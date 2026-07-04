@@ -1,8 +1,12 @@
 # Google-Signed v77 Native CallStyle Full-Screen Proof
 
-Status: Submitted - source/native implementation validated, v77 AAB published to Google Play internal testing, and the Google Play full-screen intent declaration was saved and sent for review for the legitimate Chi'lly Chat calling use case. Installed proof remains Pending until phones update from Google Play.
+Status: Partial - source/native implementation validated, v77 AAB published to Google Play internal testing, Google Play full-screen intent declaration saved/sent for review, and both physical phones previously updated through Google Play to v77. Installed proof shows the native permission/channel are present and normal in-app incoming-call UI still works, but outside-app/background CallStyle is not Closed because the receiver saw a missed-call notification without Answer/Decline actions while the caller still showed `1 in call`. A follow-up active incoming-call fix was source/Edge/OTA delivered on July 3, 2026, but installed proof is blocked until the Supabase FCM service-account secret is configured and R3 is visible over ADB again.
 
-Artifact folder: `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`
+Artifact folders:
+
+- `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`
+- `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/installed-v77-callstyle-proof-20260703-203844/`
+- `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/`
 
 ## Summary
 
@@ -32,6 +36,7 @@ Android CallStyle/full-screen behavior is bounded by Android policy and user set
 - `app.json`
 - `plugins/withChillyChatNativeCallNotifications.js`
 - `supabase/functions/chilly-chat-call-dispatch/index.ts`
+- `supabase/functions/notification-device-tokens/index.ts`
 - `scripts/guard-chilly-chat-call-push-policy.mjs`
 - `scripts/guard-notification-room-call-policy.mjs`
 
@@ -78,7 +83,17 @@ Settings -> Notifications -> Chi'lly Chat calls now includes `Full-screen call a
 
 ## Server / Push Dispatch Result
 
-`chilly-chat-call-dispatch` now sends incoming calls as data-only Expo pushes with `nativeCallStyle=android_callstyle`, `threadId`, `callInviteId`, caller copy, and route data. Missed calls keep the normal Expo notification title/body/channel path.
+Initial v77 server work sent incoming calls as data-only Expo pushes with `nativeCallStyle=android_callstyle`, `threadId`, `callInviteId`, caller copy, and route data. Installed proof showed that path did not produce the native Android CallStyle notification before missed-call conversion.
+
+The follow-up active incoming-call fix changes the server/client path:
+
+- Android registers its native FCM token with `provider=fcm` alongside the Expo token.
+- Settings readback can show a safe native call fingerprint without exposing the raw token.
+- Active incoming Chi'lly Chat calls prefer direct FCM HTTP v1 data delivery with `nativeCallStyle=android_callstyle`, `callInviteId`, `threadId`, `callType`, route, and safe caller copy.
+- Missed calls remain on the normal Expo notification title/body/channel path.
+- Active incoming calls are not counted as delivered from a missed-call notification or Expo fallback.
+- Disabling the current device registration revokes both Expo and native FCM tokens for the install.
+- Same-thread/native Accept re-reads the current ringing invite and active communication room before accepting.
 
 No service-role key is exposed to clients. Service-role use remains server-side only in the Edge Function. No auth/RLS policy was weakened.
 
@@ -87,6 +102,7 @@ No service-role key is exposed to clients. Service-role use remains server-side 
 Passed so far:
 
 - `deno check supabase/functions/chilly-chat-call-dispatch/index.ts`
+- `deno check supabase/functions/notification-device-tokens/index.ts`
 - `npm run guard:chilly-chat-call-push-policy`
 - `npm run guard:notification-room-call-policy`
 - `npm run guard:chat-call-moderation-notification-policy`
@@ -94,11 +110,13 @@ Passed so far:
 - `npm run proof:room-safe-notification-and-call-behavior`
 - `npm run proof:notification-icon-surface-wiring`
 - `npm run proof:important-notification-accessibility`
-- `npm run typecheck`
+- `npx tsc --noEmit`
 - `npm run validate:runtime`
 - `supabase db push --dry-run`
 - `npx expo prebuild --platform android --no-install`
 - `./gradlew :app:compileDebugKotlin`
+
+`npm run typecheck` executed TypeScript successfully but failed afterward on the existing Android launcher icon hash policy guard. No Android launcher icon files are changed in this lane.
 
 ## Build Result
 
@@ -156,25 +174,53 @@ Declaration status:
 
 ## Device / Installed Proof Result
 
-Pending until phones update from Google Play. Closed requires Google Play-installed v77+ proof on physical Android devices.
+Installed proof artifact subfolder: `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/installed-v77-callstyle-proof-20260703-203844/`.
 
-Required installed proof:
+Both physical phones updated through Google Play only:
 
-- package `com.chillywood.mobile`
-- installer `com.android.vending`
-- versionCode v77 or newer
-- same signed-in sessions where possible
-- no sideload
-- no `adb install`
-- no logout
-- no clear data
-- notification permission granted
-- DND/Zen and notification volume documented
-- channel `chilly_chat_calls_fullscreen_v1` present with sound/vibration
-- full-screen intent permission status read back
-- Answer/Decline actions work outside the app
-- stale call cannot be answered
-- same-thread full UI, normal in-app full modal, and room-safe compact banner do not regress
+- `R5CR120QCBF`: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `77`, versionName `1.0.0`, lastUpdateTime `2026-07-03 20:40:28`.
+- `R3CXA0DS5JV`: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `77`, versionName `1.0.0`, lastUpdateTime `2026-07-03 20:40:32`.
+
+Android environment readback:
+
+- Both devices remained attached/authorized over ADB.
+- Both packages include `android.permission.USE_FULL_SCREEN_INTENT`; `dumpsys package` readback showed it granted.
+- Both packages register `com.chillywood.mobile/.ChillyChatFirebaseMessagingService`.
+- Both devices had DND/Zen `0` during proof.
+- R5 had notification/ring/media volume nonzero for the receiver proof.
+- R5 Settings -> Notifications -> Chi'lly Chat calls showed `Full-screen call alerts` = `On` and identified channel `chilly_chat_calls_fullscreen_v1`.
+- Channel `chilly_chat_calls_fullscreen_v1` existed with high importance, system ringtone sound, ringtone audio attributes, and vibration enabled.
+
+Installed behavior proved:
+
+- Normal in-app outside-thread surface: R5 on Settings received the full app-wide incoming voice-call modal with `Decline`, `Answer`, and `Reply in Chat`; it did not show the compact room-safe banner. Decline returned R5 to Settings and R3 to `No Active Call`.
+- Same-thread incoming UI appeared on R5 after an R3 -> R5 voice call retry with `Decline` and `Accept`, proving the full same-thread incoming-call card still renders.
+
+Installed blockers found:
+
+- Same-thread `Accept` was not end-to-end Closed: R5 accepted, but landed on `Voice call active` with `1 in call`, `Connecting`, and `This communication room is unavailable`; R3 had already cleared to `No Active Call`.
+- Background/outside-app CallStyle was not Closed: with R5 outside the app and R3 calling, Android showed a `Missed Chi'lly Chat voice call` notification under `chilly_chat_missed_calls`, not an active `chilly_chat_calls_fullscreen_v1` CallStyle notification with Answer/Decline actions. The notification shade showed no Answer/Decline actions while R3 still showed `1 in call`.
+- Locked-screen video, native Answer action, native Decline action, stale/expired call rejection, and full room-safe regression were not counted Closed because the background voice path failed first.
+
+## Active Incoming Fix / Deploy Result
+
+Follow-up source/Edge/OTA fix:
+
+- Root cause: v77 native files were present, but the active incoming-call push path still relied on Expo/data delivery. The native Firebase service did not receive an active direct FCM data message, so the receiver only saw the later missed-call notification.
+- Edge functions deployed: `notification-device-tokens` and `chilly-chat-call-dispatch`.
+- EAS Update branch: `production`
+- Runtime: `1.0.0`
+- Update group: `9e0d00e8-e6cc-40e0-a4f2-7e9712b2fc0f`
+- Android update: `019f2b09-1d13-7090-b307-917d221b7c7b`
+- Message: `Fix native active incoming call delivery`
+- No new native build was created because the v77 Google Play binary already contains `ChillyChatFirebaseMessagingService`, the full-screen permission, native channel creation, and native Answer/Decline action handlers.
+
+Current blockers after the fix:
+
+- Supabase secrets list does not include `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`, `FCM_SERVICE_ACCOUNT_JSON`, `FCM_SERVICE_ACCOUNT_JSON_BASE64`, `GOOGLE_SERVICE_ACCOUNT_JSON`, or an equivalent FCM service-account secret. Without that server credential, direct FCM HTTP v1 cannot send active CallStyle payloads.
+- Current ADB readback re-confirmed `R5CR120QCBF` as Google Play-installed v77 from `com.android.vending`, but `R3CXA0DS5JV` was not visible after a non-destructive ADB server restart. Only `R5CR120QCBF` and an emulator were listed, so two-phone installed proof could not be rerun.
+
+Next proof must first configure the FCM service-account secret in Supabase, safely load the latest OTA on the v77 phones, verify native FCM registration readback, recover R3 ADB visibility, and then rerun background/locked voice/video, Answer, Decline, missed-call timing, same-thread Accept, normal in-app, and room-safe regressions.
 
 ## Safety Confirmation
 
@@ -191,6 +237,7 @@ Required installed proof:
 
 ## Remaining Open Items
 
-- Wait for v77 to become available to the physical internal tester devices through Google Play.
-- Update both physical devices through Google Play only.
-- Prove locked-screen/full-screen allowed path, fallback denied path, background notification actions, sound/vibration, stale-call rejection, and in-app regressions.
+- Configure the FCM service-account secret in Supabase without committing or exposing it.
+- Recover `R3CXA0DS5JV` ADB visibility.
+- Verify the latest OTA loads on Google Play-installed v77 and native FCM registration shows safe readback.
+- Rerun locked-screen voice/video proof, background notification actions, stale/expired call rejection, and same-thread/normal/room-safe regressions after FCM credentials and both devices are available.

@@ -742,6 +742,7 @@ export default function SettingsScreen() {
         provider: "expo",
         status: "error",
         tokenFingerprint: null,
+        nativeTokenFingerprint: null,
       });
     } finally {
       setNotificationSavingKey(null);
@@ -1985,6 +1986,9 @@ export default function SettingsScreen() {
         >
           {pushRegistration?.tokenFingerprint ? (
             <Text style={styles.metaText}>Device fingerprint {pushRegistration.tokenFingerprint}</Text>
+          ) : null}
+          {pushRegistration?.nativeTokenFingerprint ? (
+            <Text style={styles.metaText}>Native call fingerprint {pushRegistration.nativeTokenFingerprint}</Text>
           ) : null}
           <Text style={styles.metaText}>
             Device push registration controls phone push alerts. In-app Activity lives in the bell tray and still works in the app.

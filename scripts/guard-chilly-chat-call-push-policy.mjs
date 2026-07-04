@@ -13,11 +13,12 @@ const dispatchPath = "supabase/functions/chilly-chat-call-dispatch/index.ts";
 const callsLibPath = "_lib/chillyChatCalls.ts";
 const soundAssetsPath = "_lib/chillyChatCallSoundAssets.ts";
 const chatThreadPath = "app/chat/[threadId].tsx";
+const notificationsPath = "_lib/notifications.ts";
 const nativeCallPluginPath = "plugins/withChillyChatNativeCallNotifications.js";
 const configPath = "supabase/config.toml";
 const packagePath = "package.json";
 
-for (const filePath of [dispatchPath, callsLibPath, soundAssetsPath, chatThreadPath, nativeCallPluginPath, configPath, packagePath]) {
+for (const filePath of [dispatchPath, callsLibPath, soundAssetsPath, chatThreadPath, notificationsPath, nativeCallPluginPath, configPath, packagePath]) {
   if (!fs.existsSync(path.join(ROOT, filePath))) fail(`missing required file ${filePath}`);
 }
 
@@ -25,6 +26,7 @@ const dispatch = read(dispatchPath);
 const callsLib = read(callsLibPath);
 const soundAssets = read(soundAssetsPath);
 const chatThread = read(chatThreadPath);
+const notifications = read(notificationsPath);
 const nativeCallPlugin = read(nativeCallPluginPath);
 const config = read(configPath);
 const packageJson = JSON.parse(read(packagePath));
@@ -67,8 +69,29 @@ if (!dispatch.includes("pushMessage.body = copy.body") || !dispatch.includes('if
   fail("incoming call pushes must be data-only so native Android can render CallStyle while missed calls stay standard");
 }
 
+for (const requiredFcmDispatch of [
+  "sendFcmDataMessage",
+  "FIREBASE_SERVICE_ACCOUNT_JSON",
+  "provider: \"fcm\"",
+  "nativeSentCount",
+  "no_enabled_native_fcm_token",
+  "native_fcm_unavailable_expo_fallback",
+]) {
+  if (!dispatch.includes(requiredFcmDispatch)) {
+    fail(`active incoming CallStyle dispatch must prefer direct native FCM delivery: ${requiredFcmDispatch}`);
+  }
+}
+
+if (!dispatch.includes('const shouldAttemptExpo = input.action === "missed" || nativeSentCount === 0')) {
+  fail("Expo fallback must not be used for active incoming calls after direct FCM succeeds");
+}
+
 if (!dispatch.includes('pushMessage.sound = "default"') || dispatch.includes('sound: input.action === "incoming"')) {
   fail("incoming call pushes must stay data-only while missed calls use standard Expo sound");
+}
+
+if (!notifications.includes("Notifications.getDevicePushTokenAsync") || !notifications.includes('provider: "fcm"')) {
+  fail("Android push registration must store the native FCM token for CallStyle background delivery");
 }
 
 for (const forbidden of [
@@ -119,6 +142,10 @@ if (!chatThread.includes("incomingCallInvite") || !chatThread.includes("handleAc
 
 if (!chatThread.includes("nativeCallAction") || !chatThread.includes("requestedCallInviteId") || !chatThread.includes("incomingCallInvite.id !== requestedCallInviteId")) {
   fail("native Answer/Decline route must verify the active invite before mutating call state");
+}
+
+if (!chatThread.includes("readAcceptableIncomingInvite") || !chatThread.includes("getCommunicationRoomSnapshot") || !chatThread.includes("latestInvite.status === \"ringing\"")) {
+  fail("same-thread/native Answer must re-read the ringing invite and active communication room before accepting");
 }
 
 if (!config.includes("[functions.chilly-chat-call-dispatch]")) {

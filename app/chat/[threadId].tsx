@@ -994,6 +994,32 @@ export default function ChillyChatThreadScreen() {
     }
   }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, callBusy, officialAccount, threadId]);
 
+  const readAcceptableIncomingInvite = useCallback(async (
+    invite: ChillyChatCallInvite,
+  ): Promise<ChillyChatCallInvite | null> => {
+    const latestInvite = await readChillyChatCallInvite(invite.id).catch(() => null);
+    const expiresAt = Date.parse(String(latestInvite?.expiresAt ?? ""));
+    const expired = Number.isFinite(expiresAt) && expiresAt <= Date.now();
+    const roomId = String(latestInvite?.communicationRoomId ?? "").trim();
+    const snapshot = roomId ? await getCommunicationRoomSnapshot(roomId).catch(() => null) : null;
+    const roomActive = snapshot?.room.status === "active";
+    const valid =
+      !!latestInvite
+      && latestInvite.status === "ringing"
+      && !expired
+      && latestInvite.threadId === threadId
+      && latestInvite.calleeUserId === currentUserId
+      && latestInvite.callerUserId !== currentUserId
+      && roomActive;
+
+    if (valid) return latestInvite;
+
+    await clearEndedChatThreadCall(threadId).catch(() => null);
+    clearVisibleIncomingCallState(latestInvite ?? invite);
+    setCallDeliveryStatus("This Chi'lly Chat call is no longer available. Ask the caller to start a new call.");
+    return null;
+  }, [clearVisibleIncomingCallState, currentUserId, threadId]);
+
   const handleAcceptIncomingCall = useCallback(async () => {
     if (!incomingCallInvite || callBusy || !currentUserId) return;
     Vibration.cancel();
@@ -1005,9 +1031,11 @@ export default function ChillyChatThreadScreen() {
     }
     setCallBusy(true);
     try {
+      const currentInvite = await readAcceptableIncomingInvite(incomingCallInvite);
+      if (!currentInvite) return;
       const acceptedInvite = await updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
-        invite: incomingCallInvite,
+        invite: currentInvite,
         status: "accepted",
       });
       if (!acceptedInvite) {
@@ -1015,7 +1043,7 @@ export default function ChillyChatThreadScreen() {
       }
       rememberHandledIncomingInvite(acceptedInvite);
       await dismissChillyChatCallNotificationRows({
-        callInviteId: incomingCallInvite.id,
+        callInviteId: currentInvite.id,
         threadId,
       }).catch(() => 0);
       setIncomingCallInvite(null);
@@ -1024,7 +1052,7 @@ export default function ChillyChatThreadScreen() {
       trackEvent("chat_call_accepted", {
         surface: "chat-thread",
         threadId,
-        mode: incomingCallInvite.callType,
+        mode: currentInvite.callType,
       });
       await loadThreadState();
     } catch (acceptError) {
@@ -1032,7 +1060,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setCallBusy(false);
     }
-  }, [callBusy, currentUserId, incomingCallInvite, loadThreadState, rememberHandledIncomingInvite, threadId]);
+  }, [callBusy, currentUserId, incomingCallInvite, loadThreadState, readAcceptableIncomingInvite, rememberHandledIncomingInvite, threadId]);
 
   const handleDeclineIncomingCall = useCallback(async () => {
     if (!incomingCallInvite || callBusy || !currentUserId) return;
@@ -1184,9 +1212,11 @@ export default function ChillyChatThreadScreen() {
         Vibration.cancel();
         void stopChillyChatCallSound(incomingCallSoundRef.current);
         incomingCallSoundRef.current = null;
+        const currentInvite = await readAcceptableIncomingInvite(incomingCallInvite);
+        if (!currentInvite) return;
         const acceptedInvite = await updateChillyChatCallInviteStatus({
           actorUserId: currentUserId,
-          invite: incomingCallInvite,
+          invite: currentInvite,
           status: "accepted",
         });
         if (!acceptedInvite) {
@@ -1195,7 +1225,7 @@ export default function ChillyChatThreadScreen() {
           return;
         }
         await dismissChillyChatCallNotificationRows({
-          callInviteId: incomingCallInvite.id,
+          callInviteId: currentInvite.id,
           threadId,
         }).catch(() => 0);
         setIncomingCallInvite(null);
@@ -1253,7 +1283,7 @@ export default function ChillyChatThreadScreen() {
         role: isHost ? "host" : "viewer",
       });
     }
-  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, requestedCallInviteId, stopOutgoingRingback, thread?.activeCallType, threadId]);
+  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, readAcceptableIncomingInvite, requestedCallInviteId, stopOutgoingRingback, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";

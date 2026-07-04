@@ -96,6 +96,9 @@ assertIncludes(notifications, "readNativeCallAlertStatus", "Settings must be abl
 assertIncludes(notifications, "openNativeCallAlertSettings", "Settings must be able to open Android full-screen call alert settings");
 assertIncludes(notifications, "CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID", "notification runtime must create the native full-screen call channel");
 assertIncludes(notifications, "ensureNativeCallNotificationChannel", "notification runtime must ask native Android to create the native call channel");
+assertIncludes(notifications, "Notifications.getDevicePushTokenAsync", "notification registration must capture the native Android FCM token for background CallStyle delivery");
+assertIncludes(notifications, 'provider: "fcm"', "notification registration must store native FCM tokens separately from Expo tokens");
+assertIncludes(notifications, "nativeTokenFingerprint", "notification registration must expose safe native token fingerprint readback only");
 assertIncludes(notifications, "presentedNotificationId", "handled call notifications must carry the exact presented Android notification identifier");
 assertIncludes(notifications, "isIncomingChillyChatCallTitle", "handled call notifications must fallback only to incoming Chi'lly Chat call titles");
 assertIncludes(notifications, "dismissIncomingCallFallback", "handled call notification title fallback must require an explicit call action");
@@ -148,6 +151,9 @@ assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing
 assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
 assertIncludes(chatThread, "nativeCallAction", "native Android notification actions must route through the chat thread");
 assertIncludes(chatThread, "incomingCallInvite.id !== requestedCallInviteId", "native Android notification actions must reject stale invite ids");
+assertIncludes(chatThread, "readAcceptableIncomingInvite", "native and same-thread Answer must re-read current invite state before accepting");
+assertIncludes(chatThread, "latestInvite.status === \"ringing\"", "native and same-thread Answer must require a currently ringing invite");
+assertIncludes(chatThread, "getCommunicationRoomSnapshot", "native and same-thread Answer must verify the room is active before joining");
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
 assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");

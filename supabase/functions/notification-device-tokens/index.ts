@@ -9,6 +9,10 @@ type AuthenticatedUser = {
   email: string | null;
 };
 
+type AuthenticatedUserResult =
+  | { error: Response; user?: never }
+  | { error?: never; user: AuthenticatedUser };
+
 type TokenPayload = {
   action?: unknown;
   appVersion?: unknown;
@@ -116,7 +120,7 @@ const safeMetadata = (value: unknown, permissionStatus: string) => {
   return metadata;
 };
 
-async function readAuthenticatedUser(req: Request) {
+async function readAuthenticatedUser(req: Request): Promise<AuthenticatedUserResult> {
   const supabaseUrl = readRequiredEnv("SUPABASE_URL");
   const supabaseAnonKey = readRequiredEnv("SUPABASE_ANON_KEY");
   const authHeader = req.headers.get("authorization") ?? "";
@@ -142,13 +146,13 @@ async function readAuthenticatedUser(req: Request) {
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
   try {
     const auth = await readAuthenticatedUser(req);
-    if ("error" in auth) return auth.error;
+    if (auth.error) return auth.error;
 
     const payload = await parseJsonPayload(req);
     if (payload.error) return payload.error;

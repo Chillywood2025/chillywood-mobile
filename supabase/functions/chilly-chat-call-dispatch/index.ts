@@ -72,10 +72,14 @@ const JSON_HEADERS = {
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
+const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
+const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1";
 const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls";
 const VALID_CALL_TYPES = new Set(["voice", "video"]);
 const TERMINAL_STATUSES = new Set(["accepted", "declined", "missed", "canceled", "ended", "busy"]);
+
+let cachedFcmAccessToken: { expiresAt: number; token: string } | null = null;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -97,6 +101,14 @@ const readRequiredEnv = (key: string) => {
   const value = toText(Deno.env.get(key));
   if (!value) throw new Error(`Missing required environment variable: ${key}`);
   return value;
+};
+
+const readOptionalEnv = (...keys: string[]) => {
+  for (const key of keys) {
+    const value = toText(Deno.env.get(key));
+    if (value) return value;
+  }
+  return "";
 };
 
 const normalizeAction = (value: unknown): DispatchAction | null => {
@@ -342,6 +354,175 @@ async function sendExpoPush(message: JsonObject) {
   return { body, ok: response.ok, status: response.status };
 }
 
+type FcmServiceAccount = {
+  clientEmail: string;
+  privateKey: string;
+  projectId: string;
+};
+
+const base64UrlEncode = (input: string | Uint8Array) => {
+  const binary = typeof input === "string"
+    ? input
+    : Array.from(input, (byte) => String.fromCharCode(byte)).join("");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+};
+
+const parseFcmServiceAccount = (): FcmServiceAccount | null => {
+  const rawJson = readOptionalEnv("FIREBASE_SERVICE_ACCOUNT_JSON", "FCM_SERVICE_ACCOUNT_JSON", "GOOGLE_SERVICE_ACCOUNT_JSON");
+  const rawJsonBase64 = readOptionalEnv(
+    "FIREBASE_SERVICE_ACCOUNT_JSON_BASE64",
+    "FCM_SERVICE_ACCOUNT_JSON_BASE64",
+    "GOOGLE_SERVICE_ACCOUNT_JSON_BASE64",
+  );
+
+  let parsed: Record<string, unknown> | null = null;
+  if (rawJson) {
+    try {
+      parsed = JSON.parse(rawJson) as Record<string, unknown>;
+    } catch {
+      parsed = null;
+    }
+  } else if (rawJsonBase64) {
+    try {
+      const decoded = atob(rawJsonBase64);
+      parsed = JSON.parse(decoded) as Record<string, unknown>;
+    } catch {
+      parsed = null;
+    }
+  }
+
+  const projectId = toText(parsed?.project_id) || readOptionalEnv("FIREBASE_PROJECT_ID", "FCM_PROJECT_ID", "GOOGLE_CLOUD_PROJECT");
+  const clientEmail = toText(parsed?.client_email) || readOptionalEnv("FIREBASE_CLIENT_EMAIL", "FCM_CLIENT_EMAIL");
+  const privateKey = (toText(parsed?.private_key) || readOptionalEnv("FIREBASE_PRIVATE_KEY", "FCM_PRIVATE_KEY"))
+    .replace(/\\n/g, "\n");
+
+  if (!projectId || !clientEmail || !privateKey) return null;
+  return { clientEmail, privateKey, projectId };
+};
+
+const pemToArrayBuffer = (pem: string) => {
+  const normalized = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s+/g, "");
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+};
+
+async function createServiceAccountJwt(account: FcmServiceAccount) {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payload = base64UrlEncode(JSON.stringify({
+    aud: GOOGLE_OAUTH_TOKEN_URL,
+    exp: nowSeconds + 3600,
+    iat: nowSeconds,
+    iss: account.clientEmail,
+    scope: FCM_SCOPE,
+  }));
+  const unsignedJwt = `${header}.${payload}`;
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToArrayBuffer(account.privateKey),
+    { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(unsignedJwt),
+  ));
+  return `${unsignedJwt}.${base64UrlEncode(signature)}`;
+}
+
+async function readFcmAccessToken(account: FcmServiceAccount) {
+  if (cachedFcmAccessToken && cachedFcmAccessToken.expiresAt > Date.now() + 60_000) {
+    return cachedFcmAccessToken.token;
+  }
+
+  const jwt = await createServiceAccountJwt(account);
+  const body = new URLSearchParams({
+    assertion: jwt,
+    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+  });
+  const response = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
+    body,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    method: "POST",
+  });
+  const payload = await response.json().catch(() => ({}));
+  const token = toText((payload as { access_token?: unknown }).access_token);
+  const expiresIn = Number((payload as { expires_in?: unknown }).expires_in ?? 3600);
+  if (!response.ok || !token) {
+    throw new Error(`FCM OAuth failed: ${sanitizeErrorMessage(payload)}`);
+  }
+  cachedFcmAccessToken = {
+    expiresAt: Date.now() + Math.max(60, expiresIn - 60) * 1000,
+    token,
+  };
+  return token;
+}
+
+async function sendFcmDataMessage(input: {
+  data: Record<string, string>;
+  token: string;
+  ttlSeconds: number;
+}) {
+  const account = parseFcmServiceAccount();
+  if (!account) {
+    return {
+      body: {},
+      errorCode: "fcm_credentials_missing",
+      ok: false,
+      providerMessageId: null,
+      status: 0,
+    };
+  }
+
+  const accessToken = await readFcmAccessToken(account);
+  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.projectId)}/messages:send`, {
+    body: JSON.stringify({
+      message: {
+        android: {
+          priority: "HIGH",
+          ttl: `${Math.max(1, Math.floor(input.ttlSeconds))}s`,
+        },
+        data: input.data,
+        token: input.token,
+      },
+    }),
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const body = await response.json().catch(() => ({}));
+  const providerMessageId = toText((body as { name?: unknown }).name) || null;
+  const errorPayload = body && typeof body === "object" && "error" in body
+    ? (body as { error?: JsonObject }).error ?? {}
+    : {};
+  const errorCode = toText(errorPayload.status)
+    || toText(errorPayload.message)
+    || (response.ok ? null : `fcm_http_${response.status}`);
+
+  return {
+    body,
+    errorCode,
+    ok: response.ok && !!providerMessageId,
+    providerMessageId,
+    status: response.status,
+  };
+}
+
 const buildCopy = (action: DispatchAction, callType: string, callerName: string) => {
   const callLabel = callType === "voice" ? "voice" : "video";
   if (action === "missed") {
@@ -486,24 +667,69 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     };
   }
 
-  let sentCount = 0;
   const channelId = input.action === "missed" ? MISSED_CALL_CHANNEL_ID : CHAT_CALL_CHANNEL_ID;
-  for (const token of tokens) {
+  const nativeCallData: Record<string, string> = {
+    callInviteId: input.invite.id,
+    callType: input.callType,
+    callerName: input.callerName,
+    body: copy.body,
+    nativeCallStyle: input.action === "incoming" ? "android_callstyle" : "standard",
+    notificationId: notificationId ?? "",
+    notificationChannelId: channelId,
+    openCall: input.action === "incoming" ? "true" : "false",
+    path: route,
+    threadId: input.invite.thread_id,
+    title: copy.title,
+    triggerType: notificationType,
+  };
+  const fcmTokens = tokens.filter((token) => token.provider === "fcm");
+  const expoTokens = tokens.filter((token) => token.provider === "expo");
+  let nativeSentCount = 0;
+  let expoSentCount = 0;
+  let lastFailureReason = "";
+
+  if (input.action === "incoming") {
+    if (!fcmTokens.length) {
+      await insertDeliveryAttempt(adminClient, {
+        errorCode: "no_enabled_native_fcm_token",
+        notificationId,
+        provider: "fcm",
+        recipientUserId: input.recipientUserId,
+        status: "skipped",
+      });
+      lastFailureReason = "no_enabled_native_fcm_token";
+    }
+
+    for (const token of fcmTokens) {
+      const pushResult = await sendFcmDataMessage({
+        data: nativeCallData,
+        token: token.token,
+        ttlSeconds: 45,
+      });
+      const sent = pushResult.ok;
+      if (sent) nativeSentCount += 1;
+      lastFailureReason = sent ? "" : pushResult.errorCode || "fcm_provider_failed";
+      await insertDeliveryAttempt(adminClient, {
+        errorCode: sent ? null : lastFailureReason,
+        errorMessage: sent ? null : sanitizeErrorMessage(pushResult.body),
+        notificationId,
+        provider: "fcm",
+        providerMessageId: pushResult.providerMessageId,
+        pushTokenId: token.id,
+        recipientUserId: input.recipientUserId,
+        status: sent ? "sent" : "failed",
+      });
+
+      if (lastFailureReason === "UNREGISTERED" || lastFailureReason === "SENDER_ID_MISMATCH") {
+        await revokePushToken(adminClient, token.id);
+      }
+    }
+  }
+
+  const shouldAttemptExpo = input.action === "missed" || nativeSentCount === 0;
+  for (const token of shouldAttemptExpo ? expoTokens : []) {
     const pushMessage: JsonObject = {
-      data: {
-        callInviteId: input.invite.id,
-        callType: input.callType,
-        callerName: input.callerName,
-        body: copy.body,
-        nativeCallStyle: input.action === "incoming" ? "android_callstyle" : "standard",
-        notificationId: notificationId ?? "",
-        notificationChannelId: channelId,
-        openCall: input.action === "incoming" ? "true" : "false",
-        path: route,
-        threadId: input.invite.thread_id,
-        title: copy.title,
-        triggerType: notificationType,
-      },
+      data: nativeCallData,
       priority: "high",
       to: token.token,
       ttl: input.action === "incoming" ? 45 : 3600,
@@ -525,7 +751,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
       : firstTicket.message) || null;
     const sent = pushResult.ok && status === "ok";
 
-    if (sent) sentCount += 1;
+    if (sent) expoSentCount += 1;
     await insertDeliveryAttempt(adminClient, {
       errorCode,
       errorMessage: sent ? null : toText(firstTicket.message) || `Expo push returned ${pushResult.status}`,
@@ -543,21 +769,27 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   }
 
   if (notificationId) {
-    await adminClient
-      .from("notifications")
-      .update({
-        delivered_at: sentCount > 0 ? new Date().toISOString() : null,
-        status: sentCount > 0 ? "sent" : "failed",
-      })
-      .eq("id", notificationId);
+    const delivered = input.action === "incoming" ? nativeSentCount > 0 : expoSentCount > 0;
+    const update: JsonObject = delivered
+      ? { delivered_at: new Date().toISOString(), status: "sent" }
+      : input.action === "incoming" && inAppAllowed
+        ? { status: "pending" }
+        : { delivered_at: null, status: "failed" };
+    await adminClient.from("notifications").update(update).eq("id", notificationId);
   }
 
+  const deliveredCount = input.action === "incoming" ? nativeSentCount : expoSentCount;
+  const expoFallbackOnly = input.action === "incoming" && nativeSentCount === 0 && expoSentCount > 0;
   return {
     notificationId,
-    pushSent: sentCount > 0,
+    pushSent: deliveredCount > 0,
     recipientUserId: input.recipientUserId,
-    reason: sentCount > 0 ? "sent" : "provider_failed",
-    status: sentCount > 0 ? "sent" : "failed",
+    reason: deliveredCount > 0
+      ? "sent"
+      : expoFallbackOnly
+        ? "native_fcm_unavailable_expo_fallback"
+        : lastFailureReason || "provider_failed",
+    status: deliveredCount > 0 ? "sent" : inAppAllowed ? "created" : "failed",
   };
 }
 

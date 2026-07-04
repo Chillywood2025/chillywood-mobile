@@ -1407,8 +1407,9 @@ export type PushPermissionState =
 export type PushRegistrationState = {
   status: "unsupported" | "not_registered" | "registered" | "denied" | "blocked" | "error";
   permissionState: PushPermissionState;
-  provider: "expo";
+  provider: "expo" | "fcm" | "expo+fcm";
   tokenFingerprint: string | null;
+  nativeTokenFingerprint?: string | null;
   message: string;
 };
 
@@ -1679,13 +1680,42 @@ export async function openNativeCallAlertSettings(): Promise<boolean> {
     .catch(() => false);
 }
 
+type PushTokenProvider = "expo" | "fcm";
+
 const buildUnsupportedPushRegistration = (message: string): PushRegistrationState => ({
   message,
   permissionState: "unsupported",
   provider: "expo",
   status: "unsupported",
   tokenFingerprint: null,
+  nativeTokenFingerprint: null,
 });
+
+async function readPushRegistrationStatus(input: {
+  installId: string;
+  permissionState: PushPermissionState;
+  provider: PushTokenProvider;
+}): Promise<{ registered: boolean; tokenFingerprint: string | null; status: "registered" | "not_registered" | "error" }> {
+  const { data, error } = await supabase.functions.invoke("notification-device-tokens", {
+    body: {
+      action: "status",
+      installId: input.installId,
+      platform: Platform.OS,
+      provider: input.provider,
+    },
+  });
+
+  if (error) return { registered: false, status: "error", tokenFingerprint: null };
+
+  const payload = data as { registered?: unknown; status?: unknown; tokenFingerprint?: unknown } | null;
+  const tokenFingerprint = normalizeText(payload?.tokenFingerprint) || null;
+  const registered = payload?.registered === true || normalizeText(payload?.status) === "registered";
+  return {
+    registered,
+    status: registered ? "registered" : "not_registered",
+    tokenFingerprint,
+  };
+}
 
 export async function readCurrentPushRegistration(): Promise<PushRegistrationState> {
   if (Platform.OS === "web" || !Device.isDevice) {
@@ -1706,6 +1736,7 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
       provider: "expo",
       status: "denied",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 
@@ -1716,6 +1747,7 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
       provider: "expo",
       status: "error",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 
@@ -1726,40 +1758,41 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
       provider: "expo",
       status: "not_registered",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 
   const installId = await getNotificationInstallId();
-  const { data, error } = await supabase.functions.invoke("notification-device-tokens", {
-    body: {
-      action: "status",
-      installId,
-      platform: Platform.OS,
-      provider: "expo",
-    },
-  });
+  const [expoStatus, fcmStatus] = await Promise.all([
+    readPushRegistrationStatus({ installId, permissionState, provider: "expo" }),
+    Platform.OS === "android"
+      ? readPushRegistrationStatus({ installId, permissionState, provider: "fcm" })
+      : Promise.resolve({ registered: false, status: "not_registered" as const, tokenFingerprint: null }),
+  ]);
 
-  if (error) {
+  if (expoStatus.status === "error" && fcmStatus.status === "error") {
     return {
       message: "Unable to verify this device push registration. In-app Activity is tied to your account and still works in the app.",
       permissionState,
       provider: "expo",
       status: "error",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 
-  const payload = data as { registered?: unknown; status?: unknown; tokenFingerprint?: unknown } | null;
-  const tokenFingerprint = normalizeText(payload?.tokenFingerprint) || null;
-  const isRegistered = payload?.registered === true || normalizeText(payload?.status) === "registered";
+  const isRegistered = expoStatus.registered || fcmStatus.registered;
 
   if (isRegistered) {
     return {
-      message: "This Android device is registered for Chi'llywood push alerts. In-app Activity is tied to your account and still works in the app.",
+      message: fcmStatus.registered
+        ? "This Android device is registered for Chi'llywood push alerts and native Chi'lly Chat call alerts. In-app Activity is tied to your account and still works in the app."
+        : "This Android device is registered for Chi'llywood push alerts. Native Chi'lly Chat call alerts will finish registering when Firebase device token readback is available.",
       permissionState,
-      provider: "expo",
+      provider: fcmStatus.registered ? "expo+fcm" : "expo",
       status: "registered",
-      tokenFingerprint,
+      tokenFingerprint: expoStatus.tokenFingerprint,
+      nativeTokenFingerprint: fcmStatus.tokenFingerprint,
     };
   }
 
@@ -1769,11 +1802,13 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
     provider: "expo",
     status: "not_registered",
     tokenFingerprint: null,
+    nativeTokenFingerprint: null,
   };
 }
 
 async function registerPushTokenWithBackend(input: {
   permissionStatus: PushPermissionState;
+  provider: PushTokenProvider;
   token: string;
 }): Promise<PushRegistrationState> {
   const installId = await getNotificationInstallId();
@@ -1785,13 +1820,14 @@ async function registerPushTokenWithBackend(input: {
       installId,
       metadata: {
         deviceName: Device.deviceName ?? null,
+        nativeCallStyle: input.provider === "fcm",
         modelName: Device.modelName ?? null,
         osName: Device.osName ?? null,
         osVersion: Device.osVersion ?? null,
       },
       permissionStatus: input.permissionStatus,
       platform: Platform.OS,
-      provider: "expo",
+      provider: input.provider,
       token: input.token,
     },
   });
@@ -1800,20 +1836,64 @@ async function registerPushTokenWithBackend(input: {
     return {
       message: "Unable to register this device for notifications.",
       permissionState: input.permissionStatus,
-      provider: "expo",
+      provider: input.provider,
       status: "error",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 
   const tokenFingerprint = normalizeText((data as { tokenFingerprint?: unknown } | null)?.tokenFingerprint) || null;
   return {
-    message: "This Android device is registered for Chi'llywood notifications.",
+    message: input.provider === "fcm"
+      ? "This Android device is registered for native Chi'lly Chat call alerts."
+      : "This Android device is registered for Chi'llywood notifications.",
     permissionState: input.permissionStatus,
-    provider: "expo",
+    provider: input.provider,
     status: "registered",
-    tokenFingerprint,
+    tokenFingerprint: input.provider === "expo" ? tokenFingerprint : null,
+    nativeTokenFingerprint: input.provider === "fcm" ? tokenFingerprint : null,
   };
+}
+
+async function registerAndroidNativeFcmToken(permissionStatus: PushPermissionState): Promise<PushRegistrationState | null> {
+  if (Platform.OS !== "android") return null;
+  try {
+    const token = await Notifications.getDevicePushTokenAsync();
+    const rawToken = normalizeText(token.data);
+    if (!rawToken) return null;
+    return registerPushTokenWithBackend({ permissionStatus, provider: "fcm", token: rawToken });
+  } catch {
+    return {
+      message: "Unable to register the native Android call-alert token. Standard push registration may still work.",
+      permissionState: permissionStatus,
+      provider: "fcm",
+      status: "error",
+      tokenFingerprint: null,
+      nativeTokenFingerprint: null,
+    };
+  }
+}
+
+function mergeAndroidPushRegistrationResults(expoResult: PushRegistrationState, nativeResult: PushRegistrationState | null): PushRegistrationState {
+  if (!nativeResult || Platform.OS !== "android") return expoResult;
+  if (expoResult.status === "registered" || nativeResult.status === "registered") {
+    return {
+      message: nativeResult.status === "registered"
+        ? "This Android device is registered for Chi'llywood push alerts and native Chi'lly Chat call alerts."
+        : expoResult.message,
+      permissionState: expoResult.permissionState,
+      provider: nativeResult.status === "registered" && expoResult.status === "registered"
+        ? "expo+fcm"
+        : nativeResult.status === "registered"
+          ? "fcm"
+          : expoResult.provider,
+      status: "registered",
+      tokenFingerprint: expoResult.tokenFingerprint,
+      nativeTokenFingerprint: nativeResult.nativeTokenFingerprint,
+    };
+  }
+  return expoResult;
 }
 
 export async function requestAndroidPushPermissionAndRegister(): Promise<PushRegistrationState> {
@@ -1866,7 +1946,9 @@ export async function requestAndroidPushPermissionAndRegister(): Promise<PushReg
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     const rawToken = normalizeText(token.data);
     if (!rawToken) throw new Error("Expo returned an empty push token.");
-    return registerPushTokenWithBackend({ permissionStatus: "granted", token: rawToken });
+    const expoResult = await registerPushTokenWithBackend({ permissionStatus: "granted", provider: "expo", token: rawToken });
+    const nativeResult = await registerAndroidNativeFcmToken("granted");
+    return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
   } catch {
     return {
       message: "Unable to get a production push token for this Android build.",
@@ -1874,6 +1956,7 @@ export async function requestAndroidPushPermissionAndRegister(): Promise<PushReg
       provider: "expo",
       status: "error",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 }
@@ -1926,7 +2009,9 @@ export async function refreshAndroidPushRegistrationIfGranted(): Promise<PushReg
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     const rawToken = normalizeText(token.data);
     if (!rawToken) throw new Error("Expo returned an empty push token.");
-    return registerPushTokenWithBackend({ permissionStatus: "granted", token: rawToken });
+    const expoResult = await registerPushTokenWithBackend({ permissionStatus: "granted", provider: "expo", token: rawToken });
+    const nativeResult = await registerAndroidNativeFcmToken("granted");
+    return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
   } catch {
     return {
       message: "Unable to refresh the production push token for this Android build.",
@@ -1934,6 +2019,7 @@ export async function refreshAndroidPushRegistrationIfGranted(): Promise<PushReg
       provider: "expo",
       status: "error",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 }
@@ -1946,26 +2032,29 @@ export async function revokeCurrentPushInstall(): Promise<PushRegistrationState>
       provider: "expo",
       status: "unsupported",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 
   const installId = await getNotificationInstallId();
-  const { error } = await supabase.functions.invoke("notification-device-tokens", {
+  const providers: PushTokenProvider[] = Platform.OS === "android" ? ["expo", "fcm"] : ["expo"];
+  const results = await Promise.all(providers.map((provider) => supabase.functions.invoke("notification-device-tokens", {
     body: {
       action: "revoke",
       installId,
       platform: Platform.OS,
-      provider: "expo",
+      provider,
     },
-  });
+  })));
 
-  if (error) {
+  if (results.some((result) => result.error)) {
     return {
       message: "Unable to turn off this device registration right now.",
       permissionState: await readPushPermissionState(),
       provider: "expo",
       status: "error",
       tokenFingerprint: null,
+      nativeTokenFingerprint: null,
     };
   }
 
@@ -1975,6 +2064,7 @@ export async function revokeCurrentPushInstall(): Promise<PushRegistrationState>
     provider: "expo",
     status: "not_registered",
     tokenFingerprint: null,
+    nativeTokenFingerprint: null,
   };
 }
 
