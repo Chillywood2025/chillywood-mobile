@@ -1,6 +1,6 @@
 # Google-Signed v77 Native CallStyle Full-Screen Proof
 
-Status: Blocked - source/native implementation validated and v77 AAB built; Google Play internal submission is blocked until the Play Console full-screen intent declaration is completed.
+Status: Submitted - source/native implementation validated, v77 AAB published to Google Play internal testing, and the Google Play full-screen intent declaration was saved and sent for review for the legitimate Chi'lly Chat calling use case. Installed proof remains Pending until phones update from Google Play.
 
 Artifact folder: `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`
 
@@ -117,15 +117,46 @@ This is the required native build path because the lane changes Android manifest
 ## Google Play Internal Submission Result
 
 - EAS Submit ID: `47d90002-524f-41b7-968e-e975368d1285`
+- EAS retry Submit ID: `f596f244-87c4-47bc-9561-2628f891bf37`
 - Track requested: Google Play `internal`
-- Result: blocked by Google Play app-content policy
+- Result: blocked by Google Play app-content policy before the Play Console declaration was exposed
 - Blocking error: `You must let us know whether your app uses any full-screen intent permissions`
 
-The build declares `android.permission.USE_FULL_SCREEN_INTENT`, so Google Play requires the full-screen intent declaration before accepting the AAB into the internal track. This must be completed in Play Console for the app's genuine voice/video calling use case, then the same v77 build can be resubmitted to internal testing. No Play production submission happened.
+The build declares `android.permission.USE_FULL_SCREEN_INTENT`, so Google Play requires the full-screen intent declaration. After the API submit retry failed with the same blocker, the same existing v77 AAB from EAS Build `f888abdb-4154-40b8-91a3-2b410f58aa75` was uploaded through the Google Play internal-testing release UI. Play accepted/published that internal release and then exposed the App Content `Full-screen intent` declaration.
+
+Manual Play Console internal release result:
+
+- Track: Google Play `internal`
+- VersionCode: `77`
+- VersionName: `1.0.0`
+- Result: `77 (1.0.0)` available to internal testers
+- Release timestamp shown by Play Console: July 3, 2026 8:10 PM local time
+- Only internal testing was changed. No Play production submission happened.
+
+## Play Console Full-Screen Intent Declaration Result
+
+Google Play App Content exposed the `Full-screen intent` declaration after the v77 AAB was accepted in the internal release UI.
+
+Declaration selections:
+
+- Core functionality: `Making and receiving calls`
+- Install behavior / pre-grant opt-in: `Yes`
+
+Declaration scope:
+
+- Chi'llywood uses `USE_FULL_SCREEN_INTENT` only for real-time incoming Chi'lly Chat voice and video calls.
+- It is not used for ads, marketing, promotions, creator-money notifications, tips, event reminders, normal Activity alerts, or other non-urgent notifications.
+- If Android or the user does not allow full-screen call alerts, the app falls back to a high-priority call notification.
+
+Declaration status:
+
+- Saved in Play Console.
+- Sent for Google Play review from Publishing overview.
+- Publishing overview showed `Changes in review` for `Full-screen intent - Complete Full-screen intent declaration`.
 
 ## Device / Installed Proof Result
 
-Blocked until Play internal accepts the v77 build and the phones update from Google Play. Closed requires Google Play-installed v77+ proof on physical Android devices.
+Pending until phones update from Google Play. Closed requires Google Play-installed v77+ proof on physical Android devices.
 
 Required installed proof:
 
@@ -160,7 +191,6 @@ Required installed proof:
 
 ## Remaining Open Items
 
-- Complete the Google Play Console full-screen intent declaration for the legitimate Chi'lly Chat voice/video calling use case.
-- Resubmit EAS Build `f888abdb-4154-40b8-91a3-2b410f58aa75` to Google Play internal after the declaration is accepted/available.
+- Wait for v77 to become available to the physical internal tester devices through Google Play.
 - Update both physical devices through Google Play only.
 - Prove locked-screen/full-screen allowed path, fallback denied path, background notification actions, sound/vibration, stale-call rejection, and in-app regressions.

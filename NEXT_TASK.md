@@ -3,16 +3,18 @@
 # V77 Native Chi'lly Chat CallStyle / Full-Screen Proof Follow-Up
 
 Current latest truth:
-- Native Android Chi'lly Chat CallStyle/full-screen incoming-call work is source-validated and v77 AAB built, but installed proof is Blocked by the Google Play full-screen intent declaration requirement in `docs/release/GOOGLE_SIGNED_V77_NATIVE_CALLSTYLE_FULLSCREEN_PROOF.md`.
+- Native Android Chi'lly Chat CallStyle/full-screen incoming-call work is source-validated, v77 is published to Google Play internal testing, and the Google Play full-screen intent declaration is saved and sent for review in `docs/release/GOOGLE_SIGNED_V77_NATIVE_CALLSTYLE_FULLSCREEN_PROOF.md`.
 - Artifact folder: `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`.
 - Source commit `fab16ef96368a637f96846846d4717d57d2ebb5e` is pushed and aligned with `origin/main`.
 - Source now adds a bounded Expo config plugin that generates the native Android call-notification files during prebuild/EAS build: `USE_FULL_SCREEN_INTENT`, `chilly_chat_calls_fullscreen_v1`, a custom `ChillyChatFirebaseMessagingService`, Android `NotificationCompat.CallStyle.forIncomingCall`, native Answer/Decline actions, Settings full-screen call alert permission readback/settings route, and data-only incoming call push dispatch.
 - Passive notification taps open an answerable incoming-call route. Only explicit native Answer attempts to accept, and the chat route verifies the requested `callInviteId` still matches the current ringing invite for the signed-in callee before mutating state.
-- This is not OTA-only. A new Google Play internal Android build, expected v77 or newer, is required before lock-screen/full-screen behavior can be claimed.
+- This is not OTA-only. Google Play-installed v77 or newer is required before lock-screen/full-screen behavior can be claimed.
 - Edge Function `chilly-chat-call-dispatch` was deployed after source validation.
 - EAS Build `f888abdb-4154-40b8-91a3-2b410f58aa75` finished as Android App Bundle versionCode `77`, versionName `1.0.0`, runtime `1.0.0`, commit `fab16ef96368a637f96846846d4717d57d2ebb5e`.
-- EAS Submit `47d90002-524f-41b7-968e-e975368d1285` to Google Play internal failed with: `You must let us know whether your app uses any full-screen intent permissions`.
-- Next exact steps: owner/Play Console must complete the full-screen intent declaration for Chi'lly Chat's real voice/video calling use case, then resubmit build `f888abdb-4154-40b8-91a3-2b410f58aa75` to Google Play internal only, update physical devices through Google Play only, then run locked-screen/background Answer/Decline/full-screen/fallback/sound/vibration/stale-call/in-app-regression proof.
+- EAS Submit `47d90002-524f-41b7-968e-e975368d1285` and retry `f596f244-87c4-47bc-9561-2628f891bf37` to Google Play internal failed with: `You must let us know whether your app uses any full-screen intent permissions`.
+- The same existing v77 AAB from EAS Build `f888abdb-4154-40b8-91a3-2b410f58aa75` was uploaded through Google Play Console internal testing. Play Console shows latest internal release `77 (1.0.0)` available to internal testers.
+- App Content exposed `Full-screen intent`; declaration selected `Making and receiving calls`, opted in for pre-grant review, was saved, and Publishing overview shows the declaration change in review.
+- Next exact steps: update physical devices through Google Play only, verify package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `77`, channel `chilly_chat_calls_fullscreen_v1`, and full-screen call alert permission status, then run locked-screen/background Answer/Decline/full-screen/fallback/sound/vibration/stale-call/in-app-regression proof.
 - Android 14+ full-screen intent permission, DND/Zen, notification permission, channel settings, and notification volume can still block full-screen or audible ring; document these as Android/user-setting caveats instead of calling source broken.
 - Do not use OTA as final proof, sideload, `adb install`, logout, clear data, uninstall/reinstall, Play production, provider mutation, live money, payouts/cashout, Money Center changes, auth/RLS weakening, WebRTC/media rewrites, or room routing changes.
 
