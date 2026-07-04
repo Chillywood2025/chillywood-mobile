@@ -1,12 +1,13 @@
 # Google-Signed v77 Native CallStyle Full-Screen Proof
 
-Status: Partial - source/native implementation validated, v77 AAB published to Google Play internal testing, Google Play full-screen intent declaration saved/sent for review, and both physical phones previously updated through Google Play to v77. Installed proof shows the native permission/channel are present and normal in-app incoming-call UI still works, but outside-app/background CallStyle is not Closed because the receiver saw a missed-call notification without Answer/Decline actions while the caller still showed `1 in call`. A follow-up active incoming-call fix was source/Edge/OTA delivered on July 3, 2026, but installed proof is blocked until the Supabase FCM service-account secret is configured and R3 is visible over ADB again.
+Status: Blocked for installed closure - source/native implementation validated, v77 AAB published to Google Play internal testing, Google Play full-screen intent declaration saved/sent for review, and both physical phones previously updated through Google Play to v77. Installed proof shows the native permission/channel are present and normal in-app incoming-call UI still works, but outside-app/background CallStyle is not Closed because the receiver saw a missed-call notification without Answer/Decline actions while the caller still showed `1 in call`. A follow-up active incoming-call fix was source/Edge/OTA delivered on July 3, 2026. The Supabase FCM service-account blocker is now cleared, but two-phone installed proof remains blocked because `R3CXA0DS5JV` is not visible over ADB/USB.
 
 Artifact folders:
 
 - `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`
 - `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/installed-v77-callstyle-proof-20260703-203844/`
 - `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/`
+- `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/installed-fcm-secret-r3-recovery-proof-20260703-230212/`
 
 ## Summary
 
@@ -215,12 +216,28 @@ Follow-up source/Edge/OTA fix:
 - Message: `Fix native active incoming call delivery`
 - No new native build was created because the v77 Google Play binary already contains `ChillyChatFirebaseMessagingService`, the full-screen permission, native channel creation, and native Answer/Decline action handlers.
 
-Current blockers after the fix:
+## FCM Secret / R3 Recovery Pass
 
-- Supabase secrets list does not include `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`, `FCM_SERVICE_ACCOUNT_JSON`, `FCM_SERVICE_ACCOUNT_JSON_BASE64`, `GOOGLE_SERVICE_ACCOUNT_JSON`, or an equivalent FCM service-account secret. Without that server credential, direct FCM HTTP v1 cannot send active CallStyle payloads.
-- Current ADB readback re-confirmed `R5CR120QCBF` as Google Play-installed v77 from `com.android.vending`, but `R3CXA0DS5JV` was not visible after a non-destructive ADB server restart. Only `R5CR120QCBF` and an emulator were listed, so two-phone installed proof could not be rerun.
+Artifact subfolder: `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/installed-fcm-secret-r3-recovery-proof-20260703-230212/`.
 
-Next proof must first configure the FCM service-account secret in Supabase, safely load the latest OTA on the v77 phones, verify native FCM registration readback, recover R3 ADB visibility, and then rerun background/locked voice/video, Answer, Decline, missed-call timing, same-thread Accept, normal in-app, and room-safe regressions.
+Results:
+
+- Repo/origin were aligned at `e9021fa5053a5f16ac8236abeb21caebba75fff4` before proof.
+- Supabase secret `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` exists by name only. The secret value, private key, client email, and raw service-account JSON were not printed, committed, or documented.
+- `chilly-chat-call-dispatch` was redeployed after the secret was added.
+- `deno check supabase/functions/chilly-chat-call-dispatch/index.ts` passed.
+- `deno check supabase/functions/notification-device-tokens/index.ts` passed.
+- R5 package readback: `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `77`, versionName `1.0.0`, lastUpdateTime `2026-07-03 20:40:28`.
+- R5 Settings readback showed registered Expo/native call push status, redacted `Device fingerprint`, redacted `Native call fingerprint`, `Full-screen call alerts` = `On`, and channel `chilly_chat_calls_fullscreen_v1`.
+- R5 Android environment readback: DND/Zen `0`, ring/notification/media streams non-muted and nonzero.
+- R5 notification channel readback: `chilly_chat_calls_fullscreen_v1`, name `Chi'lly Chat incoming calls`, importance `4`, ringtone sound, ringtone audio attributes, and vibration enabled.
+- R3 recovery remained blocked: `adb devices` listed only `R5CR120QCBF` and an emulator, and Mac USB enumeration showed only `R5CR120QCBF` as the connected Samsung Android device. `R3CXA0DS5JV` was not visible at the USB layer.
+
+Current blocker after the pass:
+
+- `R3CXA0DS5JV` must be recovered over USB/ADB before two-phone installed proof can run. Because the second physical Play-installed v77 device was unavailable, background active CallStyle voice/video, native Answer/Decline, missed-call timing, same-thread Accept, normal in-app, and room-safe regressions were not rerun.
+
+Next proof must recover R3 ADB visibility, verify R3 remains Google Play-installed v77 from `com.android.vending`, verify native FCM registration readback on R3, and then rerun background/locked voice/video, Answer, Decline, missed-call timing, same-thread Accept, normal in-app, and room-safe regressions.
 
 ## Safety Confirmation
 
