@@ -401,6 +401,10 @@ Latest password reset/auth email provider proof result: `/tmp/app-password-reset
 
 ## Every Visible Surface Active Wiring
 
+## Native Chi'lly Chat CallStyle Proof Update
+
+Google Play-installed v77 native CallStyle proof is Partial, with the core active outside-app incoming-call path now proved on both physical Android phones. Both devices stayed Google Play-installed from `com.android.vending` at versionCode `77`; no sideload, `adb install`, logout, clear data, uninstall, or reinstall happened. Background voice and video calls produced active Android CallStyle notifications on `chilly_chat_calls_fullscreen_v1` with `Answer` and `Decline` before missed-call conversion. Native Answer joined valid calls, native Decline cleared both sides, same-thread Accept no longer hit `This communication room is unavailable`, and a normal Settings surface received the full incoming modal. Remaining launch caveats: fresh room-safe regression needs a current room fixture, missed-call timing needs a clean expiry capture, and locked-screen full-screen takeover needs separate visual proof if required.
+
 Every visible surface active wiring audit: Closed. No visible clickable dead buttons are allowed. Nothing visible should be hidden or disabled. Every visible control works, routes correctly, opens a setup/status/resolution flow, opens a support/review flow, or starts a tester-safe flow. Permission scopes must unlock backed behavior.
 
 Tester-visible monetization UX is separate from live money settlement. Premium monthly tester flow is reachable where Play internal/licensed tester/provider setup supports it. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.

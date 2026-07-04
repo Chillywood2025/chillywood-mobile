@@ -1,6 +1,6 @@
 # Google-Signed v77 Native CallStyle Full-Screen Proof
 
-Status: Blocked for installed closure - source/native implementation validated, v77 AAB published to Google Play internal testing, Google Play full-screen intent declaration saved/sent for review, and both physical phones previously updated through Google Play to v77. Installed proof shows the native permission/channel are present and normal in-app incoming-call UI still works, but outside-app/background CallStyle is not Closed because the receiver saw a missed-call notification without Answer/Decline actions while the caller still showed `1 in call`. A follow-up active incoming-call fix was source/Edge/OTA delivered on July 3, 2026. The Supabase FCM service-account blocker is now cleared, but two-phone installed proof remains blocked because `R3CXA0DS5JV` is not visible over ADB/USB.
+Status: Partial after installed two-phone closure pass - source/native implementation validated, v77 AAB published to Google Play internal testing, Google Play full-screen intent declaration saved/sent for review, and both physical phones updated through Google Play to v77. The July 4 installed pass recovered `R3CXA0DS5JV`, verified both phones are Google Play-installed v77 from `com.android.vending`, and proved active background voice/video CallStyle notifications on `chilly_chat_calls_fullscreen_v1` with Answer/Decline before missed-call conversion. Native Answer and Decline work, same-thread Accept no longer lands in `This communication room is unavailable`, and normal in-app outside-thread Settings shows the full incoming-call modal. Remaining Partial items are fresh room-safe regression proof because the old Watch-Party fixture now returns `Room not found`, a cleaner missed-call timing/expiry capture, and separate locked-screen takeover proof beyond CallStyle `fullscreenIntent`/permission readback.
 
 Artifact folders:
 
@@ -8,6 +8,7 @@ Artifact folders:
 - `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/installed-v77-callstyle-proof-20260703-203844/`
 - `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/`
 - `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/installed-fcm-secret-r3-recovery-proof-20260703-230212/`
+- `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/installed-two-device-callstyle-proof-20260704-112837/`
 
 ## Summary
 
@@ -233,11 +234,27 @@ Results:
 - R5 notification channel readback: `chilly_chat_calls_fullscreen_v1`, name `Chi'lly Chat incoming calls`, importance `4`, ringtone sound, ringtone audio attributes, and vibration enabled.
 - R3 recovery remained blocked: `adb devices` listed only `R5CR120QCBF` and an emulator, and Mac USB enumeration showed only `R5CR120QCBF` as the connected Samsung Android device. `R3CXA0DS5JV` was not visible at the USB layer.
 
-Current blocker after the pass:
+## Two-Device Active CallStyle Installed Proof
 
-- `R3CXA0DS5JV` must be recovered over USB/ADB before two-phone installed proof can run. Because the second physical Play-installed v77 device was unavailable, background active CallStyle voice/video, native Answer/Decline, missed-call timing, same-thread Accept, normal in-app, and room-safe regressions were not rerun.
+Artifact subfolder: `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/installed-two-device-callstyle-proof-20260704-112837/`.
 
-Next proof must recover R3 ADB visibility, verify R3 remains Google Play-installed v77 from `com.android.vending`, verify native FCM registration readback on R3, and then rerun background/locked voice/video, Answer, Decline, missed-call timing, same-thread Accept, normal in-app, and room-safe regressions.
+Results:
+
+- Repo/origin were aligned at `b3418eb8ebc5e0add5aede7dd97c8ef9d65178c6` before proof, and the tracked tree was clean except pre-existing untracked artifact/temp files.
+- `R3CXA0DS5JV` and `R5CR120QCBF` were both visible/authorized in `adb devices`.
+- Both devices read back package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `77`, versionName `1.0.0`.
+- Both devices had DND/Zen `0`. R5 ring/notification/media streams were nonzero; R3 ring/notification streams were nonzero.
+- Both devices had channel `chilly_chat_calls_fullscreen_v1` with importance `4`, ringtone sound, ringtone audio attributes, and vibration enabled.
+- R3 Settings readback showed registered push/native call status with redacted device/native call fingerprints and `Full-screen call alerts` enabled. R5 Settings readback showed full-screen call alerts enabled and the same channel family.
+- Background voice call: R5 outside app received an active CallStyle notification on `chilly_chat_calls_fullscreen_v1`, not a missed-call notification. The notification had `category=call`, `fullscreenIntent`, `androidx.core.app.NotificationCompat$CallStyle`, and two actions: `Decline` and `Answer`.
+- Native Answer for voice opened the valid Chi'lly Chat call and both devices reached `2 in call`; End Call returned both devices to `No Active Call`.
+- Native Decline for voice cleared the caller and receiver to `No Active Call`; R5 notification readback after Decline did not show an active answerable call notification.
+- Background video call: R5 outside app received an active CallStyle notification on `chilly_chat_calls_fullscreen_v1` with `Decline` and `Answer`; native Answer opened the valid video call and both devices reached active video-call state with `2 in call`.
+- Same-thread Accept regression: R3 and R5 were both in the same direct thread with `No Active Call`; R5 started a call, R3 saw the same-thread full incoming UI with `Accept` and `Decline`, R3 accepted, and both devices reached `2 in call`. The previous `This communication room is unavailable` failure did not reproduce.
+- Normal in-app outside-thread regression: R3 on Settings received the full incoming modal with `Decline`, `Answer`, and `Reply in Chat`, not the room-safe compact banner; Decline returned R3 to Settings and R5 to `No Active Call`.
+- Missed-call timing remained Partial: the cleanup rerun did not capture a clean active-before-expire notification for that specific attempt, although stale active answerable notifications were not present after caller end.
+- Room-safe fresh regression remained Partial: the prior Watch-Party fixture `BS-E2E-7561F256` now returns `Room not found`, and no new room fixture was created or mutated in this lane.
+- Locked-screen full-screen takeover was not separately proved beyond CallStyle `fullscreenIntent`, Settings full-screen permission readback, and background notification proof.
 
 ## Safety Confirmation
 
@@ -254,7 +271,6 @@ Next proof must recover R3 ADB visibility, verify R3 remains Google Play-install
 
 ## Remaining Open Items
 
-- Configure the FCM service-account secret in Supabase without committing or exposing it.
-- Recover `R3CXA0DS5JV` ADB visibility.
-- Verify the latest OTA loads on Google Play-installed v77 and native FCM registration shows safe readback.
-- Rerun locked-screen voice/video proof, background notification actions, stale/expired call rejection, and same-thread/normal/room-safe regressions after FCM credentials and both devices are available.
+- Create or recover a safe current room/live fixture before rerunning room-safe incoming-call regression; do not mutate room state in this proof lane just to close it.
+- Rerun missed-call timing with a clean active-before-expire capture or an actual timeout/expiry proof.
+- Separately prove locked-screen full-screen takeover if product requires full-screen visual closure beyond CallStyle `fullscreenIntent` and full-screen permission readback.

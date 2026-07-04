@@ -531,6 +531,10 @@ Do not activate creator-money. Tips, Paid Video, Watch-Party Seat Pass, VIP, and
 
 ## Every Visible Surface Active Wiring
 
+## Native Chi'lly Chat CallStyle Proof Update
+
+Google Play-installed v77 native CallStyle proof is Partial. Core background active incoming-call behavior is now installed-proved: both physical phones were visible, Google Play-installed from `com.android.vending`, and on versionCode `77`; active background voice/video calls delivered CallStyle notifications on `chilly_chat_calls_fullscreen_v1` with `Answer` and `Decline`; native Answer and Decline worked; same-thread Accept did not hit an unavailable room; and normal in-app Settings received the full incoming modal. Remaining readiness gaps are narrow: fresh room-safe regression with a current safe room fixture, clean missed-call timeout/expiry capture, and separate locked-screen full-screen visual proof if that is required for launch claims.
+
 Every visible surface active wiring audit: Closed. No visible clickable dead buttons are allowed. Nothing visible should be hidden or disabled. Every visible control works, routes correctly, opens a setup/status/resolution flow, opens a support/review flow, or starts a tester-safe flow. Permission scopes must unlock backed behavior.
 
 Tester-visible monetization UX is separate from live money settlement. Premium monthly tester flow is reachable where Play internal/licensed tester/provider setup supports it. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.

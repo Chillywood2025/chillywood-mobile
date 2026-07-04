@@ -1,5 +1,17 @@
 # NEXT TASK
 
+# V77 Native Chi'lly Chat CallStyle Remaining Closure
+
+Current latest truth:
+- Native Android Chi'lly Chat CallStyle/full-screen incoming-call work is installed-proof Partial, not Blocked, after the July 4 two-phone proof.
+- Artifact folders: `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`, `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/installed-v77-callstyle-proof-20260703-203844/`, and `/tmp/google-play-internal-v78-native-callstyle-active-incoming-fix-20260703-215118/installed-two-device-callstyle-proof-20260704-112837/`.
+- Both `R5CR120QCBF` and `R3CXA0DS5JV` were visible/authorized and remained Google Play-installed v77 from `com.android.vending`; no sideload, `adb install`, logout, clear data, uninstall, or reinstall happened.
+- Supabase FCM secret setup is complete by secret name only (`FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`), with no secret value printed or committed.
+- Closed in installed proof: background active voice CallStyle notification with `Answer` / `Decline`; background active video CallStyle notification with `Answer` / `Decline`; native Answer opens/joins valid voice/video calls; native Decline clears both sides; same-thread full incoming UI and Accept no longer hit `This communication room is unavailable`; normal Settings surface outside the thread gets the full incoming modal and Decline cleans up both sides.
+- Environment proof: both devices had DND/Zen `0`; `chilly_chat_calls_fullscreen_v1` existed with high importance, ringtone audio attributes, and vibration.
+- Remaining proof gaps: fresh room-safe regression was not rerun because fixture `BS-E2E-7561F256` now returns `Room not found`; missed-call timing needs a clean active-before-expire capture or actual timeout proof; locked-screen full-screen takeover was not separately proved beyond CallStyle `fullscreenIntent` and Settings full-screen permission readback.
+- Do not create a new Play build, sideload, `adb install`, logout, clear data, uninstall/reinstall, mutate room state, touch Money Center/providers/live money/payouts/cashout, weaken auth/RLS, or rewrite WebRTC/media unless a fresh installed proof shows a real app bug.
+
 # V77 Native Chi'lly Chat CallStyle / Full-Screen Proof Follow-Up
 
 Current latest truth:
