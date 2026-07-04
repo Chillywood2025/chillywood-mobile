@@ -1,5 +1,23 @@
 # NEXT TASK
 
+# V78 Native Answer Action Installed Proof Blocker
+
+Current latest truth:
+- Native Android Chi'lly Chat CallStyle `Answer` handoff is source/native fixed, built, submitted, and installed on R5, but final two-phone installed proof is Blocked because `R3CXA0DS5JV` is not visible over ADB or Mac USB enumeration.
+- Governing docs: `docs/release/GOOGLE_SIGNED_V77_NATIVE_CALLSTYLE_FULLSCREEN_PROOF.md` and `docs/release/GOOGLE_SIGNED_V78_NATIVE_ANSWER_ACTION_FIX.md`.
+- Artifact folder: `/tmp/google-play-internal-v77-native-answer-action-fix-20260704-124252/`.
+- Source commit: `6c3fbdef23d8ccf9bef90c26d7b6dea33c409b02` (`Fix native call answer handoff`), pushed to `origin/main`.
+- Root cause: native `Answer` used a broadcast PendingIntent and then tried to launch the app Activity after clearing the notification, so outside-app/lock-screen Android could stop ringing without delivering the answer deep link to JS.
+- Fix: native `Answer` now uses `buildActivityPendingIntent(context, data, "answer", 1)` and the chat route clears matching presented Android call notifications only after safe authenticated accept/decline handling.
+- Validation passed: Deno checks, Expo Android prebuild, generated Kotlin compile, call/notification guards, proof scripts, `npm run typecheck`, `npm run validate:runtime`, `supabase db push --dry-run`, and diff checks.
+- EAS Build `e01b708a-d049-421b-a16b-1bb1e5399e47` produced Android AAB versionCode `78`, versionName/runtime `1.0.0`, commit `6c3fbdef23d8ccf9bef90c26d7b6dea33c409b02`.
+- EAS Submit `1a7f765c-2c34-4cab-8fb6-d10bb422e976` submitted v78 to Google Play internal testing only. No Play production submission happened.
+- `R5CR120QCBF` updated through Google Play only and reads back package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `78`, versionName `1.0.0`, lastUpdateTime `2026-07-04 13:16:58`.
+- `R3CXA0DS5JV` did not appear after non-destructive `adb kill-server` / `adb start-server`, Mac USB enumeration, and repeated `adb devices` polling. `adb devices -l` shows only R5 plus an emulator.
+- Next exact step: recover `R3CXA0DS5JV` over USB/ADB without sideload, `adb install`, logout, clear data, uninstall, reinstall, or factory reset; update it through Google Play to v78; verify package/installer/version; then rerun the native Answer proof matrix.
+- Required proof after R3 recovery: background voice Answer opens/joins and caller leaves ringing; background video Answer opens/joins and caller leaves ringing; native Decline still clears safely; stale/expired/declined notification cannot answer old call; same-thread Accept does not hit `This communication room is unavailable`; normal in-app outside-thread modal works; room-safe compact banner, Reply in Chat, and Leave room and answer still work.
+- Do not touch Money Center, providers, live money, payouts/cashout, auth/RLS, broad WebRTC/media, or broad room routing unless a fresh installed proof shows a real app bug.
+
 # V77 Native Chi'lly Chat CallStyle Remaining Closure
 
 Current latest truth:

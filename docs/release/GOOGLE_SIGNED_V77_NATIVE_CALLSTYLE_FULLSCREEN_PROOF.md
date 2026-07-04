@@ -1,5 +1,61 @@
 # Google-Signed v77 Native CallStyle Full-Screen Proof
 
+## July 4, 2026 v78 Native Answer Handoff Fix
+
+Status: Blocked for final installed two-phone closure after source/native fix, build, submit, and one-device Play update. The user-proved failure was narrowed to the native Android CallStyle `Answer` action: the outside-app/lock-screen call notification appeared, rang, vibrated, and showed `Decline` / `Answer`, but tapping `Answer` only stopped ringing and did not open or join the call; the caller stayed in the trying/ringing state.
+
+Root cause: the native `Answer` action used a broadcast PendingIntent and then attempted to launch the app from `ChillyChatCallNotificationActionReceiver` after clearing the notification. On background/lock-screen Android this can stop the notification without reliably starting the Activity/deep link, so the JS route never received the valid `nativeCallAction=answer`, `callInviteId`, `threadId`, and `openCall=1` handoff.
+
+Fix commit: `6c3fbdef23d8ccf9bef90c26d7b6dea33c409b02` (`Fix native call answer handoff`).
+
+Source/native changes:
+
+- `plugins/withChillyChatNativeCallNotifications.js`: `Answer` now uses `buildActivityPendingIntent(context, data, "answer", 1)` so Android starts the app Activity directly with the existing answer deep link. `Decline` remains a broadcast action.
+- `app/chat/[threadId].tsx`: after the invite is safely accepted or declined through the existing authenticated call path, the app dismisses matching presented Android call notifications. It does not clear native call state before invite validation.
+- `scripts/guard-chilly-chat-call-push-policy.mjs` and `scripts/guard-notification-room-call-policy.mjs`: guard that native `Answer` starts the Activity directly, carries the native answer handoff, and clears presented Android notifications only after safe invite handling.
+
+Validation passed:
+
+- `deno check supabase/functions/chilly-chat-call-dispatch/index.ts`
+- `deno check supabase/functions/notification-device-tokens/index.ts`
+- `npx expo prebuild --platform android --no-install`
+- `./gradlew :app:compileDebugKotlin`
+- `npm run guard:notification-room-call-policy`
+- `npm run guard:chilly-chat-call-push-policy`
+- `npm run guard:chat-call-moderation-notification-policy`
+- `npm run guard:notification-action-retention-policy`
+- `npm run proof:room-safe-notification-and-call-behavior`
+- `npm run proof:notification-icon-surface-wiring`
+- `npm run proof:important-notification-accessibility`
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `supabase db push --dry-run`
+- `git diff --check`
+- `git diff --cached --check`
+
+Build / submit result:
+
+- EAS Build: `e01b708a-d049-421b-a16b-1bb1e5399e47`
+- Build profile: `production`
+- Artifact type: Android App Bundle
+- VersionCode: `78`
+- VersionName: `1.0.0`
+- RuntimeVersion: `1.0.0`
+- Build commit: `6c3fbdef23d8ccf9bef90c26d7b6dea33c409b02`
+- EAS Submit: `1a7f765c-2c34-4cab-8fb6-d10bb422e976`
+- Track: Google Play internal testing only
+- Result: submitted successfully. No Play production submission happened.
+
+Installed proof result:
+
+- `R5CR120QCBF` updated through Google Play only and reads back package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `78`, versionName `1.0.0`, lastUpdateTime `2026-07-04 13:16:58`.
+- `R3CXA0DS5JV` is not visible over ADB or Mac USB enumeration in the current session; `adb devices -l` shows only `R5CR120QCBF` plus an emulator. Non-destructive ADB server restart and repeated polling did not recover R3.
+- Final native Answer proof is not Closed because two physical Play-installed phones are required to prove background voice/video Answer, caller state moving out of ringing, stale Answer rejection, same-thread Accept regression, normal in-app regression, and room-safe regression.
+
+Safety confirmation: no source changes touched Money Center, providers, live money, payouts/cashout, auth/RLS, broad WebRTC/media setup, broad room routing, Play production, sideloading, `adb install`, logout, clear data, uninstall, or reinstall. No private service-account value, raw token, email, user id, provider id, signed URL, or credential is committed in this doc.
+
+Artifact folder: `/tmp/google-play-internal-v77-native-answer-action-fix-20260704-124252/`.
+
 Status: Partial after installed two-phone closure pass - source/native implementation validated, v77 AAB published to Google Play internal testing, Google Play full-screen intent declaration saved/sent for review, and both physical phones updated through Google Play to v77. The July 4 installed pass recovered `R3CXA0DS5JV`, verified both phones are Google Play-installed v77 from `com.android.vending`, and proved active background voice/video CallStyle notifications on `chilly_chat_calls_fullscreen_v1` with Answer/Decline before missed-call conversion. Native Answer and Decline work, same-thread Accept no longer lands in `This communication room is unavailable`, and normal in-app outside-thread Settings shows the full incoming-call modal. Remaining Partial items are fresh room-safe regression proof because the old Watch-Party fixture now returns `Room not found`, a cleaner missed-call timing/expiry capture, and separate locked-screen takeover proof beyond CallStyle `fullscreenIntent`/permission readback.
 
 Artifact folders:
