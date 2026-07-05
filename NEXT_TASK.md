@@ -3,11 +3,13 @@
 # Creator-Money Polish Pass Installed Proof
 
 Current latest truth:
-- Seven-item creator-money / Premium / notification polish pass is source-fixed, OTA-published, Edge-deployed where needed, and validation-clean, but installed visual proof is Blocked by proof-device/fixture state.
+- Seven-item creator-money / Premium / notification polish pass is Closed for installed visual proof on Google Play-installed v79.
 - Governing doc: `docs/release/GOOGLE_SIGNED_V79_CREATOR_MONEY_POLISH_PASS.md`.
-- Artifact folder: `/tmp/google-play-internal-v79-creator-money-polish-pass-20260705-063948/`.
+- Artifact folder: `/tmp/google-play-internal-v79-creator-money-polish-pass-20260705-063948/`; installed closure subfolder: `/tmp/google-play-internal-v79-creator-money-polish-pass-20260705-063948/installed-proof-closure-20260705-123246/`.
 - Source commit: `06969904cef6cb078ee7f28e7839962acb4ca8ad`.
 - EAS Update production Android runtime `1.0.0`: group `32da5f6a-8a04-499c-8896-c8a4497b9420`, Android update `019f3215-47b5-7bff-9aa5-cbe6088a11ba`, message `Polish creator money UI details`.
+- Installed proof found one real Paid Video locked-state regression. Follow-up source commit `ddb07f332010ace899284df6f01bd6065dc28e21` fixed locked player chrome in `app/player/[id].tsx`.
+- Follow-up EAS Update production Android runtime `1.0.0`: group `24c53b6a-2ee5-469e-a3cd-9eccc5904375`, Android update `019f3364-40aa-7ea7-baff-9ea606e87b11`, message `Fix locked paid video player chrome`.
 - `revenuecat-webhook` was redeployed after notification row copy cleanup. No secret values were printed, committed, or documented.
 - Source fixes completed:
   - Paid Video locked screen now renders a clean locked poster/paywall state instead of active player chrome bleeding through.
@@ -18,22 +20,20 @@ Current latest truth:
   - Proof account display-name typo was investigated and found only in historical artifacts/docs or external proof-account data, not in source-controlled seed/test fixtures.
   - Creator-money notification rows use concise visible copy while sandbox/proof/not-payable truth remains in metadata.
 - Full validation passed: creator-money route/notification/activity/access/money/provider/payment/notification/room/brand/route guards, `npx tsc --noEmit`, `npm run validate:runtime`, `supabase db push --dry-run`, and diff checks.
-- R5 read back Google Play-installed v79 from `com.android.vending` and loaded the app after two safe restarts.
-- R3 was not visible over ADB after non-destructive ADB server restart.
-
-Installed proof blockers:
-1. Paid Video locked screen source fix needs a user/account without proof access to the paid-video fixture; R5 opened the unlocked player because it already has proof access.
-2. Money Center safe-area and creator Seat Pass wording need a creator/Premium-capable device session; R5 hit the Premium gate and R3 was not visible.
-3. Room tray copy needs a reachable room-safe fixture; prior Seat Pass room now returns `Room not found`.
-4. Notification row copy is source/Edge/guard-closed for future generated rows, but visible installed proof needs a new safe generated/provider event row or approved proof-row path.
-5. Proof account display-name typo is not source-controlled; a physical correction needs an approved safe proof-account data update path if the owner wants new captures to change.
+- Both `R5CR120QCBF` and `R3CXA0DS5JV` were visible/authorized for closure and read back Google Play-installed v79 from `com.android.vending`.
+- Installed proof closed all seven items:
+  - R3 locked Paid Video shows a clean poster/paywall with `Unlock Video`, exact-video-only copy, and no player controls/chrome bleed-through after the follow-up OTA.
+  - R5 unavailable/sold-out Seat Pass shows `Seat Pass unavailable` with no strong enabled purchase CTA.
+  - R3 Money Center / Platform Studio header has safe top spacing and readable `Sandbox Ready`.
+  - R3 creator setup surfaces show `Watch-Party Seat Passes` and no visible `Paid Room Seats`.
+  - R5 room tray says user-facing `Activity` / “You'll stay in the room while checking updates,” with no visible technical `room-safe` QA wording.
+  - Proof account display-name typo remains source-uncontrolled external proof-account data; no account DB mutation was performed.
+  - Fresh sandbox/proof/not-payable buyer and creator notification rows show concise copy, timestamps, dismiss controls, and route smoke checks; proof truth remains in metadata.
 
 Next exact step:
-1. Recover `R3CXA0DS5JV` over ADB without sideload, `adb install`, logout, clear data, uninstall, or reinstall.
-2. Use a creator/Premium-capable session and a non-access buyer session to capture the installed visuals that R5 could not show.
-3. Create or find a fresh reachable room-safe fixture if room tray copy needs installed proof.
-4. Generate a safe sandbox/proof/not-payable notification row through an approved app/backend path if visible concise row-copy proof is required.
-5. Do not change money/provider/native/auth behavior unless fresh installed proof shows a real app bug.
+1. No creator-money polish installed-proof task is open unless a fresh installed regression appears.
+2. Do not redo the seven-item polish proof or mutate proof account display names without owner approval.
+3. Do not change money/provider/native/auth behavior unless fresh installed proof shows a real app bug.
 
 # Six Creator-Money E2E UX Installed Proof
 
