@@ -195,22 +195,20 @@ export function AccessSheet({
           premiumUpsellBody,
         })
   ), [appDisplayName, premiumUpsellBody, premiumUpsellTitle, reason, sheetState?.presentation]);
+  const isPremiumGateSheet = reason === "premium_required";
+  const renderDeferredUnavailable = deferredMonetization && !isPremiumGateSheet;
 
   const copy = {
-    kicker: deferredMonetization
-      ? (reason === "premium_required" ? "PREMIUM ACCESS" : "ROOM ACCESS")
+    kicker: renderDeferredUnavailable
+      ? "ROOM ACCESS"
       : (kickerOverride ?? baseCopy.kicker),
-    title: deferredMonetization
-      ? (reason === "premium_required" ? "Premium access is not currently available" : "Room access is not currently available")
+    title: renderDeferredUnavailable
+      ? "Room access is not currently available"
       : (titleOverride ?? baseCopy.title),
-    body: deferredMonetization
-      ? (
-          reason === "premium_required"
-            ? "Premium access is not currently available for this title on this device or account. Access will appear here when it becomes available."
-            : "Watch-Party Seat Pass access is not currently available for this room on this device or account. Access will appear here when it becomes available."
-        )
+    body: renderDeferredUnavailable
+      ? "Watch-Party Seat Pass access is not currently available for this room on this device or account. Access will appear here when it becomes available."
       : (bodyOverride ?? baseCopy.body),
-    actionLabel: deferredMonetization
+    actionLabel: renderDeferredUnavailable
       ? "Got it"
       : (
           sheetState?.primaryAction === "retry"
@@ -273,8 +271,7 @@ export function AccessSheet({
   const helperTextStyle = deferredMonetization
     ? styles.helperTextNeutral
     : sheetState?.helperTone === "warning" ? styles.helperTextWarning : styles.helperTextNeutral;
-  const isPremiumGateSheet = reason === "premium_required";
-  const displayedCopy = isPremiumGateSheet && !deferredMonetization
+  const displayedCopy = isPremiumGateSheet
     ? {
         kicker: "PREMIUM",
         title: "Premium required",
@@ -291,7 +288,7 @@ export function AccessSheet({
       };
 
   const onPrimaryPress = useCallback(async () => {
-    if (deferredMonetization) {
+    if (renderDeferredUnavailable) {
       onCloseTracked("button");
       return;
     }
@@ -389,6 +386,7 @@ export function AccessSheet({
     sheetState?.primaryAction,
     sheetState?.primaryDisabled,
     user?.id,
+    renderDeferredUnavailable,
   ]);
 
   const onRestorePress = useCallback(async () => {
@@ -478,7 +476,7 @@ export function AccessSheet({
           <Text style={styles.body}>{displayedCopy.body}</Text>
           {displayedCopy.helper ? <Text style={styles.premiumHelper}>{displayedCopy.helper}</Text> : null}
 
-          {!deferredMonetization && sandboxMode.enabled ? (
+          {!renderDeferredUnavailable && sandboxMode.enabled ? (
             <View style={isPremiumGateSheet ? styles.sandboxNotice : styles.sandboxCard}>
               {isPremiumGateSheet ? (
                 <Text style={styles.sandboxNoticeText}>Sandbox test mode — no real money is charged.</Text>
@@ -491,7 +489,7 @@ export function AccessSheet({
             </View>
           ) : null}
 
-          {!deferredMonetization && !isPremiumGateSheet && sheetState?.offer ? (
+          {!renderDeferredUnavailable && !isPremiumGateSheet && sheetState?.offer ? (
             <MoneyOfferCard
               kicker={sheetState.offer.badge}
               title={sheetState.offer.title}
@@ -504,20 +502,20 @@ export function AccessSheet({
             </MoneyOfferCard>
           ) : null}
 
-          {!deferredMonetization && !isPremiumGateSheet ? (
+          {!renderDeferredUnavailable && !isPremiumGateSheet ? (
             <MoneyScopeInfoButton
               scope="watch_party_ticket"
               label="What does this unlock?"
             />
           ) : null}
 
-          {(sheetState || deferredMonetization) && !isPremiumGateSheet ? (
+          {(sheetState || renderDeferredUnavailable) && !isPremiumGateSheet ? (
             <View style={[styles.helperCard, helperToneStyle]}>
               <Text style={styles.helperKicker}>
-                {deferredMonetization ? "ACCESS STATUS" : sheetState?.helperKicker}
+                {renderDeferredUnavailable ? "ACCESS STATUS" : sheetState?.helperKicker}
               </Text>
               <Text style={[styles.helperText, helperTextStyle]}>
-                {deferredMonetization
+                {renderDeferredUnavailable
                   ? "This surface explains the current gate and routes you back to status, restore, manage, or support flows instead of leaving a dead end."
                   : sheetState?.helperBody}
               </Text>
@@ -530,7 +528,7 @@ export function AccessSheet({
             </View>
           ) : null}
 
-          {!deferredMonetization && !isPremiumGateSheet && (sheetState?.canRestore || sheetState?.canManage) ? (
+          {!renderDeferredUnavailable && !isPremiumGateSheet && (sheetState?.canRestore || sheetState?.canManage) ? (
             <View style={styles.utilityRow}>
               {sheetState?.canRestore ? (
                 <TouchableOpacity
@@ -574,7 +572,7 @@ export function AccessSheet({
               {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryText}>{displayedCopy.actionLabel}</Text>}
             </TouchableOpacity>
           </View>
-          {!deferredMonetization && isPremiumGateSheet && sheetState?.canRestore ? (
+          {!renderDeferredUnavailable && isPremiumGateSheet && sheetState?.canRestore ? (
             <TouchableOpacity
               style={styles.restoreLink}
               onPress={() => {

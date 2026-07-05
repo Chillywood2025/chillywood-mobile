@@ -2783,7 +2783,7 @@ export default function WatchPartyRoomScreen() {
               activeOpacity={0.85}
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                Review Access
+                {accessGateSheetReason === "premium_required" ? "View Premium" : "Review Access"}
               </Text>
             </TouchableOpacity>
           ) : null}

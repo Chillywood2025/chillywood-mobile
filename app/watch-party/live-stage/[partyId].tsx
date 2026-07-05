@@ -4211,7 +4211,9 @@ export default function WatchPartyLiveStageScreen({
     : LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY;
   const activeLiveAccessPresentation = liveWatchPartyGatePresentation ?? blockedRoomAccessGatePresentation;
   const blockedRoomAccessPrimaryLabel = blockedRoomAccessSheetReason
-    ? activeLiveAccessPresentation?.actionLabel ?? (blockedRoomAccessSheetReason === "premium_required" ? "View Premium Access" : "View Room Access")
+    ? blockedRoomAccessSheetReason === "premium_required"
+      ? "View Premium"
+      : activeLiveAccessPresentation?.actionLabel ?? "View Room Access"
     : "Open Party Room";
 
   if (authLoading || betaLoading) {
@@ -4337,19 +4339,66 @@ export default function WatchPartyLiveStageScreen({
               style={styles.routeGatePrimaryButton}
               activeOpacity={0.86}
               onPress={() => {
+                if (blockedRoomAccessSheetReason) {
+                  setLiveWatchPartyAccessSheetVisible(true);
+                  return;
+                }
                 router.replace({
                   pathname: "/watch-party/[partyId]",
                   params: { partyId },
                 });
               }}
               accessibilityRole="button"
-              accessibilityLabel="Open Party Room"
+              accessibilityLabel={blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
-              <Text style={styles.routeGatePrimaryText}>Open Party Room</Text>
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}</Text>
             </TouchableOpacity>
           </View>
         </View>
+        {activeLiveAccessSheetGate && activeLiveAccessSheetReason ? (
+          <AccessSheet
+            visible={liveWatchPartyAccessSheetVisible}
+            reason={activeLiveAccessSheetReason}
+            gate={activeLiveAccessSheetGate}
+            appDisplayName={branding.appDisplayName}
+            premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
+            premiumUpsellBody={monetizationConfig.premiumUpsellBody}
+            kickerOverride={activeLiveAccessPresentation?.kicker}
+            titleOverride={liveWatchPartyPremiumGate ? livePremiumGateCopy.title : activeLiveAccessPresentation?.title}
+            bodyOverride={liveWatchPartyPremiumGate ? livePremiumGateCopy.message : activeLiveAccessPresentation?.body}
+            actionLabelOverride={activeLiveAccessPresentation?.actionLabel}
+            onPurchaseResult={(result) => {
+              if (!result.ok) {
+                return {
+                  message: result.message,
+                  tone: "error" as const,
+                };
+              }
+              setLoading(true);
+              setAccessRetryToken((value) => value + 1);
+              return {
+                message: "Premium access updated. Try Live Watch-Party again.",
+                tone: "success" as const,
+              };
+            }}
+            onRestoreResult={(result) => {
+              if (!result.ok) {
+                return {
+                  message: result.message,
+                  tone: "error" as const,
+                };
+              }
+              setLoading(true);
+              setAccessRetryToken((value) => value + 1);
+              return {
+                message: "Purchases restored. Try Live Watch-Party again.",
+                tone: "success" as const,
+              };
+            }}
+            onClose={() => setLiveWatchPartyAccessSheetVisible(false)}
+          />
+        ) : null}
       </View>
     );
   }

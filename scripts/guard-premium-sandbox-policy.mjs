@@ -53,6 +53,9 @@ const serverPaymentRail = read("supabase/functions/_shared/payment-rail-policy.t
 const validateRuntime = read("scripts/validate-runtime.mjs");
 const channelSettings = read("app/channel-settings.tsx");
 const adminSandboxRoute = read("app/admin-money-sandbox-purchases.tsx");
+const accessSheet = read("components/monetization/access-sheet.tsx");
+const watchPartyRoute = read("app/watch-party/[partyId].tsx");
+const liveStageRoute = read("app/watch-party/live-stage/[partyId].tsx");
 
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY || existingRevenueCat.androidPublicSdkKey", "Expo production RevenueCat public key wiring");
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV || existingRevenueCat.androidDebugPublicSdkKey", "Expo debug RevenueCat public key wiring");
@@ -107,6 +110,13 @@ assertIncludes(adminSandboxRoute, "Start real sandbox purchase", "sandbox tester
 assertIncludes(adminSandboxRoute, "Start physical merch sandbox checkout", "sandbox tester merch checkout action");
 assertIncludes(adminSandboxRoute, "Payout readiness", "sandbox tester payout readiness section");
 assertIncludes(adminSandboxRoute, "cannot request, trigger, simulate, cash out", "sandbox tester payout execution blocked");
+assertIncludes(accessSheet, "const renderDeferredUnavailable = deferredMonetization && !isPremiumGateSheet", "Premium gates ignore deferred unavailable dead-end mode");
+assertIncludes(accessSheet, "if (renderDeferredUnavailable)", "deferred unavailable close path is bounded away from Premium gates");
+assertIncludes(accessSheet, "if (isPremiumGateSheet)", "Premium gate primary action routes to subscribe");
+assertIncludes(watchPartyRoute, "accessGateSheetReason === \"premium_required\" ? \"View Premium\" : \"Review Access\"", "Watch-Party Premium gate uses View Premium action");
+assertIncludes(liveStageRoute, "blockedRoomAccessSheetReason === \"premium_required\"", "Live Stage blocked Premium access gets a Premium-specific action");
+assertIncludes(liveStageRoute, "? \"View Premium\"", "Live Stage blocked Premium primary label");
+assertIncludes(liveStageRoute, "if (blockedRoomAccessSheetReason) {\n                  setLiveWatchPartyAccessSheetVisible(true);", "Live Stage blocked access opens the access sheet instead of Open Party Room");
 
 assertIncludes(moneyFeatureFlags, "live_money_enabled: \"off\"", "live money default off");
 for (const key of ["live_money_enabled", "watch_party_seats_enabled", "tips_enabled", "paid_content_enabled", "payouts_enabled"]) {
