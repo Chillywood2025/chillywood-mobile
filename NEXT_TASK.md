@@ -1,5 +1,27 @@
 # NEXT TASK
 
+# Premium-Gated LiveKit Sandbox Follow-Up
+
+Current latest truth:
+- Premium-gated Watch-Party / Live Stage access CTAs are source-fixed and OTA-published, and installed proof is Partial for current LiveKit smoke.
+- Governing doc: `docs/release/GOOGLE_SIGNED_V79_PREMIUM_GATED_LIVEKIT_SANDBOX_PROOF.md`.
+- Artifact folder: `/tmp/google-play-internal-v79-premium-gated-livekit-sandbox-proof-20260705-142126/`.
+- Source commit: `aa6d01366b400680a2da692f3164c1862ae6c16c`.
+- EAS Update production Android runtime `1.0.0`: group `743a7dd8-7233-4fac-b56e-4764f88c160b`, Android update `019f33bf-42d3-7bcd-84bc-8fed01845ab1`.
+- Both `R5CR120QCBF` and `R3CXA0DS5JV` read back Google Play-installed v79 from `com.android.vending`.
+- Non-Premium Premium-required gates are source-guarded to route through `View Premium` / `/subscribe` instead of showing `Open Party Room` or a `Premium access is not currently available` dead end.
+- Both approved sandbox tester accounts opened `/subscribe`, saw compact sandbox copy, completed the Google Play / RevenueCat sandbox Premium test subscription with the Google Play test card and no real charge, and read back `Premium is active.` in app.
+- After Premium active readback, R5 hosted Watch-Party Party Room `VLLM58` and R3 joined it. The current Premium-gated Party Room smoke is Closed.
+- Watch-Party Live sidecar remains Partial for a non-Premium blocker: after Premium active, `Open Shared Player` showed `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.`
+- Live Stage remains Partial: fresh Live Waiting Room surfaces loaded, R5 created room `4D9DSZ`, and R3 found it, but current proof did not reach Stage / `2 in room`.
+- This supersedes the earlier statement that the current v79 LiveKit smoke was blocked by Premium/account access. Premium sandbox purchase/readback is now proved; the remaining gaps are sidecar readiness and Live Stage entry smoke.
+- No Premium bypass, manual entitlement mutation, service-role grant, live money, payout, cashout, payable balance, provider production mutation, creator-money activation, Play production, sideload, `adb install`, logout, clear data, uninstall/reinstall, native call change, Money Center refactor, auth/RLS weakening, LiveKit server restart, token printing, or secret exposure happened.
+
+Next exact step:
+1. Do not redo Premium sandbox purchase proof unless a regression appears.
+2. If current LiveKit closure is requested, focus narrowly on the Watch-Party Live sidecar `Live feed unavailable` token/join-contract path and the Live Stage waiting-room `Create Live Room` / `Join Now` entry path.
+3. Do not bypass Premium, manually grant entitlements, mutate provider production settings, restart LiveKit, print tokens, or broaden into WebRTC/LiveKit refactors without a fresh exact source bug.
+
 # LiveKit / Watch-Party / Live Stage Reconciliation
 
 Current latest truth:

@@ -10,6 +10,23 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Premium-Gated LiveKit Sandbox Follow-Up
+
+Status: Source-fixed and installed-proof Partial.
+
+Governing doc: `docs/release/GOOGLE_SIGNED_V79_PREMIUM_GATED_LIVEKIT_SANDBOX_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v79-premium-gated-livekit-sandbox-proof-20260705-142126/`.
+
+Source commit `aa6d01366b400680a2da692f3164c1862ae6c16c` fixes Premium-required Watch-Party / Live Stage CTA handling. Non-Premium Premium-required gates route through `View Premium` / `/subscribe` instead of showing `Open Party Room` or `Premium access is not currently available` while still gated. EAS Update production Android runtime `1.0.0` published group `743a7dd8-7233-4fac-b56e-4764f88c160b`, Android update `019f33bf-42d3-7bcd-84bc-8fed01845ab1`.
+
+Both physical proof phones read back Google Play-installed v79 from `com.android.vending`. Both opened `/subscribe`, saw compact sandbox copy, completed the approved Google Play / RevenueCat sandbox Premium test subscription with the Google Play test card/no real charge, and read back `Premium is active.` in app. After Premium active readback, current Watch-Party Party Room smoke passed: R5 hosted room `VLLM58` and R3 joined it.
+
+Remaining current LiveKit smoke gaps are no longer Premium purchase/readback blockers:
+
+- Watch-Party Live sidecar: after Premium active, `Open Shared Player` showed `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.`
+- Live Stage: fresh Live Waiting Room surfaces loaded and R3 found R5 room `4D9DSZ`, but current proof did not reach Stage / `2 in room`.
+
+Closed testing remains acceptable with gates/off switches and monitoring. Public production readiness still requires current sidecar/Live Stage closure plus load/reconnect/cellular/TURN/metrics hardening. No Premium bypass, manual entitlement grant, live money, payout/cashout, payable balance, provider production mutation, creator-money product activation, Play production, sideload, `adb install`, logout, clear data, uninstall/reinstall, native call change, Money Center refactor, auth/RLS weakening, LiveKit server restart, token printing, or secret exposure happened.
+
 ## LiveKit / Watch-Party / Live Stage Reconciliation
 
 Status: Closed for proof-history reconciliation; Partial for current v79 Live Stage / Watch-Party Live sidecar smoke.

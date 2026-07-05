@@ -6,6 +6,21 @@ Verdict: Partial for current v79 smoke, Closed for proof-history reconciliation.
 
 Artifact folder: `/tmp/google-play-internal-v79-livekit-proof-reconciliation-smoke-20260705-134945/`.
 
+## July 5 Premium Sandbox Follow-Up
+
+The Premium/access blocker language below is superseded by `docs/release/GOOGLE_SIGNED_V79_PREMIUM_GATED_LIVEKIT_SANDBOX_PROOF.md`.
+
+Follow-up source commit `aa6d01366b400680a2da692f3164c1862ae6c16c` fixed the Premium-required CTA/dead-end behavior and was published by EAS Update production Android runtime `1.0.0`, group `743a7dd8-7233-4fac-b56e-4764f88c160b`, Android update `019f33bf-42d3-7bcd-84bc-8fed01845ab1`.
+
+Both Google Play-installed v79 proof phones completed the approved Google Play / RevenueCat sandbox Premium test flow, read back `Premium is active.` in app, and then proved Premium-active Watch-Party Party Room entry on room `VLLM58` with R5 hosting and R3 joining. No real money was charged and no entitlement was manually granted.
+
+Current remaining smoke gaps are no longer Premium access:
+
+- Watch-Party Live sidecar: after Premium active, `Open Shared Player` showed the safe alert `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.`
+- Live Stage: fresh Live Waiting Room surfaces loaded and R3 found R5 room `4D9DSZ`, but current proof did not reach Stage / `2 in room`.
+
+The reconciliation below remains valid for proof-history separation, but any statement that the current v79 LiveKit smoke is blocked by Premium/account access should be read as historical and superseded by the Premium sandbox follow-up.
+
 ## Executive Summary
 
 This lane reconciles older LiveKit, Watch-Party, Live Stage, and Chi'lly Chat proof language so current docs no longer imply that every LiveKit-related surface is unproved or that diagnostic proof equals installed actual-user proof.
