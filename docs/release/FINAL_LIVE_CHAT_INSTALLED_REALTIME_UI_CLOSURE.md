@@ -1,5 +1,9 @@
 # Final Live + Chat Installed Realtime UI Closure
 
+## July 5, 2026 Reconciliation Note
+
+Current v79 proof status is reconciled in `docs/release/GOOGLE_SIGNED_V79_LIVEKIT_PROOF_RECONCILIATION_SMOKE.md`. This historical document preserves its strict actual-user Partial verdict, but later proof supersedes some older ambiguity: Watch-Party Party Room installed UI/realtime/readback are Closed for their scoped proof, current v79 Party Room smoke passed, and Chi'lly Chat calls are a separate RTC stack now Closed in v79 call-specific docs. Live Stage strict normal actual-user entry and Watch-Party Live camera sidecar current smoke remain Partial/blocked by Premium/account access until an approved Premium-capable fixture is used.
+
 Final Live + Chat installed realtime UI closure: Closed / Partial / Blocked.
 
 Final verdict: Partial under `docs/release/ACTUAL_USER_PROOF_STANDARD.md`.

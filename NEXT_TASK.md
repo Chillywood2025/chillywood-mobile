@@ -1,5 +1,25 @@
 # NEXT TASK
 
+# LiveKit / Watch-Party / Live Stage Reconciliation
+
+Current latest truth:
+- LiveKit / Watch-Party / Live Stage proof reconciliation is Closed for documentation reconciliation and Partial for current v79 smoke.
+- Governing doc: `docs/release/GOOGLE_SIGNED_V79_LIVEKIT_PROOF_RECONCILIATION_SMOKE.md`.
+- Artifact folder: `/tmp/google-play-internal-v79-livekit-proof-reconciliation-smoke-20260705-134945/`.
+- Both `R5CR120QCBF` and `R3CXA0DS5JV` were visible and read back Google Play-installed v79 from `com.android.vending`.
+- Watch-Party Party Room installed UI is Closed from prior scoped proof, and current v79 Party Room smoke passed on both phones with a temporary authenticated proof-only fixture.
+- Watch-Party realtime callback and playback readback are Closed.
+- The 25-participant LiveKit RTC-node media diagnostic and publish-authority downgrade are Closed diagnostic support, not actual-user installed UI proof.
+- Chi'lly Chat calls are a separate RTC stack; current v79 native Android CallStyle, same-thread, normal in-app, and room-safe call behavior are Closed in the call-specific docs.
+- Current v79 Watch-Party Live camera sidecar smoke remains unproved because the shared-player path showed Premium/access unavailable for the proof account/title.
+- Current v79 Live Stage smoke remains unproved because both phones hit the legitimate Premium required gate.
+- No Premium gate was bypassed, no source was changed, no LiveKit server/token behavior changed, and temporary proof rooms were marked inactive after smoke.
+
+Next exact step:
+1. Do not reopen broad LiveKit readiness from stale old Partial language.
+2. If current installed Live Stage or Watch-Party Live sidecar proof is required, provide or approve a Premium-capable proof account/fixture and run only a narrow smoke. Do not bypass Premium gates.
+3. Public-production LiveKit readiness still needs current Live Stage/sidecar smoke plus load/reconnect/cellular/TURN/metrics hardening; closed testing remains acceptable with gates/off switches and monitoring.
+
 # Creator-Money Polish Pass Installed Proof
 
 Current latest truth:

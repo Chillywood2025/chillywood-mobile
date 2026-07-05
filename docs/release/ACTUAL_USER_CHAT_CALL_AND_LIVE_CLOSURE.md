@@ -1,5 +1,9 @@
 # Actual User Chat Call And Live Closure
 
+## July 5, 2026 Reconciliation Note
+
+Current v79 proof status is reconciled in `docs/release/GOOGLE_SIGNED_V79_LIVEKIT_PROOF_RECONCILIATION_SMOKE.md`. This historical strict-standard document remains useful, but its older Chat Call Partial is superseded for the current requested Android call scope by v79 native CallStyle, same-thread, normal in-app, and room-safe call closures. Chi'lly Chat calls are not LiveKit Rooms. Watch-Party Party Room installed UI/realtime/readback are Closed for their scoped proof, and current v79 Party Room smoke passed. Live Stage strict normal actual-user entry and Watch-Party Live camera sidecar current smoke remain Partial/blocked by Premium/account access until an approved Premium-capable fixture is used.
+
 Actual-user Chat Call proof: Partial.
 
 Actual-user Live UI proof: Partial.

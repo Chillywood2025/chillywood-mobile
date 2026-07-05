@@ -1,5 +1,9 @@
 # LiveKit Production Readiness Runbook
 
+## July 5, 2026 Reconciliation Note
+
+Current v79 proof status is reconciled in `docs/release/GOOGLE_SIGNED_V79_LIVEKIT_PROOF_RECONCILIATION_SMOKE.md`. This runbook remains the production-readiness/hardening reference. It should not be read as saying every Watch-Party/LiveKit surface is currently unproved: Watch-Party Party Room installed UI, Watch-Party realtime callback/readback, and the 25-participant LiveKit media diagnostic are Closed for their scoped proof. Current v79 Party Room smoke also passed. Live Stage strict normal actual-user entry and Watch-Party Live camera sidecar current smoke remain Partial/blocked by Premium/account access until an approved Premium-capable fixture is used. Chi'lly Chat calls are a separate RTC stack and are Closed in the v79 call-specific docs.
+
 Date: 2026-04-26
 
 Lane: LiveKit production domain / TURN / TLS / network proof prep

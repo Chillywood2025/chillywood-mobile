@@ -10,6 +10,27 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## LiveKit / Watch-Party / Live Stage Reconciliation
+
+Status: Closed for proof-history reconciliation; Partial for current v79 Live Stage / Watch-Party Live sidecar smoke.
+
+Governing doc: `docs/release/GOOGLE_SIGNED_V79_LIVEKIT_PROOF_RECONCILIATION_SMOKE.md`. Artifact folder: `/tmp/google-play-internal-v79-livekit-proof-reconciliation-smoke-20260705-134945/`.
+
+Both `R5CR120QCBF` and `R3CXA0DS5JV` were visible and read back Google Play-installed package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`. A temporary authenticated proof-only title room/live room was created for smoke and then marked inactive; no service-role, provider, money, Premium entitlement, auth/RLS, or production fixture mutation was used.
+
+Current status separation:
+
+- Watch-Party Party Room installed UI: Closed from prior scoped proof; current v79 Party Room smoke also passed on both physical phones.
+- Watch-Party realtime callback and playback readback: Closed from prior scoped proof.
+- LiveKit 25-participant media diagnostic: Closed as diagnostic media proof; not a normal installed UI proof.
+- LiveKit publish-authority downgrade: Closed as diagnostic authority proof.
+- LiveKit token endpoint / server registry: historically proved with redacted backend checks; current endpoint smoke was not rerun in this lane.
+- Live Stage / Live Room: diagnostic/media proof and older screenshot-backed evidence exist, but strict actual-user normal waiting-room/entry proof remains Partial. Current v79 smoke was blocked by the legitimate Premium required gate on both phones.
+- Watch-Party Live camera sidecar: source/guard supported; current v79 smoke reached Party Room and Open Shared Player, then blocked on Premium/access unavailable for the proof account/title.
+- Chi'lly Chat calls: separate RTC stack, not LiveKit Room proof; current v79 Android call behavior is Closed in call-specific docs.
+
+Closed testing recommendation: acceptable with Premium gates, off switches, and monitoring. Public production readiness still requires current Premium-authorized Live Stage/Watch-Party Live sidecar installed smoke plus load/reconnect/cellular/TURN/metrics hardening. No source, build, Play production submission, sideload, `adb install`, logout, clear data, uninstall/reinstall, Money Center, creator-money, provider, live-money, payout/cashout, auth/RLS, native, LiveKit server, secret, or WebRTC/media changes happened.
+
 ## Creator-Money Polish Pass
 
 Status: Closed for installed visual proof on Google Play-installed v79.

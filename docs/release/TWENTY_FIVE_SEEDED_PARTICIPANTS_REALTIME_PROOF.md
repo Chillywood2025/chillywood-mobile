@@ -1,5 +1,9 @@
 # 25 Seeded Participants Realtime Proof
 
+## July 5, 2026 Reconciliation Note
+
+Current v79 proof status is reconciled in `docs/release/GOOGLE_SIGNED_V79_LIVEKIT_PROOF_RECONCILIATION_SMOKE.md`. The 25-participant LiveKit RTC-node media diagnostic and publish-authority downgrade remain Closed diagnostic proof; they are not normal installed UI proof. Watch-Party Party Room installed UI/realtime/readback are Closed from prior scoped proof, and current v79 Party Room smoke also passed. Live Stage strict normal actual-user entry and Watch-Party Live camera sidecar current installed smoke remain Partial/blocked by Premium/account access until an approved Premium-capable fixture is used. Chi'lly Chat calls are a separate RTC stack and are Closed in the v79 call-specific docs.
+
 25 seeded participants realtime proof: Closed / Partial / Blocked.
 
 Final verdict: Partial under `docs/release/ACTUAL_USER_PROOF_STANDARD.md`.
