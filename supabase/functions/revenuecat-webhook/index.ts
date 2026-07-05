@@ -623,57 +623,57 @@ const buyerNotificationPlanForProduct = (
 ): CreatorMoneyNotificationPlan | null => {
   if (productType === "paid_content_access") {
     return {
-      body: "You can now watch this creator video.",
+      body: "Paid Video unlocked.",
       category: "creator_money_purchase",
       notificationType: "paid_video_unlocked",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Video unlocked",
+      title: "Paid Video unlocked",
     };
   }
   if (productType === "watch_party_live_ticket") {
     return {
-      body: "Your Watch-Party Seat Pass is ready.",
+      body: "Your Seat Pass is ready.",
       category: "creator_money_purchase",
       notificationType: "watch_party_ticket_ready",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Seat Pass ready",
+      title: "Your Seat Pass is ready",
     };
   }
   if (productType === "channel_subscription") {
     return {
-      body: "You’re subscribed to this creator Platform.",
+      body: "Channel Subscription active.",
       category: "creator_money_purchase",
       notificationType: "channel_subscription_active",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Subscription active",
+      title: "Channel Subscription active",
     };
   }
   if (productType === "vip_pass") {
     return {
-      body: "You now have VIP access for this creator.",
+      body: "VIP Pass active.",
       category: "creator_money_purchase",
       notificationType: "vip_access_active",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "VIP access active",
+      title: "VIP Pass active",
     };
   }
   if (productType === "event_pass") {
     return {
-      body: "Your Event Pass is ready.",
+      body: "Event Pass confirmed.",
       category: "creator_money_purchase",
       notificationType: "event_pass_active",
       priority: 4,
       recipientUserId: buyerUserId,
-      title: "Event Pass active",
+      title: "Event Pass confirmed",
     };
   }
   if (productType === "creator_tip") {
     return {
-      body: "Your creator support tip was recorded. Tips do not unlock anything.",
+      body: "Tip sent. Tips do not unlock anything.",
       category: "creator_money_purchase",
       notificationType: "tip_sent_receipt",
       priority: 5,
@@ -689,20 +689,20 @@ const creatorNotificationPlanForProduct = (
   creatorUserId: string | null,
 ): CreatorMoneyNotificationPlan | null => {
   if (!creatorUserId) return null;
-  const sandboxSuffix = " Sandbox/not-payable; no payout was created.";
+  const transactionBody = "Open Money Center Transactions for details.";
   if (productType === "paid_content_access") {
     return {
-      body: `A viewer unlocked one of your videos.${sandboxSuffix}`,
+      body: transactionBody,
       category: "creator_money_sale",
       notificationType: "paid_video_sold",
       priority: 4,
       recipientUserId: creatorUserId,
-      title: "Paid video unlocked",
+      title: "Paid Video sold",
     };
   }
   if (productType === "watch_party_live_ticket") {
     return {
-      body: `A viewer got a Watch-Party Seat Pass.${sandboxSuffix}`,
+      body: transactionBody,
       category: "creator_money_sale",
       notificationType: "watch_party_ticket_sold",
       priority: 4,
@@ -712,27 +712,27 @@ const creatorNotificationPlanForProduct = (
   }
   if (productType === "channel_subscription") {
     return {
-      body: `A viewer subscribed to your creator Platform.${sandboxSuffix}`,
+      body: transactionBody,
       category: "creator_money_sale",
       notificationType: "channel_subscription_started",
       priority: 4,
       recipientUserId: creatorUserId,
-      title: "New subscriber",
+      title: "Channel Subscription started",
     };
   }
   if (productType === "vip_pass") {
     return {
-      body: `A viewer got VIP access.${sandboxSuffix}`,
+      body: transactionBody,
       category: "creator_money_sale",
       notificationType: "vip_pass_sold",
       priority: 4,
       recipientUserId: creatorUserId,
-      title: "New VIP member",
+      title: "VIP Pass sold",
     };
   }
   if (productType === "event_pass") {
     return {
-      body: `A viewer got access to your event.${sandboxSuffix}`,
+      body: transactionBody,
       category: "creator_money_sale",
       notificationType: "event_pass_sold",
       priority: 4,
@@ -742,7 +742,7 @@ const creatorNotificationPlanForProduct = (
   }
   if (productType === "creator_tip") {
     return {
-      body: `A viewer sent creator support.${sandboxSuffix}`,
+      body: transactionBody,
       category: "creator_money_sale",
       notificationType: "tip_received",
       priority: 5,

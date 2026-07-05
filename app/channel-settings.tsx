@@ -3,6 +3,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
   Alert,
@@ -1281,6 +1282,7 @@ const createInitialMoneyManageTarget = (manage: unknown): MonetizationFeatureKey
 
 export function ChannelStudioScreen() {
   const router = useRouter();
+  const safeAreaInsets = useSafeAreaInsets();
   const routeParams = useLocalSearchParams<{
     tab?: string;
     focus?: string;
@@ -1301,6 +1303,10 @@ export function ChannelStudioScreen() {
     ?? (routeAction === "clip" || routeAction === "create-clip" ? "clip" : null)
     ?? (routeAction === "upload" ? "content" : null)
     ?? "home";
+  const studioContentContainerStyle = useMemo(
+    () => [styles.content, { paddingTop: Math.max(54, safeAreaInsets.top + 18) }],
+    [safeAreaInsets.top],
+  );
   const [activeStudioTab, setActiveStudioTab] = useState<StudioTabId>(initialStudioTab);
   const [expandedHomeSections, setExpandedHomeSections] = useState<ReadonlySet<StudioHomeSectionId>>(
     () => new Set<StudioHomeSectionId>(["create"]),
@@ -10006,7 +10012,7 @@ export function ChannelStudioScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={studioContentContainerStyle}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>

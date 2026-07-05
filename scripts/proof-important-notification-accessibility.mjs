@@ -90,9 +90,9 @@ add("Activity does not fake notification records", includes(bell, "No fake count
 add("Chat remains separate from money notifications", !includes(chatIndex, "creator_money_sale") && !includes(chatIndex, "creator_money_purchase"), "chat separation");
 
 [
-  "Seat Pass ready",
+  "Your Seat Pass is ready",
   "Seat Pass sold",
-  "Your Watch-Party Seat Pass is ready.",
+  "Your Seat Pass is ready.",
 ].forEach((needle) => add(`Seat Pass visible copy present ${needle}`, includes(revenuecatWebhook, needle), needle));
 
 const forbiddenVisiblePhrases = [

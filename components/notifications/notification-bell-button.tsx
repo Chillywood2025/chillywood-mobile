@@ -231,11 +231,11 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
           <View style={[styles.traySheet, roomSafe && styles.roomSafeTraySheet]}>
             <View style={styles.trayHeader}>
               <View style={styles.trayHeaderCopy}>
-                <Text style={styles.trayKicker}>{roomSafe ? "ROOM-SAFE ACTIVITY" : "NOTIFICATIONS"}</Text>
+                <Text style={styles.trayKicker}>{roomSafe ? "ACTIVITY" : "NOTIFICATIONS"}</Text>
                 <Text style={styles.trayTitle}>Activity</Text>
                 <Text style={styles.trayBody}>
                   {roomSafe
-                    ? "Room/live surfaces use room-safe notification tray/banner behavior. Opening this tray does not leave, mute, unmute, or disconnect the room."
+                    ? "You'll stay in the room while checking updates. Opening this tray will not mute, unmute, or disconnect you."
                     : "Real notification records for creator money, events, system alerts, and supported activity."}
                 </Text>
               </View>

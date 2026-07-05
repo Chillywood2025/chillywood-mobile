@@ -8625,9 +8625,66 @@ export default function PlayerScreen() {
             {inWatchParty && entryBoostActive ? (
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
+            {creatorVideoPaidContentLocked ? (
+              <View style={styles.paidVideoLockedPoster} testID="paid-video-lock-card">
+                {frameworkBackgroundSource ? (
+                  <ImageBackground source={frameworkBackgroundSource} style={styles.paidVideoLockedPosterImage} resizeMode="cover">
+                    <View style={styles.paidVideoLockedPosterScrim} />
+                  </ImageBackground>
+                ) : (
+                  <View style={styles.paidVideoLockedPosterFallback} />
+                )}
+                <View style={styles.paidVideoLockedPosterBadge}>
+                  <MaterialIcons name="lock" size={18} color="#F8FAFF" />
+                </View>
+                <View style={styles.paidVideoUnlockFloatingCard}>
+                  <View style={styles.paidVideoLockHeader}>
+                    <Text style={styles.paidVideoLockTitle} numberOfLines={2}>
+                      {creatorVideo?.title ?? "Paid creator video"}
+                    </Text>
+                    <MoneyStatusChip label="Locked" tone="premium" />
+                  </View>
+                  {creatorVideoPaidContentPriceLabel ? (
+                    <Text style={styles.paidVideoLockPrice}>{creatorVideoPaidContentPriceLabel}</Text>
+                  ) : null}
+                  <MoneyScopeStrip
+                    includes="Playback access to this creator video only."
+                    excludes="Chi'llywood Premium, subscriptions, VIP, Watch-Party Seat Passes, event passes, rooms, and other creator videos stay separate."
+                  />
+                  <MoneyScopeInfoButton scope="paid_creator_video" label="What does this unlock?" compact />
+                  <TouchableOpacity
+                    style={[
+                      styles.playerAccessPrimaryBtn,
+                      styles.paidVideoUnlockPrimaryButton,
+                      paidVideoUnlockBusy && styles.secondaryBtnDisabled,
+                    ]}
+                    activeOpacity={0.86}
+                    disabled={paidVideoUnlockBusy}
+                    onPress={() => {
+                      void handlePaidVideoUnlock();
+                    }}
+                    testID="tester-paid-video-unlock-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Unlock paid creator video"
+                    accessibilityState={{ disabled: paidVideoUnlockBusy, busy: paidVideoUnlockBusy }}
+                  >
+                    {paidVideoUnlockBusy ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.playerAccessPrimaryText}>
+                        Unlock Video
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  {paidVideoUnlockMessage ? (
+                    <Text style={styles.videoLoadingSubtext} testID="paid-video-purchase-success-receipt">{paidVideoUnlockMessage}</Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : (
             <Animated.View
-              testID={isCreatorVideoPlayback && playbackSource && !creatorVideoPaidContentLocked ? "paid-video-player-ready" : undefined}
-              pointerEvents={creatorVideoPaidContentLocked ? "auto" : "none"}
+              testID={isCreatorVideoPlayback && playbackSource ? "paid-video-player-ready" : undefined}
+              pointerEvents="none"
               style={[
                 styles.videoAnimatedWrap,
                 {
@@ -8721,51 +8778,7 @@ export default function PlayerScreen() {
                 </View>
               )}
             </Animated.View>
-
-            {creatorVideoPaidContentLocked ? (
-              <View pointerEvents="box-none" style={styles.paidVideoUnlockFloatingCard} testID="paid-video-lock-card">
-                <View style={styles.paidVideoLockHeader}>
-                  <Text style={styles.paidVideoLockTitle} numberOfLines={2}>
-                    {creatorVideo?.title ?? "Paid creator video"}
-                  </Text>
-                  <MoneyStatusChip label="Locked" tone="premium" />
-                </View>
-                {creatorVideoPaidContentPriceLabel ? (
-                  <Text style={styles.paidVideoLockPrice}>{creatorVideoPaidContentPriceLabel}</Text>
-                ) : null}
-                <MoneyScopeStrip
-                  includes="Playback access to this creator video only."
-                  excludes="Chi'llywood Premium, subscriptions, VIP, Watch-Party Seat Passes, event passes, rooms, and other creator videos stay separate."
-                />
-                <MoneyScopeInfoButton scope="paid_creator_video" label="What does this unlock?" compact />
-                <TouchableOpacity
-                  style={[
-                    styles.playerAccessPrimaryBtn,
-                    styles.paidVideoUnlockPrimaryButton,
-                    paidVideoUnlockBusy && styles.secondaryBtnDisabled,
-                  ]}
-                  activeOpacity={0.86}
-                  disabled={paidVideoUnlockBusy}
-                  onPress={() => {
-                    void handlePaidVideoUnlock();
-                  }}
-                  testID="tester-paid-video-unlock-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="Unlock paid creator video"
-                >
-                  {paidVideoUnlockBusy ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.playerAccessPrimaryText}>
-                      Unlock Video
-                    </Text>
-                  )}
-                </TouchableOpacity>
-                {paidVideoUnlockMessage ? (
-                  <Text style={styles.videoLoadingSubtext} testID="paid-video-purchase-success-receipt">{paidVideoUnlockMessage}</Text>
-                ) : null}
-              </View>
-            ) : null}
+            )}
 
             {shouldUseSharedAndroidVideoSurface && !creatorVideoPaidContentLocked ? (
               <View
@@ -8964,7 +8977,7 @@ export default function PlayerScreen() {
               </View>
             ) : null}
 
-            {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
+            {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !creatorVideoPaidContentLocked ? (
               <View
                 collapsable={false}
                 pointerEvents="auto"
@@ -9194,7 +9207,7 @@ export default function PlayerScreen() {
                 </View>
               ) : null}
 
-              {zoomLevel > 1.01 && !inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
+              {zoomLevel > 1.01 && !inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !creatorVideoPaidContentLocked ? (
                 <View style={styles.controlsRow}>
                   <TouchableOpacity style={styles.controlBtn} onPress={resetZoom}>
                     <Text style={styles.controlBtnText}>Reset Zoom</Text>
@@ -9223,7 +9236,7 @@ export default function PlayerScreen() {
             {isSharedPartyPlayback && isPlayerFullscreen ? renderSharedFullscreenParticipantRail() : null}
           </View>
 
-          {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !isStandaloneFullscreen && !creatorVideoCommentKeyboardOpen ? (
+          {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !creatorVideoPaidContentLocked && !isStandaloneFullscreen && !creatorVideoCommentKeyboardOpen ? (
             <View style={styles.standaloneBelowMediaActions}>
               <TouchableOpacity
                 style={styles.standaloneBelowBackButton}
@@ -9691,13 +9704,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  paidVideoUnlockFloatingCard: {
+  paidVideoLockedPoster: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    backgroundColor: "#05070C",
+  },
+  paidVideoLockedPosterImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  paidVideoLockedPosterScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(5,7,12,0.62)",
+  },
+  paidVideoLockedPosterFallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#070A12",
+  },
+  paidVideoLockedPosterBadge: {
     position: "absolute",
-    left: 24,
-    right: 24,
-    bottom: 104,
-    zIndex: 190,
-    elevation: 190,
+    top: 18,
+    right: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(248,250,255,0.18)",
+    backgroundColor: "rgba(0,0,0,0.44)",
+  },
+  paidVideoUnlockFloatingCard: {
+    width: "86%",
+    maxWidth: 390,
     alignItems: "stretch",
     gap: 10,
     borderRadius: 18,

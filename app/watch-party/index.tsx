@@ -1543,19 +1543,27 @@ export default function WatchPartyIndexScreen() {
                 </TouchableOpacity>
               </>
             ) : paidTicketGate?.requiresPurchase ? (
-              <TouchableOpacity
-                style={[styles.generateCodeButton, paidTicketBusy && styles.generateCodeButtonDisabled]}
-                onPress={onBuyPaidTicketAndJoin}
-                activeOpacity={0.85}
-                disabled={paidTicketBusy}
-                testID="tester-watch-party-ticket-button"
-                accessibilityRole="button"
-                accessibilityLabel="Get Watch-Party Seat"
-              >
-                <AppText scale="footnote" style={styles.generateCodeButtonText}>
-                  {paidTicketBusy ? "Opening Store" : "Get Seat Pass"}
-                </AppText>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.generateCodeButton, (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.generateCodeButtonDisabled]}
+                  onPress={onBuyPaidTicketAndJoin}
+                  activeOpacity={0.85}
+                  disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
+                  testID="tester-watch-party-ticket-button"
+                  accessibilityRole="button"
+                  accessibilityLabel={paidWatchPartyCheckoutAvailable ? "Get Watch-Party Seat Pass" : "Seat Pass unavailable"}
+                  accessibilityState={{ disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable, busy: paidTicketBusy }}
+                >
+                  <AppText scale="footnote" style={styles.generateCodeButtonText}>
+                    {paidTicketBusy ? "Opening Store" : paidWatchPartyCheckoutAvailable ? "Get Seat Pass" : "Seat Pass unavailable"}
+                  </AppText>
+                </TouchableOpacity>
+                {!paidWatchPartyCheckoutAvailable ? (
+                  <AppText scale="footnote" style={styles.errorText}>
+                    Seat Pass is not available right now. Nothing was charged.
+                  </AppText>
+                ) : null}
+              </>
             ) : null}
             {paidTicketNotice ? <AppText scale="footnote" style={styles.errorText}>{paidTicketNotice}</AppText> : null}
           </View>
@@ -1805,14 +1813,14 @@ export default function WatchPartyIndexScreen() {
                     <Pressable
                       style={({ pressed }) => [
                         styles.joinNowBtn,
-                        paidTicketBusy && styles.primaryButtonDisabled,
+                        (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.primaryButtonDisabled,
                         pressed && styles.previewActionPressed,
                       ]}
                       onPress={onBuyPaidTicketAndJoin}
-                      disabled={paidTicketBusy}
+                      disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
                       accessibilityRole="button"
-                      accessibilityLabel="Get Watch-Party Seat"
-                      accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
+                      accessibilityLabel={paidWatchPartyCheckoutAvailable ? "Get Watch-Party Seat Pass" : "Seat Pass unavailable"}
+                      accessibilityState={{ disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable, busy: paidTicketBusy }}
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                       testID="tester-watch-party-ticket-button"
                     >
@@ -1821,9 +1829,14 @@ export default function WatchPartyIndexScreen() {
                           ? "Opening Store"
                           : paidWatchPartyCheckoutAvailable
                             ? `Get Seat Pass ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`
-                            : "Get Seat Pass"}
+                            : "Seat Pass unavailable"}
                       </AppText>
                     </Pressable>
+                    {!paidWatchPartyCheckoutAvailable ? (
+                      <AppText scale="footnote" style={styles.errorText}>
+                        Seat Pass is not available right now. Nothing was charged.
+                      </AppText>
+                    ) : null}
                   </View>
                 ) : null}
               </View>

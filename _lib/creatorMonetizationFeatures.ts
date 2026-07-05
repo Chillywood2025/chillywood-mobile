@@ -58,7 +58,7 @@ export const CREATOR_MONETIZATION_FEATURE_CATALOG: readonly MonetizationFeatureC
   },
   {
     key: "paid_watch_parties",
-    title: "Paid Room Seats",
+    title: "Watch-Party Seat Passes",
     creatorDescription: "Sell Seat Pass access to hosted Watch-Party rooms.",
     fanActionLabel: "Get Seat",
     creatorActionLabel: "Set up",

@@ -36,9 +36,17 @@ assertIncludes(packageJson, "proof:notification-center-money-activity", "activit
   "no_payout_from_notification: true",
   "premium_unlock: false",
   "livekit_authority: false",
+  "sandbox_only: true",
+  "not_payable: true",
   "Tips do not unlock anything.",
-  "Sandbox/not-payable; no payout was created.",
 ].forEach((needle) => assertIncludes(revenuecatWebhook, needle, "notification safety context/copy"));
+
+[
+  "Sandbox proof record",
+  "UI/routing proof",
+  "not-payable proof",
+  "Sandbox/not-payable; no payout was created.",
+].forEach((needle) => assertNotIncludes(revenuecatWebhook, needle, "visible notification copy"));
 
 [
   "readMoneyNotificationPreference",
