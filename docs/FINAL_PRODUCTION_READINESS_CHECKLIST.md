@@ -10,6 +10,18 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Premium Required Sheet Cleanup
+
+Status: Closed for source + Google Play-installed v79 OTA visual proof.
+
+Source commit `db1013bb8d6a136b0c6b335f7e62756ecc8bc00a` simplifies the shared Premium access sheet without changing payment/provider logic. EAS Update production Android runtime `1.0.0` published group `c96a642e-ea6d-4fff-8857-1638f6c516a5`, Android update `019f3071-d3e7-7849-a047-7b670842329d`.
+
+Installed proof on `R5CR120QCBF` showed the cleaned Watch-Party Premium gate with `Premium required`, `Watch-Party Live is included with Premium.`, compact `Sandbox test mode — no real money is charged.`, primary `View Premium`, secondary `Not now`, and footer `Already subscribed? Restore`. The installed XML proof showed duplicate `Manage Premium`, large `Restore purchases`, `What does Premium unlock?`, red `Premium Status`, and payout/cashout/withdrawal/transfer/payable-balance copy absent from the gate sheet.
+
+`View Premium` opens the existing `/subscribe` screen. Restore uses the existing restore handler and showed restore feedback. Not now dismisses the sheet and keeps the user gated. No RevenueCat entitlement logic, Google Play product setup, Premium gate checks, Money Center, creator-money flows, payouts/cashout, live money, auth/RLS, native build, or Play production changed.
+
+Artifact folder: `/tmp/premium-required-sheet-cleanup-20260704-225910/`.
+
 ## Google-Signed V77 Native Chi'lly Chat CallStyle / Full-Screen
 
 Current v79 Answer-action update: Closed for the requested Google Play-installed Android proof. `docs/release/GOOGLE_SIGNED_V79_NATIVE_ANSWER_ACTION_FIX.md` records the native Answer installed proof, and `docs/release/GOOGLE_SIGNED_V79_ROOM_SAFE_INCOMING_CALL_REGRESSION_PROOF.md` records the room-safe regression closure. Source commit `5c210fa52b3c95f2047295c9e0f696db42f48002` preserves native Answer deep-link fields and waits for authenticated invite readback/validation before accepting. EAS Build `8a144cae-959f-4acb-9266-8bf7bf2c94f8` produced Android AAB versionCode `79`, versionName/runtime `1.0.0`, and EAS Submit `db1e81e4-cd7c-4113-81f1-c05fe2cda6ed` submitted it to Google Play internal testing only. Both proof phones updated through Google Play to v79 with installer `com.android.vending`. Installed proof closed background voice/video native Answer, caller state leaving ringing, native Decline, stale declined-call notification safety, same-thread Accept, normal in-app outside-thread full modal Answer, End Call cleanup, and the remaining room-safe compact-banner regression. Room-safe proof used owner-approved Google Play / RevenueCat sandbox Premium on `R5CR120QCBF` only to reach Watch-Party `Party Waiting Room`; compact banner `Decline`, `Reply in Chat`, and `Leave room and answer` were proved, with confirmation before leaving the room to answer and both phones reaching `2 in call`. Sandbox Premium did not enable live money, payouts, cashout, payable balances, provider production settings, or creator-money settlement. No Play production submission, sideload, `adb install`, logout, clear data, uninstall/reinstall, Money Center change, provider mutation, live money, payout/cashout change, auth/RLS weakening, broad WebRTC/media rewrite, or broad room-routing change happened.

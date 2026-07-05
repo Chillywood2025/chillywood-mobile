@@ -1,5 +1,19 @@
 # NEXT TASK
 
+# Premium Required Sheet Cleanup
+
+Current latest truth:
+- Premium required sheet cleanup is Closed for source + Google Play-installed v79 OTA visual proof.
+- Artifact folder: `/tmp/premium-required-sheet-cleanup-20260704-225910/`.
+- Source commit: `db1013bb8d6a136b0c6b335f7e62756ecc8bc00a`.
+- EAS Update: production Android runtime `1.0.0`, group `c96a642e-ea6d-4fff-8857-1638f6c516a5`, Android update `019f3071-d3e7-7849-a047-7b670842329d`, message `Simplify Premium required sheet`.
+- Installed proof on `R5CR120QCBF` / Google Play-installed v79 showed the cleaned Watch-Party Premium gate: `Premium required`, `Watch-Party Live is included with Premium.`, compact `Sandbox test mode — no real money is charged.`, primary `View Premium`, secondary `Not now`, and footer `Already subscribed? Restore`.
+- Removed from the installed gate proof: duplicate `Manage Premium`, large `Restore purchases` button, `What does Premium unlock?`, red `Premium Status` card, scary payout/cashout/withdrawal/transfer/payable-balance copy, and `Start Sandbox Premium Test` from the gate sheet.
+- `View Premium` opens the existing Premium `/subscribe` screen. `Already subscribed? Restore` calls the existing restore handler and shows restore feedback. `Not now` dismisses the sheet and keeps the user gated.
+- No payment/provider logic, RevenueCat entitlement logic, Google Play product setup, Premium gates, Money Center, creator-money flows, payouts/cashout, live money, auth/RLS, native build, or Play production changed.
+- Validation passed `npm run guard:premium-sandbox-policy`, `npx tsc --noEmit`, `npm run validate:runtime`, `npm run guard:watch-party-livekit`, `npm run guard:old-room-handling`, and diff checks. `npm run proof:premium-first-activation` ran safely and preserved the known annual provider-blocked status while passing safety checks. `npm run typecheck` reached TypeScript successfully, then failed only on the pre-existing generated Android launcher icon hash guard unrelated to this UI change.
+- No remaining Premium required sheet cleanup task is open unless a fresh installed regression is observed.
+
 # V79 Native Answer And Room-Safe Incoming Call Closure
 
 Current latest truth:
