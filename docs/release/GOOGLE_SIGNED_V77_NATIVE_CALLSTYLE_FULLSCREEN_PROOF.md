@@ -1,14 +1,17 @@
 # Google-Signed v77 Native CallStyle Full-Screen Proof
 
-## July 4, 2026 v79 Native Answer Installed Proof
+## July 4, 2026 v79 Native Answer And Room-Safe Installed Proof
 
-Status: Partial after Google Play-installed v79 proof. The v79 source fix commit `5c210fa52b3c95f2047295c9e0f696db42f48002` was built as EAS Build `8a144cae-959f-4acb-9266-8bf7bf2c94f8` and submitted to Google Play internal testing as EAS Submit `db1e81e4-cd7c-4113-81f1-c05fe2cda6ed`. Both physical phones updated through Google Play only to package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`.
+Status: Closed for the requested Android v79 installed native Answer and room-safe call behavior. The v79 source fix commit `5c210fa52b3c95f2047295c9e0f696db42f48002` was built as EAS Build `8a144cae-959f-4acb-9266-8bf7bf2c94f8` and submitted to Google Play internal testing as EAS Submit `db1e81e4-cd7c-4113-81f1-c05fe2cda6ed`. Both physical phones updated through Google Play only to package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`.
 
 Installed proof closed the native Answer handoff bug: background voice and background video CallStyle notifications showed `Decline` / `Answer`, tapping `Answer` opened/joined the valid call, caller state moved out of ringing, and End Call returned both sides to `No Active Call`. Native `Decline` cleared the active notification and caller state. Same-thread Accept no longer landed in `This communication room is unavailable`; after realtime settled both phones showed `2 in call` and `Connected`. Normal in-app outside-thread Settings showed the full app-wide incoming-call modal with `Answer`, `Decline`, and `Reply in Chat`, and Answer joined correctly.
 
-Remaining Partial item: v79 room-safe compact-banner regression was not closed because no usable room-safe surface was reachable without changing room/account state. `/watch-party` hit Premium gate, `/watch-party/live-stage` showed `Live room unavailable`, visible room code `XQBBRE` returned `Room not found`, and `/communication` resolved to Chi'lly Chat inbox. Artifact folder: `/tmp/google-play-internal-v77-native-answer-action-fix-20260704-124252/v79-build-submit-proof-20260704-174313/`.
+The room-safe compact-banner regression was closed in the follow-up installed proof. After owner approval to use the Google Play / RevenueCat sandbox Premium path, `R5CR120QCBF` reached Watch-Party `Party Waiting Room`. While the receiver stayed in that room-safe surface, `R3CXA0DS5JV` started fresh Chi'lly Chat calls. The receiver got the compact `room-safe-incoming-call-banner` with `Decline`, `Reply in Chat`, and `Leave room and answer`, not the normal full modal. `Decline` kept the receiver in the room and cleared caller state. `Reply in Chat` opened the direct thread without auto-answer or mic/camera start. `Leave room and answer` showed confirmation before leaving the room and joining the call; after realtime settled both phones showed `2 in call` and `Connected`, and End Call cleared both to `No Active Call`.
 
-Follow-up room-safe-only rerun on July 4, 2026 is Blocked by device availability: `R3CXA0DS5JV` is not visible over ADB or Mac USB enumeration, so fixture discovery and the two-device room-safe banner/action matrix could not run. Artifact folder: `/tmp/google-play-internal-v79-room-safe-incoming-call-regression-proof-20260704-202158/`.
+Artifact folders:
+
+- `/tmp/google-play-internal-v77-native-answer-action-fix-20260704-124252/v79-build-submit-proof-20260704-174313/`
+- `/tmp/google-play-internal-v79-room-safe-incoming-call-regression-proof-20260704-203344/`
 
 ## July 4, 2026 v78 Native Answer Handoff Fix
 

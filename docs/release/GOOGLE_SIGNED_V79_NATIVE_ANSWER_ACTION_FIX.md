@@ -1,6 +1,6 @@
 # Google-Signed v79 Native Answer Action Fix
 
-Status: Partial after installed proof.
+Status: Closed after installed proof.
 
 ## Executive Summary
 
@@ -8,7 +8,7 @@ Google Play internal v79 includes the narrower native Answer handoff fix and was
 
 v79 installed proof closed the critical native Answer behavior for background voice and video calls: the receiver's Android CallStyle notification opened/joined the valid call, and the caller left the stuck ringing state. Native Decline also cleared both sides, same-thread Accept no longer landed in `This communication room is unavailable`, and the normal in-app outside-thread surface showed the full app-wide incoming-call modal and answered correctly.
 
-The lane remains Partial only because a usable room-safe surface could not be reached without changing room/account state. `/watch-party` hit the Premium gate, `/watch-party/live-stage` showed `Live room unavailable`, the visible room code route returned `Room not found`, and `/communication` resolved to Chi'lly Chat inbox, where the app correctly showed the normal full modal.
+The remaining room-safe regression was closed in the follow-up proof documented at `docs/release/GOOGLE_SIGNED_V79_ROOM_SAFE_INCOMING_CALL_REGRESSION_PROOF.md`. Using the owner-approved Google Play / RevenueCat sandbox Premium path on `R5CR120QCBF`, the receiver reached Watch-Party `Party Waiting Room`; the installed v79 app showed the compact room-safe banner with `Decline`, `Reply in Chat`, and `Leave room and answer`, preserved room state on Decline, opened chat without auto-answer on Reply in Chat, confirmed before Leave room and answer, then joined the call with both phones reaching `2 in call`.
 
 ## Root Cause
 
@@ -81,9 +81,8 @@ No sideload, `adb install`, logout, clear data, uninstall, or reinstall happened
 
 ## Remaining Proof Gaps
 
-- Room-safe compact-banner regression on v79 is still open because no usable room-safe surface was reachable in this pass. `/watch-party` hit Premium-gate copy, `/watch-party/live-stage` showed `Live room unavailable`, room code `XQBBRE` returned `Room not found`, and `/communication` resolved to the Chi'lly Chat inbox.
-- A follow-up room-safe-only rerun on July 4, 2026 was blocked before fixture work because `R3CXA0DS5JV` was not visible over ADB or Mac USB enumeration; see `docs/release/GOOGLE_SIGNED_V79_ROOM_SAFE_INCOMING_CALL_REGRESSION_PROOF.md`.
 - Separate locked-screen visual takeover beyond active CallStyle/fullscreenIntent permission remains a separate Android policy/device proof item if required.
+- iOS call behavior is not claimed from Android v79 proof.
 
 ## Safety
 
@@ -92,3 +91,4 @@ No Play production submission, sideload, `adb install`, logout, clear data, unin
 ## Artifacts
 
 - `/tmp/google-play-internal-v77-native-answer-action-fix-20260704-124252/v79-build-submit-proof-20260704-174313/`
+- `/tmp/google-play-internal-v79-room-safe-incoming-call-regression-proof-20260704-203344/`

@@ -1,12 +1,14 @@
 # Google-Signed v78 Native Answer Action Fix
 
-Status: Blocked for final installed two-phone closure.
+Status: Superseded by v79 installed closure.
 
 ## Executive Summary
 
 The native Android outside-app Chi'lly Chat CallStyle notification now has a source/native fix for the broken `Answer` handoff. The failure was not ringtone/channel delivery: the notification appeared, rang, vibrated, and showed `Decline` / `Answer`, but tapping `Answer` only stopped ringing and did not open/join the call.
 
-The fix was built as Google Play internal v78 and submitted successfully. `R5CR120QCBF` updated through Google Play to v78. Final installed proof is blocked because `R3CXA0DS5JV` is not visible over ADB or Mac USB enumeration in the current session.
+The fix was built as Google Play internal v78 and submitted successfully. `R5CR120QCBF` updated through Google Play to v78. Final installed proof for v78 was blocked because `R3CXA0DS5JV` was not visible over ADB or Mac USB enumeration in that session.
+
+The final Android native Answer and room-safe regression proof was later closed on Google Play-installed v79. See `docs/release/GOOGLE_SIGNED_V79_NATIVE_ANSWER_ACTION_FIX.md` and `docs/release/GOOGLE_SIGNED_V79_ROOM_SAFE_INCOMING_CALL_REGRESSION_PROOF.md`.
 
 ## Root Cause
 
@@ -61,7 +63,7 @@ No Play production submission happened.
 - `R5CR120QCBF`: Google Play-installed v78, package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, lastUpdateTime `2026-07-04 13:16:58`.
 - `R3CXA0DS5JV`: not visible over ADB or Mac USB enumeration after non-destructive ADB restart and repeated polling.
 
-Two-phone installed proof remains blocked until R3 or another owner-approved Google Play-installed physical device is visible.
+Two-phone v78 installed proof remains superseded. The required two-phone proof was completed on Google Play-installed v79.
 
 ## Required Remaining Proof
 
