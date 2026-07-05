@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,26 +20,14 @@ import {
 } from "../_lib/monetization";
 import { useOptionalBetaProgram } from "../_lib/betaProgram";
 import { useSession } from "../_lib/session";
-import { MoneyScopeInfoButton } from "../components/monetization/MoneyScopeInfoButton";
-import { MoneyScopeStrip, MoneySuccessReceipt } from "../components/monetization/money-ui";
 
 const FRIENDLY_UNAVAILABLE_MESSAGE =
   "Premium purchases are temporarily unavailable while setup is being finalized.";
-const PREMIUM_SANDBOX_SUMMARY =
-  "Google Play / RevenueCat sandbox only.";
-const PREMIUM_SANDBOX_SAFETY =
-  "No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.";
-const PREMIUM_SANDBOX_DASHBOARD_NOTE =
-  "Test purchases may appear only in Google Play and RevenueCat sandbox dashboards.";
+const PREMIUM_BODY =
+  "Watch-Party Live, Live Watch-Party, creator tools, and ad-free viewing.";
+const PREMIUM_SANDBOX_NOTICE =
+  "Sandbox test mode — no real money is charged.";
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
-
-const PREMIUM_UNLOCKS = [
-  "Creator video upload",
-  "Watch-Party Live from Player",
-  "Live Watch-Party hosting",
-  "Platform customization",
-  "Premium creator tools",
-];
 
 const buildPurchaseReady = (snapshot: MonetizationSnapshot, purchaseMode: MonetizationPurchaseMode) => {
   const target = snapshot.targets.premium_subscription;
@@ -48,12 +36,6 @@ const buildPurchaseReady = (snapshot: MonetizationSnapshot, purchaseMode: Moneti
     && snapshot.canMakePayments
     && target.offeringAvailable
     && target.packageCount > 0;
-};
-
-const buildStatusSummary = (snapshot: MonetizationSnapshot) => {
-  const hasPremium = !!snapshot.targets.premium_subscription.hasEntitlement;
-  if (hasPremium) return "Premium is active on this account.";
-  return "Premium-only features stay locked until your account has an active Premium subscription.";
 };
 
 function PremiumAccordion({
@@ -232,19 +214,34 @@ export default function SubscribeScreen() {
   const canRestore = isSignedIn && snapshot.configuration.shouldConfigure;
   const canManage = isSignedIn && snapshot.configuration.shouldConfigure;
   const busy = loading || purchaseBusy || restoreBusy || manageBusy;
-  const statusSummary = useMemo(() => buildStatusSummary(snapshot), [snapshot]);
   const purchaseStatusLabel = sandboxMode.enabled && !hasPremium
     ? purchaseReady ? "Sandbox test available" : "Sandbox setup unavailable"
     : purchaseReady || hasPremium ? "Available" : "Temporarily unavailable";
   const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
   const availabilitySummary = purchaseReady
     ? sandboxMode.enabled
-      ? "Approved tester mode can open a Google Play / RevenueCat sandbox Premium purchase. No production money is active."
+      ? "Sandbox tester setup can open the Premium test purchase when Google Play and RevenueCat are available."
       : "A verified store subscription is ready for this account."
     : FRIENDLY_UNAVAILABLE_MESSAGE;
+  const primaryActionLabel = hasPremium
+    ? "Manage subscription"
+    : sandboxMode.enabled ? "Start Sandbox Premium Test" : "Start Premium";
+  const primaryActionBusy = hasPremium ? manageBusy : purchaseBusy;
 
   const onSignIn = useCallback(() => {
     router.push({ pathname: "/(auth)/login", params: { redirectTo: "/subscribe" } });
+  }, [router]);
+
+  const onClose = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/");
+  }, [router]);
+
+  const onSecondaryClose = useCallback(() => {
+    router.replace("/");
   }, [router]);
 
   const onPurchase = useCallback(async () => {
@@ -331,10 +328,6 @@ export default function SubscribeScreen() {
     }
   }, [canManage, isSignedIn, onSignIn]);
 
-  const onAnnualStatus = useCallback(() => {
-    setNotice("Premium annual is provider-blocked by the Google Play base-plan issue. Monthly tester flow and restore remain the active paths where the Play internal tester/provider setup supports them.");
-  }, []);
-
   return (
     <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
       <View style={styles.routeContainer} testID="screen-premium" collapsable={false}>
@@ -353,7 +346,7 @@ export default function SubscribeScreen() {
         showsVerticalScrollIndicator={false}
       >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
+        <TouchableOpacity onPress={onClose} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <Text style={styles.kicker}>PREMIUM</Text>
@@ -361,16 +354,10 @@ export default function SubscribeScreen() {
       </View>
 
       <View style={styles.heroCard} testID="premium-not-creator-offer-copy" collapsable={false}>
-        <Text style={styles.heroKicker}>Chi'llywood Premium</Text>
-        <Text style={styles.heroTitle}>{hasPremium ? "Premium is active." : "Premium is not active."}</Text>
-        <Text style={styles.heroBody}>{statusSummary}</Text>
+        <Text style={styles.heroKicker}>CHILLYWOOD PREMIUM</Text>
+        <Text style={styles.heroTitle}>Premium</Text>
+        <Text style={styles.heroBody}>{hasPremium ? "Your Premium access is active." : PREMIUM_BODY}</Text>
       </View>
-
-      <MoneyScopeStrip
-        includes="App-wide Chi'llywood Premium access for supported Premium features and creator tools."
-        excludes="Creator subscriptions, VIP passes, tips, paid videos, Watch-Party Seat Passes, and paid events are separate creator products."
-      />
-      <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
 
       {sessionLoading ? (
         <View style={styles.card} testID="premium-loading-state" collapsable={false}>
@@ -391,107 +378,64 @@ export default function SubscribeScreen() {
       ) : (
         <>
           <View style={styles.card} testID="premium-status-card" collapsable={false}>
-            <Text style={styles.cardKicker}>ACCOUNT STATUS</Text>
-            {sandboxMode.enabled ? (
+            <View testID={hasPremium ? "premium-active-receipt" : undefined}>
+              <Text style={styles.cardTitle}>{hasPremium ? "Premium is active." : "Premium is not active."}</Text>
+              <Text style={styles.body}>
+                {hasPremium
+                  ? "Your Premium access is active on this account."
+                  : purchaseReady ? "Choose Premium to continue." : FRIENDLY_UNAVAILABLE_MESSAGE}
+              </Text>
+            </View>
+            {sandboxMode.enabled && !hasPremium ? (
               <View style={styles.sandboxNotice}>
-                <Text style={styles.sandboxKicker}>SANDBOX TEST MODE</Text>
-                <Text style={styles.sandboxTitle}>Premium sandbox test path</Text>
-                <Text style={styles.sandboxBody}>{PREMIUM_SANDBOX_SUMMARY}</Text>
-                <Text style={styles.sandboxDetail}>{PREMIUM_SANDBOX_SAFETY}</Text>
-                <Text style={styles.sandboxDetail}>{PREMIUM_SANDBOX_DASHBOARD_NOTE}</Text>
+                <Text style={styles.sandboxNoticeText}>{PREMIUM_SANDBOX_NOTICE}</Text>
               </View>
             ) : null}
-            <View testID={hasPremium ? "premium-active-receipt" : undefined}>
-              <StatusLine
-                label="Premium status"
-                value={hasPremium ? "Active" : "Not active"}
-                body={statusSummary}
-                tone={hasPremium ? "default" : "muted"}
-              />
-            </View>
-            {hasPremium ? (
-              <MoneySuccessReceipt
-                title="Premium active"
-                body="Your app-wide Premium status is active. Creator subscriptions, VIP, paid videos, room passes, events, and tips still stay separate."
-              />
-            ) : null}
-            <StatusLine
-              label="Purchase status"
-              value={purchaseStatusLabel}
-              body={availabilitySummary}
-              tone={purchaseStatusTone}
-            />
-            <StatusLine
-              label="Premium annual"
-              value="Provider-blocked"
-              body="Annual opens this status path while Google Play base-plan setup is blocked. It is not claimed live or buyable."
-              tone="warning"
-            />
-
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.secondaryButton, busy && styles.secondaryButtonDisabled]}
-                activeOpacity={0.86}
-                disabled={busy}
-                onPress={onRestore}
-                testID="premium-restore-button"
-                accessibilityRole="button"
-                accessibilityLabel="Restore Premium purchases"
-              >
-                {restoreBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Restore purchases</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.secondaryButton, busy && styles.secondaryButtonDisabled]}
-                activeOpacity={0.86}
-                disabled={busy}
-                onPress={onManage}
-                accessibilityRole="button"
-                accessibilityLabel="Manage Chi'llywood Premium subscription"
-              >
-                {manageBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Manage subscription</Text>}
-              </TouchableOpacity>
-            </View>
 
             <TouchableOpacity
-              style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
+              style={[styles.primaryButton, (busy || (!hasPremium && !canPurchase)) && styles.primaryButtonDisabled]}
               activeOpacity={0.88}
-              disabled={busy}
-              onPress={onPurchase}
+              disabled={busy || (!hasPremium && !canPurchase)}
+              onPress={hasPremium ? onManage : onPurchase}
               testID="premium-purchase-button"
               accessibilityRole="button"
-              accessibilityLabel="Start Chi'llywood Premium purchase or open Premium status"
+              accessibilityLabel={hasPremium ? "Manage Chi'llywood Premium subscription" : "Start Chi'llywood Premium purchase"}
             >
-              {purchaseBusy ? (
+              {primaryActionBusy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.primaryButtonText}>
-                  {canPurchase
-                    ? sandboxMode.enabled ? "Start Sandbox Premium Test" : "Subscribe to Premium"
-                    : "Check Premium Monthly Status"}
-                </Text>
+                <Text style={styles.primaryButtonText}>{primaryActionLabel}</Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.ghostButton}
+              style={[styles.secondaryButton, busy && styles.secondaryButtonDisabled]}
               activeOpacity={0.86}
-              onPress={onAnnualStatus}
-              testID="premium-annual-status-button"
+              disabled={busy}
+              onPress={onSecondaryClose}
               accessibilityRole="button"
-              accessibilityLabel="Open Premium annual provider-blocked status"
+              accessibilityLabel={hasPremium ? "Done with Premium" : "Not now"}
             >
-              <Text style={styles.ghostButtonText}>Premium annual status</Text>
+              <Text style={styles.secondaryButtonText}>{hasPremium ? "Done" : "Not now"}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.ghostButton, loading && styles.secondaryButtonDisabled]}
+              style={[styles.restoreLink, (busy || !canRestore) && styles.secondaryButtonDisabled]}
               activeOpacity={0.86}
-              disabled={loading}
-              onPress={() => {
-                void refreshSnapshot(true);
-              }}
+              disabled={busy || !canRestore}
+              onPress={onRestore}
+              testID="premium-restore-button"
+              accessibilityRole="button"
+              accessibilityLabel="Restore Premium purchases"
             >
-              <Text style={styles.ghostButtonText}>{loading ? "Checking..." : "Recheck status"}</Text>
+              {restoreBusy ? (
+                <ActivityIndicator color="#E5ECF8" size="small" />
+              ) : (
+                <Text style={styles.restoreLinkText}>
+                  {hasPremium ? "Restore purchases" : "Already subscribed? "}
+                  {!hasPremium ? <Text style={styles.restoreLinkAction}>Restore</Text> : null}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -502,35 +446,47 @@ export default function SubscribeScreen() {
           ) : null}
 
           <PremiumAccordion
-            id="premium-unlocks"
-            title="What Premium unlocks"
-            summary="Creator, live, Platform, and watch-party tools"
+            id="testing-details"
+            title="Testing details"
+            summary="Sandbox availability and purchase diagnostics"
             expanded={expanded}
             onToggle={toggleAccordion}
           >
-            {PREMIUM_UNLOCKS.map((item) => (
-              <View key={item} style={styles.unlockRow}>
-                <Text style={styles.unlockDot}>•</Text>
-                <Text style={styles.unlockText}>{item}</Text>
-              </View>
-            ))}
-          </PremiumAccordion>
-
-          {!hasPremium && !purchaseReady ? (
-            <PremiumAccordion
-              id="premium-unavailable"
-              title={sandboxMode.enabled ? "Why isn't the sandbox button active?" : "Why can't I subscribe yet?"}
-              summary={sandboxMode.enabled ? "Google Play or RevenueCat sandbox setup is unavailable on this account/device" : "Premium setup is still being finalized"}
-              expanded={expanded}
-              onToggle={toggleAccordion}
+            <StatusLine
+              label="Premium status"
+              value={hasPremium ? "Active" : "Not active"}
+              body={hasPremium ? "Entitlement readback shows Premium active." : "Premium remains locked until an entitlement is confirmed."}
+              tone={hasPremium ? "default" : "muted"}
+            />
+            <StatusLine
+              label="Purchase readiness"
+              value={purchaseStatusLabel}
+              body={availabilitySummary}
+              tone={purchaseStatusTone}
+            />
+            <StatusLine
+              label="Sandbox availability"
+              value={sandboxMode.enabled ? "On" : "Off"}
+              body={sandboxMode.enabled ? "Internal tester sandbox path is available for this account." : sandboxMode.reason}
+              tone={sandboxMode.enabled ? "default" : "muted"}
+            />
+            <StatusLine
+              label="Annual setup"
+              value="Pending"
+              body="Annual Premium setup is still being finalized. Use the available monthly/test path where supported."
+              tone="muted"
+            />
+            <TouchableOpacity
+              style={[styles.ghostButton, loading && styles.secondaryButtonDisabled]}
+              activeOpacity={0.86}
+              disabled={loading}
+              onPress={() => {
+                void refreshSnapshot(true);
+              }}
             >
-              <Text style={styles.body}>
-                {sandboxMode.enabled
-                  ? "This account is approved for sandbox testing, but the device/account still needs Google Play test billing and RevenueCat offerings available before the sandbox purchase dialog can open."
-                  : "Premium setup is still being finalized. Access stays locked until a real store product and entitlement are verified."}
-              </Text>
-            </PremiumAccordion>
-          ) : null}
+              <Text style={styles.ghostButtonText}>{loading ? "Checking..." : "Recheck status"}</Text>
+            </TouchableOpacity>
+          </PremiumAccordion>
         </>
       )}
       </ScrollView>
@@ -625,8 +581,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(112,211,166,0.28)",
     backgroundColor: "rgba(25,69,49,0.32)",
-    padding: 13,
-    gap: 5,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+  },
+  sandboxNoticeText: {
+    color: "#DDF9EB",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
   },
   sandboxKicker: {
     color: "#CFF7E3",
@@ -763,6 +725,23 @@ const styles = StyleSheet.create({
     color: "#E5ECF8",
     fontSize: 13,
     fontWeight: "800",
+  },
+  restoreLink: {
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  restoreLinkText: {
+    color: "#B8C3D8",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  restoreLinkAction: {
+    color: "#F4F7FC",
+    fontWeight: "900",
   },
   ghostButton: {
     minHeight: 42,
