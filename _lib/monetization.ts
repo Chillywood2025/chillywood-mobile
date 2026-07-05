@@ -1327,11 +1327,11 @@ export async function readMonetizationAccessSheetState(options: {
       snapshot,
       presentation,
       primaryAction: "retry",
-      primaryLabel: isPremiumBackedGate ? "Manage Premium" : "Retry Offer Lookup",
+      primaryLabel: isPremiumBackedGate ? "View Premium" : "Retry Offer Lookup",
       primaryDisabled: false,
-      helperKicker: isPremiumBackedGate ? "PREMIUM STATUS" : "OFFER STATUS",
+      helperKicker: isPremiumBackedGate ? "PREMIUM" : "OFFER STATUS",
       helperBody: isPremiumBackedGate
-        ? "Open Manage Premium to check status, restore, or start an approved sandbox Premium payment for this tester account."
+        ? "Watch-Party Live is included with Premium."
         : snapshot.issues[0]
           ?? "This purchase path is not available in the current offer configuration yet.",
       helperTone: "warning",

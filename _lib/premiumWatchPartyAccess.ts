@@ -33,17 +33,17 @@ type PremiumWatchPartyFeatureAccessOptions = {
 
 export const LIVE_FIRST_PREMIUM_UPSELL_COPY = {
   title: "Premium required",
-  message: "Live rooms are a Premium feature. Upgrade to go live and join full live rooms.",
+  message: "Watch-Party Live is included with Premium.",
 } as const;
 
 export const LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY = {
   title: "Premium required",
-  message: "Live Watch-Party is Premium. Upgrade to join full live watch parties.",
+  message: "Watch-Party Live is included with Premium.",
 } as const;
 
 export const WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY = {
   title: "Premium required",
-  message: "Watch-Party Live is Premium. Upgrade to start or join watch-party rooms.",
+  message: "Watch-Party Live is included with Premium.",
 } as const;
 
 const RUNTIME_CONTROL_DISABLED_COPY: Record<RuntimeControlledLiveFeature["controlKey"], {

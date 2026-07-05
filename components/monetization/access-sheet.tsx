@@ -28,7 +28,7 @@ import {
 import { useOptionalBetaProgram } from "../../_lib/betaProgram";
 import { useSession } from "../../_lib/session";
 import { MoneyScopeInfoButton } from "./MoneyScopeInfoButton";
-import { MoneyOfferCard, MoneyStatusChip } from "./money-ui";
+import { MoneyOfferCard } from "./money-ui";
 
 export type AccessSheetReason = "premium_required" | "party_pass_required";
 export type AccessSheetStatusTone = "neutral" | "success" | "error";
@@ -51,11 +51,11 @@ export const getAccessSheetCopy = (options: {
   const appDisplayName = String(options.appDisplayName ?? "Chi'llywood").trim() || "Chi'llywood";
   if (options.reason === "premium_required") {
     return {
-      title: String(options.premiumUpsellTitle ?? "").trim() || "Go Premium",
+      title: String(options.premiumUpsellTitle ?? "").trim() || "Premium required",
       body: String(options.premiumUpsellBody ?? "").trim()
-        || `Premium unlocks premium titles and premium-entry rooms inside ${appDisplayName}, while keeping playback ad-free.`,
-      actionLabel: "Unlock Premium",
-      kicker: "PREMIUM ACCESS",
+        || "Watch-Party Live is included with Premium.",
+      actionLabel: "View Premium",
+      kicker: "PREMIUM",
     };
   }
 
@@ -72,7 +72,7 @@ export const getAccessSheetEntryLabel = (options: {
   canPurchase?: boolean;
 }) => {
   if (options.reason === "premium_required") {
-    return options.canPurchase ? "Unlock Premium" : "View Premium Access";
+    return "View Premium";
   }
 
   return options.canPurchase ? "Get Party Pass" : "View Room Access";
@@ -273,10 +273,31 @@ export function AccessSheet({
   const helperTextStyle = deferredMonetization
     ? styles.helperTextNeutral
     : sheetState?.helperTone === "warning" ? styles.helperTextWarning : styles.helperTextNeutral;
+  const isPremiumGateSheet = reason === "premium_required";
+  const displayedCopy = isPremiumGateSheet && !deferredMonetization
+    ? {
+        kicker: "PREMIUM",
+        title: "Premium required",
+        body: "Watch-Party Live is included with Premium.",
+        helper: "Premium unlocks Watch-Party Live, Live Watch-Party, and ad-free viewing.",
+        actionLabel: "View Premium",
+      }
+    : {
+        kicker: copy.kicker,
+        title: copy.title,
+        body: copy.body,
+        helper: "",
+        actionLabel: copy.actionLabel,
+      };
 
   const onPrimaryPress = useCallback(async () => {
     if (deferredMonetization) {
       onCloseTracked("button");
+      return;
+    }
+
+    if (isPremiumGateSheet) {
+      openPremiumManagement("primary");
       return;
     }
 
@@ -362,6 +383,7 @@ export function AccessSheet({
     openPremiumManagement,
     opensPremiumManagement,
     resolvePurchaseMode,
+    isPremiumGateSheet,
     sandboxMode.enabled,
     sheetState?.primaryLabel,
     sheetState?.primaryAction,
@@ -451,41 +473,48 @@ export function AccessSheet({
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => onCloseTracked("backdrop")} />
         <View style={styles.sheet}>
-          <Text style={styles.kicker}>{copy.kicker}</Text>
-          <Text style={styles.title}>{copy.title}</Text>
-          <Text style={styles.body}>{copy.body}</Text>
+          <Text style={styles.kicker}>{displayedCopy.kicker}</Text>
+          <Text style={styles.title}>{displayedCopy.title}</Text>
+          <Text style={styles.body}>{displayedCopy.body}</Text>
+          {displayedCopy.helper ? <Text style={styles.premiumHelper}>{displayedCopy.helper}</Text> : null}
 
           {!deferredMonetization && sandboxMode.enabled ? (
-            <View style={styles.sandboxCard}>
-              <MoneyStatusChip label="Sandbox test mode" tone="warning" />
-              <Text style={styles.sandboxText}>Google Play / RevenueCat sandbox test only.</Text>
-              <Text style={styles.sandboxDetailText}>
-                No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.
-              </Text>
+            <View style={isPremiumGateSheet ? styles.sandboxNotice : styles.sandboxCard}>
+              {isPremiumGateSheet ? (
+                <Text style={styles.sandboxNoticeText}>Sandbox test mode — no real money is charged.</Text>
+              ) : (
+                <>
+                  <Text style={styles.sandboxKicker}>SANDBOX TEST MODE</Text>
+                  <Text style={styles.sandboxText}>Google Play / RevenueCat sandbox test only.</Text>
+                  <Text style={styles.sandboxDetailText}>
+                    No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.
+                  </Text>
+                </>
+              )}
             </View>
           ) : null}
 
-          {!deferredMonetization && sheetState?.offer ? (
+          {!deferredMonetization && !isPremiumGateSheet && sheetState?.offer ? (
             <MoneyOfferCard
               kicker={sheetState.offer.badge}
               title={sheetState.offer.title}
               price={sheetState.offer.priceLabel}
               body={sheetState.offer.detail}
-              statusLabel={reason === "premium_required" ? "App-wide" : "Room access"}
-              statusTone={reason === "premium_required" ? "premium" : "success"}
+              statusLabel="Room access"
+              statusTone="success"
             >
               {sheetState.offer.caption ? <Text style={styles.offerCaption}>{sheetState.offer.caption}</Text> : null}
             </MoneyOfferCard>
           ) : null}
 
-          {!deferredMonetization ? (
+          {!deferredMonetization && !isPremiumGateSheet ? (
             <MoneyScopeInfoButton
-              scope={reason === "premium_required" ? "premium" : "watch_party_ticket"}
-              label={reason === "premium_required" ? "What does Premium unlock?" : "What does this unlock?"}
+              scope="watch_party_ticket"
+              label="What does this unlock?"
             />
           ) : null}
 
-          {sheetState || deferredMonetization ? (
+          {(sheetState || deferredMonetization) && !isPremiumGateSheet ? (
             <View style={[styles.helperCard, helperToneStyle]}>
               <Text style={styles.helperKicker}>
                 {deferredMonetization ? "ACCESS STATUS" : sheetState?.helperKicker}
@@ -504,7 +533,7 @@ export function AccessSheet({
             </View>
           ) : null}
 
-          {!deferredMonetization && (sheetState?.canRestore || sheetState?.canManage) ? (
+          {!deferredMonetization && !isPremiumGateSheet && (sheetState?.canRestore || sheetState?.canManage) ? (
             <View style={styles.utilityRow}>
               {sheetState?.canRestore ? (
                 <TouchableOpacity
@@ -545,9 +574,27 @@ export function AccessSheet({
               activeOpacity={0.9}
               disabled={busy}
             >
-              {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryText}>{copy.actionLabel}</Text>}
+              {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryText}>{displayedCopy.actionLabel}</Text>}
             </TouchableOpacity>
           </View>
+          {!deferredMonetization && isPremiumGateSheet && sheetState?.canRestore ? (
+            <TouchableOpacity
+              style={styles.restoreLink}
+              onPress={() => {
+                void onRestorePress();
+              }}
+              activeOpacity={0.82}
+              disabled={busy}
+            >
+              {restoreBusy ? (
+                <ActivityIndicator color="#A7B3CA" size="small" />
+              ) : (
+                <Text style={styles.restoreLinkText}>
+                  Already subscribed? <Text style={styles.restoreLinkAction}>Restore</Text>
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -588,6 +635,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "600",
+  },
+  premiumHelper: {
+    color: "#C8D2E5",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   offerCard: {
     marginTop: 6,
@@ -641,6 +694,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 12,
     gap: 4,
+  },
+  sandboxNotice: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(248,212,128,0.28)",
+    backgroundColor: "rgba(248,212,128,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  sandboxNoticeText: {
+    color: "#F8D480",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
   },
   sandboxKicker: {
     color: "#CFF7E3",
@@ -775,5 +843,20 @@ const styles = StyleSheet.create({
     color: "#E5ECF8",
     fontSize: 14,
     fontWeight: "800",
+  },
+  restoreLink: {
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  restoreLinkText: {
+    color: "#A7B3CA",
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  restoreLinkAction: {
+    color: "#F3F6FB",
+    fontWeight: "900",
   },
 });
