@@ -82,6 +82,7 @@ No sideload, `adb install`, logout, clear data, uninstall, or reinstall happened
 ## Remaining Proof Gaps
 
 - Room-safe compact-banner regression on v79 is still open because no usable room-safe surface was reachable in this pass. `/watch-party` hit Premium-gate copy, `/watch-party/live-stage` showed `Live room unavailable`, room code `XQBBRE` returned `Room not found`, and `/communication` resolved to the Chi'lly Chat inbox.
+- A follow-up room-safe-only rerun on July 4, 2026 was blocked before fixture work because `R3CXA0DS5JV` was not visible over ADB or Mac USB enumeration; see `docs/release/GOOGLE_SIGNED_V79_ROOM_SAFE_INCOMING_CALL_REGRESSION_PROOF.md`.
 - Separate locked-screen visual takeover beyond active CallStyle/fullscreenIntent permission remains a separate Android policy/device proof item if required.
 
 ## Safety

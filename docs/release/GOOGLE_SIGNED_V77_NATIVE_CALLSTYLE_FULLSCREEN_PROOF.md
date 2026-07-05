@@ -8,6 +8,8 @@ Installed proof closed the native Answer handoff bug: background voice and backg
 
 Remaining Partial item: v79 room-safe compact-banner regression was not closed because no usable room-safe surface was reachable without changing room/account state. `/watch-party` hit Premium gate, `/watch-party/live-stage` showed `Live room unavailable`, visible room code `XQBBRE` returned `Room not found`, and `/communication` resolved to Chi'lly Chat inbox. Artifact folder: `/tmp/google-play-internal-v77-native-answer-action-fix-20260704-124252/v79-build-submit-proof-20260704-174313/`.
 
+Follow-up room-safe-only rerun on July 4, 2026 is Blocked by device availability: `R3CXA0DS5JV` is not visible over ADB or Mac USB enumeration, so fixture discovery and the two-device room-safe banner/action matrix could not run. Artifact folder: `/tmp/google-play-internal-v79-room-safe-incoming-call-regression-proof-20260704-202158/`.
+
 ## July 4, 2026 v78 Native Answer Handoff Fix
 
 Status: Blocked for final installed two-phone closure after source/native fix, build, submit, and one-device Play update. The user-proved failure was narrowed to the native Android CallStyle `Answer` action: the outside-app/lock-screen call notification appeared, rang, vibrated, and showed `Decline` / `Answer`, but tapping `Answer` only stopped ringing and did not open or join the call; the caller stayed in the trying/ringing state.

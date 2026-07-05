@@ -1,5 +1,18 @@
 # NEXT TASK
 
+# V79 Room-Safe Incoming Call Regression Proof Blocker
+
+Current latest truth:
+- Room-safe incoming-call regression proof on v79 is Blocked by device availability before fixture work.
+- Governing doc: `docs/release/GOOGLE_SIGNED_V79_ROOM_SAFE_INCOMING_CALL_REGRESSION_PROOF.md`.
+- Artifact folder: `/tmp/google-play-internal-v79-room-safe-incoming-call-regression-proof-20260704-202158/`.
+- Repo/origin aligned at `0f369013748a06d90bbcb8f644249f758027a8ac` before proof.
+- `R5CR120QCBF` is visible/authorized and remains Google Play-installed v79 from `com.android.vending`.
+- `R3CXA0DS5JV` is not visible in `adb devices` or Mac USB enumeration after non-destructive ADB server restart and repeated polling; package readback returns `device not found`.
+- No room fixture was created or mutated because two physical phones are required for the call proof.
+- Next exact step: recover `R3CXA0DS5JV` over USB/ADB without sideload, `adb install`, logout, clear data, uninstall/reinstall, or factory reset; then find/create a safe active room-safe fixture and rerun compact banner / Decline / Reply in Chat / Leave room and answer on Google Play-installed v79.
+- Do not change source, rebuild, submit Play production, touch Money Center/providers/live money/payouts/cashout, weaken auth/RLS, rewrite WebRTC/media, or broadly change room routing unless fresh installed proof shows a real app bug.
+
 # V79 Native Answer Action Final Room-Safe Rerun
 
 Current latest truth:
