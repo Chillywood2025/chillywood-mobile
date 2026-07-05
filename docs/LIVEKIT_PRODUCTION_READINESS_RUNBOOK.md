@@ -2,6 +2,21 @@
 
 ## July 5, 2026 Reconciliation Note
 
+### July 5, 2026 Heartbeat Recovery Note
+
+The latest Watch-Party Live sidecar and Live Stage failures are now classified as LiveKit server registry liveness, not Premium/provider sandbox, Watch-Party Party Room, Chi'lly Chat, or native calls. The router still correctly requires a fresh heartbeat within `staleHeartbeatSeconds = 120`. `chillywood-prod-01` remains registered as `active` with public URL `wss://live.chillywoodstream.com`, but backend readback showed zero eligible servers because its heartbeat was stale by roughly 300k seconds. The health-checked `livekit-heartbeat-monitor` function was added and deployed; it checks the public endpoint and LiveKit API before writing heartbeat rows. Current invocation returned `livekit_public_endpoint_unreachable`, so it intentionally did not update `last_heartbeat_at`. This means the remaining action is host/container/network recovery plus installing a durable heartbeat watchdog, not mobile Premium work or a stale-cutoff change.
+
+Current health/proof owners:
+
+- Edge monitor: `supabase/functions/livekit-heartbeat-monitor/index.ts`
+- Host preflight heartbeat helper: `ops/livekit-registry/heartbeat-livekit.sh`
+- Watchdog templates: `ops/livekit-registry/systemd/livekit-heartbeat-monitor.service` and `.timer`
+- Health readback: `npm run check:livekit-routing-health`
+- Policy guard: `npm run guard:livekit-heartbeat-monitor-policy`
+- Release proof: `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md`
+
+Do not manually write heartbeats, loosen the stale cutoff, or bypass LiveKit routing eligibility to make the server appear healthy.
+
 Current v79 proof status is reconciled in `docs/release/GOOGLE_SIGNED_V79_LIVEKIT_PROOF_RECONCILIATION_SMOKE.md`, with the Premium sandbox follow-up in `docs/release/GOOGLE_SIGNED_V79_PREMIUM_GATED_LIVEKIT_SANDBOX_PROOF.md` and the real Home-route sidecar retest in `docs/release/GOOGLE_SIGNED_V79_REAL_HOME_DEMO_VIDEO_WATCH_PARTY_SIDECAR_PROOF.md`. This runbook remains the production-readiness/hardening reference. It should not be read as saying every Watch-Party/LiveKit surface is currently unproved: Watch-Party Party Room installed UI, Watch-Party realtime callback/readback, and the 25-participant LiveKit media diagnostic are Closed for their scoped proof. Current v79 Premium-gated Party Room smoke also passed after approved Google Play / RevenueCat sandbox Premium purchase/readback on both proof phones. Live Stage strict normal actual-user entry and Watch-Party Live camera sidecar current smoke remain Partial, but they are no longer blocked by Premium purchase/readback. The latest sidecar retest used the installed Home rail path and reached a Party Room on both phones, but the visible Home player was still titled `Chi'llywood Originals Proof Fixture` and `Open Shared Player` showed `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.` before R3 saw playback. Future sidecar closure must use non-fixture real Home media and prove actual viewer playback. Live Stage waiting-room entry still did not reach Stage / `2 in room` in current proof. Chi'lly Chat calls are a separate RTC stack and are Closed in the v79 call-specific docs.
 
 Date: 2026-04-26

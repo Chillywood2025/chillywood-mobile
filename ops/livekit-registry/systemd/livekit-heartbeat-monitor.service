@@ -1,0 +1,19 @@
+[Unit]
+Description=Chillywood LiveKit health-checked heartbeat monitor
+Documentation=README:/opt/chillywood/livekit-registry/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/chillywood/livekit-heartbeat-monitor.env
+ExecStart=/bin/sh -c 'while true; do /usr/bin/curl --fail --silent --show-error --max-time 20 --retry 2 --retry-delay 2 --request POST "$LIVEKIT_HEARTBEAT_MONITOR_FUNCTION_URL" --header "Content-Type: application/json" --header "X-LiveKit-Heartbeat-Monitor-Token: $LIVEKIT_HEARTBEAT_MONITOR_SECRET" --data "{\"server_id\":\"$LIVEKIT_SERVER_ID\",\"source\":\"systemd-livekit-heartbeat-monitor\"}" >/dev/null; sleep "${LIVEKIT_HEARTBEAT_INTERVAL_SECONDS:-60}"; done'
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

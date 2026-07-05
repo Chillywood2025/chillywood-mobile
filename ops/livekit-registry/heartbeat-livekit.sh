@@ -18,12 +18,55 @@ require_env LIVEKIT_SERVER_ID
 
 DRY_RUN="${DRY_RUN:-1}"
 LIVEKIT_COLLECT_HOST_METRICS="${LIVEKIT_COLLECT_HOST_METRICS:-0}"
+LIVEKIT_VERIFY_PUBLIC_URL="${LIVEKIT_VERIFY_PUBLIC_URL:-1}"
+LIVEKIT_PUBLIC_HEALTH_TIMEOUT_SECONDS="${LIVEKIT_PUBLIC_HEALTH_TIMEOUT_SECONDS:-4}"
+
+api_url_from_ws() {
+  local url="$1"
+  if [[ "${url}" == wss://* ]]; then
+    printf 'https://%s' "${url#wss://}"
+    return
+  fi
+  if [[ "${url}" == ws://* ]]; then
+    printf 'http://%s' "${url#ws://}"
+    return
+  fi
+  printf '%s' "${url}"
+}
+
+verify_public_endpoint() {
+  local public_ws_url="$1"
+  local api_url
+  api_url="$(api_url_from_ws "${public_ws_url}")"
+  api_url="${api_url%/}"
+
+  if [[ -z "${api_url}" ]]; then
+    echo "missing LiveKit public health URL" >&2
+    return 1
+  fi
+
+  curl -fsS --connect-timeout "${LIVEKIT_PUBLIC_HEALTH_TIMEOUT_SECONDS}" --max-time "${LIVEKIT_PUBLIC_HEALTH_TIMEOUT_SECONDS}" \
+    -o /dev/null "${api_url}" >/dev/null
+
+  # The RTC path may reject unauthenticated requests, but it must be reachable.
+  local rtc_status
+  rtc_status="$(curl -sS --connect-timeout "${LIVEKIT_PUBLIC_HEALTH_TIMEOUT_SECONDS}" --max-time "${LIVEKIT_PUBLIC_HEALTH_TIMEOUT_SECONDS}" \
+    -o /dev/null -w '%{http_code}' "${api_url}/rtc" || true)"
+  if [[ "${rtc_status}" == "000" ]]; then
+    echo "LiveKit public /rtc endpoint is not reachable" >&2
+    return 1
+  fi
+}
 
 if [[ "${DRY_RUN}" != "1" ]]; then
   require_env LIVEKIT_REGISTRY_HEARTBEAT_SECRET
   require_env LIVEKIT_ACTIVE_ROOMS
   require_env LIVEKIT_ACTIVE_PARTICIPANTS
   require_env LIVEKIT_ACTIVE_PUBLISHERS
+  if [[ "${LIVEKIT_VERIFY_PUBLIC_URL}" == "1" ]]; then
+    require_env LIVEKIT_PUBLIC_WS_URL
+    verify_public_endpoint "${LIVEKIT_PUBLIC_WS_URL}"
+  fi
 fi
 
 HOST_METRICS_JSON="{}"

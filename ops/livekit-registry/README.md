@@ -50,12 +50,13 @@ Replace `operator-set` with the operator-approved region label when it is known.
 
 ## Heartbeat
 
-`heartbeat-livekit.sh` posts heartbeat data but does not invent metrics. For non-dry-run, provide real current counts from LiveKit/host monitoring:
+`heartbeat-livekit.sh` posts heartbeat data but does not invent metrics. It fails closed before posting when `LIVEKIT_VERIFY_PUBLIC_URL=1` and the configured public LiveKit endpoint cannot be reached. For non-dry-run, provide real current counts from LiveKit/host monitoring:
 
 ```bash
 # Export LIVEKIT_REGISTRY_HEARTBEAT_SECRET from the server secret store first.
 LIVEKIT_REGISTRY_FUNCTION_URL="https://PROJECT.supabase.co/functions/v1/livekit-registry" \
 LIVEKIT_SERVER_ID="chillywood-prod-01" \
+LIVEKIT_PUBLIC_WS_URL="wss://live.chillywoodstream.com" \
 LIVEKIT_ACTIVE_ROOMS="1" \
 LIVEKIT_ACTIVE_PARTICIPANTS="8" \
 LIVEKIT_ACTIVE_PUBLISHERS="2" \
@@ -83,6 +84,49 @@ Supported non-secret metrics fields:
 - Source/time: `LIVEKIT_METRICS_SOURCE`, `LIVEKIT_METRICS_COLLECTED_AT`
 
 Do not put LiveKit API secrets, TURN credentials, internal URLs, database passwords, heartbeat secrets, or participant tokens into any metrics field. Missing metrics should be left unset/null; they must not be invented to justify higher capacity claims.
+
+## Health-Checked Backend Monitor
+
+`livekit-heartbeat-monitor` is the preferred watchdog when it is available. It runs outside the mobile app in Supabase Edge or another trusted backend caller, uses server-side LiveKit credentials, verifies the public LiveKit endpoint, calls the real LiveKit API, counts rooms/participants/publishers, and only then inserts `livekit_server_heartbeats` plus updates `livekit_servers.last_heartbeat_at`.
+
+Required function secrets:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
+- `LIVEKIT_HEARTBEAT_MONITOR_SECRET`
+
+Invoke it only from a trusted scheduler or operator shell. Do not put the monitor secret in mobile code, docs, client logs, or screenshots:
+
+```bash
+curl -fsS -X POST "$LIVEKIT_HEARTBEAT_MONITOR_FUNCTION_URL" \
+  -H "Content-Type: application/json" \
+  -H "X-LiveKit-Heartbeat-Monitor-Token: $LIVEKIT_HEARTBEAT_MONITOR_SECRET" \
+  --data '{"server_id":"chillywood-prod-01","source":"operator-health-check"}'
+```
+
+The long-running systemd service template in `ops/livekit-registry/systemd/` is the preferred durable watchdog shape for the host or a trusted backend runner:
+
+1. Install `livekit-heartbeat-monitor.service`.
+2. Put secrets only in `/etc/chillywood/livekit-heartbeat-monitor.env` with mode `600`.
+3. Enable the service with `systemctl enable --now livekit-heartbeat-monitor.service`.
+4. Verify `systemctl status livekit-heartbeat-monitor.service` and `journalctl -u livekit-heartbeat-monitor.service` without printing secrets.
+
+The monitor must fail closed. If LiveKit public reachability or API list calls fail, it writes no fresh heartbeat.
+
+## LiveKit Server Upgrade Policy
+
+Do not blindly auto-upgrade production LiveKit. Keep the deployed LiveKit server/container version pinned in the host Docker Compose or release manifest, use Renovate/Dependabot-style PRs for proposed version changes, and require:
+
+1. pre-upgrade registry health readback,
+2. current config/secret backup without printing values,
+3. staged restart or planned maintenance window,
+4. post-upgrade public endpoint and API health checks,
+5. `check:livekit-routing-health`,
+6. rollback to the previous pinned image if health checks fail.
+
+Unattended production LiveKit upgrades are not allowed.
 
 Dry-run is default:
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chillywood LiveKit health-checked heartbeat monitor every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+Unit=livekit-heartbeat-monitor.service
+
+[Install]
+WantedBy=timers.target

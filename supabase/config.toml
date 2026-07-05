@@ -4,6 +4,9 @@ verify_jwt = false
 [functions.livekit-registry]
 verify_jwt = false
 
+[functions.livekit-heartbeat-monitor]
+verify_jwt = false
+
 [functions.media-storage]
 verify_jwt = false
 

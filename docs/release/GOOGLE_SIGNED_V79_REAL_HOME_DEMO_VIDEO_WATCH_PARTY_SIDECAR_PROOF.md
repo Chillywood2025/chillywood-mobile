@@ -10,6 +10,10 @@ Artifact folder: `/tmp/google-play-internal-v79-real-home-demo-video-watch-party
 
 Premium remains Closed for this lane, and the earlier fixture-route caveat was addressed by retesting through the installed Home video rail instead of launching a direct fixture route. Both Google Play-installed v79 proof phones re-read active Premium after approved Google Play / RevenueCat sandbox Premium renewal. R5 then launched Watch-Party Live from the visible Home rail video path and R3 joined the same Party Room. The sidecar still did not close because `Open Shared Player` failed before playback with `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.` R3 did not see actual sidecar video playback. The remaining blocker is best classified as Watch-Party Live sidecar LiveKit join-contract/token readiness or room/media handoff, not Premium/provider sandbox.
 
+## July 5 Heartbeat Recovery Follow-Up
+
+The follow-up LiveKit backend investigation in `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md` narrowed this failure further. Premium remains Closed and Party Room remains Closed. The current backend readback shows the router has zero eligible LiveKit servers because `chillywood-prod-01` has a stale heartbeat beyond the 120-second cutoff. The new health-checked `livekit-heartbeat-monitor` correctly failed closed with `livekit_public_endpoint_unreachable` and did not write a fake heartbeat. Until the real LiveKit host/container/network is restored and a health-checked heartbeat succeeds, this sidecar proof remains Partial for LiveKit infra/runtime liveness rather than Premium or mobile entitlement.
+
 ## Repo / Origin Alignment
 
 - Start and proof baseline: `HEAD == origin/main == 97a615a29ab69724f369f913c2e84a13497d9e3e`.

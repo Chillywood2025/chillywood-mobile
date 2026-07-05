@@ -10,6 +10,34 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## LiveKit Server Heartbeat / Registry Recovery
+
+Status: Source/deploy fixed; backend health remains Partial.
+
+Governing doc: `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md`. Artifact folder: `/tmp/livekit-server-heartbeat-recovery-watch-party-live-stage-proof-20260705-162020/`.
+
+Root cause for the current Watch-Party Live sidecar / Live Stage unavailable state is LiveKit registry liveness. `chillywood-prod-01` is registered and `active`, but its heartbeat is stale beyond the router's 120-second cutoff. The router therefore has zero eligible production LiveKit servers and fails token routing safe instead of falling back to a hardcoded server.
+
+Changes made:
+
+- Added `supabase/functions/livekit-heartbeat-monitor`, a health-checked monitor that verifies the public LiveKit endpoint and LiveKit API state before writing `livekit_server_heartbeats` or updating `livekit_servers.last_heartbeat_at`.
+- Added `npm run check:livekit-routing-health` for redacted backend health/audit readback.
+- Added `npm run guard:livekit-heartbeat-monitor-policy`.
+- Updated `ops/livekit-registry/heartbeat-livekit.sh` to fail closed before posting if the configured public LiveKit endpoint is unreachable.
+- Added systemd service/timer templates for durable watchdog supervision.
+- Updated the LiveKit registry runbook and release proof docs.
+
+Current readback:
+
+- `eligibleServerCount=0`
+- `staleHeartbeatCount=5`
+- `disabledServerCount=4`
+- `chillywood-prod-01` rejection reason: `stale_heartbeat`
+- heartbeat age around `300222` seconds
+- monitor invocation result: `livekit_public_endpoint_unreachable`
+
+Required before production readiness: restore the real LiveKit host/container/network for `wss://live.chillywoodstream.com`, install/enable the health-checked heartbeat watchdog from a trusted backend or host environment, rerun `check:livekit-routing-health` until there is at least one eligible server, then rerun current Play-installed v79 Watch-Party Live sidecar and Live Stage smoke. Do not manually write heartbeats, loosen stale cutoff, bypass routing eligibility, or print tokens/secrets.
+
 ## Premium-Gated LiveKit Sandbox Follow-Up
 
 Status: Source-fixed and installed-proof Partial.

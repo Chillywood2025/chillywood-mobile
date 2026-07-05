@@ -29,6 +29,10 @@ The retest used the installed Home rail video path rather than a direct fixture 
 
 R5 tapped `Open Shared Player`, and the app showed `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.` on the initial attempt and a delayed retry. R3 did not see sidecar playback. Current sidecar classification is Partial due LiveKit join-contract/token readiness or room/source handoff, not Premium/provider sandbox.
 
+## July 5 LiveKit Heartbeat Recovery Follow-Up
+
+`docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md` narrows the current sidecar and Live Stage blocker further. Backend readback showed `chillywood-prod-01` is registered as `active`, but its heartbeat is stale beyond the 120-second router cutoff, leaving `eligibleServerCount=0`. The new health-checked `livekit-heartbeat-monitor` returned `livekit_public_endpoint_unreachable` and correctly did not update the heartbeat. Until the LiveKit host/container/network is restored and a health-checked heartbeat succeeds, current Watch-Party Live sidecar and Live Stage proof remain Partial for backend LiveKit liveness.
+
 ## Executive Summary
 
 This lane reconciles older LiveKit, Watch-Party, Live Stage, and Chi'lly Chat proof language so current docs no longer imply that every LiveKit-related surface is unproved or that diagnostic proof equals installed actual-user proof.
