@@ -115,6 +115,24 @@ const toNumberArray = (value: unknown, fallback: number[]) => {
   return amounts.length ? amounts : fallback;
 };
 
+const purchaseErrorText = (error: unknown, key: string) => {
+  if (!error || typeof error !== "object") return "";
+  return toText((error as Record<string, unknown>)[key]);
+};
+
+const isRevenueCatUserCancellation = (error: unknown) => {
+  if (error && typeof error === "object" && (error as Record<string, unknown>).userCancelled === true) {
+    return true;
+  }
+  const combined = [
+    purchaseErrorText(error, "code"),
+    purchaseErrorText(error, "codeName"),
+    purchaseErrorText(error, "message"),
+    purchaseErrorText(error, "underlyingErrorMessage"),
+  ].join(" ").toLowerCase();
+  return combined.includes("cancel");
+};
+
 const toTipSettings = (row: Record<string, unknown>): CreatorTipSettings => ({
   id: toText(row.id),
   creatorId: toText(row.creator_id),
@@ -323,11 +341,23 @@ export async function purchaseCreatorTipWithGooglePlay(input: {
     };
   }
 
-  const purchase = await purchaseRevenueCatStoreProduct(storeProduct);
+  let purchase;
+  try {
+    purchase = await purchaseRevenueCatStoreProduct(storeProduct);
+  } catch (error) {
+    return {
+      ok: false,
+      intentId: toText(intent?.id) || null,
+      productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+      message: isRevenueCatUserCancellation(error)
+        ? "Tip canceled. Nothing changed."
+        : "Google Play tip could not be completed. Try again later.",
+    };
+  }
   return {
     ok: true,
     intentId: toText(intent?.id) || null,
     productId: toText(purchase.productIdentifier) || CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
-    message: "Sandbox tip complete. No live payout was created.",
+    message: "Sandbox tip complete.",
   };
 }

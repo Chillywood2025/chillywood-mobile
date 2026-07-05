@@ -199,6 +199,24 @@ const normalizeAccess = (value: unknown): ChannelSubscriptionAccess => {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const purchaseErrorText = (error: unknown, key: string) => {
+  if (!error || typeof error !== "object") return "";
+  return toText((error as Record<string, unknown>)[key]);
+};
+
+const isRevenueCatUserCancellation = (error: unknown) => {
+  if (error && typeof error === "object" && (error as Record<string, unknown>).userCancelled === true) {
+    return true;
+  }
+  const combined = [
+    purchaseErrorText(error, "code"),
+    purchaseErrorText(error, "codeName"),
+    purchaseErrorText(error, "message"),
+    purchaseErrorText(error, "underlyingErrorMessage"),
+  ].join(" ").toLowerCase();
+  return combined.includes("cancel");
+};
+
 const extractPackages = (offerings: unknown): PurchasesPackage[] => {
   const typed = offerings as OfferingsWithPackages | null;
   const packages: PurchasesPackage[] = [];
@@ -403,11 +421,35 @@ export async function purchaseChannelSubscription(input: {
     source_surface: input.sourceSurface,
   });
 
-  if (pkg) {
-    await purchaseRevenueCatPackage(pkg);
-  } else if (storeProduct) {
-    await purchaseRevenueCatStoreProduct(storeProduct);
+  try {
+    if (pkg) {
+      await purchaseRevenueCatPackage(pkg);
+    } else if (storeProduct) {
+      await purchaseRevenueCatStoreProduct(storeProduct);
+    }
+  } catch (error) {
+    const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId);
+    if (verifiedAccess.allowed) {
+      return {
+        ok: true,
+        message: "Subscribed.",
+        access: verifiedAccess,
+        intentId: intent.id,
+        productId,
+      };
+    }
+
+    return {
+      ok: false,
+      message: isRevenueCatUserCancellation(error)
+        ? "Channel Subscription was canceled. Nothing changed."
+        : "Channel Subscription checkout could not be completed. Try again later.",
+      access: verifiedAccess,
+      intentId: intent.id,
+      productId,
+    };
   }
+
   const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId);
   if (!verifiedAccess.allowed) {
     return {

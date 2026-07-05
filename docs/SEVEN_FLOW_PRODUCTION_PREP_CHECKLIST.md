@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+July 4, 2026 six creator-money E2E UX cleanup update: source is fixed and validation-clean for the six creator-money flows: Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP Pass, and Event Pass. This update is a UX/routing/copy/failure-state cleanup only; it does not activate production money. It keeps Premium separate, aligns Seat Pass wording, removes buyer-facing payout/cashout/payable-balance/provider-mutation language, improves canceled/failure states, keeps Tips from unlocking anything, and keeps paid access exact-target scoped. Installed v79 visual proof remains Partial until a loaded OTA is proved on the Google Play-installed app with both proof phones available.
+
 June 30, 2026 setup/readiness activation update: creator monetization setup is usable in sandbox/not-payable mode for Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass. Creator setup does not mean live money is active. Production activation switches remain OFF while setup switches are sandbox_only. Cashout readiness is available as a review flow only; it does not execute payouts, transfers, withdrawals, cash-out, or payable balances. `live_money_enabled` remains OFF, `payouts_enabled` remains OFF, production `cashoutEnabled` remains false, and production sales require owner/provider activation.
 
 Public non-money feature enablement update: `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md` closes safe public app-system enablement while keeping public purchase, creator-money, `live_money_enabled`, payouts, Stripe/merch, provider refunds, Premium annual, and Creator Channel Subscription unavailable unless a separate owner-approved lane changes that.

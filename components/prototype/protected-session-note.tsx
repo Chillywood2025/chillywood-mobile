@@ -10,7 +10,7 @@ import {
 
 export const ACCESS_DISCLOSURE_COPY = {
   captureBestEffort: "Capture protection is best-effort on supported devices.",
-  futureAccessControls: "Premium and Party Pass rules can apply to eligible rooms and titles, with entitlement handled in-context only when the session requires it.",
+  futureAccessControls: "Premium and Seat Pass rules can apply to eligible rooms and titles, with entitlement handled in-context only when the session requires it.",
   noUniversalBlocking: "Screen capture blocking is not guaranteed across every device, OS version, or external display path.",
   creatorHostPermissions: "Host and creator capture rules are reflected in room policy, but they are not DRM or universal device enforcement.",
   stagePermissions: "Live-stage capture rules are reflected in room policy, but they remain best-effort rather than guaranteed device blocking.",

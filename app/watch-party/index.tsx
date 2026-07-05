@@ -109,7 +109,7 @@ const getJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null | un
 
 const getContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
   if (contentAccessRule === "premium") return "Premium access is locked for this device or account.";
-  if (contentAccessRule === "party_pass") return "Party Pass access is locked for this device or account.";
+  if (contentAccessRule === "party_pass") return "Watch-Party Seat Pass access is locked for this device or account.";
   return "No extra entitlement is required.";
 };
 
@@ -125,7 +125,7 @@ const getPartyJoinPolicyCopy = (joinPolicy: WatchPartyState["joinPolicy"] | null
 
 const getPartyContentAccessCopy = (contentAccessRule: WatchPartyState["contentAccessRule"] | null | undefined) => {
   if (contentAccessRule === "premium") return "Premium title access is locked for this device or account.";
-  if (contentAccessRule === "party_pass") return "Party Pass access is locked for this device or account.";
+  if (contentAccessRule === "party_pass") return "Watch-Party Seat Pass access is locked for this device or account.";
   return "No extra entitlement is required.";
 };
 
@@ -752,7 +752,7 @@ export default function WatchPartyIndexScreen() {
           partyId: nextPartyId,
           reason: "ticket_check_unavailable",
         });
-        setJoinError("Unable to confirm Room Pass access right now.");
+        setJoinError("Unable to confirm Seat Pass access right now.");
         return;
       }
       if (ticketAccess.offer?.id) {
@@ -928,7 +928,7 @@ export default function WatchPartyIndexScreen() {
 
   const onBuyPaidTicketAndJoin = useCallback(async () => {
     if (!paidWatchPartyCheckoutAvailable) {
-      setPaidTicketNotice("Seat Pass status is active. Tester-safe checkout requires provider/test readiness; live money, payouts, cash-out, and payable balances remain off.");
+      setPaidTicketNotice("Seat Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.");
       return;
     }
     const targetPreview = preview ?? preparedRoom;
@@ -1436,7 +1436,7 @@ export default function WatchPartyIndexScreen() {
       status: "Checked before entry",
       detail: isLiveWaitingRoom
         ? "Live access uses the existing Premium check."
-        : "Watch-Party Live access uses the existing Premium or Party Pass check.",
+        : "Watch-Party Live access uses the existing Premium or Seat Pass check.",
     },
     {
       label: "Start",
@@ -1553,7 +1553,7 @@ export default function WatchPartyIndexScreen() {
                 accessibilityLabel="Get Watch-Party Seat"
               >
                 <AppText scale="footnote" style={styles.generateCodeButtonText}>
-                  {paidTicketBusy ? "Opening Store" : paidWatchPartyCheckoutAvailable ? "Get Seat Pass" : "Seat Pass status"}
+                  {paidTicketBusy ? "Opening Store" : "Get Seat Pass"}
                 </AppText>
               </TouchableOpacity>
             ) : null}
@@ -1821,7 +1821,7 @@ export default function WatchPartyIndexScreen() {
                           ? "Opening Store"
                           : paidWatchPartyCheckoutAvailable
                             ? `Get Seat Pass ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`
-                            : "Seat Pass status"}
+                            : "Get Seat Pass"}
                       </AppText>
                     </Pressable>
                   </View>

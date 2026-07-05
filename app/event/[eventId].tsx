@@ -46,7 +46,21 @@ const formatEventType = (value: string | null) => {
 };
 
 const LOCKED_COPY =
-  "This pass unlocks this creator event only. It does not include Premium, subscriptions, VIP, paid videos, Watch-Party rooms, other events, or other creator content.";
+  "This pass unlocks this creator event only. It does not include Chi'llywood Premium, subscriptions, VIP, paid videos, Watch-Party Seat Passes, other events, or other creator content.";
+
+const unavailableEventPassCopy = (status: string | null | undefined) => {
+  const normalized = normalizeText(status).toLowerCase();
+  if (normalized === "ended" || normalized === "expired") {
+    return "This Event Pass is no longer available because the event has ended or expired. Event access stays locked until access is verified.";
+  }
+  if (normalized === "canceled" || normalized === "cancelled") {
+    return "This Event Pass is no longer available because the event was canceled. Event access stays locked until access is verified.";
+  }
+  if (normalized === "removed" || normalized === "unsafe" || normalized === "blocked") {
+    return "This Event Pass is unavailable for safety or policy reasons. Event access stays locked until access is verified.";
+  }
+  return "Event Pass purchases are temporarily unavailable while setup is being finalized. Event access stays locked until access is verified.";
+};
 
 export default function PaidCreatorEventRoute() {
   const router = useRouter();
@@ -184,7 +198,7 @@ export default function PaidCreatorEventRoute() {
               <View testID="event-pass-access-granted-state">
                 <MoneySuccessReceipt
                   title="Event pass confirmed"
-                  body="You can access this creator event. This pass does not grant Premium, VIP, paid videos, Watch-Party rooms, other events, LiveKit host controls, or payout authority."
+                  body="You can access this creator event. This pass does not grant Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, other events, or LiveKit host controls."
                   testID="event-pass-success-receipt"
                 />
                 <Text style={styles.detail}>Access reason: {access.reason}</Text>
@@ -201,7 +215,7 @@ export default function PaidCreatorEventRoute() {
               >
                 <MoneyScopeStrip
                   includes="Access to this creator event only."
-                  excludes="Chi'llywood Premium, VIP, subscriptions, paid videos, Watch-Party Seat Passes, other events, host authority, and payouts stay separate."
+                  excludes="Chi'llywood Premium, VIP, subscriptions, paid videos, Watch-Party Seat Passes, other events, and host authority stay separate."
                 />
                 <MoneyScopeInfoButton scope="event_pass" label="What does this unlock?" />
                 <Pressable
@@ -229,14 +243,14 @@ export default function PaidCreatorEventRoute() {
                   <MoneyStatusChip label="Unavailable" tone="warning" />
                 </View>
                 <Text style={styles.body}>
-                  This paid event cannot be purchased right now. Reason: {access?.reason || "unavailable"}.
+                  {unavailableEventPassCopy(event?.status || offer?.status || access?.reason)}
                 </Text>
               </View>
             ) : (
               <View style={styles.stateBox}>
                 <Text style={styles.stateTitle}>Open Event</Text>
                 <Text style={styles.body}>
-                  This event is not currently configured as a paid event pass. Premium is separate from creator event passes.
+                  This event is not currently configured as a paid Event Pass. Chi'llywood Premium is separate from creator event passes.
                 </Text>
               </View>
             )}
@@ -254,7 +268,13 @@ export default function PaidCreatorEventRoute() {
               <Text style={styles.reportButtonText}>Report Event</Text>
             </Pressable>
 
-            <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.secondaryButton}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              testID="event-back-button"
+              onPress={() => router.back()}
+              style={styles.secondaryButton}
+            >
               <Text style={styles.secondaryButtonText}>Back</Text>
             </Pressable>
           </View>

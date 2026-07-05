@@ -1,5 +1,24 @@
 # NEXT TASK
 
+# Six Creator-Money E2E UX Installed Proof
+
+Current latest truth:
+- Six creator-money end-to-end UX cleanup is source-fixed and validation-clean, but installed visual proof is still Partial.
+- Governing doc: `docs/release/GOOGLE_SIGNED_V79_SIX_CREATOR_MONEY_E2E_UX_PROOF.md`.
+- Artifact folder: `/tmp/google-play-internal-v79-six-creator-money-e2e-ux-proof-20260704-235833/`.
+- Source lanes completed for Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP Pass, and Event Pass.
+- Source fixes kept Premium separate from creator-money, removed buyer-facing payout/cashout/payable-balance/provider-mutation wording, kept creator setup sandbox/not-payable, changed visible Seat Pass copy away from stale `Ticket` / `Party Pass` / `Room Pass`, improved canceled/failure copy, and kept access exact-target scoped.
+- Receipt/activity/deep-link proof scripts pass for buyer and creator money rows; seeded rows remain UI/routing proof only and are not purchase-generation proof.
+- Validation passed: `npm run proof:creator-monetization-route-button-wiring` (249/249), `npm run proof:creator-money-notification-routing`, `npm run proof:notification-center-money-activity`, `npm run proof:important-notification-accessibility`, creator/money/access/provider/premium/payment/notification/route/brand guards, `npx tsc --noEmit`, `npm run validate:runtime`, `supabase db push --dry-run`, and diff checks.
+- Safety stayed intact: no live money, payouts, cashout, payable balance, provider activation/mutation, RevenueCat/Google Play production change, Premium entitlement change, Money Center architecture refactor, native call change, auth/RLS weakening, Play production submit, sideload, `adb install`, logout, clear data, uninstall, or reinstall.
+- Device readback during closeout showed `R5CR120QCBF` as Google Play-installed v79 (`installerPackageName=com.android.vending`, versionCode `79`, versionName `1.0.0`). `R3CXA0DS5JV` was not visible over ADB in the final readback window.
+
+Next exact step:
+1. Recover/verify `R3CXA0DS5JV` over ADB without logout, clear data, uninstall/reinstall, sideload, or `adb install`.
+2. Publish or verify a runtime-compatible OTA containing the six-flow source cleanup if not already delivered.
+3. Prove on Google Play-installed v79 + loaded OTA: creator setup/readback, buyer entry/gate/CTA, safe success/access or sandbox status, unpaid/wrong-account denial where fixtures exist, receipt/activity routing, cold-start/deep-link routing where fixtures exist, Seat Pass wording, Premium separation, no buyer payout/cashout copy, liveMoneyEnabled OFF, Money Center non-regression, bell tray non-regression, and Premium gate non-regression.
+4. Keep seeded/mirrored rows documented as sandbox/proof/not-payable UI routing proof only.
+
 # Premium Subscribe Screen Cleanup
 
 Current latest truth:

@@ -195,7 +195,9 @@ assertIncludes(channelSettings, "Run your platform from one place", "Platform St
 assertIncludes(publicChannel, "Platform Store", "public platform store state");
 assertIncludes(publicChannel, "Test Creator Purchases", "public tester sandbox purchase surface");
 assertIncludes(publicChannel, "Sandbox only. No real money moves.", "public tester sandbox no-money copy");
-assertIncludes(publicChannel, "No money moved. No payout created.", "public tester sandbox receipt copy");
+assertIncludes(publicChannel, "Sandbox subscription complete.", "public tester sandbox subscription receipt copy");
+assertIncludes(publicChannel, "Sandbox VIP complete.", "public tester sandbox VIP receipt copy");
+assertNotIncludes(publicChannel, "No payout created.", "public buyer sandbox receipt payout copy");
 assertIncludes(publicChannel, "Checkout pending", "public platform checkout disabled copy");
 assertIncludes(publicChannel, "tester-watch-party-ticket-button", "public tester Watch-Party Seat Pass selector");
 assertIncludes(publicChannel, "tester-channel-subscribe-button", "tester subscription CTA selector");

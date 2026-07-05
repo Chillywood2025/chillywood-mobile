@@ -254,8 +254,8 @@ const MONETIZATION_TARGETS: Record<MonetizationTargetId, MonetizationTargetDefin
   },
   premium_watch_party_access: {
     id: "premium_watch_party_access",
-    label: "Party Pass Access",
-    summary: "Party Pass room access for watch-party entry, while active Premium can still satisfy the same gate where that entitlement already applies.",
+    label: "Watch-Party Seat Pass Access",
+    summary: "Watch-Party Seat Pass room access for watch-party entry, while active Premium can still satisfy the same gate where that entitlement already applies.",
     kind: "one_time_unlock",
     offeringId: "premium-watch-party",
     entitlementIds: ["premium_watch_party", "premium"],
@@ -1211,10 +1211,10 @@ export function getMonetizationAccessSheetPresentation(options: {
 
   if (gateReason === "party_pass_required") {
     return {
-      kicker: "PARTY PASS ACCESS",
+      kicker: "SEAT PASS ACCESS",
       title: "Unlock This Room",
-      body: `This room uses Party Pass access. Review the current room gate here, or use an active ${appDisplayName} Premium subscription when that entitlement already clears the room.`,
-      actionLabel: "Get Party Pass",
+      body: `This room uses Watch-Party Seat Pass access. Review the current room gate here, or use an active ${appDisplayName} Premium subscription when that entitlement already clears the room.`,
+      actionLabel: "Get Seat Pass",
     };
   }
 

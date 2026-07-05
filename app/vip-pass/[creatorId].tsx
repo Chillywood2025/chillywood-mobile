@@ -123,7 +123,7 @@ export default function CreatorVipPassScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.82} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>VIP Area</Text>
+          <Text style={styles.headerTitle}>VIP Pass</Text>
         </View>
 
         {loading || sessionLoading ? (
@@ -141,14 +141,14 @@ export default function CreatorVipPassScreen() {
                 testID={isOwner ? "vip-area-owner-preview-badge" : "vip-area-active-badge"}
               />
             </View>
-            <Text style={styles.title}>VIP Area</Text>
+            <Text style={styles.title}>VIP Pass active</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
             <Text style={styles.body}>
-              VIP is active for this creator&apos;s Platform only.
+              {"VIP is active for this creator's Platform only."}
             </Text>
             <MoneyScopeStrip
               includes="Creator-specific VIP access for this Platform."
-              excludes="Chi'llywood Premium, subscriptions, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, room permissions, payouts, or other creators."
+              excludes="Chi'llywood Premium, subscriptions, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, room permissions, or other creators."
               includesTestID="vip-area-includes-list"
               excludesTestID="vip-area-does-not-include-list"
             />
@@ -188,12 +188,12 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.title}>{offer?.title ?? "VIP Pass"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Get VIP access for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, Watch-Party Seat Passes, paid events, subscriptions, or other creators.`
-                : "VIP is in setup/status mode for this Platform. This screen stays active so testers can refresh, open support, or creators can manage the offer from Platform Studio."}
+                ? `Get VIP Pass for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, Watch-Party Seat Passes, paid events, subscriptions, or other creators.`
+                : "VIP Pass purchases are temporarily unavailable while setup is being finalized. VIP access stays locked until access is verified."}
             </Text>
             <MoneyScopeStrip
               includes="Creator-specific VIP access for this Platform when active."
-              excludes="Chi'llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, payouts, and other creators stay separate."
+              excludes="Chi'llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, and other creators stay separate."
             />
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
@@ -206,19 +206,19 @@ export default function CreatorVipPassScreen() {
                 onPress={needsPurchase ? handleGetVip : loadAccess}
                 testID="vip-area-get-vip-button"
                 accessibilityRole="button"
-                accessibilityLabel={needsPurchase ? "Get Creator VIP" : "Refresh VIP status"}
+                accessibilityLabel={needsPurchase ? "Get VIP Pass" : "Refresh VIP Pass status"}
               >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Get VIP" : "Refresh VIP status"}</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Get VIP Pass" : "Refresh status"}</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryButton}
                 activeOpacity={0.86}
-                onPress={() => router.push("/support" as Parameters<typeof router.push>[0])}
-                testID="vip-area-support-button"
+                onPress={openPublicPreview}
+                testID="vip-area-back-to-channel-button"
                 accessibilityRole="button"
-                accessibilityLabel="Open VIP support"
+                accessibilityLabel="Back to creator channel"
               >
-                <Text style={styles.secondaryButtonText}>Open support</Text>
+                <Text style={styles.secondaryButtonText}>Back to channel</Text>
               </TouchableOpacity>
             </View>
           </View>

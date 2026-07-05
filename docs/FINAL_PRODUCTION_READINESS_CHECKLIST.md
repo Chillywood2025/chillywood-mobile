@@ -10,6 +10,18 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Six Creator-Money E2E UX Cleanup
+
+Status: Partial. Source-fixed and validation-clean; installed two-device v79 + OTA visual proof remains pending.
+
+Governing doc: `docs/release/GOOGLE_SIGNED_V79_SIX_CREATOR_MONEY_E2E_UX_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v79-six-creator-money-e2e-ux-proof-20260704-235833/`.
+
+The source cleanup covered Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP Pass, and Event Pass. It keeps Premium separate from creator-money, uses consistent user-facing terms, removes stale visible `Ticket` / `Party Pass` / `Room Pass` wording in favor of `Watch-Party Seat Pass` / `Seat Pass`, removes buyer-facing payout/cashout/payable-balance/provider-mutation copy, keeps creator setup sandbox/not-payable, improves canceled/failure copy, keeps Tips from unlocking anything, and keeps paid access exact-target scoped.
+
+Validation passed `npm run proof:creator-monetization-route-button-wiring` (249/249), `npm run proof:creator-money-notification-routing`, `npm run proof:notification-center-money-activity`, `npm run proof:important-notification-accessibility`, creator/money/access/provider/premium/payment/notification/route/brand guards, `npx tsc --noEmit`, `npm run validate:runtime`, `supabase db push --dry-run`, and diff checks.
+
+Installed closure is not yet claimed. `R5CR120QCBF` read back Google Play-installed package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`; `R3CXA0DS5JV` was not visible over ADB in the final readback window, and the cleanup still needs loaded-OTA visual proof on installed app flows. No live money, payouts, cashout, payable balances, provider activation/mutation, Premium entitlement change, Money Center architecture refactor, native call change, auth/RLS weakening, Play production submission, sideload, `adb install`, logout, clear data, uninstall, or reinstall happened.
+
 ## Premium Subscribe Screen Cleanup
 
 Status: Closed for source + Google Play-installed v79 OTA visual proof.

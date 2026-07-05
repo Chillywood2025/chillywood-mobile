@@ -215,7 +215,7 @@ const getWatchPartyAccessTitle = (access: Pick<RoomAccessResolution, "reason"> |
   if (access?.reason === "removed") return "Watch party access removed";
   if (access?.reason === "identity_required") return "Sign in required";
   if (access?.reason === "premium_required") return "Premium access required";
-  if (access?.reason === "party_pass_required") return "Party Pass required";
+  if (access?.reason === "party_pass_required") return "Seat Pass required";
   return "Watch-party access unavailable";
 };
 
@@ -229,7 +229,7 @@ const getWatchPartyAccessBody = (access: Pick<RoomAccessResolution, "reason" | "
     return "Premium access is required before Watch-Party Live can open from this direct route.";
   }
   if (access?.reason === "party_pass_required") {
-    return "Party Pass access is required before Watch-Party Live can open from this direct route.";
+    return "Watch-Party Seat Pass access is required before Watch-Party Live can open from this direct route.";
   }
   return `${access?.label ?? "Room"} access is unavailable right now.`;
 };
@@ -6137,7 +6137,7 @@ export default function PlayerScreen() {
     });
     if (!creatorVideo || paidVideoUnlockBusy) return;
     if (!paidVideoCheckoutAvailable) {
-      setPaidVideoUnlockMessage("Paid creator video status is active: checkout requires the owner-approved provider/test product path. No live money, payout, payable balance, or provider mutation was enabled.");
+      setPaidVideoUnlockMessage("Paid Video purchases are temporarily unavailable while setup is being finalized. This video stays locked until access is verified.");
       return;
     }
     if (!isSignedIn) {
@@ -6602,7 +6602,7 @@ export default function PlayerScreen() {
         standaloneAccess.reason === "premium_required"
           ? "Premium access required"
           : standaloneAccess.reason === "party_pass_required"
-            ? "Party Pass required"
+            ? "Seat Pass required"
             : `${standaloneAccess.label} access required`;
       const body =
         standaloneAccess.reason === "premium_required"
@@ -6611,7 +6611,7 @@ export default function PlayerScreen() {
             : `Open ${blockedStandaloneAccessEntryLabel} to review the current Premium status, restore purchases, or manage your subscription before standalone playback can start here.`
           : standaloneAccess.reason === "party_pass_required"
             ? standaloneAccess.monetization.canPurchase
-              ? `Open ${blockedStandaloneAccessEntryLabel} to unlock this title through the current Party Pass flow and start playback here.`
+              ? `Open ${blockedStandaloneAccessEntryLabel} to unlock this title through the current Seat Pass flow and start playback here.`
               : `Open ${blockedStandaloneAccessEntryLabel} to review the current room-access status, restore purchases, or manage your subscription before standalone playback can start here.`
             : "Standalone playback is not available for this title on this account right now.";
       return {
@@ -8691,7 +8691,7 @@ export default function PlayerScreen() {
                   {isCreatorVideoPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>
                       {creatorVideoPaidContentLocked
-                        ? `Unlock ${creatorVideo?.title ?? "this creator video"}${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. This purchase unlocks this creator video only. It does not include Premium, subscriptions, VIP, live rooms, Watch-Party seats, or other creator content.`
+                        ? `Unlock ${creatorVideo?.title ?? "this creator video"}${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. This purchase unlocks this creator video only. It does not include Premium, subscriptions, VIP, live rooms, Watch-Party Seat Passes, or other creator content.`
                         : creatorVideoVisibilityLocked
                           ? creatorVideoVisibilityLockedBody
                         : playbackLoadError
@@ -8757,7 +8757,7 @@ export default function PlayerScreen() {
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
                     <Text style={styles.playerAccessPrimaryText}>
-                      {paidVideoCheckoutAvailable ? "Unlock Video" : "Paid Video Status"}
+                      Unlock Video
                     </Text>
                   )}
                 </TouchableOpacity>

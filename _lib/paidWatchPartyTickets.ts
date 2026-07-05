@@ -329,7 +329,7 @@ export async function createPaidWatchPartyTicketPurchaseIntent(offerId: string) 
   const { data, error } = await rpcClient.rpc("create_paid_watch_party_ticket_purchase_intent", {
     p_offer_id: offerId,
   });
-  if (error) throw new Error("Room Pass checkout is not available right now.");
+  if (error) throw new Error("Seat Pass checkout is not available right now.");
   const row = data && typeof data === "object" && !Array.isArray(data)
     ? data as Record<string, unknown>
     : {};
@@ -414,7 +414,7 @@ export async function purchasePaidWatchPartyTicket(input: {
     if (isRevenueCatUserCancellation(error)) {
       return {
         ok: false,
-        message: "Seat Pass purchase was canceled before Google Play confirmed it.",
+        message: "Seat Pass purchase was canceled. Nothing changed.",
         access: verifiedAccess,
         intentId: intent.id,
         productId,

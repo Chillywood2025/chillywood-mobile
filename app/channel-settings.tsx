@@ -561,13 +561,13 @@ const formatCreatorVideoUiError = (error: unknown, fallback: string, fileSize?: 
 };
 
 const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPartyAccessRule"] | null) => {
-  if (value === "party_pass") return "Party Pass";
+  if (value === "party_pass") return "Seat Pass";
   if (value === "premium") return "Premium";
   return "Public";
 };
 
 const formatRoomDefaultAccessLabel = (value: "open" | "party_pass" | "premium") => {
-  if (value === "party_pass") return "Party Pass";
+  if (value === "party_pass") return "Seat Pass";
   if (value === "premium") return "Premium";
   return "Open";
 };
@@ -4771,17 +4771,17 @@ export function ChannelStudioScreen() {
   ];
   const creatorGrantDetails: readonly ChannelAccessSummaryDetail[] = [
     {
-      label: "Party Pass Rooms",
+      label: "Seat Pass Rooms",
       value: !resolvedCreatorPermissions
         ? "Loading"
         : resolvedCreatorPermissions.canUsePartyPassRooms
           ? "Ready"
           : "Open Only",
       body: !resolvedCreatorPermissions
-        ? "checking whether Party Pass room defaults are available"
+        ? "checking whether Seat Pass room defaults are available"
         : resolvedCreatorPermissions.canUsePartyPassRooms
-          ? "Party Pass room defaults can stay active on this route"
-          : "Party Pass defaults fall back to open until the creator grant is enabled",
+          ? "Seat Pass room defaults can stay active on this route"
+          : "Seat Pass defaults fall back to open until the creator grant is enabled",
     },
     {
       label: "Premium Rooms",
@@ -5655,7 +5655,7 @@ export function ChannelStudioScreen() {
                 keyboardType="decimal-pad"
               />
               <Text style={styles.noticeText}>
-                Paid Videos use Google Play / RevenueCat sandbox testing. This unlocks this creator video only and does not include Premium, subscriptions, VIP, live rooms, Watch-Party seats, or other creator content.
+                Paid Videos use Google Play / RevenueCat sandbox testing. This unlocks this creator video only and does not include Premium, subscriptions, VIP, live rooms, Watch-Party Seat Passes, or other creator content.
               </Text>
             </>
           ) : null}
@@ -9503,7 +9503,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Physical merch scope</Text>
                   <Text style={styles.eventEmptyBody}>
-                    Merch is a physical-goods setup path only. It does not unlock Premium, VIP, subscriptions, room passes, events, LiveKit authority, or payout access.
+                    Merch is a physical-goods setup path only. It does not unlock Premium, VIP, subscriptions, Seat Passes, events, LiveKit authority, or payout access.
                   </Text>
                   <MoneyScopeInfoButton scope="merch_physical_good" label="What does merch include?" />
                 </View>

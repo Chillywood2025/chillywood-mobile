@@ -172,6 +172,24 @@ const normalizeAccess = (value: unknown): PaidVideoAccessResolution => {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const purchaseErrorText = (error: unknown, key: string) => {
+  if (!error || typeof error !== "object") return "";
+  return toText((error as Record<string, unknown>)[key]);
+};
+
+const isRevenueCatUserCancellation = (error: unknown) => {
+  if (error && typeof error === "object" && (error as Record<string, unknown>).userCancelled === true) {
+    return true;
+  }
+  const combined = [
+    purchaseErrorText(error, "code"),
+    purchaseErrorText(error, "codeName"),
+    purchaseErrorText(error, "message"),
+    purchaseErrorText(error, "underlyingErrorMessage"),
+  ].join(" ").toLowerCase();
+  return combined.includes("cancel");
+};
+
 export const formatPaidVideoPrice = (amountCents: number, currency = "usd") =>
   formatMonetizationCurrency(amountCents, currency);
 
@@ -308,7 +326,19 @@ export async function purchasePaidVideoAccess(input: {
     source_surface: "video_player_locked_state",
   });
 
-  await purchaseRevenueCatStoreProduct(product);
+  try {
+    await purchaseRevenueCatStoreProduct(product);
+  } catch (error) {
+    return {
+      ok: false,
+      message: isRevenueCatUserCancellation(error)
+        ? "Paid Video unlock was canceled. Nothing changed."
+        : "Paid Video checkout could not be completed. Try again later.",
+      access,
+      intentId: intent.id,
+      productId,
+    };
+  }
   const verifiedAccess = await waitForPaidVideoAccess(input.videoId);
   if (!verifiedAccess.allowed) {
     return {

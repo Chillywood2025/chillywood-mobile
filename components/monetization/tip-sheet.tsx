@@ -125,7 +125,7 @@ export function TipSheet({
 
       setNotice(
         showSandboxCopy
-          ? `Sandbox tip complete. No money moved. No payout created. ${new Date().toLocaleString()}`
+          ? `Sandbox tip complete. ${new Date().toLocaleString()}`
           : result.message,
       );
     } catch {
@@ -150,7 +150,7 @@ export function TipSheet({
             tone="premium"
           />
 
-          {showSandboxCopy ? <MoneyStatusChip label="Sandbox Test · Google Play · No live payout" tone="warning" /> : null}
+          {showSandboxCopy ? <MoneyStatusChip label="Sandbox Test · Google Play" tone="warning" /> : null}
 
           <View style={styles.amountGrid}>
             {amounts.map((amount) => (
@@ -159,6 +159,8 @@ export function TipSheet({
                 testID="tip-amount-option"
                 activeOpacity={0.86}
                 style={[styles.amountButton, !customAmount.trim() && selectedAmount === amount && styles.amountButtonActive]}
+                accessibilityRole="button"
+                accessibilityLabel={`Choose ${formatMonetizationCurrency(amount, tipStatus?.currency ?? "usd")} tip amount`}
                 onPress={() => {
                   setCustomAmount("");
                   setSelectedAmount(amount);
@@ -178,6 +180,7 @@ export function TipSheet({
             placeholder="Custom amount"
             placeholderTextColor="#8791A3"
             style={styles.input}
+            accessibilityLabel="Custom tip amount"
           />
           <TextInput
             value={privateNote}
@@ -186,6 +189,7 @@ export function TipSheet({
             placeholderTextColor="#8791A3"
             multiline
             style={[styles.input, styles.noteInput]}
+            accessibilityLabel="Private note for creator"
           />
 
           <MoneyScopeStrip
@@ -215,7 +219,14 @@ export function TipSheet({
               <Text style={styles.primaryButtonText}>{showSandboxCopy ? "Sandbox Test Tip" : "Continue to tip"}</Text>
             )}
           </TouchableOpacity>
-          <TouchableOpacity disabled={busy} style={styles.secondaryButton} onPress={onClose}>
+          <TouchableOpacity
+            disabled={busy}
+            style={styles.secondaryButton}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close tip sheet"
+            testID="tip-sheet-not-now-button"
+          >
             <Text style={styles.secondaryButtonText}>Not now</Text>
           </TouchableOpacity>
         </View>

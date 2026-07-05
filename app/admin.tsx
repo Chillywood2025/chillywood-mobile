@@ -9598,7 +9598,7 @@ export default function AdminStudioScreen() {
     setContentConfirm({
       kind: "creator_grants",
       title: "Save Creator Grants",
-      body: `Creator monetization grants for ${formatCompactIdentifier(targetUserId)} affect which backed premium, Party Pass, sponsor, and player-ad defaults can stay enabled.`,
+      body: `Creator monetization grants for ${formatCompactIdentifier(targetUserId)} affect which backed premium, Seat Pass, sponsor, and player-ad defaults can stay enabled.`,
       actionLabel: "Save Grants",
       tone: "manual",
     });
@@ -10511,7 +10511,7 @@ export default function AdminStudioScreen() {
         <View style={styles.contentSignalGrid}>
           {([
             ["premiumEnabled", "Premium", "Config; RevenueCat remains entitlement truth."],
-            ["partyPassEnabled", "Party Pass", "Config foundation for later access products."],
+            ["partyPassEnabled", "Seat Pass", "Config foundation for later access products."],
             ["sponsorPlacementsEnabled", "Sponsor Placements", "Foundation Only until sponsor execution is backed."],
             ["playerBannerEnabled", "Player Banner", "Foundation Only; no ad provider activation here."],
             ["playerMidRollEnabled", "Player Mid-Roll", "Foundation Only; no ad provider activation here."],
@@ -10607,7 +10607,7 @@ export default function AdminStudioScreen() {
           </View>
           <View style={styles.contentSignalGrid}>
             {([
-              ["canUsePartyPassRooms", "Party Pass Rooms", "Grant type"],
+              ["canUsePartyPassRooms", "Seat Pass Rooms", "Grant type"],
               ["canUsePremiumRooms", "Premium Rooms", "Grant type"],
               ["canPublishPremiumTitles", "Premium Titles", "Grant type"],
               ["canUseSponsorPlacements", "Sponsor Placements", "Foundation grant"],
@@ -11018,7 +11018,7 @@ export default function AdminStudioScreen() {
               rows={[
                 { label: "Approved tester access", value: "Owner, Admin, runtime allowlist, active beta/internal tester, or approved internal account" },
                 { label: "Premium", value: "Google Play / RevenueCat sandbox only; public shell remains closed" },
-                { label: "Digital access", value: "Tips, room passes, access passes, seats, paid content, and event passes use sandbox intents" },
+                { label: "Digital access", value: "Tips, Seat Passes, access passes, paid content, and event passes use sandbox intents" },
                 { label: "Physical merch", value: "Stripe sandbox physical goods only; no digital access" },
                 { label: "Payout readiness", value: "Read-only Stripe Connect status; no payout execution" },
                 { label: "Tester authority", value: "No admin, mod, host, speaker, LiveKit publish, payout, or safety-bypass authority" },
@@ -11173,9 +11173,9 @@ export default function AdminStudioScreen() {
               rows={[
                 { label: "Tips", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "tips_enabled").state) },
                 { label: "Watch-Party Seat Passes", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_tickets_enabled").state) },
-                { label: "Watch-Party seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_seats_enabled").state) },
+                { label: "Watch-Party Seat Pass seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_seats_enabled").state) },
                 { label: "Live Watch-Party access", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "live_watch_party_access_enabled").state) },
-                { label: "Live Watch-Party seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "live_watch_party_seats_enabled").state) },
+                { label: "Live Watch-Party Seat Pass seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "live_watch_party_seats_enabled").state) },
                 { label: "Paid content", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "paid_content_enabled").state) },
                 { label: "Tip rows", value: formatAdminFinanceCount(adminFinanceReadModel.creatorTipTransactionCount, adminFinanceReadModel.loading, "setup tip row", "setup tip rows") },
               ]}
@@ -18432,7 +18432,7 @@ export default function AdminStudioScreen() {
               <View style={styles.toggleRowWrap}>
                 {([
                   ["premiumEnabled", "Premium"],
-                  ["partyPassEnabled", "Party Pass"],
+                  ["partyPassEnabled", "Seat Pass"],
                   ["sponsorPlacementsEnabled", "Sponsor Placements"],
                   ["playerBannerEnabled", "Player Banner"],
                   ["playerMidRollEnabled", "Player Mid-Roll"],
@@ -18759,7 +18759,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>CREATOR GRANTS</Text>
               <Text style={styles.configTitle}>Backend creator monetization permissions</Text>
               <Text style={styles.configBody}>
-                Load a creator user id, then decide whether that creator can use premium rooms, Party Pass rooms, premium titles, and sponsor/ad hooks. Active Owner or Admin role required.
+                Load a creator user id, then decide whether that creator can use premium rooms, Seat Pass rooms, premium titles, and sponsor/ad hooks. Active Owner or Admin role required.
               </Text>
             </View>
             <TouchableOpacity
@@ -18798,7 +18798,7 @@ export default function AdminStudioScreen() {
 
           <View style={styles.toggleRowWrap}>
             {([
-              ["canUsePartyPassRooms", "Party Pass Rooms"],
+              ["canUsePartyPassRooms", "Seat Pass Rooms"],
               ["canUsePremiumRooms", "Premium Rooms"],
               ["canPublishPremiumTitles", "Premium Titles"],
               ["canUseSponsorPlacements", "Sponsor Placements"],

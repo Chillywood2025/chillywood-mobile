@@ -51,7 +51,14 @@ add("Settings does not render duplicate Activity records", !includes(settings, "
 add("Settings refresh reads backend push registration", includes(settings, "readCurrentPushRegistration()") && includes(notifications, "export async function readCurrentPushRegistration"), "push status readback");
 add("Device push registration is separated from in-app Activity", includes(settings, "Device push registration controls phone push alerts. In-app Activity lives in the bell tray and still works in the app."), "push/activity separation copy");
 add("Register Device immediately verifies backend status", includes(settings, "nextRegistration = await readCurrentPushRegistration()"), "post-register readback");
-add("Device push Refresh has dedicated backend readback action", includes(settings, "onPressRefreshPushRegistration") && includes(settings, "setNotificationSavingKey(\"push-refresh\")") && includes(settings, "const nextRegistration = await readCurrentPushRegistration()"), "dedicated push refresh readback");
+add(
+  "Device push Refresh has dedicated backend readback action",
+  includes(settings, "onPressRefreshPushRegistration")
+    && includes(settings, "setNotificationSavingKey(\"push-refresh\")")
+    && includes(settings, "readCurrentPushRegistration()")
+    && includes(settings, "setPushRegistration(nextRegistration)"),
+  "dedicated push refresh readback",
+);
 add("Device push Refresh shows busy state and does not call generic Activity refresh", includes(settings, "notificationSavingKey === \"push-refresh\"") && includes(settings, "void onPressRefreshPushRegistration();") && !includes(settings, "void refreshNotifications();\n              }}\n            >\n              <Text style={styles.utilityButtonText}>Refresh</Text>"), "refresh button wiring");
 add("Push status uses current install scope", includes(notifications, "action: \"status\"") && includes(notifications, "installId") && includes(deviceTokens, ".eq(\"install_id\", installId)"), "install-scoped status");
 add("Push status returns fingerprint only", includes(deviceTokens, "tokenFingerprint") && !includes(deviceTokens, "token: token"), "no raw token status response");

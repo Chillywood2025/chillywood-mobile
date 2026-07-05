@@ -61,9 +61,9 @@ export const getAccessSheetCopy = (options: {
 
   return {
     title: "Unlock This Room",
-    body: `This room uses Party Pass access. Unlock it once and jump back in without breaking the ${appDisplayName} flow.`,
-    actionLabel: "Get Party Pass",
-    kicker: "PARTY PASS",
+    body: `This room uses Watch-Party Seat Pass access. Unlock it once and jump back in without breaking the ${appDisplayName} flow.`,
+    actionLabel: "Get Seat Pass",
+    kicker: "SEAT PASS",
   };
 };
 
@@ -75,7 +75,7 @@ export const getAccessSheetEntryLabel = (options: {
     return "View Premium";
   }
 
-  return options.canPurchase ? "Get Party Pass" : "View Room Access";
+  return options.canPurchase ? "Get Seat Pass" : "View Room Access";
 };
 
 type AccessSheetProps = {
@@ -207,7 +207,7 @@ export function AccessSheet({
       ? (
           reason === "premium_required"
             ? "Premium access is not currently available for this title on this device or account. Access will appear here when it becomes available."
-            : "Party Pass access is not currently available for this room on this device or account. Access will appear here when it becomes available."
+            : "Watch-Party Seat Pass access is not currently available for this room on this device or account. Access will appear here when it becomes available."
         )
       : (bodyOverride ?? baseCopy.body),
     actionLabel: deferredMonetization
@@ -485,10 +485,7 @@ export function AccessSheet({
               ) : (
                 <>
                   <Text style={styles.sandboxKicker}>SANDBOX TEST MODE</Text>
-                  <Text style={styles.sandboxText}>Google Play / RevenueCat sandbox test only.</Text>
-                  <Text style={styles.sandboxDetailText}>
-                    No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.
-                  </Text>
+                  <Text style={styles.sandboxText}>Sandbox test mode — no real money is charged.</Text>
                 </>
               )}
             </View>

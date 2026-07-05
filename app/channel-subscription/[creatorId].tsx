@@ -123,7 +123,7 @@ export default function ChannelSubscriptionScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.82} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Subscriber Area</Text>
+          <Text style={styles.headerTitle}>Channel Subscription</Text>
         </View>
 
         {loading || sessionLoading ? (
@@ -141,14 +141,14 @@ export default function ChannelSubscriptionScreen() {
                 testID={isOwner ? "subscriber-area-owner-preview-badge" : "subscriber-area-subscribed-badge"}
               />
             </View>
-            <Text style={styles.title}>Subscriber Area</Text>
+            <Text style={styles.title}>Channel Subscription active</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
 	            <Text style={styles.body}>
 	              {"Your creator subscription is active for this Platform only."}
 	            </Text>
             <MoneyScopeStrip
               includes="Subscriber access for this creator Platform."
-              excludes="This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, payouts, or other creators."
+              excludes="This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, or other creators."
               includesTestID="subscriber-area-includes-list"
               excludesTestID="subscriber-area-does-not-include-list"
             />
@@ -187,16 +187,16 @@ export default function ChannelSubscriptionScreen() {
           </View>
         ) : (
           <View style={styles.card} testID="subscriber-area-access-denied-state">
-            <Text style={styles.kicker}>Subscriber access required</Text>
+            <Text style={styles.kicker}>Channel Subscription required</Text>
             <Text style={styles.title}>{offer?.title ?? "Channel Subscription"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Subscribe to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.`
-                : "Creator Channel Subscription is in provider-blocked/setup status for this Platform. This status screen stays active so testers can refresh, open support, or creators can manage the offer from Platform Studio."}
+                ? `Start Channel Subscription to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This unlocks subscriber access for this creator only and does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.`
+                : "Channel Subscription purchases are temporarily unavailable while setup is being finalized. Subscriber access stays locked until access is verified."}
             </Text>
             <MoneyScopeStrip
               includes="Subscriber access for this creator Platform when active."
-              excludes="Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, payouts, and other creators stay separate."
+              excludes="Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, and other creators stay separate."
             />
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
@@ -208,19 +208,19 @@ export default function ChannelSubscriptionScreen() {
                 onPress={needsPurchase ? handleSubscribe : loadAccess}
                 testID="subscriber-area-subscribe-button"
                 accessibilityRole="button"
-                accessibilityLabel={needsPurchase ? "Subscribe to creator Platform" : "Refresh creator subscription status"}
+                accessibilityLabel={needsPurchase ? "Start Channel Subscription" : "Refresh Channel Subscription status"}
               >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Subscribe" : "Refresh subscription status"}</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Start Channel Subscription" : "Refresh status"}</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryButton}
                 activeOpacity={0.86}
-                onPress={() => router.push("/support" as Parameters<typeof router.push>[0])}
-                testID="subscriber-area-support-button"
+                onPress={openPublicPreview}
+                testID="subscriber-area-back-to-channel-button"
                 accessibilityRole="button"
-                accessibilityLabel="Open subscription support"
+                accessibilityLabel="Back to creator channel"
               >
-                <Text style={styles.secondaryButtonText}>Open support</Text>
+                <Text style={styles.secondaryButtonText}>Back to channel</Text>
               </TouchableOpacity>
             </View>
           </View>

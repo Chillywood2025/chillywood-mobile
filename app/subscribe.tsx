@@ -354,7 +354,7 @@ export default function SubscribeScreen() {
       </View>
 
       <View style={styles.heroCard} testID="premium-not-creator-offer-copy" collapsable={false}>
-        <Text style={styles.heroKicker}>CHILLYWOOD PREMIUM</Text>
+          <Text style={styles.heroKicker}>Chi'llywood Premium</Text>
         <Text style={styles.heroTitle}>Premium</Text>
         <Text style={styles.heroBody}>{hasPremium ? "Your Premium access is active." : PREMIUM_BODY}</Text>
       </View>

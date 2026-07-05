@@ -61,7 +61,7 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
       "VIP status",
       "subscription access",
       "paid videos",
-      "Seat Passes or Room Passes",
+      "Watch-Party Seat Pass access",
       "event access",
       "rankings, badges, or perks unless separately implemented",
       "payout access",

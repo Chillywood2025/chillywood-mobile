@@ -205,7 +205,7 @@ const getLiveStageAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | 
   if (access?.reason === "removed") return "Live room access removed";
   if (access?.reason === "identity_required") return "Sign in required";
   if (access?.reason === "premium_required") return LIVE_FIRST_PREMIUM_UPSELL_COPY.title;
-  if (access?.reason === "party_pass_required") return "Party Pass required";
+  if (access?.reason === "party_pass_required") return "Seat Pass required";
   return "Live room access unavailable";
 };
 
@@ -219,7 +219,7 @@ const getLiveStageAccessBody = (access: Pick<RoomAccessResolution, "reason" | "l
     return LIVE_FIRST_PREMIUM_UPSELL_COPY.message;
   }
   if (access?.reason === "party_pass_required") {
-    return "Party Pass access is required before this live room can open from the direct Live Stage route.";
+    return "Watch-Party Seat Pass access is required before this live room can open from the direct Live Stage route.";
   }
   return `${access?.label ?? "Room"} access is unavailable right now.`;
 };

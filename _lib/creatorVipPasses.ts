@@ -176,6 +176,24 @@ const normalizeAccess = (value: unknown): CreatorVipPassAccess => {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const purchaseErrorText = (error: unknown, key: string) => {
+  if (!error || typeof error !== "object") return "";
+  return toText((error as Record<string, unknown>)[key]);
+};
+
+const isRevenueCatUserCancellation = (error: unknown) => {
+  if (error && typeof error === "object" && (error as Record<string, unknown>).userCancelled === true) {
+    return true;
+  }
+  const combined = [
+    purchaseErrorText(error, "code"),
+    purchaseErrorText(error, "codeName"),
+    purchaseErrorText(error, "message"),
+    purchaseErrorText(error, "underlyingErrorMessage"),
+  ].join(" ").toLowerCase();
+  return combined.includes("cancel");
+};
+
 export const formatCreatorVipPassPrice = (amountCents: number, currency = "usd") =>
   formatMonetizationCurrency(amountCents, currency);
 
@@ -304,7 +322,31 @@ export async function purchaseCreatorVipPass(input: {
     source_surface: input.sourceSurface,
   });
 
-  await purchaseRevenueCatStoreProduct(product);
+  try {
+    await purchaseRevenueCatStoreProduct(product);
+  } catch (error) {
+    const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId);
+    if (verifiedAccess.allowed) {
+      return {
+        ok: true,
+        message: "VIP confirmed.",
+        access: verifiedAccess,
+        intentId: intent.id,
+        productId,
+      };
+    }
+
+    return {
+      ok: false,
+      message: isRevenueCatUserCancellation(error)
+        ? "VIP Pass purchase was canceled. Nothing changed."
+        : "VIP Pass checkout could not be completed. Try again later.",
+      access: verifiedAccess,
+      intentId: intent.id,
+      productId,
+    };
+  }
+
   const verifiedAccess = await waitForCreatorVipPassAccess(input.creatorId);
   if (!verifiedAccess.allowed) {
     return {

@@ -252,13 +252,13 @@ const isAccessSheetReason = (reason: string | null | undefined): reason is Acces
   reason === "premium_required" || reason === "party_pass_required"
 );
 
-const getRoomAccessGateTitle = (access: Pick<RoomAccessResolution, "label"> | null | undefined) => (
-  access?.label === "Party Pass" ? "Party Pass access not currently available" : "Premium room access not currently available"
+const getRoomAccessGateTitle = (access: Pick<RoomAccessResolution, "label" | "reason"> | null | undefined) => (
+  access?.reason === "party_pass_required" ? "Seat Pass access not currently available" : "Premium room access not currently available"
 );
 
-const getRoomAccessGateBody = (access: Pick<RoomAccessResolution, "label"> | null | undefined) => (
-  access?.label === "Party Pass"
-    ? "This room stays locked because Party Pass access is not currently available for this device or account."
+const getRoomAccessGateBody = (access: Pick<RoomAccessResolution, "label" | "reason"> | null | undefined) => (
+  access?.reason === "party_pass_required"
+    ? "This room stays locked because Watch-Party Seat Pass access is not currently available for this device or account."
     : "This room stays locked because premium room access is not currently available for this device or account."
 );
 
@@ -2025,7 +2025,7 @@ export default function WatchPartyRoomScreen() {
     const normalizedPartyId = String(room?.partyId ?? partyId ?? "").trim();
     if (!normalizedPartyId || paidTicketBusy) return;
     if (!paidWatchPartyCheckoutAvailable) {
-      setPaidTicketNotice("Seat Pass status is active: checkout requires the owner-approved provider/test product path. No live money, payout, payable balance, or provider mutation was enabled.");
+      setPaidTicketNotice("Seat Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified.");
       return;
     }
     setPaidTicketBusy(true);
@@ -2851,7 +2851,7 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.errorCard} testID="watch-party-ticket-lock-card">
           <View style={styles.ticketGateHeaderRow}>
             <Text style={styles.errorTitle}>
-              {paidTicketGate.requiresPurchase ? "Reserve Seat" : "Seat Pass unavailable"}
+              {paidTicketGate.requiresPurchase ? "Seat Pass required" : "Seat Pass unavailable"}
             </Text>
             <MoneyStatusChip label={paidTicketGate.requiresPurchase ? "Seat Pass" : "Unavailable"} tone={paidTicketGate.requiresPurchase ? "premium" : "warning"} />
           </View>
@@ -2859,11 +2859,11 @@ export default function WatchPartyRoomScreen() {
           <Text style={styles.errorBody}>
             {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable
               ? `This Seat Pass unlocks access to this Watch-Party room only for ${priceLabel}. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.`
-              : "Seat Pass status is active. Checkout opens only when the owner-approved provider/test product path is available; live money and payouts remain off."}
+              : "Seat Pass purchases are temporarily unavailable while setup is being finalized. This room stays locked until access is verified."}
           </Text>
           <MoneyScopeStrip
             includes="Access to this Watch-Party room target only."
-            excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, event passes, LiveKit publish authority, host controls, payouts, and other rooms stay separate."
+            excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, event passes, LiveKit publish authority, host controls, and other rooms stay separate."
           />
           <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Seat Pass unlock?" />
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
@@ -2879,7 +2879,7 @@ export default function WatchPartyRoomScreen() {
               accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                {paidTicketBusy ? "Opening Store" : paidWatchPartyCheckoutAvailable ? "Get Seat" : "Seat Pass Status"}
+                {paidTicketBusy ? "Opening Store" : "Get Seat Pass"}
               </Text>
             </TouchableOpacity>
           ) : null}
