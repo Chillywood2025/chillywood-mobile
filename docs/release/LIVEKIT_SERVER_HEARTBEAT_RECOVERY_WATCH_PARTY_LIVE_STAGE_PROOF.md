@@ -148,3 +148,17 @@ No LiveKit API keys, participant tokens, Supabase service-role keys, auth tokens
 - `chillywood-prod-01` still has a stale heartbeat and remains ineligible.
 - Watch-Party Live sidecar playback and Live Stage / `2 in room` installed proof remain Partial until backend liveness is restored.
 - The systemd watchdog template still needs to be installed/enabled on the LiveKit host or trusted backend runner by an operator with host access.
+
+## July 5 Production Endpoint Repair Follow-Up
+
+Follow-up host/provider inspection narrowed the unreachable endpoint to a Hetzner primary IP block:
+
+- DNS: `live.chillywoodstream.com` resolves to `87.99.145.160`.
+- Hetzner server: `chillywood-prod-01` is `running`.
+- Hetzner IPv4 primary IP `87.99.145.160`: `Blocked: yes`.
+- Hetzner IPv6 primary IP `2a01:4ff:f0:7064::/64`: `Blocked: yes`.
+- Hetzner Cloud firewall list: empty; no firewall is attached.
+- Public probes: SSH and service ports time out.
+- Traceroute: reaches Hetzner and then `blocked.hetzner.com`.
+
+Because the provider blocks the assigned IPs, SSH and service access are unavailable from this environment, so Docker/Caddy/LiveKit/systemd logs and host env files could not be inspected. The next action is owner/provider unblock or safe host console access. Rebooting, manually writing heartbeats, loosening the stale cutoff, or bypassing registry eligibility would not be valid proof.

@@ -36,6 +36,8 @@ Current readback:
 - heartbeat age around `300222` seconds
 - monitor invocation result: `livekit_public_endpoint_unreachable`
 
+Follow-up endpoint repair readback: Hetzner Cloud reports `chillywood-prod-01` as `running`, but the assigned IPv4 `87.99.145.160` and IPv6 `2a01:4ff:f0:7064::/64` are both `Blocked: yes`. No Hetzner Cloud firewall is attached. Public probes and SSH time out, and traceroute reaches `blocked.hetzner.com`. Host/container/proxy logs cannot be inspected until the provider block is cleared or safe console access is provided.
+
 Required before production readiness: restore the real LiveKit host/container/network for `wss://live.chillywoodstream.com`, install/enable the health-checked heartbeat watchdog from a trusted backend or host environment, rerun `check:livekit-routing-health` until there is at least one eligible server, then rerun current Play-installed v79 Watch-Party Live sidecar and Live Stage smoke. Do not manually write heartbeats, loosen stale cutoff, bypass routing eligibility, or print tokens/secrets.
 
 ## Premium-Gated LiveKit Sandbox Follow-Up

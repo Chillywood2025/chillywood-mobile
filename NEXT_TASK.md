@@ -1,5 +1,29 @@
 # NEXT TASK
 
+# LiveKit Production Endpoint Provider Block
+
+Current latest truth:
+- The actual `wss://live.chillywoodstream.com` production endpoint repair is Blocked by Hetzner primary IP blocking.
+- Artifact folder: `/tmp/livekit-prod-endpoint-repair-20260705/`.
+- DNS resolves `live.chillywoodstream.com` to `87.99.145.160`.
+- Hetzner Cloud reports server `chillywood-prod-01` as `running`.
+- Hetzner Cloud reports both assigned primary IPs as blocked:
+  - IPv4 `87.99.145.160`: `Blocked: yes`
+  - IPv6 `2a01:4ff:f0:7064::/64`: `Blocked: yes`
+- No Hetzner Cloud firewall is attached.
+- Public probes time out on SSH and LiveKit/Caddy ports; ping has 100% packet loss; traceroute reaches Hetzner and then `blocked.hetzner.com`.
+- SSH to `chillywood@live.chillywoodstream.com`, `chillywood@87.99.145.160`, and `root@87.99.145.160` timed out.
+- Because host access is blocked, Docker/Caddy/LiveKit/systemd logs and host env presence could not be inspected from this environment.
+- `npm run check:livekit-routing-health` still fails with `eligibleServerCount=0`, `staleHeartbeatCount=5`, `disabledServerCount=4`, and `chillywood-prod-01` rejected for `stale_heartbeat` with heartbeat age about `301275` seconds.
+
+Next exact step:
+1. Owner/provider must unblock the Hetzner primary IPs or provide safe host console access.
+2. After unblocking/host access, inspect `docker ps`, LiveKit container logs, Caddy/reverse-proxy status, TLS, firewall, and the heartbeat watchdog service without printing secrets.
+3. Start/repair LiveKit and the heartbeat monitor only after the real public endpoint/API health checks pass.
+4. Run `npm run check:livekit-routing-health`; closure requires `eligibleServerCount >= 1` and `chillywood-prod-01` heartbeat age under 120 seconds.
+5. Then prove fresh `watch-party-live` and `live-stage` token success.
+6. Do not manually update `last_heartbeat_at`, loosen `staleHeartbeatSeconds`, bypass routing eligibility, change mobile/Premium/Chi'lly Chat/native calls, or print secrets.
+
 # LiveKit Server Heartbeat / Registry Recovery
 
 Current latest truth:
