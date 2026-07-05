@@ -154,6 +154,12 @@ assertIncludes(liveStage, "live-stage viewer entered without host-granted camera
 assertIncludes(livekitSurface, "hasPublishedLocalCameraTrack: !!publishedLocalCameraTrackRef", "Shared media surface logs published local camera proof");
 assertIncludes(livekitSurface, "bubbleGridTrackCount: bubbleGridTracks.length", "Shared media surface logs real bubble track count");
 assertNotIncludes(liveStage, "fallbackMediaSuccess", "Live Stage fallback must not be represented as media success");
+assertIncludes(liveStage, "const canUseViewerSelfHero = !isHost && isHybridMode;", "Live Stage self-hero mode stays viewer-only");
+assertIncludes(liveStage, "const shouldUseViewerSelfHero = canUseViewerSelfHero && viewerSelfHeroEnabled;", "Live Stage self-hero mode is local UI state");
+assertIncludes(liveStage, "testID=\"live-stage-self-hero-toggle\"", "Live Stage self-hero toggle is exposed for proof");
+assertIncludes(liveStage, "testID=\"live-stage-seat-request-approve\"", "Live Stage seat-request sheet has approve action");
+assertIncludes(liveStage, "testID=\"live-stage-seat-request-dismiss\"", "Live Stage seat-request sheet has dismiss action");
+assertIncludes(liveStage, "testID=\"live-stage-seat-request-close\"", "Live Stage seat-request sheet has close action");
 
 assertIncludes(oldRoomGuard, "isWatchPartyRoomCurrentlyActive(room)", "Old-room guard covers LiveKit stale room rejection");
 assertIncludes(oldRoomGuard, "LiveKit token room_expired rejection", "Old-room guard covers expired token response");
@@ -165,6 +171,8 @@ assertIncludes(seatApprovalProof, "deviceOrEmulatorUsed === false", "Live Stage 
 assertIncludes(seatApprovalProof, "realAuthAccountCreated === false", "Live Stage proof avoids real account creation");
 assertIncludes(seatApprovalProof, "viewer should become publish-capable after host approval", "Live Stage proof covers approved speaker publish");
 assertIncludes(seatApprovalProof, "approval should collapse host card overlay", "Live Stage proof covers overlay collapse");
+assertIncludes(seatApprovalProof, "dismiss should close the seat-request sheet", "Live Stage proof covers request sheet dismissal");
+assertIncludes(seatApprovalProof, "self-hero party box should put the real host first", "Live Stage proof covers self-hero host ordering");
 
 assertIncludes(participantPermissions, 'action: "enforce-participant-state"', "Client participant enforcement helper uses scoped endpoint action");
 assertIncludes(joinBoundary, "isLiveKitParticipantTokenExpired(entry.joinContract.participantToken)", "Prepared LiveKit join boundary rejects expired tokens");

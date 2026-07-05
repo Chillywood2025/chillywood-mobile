@@ -375,11 +375,13 @@ function LiveKitHybridParticipantVideo({
 
 function LiveKitHybridHeroVideo({
   fallbackInitial,
+  forceLocalHeroFallback = false,
   participantRole,
   preferLocalHero,
   roomName,
 }: {
   fallbackInitial: string;
+  forceLocalHeroFallback?: boolean;
   participantRole: LiveKitTokenReady["participantRole"];
   preferLocalHero: boolean;
   roomName: string;
@@ -425,12 +427,17 @@ function LiveKitHybridHeroVideo({
   const localCameraTrackRef = publishedLocalCameraTrackRef ?? directLocalCameraTrackRef;
   const primaryTrack = useMemo(
     () => {
-      if (preferLocalHero && shouldPublishLocalCamera && localCameraTrackRef) {
-        return localCameraTrackRef;
+      if (preferLocalHero) {
+        if (shouldPublishLocalCamera && localCameraTrackRef) {
+          return localCameraTrackRef;
+        }
+        if (forceLocalHeroFallback) {
+          return null;
+        }
       }
       return primaryRemoteTrack ?? localCameraTrackRef;
     },
-    [localCameraTrackRef, preferLocalHero, primaryRemoteTrack, shouldPublishLocalCamera],
+    [forceLocalHeroFallback, localCameraTrackRef, preferLocalHero, primaryRemoteTrack, shouldPublishLocalCamera],
   );
   const visibleTrackCount = (localCameraTrackRef ? 1 : 0) + remoteTracks.length;
 
@@ -439,6 +446,7 @@ function LiveKitHybridHeroVideo({
       surfaceLabel: "Hybrid Live Stage",
       roomName,
       participantRole,
+      forceLocalHeroFallback,
       preferLocalHero,
       shouldPublishLocalCamera,
       hasLocalCameraTrack: !!cameraTrack,
@@ -453,6 +461,7 @@ function LiveKitHybridHeroVideo({
     cameraTrack,
     connectionState,
     lastCameraError?.message,
+    forceLocalHeroFallback,
     participantRole,
     preferLocalHero,
     primaryRemoteTrack,
@@ -876,6 +885,7 @@ export default function WatchPartyLiveStageScreen({
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
   const [stageOverlayAutoHideArmed, setStageOverlayAutoHideArmed] = useState(false);
   const [controlsLocked, setControlsLocked] = useState(false);
+  const [viewerSelfHeroEnabled, setViewerSelfHeroEnabled] = useState(false);
   const [recentReactionEmojis, setRecentReactionEmojis] = useState<string[]>([]);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
@@ -885,6 +895,7 @@ export default function WatchPartyLiveStageScreen({
   const [participantPresentationById, setParticipantPresentationById] = useState<Record<string, "compact" | "expanded">>({});
   const [participantStateById, setParticipantStateById] = useState<Record<string, SharedParticipantLocalState>>({});
   const [seatRequestsById, setSeatRequestsById] = useState<Record<string, boolean>>({});
+  const [seatRequestSheetParticipantId, setSeatRequestSheetParticipantId] = useState("");
   const [stageParticipantActionBusyId, setStageParticipantActionBusyId] = useState("");
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
@@ -1008,6 +1019,8 @@ export default function WatchPartyLiveStageScreen({
     setLiveWatchPartyAccessSheetVisible(false);
     setRoomMissing(false);
     setRoomEntryError("");
+    setViewerSelfHeroEnabled(false);
+    setSeatRequestSheetParticipantId("");
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -2449,7 +2462,7 @@ export default function WatchPartyLiveStageScreen({
     : `${branding.watchPartyLabel} keeps the shared watch moment centered in the live route.`;
   const hybridStageFocusTarget = tailoredFocusParticipant && tailoredFocusParticipant.userId !== currentUserParticipantId
     ? tailoredFocusParticipant
-    : (lowerCommunityParticipants[0] ?? hostParticipant ?? tailoredFocusParticipant);
+    : (hostParticipant ?? lowerCommunityParticipants[0] ?? tailoredFocusParticipant);
   const stageFocusTarget = isLiveFirstMode
     ? (hostParticipant ?? tailoredFocusParticipant)
     : hybridStageFocusTarget;
@@ -2484,9 +2497,11 @@ export default function WatchPartyLiveStageScreen({
     ? "Host capture rules are active, while device blocking still stays best-effort."
     : "Capture protection stays best-effort on supported devices.";
   const liveRoomLayoutIsDefault = !tailoredFocusParticipant || tailoredFocusParticipant.userId === hostParticipant?.userId;
-  // Runtime lock: Live Watch-Party hero prefers the local/current device.
-  // Do not fix duplicate-looking feeds by removing real other host/viewer feeds from Chi'lly Party Members.
-  const heroParticipant = isHybridMode
+  const canUseViewerSelfHero = !isHost && isHybridMode;
+  const shouldUseViewerSelfHero = canUseViewerSelfHero && viewerSelfHeroEnabled;
+  // Viewer self-hero is local-only presentation state. It never changes host identity,
+  // token grants, seat approval, or any room-wide ordering.
+  const heroParticipant = shouldUseViewerSelfHero
     ? selfFallbackParticipant
     : (stageFocusTarget ?? hostParticipant ?? selfFallbackParticipant);
   const heroMediaParticipant = heroParticipant ? stageMediaParticipantsByUserId[heroParticipant.userId] as CommunicationParticipantView | undefined : undefined;
@@ -2501,9 +2516,9 @@ export default function WatchPartyLiveStageScreen({
   const showHeroRemoteImage = !showHeroLocalRtcVideo && !showHeroRemoteVideo && !!heroParticipantPreviewUri;
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
   const communityCardParticipants = useMemo(() => {
-    return visibleStripParticipants.filter((participant) => {
-      // The local/current device stays out of this box; real other room members stay in while their media catches up.
+    const nextParticipants = visibleStripParticipants.filter((participant) => {
       if (!participant.userId || participant.userId === currentUserParticipantId) return false;
+      if (!shouldUseViewerSelfHero && participant.userId === heroParticipant?.userId) return false;
       const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
         role: participant.role,
         isSpeaking: participant.isSpeaking,
@@ -2512,7 +2527,21 @@ export default function WatchPartyLiveStageScreen({
       if (participantState.isRemoved) return false;
       return true;
     });
-  }, [currentUserParticipantId, participantStateById, visibleStripParticipants]);
+    if (!shouldUseViewerSelfHero || !hostParticipant?.userId) return nextParticipants;
+    const hostEntry = nextParticipants.find((participant) => participant.userId === hostParticipant.userId);
+    if (!hostEntry) return nextParticipants;
+    return [
+      hostEntry,
+      ...nextParticipants.filter((participant) => participant.userId !== hostParticipant.userId),
+    ];
+  }, [
+    currentUserParticipantId,
+    heroParticipant?.userId,
+    hostParticipant,
+    participantStateById,
+    shouldUseViewerSelfHero,
+    visibleStripParticipants,
+  ]);
   const communityCardRows = useMemo(() => {
     const rows: typeof communityCardParticipants[] = [];
     let pendingRow: typeof communityCardParticipants = [];
@@ -2551,6 +2580,131 @@ export default function WatchPartyLiveStageScreen({
     if (participantState?.role === "host" || participantState?.role === "speaker") return true;
     return activeSpeakerSeatCount < LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS;
   }, [activeSpeakerSeatCount, participantStateById]);
+  const clearPendingSeatRequest = useCallback((participantId: string, options?: { broadcast?: boolean }) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    setSeatRequestsById((prev) => {
+      if (!prev[nextParticipantId]) return prev;
+      const next = { ...prev };
+      delete next[nextParticipantId];
+      return next;
+    });
+    if (options?.broadcast !== false) {
+      broadcastSeatRequest(nextParticipantId, false);
+    }
+    setSeatRequestSheetParticipantId((current) => (current === nextParticipantId ? "" : current));
+    collapseHostParticipantControls(nextParticipantId);
+  }, [broadcastSeatRequest, collapseHostParticipantControls]);
+  const approveStageSeatRequest = useCallback(async (participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    await runStageParticipantAction(nextParticipantId, async () => {
+      const participant = visibleStripParticipants.find((entry) => entry.userId === nextParticipantId);
+      const participantState = participantStateById[nextParticipantId] ?? createDefaultParticipantState({
+        role: participant?.role ?? "viewer",
+        isSpeaking: !!participant?.isSpeaking,
+        isMuted: !!participant?.isMuted,
+      });
+      if (participantState.isRemoved || participantState.role === "host") {
+        clearPendingSeatRequest(nextParticipantId);
+        Alert.alert("Seat request updated", "This request is no longer active.");
+        await refreshStageSnapshot(myUserId).catch(() => null);
+        return;
+      }
+      if (!canAddSpeakerSeat(nextParticipantId)) {
+        collapseHostParticipantControlsAfterFailure(nextParticipantId);
+        setSeatRequestSheetParticipantId("");
+        Alert.alert(
+          "Speaker seats full",
+          `Live rooms allow up to ${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} active speaker seats. Move someone to audience before approving another speaker.`,
+        );
+        return;
+      }
+      const seatPersisted = await emitParticipantUpdate(nextParticipantId, { role: "speaker" });
+      if (!seatPersisted) {
+        collapseHostParticipantControlsAfterFailure(nextParticipantId);
+        setSeatRequestSheetParticipantId("");
+        Alert.alert("Seat update unavailable", "The camera seat could not be saved yet. Try approving the seat again.");
+        await refreshStageSnapshot(myUserId).catch(() => null);
+        return;
+      }
+      setParticipantStateById((prev) => ({
+        ...prev,
+        [nextParticipantId]: {
+          ...(prev[nextParticipantId] ?? participantState),
+          role: "speaker",
+        },
+      }));
+      setSeatRequestsById((prev) => {
+        if (!prev[nextParticipantId]) return prev;
+        const next = { ...prev };
+        delete next[nextParticipantId];
+        return next;
+      });
+      broadcastSeatState(nextParticipantId, {
+        role: "speaker",
+        isMuted: participantState.isMuted,
+        pending: false,
+      });
+      setSeatRequestSheetParticipantId("");
+      collapseHostParticipantControls(nextParticipantId);
+    });
+  }, [
+    broadcastSeatState,
+    canAddSpeakerSeat,
+    clearPendingSeatRequest,
+    collapseHostParticipantControls,
+    collapseHostParticipantControlsAfterFailure,
+    emitParticipantUpdate,
+    myUserId,
+    participantStateById,
+    refreshStageSnapshot,
+    runStageParticipantAction,
+    visibleStripParticipants,
+  ]);
+  const pendingSeatRequestParticipants = useMemo(() => {
+    if (!isHost) return [];
+    return visibleStripParticipants.filter((participant) => {
+      const participantId = String(participant.userId ?? "").trim();
+      if (!participantId || !seatRequestsById[participantId]) return false;
+      const participantState = participantStateById[participantId] ?? createDefaultParticipantState({
+        role: participant.role,
+        isSpeaking: participant.isSpeaking,
+        isMuted: participant.isMuted,
+      });
+      return participantState.role === "listener" && !participantState.isRemoved;
+    });
+  }, [isHost, participantStateById, seatRequestsById, visibleStripParticipants]);
+  const pendingSeatRequestParticipant = useMemo(() => {
+    if (!pendingSeatRequestParticipants.length) return null;
+    return pendingSeatRequestParticipants.find((participant) => participant.userId === seatRequestSheetParticipantId)
+      ?? pendingSeatRequestParticipants[0]
+      ?? null;
+  }, [pendingSeatRequestParticipants, seatRequestSheetParticipantId]);
+  const pendingSeatRequestParticipantState = pendingSeatRequestParticipant
+    ? participantStateById[pendingSeatRequestParticipant.userId] ?? createDefaultParticipantState({
+      role: pendingSeatRequestParticipant.role,
+      isSpeaking: pendingSeatRequestParticipant.isSpeaking,
+      isMuted: pendingSeatRequestParticipant.isMuted,
+    })
+    : null;
+  useEffect(() => {
+    if (!canUseViewerSelfHero && viewerSelfHeroEnabled) {
+      setViewerSelfHeroEnabled(false);
+    }
+  }, [canUseViewerSelfHero, viewerSelfHeroEnabled]);
+  useEffect(() => {
+    if (!isHost || isLiveRoomSurface || !pendingSeatRequestParticipants.length) {
+      setSeatRequestSheetParticipantId("");
+      return;
+    }
+    setSeatRequestSheetParticipantId((current) => {
+      if (current && pendingSeatRequestParticipants.some((participant) => participant.userId === current)) {
+        return current;
+      }
+      return pendingSeatRequestParticipants[0]?.userId ?? "";
+    });
+  }, [isHost, isLiveRoomSurface, pendingSeatRequestParticipants]);
   const communityCardParticipantIndexById = useMemo(
     () => Object.fromEntries(communityCardParticipants.map((participant, index) => [participant.userId, index])),
     [communityCardParticipants],
@@ -3259,13 +3413,17 @@ export default function WatchPartyLiveStageScreen({
   }, [closeStageOverlayPanels, stageOverlayMotion]);
 
   const onLiveStageBack = useCallback(() => {
+    if (seatRequestSheetParticipantId) {
+      setSeatRequestSheetParticipantId("");
+      return;
+    }
     if (!isLiveRoomSurface) {
       onReturnToLiveRoom();
       return;
     }
 
     returnToWatchPartyRoomRoute();
-  }, [isLiveRoomSurface, onReturnToLiveRoom, returnToWatchPartyRoomRoute]);
+  }, [isLiveRoomSurface, onReturnToLiveRoom, returnToWatchPartyRoomRoute, seatRequestSheetParticipantId]);
 
   useEffect(() => {
     if (!isFocused || Platform.OS === "web") return undefined;
@@ -4467,8 +4625,9 @@ export default function WatchPartyLiveStageScreen({
           {shouldRenderLiveKitStage && liveKitJoinContract ? (
             <LiveKitHybridHeroVideo
               fallbackInitial={heroFallbackInitial}
+              forceLocalHeroFallback={shouldUseViewerSelfHero}
               participantRole={liveKitJoinContract.participantRole}
-              preferLocalHero={isHost || isHybridMode}
+              preferLocalHero={isHost || shouldUseViewerSelfHero}
               roomName={liveKitJoinContract.roomName}
             />
           ) : liveKitJoinUnavailable ? (
@@ -4562,6 +4721,77 @@ export default function WatchPartyLiveStageScreen({
             </Text>
           </View>
         ) : null}
+        {isHost && pendingSeatRequestParticipant && seatRequestSheetParticipantId ? (
+          <View
+            pointerEvents="box-none"
+            style={[styles.stageSeatRequestSheetWrap, { top: safeAreaInsets.top + 84 }]}
+          >
+            <View style={styles.stageSeatRequestSheet} pointerEvents="auto">
+              <View style={styles.stageSeatRequestHeader}>
+                <View style={styles.stageSeatRequestTitleWrap}>
+                  <Text style={styles.stageSeatRequestKicker}>Seat request</Text>
+                  <Text style={styles.stageSeatRequestTitle} numberOfLines={1}>
+                    {pendingSeatRequestParticipant.displayName}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.stageSeatRequestCloseButton}
+                  activeOpacity={0.82}
+                  accessible
+                  focusable
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss seat request"
+                  hitSlop={STAGE_CONTROL_HIT_SLOP}
+                  onPress={() => clearPendingSeatRequest(pendingSeatRequestParticipant.userId)}
+                  testID="live-stage-seat-request-close"
+                >
+                  <MaterialIcons name="close" size={18} color="#F5F7FF" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.stageSeatRequestBody}>
+                Bring them on stage when you are ready. Dismissing keeps you in the room and does not seat them.
+              </Text>
+              <View style={styles.stageSeatRequestActionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.stageSeatRequestSecondaryButton,
+                    stageParticipantActionBusyId === pendingSeatRequestParticipant.userId && styles.stageParticipantActionBtnBusy,
+                  ]}
+                  activeOpacity={0.82}
+                  accessible
+                  focusable
+                  accessibilityRole="button"
+                  accessibilityLabel="Not now for this seat request"
+                  disabled={stageParticipantActionBusyId === pendingSeatRequestParticipant.userId}
+                  onPress={() => clearPendingSeatRequest(pendingSeatRequestParticipant.userId)}
+                  testID="live-stage-seat-request-dismiss"
+                >
+                  <Text style={styles.stageSeatRequestSecondaryText}>Not now</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.stageSeatRequestPrimaryButton,
+                    (!pendingSeatRequestParticipantState || stageParticipantActionBusyId === pendingSeatRequestParticipant.userId) && styles.stageParticipantActionBtnBusy,
+                  ]}
+                  activeOpacity={0.86}
+                  accessible
+                  focusable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Bring ${pendingSeatRequestParticipant.displayName} on stage`}
+                  disabled={!pendingSeatRequestParticipantState || stageParticipantActionBusyId === pendingSeatRequestParticipant.userId}
+                  onPress={() => {
+                    void approveStageSeatRequest(pendingSeatRequestParticipant.userId);
+                  }}
+                  testID="live-stage-seat-request-approve"
+                >
+                  <Text style={styles.stageSeatRequestPrimaryText}>
+                    {stageParticipantActionBusyId === pendingSeatRequestParticipant.userId ? "Saving..." : "Bring on stage"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        ) : null}
         {/* Layout lock: preserve the people-first Chi'lly Party Members grid structure in Live Watch-Party mode. */}
         {shouldShowStageCommunityDeck ? (
         <View style={[styles.stageHybridDeck, { top: hybridDeckTop }]} pointerEvents="box-none">
@@ -4584,6 +4814,33 @@ export default function WatchPartyLiveStageScreen({
               <Text style={styles.stageCommunityCount}>{communityCardCountLabel}</Text>
             </View>
             <Text style={styles.stageCommunityHint}>{stageSeatRequestHint}</Text>
+            {canUseViewerSelfHero ? (
+              <TouchableOpacity
+                style={[
+                  styles.stageSelfHeroToggle,
+                  viewerSelfHeroEnabled && styles.stageSelfHeroToggleActive,
+                ]}
+                activeOpacity={0.84}
+                accessible
+                focusable
+                accessibilityRole="button"
+                accessibilityLabel={viewerSelfHeroEnabled ? "Show the host as the Live Stage hero" : "Make me the Live Stage hero on this device"}
+                accessibilityState={{ selected: viewerSelfHeroEnabled }}
+                hitSlop={STAGE_CONTROL_HIT_SLOP}
+                onPress={() => setViewerSelfHeroEnabled((value) => !value)}
+                testID="live-stage-self-hero-toggle"
+              >
+                <Text
+                  style={[
+                    styles.stageSelfHeroToggleText,
+                    viewerSelfHeroEnabled && styles.stageSelfHeroToggleTextActive,
+                  ]}
+                >
+                  {viewerSelfHeroEnabled ? "Show host hero" : "Make me hero"}
+                </Text>
+                <Text style={styles.stageSelfHeroToggleHint}>Only changes your view</Text>
+              </TouchableOpacity>
+            ) : null}
             {!isHost ? (
               <TouchableOpacity
                 style={[
@@ -4779,7 +5036,7 @@ export default function WatchPartyLiveStageScreen({
                                       collapseHostParticipantControls(participant.userId);
                                     }}
                                   >
-                                    <Text style={styles.stageParticipantActionText}>Deny</Text>
+                                    <Text style={styles.stageParticipantActionText}>Not now</Text>
                                   </TouchableOpacity>
                                 </>
                               ) : null}
@@ -5981,6 +6238,97 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     fontWeight: "800",
   },
+  stageSeatRequestSheetWrap: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    zIndex: 42,
+    elevation: 42,
+  },
+  stageSeatRequestSheet: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(166,200,255,0.28)",
+    backgroundColor: "rgba(6,10,18,0.94)",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.32,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 14 },
+  },
+  stageSeatRequestHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  stageSeatRequestTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  stageSeatRequestKicker: {
+    color: "#9DB7F8",
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+  },
+  stageSeatRequestTitle: {
+    color: "#F7FAFF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  stageSeatRequestCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stageSeatRequestBody: {
+    color: "#B9C6DD",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  stageSeatRequestActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  stageSeatRequestPrimaryButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 16,
+    backgroundColor: "#A7F3D0",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 13,
+  },
+  stageSeatRequestPrimaryText: {
+    color: "#07110D",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  stageSeatRequestSecondaryButton: {
+    minHeight: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  stageSeatRequestSecondaryText: {
+    color: "#E8EEFB",
+    fontSize: 13,
+    fontWeight: "800",
+  },
   stageHybridDeck: {
     position: "absolute",
     left: 14,
@@ -6428,6 +6776,34 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: "700",
     marginTop: -4,
+  },
+  stageSelfHeroToggle: {
+    alignSelf: "stretch",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(142,178,255,0.28)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  stageSelfHeroToggleActive: {
+    borderColor: "rgba(167,243,208,0.42)",
+    backgroundColor: "rgba(167,243,208,0.12)",
+  },
+  stageSelfHeroToggleText: {
+    color: "#EEF4FF",
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
+  stageSelfHeroToggleTextActive: {
+    color: "#D7FFE9",
+  },
+  stageSelfHeroToggleHint: {
+    color: "#9FACBF",
+    fontSize: 9.5,
+    lineHeight: 12,
+    fontWeight: "700",
   },
   stageCommunityRequestButton: {
     alignSelf: "flex-start",

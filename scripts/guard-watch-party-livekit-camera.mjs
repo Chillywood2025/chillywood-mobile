@@ -227,7 +227,7 @@ const liveStageHostActionMenu = sliceBetween(
 const liveStageHostApproveAction = sliceBetween(
   liveStageHostActionMenu,
   "const seatPersisted = await emitParticipantUpdate(participant.userId, { role: \"speaker\" });",
-  "<Text style={styles.stageParticipantActionText}>Deny</Text>",
+  "<Text style={styles.stageParticipantActionText}>Not now</Text>",
   "Live Stage host approve action boundary",
 );
 const liveStageHostMuteAction = sliceBetween(
@@ -435,6 +435,21 @@ assertIncludes(
   liveStage,
   "const shouldAllowLegacyStageRtcModule = Platform.OS === \"web\" || !shouldRenderLiveKitStage;",
   "Live Stage must allow legacy camera RTC fallback when native LiveKit is not actively rendering",
+);
+assertIncludes(
+  liveStage,
+  "testID=\"live-stage-self-hero-toggle\"",
+  "Live Stage must expose a viewer-only local self-hero toggle for installed proof",
+);
+assertIncludes(
+  liveStage,
+  "testID=\"live-stage-seat-request-approve\"",
+  "Live Stage host seat-request sheet must expose a direct approve action",
+);
+assertIncludes(
+  liveStage,
+  "testID=\"live-stage-seat-request-dismiss\"",
+  "Live Stage host seat-request sheet must expose a safe dismiss action",
 );
 assertIncludes(
   partyRoomRouteAccessCheck,
