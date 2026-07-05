@@ -10,6 +10,18 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Premium Subscribe Screen Cleanup
+
+Status: Closed for source + Google Play-installed v79 OTA visual proof.
+
+Source commit `af2bb5e0cc3a2ac5ceb863419ae32b38b548e45f` simplifies the full `/subscribe` Premium checkout/status page without changing payment/provider logic. Final EAS Update production Android runtime `1.0.0` published group `34ad5194-538b-40c2-9335-b5abbf95d397`, Android update `019f308e-4cde-7954-b59b-293c4128fa3b`.
+
+Installed proof on `R5CR120QCBF` showed the cleaned non-Premium sandbox tester screen with `Premium`, `Watch-Party Live, Live Watch-Party, creator tools, and ad-free viewing.`, compact `Sandbox test mode — no real money is charged.`, `Premium is not active.`, primary `Start Sandbox Premium Test`, secondary `Not now`, footer `Already subscribed? Restore`, and collapsed `Testing details`. The main screen no longer shows the big Account Status card, large sandbox warning/details, duplicate Restore/Manage actions, annual status action, `What does Premium unlock?`, unavailable explanation accordion, dense provider wording, scary red panels, or payout/cashout/withdrawal/transfer/payable-balance copy.
+
+Restore uses the existing restore flow and showed `Restore complete. Premium is not active.` Not now returns to Home from direct `/subscribe` launch. Active Premium source state renders `Manage subscription` as the primary action, `Done` as secondary, and a small restore link; installed active-state proof was unavailable because the R5 proof account was non-Premium. No RevenueCat entitlement logic, Google Play product setup, Premium gate checks, Money Center, creator-money flows, payouts/cashout, live money, auth/RLS, native build, or Play production changed.
+
+Artifact folder: `/tmp/premium-subscribe-screen-cleanup-20260704-232630/`.
+
 ## Premium Required Sheet Cleanup
 
 Status: Closed for source + Google Play-installed v79 OTA visual proof.

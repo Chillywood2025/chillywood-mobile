@@ -1,5 +1,20 @@
 # NEXT TASK
 
+# Premium Subscribe Screen Cleanup
+
+Current latest truth:
+- `/subscribe` Premium screen cleanup is Closed for source + Google Play-installed v79 OTA visual proof.
+- Artifact folder: `/tmp/premium-subscribe-screen-cleanup-20260704-232630/`.
+- Source commit: `af2bb5e0cc3a2ac5ceb863419ae32b38b548e45f`.
+- Final EAS Update: production Android runtime `1.0.0`, group `34ad5194-538b-40c2-9335-b5abbf95d397`, Android update `019f308e-4cde-7954-b59b-293c4128fa3b`, message `Simplify Premium subscribe screen`.
+- Installed proof on `R5CR120QCBF` / Google Play-installed v79 showed the cleaned `/subscribe` non-Premium sandbox tester screen: `Premium`, `Watch-Party Live, Live Watch-Party, creator tools, and ad-free viewing.`, compact `Sandbox test mode — no real money is charged.`, `Premium is not active.`, primary `Start Sandbox Premium Test`, secondary `Not now`, footer `Already subscribed? Restore`, and collapsed `Testing details`.
+- Removed from the main screen: big Account Status card, large sandbox warning/details, repeated Restore/Manage buttons, annual status action, `What does Premium unlock?`, unavailable explanation accordion, dense provider copy, scary red panels, and payout/cashout/withdrawal/transfer/payable-balance wording.
+- Restore still uses the existing `restoreMonetizationAccess` flow and showed `Restore complete. Premium is not active.` Not now returns to Home from a direct `/subscribe` launch. The purchase CTA was visually proved but not tapped; no purchase was attempted.
+- Active Premium state is source-handled: active users get primary `Manage subscription`, secondary `Done`, and small restore link. Installed active-state proof was not available because the R5 proof account was non-Premium.
+- No payment/provider logic, RevenueCat entitlement logic, Google Play product setup, Premium gates, Money Center, creator-money flows, payouts/cashout, live money, auth/RLS, native build, or Play production changed.
+- Validation passed `npm run guard:premium-sandbox-policy`, `npx tsc --noEmit`, `npm run validate:runtime`, and diff checks. `npm run proof:premium-first-activation` ran safely and preserved the known annual provider-blocked status while passing safety checks.
+- No remaining `/subscribe` Premium screen cleanup task is open unless a fresh installed regression is observed.
+
 # Premium Required Sheet Cleanup
 
 Current latest truth:
