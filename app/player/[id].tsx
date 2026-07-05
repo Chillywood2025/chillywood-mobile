@@ -9118,7 +9118,7 @@ export default function PlayerScreen() {
             ) : (
               <StandalonePlayerTopChrome
                 controlsVisible={controlsVisible}
-                playbackGateActive={standalonePlaybackGateActive}
+                playbackGateActive={standalonePlaybackGateActive || creatorVideoPaidContentLocked}
                 overlayOpacity={compactControlsOpacity}
                 overlayTranslateY={compactControlsTranslateY}
                 playbackRateLabel={formatPlaybackRateLabel(playbackRate)}
@@ -9150,7 +9150,7 @@ export default function PlayerScreen() {
             )}
 
             <View style={[styles.playerFrameworkBottomStack, inWatchParty && styles.playerFrameworkBottomStackWatchParty]}>
-              {!isLiveMode && (!isStandalonePlayer || !standalonePlaybackGateActive) ? (
+              {!isLiveMode && !creatorVideoPaidContentLocked && (!isStandalonePlayer || !standalonePlaybackGateActive) ? (
                 <View
                   pointerEvents={effectiveControlsVisible ? "auto" : "none"}
                   style={[
@@ -9217,7 +9217,7 @@ export default function PlayerScreen() {
 
             </View>
 
-            {!inWatchParty && canTogglePlayerFullscreen ? (
+            {!inWatchParty && !creatorVideoPaidContentLocked && canTogglePlayerFullscreen ? (
               <TouchableOpacity
                 style={styles.standaloneFullscreenHitTarget}
                 activeOpacity={1}
