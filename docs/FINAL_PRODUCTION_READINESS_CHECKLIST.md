@@ -12,7 +12,7 @@ Final reports must separate Play binary proof, OTA update proof, source proof, a
 
 ## Six Creator-Money E2E UX Cleanup
 
-Status: Partial. Source-fixed and validation-clean; installed two-device v79 + OTA visual proof remains pending.
+Status: Partial. Source-fixed, OTA-published, validation-clean, and partially installed-proved on Google Play v79.
 
 Governing doc: `docs/release/GOOGLE_SIGNED_V79_SIX_CREATOR_MONEY_E2E_UX_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v79-six-creator-money-e2e-ux-proof-20260704-235833/`.
 
@@ -20,7 +20,9 @@ The source cleanup covered Tips, Paid Video, Watch-Party Seat Pass, Channel Subs
 
 Validation passed `npm run proof:creator-monetization-route-button-wiring` (249/249), `npm run proof:creator-money-notification-routing`, `npm run proof:notification-center-money-activity`, `npm run proof:important-notification-accessibility`, creator/money/access/provider/premium/payment/notification/route/brand guards, `npx tsc --noEmit`, `npm run validate:runtime`, `supabase db push --dry-run`, and diff checks.
 
-Installed closure is not yet claimed. `R5CR120QCBF` read back Google Play-installed package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`; `R3CXA0DS5JV` was not visible over ADB in the final readback window, and the cleanup still needs loaded-OTA visual proof on installed app flows. No live money, payouts, cashout, payable balances, provider activation/mutation, Premium entitlement change, Money Center architecture refactor, native call change, auth/RLS weakening, Play production submission, sideload, `adb install`, logout, clear data, uninstall, or reinstall happened.
+EAS Update production Android runtime `1.0.0` published group `3f405381-d18f-4d9d-bd22-17ff83d2fb67`, Android update `019f30d1-33ec-79fa-b725-bb9d0ae3bf09`, commit `125b495cd38901fa6358e958d1b7fc970f18f574`. Both `R5CR120QCBF` and `R3CXA0DS5JV` read back Google Play-installed package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`. Installed captures on `R3CXA0DS5JV` proved Tip Sheet amount options and contribution-only copy, Paid Video locked state with `Unlock Video` and exact-video-only copy, Channel Subscription active state, VIP Pass active state, Event Pass confirmed state, bell tray timestamps/accessibility labels, and one visible creator-money notification row opening Platform Studio / Money Center.
+
+Installed closure remains Partial. Watch-Party Seat Pass fixtures returned `Room not found`, full creator setup save/readback for all six flows was not replayed, and the complete purchase/success/failure/wrong-account/unpaid matrix was not physically completed. No live money, payouts, cashout, payable balances, provider activation/mutation, Premium entitlement change, Money Center architecture refactor, native call change, auth/RLS weakening, Play production submission, sideload, `adb install`, logout, clear data, uninstall, or reinstall happened.
 
 ## Premium Subscribe Screen Cleanup
 

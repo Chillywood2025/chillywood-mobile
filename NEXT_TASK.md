@@ -3,7 +3,7 @@
 # Six Creator-Money E2E UX Installed Proof
 
 Current latest truth:
-- Six creator-money end-to-end UX cleanup is source-fixed and validation-clean, but installed visual proof is still Partial.
+- Six creator-money end-to-end UX cleanup is source-fixed, OTA-published, validation-clean, and installed visual proof is still Partial.
 - Governing doc: `docs/release/GOOGLE_SIGNED_V79_SIX_CREATOR_MONEY_E2E_UX_PROOF.md`.
 - Artifact folder: `/tmp/google-play-internal-v79-six-creator-money-e2e-ux-proof-20260704-235833/`.
 - Source lanes completed for Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP Pass, and Event Pass.
@@ -11,12 +11,15 @@ Current latest truth:
 - Receipt/activity/deep-link proof scripts pass for buyer and creator money rows; seeded rows remain UI/routing proof only and are not purchase-generation proof.
 - Validation passed: `npm run proof:creator-monetization-route-button-wiring` (249/249), `npm run proof:creator-money-notification-routing`, `npm run proof:notification-center-money-activity`, `npm run proof:important-notification-accessibility`, creator/money/access/provider/premium/payment/notification/route/brand guards, `npx tsc --noEmit`, `npm run validate:runtime`, `supabase db push --dry-run`, and diff checks.
 - Safety stayed intact: no live money, payouts, cashout, payable balance, provider activation/mutation, RevenueCat/Google Play production change, Premium entitlement change, Money Center architecture refactor, native call change, auth/RLS weakening, Play production submit, sideload, `adb install`, logout, clear data, uninstall, or reinstall.
-- Device readback during closeout showed `R5CR120QCBF` as Google Play-installed v79 (`installerPackageName=com.android.vending`, versionCode `79`, versionName `1.0.0`). `R3CXA0DS5JV` was not visible over ADB in the final readback window.
+- EAS Update production Android runtime `1.0.0` published group `3f405381-d18f-4d9d-bd22-17ff83d2fb67`, Android update `019f30d1-33ec-79fa-b725-bb9d0ae3bf09`, commit `125b495cd38901fa6358e958d1b7fc970f18f574`, message `Clean six creator money UX flows`.
+- Device readback after OTA publish showed both `R5CR120QCBF` and `R3CXA0DS5JV` as Google Play-installed v79 (`installerPackageName=com.android.vending`, versionCode `79`, versionName `1.0.0`).
+- Installed captures on `R3CXA0DS5JV` proved: Tip Sheet amount options and contribution-only copy; Paid Video locked state with `Unlock Video` and exact-video-only copy; Channel Subscription active state; VIP Pass active state; Event Pass confirmed state; bell tray timestamps/accessibility labels; visible `Tip received` creator-money row opening Platform Studio / Money Center.
+- Still not Closed: Watch-Party Seat Pass fixtures returned `Room not found`; creator setup save/readback for all six flows was not replayed; full purchase/success/canceled/wrong-account/unpaid denial matrix was not physically completed.
 
 Next exact step:
-1. Recover/verify `R3CXA0DS5JV` over ADB without logout, clear data, uninstall/reinstall, sideload, or `adb install`.
-2. Publish or verify a runtime-compatible OTA containing the six-flow source cleanup if not already delivered.
-3. Prove on Google Play-installed v79 + loaded OTA: creator setup/readback, buyer entry/gate/CTA, safe success/access or sandbox status, unpaid/wrong-account denial where fixtures exist, receipt/activity routing, cold-start/deep-link routing where fixtures exist, Seat Pass wording, Premium separation, no buyer payout/cashout copy, liveMoneyEnabled OFF, Money Center non-regression, bell tray non-regression, and Premium gate non-regression.
+1. Create or repair one safe current Watch-Party Seat Pass room fixture through existing app/backend proof utilities only; no live money, provider mutation, or Premium bypass.
+2. Rerun installed Seat Pass buyer gate/CTA/room access or safe denial proof on Google Play-installed v79 + OTA.
+3. If owner wants full closure, replay Money Center creator setup/readback for all six flows and the full purchase/success/canceled/wrong-account/unpaid denial matrix with sandbox/proof/not-payable fixtures.
 4. Keep seeded/mirrored rows documented as sandbox/proof/not-payable UI routing proof only.
 
 # Premium Subscribe Screen Cleanup

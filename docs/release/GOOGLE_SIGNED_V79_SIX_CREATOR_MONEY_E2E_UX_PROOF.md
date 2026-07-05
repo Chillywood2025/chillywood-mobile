@@ -1,10 +1,10 @@
 # Google-Signed V79 Six Creator-Money E2E UX Proof
 
-Date: 2026-07-04
+Date: 2026-07-04 / 2026-07-05 update
 
 Verdict: Partial.
 
-Source is fixed and validation-clean for the six creator-money UX lanes. Installed Google Play v79 visual proof remains pending because the cleanup has not yet been proved through a loaded OTA on both physical proof phones; `R3CXA0DS5JV` was not visible over ADB in the final readback window.
+Source is fixed and validation-clean for the six creator-money UX lanes. Google Play-installed v79 plus OTA visual proof advanced on July 5, 2026, but full closure remains Partial because the Watch-Party Seat Pass room fixture is stale/unreachable and the full purchase/success/failure/wrong-account matrix was not physically completed.
 
 Artifact folder:
 
@@ -18,18 +18,30 @@ Start baseline:
 - origin/main: `80acd6297e1a94489097b086c2ae64db1791ad6c`
 - tracked tree was clean before source changes
 
-Final source/docs commit is recorded in the final report after commit.
+Source cleanup commit before this installed-proof documentation update: `125b495cd38901fa6358e958d1b7fc970f18f574`.
 
 ## Device / OTA Proof
 
 Installed closure is not claimed.
 
-Observed device readback during closeout:
+OTA published for the JS/UI cleanup:
+
+- Branch: `production`
+- Runtime: `1.0.0`
+- Platform: Android
+- Update group: `3f405381-d18f-4d9d-bd22-17ff83d2fb67`
+- Android update: `019f30d1-33ec-79fa-b725-bb9d0ae3bf09`
+- Commit: `125b495cd38901fa6358e958d1b7fc970f18f574`
+- Message: `Clean six creator money UX flows`
+
+Device readback after OTA publish/restart:
 
 - `R5CR120QCBF`: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`
-- `R3CXA0DS5JV`: not visible over ADB in the final readback window
+- `R3CXA0DS5JV`: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`
 
-No sideload, `adb install`, logout, clear data, uninstall, or reinstall happened. No OTA for this cleanup was counted as installed proof in this pass.
+Logcat did not expose a clean Expo update id/group readback. Installed proof is based on post-OTA app behavior and captured UI text, not a direct on-device Expo update-id readback.
+
+No sideload, `adb install`, logout, clear data, uninstall, or reinstall happened.
 
 ## Lane 0 Route Inventory Result
 
@@ -68,15 +80,19 @@ Premium remains separate from creator-money. Buyer purchase surfaces no longer s
 
 ## Tips Creator Result
 
-Closed for source.
+Closed for source; installed creator setup not fully proved.
 
 Tips setup remains reachable from Money Center and stays sandbox/not-payable. Source copy keeps Tips separate from payout/cashout. Save/readback behavior remains covered by existing setup paths and proof scripts.
 
+Installed proof captured a creator-money notification row routing into Platform Studio / Money Center on `R3CXA0DS5JV`, but a full Tips setup save/readback replay was not run in this pass.
+
 ## Tips Buyer Result
 
-Closed for source.
+Closed for source and partially installed-proved.
 
 The Tip Sheet path keeps Tips contribution-only: tips do not unlock Premium, Paid Video, Seat Pass, Channel Subscription, VIP, Event Pass, room access, LiveKit authority, ranking, or payable balances. Amount controls and actions have clearer accessibility/test coverage. Cancellation and failure copy is short and safe.
+
+Installed proof on `R3CXA0DS5JV` opened the creator channel, showed `Sandbox Tip`, opened the Tip Sheet, showed amount options, and showed copy that tips are support only and never unlock paid access.
 
 ## Paid Video Creator Result
 
@@ -86,21 +102,25 @@ Paid Video setup remains tied to exact video/source offers and sandbox/not-payab
 
 ## Paid Video Buyer Result
 
-Closed for source.
+Closed for source and partially installed-proved.
 
 The locked state keeps the primary CTA as `Unlock Video` / exact-video access. Copy says access is target-specific and purchase-unavailable states are short and user-facing. Canceled checkout returns `Paid Video purchase was canceled. Nothing changed.`
 
+Installed proof on `R3CXA0DS5JV` used the documented fallback paid-video fixture and showed `Sandbox Paid Video Demo`, locked state, `$0.99`, `Unlock Video`, and exact-video-only copy. The first fixture route was private/unavailable, so full primary fixture closure remains fixture-limited.
+
 ## Seat Pass Creator Result
 
-Closed for source.
+Closed for source; installed proof blocked by stale room fixture.
 
 Watch-Party Seat Pass setup remains sandbox/not-payable and creator-facing copy says Seat Pass. No payout/cashout/live-money claim was added.
 
 ## Seat Pass Buyer Result
 
-Closed for source.
+Closed for source; installed proof blocked by stale room fixture.
 
 Buyer-facing Watch-Party copy says Seat Pass, routes to the Watch-Party / Party Room target, and does not route users to Live Stage as a paid Seat Pass product. Unavailable copy stays simple, and canceled checkout returns `Seat Pass purchase was canceled. Nothing changed.`
+
+Installed attempts on `R3CXA0DS5JV` opened the current private fixture route and documented fallback route; both returned `Room not found`. No reachable Watch-Party Seat Pass room surface was available in this pass.
 
 ## Channel Subscription Creator Result
 
@@ -110,11 +130,13 @@ Channel Subscription setup remains creator-specific and sandbox/not-payable. No 
 
 ## Channel Subscription Buyer Result
 
-Closed for source.
+Closed for source and installed-proved for active state.
 
 `/channel-subscription/[creatorId]` uses creator-specific Channel Subscription copy, one clear primary CTA, and exact-creator access language. Canceled checkout returns `Channel Subscription was canceled. Nothing changed.`
 
 Production base-plan/provider readiness remains a separate blocker and is not changed by this UX cleanup.
+
+Installed proof on `R3CXA0DS5JV` showed `Channel Subscription`, `SUBSCRIBED`, `Channel Subscription active`, creator-scoped includes, and Premium/VIP/Paid Video/Seat Pass/Event separation copy.
 
 ## VIP Creator Result
 
@@ -124,9 +146,11 @@ VIP setup remains creator-specific, sandbox/not-payable, and separate from Premi
 
 ## VIP Buyer Result
 
-Closed for source.
+Closed for source and installed-proved for active state.
 
 `/vip-pass/[creatorId]` uses creator-specific VIP Pass copy, `Get VIP Pass` as the primary CTA, and exact-creator access language. Canceled checkout returns `VIP Pass purchase was canceled. Nothing changed.`
+
+Installed proof on `R3CXA0DS5JV` showed `VIP Pass`, `VIP ACTIVE`, `VIP Pass active`, creator-specific VIP access, and Premium/subscription/Paid Video/Seat Pass/Event separation copy.
 
 ## Event Pass Creator Result
 
@@ -136,13 +160,15 @@ Event Pass setup remains event-specific, sandbox/not-payable, and separate from 
 
 ## Event Pass Buyer Result
 
-Closed for source.
+Closed for source and installed-proved for active state.
 
 `/event/[eventId]` keeps paid access exact to the event and fails closed for canceled, ended, expired, unsafe, or setup-unavailable states with user-facing copy. Canceled checkout returns `Event Pass purchase was canceled. Nothing changed.`
 
+Installed proof on `R3CXA0DS5JV` showed the event route, `Event pass confirmed`, exact-event access, and Premium/VIP/Paid Video/Seat Pass/other-event separation copy.
+
 ## Receipt / Activity Route Result
 
-Closed for source/proof scripts.
+Closed for source/proof scripts and partially installed-proved.
 
 Buyer receipt routes remain:
 
@@ -163,6 +189,8 @@ Creator transaction routes remain:
 - Event Pass sold -> Money Center Transactions
 
 Notification rows are route guidance only. They do not grant access, create payout/cashout/payable balances, mutate providers, or prove purchase generation.
+
+Installed proof opened the bell tray on `R3CXA0DS5JV`; rows showed timestamps and accessibility labels. A visible `Tip received` row opened Platform Studio / Money Center. This proves installed route behavior for the visible creator-money row only; it is not purchase-generation proof.
 
 ## Cold-Start / Deep-Link Result
 
@@ -206,7 +234,7 @@ The cleanup did not enable:
 
 ## Modern UI / UX Standards Result
 
-Closed for source, installed proof pending.
+Closed for source, partially installed-proved.
 
 The primary source improvements are:
 
@@ -217,7 +245,7 @@ The primary source improvements are:
 - fewer internal QA/provider terms on buyer surfaces
 - safer accessibility/testID coverage on touched controls
 
-Installed visual proof on Google Play v79 + loaded OTA is still required before this lane is Closed.
+Installed visual proof on Google Play v79 + OTA now covers Tips buyer sheet, Paid Video locked state, Channel Subscription active state, VIP active state, Event Pass active state, bell tray timestamps, and one creator-money row routing to Money Center. It does not cover the full six-flow purchase/success/failure/wrong-account matrix or Seat Pass room entry because the available Seat Pass fixture returned `Room not found`.
 
 ## Validation Results
 
@@ -252,8 +280,10 @@ Passed:
 
 ## Issues Still Open
 
-- Installed Google Play v79 + loaded OTA visual proof is not complete.
-- `R3CXA0DS5JV` was not visible over ADB in the final readback window.
+- Installed Google Play v79 + OTA visual proof is still not complete for the full matrix.
+- Watch-Party Seat Pass installed proof is blocked by stale/unreachable room fixtures returning `Room not found`.
+- Full creator setup save/readback for all six flows was not replayed from Money Center.
+- Purchase handoff/success/canceled/wrong-account/unpaid denial was not physically completed for every flow in this pass.
 - Production creator-money activation remains blocked pending owner/provider approval.
 - Creator Channel Subscription production base-plan/provider readiness remains a separate provider blocker.
 - Seeded/mirrored rows remain UI/routing proof only, not purchase-generation proof.
