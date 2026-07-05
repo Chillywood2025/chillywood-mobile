@@ -1,6 +1,6 @@
 [Unit]
 Description=Chillywood LiveKit health-checked heartbeat monitor
-Documentation=README:/opt/chillywood/livekit-registry/README.md
+Documentation=file:/opt/chillywood/livekit-registry/README.md
 After=network-online.target
 Wants=network-online.target
 

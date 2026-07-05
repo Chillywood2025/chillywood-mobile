@@ -12,11 +12,11 @@ Final reports must separate Play binary proof, OTA update proof, source proof, a
 
 ## LiveKit Server Heartbeat / Registry Recovery
 
-Status: Source/deploy fixed; backend health remains Partial.
+Status: Closed for backend routing health; installed Watch-Party Live sidecar / Live Stage smoke remains a separate product proof lane.
 
 Governing doc: `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md`. Artifact folder: `/tmp/livekit-server-heartbeat-recovery-watch-party-live-stage-proof-20260705-162020/`.
 
-Root cause for the current Watch-Party Live sidecar / Live Stage unavailable state is LiveKit registry liveness. `chillywood-prod-01` is registered and `active`, but its heartbeat is stale beyond the router's 120-second cutoff. The router therefore has zero eligible production LiveKit servers and fails token routing safe instead of falling back to a hardcoded server.
+Root cause for the previous Watch-Party Live sidecar / Live Stage unavailable state was LiveKit registry liveness. `chillywood-prod-01` was registered and `active`, but its heartbeat was stale beyond the router's 120-second cutoff, so the router had zero eligible production LiveKit servers and failed token routing safe instead of falling back to a hardcoded server.
 
 Changes made:
 
@@ -27,18 +27,22 @@ Changes made:
 - Added systemd service/timer templates for durable watchdog supervision.
 - Updated the LiveKit registry runbook and release proof docs.
 
-Current readback:
+Current retry readback:
 
-- `eligibleServerCount=0`
-- `staleHeartbeatCount=5`
-- `disabledServerCount=4`
-- `chillywood-prod-01` rejection reason: `stale_heartbeat`
-- heartbeat age around `300222` seconds
-- monitor invocation result: `livekit_public_endpoint_unreachable`
+- Hetzner server `chillywood-prod-01`: `running`
+- IPv4 `87.99.145.160`: `Blocked: no`
+- IPv6 `2a01:4ff:f0:7064::/64`: `Blocked: no`
+- Docker, Caddy, and the `chillywood-livekit` container are running on the host.
+- `livekit-heartbeat-monitor.service` is installed, active/enabled, and supervised with `Restart=always`.
+- `npm run check:livekit-routing-health` passes without manual monitor invocation.
+- `eligibleServerCount=1`
+- `noEligibleServerCountRecent=0`
+- `chillywood-prod-01` heartbeat age is under the 120-second cutoff.
+- `chillywood-prod-01` rejection reasons are empty.
+- fresh `watch-party-live` and `live-stage` token audit rows show `outcome=success`, `error_code=null`, `room_join=true`, and `can_subscribe=true`.
+- fresh routing audit rows show `room_assigned` / `assignment_reused` to `chillywood-prod-01`, with no fresh `no_eligible_server`.
 
-Follow-up endpoint repair readback: Hetzner Cloud reports `chillywood-prod-01` as `running`, but the assigned IPv4 `87.99.145.160` and IPv6 `2a01:4ff:f0:7064::/64` are both `Blocked: yes`. No Hetzner Cloud firewall is attached. Public probes and SSH time out, and traceroute reaches `blocked.hetzner.com`. Host/container/proxy logs cannot be inspected until the provider block is cleared or safe console access is provided.
-
-Required before production readiness: restore the real LiveKit host/container/network for `wss://live.chillywoodstream.com`, install/enable the health-checked heartbeat watchdog from a trusted backend or host environment, rerun `check:livekit-routing-health` until there is at least one eligible server, then rerun current Play-installed v79 Watch-Party Live sidecar and Live Stage smoke. Do not manually write heartbeats, loosen stale cutoff, bypass routing eligibility, or print tokens/secrets.
+Required before public production readiness: rerun current Play-installed v79 Watch-Party Live sidecar and Live Stage smoke now that backend routing health is green, then complete broader load/reconnect/cellular/TURN/metrics hardening. Do not manually write heartbeats, loosen stale cutoff, bypass routing eligibility, or print tokens/secrets.
 
 ## Premium-Gated LiveKit Sandbox Follow-Up
 

@@ -12,7 +12,9 @@ Premium remains Closed for this lane, and the earlier fixture-route caveat was a
 
 ## July 5 Heartbeat Recovery Follow-Up
 
-The follow-up LiveKit backend investigation in `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md` narrowed this failure further. Premium remains Closed and Party Room remains Closed. The current backend readback shows the router has zero eligible LiveKit servers because `chillywood-prod-01` has a stale heartbeat beyond the 120-second cutoff. The new health-checked `livekit-heartbeat-monitor` correctly failed closed with `livekit_public_endpoint_unreachable` and did not write a fake heartbeat. Until the real LiveKit host/container/network is restored and a health-checked heartbeat succeeds, this sidecar proof remains Partial for LiveKit infra/runtime liveness rather than Premium or mobile entitlement.
+The follow-up LiveKit backend investigation in `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md` first narrowed this failure to LiveKit registry liveness. Premium remains Closed and Party Room remains Closed. During the initial backend pass, the router had zero eligible LiveKit servers because `chillywood-prod-01` had a stale heartbeat beyond the 120-second cutoff, and the health-checked `livekit-heartbeat-monitor` correctly failed closed with `livekit_public_endpoint_unreachable` instead of writing a fake heartbeat.
+
+That backend blocker is now superseded by the July 5 retry closure: Hetzner unblocked the endpoint, `livekit-heartbeat-monitor.service` is installed/active on the host, `npm run check:livekit-routing-health` passes with `eligibleServerCount=1`, and fresh redacted `watch-party-live` / `live-stage` token audit rows succeed. This sidecar proof remains Partial only until the installed Home-video sidecar path is rerun against the recovered backend and R3 actual playback is proved.
 
 ## Repo / Origin Alignment
 

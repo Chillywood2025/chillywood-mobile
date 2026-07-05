@@ -2,13 +2,54 @@
 
 Date: 2026-07-05
 
-Verdict: Partial.
+Verdict: Closed for backend LiveKit routing/heartbeat recovery. Installed Watch-Party Live sidecar and Live Stage smoke remain separate current-v79 product proof lanes.
 
 Artifact folder: `/tmp/livekit-server-heartbeat-recovery-watch-party-live-stage-proof-20260705-162020/`.
 
 ## Executive Summary
 
-Premium remains Closed and Watch-Party Party Room remains Closed. The current Watch-Party Live sidecar and Live Stage failures are now classified as LiveKit infrastructure/runtime liveness. `chillywood-prod-01` is still registered as `active`, but its heartbeat is stale beyond the router's 120-second cutoff, leaving production with zero eligible LiveKit servers. A health-checked heartbeat monitor and durable watchdog templates were added, deployed, and validated, but the monitor currently returns `livekit_public_endpoint_unreachable` and correctly refuses to write a fake heartbeat.
+Premium remains Closed and Watch-Party Party Room remains Closed. The Watch-Party Live sidecar and Live Stage backend failure was LiveKit infrastructure/runtime liveness: `chillywood-prod-01` was registered as `active`, but its heartbeat was stale beyond the router's 120-second cutoff, leaving production with zero eligible LiveKit servers. The health-checked heartbeat monitor and durable watchdog templates were added, deployed, validated, and then installed on the LiveKit host after Hetzner unblocked the endpoint. Current backend readback now shows an eligible healthy server, fresh host heartbeat, reachable WSS endpoint, and successful `watch-party-live` / `live-stage` token routing.
+
+## July 5 Retry Closure
+
+Retry artifact folder: `/tmp/livekit-hetzner-recheck-20260705-retry2/`.
+
+Current repaired state:
+
+- Hetzner server `chillywood-prod-01`: `running`.
+- IPv4 `87.99.145.160`: `Blocked: no`.
+- IPv6 `2a01:4ff:f0:7064::/64`: `Blocked: no`.
+- No Hetzner Cloud firewall is attached.
+- Docker is active on the host.
+- Caddy is active and serves `https://live.chillywoodstream.com`.
+- `chillywood-livekit` container is running.
+- LiveKit listens on the expected host/container ports.
+- `livekit-heartbeat-monitor.service` is installed on the host, active/enabled, and supervised with `Restart=always`.
+- The heartbeat monitor secret is stored in Supabase/host secret storage by name only and is not printed or committed.
+- The systemd unit template now uses a valid `Documentation=file:/...` URL.
+
+Final backend health:
+
+- `npm run check:livekit-routing-health` passes without `LIVEKIT_HEARTBEAT_MONITOR_INVOKE`.
+- `eligibleServerCount=1`.
+- `noEligibleServerCountRecent=0`.
+- `staleHeartbeatSeconds=120`.
+- `chillywood-prod-01.status=active`.
+- `chillywood-prod-01.publicWsUrl=wss://live.chillywoodstream.com`.
+- `chillywood-prod-01.heartbeatAgeSeconds=11` on final readback.
+- `livekitNodeStatus=healthy`.
+- `metricsSource=livekit-heartbeat-monitor`.
+- `rejectionReasons=[]`.
+
+Endpoint/token proof:
+
+- A raw WebSocket handshake to `wss://live.chillywoodstream.com/rtc` opened successfully with an in-memory token; no token was printed.
+- Fresh `watch-party-live` token requests succeeded for host and viewer proof roles with `error_code=null`, `room_join=true`, `can_subscribe=true`, and server host `live.chillywoodstream.com`.
+- Fresh `live-stage` token requests succeeded for host and viewer proof roles with `error_code=null`, `room_join=true`, `can_subscribe=true`, and server host `live.chillywoodstream.com`.
+- Fresh routing audit rows show `room_assigned` and `assignment_reused` for `chillywood-prod-01`.
+- Fresh routing audit rows show no `no_eligible_server`.
+
+This closes the backend `no_eligible_livekit_server` blocker. Current installed Watch-Party Live sidecar playback and Live Stage / `2 in room` proof remain separate product smoke lanes and should be rerun only if requested.
 
 ## Root Cause
 
@@ -66,9 +107,9 @@ Production LiveKit must not be blindly auto-upgraded. The runbook now documents:
 - keep rollback instructions to the previous pinned version,
 - never auto-deploy a LiveKit server upgrade without health checks and rollback.
 
-## Backend Health Readback
+## Original Backend Health Readback Before Retry
 
-Final `npm run check:livekit-routing-health` readback:
+Original `npm run check:livekit-routing-health` readback before Hetzner unblock and host monitor install:
 
 - `eligibleServerCount=0`
 - `staleHeartbeatCount=5`
@@ -79,11 +120,11 @@ Final `npm run check:livekit-routing-health` readback:
 - `chillywood-prod-01.heartbeatAgeSeconds=300222`
 - `chillywood-prod-01.rejectionReasons=["stale_heartbeat"]`
 
-The script failed intentionally with:
+At that time, the script failed intentionally with:
 
 - `chillywood-prod-01 heartbeat is stale: 300222s > 120s`
 
-Monitor invocation proof:
+Original monitor invocation proof:
 
 - result: `livekit_public_endpoint_unreachable`
 - HTTP status: `503`
@@ -91,22 +132,22 @@ Monitor invocation proof:
 
 ## Watch-Party Live Token / Routing Audit Result
 
-No successful current Watch-Party Live token routing was proved after this fix because the backend still has zero eligible LiveKit servers. The expected post-recovery result is a `room_assigned` or `assignment_reused` routing audit row plus a `watch-party-live` token request success with `room_join=true` and `can_subscribe=true`.
+Retry closure proved successful current Watch-Party Live token routing. Fresh redacted token audit rows showed `watch-party-live` outcomes `success`, `error_code=null`, `room_join=true`, and `can_subscribe=true`; fresh routing audit rows showed `room_assigned` / `assignment_reused` to `chillywood-prod-01`.
 
 ## Live Stage Token / Routing Audit Result
 
-No successful current Live Stage token routing was proved after this fix because the backend still has zero eligible LiveKit servers. The expected post-recovery result is a `live-stage` token request success with `room_join=true`.
+Retry closure proved successful current Live Stage token routing. Fresh redacted token audit rows showed `live-stage` outcomes `success`, `error_code=null`, `room_join=true`, and `can_subscribe=true`; fresh routing audit rows showed `room_assigned` / `assignment_reused` to `chillywood-prod-01`.
 
 ## R5 / R3 Installed-Device Proof Result
 
-Installed mobile proof was not rerun in this lane. Running the Play-installed v79 Watch-Party Live or Live Stage flows while the router still has zero eligible servers would only reproduce `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.`
+Installed mobile proof was not rerun in this backend retry lane. The backend `no_eligible_livekit_server` blocker is closed; current Play-installed v79 Watch-Party Live sidecar playback and Live Stage / `2 in room` proof remain separate product smoke lanes.
 
 Previous installed truth remains:
 
 - Premium: Closed.
 - Watch-Party Party Room: Closed.
-- Watch-Party Live sidecar: Partial pending backend LiveKit liveness recovery and current playback proof.
-- Live Stage: Partial pending backend LiveKit liveness recovery and current Stage / `2 in room` proof.
+- Watch-Party Live sidecar: Partial pending current playback proof now that backend LiveKit liveness is restored.
+- Live Stage: Partial pending current Stage / `2 in room` proof now that backend LiveKit liveness is restored.
 - Chi'lly Chat/native calls: separate stack, unchanged.
 
 ## Validation
@@ -144,10 +185,9 @@ No LiveKit API keys, participant tokens, Supabase service-role keys, auth tokens
 
 ## Issues Still Open
 
-- The real LiveKit host/container/network for `wss://live.chillywoodstream.com` is still unreachable to the health monitor.
-- `chillywood-prod-01` still has a stale heartbeat and remains ineligible.
-- Watch-Party Live sidecar playback and Live Stage / `2 in room` installed proof remain Partial until backend liveness is restored.
-- The systemd watchdog template still needs to be installed/enabled on the LiveKit host or trusted backend runner by an operator with host access.
+- Play-installed v79 Watch-Party Live sidecar playback still needs a current product smoke rerun after backend recovery.
+- Play-installed v79 Live Stage / `2 in room` still needs a current product smoke rerun after backend recovery.
+- Broader public-production LiveKit hardening still needs load/reconnect/cellular/TURN/metrics proof before public production claims.
 
 ## July 5 Production Endpoint Repair Follow-Up
 
@@ -161,4 +201,4 @@ Follow-up host/provider inspection narrowed the unreachable endpoint to a Hetzne
 - Public probes: SSH and service ports time out.
 - Traceroute: reaches Hetzner and then `blocked.hetzner.com`.
 
-Because the provider blocks the assigned IPs, SSH and service access are unavailable from this environment, so Docker/Caddy/LiveKit/systemd logs and host env files could not be inspected. The next action is owner/provider unblock or safe host console access. Rebooting, manually writing heartbeats, loosening the stale cutoff, or bypassing registry eligibility would not be valid proof.
+This provider-block state is now superseded by the July 5 retry closure above. It remains documented as the earlier failure state, not the current blocker.

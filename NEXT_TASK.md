@@ -1,52 +1,29 @@
 # NEXT TASK
 
-# LiveKit Production Endpoint Provider Block
+# LiveKit Production Endpoint / Heartbeat Recovery Closed
 
 Current latest truth:
-- The actual `wss://live.chillywoodstream.com` production endpoint repair is Blocked by Hetzner primary IP blocking.
-- Artifact folder: `/tmp/livekit-prod-endpoint-repair-20260705/`.
-- DNS resolves `live.chillywoodstream.com` to `87.99.145.160`.
-- Hetzner Cloud reports server `chillywood-prod-01` as `running`.
-- Hetzner Cloud reports both assigned primary IPs as blocked:
-  - IPv4 `87.99.145.160`: `Blocked: yes`
-  - IPv6 `2a01:4ff:f0:7064::/64`: `Blocked: yes`
+- The actual `wss://live.chillywoodstream.com` production endpoint and `chillywood-prod-01` heartbeat registry path are recovered.
+- Retry artifact folder: `/tmp/livekit-hetzner-recheck-20260705-retry2/`.
+- Hetzner Cloud now reports `chillywood-prod-01` running and both assigned primary IPs unblocked:
+  - IPv4 `87.99.145.160`: `Blocked: no`
+  - IPv6 `2a01:4ff:f0:7064::/64`: `Blocked: no`
 - No Hetzner Cloud firewall is attached.
-- Public probes time out on SSH and LiveKit/Caddy ports; ping has 100% packet loss; traceroute reaches Hetzner and then `blocked.hetzner.com`.
-- SSH to `chillywood@live.chillywoodstream.com`, `chillywood@87.99.145.160`, and `root@87.99.145.160` timed out.
-- Because host access is blocked, Docker/Caddy/LiveKit/systemd logs and host env presence could not be inspected from this environment.
-- `npm run check:livekit-routing-health` still fails with `eligibleServerCount=0`, `staleHeartbeatCount=5`, `disabledServerCount=4`, and `chillywood-prod-01` rejected for `stale_heartbeat` with heartbeat age about `301275` seconds.
+- Host inspection showed Docker active, Caddy active, `chillywood-livekit` container running, LiveKit listening on expected host/container ports, and TLS for `live.chillywoodstream.com` healthy.
+- `livekit-heartbeat-monitor.service` is installed on the LiveKit host, active/enabled, and supervised with `Restart=always`; secrets remain only in host/Supabase secret stores and were not printed or committed.
+- `npm run check:livekit-routing-health` now passes without manual monitor invocation: `eligibleServerCount=1`, `noEligibleServerCountRecent=0`, heartbeat age under the 120-second cutoff, `chillywood-prod-01` active with no rejection reasons, and `metricsSource=livekit-heartbeat-monitor`.
+- A raw WebSocket handshake to `wss://live.chillywoodstream.com/rtc` opened successfully with an in-memory token.
+- Fresh redacted token audit rows show `watch-party-live` and `live-stage` token requests succeeded with `error_code=null`, `room_join=true`, and `can_subscribe=true`; fresh routing audit rows show `room_assigned` / `assignment_reused` to `chillywood-prod-01` and no fresh `no_eligible_server`.
 
 Next exact step:
-1. Owner/provider must unblock the Hetzner primary IPs or provide safe host console access.
-2. After unblocking/host access, inspect `docker ps`, LiveKit container logs, Caddy/reverse-proxy status, TLS, firewall, and the heartbeat watchdog service without printing secrets.
-3. Start/repair LiveKit and the heartbeat monitor only after the real public endpoint/API health checks pass.
-4. Run `npm run check:livekit-routing-health`; closure requires `eligibleServerCount >= 1` and `chillywood-prod-01` heartbeat age under 120 seconds.
-5. Then prove fresh `watch-party-live` and `live-stage` token success.
-6. Do not manually update `last_heartbeat_at`, loosen `staleHeartbeatSeconds`, bypass routing eligibility, change mobile/Premium/Chi'lly Chat/native calls, or print secrets.
+1. Do not reopen Premium, Watch-Party Party Room, Chi'lly Chat, native calls, routing cutoffs, or database eligibility rules for this backend recovery.
+2. If product proof is requested next, rerun only the current Play-installed v79 Watch-Party Live sidecar and Live Stage smoke with Premium-active devices.
+3. If sidecar or Live Stage still fails, classify it as app/media/LiveKit room readiness only after checking that `check:livekit-routing-health` remains green.
+4. Keep the heartbeat monitor installed and monitored; do not manually write heartbeats, loosen stale cutoffs, bypass routing eligibility, or print tokens/secrets.
 
-# LiveKit Server Heartbeat / Registry Recovery
+# Superseded Historical LiveKit Endpoint Block
 
-Current latest truth:
-- LiveKit server heartbeat recovery is source/deploy fixed but backend liveness remains Partial.
-- Governing doc: `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md`.
-- Artifact folder: `/tmp/livekit-server-heartbeat-recovery-watch-party-live-stage-proof-20260705-162020/`.
-- Premium remains Closed and Watch-Party Party Room remains Closed.
-- The current Watch-Party Live sidecar / Live Stage failure is backend LiveKit routing/liveness, not Premium/provider sandbox and not Chi'lly Chat/native calls.
-- `chillywood-prod-01` is still registered as `active` with public URL `wss://live.chillywoodstream.com`, but its heartbeat is stale beyond the router's 120-second cutoff.
-- Final backend readback showed `eligibleServerCount=0`, `staleHeartbeatCount=5`, `disabledServerCount=4`, and `chillywood-prod-01` rejected for `stale_heartbeat` with heartbeat age around `300222` seconds.
-- The new `livekit-heartbeat-monitor` Edge function was deployed and guarded. It checks public reachability plus LiveKit API state before writing heartbeat rows.
-- Monitor invocation against the current server returned `livekit_public_endpoint_unreachable` and did not write a fake heartbeat.
-- `ops/livekit-registry/heartbeat-livekit.sh` now fails closed before posting when public LiveKit reachability fails.
-- Systemd watchdog templates and `npm run check:livekit-routing-health` are added for durable monitoring and loud failure.
-- Validation passed for the source changes; `npm run check:livekit-routing-health` intentionally fails while the server remains stale/unreachable.
-- No Premium entitlement, native call, Chi'lly Chat, stale-cutoff, routing-bypass, live-money, payout/cashout, provider billing, auth/RLS, or secret behavior was changed.
-
-Next exact step:
-1. Restore the real LiveKit host/container/network for `wss://live.chillywoodstream.com` so public reachability and LiveKit API checks pass.
-2. Install/enable the health-checked heartbeat watchdog from `ops/livekit-registry/systemd/` or an equivalent trusted scheduler using secrets only in the host secret store.
-3. Rerun `npm run check:livekit-routing-health` with safe server-side env. Closure requires `eligibleServerCount > 0` and `chillywood-prod-01` heartbeat age under 120 seconds.
-4. After backend health is green, rerun narrow Play-installed v79 Watch-Party Live sidecar and Live Stage smoke on Premium-active R5/R3.
-5. Do not manually write heartbeats, loosen the stale cutoff, bypass routing eligibility, print tokens/secrets, restart broad app work, or change Chi'lly Chat/native call behavior.
+The previous July 5 provider-block state and zero-eligible heartbeat state are superseded. Historical artifacts remain at `/tmp/livekit-prod-endpoint-repair-20260705/` and `/tmp/livekit-server-heartbeat-recovery-watch-party-live-stage-proof-20260705-162020/`, but those are no longer current blockers.
 
 # Real Home Demo Video Watch-Party Sidecar Retest
 

@@ -16,7 +16,7 @@ The lane remains Partial because current Watch-Party Live sidecar and Live Stage
 
 Follow-up real Home-route sidecar proof is recorded in `docs/release/GOOGLE_SIGNED_V79_REAL_HOME_DEMO_VIDEO_WATCH_PARTY_SIDECAR_PROOF.md`. It confirms Premium remains Closed and R5/R3 can both reach the same Party Room from the installed Home rail path, but it does not close sidecar playback: the visible Home player was still titled `Chi'llywood Originals Proof Fixture`, and `Open Shared Player` still showed `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.` before R3 saw actual playback.
 
-Follow-up LiveKit backend recovery is recorded in `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md`. It narrows the remaining sidecar/Live Stage blocker to LiveKit server registry liveness: `chillywood-prod-01` has a stale heartbeat beyond the 120-second router cutoff, production currently has zero eligible LiveKit servers, and the new health-checked heartbeat monitor correctly fails closed with `livekit_public_endpoint_unreachable` instead of writing a fake heartbeat.
+Follow-up LiveKit backend recovery is recorded in `docs/release/LIVEKIT_SERVER_HEARTBEAT_RECOVERY_WATCH_PARTY_LIVE_STAGE_PROOF.md`. It first narrowed the sidecar/Live Stage blocker to LiveKit server registry liveness, then the July 5 retry restored the production endpoint and health-checked host heartbeat: `check:livekit-routing-health` now passes with `eligibleServerCount=1`, and fresh redacted `watch-party-live` / `live-stage` token requests succeed. The remaining sidecar/Live Stage work is current installed product smoke, not Premium or zero-eligible backend routing.
 
 ## Repo / Origin Alignment
 
