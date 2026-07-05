@@ -2,9 +2,9 @@
 
 Date: 2026-07-04 / 2026-07-05 update
 
-Verdict: Partial.
+Verdict: Closed for the remaining app-controlled safe installed-proof continuation. Real provider-generated purchase/cancel/refund and true third-account wrong-account proof remain intentionally unclaimed and require a separate owner-approved provider lane.
 
-Source is fixed and validation-clean for the six creator-money UX lanes. Google Play-installed v79 plus OTA visual proof advanced again on July 5, 2026. The stale Watch-Party Seat Pass `Room not found` fixture blocker is repaired with a fresh sandbox/proof/not-payable Party Room fixture, but full closure remains Partial because the complete physical purchase-generation/success/canceled/wrong-account/unpaid matrix was not completed for every flow without changing provider/live-money/account state.
+Source is fixed and validation-clean for the six creator-money UX lanes. Google Play-installed v79 plus OTA visual proof advanced again on July 5, 2026. The stale Watch-Party Seat Pass `Room not found` fixture blocker is repaired with a fresh sandbox/proof/not-payable Party Room fixture, and the Paid Video installed-account blocker is repaired with a safe public playable creator-video fixture for the current creator account. The remaining matrix gaps are closed where app-controlled or fixture-controlled, with non-applicable or provider-owned states documented without overclaiming purchase generation.
 
 Artifact folder:
 
@@ -22,7 +22,7 @@ Source cleanup commit before this installed-proof documentation update: `125b495
 
 ## Device / OTA Proof
 
-Installed closure is not claimed.
+Installed closure is claimed for the app-controlled safe-proof continuation only. Purchase-generation closure is not claimed.
 
 OTA published for the JS/UI cleanup:
 
@@ -96,17 +96,17 @@ Installed proof on `R3CXA0DS5JV` opened the creator channel, showed `Sandbox Tip
 
 ## Paid Video Creator Result
 
-Closed for source; installed manager blocker documented.
+Closed for source and installed safe fixture/readback proof.
 
-Paid Video setup remains tied to exact video/source offers and sandbox/not-payable state. No payout/cashout/live-money claim was added. Installed proof opened Paid Video Manager on `R3CXA0DS5JV`; that installed account currently has no public playable creator video, so the manager correctly shows `Publish a video before enabling paid unlocks` and does not fake a saved offer.
+Paid Video setup remains tied to exact video/source offers and sandbox/not-payable state. No payout/cashout/live-money claim was added. The final continuation created a safe public playable creator-video fixture for the current installed creator account, then opened Paid Video Manager on `R3CXA0DS5JV`; installed readback showed the fixture title, `Paid unlock`, and `$0.99 paid unlock is configured.`
 
 ## Paid Video Buyer Result
 
-Closed for source and partially installed-proved.
+Closed for source and installed safe fixture proof.
 
 The locked state keeps the primary CTA as `Unlock Video` / exact-video access. Copy says access is target-specific and purchase-unavailable states are short and user-facing. Canceled checkout returns `Paid Video purchase was canceled. Nothing changed.`
 
-Installed proof on `R3CXA0DS5JV` used the documented fallback paid-video fixture and showed `Sandbox Paid Video Demo`, locked state, `$0.99`, `Unlock Video`, and exact-video-only copy. The first fixture route was private/unavailable, so full primary fixture closure remains fixture-limited.
+Installed proof on `R5CR120QCBF` opened `/player/[id]?source=creator-video` for the repaired fixture and showed the unpaid locked state: `V79 Proof Paid Video Fixture`, `Paid creator content`, `$0.99`, `Unlock Video`, and exact-video-only copy. A proof-only, sandbox/not-payable access grant then opened the same player without the paywall. The grant is access-state proof only, not purchase-generation proof. It does not grant Premium, VIP, Channel Subscription, Seat Pass, Event Pass, other videos, room access, LiveKit authority, payout, cashout, or payable balance.
 
 ## Seat Pass Creator Result
 
@@ -173,7 +173,7 @@ Installed proof on `R3CXA0DS5JV` showed the event route, `Event pass confirmed`,
 
 ## Receipt / Activity Route Result
 
-Closed for source/proof scripts and partially installed-proved.
+Closed for source/proof scripts and installed safe route proof.
 
 Buyer receipt routes remain:
 
@@ -195,23 +195,23 @@ Creator transaction routes remain:
 
 Notification rows are route guidance only. They do not grant access, create payout/cashout/payable balances, mutate providers, or prove purchase generation.
 
-Installed proof opened the bell tray on `R3CXA0DS5JV`; rows showed timestamps and accessibility labels for creator sale/support rows. Visible rows included Tip received, Event Pass sold, VIP sold, Channel Subscription started, Seat Pass sold, and Paid Video sold. `Seat Pass sold` opened Platform Studio / Money Center Transactions, and earlier proof already captured `Tip received` opening Platform Studio / Money Center. These rows are sandbox/proof/not-payable UI routing evidence only, not purchase-generation proof.
+Installed proof opened the bell tray on `R3CXA0DS5JV`; rows showed timestamps and accessibility labels for creator sale/support rows. Visible rows included Tip received, Event Pass sold, VIP sold, Channel Subscription started, Seat Pass sold, and Paid Video sold. `Seat Pass sold` and the final-continuation `Paid video unlocked` creator row opened Platform Studio / Money Center Transactions; earlier proof already captured `Tip received` opening Platform Studio / Money Center. On `R5CR120QCBF`, buyer `Watch-Party Seat Pass ready` routed to the Watch-Party room with access re-check, and the final-continuation `Video unlocked` buyer row routed to the repaired Paid Video player. These rows are sandbox/proof/not-payable UI routing evidence only, not purchase-generation proof.
 
 Installed proof on `R5CR120QCBF` showed buyer `Watch-Party Seat Pass ready` with timestamp, unread state, `Enter room`, access re-check routing, and dismiss behavior.
 
 ## Cold-Start / Deep-Link Result
 
-Closed for source route contracts; Seat Pass installed cold-start proved.
+Closed for source route contracts; Seat Pass and Paid Video installed deep-link behavior proved.
 
-Route contracts pass for the covered creator-money entry points. Installed cold-start proof now covers `chillywoodmobile://watch-party/V79-SEAT-202607050940` opening Party Room for the current R5 sandbox Seat Pass fixture. Full cold-start proof for every remaining flow is still source/route-contract covered, not physically replayed in this continuation.
+Route contracts pass for the covered creator-money entry points. Installed cold-start proof covers `chillywoodmobile://watch-party/V79-SEAT-202607050940` opening Party Room for the current R5 sandbox Seat Pass fixture, and direct Paid Video player deep-link behavior was proved with the repaired current-account fixture using `source=creator-video`. Remaining cold-start routes stay covered by source route contracts and prior visible installed route proof where available.
 
 ## Already-Owned / Failure / Denial Result
 
-Closed for source; installed matrix remains partial.
+Closed for source and safe-proof matrix documentation.
 
 Each lane now has clearer source behavior or proof coverage for already-owned, canceled, failed/unavailable, unpaid, wrong-account, expired, revoked, or terminal states where applicable. Failure copy is short and avoids misleading success.
 
-Installed proof now covers Seat Pass unpaid gate before fixture, Seat Pass sandbox access after fixture, and Seat Pass receipt routing/dismiss. The full physical canceled/failure/wrong-account/unpaid matrix for all six flows remains incomplete without additional safe fixtures/provider/account actions.
+Installed proof now covers Seat Pass unpaid gate before fixture, Seat Pass sandbox access after fixture, Seat Pass receipt routing/dismiss, Paid Video unpaid locked state, and Paid Video proof-only access state. Tips do not have an already-owned/unpaid access state because Tips unlock nothing. Provider-generated cancellation/failure/refund and true third-account wrong-account proof were not generated because this lane did not mutate providers, enable live money, logout, or change accounts; those states are documented as provider/account-lane proof, not app-controlled blockers.
 
 ## Seat Pass Wording Result
 
@@ -243,7 +243,7 @@ The cleanup did not enable:
 
 ## Modern UI / UX Standards Result
 
-Closed for source, partially installed-proved.
+Closed for source and installed safe-proof continuation.
 
 The primary source improvements are:
 
@@ -254,7 +254,7 @@ The primary source improvements are:
 - fewer internal QA/provider terms on buyer surfaces
 - safer accessibility/testID coverage on touched controls
 
-Installed visual proof on Google Play v79 + OTA now covers Tips buyer sheet, Paid Video locked state, Channel Subscription active state, VIP active state, Event Pass active state, Seat Pass unpaid gate, Seat Pass sandbox room entry, Seat Pass receipt routing/dismiss, bell tray timestamps, creator transaction rows, and all six Money Center manager entry/readback surfaces. It does not cover the full six-flow purchase-generation/success/failure/wrong-account matrix.
+Installed visual proof on Google Play v79 + OTA now covers Tips buyer sheet, Paid Video creator fixture readback, Paid Video unpaid locked state, Paid Video proof-only access state, Paid Video buyer/creator receipt routes, Channel Subscription active state, VIP active state, Event Pass active state, Seat Pass unpaid gate, Seat Pass sandbox room entry, Seat Pass receipt routing/dismiss, bell tray timestamps, creator transaction rows, and all six Money Center manager entry/readback surfaces. It does not claim real purchase generation.
 
 ## Validation Results
 
@@ -289,12 +289,13 @@ Passed:
 - A fresh sandbox/proof/not-payable Watch-Party Seat Pass fixture replaced the stale route that returned `Room not found`.
 - Installed Seat Pass unpaid/access/receipt/cold-start proof was captured on Google Play v79.
 - Installed Money Center creator manager readback was captured for all six flows.
+- A safe public playable Paid Video fixture was created for the current installed creator account.
+- Paid Video Manager readback, unpaid player gate, proof-only player access, buyer `Video unlocked` row, and creator `Paid video unlocked` row were captured on Google Play v79.
 
 ## Issues Still Open
 
-- Installed Google Play v79 + OTA visual proof is still not complete for the full purchase/failure/wrong-account matrix.
-- Paid Video installed creator setup cannot fully save an offer on the current creator account until a public playable creator video fixture exists.
-- Purchase handoff/success/canceled/wrong-account/unpaid denial was not physically completed for every flow in this pass.
+- Real provider-generated purchase handoff, cancellation, refund, and true third-account wrong-account proof remain intentionally unclaimed.
+- Any future real purchase-generation proof requires an owner-approved provider sandbox lane and must not be inferred from seeded/mirrored rows.
 - Production creator-money activation remains blocked pending owner/provider approval.
 - Creator Channel Subscription production base-plan/provider readiness remains a separate provider blocker.
 - Seeded/mirrored rows remain UI/routing proof only, not purchase-generation proof.

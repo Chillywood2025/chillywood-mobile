@@ -3,7 +3,7 @@
 # Six Creator-Money E2E UX Installed Proof
 
 Current latest truth:
-- Six creator-money end-to-end UX cleanup is source-fixed, OTA-published, validation-clean, and installed visual proof is still Partial.
+- Six creator-money end-to-end UX cleanup is source-fixed, OTA-published, validation-clean, and the remaining app-controlled safe installed-proof gaps are Closed for the continuation lane.
 - Governing doc: `docs/release/GOOGLE_SIGNED_V79_SIX_CREATOR_MONEY_E2E_UX_PROOF.md`.
 - Artifact folder: `/tmp/google-play-internal-v79-six-creator-money-e2e-ux-proof-20260704-235833/`.
 - Source lanes completed for Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP Pass, and Event Pass.
@@ -13,15 +13,15 @@ Current latest truth:
 - Safety stayed intact: no live money, payouts, cashout, payable balance, provider activation/mutation, RevenueCat/Google Play production change, Premium entitlement change, Money Center architecture refactor, native call change, auth/RLS weakening, Play production submit, sideload, `adb install`, logout, clear data, uninstall, or reinstall.
 - EAS Update production Android runtime `1.0.0` published group `3f405381-d18f-4d9d-bd22-17ff83d2fb67`, Android update `019f30d1-33ec-79fa-b725-bb9d0ae3bf09`, commit `125b495cd38901fa6358e958d1b7fc970f18f574`, message `Clean six creator money UX flows`.
 - Device readback after OTA publish showed both `R5CR120QCBF` and `R3CXA0DS5JV` as Google Play-installed v79 (`installerPackageName=com.android.vending`, versionCode `79`, versionName `1.0.0`).
-- Installed captures on `R3CXA0DS5JV` proved: Tip Sheet amount options and contribution-only copy; Paid Video locked state with `Unlock Video` and exact-video-only copy; Channel Subscription active state; VIP Pass active state; Event Pass confirmed state; bell tray timestamps/accessibility labels; visible creator-money rows opening Platform Studio / Money Center.
+- Installed captures proved: Tip Sheet amount options and contribution-only copy; Paid Video locked state with `Unlock Video` and exact-video-only copy; Channel Subscription active state; VIP Pass active state; Event Pass confirmed state; bell tray timestamps/accessibility labels; visible creator-money rows opening Platform Studio / Money Center.
 - July 5 continuation repaired the stale Watch-Party Seat Pass fixture without provider/live-money mutation. Fresh room `V79-SEAT-202607050940` now proves the unpaid Seat Pass gate, sandbox/proof/not-payable Seat Pass access into Party Room, cold-start `/watch-party/[partyId]` access, buyer `Watch-Party Seat Pass ready` receipt row routing, read-state count change, and dismiss hiding only that row.
-- Creator setup manager readback was captured for all six flows. Tips and Watch-Party Seat Pass safe save/readback were exercised. Paid Video manager correctly reports the installed-account blocker: no public playable creator video exists for full paid-video offer save on that account. Channel Subscription, VIP, and Event managers open with manage/pause/event setup actions and Premium separation copy.
-- Still not Closed: full purchase-generation/success/canceled/wrong-account/unpaid denial matrix was not physically completed for every flow without changing provider/live-money/account state. Seeded/mirrored rows remain sandbox/proof/not-payable UI/routing proof only.
+- Creator setup manager readback was captured for all six flows. Tips and Watch-Party Seat Pass safe save/readback were exercised. The final continuation repaired the Paid Video installed-account blocker with a safe public playable creator-video fixture for the current creator account, proved Paid Video Manager readback, proved the unpaid buyer player gate, proved proof-only player access, and proved buyer/creator Paid Video receipt rows route correctly.
+- Full validation was rerun and passed. Seeded/mirrored rows and proof-only access grants remain sandbox/proof/not-payable UI/routing/access-state proof only, not purchase-generation proof.
 
 Next exact step:
-1. Do not redo the Seat Pass fixture repair unless a regression appears.
-2. If owner wants full closure, create only safe sandbox/proof/not-payable fixtures for the remaining unproved physical states: canceled/failure, wrong-account denial, unpaid denial, already-owned, receipt, and cold-start for each of the six creator-money flows.
-3. For Paid Video creator setup, either use/create a safe public playable creator-video fixture for the current creator account or keep the installed blocker documented exactly.
+1. No app-controlled six-flow continuation task is open unless a fresh installed regression appears.
+2. Do not redo Seat Pass or Paid Video fixture repair unless a regression appears.
+3. If the owner wants real purchase-generation/canceled/refund or true third-account wrong-account proof, run a separate owner-approved provider sandbox lane. Do not mutate providers, enable live money, enable payouts/cashout, or claim purchase generation from seeded rows in this lane.
 4. Keep seeded/mirrored rows documented as sandbox/proof/not-payable UI routing proof only; do not call them purchase-generation proof.
 
 # Premium Subscribe Screen Cleanup
