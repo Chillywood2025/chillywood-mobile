@@ -14,6 +14,8 @@ Both Google Play-installed v79 proof phones completed the approved Google Play /
 
 The lane remains Partial because current Watch-Party Live sidecar and Live Stage smoke still did not fully close after Premium became active. The remaining blockers are no longer Premium purchase/readback blockers: the sidecar showed a safe LiveKit feed unavailable alert, and Live Stage waiting-room entry did not reach Stage / `2 in room` during the current proof.
 
+Follow-up real Home-route sidecar proof is recorded in `docs/release/GOOGLE_SIGNED_V79_REAL_HOME_DEMO_VIDEO_WATCH_PARTY_SIDECAR_PROOF.md`. It confirms Premium remains Closed and R5/R3 can both reach the same Party Room from the installed Home rail path, but it does not close sidecar playback: the visible Home player was still titled `Chi'llywood Originals Proof Fixture`, and `Open Shared Player` still showed `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.` before R3 saw actual playback.
+
 ## Repo / Origin Alignment
 
 - Start baseline: `HEAD == origin/main == 2def0f202de7ce85c41a005598c8485a89838bfb`.
@@ -153,7 +155,7 @@ Source validation before OTA passed:
 
 ## Issues Still Open
 
-- Watch-Party Live sidecar current smoke: `Open Shared Player` shows safe Live feed unavailable copy after Premium active.
+- Watch-Party Live sidecar current smoke: latest installed Home-route retest still shows safe Live feed unavailable copy after Premium active; R3 did not see actual playback, and the visible Home media is still titled as a proof fixture.
 - Live Stage strict current-v79 entry smoke: Live Waiting Room loads and room discovery works, but current proof did not reach Stage / `2 in room`.
 - Public production LiveKit readiness still needs current sidecar/Live Stage smoke plus load/reconnect/cellular/TURN/metrics hardening.
 

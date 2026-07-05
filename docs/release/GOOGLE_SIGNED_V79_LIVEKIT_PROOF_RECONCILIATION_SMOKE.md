@@ -21,6 +21,14 @@ Current remaining smoke gaps are no longer Premium access:
 
 The reconciliation below remains valid for proof-history separation, but any statement that the current v79 LiveKit smoke is blocked by Premium/account access should be read as historical and superseded by the Premium sandbox follow-up.
 
+## July 5 Real Home-Route Sidecar Retest
+
+`docs/release/GOOGLE_SIGNED_V79_REAL_HOME_DEMO_VIDEO_WATCH_PARTY_SIDECAR_PROOF.md` supersedes fixture/stub sidecar evidence for the current Watch-Party Live sidecar lane.
+
+The retest used the installed Home rail video path rather than a direct fixture route. Both proof phones were Google Play-installed v79 and both read back active Premium after approved Google Play / RevenueCat sandbox Premium renewal. R5 launched Watch-Party Live from the visible Home rail player, hosted Party Room `M77N7M`, and R3 joined that same room. The local bundled `Chicago Streets` title was not visible on Home during the installed proof; the visible Home rail/player was `Chi'llywood Original` / `Chi'llywood Originals Proof Fixture`, so this is installed Home-route evidence but not strict non-fixture production-media proof.
+
+R5 tapped `Open Shared Player`, and the app showed `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.` on the initial attempt and a delayed retry. R3 did not see sidecar playback. Current sidecar classification is Partial due LiveKit join-contract/token readiness or room/source handoff, not Premium/provider sandbox.
+
 ## Executive Summary
 
 This lane reconciles older LiveKit, Watch-Party, Live Stage, and Chi'lly Chat proof language so current docs no longer imply that every LiveKit-related surface is unproved or that diagnostic proof equals installed actual-user proof.
@@ -30,8 +38,8 @@ Current truth:
 - Watch-Party Party Room installed UI proof is Closed from prior scoped proof, and a current v79 two-phone Party Room smoke passed in this lane.
 - Watch-Party realtime callback and playback readback are Closed from the prior scoped realtime/readback proof.
 - The 25-participant LiveKit RTC-node media diagnostic is Closed for media subscription and publish-authority downgrade proof.
-- Live Stage has prior installed screenshot-backed evidence and diagnostic/media support, but strict actual-user normal waiting-room/entry proof remains Partial. Current v79 Live Stage smoke was blocked by Premium/account access on both proof phones.
-- Watch-Party Live camera sidecar is source/guard supported; current v79 installed sidecar smoke was attempted and blocked by Premium/access-unavailable state for the proof account/title.
+- Live Stage has prior installed screenshot-backed evidence and diagnostic/media support, but strict actual-user normal waiting-room/entry proof remains Partial. The original current v79 Live Stage smoke hit Premium/account access; that blocker is superseded by the later approved sandbox Premium proof, but Stage / `2 in room` still has not been proved in the current lane.
+- Watch-Party Live camera sidecar is source/guard supported; current v79 installed sidecar smoke is no longer Premium-blocked, but the real Home-route retest still failed before playback with `Live feed unavailable`.
 - Chi'lly Chat calls are a separate RTC stack, not LiveKit Room proof. Current v79 native Android CallStyle Answer, Decline, same-thread, normal in-app, and room-safe call/banner behavior are Closed in the call-specific docs.
 
 No source, provider, route, Premium-gate, Money Center, creator-money, auth/RLS, native, LiveKit server, or Supabase token behavior changed in this lane.
@@ -61,7 +69,7 @@ Both physical proof phones were visible after the user reattached both devices.
 | Watch-Party Party Room | Installed UI route/access | Closed | Prior Play-internal installed clients reached expected Watch-Party UI markers. Current v79 smoke reached Party Room on both phones through a proof-only fixture. | This lane did not run a long media/load traversal. | Acceptable for closed testing with gates/off switches; rerun only if a regression appears. |
 | Watch-Party realtime sync callback | Backend realtime callback/readback | Closed | Subscription callback was observed after targeted realtime publication fix; playback readback matched. | Not a substitute for every installed UI branch. | Closed. |
 | Watch-Party playback readback | Backend state/readback | Closed | Diagnostic readback matched expected playback state. | Not broad installed UI proof by itself. | Closed as backend/readback support. |
-| Watch-Party Live camera sidecar | Source/guard plus route-smoke support | Source/diagnostic supported; current v79 smoke blocked | Route ownership, request/approval contract, simulcast/dynacast policy, and proof guards exist. Current v79 proof reached Party Room and tapped Open Shared Player. | The shared-player camera sidecar smoke could not enter because the account/title showed Premium/access unavailable. No gate was bypassed. | Acceptable for closed testers if Premium-gated and monitored; public-ready claim still needs current installed sidecar smoke. |
+| Watch-Party Live camera sidecar | Source/guard plus installed Home-route smoke | Source/diagnostic supported; current v79 smoke Partial | Route ownership, request/approval contract, simulcast/dynacast policy, and proof guards exist. The latest proof used the installed Home rail path, reached Party Room on both phones, and tapped Open Shared Player after Premium active readback. | The visible Home player was still titled `Chi'llywood Originals Proof Fixture`, so strict non-fixture production-media proof is not claimed. `Open Shared Player` failed with `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.` before R3 saw playback. | Acceptable for closed testers if Premium-gated and monitored; public-ready claim still needs non-fixture Home media sidecar playback proof. |
 | Live Stage / Live Room | Diagnostic media plus installed screenshot evidence | Diagnostic/media Closed; strict actual-user path Partial | Prior host/participant screenshots showed Live Stage before/after entry evidence; diagnostic LiveKit media subscriptions passed. | Current v79 Live Stage route showed Premium required on both phones; strict normal waiting-room/entry remains unproved here. | Acceptable for closed testers if Premium-gated and monitored; public production still needs current smoke/load/reconnect hardening. |
 | LiveKit token endpoint | Backend token contract/router | Remote activated/proof passed historically | Prior redacted token-shape/routing checks passed historically; endpoint validates Supabase auth and server-side secrets. | Current endpoint smoke was not rerun; tokens were not printed. | Acceptable for closed testing with existing controls; public launch should rerun redacted endpoint/log checks. |
 | LiveKit server registry/router | Backend routing/registry/drain | Remote activated/proof passed historically | Server assignment, heartbeat, drain/fail-safe, audit rows, and reactivation proof passed for the single-server setup. | Autoscaling, active-room migration, and broader fleet operations are not implemented. | Closed for single-server closed testing; public production needs monitoring/load/runbook hardening. |
@@ -80,7 +88,7 @@ Current v79 smoke was narrow and non-destructive.
 - A temporary proof-only title room and live room were created through authenticated proof clients, not service-role. They were marked inactive after smoke. No provider, money, payout, cashout, Premium entitlement, auth/RLS, or production fixture state was changed.
 - `R5CR120QCBF` and `R3CXA0DS5JV` both opened the temporary Watch-Party Party Room route and showed Party Room, room code, selected title, Open Shared Player, Invite, Report, Leave, and room/bell controls.
 - R5 opened the room notification tray without leaving the Party Room. The tray showed user-facing Activity copy and kept the room stable.
-- R5 tapped Open Shared Player, but Watch-Party Live / camera sidecar entry was blocked by Premium/access-unavailable state for that account/title.
+- R5 tapped Open Shared Player in the original reconciliation smoke, but Watch-Party Live / camera sidecar entry was then blocked by Premium/access-unavailable state for that account/title. This blocker is superseded by the later Premium sandbox and real Home-route sidecar retests.
 - Both R5 and R3 opened the temporary Live Stage route, but both showed Premium required. No Premium gate was bypassed.
 
 ## Safety Confirmation
@@ -102,6 +110,6 @@ Do not reopen broad LiveKit production readiness from stale old Partial language
 
 - Watch-Party Party Room installed UI/realtime/readback: Closed for closed testing; current v79 Party Room smoke also passed.
 - LiveKit RTC-node media diagnostic and publish-authority downgrade: Closed diagnostic support.
-- Live Stage strict normal actual-user installed path: Partial; current v79 smoke is blocked by Premium/account access unless an approved Premium-capable fixture/account is provided.
-- Watch-Party Live camera sidecar: source/guard supported; current v79 installed smoke is blocked by Premium/access-unavailable state for the proof account/title.
+- Live Stage strict normal actual-user installed path: Partial; Premium/account access is no longer the current blocker after approved sandbox Premium proof, but Stage / `2 in room` still needs a narrow current-v79 proof.
+- Watch-Party Live camera sidecar: source/guard supported; Premium access is no longer the blocker. Current installed Home-route sidecar smoke remains Partial because `Open Shared Player` shows `Live feed unavailable` before viewer playback, and the visible Home media is still titled as a proof fixture.
 - Chi'lly Chat calls: separate v79 call stack, Closed for requested Android call behavior.

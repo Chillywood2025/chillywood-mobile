@@ -1,5 +1,26 @@
 # NEXT TASK
 
+# Real Home Demo Video Watch-Party Sidecar Retest
+
+Current latest truth:
+- Watch-Party Live sidecar remains Partial after a real installed Home-route retest.
+- Governing doc: `docs/release/GOOGLE_SIGNED_V79_REAL_HOME_DEMO_VIDEO_WATCH_PARTY_SIDECAR_PROOF.md`.
+- Artifact folder: `/tmp/google-play-internal-v79-real-home-demo-video-watch-party-sidecar-proof-20260705-151231/`.
+- Both `R5CR120QCBF` and `R3CXA0DS5JV` read back Google Play-installed v79 from `com.android.vending`.
+- Premium remains Closed. Both approved tester accounts renewed through the approved Google Play / RevenueCat sandbox Premium flow after normal sandbox expiry and read back `Premium is active.` in app. No entitlement was manually granted.
+- R5 opened Home and used the visible installed Home rail video path, not the previous direct fixture route. The local bundled `Chicago Streets` demo was not visible on current Home; the visible Home rail/player was `Chi'llywood Original` / `Chi'llywood Originals Proof Fixture`.
+- R5 hosted Party Room `M77N7M` from that Home rail player, and R3 joined the same room through the normal room-code path.
+- R5 tapped `Open Shared Player`; the app showed `Live feed unavailable` / `Live video is temporarily unavailable. Try again in a moment.` Retry after waiting showed the same alert.
+- R3 did not see actual sidecar playback.
+- Classification: Premium/provider sandbox is not the blocker. The remaining blocker is Watch-Party Live sidecar LiveKit join-contract/token readiness or room/source handoff. Because the visible Home video still includes `Proof Fixture` in the title, this is installed Home-route evidence but not a strict non-fixture production-media proof.
+- Live Stage remains Partial unless separately proved to Stage / `2 in room`.
+- No source change, Play build, sideload, `adb install`, logout, clear data, uninstall/reinstall, Premium bypass, manual entitlement grant, provider production mutation, live money, payout/cashout, auth/RLS weakening, native call change, LiveKit server restart, token printing, secret exposure, or broad WebRTC/LiveKit refactor happened.
+
+Next exact step:
+1. Do not redo Premium sandbox proof unless entitlement regression appears.
+2. For sidecar closure, investigate the `Open Shared Player` `watch-party-live` join-boundary/token-contract path using a non-fixture real Home media item, without exposing tokens/secrets and without broad LiveKit/WebRTC refactors.
+3. Ensure future sidecar proof rejects fixture/stub/direct fixture media as final real-user proof.
+
 # Premium-Gated LiveKit Sandbox Follow-Up
 
 Current latest truth:
@@ -33,13 +54,13 @@ Current latest truth:
 - Watch-Party realtime callback and playback readback are Closed.
 - The 25-participant LiveKit RTC-node media diagnostic and publish-authority downgrade are Closed diagnostic support, not actual-user installed UI proof.
 - Chi'lly Chat calls are a separate RTC stack; current v79 native Android CallStyle, same-thread, normal in-app, and room-safe call behavior are Closed in the call-specific docs.
-- Current v79 Watch-Party Live camera sidecar smoke remains unproved because the shared-player path showed Premium/access unavailable for the proof account/title.
-- Current v79 Live Stage smoke remains unproved because both phones hit the legitimate Premium required gate.
+- The original current v79 Watch-Party Live camera sidecar smoke hit Premium/access unavailable, but that is superseded by later approved sandbox Premium proof. Current sidecar smoke remains Partial because the installed Home-route `Open Shared Player` path shows `Live feed unavailable` before viewer playback.
+- The original current v79 Live Stage smoke hit the legitimate Premium required gate, but that is superseded by later approved sandbox Premium proof. Live Stage remains Partial because strict Stage / `2 in room` proof is still not closed.
 - No Premium gate was bypassed, no source was changed, no LiveKit server/token behavior changed, and temporary proof rooms were marked inactive after smoke.
 
 Next exact step:
 1. Do not reopen broad LiveKit readiness from stale old Partial language.
-2. If current installed Live Stage or Watch-Party Live sidecar proof is required, provide or approve a Premium-capable proof account/fixture and run only a narrow smoke. Do not bypass Premium gates.
+2. If current installed Live Stage or Watch-Party Live sidecar proof is required, use the approved Premium sandbox tester state, a non-fixture real Home media item for sidecar, and run only a narrow smoke. Do not bypass Premium gates.
 3. Public-production LiveKit readiness still needs current Live Stage/sidecar smoke plus load/reconnect/cellular/TURN/metrics hardening; closed testing remains acceptable with gates/off switches and monitoring.
 
 # Creator-Money Polish Pass Installed Proof
