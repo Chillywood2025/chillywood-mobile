@@ -1,5 +1,13 @@
 # LiveKit Production Readiness Runbook
 
+## July 5, 2026 Live Stage UX Note
+
+The current Live Stage room UX source lane is fixed but not installed-closed. Source commit `50db5cabf237b42d269aac15f45120ebcb983a03` adds a local-only viewer self-hero toggle and a safe host seat-request sheet with approve, dismiss, close, and Android-back handling. EAS Update production Android runtime `1.0.0` published group `8f893072-9032-4051-af17-a56f002cc28b`, Android update `019f348b-5787-7a5c-90f1-298d4b86bd20`.
+
+Backend LiveKit routing was healthy before the installed attempt: `eligibleServerCount=1`, heartbeat age below `staleHeartbeatSeconds=120`, and redacted `live-stage` token success. The installed attempt reached R5 live-room creation and R3 joining the same room after R3 completed the approved Google Play / RevenueCat sandbox Premium flow. It did not reach Stage / `2 in room` because R5 host Premium remained inactive and R5 sandbox setup showed unavailable. Treat this as a host Premium sandbox setup blocker for installed Stage proof, not a LiveKit router/heartbeat regression and not a reason to loosen routing eligibility.
+
+Future Stage closure should use a Premium-active host and prove only the missing installed UX steps: host enters Stage, viewer requests a seat, host dismisses safely, viewer requests again, host approves, both reach Stage / `2 in room`, viewer toggles self-hero locally, real host appears first in the party box, and host roles/controls remain unchanged.
+
 ## July 5, 2026 Reconciliation Note
 
 ### July 5, 2026 Heartbeat Recovery Note
