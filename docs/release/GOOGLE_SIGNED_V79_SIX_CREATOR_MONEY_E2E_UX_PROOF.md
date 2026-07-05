@@ -10,6 +10,12 @@ Artifact folder:
 
 - `/tmp/google-play-internal-v79-six-creator-money-e2e-ux-proof-20260704-235833/`
 
+## Follow-Up Polish Pass
+
+July 5, 2026 follow-up polish pass is tracked separately in `docs/release/GOOGLE_SIGNED_V79_CREATOR_MONEY_POLISH_PASS.md`.
+
+That pass source-fixed seven observed polish items after this six-flow closure: Paid Video locked-screen presentation, Seat Pass unavailable CTA state, Money Center safe-area/header spacing, creator Seat Pass wording, room tray user-facing copy, proof account display-name investigation, and concise notification row copy. It published OTA group `32da5f6a-8a04-499c-8896-c8a4497b9420` / Android update `019f3215-47b5-7bff-9aa5-cbe6088a11ba` and passed full validation. Its installed visual proof is Blocked by current proof-device/fixture state, not by source validation.
+
 ## Repo / Origin Alignment
 
 Start baseline:

@@ -10,6 +10,18 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Creator-Money Polish Pass
+
+Status: Blocked for installed visual closure. Source fixes, Edge deploy, OTA publish, and validation are complete.
+
+Governing doc: `docs/release/GOOGLE_SIGNED_V79_CREATOR_MONEY_POLISH_PASS.md`. Artifact folder: `/tmp/google-play-internal-v79-creator-money-polish-pass-20260705-063948/`.
+
+Source commit `06969904cef6cb078ee7f28e7839962acb4ca8ad` fixed seven narrow polish items without changing payment/provider/native behavior: Paid Video locked screen now uses a clean locked poster/paywall state; unavailable Seat Pass gates no longer show a strong enabled purchase-looking CTA; Money Center / Platform Studio monetization content gets top safe-area spacing; visible creator wording uses `Watch-Party Seat Passes` instead of `Paid Room Seats`; room tray copy is user-facing instead of technical `room-safe` wording; the proof account display-name typo was investigated and found not source-controlled in repo fixtures; and creator-money notification row copy is concise while sandbox/proof/not-payable truth remains in metadata.
+
+`revenuecat-webhook` was redeployed after the notification copy change without printing or committing secrets. EAS Update production Android runtime `1.0.0` published group `32da5f6a-8a04-499c-8896-c8a4497b9420`, Android update `019f3215-47b5-7bff-9aa5-cbe6088a11ba`, commit `06969904cef6cb078ee7f28e7839962acb4ca8ad`. Full validation passed creator-money route/notification/activity/access/money/provider/payment/notification/room/brand/route guards, `npx tsc --noEmit`, `npm run validate:runtime`, `supabase db push --dry-run`, and diff checks.
+
+Installed visual proof remains blocked: `R5CR120QCBF` read back Google Play-installed v79 and loaded after two safe restarts, but `R3CXA0DS5JV` was not visible over ADB; R5 already had proof access to the paid-video fixture and therefore showed the unlocked player; R5 hit the Premium gate before Money Center / creator wording proof; the prior Seat Pass room returned `Room not found`; and newly concise notification row copy needs a fresh safe generated/provider event row or approved proof-row path for visible installed proof. No live money, payouts, cashout, payable balances, provider activation/mutation, Premium entitlement change, Money Center architecture refactor, native call change, auth/RLS weakening, Play production submission, sideload, `adb install`, logout, clear data, uninstall, or reinstall happened.
+
 ## Six Creator-Money E2E UX Cleanup
 
 Status: Closed for the app-controlled safe installed-proof continuation. This is not live-money activation and not purchase-generation proof.
