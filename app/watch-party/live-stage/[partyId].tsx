@@ -3238,7 +3238,7 @@ export default function WatchPartyLiveStageScreen({
     }
 
     closeStageOverlayPanels();
-    setStageOverlayAutoHideArmed(true);
+    setStageOverlayAutoHideArmed(entryStageMode !== "hybrid");
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
@@ -3618,8 +3618,12 @@ export default function WatchPartyLiveStageScreen({
       return;
     }
 
-    revealStageOverlay();
-  }, [isLiveRoomSurface, revealStageOverlay, stageOverlayMotion]);
+    // Live Watch-Party hybrid owns the member deck; it is not transient chrome.
+    revealStageOverlay({ armAutoHide: !isHybridMode });
+    if (isHybridMode) {
+      setStageOverlayAutoHideArmed(false);
+    }
+  }, [isHybridMode, isLiveRoomSurface, revealStageOverlay, stageOverlayMotion]);
 
   useEffect(() => {
     if (isLiveRoomSurface || !stageOverlayVisible) {
@@ -3628,7 +3632,8 @@ export default function WatchPartyLiveStageScreen({
     }
 
     if (
-      !stageOverlayAutoHideArmed
+      isHybridMode
+      || !stageOverlayAutoHideArmed
       || (
       controlsLocked
       || commentsOpen
@@ -3657,6 +3662,7 @@ export default function WatchPartyLiveStageScreen({
     faceFilterSheetOpen,
     hideStageOverlay,
     hybridCommentFocused,
+    isHybridMode,
     isLiveRoomSurface,
     reactionPickerOpen,
     stageControlsOpen,
