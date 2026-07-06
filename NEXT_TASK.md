@@ -25,14 +25,15 @@ Next exact step:
 Current latest truth:
 - Live Stage viewer self-hero / host seat-card UX is source-fixed, OTA-published, and installed-proof Partial.
 - Governing docs: `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_VIEWER_SELF_HERO_HOST_SEAT_CARD_PROOF.md` and `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_SELF_HERO_SEAT_OVERLAY_PROOF.md`.
-- Artifact folder: `/tmp/google-play-internal-v79-live-stage-viewer-self-hero-host-seat-card-proof-20260705-205435/`.
-- Source commit: `3f49af76d50897947ac1a19bec4def2f22300875`.
-- EAS Update production Android runtime `1.0.0`: group `860e3d56-c894-478a-92dc-7a0d2a0345de`, Android update `019f3526-e2bc-77a9-b3f3-27ab50b867a4`.
+- Current artifact folder: `/tmp/google-play-internal-v79-live-stage-viewer-self-hero-seat-persistence-proof-20260706-145439/installed-proof-hybrid-deck-fix-20260706-151807/`.
+- Latest source commit: `a6c57ad7bef9ec6dd245cad332850aaf9cf474e5`.
+- Latest EAS Update production Android runtime `1.0.0`: group `39b39ecf-294f-4eaa-bcb1-cc835a311efd`, Android update `019f3946-e907-7468-9d3a-0515ea050aa2`.
 - Backend LiveKit health was green after the OTA: `eligibleServerCount=1`, `noEligibleServerCountRecent=0`, heartbeat age under the 120-second cutoff, `chillywood-prod-01` healthy, and no rejection reasons.
-- Both phones read back Google Play-installed v79 from `com.android.vending`.
-- Both R5 and R3 can renew Premium through the approved Google Play / RevenueCat sandbox flow and read back `Premium is active.`
-- Installed proof remains Partial because the short monthly sandbox test subscription window expired during navigation: R5 created live room `TT8NTT`, R3 found that room and reached `Join Now`, then R3 hit the Premium-required gate after sandbox expiry; R5 later hit the Premium-required gate before `Continue to Live Stage`.
-- Because the two devices were not simultaneously Premium-active long enough to enter Stage together, installed proof did not reach host seat-request overlay, Stage / `2 in room`, installed approve/dismiss, or installed viewer self-hero toggle.
+- Both phones read back Google Play-installed package `com.chillywood.mobile` from `com.android.vending`; latest installed proof readback was versionCode `80`, versionName `1.0.0`.
+- Both R5 and R3 can read back `Premium is active` when the Google Play / RevenueCat sandbox entitlement is available.
+- Installed Packet A is closed on room `993HVB`: default host-hero layout shows viewer/self in the party box as `You`, `Make me hero` is instant with local self view and no toggle-induced `Live feed syncing`, host appears first in the party box, self is not duplicated, and `Show host hero` returns to host-as-hero.
+- Latest-OTA room `W555BH` proved R3 reached Live Stage with `2 in room`, host hero, and viewer/self visible as `You`.
+- Installed proof remains Partial only for final host seat-sheet actions after the latest X-close semantics fix because R5 sandbox Premium expired at stage entry; Restore returned `Premium is not active`, and `Start Sandbox Premium Test` became unavailable with `Premium purchases are temporarily unavailable while setup is being finalized.`
 
 Source-fixed behavior:
 - Viewers have a local-only `Make me hero` / `Show host hero` Live Stage control.
@@ -43,11 +44,13 @@ Source-fixed behavior:
 - Host pending requester card tap opens the seat-request sheet and must not hide/remove/collapse the participant card.
 - Host seat requests have `Bring on stage`, `Not now`, and close actions; Android back closes the sheet safely.
 - Approve targets only the current pending participant and handles stale/gone/full states without trapping the host.
+- The Live Watch-Party hybrid member deck must remain visible after entry and must not auto-hide as transient chrome.
+- X close must close only the sheet locally; the pending request/card must remain and the sheet must not immediately auto-reopen until the card is tapped or a new request is sent.
 
 Next exact step:
 1. Do not change LiveKit backend routing, heartbeat, Premium entitlement logic, Watch-Party Party Room, Chi'lly Chat, native calls, auth/RLS, provider production settings, or money/payout/cashout behavior.
-2. Renew R5 and R3 Premium back-to-back through the approved Google Play sandbox path and immediately run the missing installed proof before the five-minute sandbox cycle expires, or use an owner-approved longer-lived sandbox/tester state that does not manually grant entitlements.
-3. Rerun only the installed Live Stage proof: Premium-active host reaches Stage, Premium-active viewer sees self in party box, viewer toggles `Make me hero`, self becomes hero immediately without `Live feed is syncing`, host appears first in party box, toggle off returns to host-as-hero, viewer requests a seat, host opens the sheet from the stable participant card, host X-closes safely, host handles `Not now`, viewer requests again, host approves, and both reach Stage / `2 in room`.
+2. First recover a working R5 Google Play / RevenueCat sandbox Premium purchase window without manual entitlement grants or production provider mutation. If R5 still shows `Premium purchases are temporarily unavailable while setup is being finalized`, treat installed closure as sandbox-provider blocked.
+3. Rerun only the missing installed seat-sheet proof: Premium-active host reaches Stage, Premium-active viewer requests a seat, host opens the sheet from the stable participant card, host X-closes safely with request/card preserved and no auto-reopen loop, host reopens from the card, host handles `Not now` without removing the participant, viewer requests again, host approves with `Bring on stage`, and both reach seated/speaker Stage / `2 in room`.
 4. Keep backend health green with `npm run check:livekit-routing-health` before rerun.
 
 # LiveKit Production Endpoint / Heartbeat Recovery Closed
