@@ -896,6 +896,7 @@ export default function WatchPartyLiveStageScreen({
   const [participantStateById, setParticipantStateById] = useState<Record<string, SharedParticipantLocalState>>({});
   const [seatRequestsById, setSeatRequestsById] = useState<Record<string, boolean>>({});
   const [seatRequestSheetParticipantId, setSeatRequestSheetParticipantId] = useState("");
+  const [seatRequestSheetClosedById, setSeatRequestSheetClosedById] = useState<Record<string, boolean>>({});
   const [stageParticipantActionBusyId, setStageParticipantActionBusyId] = useState("");
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
@@ -1021,6 +1022,7 @@ export default function WatchPartyLiveStageScreen({
     setRoomEntryError("");
     setViewerSelfHeroEnabled(false);
     setSeatRequestSheetParticipantId("");
+    setSeatRequestSheetClosedById({});
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -1456,6 +1458,12 @@ export default function WatchPartyLiveStageScreen({
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const pending = !!payload?.pending;
+        setSeatRequestSheetClosedById((prev) => {
+          if (!prev[participantId]) return prev;
+          const next = { ...prev };
+          delete next[participantId];
+          return next;
+        });
         setSeatRequestsById((prev) => {
           if (!pending) {
             if (!prev[participantId]) return prev;
@@ -1839,6 +1847,23 @@ export default function WatchPartyLiveStageScreen({
   const collapseHostParticipantControlsAfterFailure = useCallback((participantId?: string) => {
     collapseHostParticipantControls(participantId);
   }, [collapseHostParticipantControls]);
+  const openSeatRequestSheet = useCallback((participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    setSeatRequestSheetClosedById((prev) => {
+      if (!prev[nextParticipantId]) return prev;
+      const next = { ...prev };
+      delete next[nextParticipantId];
+      return next;
+    });
+    setSeatRequestSheetParticipantId(nextParticipantId);
+  }, []);
+  const closeSeatRequestSheet = useCallback((participantId: string) => {
+    const nextParticipantId = String(participantId ?? "").trim();
+    if (!nextParticipantId) return;
+    setSeatRequestSheetClosedById((prev) => ({ ...prev, [nextParticipantId]: true }));
+    setSeatRequestSheetParticipantId((current) => (current === nextParticipantId ? "" : current));
+  }, []);
   const runStageParticipantAction = useCallback(async (participantId: string, action: () => Promise<void>) => {
     const cleanParticipantId = String(participantId ?? "").trim();
     if (!cleanParticipantId || stageParticipantActionBusyId) return;
@@ -2618,6 +2643,12 @@ export default function WatchPartyLiveStageScreen({
     if (options?.broadcast !== false) {
       broadcastSeatRequest(nextParticipantId, false);
     }
+    setSeatRequestSheetClosedById((prev) => {
+      if (!prev[nextParticipantId]) return prev;
+      const next = { ...prev };
+      delete next[nextParticipantId];
+      return next;
+    });
     setSeatRequestSheetParticipantId((current) => (current === nextParticipantId ? "" : current));
     collapseHostParticipantControls(nextParticipantId);
   }, [broadcastSeatRequest, collapseHostParticipantControls]);
@@ -2662,6 +2693,12 @@ export default function WatchPartyLiveStageScreen({
         },
       }));
       setSeatRequestsById((prev) => {
+        if (!prev[nextParticipantId]) return prev;
+        const next = { ...prev };
+        delete next[nextParticipantId];
+        return next;
+      });
+      setSeatRequestSheetClosedById((prev) => {
         if (!prev[nextParticipantId]) return prev;
         const next = { ...prev };
         delete next[nextParticipantId];
@@ -2728,9 +2765,9 @@ export default function WatchPartyLiveStageScreen({
       if (current && pendingSeatRequestParticipants.some((participant) => participant.userId === current)) {
         return current;
       }
-      return pendingSeatRequestParticipants[0]?.userId ?? "";
+      return pendingSeatRequestParticipants.find((participant) => !seatRequestSheetClosedById[participant.userId])?.userId ?? "";
     });
-  }, [isHost, isLiveRoomSurface, pendingSeatRequestParticipants]);
+  }, [isHost, isLiveRoomSurface, pendingSeatRequestParticipants, seatRequestSheetClosedById]);
   const communityCardParticipantIndexById = useMemo(
     () => Object.fromEntries(communityCardParticipants.map((participant, index) => [participant.userId, index])),
     [communityCardParticipants],
@@ -3440,7 +3477,7 @@ export default function WatchPartyLiveStageScreen({
 
   const onLiveStageBack = useCallback(() => {
     if (seatRequestSheetParticipantId) {
-      setSeatRequestSheetParticipantId("");
+      closeSeatRequestSheet(seatRequestSheetParticipantId);
       return;
     }
     if (!isLiveRoomSurface) {
@@ -3449,7 +3486,7 @@ export default function WatchPartyLiveStageScreen({
     }
 
     returnToWatchPartyRoomRoute();
-  }, [isLiveRoomSurface, onReturnToLiveRoom, returnToWatchPartyRoomRoute, seatRequestSheetParticipantId]);
+  }, [closeSeatRequestSheet, isLiveRoomSurface, onReturnToLiveRoom, returnToWatchPartyRoomRoute, seatRequestSheetParticipantId]);
 
   useEffect(() => {
     if (!isFocused || Platform.OS === "web") return undefined;
@@ -4798,7 +4835,7 @@ export default function WatchPartyLiveStageScreen({
                   accessibilityRole="button"
                   accessibilityLabel="Dismiss seat request"
                   hitSlop={STAGE_CONTROL_HIT_SLOP}
-                  onPress={() => setSeatRequestSheetParticipantId("")}
+                  onPress={() => closeSeatRequestSheet(pendingSeatRequestParticipant.userId)}
                   testID="live-stage-seat-request-close"
                 >
                   <MaterialIcons name="close" size={18} color="#F5F7FF" />
@@ -5018,7 +5055,7 @@ export default function WatchPartyLiveStageScreen({
                                   ...prev,
                                   [participant.userId]: "compact",
                                 }));
-                                setSeatRequestSheetParticipantId(participant.userId);
+                                openSeatRequestSheet(participant.userId);
                                 return;
                               }
                               if (canModerateParticipant) {
