@@ -453,7 +453,7 @@ assertIncludes(
 );
 assertIncludes(
   liveStage,
-  "Camera seat not active",
+  "\"Local self view\"",
   "Live Stage self-hero fallback must be immediate local role copy, not a syncing state",
 );
 assertIncludes(

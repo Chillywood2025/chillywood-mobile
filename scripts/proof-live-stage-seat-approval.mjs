@@ -34,7 +34,9 @@ const createProofState = () => ({
     [hostId]: { stageRole: "host", canSpeak: true, isMuted: false, membershipState: "active" },
     [viewerId]: { stageRole: "listener", canSpeak: false, isMuted: false, membershipState: "active" },
   },
+  clientPersistenceShouldFail: false,
   persistedWrites: [],
+  serverPersistedWrites: [],
   seatStateBroadcasts: [],
   seatRequestBroadcasts: [],
   deviceOrEmulatorUsed: false,
@@ -76,6 +78,7 @@ const hostTapParticipantCard = (state, participantId) => {
 };
 
 const emitParticipantUpdate = (state, participantId, changes) => {
+  if (state.clientPersistenceShouldFail) return false;
   const currentMembership = state.membershipsById[participantId];
   if (!currentMembership) return false;
   const nextStageRole = changes.role ?? currentMembership.stageRole;
@@ -88,6 +91,22 @@ const emitParticipantUpdate = (state, participantId, changes) => {
   };
   state.membershipsById[participantId] = nextMembership;
   state.persistedWrites.push({ participantId, nextMembership });
+  return true;
+};
+
+const serverPersistParticipantUpdate = (state, participantId, changes) => {
+  const currentMembership = state.membershipsById[participantId];
+  if (!currentMembership) return false;
+  const nextStageRole = changes.role ?? currentMembership.stageRole;
+  const nextMembership = {
+    ...currentMembership,
+    stageRole: nextStageRole,
+    canSpeak: nextStageRole === "host" || nextStageRole === "speaker",
+    isMuted: typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership.isMuted,
+    membershipState: changes.isRemoved ? "removed" : "active",
+  };
+  state.membershipsById[participantId] = nextMembership;
+  state.serverPersistedWrites.push({ participantId, nextMembership });
   return true;
 };
 
@@ -118,7 +137,10 @@ const closeSeatRequestSheet = (state, participantId) => {
 
 const approveSeat = (state, event, participantId) => {
   event.stopPropagation();
-  const seatPersisted = emitParticipantUpdate(state, participantId, { role: "speaker" });
+  let seatPersisted = emitParticipantUpdate(state, participantId, { role: "speaker" });
+  if (!seatPersisted) {
+    seatPersisted = serverPersistParticipantUpdate(state, participantId, { role: "speaker" });
+  }
   if (!seatPersisted) return false;
   state.participantStateById[participantId] = {
     ...state.participantStateById[participantId],
@@ -188,6 +210,19 @@ assert(state.activeParticipantId === "", "approval should collapse host card ove
 assert(state.selectedParticipantId === "", "approval should leave detail sheet closed");
 assert(state.participantPresentationById[viewerId] === "compact", "approval should collapse expanded viewer card");
 
+const fallbackState = createProofState();
+fallbackState.clientPersistenceShouldFail = true;
+fallbackState.seatRequestsById[viewerId] = true;
+fallbackState.seatRequestSheetParticipantId = viewerId;
+const fallbackEvent = createPressEvent();
+const fallbackApproved = approveSeat(fallbackState, fallbackEvent, viewerId);
+assert(fallbackEvent.propagationStopped === true, "fallback approve tap should stop parent card propagation");
+assert(fallbackApproved === true, "host approve should use server-backed persistence when client write fails");
+assert(fallbackState.persistedWrites.length === 0, "fallback proof should simulate failed client persistence");
+assert(fallbackState.serverPersistedWrites.length === 1, "fallback approval should persist through server authority once");
+assert(fallbackState.participantStateById[viewerId].role === "speaker", "fallback approval should seat the viewer");
+assert(!fallbackState.seatRequestsById[viewerId], "fallback approval should clear pending request");
+
 const dismissState = createProofState();
 dismissState.activeParticipantId = viewerId;
 dismissState.participantPresentationById[viewerId] = "expanded";
@@ -219,7 +254,8 @@ const selfHeroLayout = resolveViewerLayout({ viewerSelfHeroEnabled: true });
 assert(selfHeroLayout.hero.userId === viewerId, "self-hero layout should make the viewer local hero");
 assert(selfHeroLayout.partyBox[0]?.userId === hostId, "self-hero party box should put the real host first");
 assert(!selfHeroLayout.partyBox.some((participant) => participant.userId === viewerId), "self-hero party box should not duplicate the viewer");
-assert("Camera seat not active" !== "Live feed is syncing.", "self-hero fallback copy must not be Live feed syncing");
+assert("Local self view" !== "Live feed is syncing.", "self-hero fallback copy must not be Live feed syncing");
+assert("Local self view" !== "Waiting for host approval", "self-hero fallback copy must not imply approval is required to switch layout");
 
 assert(state.deviceOrEmulatorUsed === false, "proof must not use an attached device or emulator");
 assert(state.realAuthAccountCreated === false, "proof must not create real auth accounts");
@@ -232,6 +268,7 @@ console.log(JSON.stringify({
   realAuthAccountCreated: false,
   hostRequestRendered: true,
   approvePropagationStopped: true,
+  approveUsesServerFallbackAfterClientPersistenceFailure: true,
   dismissClosesSeatRequestSheet: true,
   closeKeepsPendingSeatRequest: true,
   defaultViewerSelfVisibleInPartyBox: true,

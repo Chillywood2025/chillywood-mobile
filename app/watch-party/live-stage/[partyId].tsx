@@ -2067,16 +2067,37 @@ export default function WatchPartyLiveStageScreen({
     const shouldRemove = typeof changes.isRemoved === "boolean" ? changes.isRemoved : currentMembership?.membershipState === "removed";
     const nextIsMuted = typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership?.isMuted ?? false;
     const nextCanPublishMedia = !shouldRemove && !nextIsMuted && (nextStageRole === "host" || nextStageRole === "speaker");
+    const nextMembershipState: "removed" | "active" = shouldRemove ? "removed" : "active";
 
-    const updatedMembership = await setPartyParticipantState(partyId, participantId, {
+    const participantStatePersistRequest = {
       isMuted: nextIsMuted,
       stageRole: nextStageRole,
       canSpeak: nextStageRole === "host" || nextStageRole === "speaker",
       cameraEnabled: nextCanPublishMedia,
       micEnabled: nextCanPublishMedia,
-      membershipState: shouldRemove ? "removed" : "active",
+      membershipState: nextMembershipState,
       leftAt: shouldRemove ? new Date().toISOString() : null,
-    }).catch(() => null);
+    };
+    let updatedMembership = await setPartyParticipantState(partyId, participantId, participantStatePersistRequest).catch(() => null);
+    if (!updatedMembership) {
+      const serverPersisted = await enforceLiveKitParticipantState({
+        surface: "live-stage",
+        roomName: partyId,
+        targetParticipantIdentity: participantId,
+        metadata: {
+          source: "live-stage-seat-control",
+          persistMembershipState: true,
+          stageRole: nextStageRole ?? "listener",
+          canSpeak: nextStageRole === "host" || nextStageRole === "speaker",
+          isMuted: nextIsMuted,
+          isRemoved: shouldRemove,
+        },
+      }).catch(() => false);
+      if (serverPersisted) {
+        const refreshedSnapshot = await refreshStageSnapshot(myUserId).catch(() => null);
+        updatedMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === participantId) ?? null;
+      }
+    }
     if (!updatedMembership) {
       debugLog("livekit", "blocked live-stage seat broadcast before membership authority persisted", {
         roomName: partyId,
@@ -2506,20 +2527,19 @@ export default function WatchPartyLiveStageScreen({
     : (stageFocusTarget ?? hostParticipant ?? selfFallbackParticipant);
   const heroMediaParticipant = heroParticipant ? stageMediaParticipantsByUserId[heroParticipant.userId] as CommunicationParticipantView | undefined : undefined;
   const heroParticipantIsCurrentUser = heroParticipant?.userId === currentUserParticipantId;
-  const showHeroLocalRtcVideo = heroParticipantIsCurrentUser && !!RTCView && !!localStreamURL;
+  const currentUserHasCameraSeat = currentStageParticipantState.role === "host" || currentStageParticipantState.role === "speaker";
+  const showHeroLocalRtcVideo = heroParticipantIsCurrentUser && currentUserHasCameraSeat && !!RTCView && !!localStreamURL;
   const showHeroRemoteVideo = !heroParticipantIsCurrentUser && !!RTCView && !!heroMediaParticipant?.streamURL;
   const heroParticipantPreviewUri = String(
     heroParticipantIsCurrentUser
-      ? (myCameraPreviewUrlRef.current || heroParticipant?.cameraPreviewUrl || heroParticipant?.avatarUrl || "")
+      ? (currentUserHasCameraSeat ? (myCameraPreviewUrlRef.current || heroParticipant?.cameraPreviewUrl || heroParticipant?.avatarUrl || "") : (heroParticipant?.avatarUrl || ""))
       : (heroParticipant?.cameraPreviewUrl || heroParticipant?.avatarUrl || ""),
   ).trim();
   const showHeroRemoteImage = !showHeroLocalRtcVideo && !showHeroRemoteVideo && !!heroParticipantPreviewUri;
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
   const selfHeroFallbackBody = currentStageParticipantState.role === "speaker"
     ? "Camera seat active"
-    : currentStageSeatRequestPending
-      ? "Waiting for host approval"
-      : "Camera seat not active";
+    : "Local self view";
   const communityCardParticipants = useMemo(() => {
     const nextParticipants = visibleStripParticipants.filter((participant) => {
       if (!participant.userId) return false;
@@ -4949,11 +4969,12 @@ export default function WatchPartyLiveStageScreen({
                         isRequesting,
                       });
                       const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
-                      const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
+                      const currentUserCanShowCameraTile = isHostBubble || isSpeakerRole;
+                      const showLocalRtcPreview = isCurrentUser && currentUserCanShowCameraTile && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
                       const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL;
                       const shouldUseHybridLiveKitVideo = shouldRenderLiveKitStage && !!liveKitJoinContract;
                       const bubbleMediaUri = isCurrentUser
-                        ? (heroOwnsLocalFeed ? (participant.avatarUrl || "") : (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || ""))
+                        ? (currentUserCanShowCameraTile && !heroOwnsLocalFeed ? (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || "") : (participant.avatarUrl || ""))
                         : (participant.cameraPreviewUrl || participant.avatarUrl || "");
                       const soloTile = communityCardParticipants.length === 1;
                       const isParticipantActionBusy = stageParticipantActionBusyId === participant.userId;

@@ -136,10 +136,11 @@ assertIncludes(liveStage, "await enforceLiveKitParticipantState({", "Live Stage 
 assertIncludes(liveStage, "blocked live-stage seat broadcast before membership authority persisted", "Live Stage blocks active seat broadcast until persistence succeeds");
 assertBefore(
   liveStage,
-  "const updatedMembership = await setPartyParticipantState",
+  "let updatedMembership = await setPartyParticipantState",
   "await enforceLiveKitParticipantState({",
   "Live Stage must persist membership authority before enforcing participant state.",
 );
+assertIncludes(liveStage, "persistMembershipState: true", "Live Stage host approval must request server-backed membership persistence when client persistence fails");
 assertIncludes(liveStage, "disableHybridLocalMediaQuietly(\"audio-authority-downgrade\"", "Live Stage audio stops immediately on downgrade/mute");
 assertIncludes(liveStage, "disableHybridLocalMediaQuietly(\"camera-authority-downgrade\"", "Live Stage camera stops immediately on downgrade/mute");
 assertIncludes(liveStage, "disableHybridLocalMediaQuietly(\"unmount\")", "Live Stage local media stops on unmount");
@@ -159,7 +160,7 @@ assertIncludes(liveStage, "const shouldUseViewerSelfHero = canUseViewerSelfHero 
 assertIncludes(liveStage, "const selfHeroFallbackBody = currentStageParticipantState.role === \"speaker\"", "Live Stage self-hero fallback must be local state copy, not LiveKit syncing copy");
 assertIncludes(liveStage, "shouldUseViewerSelfHero && participant.userId === currentUserParticipantId", "Live Stage self-hero removes self from party box only while self is hero");
 assertIncludes(liveStage, "showHeroLocalRtcVideo && RTCView", "Live Stage self-hero uses local visual immediately when available");
-assertIncludes(liveStage, "Camera seat not active", "Live Stage self-hero fallback explains viewer role instead of syncing");
+assertIncludes(liveStage, "\"Local self view\"", "Live Stage self-hero fallback explains local-only layout instead of syncing or approval");
 assertIncludes(liveStage, "forceLocalHeroFallback={false}", "Live Stage self-hero must not force the LiveKit syncing fallback");
 assertIncludes(liveStage, "testID=\"live-stage-self-hero-toggle\"", "Live Stage self-hero toggle is exposed for proof");
 assertIncludes(liveStage, "\"live-stage-self-party-card\"", "Live Stage default viewer layout exposes self party-card proof id");
@@ -187,8 +188,12 @@ assertIncludes(seatApprovalProof, "default viewer layout should include viewer s
 assertIncludes(seatApprovalProof, "host pending-request card tap should open the seat-request sheet", "Live Stage proof covers card tap sheet behavior");
 assertIncludes(seatApprovalProof, "self-hero party box should put the real host first", "Live Stage proof covers self-hero host ordering");
 assertIncludes(seatApprovalProof, "self-hero fallback copy must not be Live feed syncing", "Live Stage proof covers instant self-hero fallback copy");
+assertIncludes(seatApprovalProof, "host approve should use server-backed persistence when client write fails", "Live Stage proof covers host approve fallback after client persistence failure");
 
 assertIncludes(participantPermissions, 'action: "enforce-participant-state"', "Client participant enforcement helper uses scoped endpoint action");
+assertIncludes(livekitToken, "metadataFlagEnabled(metadata.persistMembershipState)", "LiveKit token function must recognize host-approved membership persistence requests");
+assertIncludes(livekitToken, "Only the room host can update a Live Stage camera seat.", "LiveKit token function must keep server-backed seat persistence host-only");
+assertIncludes(livekitToken, "stage_role: nextStageRole", "LiveKit token function must persist approved Live Stage role before enforcing media state");
 assertIncludes(joinBoundary, "isLiveKitParticipantTokenExpired(entry.joinContract.participantToken)", "Prepared LiveKit join boundary rejects expired tokens");
 
 if (process.exitCode) process.exit();

@@ -164,6 +164,26 @@ const sanitizeMetadata = (value: unknown) => {
   ) as Record<string, ScalarMetadataValue>;
 };
 
+const metadataFlagEnabled = (value: ScalarMetadataValue | undefined) => (
+  value === true || sanitizeText(value).toLowerCase() === "true"
+);
+
+const metadataBoolean = (value: ScalarMetadataValue | undefined, fallback = false) => {
+  if (typeof value === "boolean") return value;
+  const normalized = sanitizeText(value).toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return fallback;
+};
+
+const normalizeWatchPartyStageRole = (value: unknown): "host" | "speaker" | "listener" | null => {
+  const normalized = sanitizeText(value).toLowerCase();
+  if (normalized === "host") return "host";
+  if (normalized === "speaker") return "speaker";
+  if (normalized === "listener" || normalized === "viewer" || normalized === "audience") return "listener";
+  return null;
+};
+
 const normalizeSurface = (value: unknown): LiveKitJoinSurface | null => {
   const normalized = sanitizeText(value).toLowerCase();
   if (normalized === "live-stage") return "live-stage";
@@ -349,6 +369,7 @@ async function enforceParticipantState(
   actorUserId: string,
   livekitApiKey: string,
   livekitApiSecret: string,
+  metadata: Record<string, ScalarMetadataValue> = {},
 ): Promise<Response> {
   if (room.kind !== "watch-party") {
     return json(400, {
@@ -362,6 +383,94 @@ async function enforceParticipantState(
       error: "insufficient_role",
       message: "Only the room host or the affected participant can enforce this LiveKit participant state.",
     });
+  }
+
+  if (metadataFlagEnabled(metadata.persistMembershipState)) {
+    if (actorUserId !== room.hostUserId) {
+      return json(403, {
+        error: "insufficient_role",
+        message: "Only the room host can update a Live Stage camera seat.",
+      });
+    }
+
+    if (!isWatchPartyRoomCurrentlyActive(room)) {
+      return json(410, {
+        error: "room_expired",
+        message: "This Live Stage has ended. Start or join a fresh room.",
+      });
+    }
+
+    const nextStageRole = normalizeWatchPartyStageRole(metadata.stageRole);
+    if (!nextStageRole) {
+      return json(400, {
+        error: "invalid_stage_role",
+        message: "stageRole must be host, speaker, or listener.",
+      });
+    }
+
+    if (nextStageRole === "host" && targetUserId !== room.hostUserId) {
+      return json(403, {
+        error: "insufficient_role",
+        message: "Only the room host can keep host authority.",
+      });
+    }
+
+    const memberships = await fetchWatchPartyMemberships(adminClient, room.roomName);
+    if (!memberships) {
+      return json(503, {
+        error: "membership_lookup_failed",
+        message: "Chi'llywood could not verify this Live Stage membership yet.",
+      });
+    }
+
+    const currentMembership = memberships.find((membership) => membership.userId === targetUserId) ?? null;
+    if (!currentMembership || currentMembership.membershipState === "removed" || currentMembership.membershipState === "left") {
+      return json(409, {
+        error: "membership_unavailable",
+        message: "This Live Stage participant is no longer available.",
+      });
+    }
+
+    if (nextStageRole === "speaker" && currentMembership.stageRole !== "speaker") {
+      const speakerSeatIds = getAuthorizedWatchPartySpeakerSeatIds(memberships, room.hostUserId);
+      if (!speakerSeatIds.has(targetUserId) && speakerSeatIds.size >= LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS) {
+        return json(409, {
+          error: "speaker_seats_full",
+          message: `Live rooms allow up to ${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} active speaker seats.`,
+        });
+      }
+    }
+
+    const isMuted = metadataBoolean(metadata.isMuted, currentMembership.isMuted);
+    const membershipState = metadataFlagEnabled(metadata.isRemoved) ? "removed" : "active";
+    const canPublishMedia = membershipState === "active"
+      && !isMuted
+      && (nextStageRole === "host" || nextStageRole === "speaker");
+    const now = new Date().toISOString();
+    const update = await adminClient
+      .from("watch_party_room_memberships")
+      .update({
+        camera_enabled: canPublishMedia,
+        can_speak: canPublishMedia,
+        is_muted: isMuted,
+        last_seen_at: now,
+        left_at: membershipState === "removed" ? now : null,
+        membership_state: membershipState,
+        mic_enabled: canPublishMedia,
+        stage_role: nextStageRole,
+        updated_at: now,
+      })
+      .eq("party_id", room.roomName)
+      .eq("user_id", targetUserId)
+      .select("user_id")
+      .maybeSingle();
+
+    if (update.error || !update.data) {
+      return json(503, {
+        error: "membership_update_failed",
+        message: "Chi'llywood could not save this Live Stage seat yet.",
+      });
+    }
   }
 
   const roomActive = isWatchPartyRoomCurrentlyActive(room);
@@ -892,6 +1001,7 @@ Deno.serve(async (req): Promise<Response> => {
         userId,
         livekitApiKey,
         livekitApiSecret,
+        sanitizeMetadata(payload.metadata),
       );
       await writeLiveKitTokenRequestAudit(adminClient, {
         action,
