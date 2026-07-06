@@ -6,7 +6,7 @@ Verdict: Partial.
 
 ## Summary
 
-Live Stage room UX is source-fixed and OTA-published, but installed Stage proof is not closed because the host proof phone could not become Premium active through the safe sandbox Premium path. Backend LiveKit routing stayed healthy, both phones were Google Play-installed v79, R5 created a live room, and R3 joined that room after approved Google Play / RevenueCat sandbox Premium. The missing installed proof is the actual Stage / `2 in room` state plus host seat-overlay approve/dismiss and viewer self-hero toggling.
+Live Stage room UX is source-fixed and OTA-published, and the latest installed closure attempt proved a Premium-active R3 can host and enter Live Stage on Google Play-installed v79. Installed closure remains Partial because the second proof phone, R5, still cannot become Premium active or join the Premium-gated Live Stage path: it shows `Premium purchases are temporarily unavailable while setup is being finalized.`, restore keeps Premium inactive, and Testing details shows `Sandbox setup unavailable.` The missing installed proof is now the two-device Stage / `2 in room` state plus host seat-overlay approve/dismiss and viewer self-hero toggling.
 
 This lane did not change Premium entitlement logic, Watch-Party Party Room logic, LiveKit heartbeat/router eligibility, Chi'lly Chat/native calls, auth/RLS, provider production settings, live money, payout/cashout, or native code.
 
@@ -60,12 +60,14 @@ The first combined validation log also contains an expected local environment fa
 
 Artifact folder: `/tmp/google-play-internal-v79-live-stage-self-hero-seat-overlay-proof-20260705-180402/`
 
+Latest installed proof subfolder: `/tmp/google-play-internal-v79-live-stage-self-hero-seat-overlay-proof-20260705-180402/installed-proof-closure-20260705-200158/`
+
 Device readback:
 
 - `R5CR120QCBF`: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`
 - `R3CXA0DS5JV`: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`
 
-Installed proof reached:
+Earlier installed proof reached:
 
 - R5 created live room `KLLMSX`;
 - R3 completed the approved Google Play / RevenueCat sandbox Premium flow;
@@ -73,15 +75,22 @@ Installed proof reached:
 - R3 joined the same live room;
 - installed room state showed R3 in the room with the R5 host before Stage entry.
 
-Installed proof did not reach:
+Latest installed proof reached:
 
-- host R5 entering Stage;
+- backend LiveKit health passed with `eligibleServerCount=1`, heartbeat age under cutoff, and fresh `live-stage:success` token audit;
+- R3 was still Google Play-installed v79 and completed/read back Premium active through the approved sandbox flow;
+- R3 created live room `T7S75E`;
+- R3 tapped `Continue to Live Stage`;
+- R3 reached `LIVE STAGE` as host with visible `Host-led live`, `Audience waiting`, comments/reaction controls, and no LiveKit unavailable error.
+
+Installed proof still did not reach:
+
 - host seat-request overlay;
 - host dismiss / approve actions;
 - Stage / `2 in room`;
 - viewer self-hero toggle in Stage.
 
-Reason: R5 remained non-Premium. Its purchase path showed `Premium purchases are temporarily unavailable while setup is being finalized.`, restore read back `Premium is not active.`, and Testing details showed `Sandbox setup unavailable.`
+Reason: the only second physical proof phone, R5, remained non-Premium and was blocked at the Premium-required Live Stage gate. Its purchase path showed `Premium purchases are temporarily unavailable while setup is being finalized.`, restore read back `Premium is not active.`, and Testing details showed `Sandbox setup unavailable.` No Premium entitlement was manually granted, and no gate was bypassed.
 
 ## Validation
 

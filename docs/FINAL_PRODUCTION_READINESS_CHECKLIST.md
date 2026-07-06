@@ -12,7 +12,7 @@ Final reports must separate Play binary proof, OTA update proof, source proof, a
 
 ## Live Stage Self-Hero / Seat-Request Overlay UX
 
-Status: Source-fixed and OTA-published; installed proof remains Partial because the host proof account could not become Premium active through the safe sandbox flow.
+Status: Source-fixed and OTA-published; installed proof remains Partial because only one proof phone is currently Premium-active for the Live Stage path.
 
 Governing doc: `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_SELF_HERO_SEAT_OVERLAY_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v79-live-stage-self-hero-seat-overlay-proof-20260705-180402/`.
 
@@ -28,13 +28,13 @@ Source behavior now expected:
 
 Installed proof result:
 
-- backend LiveKit health was green before proof (`eligibleServerCount=1`, heartbeat age under cutoff, no fresh `no_eligible_livekit_server` blocker);
+- backend LiveKit health was green in the latest installed attempt (`eligibleServerCount=1`, heartbeat age under cutoff, `chillywood-prod-01` healthy, no fresh `no_eligible_livekit_server` blocker, fresh `live-stage:success` token audit);
 - both devices read back Google Play-installed v79 from `com.android.vending`;
-- R5 created live room `KLLMSX`;
-- R3 completed approved Google Play / RevenueCat sandbox Premium, read back `Premium is active.`, and joined the same live room;
-- R5 could not enter Stage because R5 remained non-Premium: purchase path showed `Premium purchases are temporarily unavailable while setup is being finalized.`, restore read back inactive, and Testing details showed `Sandbox setup unavailable.`
+- R3 completed approved Google Play / RevenueCat sandbox Premium and read back `Premium is active.`;
+- R3 created live room `T7S75E`, tapped `Continue to Live Stage`, and reached `LIVE STAGE` as host with visible host-led live UI and no LiveKit unavailable error;
+- R5 remained non-Premium and was blocked at the Premium-required Live Stage gate: purchase path showed `Premium purchases are temporarily unavailable while setup is being finalized.`, restore read back inactive, and Testing details showed `Sandbox setup unavailable.`
 
-Public production readiness still requires installed proof with a Premium-active host: host reaches Stage, viewer requests a seat, host can dismiss, viewer can request again, host approves, both reach Stage / `2 in room`, viewer self-hero toggles locally, and host remains first party-box tile without role/permission changes.
+Public production readiness still requires installed proof with two Premium-active devices: host reaches Stage, viewer requests a seat, host can dismiss, viewer can request again, host approves, both reach Stage / `2 in room`, viewer self-hero toggles locally, and host remains first party-box tile without role/permission changes.
 
 No Premium entitlement logic, Premium bypass, manual entitlement grant, Watch-Party Party Room logic, LiveKit heartbeat/router eligibility, Chi'lly Chat/native calls, auth/RLS, provider production settings, live money, payout/cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall changed.
 
