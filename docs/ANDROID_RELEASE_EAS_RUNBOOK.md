@@ -132,11 +132,19 @@ What remains:
 | App name | `Chi'llywood` in `app.json` | Ready, subject to final listing review |
 | Version name | `1.0.0` from Expo `version` | Ready for first Public v1 candidate if product owner approves |
 | Version code | EAS remote app version source with production `autoIncrement: true`; latest remote read returned `{}` and older EAS builds reported version code `1` | Initialize/verify remote value before each Play upload |
-| Scheme / deep links | `chillywoodmobile` | Present; deep-link smoke remains proof-pending |
+| Scheme / deep links | Custom scheme `chillywoodmobile`; Android App Links repo-prepared for `https://chillywoodstream.com` app-owned paths | Partial; App Links require Play App Signing SHA-256 in `/.well-known/assetlinks.json`, static-site deploy, new native Google Play build, and Play/device validation |
 | Runtime version | `{ "policy": "appVersion" }` | Ready; OTA updates must respect runtime compatibility |
 | Updates URL | Expo Updates URL matches the EAS project id | Ready by config, proof-pending in release build |
 
 The Android package id matches the current Chi'llywood Play/RevenueCat target in repo docs: `com.chillywood.mobile`.
+
+Android App Links release implication:
+
+- `app.config.ts` now defines `https` / `autoVerify: true` intent filters for `chillywoodstream.com`.
+- Approved paths are app-owned auth/callback, Profile, Platform, Player/content, Spectator, Title, and Watch-Party/Live Stage routes.
+- Public legal/support paths remain browser-first and should not be claimed for app opening.
+- Do not use OTA-only release proof for App Links because manifest filters are native config.
+- Before upload, replace the assetlinks placeholder with the Play App Signing SHA-256 from Play Console App integrity and deploy `public-site/legal-site/site/.well-known/assetlinks.json`.
 
 ## Native Dependency Rebuild Notes
 

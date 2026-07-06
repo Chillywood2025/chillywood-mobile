@@ -2,6 +2,15 @@
 
 Deep-link tests must use selectors and visible safe states, not coordinate taps. Every route must avoid crashes, raw stack traces, raw SQL/provider errors, and hidden-content leaks.
 
+Android App Links policy:
+
+- Claimed host: `https://chillywoodstream.com`
+- Claimed app-owned paths: `/auth`, `/auth-callback`, `/auth/reset-password`, `/auth/v1/verify`, `/auth/verify`, `/callback`, `/confirm`, `/reset-password`, `/v1/verify`, `/verify`, `/profile`, `/channel`, `/player`, `/spectate`, `/title`, and `/watch-party`
+- Web-only paths: `/`, `/privacy`, `/terms`, `/account-deletion`, `/copyright-report`, and `/support`
+- Deferred unsupported paths: `/live`, `/live-stage`, and `/invite`
+
+For Android App Links closure, first prove `https://chillywoodstream.com/.well-known/assetlinks.json` returns HTTPS 200 valid JSON with package `com.chillywood.mobile` and the Play App Signing SHA-256, then test on a Google Play-installed native build. Do not sideload or use `adb install` for final proof.
+
 | Route | Expected selector | Denied fallback | Auth behavior | Notes |
 | --- | --- | --- | --- | --- |
 | Home | `app-root-ready` or home-ready selector | Safe loading/empty state | Signed-out allowed where product allows | No feed reorder by algorithm flag. |

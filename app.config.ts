@@ -16,6 +16,43 @@ const DEPLOYED_TERMS_OF_SERVICE_URL = "https://chillywoodstream.com/terms";
 const DEPLOYED_ACCOUNT_DELETION_URL = "https://chillywoodstream.com/account-deletion";
 const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-report";
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
+const ANDROID_APP_LINK_HOST = "chillywoodstream.com";
+const ANDROID_APP_LINK_EXACT_PATHS = [
+  "/auth",
+  "/auth-callback",
+  "/auth/reset-password",
+  "/auth/v1/verify",
+  "/auth/verify",
+  "/callback",
+  "/channel",
+  "/confirm",
+  "/player",
+  "/profile",
+  "/reset-password",
+  "/spectate",
+  "/title",
+  "/v1/verify",
+  "/verify",
+  "/watch-party",
+] as const;
+const ANDROID_APP_LINK_PATH_PREFIXES = [
+  "/auth/",
+  "/auth-callback/",
+  "/auth/reset-password/",
+  "/auth/v1/verify/",
+  "/auth/verify/",
+  "/callback/",
+  "/channel/",
+  "/confirm/",
+  "/player/",
+  "/profile/",
+  "/reset-password/",
+  "/spectate/",
+  "/title/",
+  "/v1/verify/",
+  "/verify/",
+  "/watch-party/",
+] as const;
 const CHILLY_CHAT_NOTIFICATION_SOUND_FILES = [
   "./assets/sounds/chilly-chat/chilly_ring.wav",
   "./assets/sounds/chilly-chat/skyline_pulse.wav",
@@ -57,6 +94,29 @@ const mergePlugins = (
 
   return merged;
 };
+
+const buildAndroidAppLinkIntentFilters = (): NonNullable<NonNullable<ExpoConfig["android"]>["intentFilters"]> => [
+  ...ANDROID_APP_LINK_EXACT_PATHS.map((appLinkPath) => ({
+    action: "VIEW",
+    autoVerify: true,
+    category: ["BROWSABLE", "DEFAULT"],
+    data: {
+      host: ANDROID_APP_LINK_HOST,
+      path: appLinkPath,
+      scheme: "https",
+    },
+  })),
+  ...ANDROID_APP_LINK_PATH_PREFIXES.map((pathPrefix) => ({
+    action: "VIEW",
+    autoVerify: true,
+    category: ["BROWSABLE", "DEFAULT"],
+    data: {
+      host: ANDROID_APP_LINK_HOST,
+      pathPrefix,
+      scheme: "https",
+    },
+  })),
+];
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const base = config as ExpoConfig;
@@ -116,6 +176,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: {
       ...base.android,
       ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
+      intentFilters: [
+        ...(Array.isArray(existingAndroid.intentFilters) ? existingAndroid.intentFilters : []),
+        ...buildAndroidAppLinkIntentFilters(),
+      ],
     },
     ios: {
       ...base.ios,

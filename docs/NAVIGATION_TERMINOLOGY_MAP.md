@@ -3,6 +3,17 @@
 ## Purpose
 This map records the current Chi'llywood app navigation and product language after the Modern Navigation IA, Public V1 burn-down, Home/Profile cleanup, and Home Continue Watching cleanup passes. It is a product map, not a route rewrite plan. Technical route names such as `/channel/[userId]` remain for compatibility when the user-facing concept is `Platform`.
 
+## Android App Links Policy
+Android App Links are intentionally narrow. The app claims `https://chillywoodstream.com` only for app-owned routes that resolve safely in Expo Router:
+
+- Auth/callback fallbacks: `/auth`, `/auth-callback`, `/auth/reset-password`, `/auth/v1/verify`, `/auth/verify`, `/callback`, `/confirm`, `/reset-password`, `/v1/verify`, `/verify`
+- Content and identity: `/profile`, `/channel`, `/player`, `/spectate`, `/title`
+- Rooms: `/watch-party`, including Live Stage under `/watch-party/live-stage/[partyId]`
+
+Public legal/support paths remain web-only: `/`, `/privacy`, `/terms`, `/account-deletion`, `/copyright-report`, and `/support`. Do not claim `www.chillywoodstream.com`, `auth.chillywoodstream.com`, `live.chillywoodstream.com`, or `network-proof.chillywoodstream.com` unless a later product task proves that host should open the app and can serve its own valid `/.well-known/assetlinks.json`.
+
+Unsupported/deferred web paths such as `/live`, `/live-stage`, and `/invite` must not be added to Android App Links until route handling exists. Android manifest App Links require a new Google Play native build; OTA is not sufficient.
+
 ## Final Terminology
 - Profile = the user's social identity hub.
 - Username/handle = public user handle displayed as `@username`; it is separate from email and supports public discovery.

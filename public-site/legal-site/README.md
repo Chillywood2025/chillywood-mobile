@@ -24,6 +24,14 @@ Deployable output:
 public-site/legal-site/site/
 ```
 
+Android App Links association:
+
+- Source template: `public-site/legal-site/assetlinks.json`
+- Deployable output: `public-site/legal-site/site/.well-known/assetlinks.json`
+- Hosted URL: `https://chillywoodstream.com/.well-known/assetlinks.json`
+- The template must contain the Play App Signing SHA-256 fingerprint from Google Play Console App integrity before closure. Do not use debug, upload-key, local keystore, or guessed fingerprints.
+- App Links manifest changes require a new native Google Play Android build; OTA alone cannot close Play Console deep-link association warnings.
+
 Preferred production mapping after DNS/hosting setup:
 
 - `https://chillywoodstream.com/terms`

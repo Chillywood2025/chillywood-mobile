@@ -10,6 +10,37 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Android App Links / Domain Association
+
+Status: Repo-prepared and Partial.
+
+Governing doc: `docs/release/ANDROID_APP_LINKS_CHILLYWOODSTREAM_DOMAIN_ASSOCIATION_PROOF.md`.
+
+Play Console warned that deep links may fail because Chi'llywood web domains are not associated with the app. Repo inspection confirmed the app config did not previously define verified Android App Links for `https://chillywoodstream.com`, and the public static site did not serve a valid `/.well-known/assetlinks.json`.
+
+Current source/config state:
+
+- `app.config.ts` now declares Android `intentFilters` for package `com.chillywood.mobile`, `scheme: "https"`, host `chillywoodstream.com`, and `autoVerify: true`.
+- Claimed paths are narrow app-owned routes: auth/callback fallback paths, `/profile`, `/channel`, `/player`, `/spectate`, `/title`, and `/watch-party` including `/watch-party/live-stage/[partyId]`.
+- Public legal/support website paths remain web-only: `/`, `/privacy`, `/terms`, `/account-deletion`, `/copyright-report`, and `/support`.
+- Deferred/unclaimed hosts and paths include `www.chillywoodstream.com`, `auth.chillywoodstream.com`, `live.chillywoodstream.com`, `network-proof.chillywoodstream.com`, `/live`, `/live-stage`, and `/invite`.
+- `public-site/legal-site/assetlinks.json` and generated `public-site/legal-site/site/.well-known/assetlinks.json` exist, and the build copies the association file into the deployable static site output.
+
+Current blocker:
+
+- The JSON still contains `PASTE_PLAY_APP_SIGNING_SHA256_FINGERPRINT_HERE`.
+- Current live website verification returns HTML at `https://chillywoodstream.com/.well-known/assetlinks.json`, not valid Digital Asset Links JSON.
+- A new Google Play native Android build is required after manifest filters change. OTA alone cannot update Android manifest App Links.
+
+Required before production readiness:
+
+1. Copy the Play App Signing SHA-256 from Google Play Console App integrity; do not use upload/debug/local/guessed fingerprints.
+2. Replace the placeholder, rebuild/deploy the static site, and prove HTTPS 200 valid JSON at the assetlinks path.
+3. Upload a new native Play build and refresh Play Console deep-link validation.
+4. Optionally prove on a Play-installed device with `pm get-app-links` and a claimed-path `am start` diagnostic. Do not sideload, `adb install`, uninstall, clear data, or logout for this proof.
+
+No Premium, Google Play/RevenueCat product, LiveKit backend, Watch-Party Party Room, Live Stage UX, Chi'lly Chat/native call, auth/RLS, billing/provider production, live money, payout, or cashout behavior changed.
+
 ## Live Stage Self-Hero / Seat-Request Overlay UX
 
 Status: Source-fixed and OTA-published; installed proof remains Partial because the Google Play sandbox Premium renewal window expired before both devices completed the two-device Stage proof.

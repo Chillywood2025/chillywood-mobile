@@ -11,6 +11,7 @@ import {
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const siteRoot = path.join(scriptDir, "site");
+const assetLinksSourcePath = path.join(scriptDir, "assetlinks.json");
 const lastUpdated = "May 21, 2026";
 const publicDmcaReportSlug = "copyright-report";
 const publicDmcaReportUrl = `${LEGAL_PUBLIC_BASE_URL}/${publicDmcaReportSlug}`;
@@ -517,6 +518,12 @@ function assertPublicOutput(contents, filePath) {
   if (match) throw new Error(`public output failed placeholder/contact check for ${filePath}: ${match}`);
 }
 
+function writeAssetLinks() {
+  const contents = fs.readFileSync(assetLinksSourcePath, "utf8");
+  JSON.parse(contents);
+  writeFile(path.join(siteRoot, ".well-known", "assetlinks.json"), contents);
+}
+
 function writeStyles() {
   writeFile(
     path.join(siteRoot, "assets", "styles.css"),
@@ -631,6 +638,7 @@ h2 { font-size: clamp(1.35rem, 2.2vw, 1.85rem); line-height: 1.18; margin: 0 0 0
 }
 
 fs.rmSync(siteRoot, { force: true, recursive: true });
+writeAssetLinks();
 writeStyles();
 const index = renderIndex();
 assertPublicOutput(index, "index");
