@@ -4,6 +4,24 @@ Date: 2026-07-05
 
 Verdict: Partial.
 
+## 2026-07-05 Follow-Up
+
+This proof is superseded for current source status by `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_VIEWER_SELF_HERO_HOST_SEAT_CARD_PROOF.md`.
+
+Follow-up source commit `3f49af76d50897947ac1a19bec4def2f22300875` fixes the manual installed regressions found after this pass:
+
+- default host-hero layout includes viewer/self in the party box as `You`;
+- viewer self-hero uses an immediate local camera/avatar/initials fallback instead of falling into `Live feed is syncing`;
+- the real host remains first in the party box while self-hero is enabled;
+- host tapping a pending requester card opens the seat-request sheet without hiding/removing/collapsing the participant card;
+- X close only closes the sheet and preserves the pending request/card;
+- `Not now` clears/declines the current request while keeping the participant visible as listener/viewer;
+- `Bring on stage` still targets only the current pending participant.
+
+The follow-up EAS Update production Android runtime `1.0.0` published group `860e3d56-c894-478a-92dc-7a0d2a0345de`, Android update `019f3526-e2bc-77a9-b3f3-27ab50b867a4`, commit `3f49af76d50897947ac1a19bec4def2f22300875`.
+
+Installed proof remains Partial after the follow-up because the Google Play sandbox Premium renewal window expired before both Play-installed devices completed the two-device Stage proof. R5 created live room `TT8NTT`, R3 found the room and reached `Join Now`, then R3 hit the Premium-required gate after sandbox expiry and R5 later hit the Premium-required gate before `Continue to Live Stage`. This is not a LiveKit routing/heartbeat regression, not a Premium source regression, and not a reason to loosen gates or manually grant entitlement.
+
 ## Summary
 
 Live Stage room UX is source-fixed and OTA-published, and the latest installed closure attempt proved a Premium-active R3 can host and enter Live Stage on Google Play-installed v79. Installed closure remains Partial because the second proof phone, R5, still cannot become Premium active or join the Premium-gated Live Stage path: it shows `Premium purchases are temporarily unavailable while setup is being finalized.`, restore keeps Premium inactive, and Testing details shows `Sandbox setup unavailable.` The missing installed proof is now the two-device Stage / `2 in room` state plus host seat-overlay approve/dismiss and viewer self-hero toggling.

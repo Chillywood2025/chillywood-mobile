@@ -12,29 +12,33 @@ Final reports must separate Play binary proof, OTA update proof, source proof, a
 
 ## Live Stage Self-Hero / Seat-Request Overlay UX
 
-Status: Source-fixed and OTA-published; installed proof remains Partial because only one proof phone is currently Premium-active for the Live Stage path.
+Status: Source-fixed and OTA-published; installed proof remains Partial because the Google Play sandbox Premium renewal window expired before both devices completed the two-device Stage proof.
 
-Governing doc: `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_SELF_HERO_SEAT_OVERLAY_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v79-live-stage-self-hero-seat-overlay-proof-20260705-180402/`.
+Governing docs: `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_VIEWER_SELF_HERO_HOST_SEAT_CARD_PROOF.md` and `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_SELF_HERO_SEAT_OVERLAY_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v79-live-stage-viewer-self-hero-host-seat-card-proof-20260705-205435/`.
 
-Source commit `50db5cabf237b42d269aac15f45120ebcb983a03` adds a local-only viewer Live Stage self-hero mode and fixes the host seat-request overlay. EAS Update production Android runtime `1.0.0` published group `8f893072-9032-4051-af17-a56f002cc28b`, Android update `019f348b-5787-7a5c-90f1-298d4b86bd20`.
+Source commit `3f49af76d50897947ac1a19bec4def2f22300875` fixes the manual installed regressions found after the earlier Live Stage self-hero pass. EAS Update production Android runtime `1.0.0` published group `860e3d56-c894-478a-92dc-7a0d2a0345de`, Android update `019f3526-e2bc-77a9-b3f3-27ab50b867a4`.
 
 Source behavior now expected:
 
+- default host-hero layout includes viewer/self in the party box as `You`;
 - viewer can locally toggle `Make me hero` / `Show host hero`;
+- self-hero uses immediate local camera/avatar/initials fallback and must not show `Live feed is syncing` solely because the viewer lacks publish permission;
 - self-hero mode does not change the real host, participant roles, seat approval state, LiveKit room name, token grants, or other devices' layout;
 - self-hero mode renders viewer/self as hero locally, real host first in the party box, then remaining participants in stable order;
+- host pending requester card tap opens the seat-request sheet and must not hide/remove/collapse the participant card;
 - host seat-request sheet provides `Bring on stage`, `Not now`, close, and Android-back dismissal;
 - approve targets the current pending participant only and handles stale/gone/full states without trapping the host.
 
 Installed proof result:
 
-- backend LiveKit health was green in the latest installed attempt (`eligibleServerCount=1`, heartbeat age under cutoff, `chillywood-prod-01` healthy, no fresh `no_eligible_livekit_server` blocker, fresh `live-stage:success` token audit);
+- backend LiveKit health was green after the OTA (`eligibleServerCount=1`, `noEligibleServerCountRecent=0`, heartbeat age under cutoff, `chillywood-prod-01` healthy, no fresh `no_eligible_livekit_server` blocker);
 - both devices read back Google Play-installed v79 from `com.android.vending`;
-- R3 completed approved Google Play / RevenueCat sandbox Premium and read back `Premium is active.`;
-- R3 created live room `T7S75E`, tapped `Continue to Live Stage`, and reached `LIVE STAGE` as host with visible host-led live UI and no LiveKit unavailable error;
-- R5 remained non-Premium and was blocked at the Premium-required Live Stage gate: purchase path showed `Premium purchases are temporarily unavailable while setup is being finalized.`, restore read back inactive, and Testing details showed `Sandbox setup unavailable.`
+- both R5 and R3 completed approved Google Play / RevenueCat sandbox Premium renewals and read back `Premium is active.` at different points in the run;
+- R5 created live room `TT8NTT`;
+- R3 found the same room and reached `Join Now`;
+- the proof did not reach Stage because the short sandbox subscription cycle expired during navigation: R3 hit the Premium-required gate after expiry, and R5 later hit the Premium-required gate before `Continue to Live Stage`.
 
-Public production readiness still requires installed proof with two Premium-active devices: host reaches Stage, viewer requests a seat, host can dismiss, viewer can request again, host approves, both reach Stage / `2 in room`, viewer self-hero toggles locally, and host remains first party-box tile without role/permission changes.
+Public production readiness still requires installed proof with two simultaneously Premium-active devices: host reaches Stage, default viewer layout shows self in the party box, viewer self-hero toggles instantly without `Live feed is syncing`, host appears first party-box tile, host card tap opens the sheet without hiding the card, host can X-close and use `Not now`, viewer can request again, host approves, and both reach Stage / `2 in room`.
 
 No Premium entitlement logic, Premium bypass, manual entitlement grant, Watch-Party Party Room logic, LiveKit heartbeat/router eligibility, Chi'lly Chat/native calls, auth/RLS, provider production settings, live money, payout/cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall changed.
 
