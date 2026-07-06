@@ -14,6 +14,8 @@ Public legal/support paths remain web-only: `/`, `/privacy`, `/terms`, `/account
 
 Unsupported/deferred web paths such as `/live`, `/live-stage`, and `/invite` must not be added to Android App Links until route handling exists. Android manifest App Links require a new Google Play native build; OTA is not sufficient.
 
+Closure status: `chillywoodstream.com` App Links are Closed as of Google Play internal versionCode `80`. The hosted `/.well-known/assetlinks.json` returns valid Digital Asset Links JSON, Play Console Deep links showed `All links working`, and Android 16 Play-installed device verification reported `chillywoodstream.com: verified`; claimed app-owned paths opened the app and web-only `/privacy` stayed in Chrome.
+
 ## Final Terminology
 - Profile = the user's social identity hub.
 - Username/handle = public user handle displayed as `@username`; it is separate from email and supports public discovery.

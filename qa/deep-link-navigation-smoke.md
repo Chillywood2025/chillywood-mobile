@@ -9,7 +9,7 @@ Android App Links policy:
 - Web-only paths: `/`, `/privacy`, `/terms`, `/account-deletion`, `/copyright-report`, and `/support`
 - Deferred unsupported paths: `/live`, `/live-stage`, and `/invite`
 
-For Android App Links closure, first prove `https://chillywoodstream.com/.well-known/assetlinks.json` returns HTTPS 200 valid JSON with package `com.chillywood.mobile` and the Play App Signing SHA-256, then test on a Google Play-installed native build. Do not sideload or use `adb install` for final proof.
+Android App Links closure for `chillywoodstream.com` is complete as of Google Play internal versionCode `80`: the hosted Digital Asset Links JSON is valid, Play Console showed `All links working`, and Android 16 Play-installed device verification reported `chillywoodstream.com: verified`. For future App Links changes, prove the hosted association file again and test a Google Play-installed native build; do not sideload or use `adb install` for final proof.
 
 | Route | Expected selector | Denied fallback | Auth behavior | Notes |
 | --- | --- | --- | --- | --- |

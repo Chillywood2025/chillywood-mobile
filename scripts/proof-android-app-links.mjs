@@ -101,21 +101,23 @@ const websiteReady = websiteSummary.httpStatus === 200
   && websiteSummary.packageName === packageName
   && !websiteSummary.hasPlaceholder
   && websiteSummary.hasRealLookingFingerprint;
+const assetLinksClosed = websiteReady && localClosedReady;
 
 const result = {
-  status: websiteReady && localClosedReady ? "closed-ready" : "partial",
+  status: assetLinksClosed ? "closed" : "partial",
+  scope: "local-and-hosted-digital-asset-links",
   packageName,
   assetLinksUrl,
   localAssetLinks: localSummary,
   websiteAssetLinks: websiteSummary,
-  nextRequiredAction: websiteReady && localClosedReady
-    ? "Upload a native Google Play build with the App Links manifest filters and refresh Play Console deep-link validation."
+  nextRequiredAction: assetLinksClosed
+    ? "Digital Asset Links association is live. Full App Links closure proof is recorded in the release doc with native Play build, Play Console validation, and Play-installed device verification."
     : "Replace the placeholder with the Play App Signing SHA-256 fingerprint, deploy the static site, then upload a native Google Play build.",
 };
 
 console.log(JSON.stringify(result, null, 2));
 
-if (closedMode && result.status !== "closed-ready") {
+if (closedMode && result.status !== "closed") {
   fail("closed mode requires local and hosted assetlinks.json with a real Play App Signing SHA-256 fingerprint");
 }
 

@@ -12,7 +12,7 @@ Final reports must separate Play binary proof, OTA update proof, source proof, a
 
 ## Android App Links / Domain Association
 
-Status: Repo-prepared and Partial.
+Status: Closed.
 
 Governing doc: `docs/release/ANDROID_APP_LINKS_CHILLYWOODSTREAM_DOMAIN_ASSOCIATION_PROOF.md`.
 
@@ -24,20 +24,19 @@ Current source/config state:
 - Claimed paths are narrow app-owned routes: auth/callback fallback paths, `/profile`, `/channel`, `/player`, `/spectate`, `/title`, and `/watch-party` including `/watch-party/live-stage/[partyId]`.
 - Public legal/support website paths remain web-only: `/`, `/privacy`, `/terms`, `/account-deletion`, `/copyright-report`, and `/support`.
 - Deferred/unclaimed hosts and paths include `www.chillywoodstream.com`, `auth.chillywoodstream.com`, `live.chillywoodstream.com`, `network-proof.chillywoodstream.com`, `/live`, `/live-stage`, and `/invite`.
-- `public-site/legal-site/assetlinks.json` and generated `public-site/legal-site/site/.well-known/assetlinks.json` exist, and the build copies the association file into the deployable static site output.
+- `public-site/legal-site/assetlinks.json` and generated `public-site/legal-site/site/.well-known/assetlinks.json` contain the public Play App Signing SHA-256 fingerprint, and the build copies the association file into the deployable static site output.
 
-Current blocker:
+Closure proof:
 
-- The JSON still contains `PASTE_PLAY_APP_SIGNING_SHA256_FINGERPRINT_HERE`.
-- Current live website verification returns HTML at `https://chillywoodstream.com/.well-known/assetlinks.json`, not valid Digital Asset Links JSON.
-- A new Google Play native Android build is required after manifest filters change. OTA alone cannot update Android manifest App Links.
+- `https://chillywoodstream.com/.well-known/assetlinks.json` returns HTTPS 200 valid JSON with `package_name: "com.chillywood.mobile"` and relation `delegate_permission/common.handle_all_urls`.
+- Google Digital Asset Links API readback returned the expected `chillywoodstream.com` statement for package `com.chillywood.mobile`.
+- EAS native Android build `4c27d4a2-1b54-48d0-93a2-266c3c430dae` produced Google Play internal versionCode `80`, and EAS Submit `35894152-a50a-4edf-b5d3-a9b53a760638` completed on the internal track.
+- Play Console Deep links for selected app version `80 (1.0.0)` showed `All links working`.
+- Android 16 Play-installed device `R3CXA0DS5JV` reported `chillywoodstream.com: verified`; claimed paths opened `com.chillywood.mobile/.MainActivity`, while web-only `/privacy` opened Chrome.
 
-Required before production readiness:
+Future change rule:
 
-1. Copy the Play App Signing SHA-256 from Google Play Console App integrity; do not use upload/debug/local/guessed fingerprints.
-2. Replace the placeholder, rebuild/deploy the static site, and prove HTTPS 200 valid JSON at the assetlinks path.
-3. Upload a new native Play build and refresh Play Console deep-link validation.
-4. Optionally prove on a Play-installed device with `pm get-app-links` and a claimed-path `am start` diagnostic. Do not sideload, `adb install`, uninstall, clear data, or logout for this proof.
+Any future App Links host/path manifest change requires a new native Google Play Android build and fresh Play/device validation. OTA alone cannot update Android manifest App Links. Do not sideload, `adb install`, uninstall, clear data, or logout for final App Links proof.
 
 No Premium, Google Play/RevenueCat product, LiveKit backend, Watch-Party Party Room, Live Stage UX, Chi'lly Chat/native call, auth/RLS, billing/provider production, live money, payout, or cashout behavior changed.
 

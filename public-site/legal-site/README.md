@@ -29,8 +29,9 @@ Android App Links association:
 - Source template: `public-site/legal-site/assetlinks.json`
 - Deployable output: `public-site/legal-site/site/.well-known/assetlinks.json`
 - Hosted URL: `https://chillywoodstream.com/.well-known/assetlinks.json`
-- The template must contain the Play App Signing SHA-256 fingerprint from Google Play Console App integrity before closure. Do not use debug, upload-key, local keystore, or guessed fingerprints.
-- App Links manifest changes require a new native Google Play Android build; OTA alone cannot close Play Console deep-link association warnings.
+- The template contains the public Play App Signing SHA-256 fingerprint for package `com.chillywood.mobile`. Do not use debug, upload-key, local keystore, or guessed fingerprints for future package/domain associations.
+- Android App Links closure for `chillywoodstream.com` passed on July 6, 2026: the hosted URL returns HTTPS 200 JSON, Play Console Deep links for Google Play internal versionCode `80` showed `All links working`, and Android 16 Play-installed device verification reported `chillywoodstream.com: verified`.
+- Future App Links manifest changes require a new native Google Play Android build; OTA alone cannot close Play Console deep-link association warnings.
 
 Preferred production mapping after DNS/hosting setup:
 
@@ -52,13 +53,14 @@ Current repo truth: this static site is deployed on `chillywoodstream.com` from 
 
 The May 21 policy bundle includes 12 full pages, each over 1,500 words: Privacy, Terms, Community Guidelines, Creator Rules, Copyright/DMCA, Support & Account Help, Account Deletion, Premium/Subscription Terms, Live/Watch-Party/Chat Rules, Law Enforcement/Legal Requests, Moderation/Appeals, and Creator Monetization/Revenue Disclaimer. `npm run legal-site:build` currently generates 18 static pages: the 12 policy pages, the formal `/copyright-report` public intake page, and compatibility aliases for existing launch/legal paths.
 
-Cloudflare status as of May 22, 2026:
+Cloudflare status as of July 6, 2026:
 
 - Pages project: `chillywood-legal`
-- Proved Pages deployment: `https://0c365932.chillywood-legal.pages.dev`
+- Proved App Links Pages deployment: `https://54c2b916.chillywood-legal.pages.dev`
 - Expanded generated output deployed successfully from `public-site/legal-site/site/`.
 - Custom domain `chillywoodstream.com` is active.
 - `https://chillywoodstream.com/` returns HTTP/2 200.
+- `https://chillywoodstream.com/.well-known/assetlinks.json` returns HTTP/2 200 `application/json` with package `com.chillywood.mobile`, relation `delegate_permission/common.handle_all_urls`, and the public Play App Signing SHA-256 fingerprint.
 - `/copyright-report` returned HTTP 200 after trailing-slash redirect in May 22 proof and hosts the public copyright notice form.
 - `/privacy`, `/creator-monetization`, and `/live-rules` returned HTTP 200 after trailing-slash redirect in May 21 proof.
 - `/terms`, `/account-deletion`, `/copyright`, and `/support` had prior HTTP 200 proof after trailing-slash redirect and remain current unless a later deploy regresses them.

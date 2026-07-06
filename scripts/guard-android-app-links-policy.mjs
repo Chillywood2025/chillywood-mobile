@@ -255,5 +255,5 @@ if (process.exitCode) process.exit();
 
 console.log("Android App Links policy guard passed.");
 if (!closedMode) {
-  console.log("Status: repo-ready template; Closed proof requires real Play App Signing SHA-256 plus deployed website verification.");
+  console.log("Status: App Links config and local assetlinks policy are ready. Full closure proof is recorded in the release doc; future changes require fresh Play Console and Play-installed device verification.");
 }

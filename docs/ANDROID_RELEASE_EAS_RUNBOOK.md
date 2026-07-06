@@ -118,7 +118,7 @@ What is ready:
 
 What remains:
 
-- Current `main` has not been release-built in this lane.
+- Current `main` has been release-built for the Android App Links closure lane.
 - `android.versionCode` is intentionally not configured locally because `remote` app version source is the selected strategy. The latest read-only EAS version check returned `{}`, so before the next Play upload the release owner must initialize or sync the remote EAS Android build number with `npx eas-cli build:version:set --platform android --profile production` and verify it is greater than any `versionCode` already accepted by Google Play.
 - `eas.json` does not set an `environment` field on build profiles. Release env values must therefore be confirmed through EAS project environment variables, local shell for local commands, or explicit profile updates in a later approved config lane.
 - No `.easignore` exists. The project currently relies on `.gitignore` plus EAS defaults; this is acceptable for this prep lane, but release owner should review build upload contents before first production proof.
@@ -131,8 +131,8 @@ What remains:
 | Play package/developer verification | Complete for `com.chillywood.mobile`; selected signing fingerprint `2B:A7:84:1B:70:6B:E8:69:E8:0F:EA:DA:43:8D:14:33:34:D6:E8:70:99:63:FA:B9:63:94:07:4E:9D:D0:95:43` verified in Play Console | Done for package ownership only; production release proof remains pending |
 | App name | `Chi'llywood` in `app.json` | Ready, subject to final listing review |
 | Version name | `1.0.0` from Expo `version` | Ready for first Public v1 candidate if product owner approves |
-| Version code | EAS remote app version source with production `autoIncrement: true`; latest remote read returned `{}` and older EAS builds reported version code `1` | Initialize/verify remote value before each Play upload |
-| Scheme / deep links | Custom scheme `chillywoodmobile`; Android App Links repo-prepared for `https://chillywoodstream.com` app-owned paths | Partial; App Links require Play App Signing SHA-256 in `/.well-known/assetlinks.json`, static-site deploy, new native Google Play build, and Play/device validation |
+| Version code | EAS remote app version source with production `autoIncrement: true`; Android App Links closure build produced Play internal versionCode `80` | Verify remote value before each future Play upload |
+| Scheme / deep links | Custom scheme `chillywoodmobile`; Android App Links Closed for `https://chillywoodstream.com` app-owned paths | `chillywoodstream.com` serves valid Digital Asset Links JSON, Play internal v80 contains the manifest filters, Play Console showed `All links working`, and Android 16 device verification passed |
 | Runtime version | `{ "policy": "appVersion" }` | Ready; OTA updates must respect runtime compatibility |
 | Updates URL | Expo Updates URL matches the EAS project id | Ready by config, proof-pending in release build |
 
@@ -140,11 +140,12 @@ The Android package id matches the current Chi'llywood Play/RevenueCat target in
 
 Android App Links release implication:
 
-- `app.config.ts` now defines `https` / `autoVerify: true` intent filters for `chillywoodstream.com`.
+- `app.config.ts` defines `https` / `autoVerify: true` intent filters for `chillywoodstream.com`.
 - Approved paths are app-owned auth/callback, Profile, Platform, Player/content, Spectator, Title, and Watch-Party/Live Stage routes.
 - Public legal/support paths remain browser-first and should not be claimed for app opening.
-- Do not use OTA-only release proof for App Links because manifest filters are native config.
-- Before upload, replace the assetlinks placeholder with the Play App Signing SHA-256 from Play Console App integrity and deploy `public-site/legal-site/site/.well-known/assetlinks.json`.
+- App Links closure used EAS Build `4c27d4a2-1b54-48d0-93a2-266c3c430dae`, EAS Submit `35894152-a50a-4edf-b5d3-a9b53a760638`, and Google Play internal versionCode `80`.
+- `public-site/legal-site/site/.well-known/assetlinks.json` is deployed at `https://chillywoodstream.com/.well-known/assetlinks.json` with the public Play App Signing SHA-256 fingerprint for `com.chillywood.mobile`.
+- Do not use OTA-only release proof for future App Links manifest changes because manifest filters are native config.
 
 ## Native Dependency Rebuild Notes
 

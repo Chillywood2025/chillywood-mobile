@@ -1,25 +1,24 @@
 # NEXT TASK
 
-# Android App Links / Domain Association Follow-Up
+# Android App Links / Domain Association Closed
 
 Current latest truth:
-- Android App Links / deep-link domain association is repo-prepared and Partial.
+- Android App Links / deep-link domain association is Closed.
 - Governing doc: `docs/release/ANDROID_APP_LINKS_CHILLYWOODSTREAM_DOMAIN_ASSOCIATION_PROOF.md`.
-- Source/config now adds Android `https` App Links in `app.config.ts` for package `com.chillywood.mobile`, host `chillywoodstream.com`, and `autoVerify: true`.
+- Source/config adds Android `https` App Links in `app.config.ts` for package `com.chillywood.mobile`, host `chillywoodstream.com`, and `autoVerify: true`.
 - Claimed paths are narrow app-owned routes: auth/callback fallbacks, `/profile`, `/channel`, `/player`, `/spectate`, `/title`, and `/watch-party` including Live Stage under `/watch-party/live-stage/[partyId]`.
 - Web/legal paths remain browser-first: `/`, `/privacy`, `/terms`, `/account-deletion`, `/copyright-report`, and `/support`.
 - Deferred/unclaimed: `www.chillywoodstream.com`, `auth.chillywoodstream.com`, `live.chillywoodstream.com`, `network-proof.chillywoodstream.com`, `/live`, `/live-stage`, and `/invite`.
-- `public-site/legal-site/assetlinks.json` and generated `public-site/legal-site/site/.well-known/assetlinks.json` exist, but still contain `PASTE_PLAY_APP_SIGNING_SHA256_FINGERPRINT_HERE`.
-- Current live website verification is not closed: `https://chillywoodstream.com/.well-known/assetlinks.json` returns HTTP 200 HTML from the legal-site shell, not valid JSON.
-- A new native Android build and Google Play upload are required after manifest filters change. OTA alone cannot close this warning.
+- `public-site/legal-site/assetlinks.json` and generated `public-site/legal-site/site/.well-known/assetlinks.json` contain the public Play App Signing SHA-256 fingerprint for `com.chillywood.mobile`.
+- `https://chillywoodstream.com/.well-known/assetlinks.json` returns HTTPS 200 valid JSON with `package_name: "com.chillywood.mobile"` and relation `delegate_permission/common.handle_all_urls`.
+- EAS native Android build `4c27d4a2-1b54-48d0-93a2-266c3c430dae` produced Google Play internal versionCode `80`; EAS Submit `35894152-a50a-4edf-b5d3-a9b53a760638` completed on the internal track.
+- Play Console Deep links for selected app version `80 (1.0.0)` showed `All links working`.
+- Android 16 Play-installed device `R3CXA0DS5JV` reported `chillywoodstream.com: verified`; `/profile/test`, `/watch-party/test`, and `/title/test` opened `com.chillywood.mobile/.MainActivity`, while web-only `/privacy` opened Chrome.
 
 Next exact step:
-1. In Google Play Console, copy the Play App Signing key certificate SHA-256 from Setup/App integrity/App signing. Do not use the upload key, debug key, local keystore, ADI-only value, or a guessed fingerprint.
-2. Replace the placeholder in `public-site/legal-site/assetlinks.json`, run `npm run legal-site:build`, and deploy `public-site/legal-site/site/` to `chillywoodstream.com`.
-3. Verify `curl -i https://chillywoodstream.com/.well-known/assetlinks.json` returns HTTPS 200 valid JSON with package `com.chillywood.mobile`, relation `delegate_permission/common.handle_all_urls`, and the real Play App Signing SHA-256.
-4. Create/upload a new Google Play native Android build from current `main` so the manifest contains the App Links intent filters.
-5. After Play processing, refresh Play Console deep-link validation and optionally run only diagnostic ADB commands on the Play-installed app: `adb shell pm get-app-links com.chillywood.mobile` and `adb shell am start -a android.intent.action.VIEW -d "https://chillywoodstream.com/profile/test"`.
-6. Do not sideload, `adb install`, uninstall, clear data, logout, or mutate Premium, LiveKit, Watch-Party, Live Stage, Chi'lly Chat/native calls, auth/RLS, billing/provider, live money, payouts, or cashout behavior.
+1. No App Links closure task is open for `chillywoodstream.com`.
+2. If product later wants additional hosts or paths, add only backed app-owned routes, serve a valid `/.well-known/assetlinks.json` on each claimed host, and ship another native Google Play build. OTA alone cannot update Android manifest App Links.
+3. Do not sideload, `adb install`, uninstall, clear data, logout, or mutate Premium, LiveKit, Watch-Party, Live Stage, Chi'lly Chat/native calls, auth/RLS, billing/provider, live money, payouts, or cashout behavior for future App Links proof.
 
 # Live Stage Viewer Self-Hero / Host Seat Card Installed Proof Follow-Up
 
