@@ -4775,7 +4775,7 @@ export default function WatchPartyLiveStageScreen({
         ) : null}
         {isHost && pendingSeatRequestParticipant && seatRequestSheetParticipantId ? (
           <View
-            pointerEvents="box-none"
+            pointerEvents="auto"
             style={[styles.stageSeatRequestSheetWrap, { top: safeAreaInsets.top + 84 }]}
           >
             <View
@@ -6648,8 +6648,8 @@ const styles = StyleSheet.create({
   },
   stageOverlayPanelWrap: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 30,
-    elevation: 30,
+    zIndex: 100,
+    elevation: 100,
   },
   stageDockOverlay: {
     position: "absolute",

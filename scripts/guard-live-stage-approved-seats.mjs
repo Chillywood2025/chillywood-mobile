@@ -171,6 +171,9 @@ assertIncludes(liveStage, "testID=\"live-stage-seat-request-approve\"", "Live St
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-dismiss\"", "Live Stage seat-request sheet has dismiss action");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-close\"", "Live Stage seat-request sheet has close action");
 assertIncludes(liveStage, "onPress={() => setSeatRequestSheetParticipantId(\"\")}", "Live Stage close action only closes the request sheet");
+assertIncludes(liveStage, "pointerEvents=\"auto\"\n            style={[styles.stageSeatRequestSheetWrap", "Live Stage seat request wrapper must receive host taps");
+assertIncludes(liveStage, "zIndex: 100", "Live Stage overlay wrapper must sit above the notification portal for host sheet taps");
+assertIncludes(liveStage, "elevation: 100", "Live Stage overlay wrapper must sit above Android elevated portals for host sheet taps");
 assertIncludes(liveStage, "Live Watch-Party hybrid owns the member deck; it is not transient chrome.", "Live Stage hybrid deck visibility marker");
 assertIncludes(liveStage, "setStageOverlayAutoHideArmed(entryStageMode !== \"hybrid\")", "Live Stage must not arm overlay auto-hide for hybrid Live Watch-Party entry");
 assertIncludes(liveStage, "isHybridMode\n      || !stageOverlayAutoHideArmed", "Live Stage hybrid mode must block the overlay auto-hide timer");
