@@ -2515,9 +2515,15 @@ export default function WatchPartyLiveStageScreen({
   ).trim();
   const showHeroRemoteImage = !showHeroLocalRtcVideo && !showHeroRemoteVideo && !!heroParticipantPreviewUri;
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
+  const selfHeroFallbackBody = currentStageParticipantState.role === "speaker"
+    ? "Camera seat active"
+    : currentStageSeatRequestPending
+      ? "Waiting for host approval"
+      : "Camera seat not active";
   const communityCardParticipants = useMemo(() => {
     const nextParticipants = visibleStripParticipants.filter((participant) => {
-      if (!participant.userId || participant.userId === currentUserParticipantId) return false;
+      if (!participant.userId) return false;
+      if (shouldUseViewerSelfHero && participant.userId === currentUserParticipantId) return false;
       if (!shouldUseViewerSelfHero && participant.userId === heroParticipant?.userId) return false;
       const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
         role: participant.role,
@@ -4622,12 +4628,32 @@ export default function WatchPartyLiveStageScreen({
           ]}
           collapsable={false}
         >
-          {shouldRenderLiveKitStage && liveKitJoinContract ? (
+          {shouldUseViewerSelfHero ? (
+            showHeroLocalRtcVideo && RTCView ? (
+              <RTCView
+                key={`${heroParticipant?.userId ?? "hero"}:${localStreamURL ?? "no-local-stream"}`}
+                streamURL={localStreamURL as string}
+                style={styles.stageHeroMediaFill}
+                objectFit="cover"
+                mirror
+              />
+            ) : showHeroRemoteImage ? (
+              <Image
+                source={{ uri: heroParticipantPreviewUri }}
+                style={styles.stageHeroMediaFill}
+              />
+            ) : (
+              <View style={styles.stageHeroFallback}>
+                <Text style={styles.stageHeroFallbackInitial}>{heroFallbackInitial}</Text>
+                <Text style={styles.stageHeroFallbackBody}>{selfHeroFallbackBody}</Text>
+              </View>
+            )
+          ) : shouldRenderLiveKitStage && liveKitJoinContract ? (
             <LiveKitHybridHeroVideo
               fallbackInitial={heroFallbackInitial}
-              forceLocalHeroFallback={shouldUseViewerSelfHero}
+              forceLocalHeroFallback={false}
               participantRole={liveKitJoinContract.participantRole}
-              preferLocalHero={isHost || shouldUseViewerSelfHero}
+              preferLocalHero={isHost}
               roomName={liveKitJoinContract.roomName}
             />
           ) : liveKitJoinUnavailable ? (
@@ -4726,7 +4752,11 @@ export default function WatchPartyLiveStageScreen({
             pointerEvents="box-none"
             style={[styles.stageSeatRequestSheetWrap, { top: safeAreaInsets.top + 84 }]}
           >
-            <View style={styles.stageSeatRequestSheet} pointerEvents="auto">
+            <View
+              style={styles.stageSeatRequestSheet}
+              pointerEvents="auto"
+              testID="live-stage-seat-request-sheet"
+            >
               <View style={styles.stageSeatRequestHeader}>
                 <View style={styles.stageSeatRequestTitleWrap}>
                   <Text style={styles.stageSeatRequestKicker}>Seat request</Text>
@@ -4742,7 +4772,7 @@ export default function WatchPartyLiveStageScreen({
                   accessibilityRole="button"
                   accessibilityLabel="Dismiss seat request"
                   hitSlop={STAGE_CONTROL_HIT_SLOP}
-                  onPress={() => clearPendingSeatRequest(pendingSeatRequestParticipant.userId)}
+                  onPress={() => setSeatRequestSheetParticipantId("")}
                   testID="live-stage-seat-request-close"
                 >
                   <MaterialIcons name="close" size={18} color="#F5F7FF" />
@@ -4932,6 +4962,15 @@ export default function WatchPartyLiveStageScreen({
                         <TouchableOpacity
                           key={`hybrid-presence-${participant.userId}`}
                           activeOpacity={0.74}
+                          accessible
+                          focusable
+                          accessibilityRole="button"
+                          accessibilityLabel={isRequesting
+                            ? `${participantDisplayName} requested camera. Open seat request.`
+                            : isCurrentUser
+                              ? `You are in the Live Stage as ${roleLabel}.`
+                              : `${participantDisplayName}, ${roleLabel}.`}
+                          testID={isCurrentUser ? "live-stage-self-party-card" : isRequesting ? `live-stage-pending-seat-card-${participant.userId}` : `live-stage-party-card-${participant.userId}`}
                           style={[
                             styles.stageParticipantTile,
                             styles.stageParticipantTileGrid,
@@ -4944,6 +4983,17 @@ export default function WatchPartyLiveStageScreen({
                           onPress={() => {
                             if (isHost) {
                               debugLiveStage("host tap user", { userId: participant.userId });
+                              if (isRequesting && canModerateParticipant) {
+                                setSelectedParticipantId("");
+                                setActiveSpeakerUserId(participant.userId);
+                                setActiveParticipantId(participant.userId);
+                                setParticipantPresentationById((prev) => ({
+                                  ...prev,
+                                  [participant.userId]: "compact",
+                                }));
+                                setSeatRequestSheetParticipantId(participant.userId);
+                                return;
+                              }
                               if (canModerateParticipant) {
                                 setSelectedParticipantId("");
                               }

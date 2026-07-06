@@ -443,6 +443,31 @@ assertIncludes(
 );
 assertIncludes(
   liveStage,
+  "\"live-stage-self-party-card\"",
+  "Live Stage must expose the viewer self party card in default host-hero layout",
+);
+assertIncludes(
+  liveStage,
+  "`live-stage-pending-seat-card-${participant.userId}`",
+  "Live Stage pending requester card must be a direct seat-sheet tap target",
+);
+assertIncludes(
+  liveStage,
+  "Camera seat not active",
+  "Live Stage self-hero fallback must be immediate local role copy, not a syncing state",
+);
+assertIncludes(
+  liveStage,
+  "forceLocalHeroFallback={false}",
+  "Live Stage self-hero must not route viewer fallback through LiveKit syncing state",
+);
+assertIncludes(
+  liveStage,
+  "testID=\"live-stage-seat-request-sheet\"",
+  "Live Stage host seat-request sheet must be directly testable",
+);
+assertIncludes(
+  liveStage,
   "testID=\"live-stage-seat-request-approve\"",
   "Live Stage host seat-request sheet must expose a direct approve action",
 );

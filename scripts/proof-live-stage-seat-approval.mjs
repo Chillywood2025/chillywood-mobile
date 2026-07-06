@@ -25,6 +25,7 @@ const createProofState = () => ({
   viewerSelfHeroEnabled: false,
   participantPresentationById: {},
   seatRequestsById: {},
+  hiddenParticipantIds: {},
   participantStateById: {
     [hostId]: { role: "host", isMuted: false, isRemoved: false },
     [viewerId]: { role: "listener", isMuted: false, isRemoved: false },
@@ -53,15 +54,25 @@ const collapseHostParticipantControls = (state, participantId) => {
 const hostTapParticipantCard = (state, participantId) => {
   const participantState = state.participantStateById[participantId];
   const canModerateParticipant = participantState?.role !== "host";
+  const isRequesting = !!state.seatRequestsById[participantId] && participantState?.role === "listener" && !participantState?.isRemoved;
+  if (canModerateParticipant) {
+    state.activeParticipantId = participantId;
+    if (isRequesting) {
+      state.participantPresentationById[participantId] = "compact";
+      state.seatRequestSheetParticipantId = participantId;
+      state.selectedParticipantId = "";
+      return { detailModalOpened: false, seatRequestSheetOpened: true };
+    }
+    state.participantPresentationById[participantId] =
+      state.participantPresentationById[participantId] === "expanded" ? "compact" : "expanded";
+    state.selectedParticipantId = "";
+    return { detailModalOpened: false, seatRequestSheetOpened: false };
+  }
   state.activeParticipantId = participantId;
   state.participantPresentationById[participantId] =
     state.participantPresentationById[participantId] === "expanded" ? "compact" : "expanded";
-  if (canModerateParticipant) {
-    state.selectedParticipantId = "";
-    return { detailModalOpened: false };
-  }
   state.selectedParticipantId = participantId;
-  return { detailModalOpened: true };
+  return { detailModalOpened: true, seatRequestSheetOpened: false };
 };
 
 const emitParticipantUpdate = (state, participantId, changes) => {
@@ -99,6 +110,12 @@ const clearPendingSeatRequest = (state, participantId) => {
   collapseHostParticipantControls(state, participantId);
 };
 
+const closeSeatRequestSheet = (state, participantId) => {
+  if (state.seatRequestSheetParticipantId === participantId) {
+    state.seatRequestSheetParticipantId = "";
+  }
+};
+
 const approveSeat = (state, event, participantId) => {
   event.stopPropagation();
   const seatPersisted = emitParticipantUpdate(state, participantId, { role: "speaker" });
@@ -124,7 +141,7 @@ const resolveViewerLayout = ({ viewerSelfHeroEnabled }) => {
   const visibleParticipants = [viewer, guest, host];
   const hero = viewerSelfHeroEnabled ? viewer : host;
   const partyBox = visibleParticipants
-    .filter((participant) => participant.userId !== viewer.userId)
+    .filter((participant) => !viewerSelfHeroEnabled || participant.userId !== viewer.userId)
     .filter((participant) => viewerSelfHeroEnabled || participant.userId !== hero.userId);
   if (viewerSelfHeroEnabled) {
     partyBox.sort((a, b) => {
@@ -145,8 +162,13 @@ assert(state.seatRequestSheetParticipantId === viewerId, "host seat-request shee
 
 const tapResult = hostTapParticipantCard(state, viewerId);
 assert(tapResult.detailModalOpened === false, "detail modal should stay closed for host moderation taps");
+assert(tapResult.seatRequestSheetOpened === true, "host pending-request card tap should open the seat-request sheet");
 assert(state.activeParticipantId === viewerId, "viewer card should focus the inline host controls");
 assert(state.selectedParticipantId === "", "host moderation tap should not select the participant detail sheet");
+assert(state.seatRequestSheetParticipantId === viewerId, "host card tap should target the pending viewer in the seat-request sheet");
+assert(state.seatRequestsById[viewerId] === true, "host card tap must not clear the pending request");
+assert(!state.hiddenParticipantIds[viewerId], "host card tap must not hide the participant");
+assert(state.participantStateById[viewerId].role === "listener", "host card tap must not seat or remove the viewer");
 
 const approveEvent = createPressEvent();
 const approved = approveSeat(state, approveEvent, viewerId);
@@ -171,22 +193,33 @@ dismissState.activeParticipantId = viewerId;
 dismissState.participantPresentationById[viewerId] = "expanded";
 dismissState.seatRequestsById[viewerId] = true;
 dismissState.seatRequestSheetParticipantId = viewerId;
+
+closeSeatRequestSheet(dismissState, viewerId);
+assert(dismissState.seatRequestSheetParticipantId === "", "close should hide only the seat-request sheet");
+assert(dismissState.seatRequestsById[viewerId] === true, "close should keep the pending request");
+assert(dismissState.participantStateById[viewerId].role === "listener", "close should not seat the viewer");
+assert(!dismissState.hiddenParticipantIds[viewerId], "close should keep the participant card visible");
+
+dismissState.seatRequestSheetParticipantId = viewerId;
 clearPendingSeatRequest(dismissState, viewerId);
 assert(!dismissState.seatRequestsById[viewerId], "dismiss should clear pending seat request");
 assert(dismissState.seatRequestSheetParticipantId === "", "dismiss should close the seat-request sheet");
 assert(dismissState.seatRequestBroadcasts.length === 1, "dismiss should broadcast one request cancellation");
 assert(dismissState.seatRequestBroadcasts[0].pending === false, "dismiss should broadcast pending false");
 assert(dismissState.participantStateById[viewerId].role === "listener", "dismiss should not seat the viewer");
+assert(!dismissState.hiddenParticipantIds[viewerId], "dismiss should keep the participant card visible");
 assert(dismissState.activeParticipantId === "", "dismiss should collapse host card overlay");
 assert(dismissState.participantPresentationById[viewerId] === "compact", "dismiss should collapse expanded viewer card");
 
 const defaultLayout = resolveViewerLayout({ viewerSelfHeroEnabled: false });
 assert(defaultLayout.hero.userId === hostId, "default viewer layout should keep the real host as hero");
+assert(defaultLayout.partyBox.some((participant) => participant.userId === viewerId), "default viewer layout should include viewer self in party box");
 assert(!defaultLayout.partyBox.some((participant) => participant.userId === hostId), "default layout should not duplicate host in party box");
 const selfHeroLayout = resolveViewerLayout({ viewerSelfHeroEnabled: true });
 assert(selfHeroLayout.hero.userId === viewerId, "self-hero layout should make the viewer local hero");
 assert(selfHeroLayout.partyBox[0]?.userId === hostId, "self-hero party box should put the real host first");
 assert(!selfHeroLayout.partyBox.some((participant) => participant.userId === viewerId), "self-hero party box should not duplicate the viewer");
+assert("Camera seat not active" !== "Live feed is syncing.", "self-hero fallback copy must not be Live feed syncing");
 
 assert(state.deviceOrEmulatorUsed === false, "proof must not use an attached device or emulator");
 assert(state.realAuthAccountCreated === false, "proof must not create real auth accounts");
@@ -200,6 +233,9 @@ console.log(JSON.stringify({
   hostRequestRendered: true,
   approvePropagationStopped: true,
   dismissClosesSeatRequestSheet: true,
+  closeKeepsPendingSeatRequest: true,
+  defaultViewerSelfVisibleInPartyBox: true,
+  hostPendingCardOpensSeatSheet: true,
   viewerSelfHeroLocalOnly: true,
   hostFirstInSelfHeroPartyBox: true,
   viewerCanPublishAfterApproval: true,
