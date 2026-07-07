@@ -378,8 +378,9 @@ assert(
 assert(
   playerSource.includes('onPressSharedPlayerRequestCamera("dock")')
     && playerSource.includes('onPressSharedPlayerRequestCamera("bubble")')
-    && playerSource.includes("await requestPartySeat();"),
-  "explicit Request Camera and bubble taps must share the versioned request path",
+    && playerSource.includes("const requestPartySeat = useCallback(async (participantIdOverride?: string)")
+    && playerSource.includes("await requestPartySeat(currentWatchPartyParticipant.id);"),
+  "explicit Request Camera and bubble taps must pass the visible participant id into the versioned request path",
 );
 assert(
   playerSource.includes("Camera request sent. Waiting for host.")
@@ -397,8 +398,9 @@ assert(
 assert(
   playerSource.includes("shared-player-comment-input")
     && playerSource.includes("shared-player-comment-send")
-    && playerSource.includes("shared-player-visible-comments"),
-  "regular Shared Player comments must expose visible input/send proof targets",
+    && playerSource.includes("shared-player-visible-comments")
+    && playerSource.includes("renderPartyCommentsContent(false, shouldShowRegularSharedComments && !partyCommentsOpen)"),
+  "regular Shared Player comments must expose visible compact input/send proof targets",
 );
 assert(
   playerSource.includes("shared-player-reaction-button")

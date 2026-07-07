@@ -3400,8 +3400,8 @@ export default function PlayerScreen() {
     resetAutoHideTimer,
   ]);
 
-  const requestPartySeat = useCallback(async () => {
-    const trackedUserId = String(partyUserId || partySyncUserIdRef.current || "").trim();
+  const requestPartySeat = useCallback(async (participantIdOverride?: string) => {
+    const trackedUserId = String(participantIdOverride || partyUserId || partySyncUserIdRef.current || "").trim();
     if (!inWatchParty || !partyId || !trackedUserId) return;
     const currentParticipant = partyParticipants.find((entry) => entry.id === trackedUserId);
     const currentMembership = partyMembershipMapRef.current[trackedUserId];
@@ -5635,7 +5635,7 @@ export default function PlayerScreen() {
     }
 
     try {
-      await requestPartySeat();
+      await requestPartySeat(currentWatchPartyParticipant.id);
       setWatchPartyCameraRequestError("");
       showLivePresenceEvent("Camera request sent. Waiting for host.");
       debugLog("livekit", "watch-party-live camera request submitted from shared player control", {
@@ -5656,6 +5656,7 @@ export default function PlayerScreen() {
   }, [
     currentWatchPartyHostAuthority.isHost,
     currentWatchPartyParticipant,
+    currentWatchPartyParticipant?.id,
     currentWatchPartyParticipantCanSpeak,
     currentWatchPartyViewerRequestPending,
     isSharedPartyPlayback,
@@ -8083,7 +8084,7 @@ export default function PlayerScreen() {
               sharedPartyCommentsKeyboardActive && styles.watchPartyDockCardKeyboardComposer,
             ]}
           >
-            {renderPartyCommentsContent()}
+            {renderPartyCommentsContent(false, shouldShowRegularSharedComments && !partyCommentsOpen)}
           </View>
         ) : null}
 
@@ -8358,29 +8359,31 @@ export default function PlayerScreen() {
     );
   };
 
-  const renderPartyCommentsContent = (compactFullscreenRail = false) => (
+  const renderPartyCommentsContent = (compactFullscreenRail = false, compactSharedDock = false) => (
     <>
       {sharedPartyCommentsKeyboardActive ? null : (
         <>
           <Text style={[styles.partyCommentsDrawerTitle, compactFullscreenRail && styles.partyCommentsDrawerTitleFullscreenRail]}>
             {roomCommentsTitle}
           </Text>
-          <ScrollView
-            style={[styles.partyCommentsList, compactFullscreenRail && styles.partyCommentsListFullscreenRail]}
-            contentContainerStyle={styles.partyCommentsListContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {partyOverlayMessages.length > 0 ? (
-              partyOverlayMessages.map((msg) => (
-                <Text key={msg.id} style={styles.partyCommentsLine}>
-                  <Text style={styles.partyCommentsAuthor}>{msg.author}: </Text>
-                  {msg.body}
-                </Text>
-              ))
-            ) : (
-              <Text style={styles.partyCommentsLine}>{roomCommentsEmptyText}</Text>
-            )}
-          </ScrollView>
+          {!compactSharedDock ? (
+            <ScrollView
+              style={[styles.partyCommentsList, compactFullscreenRail && styles.partyCommentsListFullscreenRail]}
+              contentContainerStyle={styles.partyCommentsListContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {partyOverlayMessages.length > 0 ? (
+                partyOverlayMessages.map((msg) => (
+                  <Text key={msg.id} style={styles.partyCommentsLine}>
+                    <Text style={styles.partyCommentsAuthor}>{msg.author}: </Text>
+                    {msg.body}
+                  </Text>
+                ))
+              ) : (
+                <Text style={styles.partyCommentsLine}>{roomCommentsEmptyText}</Text>
+              )}
+            </ScrollView>
+          ) : null}
         </>
       )}
       {inWatchParty ? (

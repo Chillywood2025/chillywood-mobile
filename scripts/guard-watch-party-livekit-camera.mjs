@@ -235,6 +235,11 @@ assertIncludes(
 );
 assertIncludes(
   player,
+  "renderPartyCommentsContent(false, shouldShowRegularSharedComments && !partyCommentsOpen)",
+  "regular Shared Player visible comments must use the compact dock input/send layout",
+);
+assertIncludes(
+  player,
   "watch-party-live shared video watchdog check",
   "Android shared playback must log watchdog checks when sync says playing but render has no progress",
 );
@@ -326,7 +331,7 @@ const playerWatchPartyReactionSelect = sliceBetween(
 );
 const playerWatchPartySeatRequest = sliceBetween(
   player,
-  "const requestPartySeat = useCallback(async () => {",
+  "const requestPartySeat = useCallback(async (participantIdOverride?: string) => {",
   "const persistPartySeatState = useCallback(async (participantId: string, options: {",
   "Player Watch-Party seat request boundary",
 );
@@ -344,7 +349,7 @@ const playerSharedPlayerDock = sliceBetween(
 );
 const playerPartyCommentsContent = sliceBetween(
   player,
-  "const renderPartyCommentsContent = (compactFullscreenRail = false) => (",
+  "const renderPartyCommentsContent = (compactFullscreenRail = false, compactSharedDock = false) => (",
   "const renderSharedFullscreenCommentsRail = () => (",
   "Player party comments content boundary",
 );
@@ -798,8 +803,13 @@ assertIncludes(
 );
 assertIncludes(
   playerWatchPartyRequestCameraControl,
-  "await requestPartySeat();",
-  "explicit Request Camera control must use the versioned request path",
+  "await requestPartySeat(currentWatchPartyParticipant.id);",
+  "explicit Request Camera control must pass the visible participant id into the versioned request path",
+);
+assertIncludes(
+  player,
+  "const requestPartySeat = useCallback(async (participantIdOverride?: string)",
+  "Watch-Party Live request path must accept a stable participant id override",
 );
 assertIncludes(
   playerWatchPartyRequestCameraControl,
