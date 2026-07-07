@@ -3,7 +3,7 @@
 # Watch-Party Live Source-Truth Repair
 
 Current latest truth:
-- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and OTA-published from aligned source. Installed proof remains Partial, but the real-media playback blocker is resolved: both R5 and R3 rendered actual video in the same Shared Player on the fresh OTA. The remaining installed gap is viewer camera request / host approval with matching LiveKit speaker/canPublish authority and approved identity-safe camera feed.
+- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and OTA-published from aligned source. Installed proof remains Partial, but the real-media playback blocker is resolved: both R5 and R3 rendered actual video in the same Shared Player on the fresh OTA. A July 7 camera-request packet then narrowed the remaining blocker to installed Shared Player camera-request/comment-reaction reachability and request persistence: tapping the viewer's own audience bubble/card did not produce a visible pending request, and the host never received a review/approval surface.
 - Governing new doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
 - Source commit: `833520e5ba6fad86160b93df1da45cd510b1c433`.
 - Android EAS Update production runtime `1.0.0`: group `0d23919f-bedb-40b4-9428-6550bdfd765c`, Android update `019f3da7-dcd6-7732-a757-cb36b1bd7c61`.
@@ -13,6 +13,9 @@ Current latest truth:
 - In installed room `38M7L3`, R5 hosted from `Chi'llywood City Lights`, R3 joined the same Party Room, and both devices opened Shared Player. Actual video playback appeared on both devices after host playback started. No `Live feed unavailable` or `Live video is temporarily unavailable. Try again in a moment.` alert appeared.
 - Regular Shared Player comments were visible at the bottom, R3 showed `Synced · Controls locked` for viewer locked-control proof, fullscreen preserved the locked rails and rendered actual video after host restart, and R3 returned to the Party Room.
 - Current installed proof still needs the viewer camera request / host approval packet. In the latest run the visible Shared Player controls did not expose a completed request/approval path before the packet ended, so no matching speaker/canPublish publish authority or approved viewer camera feed is claimed.
+- Latest remaining-packet artifact: `/tmp/google-play-internal-v80-watch-party-live-camera-request-approval-proof-20260707-171433/`.
+- Latest packet used fresh room `EJPK7C` after stale room `38M7L3` returned `Room not found`. Both devices were visible, Play-installed v80, backend LiveKit health was green, and both devices renewed/read back Premium active through the approved Google Play / RevenueCat sandbox flow. R5 hosted from the strict real-media `Chi'llywood City Lights` Player path and R3 joined the same Party Room/Shared Player.
+- Latest packet result: the viewer/audience bubble was visible, but tapping the viewer's own bubble/card did not send/persist a camera request and did not change the viewer to `Request pending`; R5 never received a request badge/review card/approval surface. Viewer comment/reaction send was also not proved because the attempted bottom-control interaction escaped to the Android share/intent resolver and was backed out without sending.
 - Current source follow-up adds Android shared-video render proof/recovery. `Synced · Playing` alone is not actual playback proof. A real-media shared source with no load/progress triggers one `expo-video` remount, then an `expo-av` fallback, then a clear render-stalled state if both renderers fail. Logs are redacted and include source kind/classification, playback URL presence boolean only, load/progress/watchdog state, and recovery action.
 - The Shared Player custom fullscreen rails remain locked: left comments rail, center shared video surface, and right portrait-reused LiveKit bubble rail. This lane must not change `docs/SHARED_PLAYER_CUSTOM_FULLSCREEN_RAILS.md` layout intent except proof/status notes.
 - Party Room handoff and Player entry now use the same canonical Watch-Party Live Premium access key helper, without bypassing Premium or changing Google Play / RevenueCat behavior.
@@ -26,11 +29,12 @@ Current latest truth:
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
 
 Next exact step:
-1. Use Play-installed v80 or newer, latest OTA, both devices Premium-active through approved Google Play / RevenueCat sandbox, and `Chi'llywood City Lights` or another `classification=real-media` Home card.
-2. Reprove only the remaining packet if possible: viewer camera request from Shared Player, host sees and approves, viewer receives matching speaker/canPublish authority, viewer publishes camera or a clear publish-ready state appears, and host sees an identity-safe viewer bubble/feed.
-3. If the request control is still not reachable in Shared Player, classify the blocker as installed Watch-Party Live camera-request UI reachability rather than media playback, Premium, Party Room entry, or backend LiveKit routing.
-4. Do not count `Synced · Playing` alone as actual playback proof.
-5. Do not touch Premium entitlement logic, Watch-Party Party Room, Android App Links, LiveKit routing/heartbeat/cutoffs, Chi'lly Chat/native calls, auth/RLS, billing/provider settings, live money, payouts, cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall.
+1. Fix the installed Shared Player camera-request/comment-reaction reachability gap without changing fullscreen layout, Premium, Party Room, LiveKit backend routing, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing/provider settings, live money, payout, or cashout behavior.
+2. Make the viewer camera request path explicit and proofable from Shared Player: a visible/requestable self audience control should send/persist a versioned request, show safe pending feedback, and never silently fail.
+3. Make the host request receipt/approval path proofable: the host should see a stable request badge/card/sheet, approve it, and the viewer should receive matching speaker/canPublish authority with an identity-safe approved bubble/feed.
+4. Recheck viewer comment/reaction controls from regular Shared Player so they do not escape to Android share/intent UI when the user is trying to send a room comment or reaction.
+5. After source fix, run the required guards/validation, push, publish a fresh OTA from aligned source, then rerun only the remaining installed packet with Play-installed v80 or newer, both devices Premium-active through approved sandbox, and `Chi'llywood City Lights` or another `classification=real-media` Home card.
+6. Do not count `Synced · Playing` alone as actual playback proof, and do not redo broad playback/fullscreen/Premium/backend lanes unless a fresh regression appears.
 
 # Android App Links / Domain Association Closed
 
