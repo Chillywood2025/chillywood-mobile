@@ -1,8 +1,8 @@
 # Final Production Readiness Checklist
 
-## July 6, 2026 Live Stage Follow-Up
+## July 7, 2026 Live Stage Source-Truth Follow-Up
 
-Live Stage host/viewer UX has an additional source/guard fix pending installed OTA proof: host-side inline controls no longer offer direct `Seat Participant` for non-requesting audience viewers, X close collapses transient host controls while preserving the pending request/card, the request-camera control has a stable testID, and local self tiles no longer borrow remote LiveKit fallback video. This preserves Premium gates, LiveKit routing/heartbeat/cutoffs, Watch-Party Party Room behavior, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing/provider state, live money, payout, and cashout boundaries. Closed-testing proof can continue after OTA; public production remains gated on installed two-phone proof.
+Live Stage host/viewer UX has a stricter source/guard repair pending commit, push, OTA, and installed proof: request close suppression is versioned, duplicate pending broadcasts cannot reopen an X-closed sheet, downgraded LiveKit speaker-desired contracts are not publish-ready, pending approval is sheet-only, participant-specific tiles require identity-matched tracks, and the proof imports the real Live Stage helper module instead of a duplicate model. This preserves Premium gates, LiveKit routing/heartbeat/cutoffs, Watch-Party Party Room behavior, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing/provider state, live money, payout, and cashout boundaries. Closed-testing proof can continue after OTA; public production remains gated on installed two-phone proof.
 
 ## OTA-First Proof Rule
 
@@ -46,13 +46,13 @@ No Premium, Google Play/RevenueCat product, LiveKit backend, Watch-Party Party R
 
 ## Live Stage Self-Hero / Seat-Request Overlay UX
 
-Status: Source/guard complete, repo-aligned, and OTA-published for the host/viewer presentation and seat-sheet UX; installed proof remains Partial until the latest aligned OTA is proved on Google Play-installed devices with both phones Premium-active.
+Status: Source/guard complete for the request/seat/publish/presentation source-truth repair; installed proof remains Partial until this source is committed, pushed, OTA-published, and proved on Google Play-installed devices with both phones Premium-active.
 
 Governing docs: `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_VIEWER_SELF_HERO_HOST_SEAT_CARD_PROOF.md` and `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_SELF_HERO_SEAT_OVERLAY_PROOF.md`. Current artifact folder: `/tmp/google-play-internal-v79-live-stage-viewer-self-hero-seat-persistence-proof-20260706-145439/installed-proof-hybrid-deck-fix-20260706-151807/`.
 
 Source commits through `a6c57ad7bef9ec6dd245cad332850aaf9cf474e5` fix the manual installed regressions found after the earlier Live Stage self-hero pass, plus the July 6 proof defects where the Live Watch-Party hybrid deck could auto-hide and the X-close path could immediately auto-reopen the same pending sheet. Latest EAS Update production Android runtime `1.0.0` published group `39b39ecf-294f-4eaa-bcb1-cc835a311efd`, Android update `019f3946-e907-7468-9d3a-0515ea050aa2`.
 
-Current aligned source: `origin/main` `fae20e2930f9511077bc0c1e5732cbdb793f6294` supersedes the temporary local-only `ba78ca3eb787052a54836e74b469d40c1d936f49` blocker with an equivalent remote tree. Fresh production Android runtime `1.0.0` EAS Update from that aligned source: group `8e8bb31c-74e8-4699-b2bc-d53fdf32a84b`, Android update `019f3a7f-be4d-7917-bf8a-0f55124f5a9a`, message `Fix Live Stage host viewer presentation a496991`. The final source/guard polish ensures host mode excludes host/self from Chi'lly Party Members when host/self is the actual visual hero, keeps remote viewer/requester cards visible during focus/tap, and keeps `Featured` as secondary presentation styling rather than primary role/status copy. The deployed `livekit-token` Edge Function and shared function files hash-match `origin/main`; the `enforce-participant-state` / `persistMembershipState` path is deployed and represented in source for Live Stage seat authority fallback. Post-alignment validation passed, including LiveKit health, Live Stage proof/guards, runtime validation, route contracts, TypeScript, Deno check, diff checks, and changed-file secret scan.
+Current source-truth repair starts from `origin/main` `12334d69a6f6ac499ba1aad481e850cffbc41f10` and is not installed-proof closed until the final commit is pushed and OTA-published. It preserves the prior host/viewer presentation fix, then adds request-versioned sheet close semantics, strict desired LiveKit authority matching, sheet-only pending approvals, identity-safe participant track rendering, and helper-backed proof coverage. The deployed `livekit-token` Edge Function source was audited and deno-checked; no livekit-token source change or deploy was required in this lane.
 
 Source behavior now expected:
 
@@ -68,6 +68,12 @@ Source behavior now expected:
 - X close keeps the pending request/card visible and does not immediately auto-reopen until the host taps the pending card or a fresh request is sent.
 - Host mode filters party-box membership by actual visual hero identity, not focus state; focusing/tapping a remote viewer must not remove that remote viewer from the host members box.
 - `Featured` must never replace `Host`, `Audience`, `Seat request pending`, `Seated`, or `Removed` as the primary card status.
+- X close is request-version safe; duplicate pending broadcasts do not reopen the sheet.
+- `Not now` clears/declines the current request while keeping the participant visible.
+- Pending approval is sheet-only; participant cards do not render inline pending approve/dismiss controls.
+- A speaker-desired participant is not publish-ready until the LiveKit contract matches speaker/canPublish authority.
+- Participant-specific video uses only identity-matched LiveKit tracks; missing tracks render a safe fallback, not another participant's feed.
+- The source proof imports the real helper module that the component uses.
 
 Installed proof result:
 
@@ -78,7 +84,7 @@ Installed proof result:
 - latest-OTA room `W555BH` proved R3 reached Live Stage with `2 in room`, host hero, and viewer/self visible as `You`;
 - final host seat-sheet closure after the latest OTA remains unproved because R5 sandbox Premium expired at stage entry; Restore returned `Premium is not active`, and `Start Sandbox Premium Test` became unavailable with `Premium purchases are temporarily unavailable while setup is being finalized.`
 
-Public production readiness still requires installed proof on the latest aligned OTA with two simultaneously Premium-active devices: host reaches Stage, host/self is hero/background, host members box shows the remote viewer/requester and not `You HOST`, remote card tap does not hide the card, `Featured` does not replace Viewer/Listener/Requesting/Speaker status, default viewer layout shows self in the party box, viewer self-hero toggles instantly without `Live feed is syncing`, host appears first party-box tile, host card tap opens the sheet without hiding the card, host can X-close and use `Not now`, viewer can request again, host approves, and both reach Stage / `2 in room`.
+Public production readiness still requires installed proof on a fresh aligned OTA with two simultaneously Premium-active devices: host reaches Stage, host/self is hero/background, host members box shows the remote viewer/requester and not `You HOST`, remote card tap does not hide the card, `Featured` does not replace Viewer/Listener/Requesting/Speaker status, default viewer layout shows self in the party box, viewer self-hero toggles instantly without `Live feed is syncing`, X close suppresses duplicate pending reopen, `Not now` clears the request while preserving the participant, viewer can request again, host approves with `Bring on stage`, viewer receives matching speaker/canPublish authority, host sees the correct viewer feed or identity-safe fallback, and both reach Stage / `2 in room`.
 
 No Premium entitlement logic, Premium bypass, manual entitlement grant, Watch-Party Party Room logic, LiveKit heartbeat/router eligibility, Chi'lly Chat/native calls, auth/RLS, provider production settings, live money, payout/cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall changed.
 

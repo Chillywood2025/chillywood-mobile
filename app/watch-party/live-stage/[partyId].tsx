@@ -149,7 +149,6 @@ import {
     buildSharedParticipantIdentity,
     canRequestSeat,
     createDefaultParticipantState,
-    getParticipantLayerLabel,
     LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS,
     mergeMissingParticipantStates,
     normalizeSharedRoomMode,
@@ -160,6 +159,20 @@ import {
     type SharedParticipantLocalState,
     type SharedRoomMode,
 } from "../../../_lib/watch-party/room-shared";
+import {
+  applyLiveStageSeatRequestEvent,
+  buildLiveStageCommunityParticipants,
+  canRenderParticipantSpecificLiveKitTrack,
+  closeLiveStageSeatRequestSheet,
+  createSeatRequestVersion,
+  emptyLiveStageSeatRequestState,
+  getLiveStagePrimaryRoleLabel,
+  liveKitContractMatchesDesiredAuthority,
+  resolveActualVisualHeroParticipantId,
+  resolveDesiredLiveKitAuthority,
+  shouldAutoOpenLiveStageSeatRequest,
+  type LiveStageSeatRequestState,
+} from "../../../_lib/watch-party/live-stage-presentation";
 
 type StageParticipant = SharedParticipantIdentity & {
   username: string;
@@ -249,6 +262,8 @@ const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as c
 const LIVE_STAGE_REMOTE_GRID_COLUMNS = 3;
 const LIVE_STAGE_REMOTE_GRID_VISIBLE_ROWS = 2;
 const LIVE_STAGE_VERBOSE_LOGGING = false;
+const LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS = 6;
+const LIVE_STAGE_AUTHORITY_REFRESH_RETRY_MILLIS = 700;
 
 const debugLiveStage = (message: string, meta?: Record<string, unknown>) => {
   if (!LIVE_STAGE_VERBOSE_LOGGING) return;
@@ -295,11 +310,9 @@ function ConditionalWrap({
 function LiveKitHybridParticipantVideo({
   participantId,
   fallback,
-  remoteTrackIndex = 0,
 }: {
   participantId: string;
   fallback: React.ReactNode;
-  remoteTrackIndex?: number;
 }) {
   const { localParticipant } = useHybridLiveKitLocalParticipant();
   const tracks = useHybridLiveKitTracks(
@@ -330,13 +343,15 @@ function LiveKitHybridParticipantVideo({
     )) ?? null,
     [localParticipant.identity, participantId, tracks],
   );
-  const fallbackRemoteTrack = useMemo(
-    () => remoteCameraTracks[remoteTrackIndex] ?? remoteCameraTracks[0] ?? null,
-    [remoteCameraTracks, remoteTrackIndex],
-  );
-
   const participantIsLocal = participantId === localParticipant.identity;
-  const resolvedRemoteTrack = participantIsLocal ? null : matchingTrack ?? fallbackRemoteTrack;
+  const resolvedRemoteTrack = (
+    matchingTrack
+    && canRenderParticipantSpecificLiveKitTrack({
+      participantId,
+      localParticipantIdentity: localParticipant.identity,
+      trackParticipantIdentity: matchingTrack.participant.identity,
+    })
+  ) ? matchingTrack : null;
 
   useEffect(() => {
     debugLog("livekit", "live-stage member tile track state", {
@@ -345,7 +360,9 @@ function LiveKitHybridParticipantVideo({
       remoteCameraTrackCount: remoteCameraTracks.length,
       remoteCameraIdentities: remoteCameraTracks.map((trackRef) => trackRef.participant.identity),
       hasMatchingTrack: !!matchingTrack,
+      missingMatchingTrack: !matchingTrack,
       participantIsLocal,
+      usesIdentityFallback: false,
       resolvedRemoteIdentity: resolvedRemoteTrack && isHybridLiveKitTrackReference(resolvedRemoteTrack)
         ? resolvedRemoteTrack.participant.identity
         : null,
@@ -897,9 +914,10 @@ export default function WatchPartyLiveStageScreen({
   const [featuredParticipantById, setFeaturedParticipantById] = useState<Record<string, boolean>>({});
   const [participantPresentationById, setParticipantPresentationById] = useState<Record<string, "compact" | "expanded">>({});
   const [participantStateById, setParticipantStateById] = useState<Record<string, SharedParticipantLocalState>>({});
-  const [seatRequestsById, setSeatRequestsById] = useState<Record<string, boolean>>({});
+  const [seatRequestState, setSeatRequestState] = useState<LiveStageSeatRequestState>(() => emptyLiveStageSeatRequestState());
+  const seatRequestsById = seatRequestState.pendingById;
+  const seatRequestVersionById = seatRequestState.versionById;
   const [seatRequestSheetParticipantId, setSeatRequestSheetParticipantId] = useState("");
-  const [seatRequestSheetClosedById, setSeatRequestSheetClosedById] = useState<Record<string, boolean>>({});
   const [stageParticipantActionBusyId, setStageParticipantActionBusyId] = useState("");
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
@@ -934,6 +952,7 @@ export default function WatchPartyLiveStageScreen({
   const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const liveKitStageContractRefreshKeyRef = useRef("");
   const liveKitStageAuthorityRetryKeyRef = useRef("");
+  const liveKitStageAuthorityRetryCountRef = useRef<Record<string, number>>({});
   const liveKitStageAuthorityRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const liveKitStageMountedRef = useRef(true);
   const stripOrderRef = useRef<string>("");
@@ -1025,7 +1044,7 @@ export default function WatchPartyLiveStageScreen({
     setRoomEntryError("");
     setViewerSelfHeroEnabled(false);
     setSeatRequestSheetParticipantId("");
-    setSeatRequestSheetClosedById({});
+    setSeatRequestState(emptyLiveStageSeatRequestState());
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -1043,16 +1062,24 @@ export default function WatchPartyLiveStageScreen({
       };
     });
     setParticipantStateById(nextParticipantStateById);
-    setSeatRequestsById((prev) => {
-      const next: Record<string, boolean> = {};
-      Object.entries(prev).forEach(([participantId, pending]) => {
+    setSeatRequestState((prev) => {
+      const pendingById: Record<string, boolean> = {};
+      const versionById: Record<string, string> = {};
+      const closedVersionById: Record<string, string> = {};
+      Object.entries(prev.pendingById).forEach(([participantId, pending]) => {
         if (!pending) return;
         const participantState = nextParticipantStateById[participantId];
         if (participantState && !participantState.isRemoved && participantState.role === "listener") {
-          next[participantId] = true;
+          pendingById[participantId] = true;
+          if (prev.versionById[participantId]) {
+            versionById[participantId] = prev.versionById[participantId];
+          }
+          if (prev.closedVersionById[participantId]) {
+            closedVersionById[participantId] = prev.closedVersionById[participantId];
+          }
         }
       });
-      return next;
+      return { pendingById, versionById, closedVersionById };
     });
   }, []);
 
@@ -1263,7 +1290,7 @@ export default function WatchPartyLiveStageScreen({
 
   useEffect(() => {
     setLiveSurface("room");
-    setSeatRequestsById({});
+    setSeatRequestState(emptyLiveStageSeatRequestState());
   }, [partyId]);
 
   useEffect(() => {
@@ -1461,21 +1488,12 @@ export default function WatchPartyLiveStageScreen({
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const pending = !!payload?.pending;
-        setSeatRequestSheetClosedById((prev) => {
-          if (!prev[participantId]) return prev;
-          const next = { ...prev };
-          delete next[participantId];
-          return next;
-        });
-        setSeatRequestsById((prev) => {
-          if (!pending) {
-            if (!prev[participantId]) return prev;
-            const next = { ...prev };
-            delete next[participantId];
-            return next;
-          }
-          return { ...prev, [participantId]: true };
-        });
+        setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
+          participantId,
+          pending,
+          requestVersion: String(payload?.requestVersion ?? payload?.requestId ?? ""),
+          requestedAt: String(payload?.requestedAt ?? ""),
+        }));
       });
 
       channel.on("broadcast", { event: "participant:seat-state" }, ({ payload }: { payload: Record<string, unknown> }) => {
@@ -1500,15 +1518,12 @@ export default function WatchPartyLiveStageScreen({
             isRemoved: nextIsRemoved,
           },
         }));
-        setSeatRequestsById((prev) => {
-          if (pending && nextRole === "listener" && !nextIsRemoved) {
-            return { ...prev, [participantId]: true };
-          }
-          if (!prev[participantId]) return prev;
-          const next = { ...prev };
-          delete next[participantId];
-          return next;
-        });
+        setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
+          participantId,
+          pending: pending && nextRole === "listener" && !nextIsRemoved,
+          requestVersion: String(payload?.requestVersion ?? payload?.requestId ?? ""),
+          requestedAt: String(payload?.requestedAt ?? ""),
+        }));
       });
 
         channel.subscribe((status) => {
@@ -1853,18 +1868,12 @@ export default function WatchPartyLiveStageScreen({
   const openSeatRequestSheet = useCallback((participantId: string) => {
     const nextParticipantId = String(participantId ?? "").trim();
     if (!nextParticipantId) return;
-    setSeatRequestSheetClosedById((prev) => {
-      if (!prev[nextParticipantId]) return prev;
-      const next = { ...prev };
-      delete next[nextParticipantId];
-      return next;
-    });
     setSeatRequestSheetParticipantId(nextParticipantId);
   }, []);
   const closeSeatRequestSheet = useCallback((participantId: string) => {
     const nextParticipantId = String(participantId ?? "").trim();
     if (!nextParticipantId) return;
-    setSeatRequestSheetClosedById((prev) => ({ ...prev, [nextParticipantId]: true }));
+    setSeatRequestState((prev) => closeLiveStageSeatRequestSheet(prev, nextParticipantId));
     setSeatRequestSheetParticipantId((current) => (current === nextParticipantId ? "" : current));
     collapseHostParticipantControls(nextParticipantId);
   }, [collapseHostParticipantControls]);
@@ -2159,11 +2168,19 @@ export default function WatchPartyLiveStageScreen({
       .catch(() => {});
   }, []);
 
-  const broadcastSeatRequest = useCallback((participantId: string, pending: boolean) => {
+  const broadcastSeatRequest = useCallback((participantId: string, pending: boolean, requestVersion?: string) => {
     const channel = channelRef.current;
     if (!channel || !participantId) return;
     channel
-      .send({ type: "broadcast", event: "participant:seat-request", payload: { participantId, pending } })
+      .send({
+        type: "broadcast",
+        event: "participant:seat-request",
+        payload: {
+          participantId,
+          pending,
+          requestVersion: requestVersion || null,
+        },
+      })
       .catch(() => {});
   }, []);
 
@@ -2172,6 +2189,7 @@ export default function WatchPartyLiveStageScreen({
     isMuted: boolean;
     isRemoved?: boolean;
     pending?: boolean;
+    requestVersion?: string;
   }) => {
     const channel = channelRef.current;
     if (!channel || !participantId) return;
@@ -2185,6 +2203,7 @@ export default function WatchPartyLiveStageScreen({
           isMuted: payload.isMuted,
           isRemoved: !!payload.isRemoved,
           pending: !!payload.pending,
+          requestVersion: payload.requestVersion || null,
         },
       })
       .catch(() => {});
@@ -2217,8 +2236,13 @@ export default function WatchPartyLiveStageScreen({
     }
 
     revealStageOverlay();
-    setSeatRequestsById((prev) => ({ ...prev, [nextParticipantId]: true }));
-    broadcastSeatRequest(nextParticipantId, true);
+    const requestVersion = createSeatRequestVersion();
+    setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
+      participantId: nextParticipantId,
+      pending: true,
+      requestVersion,
+    }));
+    broadcastSeatRequest(nextParticipantId, true, requestVersion);
   }, [
     broadcastSeatRequest,
     isHost,
@@ -2422,14 +2446,6 @@ export default function WatchPartyLiveStageScreen({
         : canRequestSeat(currentStageParticipantState)
           ? "Watching is allowed here when the room is free or your account has the required access. Request camera when you want to join the visible feeds."
           : "Watching is allowed here when the room is free or your account has the required access. Camera requests are unavailable for your current role.";
-  const stageSeatRequestButtonLabel = currentStageParticipantState.role === "speaker"
-    ? "Camera active"
-    : currentStageSeatRequestPending
-      ? "Request pending"
-      : "Request camera";
-  const stageSeatRequestButtonDisabled = currentStageParticipantState.role === "speaker"
-    || currentStageSeatRequestPending
-    || !canRequestSeat(currentStageParticipantState);
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
   const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
   const liveRoomJoinLabel = room?.joinPolicy === "locked"
@@ -2491,11 +2507,34 @@ export default function WatchPartyLiveStageScreen({
     participantStateById[trackedUserId]?.isMuted
     ?? membershipMapRef.current[trackedUserId]?.isMuted
   );
+  const desiredLiveKitAuthority = useMemo(
+    () => resolveDesiredLiveKitAuthority({
+      participantRole: liveKitParticipantRole,
+      isMuted: isCurrentStageParticipantMuted,
+    }),
+    [isCurrentStageParticipantMuted, liveKitParticipantRole],
+  );
+  const currentLiveKitContractMatchesDesiredAuthority = liveKitContractMatchesDesiredAuthority(
+    liveKitJoinContract,
+    desiredLiveKitAuthority,
+  );
   const liveKitContractAllowsStagePublish = liveKitJoinContract
-    ? liveKitJoinContract.requestedGrants.canPublish
-    : liveKitParticipantRole !== "viewer";
+    ? currentLiveKitContractMatchesDesiredAuthority && liveKitJoinContract.requestedGrants.canPublish
+    : false;
   const publishLocalStageAudio = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;
   const publishLocalStageCamera = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;
+  const currentStageSeatActivating = currentStageParticipantState.role === "speaker"
+    && !currentLiveKitContractMatchesDesiredAuthority;
+  const stageSeatRequestButtonLabel = currentStageSeatActivating
+    ? "Camera seat activating"
+    : currentStageParticipantState.role === "speaker"
+      ? "Camera active"
+      : currentStageSeatRequestPending
+        ? "Request pending"
+        : "Request camera";
+  const stageSeatRequestButtonDisabled = currentStageParticipantState.role === "speaker"
+    || currentStageSeatRequestPending
+    || !canRequestSeat(currentStageParticipantState);
   const currentMembershipAuthoritySignature = [
     currentTrackedParticipantState?.role ?? "none",
     currentStageMembership?.stageRole ?? "none",
@@ -2569,33 +2608,25 @@ export default function WatchPartyLiveStageScreen({
   const selfHeroFallbackBody = currentStageParticipantState.role === "speaker"
     ? "Camera seat active"
     : "Local self view";
-  const actualVisualHeroParticipantId = isHost
-    ? currentUserParticipantId
-    : shouldUseViewerSelfHero
-      ? currentUserParticipantId
-      : (heroParticipant?.userId ?? "");
+  // Keep these concepts separate: actual visual hero controls tile filtering,
+  // active/focus controls local emphasis, Featured is styling, and room
+  // authority comes only from membership/LiveKit grants.
+  const actualVisualHeroParticipantId = resolveActualVisualHeroParticipantId({
+    isHost,
+    currentUserParticipantId,
+    shouldUseViewerSelfHero,
+    heroParticipantId: heroParticipant?.userId ?? "",
+  });
   const communityCardParticipants = useMemo(() => {
-    const nextParticipants = visibleStripParticipants.filter((participant) => {
-      if (!participant.userId) return false;
-      if (participant.userId === actualVisualHeroParticipantId) return false;
-      const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
-        role: participant.role,
-        isSpeaking: participant.isSpeaking,
-        isMuted: participant.isMuted,
-      });
-      if (participantState.isRemoved) return false;
-      return true;
+    return buildLiveStageCommunityParticipants({
+      participants: visibleStripParticipants,
+      actualVisualHeroParticipantId,
+      participantStateById,
+      shouldUseViewerSelfHero,
+      hostParticipantId: hostParticipant?.userId ?? "",
     });
-    if (!shouldUseViewerSelfHero || !hostParticipant?.userId) return nextParticipants;
-    const hostEntry = nextParticipants.find((participant) => participant.userId === hostParticipant.userId);
-    if (!hostEntry) return nextParticipants;
-    return [
-      hostEntry,
-      ...nextParticipants.filter((participant) => participant.userId !== hostParticipant.userId),
-    ];
   }, [
     actualVisualHeroParticipantId,
-    currentUserParticipantId,
     hostParticipant,
     participantStateById,
     shouldUseViewerSelfHero,
@@ -2642,24 +2673,18 @@ export default function WatchPartyLiveStageScreen({
   const clearPendingSeatRequest = useCallback((participantId: string, options?: { broadcast?: boolean }) => {
     const nextParticipantId = String(participantId ?? "").trim();
     if (!nextParticipantId) return;
-    setSeatRequestsById((prev) => {
-      if (!prev[nextParticipantId]) return prev;
-      const next = { ...prev };
-      delete next[nextParticipantId];
-      return next;
-    });
+    const requestVersion = seatRequestVersionById[nextParticipantId] ?? "";
+    setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
+      participantId: nextParticipantId,
+      pending: false,
+      requestVersion: prev.versionById[nextParticipantId] ?? requestVersion,
+    }));
     if (options?.broadcast !== false) {
-      broadcastSeatRequest(nextParticipantId, false);
+      broadcastSeatRequest(nextParticipantId, false, requestVersion);
     }
-    setSeatRequestSheetClosedById((prev) => {
-      if (!prev[nextParticipantId]) return prev;
-      const next = { ...prev };
-      delete next[nextParticipantId];
-      return next;
-    });
     setSeatRequestSheetParticipantId((current) => (current === nextParticipantId ? "" : current));
     collapseHostParticipantControls(nextParticipantId);
-  }, [broadcastSeatRequest, collapseHostParticipantControls]);
+  }, [broadcastSeatRequest, collapseHostParticipantControls, seatRequestVersionById]);
   const approveStageSeatRequest = useCallback(async (participantId: string) => {
     const nextParticipantId = String(participantId ?? "").trim();
     if (!nextParticipantId) return;
@@ -2700,22 +2725,17 @@ export default function WatchPartyLiveStageScreen({
           role: "speaker",
         },
       }));
-      setSeatRequestsById((prev) => {
-        if (!prev[nextParticipantId]) return prev;
-        const next = { ...prev };
-        delete next[nextParticipantId];
-        return next;
-      });
-      setSeatRequestSheetClosedById((prev) => {
-        if (!prev[nextParticipantId]) return prev;
-        const next = { ...prev };
-        delete next[nextParticipantId];
-        return next;
-      });
+      const approvedRequestVersion = seatRequestVersionById[nextParticipantId] ?? "";
+      setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
+        participantId: nextParticipantId,
+        pending: false,
+        requestVersion: prev.versionById[nextParticipantId] ?? approvedRequestVersion,
+      }));
       broadcastSeatState(nextParticipantId, {
         role: "speaker",
         isMuted: participantState.isMuted,
         pending: false,
+        requestVersion: approvedRequestVersion,
       });
       setSeatRequestSheetParticipantId("");
       collapseHostParticipantControls(nextParticipantId);
@@ -2731,6 +2751,7 @@ export default function WatchPartyLiveStageScreen({
     participantStateById,
     refreshStageSnapshot,
     runStageParticipantAction,
+    seatRequestVersionById,
     visibleStripParticipants,
   ]);
   const pendingSeatRequestParticipants = useMemo(() => {
@@ -2773,13 +2794,12 @@ export default function WatchPartyLiveStageScreen({
       if (current && pendingSeatRequestParticipants.some((participant) => participant.userId === current)) {
         return current;
       }
-      return pendingSeatRequestParticipants.find((participant) => !seatRequestSheetClosedById[participant.userId])?.userId ?? "";
+      return pendingSeatRequestParticipants.find((participant) => shouldAutoOpenLiveStageSeatRequest(
+        seatRequestState,
+        participant.userId,
+      ))?.userId ?? "";
     });
-  }, [isHost, isLiveRoomSurface, pendingSeatRequestParticipants, seatRequestSheetClosedById]);
-  const communityCardParticipantIndexById = useMemo(
-    () => Object.fromEntries(communityCardParticipants.map((participant, index) => [participant.userId, index])),
-    [communityCardParticipants],
-  );
+  }, [isHost, isLiveRoomSurface, pendingSeatRequestParticipants, seatRequestState]);
   const communityCardCountLabel = communityCardParticipants.length > 0
     ? `${communityCardParticipants.length} ${communityCardParticipants.length === 1 ? "member" : "members"}`
     : "Feeds syncing";
@@ -3318,11 +3338,12 @@ export default function WatchPartyLiveStageScreen({
       return;
     }
 
-    const desiredCanPublish = liveKitParticipantRole !== "viewer" && !isCurrentStageParticipantMuted;
+    const desiredCanPublish = desiredLiveKitAuthority.canPublish;
     const existingCanPublish = liveKitJoinContract?.requestedGrants.canPublish === true;
-    const staleRoleContract = !!liveKitJoinContract && liveKitJoinContract.participantRole !== liveKitParticipantRole;
+    const staleRoleContract = !!liveKitJoinContract && liveKitJoinContract.participantRole !== desiredLiveKitAuthority.participantRole;
     const stalePublishContract = !!liveKitJoinContract && existingCanPublish !== desiredCanPublish;
-    const staleContract = staleRoleContract || stalePublishContract;
+    const contractMatchesDesiredAuthority = liveKitContractMatchesDesiredAuthority(liveKitJoinContract, desiredLiveKitAuthority);
+    const staleContract = !!liveKitJoinContract && !contractMatchesDesiredAuthority;
     const authorityRetryKey = [
       partyId,
       trackedUserId,
@@ -3331,14 +3352,19 @@ export default function WatchPartyLiveStageScreen({
       currentMembershipAuthoritySignature,
     ].join(":");
 
-    if (liveKitJoinContract && !staleContract) {
+    if (liveKitJoinContract && contractMatchesDesiredAuthority) {
       liveKitStageAuthorityRetryKeyRef.current = "";
       liveKitStageContractRefreshKeyRef.current = "";
+      liveKitStageAuthorityRetryCountRef.current = {};
       return;
     }
 
-    if (staleContract && desiredCanPublish && liveKitStageAuthorityRetryKeyRef.current === authorityRetryKey) {
-      debugLog("livekit", "kept backend-authoritative live-stage contract after guarded publish retry", {
+    if (
+      staleContract
+      && desiredCanPublish
+      && (liveKitStageAuthorityRetryCountRef.current[authorityRetryKey] ?? 0) >= LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS
+    ) {
+      debugLog("livekit", "live-stage publish contract remains downgraded after bounded authority refresh", {
         roomName: partyId,
         currentUserId: trackedUserId,
         desiredParticipantRole: liveKitParticipantRole,
@@ -3396,8 +3422,7 @@ export default function WatchPartyLiveStageScreen({
       if (!active) return;
       if (joinResult.status === "ready") {
         const joinResultCanPublish = joinResult.requestedGrants.canPublish === true;
-        const joinResultMatchesDesired = joinResult.participantRole === liveKitParticipantRole
-          && joinResultCanPublish === desiredCanPublish;
+        const joinResultMatchesDesired = liveKitContractMatchesDesiredAuthority(joinResult, desiredLiveKitAuthority);
         setLiveKitJoinContract(joinResult);
         setLiveKitJoinUnavailable(null);
         debugLog("livekit", "refreshed live-stage join contract from membership authority", {
@@ -3410,12 +3435,17 @@ export default function WatchPartyLiveStageScreen({
         });
 
         if (!joinResultMatchesDesired && desiredCanPublish) {
-          if (liveKitStageAuthorityRetryKeyRef.current !== authorityRetryKey) {
+          const nextRetryCount = (liveKitStageAuthorityRetryCountRef.current[authorityRetryKey] ?? 0) + 1;
+          liveKitStageAuthorityRetryCountRef.current = {
+            ...liveKitStageAuthorityRetryCountRef.current,
+            [authorityRetryKey]: nextRetryCount,
+          };
+          if (nextRetryCount <= LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS) {
             liveKitStageAuthorityRetryKeyRef.current = authorityRetryKey;
             if (liveKitStageAuthorityRetryTimeoutRef.current) {
               clearTimeout(liveKitStageAuthorityRetryTimeoutRef.current);
             }
-            debugLog("livekit", "live-stage publish contract still downgraded; refreshing snapshot before one retry", {
+            debugLog("livekit", "live-stage publish contract still downgraded; refreshing authority snapshot", {
               roomName: joinResult.roomName,
               currentUserId: trackedUserId,
               desiredParticipantRole: liveKitParticipantRole,
@@ -3423,6 +3453,8 @@ export default function WatchPartyLiveStageScreen({
               participantRole: joinResult.participantRole,
               canPublish: joinResultCanPublish,
               membershipAuthority: currentMembershipAuthoritySignature,
+              retryCount: nextRetryCount,
+              maxRetryCount: LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS,
             });
             liveKitStageAuthorityRetryTimeoutRef.current = setTimeout(() => {
               liveKitStageAuthorityRetryTimeoutRef.current = null;
@@ -3432,17 +3464,7 @@ export default function WatchPartyLiveStageScreen({
                 liveKitStageContractRefreshKeyRef.current = "";
                 setLiveKitJoinContract(null);
               });
-            }, 650);
-          } else {
-            debugLog("livekit", "live-stage publish contract retry already used for authority snapshot", {
-              roomName: joinResult.roomName,
-              currentUserId: trackedUserId,
-              desiredParticipantRole: liveKitParticipantRole,
-              desiredCanPublish,
-              participantRole: joinResult.participantRole,
-              canPublish: joinResultCanPublish,
-              membershipAuthority: currentMembershipAuthoritySignature,
-            });
+            }, LIVE_STAGE_AUTHORITY_REFRESH_RETRY_MILLIS);
           }
         }
         return;
@@ -3461,6 +3483,7 @@ export default function WatchPartyLiveStageScreen({
     };
   }, [
     currentMembershipAuthoritySignature,
+    desiredLiveKitAuthority,
     isCurrentStageParticipantMuted,
     liveKitFoundationEnabled,
     liveKitJoinContract,
@@ -5020,10 +5043,12 @@ export default function WatchPartyLiveStageScreen({
                       const shouldShowInlineHostControls = isHost
                         && isActiveParticipant
                         && canModerateParticipant
-                        && (isRequesting || isSpeakerRole || isRemoved)
-                        && !(isRequesting && activeSeatSheetTargetsParticipant);
+                        && !isRequesting
+                        && (isSpeakerRole || isRemoved)
+                        && !activeSeatSheetTargetsParticipant;
                       // Featured is local focus styling only. Keep the primary card label tied to room state.
-                      const roleLabel = getParticipantLayerLabel({
+                      const roleLabel = getLiveStagePrimaryRoleLabel({
+                        participant,
                         state: participantState,
                         isRequesting,
                       });
@@ -5107,73 +5132,7 @@ export default function WatchPartyLiveStageScreen({
                         >
                           {shouldShowInlineHostControls ? (
                             <View style={[styles.stageParticipantActionMenu, styles.stageParticipantActionMenuGrid]}>
-                              {isRequesting ? (
-                                <>
-                                  <TouchableOpacity
-                                    style={[styles.stageParticipantActionBtn, isParticipantActionBusy && styles.stageParticipantActionBtnBusy]}
-                                    activeOpacity={0.82}
-                                    disabled={isParticipantActionBusy}
-                                    onPress={(event) => {
-                                      event.stopPropagation();
-                                      void runStageParticipantAction(participant.userId, async () => {
-                                        if (!canAddSpeakerSeat(participant.userId)) {
-                                          collapseHostParticipantControlsAfterFailure(participant.userId);
-                                          Alert.alert(
-                                            "Speaker seats full",
-                                            `Live rooms allow up to ${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} active speaker seats. Move someone to audience before approving another speaker.`,
-                                          );
-                                          return;
-                                        }
-                                        const seatPersisted = await emitParticipantUpdate(participant.userId, { role: "speaker" });
-                                        if (!seatPersisted) {
-                                          collapseHostParticipantControlsAfterFailure(participant.userId);
-                                          Alert.alert("Seat update unavailable", "The camera seat could not be saved yet. Try approving the seat again.");
-                                          await refreshStageSnapshot(myUserId).catch(() => null);
-                                          return;
-                                        }
-                                        setParticipantStateById((prev) => ({
-                                          ...prev,
-                                          [participant.userId]: {
-                                            ...(prev[participant.userId] ?? participantState),
-                                            role: "speaker",
-                                          },
-                                        }));
-                                        setSeatRequestsById((prev) => {
-                                          if (!prev[participant.userId]) return prev;
-                                          const next = { ...prev };
-                                          delete next[participant.userId];
-                                          return next;
-                                        });
-                                        broadcastSeatState(participant.userId, {
-                                          role: "speaker",
-                                          isMuted,
-                                          pending: false,
-                                        });
-                                        collapseHostParticipantControls(participant.userId);
-                                      });
-                                    }}
-                                  >
-                                    <Text style={styles.stageParticipantActionText}>{isParticipantActionBusy ? "Saving..." : "Approve Seat"}</Text>
-                                  </TouchableOpacity>
-                                  <TouchableOpacity
-                                    style={styles.stageParticipantActionBtn}
-                                    activeOpacity={0.82}
-                                    onPress={(event) => {
-                                      event.stopPropagation();
-                                      setSeatRequestsById((prev) => {
-                                        if (!prev[participant.userId]) return prev;
-                                        const next = { ...prev };
-                                        delete next[participant.userId];
-                                        return next;
-                                      });
-                                      broadcastSeatRequest(participant.userId, false);
-                                      collapseHostParticipantControls(participant.userId);
-                                    }}
-                                  >
-                                    <Text style={styles.stageParticipantActionText}>Not now</Text>
-                                  </TouchableOpacity>
-                                </>
-                              ) : null}
+                              <Text style={styles.stageParticipantActionStatusText}>Manage seated speaker</Text>
                               <TouchableOpacity
                                 style={[styles.stageParticipantActionBtn, isParticipantActionBusy && styles.stageParticipantActionBtnBusy]}
                                 activeOpacity={0.82}
@@ -5260,12 +5219,11 @@ export default function WatchPartyLiveStageScreen({
                                         isMuted,
                                         pending: false,
                                       });
-                                      setSeatRequestsById((prev) => {
-                                        if (!prev[participant.userId]) return prev;
-                                        const next = { ...prev };
-                                        delete next[participant.userId];
-                                        return next;
-                                      });
+                                      setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
+                                        participantId: participant.userId,
+                                        pending: false,
+                                        requestVersion: prev.versionById[participant.userId],
+                                      }));
                                       collapseHostParticipantControls(participant.userId);
                                     });
                                   }}
@@ -5307,12 +5265,11 @@ export default function WatchPartyLiveStageScreen({
                                       isRemoved: !isRemoved,
                                       pending: false,
                                     });
-                                    setSeatRequestsById((prev) => {
-                                      if (!prev[participant.userId]) return prev;
-                                      const next = { ...prev };
-                                      delete next[participant.userId];
-                                      return next;
-                                    });
+                                    setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
+                                      participantId: participant.userId,
+                                      pending: false,
+                                      requestVersion: prev.versionById[participant.userId],
+                                    }));
                                     collapseHostParticipantControls(participant.userId);
                                   });
                                 }}
@@ -5351,7 +5308,6 @@ export default function WatchPartyLiveStageScreen({
                                   {shouldUseHybridLiveKitVideo ? (
                                     <LiveKitHybridParticipantVideo
                                       participantId={participant.userId}
-                                      remoteTrackIndex={communityCardParticipantIndexById[participant.userId] ?? 0}
                                       fallback={bubbleMediaUri ? (
                                         <Image
                                           source={{ uri: bubbleMediaUri }}

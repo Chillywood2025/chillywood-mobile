@@ -28,6 +28,7 @@ const liveStage = readSource("app/watch-party/live-stage/[partyId].tsx");
 const player = readSource("app/player/[id].tsx");
 const watchPartyIndex = readSource("app/watch-party/index.tsx");
 const partyRoom = readSource("app/watch-party/[partyId].tsx");
+const liveStagePresentation = readSource("_lib/watch-party/live-stage-presentation.ts");
 
 assertIncludes(appLayout, '<Stack.Screen name="watch-party/live-stage/index" />', "Live Stage index route registration");
 assertIncludes(appLayout, '<Stack.Screen name="watch-party/live-stage/[partyId]" />', "Live Stage party route registration");
@@ -60,14 +61,15 @@ assertBefore(
   "Live Stage overlay utility sheets must stay above the lower dock in the approved stage shell.",
 );
 assertIncludes(liveStage, "communityCardParticipants = useMemo", "Live Stage participant visibility owner");
+assertIncludes(liveStage, "buildLiveStageCommunityParticipants({", "Live Stage route must use shared member deck helper");
 assertIncludes(
-  liveStage,
-  "if (!participant.userId || participant.userId === currentUserParticipantId) return false;",
-  "Live Stage member deck should only remove the local/current participant from member cards",
+  liveStagePresentation,
+  "participantId === actualVisualHeroParticipantId",
+  "Live Stage member deck should remove only the actual visual hero from member cards",
 );
 assertIncludes(
-  liveStage,
-  "if (participantState.isRemoved) return false;",
+  liveStagePresentation,
+  "if (participantState?.isRemoved) return false;",
   "Live Stage member deck should only remove explicitly removed participants",
 );
 assertNotIncludes(liveStage, "proof-live-stage-host-0001", "Live Stage route must not contain proof host identities");

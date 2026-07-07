@@ -85,7 +85,7 @@ add("participant_enforcement_action", participantPermissions.includes('action: "
 add("party_room_host_only_participant_state", watchParty.includes("blocked non-host participant state update") && watchParty.includes(".eq(\"host_user_id\", writableUserId)"), "participant state updates are host-owned");
 add("party_room_removed_denial", roomRules.includes("membershipState === \"removed\"") && roomRules.includes("reason: \"removed\""), "removed membership denies access");
 add("party_room_host_controls", partyRoom.includes("emitParticipantUpdate") && partyRoom.includes("remove_participant") && partyRoom.includes("mute_participant"), "Party Room host participant controls exist");
-add("live_stage_host_controls", liveStage.includes("Approve Seat") && liveStage.includes("Move to Audience") && liveStage.includes("Remove"), "Live Stage host participant controls exist");
+add("live_stage_host_controls", liveStage.includes("Bring on stage") && liveStage.includes("Move to Audience") && liveStage.includes("Remove"), "Live Stage host participant controls exist");
 add("live_stage_persist_before_broadcast", liveStage.includes("blocked live-stage seat broadcast before membership authority persisted") && liveStage.includes("await enforceLiveKitParticipantState({"), "Live Stage persists authority before enforcement/broadcast");
 add("live_stage_contract_refresh", liveStage.includes("staleRoleContract") && liveStage.includes("stalePublishContract") && liveStage.includes("live-stage-authority-refresh"), "Live Stage refreshes stale role/publish contracts");
 add("old_room_guard_referenced", oldRoomGuard.includes("LiveKit token room_expired rejection"), "old-room guard covers LiveKit stale room denial");

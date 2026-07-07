@@ -225,9 +225,9 @@ const liveStageHostActionMenu = sliceBetween(
   "Live Stage host action menu boundary",
 );
 const liveStageHostApproveAction = sliceBetween(
-  liveStageHostActionMenu,
-  "const seatPersisted = await emitParticipantUpdate(participant.userId, { role: \"speaker\" });",
-  "<Text style={styles.stageParticipantActionText}>Not now</Text>",
+  liveStage,
+  "const approveStageSeatRequest = useCallback(async (participantId: string) => {",
+  "const pendingSeatRequestParticipants = useMemo(() => {",
   "Live Stage host approve action boundary",
 );
 const liveStageHostMuteAction = sliceBetween(
@@ -1157,19 +1157,19 @@ assertIncludes(
 assertCountAtLeast(
   liveStageHostActionMenu,
   "event.stopPropagation();",
-  5,
+  3,
   "Live Stage host action buttons must stop parent card tap propagation.",
 );
 assertBefore(
   liveStageHostApproveAction,
-  "const seatPersisted = await emitParticipantUpdate(participant.userId, { role: \"speaker\" });",
-  "broadcastSeatState(participant.userId, {",
+  "const seatPersisted = await emitParticipantUpdate(nextParticipantId, { role: \"speaker\" });",
+  "broadcastSeatState(nextParticipantId, {",
   "Live Stage approve broadcasts must wait until membership authority is persisted.",
 );
 assertBefore(
   liveStageHostApproveAction,
-  "broadcastSeatState(participant.userId, {",
-  "collapseHostParticipantControls(participant.userId);",
+  "broadcastSeatState(nextParticipantId, {",
+  "collapseHostParticipantControls(nextParticipantId);",
   "Live Stage approve must collapse host controls after broadcasting the persisted seat state.",
 );
 assertBefore(

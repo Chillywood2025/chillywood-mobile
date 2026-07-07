@@ -4,6 +4,21 @@ Date: 2026-07-05; continued 2026-07-06
 
 Verdict: Partial.
 
+## July 7 Source-Truth Superseding Note
+
+The July 6 source/OTA proof remained insufficient because installed behavior still showed request/seat/publish and participant-video edge cases that source proof did not catch. The next source-truth lane is recorded in `docs/release/GOOGLE_SIGNED_V80_LIVE_STAGE_SEAT_REQUEST_CONTRACT_AND_TRACK_IDENTITY_PROOF.md`.
+
+Superseding source behavior:
+
+- X close is request-version safe and duplicate pending broadcasts do not reopen the same sheet;
+- `Not now` is the explicit decline/clear path while participant visibility is preserved;
+- pending approval is sheet-only and participant cards do not render inline pending approve/dismiss controls;
+- a speaker-desired viewer is not publish-ready until the LiveKit join contract also grants speaker/canPublish;
+- participant-specific tiles require identity-matched LiveKit tracks and do not borrow arbitrary remote fallback feeds;
+- `npm run proof:live-stage-seat-approval` now imports the same pure helper module used by the route instead of testing a duplicate fake model.
+
+This document remains the historical record for the self-hero and host-seat-card partial installed proof. Installed closure should use the newer v80 source-truth proof doc after commit, push, OTA, and two-device proof.
+
 ## July 6 Follow-Up: Host Viewer Feed / Inline Seat Control Fix
 
 Installed Google Play v80 testing found one more app-controlled Live Stage UX defect after repo alignment and OTA proof started. The host phone correctly kept host/self as the hero and no longer showed `You HOST` in Chi'lly Party Members, but the remote viewer card could expose inline `Seat Participant` controls while the viewer was still an audience listener and had not requested camera. That host-side direct seat path could make the host show the viewer as `Seated` without the viewer going through the request/approval publish path, leaving the host card without a real viewer live feed. The transient host controls could also remain visually open after the seat sheet was closed, and the viewer `You` tile could borrow a remote LiveKit fallback track instead of staying a local self tile.

@@ -20,26 +20,23 @@ Next exact step:
 2. If product later wants additional hosts or paths, add only backed app-owned routes, serve a valid `/.well-known/assetlinks.json` on each claimed host, and ship another native Google Play build. OTA alone cannot update Android manifest App Links.
 3. Do not sideload, `adb install`, uninstall, clear data, logout, or mutate Premium, LiveKit, Watch-Party, Live Stage, Chi'lly Chat/native calls, auth/RLS, billing/provider, live money, payouts, or cashout behavior for future App Links proof.
 
-# Live Stage Viewer Self-Hero / Host Seat Card Installed Proof Follow-Up
+# Live Stage Source-Truth Repair / Installed Proof Follow-Up
 
 Current latest truth:
-- Live Stage host/viewer presentation and seat-sheet UX is source/guard complete and repo-aligned, with installed proof still next.
-- Governing docs: `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_VIEWER_SELF_HERO_HOST_SEAT_CARD_PROOF.md` and `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_SELF_HERO_SEAT_OVERLAY_PROOF.md`.
-- Current artifact folder: `/tmp/google-play-internal-v79-live-stage-viewer-self-hero-seat-persistence-proof-20260706-145439/installed-proof-hybrid-deck-fix-20260706-151807/`.
-- Current canonical `origin/main`: `fae20e2930f9511077bc0c1e5732cbdb793f6294`.
-- This supersedes the local-only `ba78ca3eb787052a54836e74b469d40c1d936f49` repo-alignment blocker with an equivalent remote tree. The pending source lane is no longer blocked by stale `origin/main`.
-- Latest source behavior: host/self remains the actual visual hero on the host device; host/self is excluded from the host Chi'lly Party Members box; the remote viewer/requester remains visible while focused/tapped; `Featured` is styling only and cannot replace the primary room-state label.
-- The deployed `livekit-token` Edge Function and shared function files hash-match `origin/main`; `enforce-participant-state` / `persistMembershipState` remains deployed and represented in source for Live Stage seat authority fallback.
-- Post-alignment validation passed, including LiveKit health, Live Stage guard/proof, runtime, route contracts, TypeScript, Deno check, diff checks, and changed-file secret scan.
-- Previous installed OTA before this final source polish: group `39b39ecf-294f-4eaa-bcb1-cc835a311efd`, Android update `019f3946-e907-7468-9d3a-0515ea050aa2`, commit `a6c57ad7bef9ec6dd245cad332850aaf9cf474e5`.
-- Fresh aligned-source EAS Update is published to production Android runtime `1.0.0`: group `8e8bb31c-74e8-4699-b2bc-d53fdf32a84b`, Android update `019f3a7f-be4d-7917-bf8a-0f55124f5a9a`, source commit `fae20e2930f9511077bc0c1e5732cbdb793f6294`, message `Fix Live Stage host viewer presentation a496991`.
-- Latest EAS Update production Android runtime `1.0.0`: group `39b39ecf-294f-4eaa-bcb1-cc835a311efd`, Android update `019f3946-e907-7468-9d3a-0515ea050aa2`.
-- Backend LiveKit health was green after the OTA: `eligibleServerCount=1`, `noEligibleServerCountRecent=0`, heartbeat age under the 120-second cutoff, `chillywood-prod-01` healthy, and no rejection reasons.
-- Both phones read back Google Play-installed package `com.chillywood.mobile` from `com.android.vending`; latest installed proof readback was versionCode `80`, versionName `1.0.0`.
-- Both R5 and R3 can read back `Premium is active` when the Google Play / RevenueCat sandbox entitlement is available.
-- Installed Packet A is closed on room `993HVB`: default host-hero layout shows viewer/self in the party box as `You`, `Make me hero` is instant with local self view and no toggle-induced `Live feed syncing`, host appears first in the party box, self is not duplicated, and `Show host hero` returns to host-as-hero.
-- Latest-OTA room `W555BH` proved R3 reached Live Stage with `2 in room`, host hero, and viewer/self visible as `You`.
-- Installed proof remains Partial only for final host seat-sheet actions after the latest X-close semantics fix because R5 sandbox Premium expired at stage entry; Restore returned `Premium is not active`, and `Start Sandbox Premium Test` became unavailable with `Premium purchases are temporarily unavailable while setup is being finalized.`
+- Live Stage host/viewer presentation and seat/request/publish state has a new source-truth repair pending commit/push, OTA, and installed proof.
+- Governing docs: `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_VIEWER_SELF_HERO_HOST_SEAT_CARD_PROOF.md`, `docs/release/GOOGLE_SIGNED_V80_LIVE_STAGE_SEAT_REQUEST_CONTRACT_AND_TRACK_IDENTITY_PROOF.md`, and `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_SELF_HERO_SEAT_OVERLAY_PROOF.md`.
+- Current artifact folder: `/tmp/google-play-internal-v80-live-stage-source-truth-fix-20260707-002444/`.
+- Starting canonical `origin/main`: `12334d69a6f6ac499ba1aad481e850cffbc41f10`.
+- Latest source behavior separates actual visual hero identity, focus/Featured styling, room authority, request state, and LiveKit publish-contract readiness.
+- Request close suppression is request-versioned: X close is local close-only, duplicate/replayed pending broadcasts do not reopen the sheet, `Not now` clears/declines the request, and a new viewer request can reopen the sheet.
+- A viewer is not treated as fully seated/publish-ready until the LiveKit join contract matches desired speaker/canPublish authority. Downgraded viewer/no-publish contracts show a syncing state instead of fake publish readiness.
+- Pending approval is sheet-only. Inline pending `Approve Seat` / `Seat Participant` controls are removed from participant cards.
+- Participant-specific member tiles require identity-matched LiveKit tracks and do not borrow arbitrary remote fallback video.
+- `npm run proof:live-stage-seat-approval` now imports pure helpers from `_lib/watch-party/live-stage-presentation.ts` instead of testing a duplicate fake model.
+- Backend LiveKit health is green with local proof env: `eligibleServerCount=1`, heartbeat under the 120-second cutoff, `chillywood-prod-01` healthy, and no fresh `no_eligible_livekit_server` blocker.
+- No livekit-token source change or deploy was required in this lane; `deno check supabase/functions/livekit-token/index.ts` passed.
+- Prior installed proof remains useful but not final: room `993HVB` proved viewer self-hero behavior, and room `W555BH` proved R3 reached Live Stage with `2 in room`, host hero, and viewer/self visible as `You`.
+- Installed proof is still pending until this source is committed, pushed to `origin/main`, OTA-published, and loaded on Google Play-installed v80+ devices.
 
 Source-fixed behavior:
 - Viewers have a local-only `Make me hero` / `Show host hero` Live Stage control.
@@ -54,12 +51,15 @@ Source-fixed behavior:
 - X close must close only the sheet locally; the pending request/card must remain and the sheet must not immediately auto-reopen until the card is tapped or a new request is sent.
 - Host mode must filter party-box membership by the actual visual hero (`host/self`), not by the focused participant. Focusing or tapping a remote viewer must not remove that remote viewer from the host members box.
 - `Featured` is a secondary focus/presentation affordance only; card primary status remains room-state based.
+- Pending approval is sheet-only; participant cards show request status and open the sheet, but do not render inline pending approve/dismiss controls.
+- Participant-specific cards render only identity-matched LiveKit tracks. Missing tracks show an identity-safe fallback instead of another participant's camera.
+- Desired speaker/canPublish state must match the active LiveKit contract before the UI treats the viewer as publish-ready.
 
 Next exact step:
-1. Do not change LiveKit backend routing, heartbeat, Premium entitlement logic, Watch-Party Party Room, Chi'lly Chat, native calls, auth/RLS, provider production settings, or money/payout/cashout behavior.
-2. Recover a working R5/R3 Google Play / RevenueCat sandbox Premium window without manual entitlement grants or production provider mutation. If either device still shows `Premium purchases are temporarily unavailable while setup is being finalized`, treat installed closure as sandbox-provider blocked.
-3. Rerun the installed Live Stage proof on Play-installed v80+ latest OTA: host reaches Stage, UI shows `2 in room`, host/self is hero/background, Chi'lly Party Members shows remote viewer/requester and not `You HOST`, tapping the remote card does not hide it, `Featured` does not replace Viewer/Listener/Requesting/Speaker status, viewer self-hero regression still passes, X close preserves request/card, `Not now` clears request while keeping participant visible, viewer requests again, host approves with `Bring on stage`, and both remain Stage / `2 in room`.
-4. Keep backend health green with `npm run check:livekit-routing-health` before rerun.
+1. Commit the Live Stage source/guard/docs repair, push it to `origin/main`, and confirm `HEAD == origin/main`.
+2. Publish a fresh Android EAS Update from the aligned commit and record group/update/runtime.
+3. Only after OTA is available, run installed proof on Play-installed v80+ latest OTA: host reaches Stage, UI shows `2 in room`, host/self is hero/background, Chi'lly Party Members shows remote viewer/requester and not `You HOST`, tapping the remote card does not hide it, `Featured` does not replace Viewer/Listener/Requesting/Speaker status, viewer self-hero regression still passes, X close preserves request/card and duplicate pending does not reopen it, `Not now` clears request while keeping participant visible, viewer requests again, host approves with `Bring on stage`, viewer receives matching speaker/canPublish authority, host sees correct viewer feed or identity-safe fallback, and both remain Stage / `2 in room`.
+4. Do not change LiveKit backend routing, heartbeat, Premium entitlement logic, Watch-Party Party Room, Chi'lly Chat, native calls, auth/RLS, provider production settings, or money/payout/cashout behavior.
 
 # LiveKit Production Endpoint / Heartbeat Recovery Closed
 

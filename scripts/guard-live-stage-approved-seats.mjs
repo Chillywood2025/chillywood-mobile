@@ -48,6 +48,7 @@ const joinBoundary = readSource("_lib/livekit/join-boundary.ts");
 const oldRoomGuard = readSource("scripts/guard-old-room-handling.mjs");
 const watchPartyLiveKitGuard = readSource("scripts/guard-watch-party-livekit-camera.mjs");
 const seatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
+const liveStagePresentation = readSource("_lib/watch-party/live-stage-presentation.ts");
 
 assertStaticRole({
   label: "host",
@@ -122,14 +123,20 @@ assertBefore(
 );
 assertIncludes(livekitToken, "\"enforce-participant-state\"", "LiveKit token participant enforcement endpoint");
 assertIncludes(livekitToken, "removeParticipant(room.roomName, targetUserId)", "LiveKit token stale publish-capable participant removal");
+assertIncludes(liveStagePresentation, "applyLiveStageSeatRequestEvent", "Live Stage presentation helper must own request event state");
+assertIncludes(liveStagePresentation, "closeLiveStageSeatRequestSheet", "Live Stage presentation helper must own X close suppression");
+assertIncludes(liveStagePresentation, "liveKitContractMatchesDesiredAuthority", "Live Stage presentation helper must own contract authority matching");
+assertIncludes(liveStagePresentation, "canRenderParticipantSpecificLiveKitTrack", "Live Stage presentation helper must own identity-safe track rendering");
 
 assertIncludes(liveStage, "currentTrackedParticipantState?.role === \"speaker\"", "Live Stage local speaker authority state");
 assertIncludes(liveStage, "currentStageMembership?.canSpeak", "Live Stage canSpeak membership authority");
 assertIncludes(liveStage, "currentStageMembership?.stageRole === \"speaker\"", "Live Stage stageRole membership authority");
 assertIncludes(liveStage, "const publishLocalStageAudio = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;", "Live Stage local audio publish gate");
 assertIncludes(liveStage, "const publishLocalStageCamera = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;", "Live Stage local camera publish gate");
-assertIncludes(liveStage, "const staleRoleContract = !!liveKitJoinContract && liveKitJoinContract.participantRole !== liveKitParticipantRole;", "Live Stage role mismatch contract refresh");
+assertIncludes(liveStage, "const staleRoleContract = !!liveKitJoinContract && liveKitJoinContract.participantRole !== desiredLiveKitAuthority.participantRole;", "Live Stage role mismatch contract refresh");
 assertIncludes(liveStage, "const stalePublishContract = !!liveKitJoinContract && existingCanPublish !== desiredCanPublish;", "Live Stage publish mismatch contract refresh");
+assertIncludes(liveStage, "liveKitContractMatchesDesiredAuthority(liveKitJoinContract, desiredLiveKitAuthority)", "Live Stage publish readiness must require matching contract authority");
+assertIncludes(liveStage, "LIVE_STAGE_AUTHORITY_REFRESH_MAX_ATTEMPTS", "Live Stage authority refresh must be bounded");
 assertIncludes(liveStage, "setLiveKitJoinContract(null);", "Live Stage stale/fallback contract clear");
 assertIncludes(liveStage, "source: \"live-stage-authority-refresh\"", "Live Stage authority refresh token request marker");
 assertIncludes(liveStage, "await enforceLiveKitParticipantState({", "Live Stage stale publish-capable session enforcement");
@@ -158,9 +165,10 @@ assertNotIncludes(liveStage, "fallbackMediaSuccess", "Live Stage fallback must n
 assertIncludes(liveStage, "const canUseViewerSelfHero = !isHost && isHybridMode;", "Live Stage self-hero mode stays viewer-only");
 assertIncludes(liveStage, "const shouldUseViewerSelfHero = canUseViewerSelfHero && viewerSelfHeroEnabled;", "Live Stage self-hero mode is local UI state");
 assertIncludes(liveStage, "const participantIsLocal = participantId === localParticipant.identity;", "Live Stage member tile must detect local self before using remote track fallback");
-assertIncludes(liveStage, "const resolvedRemoteTrack = participantIsLocal ? null : matchingTrack ?? fallbackRemoteTrack;", "Live Stage self party card must not borrow a remote viewer/host feed");
-assertIncludes(liveStage, "const actualVisualHeroParticipantId = isHost", "Live Stage must separate actual visual hero from active/focus participant");
-assertIncludes(liveStage, "participant.userId === actualVisualHeroParticipantId", "Live Stage party box must filter actual visual hero, not focused remote card");
+assertIncludes(liveStage, "canRenderParticipantSpecificLiveKitTrack", "Live Stage member tile must require exact participant identity for LiveKit video");
+assertNotIncludes(liveStage, "matchingTrack ?? fallbackRemoteTrack", "Live Stage member tile must not borrow arbitrary remote tracks");
+assertIncludes(liveStage, "resolveActualVisualHeroParticipantId", "Live Stage must separate actual visual hero from active/focus participant");
+assertIncludes(liveStage, "buildLiveStageCommunityParticipants", "Live Stage party box must use shared helper filtering");
 assertNotIncludes(liveStage, "participant.userId === heroParticipant?.userId) return false", "Live Stage host party box must not filter remote viewer by focus-derived hero participant");
 assertIncludes(liveStage, "Featured is local focus styling only. Keep the primary card label tied to room state.", "Live Stage card role label must stay room-state based");
 assertNotIncludes(
@@ -169,7 +177,7 @@ assertNotIncludes(
   "Live Stage card role label must not use Featured as the primary participant status",
 );
 assertIncludes(liveStage, "const selfHeroFallbackBody = currentStageParticipantState.role === \"speaker\"", "Live Stage self-hero fallback must be local state copy, not LiveKit syncing copy");
-assertIncludes(liveStage, "shouldUseViewerSelfHero\n      ? currentUserParticipantId", "Live Stage self-hero removes self from party box through actual visual hero filtering");
+assertIncludes(liveStage, "shouldUseViewerSelfHero,", "Live Stage self-hero state must feed shared party-box helper");
 assertIncludes(liveStage, "showHeroLocalRtcVideo && RTCView", "Live Stage self-hero uses local visual immediately when available");
 assertIncludes(liveStage, "\"Local self view\"", "Live Stage self-hero fallback explains local-only layout instead of syncing or approval");
 assertIncludes(liveStage, "forceLocalHeroFallback={false}", "Live Stage self-hero must not force the LiveKit syncing fallback");
@@ -179,16 +187,19 @@ assertIncludes(liveStage, "\"live-stage-self-party-card\"", "Live Stage default 
 assertIncludes(liveStage, "`live-stage-pending-seat-card-${participant.userId}`", "Live Stage pending requester card exposes a stable proof id");
 assertIncludes(liveStage, "openSeatRequestSheet(participant.userId);", "Live Stage pending requester card opens the seat sheet");
 assertIncludes(liveStage, "const shouldShowInlineHostControls = isHost", "Live Stage host inline controls must be explicitly gated");
-assertIncludes(liveStage, "&& (isRequesting || isSpeakerRole || isRemoved)", "Live Stage host controls must not expose direct seating for non-requesting audience listeners");
+assertIncludes(liveStage, "&& !isRequesting", "Live Stage host controls must not expose inline controls for pending approval requests");
+assertNotIncludes(liveStage, "Approve Seat", "Live Stage pending approval must not render inline Approve Seat");
 assertNotIncludes(liveStage, "isSpeakerRole ? \"Move to Audience\" : \"Seat Participant\"", "Live Stage host card must not directly seat non-requesting audience listeners");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-sheet\"", "Live Stage seat-request sheet is exposed for proof");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-approve\"", "Live Stage seat-request sheet has approve action");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-dismiss\"", "Live Stage seat-request sheet has dismiss action");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-close\"", "Live Stage seat-request sheet has close action");
-assertIncludes(liveStage, "const [seatRequestSheetClosedById, setSeatRequestSheetClosedById]", "Live Stage tracks locally closed seat request sheets");
+assertIncludes(liveStage, "LiveStageSeatRequestState", "Live Stage tracks versioned seat requests");
+assertIncludes(liveStage, "createSeatRequestVersion", "Live Stage requests must carry a request version");
+assertIncludes(liveStage, "applyLiveStageSeatRequestEvent", "Live Stage request broadcasts must use shared versioned state helper");
 assertIncludes(liveStage, "const closeSeatRequestSheet = useCallback", "Live Stage close action must use local close helper");
 assertIncludes(liveStage, "onPress={() => closeSeatRequestSheet(pendingSeatRequestParticipant.userId)}", "Live Stage X close action only closes the request sheet locally");
-assertIncludes(liveStage, "pendingSeatRequestParticipants.find((participant) => !seatRequestSheetClosedById[participant.userId])", "Live Stage must not immediately auto-reopen a locally closed pending request");
+assertIncludes(liveStage, "shouldAutoOpenLiveStageSeatRequest", "Live Stage must not immediately auto-reopen a locally closed pending request");
 assertIncludes(liveStage, "openSeatRequestSheet(participant.userId);", "Live Stage pending requester card reopens a locally closed seat sheet");
 assertIncludes(liveStage, "closeSeatRequestSheet(seatRequestSheetParticipantId);", "Live Stage Android back closes the request sheet without clearing the request");
 assertIncludes(liveStage, "pointerEvents=\"auto\"\n            style={[styles.stageSeatRequestSheetWrap", "Live Stage seat request wrapper must receive host taps");
@@ -212,12 +223,14 @@ assertIncludes(seatApprovalProof, "dismiss should close the seat-request sheet",
 assertIncludes(seatApprovalProof, "close should keep the pending request", "Live Stage proof covers X close preserving request");
 assertIncludes(seatApprovalProof, "default viewer layout should include viewer self in party box", "Live Stage proof covers default self tile visibility");
 assertIncludes(seatApprovalProof, "host party box should not duplicate host/self as You HOST", "Live Stage proof covers host self not duplicated in remote member box");
-assertIncludes(seatApprovalProof, "host focus must not filter the remote viewer out of the party box", "Live Stage proof covers focused remote viewer retention");
-assertIncludes(seatApprovalProof, "pending remote viewer should remain visible after host card tap opens sheet", "Live Stage proof covers pending remote viewer card retention");
-assertIncludes(seatApprovalProof, "featured focus must not replace primary participant role label", "Live Stage proof covers Featured not replacing primary role/status");
+assertIncludes(seatApprovalProof, "focused remote viewer should remain in host party box", "Live Stage proof covers focused remote viewer retention");
+assertIncludes(seatApprovalProof, "host card tap must not hide the participant", "Live Stage proof covers pending remote viewer card retention");
+assertIncludes(seatApprovalProof, "featured listener must still be Audience", "Live Stage proof covers Featured not replacing primary role/status");
 assertIncludes(seatApprovalProof, "host pending-request card tap should open the seat-request sheet", "Live Stage proof covers card tap sheet behavior");
-assertIncludes(seatApprovalProof, "non-requesting audience viewer must not expose direct inline Seat Participant", "Live Stage proof covers no direct seat action before viewer requests camera");
-assertIncludes(seatApprovalProof, "viewer self tile must not borrow a remote LiveKit track fallback", "Live Stage proof covers local self tile not using remote feed fallback");
+assertIncludes(seatApprovalProof, "pending approve/dismiss actions must not render inline", "Live Stage proof covers sheet-only pending approval");
+assertIncludes(seatApprovalProof, "participant card must not borrow another remote participant's track", "Live Stage proof covers identity-matched member tracks");
+assertIncludes(seatApprovalProof, "duplicate pending broadcast must not reopen a locally closed request", "Live Stage proof covers request-versioned X close suppression");
+assertIncludes(seatApprovalProof, "viewer/no-publish token must not be publish-ready for approved speaker", "Live Stage proof covers downgraded contract rejection");
 assertIncludes(seatApprovalProof, "close should collapse transient host controls", "Live Stage proof covers X close clearing the transient host overlay");
 assertIncludes(seatApprovalProof, "self-hero party box should put the real host first", "Live Stage proof covers self-hero host ordering");
 assertIncludes(seatApprovalProof, "self-hero fallback copy must not be Live feed syncing", "Live Stage proof covers instant self-hero fallback copy");
