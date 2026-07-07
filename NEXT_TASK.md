@@ -32,6 +32,7 @@ Current latest truth:
 - The deployed `livekit-token` Edge Function and shared function files hash-match `origin/main`; `enforce-participant-state` / `persistMembershipState` remains deployed and represented in source for Live Stage seat authority fallback.
 - Post-alignment validation passed, including LiveKit health, Live Stage guard/proof, runtime, route contracts, TypeScript, Deno check, diff checks, and changed-file secret scan.
 - Previous installed OTA before this final source polish: group `39b39ecf-294f-4eaa-bcb1-cc835a311efd`, Android update `019f3946-e907-7468-9d3a-0515ea050aa2`, commit `a6c57ad7bef9ec6dd245cad332850aaf9cf474e5`.
+- Fresh aligned-source EAS Update is published to production Android runtime `1.0.0`: group `8e8bb31c-74e8-4699-b2bc-d53fdf32a84b`, Android update `019f3a7f-be4d-7917-bf8a-0f55124f5a9a`, source commit `fae20e2930f9511077bc0c1e5732cbdb793f6294`, message `Fix Live Stage host viewer presentation a496991`.
 - Latest EAS Update production Android runtime `1.0.0`: group `39b39ecf-294f-4eaa-bcb1-cc835a311efd`, Android update `019f3946-e907-7468-9d3a-0515ea050aa2`.
 - Backend LiveKit health was green after the OTA: `eligibleServerCount=1`, `noEligibleServerCountRecent=0`, heartbeat age under the 120-second cutoff, `chillywood-prod-01` healthy, and no rejection reasons.
 - Both phones read back Google Play-installed package `com.chillywood.mobile` from `com.android.vending`; latest installed proof readback was versionCode `80`, versionName `1.0.0`.
@@ -56,10 +57,9 @@ Source-fixed behavior:
 
 Next exact step:
 1. Do not change LiveKit backend routing, heartbeat, Premium entitlement logic, Watch-Party Party Room, Chi'lly Chat, native calls, auth/RLS, provider production settings, or money/payout/cashout behavior.
-2. Publish a fresh EAS Update from `origin/main` `fae20e2930f9511077bc0c1e5732cbdb793f6294` or newer before installed proof; do not use a local-only OTA.
-3. Recover a working R5/R3 Google Play / RevenueCat sandbox Premium window without manual entitlement grants or production provider mutation. If either device still shows `Premium purchases are temporarily unavailable while setup is being finalized`, treat installed closure as sandbox-provider blocked.
-4. Rerun the installed Live Stage proof on Play-installed v80+ latest OTA: host reaches Stage, UI shows `2 in room`, host/self is hero/background, Chi'lly Party Members shows remote viewer/requester and not `You HOST`, tapping the remote card does not hide it, `Featured` does not replace Viewer/Listener/Requesting/Speaker status, viewer self-hero regression still passes, X close preserves request/card, `Not now` clears request while keeping participant visible, viewer requests again, host approves with `Bring on stage`, and both remain Stage / `2 in room`.
-5. Keep backend health green with `npm run check:livekit-routing-health` before rerun.
+2. Recover a working R5/R3 Google Play / RevenueCat sandbox Premium window without manual entitlement grants or production provider mutation. If either device still shows `Premium purchases are temporarily unavailable while setup is being finalized`, treat installed closure as sandbox-provider blocked.
+3. Rerun the installed Live Stage proof on Play-installed v80+ latest OTA: host reaches Stage, UI shows `2 in room`, host/self is hero/background, Chi'lly Party Members shows remote viewer/requester and not `You HOST`, tapping the remote card does not hide it, `Featured` does not replace Viewer/Listener/Requesting/Speaker status, viewer self-hero regression still passes, X close preserves request/card, `Not now` clears request while keeping participant visible, viewer requests again, host approves with `Bring on stage`, and both remain Stage / `2 in room`.
+4. Keep backend health green with `npm run check:livekit-routing-health` before rerun.
 
 # LiveKit Production Endpoint / Heartbeat Recovery Closed
 
