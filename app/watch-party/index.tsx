@@ -1306,6 +1306,12 @@ export default function WatchPartyIndexScreen() {
   const isMissingWatchPartyContent = !isLiveWaitingRoom && !partyTitleLocked && !preparedTargetPartyId;
   const createActionBusy = creating || shouldGuardCreateDuringInitialPrep;
   const createActionDisabled = createActionBusy || isMissingWatchPartyContent || !features.watchPartyEnabled;
+  const liveCreateActionLabel = preparedTargetPartyId ? "Continue to Live Room" : "Create Live Room";
+  const createActionLabel = isMissingWatchPartyContent
+    ? "Choose Content First"
+    : isLiveWaitingRoom
+      ? liveCreateActionLabel
+      : "Create Party Room";
   const topHostLabel = preparedRoom
     ? hostLabel
     : incomingHandoff
@@ -1722,7 +1728,7 @@ export default function WatchPartyIndexScreen() {
               </View>
             )}
             {createError ? <AppText scale="footnote" style={styles.errorText}>{createError}</AppText> : null}
-            <TouchableOpacity
+            <Pressable
               style={[styles.primaryButton, createActionDisabled && styles.primaryButtonDisabled]}
               onPressIn={() => {
                 debugLog("watch-party", "watch_party_create_room_press_in", {
@@ -1732,11 +1738,10 @@ export default function WatchPartyIndexScreen() {
                 });
               }}
               onPress={onCreateRoom}
-              activeOpacity={0.85}
               disabled={createActionDisabled}
               testID="watch-party-create-room"
               accessibilityRole="button"
-              accessibilityLabel={isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}
+              accessibilityLabel={createActionLabel}
               accessibilityState={{ disabled: createActionDisabled, busy: createActionBusy }}
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
@@ -1749,10 +1754,10 @@ export default function WatchPartyIndexScreen() {
                 </View>
               ) : (
                 <AppText scale="body" style={styles.primaryButtonText}>
-                  {isMissingWatchPartyContent ? "Choose Content First" : isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}
+                  {createActionLabel}
                 </AppText>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <View style={styles.joinCard}>
