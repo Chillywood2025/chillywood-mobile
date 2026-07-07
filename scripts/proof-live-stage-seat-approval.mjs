@@ -58,6 +58,10 @@ const hostTapParticipantCard = (state, participantId) => {
   const canModerateParticipant = participantState?.role !== "host";
   const isRequesting = !!state.seatRequestsById[participantId] && participantState?.role === "listener" && !participantState?.isRemoved;
   if (canModerateParticipant) {
+    if (state.activeParticipantId === participantId && !isRequesting) {
+      collapseHostParticipantControls(state, participantId);
+      return { detailModalOpened: false, seatRequestSheetOpened: false, controlsCollapsed: true };
+    }
     state.activeParticipantId = participantId;
     if (isRequesting) {
       state.participantPresentationById[participantId] = "compact";
@@ -133,7 +137,14 @@ const closeSeatRequestSheet = (state, participantId) => {
   if (state.seatRequestSheetParticipantId === participantId) {
     state.seatRequestSheetParticipantId = "";
   }
+  collapseHostParticipantControls(state, participantId);
 };
+
+const canShowInlineSeatToggle = (state, participantId) => state.participantStateById[participantId]?.role === "speaker";
+
+const participantTileCanUseRemoteFallback = ({ participantId, localParticipantIdentity }) => (
+  participantId !== localParticipantIdentity
+);
 
 const approveSeat = (state, event, participantId) => {
   event.stopPropagation();
@@ -215,6 +226,13 @@ assert(nonRequestingTapResult.seatRequestSheetOpened === false, "non-requesting 
 assert(nonRequestingFocusState.activeParticipantId === viewerId, "non-requesting remote viewer tap may focus the card");
 assert(!nonRequestingFocusState.hiddenParticipantIds[viewerId], "non-requesting remote viewer tap must not hide the participant");
 assert(resolveHostLayout({ activeParticipantId: nonRequestingFocusState.activeParticipantId }).partyBox.some((participant) => participant.userId === viewerId), "focused non-requesting remote viewer should remain in host party box");
+assert(canShowInlineSeatToggle(nonRequestingFocusState, viewerId) === false, "non-requesting audience viewer must not expose direct inline Seat Participant");
+const nonRequestingSecondTapResult = hostTapParticipantCard(nonRequestingFocusState, viewerId);
+assert(nonRequestingSecondTapResult.controlsCollapsed === true, "second tap on focused non-requesting viewer should collapse host controls");
+assert(nonRequestingFocusState.activeParticipantId === "", "focused non-requesting viewer controls should collapse cleanly");
+
+assert(participantTileCanUseRemoteFallback({ participantId: viewerId, localParticipantIdentity: hostId }) === true, "remote participant card may use a remote track fallback");
+assert(participantTileCanUseRemoteFallback({ participantId: viewerId, localParticipantIdentity: viewerId }) === false, "viewer self tile must not borrow a remote LiveKit track fallback");
 
 const state = createProofState();
 state.seatRequestsById[viewerId] = true;
@@ -276,6 +294,7 @@ assert(dismissState.seatRequestSheetParticipantId === "", "close should hide onl
 assert(dismissState.seatRequestsById[viewerId] === true, "close should keep the pending request");
 assert(dismissState.participantStateById[viewerId].role === "listener", "close should not seat the viewer");
 assert(!dismissState.hiddenParticipantIds[viewerId], "close should keep the participant card visible");
+assert(dismissState.activeParticipantId === "", "close should collapse transient host controls");
 
 dismissState.seatRequestSheetParticipantId = viewerId;
 clearPendingSeatRequest(dismissState, viewerId);

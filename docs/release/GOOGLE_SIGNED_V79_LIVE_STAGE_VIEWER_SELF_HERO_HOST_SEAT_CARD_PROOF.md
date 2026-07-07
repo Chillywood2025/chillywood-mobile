@@ -4,6 +4,21 @@ Date: 2026-07-05; continued 2026-07-06
 
 Verdict: Partial.
 
+## July 6 Follow-Up: Host Viewer Feed / Inline Seat Control Fix
+
+Installed Google Play v80 testing found one more app-controlled Live Stage UX defect after repo alignment and OTA proof started. The host phone correctly kept host/self as the hero and no longer showed `You HOST` in Chi'lly Party Members, but the remote viewer card could expose inline `Seat Participant` controls while the viewer was still an audience listener and had not requested camera. That host-side direct seat path could make the host show the viewer as `Seated` without the viewer going through the request/approval publish path, leaving the host card without a real viewer live feed. The transient host controls could also remain visually open after the seat sheet was closed, and the viewer `You` tile could borrow a remote LiveKit fallback track instead of staying a local self tile.
+
+Follow-up source/guard patch:
+
+- local self member tiles no longer use remote LiveKit track fallback;
+- viewer `Request camera` now has `testID="live-stage-request-camera-button"` for installed proof taps;
+- host X close collapses transient controls while preserving the pending request/card;
+- non-requesting audience listeners no longer expose direct inline `Seat Participant`;
+- speaker demotion remains available as `Move to Audience`;
+- seat approval remains the explicit viewer request -> host seat sheet -> `Bring on stage` flow.
+
+Validation passed for the follow-up patch: `npm run check:livekit-routing-health`, `npm run guard:livekit-heartbeat-monitor-policy`, `npm run guard:premium-sandbox-policy`, `npm run guard:watch-party-livekit`, `npm run guard:old-room-handling`, `npm run proof:live-stage-seat-approval`, `npm run validate:runtime`, `npm run guard:route-contracts --if-present`, `npx tsc --noEmit`, `git diff --check`, `git diff --cached --check`, and changed-file secret scan. No Premium source logic, Premium bypass, manual entitlement grant, LiveKit routing/heartbeat/cutoff change, Watch-Party Party Room change, Android App Links change, Chi'lly Chat/native-call change, auth/RLS change, provider/billing mutation, live money, payout, cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall occurred.
+
 ## Summary
 
 Live Stage UX is source-fixed, guard-covered, OTA-published, and backend LiveKit routing remains healthy. The July 6 continuation fixed two additional installed defects found during proof: the Live Watch-Party hybrid member deck could auto-hide after entry, and the host seat-request sheet could immediately reopen after X close because pending-request auto-open ignored a local close. Installed closure remains Partial because after the latest OTA the R5 Google Play sandbox Premium entitlement expired at stage entry, Restore returned `Premium is not active`, and the sandbox purchase CTA entered `Premium purchases are temporarily unavailable while setup is being finalized.` No Premium source logic, entitlement bypass, LiveKit backend routing, Watch-Party Party Room logic, Chi'lly Chat/native calls, auth/RLS, billing provider production setup, live money, payout, or cashout behavior changed.

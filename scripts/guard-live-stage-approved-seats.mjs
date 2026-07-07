@@ -157,6 +157,8 @@ assertIncludes(livekitSurface, "bubbleGridTrackCount: bubbleGridTracks.length", 
 assertNotIncludes(liveStage, "fallbackMediaSuccess", "Live Stage fallback must not be represented as media success");
 assertIncludes(liveStage, "const canUseViewerSelfHero = !isHost && isHybridMode;", "Live Stage self-hero mode stays viewer-only");
 assertIncludes(liveStage, "const shouldUseViewerSelfHero = canUseViewerSelfHero && viewerSelfHeroEnabled;", "Live Stage self-hero mode is local UI state");
+assertIncludes(liveStage, "const participantIsLocal = participantId === localParticipant.identity;", "Live Stage member tile must detect local self before using remote track fallback");
+assertIncludes(liveStage, "const resolvedRemoteTrack = participantIsLocal ? null : matchingTrack ?? fallbackRemoteTrack;", "Live Stage self party card must not borrow a remote viewer/host feed");
 assertIncludes(liveStage, "const actualVisualHeroParticipantId = isHost", "Live Stage must separate actual visual hero from active/focus participant");
 assertIncludes(liveStage, "participant.userId === actualVisualHeroParticipantId", "Live Stage party box must filter actual visual hero, not focused remote card");
 assertNotIncludes(liveStage, "participant.userId === heroParticipant?.userId) return false", "Live Stage host party box must not filter remote viewer by focus-derived hero participant");
@@ -172,9 +174,13 @@ assertIncludes(liveStage, "showHeroLocalRtcVideo && RTCView", "Live Stage self-h
 assertIncludes(liveStage, "\"Local self view\"", "Live Stage self-hero fallback explains local-only layout instead of syncing or approval");
 assertIncludes(liveStage, "forceLocalHeroFallback={false}", "Live Stage self-hero must not force the LiveKit syncing fallback");
 assertIncludes(liveStage, "testID=\"live-stage-self-hero-toggle\"", "Live Stage self-hero toggle is exposed for proof");
+assertIncludes(liveStage, "testID=\"live-stage-request-camera-button\"", "Live Stage request-camera button is exposed for installed proof");
 assertIncludes(liveStage, "\"live-stage-self-party-card\"", "Live Stage default viewer layout exposes self party-card proof id");
 assertIncludes(liveStage, "`live-stage-pending-seat-card-${participant.userId}`", "Live Stage pending requester card exposes a stable proof id");
 assertIncludes(liveStage, "openSeatRequestSheet(participant.userId);", "Live Stage pending requester card opens the seat sheet");
+assertIncludes(liveStage, "const shouldShowInlineHostControls = isHost", "Live Stage host inline controls must be explicitly gated");
+assertIncludes(liveStage, "&& (isRequesting || isSpeakerRole || isRemoved)", "Live Stage host controls must not expose direct seating for non-requesting audience listeners");
+assertNotIncludes(liveStage, "isSpeakerRole ? \"Move to Audience\" : \"Seat Participant\"", "Live Stage host card must not directly seat non-requesting audience listeners");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-sheet\"", "Live Stage seat-request sheet is exposed for proof");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-approve\"", "Live Stage seat-request sheet has approve action");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-dismiss\"", "Live Stage seat-request sheet has dismiss action");
@@ -210,6 +216,9 @@ assertIncludes(seatApprovalProof, "host focus must not filter the remote viewer 
 assertIncludes(seatApprovalProof, "pending remote viewer should remain visible after host card tap opens sheet", "Live Stage proof covers pending remote viewer card retention");
 assertIncludes(seatApprovalProof, "featured focus must not replace primary participant role label", "Live Stage proof covers Featured not replacing primary role/status");
 assertIncludes(seatApprovalProof, "host pending-request card tap should open the seat-request sheet", "Live Stage proof covers card tap sheet behavior");
+assertIncludes(seatApprovalProof, "non-requesting audience viewer must not expose direct inline Seat Participant", "Live Stage proof covers no direct seat action before viewer requests camera");
+assertIncludes(seatApprovalProof, "viewer self tile must not borrow a remote LiveKit track fallback", "Live Stage proof covers local self tile not using remote feed fallback");
+assertIncludes(seatApprovalProof, "close should collapse transient host controls", "Live Stage proof covers X close clearing the transient host overlay");
 assertIncludes(seatApprovalProof, "self-hero party box should put the real host first", "Live Stage proof covers self-hero host ordering");
 assertIncludes(seatApprovalProof, "self-hero fallback copy must not be Live feed syncing", "Live Stage proof covers instant self-hero fallback copy");
 assertIncludes(seatApprovalProof, "host approve should use server-backed persistence when client write fails", "Live Stage proof covers host approve fallback after client persistence failure");

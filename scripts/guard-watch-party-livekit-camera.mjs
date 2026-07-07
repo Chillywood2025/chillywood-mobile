@@ -220,7 +220,7 @@ const liveStageHostCardPress = sliceBetween(
 );
 const liveStageHostActionMenu = sliceBetween(
   liveStage,
-  "{isHost && isActiveParticipant && canModerateParticipant ? (",
+  "{shouldShowInlineHostControls ? (",
   "<View style={[styles.stagePresenceTapWrap",
   "Live Stage host action menu boundary",
 );

@@ -1,5 +1,9 @@
 # LiveKit Production Readiness Runbook
 
+## July 6, 2026 Live Stage Host/Viewer Follow-Up
+
+Installed v80 proof found one remaining app-controlled Live Stage UX issue after the host/viewer presentation OTA: host-side inline card controls still allowed direct `Seat Participant` for a non-requesting audience viewer, which could leave host state ahead of the viewer publish path and produce a remote card without real viewer live feed. The follow-up patch keeps Live Stage seat authority on the explicit viewer request -> host seat sheet -> `Bring on stage` path, collapses transient host controls when X closes the request sheet while preserving the request, adds `live-stage-request-camera-button` for installed proof, and prevents the viewer `You` tile from borrowing a remote LiveKit fallback track. LiveKit routing, heartbeat, stale cutoff, registry, Premium gates, Watch-Party Party Room, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing, payout, and cashout behavior were not changed.
+
 ## July 5, 2026 Live Stage UX Note
 
 The current Live Stage room UX source lane is fixed but not installed-closed. Follow-up source commits through `a6c57ad7bef9ec6dd245cad332850aaf9cf474e5` supersede the earlier `50db5cabf237b42d269aac15f45120ebcb983a03` self-hero pass by fixing the installed manual regressions and July 6 proof defects: default host-hero layout includes viewer/self in the party box, self-hero uses immediate local camera/avatar/initials fallback instead of toggle-induced `Live feed is syncing`, the real host remains first in the party box during self-hero mode, the Live Watch-Party hybrid deck stays visible after entry, host pending-request card/sheet paths are stable, and X close locally closes the pending sheet without clearing the request or immediately auto-reopening. Latest EAS Update production Android runtime `1.0.0` published group `39b39ecf-294f-4eaa-bcb1-cc835a311efd`, Android update `019f3946-e907-7468-9d3a-0515ea050aa2`.

@@ -335,7 +335,8 @@ function LiveKitHybridParticipantVideo({
     [remoteCameraTracks, remoteTrackIndex],
   );
 
-  const resolvedRemoteTrack = matchingTrack ?? fallbackRemoteTrack;
+  const participantIsLocal = participantId === localParticipant.identity;
+  const resolvedRemoteTrack = participantIsLocal ? null : matchingTrack ?? fallbackRemoteTrack;
 
   useEffect(() => {
     debugLog("livekit", "live-stage member tile track state", {
@@ -344,6 +345,7 @@ function LiveKitHybridParticipantVideo({
       remoteCameraTrackCount: remoteCameraTracks.length,
       remoteCameraIdentities: remoteCameraTracks.map((trackRef) => trackRef.participant.identity),
       hasMatchingTrack: !!matchingTrack,
+      participantIsLocal,
       resolvedRemoteIdentity: resolvedRemoteTrack && isHybridLiveKitTrackReference(resolvedRemoteTrack)
         ? resolvedRemoteTrack.participant.identity
         : null,
@@ -352,6 +354,7 @@ function LiveKitHybridParticipantVideo({
     localParticipant.identity,
     matchingTrack,
     participantId,
+    participantIsLocal,
     remoteCameraTracks,
     resolvedRemoteTrack,
   ]);
@@ -1863,7 +1866,8 @@ export default function WatchPartyLiveStageScreen({
     if (!nextParticipantId) return;
     setSeatRequestSheetClosedById((prev) => ({ ...prev, [nextParticipantId]: true }));
     setSeatRequestSheetParticipantId((current) => (current === nextParticipantId ? "" : current));
-  }, []);
+    collapseHostParticipantControls(nextParticipantId);
+  }, [collapseHostParticipantControls]);
   const runStageParticipantAction = useCallback(async (participantId: string, action: () => Promise<void>) => {
     const cleanParticipantId = String(participantId ?? "").trim();
     if (!cleanParticipantId || stageParticipantActionBusyId) return;
@@ -4949,6 +4953,7 @@ export default function WatchPartyLiveStageScreen({
                 onPress={() => {
                   requestStageSeat(currentUserParticipantId).catch(() => {});
                 }}
+                testID="live-stage-request-camera-button"
               >
                 <Text
                   style={[
@@ -4987,6 +4992,7 @@ export default function WatchPartyLiveStageScreen({
                   selectedStageEffectId,
                   heroOwnsLocalFeed,
                   isHost,
+                  seatRequestSheetParticipantId,
                 }}
                 renderItem={({ item: participantRow }) => (
                   <View style={styles.stageHybridCommunityRow}>
@@ -5010,6 +5016,12 @@ export default function WatchPartyLiveStageScreen({
                       const presentation = participantPresentationById[participant.userId] ?? "compact";
                       const isExpanded = presentation === "expanded";
                       const canModerateParticipant = !!persistedParticipantMembership && participantState.role !== "host";
+                      const activeSeatSheetTargetsParticipant = seatRequestSheetParticipantId === participant.userId;
+                      const shouldShowInlineHostControls = isHost
+                        && isActiveParticipant
+                        && canModerateParticipant
+                        && (isRequesting || isSpeakerRole || isRemoved)
+                        && !(isRequesting && activeSeatSheetTargetsParticipant);
                       // Featured is local focus styling only. Keep the primary card label tied to room state.
                       const roleLabel = getParticipantLayerLabel({
                         state: participantState,
@@ -5064,6 +5076,10 @@ export default function WatchPartyLiveStageScreen({
                               }
                               if (canModerateParticipant) {
                                 setSelectedParticipantId("");
+                                if (activeParticipantId === participant.userId) {
+                                  collapseHostParticipantControls(participant.userId);
+                                  return;
+                                }
                               }
                             } else {
                               debugLiveStage("request mic", { userId: participant.userId });
@@ -5089,7 +5105,7 @@ export default function WatchPartyLiveStageScreen({
                           }}
                           delayLongPress={220}
                         >
-                          {isHost && isActiveParticipant && canModerateParticipant ? (
+                          {shouldShowInlineHostControls ? (
                             <View style={[styles.stageParticipantActionMenu, styles.stageParticipantActionMenuGrid]}>
                               {isRequesting ? (
                                 <>
@@ -5209,60 +5225,54 @@ export default function WatchPartyLiveStageScreen({
                                   <Text style={styles.stageParticipantActionStatusText}>Saving...</Text>
                                 ) : null}
                               </TouchableOpacity>
-                              <TouchableOpacity
-                                style={[styles.stageParticipantActionBtn, isParticipantActionBusy && styles.stageParticipantActionBtnBusy]}
-                                activeOpacity={0.82}
-                                disabled={isParticipantActionBusy}
-                                onPress={(event) => {
-                                  event.stopPropagation();
-                                  void runStageParticipantAction(participant.userId, async () => {
-                                    if (!isSpeakerRole && !canAddSpeakerSeat(participant.userId)) {
-                                      collapseHostParticipantControlsAfterFailure(participant.userId);
-                                      Alert.alert(
-                                        "Speaker seats full",
-                                        `Live rooms allow up to ${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} active speaker seats. Move someone to audience before seating another speaker.`,
-                                      );
-                                      return;
-                                    }
-                                    const nextRole = isSpeakerRole ? "listener" : "speaker";
-                                    const seatPersisted = await emitParticipantUpdate(participant.userId, { role: nextRole });
-                                    if (!seatPersisted) {
-                                      collapseHostParticipantControlsAfterFailure(participant.userId);
-                                      Alert.alert("Seat update unavailable", "The seat change could not be saved yet. Try again in a moment.");
-                                      await refreshStageSnapshot(myUserId).catch(() => null);
-                                      return;
-                                    }
-                                    setParticipantStateById((prev) => {
-                                      const current = prev[participant.userId] ?? {
-                                        isMuted: !!participant.isMuted,
-                                        role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
-                                        isRemoved: false,
-                                      };
-                                      return {
-                                        ...prev,
-                                        [participant.userId]: {
-                                          ...current,
-                                          role: current.role === "host" ? "host" : nextRole,
-                                        },
-                                      };
+                              {isSpeakerRole ? (
+                                <TouchableOpacity
+                                  style={[styles.stageParticipantActionBtn, isParticipantActionBusy && styles.stageParticipantActionBtnBusy]}
+                                  activeOpacity={0.82}
+                                  disabled={isParticipantActionBusy}
+                                  onPress={(event) => {
+                                    event.stopPropagation();
+                                    void runStageParticipantAction(participant.userId, async () => {
+                                      const nextRole = "listener";
+                                      const seatPersisted = await emitParticipantUpdate(participant.userId, { role: nextRole });
+                                      if (!seatPersisted) {
+                                        collapseHostParticipantControlsAfterFailure(participant.userId);
+                                        Alert.alert("Seat update unavailable", "The seat change could not be saved yet. Try again in a moment.");
+                                        await refreshStageSnapshot(myUserId).catch(() => null);
+                                        return;
+                                      }
+                                      setParticipantStateById((prev) => {
+                                        const current = prev[participant.userId] ?? {
+                                          isMuted: !!participant.isMuted,
+                                          role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
+                                          isRemoved: false,
+                                        };
+                                        return {
+                                          ...prev,
+                                          [participant.userId]: {
+                                            ...current,
+                                            role: current.role === "host" ? "host" : nextRole,
+                                          },
+                                        };
+                                      });
+                                      broadcastSeatState(participant.userId, {
+                                        role: nextRole,
+                                        isMuted,
+                                        pending: false,
+                                      });
+                                      setSeatRequestsById((prev) => {
+                                        if (!prev[participant.userId]) return prev;
+                                        const next = { ...prev };
+                                        delete next[participant.userId];
+                                        return next;
+                                      });
+                                      collapseHostParticipantControls(participant.userId);
                                     });
-                                    broadcastSeatState(participant.userId, {
-                                      role: nextRole,
-                                      isMuted,
-                                      pending: false,
-                                    });
-                                    setSeatRequestsById((prev) => {
-                                      if (!prev[participant.userId]) return prev;
-                                      const next = { ...prev };
-                                      delete next[participant.userId];
-                                      return next;
-                                    });
-                                    collapseHostParticipantControls(participant.userId);
-                                  });
-                                }}
-                              >
-                                <Text style={styles.stageParticipantActionText}>{isParticipantActionBusy ? "Saving..." : isSpeakerRole ? "Move to Audience" : "Seat Participant"}</Text>
-                              </TouchableOpacity>
+                                  }}
+                                >
+                                  <Text style={styles.stageParticipantActionText}>{isParticipantActionBusy ? "Saving..." : "Move to Audience"}</Text>
+                                </TouchableOpacity>
+                              ) : null}
                               <TouchableOpacity
                                 style={[styles.stageParticipantActionBtn, styles.stageParticipantActionBtnDanger, isParticipantActionBusy && styles.stageParticipantActionBtnBusy]}
                                 activeOpacity={0.82}

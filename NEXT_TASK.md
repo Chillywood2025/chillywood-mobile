@@ -3400,6 +3400,23 @@ Account restriction and appeals operations: Closed for current production policy
 Next lane: Continue production readiness with legal/privacy/account deletion and data safety final alignment, unless a narrower blocker is found.
 # Next Task
 
+## Live Stage Installed Proof Follow-Up
+
+Next lane: publish an OTA from the aligned Live Stage follow-up commit, then rerun installed proof on Google Play-installed R5/R3 with both devices Premium-active in the same Google Play / RevenueCat sandbox window.
+
+Proof must use testID taps where available:
+
+- `live-stage-self-hero-toggle`
+- `live-stage-request-camera-button`
+- `live-stage-pending-seat-card-*`
+- `live-stage-seat-request-close`
+- `live-stage-seat-request-dismiss`
+- `live-stage-seat-request-approve`
+
+Required installed truth: host remains hero/background and is not duplicated as `You HOST`; host member box shows the remote viewer/requester; non-requesting audience viewers do not expose a direct `Seat Participant` path; viewer self tile does not borrow a remote feed; `Make me hero` is instant and local-only; X close preserves request/card and collapses transient controls; `Not now` clears the request without removing the participant; `Bring on stage` seats the requesting viewer and reaches Stage / `2 in room`.
+
+Do not bypass Premium, manually grant entitlements, change LiveKit routing/heartbeat/cutoffs, touch Watch-Party Party Room, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing/provider settings, live money, payout, cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall.
+
 ## BrowserStack Monetization E2E
 
 Next proof lane: use the BrowserStack readiness artifacts to run Android App Live/App Automate smoke proof for the seven monetization flows. Start with fixture readback, grant a non-owner sandbox tester, run Maestro selector smoke flows locally when possible, then use BrowserStack App Live for Google Play sandbox purchase-sheet completion. Do not use coordinate taps unless documented as an emergency proof weakness.

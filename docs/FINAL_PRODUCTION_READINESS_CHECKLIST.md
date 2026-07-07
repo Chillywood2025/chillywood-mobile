@@ -1,5 +1,9 @@
 # Final Production Readiness Checklist
 
+## July 6, 2026 Live Stage Follow-Up
+
+Live Stage host/viewer UX has an additional source/guard fix pending installed OTA proof: host-side inline controls no longer offer direct `Seat Participant` for non-requesting audience viewers, X close collapses transient host controls while preserving the pending request/card, the request-camera control has a stable testID, and local self tiles no longer borrow remote LiveKit fallback video. This preserves Premium gates, LiveKit routing/heartbeat/cutoffs, Watch-Party Party Room behavior, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing/provider state, live money, payout, and cashout boundaries. Closed-testing proof can continue after OTA; public production remains gated on installed two-phone proof.
+
 ## OTA-First Proof Rule
 
 For JavaScript-only UI, routing, copy, or helper fixes, prefer EAS Update / OTA proof before creating a new Google Play internal build.
