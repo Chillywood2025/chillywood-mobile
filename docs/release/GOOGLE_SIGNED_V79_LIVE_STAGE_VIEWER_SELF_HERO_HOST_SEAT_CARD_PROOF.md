@@ -8,6 +8,8 @@ Verdict: Partial.
 
 Live Stage UX is source-fixed, guard-covered, OTA-published, and backend LiveKit routing remains healthy. The July 6 continuation fixed two additional installed defects found during proof: the Live Watch-Party hybrid member deck could auto-hide after entry, and the host seat-request sheet could immediately reopen after X close because pending-request auto-open ignored a local close. Installed closure remains Partial because after the latest OTA the R5 Google Play sandbox Premium entitlement expired at stage entry, Restore returned `Premium is not active`, and the sandbox purchase CTA entered `Premium purchases are temporarily unavailable while setup is being finalized.` No Premium source logic, entitlement bypass, LiveKit backend routing, Watch-Party Party Room logic, Chi'lly Chat/native calls, auth/RLS, billing provider production setup, live money, payout, or cashout behavior changed.
 
+July 6 repo-alignment continuation: source/guard proof is now on `origin/main` at `fae20e2930f9511077bc0c1e5732cbdb793f6294`. The temporary local-only commit `ba78ca3eb787052a54836e74b469d40c1d936f49` was applied to GitHub as an equivalent remote tree because shell GitHub credentials were unavailable. This final source polish keeps the host as the actual visual hero on the host device, excludes host/self from the host Chi'lly Party Members box, keeps remote viewer/requester cards visible while focused/tapped, and makes `Featured` a focus style only rather than a primary room-state label. The deployed `livekit-token` Edge Function and shared function files hash-match `origin/main`; the server-backed `enforce-participant-state` / `persistMembershipState` path is still deployed and represented in source for Live Stage seat authority fallback. Post-alignment validation passed. Installed proof remains the next phase after a fresh EAS Update from this aligned commit.
+
 ## Manual Regression Report
 
 Manual installed testing found two Live Stage UX defects after the earlier self-hero / seat-overlay source pass:
@@ -25,6 +27,7 @@ July 6 continuation commits:
 - `65c0697e19a1ad7ac3addf01a5910746fe3b273d` - kept the Live Watch-Party hybrid member deck visible after stage entry.
 - `c189731167bf374a5eac5a98fd6f0e1fcbfa227e` - raised the host seat sheet touch layer.
 - `a6c57ad7bef9ec6dd245cad332850aaf9cf474e5` - fixed seat sheet X-close semantics so a locally closed pending sheet does not immediately auto-reopen, while the pending card can reopen it.
+- `fae20e2930f9511077bc0c1e5732cbdb793f6294` - aligned the final Live Stage host/viewer presentation polish on `origin/main`; host/self is excluded from the host member box when host/self is the actual visual hero, remote viewer/requester cards remain visible on focus/tap, and `Featured` cannot replace primary room-state status.
 
 Files changed:
 
@@ -41,6 +44,8 @@ Implemented behavior:
 - in self-hero mode, viewer/self is local hero, real host is first in the party box, and viewer/self is not duplicated in the party box;
 - host pending requester card is an explicit accessible tap target and opens the seat-request sheet;
 - tapping the pending requester card does not hide/remove/collapse the participant card or clear the request;
+- host mode filters the party box by actual visual hero identity, not by the focused participant;
+- `Featured` is secondary focus styling only, while primary status remains room-state based;
 - X close only closes the sheet and keeps the request/card visible;
 - `Not now` clears/declines the pending request according to the existing room model while keeping the participant visible as listener/viewer;
 - `Bring on stage` still approves only the current pending participant.
