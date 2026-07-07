@@ -5010,9 +5010,9 @@ export default function WatchPartyLiveStageScreen({
                       const presentation = participantPresentationById[participant.userId] ?? "compact";
                       const isExpanded = presentation === "expanded";
                       const canModerateParticipant = !!persistedParticipantMembership && participantState.role !== "host";
+                      // Featured is local focus styling only. Keep the primary card label tied to room state.
                       const roleLabel = getParticipantLayerLabel({
                         state: participantState,
-                        isFeatured,
                         isRequesting,
                       });
                       const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
