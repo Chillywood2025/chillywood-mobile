@@ -175,6 +175,35 @@ const resolveViewerLayout = ({ viewerSelfHeroEnabled }) => {
   return { hero, partyBox };
 };
 
+const resolveHostLayout = ({ activeParticipantId = "" } = {}) => {
+  const host = { userId: hostId, role: "host" };
+  const viewer = { userId: viewerId, role: "viewer" };
+  const guest = { userId: "proof-live-stage-guest-0001", role: "viewer" };
+  const visibleParticipants = [host, viewer, guest];
+  const actualVisualHeroId = hostId;
+  const activeFocus = visibleParticipants.find((participant) => participant.userId === activeParticipantId) ?? host;
+  const partyBox = visibleParticipants.filter((participant) => participant.userId !== actualVisualHeroId);
+  return { actualVisualHeroId, activeFocus, partyBox };
+};
+
+const hostDefaultLayout = resolveHostLayout();
+assert(hostDefaultLayout.actualVisualHeroId === hostId, "host layout should use host/self as the actual visual hero");
+assert(!hostDefaultLayout.partyBox.some((participant) => participant.userId === hostId), "host party box should not duplicate host/self as You HOST");
+assert(hostDefaultLayout.partyBox.some((participant) => participant.userId === viewerId), "host party box should include the remote viewer");
+
+const hostFocusedLayout = resolveHostLayout({ activeParticipantId: viewerId });
+assert(hostFocusedLayout.activeFocus.userId === viewerId, "host can focus the remote viewer card");
+assert(hostFocusedLayout.actualVisualHeroId === hostId, "host visual hero should remain host/self after remote viewer focus");
+assert(hostFocusedLayout.partyBox.some((participant) => participant.userId === viewerId), "host focus must not filter the remote viewer out of the party box");
+assert(!hostFocusedLayout.partyBox.some((participant) => participant.userId === hostId), "host focus must not reveal You HOST in the party box");
+
+const nonRequestingFocusState = createProofState();
+const nonRequestingTapResult = hostTapParticipantCard(nonRequestingFocusState, viewerId);
+assert(nonRequestingTapResult.seatRequestSheetOpened === false, "non-requesting remote viewer tap should not open the seat sheet");
+assert(nonRequestingFocusState.activeParticipantId === viewerId, "non-requesting remote viewer tap may focus the card");
+assert(!nonRequestingFocusState.hiddenParticipantIds[viewerId], "non-requesting remote viewer tap must not hide the participant");
+assert(resolveHostLayout({ activeParticipantId: nonRequestingFocusState.activeParticipantId }).partyBox.some((participant) => participant.userId === viewerId), "focused non-requesting remote viewer should remain in host party box");
+
 const state = createProofState();
 state.seatRequestsById[viewerId] = true;
 state.seatRequestSheetParticipantId = viewerId;
@@ -191,6 +220,7 @@ assert(state.seatRequestSheetParticipantId === viewerId, "host card tap should t
 assert(state.seatRequestsById[viewerId] === true, "host card tap must not clear the pending request");
 assert(!state.hiddenParticipantIds[viewerId], "host card tap must not hide the participant");
 assert(state.participantStateById[viewerId].role === "listener", "host card tap must not seat or remove the viewer");
+assert(resolveHostLayout({ activeParticipantId: state.activeParticipantId }).partyBox.some((participant) => participant.userId === viewerId), "pending remote viewer should remain visible after host card tap opens sheet");
 
 const approveEvent = createPressEvent();
 const approved = approveSeat(state, approveEvent, viewerId);
@@ -271,6 +301,10 @@ console.log(JSON.stringify({
   approveUsesServerFallbackAfterClientPersistenceFailure: true,
   dismissClosesSeatRequestSheet: true,
   closeKeepsPendingSeatRequest: true,
+  hostVisualHeroIsSelf: true,
+  hostPartyBoxExcludesSelfHost: true,
+  hostPartyBoxIncludesRemoteViewer: true,
+  hostFocusKeepsRemoteViewerVisible: true,
   defaultViewerSelfVisibleInPartyBox: true,
   hostPendingCardOpensSeatSheet: true,
   viewerSelfHeroLocalOnly: true,

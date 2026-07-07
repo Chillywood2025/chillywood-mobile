@@ -2565,11 +2565,15 @@ export default function WatchPartyLiveStageScreen({
   const selfHeroFallbackBody = currentStageParticipantState.role === "speaker"
     ? "Camera seat active"
     : "Local self view";
+  const actualVisualHeroParticipantId = isHost
+    ? currentUserParticipantId
+    : shouldUseViewerSelfHero
+      ? currentUserParticipantId
+      : (heroParticipant?.userId ?? "");
   const communityCardParticipants = useMemo(() => {
     const nextParticipants = visibleStripParticipants.filter((participant) => {
       if (!participant.userId) return false;
-      if (shouldUseViewerSelfHero && participant.userId === currentUserParticipantId) return false;
-      if (!shouldUseViewerSelfHero && participant.userId === heroParticipant?.userId) return false;
+      if (participant.userId === actualVisualHeroParticipantId) return false;
       const participantState = participantStateById[participant.userId] ?? createDefaultParticipantState({
         role: participant.role,
         isSpeaking: participant.isSpeaking,
@@ -2586,8 +2590,8 @@ export default function WatchPartyLiveStageScreen({
       ...nextParticipants.filter((participant) => participant.userId !== hostParticipant.userId),
     ];
   }, [
+    actualVisualHeroParticipantId,
     currentUserParticipantId,
-    heroParticipant?.userId,
     hostParticipant,
     participantStateById,
     shouldUseViewerSelfHero,
