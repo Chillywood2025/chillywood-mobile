@@ -140,6 +140,11 @@ assertIncludes(
 );
 assertIncludes(
   watchPartyLiveSourceTruth,
+  "if (currentVersion && !eventVersion)",
+  "Watch-Party Live source-truth helper must reject unversioned clears against versioned pending requests",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
   "watchPartyLiveContractMatchesDesiredAuthority",
   "Watch-Party Live source-truth helper must own contract authority matching",
 );
@@ -152,6 +157,31 @@ assertIncludes(
   watchPartyLiveSourceTruth,
   "classifyWatchPartyLiveMediaSource",
   "Watch-Party Live source-truth helper must classify real media versus fixture/fallback proof",
+);
+assertIncludes(
+  player,
+  "watchPartyLiveMediaSourceDebugMetadata",
+  "Player runtime must wire Watch-Party Live media classification metadata",
+);
+assertIncludes(
+  player,
+  "watch-party-live media source classification",
+  "Player runtime must log Watch-Party Live media classification before installed proof",
+);
+assertIncludes(
+  player,
+  "playbackUrlPresent",
+  "Player runtime media classification log must include redacted playback URL presence",
+);
+assertIncludes(
+  player,
+  "usedBundledFallback",
+  "Player runtime media classification log must include bundled fallback status",
+);
+assertIncludes(
+  player,
+  'playbackUrl: playbackUrlPresent ? "redacted-present" : ""',
+  "Player runtime media classification must not log full playback URLs",
 );
 assertIncludes(
   player,
@@ -782,6 +812,16 @@ assertIncludes(
   playerWatchPartySeatPersistence,
   "broadcastPartySeatRequest(participantId, false, clearingRequestVersion)",
   "Player Watch-Party LiveKit host approvals must persistently clear versioned pending camera request markers",
+);
+assertIncludes(
+  playerWatchPartySeatPersistence,
+  'clearPendingPartySeatRequest(participantId, "seat-state-persisted", clearingRequestVersion)',
+  "Player Watch-Party LiveKit host approvals must locally clear using the current request version",
+);
+assertIncludes(
+  player,
+  'clearPendingPartySeatRequest(participant.id, "seat-request-denied", clearingRequestVersion)',
+  "Player Watch-Party LiveKit host denies must locally clear using the current request version",
 );
 assertIncludes(
   player,

@@ -159,6 +159,9 @@ export const applyWatchPartySeatRequestEvent = (
       event.sentAt,
     );
     const currentVersion = state.versionById[participantId] ?? "";
+    if (currentVersion && !eventVersion) {
+      return state;
+    }
     if (currentVersion && eventVersion && currentVersion !== eventVersion) {
       return state;
     }

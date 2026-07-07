@@ -44,6 +44,8 @@ const {
   watchPartyLiveContractMatchesDesiredAuthority,
 } = await importTypeScriptModule("_lib/watch-party/watch-party-live-source-truth.ts");
 
+const playerSource = readFileSync(path.join(root, "app/player/[id].tsx"), "utf8");
+
 const createProofState = () => ({
   hostAuthority: { isHost: true, source: "proof-room-host" },
   seatRequestState: emptyWatchPartyLiveSeatRequestState(),
@@ -158,6 +160,15 @@ assert(
   shouldAutoOpenWatchPartySeatRequestReview(state.seatRequestState, viewerId) === true,
   "old clear event must not clear a newer request version",
 );
+applySeatRequestMarker(
+  state,
+  encodePartySeatRequestMessage(viewerId, false, { sentAt: now + 4 }),
+  "proof-unversioned-stale-clear",
+);
+assert(
+  shouldAutoOpenWatchPartySeatRequestReview(state.seatRequestState, viewerId) === true,
+  "unversioned local/legacy clear must not clear a newer versioned request",
+);
 
 const hostRoster = renderRoster(state, true);
 const viewerRoster = renderRoster(state, false);
@@ -232,6 +243,41 @@ assert(
   }) === "bundled-fallback",
   "bundled fallback must not count as real non-fixture media proof",
 );
+assert(
+  classifyWatchPartyLiveMediaSource({
+    sourceType: "creator-video",
+    sourceId: "missing-source",
+    displayName: "Missing Source",
+    playbackUrl: "",
+    usedBundledFallback: false,
+  }) === "missing-source",
+  "missing source must not count as real non-fixture media proof",
+);
+assert(
+  playerSource.includes("watchPartyLiveMediaSourceDebugMetadata"),
+  "Player must wire runtime Watch-Party Live media classification metadata",
+);
+assert(
+  playerSource.includes("playbackUrlPresent") && playerSource.includes("usedBundledFallback") && playerSource.includes("classification"),
+  "Player classification log must include redacted source-readiness metadata",
+);
+assert(
+  playerSource.includes('playbackUrl: playbackUrlPresent ? "redacted-present" : ""'),
+  "Player classification must not log full playback URLs",
+);
+assert(
+  playerSource.includes('clearPendingPartySeatRequest(participantId, "seat-state-persisted", clearingRequestVersion)'),
+  "approval persistence local clear must use the current request version",
+);
+assert(
+  playerSource.includes('clearPendingPartySeatRequest(participant.id, "seat-request-denied", clearingRequestVersion)'),
+  "deny local clear must use the current request version",
+);
+assert(
+  playerSource.includes("broadcastPartySeatRequest(participantId, false, clearingRequestVersion)")
+    && playerSource.includes("broadcastPartySeatRequest(participant.id, false, clearingRequestVersion)"),
+  "local clear and broadcast clear must share the captured request version",
+);
 
 console.log("Watch-Party seat request proof passed");
 console.log(JSON.stringify({
@@ -240,6 +286,8 @@ console.log(JSON.stringify({
   deviceOrEmulatorUsed: false,
   hostRequestRendered: true,
   duplicateRequestSuppressedAfterClose: true,
+  staleLocalClearPreservedNewRequest: true,
   viewerRequestHidden: true,
+  runtimeMediaClassificationWired: true,
   helperBackedProof: true,
 }, null, 2));

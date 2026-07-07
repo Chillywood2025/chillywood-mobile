@@ -2019,8 +2019,8 @@ export default function PlayerScreen() {
     return { ...participant, isRequestingToSpeak };
   }, [getWatchPartyHostAuthority, hasPendingPartySeatRequest]);
 
-  const clearPendingPartySeatRequest = useCallback((participantId: string, source: string) => {
-    setPendingPartySeatRequest(participantId, false, source);
+  const clearPendingPartySeatRequest = useCallback((participantId: string, source: string, requestVersion = "") => {
+    setPendingPartySeatRequest(participantId, false, source, Date.now(), requestVersion);
   }, [setPendingPartySeatRequest]);
 
   const syncCurrentPartyPresence = useCallback(async (overrides?: Partial<{
@@ -3460,7 +3460,7 @@ export default function PlayerScreen() {
     }
 
     if (options.isRequestingToSpeak === false || options.canSpeak) {
-      clearPendingPartySeatRequest(participantId, "seat-state-persisted");
+      clearPendingPartySeatRequest(participantId, "seat-state-persisted", clearingRequestVersion);
     }
     partyMembershipMapRef.current[participantId] = nextMembership;
     setPartyParticipants((prev) =>
@@ -6334,17 +6334,31 @@ export default function PlayerScreen() {
     if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, isCreatorVideoPlayback, source, titleLoading]);
-  const watchPartyLiveMediaSourceClassification = useMemo(() => (
-    classifyWatchPartyLiveMediaSource({
+  const watchPartyLiveMediaSourceDebugMetadata = useMemo(() => {
+    const sourceId = String(displayItem?.id ?? cleanId ?? "").trim();
+    const displayName = String(displayItem?.title ?? creatorVideo?.title ?? "").trim();
+    const playbackUrlPresent = !!String(displayItem?.video_url ?? creatorVideo?.playbackUrl ?? "").trim();
+    const usedBundledFallback = inWatchParty
+      && !!sharedPartyResolvedSource
+      && typeof sharedPartyResolvedSource === "number";
+    const classification = classifyWatchPartyLiveMediaSource({
       sourceType: playbackSourceKind,
-      sourceId: displayItem?.id ?? cleanId,
-      displayName: displayItem?.title ?? creatorVideo?.title ?? "",
-      playbackUrl: displayItem?.video_url ?? creatorVideo?.playbackUrl ?? "",
-      usedBundledFallback: inWatchParty
-        && !!sharedPartyResolvedSource
-        && typeof sharedPartyResolvedSource === "number",
-    })
-  ), [
+      sourceId,
+      displayName,
+      playbackUrl: playbackUrlPresent ? "redacted-present" : "",
+      usedBundledFallback,
+    });
+    return {
+      partyId,
+      sourceType: playbackSourceKind,
+      sourceId,
+      displayName,
+      title: displayName,
+      playbackUrlPresent,
+      usedBundledFallback,
+      classification,
+    };
+  }, [
     cleanId,
     creatorVideo?.playbackUrl,
     creatorVideo?.title,
@@ -6352,6 +6366,7 @@ export default function PlayerScreen() {
     displayItem?.title,
     displayItem?.video_url,
     inWatchParty,
+    partyId,
     playbackSourceKind,
     sharedPartyResolvedSource,
   ]);
@@ -6360,21 +6375,10 @@ export default function PlayerScreen() {
   );
   useEffect(() => {
     if (!inWatchParty) return;
-    debugLog("player", "watch-party-live media source classification", {
-      classification: watchPartyLiveMediaSourceClassification,
-      sourceType: playbackSourceKind,
-      hasPlaybackUrl: !!String(displayItem?.video_url ?? creatorVideo?.playbackUrl ?? "").trim(),
-      usesBundledFallback: typeof sharedPartyResolvedSource === "number",
-    });
+    debugLog("player", "watch-party-live media source classification", watchPartyLiveMediaSourceDebugMetadata);
   }, [
-    cleanId,
-    creatorVideo?.playbackUrl,
-    displayItem?.id,
-    displayItem?.video_url,
     inWatchParty,
-    playbackSourceKind,
-    sharedPartyResolvedSource,
-    watchPartyLiveMediaSourceClassification,
+    watchPartyLiveMediaSourceDebugMetadata,
   ]);
   useEffect(() => {
     let cancelled = false;
@@ -6992,7 +6996,7 @@ export default function PlayerScreen() {
 
   const denyPartyParticipantSeatRequest = useCallback(async (participant: PartyParticipant) => {
     const clearingRequestVersion = pendingPartySeatRequestsRef.current[participant.id]?.requestVersion ?? "";
-    clearPendingPartySeatRequest(participant.id, "seat-request-denied");
+    clearPendingPartySeatRequest(participant.id, "seat-request-denied", clearingRequestVersion);
     setPartyParticipants((prev) =>
       prev.map((entry) =>
         entry.id === participant.id ? { ...entry, isRequestingToSpeak: false } : entry,

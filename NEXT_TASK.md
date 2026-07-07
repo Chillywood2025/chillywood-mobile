@@ -3,7 +3,7 @@
 # Watch-Party Live Source-Truth Repair
 
 Current latest truth:
-- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. Installed proof is Partial/blocked on R3 device visibility.
+- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and pending fresh OTA publication from aligned source. Installed proof remains Partial/blocked on R3 device visibility.
 - Governing new doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
 - Source commit: `44d776fe117386d3cd0a3400d488ed82e11c8bf6`.
 - Android EAS Update production runtime `1.0.0`: group `d4c9fe3a-1f92-4fa6-8252-5920aecc59b4`, Android update `019f3d20-16a3-772b-9b4e-870e4d9deeeb`.
@@ -11,8 +11,10 @@ Current latest truth:
 - The Shared Player custom fullscreen rails remain locked: left comments rail, center shared video surface, and right portrait-reused LiveKit bubble rail. This lane must not change `docs/SHARED_PLAYER_CUSTOM_FULLSCREEN_RAILS.md` layout intent except proof/status notes.
 - Party Room handoff and Player entry now use the same canonical Watch-Party Live Premium access key helper, without bypassing Premium or changing Google Play / RevenueCat behavior.
 - Watch-Party Live media is classified as real remote media, bundled fallback, proof fixture, or missing fallback so fixture/bundled playback cannot be claimed as strict real non-fixture Home media proof.
+- Runtime Player proof/debug logging now uses `classifyWatchPartyLiveMediaSource(...)` with redacted metadata only: party id, source type/id, display name/title, playback URL presence, bundled-fallback boolean, and classification. Strict installed proof may close only when the runtime classification is `real-media`.
 - Watch-Party Live token contracts are authority-strict: desired host/speaker publish state is not publish-ready unless the active LiveKit token contract matches role/canPublish/room/identity.
 - Camera request review is request-versioned. Duplicate pending events do not reopen an X-closed review, `Not now` clears the current request, and a new viewer request can surface again.
+- Local Watch-Party Live request clears are request-version aware. Approval/deny paths pass the captured request version into the local clear and the broadcast clear; legacy unversioned clears do not erase a newer versioned pending request.
 - Pending approval is the stable host review path; pending cards do not expose competing inline approve/dismiss buttons, and non-requesting audience cards do not render direct seating controls.
 - Participant-specific Watch-Party Live bubbles require identity-matched LiveKit tracks and do not borrow arbitrary remote tracks.
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
