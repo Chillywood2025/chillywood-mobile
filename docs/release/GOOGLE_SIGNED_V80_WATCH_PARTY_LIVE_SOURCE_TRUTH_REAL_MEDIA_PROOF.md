@@ -12,7 +12,7 @@ Android EAS Update production runtime `1.0.0`: group `d4c9fe3a-1f92-4fa6-8252-59
 
 Watch-Party Live sidecar/shared-player source truth is repaired for the remaining app-controlled gaps found after the real Home-route installed proof. The fix does not change Shared Player fullscreen layout. It canonicalizes Party Room and Player Premium access keys, classifies media so fixture/bundled fallback cannot be counted as strict real Home media proof, requires LiveKit token contracts to match desired host/speaker publish authority, versions camera-seat requests, keeps pending approval on one stable host review path, makes participant bubbles identity-safe, and moves proof coverage onto the real helper module.
 
-Installed Google Play proof is still required before closure: use Play-installed v80 or newer with latest OTA, Premium-active sandbox testers, strict non-fixture Home media, actual Shared Player playback on both devices, host-only playback authority, viewer comments/reactions/camera request, host approval with matching LiveKit authority, identity-safe LiveKit bubbles, unchanged fullscreen rails, and return-to-room behavior.
+Installed Google Play proof is still required before closure. R5 read back Play-installed v80 from `com.android.vending` and launched this OTA, but R3 was not visible over USB, `adb mdns services`, or Bonjour `_adb-tls-connect._tcp`, so the required two-phone proof could not start. The next pass must use Play-installed v80 or newer with latest OTA, Premium-active sandbox testers, strict non-fixture Home media, actual Shared Player playback on both devices, host-only playback authority, viewer comments/reactions/camera request, host approval with matching LiveKit authority, identity-safe LiveKit bubbles, unchanged fullscreen rails, and return-to-room behavior.
 
 ## Fullscreen/Layout No-Change
 
@@ -79,7 +79,15 @@ No source change was made to `supabase/functions/livekit-token/index.ts`; the De
 
 ## Remaining Installed Proof
 
-Run installed proof last:
+R3 visibility blocker:
+
+- `adb devices -l` showed R5 and a local emulator only.
+- `adb mdns services` found no Android wireless debugging endpoint.
+- short Bonjour discovery for `_adb-tls-connect._tcp` found no R3 endpoint.
+- macOS USB enumeration showed R5 only.
+- no sideload, `adb install`, uninstall, clear data, logout, or app reset was performed.
+
+After R3 is recovered, run installed proof last:
 
 1. Confirm backend LiveKit health is green.
 2. Confirm both devices are Google Play-installed v80 or newer with latest OTA.
