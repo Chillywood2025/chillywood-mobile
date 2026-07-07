@@ -16,9 +16,9 @@ Watch-Party Live sidecar/shared-player source truth is repaired for the remainin
 
 The pre-proof hardening follow-up wires the media classifier into Player runtime proof/debug logging and makes local request clears request-version aware. Runtime logs include only redacted source-readiness metadata: party id, source type/id, display name/title, playback URL presence, bundled-fallback boolean, and classification. They do not include full playback URLs or signed URLs. Strict installed closure requires `classification=real-media`; `fixture-or-proof`, `bundled-fallback`, and `missing-source` remain honest Partial media classifications.
 
-Installed Google Play proof is still required before closure. R3 visibility was recovered through the already-paired wireless ADB endpoint `10.0.0.27:44639`, which mapped to serial `R3CXA0DS5JV`; R5 remained visible over USB. Both devices read back Play-installed v80. R5 was already Premium active, and R3 renewed Premium through the approved Google Play / RevenueCat sandbox flow and read back Premium active. Backend LiveKit health was green.
+Installed Google Play proof is still Partial. R3 visibility was recovered through the already-paired wireless ADB endpoint `10.0.0.27:44639`, which mapped to serial `R3CXA0DS5JV`; R5 remained visible over USB. Both devices read back Play-installed v80. R5 was Premium active, and R3 renewed Premium through the approved Google Play / RevenueCat sandbox flow and read back Premium active. Backend LiveKit health was green.
 
-The installed proof attempt stopped before starting Watch-Party Live because the available Home media card opened Player as `Chi'llywood Originals Proof Fixture`. That cannot count as strict real non-fixture Home media proof. The next pass must first surface a safe public/playable Home media item without proof/fixture wording, then use Play-installed v80 or newer with latest OTA, Premium-active sandbox testers, strict non-fixture Home media, actual Shared Player playback on both devices, host-only playback authority, viewer comments/reactions/camera request, host approval with matching LiveKit authority, identity-safe LiveKit bubbles, unchanged fullscreen rails, and return-to-room behavior.
+The first installed attempt stopped before starting Watch-Party Live because the available Home media card opened Player as `Chi'llywood Originals Proof Fixture`. The follow-up proof surfaced a safe public/playable Home media item, `Chi'llywood City Lights`, with remote playback URL present and no proof/fixture wording; runtime classification for the candidate is `real-media`. R5 hosted room `K4ADLA` from that Home card, R3 joined the same Party Room, and both devices opened the same Shared Player. R5 started actual real-media playback and showed the Sintel trailer frame at `0:04` / `0:52`. R3 reached `Synced · Playing` in the same Shared Player but the video surface stayed black, then later returned to `Synced · Paused` without rendering video. Strict installed closure remains Partial because actual video playback did not appear on both devices. No `Live feed unavailable` or `Live video is temporarily unavailable. Try again in a moment.` alert appeared in this real-media rerun.
 
 ## Fullscreen/Layout No-Change
 
@@ -94,17 +94,21 @@ Current installed-proof blocker:
 - R3 is now visible over wireless ADB as `10.0.0.27:44639`; `getprop ro.serialno` returns `R3CXA0DS5JV`.
 - R5 and R3 both read back package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `80`, versionName `1.0.0`.
 - R5 read back `Premium is active.`.
-- R3 completed the approved Google Play / RevenueCat sandbox Premium test subscription with the always-approves test card and read back `Premium is active.`.
-- The only available Home media found during the attempt opened Player as `Chi'llywood Originals Proof Fixture`.
-- Strict installed proof remains blocked until a safe real non-fixture Home media item is available.
-- no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, or source change was performed.
+- R3 completed the approved Google Play / RevenueCat sandbox Premium renewal and read back `Premium is active.`.
+- A safe real Home media card was surfaced: `Chi'llywood City Lights`, `sourceType=creator_video`, `sourceId=c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, `playbackUrlPresent=true`, `usedBundledFallback=false`, `classification=real-media`.
+- R5 opened the real Home card, started Watch-Party Live, hosted room `K4ADLA`, and opened the Shared Player.
+- R3 joined room `K4ADLA` and opened the same Shared Player.
+- R5 showed actual real-media playback at `0:04` / `0:52`.
+- R3 showed `Synced · Playing` but the Shared Player video surface remained black, then later returned to `Synced · Paused`.
+- Strict installed proof remains Partial until viewer shared-player playback renders actual video from the real-media room.
+- no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, source change, or fullscreen layout change was performed.
 
-After R3 is recovered, run installed proof last:
+Next exact proof/fix step:
 
 1. Confirm backend LiveKit health is green.
 2. Confirm both devices are Google Play-installed v80 or newer with latest OTA.
 3. Renew both devices through approved Google Play / RevenueCat sandbox Premium.
-4. Use strict real non-fixture Home media.
+4. Use `Chi'llywood City Lights` or another strict real non-fixture Home media item with `classification=real-media`.
 5. Host opens Watch-Party Live and Party Room.
 6. Viewer joins the same Party Room.
 7. Host and viewer open the Shared Player.
