@@ -186,10 +186,22 @@ const resolveHostLayout = ({ activeParticipantId = "" } = {}) => {
   return { actualVisualHeroId, activeFocus, partyBox };
 };
 
+const resolvePrimaryRoleLabel = ({ role, isFeatured = false, isRequesting = false, isRemoved = false }) => {
+  void isFeatured;
+  if (isRemoved) return "Removed";
+  if (isRequesting && role === "listener") return "Seat request pending";
+  if (role === "host") return "Host";
+  if (role === "speaker") return "Seated";
+  return "Audience";
+};
+
 const hostDefaultLayout = resolveHostLayout();
 assert(hostDefaultLayout.actualVisualHeroId === hostId, "host layout should use host/self as the actual visual hero");
 assert(!hostDefaultLayout.partyBox.some((participant) => participant.userId === hostId), "host party box should not duplicate host/self as You HOST");
 assert(hostDefaultLayout.partyBox.some((participant) => participant.userId === viewerId), "host party box should include the remote viewer");
+assert(resolvePrimaryRoleLabel({ role: "listener", isFeatured: true }) === "Audience", "featured focus must not replace primary participant role label");
+assert(resolvePrimaryRoleLabel({ role: "listener", isFeatured: true, isRequesting: true }) === "Seat request pending", "seat request status must outrank featured focus styling");
+assert(resolvePrimaryRoleLabel({ role: "speaker", isFeatured: true }) === "Seated", "speaker status must outrank featured focus styling");
 
 const hostFocusedLayout = resolveHostLayout({ activeParticipantId: viewerId });
 assert(hostFocusedLayout.activeFocus.userId === viewerId, "host can focus the remote viewer card");
@@ -305,6 +317,7 @@ console.log(JSON.stringify({
   hostPartyBoxExcludesSelfHost: true,
   hostPartyBoxIncludesRemoteViewer: true,
   hostFocusKeepsRemoteViewerVisible: true,
+  featuredFocusDoesNotReplaceRoleLabel: true,
   defaultViewerSelfVisibleInPartyBox: true,
   hostPendingCardOpensSeatSheet: true,
   viewerSelfHeroLocalOnly: true,
