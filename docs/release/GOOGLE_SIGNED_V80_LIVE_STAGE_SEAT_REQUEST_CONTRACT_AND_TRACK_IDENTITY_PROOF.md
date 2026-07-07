@@ -2,11 +2,11 @@
 
 Date: 2026-07-07
 
-Verdict: Source/guard/OTA complete; installed proof pending until synchronized Premium-active device proof.
+Verdict: Closed.
 
 ## Summary
 
-Live Stage was audited from source truth after installed testing showed the prior proof model was too shallow. The repair keeps the previous host/viewer presentation behavior, then fixes the request, contract, and video-identity rules that made installed behavior diverge from source proof.
+Live Stage was audited from source truth after installed testing showed the prior proof model was too shallow. The repair keeps the previous host/viewer presentation behavior, then fixes the request, contract, and video-identity rules that made installed behavior diverge from source proof. Installed Google Play v80 proof on room `NXQ4M2` closed the lane after both devices renewed Premium through the approved Google Play / RevenueCat sandbox path.
 
 ## Source Fix
 
@@ -85,26 +85,38 @@ No `supabase/functions/livekit-token/index.ts` source change or deploy was requi
 
 No native build or Play submission happened.
 
-## Installed Proof Plan
+## Installed Proof Result
 
-Installed proof must run only after both Play-installed phones load the OTA above.
+Artifact folder: `/tmp/google-play-internal-v80-live-stage-source-truth-fix-20260707-002444/`
 
-Required proof:
+Final room: `NXQ4M2`
 
-1. host reaches Live Stage with UI showing `2 in room`;
-2. host/self is hero/background and does not appear as `You HOST` in Chi'lly Party Members;
-3. remote viewer/requester remains visible and tapping the card does not hide it;
-4. `Featured` styling does not replace Viewer/Listener/Requesting/Speaker status;
-5. viewer default layout shows self as `You`;
-6. `Make me hero` is instant with no toggle-induced `Live feed syncing`;
-7. self-hero shows host first and does not duplicate self;
-8. X close closes only the sheet, preserves request/card, and duplicate pending does not reopen it;
-9. `Not now` clears the request and keeps the participant visible;
-10. viewer can request again;
-11. `Bring on stage` seats the viewer;
-12. viewer receives matching speaker/canPublish authority;
-13. host sees correct viewer feed or an identity-safe fallback, never the wrong participant feed;
-14. Stage remains `2 in room`.
+Device/build proof:
+
+- `R5CR120QCBF`: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `80`, versionName `1.0.0`;
+- `R3CXA0DS5JV` via wireless ADB endpoint `Android-2.local:43031`: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `80`, versionName `1.0.0`;
+- OTA source commit `cd1ec3b48423f2912009847f2fe9bab3057eb509`, group `c4f88243-f762-4b8d-a783-c7a1953ed2ea`, Android update `019f3b28-0935-74c5-bb84-b313eeecb11d`, runtime `1.0.0`;
+- both devices renewed Premium through the approved Google Play / RevenueCat sandbox flow and read back `Premium is active.`;
+- backend LiveKit health was green before and after proof with one eligible server and heartbeat age under the 120-second cutoff.
+
+Installed proof closed:
+
+1. host reached Live Stage with UI showing `2 in room`;
+2. host/self remained hero/background and did not appear as `You HOST` in Chi'lly Party Members;
+3. host Chi'lly Party Members showed the remote viewer/requester, and tapping the remote card did not hide it;
+4. `Featured` styling did not replace Viewer/Audience/Seat request/Seated status;
+5. viewer default layout showed self as `You`;
+6. `Make me hero` was instant and did not show toggle-induced `Live feed syncing`;
+7. self-hero showed host first and did not duplicate self;
+8. `Show host hero` restored the host-hero layout and returned self to the party box;
+9. X close closed only the seat sheet, preserved request/card, and did not immediately reopen;
+10. `Not now` cleared/declined the request and kept the participant visible as audience/listener;
+11. viewer could request again;
+12. `Bring on stage` seated the viewer;
+13. viewer read back `Camera active` / `Camera seat active`;
+14. host saw the viewer as `Seated` with identity-safe tile behavior, not the wrong participant feed;
+15. Stage remained `2 in room`;
+16. host identity and host-only controls remained unchanged.
 
 ## Safety
 
