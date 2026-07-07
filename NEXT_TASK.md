@@ -1,5 +1,25 @@
 # NEXT TASK
 
+# Watch-Party Live Source-Truth Repair
+
+Current latest truth:
+- Watch-Party Live sidecar/shared-player source truth is repaired and awaiting final validation, origin alignment, OTA, and installed proof.
+- Governing new doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
+- The Shared Player custom fullscreen rails remain locked: left comments rail, center shared video surface, and right portrait-reused LiveKit bubble rail. This lane must not change `docs/SHARED_PLAYER_CUSTOM_FULLSCREEN_RAILS.md` layout intent except proof/status notes.
+- Party Room handoff and Player entry now use the same canonical Watch-Party Live Premium access key helper, without bypassing Premium or changing Google Play / RevenueCat behavior.
+- Watch-Party Live media is classified as real remote media, bundled fallback, proof fixture, or missing fallback so fixture/bundled playback cannot be claimed as strict real non-fixture Home media proof.
+- Watch-Party Live token contracts are authority-strict: desired host/speaker publish state is not publish-ready unless the active LiveKit token contract matches role/canPublish/room/identity.
+- Camera request review is request-versioned. Duplicate pending events do not reopen an X-closed review, `Not now` clears the current request, and a new viewer request can surface again.
+- Pending approval is the stable host review path; pending cards do not expose competing inline approve/dismiss buttons, and non-requesting audience cards do not render direct seating controls.
+- Participant-specific Watch-Party Live bubbles require identity-matched LiveKit tracks and do not borrow arbitrary remote tracks.
+- `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
+
+Next exact step:
+1. Finish full validation, commit, push to `origin/main`, and publish an Android EAS Update from the aligned source.
+2. Run installed proof last only: Play-installed v80 or newer, latest OTA, both devices Premium-active through approved Google Play / RevenueCat sandbox, real non-fixture Home media, host opens Party Room/shared player, viewer joins same shared player, actual playback appears, host-only playback authority holds, viewer comments/reactions/camera request still work, identity-safe LiveKit bubbles render, and fullscreen rails remain unchanged.
+3. If installed proof cannot use strict non-fixture Home media, classify the media limitation honestly and do not count fixture/bundled fallback as real-user closure.
+4. Do not touch Premium entitlement logic, Watch-Party Party Room, Android App Links, LiveKit routing/heartbeat/cutoffs, Chi'lly Chat/native calls, auth/RLS, billing/provider settings, live money, payouts, cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall.
+
 # Android App Links / Domain Association Closed
 
 Current latest truth:

@@ -1,6 +1,8 @@
-const PARTY_SEAT_REQUEST_MESSAGE_PREFIX = "__chillywood_party_seat_request_v1__:";
-const PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS = 5 * 60 * 1000;
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import ts from "typescript";
 
+const root = process.cwd();
 const hostId = process.env.WATCH_PARTY_PROOF_HOST_ID || "proof-host-user-0001";
 const viewerId = process.env.WATCH_PARTY_PROOF_VIEWER_ID || "proof-viewer-user-0001";
 const now = Date.now();
@@ -14,30 +16,37 @@ const assert = (condition, message) => {
   if (!condition) fail(message);
 };
 
-const encodeSeatRequest = (participantId, pending, sentAt = now) => (
-  `${PARTY_SEAT_REQUEST_MESSAGE_PREFIX}${JSON.stringify({ participantId, pending, sentAt })}`
-);
-
-const decodeSeatRequest = (body) => {
-  const text = String(body ?? "").trim();
-  if (!text.startsWith(PARTY_SEAT_REQUEST_MESSAGE_PREFIX)) return null;
-  try {
-    const decoded = JSON.parse(text.slice(PARTY_SEAT_REQUEST_MESSAGE_PREFIX.length));
-    const participantId = String(decoded.participantId ?? "").trim();
-    if (!participantId) return null;
-    return {
-      participantId,
-      pending: decoded.pending !== false,
-      sentAt: Number(decoded.sentAt ?? 0),
-    };
-  } catch {
-    return null;
-  }
+const importTypeScriptModule = async (relativePath) => {
+  const sourcePath = path.join(root, relativePath);
+  const source = readFileSync(sourcePath, "utf8");
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+      strict: true,
+    },
+    fileName: sourcePath,
+  }).outputText;
+  const encoded = Buffer.from(transpiled, "utf8").toString("base64");
+  return import(`data:text/javascript;base64,${encoded}`);
 };
+
+const {
+  applyWatchPartySeatRequestEvent,
+  canRenderWatchPartyParticipantSpecificTrack,
+  classifyWatchPartyLiveMediaSource,
+  closeWatchPartySeatRequestReview,
+  createWatchPartySeatRequestVersion,
+  decodePartySeatRequestMessage,
+  emptyWatchPartyLiveSeatRequestState,
+  encodePartySeatRequestMessage,
+  shouldAutoOpenWatchPartySeatRequestReview,
+  watchPartyLiveContractMatchesDesiredAuthority,
+} = await importTypeScriptModule("_lib/watch-party/watch-party-live-source-truth.ts");
 
 const createProofState = () => ({
   hostAuthority: { isHost: true, source: "proof-room-host" },
-  pendingSeatRequests: {},
+  seatRequestState: emptyWatchPartyLiveSeatRequestState(),
   participants: [
     {
       id: hostId,
@@ -62,36 +71,27 @@ const createProofState = () => ({
   ],
 });
 
-const hasPendingSeatRequest = (state, participant) => {
-  if (participant.canSpeak) {
-    delete state.pendingSeatRequests[participant.id];
-    return false;
-  }
-  const pending = state.pendingSeatRequests[participant.id];
-  if (!pending) return false;
-  if (pending.sentAt > 0 && now - pending.sentAt > PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS) {
-    delete state.pendingSeatRequests[participant.id];
-    return false;
-  }
-  return true;
-};
-
 const mergePendingSeatRequests = (state) => {
   state.participants = state.participants.map((participant) => ({
     ...participant,
-    isRequestingToSpeak: state.hostAuthority.isHost && hasPendingSeatRequest(state, participant),
+    isRequestingToSpeak: state.hostAuthority.isHost
+      && !participant.canSpeak
+      && !!state.seatRequestState.pendingById[participant.id],
   }));
 };
 
 const applySeatRequestMarker = (state, body, source) => {
-  const marker = decodeSeatRequest(body);
+  const marker = decodePartySeatRequestMessage(body);
   assert(marker, "seat request marker should decode");
   assert(state.hostAuthority.isHost, "proof host must have approval authority");
-  if (marker.pending) {
-    state.pendingSeatRequests[marker.participantId] = { sentAt: marker.sentAt || now, source };
-  } else {
-    delete state.pendingSeatRequests[marker.participantId];
-  }
+  state.seatRequestState = applyWatchPartySeatRequestEvent(state.seatRequestState, {
+    participantId: marker.participantId,
+    pending: marker.pending,
+    sentAt: marker.sentAt,
+    requestedAt: marker.requestedAt,
+    requestVersion: marker.requestVersion,
+    source,
+  });
   mergePendingSeatRequests(state);
 };
 
@@ -113,15 +113,51 @@ const renderRoster = (state, showRequestIndicators) => (
 );
 
 const state = createProofState();
-const requestMarker = encodeSeatRequest(viewerId, true);
+const requestVersion = createWatchPartySeatRequestVersion(now, 0.42);
+const requestMarker = encodePartySeatRequestMessage(viewerId, true, { requestVersion, sentAt: now });
 applySeatRequestMarker(state, requestMarker, "proof-message-poll");
 
 const requestedViewer = state.participants.find((participant) => participant.id === viewerId);
 assert(requestedViewer?.isRequestingToSpeak === true, "host state should apply the viewer request");
+assert(
+  shouldAutoOpenWatchPartySeatRequestReview(state.seatRequestState, viewerId) === true,
+  "new pending request should auto-open host review",
+);
 
-mergePendingSeatRequests(state);
-const refreshedViewer = state.participants.find((participant) => participant.id === viewerId);
-assert(refreshedViewer?.isRequestingToSpeak === true, "pending request should survive a roster refresh");
+state.seatRequestState = closeWatchPartySeatRequestReview(state.seatRequestState, viewerId);
+applySeatRequestMarker(state, requestMarker, "duplicate-proof-message-poll");
+assert(
+  state.seatRequestState.pendingById[viewerId] === true,
+  "X close should preserve the pending request",
+);
+assert(
+  shouldAutoOpenWatchPartySeatRequestReview(state.seatRequestState, viewerId) === false,
+  "duplicate pending request version must not reopen after X close",
+);
+
+applySeatRequestMarker(
+  state,
+  encodePartySeatRequestMessage(viewerId, false, { requestVersion, sentAt: now + 1 }),
+  "proof-clear",
+);
+const clearedViewer = state.participants.find((participant) => participant.id === viewerId);
+assert(clearedViewer?.isRequestingToSpeak === false, "clearing the request should remove host pending state");
+
+const secondRequestVersion = createWatchPartySeatRequestVersion(now + 2, 0.84);
+applySeatRequestMarker(
+  state,
+  encodePartySeatRequestMessage(viewerId, true, { requestVersion: secondRequestVersion, sentAt: now + 2 }),
+  "proof-new-request",
+);
+applySeatRequestMarker(
+  state,
+  encodePartySeatRequestMessage(viewerId, false, { requestVersion, sentAt: now + 3 }),
+  "proof-stale-clear",
+);
+assert(
+  shouldAutoOpenWatchPartySeatRequestReview(state.seatRequestState, viewerId) === true,
+  "old clear event must not clear a newer request version",
+);
 
 const hostRoster = renderRoster(state, true);
 const viewerRoster = renderRoster(state, false);
@@ -134,9 +170,68 @@ assert(
   "viewer roster should hide request indicators",
 );
 
-applySeatRequestMarker(state, encodeSeatRequest(viewerId, false), "proof-clear");
-const clearedViewer = state.participants.find((participant) => participant.id === viewerId);
-assert(clearedViewer?.isRequestingToSpeak === false, "clearing the request should remove host pending state");
+assert(
+  watchPartyLiveContractMatchesDesiredAuthority(
+    { roomName: "ROOM1", participantRole: "viewer", requestedGrants: { canPublish: false } },
+    { participantRole: "speaker", canPublish: true },
+    { roomName: "ROOM1" },
+  ) === false,
+  "speaker desired state must reject viewer/no-publish LiveKit contract",
+);
+assert(
+  watchPartyLiveContractMatchesDesiredAuthority(
+    { roomName: "ROOM1", participantRole: "speaker", requestedGrants: { canPublish: true } },
+    { participantRole: "speaker", canPublish: true },
+    { roomName: "ROOM1" },
+  ) === true,
+  "speaker desired state should accept speaker/canPublish LiveKit contract",
+);
+assert(
+  canRenderWatchPartyParticipantSpecificTrack({
+    participantId: viewerId,
+    localParticipantIdentity: hostId,
+    trackParticipantIdentity: viewerId,
+  }) === true,
+  "participant card may render an exact identity-matched remote track",
+);
+assert(
+  canRenderWatchPartyParticipantSpecificTrack({
+    participantId: viewerId,
+    localParticipantIdentity: hostId,
+    trackParticipantIdentity: "other-viewer",
+  }) === false,
+  "participant card must not borrow a different participant track",
+);
+assert(
+  classifyWatchPartyLiveMediaSource({
+    sourceType: "creator-video",
+    sourceId: "creator-real-home-demo",
+    displayName: "Home Demo",
+    playbackUrl: "https://media.example.invalid/redacted.mp4",
+    usedBundledFallback: false,
+  }) === "real-media",
+  "real media classification should require a non-fixture playback URL",
+);
+assert(
+  classifyWatchPartyLiveMediaSource({
+    sourceType: "platform-title",
+    sourceId: "fixture-title",
+    displayName: "Proof Fixture",
+    playbackUrl: "https://media.example.invalid/redacted.mp4",
+    usedBundledFallback: false,
+  }) === "fixture-or-proof",
+  "fixture/proof media must not count as real Home media proof",
+);
+assert(
+  classifyWatchPartyLiveMediaSource({
+    sourceType: "platform-title",
+    sourceId: "local-title",
+    displayName: "Local Title",
+    playbackUrl: "",
+    usedBundledFallback: true,
+  }) === "bundled-fallback",
+  "bundled fallback must not count as real non-fixture media proof",
+);
 
 console.log("Watch-Party seat request proof passed");
 console.log(JSON.stringify({
@@ -144,5 +239,7 @@ console.log(JSON.stringify({
   proofViewerId: viewerId,
   deviceOrEmulatorUsed: false,
   hostRequestRendered: true,
+  duplicateRequestSuppressedAfterClose: true,
   viewerRequestHidden: true,
+  helperBackedProof: true,
 }, null, 2));

@@ -123,6 +123,7 @@ import {
     getWritablePartyUserId,
     joinPartyRoomSession,
     PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS,
+    resolvePremiumAccessKeyForRoom,
     sendPartyMessage,
     setPartyParticipantState,
     updateRoomPlayback,
@@ -160,6 +161,18 @@ import {
   PLAYER_WATCH_PARTY_SOURCE,
   resolveIdentityName,
 } from "../../_lib/watch-party/room-shared";
+import {
+  applyWatchPartySeatRequestEvent,
+  classifyWatchPartyLiveMediaSource,
+  closeWatchPartySeatRequestReview,
+  createWatchPartySeatRequestVersion,
+  emptyWatchPartyLiveSeatRequestState,
+  isWatchPartySeatRequestExpired,
+  resolveDesiredWatchPartyLiveAuthority,
+  shouldAutoOpenWatchPartySeatRequestReview,
+  watchPartyLiveContractMatchesDesiredAuthority,
+  type WatchPartyLiveSeatRequestState,
+} from "../../_lib/watch-party/watch-party-live-source-truth";
 
 const ACCENT = "#DC143C";
 const BG = "#0B0B10";
@@ -1151,7 +1164,8 @@ export default function PlayerScreen() {
   const lastPartySeatRequestFocusKeyRef = useRef("");
   const partySeatRequestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const partyRoomHostUserIdRef = useRef("");
-  const pendingPartySeatRequestsRef = useRef<Record<string, { sentAt: number; source: string }>>({});
+  const pendingPartySeatRequestsRef = useRef<Record<string, { sentAt: number; source: string; requestVersion: string }>>({});
+  const partySeatRequestClosedVersionRef = useRef<Record<string, string>>({});
   const participantReactionScaleMapRef = useRef<Record<string, Animated.Value>>({});
   const participantReactionTranslateYMapRef = useRef<Record<string, Animated.Value>>({});
   const participantReactionOpacityMapRef = useRef<Record<string, Animated.Value>>({});
@@ -1792,7 +1806,8 @@ export default function PlayerScreen() {
         return;
       }
 
-      const premiumAccess = await requireWatchPartyLivePremium({ accessKey: partyId }).catch(() => null);
+      const premiumAccessKey = resolvePremiumAccessKeyForRoom(snapshot.room);
+      const premiumAccess = await requireWatchPartyLivePremium({ accessKey: premiumAccessKey }).catch(() => null);
       if (!active) return;
 
       if (!premiumAccess?.allowed) {
@@ -1805,6 +1820,7 @@ export default function PlayerScreen() {
             surface: "watch-party-live-player-entry",
             controlKey: premiumAccess?.runtimeControlKey ?? "watch_party_live_enabled",
             roomId: partyId,
+            premiumAccessKey,
           });
           setWatchPartyEntryLoading(false);
           return;
@@ -1815,6 +1831,7 @@ export default function PlayerScreen() {
           surface: "watch-party-live-player-entry",
           reason: premiumAccess?.reason ?? "premium_required",
           roomId: partyId,
+          premiumAccessKey,
         });
         setWatchPartyEntryLoading(false);
         return;
@@ -1917,33 +1934,78 @@ export default function PlayerScreen() {
     return true;
   }, [getSharedPlaybackControlAuthority, partyId]);
 
+  const readPartySeatRequestState = useCallback((): WatchPartyLiveSeatRequestState => {
+    const pendingById: WatchPartyLiveSeatRequestState["pendingById"] = {};
+    const versionById: WatchPartyLiveSeatRequestState["versionById"] = {};
+    const sentAtById: WatchPartyLiveSeatRequestState["sentAtById"] = {};
+    const sourceById: WatchPartyLiveSeatRequestState["sourceById"] = {};
+    Object.entries(pendingPartySeatRequestsRef.current).forEach(([participantId, entry]) => {
+      pendingById[participantId] = true;
+      versionById[participantId] = entry.requestVersion;
+      sentAtById[participantId] = entry.sentAt;
+      sourceById[participantId] = entry.source;
+    });
+    return {
+      pendingById,
+      versionById,
+      sentAtById,
+      sourceById,
+      closedVersionById: { ...partySeatRequestClosedVersionRef.current },
+    };
+  }, []);
+
+  const writePartySeatRequestState = useCallback((state: WatchPartyLiveSeatRequestState) => {
+    const nextPending: typeof pendingPartySeatRequestsRef.current = {};
+    Object.keys(state.pendingById).forEach((participantId) => {
+      if (!state.pendingById[participantId]) return;
+      nextPending[participantId] = {
+        sentAt: state.sentAtById[participantId] ?? Date.now(),
+        source: state.sourceById[participantId] ?? "unknown",
+        requestVersion: state.versionById[participantId] ?? "",
+      };
+    });
+    pendingPartySeatRequestsRef.current = nextPending;
+    partySeatRequestClosedVersionRef.current = { ...state.closedVersionById };
+  }, []);
+
   const setPendingPartySeatRequest = useCallback((
     participantId: string,
     pending: boolean,
     source: string,
     sentAt = Date.now(),
+    requestVersion = "",
   ) => {
     const cleanParticipantId = String(participantId ?? "").trim();
     if (!cleanParticipantId) return;
-    if (pending) {
-      pendingPartySeatRequestsRef.current[cleanParticipantId] = {
-        sentAt: Number.isFinite(sentAt) && sentAt > 0 ? sentAt : Date.now(),
-        source,
-      };
-    } else {
-      delete pendingPartySeatRequestsRef.current[cleanParticipantId];
-    }
-  }, []);
+    const nextState = applyWatchPartySeatRequestEvent(readPartySeatRequestState(), {
+      participantId: cleanParticipantId,
+      pending,
+      sentAt,
+      requestedAt: sentAt,
+      requestVersion,
+      source,
+    });
+    writePartySeatRequestState(nextState);
+  }, [readPartySeatRequestState, writePartySeatRequestState]);
+
+  const closePendingPartySeatReview = useCallback((participantId: string) => {
+    const nextState = closeWatchPartySeatRequestReview(readPartySeatRequestState(), participantId);
+    writePartySeatRequestState(nextState);
+    setActiveParticipantId((current) => (current === participantId ? null : current));
+    setActiveParticipantToolsId((current) => (current === participantId ? null : current));
+  }, [readPartySeatRequestState, writePartySeatRequestState]);
 
   const hasPendingPartySeatRequest = useCallback((participantId: string, canSpeak: boolean) => {
     if (canSpeak) {
       delete pendingPartySeatRequestsRef.current[participantId];
+      delete partySeatRequestClosedVersionRef.current[participantId];
       return false;
     }
     const pending = pendingPartySeatRequestsRef.current[participantId];
     if (!pending) return false;
-    if (pending.sentAt > 0 && Date.now() - pending.sentAt > PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS) {
+    if (isWatchPartySeatRequestExpired(pending.sentAt, Date.now(), PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS)) {
       delete pendingPartySeatRequestsRef.current[participantId];
+      delete partySeatRequestClosedVersionRef.current[participantId];
       return false;
     }
     return true;
@@ -1997,13 +2059,18 @@ export default function PlayerScreen() {
     }).catch(() => {});
   }, []);
 
-  const persistPartySeatRequestMarker = useCallback(async (participantId: string, pending: boolean) => {
+  const persistPartySeatRequestMarker = useCallback(async (
+    participantId: string,
+    pending: boolean,
+    requestVersion = "",
+  ) => {
     if (!partyId || !participantId) return false;
+    const sentAt = Date.now();
     const persisted = await sendPartyMessage(
       partyId,
       participantId,
       "system",
-      encodePartySeatRequestMessage(participantId, pending),
+      encodePartySeatRequestMessage(participantId, pending, { requestVersion, sentAt }),
       { username: partyDisplayNameRef.current || "Guest" },
     ).catch(() => false);
     debugLog("livekit", "watch-party-live seat request marker persisted", {
@@ -2011,13 +2078,19 @@ export default function PlayerScreen() {
       currentUserId: partyUserId || partySyncUserIdRef.current,
       participantId,
       pending,
+      requestVersion,
       persisted,
     });
     return persisted;
   }, [partyId, partyUserId]);
 
-  const broadcastPartySeatRequest = useCallback(async (participantId: string, pending: boolean) => {
-    const markerPersisted = await persistPartySeatRequestMarker(participantId, pending);
+  const broadcastPartySeatRequest = useCallback(async (
+    participantId: string,
+    pending: boolean,
+    requestVersion = "",
+  ) => {
+    const requestedAt = Date.now();
+    const markerPersisted = await persistPartySeatRequestMarker(participantId, pending, requestVersion);
     if (!markerPersisted) {
       throw new Error("watch_party_live_seat_request_marker_unavailable");
     }
@@ -2028,6 +2101,7 @@ export default function PlayerScreen() {
         currentUserId: partyUserId || partySyncUserIdRef.current,
         participantId,
         pending,
+        requestVersion,
       });
       return;
     }
@@ -2037,6 +2111,8 @@ export default function PlayerScreen() {
       payload: {
         participantId,
         pending,
+        requestVersion,
+        requestedAt,
       },
     });
     debugLog("livekit", "watch-party-live seat request sent", {
@@ -2044,6 +2120,7 @@ export default function PlayerScreen() {
       currentUserId: partyUserId || partySyncUserIdRef.current,
       participantId,
       pending,
+      requestVersion,
       sendStatus: String(sendStatus ?? "unknown"),
       markerPersisted,
     });
@@ -2053,6 +2130,7 @@ export default function PlayerScreen() {
         currentUserId: partyUserId || partySyncUserIdRef.current,
         participantId,
         pending,
+        requestVersion,
         sendStatus: String(sendStatus),
       });
     }
@@ -2101,6 +2179,7 @@ export default function PlayerScreen() {
       }
       partyRoomHostUserIdRef.current = "";
       pendingPartySeatRequestsRef.current = {};
+      partySeatRequestClosedVersionRef.current = {};
       return;
     }
 
@@ -2286,10 +2365,16 @@ export default function PlayerScreen() {
 
       const currentUserCanApproveSeatRequests = () => getWatchPartyHostAuthority(trackedUserId);
 
-      const applySeatRequestState = (participantId: string, pending: boolean, source: string, sentAt = Date.now()) => {
+      const applySeatRequestState = (
+        participantId: string,
+        pending: boolean,
+        source: string,
+        sentAt = Date.now(),
+        requestVersion = "",
+      ) => {
         const authority = currentUserCanApproveSeatRequests();
         if (!authority.isHost) return;
-        setPendingPartySeatRequest(participantId, pending, source, sentAt);
+        setPendingPartySeatRequest(participantId, pending, source, sentAt, requestVersion);
         setPartyParticipants((prev) => {
           let found = false;
           const next = prev.map((entry) => {
@@ -2334,6 +2419,7 @@ export default function PlayerScreen() {
           participantId,
           pending,
           source,
+          requestVersion,
           currentUserIsHost: authority.isHost,
           hostAuthoritySource: authority.source,
           pendingSeatRequestIds: Object.keys(pendingPartySeatRequestsRef.current),
@@ -2342,7 +2428,13 @@ export default function PlayerScreen() {
 
         if (!partyMembershipMapRef.current[participantId]) {
           refreshMembershipRosterFromAuthority(true).finally(() => {
-            if (active) applySeatRequestState(participantId, pending, `${source}:after-membership-refresh`);
+            if (active) applySeatRequestState(
+              participantId,
+              pending,
+              `${source}:after-membership-refresh`,
+              sentAt,
+              requestVersion,
+            );
           });
         }
       };
@@ -2353,24 +2445,26 @@ export default function PlayerScreen() {
       ) => {
         const authority = currentUserCanApproveSeatRequests();
         if (!authority.isHost) return;
-        const latestByParticipant = new Map<string, { pending: boolean; sentAt: number }>();
+        const latestByParticipant = new Map<string, { pending: boolean; sentAt: number; requestVersion: string }>();
         messages.forEach((message) => {
           const marker = decodePartySeatRequestMessage(message.body);
           if (!marker) return;
           const sentAt = marker.sentAt || Date.parse(String(message.createdAt ?? ""));
+          const requestVersion = marker.requestVersion || String(sentAt || "");
           latestByParticipant.set(marker.participantId, {
             pending: marker.pending,
             sentAt: Number.isFinite(sentAt) ? sentAt : 0,
+            requestVersion,
           });
         });
 
-        latestByParticipant.forEach(({ pending, sentAt }, participantId) => {
+        latestByParticipant.forEach(({ pending, sentAt, requestVersion }, participantId) => {
           if (participantId === trackedUserId) return;
-          if (pending && sentAt > 0 && Date.now() - sentAt > PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS) {
-            setPendingPartySeatRequest(participantId, false, `${source}:expired`, sentAt);
+          if (pending && isWatchPartySeatRequestExpired(sentAt, Date.now(), PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS)) {
+            setPendingPartySeatRequest(participantId, false, `${source}:expired`, sentAt, requestVersion);
             return;
           }
-          applySeatRequestState(participantId, pending, source, sentAt);
+          applySeatRequestState(participantId, pending, source, sentAt, requestVersion);
         });
       };
 
@@ -2638,12 +2732,17 @@ export default function PlayerScreen() {
           if (!currentUserCanApproveSeatRequests().isHost || marker.participantId === trackedUserId) return;
           if (
             marker.pending
-            && marker.sentAt > 0
-            && Date.now() - marker.sentAt > PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS
+            && isWatchPartySeatRequestExpired(marker.sentAt, Date.now(), PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS)
           ) {
             return;
           }
-          applySeatRequestState(marker.participantId, marker.pending, "message-insert", marker.sentAt);
+          applySeatRequestState(
+            marker.participantId,
+            marker.pending,
+            "message-insert",
+            marker.sentAt,
+            marker.requestVersion,
+          );
         },
       );
 
@@ -2651,12 +2750,21 @@ export default function PlayerScreen() {
         const participantId = String(payload?.participantId ?? "").trim();
         if (!participantId) return;
         const pending = !!payload?.pending;
-        applySeatRequestState(participantId, pending, "broadcast");
+        const requestedAt = Number(payload?.requestedAt ?? payload?.sentAt ?? 0);
+        const requestVersion = String(payload?.requestVersion ?? payload?.requestId ?? requestedAt ?? "").trim();
+        applySeatRequestState(
+          participantId,
+          pending,
+          "broadcast",
+          Number.isFinite(requestedAt) && requestedAt > 0 ? requestedAt : Date.now(),
+          requestVersion,
+        );
         debugLog("livekit", "watch-party-live seat request received", {
           roomName: partyId,
           currentUserId: trackedUserId,
           participantId,
           pending,
+          requestVersion,
           currentUserIsHost: currentUserCanApproveSeatRequests().isHost,
           hostAuthoritySource: currentUserCanApproveSeatRequests().source,
         });
@@ -2804,7 +2912,7 @@ export default function PlayerScreen() {
       const authority = getWatchPartyHostAuthority();
       if (!authority.isHost) return;
       const currentUserId = authority.currentUserId;
-      const latestByParticipant = new Map<string, { pending: boolean; sentAt: number }>();
+      const latestByParticipant = new Map<string, { pending: boolean; sentAt: number; requestVersion: string }>();
       messages.forEach((message) => {
         const marker = decodePartySeatRequestMessage(message.body);
         if (!marker) return;
@@ -2815,16 +2923,17 @@ export default function PlayerScreen() {
         latestByParticipant.set(marker.participantId, {
           pending: marker.pending,
           sentAt: normalizedSentAt,
+          requestVersion: marker.requestVersion || String(normalizedSentAt || ""),
         });
       });
 
-      latestByParticipant.forEach(({ pending, sentAt }, participantId) => {
+      latestByParticipant.forEach(({ pending, sentAt, requestVersion }, participantId) => {
         if (!participantId || participantId === currentUserId) return;
-        if (pending && sentAt > 0 && Date.now() - sentAt > PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS) {
-          setPendingPartySeatRequest(participantId, false, `${source}:expired`, sentAt);
+        if (pending && isWatchPartySeatRequestExpired(sentAt, Date.now(), PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS)) {
+          setPendingPartySeatRequest(participantId, false, `${source}:expired`, sentAt, requestVersion);
           return;
         }
-        setPendingPartySeatRequest(participantId, pending, source, sentAt);
+        setPendingPartySeatRequest(participantId, pending, source, sentAt, requestVersion);
         if (!partyParticipantsRef.current.some((participant) => participant.id === participantId)) {
           refreshPartyMembershipSnapshot().catch(() => null);
         }
@@ -2871,6 +2980,7 @@ export default function PlayerScreen() {
           participantId,
           pending,
           source,
+          requestVersion,
           currentUserIsHost: authority.isHost,
           hostAuthoritySource: authority.source,
           pendingSeatRequestIds: Object.keys(pendingPartySeatRequestsRef.current),
@@ -3298,9 +3408,10 @@ export default function PlayerScreen() {
     );
     setControlsVisible(true);
     resetAutoHideTimer();
+    const requestVersion = createWatchPartySeatRequestVersion();
     try {
       await syncCurrentPartyPresence({ isRequestingToSpeak: true }).catch(() => {});
-      await broadcastPartySeatRequest(trackedUserId, true);
+      await broadcastPartySeatRequest(trackedUserId, true, requestVersion);
     } catch (error) {
       setPartyParticipants((prev) =>
         prev.map((entry) =>
@@ -3327,6 +3438,7 @@ export default function PlayerScreen() {
     if (!inWatchParty || !partyId || !participantId || !authority.isHost) return false;
 
     const existingMembership = partyMembershipMapRef.current[participantId];
+    const clearingRequestVersion = pendingPartySeatRequestsRef.current[participantId]?.requestVersion ?? "";
     const nextMembership = await setPartyParticipantState(partyId, participantId, {
       role: existingMembership?.role ?? "viewer",
       stageRole: options.stageRole,
@@ -3368,10 +3480,11 @@ export default function PlayerScreen() {
 
     await broadcastPartySeatState(participantId, options);
     if (options.isRequestingToSpeak === false) {
-      await broadcastPartySeatRequest(participantId, false).catch((error) => {
+      await broadcastPartySeatRequest(participantId, false, clearingRequestVersion).catch((error) => {
         debugLog("livekit", "watch-party-live seat request clear broadcast failed after persistence", {
           roomName: partyId,
           participantId,
+          requestVersion: clearingRequestVersion,
           error: error instanceof Error ? error.message : String(error ?? ""),
         });
       });
@@ -5388,8 +5501,21 @@ export default function PlayerScreen() {
     }
     return "viewer";
   }, [currentWatchPartyParticipant, partySyncRole, trackedUserId]);
-  const desiredWatchPartyLiveKitCanPublish = desiredWatchPartyLiveKitParticipantRole !== "viewer" && !currentWatchPartyParticipantMuted;
-  const watchPartyLiveKitCanPublish = !!watchPartyLiveKitJoinContract?.requestedGrants.canPublish
+  const desiredWatchPartyLiveKitAuthority = useMemo(
+    () => resolveDesiredWatchPartyLiveAuthority({
+      participantRole: desiredWatchPartyLiveKitParticipantRole,
+      isMuted: currentWatchPartyParticipantMuted,
+    }),
+    [currentWatchPartyParticipantMuted, desiredWatchPartyLiveKitParticipantRole],
+  );
+  const desiredWatchPartyLiveKitCanPublish = desiredWatchPartyLiveKitAuthority.canPublish;
+  const watchPartyLiveKitContractMatchesDesired = watchPartyLiveContractMatchesDesiredAuthority(
+    watchPartyLiveKitJoinContract,
+    desiredWatchPartyLiveKitAuthority,
+    { roomName: partyId },
+  );
+  const watchPartyLiveKitCanPublish = watchPartyLiveKitContractMatchesDesired
+    && !!watchPartyLiveKitJoinContract?.requestedGrants.canPublish
     && watchPartyLiveKitJoinContract.participantRole !== "viewer";
   const publishWatchPartyLiveKitAudio = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
   const publishWatchPartyLiveKitVideo = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
@@ -5503,12 +5629,16 @@ export default function PlayerScreen() {
       && !participant.canSpeak
     )) ?? null;
   }, [currentWatchPartyHostAuthority.isHost, liveBubbleParticipants, trackedUserId]);
+  const hostVisibleSeatRequesterVersion = hostVisibleSeatRequester
+    ? pendingPartySeatRequestsRef.current[hostVisibleSeatRequester.id]?.requestVersion ?? ""
+    : "";
   useEffect(() => {
     if (!hostVisibleSeatRequester || !partyId) {
       lastPartySeatRequestFocusKeyRef.current = "";
       return;
     }
-    const requestFocusKey = `${partyId}:${hostVisibleSeatRequester.id}`;
+    if (!shouldAutoOpenWatchPartySeatRequestReview(readPartySeatRequestState(), hostVisibleSeatRequester.id)) return;
+    const requestFocusKey = `${partyId}:${hostVisibleSeatRequester.id}:${hostVisibleSeatRequesterVersion}`;
     if (lastPartySeatRequestFocusKeyRef.current === requestFocusKey) return;
     lastPartySeatRequestFocusKeyRef.current = requestFocusKey;
     setActiveParticipantId(hostVisibleSeatRequester.id);
@@ -5528,8 +5658,10 @@ export default function PlayerScreen() {
   }, [
     currentWatchPartyHostAuthority.source,
     hostVisibleSeatRequester,
+    hostVisibleSeatRequesterVersion,
     liveBubbleParticipants,
     partyId,
+    readPartySeatRequestState,
     resetAutoHideTimer,
     showLivePresenceEvent,
     trackedUserId,
@@ -5629,28 +5761,17 @@ export default function PlayerScreen() {
       currentWatchPartyMembershipAuthoritySignature,
     ].join(":");
 
-    if (watchPartyLiveKitJoinContract && !staleContract) {
+    if (
+      watchPartyLiveKitJoinContract
+      && !staleContract
+      && watchPartyLiveContractMatchesDesiredAuthority(
+        watchPartyLiveKitJoinContract,
+        desiredWatchPartyLiveKitAuthority,
+        { roomName: partyId },
+      )
+    ) {
       watchPartyLiveKitContractRequestKeyRef.current = "";
       watchPartyLiveKitAuthorityRetryKeyRef.current = "";
-      return;
-    }
-
-    if (
-      staleContract
-      && desiredWatchPartyLiveKitCanPublish
-      && !contractRoomMismatch
-      && !watchPartyLiveKitJoinContractExpired
-      && watchPartyLiveKitAuthorityRetryKeyRef.current === authorityRetryKey
-    ) {
-      debugLog("livekit", "kept backend-authoritative watch-party-live contract after guarded publish retry", {
-        roomName: partyId,
-        currentUserId: trackedUserId,
-        desiredParticipantRole: desiredWatchPartyLiveKitParticipantRole,
-        desiredCanPublish: desiredWatchPartyLiveKitCanPublish,
-        contractParticipantRole: watchPartyLiveKitJoinContract?.participantRole ?? null,
-        contractCanPublish: existingCanPublish,
-        membershipAuthority: currentWatchPartyMembershipAuthoritySignature,
-      });
       return;
     }
 
@@ -5678,9 +5799,11 @@ export default function PlayerScreen() {
     });
     if (preparedContract) {
       const preparedContractCanPublish = preparedContract.requestedGrants.canPublish === true;
-      const preparedContractMatchesDesired = preparedContract.roomName === partyId
-        && preparedContract.participantRole === desiredWatchPartyLiveKitParticipantRole
-        && preparedContractCanPublish === desiredWatchPartyLiveKitCanPublish;
+      const preparedContractMatchesDesired = watchPartyLiveContractMatchesDesiredAuthority(
+        preparedContract,
+        desiredWatchPartyLiveKitAuthority,
+        { roomName: partyId },
+      );
       if (preparedContractMatchesDesired) {
         watchPartyLiveKitContractRequestKeyRef.current = "";
         watchPartyLiveKitAuthorityRetryKeyRef.current = "";
@@ -5742,9 +5865,11 @@ export default function PlayerScreen() {
       if (!active) return;
       if (joinResult.status === "ready") {
         const joinResultCanPublish = joinResult.requestedGrants.canPublish === true;
-        const joinResultMatchesDesired = joinResult.participantRole === desiredWatchPartyLiveKitParticipantRole
-          && joinResultCanPublish === desiredWatchPartyLiveKitCanPublish;
-        setWatchPartyLiveKitJoinContract(joinResult);
+        const joinResultMatchesDesired = watchPartyLiveContractMatchesDesiredAuthority(
+          joinResult,
+          desiredWatchPartyLiveKitAuthority,
+          { roomName: partyId },
+        );
         debugLog("livekit", "prepared watch-party-live join contract from membership authority", {
           roomName: joinResult.roomName,
           endpoint: joinResult.endpoint,
@@ -5756,11 +5881,13 @@ export default function PlayerScreen() {
         });
 
         if (joinResultMatchesDesired) {
+          setWatchPartyLiveKitJoinContract(joinResult);
           watchPartyLiveKitContractRequestKeyRef.current = "";
           watchPartyLiveKitAuthorityRetryKeyRef.current = "";
           return;
         }
 
+        setWatchPartyLiveKitJoinContract(null);
         if (desiredWatchPartyLiveKitCanPublish) {
           if (watchPartyLiveKitAuthorityRetryKeyRef.current !== authorityRetryKey) {
             watchPartyLiveKitAuthorityRetryKeyRef.current = authorityRetryKey;
@@ -5818,6 +5945,7 @@ export default function PlayerScreen() {
     currentWatchPartyMembershipAuthoritySignature,
     currentWatchPartyParticipantMuted,
     currentWatchPartyParticipantName,
+    desiredWatchPartyLiveKitAuthority,
     desiredWatchPartyLiveKitCanPublish,
     desiredWatchPartyLiveKitParticipantRole,
     inWatchParty,
@@ -6206,9 +6334,48 @@ export default function PlayerScreen() {
     if (isCreatorVideoPlayback) return null;
     return displayItem?.video || fallbackVideo;
   }, [displayItem?.video, displayItem?.video_url, fallbackVideo, inWatchParty, isCreatorVideoPlayback, source, titleLoading]);
+  const watchPartyLiveMediaSourceClassification = useMemo(() => (
+    classifyWatchPartyLiveMediaSource({
+      sourceType: playbackSourceKind,
+      sourceId: displayItem?.id ?? cleanId,
+      displayName: displayItem?.title ?? creatorVideo?.title ?? "",
+      playbackUrl: displayItem?.video_url ?? creatorVideo?.playbackUrl ?? "",
+      usedBundledFallback: inWatchParty
+        && !!sharedPartyResolvedSource
+        && typeof sharedPartyResolvedSource === "number",
+    })
+  ), [
+    cleanId,
+    creatorVideo?.playbackUrl,
+    creatorVideo?.title,
+    displayItem?.id,
+    displayItem?.title,
+    displayItem?.video_url,
+    inWatchParty,
+    playbackSourceKind,
+    sharedPartyResolvedSource,
+  ]);
   const [playbackSource, setPlaybackSource] = useState<any>(() =>
     typeof sharedPartyResolvedSource === "number" ? null : sharedPartyResolvedSource,
   );
+  useEffect(() => {
+    if (!inWatchParty) return;
+    debugLog("player", "watch-party-live media source classification", {
+      classification: watchPartyLiveMediaSourceClassification,
+      sourceType: playbackSourceKind,
+      hasPlaybackUrl: !!String(displayItem?.video_url ?? creatorVideo?.playbackUrl ?? "").trim(),
+      usesBundledFallback: typeof sharedPartyResolvedSource === "number",
+    });
+  }, [
+    cleanId,
+    creatorVideo?.playbackUrl,
+    displayItem?.id,
+    displayItem?.video_url,
+    inWatchParty,
+    playbackSourceKind,
+    sharedPartyResolvedSource,
+    watchPartyLiveMediaSourceClassification,
+  ]);
   useEffect(() => {
     let cancelled = false;
 
@@ -6824,6 +6991,7 @@ export default function PlayerScreen() {
   ]);
 
   const denyPartyParticipantSeatRequest = useCallback(async (participant: PartyParticipant) => {
+    const clearingRequestVersion = pendingPartySeatRequestsRef.current[participant.id]?.requestVersion ?? "";
     clearPendingPartySeatRequest(participant.id, "seat-request-denied");
     setPartyParticipants((prev) =>
       prev.map((entry) =>
@@ -6833,10 +7001,11 @@ export default function PlayerScreen() {
     if (participant.id === trackedUserId) {
       syncCurrentPartyPresence({ isRequestingToSpeak: false }).catch(() => {});
     }
-    await broadcastPartySeatRequest(participant.id, false).catch((error) => {
+    await broadcastPartySeatRequest(participant.id, false, clearingRequestVersion).catch((error) => {
       debugLog("livekit", "watch-party-live seat request deny marker failed", {
         roomName: partyId,
         participantId: participant.id,
+        requestVersion: clearingRequestVersion,
         error: error instanceof Error ? error.message : String(error ?? ""),
       });
     });
@@ -6903,27 +7072,7 @@ export default function PlayerScreen() {
       {toolsExpanded ? (
         <View style={[styles.participantExpandedControls, dockLayout && styles.participantExpandedControlsDock]}>
           {isRequesting ? (
-            <>
-              <TouchableOpacity
-                style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
-                onPress={async () => {
-                  await approvePartyParticipantSeat(participant);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.partyParticipantControlBtnText}>Approve</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
-                onPress={async () => {
-                  await denyPartyParticipantSeatRequest(participant);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.partyParticipantControlBtnText}>Deny</Text>
-              </TouchableOpacity>
-            </>
+            <Text style={styles.participantExpandedSummaryBody}>Use the review card to approve or deny this camera request.</Text>
           ) : null}
 
           <TouchableOpacity
@@ -6982,45 +7131,39 @@ export default function PlayerScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
-            onPress={async () => {
-              const nextCanSpeak = !participant.canSpeak;
-              if (nextCanSpeak && !canAddPartySpeakerSeat(participant)) {
-                showLivePresenceEvent(`Speaker seats are full (${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} max)`);
-                return;
-              }
-              const seatPersisted = await persistPartySeatState(participant.id, {
-                canSpeak: nextCanSpeak,
-                stageRole: nextCanSpeak ? "speaker" : "listener",
-                isRequestingToSpeak: false,
-              });
-              if (!seatPersisted) {
-                await reportPartySeatUpdateUnavailable();
-                return;
-              }
-              setPartyParticipants((prev) =>
-                prev.map((entry) => {
-                  if (entry.id !== participant.id) return entry;
-                  return {
-                    ...entry,
-                    canSpeak: nextCanSpeak,
-                    stageRole: nextCanSpeak ? "speaker" : "listener",
-                    isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
-                    isRequestingToSpeak: false,
-                  };
-                }),
-              );
-
-              if (participant.canSpeak) {
+          {participant.canSpeak ? (
+            <TouchableOpacity
+              style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
+              onPress={async () => {
+                const seatPersisted = await persistPartySeatState(participant.id, {
+                  canSpeak: false,
+                  stageRole: "listener",
+                  isRequestingToSpeak: false,
+                });
+                if (!seatPersisted) {
+                  await reportPartySeatUpdateUnavailable();
+                  return;
+                }
+                setPartyParticipants((prev) =>
+                  prev.map((entry) => {
+                    if (entry.id !== participant.id) return entry;
+                    return {
+                      ...entry,
+                      canSpeak: false,
+                      stageRole: "listener",
+                      isSpeaking: false,
+                      isRequestingToSpeak: false,
+                    };
+                  }),
+                );
                 speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
-              }
-              bumpRoomEnergy(participant.canSpeak ? 0.04 : 0.07);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.partyParticipantControlBtnText}>{participant.canSpeak ? "Move to Audience" : "Seat Participant"}</Text>
-          </TouchableOpacity>
+                bumpRoomEnergy(0.04);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.partyParticipantControlBtnText}>Move to Audience</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
             style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
@@ -7345,7 +7488,7 @@ export default function PlayerScreen() {
     const participant = watchPartyLiveHostReviewParticipant;
     if (!participant) return null;
     const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
-    const seatActionLabel = participant.canSpeak ? "Move to Audience" : "Seat Participant";
+    const canManageSeatedSpeaker = participant.canSpeak;
 
     return (
       <View style={[styles.watchPartyDockCard, styles.watchPartyHostReviewCard]}>
@@ -7357,8 +7500,7 @@ export default function PlayerScreen() {
           <TouchableOpacity
             style={styles.watchPartyHostReviewCloseBtn}
             onPress={() => {
-              setActiveParticipantId(null);
-              setActiveParticipantToolsId(null);
+              closePendingPartySeatReview(participant.id);
             }}
             activeOpacity={0.84}
           >
@@ -7370,7 +7512,7 @@ export default function PlayerScreen() {
             ? "Review this request and approve only when you want this viewer to publish camera and mic."
             : participant.canSpeak
               ? "This participant is seated and can publish. Move them back to the audience when needed."
-              : "Seat this participant to let them publish camera and mic."}
+              : "This viewer is in the audience. They can request camera when they are ready."}
         </Text>
         <View style={styles.watchPartyHostReviewActionRow}>
           {isRequesting ? (
@@ -7394,11 +7536,11 @@ export default function PlayerScreen() {
                 <Text style={styles.partyParticipantControlBtnText}>Deny</Text>
               </TouchableOpacity>
             </>
-          ) : (
+          ) : canManageSeatedSpeaker ? (
             <TouchableOpacity
               style={[styles.partyParticipantControlBtn, styles.watchPartyHostReviewPrimaryBtn]}
               onPress={async () => {
-                const nextCanSpeak = !participant.canSpeak;
+                const nextCanSpeak = false;
                 if (nextCanSpeak && !canAddPartySpeakerSeat(participant)) {
                   showLivePresenceEvent(`Speaker seats are full (${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} max)`);
                   return;
@@ -7432,9 +7574,9 @@ export default function PlayerScreen() {
               }}
               activeOpacity={0.86}
             >
-              <Text style={styles.partyParticipantControlBtnText}>{seatActionLabel}</Text>
+              <Text style={styles.partyParticipantControlBtnText}>Move to Audience</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </View>
     );

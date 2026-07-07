@@ -16,6 +16,12 @@ The follow-up LiveKit backend investigation in `docs/release/LIVEKIT_SERVER_HEAR
 
 That backend blocker is now superseded by the July 5 retry closure: Hetzner unblocked the endpoint, `livekit-heartbeat-monitor.service` is installed/active on the host, `npm run check:livekit-routing-health` passes with `eligibleServerCount=1`, and fresh redacted `watch-party-live` / `live-stage` token audit rows succeed. This sidecar proof remains Partial only until the installed Home-video sidecar path is rerun against the recovered backend and R3 actual playback is proved.
 
+## July 7 Source-Truth Follow-Up
+
+The source follow-up in `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md` repairs the app-controlled Watch-Party Live sidecar source truth that this installed proof exposed. The fix keeps the Shared Player fullscreen layout unchanged, canonicalizes the Premium access key used by Party Room and Player, classifies real remote media versus bundled/proof/fixture fallback for proof honesty, treats downgraded LiveKit token contracts as not publish-ready, versions camera-seat requests so duplicate pending events do not reopen an X-closed review, keeps pending approval on a stable host review path, and requires identity-matched participant tracks in LiveKit bubbles.
+
+This does not retroactively close the July 5 installed proof: actual R3 shared-player playback from strict non-fixture Home media still needs a fresh Play-installed proof pass after the aligned source and OTA are loaded.
+
 ## Repo / Origin Alignment
 
 - Start and proof baseline: `HEAD == origin/main == 97a615a29ab69724f369f913c2e84a13497d9e3e`.

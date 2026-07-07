@@ -105,6 +105,7 @@ import {
     getSafePartyUserId,
     joinPartyRoomSession,
     leavePartyRoomSession,
+    resolvePremiumAccessKeyForRoom,
     sendPartyMessageRecord,
     setPartyRoomPolicies,
     setPartyParticipantState,
@@ -839,11 +840,7 @@ export default function WatchPartyRoomScreen() {
 
         if (!exactTicketAllowsEntry) {
           const premiumAccessSource = snapshot.room.roomType === "live" ? "live_first" : "watch_party_live";
-          const premiumAccessKey = String(
-            snapshot.room.roomType === "live"
-              ? snapshot.room.partyId ?? partyId
-              : snapshot.room.sourceId ?? snapshot.room.titleId ?? snapshot.room.partyId ?? partyId,
-          ).trim();
+          const premiumAccessKey = String(resolvePremiumAccessKeyForRoom(snapshot.room) || partyId).trim();
           const premiumAccess = await (
             premiumAccessSource === "live_first" ? requireLiveFirstPremium : requireWatchPartyLivePremium
           )({ accessKey: premiumAccessKey }).catch(() => null);
@@ -2086,7 +2083,13 @@ export default function WatchPartyRoomScreen() {
         return;
       }
 
-      const premiumAccess = await requireWatchPartyLivePremium({ accessKey: targetSourceId || nextPartyId }).catch(() => null);
+      const premiumAccessKey = resolvePremiumAccessKeyForRoom({
+        partyId: nextPartyId,
+        roomType: "title",
+        sourceId: targetSourceId,
+        titleId: targetTitleId || null,
+      });
+      const premiumAccess = await requireWatchPartyLivePremium({ accessKey: premiumAccessKey }).catch(() => null);
       if (!premiumAccess?.allowed) {
         resetWatchPartyLiveOpening();
         if (isRuntimeControlBlockedAccess(premiumAccess)) {
@@ -2105,7 +2108,7 @@ export default function WatchPartyRoomScreen() {
           setAccessGate({
             source: "watch_party_live",
             access: premiumAccess,
-            accessKey: targetSourceId || nextPartyId,
+            accessKey: premiumAccessKey || nextPartyId,
           });
         }
         setAccessSheetVisible(true);

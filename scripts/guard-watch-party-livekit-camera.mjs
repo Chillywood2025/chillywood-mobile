@@ -53,6 +53,7 @@ const partyRoom = readSource("app/watch-party/[partyId].tsx");
 const liveStage = readSource("app/watch-party/live-stage/[partyId].tsx");
 const player = readSource("app/player/[id].tsx");
 const watchParty = readSource("_lib/watchParty.ts");
+const watchPartyLiveSourceTruth = readSource("_lib/watch-party/watch-party-live-source-truth.ts");
 const watchPartySeatRequestProof = readSource("scripts/proof-watch-party-seat-request.mjs");
 const liveStageSeatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
 const premiumWatchPartyAccess = readSource("_lib/premiumWatchPartyAccess.ts");
@@ -95,7 +96,7 @@ const playerVideoLoadHandler = sliceBetween(
 const playerWatchPartyPresenceSync = sliceBetween(
   player,
   "const syncCurrentPartyPresence = useCallback(async (overrides?: Partial<{",
-  "const persistPartySeatRequestMarker = useCallback(async (participantId: string, pending: boolean) => {",
+  "const persistPartySeatRequestMarker = useCallback(async (",
   "Player Watch-Party presence sync boundary",
 );
 const playerWatchPartyHostSeatRequestPolling = sliceBetween(
@@ -121,6 +122,66 @@ const playerSharedPlaybackControlAuthority = sliceBetween(
   "const getSharedPlaybackControlAuthority = useCallback(() => {",
   "const setPendingPartySeatRequest = useCallback((",
   "Player Watch-Party shared playback control authority boundary",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "export const createWatchPartySeatRequestVersion",
+  "Watch-Party Live source-truth helper must create request versions",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "closeWatchPartySeatRequestReview",
+  "Watch-Party Live source-truth helper must own X/Close suppression",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "shouldAutoOpenWatchPartySeatRequestReview",
+  "Watch-Party Live source-truth helper must own duplicate auto-open checks",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "watchPartyLiveContractMatchesDesiredAuthority",
+  "Watch-Party Live source-truth helper must own contract authority matching",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "canRenderWatchPartyParticipantSpecificTrack",
+  "Watch-Party Live source-truth helper must own identity-safe track checks",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "classifyWatchPartyLiveMediaSource",
+  "Watch-Party Live source-truth helper must classify real media versus fixture/fallback proof",
+);
+assertIncludes(
+  player,
+  "isSharedPartyPlayback && isPlayerFullscreen ? styles.sharedFullscreenRailsLayout",
+  "Shared Player fullscreen must keep the custom three-zone rails layout",
+);
+assertIncludes(
+  player,
+  "isSharedPartyPlayback && isPlayerFullscreen ? renderSharedFullscreenCommentsRail() : null",
+  "Shared Player fullscreen must keep the left comments rail",
+);
+assertIncludes(
+  player,
+  "isSharedPartyPlayback && isPlayerFullscreen ? styles.sharedFullscreenCenterStage",
+  "Shared Player fullscreen must keep the center shared video surface",
+);
+assertIncludes(
+  player,
+  "isSharedPartyPlayback && isPlayerFullscreen ? renderSharedFullscreenParticipantRail() : null",
+  "Shared Player fullscreen must keep the right LiveKit bubble rail",
+);
+assertIncludes(
+  player,
+  "renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)",
+  "Shared Player fullscreen right rail must reuse the portrait LiveKit bubble surface",
+);
+assertNotIncludes(
+  player,
+  "renderParticipantPanel(false, false, true)",
+  "Shared Player fullscreen right rail must not fall back to the non-LiveKit participant panel",
 );
 const playerSharedPlaybackSync = sliceBetween(
   player,
@@ -196,7 +257,7 @@ const playerWatchPartySeatRequest = sliceBetween(
 );
 const playerWatchPartyEntryAccessCheck = sliceBetween(
   player,
-  "const premiumAccess = await requireWatchPartyLivePremium({ accessKey: partyId })",
+  "const premiumAccessKey = resolvePremiumAccessKeyForRoom(snapshot.room);",
   "return () => {\n      active = false;",
   "Player Watch-Party entry access check boundary",
 );
@@ -558,6 +619,22 @@ assertIncludes(
 );
 assertIncludes(
   playerWatchPartyLiveKitContractRefresh,
+  "watchPartyLiveContractMatchesDesiredAuthority(",
+  "Player Watch-Party LiveKit must use shared authority matching helper",
+);
+assertBefore(
+  playerWatchPartyLiveKitContractRefresh,
+  "if (joinResultMatchesDesired) {",
+  "setWatchPartyLiveKitJoinContract(joinResult);",
+  "Player Watch-Party LiveKit must only store fresh join contracts after authority matches",
+);
+assertNotIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "kept backend-authoritative watch-party-live contract after guarded publish retry",
+  "Player Watch-Party LiveKit must not keep downgraded publish contracts as ready",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
   "watchPartyLiveKitContractRequestKeyRef.current = \"\";",
   "Player Watch-Party LiveKit must reset request keys after matching authority",
 );
@@ -612,17 +689,17 @@ assertIncludes(
   "Player Watch-Party LiveKit viewer requests must log Realtime broadcast send status",
 );
 assertIncludes(
-  watchParty,
+  watchPartyLiveSourceTruth,
   "PARTY_SEAT_REQUEST_MESSAGE_PREFIX",
   "Watch-Party shared helpers must define the durable hidden seat-request marker prefix",
 );
 assertIncludes(
-  watchParty,
+  watchPartyLiveSourceTruth,
   "export const encodePartySeatRequestMessage",
   "Watch-Party shared helpers must encode durable seat-request markers",
 );
 assertIncludes(
-  watchParty,
+  watchPartyLiveSourceTruth,
   "export const decodePartySeatRequestMessage",
   "Watch-Party shared helpers must decode durable seat-request markers",
 );
@@ -693,8 +770,8 @@ assertIncludes(
 );
 assertIncludes(
   playerWatchPartyHostSeatRequestPolling,
-  "setPendingPartySeatRequest(participantId, pending, source, sentAt)",
-  "Player Watch-Party LiveKit host polling must persist pending request state across roster refresh",
+  "setPendingPartySeatRequest(participantId, pending, source, sentAt, requestVersion)",
+  "Player Watch-Party LiveKit host polling must persist versioned pending request state across roster refresh",
 );
 assertIncludes(
   player,
@@ -703,8 +780,8 @@ assertIncludes(
 );
 assertIncludes(
   playerWatchPartySeatPersistence,
-  "broadcastPartySeatRequest(participantId, false)",
-  "Player Watch-Party LiveKit host approvals must persistently clear pending camera request markers",
+  "broadcastPartySeatRequest(participantId, false, clearingRequestVersion)",
+  "Player Watch-Party LiveKit host approvals must persistently clear versioned pending camera request markers",
 );
 assertIncludes(
   player,
@@ -783,8 +860,18 @@ assertIncludes(
 );
 assertIncludes(
   watchPartySeatRequestProof,
-  "pending request should survive a roster refresh",
-  "Watch-Party seat request proof must cover durable host pending state",
+  "duplicate pending request version must not reopen after X close",
+  "Watch-Party seat request proof must cover request-version close suppression",
+);
+assertIncludes(
+  watchPartySeatRequestProof,
+  "helperBackedProof: true",
+  "Watch-Party seat request proof must import real source-truth helpers",
+);
+assertIncludes(
+  watchPartySeatRequestProof,
+  "_lib/watch-party/watch-party-live-source-truth.ts",
+  "Watch-Party seat request proof must import the production source-truth helper",
 );
 assertIncludes(
   partyRoom,
@@ -1034,6 +1121,26 @@ assertIncludes(
   "Player Watch-Party Live title host request controls must expose a tappable primary action",
 );
 assertIncludes(
+  playerWatchPartyHostControls,
+  "Use the review card to approve or deny this camera request.",
+  "Player Watch-Party pending inline tools must defer approval to the stable review card",
+);
+assertNotIncludes(
+  playerWatchPartyHostControls,
+  "Approve</Text>",
+  "Player Watch-Party pending inline tools must not expose inline Approve",
+);
+assertNotIncludes(
+  playerWatchPartyHostControls,
+  "Deny</Text>",
+  "Player Watch-Party pending inline tools must not expose inline Deny",
+);
+assertNotIncludes(
+  playerWatchPartyHostControls,
+  "Seat Participant",
+  "Player Watch-Party non-requesting audience listeners must not expose direct Seat Participant inline controls",
+);
+assertIncludes(
   player,
   "pointerEvents=\"none\" style={styles.livePresenceEventToast}",
   "Player Watch-Party Live request toast must not block host control taps",
@@ -1042,6 +1149,21 @@ assertIncludes(
   partyRoom,
   "liveKitIdentity: participantIdentity",
   "Party Room must pass the prepared LiveKit participant identity through the Player route handoff",
+);
+assertIncludes(
+  watchParty,
+  "export const resolvePremiumAccessKeyForRoom",
+  "Watch-Party shared helpers must export the canonical Premium access key resolver",
+);
+assertIncludes(
+  partyRoom,
+  "resolvePremiumAccessKeyForRoom(",
+  "Party Room Watch-Party Live handoff must use the canonical Premium access key resolver",
+);
+assertIncludes(
+  player,
+  "const premiumAccessKey = resolvePremiumAccessKeyForRoom(snapshot.room);",
+  "Player Watch-Party Live entry must use the same canonical Premium access key resolver",
 );
 assertIncludes(
   partyRoom,

@@ -1,5 +1,15 @@
 # Final Production Readiness Checklist
 
+## July 7, 2026 Watch-Party Live Source-Truth Follow-Up
+
+Status: Source-repaired, guard/proof upgraded, installed proof pending.
+
+Watch-Party Live sidecar/shared-player now has source-truth coverage for the remaining app-controlled failure modes without changing the locked fullscreen layout. The custom fullscreen row remains the same left comments rail, center shared player/video surface, and right portrait-reused LiveKit bubble rail. Guard coverage rejects replacing the right rail with fake participants, removing the rails, or falling back to normal native fullscreen for shared playback.
+
+The source repair adds a canonical Watch-Party Live Premium access key helper shared by Party Room handoff and Player entry, real/non-fixture media classification for installed proof honesty, strict LiveKit token-contract authority matching before host/speaker publish-ready UI, request-versioned camera-seat requests with X-close duplicate suppression and `Not now` clear semantics, sheet/review-card-first pending approval instead of competing inline pending controls, identity-matched participant-specific bubble tracks, and helper-backed proof importing the route's real Watch-Party Live source-truth module.
+
+Public production remains No-Go for Watch-Party Live sidecar until Google Play-installed proof closes with real non-fixture Home media, actual shared-player playback on both devices, host-only playback authority in portrait and fullscreen, viewer comments/reactions/camera request, host approval with matching LiveKit authority, identity-safe LiveKit bubbles, and unchanged fullscreen rails. This lane does not change Premium entitlement logic, billing/provider setup, Watch-Party Party Room behavior, Android App Links, LiveKit routing/heartbeat/cutoffs, Chi'lly Chat/native calls, auth/RLS, live money, payout, or cashout.
+
 ## July 7, 2026 Live Stage Source-Truth Follow-Up
 
 Live Stage host/viewer UX is Closed for the app-controlled installed Google Play v80 proof lane. The stricter source/guard repair is committed, pushed, OTA-published, and installed-proved: request close suppression is versioned, duplicate pending broadcasts cannot reopen an X-closed sheet, downgraded LiveKit speaker-desired contracts are not publish-ready, pending approval is sheet-only, participant-specific tiles require identity-matched tracks, and the proof imports the real Live Stage helper module instead of a duplicate model. Installed room `NXQ4M2` proved the host/viewer presentation, X close, `Not now`, `Bring on stage`, viewer publish-state readback, identity-safe tile behavior, and Stage / `2 in room` with both phones Premium-active through the approved Google Play / RevenueCat sandbox path. This preserves Premium gates, LiveKit routing/heartbeat/cutoffs, Watch-Party Party Room behavior, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing/provider state, live money, payout, and cashout boundaries. Public production still requires separate Watch-Party Live sidecar playback closure and broader LiveKit load/reconnect/cellular/TURN/metrics hardening.
