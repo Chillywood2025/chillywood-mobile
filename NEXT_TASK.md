@@ -3,10 +3,10 @@
 # Watch-Party Live Source-Truth Repair
 
 Current latest truth:
-- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and pending fresh OTA publication from aligned source. Installed proof remains Partial/blocked on R3 device visibility.
+- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and OTA-published from aligned source. Installed proof remains Partial/blocked on R3 device visibility.
 - Governing new doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
-- Source commit: `44d776fe117386d3cd0a3400d488ed82e11c8bf6`.
-- Android EAS Update production runtime `1.0.0`: group `d4c9fe3a-1f92-4fa6-8252-5920aecc59b4`, Android update `019f3d20-16a3-772b-9b4e-870e4d9deeeb`.
+- Source commit: `0b07b7224be9fdd3fe1df2d3906f7e140040cd50`.
+- Android EAS Update production runtime `1.0.0`: group `f917d6f6-e298-45f4-b1fe-7962c3c89f34`, Android update `019f3d37-5bd7-70b5-b881-4e15a2b07c30`.
 - R5 read back Play-installed v80 from `com.android.vending` and safely downloaded/launched the OTA. R3 was not visible to ADB/macOS USB or wireless mDNS/Bonjour discovery, so the required two-device installed proof could not start.
 - The Shared Player custom fullscreen rails remain locked: left comments rail, center shared video surface, and right portrait-reused LiveKit bubble rail. This lane must not change `docs/SHARED_PLAYER_CUSTOM_FULLSCREEN_RAILS.md` layout intent except proof/status notes.
 - Party Room handoff and Player entry now use the same canonical Watch-Party Live Premium access key helper, without bypassing Premium or changing Google Play / RevenueCat behavior.

@@ -4,11 +4,11 @@ Date: 2026-07-07
 
 Verdict: Partial until installed proof closes.
 
-Source commit: `44d776fe117386d3cd0a3400d488ed82e11c8bf6`.
+Source commit: `0b07b7224be9fdd3fe1df2d3906f7e140040cd50`.
 
-Android EAS Update production runtime `1.0.0`: group `d4c9fe3a-1f92-4fa6-8252-5920aecc59b4`, Android update `019f3d20-16a3-772b-9b4e-870e4d9deeeb`.
+Android EAS Update production runtime `1.0.0`: group `f917d6f6-e298-45f4-b1fe-7962c3c89f34`, Android update `019f3d37-5bd7-70b5-b881-4e15a2b07c30`.
 
-Pre-proof hardening follow-up: validation-clean on July 7, 2026; fresh OTA mapping is recorded below after publishing from aligned `origin/main`.
+Pre-proof hardening follow-up: validation-clean and OTA-published on July 7, 2026 from aligned `origin/main`.
 
 ## Executive Summary
 
