@@ -231,3 +231,7 @@ Manual proof items:
 - No route drift occurs between Live Stage and Party Room.
 - Stream/media fixes do not change the locked UI.
 - No fake participant tiles or fake Chi’llyfects/effects are used as proof.
+
+## 9. July 7, 2026 Watch-Party Live Control Reachability Note
+
+The Watch-Party Live Shared Player reachability fix adds explicit regular-player controls for viewer `Request Camera`, room reaction, and stable comment input/send proof targets inside the existing lower dock/comment structure. This is permitted by the lock because the shared content remains at the top, people/LiveKit bubbles remain below the content, visible comments remain visible in the approved lower placement, and fullscreen still uses the existing left comments rail, center video surface, and right LiveKit bubble rail.

@@ -1138,6 +1138,7 @@ export default function PlayerScreen() {
   const [partyCommentsOpen, setPartyCommentsOpen] = useState(false);
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [partyCommentSending, setPartyCommentSending] = useState(false);
+  const [watchPartyCameraRequestError, setWatchPartyCameraRequestError] = useState("");
   const [watchPartyMenuOpen, setWatchPartyMenuOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [liveFilterSheetOpen, setLiveFilterSheetOpen] = useState(false);
@@ -2180,6 +2181,7 @@ export default function PlayerScreen() {
       setPartyChatOpen((current) => (current ? false : current));
       setPartyCommentDraft((current) => (current ? "" : current));
       setPartyCommentSending((current) => (current ? false : current));
+      setWatchPartyCameraRequestError((current) => (current ? "" : current));
       setPartyOverlayMessages((current) => (current.length === 0 ? current : []));
       setPartyReactionBursts((current) => (current.length === 0 ? current : []));
       partyMembershipMapRef.current = {};
@@ -3414,6 +3416,7 @@ export default function PlayerScreen() {
       return;
     }
 
+    setWatchPartyCameraRequestError("");
     setPartyParticipants((prev) =>
       prev.map((entry) =>
         entry.id === trackedUserId ? { ...entry, isRequestingToSpeak: true } : entry,
@@ -3432,6 +3435,7 @@ export default function PlayerScreen() {
         ),
       );
       await syncCurrentPartyPresence({ isRequestingToSpeak: false }).catch(() => {});
+      setWatchPartyCameraRequestError("Camera request unavailable. Try again in a moment.");
       debugLog("livekit", "watch-party-live seat request unavailable after optimistic state", {
         roomName: partyId,
         currentUserId: trackedUserId,
@@ -5178,6 +5182,21 @@ export default function PlayerScreen() {
         text: `Someone reacted ${emoji}`,
       },
     ]);
+    partySocialChannelRef.current?.send({
+      type: "broadcast",
+      event: "reaction",
+      payload: {
+        emoji,
+        userId: partyUserIdRef.current || partySyncUserIdRef.current || "",
+        participantId,
+      },
+    }).catch((error) => {
+      debugLog("player", "watch-party-live reaction broadcast failed", {
+        roomName: partyId,
+        participantId,
+        error: error instanceof Error ? error.message : String(error ?? ""),
+      });
+    });
 
     const id = `party-local-react-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const videoWidth = Math.max(220, Math.floor(videoWidthRef.current || 320));
@@ -5246,7 +5265,7 @@ export default function PlayerScreen() {
       delete partyLocalReactionOpacityMapRef.current[id];
     });
     bumpRoomEnergy(0.07);
-  }, [activeParticipantId, bumpRoomEnergy, inWatchParty, markParticipantActive, partyParticipants, triggerParticipantLinkedReaction]);
+  }, [activeParticipantId, bumpRoomEnergy, inWatchParty, markParticipantActive, partyId, partyParticipants, triggerParticipantLinkedReaction]);
 
   useEffect(() => {
     return () => {
@@ -5301,6 +5320,18 @@ export default function PlayerScreen() {
     triggerLocalPartyReaction(emoji);
     setRecentReactionEmojis((prev) => pushRecentReaction(prev, emoji));
   }, [triggerLocalPartyReaction]);
+
+  const onPressSharedPlayerQuickReaction = useCallback(() => {
+    if (!isSharedPartyPlayback) return;
+    setLiveFilterSheetOpen(false);
+    setPartyCommentsOpen(false);
+    setWatchPartyMenuOpen(false);
+    setReactionPickerOpen(false);
+    const emoji = PARTY_LOCAL_REACTION_SET[Math.floor(Math.random() * PARTY_LOCAL_REACTION_SET.length)] ?? "✨";
+    triggerLocalPartyReaction(emoji);
+    setRecentReactionEmojis((prev) => pushRecentReaction(prev, emoji));
+    showLivePresenceEvent(`${emoji} reaction sent`);
+  }, [isSharedPartyPlayback, showLivePresenceEvent, triggerLocalPartyReaction]);
 
   const onToggleLiveFilters = useCallback(() => {
     setPartyCommentsOpen(false);
@@ -5566,6 +5597,73 @@ export default function PlayerScreen() {
       source: sources.join("+") || "none",
     };
   }, [currentWatchPartyParticipant?.role, partySyncRole, trackedUserId]);
+  const currentWatchPartyParticipantCanSpeak = !!(
+    currentWatchPartyParticipant?.canSpeak
+    || currentWatchPartyParticipant?.stageRole === "speaker"
+    || partyMembershipMapRef.current[trackedUserId]?.canSpeak
+    || partyMembershipMapRef.current[trackedUserId]?.stageRole === "speaker"
+  );
+  const currentWatchPartyViewerRequestPending = !!(
+    isSharedPartyPlayback
+    && !currentWatchPartyHostAuthority.isHost
+    && !currentWatchPartyParticipantCanSpeak
+    && currentWatchPartyParticipant?.isRequestingToSpeak
+  );
+  const shouldRenderSharedPlayerRequestCameraControl = !!(
+    isSharedPartyPlayback
+    && !currentWatchPartyHostAuthority.isHost
+    && currentWatchPartyParticipant
+    && !currentWatchPartyParticipantCanSpeak
+  );
+  const onPressSharedPlayerRequestCamera = useCallback(async (source: "dock" | "bubble" = "dock") => {
+    if (!isSharedPartyPlayback) return;
+    if (!currentWatchPartyParticipant) {
+      setWatchPartyCameraRequestError("Camera request unavailable. Rejoin the room and try again.");
+      showLivePresenceEvent("Camera request unavailable. Rejoin the room and try again.");
+      debugLog("livekit", "watch-party-live camera request blocked without participant", {
+        roomName: partyId,
+        source,
+        currentUserId: trackedUserId,
+      });
+      return;
+    }
+    if (currentWatchPartyHostAuthority.isHost || currentWatchPartyParticipantCanSpeak) return;
+    if (currentWatchPartyViewerRequestPending) {
+      setWatchPartyCameraRequestError("");
+      showLivePresenceEvent("Request pending. Waiting for host.");
+      return;
+    }
+
+    try {
+      await requestPartySeat();
+      setWatchPartyCameraRequestError("");
+      showLivePresenceEvent("Camera request sent. Waiting for host.");
+      debugLog("livekit", "watch-party-live camera request submitted from shared player control", {
+        roomName: partyId,
+        source,
+        currentUserId: trackedUserId,
+      });
+    } catch (error) {
+      setWatchPartyCameraRequestError("Camera request unavailable. Try again in a moment.");
+      showLivePresenceEvent("Camera request unavailable. Try again in a moment.");
+      debugLog("livekit", "watch-party-live camera request control failed", {
+        roomName: partyId,
+        source,
+        currentUserId: trackedUserId,
+        error: error instanceof Error ? error.message : String(error ?? ""),
+      });
+    }
+  }, [
+    currentWatchPartyHostAuthority.isHost,
+    currentWatchPartyParticipant,
+    currentWatchPartyParticipantCanSpeak,
+    currentWatchPartyViewerRequestPending,
+    isSharedPartyPlayback,
+    partyId,
+    requestPartySeat,
+    showLivePresenceEvent,
+    trackedUserId,
+  ]);
   const watchPartyLiveSharedPlaybackControlsLocked = isSharedPartyPlayback && !currentWatchPartyHostAuthority.isHost;
   const desiredWatchPartyLiveKitParticipantRole = useMemo<LiveKitTokenReady["participantRole"]>(() => {
     const currentMembership = partyMembershipMapRef.current[trackedUserId];
@@ -5688,16 +5786,13 @@ export default function PlayerScreen() {
     if (currentParticipant?.isRequestingToSpeak) {
       return;
     }
-    requestPartySeat().catch(() => {
-      showLivePresenceEvent("Camera request unavailable. Try again in a moment.");
-    });
+    onPressSharedPlayerRequestCamera("bubble");
   }, [
     currentWatchPartyHostAuthority.isHost,
+    onPressSharedPlayerRequestCamera,
     partyId,
     partyParticipants,
-    requestPartySeat,
     resetAutoHideTimer,
-    showLivePresenceEvent,
     trackedUserId,
   ]);
   const hostVisibleSeatRequester = useMemo(() => {
@@ -7182,13 +7277,13 @@ export default function PlayerScreen() {
     markParticipantActive(participant.id, 2400);
     bumpRoomEnergy(0.03);
     if (!isHost && participant.id === trackedUserId && !participant.canSpeak) {
-      requestPartySeat().catch(() => {});
+      onPressSharedPlayerRequestCamera("bubble");
     }
     if (!isHost) return;
     const nextParticipantId = activeParticipantId === participant.id ? null : participant.id;
     setActiveParticipantId(nextParticipantId);
     setActiveParticipantToolsId(null);
-  }, [activeParticipantId, bumpRoomEnergy, currentWatchPartyHostAuthority.isHost, markParticipantActive, requestPartySeat, trackedUserId]);
+  }, [activeParticipantId, bumpRoomEnergy, currentWatchPartyHostAuthority.isHost, markParticipantActive, onPressSharedPlayerRequestCamera, trackedUserId]);
 
   const reportPartySeatUpdateUnavailable = useCallback(async () => {
     showLivePresenceEvent("Seat update unavailable. Try again in a moment.");
@@ -7736,7 +7831,10 @@ export default function PlayerScreen() {
     const canManageSeatedSpeaker = participant.canSpeak;
 
     return (
-      <View style={[styles.watchPartyDockCard, styles.watchPartyHostReviewCard]}>
+      <View
+        style={[styles.watchPartyDockCard, styles.watchPartyHostReviewCard]}
+        testID="shared-player-host-request-card"
+      >
         <View style={styles.watchPartyHostReviewHeader}>
           <View style={styles.watchPartyHostReviewMeta}>
             <Text style={styles.watchPartyDockCardTitle}>{isRequesting ? "Camera Request" : "Participant Seat"}</Text>
@@ -7748,6 +7846,9 @@ export default function PlayerScreen() {
               closePendingPartySeatReview(participant.id);
             }}
             activeOpacity={0.84}
+            testID="shared-player-host-request-close"
+            accessibilityRole="button"
+            accessibilityLabel="Close camera request review"
           >
             <Text style={styles.watchPartyHostReviewCloseText}>Close</Text>
           </TouchableOpacity>
@@ -7768,6 +7869,9 @@ export default function PlayerScreen() {
                   await approvePartyParticipantSeat(participant);
                 }}
                 activeOpacity={0.86}
+                testID="shared-player-host-request-approve"
+                accessibilityRole="button"
+                accessibilityLabel="Approve camera request"
               >
                 <Text style={styles.partyParticipantControlBtnText}>Approve</Text>
               </TouchableOpacity>
@@ -7777,6 +7881,9 @@ export default function PlayerScreen() {
                   await denyPartyParticipantSeatRequest(participant);
                 }}
                 activeOpacity={0.86}
+                testID="shared-player-host-request-deny"
+                accessibilityRole="button"
+                accessibilityLabel="Deny camera request"
               >
                 <Text style={styles.partyParticipantControlBtnText}>Deny</Text>
               </TouchableOpacity>
@@ -7903,6 +8010,7 @@ export default function PlayerScreen() {
             style={styles.watchPartyDockActionBtn}
             onPress={onPressWatchPartyRoom}
             activeOpacity={0.88}
+            testID="shared-player-party-room-button"
           >
             <Text style={styles.watchPartyDockActionText}>Party Room</Text>
           </TouchableOpacity>
@@ -7910,17 +8018,60 @@ export default function PlayerScreen() {
             style={[styles.watchPartyDockActionBtn, partyCommentsOpen && styles.watchPartyDockActionBtnActive]}
             onPress={onToggleWatchPartyComments}
             activeOpacity={0.88}
+            testID="shared-player-room-comments-button"
           >
             <Text style={[styles.watchPartyDockActionText, partyCommentsOpen && styles.watchPartyDockActionTextActive]}>Room Comments</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={styles.watchPartyDockActionBtn}
+            onPress={onPressSharedPlayerQuickReaction}
+            activeOpacity={0.88}
+            testID="shared-player-reaction-button"
+            accessibilityRole="button"
+            accessibilityLabel="Send a quick room reaction"
+          >
+            <Text style={styles.watchPartyDockActionText}>React</Text>
+          </TouchableOpacity>
+          {shouldRenderSharedPlayerRequestCameraControl ? (
+            <TouchableOpacity
+              style={[
+                styles.watchPartyDockActionBtn,
+                currentWatchPartyViewerRequestPending && styles.watchPartyDockActionBtnActive,
+                currentWatchPartyViewerRequestPending && styles.secondaryBtnDisabled,
+              ]}
+              onPress={() => {
+                void onPressSharedPlayerRequestCamera("dock");
+              }}
+              disabled={currentWatchPartyViewerRequestPending}
+              activeOpacity={0.88}
+              testID={currentWatchPartyViewerRequestPending ? "shared-player-request-camera-pending" : "shared-player-request-camera-button"}
+              accessibilityRole="button"
+              accessibilityLabel={currentWatchPartyViewerRequestPending ? "Camera request pending" : "Request camera"}
+              accessibilityState={{ disabled: currentWatchPartyViewerRequestPending }}
+            >
+              <Text style={[
+                styles.watchPartyDockActionText,
+                currentWatchPartyViewerRequestPending && styles.watchPartyDockActionTextActive,
+              ]}>
+                {currentWatchPartyViewerRequestPending ? "Request pending" : "Request Camera"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
             style={[styles.watchPartyDockActionBtn, watchPartyMenuOpen && styles.watchPartyDockActionBtnActive]}
             onPress={onToggleWatchPartyMenu}
             activeOpacity={0.88}
+            testID="shared-player-controls-button"
           >
             <Text style={[styles.watchPartyDockActionText, watchPartyMenuOpen && styles.watchPartyDockActionTextActive]}>Controls</Text>
           </TouchableOpacity>
         </View>
+
+        {watchPartyCameraRequestError ? (
+          <Text testID="shared-player-camera-request-error" style={styles.watchPartyCameraRequestErrorText}>
+            {watchPartyCameraRequestError}
+          </Text>
+        ) : null}
 
         {renderWatchPartyLiveHostReviewCard()}
 
@@ -8253,6 +8404,7 @@ export default function PlayerScreen() {
             placeholderTextColor="rgba(212,216,226,0.7)"
             editable={!partyCommentSending}
             returnKeyType="send"
+            testID={isSharedPartyPlayback ? (compactFullscreenRail ? "shared-player-fullscreen-comment-input" : "shared-player-comment-input") : undefined}
           />
           <TouchableOpacity
             style={[
@@ -8266,6 +8418,8 @@ export default function PlayerScreen() {
             disabled={partyCommentSending || !partyCommentDraft.trim()}
             activeOpacity={0.85}
             accessibilityLabel={partyCommentSending ? "Sending room comment" : "Send room comment"}
+            accessibilityRole="button"
+            testID={isSharedPartyPlayback ? (compactFullscreenRail ? "shared-player-fullscreen-comment-send" : "shared-player-comment-send") : undefined}
           >
             {compactFullscreenRail ? (
               partyCommentSending ? (
@@ -11459,16 +11613,22 @@ const styles = StyleSheet.create({
   },
   watchPartyDockOverlay: {
     gap: 8,
+    zIndex: 60,
+    elevation: 60,
   },
   watchPartyDockOverlayKeyboard: {
     gap: 6,
   },
   watchPartyDockActionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   watchPartyDockActionBtn: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 104,
+    minHeight: 42,
     borderRadius: 999,
     borderWidth: 0,
     backgroundColor: "rgba(255,255,255,0.1)",
@@ -11487,6 +11647,12 @@ const styles = StyleSheet.create({
   },
   watchPartyDockActionTextActive: {
     color: "#FFFFFF",
+  },
+  watchPartyCameraRequestErrorText: {
+    color: "#F7C5CF",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15,
   },
   watchPartyDockCard: {
     borderRadius: 18,

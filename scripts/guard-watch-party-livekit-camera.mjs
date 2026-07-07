@@ -330,6 +330,24 @@ const playerWatchPartySeatRequest = sliceBetween(
   "const persistPartySeatState = useCallback(async (participantId: string, options: {",
   "Player Watch-Party seat request boundary",
 );
+const playerWatchPartyRequestCameraControl = sliceBetween(
+  player,
+  "const onPressSharedPlayerRequestCamera = useCallback(async (source: \"dock\" | \"bubble\" = \"dock\") => {",
+  "const watchPartyLiveSharedPlaybackControlsLocked = isSharedPartyPlayback && !currentWatchPartyHostAuthority.isHost;",
+  "Player Watch-Party explicit request camera control boundary",
+);
+const playerSharedPlayerDock = sliceBetween(
+  player,
+  "const renderTitleParticipantExpandedPanel = () => (",
+  "const renderCreatorVideoCommentsPanel = () => {",
+  "Player Shared Player dock boundary",
+);
+const playerPartyCommentsContent = sliceBetween(
+  player,
+  "const renderPartyCommentsContent = (compactFullscreenRail = false) => (",
+  "const renderSharedFullscreenCommentsRail = () => (",
+  "Player party comments content boundary",
+);
 const playerWatchPartyEntryAccessCheck = sliceBetween(
   player,
   "const premiumAccessKey = resolvePremiumAccessKeyForRoom(snapshot.room);",
@@ -755,8 +773,53 @@ assertIncludes(
 );
 assertIncludes(
   player,
-  "requestPartySeat().catch",
-  "Player Watch-Party LiveKit current-user bubble tap must send the visible camera request quietly",
+  "onPressSharedPlayerRequestCamera(\"bubble\")",
+  "Player Watch-Party LiveKit current-user bubble tap must use the explicit request-camera path",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  "shared-player-request-camera-button",
+  "regular Shared Player must expose an explicit viewer Request Camera button",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  "shared-player-request-camera-pending",
+  "regular Shared Player Request Camera button must expose a pending proof state",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  "shared-player-camera-request-error",
+  "regular Shared Player Request Camera button must expose a safe error proof state",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  "onPressSharedPlayerRequestCamera(\"dock\")",
+  "regular Shared Player Request Camera button must call the versioned request path",
+);
+assertIncludes(
+  playerWatchPartyRequestCameraControl,
+  "await requestPartySeat();",
+  "explicit Request Camera control must use the versioned request path",
+);
+assertIncludes(
+  playerWatchPartyRequestCameraControl,
+  "Camera request sent. Waiting for host.",
+  "explicit Request Camera control must show local pending feedback",
+);
+assertIncludes(
+  playerWatchPartyRequestCameraControl,
+  "Camera request unavailable. Try again in a moment.",
+  "explicit Request Camera control must show safe failure feedback",
+);
+assertNotIncludes(
+  playerWatchPartyRequestCameraControl,
+  "blockViewerSharedPlaybackControl",
+  "explicit Request Camera control must not be blocked by viewer playback lock",
+);
+assertNotIncludes(
+  playerWatchPartyRequestCameraControl,
+  "Share.share",
+  "explicit Request Camera control must not open the Android share intent",
 );
 assertIncludes(
   player,
@@ -1204,6 +1267,76 @@ assertIncludes(
   player,
   "watchPartyHostReviewPrimaryBtn",
   "Player Watch-Party Live title host request controls must expose a tappable primary action",
+);
+assertIncludes(
+  player,
+  "shared-player-host-request-card",
+  "Player Watch-Party host request review card must expose an installed-proof target",
+);
+assertIncludes(
+  player,
+  "shared-player-host-request-approve",
+  "Player Watch-Party host request review card must expose an installed-proof approve target",
+);
+assertIncludes(
+  player,
+  "shared-player-host-request-deny",
+  "Player Watch-Party host request review card must expose an installed-proof deny target",
+);
+assertIncludes(
+  player,
+  "shared-player-host-request-close",
+  "Player Watch-Party host request review card must expose an installed-proof close target",
+);
+assertIncludes(
+  playerPartyCommentsContent,
+  "shared-player-comment-input",
+  "regular Shared Player comments must expose an installed-proof input target",
+);
+assertIncludes(
+  playerPartyCommentsContent,
+  "shared-player-comment-send",
+  "regular Shared Player comments must expose an installed-proof send target",
+);
+assertNotIncludes(
+  playerPartyCommentsContent,
+  "Share.share",
+  "regular Shared Player comment controls must not open the Android share intent",
+);
+assertNotIncludes(
+  playerPartyCommentsContent,
+  "blockViewerSharedPlaybackControl",
+  "regular Shared Player comments must not be blocked by viewer playback lock",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  "shared-player-reaction-button",
+  "regular Shared Player must expose a reachable viewer reaction button",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  "onPressSharedPlayerQuickReaction",
+  "regular Shared Player reaction button must use the local reaction path",
+);
+assertIncludes(
+  player,
+  "event: \"reaction\"",
+  "regular Shared Player reactions must broadcast to the room",
+);
+assertNotIncludes(
+  playerSharedPlayerDock,
+  "Share.share",
+  "regular Shared Player lower controls must not open Android Share directly",
+);
+assertIncludes(
+  player,
+  "zIndex: 60",
+  "regular Shared Player lower controls must stay above video/share gesture surfaces",
+);
+assertIncludes(
+  player,
+  "elevation: 60",
+  "regular Shared Player lower controls must stay above Android touch layers",
 );
 assertIncludes(
   playerWatchPartyHostControls,

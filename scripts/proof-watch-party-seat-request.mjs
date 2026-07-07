@@ -369,6 +369,57 @@ assert(
     && playerSource.includes("broadcastPartySeatRequest(participant.id, false, clearingRequestVersion)"),
   "local clear and broadcast clear must share the captured request version",
 );
+assert(
+  playerSource.includes("shared-player-request-camera-button")
+    && playerSource.includes("shared-player-request-camera-pending")
+    && playerSource.includes("shared-player-camera-request-error"),
+  "regular Shared Player must expose explicit Request Camera ready/pending/error proof targets",
+);
+assert(
+  playerSource.includes('onPressSharedPlayerRequestCamera("dock")')
+    && playerSource.includes('onPressSharedPlayerRequestCamera("bubble")')
+    && playerSource.includes("await requestPartySeat();"),
+  "explicit Request Camera and bubble taps must share the versioned request path",
+);
+assert(
+  playerSource.includes("Camera request sent. Waiting for host.")
+    && playerSource.includes("Request pending. Waiting for host.")
+    && playerSource.includes("Camera request unavailable. Try again in a moment."),
+  "viewer Request Camera must show safe sent, duplicate-pending, and failure feedback",
+);
+assert(
+  playerSource.includes("shared-player-host-request-card")
+    && playerSource.includes("shared-player-host-request-approve")
+    && playerSource.includes("shared-player-host-request-deny")
+    && playerSource.includes("shared-player-host-request-close"),
+  "host request review card must expose stable installed-proof targets",
+);
+assert(
+  playerSource.includes("shared-player-comment-input")
+    && playerSource.includes("shared-player-comment-send")
+    && playerSource.includes("shared-player-visible-comments"),
+  "regular Shared Player comments must expose visible input/send proof targets",
+);
+assert(
+  playerSource.includes("shared-player-reaction-button")
+    && playerSource.includes("onPressSharedPlayerQuickReaction")
+    && playerSource.includes('event: "reaction"'),
+  "regular Shared Player viewer reactions must be reachable and broadcast to the room",
+);
+assert(
+  !playerSource.slice(
+    playerSource.indexOf("const renderPartyCommentsContent = (compactFullscreenRail = false) => ("),
+    playerSource.indexOf("const renderSharedFullscreenCommentsRail = () => ("),
+  ).includes("Share.share"),
+  "regular Shared Player comment send must not route through Android Share",
+);
+assert(
+  !playerSource.slice(
+    playerSource.indexOf("const onPressSharedPlayerRequestCamera = useCallback(async"),
+    playerSource.indexOf("const watchPartyLiveSharedPlaybackControlsLocked"),
+  ).includes("Share.share"),
+  "regular Shared Player Request Camera must not route through Android Share",
+);
 
 console.log("Watch-Party seat request proof passed");
 console.log(JSON.stringify({
@@ -382,5 +433,9 @@ console.log(JSON.stringify({
   sharedAndroidVideoRecoveryGuarded: true,
   viewerRequestHidden: true,
   runtimeMediaClassificationWired: true,
+  explicitRequestCameraControl: true,
+  hostRequestReviewTargets: true,
+  commentSendReachableWithoutShare: true,
+  reactionReachableWithoutShare: true,
   helperBackedProof: true,
 }, null, 2));
