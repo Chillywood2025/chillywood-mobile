@@ -159,6 +159,16 @@ assertIncludes(
   "Watch-Party Live source-truth helper must classify real media versus fixture/fallback proof",
 );
 assertIncludes(
+  watchPartyLiveSourceTruth,
+  "shouldTriggerWatchPartyLiveSharedPlaybackRecovery",
+  "Watch-Party Live source-truth helper must decide Android shared-video recovery from real playback evidence",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "canCloseWatchPartyLiveActualPlaybackProof",
+  "Watch-Party Live source-truth helper must reject Synced Playing without actual video playback proof",
+);
+assertIncludes(
   player,
   "watchPartyLiveMediaSourceDebugMetadata",
   "Player runtime must wire Watch-Party Live media classification metadata",
@@ -207,6 +217,41 @@ assertIncludes(
   player,
   "renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)",
   "Shared Player fullscreen right rail must reuse the portrait LiveKit bubble surface",
+);
+assertIncludes(
+  player,
+  "const shouldShowRegularSharedComments = isSharedPartyPlayback && !isPlayerFullscreen;",
+  "regular Shared Player must keep visible comments mounted outside fullscreen",
+);
+assertIncludes(
+  player,
+  "shouldShowRegularSharedComments || partyCommentsOpen",
+  "regular Shared Player comments must not be menu-only behind the Room Comments button",
+);
+assertIncludes(
+  player,
+  'testID={shouldShowRegularSharedComments ? "shared-player-visible-comments" : undefined}',
+  "regular Shared Player visible comments need an installed-proof target",
+);
+assertIncludes(
+  player,
+  "watch-party-live shared video watchdog check",
+  "Android shared playback must log watchdog checks when sync says playing but render has no progress",
+);
+assertIncludes(
+  player,
+  "watch-party-live shared video recovery",
+  "Android shared playback must log bounded recovery actions",
+);
+assertIncludes(
+  player,
+  "watch-party-live shared video render stalled",
+  "Android shared playback must expose a clear render-stalled failure state",
+);
+assertIncludes(
+  player,
+  "setSharedAndroidVideoFallbackMode(\"expo-av\")",
+  "Android shared playback must fall back to expo-av if expo-video stays black/stalled",
 );
 assertNotIncludes(
   player,

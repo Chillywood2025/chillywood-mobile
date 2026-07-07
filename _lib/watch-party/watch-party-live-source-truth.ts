@@ -46,6 +46,26 @@ export type WatchPartyLiveJoinContractLike = {
 
 export type WatchPartyLiveMediaSourceClassification = "real-media" | "fixture-or-proof" | "bundled-fallback" | "missing-source";
 
+export type WatchPartyLiveSharedPlaybackRenderProbe = {
+  isSharedPartyPlayback: boolean;
+  platform?: string | null;
+  sourceClassification?: WatchPartyLiveMediaSourceClassification | null;
+  playbackUrlPresent?: boolean | null;
+  usedBundledFallback?: boolean | null;
+  shouldBePlaying?: boolean | null;
+  sourceLoadFired?: boolean | null;
+  durationMillis?: number | null;
+  positionMillis?: number | null;
+  lastProgressAtMillis?: number | null;
+  sessionStartedAtMillis?: number | null;
+  nowMillis?: number | null;
+  recoveryCount?: number | null;
+  maxRecoveries?: number | null;
+  watchdogTimeoutMillis?: number | null;
+  renderWatchdogActive?: boolean | null;
+  visualPlaybackObserved?: boolean | null;
+};
+
 export const normalizeWatchPartySeatRequestVersion = (...candidates: unknown[]) => {
   for (const candidate of candidates) {
     const normalized = sanitizeIdentifier(candidate);
@@ -294,3 +314,50 @@ export const classifyWatchPartyLiveMediaSource = (options: {
   }
   return "real-media";
 };
+
+const normalizePositiveMillis = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+export const hasWatchPartyLiveConcretePlaybackProgress = (
+  probe: Pick<WatchPartyLiveSharedPlaybackRenderProbe, "sourceLoadFired" | "durationMillis" | "positionMillis" | "lastProgressAtMillis">,
+) => {
+  const durationMillis = normalizePositiveMillis(probe.durationMillis);
+  const positionMillis = normalizePositiveMillis(probe.positionMillis);
+  const lastProgressAtMillis = normalizePositiveMillis(probe.lastProgressAtMillis);
+  return probe.sourceLoadFired === true && durationMillis > 0 && (positionMillis > 0 || lastProgressAtMillis > 0);
+};
+
+export const shouldTriggerWatchPartyLiveSharedPlaybackRecovery = (
+  probe: WatchPartyLiveSharedPlaybackRenderProbe,
+) => {
+  if (!probe.isSharedPartyPlayback) return false;
+  if (sanitizeIdentifier(probe.platform).toLowerCase() !== "android") return false;
+  if (probe.sourceClassification !== "real-media") return false;
+  if (probe.playbackUrlPresent !== true || probe.usedBundledFallback === true) return false;
+  if (probe.shouldBePlaying !== true) return false;
+  if (hasWatchPartyLiveConcretePlaybackProgress(probe)) return false;
+
+  const nowMillis = normalizePositiveMillis(probe.nowMillis) || Date.now();
+  const sessionStartedAtMillis = normalizePositiveMillis(probe.sessionStartedAtMillis);
+  const elapsedMillis = sessionStartedAtMillis > 0 ? nowMillis - sessionStartedAtMillis : 0;
+  const watchdogTimeoutMillis = normalizePositiveMillis(probe.watchdogTimeoutMillis) || 4500;
+  if (elapsedMillis < watchdogTimeoutMillis) return false;
+
+  const maxRecoveries = Math.max(1, Math.floor(Number(probe.maxRecoveries ?? 2)));
+  const recoveryCount = Math.max(0, Math.floor(Number(probe.recoveryCount ?? 0)));
+  return recoveryCount < maxRecoveries;
+};
+
+export const canCloseWatchPartyLiveActualPlaybackProof = (
+  probe: WatchPartyLiveSharedPlaybackRenderProbe,
+) => (
+  probe.isSharedPartyPlayback
+  && probe.sourceClassification === "real-media"
+  && probe.playbackUrlPresent === true
+  && probe.usedBundledFallback !== true
+  && hasWatchPartyLiveConcretePlaybackProgress(probe)
+  && probe.renderWatchdogActive !== true
+  && probe.visualPlaybackObserved === true
+);

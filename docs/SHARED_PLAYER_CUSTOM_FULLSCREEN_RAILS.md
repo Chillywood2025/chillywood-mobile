@@ -63,6 +63,8 @@ This layout change does not alter:
 
 July 7 Watch-Party Live source-truth guard update: the fullscreen layout remains locked. `npm run guard:watch-party-livekit` now checks that `isSharedPartyPlayback && isPlayerFullscreen` uses the custom three-zone shared-player row, that the left comments rail, center video surface, and right participant rail remain present, that the right rail calls `renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)`, and that the fullscreen rail does not fall back to the older non-LiveKit participant panel or a normal native fullscreen player path. This is guard/status coverage only; it does not change the visual layout.
 
+July 7 regular Shared Player proof update: non-fullscreen Shared Player comments are visible in the approved lower/bottom placement by default when `isSharedPartyPlayback && !isPlayerFullscreen`. The `Room Comments` action can still focus or toggle controls, but comments are not menu-only. Fullscreen remains the same custom three-zone rail layout above.
+
 Repo-side validation passed. EAS production candidate update group `40b451bc-f4fc-4929-9052-46baa8cff145` downloaded and applied on the Play-installed `R5CR120QCBF` runtime `1.0.0`; user visual confirmation reported the shared-player fullscreen view works after the final right-rail reuse fix.
 
 June 10 scroll-stabilization update:

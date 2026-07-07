@@ -167,6 +167,7 @@ import {
   closeWatchPartySeatRequestReview,
   createWatchPartySeatRequestVersion,
   emptyWatchPartyLiveSeatRequestState,
+  shouldTriggerWatchPartyLiveSharedPlaybackRecovery,
   isWatchPartySeatRequestExpired,
   resolveDesiredWatchPartyLiveAuthority,
   shouldAutoOpenWatchPartySeatRequestReview,
@@ -220,6 +221,8 @@ const WATCH_PARTY_LIVE_DUCK_DOWN_MILLIS = 250;
 const WATCH_PARTY_LIVE_RESTORE_MILLIS = 700;
 const WATCH_PARTY_LIVE_VOICE_IDLE_MILLIS = 650;
 const WATCH_PARTY_LIVE_VOLUME_TICK_MILLIS = 50;
+const WATCH_PARTY_SHARED_ANDROID_VIDEO_WATCHDOG_MILLIS = 4500;
+const WATCH_PARTY_SHARED_ANDROID_VIDEO_MAX_RECOVERIES = 2;
 const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
 const CREATOR_VIDEO_BRANDED_BACKGROUND = WATCH_PARTY_BRANDED_BACKGROUND;
 
@@ -1085,6 +1088,10 @@ export default function PlayerScreen() {
   const [paidVideoUnlockMessage, setPaidVideoUnlockMessage] = useState<string | null>(null);
   const [watchPartyCommentKeyboardOpen, setWatchPartyCommentKeyboardOpen] = useState(false);
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
+  const [sharedAndroidVideoRemountIndex, setSharedAndroidVideoRemountIndex] = useState(0);
+  const [sharedAndroidVideoFallbackMode, setSharedAndroidVideoFallbackMode] = useState<"expo-video" | "expo-av">("expo-video");
+  const [sharedAndroidVideoRenderFailure, setSharedAndroidVideoRenderFailure] = useState<string | null>(null);
+  const [sharedAndroidVideoWatchdogActive, setSharedAndroidVideoWatchdogActive] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
   const [loadedVideoAspectRatio, setLoadedVideoAspectRatio] = useState<number | null>(null);
@@ -1229,6 +1236,12 @@ export default function PlayerScreen() {
   const zoomTranslateYValueRef = useRef(0);
   const durationRef = useRef(0);
   const currentPositionRef = useRef(0);
+  const sharedAndroidVideoSessionStartedAtRef = useRef(0);
+  const sharedAndroidVideoSourceLoadFiredRef = useRef(false);
+  const sharedAndroidVideoLastProgressAtRef = useRef(0);
+  const sharedAndroidVideoRecoveryCountRef = useRef(0);
+  const sharedAndroidVideoLastPositionRef = useRef(0);
+  const watchPartyLiveMediaSourceDebugMetadataRef = useRef<Record<string, unknown> | null>(null);
   const lastProgressWriteAtRef = useRef(0);
   const lastPersistedPositionRef = useRef(0);
   const lastPlaybackIsPlayingRef = useRef(false);
@@ -4024,6 +4037,33 @@ export default function PlayerScreen() {
       setDurationMillis(duration);
       setPositionMillis(position);
       setIsPlaying(status.isPlaying);
+      if (isSharedPartyPlayback) {
+        const previousSharedPosition = sharedAndroidVideoLastPositionRef.current;
+        if (duration > 0 && !sharedAndroidVideoSourceLoadFiredRef.current) {
+          sharedAndroidVideoSourceLoadFiredRef.current = true;
+        }
+        const hasConcreteSharedProgress =
+          position > 0
+          || Math.abs(position - previousSharedPosition) >= 250;
+        if (hasConcreteSharedProgress) {
+          const hadPreviousProgress = sharedAndroidVideoLastProgressAtRef.current > 0;
+          sharedAndroidVideoLastProgressAtRef.current = Date.now();
+          setSharedAndroidVideoRenderFailure(null);
+          setSharedAndroidVideoWatchdogActive(false);
+          if (!hadPreviousProgress) {
+            debugLog("player", "watch-party-live shared video concrete playback observed", {
+              ...(watchPartyLiveMediaSourceDebugMetadataRef.current ?? {}),
+              deviceRole: partySyncRoleRef.current ?? partySyncRole ?? "unknown",
+              sourceLoadFired: sharedAndroidVideoSourceLoadFiredRef.current,
+              durationMillis: duration,
+              positionMillis: position,
+              playingState: status.isPlaying ? "playing" : "paused",
+              fallbackMode: sharedAndroidVideoFallbackMode,
+            });
+          }
+        }
+        sharedAndroidVideoLastPositionRef.current = position;
+      }
 
       const wasPlaying = lastPlaybackIsPlayingRef.current;
       lastPlaybackIsPlayingRef.current = status.isPlaying;
@@ -4116,7 +4156,20 @@ export default function PlayerScreen() {
         }
       }
     },
-    [getSharedPlaybackControlAuthority, inWatchParty, navigateToNext, nextTitleId, partyId, persistProgress, startUpNextCountdown, titleId, upNextCanceled],
+    [
+      getSharedPlaybackControlAuthority,
+      inWatchParty,
+      isSharedPartyPlayback,
+      navigateToNext,
+      nextTitleId,
+      partyId,
+      partySyncRole,
+      persistProgress,
+      sharedAndroidVideoFallbackMode,
+      startUpNextCountdown,
+      titleId,
+      upNextCanceled,
+    ],
   );
 
   const logPlayerVideoOperationFailure = useCallback((operation: string, error: unknown, extra?: Record<string, unknown>) => {
@@ -4166,6 +4219,25 @@ export default function PlayerScreen() {
         const duration = status.durationMillis ?? 0;
         durationRef.current = duration;
         setDurationMillis(duration);
+        if (isSharedPartyPlayback) {
+          const position = status.positionMillis ?? currentPositionRef.current ?? 0;
+          sharedAndroidVideoSourceLoadFiredRef.current = true;
+          if (duration > 0 && position > 0) {
+            sharedAndroidVideoLastProgressAtRef.current = Date.now();
+          }
+          sharedAndroidVideoLastPositionRef.current = position;
+          setSharedAndroidVideoRenderFailure(null);
+          setSharedAndroidVideoWatchdogActive(false);
+          debugLog("player", "watch-party-live shared video source loaded", {
+            ...(watchPartyLiveMediaSourceDebugMetadataRef.current ?? {}),
+            deviceRole: partySyncRoleRef.current ?? partySyncRole ?? "unknown",
+            sourceLoadFired: true,
+            durationMillis: duration,
+            positionMillis: position,
+            playingState: status.isPlaying ? "playing" : "paused",
+            fallbackMode: sharedAndroidVideoFallbackMode,
+          });
+        }
 
         let startAt = 0;
         const resume = Math.max(0, resumePositionRef.current || 0);
@@ -4198,7 +4270,14 @@ export default function PlayerScreen() {
         logPlayerVideoOperationFailure("load-handler", error);
       });
     },
-    [logPlayerVideoOperationFailure, playbackRate, runPlayerVideoOperation],
+    [
+      isSharedPartyPlayback,
+      logPlayerVideoOperationFailure,
+      partySyncRole,
+      playbackRate,
+      runPlayerVideoOperation,
+      sharedAndroidVideoFallbackMode,
+    ],
   );
 
   const onVideoError = useCallback((error: string) => {
@@ -6374,6 +6453,9 @@ export default function PlayerScreen() {
     typeof sharedPartyResolvedSource === "number" ? null : sharedPartyResolvedSource,
   );
   useEffect(() => {
+    watchPartyLiveMediaSourceDebugMetadataRef.current = watchPartyLiveMediaSourceDebugMetadata;
+  }, [watchPartyLiveMediaSourceDebugMetadata]);
+  useEffect(() => {
     if (!inWatchParty) return;
     debugLog("player", "watch-party-live media source classification", watchPartyLiveMediaSourceDebugMetadata);
   }, [
@@ -6469,7 +6551,25 @@ export default function PlayerScreen() {
     };
   }, [creatorVideo?.thumbnailUrl, displayItem, isCreatorStandalonePlaybackSurface]);
   const isLiveMode = isLiveModeFlag;
-  const shouldUseSharedAndroidVideoSurface = Platform.OS === "android" && isSharedPartyPlayback;
+  const sharedAndroidVideoSourceKey = [
+    partyId ?? "no-party",
+    watchPartyLiveMediaSourceDebugMetadata.sourceType,
+    watchPartyLiveMediaSourceDebugMetadata.sourceId,
+    watchPartyLiveMediaSourceDebugMetadata.classification,
+    watchPartyLiveMediaSourceDebugMetadata.playbackUrlPresent ? "remote" : "no-source",
+    watchPartyLiveMediaSourceDebugMetadata.usedBundledFallback ? "bundled" : "not-bundled",
+  ].join(":");
+  const shouldUseSharedAndroidVideoSurface = Platform.OS === "android"
+    && isSharedPartyPlayback
+    && sharedAndroidVideoFallbackMode === "expo-video";
+  const sharedAndroidVideoShouldBePlaying = isLiveMode
+    ? true
+    : isPlaying || (isSharedPartyPlayback && /playing/i.test(String(partySyncStatus ?? "")));
+  const sharedAndroidVideoProofSourceKind = watchPartyLiveMediaSourceDebugMetadata.usedBundledFallback
+    ? "bundled"
+    : watchPartyLiveMediaSourceDebugMetadata.playbackUrlPresent
+      ? "remote"
+      : "missing";
   const playerVideoVolume = isSharedPartyPlayback ? effectiveVideoVolume : 1;
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);
@@ -6482,6 +6582,147 @@ export default function PlayerScreen() {
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || !isSharedPartyPlayback) return;
+    const now = Date.now();
+    sharedAndroidVideoSessionStartedAtRef.current = now;
+    sharedAndroidVideoSourceLoadFiredRef.current = false;
+    sharedAndroidVideoLastProgressAtRef.current = 0;
+    sharedAndroidVideoRecoveryCountRef.current = 0;
+    sharedAndroidVideoLastPositionRef.current = 0;
+    setSharedAndroidVideoRemountIndex(0);
+    setSharedAndroidVideoFallbackMode("expo-video");
+    setSharedAndroidVideoRenderFailure(null);
+    setSharedAndroidVideoWatchdogActive(false);
+    debugLog("player", "watch-party-live shared video render session reset", {
+      ...watchPartyLiveMediaSourceDebugMetadata,
+      deviceRole: partySyncRoleRef.current ?? partySyncRole ?? "unknown",
+      sourceKind: sharedAndroidVideoProofSourceKind,
+      fallbackMode: "expo-video",
+      sourceLoadFired: false,
+      durationMillis: durationRef.current,
+      positionMillis: currentPositionRef.current,
+    });
+  }, [
+    isSharedPartyPlayback,
+    partySyncRole,
+    sharedAndroidVideoProofSourceKind,
+    sharedAndroidVideoSourceKey,
+    watchPartyLiveMediaSourceDebugMetadata,
+  ]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || !isSharedPartyPlayback) return;
+    if (!sharedAndroidVideoShouldBePlaying) return;
+    if (!watchPartyLiveMediaSourceDebugMetadata.playbackUrlPresent) return;
+    if (watchPartyLiveMediaSourceDebugMetadata.classification !== "real-media") return;
+
+    const timer = setTimeout(() => {
+      const now = Date.now();
+      const commonLogMetadata = {
+        ...watchPartyLiveMediaSourceDebugMetadata,
+        deviceRole: partySyncRoleRef.current ?? partySyncRole ?? "unknown",
+        sourceKind: sharedAndroidVideoProofSourceKind,
+        sourceLoadFired: sharedAndroidVideoSourceLoadFiredRef.current,
+        durationMillis: durationRef.current,
+        positionMillis: currentPositionRef.current,
+        playingState: isPlaying ? "playing" : "paused",
+        fallbackMode: sharedAndroidVideoFallbackMode,
+        remountIndex: sharedAndroidVideoRemountIndex,
+        recoveryCount: sharedAndroidVideoRecoveryCountRef.current,
+      };
+      const shouldRecover = shouldTriggerWatchPartyLiveSharedPlaybackRecovery({
+        isSharedPartyPlayback,
+        platform: Platform.OS,
+        sourceClassification: watchPartyLiveMediaSourceDebugMetadata.classification,
+        playbackUrlPresent: watchPartyLiveMediaSourceDebugMetadata.playbackUrlPresent,
+        usedBundledFallback: watchPartyLiveMediaSourceDebugMetadata.usedBundledFallback,
+        shouldBePlaying: sharedAndroidVideoShouldBePlaying,
+        sourceLoadFired: sharedAndroidVideoSourceLoadFiredRef.current,
+        durationMillis: durationRef.current,
+        positionMillis: currentPositionRef.current,
+        lastProgressAtMillis: sharedAndroidVideoLastProgressAtRef.current,
+        sessionStartedAtMillis: sharedAndroidVideoSessionStartedAtRef.current,
+        nowMillis: now,
+        recoveryCount: sharedAndroidVideoRecoveryCountRef.current,
+        maxRecoveries: WATCH_PARTY_SHARED_ANDROID_VIDEO_MAX_RECOVERIES,
+        watchdogTimeoutMillis: WATCH_PARTY_SHARED_ANDROID_VIDEO_WATCHDOG_MILLIS,
+      });
+
+      debugLog("player", "watch-party-live shared video watchdog check", {
+        ...commonLogMetadata,
+        renderWatchdogActive: shouldRecover,
+      });
+
+      if (shouldRecover) {
+        setSharedAndroidVideoWatchdogActive(true);
+        if (sharedAndroidVideoFallbackMode === "expo-av") {
+          sharedAndroidVideoRecoveryCountRef.current = WATCH_PARTY_SHARED_ANDROID_VIDEO_MAX_RECOVERIES;
+          setSharedAndroidVideoRenderFailure("Shared video did not render on this device. Return to the room and reopen Shared Player.");
+          debugLog("player", "watch-party-live shared video render stalled", {
+            ...commonLogMetadata,
+            renderWatchdogActive: true,
+            recoveryAction: "fallback-expo-av-stalled",
+          });
+          return;
+        }
+        const nextRecoveryCount = sharedAndroidVideoRecoveryCountRef.current + 1;
+        sharedAndroidVideoRecoveryCountRef.current = nextRecoveryCount;
+        sharedAndroidVideoSessionStartedAtRef.current = now;
+        sharedAndroidVideoSourceLoadFiredRef.current = false;
+        sharedAndroidVideoLastProgressAtRef.current = 0;
+        sharedAndroidVideoLastPositionRef.current = 0;
+        setSharedAndroidVideoRenderFailure(null);
+        if (nextRecoveryCount === 1) {
+          debugLog("player", "watch-party-live shared video recovery", {
+            ...commonLogMetadata,
+            recoveryAction: "remount-expo-video",
+            recoveryCount: nextRecoveryCount,
+          });
+          setSharedAndroidVideoRemountIndex((value) => value + 1);
+          return;
+        }
+        debugLog("player", "watch-party-live shared video recovery", {
+          ...commonLogMetadata,
+          recoveryAction: "fallback-expo-av",
+          recoveryCount: nextRecoveryCount,
+        });
+        setSharedAndroidVideoFallbackMode("expo-av");
+        return;
+      }
+
+      const elapsedMillis = sharedAndroidVideoSessionStartedAtRef.current > 0
+        ? now - sharedAndroidVideoSessionStartedAtRef.current
+        : 0;
+      if (
+        elapsedMillis >= WATCH_PARTY_SHARED_ANDROID_VIDEO_WATCHDOG_MILLIS
+        && sharedAndroidVideoRecoveryCountRef.current >= WATCH_PARTY_SHARED_ANDROID_VIDEO_MAX_RECOVERIES
+        && !sharedAndroidVideoSourceLoadFiredRef.current
+        && sharedAndroidVideoLastProgressAtRef.current <= 0
+      ) {
+        setSharedAndroidVideoWatchdogActive(true);
+        setSharedAndroidVideoRenderFailure("Shared video did not render on this device. Return to the room and reopen Shared Player.");
+        debugLog("player", "watch-party-live shared video render stalled", {
+          ...commonLogMetadata,
+          renderWatchdogActive: true,
+          recoveryAction: "failure-state",
+        });
+      }
+    }, WATCH_PARTY_SHARED_ANDROID_VIDEO_WATCHDOG_MILLIS);
+
+    return () => clearTimeout(timer);
+  }, [
+    isPlaying,
+    isSharedPartyPlayback,
+    partySyncRole,
+    sharedAndroidVideoFallbackMode,
+    sharedAndroidVideoProofSourceKind,
+    sharedAndroidVideoRemountIndex,
+    sharedAndroidVideoShouldBePlaying,
+    sharedAndroidVideoSourceKey,
+    watchPartyLiveMediaSourceDebugMetadata,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -7640,6 +7881,8 @@ export default function PlayerScreen() {
       </View>
   );
 
+  const shouldShowRegularSharedComments = isSharedPartyPlayback && !isPlayerFullscreen;
+
   const renderTitleParticipantExpandedPanel = () => (
     <View style={styles.titleParticipantFeedWrap}>
       {renderWatchPartySocialPanel()}
@@ -7681,8 +7924,14 @@ export default function PlayerScreen() {
 
         {renderWatchPartyLiveHostReviewCard()}
 
-        {partyCommentsOpen ? (
-          <View style={[styles.watchPartyDockCard, sharedPartyCommentsKeyboardActive && styles.watchPartyDockCardKeyboardComposer]}>
+        {shouldShowRegularSharedComments || partyCommentsOpen ? (
+          <View
+            testID={shouldShowRegularSharedComments ? "shared-player-visible-comments" : undefined}
+            style={[
+              styles.watchPartyDockCard,
+              sharedPartyCommentsKeyboardActive && styles.watchPartyDockCardKeyboardComposer,
+            ]}
+          >
             {renderPartyCommentsContent()}
           </View>
         ) : null}
@@ -8845,6 +9094,7 @@ export default function PlayerScreen() {
               {playbackSource && !standalonePlaybackSourceFailed ? (
                 shouldUseSharedAndroidVideoSurface ? (
                   <SharedAndroidVideoSurface
+                    key={`shared-android-video-${sharedAndroidVideoSourceKey}-${sharedAndroidVideoRemountIndex}`}
                     ref={videoRef}
                     source={playbackSource}
                     style={styles.video}
@@ -8923,10 +9173,15 @@ export default function PlayerScreen() {
                   ) : null}
                 </View>
               )}
+              {sharedAndroidVideoRenderFailure && isSharedPartyPlayback ? (
+                <View pointerEvents="none" style={styles.sharedAndroidVideoRenderFailureOverlay}>
+                  <Text style={styles.sharedAndroidVideoRenderFailureText}>{sharedAndroidVideoRenderFailure}</Text>
+                </View>
+              ) : null}
             </Animated.View>
             )}
 
-            {shouldUseSharedAndroidVideoSurface && !creatorVideoPaidContentLocked ? (
+            {Platform.OS === "android" && isSharedPartyPlayback && !creatorVideoPaidContentLocked ? (
               <View
                 collapsable={false}
                 pointerEvents="auto"
@@ -9822,6 +10077,25 @@ const styles = StyleSheet.create({
     zIndex: 170,
     elevation: 170,
     backgroundColor: "transparent",
+  },
+  sharedAndroidVideoRenderFailureOverlay: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 18,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(10,12,20,0.84)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  sharedAndroidVideoRenderFailureText: {
+    color: "#E6ECFA",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    textAlign: "center",
   },
   videoLoadingFallback: {
     ...StyleSheet.absoluteFillObject,

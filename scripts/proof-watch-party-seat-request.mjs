@@ -33,6 +33,7 @@ const importTypeScriptModule = async (relativePath) => {
 
 const {
   applyWatchPartySeatRequestEvent,
+  canCloseWatchPartyLiveActualPlaybackProof,
   canRenderWatchPartyParticipantSpecificTrack,
   classifyWatchPartyLiveMediaSource,
   closeWatchPartySeatRequestReview,
@@ -40,6 +41,7 @@ const {
   decodePartySeatRequestMessage,
   emptyWatchPartyLiveSeatRequestState,
   encodePartySeatRequestMessage,
+  shouldTriggerWatchPartyLiveSharedPlaybackRecovery,
   shouldAutoOpenWatchPartySeatRequestReview,
   watchPartyLiveContractMatchesDesiredAuthority,
 } = await importTypeScriptModule("_lib/watch-party/watch-party-live-source-truth.ts");
@@ -258,12 +260,101 @@ assert(
   "Player must wire runtime Watch-Party Live media classification metadata",
 );
 assert(
+  shouldTriggerWatchPartyLiveSharedPlaybackRecovery({
+    isSharedPartyPlayback: true,
+    platform: "android",
+    sourceClassification: "real-media",
+    playbackUrlPresent: true,
+    usedBundledFallback: false,
+    shouldBePlaying: true,
+    sourceLoadFired: false,
+    durationMillis: 0,
+    positionMillis: 0,
+    lastProgressAtMillis: 0,
+    sessionStartedAtMillis: now,
+    nowMillis: now + 5000,
+    recoveryCount: 0,
+    maxRecoveries: 2,
+    watchdogTimeoutMillis: 4500,
+  }) === true,
+  "real-media Android shared playback should recover when sync says playing but no source load/progress appears",
+);
+assert(
+  shouldTriggerWatchPartyLiveSharedPlaybackRecovery({
+    isSharedPartyPlayback: true,
+    platform: "android",
+    sourceClassification: "fixture-or-proof",
+    playbackUrlPresent: true,
+    usedBundledFallback: false,
+    shouldBePlaying: true,
+    sourceLoadFired: false,
+    durationMillis: 0,
+    positionMillis: 0,
+    lastProgressAtMillis: 0,
+    sessionStartedAtMillis: now,
+    nowMillis: now + 5000,
+    recoveryCount: 0,
+    maxRecoveries: 2,
+    watchdogTimeoutMillis: 4500,
+  }) === false,
+  "fixture media must not drive strict real-media playback recovery proof",
+);
+assert(
+  canCloseWatchPartyLiveActualPlaybackProof({
+    isSharedPartyPlayback: true,
+    platform: "android",
+    sourceClassification: "real-media",
+    playbackUrlPresent: true,
+    usedBundledFallback: false,
+    shouldBePlaying: true,
+    sourceLoadFired: false,
+    durationMillis: 0,
+    positionMillis: 0,
+    lastProgressAtMillis: 0,
+    renderWatchdogActive: false,
+    visualPlaybackObserved: true,
+  }) === false,
+  "Synced Playing alone must not close actual video playback proof",
+);
+assert(
+  canCloseWatchPartyLiveActualPlaybackProof({
+    isSharedPartyPlayback: true,
+    platform: "android",
+    sourceClassification: "real-media",
+    playbackUrlPresent: true,
+    usedBundledFallback: false,
+    shouldBePlaying: true,
+    sourceLoadFired: true,
+    durationMillis: 52000,
+    positionMillis: 4200,
+    lastProgressAtMillis: now + 4200,
+    renderWatchdogActive: false,
+    visualPlaybackObserved: true,
+  }) === true,
+  "actual video playback proof requires real media plus loaded duration/progress and visual observation",
+);
+assert(
   playerSource.includes("playbackUrlPresent") && playerSource.includes("usedBundledFallback") && playerSource.includes("classification"),
   "Player classification log must include redacted source-readiness metadata",
 );
 assert(
   playerSource.includes('playbackUrl: playbackUrlPresent ? "redacted-present" : ""'),
   "Player classification must not log full playback URLs",
+);
+assert(
+  playerSource.includes("shouldShowRegularSharedComments || partyCommentsOpen")
+    && playerSource.includes('testID={shouldShowRegularSharedComments ? "shared-player-visible-comments" : undefined}'),
+  "regular Shared Player must mount visible comments instead of hiding comments behind the Room Comments button",
+);
+assert(
+  playerSource.includes("watch-party-live shared video watchdog check")
+    && playerSource.includes("watch-party-live shared video recovery")
+    && playerSource.includes("watch-party-live shared video render stalled"),
+  "Player must log bounded Android shared-video render watchdog and recovery states",
+);
+assert(
+  playerSource.includes("setSharedAndroidVideoFallbackMode(\"expo-av\")"),
+  "Android shared playback must fall back to the stable expo-av renderer if expo-video stays black/stalled",
 );
 assert(
   playerSource.includes('clearPendingPartySeatRequest(participantId, "seat-state-persisted", clearingRequestVersion)'),
@@ -287,6 +378,8 @@ console.log(JSON.stringify({
   hostRequestRendered: true,
   duplicateRequestSuppressedAfterClose: true,
   staleLocalClearPreservedNewRequest: true,
+  syncedPlayingAloneRejectedAsPlaybackProof: true,
+  sharedAndroidVideoRecoveryGuarded: true,
   viewerRequestHidden: true,
   runtimeMediaClassificationWired: true,
   helperBackedProof: true,

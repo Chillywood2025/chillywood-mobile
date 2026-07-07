@@ -20,6 +20,8 @@ Installed Google Play proof is still Partial. R3 visibility was recovered throug
 
 The first installed attempt stopped before starting Watch-Party Live because the available Home media card opened Player as `Chi'llywood Originals Proof Fixture`. The follow-up proof surfaced a safe public/playable Home media item, `Chi'llywood City Lights`, with remote playback URL present and no proof/fixture wording; runtime classification for the candidate is `real-media`. R5 hosted room `K4ADLA` from that Home card, R3 joined the same Party Room, and both devices opened the same Shared Player. R5 started actual real-media playback and showed the Sintel trailer frame at `0:04` / `0:52`. R3 reached `Synced · Playing` in the same Shared Player but the video surface stayed black, then later returned to `Synced · Paused` without rendering video. Strict installed closure remains Partial because actual video playback did not appear on both devices. No `Live feed unavailable` or `Live video is temporarily unavailable. Try again in a moment.` alert appeared in this real-media rerun.
 
+The current source follow-up keeps the fullscreen rails unchanged while addressing the two app-controlled proof blockers found in that real-media run. Regular non-fullscreen Shared Player now mounts visible room comments at the bottom by default instead of making comments menu-only behind `Room Comments`. Android shared playback now has a bounded real-media watchdog: `Synced · Playing` without source load/progress is not counted as playback proof, the app logs redacted source/load/progress/watchdog metadata, remounts the `expo-video` shared surface once, falls back to the stable `expo-av` renderer if needed, and shows a clear render-stalled state if both paths fail. Strict installed closure still requires actual visible playback on both devices.
+
 ## Fullscreen/Layout No-Change
 
 The locked fullscreen layout remains:
@@ -46,6 +48,8 @@ Source behavior now covered:
 - Party Room handoff and Player entry use `resolvePremiumAccessKeyForRoom(...)` for consistent Watch-Party Live Premium access checks.
 - Media source classification distinguishes real remote media from local bundled fallback, proof fixture copy, and missing source fallback.
 - Player runtime now logs redacted Watch-Party Live media source classification metadata when resolving shared playback. This makes installed proof able to distinguish `real-media` from `fixture-or-proof`, `bundled-fallback`, and `missing-source` without exposing private playback URLs.
+- Regular Shared Player comments are visible in the approved lower/bottom placement when `isSharedPartyPlayback && !isPlayerFullscreen`; the button may still focus/toggle controls, but comments are no longer menu-only.
+- Android shared playback is render-proof aware. A real-media shared source showing sync state without load/progress triggers a bounded recovery sequence and cannot close installed playback proof from `Synced · Playing` alone.
 - Watch-Party Live contracts are authority-strict: desired host/speaker publish state is not publish-ready unless the active token contract matches room, identity, role, and canPublish.
 - Camera-seat requests carry request versions; duplicate pending events do not reopen an X-closed review for the same request.
 - Local camera-request clears are version-aware. Host approval and deny paths pass the captured request version into the local clear before broadcasting the same versioned clear, and legacy unversioned clears cannot erase a newer versioned pending request.
@@ -100,7 +104,8 @@ Current installed-proof blocker:
 - R3 joined room `K4ADLA` and opened the same Shared Player.
 - R5 showed actual real-media playback at `0:04` / `0:52`.
 - R3 showed `Synced · Playing` but the Shared Player video surface remained black, then later returned to `Synced · Paused`.
-- Strict installed proof remains Partial until viewer shared-player playback renders actual video from the real-media room.
+- Source follow-up now rejects `Synced · Playing` as playback proof unless source load/progress and visible playback are observed, and adds bounded Android shared-video recovery for that black-surface state.
+- Strict installed proof remains Partial until viewer shared-player playback renders actual video from the real-media room after the fresh OTA.
 - no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, source change, or fullscreen layout change was performed.
 
 Next exact proof/fix step:
