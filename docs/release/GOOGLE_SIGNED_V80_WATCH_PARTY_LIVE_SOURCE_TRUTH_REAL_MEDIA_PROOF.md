@@ -16,7 +16,9 @@ Watch-Party Live sidecar/shared-player source truth is repaired for the remainin
 
 The pre-proof hardening follow-up wires the media classifier into Player runtime proof/debug logging and makes local request clears request-version aware. Runtime logs include only redacted source-readiness metadata: party id, source type/id, display name/title, playback URL presence, bundled-fallback boolean, and classification. They do not include full playback URLs or signed URLs. Strict installed closure requires `classification=real-media`; `fixture-or-proof`, `bundled-fallback`, and `missing-source` remain honest Partial media classifications.
 
-Installed Google Play proof is still required before closure. R5 read back Play-installed v80 from `com.android.vending` and launched this OTA, but R3 was not visible over USB, `adb mdns services`, or Bonjour `_adb-tls-connect._tcp`, so the required two-phone proof could not start. The next pass must use Play-installed v80 or newer with latest OTA, Premium-active sandbox testers, strict non-fixture Home media, actual Shared Player playback on both devices, host-only playback authority, viewer comments/reactions/camera request, host approval with matching LiveKit authority, identity-safe LiveKit bubbles, unchanged fullscreen rails, and return-to-room behavior.
+Installed Google Play proof is still required before closure. R3 visibility was recovered through the already-paired wireless ADB endpoint `10.0.0.27:44639`, which mapped to serial `R3CXA0DS5JV`; R5 remained visible over USB. Both devices read back Play-installed v80. R5 was already Premium active, and R3 renewed Premium through the approved Google Play / RevenueCat sandbox flow and read back Premium active. Backend LiveKit health was green.
+
+The installed proof attempt stopped before starting Watch-Party Live because the available Home media card opened Player as `Chi'llywood Originals Proof Fixture`. That cannot count as strict real non-fixture Home media proof. The next pass must first surface a safe public/playable Home media item without proof/fixture wording, then use Play-installed v80 or newer with latest OTA, Premium-active sandbox testers, strict non-fixture Home media, actual Shared Player playback on both devices, host-only playback authority, viewer comments/reactions/camera request, host approval with matching LiveKit authority, identity-safe LiveKit bubbles, unchanged fullscreen rails, and return-to-room behavior.
 
 ## Fullscreen/Layout No-Change
 
@@ -87,13 +89,15 @@ The July 7 pre-proof hardening follow-up reran the same validation set. `npm run
 
 ## Remaining Installed Proof
 
-R3 visibility blocker:
+Current installed-proof blocker:
 
-- `adb devices -l` showed R5 and a local emulator only.
-- `adb mdns services` found no Android wireless debugging endpoint.
-- short Bonjour discovery for `_adb-tls-connect._tcp` found no R3 endpoint.
-- macOS USB enumeration showed R5 only.
-- no sideload, `adb install`, uninstall, clear data, logout, or app reset was performed.
+- R3 is now visible over wireless ADB as `10.0.0.27:44639`; `getprop ro.serialno` returns `R3CXA0DS5JV`.
+- R5 and R3 both read back package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `80`, versionName `1.0.0`.
+- R5 read back `Premium is active.`.
+- R3 completed the approved Google Play / RevenueCat sandbox Premium test subscription with the always-approves test card and read back `Premium is active.`.
+- The only available Home media found during the attempt opened Player as `Chi'llywood Originals Proof Fixture`.
+- Strict installed proof remains blocked until a safe real non-fixture Home media item is available.
+- no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, or source change was performed.
 
 After R3 is recovered, run installed proof last:
 

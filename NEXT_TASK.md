@@ -3,11 +3,12 @@
 # Watch-Party Live Source-Truth Repair
 
 Current latest truth:
-- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and OTA-published from aligned source. Installed proof remains Partial/blocked on R3 device visibility.
+- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and OTA-published from aligned source. Installed proof remains Partial because strict real non-fixture Home media is not currently available in the installed Home feed.
 - Governing new doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
 - Source commit: `0b07b7224be9fdd3fe1df2d3906f7e140040cd50`.
 - Android EAS Update production runtime `1.0.0`: group `f917d6f6-e298-45f4-b1fe-7962c3c89f34`, Android update `019f3d37-5bd7-70b5-b881-4e15a2b07c30`.
-- R5 read back Play-installed v80 from `com.android.vending` and safely downloaded/launched the OTA. R3 was not visible to ADB/macOS USB or wireless mDNS/Bonjour discovery, so the required two-device installed proof could not start.
+- R3 visibility was recovered through already-paired wireless ADB endpoint `10.0.0.27:44639`, mapping to serial `R3CXA0DS5JV`; R5 remained visible over USB. Both devices read back Play-installed v80 from `com.android.vending`. R5 was already Premium active, and R3 renewed through the approved Google Play / RevenueCat sandbox Premium flow and read back Premium active.
+- The next proof attempt stopped before starting Watch-Party Live because the available Home media card opened Player as `Chi'llywood Originals Proof Fixture`. That cannot be counted as strict real non-fixture Home media proof.
 - The Shared Player custom fullscreen rails remain locked: left comments rail, center shared video surface, and right portrait-reused LiveKit bubble rail. This lane must not change `docs/SHARED_PLAYER_CUSTOM_FULLSCREEN_RAILS.md` layout intent except proof/status notes.
 - Party Room handoff and Player entry now use the same canonical Watch-Party Live Premium access key helper, without bypassing Premium or changing Google Play / RevenueCat behavior.
 - Watch-Party Live media is classified as real remote media, bundled fallback, proof fixture, or missing fallback so fixture/bundled playback cannot be claimed as strict real non-fixture Home media proof.
@@ -20,7 +21,7 @@ Current latest truth:
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
 
 Next exact step:
-1. Recover R3 visibility without sideload, install, uninstall, logout, clear data, or app reset. Use USB data mode/RSA prompt or existing wireless debugging connect endpoint only.
+1. Create or surface a safe real non-fixture Home media item that is public/playable and does not contain proof/fixture wording in title/name/source id. Do not use private user data or signed/private URLs in docs.
 2. Then run installed proof last only: Play-installed v80 or newer, latest OTA, both devices Premium-active through approved Google Play / RevenueCat sandbox, real non-fixture Home media, host opens Party Room/shared player, viewer joins same shared player, actual playback appears, host-only playback authority holds, viewer comments/reactions/camera request still work, identity-safe LiveKit bubbles render, and fullscreen rails remain unchanged.
 3. If installed proof cannot use strict non-fixture Home media, classify the media limitation honestly and do not count fixture/bundled fallback as real-user closure.
 4. Do not touch Premium entitlement logic, Watch-Party Party Room, Android App Links, LiveKit routing/heartbeat/cutoffs, Chi'lly Chat/native calls, auth/RLS, billing/provider settings, live money, payouts, cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall.
