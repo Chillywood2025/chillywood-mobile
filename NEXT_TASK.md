@@ -36,7 +36,7 @@ Current latest truth:
 - Backend LiveKit health is green with local proof env: `eligibleServerCount=1`, heartbeat under the 120-second cutoff, `chillywood-prod-01` healthy, and no fresh `no_eligible_livekit_server` blocker.
 - No livekit-token source change or deploy was required in this lane; `deno check supabase/functions/livekit-token/index.ts` passed.
 - Prior installed proof remains useful but not final: room `993HVB` proved viewer self-hero behavior, and room `W555BH` proved R3 reached Live Stage with `2 in room`, host hero, and viewer/self visible as `You`.
-- Installed proof is still pending until this source is committed, pushed to `origin/main`, OTA-published, and loaded on Google Play-installed v80+ devices.
+- Repo alignment and OTA are complete: source commit `cd1ec3b48423f2912009847f2fe9bab3057eb509` is on `origin/main`; Android EAS Update production runtime `1.0.0` published group `c4f88243-f762-4b8d-a783-c7a1953ed2ea`, Android update `019f3b28-0935-74c5-bb84-b313eeecb11d`, message `Fix Live Stage request contract identity cd1ec3b`.
 
 Source-fixed behavior:
 - Viewers have a local-only `Make me hero` / `Show host hero` Live Stage control.
@@ -56,10 +56,9 @@ Source-fixed behavior:
 - Desired speaker/canPublish state must match the active LiveKit contract before the UI treats the viewer as publish-ready.
 
 Next exact step:
-1. Commit the Live Stage source/guard/docs repair, push it to `origin/main`, and confirm `HEAD == origin/main`.
-2. Publish a fresh Android EAS Update from the aligned commit and record group/update/runtime.
-3. Only after OTA is available, run installed proof on Play-installed v80+ latest OTA: host reaches Stage, UI shows `2 in room`, host/self is hero/background, Chi'lly Party Members shows remote viewer/requester and not `You HOST`, tapping the remote card does not hide it, `Featured` does not replace Viewer/Listener/Requesting/Speaker status, viewer self-hero regression still passes, X close preserves request/card and duplicate pending does not reopen it, `Not now` clears request while keeping participant visible, viewer requests again, host approves with `Bring on stage`, viewer receives matching speaker/canPublish authority, host sees correct viewer feed or identity-safe fallback, and both remain Stage / `2 in room`.
-4. Do not change LiveKit backend routing, heartbeat, Premium entitlement logic, Watch-Party Party Room, Chi'lly Chat, native calls, auth/RLS, provider production settings, or money/payout/cashout behavior.
+1. Confirm both Play-installed phones have loaded the latest OTA group/update if runtime readback is available.
+2. Run installed proof on Play-installed v80+ latest OTA: host reaches Stage, UI shows `2 in room`, host/self is hero/background, Chi'lly Party Members shows remote viewer/requester and not `You HOST`, tapping the remote card does not hide it, `Featured` does not replace Viewer/Listener/Requesting/Speaker status, viewer self-hero regression still passes, X close preserves request/card and duplicate pending does not reopen it, `Not now` clears request while keeping participant visible, viewer requests again, host approves with `Bring on stage`, viewer receives matching speaker/canPublish authority, host sees correct viewer feed or identity-safe fallback, and both remain Stage / `2 in room`.
+3. Do not change LiveKit backend routing, heartbeat, Premium entitlement logic, Watch-Party Party Room, Chi'lly Chat, native calls, auth/RLS, provider production settings, or money/payout/cashout behavior.
 
 # LiveKit Production Endpoint / Heartbeat Recovery Closed
 

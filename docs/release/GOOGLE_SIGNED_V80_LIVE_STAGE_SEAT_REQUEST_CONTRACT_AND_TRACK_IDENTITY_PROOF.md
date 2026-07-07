@@ -2,7 +2,7 @@
 
 Date: 2026-07-07
 
-Verdict: Source/guard complete; installed proof pending until commit, push, OTA, and synchronized Premium-active device proof.
+Verdict: Source/guard/OTA complete; installed proof pending until synchronized Premium-active device proof.
 
 ## Summary
 
@@ -74,9 +74,20 @@ Backend health readback was green: one eligible LiveKit server, heartbeat under 
 
 No `supabase/functions/livekit-token/index.ts` source change or deploy was required in this lane. The function still deno-checks, and this lane did not change LiveKit routing, heartbeat, stale cutoff, registry, or token routing policy.
 
+## OTA Result
+
+- source commit: `cd1ec3b48423f2912009847f2fe9bab3057eb509`
+- branch: `production`
+- runtime: `1.0.0`
+- update group: `c4f88243-f762-4b8d-a783-c7a1953ed2ea`
+- Android update: `019f3b28-0935-74c5-bb84-b313eeecb11d`
+- message: `Fix Live Stage request contract identity cd1ec3b`
+
+No native build or Play submission happened.
+
 ## Installed Proof Plan
 
-Installed proof must run only after this source is pushed to `origin/main`, a fresh Android EAS Update is published from the aligned commit, and both Play-installed phones load the update.
+Installed proof must run only after both Play-installed phones load the OTA above.
 
 Required proof:
 

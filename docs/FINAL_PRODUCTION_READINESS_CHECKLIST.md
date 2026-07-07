@@ -2,7 +2,7 @@
 
 ## July 7, 2026 Live Stage Source-Truth Follow-Up
 
-Live Stage host/viewer UX has a stricter source/guard repair pending commit, push, OTA, and installed proof: request close suppression is versioned, duplicate pending broadcasts cannot reopen an X-closed sheet, downgraded LiveKit speaker-desired contracts are not publish-ready, pending approval is sheet-only, participant-specific tiles require identity-matched tracks, and the proof imports the real Live Stage helper module instead of a duplicate model. This preserves Premium gates, LiveKit routing/heartbeat/cutoffs, Watch-Party Party Room behavior, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing/provider state, live money, payout, and cashout boundaries. Closed-testing proof can continue after OTA; public production remains gated on installed two-phone proof.
+Live Stage host/viewer UX has a stricter source/guard repair committed, pushed, OTA-published, and pending installed proof: request close suppression is versioned, duplicate pending broadcasts cannot reopen an X-closed sheet, downgraded LiveKit speaker-desired contracts are not publish-ready, pending approval is sheet-only, participant-specific tiles require identity-matched tracks, and the proof imports the real Live Stage helper module instead of a duplicate model. This preserves Premium gates, LiveKit routing/heartbeat/cutoffs, Watch-Party Party Room behavior, Android App Links, Chi'lly Chat/native calls, auth/RLS, billing/provider state, live money, payout, and cashout boundaries. Closed-testing proof can continue after OTA; public production remains gated on installed two-phone proof.
 
 ## OTA-First Proof Rule
 
@@ -46,13 +46,13 @@ No Premium, Google Play/RevenueCat product, LiveKit backend, Watch-Party Party R
 
 ## Live Stage Self-Hero / Seat-Request Overlay UX
 
-Status: Source/guard complete for the request/seat/publish/presentation source-truth repair; installed proof remains Partial until this source is committed, pushed, OTA-published, and proved on Google Play-installed devices with both phones Premium-active.
+Status: Source/guard complete for the request/seat/publish/presentation source-truth repair; installed proof remains Partial until Android EAS Update group `c4f88243-f762-4b8d-a783-c7a1953ed2ea` / update `019f3b28-0935-74c5-bb84-b313eeecb11d` is loaded and proved on Google Play-installed devices with both phones Premium-active.
 
 Governing docs: `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_VIEWER_SELF_HERO_HOST_SEAT_CARD_PROOF.md` and `docs/release/GOOGLE_SIGNED_V79_LIVE_STAGE_SELF_HERO_SEAT_OVERLAY_PROOF.md`. Current artifact folder: `/tmp/google-play-internal-v79-live-stage-viewer-self-hero-seat-persistence-proof-20260706-145439/installed-proof-hybrid-deck-fix-20260706-151807/`.
 
 Source commits through `a6c57ad7bef9ec6dd245cad332850aaf9cf474e5` fix the manual installed regressions found after the earlier Live Stage self-hero pass, plus the July 6 proof defects where the Live Watch-Party hybrid deck could auto-hide and the X-close path could immediately auto-reopen the same pending sheet. Latest EAS Update production Android runtime `1.0.0` published group `39b39ecf-294f-4eaa-bcb1-cc835a311efd`, Android update `019f3946-e907-7468-9d3a-0515ea050aa2`.
 
-Current source-truth repair starts from `origin/main` `12334d69a6f6ac499ba1aad481e850cffbc41f10` and is not installed-proof closed until the final commit is pushed and OTA-published. It preserves the prior host/viewer presentation fix, then adds request-versioned sheet close semantics, strict desired LiveKit authority matching, sheet-only pending approvals, identity-safe participant track rendering, and helper-backed proof coverage. The deployed `livekit-token` Edge Function source was audited and deno-checked; no livekit-token source change or deploy was required in this lane.
+Current source-truth repair is aligned on `origin/main` at `cd1ec3b48423f2912009847f2fe9bab3057eb509` and published by Android EAS Update group `c4f88243-f762-4b8d-a783-c7a1953ed2ea`, update `019f3b28-0935-74c5-bb84-b313eeecb11d`, runtime `1.0.0`. It preserves the prior host/viewer presentation fix, then adds request-versioned sheet close semantics, strict desired LiveKit authority matching, sheet-only pending approvals, identity-safe participant track rendering, and helper-backed proof coverage. The deployed `livekit-token` Edge Function source was audited and deno-checked; no livekit-token source change or deploy was required in this lane.
 
 Source behavior now expected:
 
