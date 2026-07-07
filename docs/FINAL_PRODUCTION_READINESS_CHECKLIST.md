@@ -2,9 +2,9 @@
 
 ## July 7, 2026 Watch-Party Live Source-Truth Follow-Up
 
-Status: Source-repaired, guard/proof upgraded, installed proof pending.
+Status: Source-repaired, guard/proof upgraded, OTA-published, installed proof pending.
 
-Watch-Party Live sidecar/shared-player now has source-truth coverage for the remaining app-controlled failure modes without changing the locked fullscreen layout. The custom fullscreen row remains the same left comments rail, center shared player/video surface, and right portrait-reused LiveKit bubble rail. Guard coverage rejects replacing the right rail with fake participants, removing the rails, or falling back to normal native fullscreen for shared playback.
+Watch-Party Live sidecar/shared-player now has source-truth coverage for the remaining app-controlled failure modes without changing the locked fullscreen layout. Source commit `44d776fe117386d3cd0a3400d488ed82e11c8bf6` is on `origin/main`; Android EAS Update production runtime `1.0.0` published group `d4c9fe3a-1f92-4fa6-8252-5920aecc59b4`, Android update `019f3d20-16a3-772b-9b4e-870e4d9deeeb`. The custom fullscreen row remains the same left comments rail, center shared player/video surface, and right portrait-reused LiveKit bubble rail. Guard coverage rejects replacing the right rail with fake participants, removing the rails, or falling back to normal native fullscreen for shared playback.
 
 The source repair adds a canonical Watch-Party Live Premium access key helper shared by Party Room handoff and Player entry, real/non-fixture media classification for installed proof honesty, strict LiveKit token-contract authority matching before host/speaker publish-ready UI, request-versioned camera-seat requests with X-close duplicate suppression and `Not now` clear semantics, sheet/review-card-first pending approval instead of competing inline pending controls, identity-matched participant-specific bubble tracks, and helper-backed proof importing the route's real Watch-Party Live source-truth module.
 

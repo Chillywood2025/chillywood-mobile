@@ -4,6 +4,10 @@ Date: 2026-07-07
 
 Verdict: Partial until installed proof closes.
 
+Source commit: `44d776fe117386d3cd0a3400d488ed82e11c8bf6`.
+
+Android EAS Update production runtime `1.0.0`: group `d4c9fe3a-1f92-4fa6-8252-5920aecc59b4`, Android update `019f3d20-16a3-772b-9b4e-870e4d9deeeb`.
+
 ## Executive Summary
 
 Watch-Party Live sidecar/shared-player source truth is repaired for the remaining app-controlled gaps found after the real Home-route installed proof. The fix does not change Shared Player fullscreen layout. It canonicalizes Party Room and Player Premium access keys, classifies media so fixture/bundled fallback cannot be counted as strict real Home media proof, requires LiveKit token contracts to match desired host/speaker publish authority, versions camera-seat requests, keeps pending approval on one stable host review path, makes participant bubbles identity-safe, and moves proof coverage onto the real helper module.
@@ -54,9 +58,9 @@ No LiveKit tokens, Supabase service-role keys, API secrets, auth tokens, TURN cr
 
 ## Validation
 
-Validation is recorded in the final report for this lane. Required commands:
+Validation passed for the source/guard/doc/OTA lane:
 
-- `npm run check:livekit-routing-health`
+- `npm run check:livekit-routing-health` with the local proof env loaded: `eligibleServerCount=1`, heartbeat age under the 120-second cutoff, `chillywood-prod-01` healthy, no recent no-eligible-server blocker.
 - `npm run guard:livekit-heartbeat-monitor-policy`
 - `npm run guard:premium-sandbox-policy`
 - `npm run guard:watch-party-livekit`
@@ -70,6 +74,8 @@ Validation is recorded in the final report for this lane. Required commands:
 - `git diff --check`
 - `git diff --cached --check`
 - changed-file secret scan
+
+No source change was made to `supabase/functions/livekit-token/index.ts`; the Deno check confirms the existing deployed-source lane remains type-valid.
 
 ## Remaining Installed Proof
 
