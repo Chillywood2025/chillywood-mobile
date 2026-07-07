@@ -160,6 +160,12 @@ assertIncludes(liveStage, "const shouldUseViewerSelfHero = canUseViewerSelfHero 
 assertIncludes(liveStage, "const actualVisualHeroParticipantId = isHost", "Live Stage must separate actual visual hero from active/focus participant");
 assertIncludes(liveStage, "participant.userId === actualVisualHeroParticipantId", "Live Stage party box must filter actual visual hero, not focused remote card");
 assertNotIncludes(liveStage, "participant.userId === heroParticipant?.userId) return false", "Live Stage host party box must not filter remote viewer by focus-derived hero participant");
+assertIncludes(liveStage, "Featured is local focus styling only. Keep the primary card label tied to room state.", "Live Stage card role label must stay room-state based");
+assertNotIncludes(
+  liveStage,
+  "const roleLabel = getParticipantLayerLabel({\n                        state: participantState,\n                        isFeatured,\n                        isRequesting,\n                      });",
+  "Live Stage card role label must not use Featured as the primary participant status",
+);
 assertIncludes(liveStage, "const selfHeroFallbackBody = currentStageParticipantState.role === \"speaker\"", "Live Stage self-hero fallback must be local state copy, not LiveKit syncing copy");
 assertIncludes(liveStage, "shouldUseViewerSelfHero\n      ? currentUserParticipantId", "Live Stage self-hero removes self from party box through actual visual hero filtering");
 assertIncludes(liveStage, "showHeroLocalRtcVideo && RTCView", "Live Stage self-hero uses local visual immediately when available");
@@ -202,6 +208,7 @@ assertIncludes(seatApprovalProof, "default viewer layout should include viewer s
 assertIncludes(seatApprovalProof, "host party box should not duplicate host/self as You HOST", "Live Stage proof covers host self not duplicated in remote member box");
 assertIncludes(seatApprovalProof, "host focus must not filter the remote viewer out of the party box", "Live Stage proof covers focused remote viewer retention");
 assertIncludes(seatApprovalProof, "pending remote viewer should remain visible after host card tap opens sheet", "Live Stage proof covers pending remote viewer card retention");
+assertIncludes(seatApprovalProof, "featured focus must not replace primary participant role label", "Live Stage proof covers Featured not replacing primary role/status");
 assertIncludes(seatApprovalProof, "host pending-request card tap should open the seat-request sheet", "Live Stage proof covers card tap sheet behavior");
 assertIncludes(seatApprovalProof, "self-hero party box should put the real host first", "Live Stage proof covers self-hero host ordering");
 assertIncludes(seatApprovalProof, "self-hero fallback copy must not be Live feed syncing", "Live Stage proof covers instant self-hero fallback copy");
