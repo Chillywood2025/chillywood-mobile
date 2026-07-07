@@ -3,16 +3,16 @@
 # Watch-Party Live Source-Truth Repair
 
 Current latest truth:
-- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and OTA-published from aligned source. Installed proof remains Partial after strict real non-fixture Home media was surfaced and used: R5 played the media locally in Shared Player, but R3 did not render actual video in the same Shared Player.
+- Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and OTA-published from aligned source. Installed proof remains Partial, but the real-media playback blocker is resolved: both R5 and R3 rendered actual video in the same Shared Player on the fresh OTA. The remaining installed gap is viewer camera request / host approval with matching LiveKit speaker/canPublish authority and approved identity-safe camera feed.
 - Governing new doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
 - Source commit: `833520e5ba6fad86160b93df1da45cd510b1c433`.
 - Android EAS Update production runtime `1.0.0`: group `0d23919f-bedb-40b4-9428-6550bdfd765c`, Android update `019f3da7-dcd6-7732-a757-cb36b1bd7c61`.
 - R3 visibility was recovered through already-paired wireless ADB endpoint `10.0.0.27:44639`, mapping to serial `R3CXA0DS5JV`; R5 remained visible over USB. Both devices read back Play-installed v80 from `com.android.vending`. R5 was already Premium active, and R3 renewed through the approved Google Play / RevenueCat sandbox Premium flow and read back Premium active.
 - The first proof attempt stopped before starting Watch-Party Live because the available Home media card opened Player as `Chi'llywood Originals Proof Fixture`. That cannot be counted as strict real non-fixture Home media proof.
 - A safe real Home media card is now available: `Chi'llywood City Lights`, `sourceType=creator_video`, `sourceId=c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, remote playback URL present, `usedBundledFallback=false`, `classification=real-media`.
-- In installed room `K4ADLA`, R5 hosted from `Chi'llywood City Lights`, R3 joined the same Party Room, and both devices opened Shared Player. R5 showed actual playback at `0:04` / `0:52`; R3 showed `Synced · Playing` but the video surface stayed black and later returned to `Synced · Paused`.
-- No `Live feed unavailable` or `Live video is temporarily unavailable. Try again in a moment.` alert appeared in the real-media rerun.
-- Current source follow-up restores regular Shared Player visible comments at the bottom in non-fullscreen mode; comments are not menu-only behind `Room Comments`.
+- In installed room `38M7L3`, R5 hosted from `Chi'llywood City Lights`, R3 joined the same Party Room, and both devices opened Shared Player. Actual video playback appeared on both devices after host playback started. No `Live feed unavailable` or `Live video is temporarily unavailable. Try again in a moment.` alert appeared.
+- Regular Shared Player comments were visible at the bottom, R3 showed `Synced · Controls locked` for viewer locked-control proof, fullscreen preserved the locked rails and rendered actual video after host restart, and R3 returned to the Party Room.
+- Current installed proof still needs the viewer camera request / host approval packet. In the latest run the visible Shared Player controls did not expose a completed request/approval path before the packet ended, so no matching speaker/canPublish publish authority or approved viewer camera feed is claimed.
 - Current source follow-up adds Android shared-video render proof/recovery. `Synced · Playing` alone is not actual playback proof. A real-media shared source with no load/progress triggers one `expo-video` remount, then an `expo-av` fallback, then a clear render-stalled state if both renderers fail. Logs are redacted and include source kind/classification, playback URL presence boolean only, load/progress/watchdog state, and recovery action.
 - The Shared Player custom fullscreen rails remain locked: left comments rail, center shared video surface, and right portrait-reused LiveKit bubble rail. This lane must not change `docs/SHARED_PLAYER_CUSTOM_FULLSCREEN_RAILS.md` layout intent except proof/status notes.
 - Party Room handoff and Player entry now use the same canonical Watch-Party Live Premium access key helper, without bypassing Premium or changing Google Play / RevenueCat behavior.
@@ -27,8 +27,8 @@ Current latest truth:
 
 Next exact step:
 1. Use Play-installed v80 or newer, latest OTA, both devices Premium-active through approved Google Play / RevenueCat sandbox, and `Chi'llywood City Lights` or another `classification=real-media` Home card.
-2. Reprove: host opens Party Room/shared player, viewer joins same shared player, actual playback appears on both devices, regular Shared Player comments are visible at the bottom, host-only playback authority holds, viewer comments/reactions/camera request still work, identity-safe LiveKit bubbles render, fullscreen rails remain unchanged, and return to room works.
-3. If R3 shows `Synced · Playing` with a black video surface again, record the watchdog state/recovery action/exact copy and classify it as viewer Shared Player render/playback, not media fixture availability, Premium, Party Room entry, or backend LiveKit routing.
+2. Reprove only the remaining packet if possible: viewer camera request from Shared Player, host sees and approves, viewer receives matching speaker/canPublish authority, viewer publishes camera or a clear publish-ready state appears, and host sees an identity-safe viewer bubble/feed.
+3. If the request control is still not reachable in Shared Player, classify the blocker as installed Watch-Party Live camera-request UI reachability rather than media playback, Premium, Party Room entry, or backend LiveKit routing.
 4. Do not count `Synced · Playing` alone as actual playback proof.
 5. Do not touch Premium entitlement logic, Watch-Party Party Room, Android App Links, LiveKit routing/heartbeat/cutoffs, Chi'lly Chat/native calls, auth/RLS, billing/provider settings, live money, payouts, cashout, sideload, `adb install`, logout, clear data, uninstall, or reinstall.
 
