@@ -5,8 +5,8 @@
 Current latest truth:
 - Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published. A July 7 pre-proof hardening follow-up is validation-clean and OTA-published from aligned source. Installed proof remains Partial after strict real non-fixture Home media was surfaced and used: R5 played the media locally in Shared Player, but R3 did not render actual video in the same Shared Player.
 - Governing new doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
-- Source commit: `0b07b7224be9fdd3fe1df2d3906f7e140040cd50`.
-- Android EAS Update production runtime `1.0.0`: group `f917d6f6-e298-45f4-b1fe-7962c3c89f34`, Android update `019f3d37-5bd7-70b5-b881-4e15a2b07c30`.
+- Source commit: `833520e5ba6fad86160b93df1da45cd510b1c433`.
+- Android EAS Update production runtime `1.0.0`: group `0d23919f-bedb-40b4-9428-6550bdfd765c`, Android update `019f3da7-dcd6-7732-a757-cb36b1bd7c61`.
 - R3 visibility was recovered through already-paired wireless ADB endpoint `10.0.0.27:44639`, mapping to serial `R3CXA0DS5JV`; R5 remained visible over USB. Both devices read back Play-installed v80 from `com.android.vending`. R5 was already Premium active, and R3 renewed through the approved Google Play / RevenueCat sandbox Premium flow and read back Premium active.
 - The first proof attempt stopped before starting Watch-Party Live because the available Home media card opened Player as `Chi'llywood Originals Proof Fixture`. That cannot be counted as strict real non-fixture Home media proof.
 - A safe real Home media card is now available: `Chi'llywood City Lights`, `sourceType=creator_video`, `sourceId=c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, remote playback URL present, `usedBundledFallback=false`, `classification=real-media`.
