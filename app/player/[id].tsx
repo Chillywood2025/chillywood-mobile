@@ -7830,6 +7830,78 @@ export default function PlayerScreen() {
     if (!participant) return null;
     const isRequesting = participant.isRequestingToSpeak && !participant.canSpeak;
     const canManageSeatedSpeaker = participant.canSpeak;
+    const renderHostReviewActions = () => (
+      <View style={styles.watchPartyHostReviewActionRow}>
+        {isRequesting ? (
+          <>
+            <TouchableOpacity
+              style={[styles.partyParticipantControlBtn, styles.watchPartyHostReviewPrimaryBtn]}
+              onPress={async () => {
+                await approvePartyParticipantSeat(participant);
+              }}
+              activeOpacity={0.86}
+              testID="shared-player-host-request-approve"
+              accessibilityRole="button"
+              accessibilityLabel="Approve camera request"
+            >
+              <Text style={styles.partyParticipantControlBtnText}>Approve</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.partyParticipantControlBtn}
+              onPress={async () => {
+                await denyPartyParticipantSeatRequest(participant);
+              }}
+              activeOpacity={0.86}
+              testID="shared-player-host-request-deny"
+              accessibilityRole="button"
+              accessibilityLabel="Deny camera request"
+            >
+              <Text style={styles.partyParticipantControlBtnText}>Deny</Text>
+            </TouchableOpacity>
+          </>
+        ) : canManageSeatedSpeaker ? (
+          <TouchableOpacity
+            style={[styles.partyParticipantControlBtn, styles.watchPartyHostReviewPrimaryBtn]}
+            onPress={async () => {
+              const nextCanSpeak = false;
+              if (nextCanSpeak && !canAddPartySpeakerSeat(participant)) {
+                showLivePresenceEvent(`Speaker seats are full (${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} max)`);
+                return;
+              }
+              const seatPersisted = await persistPartySeatState(participant.id, {
+                canSpeak: nextCanSpeak,
+                stageRole: nextCanSpeak ? "speaker" : "listener",
+                isRequestingToSpeak: false,
+              });
+              if (!seatPersisted) {
+                await reportPartySeatUpdateUnavailable();
+                return;
+              }
+              setPartyParticipants((prev) =>
+                prev.map((entry) =>
+                  entry.id === participant.id
+                    ? {
+                        ...entry,
+                        canSpeak: nextCanSpeak,
+                        stageRole: nextCanSpeak ? "speaker" : "listener",
+                        isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
+                        isRequestingToSpeak: false,
+                      }
+                    : entry,
+                ),
+              );
+              if (participant.canSpeak) {
+                speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
+              }
+              bumpRoomEnergy(participant.canSpeak ? 0.04 : 0.07);
+            }}
+            activeOpacity={0.86}
+          >
+            <Text style={styles.partyParticipantControlBtnText}>Move to Audience</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
 
     return (
       <View
@@ -7854,6 +7926,7 @@ export default function PlayerScreen() {
             <Text style={styles.watchPartyHostReviewCloseText}>Close</Text>
           </TouchableOpacity>
         </View>
+        {isRequesting ? renderHostReviewActions() : null}
         <Text style={styles.watchPartyHostReviewBody}>
           {isRequesting
             ? "Review this request and approve only when you want this viewer to publish camera and mic."
@@ -7861,76 +7934,7 @@ export default function PlayerScreen() {
               ? "This participant is seated and can publish. Move them back to the audience when needed."
               : "This viewer is in the audience. They can request camera when they are ready."}
         </Text>
-        <View style={styles.watchPartyHostReviewActionRow}>
-          {isRequesting ? (
-            <>
-              <TouchableOpacity
-                style={[styles.partyParticipantControlBtn, styles.watchPartyHostReviewPrimaryBtn]}
-                onPress={async () => {
-                  await approvePartyParticipantSeat(participant);
-                }}
-                activeOpacity={0.86}
-                testID="shared-player-host-request-approve"
-                accessibilityRole="button"
-                accessibilityLabel="Approve camera request"
-              >
-                <Text style={styles.partyParticipantControlBtnText}>Approve</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.partyParticipantControlBtn}
-                onPress={async () => {
-                  await denyPartyParticipantSeatRequest(participant);
-                }}
-                activeOpacity={0.86}
-                testID="shared-player-host-request-deny"
-                accessibilityRole="button"
-                accessibilityLabel="Deny camera request"
-              >
-                <Text style={styles.partyParticipantControlBtnText}>Deny</Text>
-              </TouchableOpacity>
-            </>
-          ) : canManageSeatedSpeaker ? (
-            <TouchableOpacity
-              style={[styles.partyParticipantControlBtn, styles.watchPartyHostReviewPrimaryBtn]}
-              onPress={async () => {
-                const nextCanSpeak = false;
-                if (nextCanSpeak && !canAddPartySpeakerSeat(participant)) {
-                  showLivePresenceEvent(`Speaker seats are full (${LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS} max)`);
-                  return;
-                }
-                const seatPersisted = await persistPartySeatState(participant.id, {
-                  canSpeak: nextCanSpeak,
-                  stageRole: nextCanSpeak ? "speaker" : "listener",
-                  isRequestingToSpeak: false,
-                });
-                if (!seatPersisted) {
-                  await reportPartySeatUpdateUnavailable();
-                  return;
-                }
-                setPartyParticipants((prev) =>
-                  prev.map((entry) =>
-                    entry.id === participant.id
-                      ? {
-                          ...entry,
-                          canSpeak: nextCanSpeak,
-                          stageRole: nextCanSpeak ? "speaker" : "listener",
-                          isSpeaking: nextCanSpeak ? entry.isSpeaking : false,
-                          isRequestingToSpeak: false,
-                        }
-                      : entry,
-                  ),
-                );
-                if (participant.canSpeak) {
-                  speakingOrderRef.current = speakingOrderRef.current.filter((id) => id !== participant.id);
-                }
-                bumpRoomEnergy(participant.canSpeak ? 0.04 : 0.07);
-              }}
-              activeOpacity={0.86}
-            >
-              <Text style={styles.partyParticipantControlBtnText}>Move to Audience</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
+        {!isRequesting ? renderHostReviewActions() : null}
       </View>
     );
   };

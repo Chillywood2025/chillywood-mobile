@@ -1298,6 +1298,23 @@ assertIncludes(
   "shared-player-host-request-close",
   "Player Watch-Party host request review card must expose an installed-proof close target",
 );
+const playerSharedHostReviewCard = sliceBetween(
+  player,
+  "const renderWatchPartyLiveHostReviewCard = () => {",
+  "const renderWatchPartySocialPanel =",
+  "Player Watch-Party host request review card boundary",
+);
+assertIncludes(
+  playerSharedHostReviewCard,
+  "const renderHostReviewActions = () => (",
+  "Player Watch-Party host request review card must centralize tappable actions",
+);
+assertBefore(
+  playerSharedHostReviewCard,
+  "{isRequesting ? renderHostReviewActions() : null}",
+  "<Text style={styles.watchPartyHostReviewBody}>",
+  "Player Watch-Party pending request approve/deny actions must render before the explanatory body so they stay reachable",
+);
 assertIncludes(
   playerPartyCommentsContent,
   "shared-player-comment-input",

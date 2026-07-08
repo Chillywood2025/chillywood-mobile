@@ -395,6 +395,18 @@ assert(
     && playerSource.includes("shared-player-host-request-close"),
   "host request review card must expose stable installed-proof targets",
 );
+const sharedPlayerHostReviewStart = playerSource.indexOf("const renderWatchPartyLiveHostReviewCard = () => {");
+const sharedPlayerHostReviewEnd = playerSource.indexOf("const renderWatchPartySocialPanel =", sharedPlayerHostReviewStart);
+const sharedPlayerHostReviewSource =
+  sharedPlayerHostReviewStart >= 0 && sharedPlayerHostReviewEnd > sharedPlayerHostReviewStart
+    ? playerSource.slice(sharedPlayerHostReviewStart, sharedPlayerHostReviewEnd)
+    : "";
+assert(
+  sharedPlayerHostReviewSource.includes("const renderHostReviewActions = () => (")
+    && sharedPlayerHostReviewSource.indexOf("{isRequesting ? renderHostReviewActions() : null}")
+      < sharedPlayerHostReviewSource.indexOf("<Text style={styles.watchPartyHostReviewBody}>"),
+  "pending host request approve/deny actions must render before explanatory body for installed reachability",
+);
 assert(
   playerSource.includes("shared-player-comment-input")
     && playerSource.includes("shared-player-comment-send")
