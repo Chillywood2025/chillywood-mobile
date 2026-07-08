@@ -12,6 +12,8 @@ Pre-proof hardening follow-up: validation-clean and OTA-published on July 7, 202
 
 Control reachability follow-up: source commit `7ec03c5e4fc716a65fad633db1a593906c2012c3` is on `origin/main`; Android EAS Update production runtime `1.0.0` published group `d6828e44-5e61-4329-9721-d4106a97909f`, Android update `019f3eea-b092-7f99-9833-723a9ed710a3`, message `Fix Watch-Party Live controls 7ec03c5`.
 
+Request-control follow-up: source commit `ad1611b9810299a2ffb98cfdefc15d193a2869e2` is on `origin/main`; Android EAS Update production runtime `1.0.0` published group `6f83ca92-a7c8-41f5-b4d3-864998e2823e`, Android update `019f3f06-a76b-7dea-8ad7-f5db9374533b`, message `Fix Watch-Party Live request controls ad1611b`.
+
 ## Executive Summary
 
 Watch-Party Live sidecar/shared-player source truth is repaired for the remaining app-controlled gaps found after the real Home-route installed proof. The fix does not change Shared Player fullscreen layout. It canonicalizes Party Room and Player Premium access keys, classifies media so fixture/bundled fallback cannot be counted as strict real Home media proof, requires LiveKit token contracts to match desired host/speaker publish authority, versions camera-seat requests, keeps pending approval on one stable host review path, makes participant bubbles identity-safe, and moves proof coverage onto the real helper module.
@@ -29,6 +31,8 @@ Installed follow-up proof after OTA group `0d23919f-bedb-40b4-9428-6550bdfd765c`
 The remaining camera request / host approval packet used artifact folder `/tmp/google-play-internal-v80-watch-party-live-camera-request-approval-proof-20260707-171433/`. Both devices were visible, Play-installed v80, backend LiveKit health was green, and both devices renewed/read back Premium active through the approved Google Play / RevenueCat sandbox path after normal sandbox expiry. Stale room `38M7L3` returned `Room not found`, so R5 created fresh room `EJPK7C` from the strict real-media `Chi'llywood City Lights` Player path and R3 joined the same Party Room/Shared Player. The packet remains Partial because tapping the viewer's own audience bubble/card did not send or persist a camera request, did not show a visible `Request pending` state, and R5 never received a request badge/review card/approval surface. Viewer comment/reaction send was also not closed in that packet because the attempted bottom-control interaction escaped to Android share/intent UI and was backed out without sending. No matching speaker/canPublish authority or identity-safe approved viewer camera feed is claimed.
 
 The current narrow source follow-up fixes that installed control reachability gap without changing fullscreen rails or the major Shared Player layout. Regular Shared Player now exposes an explicit viewer `Request Camera` button with pending/error proof states; self-bubble taps use the same versioned request path; the host review card exposes stable installed-proof targets; regular comment input/send controls expose stable proof targets; and a reachable regular Shared Player reaction button broadcasts room reactions. Guard/proof coverage rejects Android Share handling in request, comment, and reaction paths and keeps those controls outside the host-only playback lock. This source follow-up is validation-clean and OTA-published; installed proof on Google Play devices is still required before closure.
+
+The installed rerun after that OTA used fresh real-media room `ZWZ2KP` and proved the latest control targets were visible by testID, including `shared-player-request-camera-button`, `shared-player-reaction-button`, and `shared-player-visible-comments`. It still remained Partial because tapping explicit `Request Camera` or the viewer self bubble did not produce `Request pending`, and the host did not receive a request surface. Source root cause: `onPressSharedPlayerRequestCamera(...)` had the visible participant, but `requestPartySeat()` recomputed requester identity from a separate party-user/ref path that could be stale and silently return before persisting. The always-visible comments dock also showed only the title while input/send were clipped below the screen. Source commit `ad1611b9810299a2ffb98cfdefc15d193a2869e2` fixes both without changing fullscreen rails: the request path now accepts the visible participant id, and the regular Shared Player comments dock uses a compact input/send layout while fullscreen rail comments remain unchanged. This follow-up is validation-clean and OTA-published; installed proof remains required after group `6f83ca92-a7c8-41f5-b4d3-864998e2823e` loads.
 
 ## Fullscreen/Layout No-Change
 
@@ -57,6 +61,7 @@ Source behavior now covered:
 - Media source classification distinguishes real remote media from local bundled fallback, proof fixture copy, and missing source fallback.
 - Player runtime now logs redacted Watch-Party Live media source classification metadata when resolving shared playback. This makes installed proof able to distinguish `real-media` from `fixture-or-proof`, `bundled-fallback`, and `missing-source` without exposing private playback URLs.
 - Regular Shared Player comments are visible in the approved lower/bottom placement when `isSharedPartyPlayback && !isPlayerFullscreen`; the button may still focus/toggle controls, but comments are no longer menu-only.
+- Regular Shared Player comments use a compact dock layout for the always-visible bottom surface so input/send remain reachable without opening Android Share or moving the fullscreen rails.
 - Android shared playback is render-proof aware. A real-media shared source showing sync state without load/progress triggers a bounded recovery sequence and cannot close installed playback proof from `Synced · Playing` alone.
 - Watch-Party Live contracts are authority-strict: desired host/speaker publish state is not publish-ready unless the active token contract matches room, identity, role, and canPublish.
 - Camera-seat requests carry request versions; duplicate pending events do not reopen an X-closed review for the same request.
@@ -65,6 +70,7 @@ Source behavior now covered:
 - Pending approval is one stable host review path. Pending inline approve/dismiss controls and direct seating for non-requesting audience/listener cards are removed.
 - Participant-specific LiveKit bubbles only render identity-matched tracks.
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module instead of duplicating a fake model.
+- The explicit `Request Camera` path passes the visible Shared Player participant id into the versioned request helper, so it does not depend on a stale party-user/ref identity.
 
 ## Proof Boundaries
 
@@ -114,10 +120,11 @@ Current installed-proof status:
 - Fresh room `EJPK7C` narrowed the remaining blocker to camera request / host approval: R3's visible self audience bubble/card did not send or persist a request, no pending request state appeared, and R5 never received a request review/approval surface.
 - Viewer comment/reaction send remains unproved in the latest packet because the attempted interaction escaped to Android share/intent UI and was backed out without sending.
 - Current source follow-up adds explicit regular Shared Player proof targets for `Request Camera`, request pending/error states, host review approve/deny/close, comment input/send, and reaction send. It also routes bubble taps through the same request path and broadcasts regular Shared Player reactions to the room. Installed proof remains required after OTA.
+- Latest request-control follow-up reroutes explicit request and self-bubble request through the visible participant id and makes the regular comments dock input/send reachable. Installed proof remains required after OTA group `6f83ca92-a7c8-41f5-b4d3-864998e2823e`.
 - Strict installed proof remains Partial until the Shared Player viewer camera request is reachable and persistent, host approval succeeds, viewer speaker/canPublish authority matches, and an approved identity-safe viewer camera bubble/feed is visible.
 - no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, source change, or fullscreen layout change was performed.
 
 Next exact proof/fix step:
 
-1. Rerun installed proof only after OTA group `d6828e44-5e61-4329-9721-d4106a97909f` / Android update `019f3eea-b092-7f99-9833-723a9ed710a3` loads on Google Play-installed devices; carry forward the already-proved real-media playback, regular comments visibility, locked viewer playback controls, fullscreen rails, and return-to-room results unless a fresh regression appears.
+1. Rerun installed proof only after OTA group `6f83ca92-a7c8-41f5-b4d3-864998e2823e` / Android update `019f3f06-a76b-7dea-8ad7-f5db9374533b` loads on Google Play-installed devices; carry forward the already-proved real-media playback, regular comments visibility, locked viewer playback controls, fullscreen rails, and return-to-room results unless a fresh regression appears.
 2. Close the remaining packet only if viewer comment/reaction works, explicit `Request Camera` sends/persists and shows pending feedback, host review/approve works, the viewer receives matching speaker/canPublish authority, and the approved viewer camera bubble/feed is identity-safe.
