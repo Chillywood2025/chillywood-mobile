@@ -9,6 +9,8 @@ Current latest truth:
 - Repo alignment after the source/doc/OTA lane: `HEAD == origin/main == 052f5c2e3fd526d795ec05259efd4a786f54769b`.
 - Source commit for the keyboard-height fix: `eaee449b3bc2236abee02f18443094e65c0a999b`.
 - Android EAS Update production runtime `1.0.0`: group `d34905b5-ecd6-4c72-b32d-32a173852b89`, Android update `019f414f-f0de-7fe6-b23e-f1d1821b5cfb`, message `Fix Watch-Party Live comment keyboard height eaee449b`.
+- Source commit for final camera/reaction hardening: `7d92e8a07bff084916969e665b5ee0ea89ee83fb`.
+- Android EAS Update production runtime `1.0.0`: group `c4edaad0-0565-4548-8848-9ef6450a5a4f`, Android update `019f4247-cb7f-7bbd-b19e-80cf06b2ae1b`, message `Fix Watch-Party Live camera reaction 7d92e8a0`.
 - Fresh installed room `NZP627` used strict real media `Chi'llywood City Lights`, `sourceType=creator_video`, `sourceId=c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, `classification=real-media`.
 - R3 was recovered through wireless ADB at `10.0.0.27:42069`; R5 stayed USB-visible.
 - R5 renewed Premium through the approved Google Play / RevenueCat sandbox path after normal sandbox expiry; R3 joined the same room without a Premium gate. No manual entitlement or bypass was used.
