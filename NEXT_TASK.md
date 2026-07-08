@@ -8,7 +8,9 @@ Latest stable-bubble source update:
 - Current source fix in this lane keeps a separate renderable LiveKit contract so the real LiveKit bubble surface stays mounted during token/authority refresh. It still does not treat downgraded viewer/no-publish contracts as publish-ready.
 - Speaker/canPublish token refresh now uses a bounded membership-refresh retry window instead of the old single retry that could silently stop after one downgraded response.
 - The Shared Player top-video presence pill no longer lists participant names during Watch-Party Live; it keeps the count only so it does not compete with the real bubble panel.
-- Validation passed: LiveKit routing health (`eligibleServerCount=1`, `heartbeatAgeSeconds=20`, no recent no-eligible-server blocker), heartbeat policy, Premium sandbox policy, Watch-Party LiveKit guard, old-room handling, Watch-Party seat-request proof, Live Stage proof, runtime validation, route contracts, TypeScript, `deno check supabase/functions/livekit-token/index.ts`, diff checks, and changed-hunk secret scan. Commit/push, OTA, and installed proof are still required.
+- Source commit `4127cb10aad7007c57a30e9baee1a9088b02ad52` is pushed to `origin/main`.
+- Android EAS Update production runtime `1.0.0`: group `996c2593-7df5-4826-8c39-cfc3810de91c`, Android update `019f42d8-93ad-72c5-806a-9ff679c28202`, message `Stabilize Watch-Party Live bubbles 4127cb10`.
+- Validation passed: LiveKit routing health (`eligibleServerCount=1`, `heartbeatAgeSeconds=20`, no recent no-eligible-server blocker), heartbeat policy, Premium sandbox policy, Watch-Party LiveKit guard, old-room handling, Watch-Party seat-request proof, Live Stage proof, runtime validation, route contracts, TypeScript, `deno check supabase/functions/livekit-token/index.ts`, diff checks, and changed-hunk secret scan. Installed proof is still required.
 - Do not change fullscreen rails/layout, Premium, Watch-Party Party Room source semantics, LiveKit routing/heartbeat/cutoffs, App Links, Chat/native, auth/RLS, billing, payout/cashout, sideload/install/logout/clear-data/uninstall/reinstall.
 
 Superseded foreground media-bubble update:
@@ -43,7 +45,7 @@ Current latest truth:
 
 Next exact step:
 1. Do not reopen playback, real-media classification, visible comments, keyboard reachability, request/approval, roster convergence, fullscreen rails, Premium, App Links, Chat/native calls, or LiveKit backend unless a fresh regression appears.
-2. Load OTA group `fd2b4bc1-b1e0-4f25-aa6d-95dfda3a65d9` / Android update `019f4297-677e-7286-a16b-73fa3cc064f3`, then re-prove the installed Party Room `Connecting…` / Open Shared Player progression using the installed test-ID-backed buttons. Try normal tap first and long-press fallback only if the normal tap still does not fire. Do not use the room code as a direct Player `partyId` workaround.
+2. Load OTA group `996c2593-7df5-4826-8c39-cfc3810de91c` / Android update `019f42d8-93ad-72c5-806a-9ff679c28202`, then rerun the installed Watch-Party Live proof with the focus on post-approval bubble/feed stability. Do not use the room code as a direct Player `partyId` workaround.
 3. Then focus the next lane on the final installed camera/reaction proof:
    - keep Play-installed v80/latest OTA on R5/R3;
    - renew both Premium windows through the approved Google Play / RevenueCat sandbox path if expired;
