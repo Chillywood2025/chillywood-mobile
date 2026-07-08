@@ -351,6 +351,60 @@ assert(
   viewerDeviceRoster.every((entry) => entry.identityAliases.includes(entry.participantId)),
   "roster entries should alias app participant ids for stable taps and labels",
 );
+const collidingViewerMergedRoster = mergeWatchPartyLiveRoster({
+  memberships: approvedMemberships,
+  presenceParticipants: [
+    {
+      id: hostId,
+      liveKitIdentity: "lk-viewer-device",
+      name: "Proof Host",
+      role: "host",
+      stageRole: "host",
+      canSpeak: true,
+    },
+    {
+      id: viewerId,
+      liveKitIdentity: "lk-viewer-device",
+      name: "Proof Viewer",
+      role: "viewer",
+      stageRole: "speaker",
+      canSpeak: true,
+    },
+  ],
+  currentUserId: viewerId,
+  currentLiveKitIdentity: "lk-viewer-device",
+  roomHostUserId: hostId,
+});
+assert(
+  collidingViewerMergedRoster.length === 2,
+  "identity collision recovery must keep both host and viewer visible",
+);
+assert(
+  collidingViewerMergedRoster.find((entry) => entry.id === hostId)?.liveKitIdentity === hostId,
+  "remote host must not keep a LiveKit identity that collides with the viewer current identity",
+);
+const collidingViewerDeviceRoster = buildWatchPartyLiveParticipantRoster({
+  participants: collidingViewerMergedRoster,
+  currentUserId: viewerId,
+  currentLiveKitIdentity: "lk-viewer-device",
+  showRequestIndicators: false,
+});
+assert(
+  collidingViewerDeviceRoster.length === 2,
+  "colliding identities must not collapse the viewer device roster to only self",
+);
+assert(
+  collidingViewerDeviceRoster.filter((entry) => entry.label === "You").length === 1,
+  "only the durable current user participant may be labeled You",
+);
+assert(
+  collidingViewerDeviceRoster.find((entry) => entry.participantId === hostId)?.role === "host",
+  "identity collision must not mix host/viewer roles",
+);
+assert(
+  collidingViewerDeviceRoster.find((entry) => entry.participantId === viewerId)?.role === "speaker",
+  "identity collision must keep the approved viewer as speaker",
+);
 
 assert(
   watchPartyLiveContractMatchesDesiredAuthority(

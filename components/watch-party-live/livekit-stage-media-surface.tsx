@@ -195,15 +195,23 @@ const getParticipantLabel = (
   participantRosterByIdentity?: Map<string, LiveKitStageParticipantRosterEntry>,
   currentIdentityAliases?: Set<string>,
 ) => {
-  if (identity === currentIdentity || currentIdentityAliases?.has(identity)) return "You";
   const rosterEntry = participantRosterByIdentity?.get(identity);
-  if (rosterEntry?.isCurrentUser) return "You";
-  const candidate = String(rosterEntry?.label ?? participantLabelsByIdentity?.[identity] ?? "").trim();
+  if (rosterEntry) {
+    if (rosterEntry.isCurrentUser) return "You";
+    const candidate = String(rosterEntry.label ?? participantLabelsByIdentity?.[identity] ?? "").trim();
+    const normalizedCandidate = candidate.toLowerCase();
+    if (candidate && normalizedCandidate !== "you" && normalizedCandidate !== "me") {
+      return candidate;
+    }
+    return rosterEntry.role === "host" ? "Host" : "Guest";
+  }
+  if (identity === currentIdentity || currentIdentityAliases?.has(identity)) return "You";
+  const candidate = String(participantLabelsByIdentity?.[identity] ?? "").trim();
   const normalizedCandidate = candidate.toLowerCase();
   if (candidate && normalizedCandidate !== "you" && normalizedCandidate !== "me") {
     return candidate;
   }
-  return rosterEntry?.role === "host" ? "Host" : "Guest";
+  return "Guest";
 };
 
 const normalizeIdentityList = (...values: unknown[]) => {
@@ -399,7 +407,7 @@ function LiveKitStageMediaContent({
       if (seenIdentities.has(identity)) return;
       const aliases = normalizeIdentityList(identity, entry.participantId, entry.identityAliases ?? []);
       const trackRef = aliases.map((alias) => trackByIdentity.get(alias) ?? null).find(Boolean) ?? null;
-      const isCurrentParticipant = entry.isCurrentUser === true || aliases.some((alias) => currentIdentitySet.has(alias));
+      const isCurrentParticipant = entry.isCurrentUser === true;
       const label = getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity, currentIdentitySet);
       nextItems.push({
         identity,

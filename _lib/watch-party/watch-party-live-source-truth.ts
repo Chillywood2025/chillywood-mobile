@@ -459,6 +459,7 @@ export const mergeWatchPartyLiveRoster = (options: {
   presenceParticipants?: WatchPartyLivePresenceParticipant[];
   currentUserId?: string | null;
   currentLiveKitIdentity?: string | null;
+  currentIdentityAliases?: string[];
   roomHostUserId?: string | null;
   currentDisplayName?: string | null;
   currentAvatarUrl?: string | null;
@@ -467,6 +468,11 @@ export const mergeWatchPartyLiveRoster = (options: {
 }): WatchPartyLiveRosterParticipant[] => {
   const currentUserId = sanitizeIdentifier(options.currentUserId);
   const currentLiveKitIdentity = sanitizeIdentifier(options.currentLiveKitIdentity);
+  const currentIdentitySet = new Set(normalizeIdentityList(
+    currentUserId,
+    currentLiveKitIdentity,
+    options.currentIdentityAliases ?? [],
+  ));
   const roomHostUserId = sanitizeIdentifier(options.roomHostUserId);
   const memberships = options.memberships ?? [];
   const presenceParticipants = options.presenceParticipants ?? [];
@@ -506,10 +512,15 @@ export const mergeWatchPartyLiveRoster = (options: {
     const displayName = sanitizeIdentifier(
       isCurrentUser ? "You" : membership?.displayName || presence?.name || (role.role === "host" ? "Host" : "Guest"),
     );
+    const presenceLiveKitIdentity = sanitizeIdentifier(presence?.liveKitIdentity);
+    const presenceIdentityCollidesWithCurrent = !isCurrentUser
+      && !!presenceLiveKitIdentity
+      && currentIdentitySet.has(presenceLiveKitIdentity);
+    const safePresenceLiveKitIdentity = presenceIdentityCollidesWithCurrent ? "" : presenceLiveKitIdentity;
 
     return {
       id: participantId,
-      liveKitIdentity: sanitizeIdentifier(presence?.liveKitIdentity) || (isCurrentUser ? currentLiveKitIdentity : "") || participantId,
+      liveKitIdentity: safePresenceLiveKitIdentity || (isCurrentUser ? currentLiveKitIdentity : "") || participantId,
       name: displayName || (isCurrentUser ? "You" : role.role === "host" ? "Host" : "Guest"),
       role: role.role,
       stageRole: role.stageRole,
@@ -572,6 +583,7 @@ export const buildWatchPartyLiveParticipantRoster = (options: {
   );
   const currentIdentitySet = new Set(currentIdentityAliases);
   const seenParticipantIds = new Set<string>();
+  const seenIdentities = new Set<string>();
 
   return options.participants.reduce<WatchPartyLiveParticipantRosterEntry[]>((entries, participant) => {
     const participantId = sanitizeIdentifier(participant.id);
@@ -579,9 +591,22 @@ export const buildWatchPartyLiveParticipantRoster = (options: {
     seenParticipantIds.add(participantId);
 
     const liveKitIdentity = sanitizeIdentifier(participant.liveKitIdentity);
-    const identity = liveKitIdentity || participantId;
-    const identityAliases = normalizeIdentityList(identity, participantId, liveKitIdentity);
-    const isCurrentUser = identityAliases.some((entry) => currentIdentitySet.has(entry));
+    const isCurrentUser = !!participantId && participantId === sanitizeIdentifier(options.currentUserId);
+    const preferredIdentity = liveKitIdentity || participantId;
+    const preferredAliases = normalizeIdentityList(preferredIdentity, participantId, liveKitIdentity);
+    const identityCollidesWithCurrent = !isCurrentUser && preferredAliases.some((entry) => currentIdentitySet.has(entry));
+    let identity = identityCollidesWithCurrent ? participantId : preferredIdentity;
+    if (seenIdentities.has(identity) && identity !== participantId) {
+      identity = participantId;
+    }
+    if (seenIdentities.has(identity)) return entries;
+    seenIdentities.add(identity);
+    const identityAliases = normalizeIdentityList(
+      identity,
+      participantId,
+      identityCollidesWithCurrent ? "" : liveKitIdentity,
+      isCurrentUser ? currentIdentityAliases : [],
+    );
     const role: WatchPartyLiveParticipantRosterEntry["role"] = participant.role === "host"
       ? "host"
       : participant.canSpeak || participant.stageRole === "speaker"

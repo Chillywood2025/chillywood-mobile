@@ -5565,6 +5565,7 @@ export default function PlayerScreen() {
       presenceParticipants: partyParticipants,
       currentUserId: trackedUserId,
       currentLiveKitIdentity: watchPartyLiveKitIdentity || watchPartyLiveKitIdentityRef.current || trackedUserId,
+      currentIdentityAliases: [watchPartyLiveKitIdentityRef.current],
       roomHostUserId: partyRoomHostUserIdRef.current,
       currentDisplayName: partyDisplayNameRef.current,
       currentAvatarUrl: partyAvatarUrlRef.current,
@@ -7163,9 +7164,17 @@ export default function PlayerScreen() {
     return `${viewerCount} viewers synced`;
   }, [inWatchParty, viewerCount]);
   const watchPartyPreviewLabel = useMemo(() => {
-    if (partyParticipantPreview.length === 0) return "";
-    return partyParticipantPreview.slice(0, 2).join(" · ");
-  }, [partyParticipantPreview]);
+    if (liveBubbleParticipants.length === 0) return "";
+    return liveBubbleParticipants.slice(0, 2).map((participant) => {
+      if (participant.id === trackedUserId) return "You";
+      if (participant.role === "host" || participant.stageRole === "host") return "Host";
+      return resolvePartyParticipantDisplayName({
+        isCurrentUser: false,
+        role: participant.role,
+        candidates: [participant.name, partyMembershipMapRef.current[participant.id]?.displayName],
+      });
+    }).join(" · ");
+  }, [liveBubbleParticipants, trackedUserId]);
   const compactPartySyncStatus = useMemo(() => {
     if (!partySyncStatus) return "";
     return partySyncStatus
@@ -8054,11 +8063,66 @@ export default function PlayerScreen() {
         containerStyle={containerStyle ?? styles.watchPartySocialMediaFrameInner}
       />
     ) : (
-      <View style={styles.watchPartySocialPlaceholder}>
-        <Text style={styles.watchPartySocialPlaceholderKicker}>SHARED PLAYER</Text>
-        <Text style={styles.watchPartySocialPlaceholderBody}>
-          Shared playback stays here if the room drops back from live camera.
-        </Text>
+      <View style={[styles.watchPartyRosterPlaceholderSurface, containerStyle ?? styles.watchPartySocialMediaFrameInner]}>
+        {liveBubbleParticipants.length > 0 ? (
+          <ScrollView
+            style={styles.watchPartyRosterPlaceholderScroll}
+            contentContainerStyle={styles.watchPartyRosterPlaceholderContent}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            testID="shared-player-live-roster-placeholder"
+          >
+            {liveBubbleParticipants.map((participant) => {
+              const roleLabel = participant.role === "host"
+                ? "Host"
+                : participant.canSpeak || participant.stageRole === "speaker"
+                  ? "Speaker"
+                  : participant.isRequestingToSpeak
+                    ? "Request"
+                    : "Audience";
+              const isCurrentParticipant = participant.id === trackedUserId;
+              const label = resolvePartyParticipantDisplayName({
+                isCurrentUser: isCurrentParticipant,
+                role: participant.role,
+                candidates: [participant.name, partyMembershipMapRef.current[participant.id]?.displayName],
+              });
+              const avatarUri = String(participant.cameraPreviewUrl || participant.avatarUrl || "").trim();
+              return (
+                <TouchableOpacity
+                  key={participant.id}
+                  style={styles.watchPartyRosterPlaceholderItem}
+                  activeOpacity={0.84}
+                  onPress={() => onWatchPartyLiveKitParticipantPress(participant.id)}
+                  testID={`shared-player-live-roster-placeholder-${participant.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label} ${roleLabel}`}
+                >
+                  <View style={[
+                    styles.watchPartyRosterPlaceholderAvatar,
+                    participant.role === "host" && styles.watchPartyRosterPlaceholderAvatarHost,
+                    participant.canSpeak && participant.role !== "host" && styles.watchPartyRosterPlaceholderAvatarSpeaker,
+                  ]}>
+                    {avatarUri ? (
+                      <Image source={{ uri: avatarUri }} style={styles.watchPartyRosterPlaceholderAvatarImage} />
+                    ) : (
+                      <Text style={styles.watchPartyRosterPlaceholderInitials}>{getInitials(label)}</Text>
+                    )}
+                  </View>
+                  <Text style={styles.watchPartyRosterPlaceholderName} numberOfLines={1}>{label}</Text>
+                  <Text style={styles.watchPartyRosterPlaceholderStatus} numberOfLines={1}>{roleLabel}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <View style={styles.watchPartySocialPlaceholder}>
+            <Text style={styles.watchPartySocialPlaceholderKicker}>CAMERA SYNCING</Text>
+            <Text style={styles.watchPartySocialPlaceholderBody}>
+              Camera bubbles will appear as room members connect.
+            </Text>
+          </View>
+        )}
       </View>
     )
   );
@@ -11558,6 +11622,67 @@ const styles = StyleSheet.create({
     color: "#E7EBF6",
     fontSize: 12,
     lineHeight: 18,
+  },
+  watchPartyRosterPlaceholderSurface: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "rgba(4, 6, 12, 0.72)",
+  },
+  watchPartyRosterPlaceholderScroll: {
+    flex: 1,
+  },
+  watchPartyRosterPlaceholderContent: {
+    alignItems: "center",
+    gap: 14,
+    minHeight: "100%",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  watchPartyRosterPlaceholderItem: {
+    width: 96,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  watchPartyRosterPlaceholderAvatar: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  watchPartyRosterPlaceholderAvatarHost: {
+    borderColor: "rgba(255, 216, 94, 0.5)",
+    backgroundColor: "rgba(255, 216, 94, 0.14)",
+  },
+  watchPartyRosterPlaceholderAvatarSpeaker: {
+    borderColor: "rgba(108, 242, 177, 0.45)",
+    backgroundColor: "rgba(108, 242, 177, 0.12)",
+  },
+  watchPartyRosterPlaceholderAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  watchPartyRosterPlaceholderInitials: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  watchPartyRosterPlaceholderName: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    maxWidth: "100%",
+  },
+  watchPartyRosterPlaceholderStatus: {
+    color: "#AEB4C6",
+    fontSize: 10,
+    fontWeight: "800",
+    maxWidth: "100%",
   },
   titleParticipantFeedScroll: {
     maxHeight: 228,

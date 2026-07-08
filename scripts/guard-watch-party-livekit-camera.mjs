@@ -175,6 +175,21 @@ assertIncludes(
 );
 assertIncludes(
   watchPartyLiveSourceTruth,
+  "presenceIdentityCollidesWithCurrent",
+  "Watch-Party Live roster merge must drop remote LiveKit identities that collide with the current device identity",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "const isCurrentUser = !!participantId && participantId === sanitizeIdentifier(options.currentUserId)",
+  "Watch-Party Live roster labels must use durable app participant id, not transient LiveKit aliases, for current-user truth",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "identityCollidesWithCurrent",
+  "Watch-Party Live participant roster must recover from LiveKit identity collisions without collapsing remote members",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
   "export const resolveWatchPartyLiveParticipantRole",
   "Watch-Party Live source-truth helper must own role precedence between membership and presence",
 );
@@ -562,6 +577,16 @@ assertIncludes(
 );
 assertIncludes(
   livekitSurface,
+  "if (rosterEntry) {\n    if (rosterEntry.isCurrentUser) return \"You\";",
+  "LiveKit media surface must let durable roster current-user truth beat local LiveKit identity aliases",
+);
+assertIncludes(
+  livekitSurface,
+  "const isCurrentParticipant = entry.isCurrentUser === true;",
+  "LiveKit roster entries must not mark remote members current just because a transient identity alias collides",
+);
+assertIncludes(
+  livekitSurface,
   "const bubbleGridItems = useMemo<BubbleGridItem[]>(() => {",
   "LiveKit media surface must build roster-aware bubble-grid items",
 );
@@ -840,6 +865,21 @@ assertIncludes(
   player,
   "presenceParticipants: partyParticipants",
   "Player Watch-Party bubble roster may enrich membership with realtime presence",
+);
+assertIncludes(
+  player,
+  "shared-player-live-roster-placeholder",
+  "regular Shared Player must render membership roster placeholders when LiveKit bubbles are still syncing",
+);
+assertIncludes(
+  player,
+  "const watchPartyPreviewLabel = useMemo(() => {\n    if (liveBubbleParticipants.length === 0) return \"\";",
+  "Shared Player participant preview text must use the merged membership roster instead of stale raw presence preview labels",
+);
+assertIncludes(
+  player,
+  "Camera bubbles will appear as room members connect.",
+  "Shared Player roster fallback must be honest about camera syncing instead of hiding active room members",
 );
 assertIncludes(
   player,
