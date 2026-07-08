@@ -21,6 +21,7 @@ Current latest truth:
 - Android EAS Update production runtime `1.0.0` was published from `54753513` as group `9285127f-acb0-49ec-bcd1-554f439c7497`, Android update `019f412a-b092-73d5-a688-5b2e3c0ce131`, message `Fix Watch-Party Live lower dock touch layer 54753513`.
 - Installed proof after the lower-dock touch-layer OTA recovered R3 again at `10.0.0.27:42069`; R5 remained USB-visible. Room `ATKLEB` reached the Shared Player on both devices after normal Google Play sandbox Premium renewals. The lower dock was tappable and the R3 comment input focused, but Android still covered/cut off the composer and Send row with the keyboard. This is the current app-controlled source blocker.
 - Current source follow-up keeps fullscreen unchanged and only shrinks the regular non-fullscreen Watch-Party Live shared video surface while `sharedPartyCommentsKeyboardActive` is true, so the existing visible lower comments composer can sit above Android's keyboard.
+- Source commit `eaee449b3bc2236abee02f18443094e65c0a999b` is pushed to `origin/main`. Android EAS Update production runtime `1.0.0` published group `d34905b5-ecd6-4c72-b32d-32a173852b89`, Android update `019f414f-f0de-7fe6-b23e-f1d1821b5cfb`, message `Fix Watch-Party Live comment keyboard height eaee449b`.
 
 Superseded historical trail retained for context:
 - Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published through the real-media playback lane. Installed proof remains Partial, but the real-media playback blocker is resolved: both R5 and R3 rendered actual video in the same Shared Player on the fresh OTA. A July 7 camera-request packet then narrowed the remaining blocker to installed Shared Player camera-request/comment-reaction reachability and request persistence: tapping the viewer's own audience bubble/card did not produce a visible pending request, and the host never received a review/approval surface.
@@ -52,7 +53,7 @@ Superseded historical trail retained for context:
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
 
 Next exact step:
-1. Validate, push, and publish a fresh Android OTA from the keyboard-height source follow-up.
+1. Load Android OTA group `d34905b5-ecd6-4c72-b32d-32a173852b89` / update `019f414f-f0de-7fe6-b23e-f1d1821b5cfb` on both Play-installed devices.
 2. Rerun only the focused installed packet on Play-installed devices after that OTA loads: open `Chi'llywood City Lights`, confirm carry-forward playback/roster basics, tap the visible lower-dock controls, focus the visible bottom comment composer, verify the composer/Send row is visible and tappable above the keyboard, send a viewer comment, and confirm host receipt.
 3. Do not reopen playback, real-media classification, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, LiveKit backend, or roster convergence unless a fresh regression appears.
 
