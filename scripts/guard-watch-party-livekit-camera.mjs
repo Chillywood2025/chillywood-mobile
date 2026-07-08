@@ -522,8 +522,18 @@ assertIncludes(
 );
 assertIncludes(
   livekitSurface,
-  "onPress={() => onParticipantPress?.(item.identity)}",
-  "LiveKit bubble-grid items must call the participant press handler",
+  "onPress={() => onParticipantPress?.(item.participantId)}",
+  "LiveKit bubble-grid items must call the participant press handler with the app participant id",
+);
+assertIncludes(
+  livekitSurface,
+  "currentParticipantIdentity?: string",
+  "LiveKit media surface must accept explicit current participant identity for app/LiveKit alias safety",
+);
+assertIncludes(
+  livekitSurface,
+  "identityAliases?: string[]",
+  "LiveKit media surface roster must carry identity aliases for app id and LiveKit id matching",
 );
 assertIncludes(
   livekitSurface,
@@ -763,6 +773,21 @@ assertIncludes(
 );
 assertIncludes(
   player,
+  "buildWatchPartyLiveParticipantRoster",
+  "Player Watch-Party LiveKit roster must be built by the shared source-truth helper",
+);
+assertIncludes(
+  player,
+  "currentParticipantIdentity={watchPartyLiveKitIdentity || trackedUserId}",
+  "Player Watch-Party LiveKit surface must receive explicit current identity",
+);
+assertIncludes(
+  player,
+  "partyMembershipRosterPollRef.current = setInterval",
+  "Player Watch-Party Shared Player must poll membership authority so bubbles do not depend only on presence",
+);
+assertIncludes(
+  player,
   "const onWatchPartyLiveKitParticipantPress = useCallback((identity: string) => {",
   "Player Watch-Party LiveKit bubble taps must route to participant handling",
 );
@@ -973,7 +998,7 @@ assertIncludes(
 );
 assertIncludes(
   player,
-  "isRequestingToSpeak: currentWatchPartyHostAuthority.isHost && !!participant.isRequestingToSpeak && role === \"viewer\"",
+  "showRequestIndicators: currentWatchPartyHostAuthority.isHost",
   "Player Watch-Party LiveKit roster must only expose pending viewer request state to hosts",
 );
 assertIncludes(

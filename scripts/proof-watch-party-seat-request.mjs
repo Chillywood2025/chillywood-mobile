@@ -33,6 +33,7 @@ const importTypeScriptModule = async (relativePath) => {
 
 const {
   applyWatchPartySeatRequestEvent,
+  buildWatchPartyLiveParticipantRoster,
   canCloseWatchPartyLiveActualPlaybackProof,
   canRenderWatchPartyParticipantSpecificTrack,
   classifyWatchPartyLiveMediaSource,
@@ -181,6 +182,66 @@ assert(
 assert(
   viewerRoster.find((entry) => entry.identity === viewerId)?.isRequestingToSpeak === false,
   "viewer roster should hide request indicators",
+);
+const approvedRosterParticipants = [
+  {
+    id: hostId,
+    liveKitIdentity: "lk-host-device",
+    name: "Proof Host",
+    role: "host",
+    stageRole: "host",
+    canSpeak: true,
+    muted: false,
+    isRequestingToSpeak: false,
+  },
+  {
+    id: viewerId,
+    liveKitIdentity: "lk-viewer-device",
+    name: "Proof Viewer",
+    role: "viewer",
+    stageRole: "speaker",
+    canSpeak: true,
+    muted: false,
+    isRequestingToSpeak: false,
+  },
+];
+const hostDeviceRoster = buildWatchPartyLiveParticipantRoster({
+  participants: approvedRosterParticipants,
+  currentUserId: hostId,
+  currentLiveKitIdentity: "lk-host-device",
+  showRequestIndicators: true,
+});
+assert(hostDeviceRoster.length === 2, "host device roster should include host and approved viewer");
+assert(
+  hostDeviceRoster.find((entry) => entry.participantId === hostId)?.label === "You",
+  "host device should label only the host participant as You",
+);
+assert(
+  hostDeviceRoster.find((entry) => entry.participantId === viewerId)?.role === "speaker",
+  "host device should keep the approved viewer visible as a speaker",
+);
+assert(
+  hostDeviceRoster.find((entry) => entry.participantId === viewerId)?.identity === "lk-viewer-device",
+  "host device should use the viewer LiveKit identity for identity-safe track mapping",
+);
+const viewerDeviceRoster = buildWatchPartyLiveParticipantRoster({
+  participants: approvedRosterParticipants,
+  currentUserId: viewerId,
+  currentLiveKitIdentity: "lk-viewer-device",
+  showRequestIndicators: false,
+});
+assert(viewerDeviceRoster.length === 2, "viewer device roster should include viewer and host");
+assert(
+  viewerDeviceRoster.find((entry) => entry.participantId === viewerId)?.label === "You",
+  "viewer device should label only the viewer participant as You",
+);
+assert(
+  viewerDeviceRoster.find((entry) => entry.participantId === hostId)?.role === "host",
+  "viewer device should keep the real host visible as host",
+);
+assert(
+  viewerDeviceRoster.every((entry) => entry.identityAliases.includes(entry.participantId)),
+  "roster entries should alias app participant ids for stable taps and labels",
 );
 
 assert(
@@ -400,6 +461,17 @@ assert(
     && playerSource.includes("shared-player-host-request-deny")
     && playerSource.includes("shared-player-host-request-close"),
   "host request review card must expose stable installed-proof targets",
+);
+assert(
+  playerSource.includes("buildWatchPartyLiveParticipantRoster")
+    && playerSource.includes("currentParticipantIdentity={watchPartyLiveKitIdentity || trackedUserId}")
+    && playerSource.includes("currentParticipantIdentityAliases={[trackedUserId, watchPartyLiveKitIdentityRef.current].filter(Boolean)}"),
+  "Player must pass helper-built roster and explicit current identity aliases into the LiveKit bubble surface",
+);
+assert(
+  playerSource.includes("partyMembershipRosterPollRef.current = setInterval")
+    && playerSource.includes("refreshMembershipRosterFromAuthority(true).catch(() => null);"),
+  "Shared Player must periodically refresh the membership-authoritative roster, not depend only on presence",
 );
 const sharedPlayerHostReviewStart = playerSource.indexOf("const renderWatchPartyLiveHostReviewCard = () => {");
 const sharedPlayerHostReviewEnd = playerSource.indexOf("const renderWatchPartySocialPanel =", sharedPlayerHostReviewStart);

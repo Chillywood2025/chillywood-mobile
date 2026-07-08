@@ -163,6 +163,7 @@ import {
 } from "../../_lib/watch-party/room-shared";
 import {
   applyWatchPartySeatRequestEvent,
+  buildWatchPartyLiveParticipantRoster,
   classifyWatchPartyLiveMediaSource,
   closeWatchPartySeatRequestReview,
   createWatchPartySeatRequestVersion,
@@ -372,6 +373,7 @@ const formatPlaybackRateLabel = (rate: number) => `${Number(rate.toFixed(2)).toS
 
 type PartyParticipant = {
   id: string;
+  liveKitIdentity?: string;
   name: string;
   role: "host" | "co-host" | "viewer";
   avatarUrl?: string;
@@ -1171,6 +1173,8 @@ export default function PlayerScreen() {
   const lastPartyMembershipRosterRefreshAtRef = useRef(0);
   const lastPartySeatRequestFocusKeyRef = useRef("");
   const partySeatRequestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const partyMembershipRosterPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const watchPartyLiveKitIdentityRef = useRef("");
   const partyRoomHostUserIdRef = useRef("");
   const pendingPartySeatRequestsRef = useRef<Record<string, { sentAt: number; source: string; requestVersion: string }>>({});
   const partySeatRequestClosedVersionRef = useRef<Record<string, string>>({});
@@ -1206,6 +1210,10 @@ export default function PlayerScreen() {
   useEffect(() => {
     partyUserIdRef.current = partyUserId;
   }, [partyUserId]);
+
+  useEffect(() => {
+    watchPartyLiveKitIdentityRef.current = String(watchPartyLiveKitIdentity || partyUserId || "").trim();
+  }, [partyUserId, watchPartyLiveKitIdentity]);
 
   useEffect(() => {
     return () => {
@@ -2050,6 +2058,7 @@ export default function PlayerScreen() {
     const membership = partyMembershipMapRef.current[trackedUserId];
     const role = membership?.role === "host" ? "host" : "viewer";
     const currentParticipant = partyParticipantsRef.current.find((entry) => entry.id === trackedUserId);
+    const liveKitIdentity = String(watchPartyLiveKitIdentityRef.current || trackedUserId).trim();
     const canSpeak = overrides?.canSpeak ?? membership?.canSpeak ?? role === "host";
     const stageRole = overrides?.stageRole ?? derivePartyStageRole({
       role: role === "host" ? "host" : "viewer",
@@ -2059,6 +2068,8 @@ export default function PlayerScreen() {
 
     await channel.track({
       userId: trackedUserId,
+      liveKitIdentity,
+      participantIdentity: liveKitIdentity,
       username: partyDisplayNameRef.current,
       avatarUrl: partyAvatarUrlRef.current || undefined,
       cameraPreviewUrl: myCameraPreviewUrlRef.current || undefined,
@@ -2192,6 +2203,10 @@ export default function PlayerScreen() {
         supabase.removeChannel(partySocialChannelRef.current);
         partySocialChannelRef.current = null;
       }
+      if (partyMembershipRosterPollRef.current) {
+        clearInterval(partyMembershipRosterPollRef.current);
+        partyMembershipRosterPollRef.current = null;
+      }
       partyRoomHostUserIdRef.current = "";
       pendingPartySeatRequestsRef.current = {};
       partySeatRequestClosedVersionRef.current = {};
@@ -2321,6 +2336,7 @@ export default function PlayerScreen() {
 
             const nextParticipant = {
               id: membership.userId,
+              liveKitIdentity: existing?.liveKitIdentity,
               name: resolvePartyParticipantDisplayName({
                 isCurrentUser,
                 role,
@@ -2536,13 +2552,15 @@ export default function PlayerScreen() {
       }
 
       const channel = supabase.channel(channelName, {
-        config: { presence: { key: trackedUserId } },
+        config: { presence: { key: watchPartyLiveKitIdentityRef.current || trackedUserId } },
       });
       partySocialChannelRef.current = channel;
 
       channel.on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{
           userId?: string;
+          liveKitIdentity?: string;
+          participantIdentity?: string;
           username?: string;
           role?: string;
           stageRole?: string;
@@ -2566,6 +2584,8 @@ export default function PlayerScreen() {
             const first = Array.isArray(presArr)
               ? (presArr[0] as {
                   userId?: string;
+                  liveKitIdentity?: string;
+                  participantIdentity?: string;
                   username?: string;
                   role?: string;
                   stageRole?: string;
@@ -2601,6 +2621,8 @@ export default function PlayerScreen() {
             const presence = Array.isArray(presArr)
               ? (presArr[0] as {
                   userId?: string;
+                  liveKitIdentity?: string;
+                  participantIdentity?: string;
                   username?: string;
                   role?: string;
                   stageRole?: string;
@@ -2618,6 +2640,12 @@ export default function PlayerScreen() {
               : undefined;
             const resolvedUserId = String(presence?.userId ?? key).trim();
             const existing = previousById.get(resolvedUserId);
+            const resolvedLiveKitIdentity = String(
+              presence?.liveKitIdentity
+              ?? presence?.participantIdentity
+              ?? existing?.liveKitIdentity
+              ?? resolvedUserId,
+            ).trim();
             const membership = partyMembershipMapRef.current[resolvedUserId];
             const rawRole = String(
               membership?.role
@@ -2664,6 +2692,7 @@ export default function PlayerScreen() {
 
             const nextParticipant = {
               id: resolvedUserId,
+              liveKitIdentity: resolvedLiveKitIdentity,
               name: resolvedName,
               role,
               avatarUrl: resolvedAvatarUrl || existing?.avatarUrl,
@@ -2686,6 +2715,7 @@ export default function PlayerScreen() {
             const selfMembership = partyMembershipMapRef.current[trackedUserId];
             next.unshift(applyPendingSeatRequestToParticipant({
               id: trackedUserId,
+              liveKitIdentity: previousById.get(trackedUserId)?.liveKitIdentity || watchPartyLiveKitIdentityRef.current || trackedUserId,
               name: "You",
               role: selfMembership?.role === "host" ? "host" : "viewer",
               avatarUrl: previousById.get(trackedUserId)?.avatarUrl || profileAvatarUrl || undefined,
@@ -2885,6 +2915,14 @@ export default function PlayerScreen() {
             .catch(() => {});
         }
       });
+
+      if (partyMembershipRosterPollRef.current) {
+        clearInterval(partyMembershipRosterPollRef.current);
+        partyMembershipRosterPollRef.current = null;
+      }
+      partyMembershipRosterPollRef.current = setInterval(() => {
+        refreshMembershipRosterFromAuthority(true).catch(() => null);
+      }, 3000);
     };
 
     bootstrapPartySocial();
@@ -2896,6 +2934,10 @@ export default function PlayerScreen() {
       if (partySocialChannelRef.current) {
         supabase.removeChannel(partySocialChannelRef.current);
         partySocialChannelRef.current = null;
+      }
+      if (partyMembershipRosterPollRef.current) {
+        clearInterval(partyMembershipRosterPollRef.current);
+        partyMembershipRosterPollRef.current = null;
       }
     };
   }, [
@@ -5734,49 +5776,47 @@ export default function PlayerScreen() {
       currentMembership?.membershipState ?? "none",
     ].join("|");
   }, [currentWatchPartyParticipant, trackedUserId]);
-  const watchPartyLiveKitParticipantLabelsByIdentity = useMemo(
-    () => Object.fromEntries(liveBubbleParticipants.map((participant) => [
-      participant.id,
-      resolvePartyParticipantDisplayName({
-        isCurrentUser: participant.id === trackedUserId,
-        role: participant.role,
-        candidates: [participant.name, partyMembershipMapRef.current[participant.id]?.displayName],
-      }),
-    ])),
-    [liveBubbleParticipants, trackedUserId],
-  );
-  const watchPartyLiveKitParticipantAvatarUrlsByIdentity = useMemo(
-    () => Object.fromEntries(liveBubbleParticipants.map((participant) => [
-      participant.id,
-      String(
-        (participant.id === trackedUserId ? myCameraPreviewUrlRef.current : "")
-        || participant.cameraPreviewUrl
-        || participant.avatarUrl
-        || "",
-      ).trim(),
-    ]).filter(([, avatarUrl]) => avatarUrl)),
-    [liveBubbleParticipants, trackedUserId],
-  );
   const watchPartyLiveKitParticipantRoster = useMemo(
-    () => liveBubbleParticipants.map((participant) => {
-      const role: LiveKitStageParticipantRosterEntry["role"] = participant.role === "host"
-        ? "host"
-        : participant.canSpeak || participant.stageRole === "speaker"
-          ? "speaker"
-          : "viewer";
-      return {
-        identity: participant.id,
-        label: resolvePartyParticipantDisplayName({
+    () => buildWatchPartyLiveParticipantRoster({
+      participants: liveBubbleParticipants.map((participant) => ({
+        id: participant.id,
+        liveKitIdentity: participant.liveKitIdentity,
+        name: resolvePartyParticipantDisplayName({
           isCurrentUser: participant.id === trackedUserId,
           role: participant.role,
           candidates: [participant.name, partyMembershipMapRef.current[participant.id]?.displayName],
         }),
-        role,
-        canPublish: role !== "viewer" && !participant.muted,
-        isRequestingToSpeak: currentWatchPartyHostAuthority.isHost && !!participant.isRequestingToSpeak && role === "viewer",
-      };
+        role: participant.role,
+        stageRole: participant.stageRole,
+        muted: participant.muted,
+        canSpeak: participant.canSpeak,
+        isRequestingToSpeak: participant.isRequestingToSpeak,
+        avatarUrl: participant.avatarUrl,
+        cameraPreviewUrl: participant.id === trackedUserId
+          ? myCameraPreviewUrlRef.current || participant.cameraPreviewUrl
+          : participant.cameraPreviewUrl,
+      })),
+      currentUserId: trackedUserId,
+      currentLiveKitIdentity: watchPartyLiveKitIdentity || trackedUserId,
+      currentIdentityAliases: [watchPartyLiveKitIdentityRef.current],
+      showRequestIndicators: currentWatchPartyHostAuthority.isHost,
     }),
-    [currentWatchPartyHostAuthority.isHost, liveBubbleParticipants, trackedUserId],
+    [currentWatchPartyHostAuthority.isHost, liveBubbleParticipants, trackedUserId, watchPartyLiveKitIdentity],
+  );
+  const watchPartyLiveKitParticipantLabelsByIdentity = useMemo(
+    () => Object.fromEntries(watchPartyLiveKitParticipantRoster.flatMap((participant) => (
+      [participant.identity, participant.participantId, ...participant.identityAliases].map((identity) => [identity, participant.label] as const)
+    ))),
+    [watchPartyLiveKitParticipantRoster],
+  );
+  const watchPartyLiveKitParticipantAvatarUrlsByIdentity = useMemo(
+    () => Object.fromEntries(watchPartyLiveKitParticipantRoster.flatMap((participant) => {
+      const avatarUrl = String(participant.avatarUrl ?? "").trim();
+      return avatarUrl
+        ? [participant.identity, participant.participantId, ...participant.identityAliases].map((identity) => [identity, avatarUrl] as const)
+        : [];
+    })),
+    [watchPartyLiveKitParticipantRoster],
   );
   const onWatchPartyLiveKitParticipantPress = useCallback((identity: string) => {
     const participantIdentity = String(identity ?? "").trim();
@@ -7971,6 +8011,8 @@ export default function PlayerScreen() {
         participantAvatarUrlsByIdentity={watchPartyLiveKitParticipantAvatarUrlsByIdentity}
         participantRoster={watchPartyLiveKitParticipantRoster}
         onParticipantPress={onWatchPartyLiveKitParticipantPress}
+        currentParticipantIdentity={watchPartyLiveKitIdentity || trackedUserId}
+        currentParticipantIdentityAliases={[trackedUserId, watchPartyLiveKitIdentityRef.current].filter(Boolean)}
         showRequestIndicators={currentWatchPartyHostAuthority.isHost}
         surfaceLabel="Watch-Party Live"
         publishLocalAudio={publishWatchPartyLiveKitAudio}

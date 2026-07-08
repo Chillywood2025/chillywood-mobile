@@ -46,6 +46,34 @@ export type WatchPartyLiveJoinContractLike = {
 
 export type WatchPartyLiveMediaSourceClassification = "real-media" | "fixture-or-proof" | "bundled-fallback" | "missing-source";
 
+export type WatchPartyLiveParticipantRole = "host" | "co-host" | "viewer";
+export type WatchPartyLiveParticipantStageRole = "host" | "speaker" | "listener";
+
+export type WatchPartyLiveRosterParticipant = {
+  id: string;
+  liveKitIdentity?: string | null;
+  name: string;
+  role: WatchPartyLiveParticipantRole;
+  stageRole: WatchPartyLiveParticipantStageRole;
+  muted?: boolean | null;
+  canSpeak?: boolean | null;
+  isRequestingToSpeak?: boolean | null;
+  avatarUrl?: string | null;
+  cameraPreviewUrl?: string | null;
+};
+
+export type WatchPartyLiveParticipantRosterEntry = {
+  identity: string;
+  participantId: string;
+  label: string;
+  role: "host" | "speaker" | "viewer";
+  canPublish: boolean;
+  isRequestingToSpeak: boolean;
+  isCurrentUser: boolean;
+  identityAliases: string[];
+  avatarUrl: string | null;
+};
+
 export type WatchPartyLiveSharedPlaybackRenderProbe = {
   isSharedPartyPlayback: boolean;
   platform?: string | null;
@@ -291,6 +319,76 @@ export const canRenderWatchPartyParticipantSpecificTrack = (options: {
     && !!trackParticipantIdentity
     && participantId !== localParticipantIdentity
     && trackParticipantIdentity === participantId;
+};
+
+const normalizeIdentityList = (...values: unknown[]) => {
+  const seen = new Set<string>();
+  const identities: string[] = [];
+  values.forEach((value) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        const normalized = sanitizeIdentifier(entry);
+        if (!normalized || seen.has(normalized)) return;
+        seen.add(normalized);
+        identities.push(normalized);
+      });
+      return;
+    }
+    const normalized = sanitizeIdentifier(value);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    identities.push(normalized);
+  });
+  return identities;
+};
+
+export const buildWatchPartyLiveParticipantRoster = (options: {
+  participants: WatchPartyLiveRosterParticipant[];
+  currentUserId?: string | null;
+  currentLiveKitIdentity?: string | null;
+  currentIdentityAliases?: string[];
+  showRequestIndicators?: boolean | null;
+}): WatchPartyLiveParticipantRosterEntry[] => {
+  const currentIdentityAliases = normalizeIdentityList(
+    options.currentUserId,
+    options.currentLiveKitIdentity,
+    options.currentIdentityAliases ?? [],
+  );
+  const currentIdentitySet = new Set(currentIdentityAliases);
+  const seenParticipantIds = new Set<string>();
+
+  return options.participants.reduce<WatchPartyLiveParticipantRosterEntry[]>((entries, participant) => {
+    const participantId = sanitizeIdentifier(participant.id);
+    if (!participantId || seenParticipantIds.has(participantId)) return entries;
+    seenParticipantIds.add(participantId);
+
+    const liveKitIdentity = sanitizeIdentifier(participant.liveKitIdentity);
+    const identity = liveKitIdentity || participantId;
+    const identityAliases = normalizeIdentityList(identity, participantId, liveKitIdentity);
+    const isCurrentUser = identityAliases.some((entry) => currentIdentitySet.has(entry));
+    const role: WatchPartyLiveParticipantRosterEntry["role"] = participant.role === "host"
+      ? "host"
+      : participant.canSpeak || participant.stageRole === "speaker"
+        ? "speaker"
+        : "viewer";
+    const label = isCurrentUser
+      ? "You"
+      : sanitizeIdentifier(participant.name) || (role === "host" ? "Host" : "Guest");
+    const avatarUrl = sanitizeIdentifier(participant.cameraPreviewUrl) || sanitizeIdentifier(participant.avatarUrl) || null;
+
+    entries.push({
+      identity,
+      participantId,
+      label,
+      role,
+      canPublish: role !== "viewer" && !participant.muted,
+      isRequestingToSpeak: !!options.showRequestIndicators && !!participant.isRequestingToSpeak && role === "viewer",
+      isCurrentUser,
+      identityAliases,
+      avatarUrl,
+    });
+    return entries;
+  }, []);
 };
 
 export const classifyWatchPartyLiveMediaSource = (options: {

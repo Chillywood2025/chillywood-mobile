@@ -35,10 +35,13 @@ import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
 
 export type LiveKitStageParticipantRosterEntry = {
   identity: string;
+  participantId?: string;
   label: string;
   role?: "host" | "speaker" | "viewer" | "listener";
   canPublish?: boolean;
   isRequestingToSpeak?: boolean;
+  isCurrentUser?: boolean;
+  identityAliases?: string[];
 };
 
 type LiveKitStageMediaSurfaceProps = {
@@ -53,6 +56,8 @@ type LiveKitStageMediaSurfaceProps = {
   localParticipantFallback?: React.ReactNode;
   participantRoster?: LiveKitStageParticipantRosterEntry[];
   onParticipantPress?: (identity: string) => void;
+  currentParticipantIdentity?: string;
+  currentParticipantIdentityAliases?: string[];
   showRequestIndicators?: boolean;
   surfaceLabel?: string;
   publishLocalAudio?: boolean;
@@ -67,6 +72,8 @@ type LiveKitStageMediaContentProps = {
   localParticipantFallback?: React.ReactNode;
   participantRoster?: LiveKitStageParticipantRosterEntry[];
   onParticipantPress?: (identity: string) => void;
+  currentParticipantIdentity?: string;
+  currentParticipantIdentityAliases?: string[];
   showRequestIndicators: boolean;
   surfaceLabel: string;
   publishLocalAudio: boolean;
@@ -78,6 +85,7 @@ type RenderableLiveKitTrackReference = NonNullable<React.ComponentProps<typeof V
 
 type BubbleGridItem = {
   identity: string;
+  participantId: string;
   key: string;
   label: string;
   role: LiveKitStageParticipantRosterEntry["role"] | null;
@@ -85,6 +93,7 @@ type BubbleGridItem = {
   isRequestingToSpeak: boolean;
   trackRef: RenderableLiveKitTrackReference | null;
   avatarUrl: string | null;
+  isCurrentParticipant: boolean;
 };
 
 const isRenderableTrackReference = (trackRef: unknown): trackRef is RenderableLiveKitTrackReference => (
@@ -184,15 +193,38 @@ const getParticipantLabel = (
   currentIdentity: string,
   participantLabelsByIdentity?: Record<string, string>,
   participantRosterByIdentity?: Map<string, LiveKitStageParticipantRosterEntry>,
+  currentIdentityAliases?: Set<string>,
 ) => {
-  if (identity === currentIdentity) return "You";
+  if (identity === currentIdentity || currentIdentityAliases?.has(identity)) return "You";
   const rosterEntry = participantRosterByIdentity?.get(identity);
+  if (rosterEntry?.isCurrentUser) return "You";
   const candidate = String(rosterEntry?.label ?? participantLabelsByIdentity?.[identity] ?? "").trim();
   const normalizedCandidate = candidate.toLowerCase();
   if (candidate && normalizedCandidate !== "you" && normalizedCandidate !== "me") {
     return candidate;
   }
   return rosterEntry?.role === "host" ? "Host" : "Guest";
+};
+
+const normalizeIdentityList = (...values: unknown[]) => {
+  const seen = new Set<string>();
+  const identities: string[] = [];
+  values.forEach((value) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        const normalized = String(entry ?? "").trim();
+        if (!normalized || seen.has(normalized)) return;
+        seen.add(normalized);
+        identities.push(normalized);
+      });
+      return;
+    }
+    const normalized = String(value ?? "").trim();
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    identities.push(normalized);
+  });
+  return identities;
 };
 
 const getParticipantInitials = (label: string) => {
@@ -211,6 +243,8 @@ function LiveKitStageMediaContent({
   localParticipantFallback,
   participantRoster,
   onParticipantPress,
+  currentParticipantIdentity,
+  currentParticipantIdentityAliases,
   showRequestIndicators,
   surfaceLabel,
   publishLocalAudio,
@@ -226,6 +260,18 @@ function LiveKitStageMediaContent({
     lastMicrophoneError,
     localParticipant,
   } = useLocalParticipant();
+  const currentIdentitySet = useMemo(() => new Set(normalizeIdentityList(
+    localParticipant.identity,
+    currentParticipantIdentity,
+    currentParticipantIdentityAliases ?? [],
+  )), [currentParticipantIdentity, currentParticipantIdentityAliases, localParticipant.identity]);
+  const isCurrentLiveKitIdentity = useCallback(
+    (identity: unknown) => {
+      const normalized = String(identity ?? "").trim();
+      return !!normalized && currentIdentitySet.has(normalized);
+    },
+    [currentIdentitySet],
+  );
   const shouldPublishLocalCamera = publishLocalVideo && joinContract.participantRole !== "viewer";
   const tracks = useTracks(
     [
@@ -239,8 +285,8 @@ function LiveKitStageMediaContent({
     [tracks],
   );
   const remoteTracks = useMemo(
-    () => renderableTracks.filter((trackRef) => trackRef.participant.identity !== localParticipant.identity),
-    [localParticipant.identity, renderableTracks],
+    () => renderableTracks.filter((trackRef) => !isCurrentLiveKitIdentity(trackRef.participant.identity)),
+    [isCurrentLiveKitIdentity, renderableTracks],
   );
   const remoteCameraTracks = useMemo(
     () => remoteTracks.filter((trackRef) => trackRef.source === Track.Source.Camera),
@@ -254,7 +300,9 @@ function LiveKitStageMediaContent({
       next.set(identity, {
         ...entry,
         identity,
+        participantId: String(entry.participantId ?? entry.identity ?? "").trim(),
         label: String(entry.label ?? "").trim(),
+        identityAliases: normalizeIdentityList(entry.identity, entry.participantId, entry.identityAliases ?? []),
       });
     });
     return next;
@@ -349,10 +397,13 @@ function LiveKitStageMediaContent({
     const seenIdentities = new Set<string>();
     participantRosterByIdentity.forEach((entry, identity) => {
       if (seenIdentities.has(identity)) return;
-      const trackRef = trackByIdentity.get(identity) ?? null;
-      const label = getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity);
+      const aliases = normalizeIdentityList(identity, entry.participantId, entry.identityAliases ?? []);
+      const trackRef = aliases.map((alias) => trackByIdentity.get(alias) ?? null).find(Boolean) ?? null;
+      const isCurrentParticipant = entry.isCurrentUser === true || aliases.some((alias) => currentIdentitySet.has(alias));
+      const label = getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity, currentIdentitySet);
       nextItems.push({
         identity,
+        participantId: String(entry.participantId ?? identity).trim() || identity,
         key: `${identity}:${trackRef?.source ?? "placeholder"}`,
         label,
         role: entry.role ?? null,
@@ -360,6 +411,7 @@ function LiveKitStageMediaContent({
         isRequestingToSpeak: showRequestIndicators && !!entry.isRequestingToSpeak,
         trackRef,
         avatarUrl: String(participantAvatarUrlsByIdentity?.[identity] ?? "").trim() || null,
+        isCurrentParticipant,
       });
       seenIdentities.add(identity);
     });
@@ -367,9 +419,11 @@ function LiveKitStageMediaContent({
     bubbleGridTracks.forEach((trackRef) => {
       const identity = String(trackRef.participant.identity ?? "").trim();
       if (!identity || seenIdentities.has(identity)) return;
-      const label = getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity);
+      const label = getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity, currentIdentitySet);
+      const isCurrentParticipant = currentIdentitySet.has(identity);
       nextItems.push({
         identity,
+        participantId: participantRosterByIdentity.get(identity)?.participantId ?? identity,
         key: `${identity}:${trackRef.source}`,
         label,
         role: participantRosterByIdentity.get(identity)?.role ?? null,
@@ -377,6 +431,7 @@ function LiveKitStageMediaContent({
         isRequestingToSpeak: showRequestIndicators && !!participantRosterByIdentity.get(identity)?.isRequestingToSpeak,
         trackRef,
         avatarUrl: String(participantAvatarUrlsByIdentity?.[identity] ?? "").trim() || null,
+        isCurrentParticipant,
       });
       seenIdentities.add(identity);
     });
@@ -384,6 +439,7 @@ function LiveKitStageMediaContent({
     return nextItems.slice(0, 25);
   }, [
     bubbleGridTracks,
+    currentIdentitySet,
     localParticipant.identity,
     participantAvatarUrlsByIdentity,
     participantLabelsByIdentity,
@@ -398,13 +454,14 @@ function LiveKitStageMediaContent({
     ]);
     return Array.from(identities).map((identity) => ({
       identity,
-      label: getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity),
+      label: getParticipantLabel(identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity, currentIdentitySet),
       role: participantRosterByIdentity.get(identity)?.role ?? null,
       canPublish: !!participantRosterByIdentity.get(identity)?.canPublish,
       isRequestingToSpeak: showRequestIndicators && !!participantRosterByIdentity.get(identity)?.isRequestingToSpeak,
     }));
   }, [
     bubbleGridTracks,
+    currentIdentitySet,
     localParticipant.identity,
     participantLabelsByIdentity,
     participantRosterByIdentity,
@@ -439,6 +496,8 @@ function LiveKitStageMediaContent({
       bubbleGridTrackCount: bubbleGridTracks.length,
       bubbleGridItemCount: bubbleGridItems.length,
       localParticipantIdentity: localParticipant.identity,
+      currentParticipantIdentity: String(currentParticipantIdentity ?? ""),
+      currentParticipantIdentityAliases: Array.from(currentIdentitySet),
       remoteCameraIdentities: remoteCameraTracks.map((trackRef) => trackRef.participant.identity),
       bubbleGridIdentities: bubbleGridTracks.map((trackRef) => trackRef.participant.identity),
       bubbleGridTrackMappings: JSON.stringify(bubbleGridTrackMappings),
@@ -479,7 +538,7 @@ function LiveKitStageMediaContent({
       const bubbleGridContent = (
         <View style={styles.bubbleGridContent} collapsable={false}>
           {bubbleGridItems.map((item) => {
-            const isLocalParticipant = item.identity === localParticipant.identity;
+            const isLocalParticipant = item.isCurrentParticipant;
 
             return (
               <Pressable
@@ -487,7 +546,7 @@ function LiveKitStageMediaContent({
                 style={styles.bubbleGridItem}
                 collapsable={false}
                 disabled={!onParticipantPress}
-                onPress={() => onParticipantPress?.(item.identity)}
+                onPress={() => onParticipantPress?.(item.participantId)}
               >
                 {item.trackRef ? (
                   <View style={styles.bubbleVideoWrap} collapsable={false}>
@@ -568,7 +627,7 @@ function LiveKitStageMediaContent({
         <View pointerEvents="none" style={styles.videoOverlay}>
           <View style={styles.videoBadge}>
             <Text style={styles.videoBadgeText}>
-              {getParticipantLabel(primaryTrack.participant.identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity)}
+              {getParticipantLabel(primaryTrack.participant.identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity, currentIdentitySet)}
             </Text>
           </View>
         </View>
@@ -582,7 +641,7 @@ function LiveKitStageMediaContent({
             />
             <View style={styles.secondaryVideoBadge}>
               <Text style={styles.secondaryVideoBadgeText}>
-                {getParticipantLabel(secondaryTrack.participant.identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity)}
+                {getParticipantLabel(secondaryTrack.participant.identity, localParticipant.identity, participantLabelsByIdentity, participantRosterByIdentity, currentIdentitySet)}
               </Text>
             </View>
           </View>
@@ -652,6 +711,8 @@ export function LiveKitStageMediaSurface({
   localParticipantFallback,
   participantRoster,
   onParticipantPress,
+  currentParticipantIdentity,
+  currentParticipantIdentityAliases,
   showRequestIndicators = true,
   surfaceLabel = "Live Stage",
   publishLocalAudio = joinContract.participantRole !== "viewer",
@@ -951,6 +1012,8 @@ export function LiveKitStageMediaSurface({
           localParticipantFallback={localParticipantFallback}
           participantRoster={participantRoster}
           onParticipantPress={onParticipantPress}
+          currentParticipantIdentity={currentParticipantIdentity}
+          currentParticipantIdentityAliases={currentParticipantIdentityAliases}
           showRequestIndicators={showRequestIndicators}
           surfaceLabel={surfaceLabel}
           publishLocalAudio={effectivePublishLocalAudio}
