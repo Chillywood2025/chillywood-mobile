@@ -873,8 +873,13 @@ assertIncludes(
 );
 assertIncludes(
   player,
-  "const watchPartyPreviewLabel = useMemo(() => {\n    if (liveBubbleParticipants.length === 0) return \"\";",
-  "Shared Player participant preview text must use the merged membership roster instead of stale raw presence preview labels",
+  "if (liveBubbleParticipants.length === 1) return \"1 in room\";",
+  "Shared Player participant preview text must use a neutral room count instead of concatenating host/viewer labels that can look like role mixing",
+);
+assertIncludes(
+  player,
+  "return `${liveBubbleParticipants.length} in room`;",
+  "Shared Player participant preview text must remain a neutral room count for two-device Watch-Party Live proof",
 );
 assertIncludes(
   player,

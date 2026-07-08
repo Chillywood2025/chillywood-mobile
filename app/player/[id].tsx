@@ -7165,16 +7165,9 @@ export default function PlayerScreen() {
   }, [inWatchParty, viewerCount]);
   const watchPartyPreviewLabel = useMemo(() => {
     if (liveBubbleParticipants.length === 0) return "";
-    return liveBubbleParticipants.slice(0, 2).map((participant) => {
-      if (participant.id === trackedUserId) return "You";
-      if (participant.role === "host" || participant.stageRole === "host") return "Host";
-      return resolvePartyParticipantDisplayName({
-        isCurrentUser: false,
-        role: participant.role,
-        candidates: [participant.name, partyMembershipMapRef.current[participant.id]?.displayName],
-      });
-    }).join(" · ");
-  }, [liveBubbleParticipants, trackedUserId]);
+    if (liveBubbleParticipants.length === 1) return "1 in room";
+    return `${liveBubbleParticipants.length} in room`;
+  }, [liveBubbleParticipants]);
   const compactPartySyncStatus = useMemo(() => {
     if (!partySyncStatus) return "";
     return partySyncStatus
