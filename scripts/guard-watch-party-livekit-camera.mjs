@@ -1308,6 +1308,11 @@ assertIncludes(
   "shared-player-comment-send",
   "regular Shared Player comments must expose an installed-proof send target",
 );
+assertIncludes(
+  playerPartyCommentsContent,
+  "!compactSharedDock ? (",
+  "regular Shared Player compact comments must prioritize the input/send composer over a clipped title/list",
+);
 assertNotIncludes(
   playerPartyCommentsContent,
   "Share.share",
@@ -1317,6 +1322,21 @@ assertNotIncludes(
   playerPartyCommentsContent,
   "blockViewerSharedPlaybackControl",
   "regular Shared Player comments must not be blocked by viewer playback lock",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  'testID="shared-player-regular-controls"',
+  "regular Shared Player must mount a stable control deck for installed proof",
+);
+assertNotIncludes(
+  playerSharedPlayerDock,
+  'pointerEvents={effectiveControlsVisible ? "auto" : "none"}',
+  "regular Shared Player controls must not be hidden behind the auto-hide pointer gate",
+);
+assertNotIncludes(
+  playerSharedPlayerDock,
+  "partyOverlayControlsOpacity",
+  "regular Shared Player controls must not rely on hidden overlay opacity for reachability",
 );
 assertIncludes(
   playerSharedPlayerDock,

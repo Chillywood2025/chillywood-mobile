@@ -7995,15 +7995,11 @@ export default function PlayerScreen() {
     <View style={styles.titleParticipantFeedWrap}>
       {renderWatchPartySocialPanel()}
 
-      <Animated.View
-        pointerEvents={effectiveControlsVisible ? "auto" : "none"}
+      <View
+        testID="shared-player-regular-controls"
         style={[
           styles.watchPartyDockOverlay,
           sharedPartyCommentsKeyboardActive && styles.watchPartyDockOverlayKeyboard,
-          {
-            opacity: partyOverlayControlsOpacity,
-            transform: [{ translateY: partyOverlayControlsTranslateY }],
-          },
         ]}
       >
         <View style={styles.watchPartyDockActionRow}>
@@ -8129,7 +8125,7 @@ export default function PlayerScreen() {
           </View>
         ) : null}
 
-      </Animated.View>
+      </View>
     </View>
   );
 
@@ -8363,9 +8359,11 @@ export default function PlayerScreen() {
     <>
       {sharedPartyCommentsKeyboardActive ? null : (
         <>
-          <Text style={[styles.partyCommentsDrawerTitle, compactFullscreenRail && styles.partyCommentsDrawerTitleFullscreenRail]}>
-            {roomCommentsTitle}
-          </Text>
+          {!compactSharedDock ? (
+            <Text style={[styles.partyCommentsDrawerTitle, compactFullscreenRail && styles.partyCommentsDrawerTitleFullscreenRail]}>
+              {roomCommentsTitle}
+            </Text>
+          ) : null}
           {!compactSharedDock ? (
             <ScrollView
               style={[styles.partyCommentsList, compactFullscreenRail && styles.partyCommentsListFullscreenRail]}

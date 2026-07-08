@@ -403,6 +403,25 @@ assert(
   "regular Shared Player comments must expose visible compact input/send proof targets",
 );
 assert(
+  playerSource.includes('testID="shared-player-regular-controls"')
+    && !playerSource.slice(
+      playerSource.indexOf("const renderTitleParticipantExpandedPanel = () => ("),
+      playerSource.indexOf("const renderCreatorVideoCommentsPanel = () => {"),
+    ).includes('pointerEvents={effectiveControlsVisible ? "auto" : "none"}')
+    && !playerSource.slice(
+      playerSource.indexOf("const renderTitleParticipantExpandedPanel = () => ("),
+      playerSource.indexOf("const renderCreatorVideoCommentsPanel = () => {"),
+    ).includes("partyOverlayControlsOpacity"),
+  "regular Shared Player request/comment/reaction controls must be mounted outside the hidden auto-hide overlay gate",
+);
+assert(
+  playerSource.slice(
+    playerSource.indexOf("const renderPartyCommentsContent = (compactFullscreenRail = false, compactSharedDock = false) => ("),
+    playerSource.indexOf("const renderSharedFullscreenCommentsRail = () => ("),
+  ).includes("!compactSharedDock ? ("),
+  "regular Shared Player compact comments should prioritize reachable input/send over a clipped title/list",
+);
+assert(
   playerSource.includes("shared-player-reaction-button")
     && playerSource.includes("onPressSharedPlayerQuickReaction")
     && playerSource.includes('event: "reaction"'),
@@ -436,6 +455,8 @@ console.log(JSON.stringify({
   viewerRequestHidden: true,
   runtimeMediaClassificationWired: true,
   explicitRequestCameraControl: true,
+  regularControlsMountedOutsideAutoHideGate: true,
+  compactCommentsInputPrioritized: true,
   hostRequestReviewTargets: true,
   commentSendReachableWithoutShare: true,
   reactionReachableWithoutShare: true,

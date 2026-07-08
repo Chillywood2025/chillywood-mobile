@@ -34,6 +34,8 @@ The current narrow source follow-up fixes that installed control reachability ga
 
 The installed rerun after that OTA used fresh real-media room `ZWZ2KP` and proved the latest control targets were visible by testID, including `shared-player-request-camera-button`, `shared-player-reaction-button`, and `shared-player-visible-comments`. It still remained Partial because tapping explicit `Request Camera` or the viewer self bubble did not produce `Request pending`, and the host did not receive a request surface. Source root cause: `onPressSharedPlayerRequestCamera(...)` had the visible participant, but `requestPartySeat()` recomputed requester identity from a separate party-user/ref path that could be stale and silently return before persisting. The always-visible comments dock also showed only the title while input/send were clipped below the screen. Source commit `ad1611b9810299a2ffb98cfdefc15d193a2869e2` fixes both without changing fullscreen rails: the request path now accepts the visible participant id, and the regular Shared Player comments dock uses a compact input/send layout while fullscreen rail comments remain unchanged. This follow-up is validation-clean and OTA-published; installed proof remains required after group `6f83ca92-a7c8-41f5-b4d3-864998e2823e` loads.
 
+Final pre-proof reachability follow-up: a later installed rerun on fresh room `42L39G` showed the regular Shared Player could still render the bubble/social panel while leaving the request/comment/reaction controls unreachable. Source root cause: those controls were still mounted inside an auto-hide animated overlay gated by `effectiveControlsVisible`, opacity, and pointer events, so Android could expose the content surface and social panel without reachable lower-control proof targets. The source now mounts the regular Shared Player controls in a stable `shared-player-regular-controls` deck outside that hidden overlay gate, keeps `Request Camera`, reaction, host review, error, and comment test targets in the approved lower Shared Player structure, and prioritizes the compact comment input/send row over a clipped title/list. Fullscreen remains unchanged: the left comments rail, center video surface, and right LiveKit bubble rail keep their locked custom layout. Installed proof remains required after the fresh OTA for this final reachability follow-up.
+
 ## Fullscreen/Layout No-Change
 
 The locked fullscreen layout remains:
@@ -71,6 +73,8 @@ Source behavior now covered:
 - Participant-specific LiveKit bubbles only render identity-matched tracks.
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module instead of duplicating a fake model.
 - The explicit `Request Camera` path passes the visible Shared Player participant id into the versioned request helper, so it does not depend on a stale party-user/ref identity.
+- Regular Shared Player request/comment/reaction controls now mount in a stable lower control deck outside the hidden auto-hide overlay pointer/opacity gate.
+- Regular Shared Player compact comments prioritize the input/send composer so installed proof can tap comment controls without falling through to Android Share/intent UI.
 
 ## Proof Boundaries
 
@@ -121,10 +125,11 @@ Current installed-proof status:
 - Viewer comment/reaction send remains unproved in the latest packet because the attempted interaction escaped to Android share/intent UI and was backed out without sending.
 - Current source follow-up adds explicit regular Shared Player proof targets for `Request Camera`, request pending/error states, host review approve/deny/close, comment input/send, and reaction send. It also routes bubble taps through the same request path and broadcasts regular Shared Player reactions to the room. Installed proof remains required after OTA.
 - Latest request-control follow-up reroutes explicit request and self-bubble request through the visible participant id and makes the regular comments dock input/send reachable. Installed proof remains required after OTA group `6f83ca92-a7c8-41f5-b4d3-864998e2823e`.
+- Final pre-proof reachability follow-up moves the regular Shared Player control deck outside the hidden auto-hide overlay gate and keeps compact comments focused on input/send. Installed proof remains required after the fresh OTA from this source.
 - Strict installed proof remains Partial until the Shared Player viewer camera request is reachable and persistent, host approval succeeds, viewer speaker/canPublish authority matches, and an approved identity-safe viewer camera bubble/feed is visible.
 - no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, source change, or fullscreen layout change was performed.
 
 Next exact proof/fix step:
 
-1. Rerun installed proof only after OTA group `6f83ca92-a7c8-41f5-b4d3-864998e2823e` / Android update `019f3f06-a76b-7dea-8ad7-f5db9374533b` loads on Google Play-installed devices; carry forward the already-proved real-media playback, regular comments visibility, locked viewer playback controls, fullscreen rails, and return-to-room results unless a fresh regression appears.
+1. Rerun installed proof only after the fresh OTA from the final pre-proof reachability source loads on Google Play-installed devices; carry forward the already-proved real-media playback, regular comments visibility, locked viewer playback controls, fullscreen rails, and return-to-room results unless a fresh regression appears.
 2. Close the remaining packet only if viewer comment/reaction works, explicit `Request Camera` sends/persists and shows pending feedback, host review/approve works, the viewer receives matching speaker/canPublish authority, and the approved viewer camera bubble/feed is identity-safe.

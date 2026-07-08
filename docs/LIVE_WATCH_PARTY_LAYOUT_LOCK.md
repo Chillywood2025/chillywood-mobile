@@ -207,6 +207,8 @@ Relevant files:
 
 ## 8. Proof Checklist
 
+July 7, 2026 Watch-Party Live control reachability note: regular Shared Player request/comment/reaction controls may be made more explicit inside the approved lower Shared Player structure. The final pre-proof source follow-up mounts `shared-player-regular-controls` outside the hidden auto-hide overlay gate so installed proof can tap `Request Camera`, reaction, and comment input/send controls. This is a control reachability/status note only; it does not move shared content from the top, does not move people/participants away from below the content, does not hide visible comments, and does not change the custom fullscreen rails.
+
 Manual proof items:
 
 - Live Stage route opens at `/watch-party/live-stage/[partyId]`.
