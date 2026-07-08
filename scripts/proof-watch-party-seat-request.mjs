@@ -53,6 +53,7 @@ const {
 const playerSource = readFileSync(path.join(root, "app/player/[id].tsx"), "utf8");
 const partyRoomSource = readFileSync(path.join(root, "app/watch-party/[partyId].tsx"), "utf8");
 const livekitSurfaceSource = readFileSync(path.join(root, "components/watch-party-live/livekit-stage-media-surface.tsx"), "utf8");
+const watchPartySource = readFileSync(path.join(root, "_lib/watchParty.ts"), "utf8");
 
 const createProofState = () => ({
   hostAuthority: { isHost: true, source: "proof-room-host" },
@@ -642,6 +643,23 @@ assert(
   "viewer Request Camera must show safe sent, duplicate-pending, and failure feedback",
 );
 assert(
+  watchPartySource.includes("export async function setOwnPartyParticipantMuteState")
+    && watchPartySource.includes(".eq(\"user_id\", writableUserId)")
+    && watchPartySource.includes("is_muted: nextIsMuted")
+    && watchPartySource.includes("camera_enabled: nextCanPublishMedia")
+    && watchPartySource.includes("mic_enabled: nextCanPublishMedia"),
+  "seated participants must have a narrow self-mute membership helper that only updates their own mute/media flags",
+);
+assert(
+  playerSource.includes("shared-player-self-mute-button")
+    && playerSource.includes("shared-player-self-unmute-button")
+    && playerSource.includes("shared-player-self-mute-error")
+    && playerSource.includes("await setOwnPartyParticipantMuteState(partyId, nextMuted)")
+    && playerSource.includes("setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1)")
+    && playerSource.includes("showLivePresenceEvent(updatedMembership.isMuted ? \"You muted yourself\" : \"You unmuted yourself\")"),
+  "seated Watch-Party Live viewers must expose durable self mute/unmute controls and refresh LiveKit authority",
+);
+assert(
   playerSource.includes("shared-player-host-request-card")
     && playerSource.includes("shared-player-host-request-approve")
     && playerSource.includes("shared-player-host-request-deny")
@@ -840,6 +858,7 @@ console.log(JSON.stringify({
   commentSendReachableWithoutShare: true,
   reactionReachableWithoutShare: true,
   reactionReceiverEventProof: true,
+  viewerSelfMuteProofTargets: true,
   approvedSpeakerMissingTrackCameraPreparing: true,
   foregroundBlurDoesNotDisableLiveKit: true,
   keyboardComposerScrollsIntoView: true,

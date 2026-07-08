@@ -1,5 +1,16 @@
 # NEXT TASK
 
+# Watch-Party Live / Live Stage Seated Self-Mute Follow-Up
+
+Current source follow-up:
+- Approved non-host speakers now get explicit `Mute myself` / `Unmute myself` controls in regular Watch-Party Live Shared Player and Live Stage.
+- The shared helper `setOwnPartyParticipantMuteState(...)` writes only the signed-in user's own membership row, changes `is_muted` plus derived `camera_enabled` / `mic_enabled`, preserves role/stageRole/canSpeak, and reuses the existing Premium room-access check.
+- Host mute/moderation remains separate and authoritative through the existing host management path.
+- Muted approved speakers remain seated but are not publish-ready: LiveKit token authority returns `speaker` with `canPublish=false` while muted, and the app clears stale LiveKit contracts so unmute/mute refreshes authority.
+- The active speaker/camera seat cap remains `4`; no separate source-level passive viewer cap was changed.
+- Fullscreen rails/layout, Premium, Party Room, LiveKit routing/heartbeat/cutoffs, App Links, Chat/native, auth/RLS, billing/provider, payout, and cashout behavior were not changed.
+- Next step after validation/push/OTA: installed smoke should prove seated viewer self-mute/unmute in Watch-Party Live and Live Stage, plus host mute still works.
+
 # Watch-Party Live Stable Bubble Surface / Final Camera Proof
 
 Latest stable-bubble source update:

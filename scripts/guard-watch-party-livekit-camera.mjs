@@ -1164,6 +1164,51 @@ assertNotIncludes(
   "explicit Request Camera control must not open the Android share intent",
 );
 assertIncludes(
+  watchParty,
+  "export async function setOwnPartyParticipantMuteState",
+  "shared Watch-Party membership helper must expose a narrow current-user self mute writer",
+);
+assertIncludes(
+  watchParty,
+  ".eq(\"user_id\", writableUserId)",
+  "current-user self mute writer must only update the signed-in user's membership row",
+);
+assertIncludes(
+  watchParty,
+  "is_muted: nextIsMuted",
+  "current-user self mute writer must persist only the mute flag and derived media flags",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  "shared-player-self-mute-button",
+  "seated Watch-Party Live viewers must expose a Mute myself control",
+);
+assertIncludes(
+  playerSharedPlayerDock,
+  "shared-player-self-unmute-button",
+  "muted Watch-Party Live speakers must expose an Unmute myself control",
+);
+assertIncludes(
+  player,
+  "await setOwnPartyParticipantMuteState(partyId, nextMuted)",
+  "Watch-Party Live self mute control must persist through the narrow current-user helper",
+);
+assertIncludes(
+  player,
+  "setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1)",
+  "Watch-Party Live self mute must refresh the LiveKit authority contract",
+);
+assertNotIncludes(
+  sliceBetween(
+    player,
+    "const onPressSharedPlayerSelfMute = useCallback(async () => {",
+    "const watchPartyLiveSharedPlaybackControlsLocked",
+    "Player Watch-Party self mute handler boundary",
+  ),
+  "Share.share",
+  "Watch-Party Live self mute must not open Android Share",
+);
+assertIncludes(
   player,
   "watch-party-live seat request sent",
   "Player Watch-Party LiveKit viewer requests must log Realtime broadcast send status",

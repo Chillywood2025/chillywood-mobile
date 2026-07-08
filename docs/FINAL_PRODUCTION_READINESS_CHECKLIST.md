@@ -1,5 +1,11 @@
 # Final Production Readiness Checklist
 
+## July 8, 2026 Seated Speaker Self-Mute Follow-Up
+
+Status: Source-repaired and guard/proof upgraded; installed proof still required.
+
+Approved non-host speakers now have explicit self-mute/unmute controls in Watch-Party Live regular Shared Player and Live Stage. The shared `setOwnPartyParticipantMuteState(...)` helper writes only the current signed-in user's membership row, preserves role/stageRole/canSpeak, toggles `is_muted`, and derives camera/mic flags after the existing Premium room-access check. Host moderation mute remains on the host authority path. Muted approved speakers stay seated but are not publish-ready: token authority returns speaker with `canPublish=false` while muted, and the app refreshes LiveKit contracts after mute/unmute. The active speaker/camera seat cap remains `4`; no passive audience cap, fullscreen rails/layout, Premium, Party Room, LiveKit routing/heartbeat/cutoff, App Links, Chat/native, auth/RLS, billing/provider, payout, or cashout behavior changed.
+
 ## July 7, 2026 Watch-Party Live Source-Truth Follow-Up
 
 Status: Source-repaired, guard/proof upgraded, installed proof Partial on final approved camera/reaction delivery.

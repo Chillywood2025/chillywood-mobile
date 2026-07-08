@@ -96,6 +96,7 @@ import {
     deletePartyMessage,
     sendPartyMessageRecord,
     setPartyRoomPolicies,
+    setOwnPartyParticipantMuteState,
     setPartyParticipantState,
     touchPartyRoomSession,
     type WatchPartyRoomMembership,
@@ -919,6 +920,8 @@ export default function WatchPartyLiveStageScreen({
   const seatRequestVersionById = seatRequestState.versionById;
   const [seatRequestSheetParticipantId, setSeatRequestSheetParticipantId] = useState("");
   const [stageParticipantActionBusyId, setStageParticipantActionBusyId] = useState("");
+  const [stageSelfMuteBusy, setStageSelfMuteBusy] = useState(false);
+  const [stageSelfMuteError, setStageSelfMuteError] = useState("");
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
@@ -1045,6 +1048,8 @@ export default function WatchPartyLiveStageScreen({
     setViewerSelfHeroEnabled(false);
     setSeatRequestSheetParticipantId("");
     setSeatRequestState(emptyLiveStageSeatRequestState());
+    setStageSelfMuteBusy(false);
+    setStageSelfMuteError("");
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -2535,6 +2540,69 @@ export default function WatchPartyLiveStageScreen({
   const stageSeatRequestButtonDisabled = currentStageParticipantState.role === "speaker"
     || currentStageSeatRequestPending
     || !canRequestSeat(currentStageParticipantState);
+  const shouldRenderStageSelfMuteControl = !!(
+    !isHost
+    && currentStageParticipantState.role === "speaker"
+    && !currentStageParticipantState.isRemoved
+  );
+  const onPressStageSelfMute = useCallback(async () => {
+    if (!shouldRenderStageSelfMuteControl || stageSelfMuteBusy) return;
+    const nextMuted = !isCurrentStageParticipantMuted;
+    setStageSelfMuteBusy(true);
+    setStageSelfMuteError("");
+    try {
+      const updatedMembership = await setOwnPartyParticipantMuteState(partyId, nextMuted);
+      if (!updatedMembership) throw new Error("live_stage_self_mute_unavailable");
+      membershipMapRef.current[updatedMembership.userId] = updatedMembership;
+      setParticipantStateById((prev) => {
+        const current = prev[updatedMembership.userId] ?? createDefaultParticipantState({
+          role: updatedMembership.role === "host" || updatedMembership.stageRole === "host" ? "host" : "viewer",
+          isSpeaking: updatedMembership.stageRole === "speaker" || updatedMembership.canSpeak,
+          isMuted: updatedMembership.isMuted,
+        });
+        return {
+          ...prev,
+          [updatedMembership.userId]: {
+            ...current,
+            role: updatedMembership.stageRole,
+            isMuted: updatedMembership.isMuted,
+            isRemoved: updatedMembership.membershipState === "removed",
+          },
+        };
+      });
+      broadcastSeatState(updatedMembership.userId, {
+        role: updatedMembership.stageRole,
+        isMuted: updatedMembership.isMuted,
+        pending: false,
+      });
+      setLiveKitJoinContract(null);
+      setLiveKitJoinUnavailable(null);
+      await refreshStageSnapshot(myUserId).catch(() => null);
+      debugLiveStage("self mute persisted", {
+        userId: updatedMembership.userId,
+        isMuted: updatedMembership.isMuted,
+        stageRole: updatedMembership.stageRole,
+      });
+    } catch (error) {
+      setStageSelfMuteError("Mute update unavailable. Try again in a moment.");
+      debugLiveStage("self mute failed", {
+        userId: currentUserParticipantId,
+        nextMuted,
+        error: error instanceof Error ? error.message : String(error ?? ""),
+      });
+    } finally {
+      setStageSelfMuteBusy(false);
+    }
+  }, [
+    broadcastSeatState,
+    currentUserParticipantId,
+    isCurrentStageParticipantMuted,
+    myUserId,
+    partyId,
+    refreshStageSnapshot,
+    shouldRenderStageSelfMuteControl,
+    stageSelfMuteBusy,
+  ]);
   const currentMembershipAuthoritySignature = [
     currentTrackedParticipantState?.role ?? "none",
     currentStageMembership?.stageRole ?? "none",
@@ -4965,7 +5033,7 @@ export default function WatchPartyLiveStageScreen({
                 <Text style={styles.stageSelfHeroToggleHint}>Only changes your view</Text>
               </TouchableOpacity>
             ) : null}
-            {!isHost ? (
+            {!isHost && !shouldRenderStageSelfMuteControl ? (
               <TouchableOpacity
                 style={[
                   styles.stageCommunityRequestButton,
@@ -4987,6 +5055,43 @@ export default function WatchPartyLiveStageScreen({
                   {stageSeatRequestButtonLabel}
                 </Text>
               </TouchableOpacity>
+            ) : null}
+            {shouldRenderStageSelfMuteControl ? (
+              <TouchableOpacity
+                style={[
+                  styles.stageCommunityRequestButton,
+                  isCurrentStageParticipantMuted && styles.stageSelfHeroToggleActive,
+                  stageSelfMuteBusy && styles.stageCommunityRequestButtonDisabled,
+                ]}
+                activeOpacity={0.84}
+                disabled={stageSelfMuteBusy}
+                onPress={() => {
+                  void onPressStageSelfMute();
+                }}
+                testID={isCurrentStageParticipantMuted ? "live-stage-self-unmute-button" : "live-stage-self-mute-button"}
+                accessibilityRole="button"
+                accessibilityLabel={isCurrentStageParticipantMuted ? "Unmute yourself on Live Stage" : "Mute yourself on Live Stage"}
+                accessibilityState={{ selected: isCurrentStageParticipantMuted, disabled: stageSelfMuteBusy }}
+              >
+                <Text
+                  style={[
+                    styles.stageCommunityRequestButtonText,
+                    isCurrentStageParticipantMuted && styles.stageSelfHeroToggleTextActive,
+                    stageSelfMuteBusy && styles.stageCommunityRequestButtonTextDisabled,
+                  ]}
+                >
+                  {stageSelfMuteBusy
+                    ? "Saving..."
+                    : isCurrentStageParticipantMuted
+                      ? "Unmute myself"
+                      : "Mute myself"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            {stageSelfMuteError ? (
+              <Text testID="live-stage-self-mute-error" style={styles.stageHybridCommentError}>
+                {stageSelfMuteError}
+              </Text>
             ) : null}
 
             {communityCardParticipants.length > 0 ? (

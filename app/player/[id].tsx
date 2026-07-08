@@ -125,6 +125,7 @@ import {
     PARTY_SEAT_REQUEST_MESSAGE_TTL_MILLIS,
     resolvePremiumAccessKeyForRoom,
     sendPartyMessage,
+    setOwnPartyParticipantMuteState,
     setPartyParticipantState,
     updateRoomPlayback,
     type WatchPartyRoomMembership,
@@ -1147,6 +1148,8 @@ export default function PlayerScreen() {
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [partyCommentSending, setPartyCommentSending] = useState(false);
   const [watchPartyCameraRequestError, setWatchPartyCameraRequestError] = useState("");
+  const [watchPartySelfMuteBusy, setWatchPartySelfMuteBusy] = useState(false);
+  const [watchPartySelfMuteError, setWatchPartySelfMuteError] = useState("");
   const [watchPartyMenuOpen, setWatchPartyMenuOpen] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [liveFilterSheetOpen, setLiveFilterSheetOpen] = useState(false);
@@ -2202,6 +2205,8 @@ export default function PlayerScreen() {
       setPartyCommentDraft((current) => (current ? "" : current));
       setPartyCommentSending((current) => (current ? false : current));
       setWatchPartyCameraRequestError((current) => (current ? "" : current));
+      setWatchPartySelfMuteBusy((current) => (current ? false : current));
+      setWatchPartySelfMuteError((current) => (current ? "" : current));
       setPartyOverlayMessages((current) => (current.length === 0 ? current : []));
       setPartyReactionBursts((current) => (current.length === 0 ? current : []));
       partyMembershipMapRef.current = {};
@@ -5756,6 +5761,12 @@ export default function PlayerScreen() {
     && currentWatchPartyParticipant
     && !currentWatchPartyParticipantCanSpeak
   );
+  const shouldRenderSharedPlayerSelfMuteControl = !!(
+    isSharedPartyPlayback
+    && !currentWatchPartyHostAuthority.isHost
+    && currentWatchPartyParticipant
+    && currentWatchPartyParticipantCanSpeak
+  );
   const onPressSharedPlayerRequestCamera = useCallback(async (source: "dock" | "bubble" = "dock") => {
     if (!isSharedPartyPlayback) return;
     if (!currentWatchPartyParticipant) {
@@ -5805,6 +5816,79 @@ export default function PlayerScreen() {
     requestPartySeat,
     showLivePresenceEvent,
     trackedUserId,
+  ]);
+  const onPressSharedPlayerSelfMute = useCallback(async () => {
+    if (!isSharedPartyPlayback || !currentWatchPartyParticipant || !currentWatchPartyParticipantCanSpeak || currentWatchPartyHostAuthority.isHost) return;
+    if (watchPartySelfMuteBusy) return;
+
+    const nextMuted = !currentWatchPartyParticipantMuted;
+    setWatchPartySelfMuteBusy(true);
+    setWatchPartySelfMuteError("");
+    try {
+      const updatedMembership = await setOwnPartyParticipantMuteState(partyId, nextMuted);
+      if (!updatedMembership) throw new Error("watch_party_live_self_mute_unavailable");
+
+      partyMembershipMapRef.current[updatedMembership.userId] = updatedMembership;
+      setPartyParticipants((prev) =>
+        prev.map((entry) =>
+          entry.id === updatedMembership.userId
+            ? {
+                ...entry,
+                muted: updatedMembership.isMuted,
+                canSpeak: updatedMembership.canSpeak,
+                stageRole: updatedMembership.stageRole,
+                isSpeaking: updatedMembership.isMuted ? false : entry.isSpeaking,
+              }
+            : entry,
+        ),
+      );
+      await broadcastPartySeatState(updatedMembership.userId, {
+        canSpeak: updatedMembership.canSpeak,
+        stageRole: updatedMembership.stageRole,
+        isRequestingToSpeak: false,
+        isMuted: updatedMembership.isMuted,
+      });
+      await syncCurrentPartyPresence({
+        canSpeak: updatedMembership.canSpeak,
+        stageRole: updatedMembership.stageRole,
+        muted: updatedMembership.isMuted,
+        isRequestingToSpeak: false,
+      }).catch(() => {});
+      setWatchPartyLiveKitJoinContract(null);
+      setWatchPartyLiveKitRenderableContract(null);
+      setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1);
+      showLivePresenceEvent(updatedMembership.isMuted ? "You muted yourself" : "You unmuted yourself");
+      debugLog("livekit", "watch-party-live self mute persisted", {
+        roomName: partyId,
+        currentUserId: trackedUserId,
+        isMuted: updatedMembership.isMuted,
+        stageRole: updatedMembership.stageRole,
+        canSpeak: updatedMembership.canSpeak,
+      });
+    } catch (error) {
+      setWatchPartySelfMuteError("Mute update unavailable. Try again in a moment.");
+      showLivePresenceEvent("Mute update unavailable. Try again in a moment.");
+      debugLog("livekit", "watch-party-live self mute failed", {
+        roomName: partyId,
+        currentUserId: trackedUserId,
+        nextMuted,
+        error: error instanceof Error ? error.message : String(error ?? ""),
+      });
+    } finally {
+      setWatchPartySelfMuteBusy(false);
+    }
+  }, [
+    broadcastPartySeatState,
+    currentWatchPartyHostAuthority.isHost,
+    currentWatchPartyParticipant,
+    currentWatchPartyParticipantCanSpeak,
+    currentWatchPartyParticipantMuted,
+    isSharedPartyPlayback,
+    partyId,
+    showLivePresenceEvent,
+    syncCurrentPartyPresence,
+    trackedUserId,
+    watchPartySelfMuteBusy,
   ]);
   const watchPartyLiveSharedPlaybackControlsLocked = isSharedPartyPlayback && !currentWatchPartyHostAuthority.isHost;
   const desiredWatchPartyLiveKitParticipantRole = useMemo<LiveKitTokenReady["participantRole"]>(() => {
@@ -8326,6 +8410,35 @@ export default function PlayerScreen() {
                   </Text>
                 </TouchableOpacity>
               ) : null}
+              {shouldRenderSharedPlayerSelfMuteControl ? (
+                <TouchableOpacity
+                  style={[
+                    styles.watchPartyDockActionBtn,
+                    currentWatchPartyParticipantMuted && styles.watchPartyDockActionBtnActive,
+                    watchPartySelfMuteBusy && styles.secondaryBtnDisabled,
+                  ]}
+                  onPress={() => {
+                    void onPressSharedPlayerSelfMute();
+                  }}
+                  disabled={watchPartySelfMuteBusy}
+                  activeOpacity={0.88}
+                  testID={currentWatchPartyParticipantMuted ? "shared-player-self-unmute-button" : "shared-player-self-mute-button"}
+                  accessibilityRole="button"
+                  accessibilityLabel={currentWatchPartyParticipantMuted ? "Unmute yourself" : "Mute yourself"}
+                  accessibilityState={{ selected: currentWatchPartyParticipantMuted, disabled: watchPartySelfMuteBusy }}
+                >
+                  <Text style={[
+                    styles.watchPartyDockActionText,
+                    currentWatchPartyParticipantMuted && styles.watchPartyDockActionTextActive,
+                  ]}>
+                    {watchPartySelfMuteBusy
+                      ? "Saving..."
+                      : currentWatchPartyParticipantMuted
+                        ? "Unmute myself"
+                        : "Mute myself"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 style={[styles.watchPartyDockActionBtn, watchPartyMenuOpen && styles.watchPartyDockActionBtnActive]}
                 onPress={onToggleWatchPartyMenu}
@@ -8339,6 +8452,11 @@ export default function PlayerScreen() {
             {watchPartyCameraRequestError ? (
               <Text testID="shared-player-camera-request-error" style={styles.watchPartyCameraRequestErrorText}>
                 {watchPartyCameraRequestError}
+              </Text>
+            ) : null}
+            {watchPartySelfMuteError ? (
+              <Text testID="shared-player-self-mute-error" style={styles.watchPartyCameraRequestErrorText}>
+                {watchPartySelfMuteError}
               </Text>
             ) : null}
 

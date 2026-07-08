@@ -49,6 +49,7 @@ const oldRoomGuard = readSource("scripts/guard-old-room-handling.mjs");
 const watchPartyLiveKitGuard = readSource("scripts/guard-watch-party-livekit-camera.mjs");
 const seatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
 const liveStagePresentation = readSource("_lib/watch-party/live-stage-presentation.ts");
+const watchParty = readSource("_lib/watchParty.ts");
 
 assertStaticRole({
   label: "host",
@@ -183,6 +184,11 @@ assertIncludes(liveStage, "\"Local self view\"", "Live Stage self-hero fallback 
 assertIncludes(liveStage, "forceLocalHeroFallback={false}", "Live Stage self-hero must not force the LiveKit syncing fallback");
 assertIncludes(liveStage, "testID=\"live-stage-self-hero-toggle\"", "Live Stage self-hero toggle is exposed for proof");
 assertIncludes(liveStage, "testID=\"live-stage-request-camera-button\"", "Live Stage request-camera button is exposed for installed proof");
+assertIncludes(watchParty, "export async function setOwnPartyParticipantMuteState", "Watch-Party shared helper exposes current-user self mute persistence");
+assertIncludes(watchParty, ".eq(\"user_id\", writableUserId)", "self mute persistence only writes the signed-in user's membership row");
+assertIncludes(liveStage, "testID={isCurrentStageParticipantMuted ? \"live-stage-self-unmute-button\" : \"live-stage-self-mute-button\"}", "Live Stage seated viewers expose self mute/unmute proof targets");
+assertIncludes(liveStage, "await setOwnPartyParticipantMuteState(partyId, nextMuted)", "Live Stage self mute uses narrow current-user persistence helper");
+assertIncludes(liveStage, "setLiveKitJoinContract(null);", "Live Stage self mute clears stale LiveKit contract for authority refresh");
 assertIncludes(liveStage, "\"live-stage-self-party-card\"", "Live Stage default viewer layout exposes self party-card proof id");
 assertIncludes(liveStage, "`live-stage-pending-seat-card-${participant.userId}`", "Live Stage pending requester card exposes a stable proof id");
 assertIncludes(liveStage, "openSeatRequestSheet(participant.userId);", "Live Stage pending requester card opens the seat sheet");

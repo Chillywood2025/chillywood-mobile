@@ -1413,6 +1413,61 @@ export async function setPartyParticipantState(
   return rowToMembership(data);
 }
 
+export async function setOwnPartyParticipantMuteState(
+  partyId: string,
+  isMuted: boolean,
+): Promise<WatchPartyRoomMembership | null> {
+  const normalizedPartyId = String(partyId ?? "").trim().toUpperCase();
+  const writableUserId = await getWritablePartyUserId();
+  if (!normalizedPartyId || !writableUserId) return null;
+  const room = await getPartyRoom(normalizedPartyId).catch(() => null);
+  if (!room) return null;
+  const premiumAccess = await requirePremiumAccessForRoom(room).catch(() => null);
+  if (!premiumAccess?.allowed) return null;
+
+  const currentMembershipRow = await fetchPartyMembershipRow(normalizedPartyId, writableUserId);
+  if (!currentMembershipRow) return null;
+  const currentMembership = rowToMembership(currentMembershipRow);
+  if (!currentMembership) return null;
+  if (currentMembership.membershipState === "removed" || currentMembership.membershipState === "left") return null;
+
+  const now = new Date().toISOString();
+  const nextIsMuted = !!isMuted;
+  const nextCanPublishMedia = canWatchPartyMembershipPublishMedia({
+    role: currentMembership.role,
+    stageRole: currentMembership.stageRole,
+    canSpeak: currentMembership.canSpeak,
+    isMuted: nextIsMuted,
+    membershipState: currentMembership.membershipState,
+  });
+  const updates: PartyMembershipUpdate = {
+    is_muted: nextIsMuted,
+    camera_enabled: nextCanPublishMedia,
+    mic_enabled: nextCanPublishMedia,
+    updated_at: now,
+    last_seen_at: now,
+  };
+
+  const { data, error } = await supabase
+    .from(WATCH_PARTY_ROOM_MEMBERSHIPS_TABLE)
+    .update(updates)
+    .eq("party_id", normalizedPartyId)
+    .eq("user_id", writableUserId)
+    .select(PARTY_ROOM_MEMBERSHIP_SELECT)
+    .returns<PartyMembershipRow>()
+    .single();
+
+  if (error || !data) {
+    reportRuntimeError("watch-party-set-own-participant-mute-state", error ?? new Error("Missing membership row"), {
+      partyId: normalizedPartyId,
+      targetUserId: writableUserId,
+      isMuted: nextIsMuted,
+    });
+    return null;
+  }
+  return rowToMembership(data);
+}
+
 export async function updateRoomPlayback(
   partyId: string,
   positionMillis: number,
