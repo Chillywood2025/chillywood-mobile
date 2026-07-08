@@ -14,7 +14,9 @@ Current latest truth:
 - The newest remaining installed screenshot shows the regular Shared Player bottom comment composer cut off by the bottom edge/keyboard. This is now the open app-controlled source issue; it does not reopen playback, real media, fullscreen rails, Premium, LiveKit backend, or roster convergence unless a fresh regression appears.
 - Source commit `3a2001381a43c26b7e499da699148e0438004c59` keeps fullscreen unchanged and makes the regular non-fullscreen lower dock scrollable, activates keyboard-safe comment mode when the visible composer receives focus, closes the Shared Player menu while composing, and keeps Send taps handled while the keyboard is open.
 - Android EAS Update production runtime `1.0.0` was published from that source as group `d4461f02-f7a3-4fc7-80e8-90dbfc76581a`, Android update `019f4064-d6e3-7316-95d6-ae6efc5b9a2a`, message `Fix Watch-Party Live comment dock keyboard reachability 3a200138`.
-- Installed proof on room `W5AZ7B` after that OTA recovered R3 through wireless ADB and confirmed both devices could reach the Shared Player, but focusing the R3 comment input still left the composer hidden behind the Android keyboard while the action row remained visible. The current source follow-up hides the regular Shared Player action row and controls menu while `sharedPartyCommentsKeyboardActive` is true, so the visible comments composer/Send row is prioritized above the keyboard. Fullscreen rails remain unchanged.
+- Installed proof on room `W5AZ7B` after that OTA recovered R3 through wireless ADB and confirmed both devices could reach the Shared Player, but focusing the R3 comment input still left the composer hidden behind the Android keyboard while the action row remained visible.
+- Source commit `cec243533fff7d6859a3397a8a055aa6558a01f6` hides the regular Shared Player action row and controls menu while `sharedPartyCommentsKeyboardActive` is true, so the visible comments composer/Send row is prioritized above the keyboard. Fullscreen rails remain unchanged.
+- Android EAS Update production runtime `1.0.0` was published from `cec24353` as group `4c88f779-570a-4fe8-8089-66eeafee4a6b`, Android update `019f410d-cd39-7875-9253-a6575ce09d8c`, message `Fix Watch-Party Live comment keyboard priority cec24353`.
 
 Superseded historical trail retained for context:
 - Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published through the real-media playback lane. Installed proof remains Partial, but the real-media playback blocker is resolved: both R5 and R3 rendered actual video in the same Shared Player on the fresh OTA. A July 7 camera-request packet then narrowed the remaining blocker to installed Shared Player camera-request/comment-reaction reachability and request persistence: tapping the viewer's own audience bubble/card did not produce a visible pending request, and the host never received a review/approval surface.
@@ -46,10 +48,9 @@ Superseded historical trail retained for context:
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
 
 Next exact step:
-1. Commit/push the current comment keyboard follow-up, publish a fresh Android OTA, and record the source commit/group/update/runtime.
-2. Load that fresh OTA on both Play-installed devices.
-3. Rerun only the focused installed packet on Play-installed devices after that OTA loads: open `Chi'llywood City Lights`, confirm carry-forward playback/roster basics, focus the visible bottom comment composer, verify the action row is suppressed and the composer/Send row is visible above the keyboard, send a viewer comment, and confirm host receipt.
-4. Do not reopen playback, real-media classification, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, LiveKit backend, or roster convergence unless a fresh regression appears.
+1. Load Android OTA group `4c88f779-570a-4fe8-8089-66eeafee4a6b` / update `019f410d-cd39-7875-9253-a6575ce09d8c` on both Play-installed devices.
+2. Rerun only the focused installed packet on Play-installed devices after that OTA loads: open `Chi'llywood City Lights`, confirm carry-forward playback/roster basics, focus the visible bottom comment composer, verify the action row is suppressed and the composer/Send row is visible above the keyboard, send a viewer comment, and confirm host receipt.
+3. Do not reopen playback, real-media classification, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, LiveKit backend, or roster convergence unless a fresh regression appears.
 
 # Android App Links / Domain Association Closed
 
