@@ -1,5 +1,21 @@
 # NEXT TASK
 
+# Cloudflare R2 Media Delivery Staged Proof
+
+Current latest truth:
+- Cloudflare R2 is enabled and private proof bucket `chillywood-media-proof` exists.
+- Harmless text object `playback/public/proof/hello.txt` was uploaded to remote R2 and read back through authorized Wrangler access only; byte-for-byte readback matched.
+- The proof object is kept as harmless text proof traceability unless the owner later requests cleanup.
+- r2.dev public access is disabled, no public bucket access is enabled, no custom domain is connected, and no cache rule was applied.
+- No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
+- Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
+
+Next exact media step:
+1. Plan `media.chillywoodstream.com` custom domain/cache without applying it.
+2. Decide whether the public proof uses a separate public-playback bucket/surface or a Worker/WAF-token protected path layer.
+3. Do not enable public bucket access, r2.dev, custom domain, cache rules, signed/token CDN playback, or production playback switching until explicitly approved and proved.
+4. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
+
 # Watch-Party Live / Live Stage Seated Self-Mute Follow-Up
 
 Current source follow-up:

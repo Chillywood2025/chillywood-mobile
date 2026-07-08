@@ -85,15 +85,17 @@ Status: architecture and guard only. This document does not deploy a CDN, create
 
 Transcoding status: not live; no worker exists in this repo.
 
-Cloudflare R2 private origin status: target path, not configured by this repo change.
+Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.
 
 Cloudflare custom domain/cache status: target delivery/cache layer for safe playback assets, not deployed by this repo change.
 
-R2 CLI/API proof status: blocked until R2 is enabled in Cloudflare; no R2 CDN playback is live.
+R2 CLI/API proof status: private remote proof upload/readback succeeded through authorized Wrangler access; no R2 CDN playback is live.
 
-R2 proof bucket status: not created in this pass because Cloudflare R2 is not enabled for the account.
+R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.
 
-R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled.
+R2 proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded and is kept for proof traceability.
+
+R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled; r2.dev public access is disabled and no custom domains are connected.
 
 Media bandwidth telemetry status: foundation only, not live.
 
@@ -132,24 +134,24 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 
 ### Staged Cloudflare Proof Plan
 
-- CLI/API preflight: Wrangler authentication was available without printing tokens, but R2 bucket operations returned Cloudflare code `10042` until R2 is enabled in the Cloudflare dashboard.
-- First bucket target after R2 is enabled: `chillywood-media-proof`, or `chillywood-media-dev` if the proof bucket name is unavailable.
-- The proof bucket must remain private. Do not enable public bucket access, the r2.dev public development URL, or a custom domain during the private-origin proof.
+- CLI/API preflight: Wrangler authentication is available without printing tokens, R2 is enabled, and the private proof bucket exists.
+- First bucket target: `chillywood-media-proof`.
+- The proof bucket remains private. Public bucket access, the r2.dev public development URL, and custom domains were not enabled during the private-origin proof.
 - Proof object target: `playback/public/proof/hello.txt`.
-- Private-origin proof commands should create the proof/dev bucket, upload the harmless proof object, and read it back through authorized Wrangler/S3-compatible access only.
+- Private-origin proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.
+- No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
+- No production playback config was switched.
 - Stop before public access. Do not connect `media.chillywoodstream.com` until the owner approves that the bucket/surface contains only safe public playback assets or token/WAF/Worker controls are in place.
 - Public proof, when approved, may expose only `playback/public/` test assets. It must not expose source/original/master, unscanned, private, or Premium-only objects.
 
-### Cloudflare Setup Steps Before Applying
+### Cloudflare Setup Steps Before Applying Public Delivery
 
-1. Enable R2 for the Cloudflare account in the dashboard.
-2. Run `wrangler r2 bucket create chillywood-media-proof`.
-3. Upload `playback/public/proof/hello.txt` through authorized CLI/API access.
-4. Read the proof object back through authorized CLI/API access.
-5. Confirm no r2.dev public URL, custom domain, or public bucket access is enabled.
-6. Prepare `media.chillywoodstream.com` only after owner approval and after the safe public surface or token/WAF/Worker access control is decided.
-7. Add Cloudflare cache rules only for approved public playback paths: long TTL for immutable segments/thumbnails, short TTL for manifests, no cache for private/original paths.
-8. Confirm cache headers and Cloudflare cache status only on approved proof paths.
+1. Confirm the private proof bucket and harmless proof object remain non-production proof assets only.
+2. Decide whether `media.chillywoodstream.com` will point to a separate public-playback bucket/surface or to a Worker/WAF-token protected path layer.
+3. Document the exact Cloudflare dashboard/API steps before applying them.
+4. Add Cloudflare cache rules only for approved public playback paths: long TTL for immutable segments/thumbnails, short TTL for manifests, no cache for private/original paths.
+5. Confirm cache headers and Cloudflare cache status only on approved proof paths.
+6. Keep production creator-video playback on existing resolver/direct signed-origin fallback until signed/token CDN access, telemetry, takedown purge, and Premium gating are implemented and proved.
 
 ### Signed CDN Playback
 

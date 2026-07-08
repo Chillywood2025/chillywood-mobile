@@ -89,9 +89,11 @@ const hasResumableUpload = /\b(createMultipartUpload|completeMultipartUpload|Upl
 assertIncludes(architecture, "Status: architecture and guard only.", "media delivery architecture doc");
 assertIncludes(architecture, "Transcoding status: not live; no worker exists in this repo.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare custom domain/cache status: target delivery/cache layer for safe playback assets, not deployed by this repo change.", "media delivery architecture doc");
-assertIncludes(architecture, "R2 CLI/API proof status: blocked until R2 is enabled in Cloudflare; no R2 CDN playback is live.", "R2 CLI/API proof status");
-assertIncludes(architecture, "R2 proof bucket status: not created in this pass because Cloudflare R2 is not enabled for the account.", "R2 proof bucket status");
-assertIncludes(architecture, "R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled.", "R2 public exposure status");
+assertIncludes(architecture, "Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.", "R2 private origin proof status");
+assertIncludes(architecture, "R2 CLI/API proof status: private remote proof upload/readback succeeded through authorized Wrangler access; no R2 CDN playback is live.", "R2 CLI/API proof status");
+assertIncludes(architecture, "R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.", "R2 proof bucket status");
+assertIncludes(architecture, "R2 proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded and is kept for proof traceability.", "R2 proof object status");
+assertIncludes(architecture, "R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled; r2.dev public access is disabled and no custom domains are connected.", "R2 public exposure status");
 assertIncludes(architecture, "Media bandwidth telemetry status: foundation only, not live.", "media delivery architecture doc");
 assertIncludes(architecture, "Cache savings status: not proved; telemetry/cache proof is required before savings claims.", "cache savings proof status");
 assertIncludes(architecture, "5 GB resumable upload status: not live; current upload is single signed PUT.", "media delivery architecture doc");
@@ -107,6 +109,9 @@ assertIncludes(architecture, "Do not connect a Cloudflare R2 custom domain direc
 assertIncludes(architecture, "The safest first custom-domain target is a separate proof or public-playback surface that contains only approved `playback/public/` assets.", "safe custom-domain target");
 assertIncludes(architecture, "Use long TTLs only for immutable segments and thumbnails, short TTLs for manifests, and no cache for private/original paths.", "cache TTL policy");
 assertIncludes(architecture, "Proof object target: `playback/public/proof/hello.txt`.", "R2 proof object path");
+assertIncludes(architecture, "Private-origin proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.", "R2 private proof readback");
+assertIncludes(architecture, "No production media, private/original media, unscanned upload, or Premium creator media was uploaded.", "R2 proof media boundary");
+assertIncludes(architecture, "No production playback config was switched.", "production playback boundary");
 assertIncludes(architecture, "Supabase/Edge resolver remains the access-control and playback decision layer.", "Supabase/Edge resolver boundary");
 assertIncludes(architecture, "The app must ask the backend resolver for playback; the app must not hard-code R2 or Cloudflare custom-domain decisions.", "app resolver contract");
 assertIncludes(architecture, "Creator-video Watch-Party sources must use the same creator-video playback resolver path as standalone Player.", "media delivery architecture doc");
