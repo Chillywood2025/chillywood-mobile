@@ -9,6 +9,7 @@ Current source follow-up:
 - Muted approved speakers remain seated but are not publish-ready: LiveKit token authority returns `speaker` with `canPublish=false` while muted, and the app clears stale LiveKit contracts so unmute/mute refreshes authority.
 - The active speaker/camera seat cap remains `4`; no separate source-level passive viewer cap was changed.
 - Fullscreen rails/layout, Premium, Party Room, LiveKit routing/heartbeat/cutoffs, App Links, Chat/native, auth/RLS, billing/provider, payout, and cashout behavior were not changed.
+- Source commit `1160a5d816eeea2d293566851c45625c317b23bb` is on `origin/main`; Android EAS Update production runtime `1.0.0` published group `11005b31-4d5d-4359-87f6-fbf5a1b1155f`, Android update `019f4307-0522-7054-996a-0fe97624236c`.
 - Next step after validation/push/OTA: installed smoke should prove seated viewer self-mute/unmute in Watch-Party Live and Live Stage, plus host mute still works.
 
 # Watch-Party Live Stable Bubble Surface / Final Camera Proof
