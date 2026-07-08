@@ -732,10 +732,20 @@ const partyRoomSharedPlayerDockAction = partyRoomSource.slice(
 );
 assert(
   partyRoomSharedPlayerMainCta.includes("onPress={onWatchTogether}")
+    && partyRoomSharedPlayerMainCta.includes('accessibilityRole="button"')
+    && partyRoomSharedPlayerMainCta.includes("hitSlop={12}")
+    && partyRoomSharedPlayerMainCta.includes("onLongPress={onWatchTogether}")
     && partyRoomSharedPlayerMainCta.includes("disabled={watchPartyLiveOpening}")
     && partyRoomSharedPlayerDockAction.includes("onPress={onWatchTogether}")
+    && partyRoomSharedPlayerDockAction.includes('accessibilityRole="button"')
+    && partyRoomSharedPlayerDockAction.includes("hitSlop={10}")
+    && partyRoomSharedPlayerDockAction.includes("onLongPress={onWatchTogether}")
     && partyRoomSharedPlayerDockAction.includes("disabled={watchPartyLiveOpening}"),
-  "Party Room Shared Player entry buttons must expose stable testID taps wired to the real guarded handoff handler",
+  "Party Room Shared Player entry buttons must expose stable button/testID taps wired to the real guarded handoff handler",
+);
+assert(
+  partyRoomSource.includes('"shared player open requested"'),
+  "Party Room shared-player handoff must log a redacted request event before LiveKit preparation",
 );
 assert(
   playerSource.includes("selfParticipantId")

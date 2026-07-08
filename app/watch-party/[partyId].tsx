@@ -29,6 +29,7 @@ import {
     KeyboardAvoidingView,
     LayoutAnimation,
     Platform,
+    Pressable,
     ScrollView,
     Share,
     StyleSheet,
@@ -2064,6 +2065,13 @@ export default function WatchPartyRoomScreen() {
       let targetSourceId = resolveWatchPartySourceId(room);
       let targetTitleId = String(room?.titleId ?? "").trim();
 
+      debugLog("watch-party", "shared player open requested", {
+        partyId: nextPartyId || null,
+        sourceType: targetSourceType ?? null,
+        sourceIdPresent: !!targetSourceId,
+        opening: watchPartyLiveOpeningRef.current,
+      });
+
       if ((!targetSourceId || !targetSourceType) && nextPartyId) {
         const latestRoom = await getPartyRoom(nextPartyId).catch(() => null);
         targetSourceType = resolveWatchPartySourceType(latestRoom);
@@ -3123,16 +3131,23 @@ export default function WatchPartyRoomScreen() {
               <Text numberOfLines={1} style={styles.watchPartyScreenMetaValue}>{roomCodeCardValue}</Text>
             </View>
           </View>
-          <TouchableOpacity
+          <Pressable
             testID="watch-party-open-shared-player-button"
             accessibilityLabel="Open Shared Player"
-            style={[styles.watchCTA, watchPartyLiveOpening && styles.watchCTADisabled]}
+            accessibilityRole="button"
+            hitSlop={12}
+            style={({ pressed }) => [
+              styles.watchCTA,
+              pressed && styles.watchCTAPressed,
+              watchPartyLiveOpening && styles.watchCTADisabled,
+            ]}
             onPress={onWatchTogether}
+            onLongPress={onWatchTogether}
+            delayLongPress={260}
             disabled={watchPartyLiveOpening}
-            activeOpacity={0.88}
           >
             <Text style={styles.watchCTAText}>{watchPartyLiveOpening ? "Opening Player..." : "Open Shared Player"}</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     );
@@ -3144,21 +3159,25 @@ export default function WatchPartyRoomScreen() {
     return (
       <View style={styles.partyRoomActionDockCard}>
         <View style={styles.partyRoomActionDock}>
-          <TouchableOpacity
+          <Pressable
             testID="watch-party-action-player-button"
             accessibilityLabel="Open Shared Player"
-            style={[
+            accessibilityRole="button"
+            hitSlop={10}
+            style={({ pressed }) => [
               styles.partyRoomDockButton,
               styles.partyRoomDockButtonPrimary,
+              pressed && styles.partyRoomDockButtonPressed,
               watchPartyLiveOpening && styles.partyRoomDockButtonDisabled,
             ]}
-            activeOpacity={0.84}
             onPress={onWatchTogether}
+            onLongPress={onWatchTogether}
+            delayLongPress={260}
             disabled={watchPartyLiveOpening}
           >
             <MaterialIcons name="play-arrow" size={20} color="#FFFFFF" />
             <Text style={styles.partyRoomDockButtonText}>{watchPartyLiveOpening ? "Opening" : "Player"}</Text>
-          </TouchableOpacity>
+          </Pressable>
           <TouchableOpacity
             style={styles.partyRoomDockButton}
             activeOpacity={0.84}
@@ -5017,6 +5036,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
+  watchCTAPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.99 }],
+  },
   watchCTADisabled: {
     opacity: 0.58,
   },
@@ -5059,6 +5082,10 @@ const styles = StyleSheet.create({
   partyRoomDockButtonPrimary: {
     borderColor: "rgba(220,20,60,0.46)",
     backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  partyRoomDockButtonPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.98 }],
   },
   partyRoomDockButtonLeave: {
     borderColor: "rgba(255,115,140,0.34)",

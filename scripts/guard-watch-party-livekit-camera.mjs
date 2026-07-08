@@ -237,6 +237,21 @@ assertIncludes(
 );
 assertIncludes(
   partyRoomSharedPlayerMainCta,
+  'accessibilityRole="button"',
+  "Party Room main Open Shared Player CTA must expose native button semantics for installed proof taps",
+);
+assertIncludes(
+  partyRoomSharedPlayerMainCta,
+  "onLongPress={onWatchTogether}",
+  "Party Room main Open Shared Player CTA must keep a long-press fallback wired to the handoff handler",
+);
+assertIncludes(
+  partyRoomSharedPlayerMainCta,
+  "hitSlop={12}",
+  "Party Room main Open Shared Player CTA must keep a stable expanded tap target",
+);
+assertIncludes(
+  partyRoomSharedPlayerMainCta,
   "disabled={watchPartyLiveOpening}",
   "Party Room main Open Shared Player CTA must remain guarded while opening",
 );
@@ -252,8 +267,28 @@ assertIncludes(
 );
 assertIncludes(
   partyRoomSharedPlayerDockAction,
+  'accessibilityRole="button"',
+  "Party Room action dock Player button must expose native button semantics for installed proof taps",
+);
+assertIncludes(
+  partyRoomSharedPlayerDockAction,
+  "onLongPress={onWatchTogether}",
+  "Party Room action dock Player button must keep a long-press fallback wired to the handoff handler",
+);
+assertIncludes(
+  partyRoomSharedPlayerDockAction,
+  "hitSlop={10}",
+  "Party Room action dock Player button must keep a stable expanded tap target",
+);
+assertIncludes(
+  partyRoomSharedPlayerDockAction,
   "disabled={watchPartyLiveOpening}",
   "Party Room action dock Player button must remain guarded while opening",
+);
+assertIncludes(
+  partyRoomWatchTogether,
+  '"shared player open requested"',
+  "Party Room shared-player handoff must log a redacted request event before LiveKit preparation",
 );
 assertIncludes(
   player,
