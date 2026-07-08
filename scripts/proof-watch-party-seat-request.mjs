@@ -766,6 +766,25 @@ assert(
   "approved Watch-Party Live speakers without identity-matched camera tracks must show camera-preparing, not a complete seated video state",
 );
 assert(
+  playerSource.includes('const playerMediaIsInteractive = playerAppState === "active";')
+    && !playerSource.includes('playerAppState === "active" && (Platform.OS !== "android" || playerHasAndroidFocus)'),
+  "Shared Player must keep Watch-Party LiveKit active through transient Android blur while foregrounded",
+);
+assert(
+  livekitSurfaceSource.includes('const appIsInteractive = appState === "active";')
+    && !livekitSurfaceSource.includes('appState === "active" && (Platform.OS !== "android" || hasAndroidFocus)'),
+  "LiveKit bubble surface must not disconnect on transient Android focus blur",
+);
+assert(
+  livekitSurfaceSource.indexOf('if (item.canPublish) return "Camera preparing";') >= 0
+    && livekitSurfaceSource.indexOf('if (item.canPublish) return "Camera preparing";') < livekitSurfaceSource.indexOf('if (item.role === "host") return "Host";'),
+  "publish-capable host/speaker bubbles without a track must show Camera preparing instead of hiding missing media behind role text",
+);
+assert(
+  playerSource.includes("sharedPlayerLowerDockScrollRef.current?.scrollToEnd({ animated: true });"),
+  "Shared Player comments composer must scroll into view when the keyboard opens",
+);
+assert(
   !playerSource.slice(
     playerSource.indexOf("const renderPartyCommentsContent = (compactFullscreenRail = false) => ("),
     playerSource.indexOf("const renderSharedFullscreenCommentsRail = () => ("),
@@ -800,6 +819,8 @@ console.log(JSON.stringify({
   reactionReachableWithoutShare: true,
   reactionReceiverEventProof: true,
   approvedSpeakerMissingTrackCameraPreparing: true,
+  foregroundBlurDoesNotDisableLiveKit: true,
+  keyboardComposerScrollsIntoView: true,
   postApprovalRosterConvergenceGuarded: true,
   partyRoomSharedPlayerTestIds: true,
   helperBackedProof: true,

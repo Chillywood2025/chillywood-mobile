@@ -206,6 +206,37 @@ assertIncludes(
   "Watch-Party Live source-truth helper must own role precedence between membership and presence",
 );
 assertIncludes(
+  livekitSurface,
+  "const appIsInteractive = appState === \"active\";",
+  "Watch-Party LiveKit surface must stay connected through transient Android blur while foregrounded",
+);
+assertNotIncludes(
+  livekitSurface,
+  "appState === \"active\" && (Platform.OS !== \"android\" || hasAndroidFocus)",
+  "Watch-Party LiveKit surface must not disable bubbles on transient Android blur",
+);
+assertBefore(
+  livekitSurface,
+  "if (item.canPublish) return \"Camera preparing\";",
+  "if (item.role === \"host\") return \"Host\";",
+  "Watch-Party Live publish-capable host bubbles without a track should show camera-preparing state instead of hiding behind Host",
+);
+assertIncludes(
+  player,
+  "const playerMediaIsInteractive = playerAppState === \"active\";",
+  "Shared Player media interactivity must use foreground AppState instead of transient Android focus blur",
+);
+assertNotIncludes(
+  player,
+  "playerAppState === \"active\" && (Platform.OS !== \"android\" || playerHasAndroidFocus)",
+  "Shared Player must not disconnect Watch-Party LiveKit on transient Android blur",
+);
+assertIncludes(
+  player,
+  "sharedPlayerLowerDockScrollRef.current?.scrollToEnd({ animated: true });",
+  "Shared Player comments composer must scroll above the keyboard",
+);
+assertIncludes(
   watchPartyLiveSourceTruth,
   "membershipStageRole === \"speaker\" || options.membershipCanSpeak === true",
   "Watch-Party Live role resolution must prefer approved speaker membership over stale presence",

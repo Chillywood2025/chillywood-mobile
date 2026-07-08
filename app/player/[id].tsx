@@ -1197,6 +1197,7 @@ export default function PlayerScreen() {
   const watchPartyLiveVoiceIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchPartyLiveVolumeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const effectiveVideoVolumeRef = useRef(WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT);
+  const sharedPlayerLowerDockScrollRef = useRef<ScrollView | null>(null);
   const myCameraPreviewUrlRef = useRef("");
   const partyDisplayNameRef = useRef("You");
   const partyAvatarUrlRef = useRef("");
@@ -5669,25 +5670,19 @@ export default function PlayerScreen() {
     [liveBubbleParticipants, partySyncRole, trackedUserId],
   );
   const [playerAppState, setPlayerAppState] = useState<AppStateStatus>(() => AppState.currentState);
-  const [playerHasAndroidFocus, setPlayerHasAndroidFocus] = useState(true);
   useEffect(() => {
     const changeSubscription = AppState.addEventListener("change", (nextState) => {
       setPlayerAppState(nextState);
     });
-    const focusSubscription = Platform.OS === "android"
-      ? AppState.addEventListener("focus", () => setPlayerHasAndroidFocus(true))
-      : null;
-    const blurSubscription = Platform.OS === "android"
-      ? AppState.addEventListener("blur", () => setPlayerHasAndroidFocus(false))
-      : null;
 
     return () => {
       changeSubscription.remove();
-      focusSubscription?.remove();
-      blurSubscription?.remove();
     };
   }, []);
-  const playerMediaIsInteractive = playerAppState === "active" && (Platform.OS !== "android" || playerHasAndroidFocus);
+  // Android blur events can fire while the shared player remains foregrounded.
+  // Gate LiveKit/video only on real AppState backgrounding so camera bubbles
+  // keep their room connection while users type comments or system UI appears.
+  const playerMediaIsInteractive = playerAppState === "active";
   const watchPartyLiveKitJoinContractExpired = !!watchPartyLiveKitJoinContract
     && isLiveKitParticipantTokenExpired(watchPartyLiveKitJoinContract.participantToken);
   const shouldRenderWatchPartyLiveKit = inWatchParty
@@ -7239,6 +7234,15 @@ export default function PlayerScreen() {
   const roomCommentsTitle = isLiveMode ? "Live Room Comments" : "Room Comments";
   const roomCommentsEmptyText = isLiveMode ? "No live room comments yet." : "No room comments yet.";
   const sharedPartyCommentsKeyboardActive = isSharedPartyPlayback && !isPlayerFullscreen && watchPartyCommentKeyboardOpen;
+  useEffect(() => {
+    if (!sharedPartyCommentsKeyboardActive) return undefined;
+    const timeout = setTimeout(() => {
+      sharedPlayerLowerDockScrollRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [sharedPartyCommentsKeyboardActive, partyCommentDraft]);
   const standaloneAccessPresentation = useMemo(() => {
     if (!isStandalonePlayer) return null;
     if (standaloneAccessLoading) {
@@ -10027,6 +10031,7 @@ export default function PlayerScreen() {
           {isSharedPartyPlayback && source && !isPlayerFullscreen ? (
             <View style={[styles.titleParticipantFeedDock, hasActiveRailParticipants && styles.titleWatchPartyRailDockActive]}>
               <ScrollView
+                ref={sharedPlayerLowerDockScrollRef}
                 testID="shared-player-lower-dock-scroll"
                 style={styles.titleParticipantFeedDockScroll}
                 contentContainerStyle={[

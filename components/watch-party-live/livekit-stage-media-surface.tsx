@@ -99,8 +99,8 @@ type BubbleGridItem = {
 const getBubblePlaceholderStatus = (item: Pick<BubbleGridItem, "canPublish" | "isRequestingToSpeak" | "role" | "trackRef">) => {
   if (item.trackRef) return "";
   if (item.isRequestingToSpeak) return "Request";
-  if (item.role === "host") return "Host";
   if (item.canPublish) return "Camera preparing";
+  if (item.role === "host") return "Host";
   return "Audience";
 };
 
@@ -746,7 +746,11 @@ export function LiveKitStageMediaSurface({
   const publishLocalCamera = publishLocalVideo ?? (
     joinContract.participantRole !== "viewer" && joinContract.requestedGrants.canPublish
   );
-  const appIsInteractive = appState === "active" && (Platform.OS !== "android" || hasAndroidFocus);
+  // Android can emit transient blur events while the app is still visible
+  // (keyboard, notification shade, wireless debugging overlays). Keep LiveKit
+  // connected until AppState actually backgrounds the app so foreground bubbles
+  // do not collapse to roster-only placeholders.
+  const appIsInteractive = appState === "active";
   const shouldConnectRoom = active && appIsInteractive;
   shouldConnectRoomRef.current = shouldConnectRoom;
   const effectivePublishLocalAudio = shouldConnectRoom && publishLocalAudio;
