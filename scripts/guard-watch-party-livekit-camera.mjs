@@ -648,8 +648,13 @@ assertIncludes(
 );
 assertIncludes(
   livekitSurface,
-  "item.isRequestingToSpeak ? \"Request\"",
-  "LiveKit bubble-grid placeholders must show pending camera requests",
+  "getBubblePlaceholderStatus(item)",
+  "LiveKit bubble-grid placeholders must use the explicit proofable placeholder-status helper",
+);
+assertIncludes(
+  livekitSurface,
+  "Camera preparing",
+  "LiveKit bubble-grid placeholders must show approved speakers without tracks as camera-preparing, not falsely complete",
 );
 assertIncludes(
   livekitSurface,
@@ -1570,6 +1575,21 @@ assertIncludes(
   player,
   "event: \"reaction\"",
   "regular Shared Player reactions must broadcast to the room",
+);
+assertIncludes(
+  player,
+  "watch-party-live reaction received",
+  "regular Shared Player reactions must log receiver-side reaction delivery for installed proof",
+);
+assertIncludes(
+  player,
+  "author: \"Reaction\"",
+  "regular Shared Player reactions must create a visible local receiver event, not only a transient animation",
+);
+assertIncludes(
+  player,
+  "selfParticipantId",
+  "regular Shared Player reactions must associate local reactions with the sender participant instead of an arbitrary active/host participant",
 );
 assertNotIncludes(
   playerSharedPlayerDock,

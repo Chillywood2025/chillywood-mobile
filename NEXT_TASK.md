@@ -16,6 +16,7 @@ Current latest truth:
 - The regular Shared Player comment keyboard/cutoff issue is installed-proved fixed: R3 focused the visible comment input, input/Send moved above Android's keyboard, R3 sent `proof`, and R5 saw `Guest: proof` in Room Comments.
 - Request/approval and post-approval roster convergence are installed-proved on room `NZP627`: R3 tapped `Request Camera`; R5 received a stable `CAMERA REQUEST` card; R5 approved; R5 showed `You` as Host plus `chillywood92` as Speaker; R3 showed self as Speaker plus `user230455` as Host; no device showed only self, no duplicate self bubble appeared, and host/viewer roles did not mix.
 - Remaining blocker: R5 did not render the viewer camera feed during the proof window; it showed an identity-safe approved speaker placeholder plus seated/publish-ready copy. The R3 `React` tap also did not produce an observable host-side reaction/energy marker in screenshots/XML.
+- Source hardening for that final blocker is now in progress/next to prove: receiver-side reactions create a visible local `Reaction` room event plus longer receiver toast, local reaction attribution uses the sender participant first, and approved speaker bubbles without an identity-matched remote track show `Camera preparing` instead of a falsely complete seated placeholder.
 
 Next exact step:
 1. Do not reopen playback, real-media classification, visible comments, keyboard reachability, request/approval, roster convergence, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, or LiveKit backend unless a fresh regression appears.
@@ -23,8 +24,8 @@ Next exact step:
    - keep Play-installed v80/latest OTA on R5/R3;
    - renew both Premium windows through the approved Google Play / RevenueCat sandbox path if expired;
    - use a fresh `Chi'llywood City Lights` room;
-   - prove R3 reaction produces a visible host-side reaction/energy marker;
-   - prove the approved R3 speaker publishes a camera feed that R5 renders under the correct `chillywood92` identity, or add a clear source fix so the host surface says an honest `Camera preparing`/publish-ready state while waiting for the remote track.
+   - prove R3 reaction produces a visible host-side reaction/energy marker or `Reaction` room event;
+   - prove the approved R3 speaker publishes a camera feed that R5 renders under the correct `chillywood92` identity, or that the host surface says an honest `Camera preparing` state while waiting for the identity-matched remote track.
 3. Do not change fullscreen layout, Premium entitlement logic, LiveKit routing/heartbeat/cutoff/server registry, Watch-Party Party Room behavior, Android App Links, Chat/native calls, auth/RLS, billing/provider settings, payouts/cashout, or use sideload/adb install/logout/clear data/uninstall/reinstall.
 
 Superseded current-truth trail retained below for context.

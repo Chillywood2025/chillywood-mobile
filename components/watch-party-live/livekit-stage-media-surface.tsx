@@ -96,6 +96,14 @@ type BubbleGridItem = {
   isCurrentParticipant: boolean;
 };
 
+const getBubblePlaceholderStatus = (item: Pick<BubbleGridItem, "canPublish" | "isRequestingToSpeak" | "role" | "trackRef">) => {
+  if (item.trackRef) return "";
+  if (item.isRequestingToSpeak) return "Request";
+  if (item.role === "host") return "Host";
+  if (item.canPublish) return "Camera preparing";
+  return "Audience";
+};
+
 const isRenderableTrackReference = (trackRef: unknown): trackRef is RenderableLiveKitTrackReference => (
   isTrackReference(trackRef)
 );
@@ -580,7 +588,7 @@ function LiveKitStageMediaContent({
                       {getParticipantInitials(item.label)}
                     </Text>
                     <Text style={styles.bubblePlaceholderStatus} numberOfLines={1}>
-                      {item.isRequestingToSpeak ? "Request" : item.role === "host" ? "Host" : item.canPublish ? "Seated" : "Audience"}
+                      {getBubblePlaceholderStatus(item)}
                     </Text>
                   </View>
                 )}

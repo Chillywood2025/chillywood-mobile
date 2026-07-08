@@ -50,6 +50,7 @@ const {
 } = await importTypeScriptModule("_lib/watch-party/watch-party-live-source-truth.ts");
 
 const playerSource = readFileSync(path.join(root, "app/player/[id].tsx"), "utf8");
+const livekitSurfaceSource = readFileSync(path.join(root, "components/watch-party-live/livekit-stage-media-surface.tsx"), "utf8");
 
 const createProofState = () => ({
   hostAuthority: { isHost: true, source: "proof-room-host" },
@@ -715,8 +716,22 @@ assert(
 assert(
   playerSource.includes("shared-player-reaction-button")
     && playerSource.includes("onPressSharedPlayerQuickReaction")
-    && playerSource.includes('event: "reaction"'),
-  "regular Shared Player viewer reactions must be reachable and broadcast to the room",
+    && playerSource.includes('event: "reaction"')
+    && playerSource.includes("watch-party-live reaction received")
+    && playerSource.includes('author: "Reaction"'),
+  "regular Shared Player viewer reactions must be reachable, broadcast, and visible on receiver devices",
+);
+assert(
+  playerSource.includes("selfParticipantId")
+    && playerSource.indexOf("selfParticipantId")
+      < playerSource.indexOf("activeParticipantId", playerSource.indexOf("selfParticipantId")),
+  "regular Shared Player local reactions must be associated with the sender before falling back to active/host participants",
+);
+assert(
+  livekitSurfaceSource.includes("getBubblePlaceholderStatus(item)")
+    && livekitSurfaceSource.includes("Camera preparing")
+    && !livekitSurfaceSource.includes('item.canPublish ? "Seated"'),
+  "approved Watch-Party Live speakers without identity-matched camera tracks must show camera-preparing, not a complete seated video state",
 );
 assert(
   !playerSource.slice(
@@ -751,6 +766,8 @@ console.log(JSON.stringify({
   hostRequestReviewTargets: true,
   commentSendReachableWithoutShare: true,
   reactionReachableWithoutShare: true,
+  reactionReceiverEventProof: true,
+  approvedSpeakerMissingTrackCameraPreparing: true,
   postApprovalRosterConvergenceGuarded: true,
   helperBackedProof: true,
 }, null, 2));

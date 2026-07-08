@@ -2216,6 +2216,19 @@ export default function PlayerScreen() {
 
     let active = true;
 
+    const pushPresenceToast = (messageRaw: unknown) => {
+      const message = String(messageRaw ?? "").trim();
+      if (!message) return;
+      setLivePresenceEvent(message);
+      if (livePresenceEventTimeoutRef.current) {
+        clearTimeout(livePresenceEventTimeoutRef.current);
+      }
+      livePresenceEventTimeoutRef.current = setTimeout(() => {
+        setLivePresenceEvent(null);
+        livePresenceEventTimeoutRef.current = null;
+      }, 4000);
+    };
+
     const pushReactionBurst = (emojiRaw: unknown) => {
       const emoji = String(emojiRaw ?? "").trim();
       if (!emoji) return;
@@ -2268,7 +2281,7 @@ export default function PlayerScreen() {
         delete partyReactionScaleMapRef.current[id];
         delete partyReactionTranslateMapRef.current[id];
         delete partyReactionOpacityMapRef.current[id];
-      }, 1100);
+      }, 2200);
     };
 
     const bootstrapPartySocial = async () => {
@@ -2884,7 +2897,37 @@ export default function PlayerScreen() {
       });
 
       channel.on("broadcast", { event: "reaction" }, ({ payload }: { payload: Record<string, unknown> }) => {
-        pushReactionBurst(payload?.emoji);
+        const emoji = String(payload?.emoji ?? "").trim();
+        if (!emoji) return;
+        pushReactionBurst(emoji);
+
+        const incomingUserId = String(payload?.userId ?? "").trim();
+        const incomingParticipantId = String(payload?.participantId ?? incomingUserId).trim();
+        const fromCurrentDevice = isCurrentIdentity(incomingUserId) || isCurrentIdentity(incomingParticipantId);
+        if (fromCurrentDevice) return;
+
+        const participant = partyParticipantsRef.current.find((entry) => (
+          entry.id === incomingParticipantId || entry.liveKitIdentity === incomingParticipantId
+        )) ?? null;
+        const authorLabel = resolvePartyParticipantDisplayName({
+          isCurrentUser: false,
+          role: participant?.role ?? "viewer",
+          candidates: [participant?.name, partyMembershipMapRef.current[incomingParticipantId]?.displayName, "Guest"],
+        });
+        const reactionMessage = `${authorLabel} reacted ${emoji}`;
+        pushPresenceToast(reactionMessage);
+        pushPartyOverlayMessage({
+          id: `party-reaction-${incomingParticipantId || incomingUserId || "remote"}-${Date.now()}`,
+          author: "Reaction",
+          body: reactionMessage,
+        });
+        debugLog("player", "watch-party-live reaction received", {
+          roomName: partyId,
+          currentUserId: trackedUserId,
+          participantId: incomingParticipantId || null,
+          userIdPresent: !!incomingUserId,
+          emojiPresent: !!emoji,
+        });
       });
 
       channel.on("broadcast", { event: "message" }, ({ payload }: { payload: Record<string, unknown> }) => {
@@ -5225,8 +5268,13 @@ export default function PlayerScreen() {
     const highEnergy = currentEnergy > 0.7;
     const energyScaleBoost = currentEnergy * 0.24;
 
+    const selfParticipantId = String(partyUserIdRef.current || partySyncUserIdRef.current || "").trim();
     const participantId =
-      activeParticipantId ?? partyParticipants.find((entry) => entry.role === "host")?.id ?? partyParticipants[0]?.id ?? "";
+      selfParticipantId
+      || activeParticipantId
+      || partyParticipants.find((entry) => entry.role === "host")?.id
+      || partyParticipants[0]?.id
+      || "";
     const reactingParticipant = partyParticipants.find((entry) => entry.id === participantId) ?? null;
     if (participantId) {
       markParticipantActive(participantId, 2400);

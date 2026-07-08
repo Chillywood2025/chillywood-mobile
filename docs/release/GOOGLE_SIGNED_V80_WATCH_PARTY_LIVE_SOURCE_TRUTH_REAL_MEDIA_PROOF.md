@@ -6,6 +6,8 @@ Verdict: Partial. Watch-Party Live real-media playback, visible regular comments
 
 Initial source-truth commit: `833520e5ba6fad86160b93df1da45cd510b1c433`.
 
+Final camera/reaction source follow-up: the receiver-side reaction path now creates a visible local `Reaction` room event and a longer receiver toast instead of relying only on a short floating animation. Local reactions are associated with the sender participant before falling back to active/host participants. Approved speaker bubbles without an identity-matched remote camera track now show an honest `Camera preparing` state instead of a falsely complete seated placeholder. This does not change the Shared Player fullscreen rails, Premium, Party Room, LiveKit routing/heartbeat, Android App Links, Chat/native calls, auth/RLS, billing/provider settings, payout, or cashout behavior. Installed proof remains required after OTA.
+
 Android EAS Update production runtime `1.0.0`: group `0d23919f-bedb-40b4-9428-6550bdfd765c`, Android update `019f3da7-dcd6-7732-a757-cb36b1bd7c61`.
 
 Pre-proof hardening follow-up: validation-clean and OTA-published on July 7, 2026 from aligned `origin/main`.
