@@ -74,6 +74,7 @@ const sourceCorpus = [
   watchPartyContentSources,
   migration,
 ].join("\n\n");
+const deliveryClaimsCorpus = [docsCorpus, sourceCorpus].join("\n\n");
 
 const hasTranscodeWorker = (
   exists("supabase/functions/media-transcode/index.ts")
@@ -88,25 +89,34 @@ const hasResumableUpload = /\b(createMultipartUpload|completeMultipartUpload|Upl
 assertIncludes(architecture, "Status: architecture and guard only.", "media delivery architecture doc");
 assertIncludes(architecture, "Transcoding status: not live; no worker exists in this repo.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare custom domain/cache status: target delivery/cache layer for safe playback assets, not deployed by this repo change.", "media delivery architecture doc");
+assertIncludes(architecture, "R2 CLI/API proof status: blocked until R2 is enabled in Cloudflare; no R2 CDN playback is live.", "R2 CLI/API proof status");
+assertIncludes(architecture, "R2 proof bucket status: not created in this pass because Cloudflare R2 is not enabled for the account.", "R2 proof bucket status");
+assertIncludes(architecture, "R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled.", "R2 public exposure status");
 assertIncludes(architecture, "Media bandwidth telemetry status: foundation only, not live.", "media delivery architecture doc");
+assertIncludes(architecture, "Cache savings status: not proved; telemetry/cache proof is required before savings claims.", "cache savings proof status");
 assertIncludes(architecture, "5 GB resumable upload status: not live; current upload is single signed PUT.", "media delivery architecture doc");
 assertIncludes(architecture, "Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domain/cache", "Cloudflare R2 chosen path");
 assertIncludes(architecture, "Cloudflare R2 is the target origin because the owner already has the domain on Cloudflare.", "Cloudflare R2 domain rationale");
 assertIncludes(architecture, "Keep the R2 bucket private by default.", "R2 private bucket policy");
+assertIncludes(architecture, "The planned custom hostname is `media.chillywoodstream.com`.", "Cloudflare custom hostname plan");
 assertIncludes(architecture, "Original/master files are private processing sources.", "media delivery architecture doc");
 assertIncludes(architecture, "Do not enable public access for originals/master files.", "original/master privacy");
 assertIncludes(architecture, "Safe first CDN target is public/demo/ready playback assets only.", "safe public cache target");
 assertIncludes(architecture, "Paid/Premium media needs token/signed CDN access before public CDN delivery.", "paid/Premium CDN signing requirement");
+assertIncludes(architecture, "Do not connect a Cloudflare R2 custom domain directly to a mixed bucket containing private originals, unscanned uploads, or paid/Premium-only media unless Cloudflare token/WAF/Worker access control is already enforcing the private paths before R2 reads.", "mixed bucket custom-domain guardrail");
+assertIncludes(architecture, "The safest first custom-domain target is a separate proof or public-playback surface that contains only approved `playback/public/` assets.", "safe custom-domain target");
+assertIncludes(architecture, "Use long TTLs only for immutable segments and thumbnails, short TTLs for manifests, and no cache for private/original paths.", "cache TTL policy");
+assertIncludes(architecture, "Proof object target: `playback/public/proof/hello.txt`.", "R2 proof object path");
 assertIncludes(architecture, "Supabase/Edge resolver remains the access-control and playback decision layer.", "Supabase/Edge resolver boundary");
 assertIncludes(architecture, "The app must ask the backend resolver for playback; the app must not hard-code R2 or Cloudflare custom-domain decisions.", "app resolver contract");
 assertIncludes(architecture, "Creator-video Watch-Party sources must use the same creator-video playback resolver path as standalone Player.", "media delivery architecture doc");
 assertIncludes(architecture, "HLS/transcoding is a future milestone unless implemented and proved.", "HLS/transcoding status");
 assertIncludes(architecture, "Bandwidth/minutes-watched telemetry remains required before broad rollout.", "egress telemetry requirement");
-assertIncludes(architecture, "MEDIA_ORIGIN_PROVIDER=hetzner_s3 | cloudflare_r2", "config contract");
+assertIncludes(architecture, "MEDIA_ORIGIN_PROVIDER=cloudflare_r2", "config contract");
 assertIncludes(architecture, "MEDIA_DELIVERY_PROVIDER=origin_signed_direct | cloudflare_r2_custom_domain", "config contract");
-assertIncludes(architecture, "MEDIA_CDN_BASE_URL", "config contract");
+assertIncludes(architecture, "MEDIA_CDN_BASE_URL=https://media.chillywoodstream.com", "config contract");
 assertIncludes(architecture, "MEDIA_CDN_SIGNING_MODE=off | token", "config contract");
-assertIncludes(architecture, "MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX", "config contract");
+assertIncludes(architecture, "MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX=playback/public/", "config contract");
 assertIncludes(architecture, "MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED=true", "config contract");
 assertIncludes(architecture, "R2_BUCKET", "config contract");
 assertIncludes(architecture, "R2_ACCOUNT_ID", "config contract");
@@ -128,12 +138,21 @@ if (transcodeLiveClaims.length && !hasTranscodeWorker) {
 }
 
 const cdnLiveClaims = claimSentences(
-  docsCorpus,
-  /\b(CDN|edge cache|signed CDN|CloudFront|Bunny|Cloudflare CDN)\b/i,
-  /\b(live|active|deployed|proved|closed|production-ready)\b/i,
+  deliveryClaimsCorpus,
+  /\b(CDN|edge cache|signed CDN|CloudFront|Bunny|Cloudflare CDN|Cloudflare custom domain|custom-domain\/cache|media\.chillywoodstream\.com)\b/i,
+  /\b(live|active|deployed|proved|closed|production-ready|enabled|connected|serving|working)\b/i,
 );
 if (cdnLiveClaims.length && !hasCdnPlaybackPath) {
   fail(`docs claim CDN playback is live without CDN playback path: ${cdnLiveClaims.join(" | ")}`);
+}
+
+const r2CdnLiveClaims = claimSentences(
+  deliveryClaimsCorpus,
+  /\b(R2 CDN|R2 custom domain|Cloudflare custom domain|custom-domain\/cache|media\.chillywoodstream\.com)\b/i,
+  /\b(live|active|deployed|proved|closed|production-ready|enabled|connected|serving|working)\b/i,
+);
+if (r2CdnLiveClaims.length) {
+  fail(`R2 CDN/custom-domain delivery must not be claimed live before proof: ${r2CdnLiveClaims.join(" | ")}`);
 }
 
 const streamRequiredClaims = claimSentences(
@@ -181,7 +200,7 @@ for (const sentence of splitSentences(docsCorpus)) {
 }
 
 const scaledMediaClaims = claimSentences(
-  docsCorpus,
+  deliveryClaimsCorpus,
   /\b(scaled media delivery|scalable media delivery|low-egress video|media delivery scale)\b/i,
   /\b(live|active|proved|closed|production-ready)\b/i,
 );
@@ -190,12 +209,21 @@ if (scaledMediaClaims.length && !hasPlaybackTelemetry) {
 }
 
 const egressProtectionClaims = claimSentences(
-  docsCorpus,
+  deliveryClaimsCorpus,
   /\b(egress|cost protection|low-egress|broad rollout)\b/i,
   /\b(live|active|proved|closed|production-ready|protected|ready)\b/i,
 );
 if (egressProtectionClaims.length && !/Bandwidth\/minutes-watched telemetry remains required before broad rollout\./.test(architecture)) {
   fail(`egress/cost protection cannot be claimed without telemetry plan: ${egressProtectionClaims.join(" | ")}`);
+}
+
+const cacheSavingsClaims = claimSentences(
+  deliveryClaimsCorpus,
+  /\b(cache savings|cache hit|egress savings|cost savings|CF-Cache-Status|cache proof)\b/i,
+  /\b(live|active|proved|closed|production-ready|achieved|reduced|saving|saves)\b/i,
+);
+if (cacheSavingsClaims.length && !hasPlaybackTelemetry) {
+  fail(`cache/egress savings cannot be claimed without telemetry and cache proof: ${cacheSavingsClaims.join(" | ")}`);
 }
 
 const resumableClaims = claimSentences(
@@ -229,7 +257,12 @@ assertNotMatches(docsCorpus, /\bFacebook-scale\b/i, "media architecture docs");
 assertNotMatches(docsCorpus, /\bprivate backbone\b/i, "media architecture docs");
 assertNotMatches(docsCorpus, /\bpeering\b/i, "media architecture docs");
 
-const secretScanCorpus = [architecture, read("scripts/guard-media-delivery-architecture.mjs"), packageJson].join("\n");
+const secretScanCorpus = [
+  architecture,
+  read("scripts/guard-media-delivery-architecture.mjs"),
+  packageJson,
+  sourceCorpus,
+].join("\n");
 [
   /\bAKIA[0-9A-Z]{16}\b/,
   /\bASIA[0-9A-Z]{16}\b/,
@@ -239,8 +272,14 @@ const secretScanCorpus = [architecture, read("scripts/guard-media-delivery-archi
   /\bR2_ACCOUNT_ID\s*=\s*[A-Za-z0-9_-]+/,
   /\bR2_BUCKET\s*=\s*[A-Za-z0-9_.-]+/,
   /\bR2_S3_ENDPOINT\s*=\s*https?:\/\//i,
-  /\bMEDIA_CDN_BASE_URL\s*=\s*https?:\/\//i,
 ].forEach((pattern) => assertNotMatches(secretScanCorpus, pattern, "changed media delivery docs/source"));
+
+for (const match of secretScanCorpus.matchAll(/\bMEDIA_CDN_BASE_URL\s*=\s*(https?:\/\/[^\s`'"]+)/gi)) {
+  const configuredUrl = match[1];
+  if (configuredUrl !== "https://media.chillywoodstream.com") {
+    fail(`changed media delivery docs/source must not include real MEDIA_CDN_BASE_URL values other than the approved public custom-domain contract: ${configuredUrl}`);
+  }
+}
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "free VOD policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "Premium VOD policy");
