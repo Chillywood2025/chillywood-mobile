@@ -2,6 +2,14 @@
 
 # Watch-Party Live Final Camera/Reaction Proof
 
+Latest foreground media-bubble update:
+- Source commit `f9882fc3fcbd23e7765d17f432c47a78ed056f5c` is pushed to `origin/main`.
+- Android EAS Update production runtime `1.0.0`: group `ecd5dfde-3650-40e9-a3c9-8431ed8806ec`, Android update `019f42a7-167d-70bf-a8f1-fea8d81469c3`, message `Fix Watch-Party foreground media bubbles f9882fc3`.
+- Root cause of the latest “bubbles but no feed” screenshots: the roster/role source was correct, but Watch-Party LiveKit could still be disabled by transient Android foreground `blur` events while the app stayed visible, leaving only membership placeholder bubbles. Publish-capable host/speaker bubbles also showed the role label before `Camera preparing`, which made missing track state look inert instead of actively preparing.
+- Source now keeps Shared Player / LiveKit media active while AppState remains `active`, even through keyboard/system/wireless-debug foreground blur events. Publish-capable no-track bubbles now show `Camera preparing` before plain role labels. The regular Shared Player lower dock auto-scrolls to the comment composer while typing so the keyboard does not leave the composer cut off.
+- User installed confirmation after this pass: “It works now.” If a launch-quality artifact is required, capture one short fresh OTA pickup proof using this update group before changing source again.
+- Do not reopen fullscreen layout, Premium, Watch-Party Party Room source semantics, LiveKit routing/heartbeat/cutoffs, App Links, Chat/native, auth/RLS, billing, payout/cashout, sideload/install/logout/clear-data/uninstall/reinstall.
+
 Current latest truth:
 - Watch-Party Live Shared Player remains Partial, but the old comment-composer blocker is now installed-proved fixed.
 - Governing doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
