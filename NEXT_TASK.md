@@ -1,6 +1,33 @@
 # NEXT TASK
 
-# Watch-Party Live Comment Composer OTA Proof
+# Watch-Party Live Final Camera/Reaction Proof
+
+Current latest truth:
+- Watch-Party Live Shared Player remains Partial, but the old comment-composer blocker is now installed-proved fixed.
+- Governing doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
+- Latest proof artifact folder: `/tmp/google-play-internal-v80-watch-party-live-lower-dock-touch-proof-20260708-050018/installed-proof/resume-20260708-055013/`.
+- Repo alignment after the source/doc/OTA lane: `HEAD == origin/main == 052f5c2e3fd526d795ec05259efd4a786f54769b`.
+- Source commit for the keyboard-height fix: `eaee449b3bc2236abee02f18443094e65c0a999b`.
+- Android EAS Update production runtime `1.0.0`: group `d34905b5-ecd6-4c72-b32d-32a173852b89`, Android update `019f414f-f0de-7fe6-b23e-f1d1821b5cfb`, message `Fix Watch-Party Live comment keyboard height eaee449b`.
+- Fresh installed room `NZP627` used strict real media `Chi'llywood City Lights`, `sourceType=creator_video`, `sourceId=c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, `classification=real-media`.
+- R3 was recovered through wireless ADB at `10.0.0.27:42069`; R5 stayed USB-visible.
+- R5 renewed Premium through the approved Google Play / RevenueCat sandbox path after normal sandbox expiry; R3 joined the same room without a Premium gate. No manual entitlement or bypass was used.
+- Backend LiveKit health stayed green: `eligibleServerCount=1`, heartbeat age under 120 seconds, no recent `no_eligible_livekit_server`, and active room/publisher metrics were present.
+- The regular Shared Player comment keyboard/cutoff issue is installed-proved fixed: R3 focused the visible comment input, input/Send moved above Android's keyboard, R3 sent `proof`, and R5 saw `Guest: proof` in Room Comments.
+- Request/approval and post-approval roster convergence are installed-proved on room `NZP627`: R3 tapped `Request Camera`; R5 received a stable `CAMERA REQUEST` card; R5 approved; R5 showed `You` as Host plus `chillywood92` as Speaker; R3 showed self as Speaker plus `user230455` as Host; no device showed only self, no duplicate self bubble appeared, and host/viewer roles did not mix.
+- Remaining blocker: R5 did not render the viewer camera feed during the proof window; it showed an identity-safe approved speaker placeholder plus seated/publish-ready copy. The R3 `React` tap also did not produce an observable host-side reaction/energy marker in screenshots/XML.
+
+Next exact step:
+1. Do not reopen playback, real-media classification, visible comments, keyboard reachability, request/approval, roster convergence, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, or LiveKit backend unless a fresh regression appears.
+2. Focus the next lane on the final installed camera/reaction proof only:
+   - keep Play-installed v80/latest OTA on R5/R3;
+   - renew both Premium windows through the approved Google Play / RevenueCat sandbox path if expired;
+   - use a fresh `Chi'llywood City Lights` room;
+   - prove R3 reaction produces a visible host-side reaction/energy marker;
+   - prove the approved R3 speaker publishes a camera feed that R5 renders under the correct `chillywood92` identity, or add a clear source fix so the host surface says an honest `Camera preparing`/publish-ready state while waiting for the remote track.
+3. Do not change fullscreen layout, Premium entitlement logic, LiveKit routing/heartbeat/cutoff/server registry, Watch-Party Party Room behavior, Android App Links, Chat/native calls, auth/RLS, billing/provider settings, payouts/cashout, or use sideload/adb install/logout/clear data/uninstall/reinstall.
+
+Superseded current-truth trail retained below for context.
 
 Current latest truth:
 - Watch-Party Live Shared Player is Partial after the newest installed comment-composer screenshot.
