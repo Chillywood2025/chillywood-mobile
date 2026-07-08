@@ -3456,13 +3456,32 @@ export default function PlayerScreen() {
 
     const existingMembership = partyMembershipMapRef.current[participantId];
     const clearingRequestVersion = pendingPartySeatRequestsRef.current[participantId]?.requestVersion ?? "";
-    const nextMembership = await setPartyParticipantState(partyId, participantId, {
+    let nextMembership = await setPartyParticipantState(partyId, participantId, {
       role: existingMembership?.role ?? "viewer",
       stageRole: options.stageRole,
       canSpeak: options.canSpeak,
       isMuted: options.isMuted ?? (options.canSpeak ? existingMembership?.isMuted : false),
       membershipState: existingMembership?.membershipState ?? "active",
     }).catch(() => null);
+
+    if (!nextMembership) {
+      const serverPersisted = await enforceLiveKitParticipantState({
+        surface: "watch-party-live",
+        roomName: partyId,
+        targetParticipantIdentity: participantId,
+        metadata: {
+          source: "watch-party-live-seat-control",
+          persistMembershipState: true,
+          stageRole: options.stageRole,
+          canSpeak: options.canSpeak,
+          isMuted: options.isMuted ?? existingMembership?.isMuted ?? false,
+        },
+      }).catch(() => false);
+      if (serverPersisted) {
+        const refreshedSnapshot = await refreshPartyMembershipSnapshot().catch(() => null);
+        nextMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === participantId) ?? null;
+      }
+    }
 
     if (!nextMembership) {
       debugLog("livekit", "blocked watch-party-live seat broadcast before membership authority persisted", {
@@ -3533,6 +3552,7 @@ export default function PlayerScreen() {
     inWatchParty,
     partyId,
     partyUserId,
+    refreshPartyMembershipSnapshot,
     syncCurrentPartyPresence,
   ]);
 

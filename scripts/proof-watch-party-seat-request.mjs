@@ -361,6 +361,12 @@ assert(
   "approval persistence local clear must use the current request version",
 );
 assert(
+  playerSource.includes('surface: "watch-party-live"')
+    && playerSource.includes("persistMembershipState: true")
+    && playerSource.includes("refreshedSnapshot?.memberships.find((membership) => membership.userId === participantId)"),
+  "Watch-Party Live approval must fall back to server-backed membership persistence before claiming speaker state",
+);
+assert(
   playerSource.includes('clearPendingPartySeatRequest(participant.id, "seat-request-denied", clearingRequestVersion)'),
   "deny local clear must use the current request version",
 );
