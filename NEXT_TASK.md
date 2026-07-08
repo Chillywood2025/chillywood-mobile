@@ -12,6 +12,7 @@ Current latest truth:
 - Later room `PKL35Z` proved comment/reaction/request/approval reachability, but the newest user photos show the approved-state roster/feed is still unstable: one phone can show only self/no remote bubbles, another can show `SPEAKER`/`You` plus a host bubble for the same displayed identity.
 - Current source follow-up makes durable active room membership the base Watch-Party Live bubble roster. Realtime presence can enrich display, speaking, preview, and LiveKit identity fields, but it cannot delete active members that membership says are still in the room. Role precedence is room host / membership host first, approved speaker membership or `canSpeak` second, and presence only as fallback. The Player resolves current/tapped participants from the merged roster, passes identity aliases into the LiveKit bubble surface, and logs membership/presence/rendered-bubble identity diagnostics so a self-only or duplicate bubble state is proof-detectable.
 - Source commit `1e3d24401d8b6953ca7b47385925a995b2e09390` is on `origin/main` and OTA-published to Android production runtime `1.0.0` as update group `fc45e3b9-69ee-4303-90b8-2d027397f2f3`, Android update `019f3f77-6bb8-7d48-b8f5-74c1fb60d455`.
+- Installed proof after that OTA is blocked at device preflight: R5 is visible over USB; R3 is not visible over USB or ADB. The prior wireless endpoint `10.0.0.27:44639` returns `Host is down`, Bonjour briefly advertised `adb-R3CXA0DS5JV-GkXqSD` but resolve/connect did not succeed, `adb mdns services` is empty after ADB restart, and `10.0.0.27` does not answer ping.
 - This is not Closed until a fresh OTA and installed proof show stable host/viewer bubbles, no confusing `You HOST`/self-only collapse, matching speaker/canPublish authority, and identity-safe approved feed/fallback after approval.
 
 Superseded historical trail retained for context:
@@ -44,8 +45,9 @@ Superseded historical trail retained for context:
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
 
 Next exact step:
-1. Rerun only the focused installed packet on Play-installed devices after the latest OTA loads: real-media Shared Player, request/approval, R3 speaker/canPublish, stable bubbles on both phones, no self-only or duplicate host/self collapse, and identity-safe approved feed/fallback.
-2. Do not reopen playback, real-media classification, regular comments visibility, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, or backend LiveKit routing unless a fresh regression appears.
+1. Recover R3 visibility without sideload, install, uninstall, clear data, logout, or app reset. Preferred: unlock R3, confirm Wireless debugging is on, provide the current IP address and Port line from Wireless debugging if mDNS does not expose it; USB can also be used if macOS sees the device and RSA is accepted.
+2. Rerun only the focused installed packet on Play-installed devices after the latest OTA loads: real-media Shared Player, request/approval, R3 speaker/canPublish, stable bubbles on both phones, no self-only or duplicate host/self collapse, and identity-safe approved feed/fallback.
+3. Do not reopen playback, real-media classification, regular comments visibility, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, or backend LiveKit routing unless a fresh regression appears.
 
 # Android App Links / Domain Association Closed
 

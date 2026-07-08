@@ -121,11 +121,13 @@ The July 7 pre-proof hardening follow-up reran the same validation set. `npm run
 
 The post-approval roster convergence follow-up reran the validation set before OTA. `npm run check:livekit-routing-health` used the local proof env and returned `eligibleServerCount=1`, `heartbeatAgeSeconds=30`, `chillywood-prod-01.status=active`, `livekitNodeStatus=healthy`, and no rejection reasons; the local env file still emitted its known parse warning. `npm run proof:watch-party-seat-request` now reports `postApprovalRosterConvergenceGuarded=true`. `npm run guard:watch-party-livekit`, `npx tsc --noEmit`, `deno check supabase/functions/livekit-token/index.ts`, diff checks, and changed-file secret scan passed. Android EAS Update group `fc45e3b9-69ee-4303-90b8-2d027397f2f3`, Android update `019f3f77-6bb8-7d48-b8f5-74c1fb60d455`, runtime `1.0.0`, was published from source commit `1e3d24401d8b6953ca7b47385925a995b2e09390`.
 
+Installed proof attempt after that OTA stopped at device preflight. R5 was visible over USB as `R5CR120QCBF`; R3 was not visible in `adb devices -l`. Reconnecting the prior wireless endpoint `10.0.0.27:44639` returned `Host is down`; Bonjour initially advertised `_adb-tls-connect` service `adb-R3CXA0DS5JV-GkXqSD`, but service resolution/connect did not succeed and a later `adb mdns services` after `adb kill-server` / `adb start-server` returned empty. macOS USB readback showed R5 only, and `10.0.0.27` did not answer ping. No app proof packet was started, no Premium renewal was attempted, and no installed closure is claimed from this attempt.
+
 ## Remaining Installed Proof
 
 Current installed-proof status:
 
-- R3 is now visible over wireless ADB as `10.0.0.27:44639`; device readback maps to the expected R3 handset.
+- Earlier installed packets used R3 over wireless ADB as `10.0.0.27:44639`; device readback mapped to the expected R3 handset. The latest post-roster-OTA proof attempt could not reuse that endpoint because it returned `Host is down`.
 - R5 and R3 both read back package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `80`, versionName `1.0.0`.
 - R5 read back `Premium is active.`.
 - R3 completed the approved Google Play / RevenueCat sandbox Premium renewal and read back `Premium is active.`.
@@ -140,9 +142,10 @@ Current installed-proof status:
 - Final pre-proof reachability follow-up moves the regular Shared Player control deck outside the hidden auto-hide overlay gate and keeps compact comments focused on input/send. Installed proof remains required after the fresh OTA from this source.
 - Strict installed proof is Partial: explicit `Request Camera` / approval reachability has supporting proof, but newest installed photos show the approved roster/bubble/feed state can collapse or duplicate identities. The current source follow-up is OTA-published and must be installed-proved before closure.
 - The current source proof now rejects the photo failure mode: an approved two-member room may not render only self, may not drop host/viewer on one device because presence is stale, may not duplicate self fallback, and may not let stale presence override host/speaker membership roles. Installed proof remains required after OTA.
+- The latest installed proof attempt is blocked by R3 device visibility before app navigation. Recover R3 by USB or the current Wireless debugging IP/port, then rerun only the focused post-approval roster/bubble proof.
 - no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, source change, or fullscreen layout change was performed.
 
 Next exact proof/fix step:
 
-1. Validate, push, and OTA the current roster/bubble source follow-up.
+1. Recover R3 visibility without sideload, install, uninstall, clear data, logout, or app reset. Use USB if macOS can see the device and RSA is accepted, or provide the current Wireless debugging IP address and Port line if mDNS does not expose it.
 2. Rerun the focused installed packet with strict real media and Premium-active Play-installed devices: request/approval, matching speaker/canPublish authority, stable bubbles on both phones, no self-only or duplicate host/self collapse, identity-safe approved feed/fallback, locked viewer controls, fullscreen rails unchanged, and return-to-room.
