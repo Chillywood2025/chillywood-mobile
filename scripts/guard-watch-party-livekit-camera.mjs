@@ -1577,6 +1577,16 @@ assertIncludes(
   "regular Shared Player lower controls must stay above Android touch layers",
 );
 assertIncludes(
+  player,
+  "titleParticipantFeedDock: {\n    marginTop: 4,\n    position: \"relative\",\n    zIndex: 120,\n    elevation: 120,",
+  "regular Shared Player lower dock must own the highest Android touch layer",
+);
+assertIncludes(
+  player,
+  "sharedAndroidVideoTapTarget: {\n    ...StyleSheet.absoluteFillObject,\n    bottom: 56,\n    zIndex: 1,\n    elevation: 1,",
+  "regular Shared Player video tap target must stay below the lower dock touch layer",
+);
+assertIncludes(
   playerWatchPartyHostControls,
   "Use the review card to approve or deny this camera request.",
   "Player Watch-Party pending inline tools must defer approval to the stable review card",

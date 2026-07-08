@@ -17,6 +17,7 @@ Current latest truth:
 - Installed proof on room `W5AZ7B` after that OTA recovered R3 through wireless ADB and confirmed both devices could reach the Shared Player, but focusing the R3 comment input still left the composer hidden behind the Android keyboard while the action row remained visible.
 - Source commit `cec243533fff7d6859a3397a8a055aa6558a01f6` hides the regular Shared Player action row and controls menu while `sharedPartyCommentsKeyboardActive` is true, so the visible comments composer/Send row is prioritized above the keyboard. Fullscreen rails remain unchanged.
 - Android EAS Update production runtime `1.0.0` was published from `cec24353` as group `4c88f779-570a-4fe8-8089-66eeafee4a6b`, Android update `019f410d-cd39-7875-9253-a6575ce09d8c`, message `Fix Watch-Party Live comment keyboard priority cec24353`.
+- Installed rerun after that OTA recovered R3 through wireless ADB at `10.0.0.27:42069` and kept R5 visible over USB. The devices reached the Shared Player, but visible lower-dock controls could still be inert: tapping the regular `Party Room`, `Room Comments`, and comment input surfaces did not reliably focus/navigate. Source root cause: the Android shared-video tap target still had a higher native touch layer than the regular lower dock. The current source follow-up keeps fullscreen unchanged, lowers `sharedAndroidVideoTapTarget` under the dock, and raises the existing regular lower dock/scroll/content layers so comments, reactions, request-camera, room, and controls buttons can receive taps.
 
 Superseded historical trail retained for context:
 - Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published through the real-media playback lane. Installed proof remains Partial, but the real-media playback blocker is resolved: both R5 and R3 rendered actual video in the same Shared Player on the fresh OTA. A July 7 camera-request packet then narrowed the remaining blocker to installed Shared Player camera-request/comment-reaction reachability and request persistence: tapping the viewer's own audience bubble/card did not produce a visible pending request, and the host never received a review/approval surface.
@@ -48,8 +49,8 @@ Superseded historical trail retained for context:
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
 
 Next exact step:
-1. Load Android OTA group `4c88f779-570a-4fe8-8089-66eeafee4a6b` / update `019f410d-cd39-7875-9253-a6575ce09d8c` on both Play-installed devices.
-2. Rerun only the focused installed packet on Play-installed devices after that OTA loads: open `Chi'llywood City Lights`, confirm carry-forward playback/roster basics, focus the visible bottom comment composer, verify the action row is suppressed and the composer/Send row is visible above the keyboard, send a viewer comment, and confirm host receipt.
+1. Commit/push the lower-dock Android touch-layer source follow-up, publish a fresh Android OTA from aligned `origin/main`, and load it on both Play-installed devices.
+2. Rerun only the focused installed packet on Play-installed devices after that OTA loads: open `Chi'llywood City Lights`, confirm carry-forward playback/roster basics, tap the visible lower-dock controls, focus the visible bottom comment composer, verify the composer/Send row is visible and tappable above the keyboard, send a viewer comment, and confirm host receipt.
 3. Do not reopen playback, real-media classification, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, LiveKit backend, or roster convergence unless a fresh regression appears.
 
 # Android App Links / Domain Association Closed

@@ -10396,8 +10396,8 @@ const styles = StyleSheet.create({
   sharedAndroidVideoTapTarget: {
     ...StyleSheet.absoluteFillObject,
     bottom: 56,
-    zIndex: 4,
-    elevation: 4,
+    zIndex: 1,
+    elevation: 1,
     backgroundColor: "transparent",
   },
   sharedPlayerFullscreenHitTarget: {
@@ -11423,6 +11423,9 @@ const styles = StyleSheet.create({
   },
   titleParticipantFeedDock: {
     marginTop: 4,
+    position: "relative",
+    zIndex: 120,
+    elevation: 120,
     borderRadius: 22,
     borderWidth: 0,
     backgroundColor: "rgba(8,10,18,0.46)",
@@ -11435,11 +11438,15 @@ const styles = StyleSheet.create({
   },
   titleParticipantFeedDockScroll: {
     maxHeight: 430,
+    zIndex: 121,
+    elevation: 121,
   },
   titleParticipantFeedDockContent: {
     paddingHorizontal: 10,
     paddingTop: 10,
     paddingBottom: 28,
+    zIndex: 122,
+    elevation: 122,
   },
   titleParticipantFeedDockContentKeyboard: {
     paddingBottom: 96,

@@ -239,3 +239,5 @@ Manual proof items:
 ## 9. July 7, 2026 Watch-Party Live Control Reachability Note
 
 The Watch-Party Live Shared Player reachability fix adds explicit regular-player controls for viewer `Request Camera`, room reaction, and stable comment input/send proof targets inside the existing lower dock/comment structure. This is permitted by the lock because the shared content remains at the top, people/LiveKit bubbles remain below the content, visible comments remain visible in the approved lower placement, and fullscreen still uses the existing left comments rail, center video surface, and right LiveKit bubble rail.
+
+July 8, 2026 touch-layer note: regular non-fullscreen Shared Player fixes may adjust z-index/elevation within the existing lower dock and Android shared-video tap target so visible lower controls can receive touches. This is layout-lock compliant only when the shared content stays at the top, people/participants stay below the content, visible comments remain in the approved lower placement, and the fullscreen left comments rail / center video / right LiveKit bubble rail stay unchanged.

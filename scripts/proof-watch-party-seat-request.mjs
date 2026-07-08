@@ -665,6 +665,11 @@ assert(
   "regular Shared Player lower dock must be scrollable and keyboard-safe so comments are not cut off",
 );
 assert(
+  playerSource.includes('titleParticipantFeedDock: {\n    marginTop: 4,\n    position: "relative",\n    zIndex: 120,\n    elevation: 120,')
+    && playerSource.includes('sharedAndroidVideoTapTarget: {\n    ...StyleSheet.absoluteFillObject,\n    bottom: 56,\n    zIndex: 1,\n    elevation: 1,'),
+  "regular Shared Player lower dock must sit above the Android shared-video tap target so comments/reactions/request controls remain reachable",
+);
+assert(
   playerSource.includes("const sharedPartyCommentsKeyboardActive = isSharedPartyPlayback && !isPlayerFullscreen && watchPartyCommentKeyboardOpen;")
     && playerSource.includes("setWatchPartyCommentKeyboardOpen(true);")
     && playerSource.includes("setPartyCommentsOpen(true);"),

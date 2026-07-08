@@ -67,6 +67,8 @@ July 7 regular Shared Player proof update: non-fullscreen Shared Player comments
 
 July 8 regular Shared Player keyboard note: the non-fullscreen lower dock may scroll, add keyboard-safe bottom padding, and hide regular action/control rows while the comment keyboard is active so the visible comment composer and Send button are not clipped by Android keyboard or bottom inset. This does not change fullscreen. The fullscreen left comments rail, center shared video surface, and right LiveKit bubble rail remain the same three-zone row.
 
+July 8 regular Shared Player touch-layer note: non-fullscreen Android touch priority may be adjusted so the visible lower dock sits above the shared-video tap target. This is not a fullscreen layout change. The fullscreen left comments rail, center shared video surface, and right LiveKit bubble rail remain the same three-zone row.
+
 Repo-side validation passed. EAS production candidate update group `40b451bc-f4fc-4929-9052-46baa8cff145` downloaded and applied on the Play-installed `R5CR120QCBF` runtime `1.0.0`; user visual confirmation reported the shared-player fullscreen view works after the final right-rail reuse fix.
 
 June 10 scroll-stabilization update:
