@@ -63,6 +63,18 @@ const partyRoomWatchTogether = sliceBetween(
   "const onPickPartyRoomCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {",
   "Party Room Watch Together handler boundary",
 );
+const partyRoomSharedPlayerMainCta = sliceBetween(
+  partyRoom,
+  'testID="watch-party-open-shared-player-button"',
+  '<Text style={styles.watchCTAText}',
+  "Party Room main Shared Player CTA boundary",
+);
+const partyRoomSharedPlayerDockAction = sliceBetween(
+  partyRoom,
+  'testID="watch-party-action-player-button"',
+  '<MaterialIcons name="play-arrow"',
+  "Party Room action dock Shared Player button boundary",
+);
 const playerFallbackHandler = sliceBetween(
   player,
   "const onWatchPartyLiveKitFallback = useCallback(",
@@ -212,6 +224,36 @@ assertIncludes(
   player,
   "watch-party-live media source classification",
   "Player runtime must log Watch-Party Live media classification before installed proof",
+);
+assertIncludes(
+  partyRoom,
+  'testID="watch-party-open-shared-player-button"',
+  "Party Room main Open Shared Player CTA must expose a stable installed-proof testID",
+);
+assertIncludes(
+  partyRoomSharedPlayerMainCta,
+  "onPress={onWatchTogether}",
+  "Party Room main Open Shared Player CTA must call the real shared-player handoff handler",
+);
+assertIncludes(
+  partyRoomSharedPlayerMainCta,
+  "disabled={watchPartyLiveOpening}",
+  "Party Room main Open Shared Player CTA must remain guarded while opening",
+);
+assertIncludes(
+  partyRoom,
+  'testID="watch-party-action-player-button"',
+  "Party Room action dock Player button must expose a stable installed-proof testID",
+);
+assertIncludes(
+  partyRoomSharedPlayerDockAction,
+  "onPress={onWatchTogether}",
+  "Party Room action dock Player button must call the real shared-player handoff handler",
+);
+assertIncludes(
+  partyRoomSharedPlayerDockAction,
+  "disabled={watchPartyLiveOpening}",
+  "Party Room action dock Player button must remain guarded while opening",
 );
 assertIncludes(
   player,

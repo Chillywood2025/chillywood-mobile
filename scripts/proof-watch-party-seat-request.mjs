@@ -50,6 +50,7 @@ const {
 } = await importTypeScriptModule("_lib/watch-party/watch-party-live-source-truth.ts");
 
 const playerSource = readFileSync(path.join(root, "app/player/[id].tsx"), "utf8");
+const partyRoomSource = readFileSync(path.join(root, "app/watch-party/[partyId].tsx"), "utf8");
 const livekitSurfaceSource = readFileSync(path.join(root, "components/watch-party-live/livekit-stage-media-surface.tsx"), "utf8");
 
 const createProofState = () => ({
@@ -721,6 +722,21 @@ assert(
     && playerSource.includes('author: "Reaction"'),
   "regular Shared Player viewer reactions must be reachable, broadcast, and visible on receiver devices",
 );
+const partyRoomSharedPlayerMainCta = partyRoomSource.slice(
+  partyRoomSource.indexOf('testID="watch-party-open-shared-player-button"'),
+  partyRoomSource.indexOf("<Text style={styles.watchCTAText}", partyRoomSource.indexOf('testID="watch-party-open-shared-player-button"')),
+);
+const partyRoomSharedPlayerDockAction = partyRoomSource.slice(
+  partyRoomSource.indexOf('testID="watch-party-action-player-button"'),
+  partyRoomSource.indexOf('<MaterialIcons name="play-arrow"', partyRoomSource.indexOf('testID="watch-party-action-player-button"')),
+);
+assert(
+  partyRoomSharedPlayerMainCta.includes("onPress={onWatchTogether}")
+    && partyRoomSharedPlayerMainCta.includes("disabled={watchPartyLiveOpening}")
+    && partyRoomSharedPlayerDockAction.includes("onPress={onWatchTogether}")
+    && partyRoomSharedPlayerDockAction.includes("disabled={watchPartyLiveOpening}"),
+  "Party Room Shared Player entry buttons must expose stable testID taps wired to the real guarded handoff handler",
+);
 assert(
   playerSource.includes("selfParticipantId")
     && playerSource.indexOf("selfParticipantId")
@@ -769,5 +785,6 @@ console.log(JSON.stringify({
   reactionReceiverEventProof: true,
   approvedSpeakerMissingTrackCameraPreparing: true,
   postApprovalRosterConvergenceGuarded: true,
+  partyRoomSharedPlayerTestIds: true,
   helperBackedProof: true,
 }, null, 2));

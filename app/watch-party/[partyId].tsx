@@ -3124,6 +3124,8 @@ export default function WatchPartyRoomScreen() {
             </View>
           </View>
           <TouchableOpacity
+            testID="watch-party-open-shared-player-button"
+            accessibilityLabel="Open Shared Player"
             style={[styles.watchCTA, watchPartyLiveOpening && styles.watchCTADisabled]}
             onPress={onWatchTogether}
             disabled={watchPartyLiveOpening}
@@ -3143,6 +3145,8 @@ export default function WatchPartyRoomScreen() {
       <View style={styles.partyRoomActionDockCard}>
         <View style={styles.partyRoomActionDock}>
           <TouchableOpacity
+            testID="watch-party-action-player-button"
+            accessibilityLabel="Open Shared Player"
             style={[
               styles.partyRoomDockButton,
               styles.partyRoomDockButtonPrimary,
