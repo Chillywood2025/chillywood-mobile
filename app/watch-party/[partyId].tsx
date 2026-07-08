@@ -2141,7 +2141,7 @@ export default function WatchPartyRoomScreen() {
           ? "speaker"
           : "viewer";
 
-      const joinResult = await prepareLiveKitJoinBoundary({
+      void prepareLiveKitJoinBoundary({
         surface: "watch-party-live",
         roomName: nextPartyId,
         participantIdentity,
@@ -2154,35 +2154,27 @@ export default function WatchPartyRoomScreen() {
           sourceId: targetSourceId,
           source: "party-room-watch-party-live",
         },
-      });
-
-      if (joinResult.status === "ready") {
-        debugLog("livekit", "prepared watch-party-live join contract", {
-          roomName: joinResult.roomName,
-          endpoint: joinResult.endpoint,
-          participantRole: joinResult.participantRole,
-          requestedGrants: joinResult.requestedGrants,
-        });
-      } else {
-        debugLog("livekit", "watch-party-live join contract unavailable", {
+      }).then((joinResult) => {
+        if (joinResult.status === "ready") {
+          debugLog("livekit", "prepared watch-party-live join contract", {
+            roomName: joinResult.roomName,
+            endpoint: joinResult.endpoint,
+            participantRole: joinResult.participantRole,
+            requestedGrants: joinResult.requestedGrants,
+          });
+          return;
+        }
+        debugLog("livekit", "watch-party-live prewarm unavailable; player will retry", {
           reason: joinResult.reason,
           roomName: joinResult.roomName,
           endpoint: joinResult.endpoint,
         });
-        if (joinResult.reason === "request_failed" || joinResult.reason === "invalid_response") {
-          reportRuntimeError("livekit-watch-party-contract", new Error(joinResult.message), {
-            reason: joinResult.reason,
-            roomName: joinResult.roomName,
-          });
-        }
-        resetWatchPartyLiveOpening();
-        setPartyRoomCameraPreviewSuppressed(false);
-        Alert.alert(
-          "Live feed unavailable",
-          joinResult.message || "The LiveKit room did not finish preparing. Stay in the room and try again.",
-        );
-        return;
-      }
+      }).catch((error) => {
+        debugLog("livekit", "watch-party-live prewarm failed; player will retry", {
+          message: error instanceof Error ? error.message : "unknown",
+          roomName: nextPartyId,
+        });
+      });
 
       setPartyRoomCameraPreviewSuppressed(true);
 

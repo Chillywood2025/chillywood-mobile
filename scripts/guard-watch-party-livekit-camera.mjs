@@ -855,17 +855,20 @@ assertIncludes(
   "const allowLocalCameraPreview = isNativeCameraPlatform && isFocused && !partyRoomCameraPreviewSuppressed;",
   "Party Room local preview focus/suppression gate",
 );
-assertBefore(
+assertNotIncludes(
   partyRoomWatchTogether,
-  "const joinResult = await prepareLiveKitJoinBoundary({",
-  "setPartyRoomCameraPreviewSuppressed(true);",
-  "Party Room must not suppress expo-camera preview before the LiveKit handoff is ready.",
+  "await prepareLiveKitJoinBoundary({",
+  "Party Room Shared Player entry must not await LiveKit prewarm before routing to Player",
 );
-assertBefore(
+assertNotIncludes(
   partyRoomWatchTogether,
-  "setPartyRoomCameraPreviewSuppressed(false);",
   "\"Live feed unavailable\"",
-  "Party Room must restore expo-camera preview before reporting an unavailable LiveKit handoff.",
+  "Party Room Shared Player entry must not turn LiveKit prewarm into a blocking alert",
+);
+assertIncludes(
+  partyRoomWatchTogether,
+  "watch-party-live prewarm unavailable; player will retry",
+  "Party Room Shared Player entry must treat LiveKit prewarm as non-blocking and let Player retry",
 );
 assertBefore(
   partyRoomWatchTogether,

@@ -748,6 +748,12 @@ assert(
   "Party Room shared-player handoff must log a redacted request event before LiveKit preparation",
 );
 assert(
+  !partyRoomSource.includes("await prepareLiveKitJoinBoundary({")
+    && !partyRoomSource.includes('"Live feed unavailable"')
+    && partyRoomSource.includes("watch-party-live prewarm unavailable; player will retry"),
+  "Party Room Shared Player entry must route after Premium/source validation and let Player retry LiveKit prewarm failures",
+);
+assert(
   playerSource.includes("selfParticipantId")
     && playerSource.indexOf("selfParticipantId")
       < playerSource.indexOf("activeParticipantId", playerSource.indexOf("selfParticipantId")),
