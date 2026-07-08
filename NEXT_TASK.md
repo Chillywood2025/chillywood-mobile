@@ -9,10 +9,12 @@ Current latest truth:
 - r2.dev public access is disabled, no public bucket access is enabled, no custom domain is connected, and no cache rule was applied.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
+- Read-only audit confirmed the proof bucket still exists, the proof object still reads back through authorized Wrangler access, r2.dev is disabled, and no custom domains are connected.
+- Cloudflare R2 custom domains should be treated as public bucket exposure, not a native prefix-limited publish switch. Do not connect `media.chillywoodstream.com` directly to a mixed bucket.
 
 Next exact media step:
 1. Plan `media.chillywoodstream.com` custom domain/cache without applying it.
-2. Decide whether the public proof uses a separate public-playback bucket/surface or a Worker/WAF-token protected path layer.
+2. Prefer a separate public-playback proof bucket/surface containing only `playback/public/` assets, or a Worker/WAF-token gateway that blocks private prefixes before R2 reads.
 3. Do not enable public bucket access, r2.dev, custom domain, cache rules, signed/token CDN playback, or production playback switching until explicitly approved and proved.
 4. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
 

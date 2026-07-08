@@ -50,9 +50,12 @@ const claimSentences = (source, subjectPattern, claimPattern) => (
 );
 
 const architecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
+const currentState = read("CURRENT_STATE.md");
+const nextTask = read("NEXT_TASK.md");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
 const wave2Doc = read("docs/WAVE2_CREATOR_MEDIA_CLOSURE_RUNBOOK.md");
 const docsCorpus = [architecture, vodDoc, wave2Doc].join("\n\n");
+const mediaStatusCorpus = [architecture, currentState, nextTask].join("\n\n");
 
 const mediaStorage = read("_lib/mediaStorage.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
@@ -94,6 +97,7 @@ assertIncludes(architecture, "R2 CLI/API proof status: private remote proof uplo
 assertIncludes(architecture, "R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.", "R2 proof bucket status");
 assertIncludes(architecture, "R2 proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded and is kept for proof traceability.", "R2 proof object status");
 assertIncludes(architecture, "R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled; r2.dev public access is disabled and no custom domains are connected.", "R2 public exposure status");
+assertIncludes(architecture, "R2 custom-domain/cache planning status: planned only; read-only audit confirmed the proof bucket exists, r2.dev is disabled, no custom domains are connected, and the proof object still reads back through authorized Wrangler access.", "R2 custom-domain/cache planning status");
 assertIncludes(architecture, "Media bandwidth telemetry status: foundation only, not live.", "media delivery architecture doc");
 assertIncludes(architecture, "Cache savings status: not proved; telemetry/cache proof is required before savings claims.", "cache savings proof status");
 assertIncludes(architecture, "5 GB resumable upload status: not live; current upload is single signed PUT.", "media delivery architecture doc");
@@ -101,17 +105,26 @@ assertIncludes(architecture, "Near-term chosen path: Cloudflare R2 private origi
 assertIncludes(architecture, "Cloudflare R2 is the target origin because the owner already has the domain on Cloudflare.", "Cloudflare R2 domain rationale");
 assertIncludes(architecture, "Keep the R2 bucket private by default.", "R2 private bucket policy");
 assertIncludes(architecture, "The planned custom hostname is `media.chillywoodstream.com`.", "Cloudflare custom hostname plan");
+assertIncludes(architecture, "Allowed public proof prefix: `playback/public/`.", "allowed public proof prefix");
+assertIncludes(architecture, "Private blocked prefixes: `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/`.", "private blocked prefixes");
 assertIncludes(architecture, "Original/master files are private processing sources.", "media delivery architecture doc");
 assertIncludes(architecture, "Do not enable public access for originals/master files.", "original/master privacy");
-assertIncludes(architecture, "Safe first CDN target is public/demo/ready playback assets only.", "safe public cache target");
+assertIncludes(architecture, "Safe first CDN target is public/demo/ready playback assets only under the allowed public prefix.", "safe public cache target");
 assertIncludes(architecture, "Paid/Premium media needs token/signed CDN access before public CDN delivery.", "paid/Premium CDN signing requirement");
 assertIncludes(architecture, "Do not connect a Cloudflare R2 custom domain directly to a mixed bucket containing private originals, unscanned uploads, or paid/Premium-only media unless Cloudflare token/WAF/Worker access control is already enforcing the private paths before R2 reads.", "mixed bucket custom-domain guardrail");
 assertIncludes(architecture, "The safest first custom-domain target is a separate proof or public-playback surface that contains only approved `playback/public/` assets.", "safe custom-domain target");
-assertIncludes(architecture, "Use long TTLs only for immutable segments and thumbnails, short TTLs for manifests, and no cache for private/original paths.", "cache TTL policy");
+assertIncludes(architecture, "Cache headers: HLS segments and thumbnails may use long TTL plus immutable naming; HLS manifests use short TTL; the proof text object uses short or default TTL; private/original paths use no cache.", "cache TTL policy");
 assertIncludes(architecture, "Proof object target: `playback/public/proof/hello.txt`.", "R2 proof object path");
 assertIncludes(architecture, "Private-origin proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.", "R2 private proof readback");
 assertIncludes(architecture, "No production media, private/original media, unscanned upload, or Premium creator media was uploaded.", "R2 proof media boundary");
 assertIncludes(architecture, "No production playback config was switched.", "production playback boundary");
+assertIncludes(architecture, "Cloudflare R2 custom domains are a public bucket exposure path, not a bucket-native prefix-limited publish switch.", "R2 custom-domain prefix decision");
+assertIncludes(architecture, "The current proof did not identify a safe R2 custom-domain configuration that exposes only `playback/public/` while keeping private prefixes in the same bucket unreachable by configuration alone.", "R2 prefix-limited exposure decision");
+assertIncludes(architecture, "A direct custom domain on a mixed bucket must be treated as unsafe for Chi'llywood media unless a Worker, WAF token rule, Cloudflare Access policy, or equivalent path/token control is already implemented and proved before bucket reads.", "mixed bucket public exposure guardrail");
+assertIncludes(architecture, "Recommended safest next architecture: create a separate public-playback proof bucket or public-playback surface containing only approved `playback/public/` assets, then connect `media.chillywoodstream.com` only to that safe surface after explicit owner approval.", "safe public-playback proof architecture");
+assertIncludes(architecture, "Alternative safe architecture: keep the R2 bucket private and put `media.chillywoodstream.com` on a Worker route that allowlists `playback/public/`, blocks private prefixes, applies token checks for paid/Premium paths, sets cache headers by asset class, and reads R2 through a private binding.", "Worker gateway architecture");
+assertIncludes(architecture, "Do not connect `media.chillywoodstream.com` directly to `chillywood-media-proof` while that bucket is a mixed private/proof bucket.", "proof bucket custom-domain prohibition");
+assertIncludes(architecture, "Read-only custom-domain/cache audit: bucket list shows `chillywood-media-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.", "read-only custom-domain/cache audit");
 assertIncludes(architecture, "Supabase/Edge resolver remains the access-control and playback decision layer.", "Supabase/Edge resolver boundary");
 assertIncludes(architecture, "The app must ask the backend resolver for playback; the app must not hard-code R2 or Cloudflare custom-domain decisions.", "app resolver contract");
 assertIncludes(architecture, "Creator-video Watch-Party sources must use the same creator-video playback resolver path as standalone Player.", "media delivery architecture doc");
@@ -152,7 +165,7 @@ if (cdnLiveClaims.length && !hasCdnPlaybackPath) {
 }
 
 const r2CdnLiveClaims = claimSentences(
-  deliveryClaimsCorpus,
+  mediaStatusCorpus,
   /\b(R2 CDN|R2 custom domain|Cloudflare custom domain|custom-domain\/cache|media\.chillywoodstream\.com)\b/i,
   /\b(live|active|deployed|proved|closed|production-ready|enabled|connected|serving|working)\b/i,
 );
@@ -201,6 +214,28 @@ for (const sentence of splitSentences(docsCorpus)) {
     if (!/\b(token|signed|requires|required|before|first)\b/i.test(sentence)) {
       fail(`Paid/Premium media cannot use public CDN without token/signed access: ${sentence}`);
     }
+  }
+}
+
+for (const sentence of splitSentences(mediaStatusCorpus)) {
+  if (/\b(whole bucket|mixed bucket|same bucket|private prefixes inside it|private prefixes in the same bucket)\b/i.test(sentence)
+    && /\b(public|custom domain|media\.chillywoodstream\.com|safe|safely)\b/i.test(sentence)
+    && !/\b(unsafe|do not|must not|not|unless|Worker|WAF|Access|token|blocked|separate public-playback)\b/i.test(sentence)) {
+    fail(`docs imply a mixed/whole R2 bucket can be safely public without proved isolation: ${sentence}`);
+  }
+
+  if (/\b(prefix-limited|prefix limited|prefix-scoped|prefix scoped)\b/i.test(sentence)
+    && /\b(public exposure|public access|custom domain|R2 custom-domain)\b/i.test(sentence)
+    && /\b(safe|supported|works|available|proved|configured)\b/i.test(sentence)
+    && !/\b(not|did not|no|without|unless|Worker|WAF|Access|gateway|separate bucket)\b/i.test(sentence)) {
+    fail(`docs claim prefix-limited R2 custom-domain public exposure is safe without gateway proof: ${sentence}`);
+  }
+
+  if (/\b(production playback|app playback|creator-video playback|Player playback)\b/i.test(sentence)
+    && /\b(R2|Cloudflare|custom domain|media\.chillywoodstream\.com)\b/i.test(sentence)
+    && /\b(switched|uses|serves|live|active|deployed|production-ready)\b/i.test(sentence)
+    && !/\b(not|no|unchanged|until|do not|must not|fallback|planned|future|without)\b/i.test(sentence)) {
+    fail(`docs claim production playback switched to R2 before resolver proof: ${sentence}`);
   }
 }
 
@@ -264,6 +299,8 @@ assertNotMatches(docsCorpus, /\bpeering\b/i, "media architecture docs");
 
 const secretScanCorpus = [
   architecture,
+  currentState,
+  nextTask,
   read("scripts/guard-media-delivery-architecture.mjs"),
   packageJson,
   sourceCorpus,

@@ -97,6 +97,8 @@ R2 proof object status: harmless text object `playback/public/proof/hello.txt` u
 
 R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled; r2.dev public access is disabled and no custom domains are connected.
 
+R2 custom-domain/cache planning status: planned only; read-only audit confirmed the proof bucket exists, r2.dev is disabled, no custom domains are connected, and the proof object still reads back through authorized Wrangler access.
+
 Media bandwidth telemetry status: foundation only, not live.
 
 Cache savings status: not proved; telemetry/cache proof is required before savings claims.
@@ -120,7 +122,9 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 
 - Cloudflare custom domain/cache is the near-term delivery/cache layer for safe playback assets.
 - The planned custom hostname is `media.chillywoodstream.com`.
-- Safe first CDN target is public/demo/ready playback assets only.
+- Allowed public proof prefix: `playback/public/`.
+- Private blocked prefixes: `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/`.
+- Safe first CDN target is public/demo/ready playback assets only under the allowed public prefix.
 - Paid/Premium media needs token/signed CDN access before public CDN delivery.
 - MEDIA_CDN_SIGNING_MODE=off is only acceptable for public/safe playback assets.
 - Private/Premium CDN delivery requires token/signed access first.
@@ -129,8 +133,20 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - The safest first custom-domain target is a separate proof or public-playback surface that contains only approved `playback/public/` assets.
 - Use cache keys that separate video id, rendition quality, manifest/segment path, and authorization token shape.
 - Configure Cloudflare to fetch from private R2 origin only after origin access and cache rules are explicitly proved.
-- Use long TTLs only for immutable segments and thumbnails, short TTLs for manifests, and no cache for private/original paths.
+- Cache headers: HLS segments and thumbnails may use long TTL plus immutable naming; HLS manifests use short TTL; the proof text object uses short or default TTL; private/original paths use no cache.
 - Add purge/invalidation by video id and rendition path for takedowns, moderation changes, and entitlement policy changes.
+
+### Prefix-Limited Public Exposure Decision
+
+- Cloudflare R2 custom domains are a public bucket exposure path, not a bucket-native prefix-limited publish switch.
+- The current proof did not identify a safe R2 custom-domain configuration that exposes only `playback/public/` while keeping private prefixes in the same bucket unreachable by configuration alone.
+- A direct custom domain on a mixed bucket must be treated as unsafe for Chi'llywood media unless a Worker, WAF token rule, Cloudflare Access policy, or equivalent path/token control is already implemented and proved before bucket reads.
+- R2 S3 presigned URLs remain valid for the R2 S3 API endpoint, but they do not protect R2 custom-domain URLs. Custom-domain authentication requires Cloudflare-layer controls such as WAF HMAC/token validation or a Worker gateway.
+- Official Cloudflare docs basis: [R2 public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/), [Protect an R2 bucket with Cloudflare Access](https://developers.cloudflare.com/r2/tutorials/cloudflare-access/), [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/), and [How R2 works with cache](https://developers.cloudflare.com/r2/how-r2-works/).
+- Recommended safest next architecture: create a separate public-playback proof bucket or public-playback surface containing only approved `playback/public/` assets, then connect `media.chillywoodstream.com` only to that safe surface after explicit owner approval.
+- Alternative safe architecture: keep the R2 bucket private and put `media.chillywoodstream.com` on a Worker route that allowlists `playback/public/`, blocks private prefixes, applies token checks for paid/Premium paths, sets cache headers by asset class, and reads R2 through a private binding.
+- Do not connect `media.chillywoodstream.com` directly to `chillywood-media-proof` while that bucket is a mixed private/proof bucket.
+- Do not claim cache savings, CDN delivery, or production media delivery until a public proof path is connected, cache headers are observed, and telemetry/log ingestion is in place.
 
 ### Staged Cloudflare Proof Plan
 
@@ -141,6 +157,7 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - Private-origin proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - No production playback config was switched.
+- Read-only custom-domain/cache audit: bucket list shows `chillywood-media-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.
 - Stop before public access. Do not connect `media.chillywoodstream.com` until the owner approves that the bucket/surface contains only safe public playback assets or token/WAF/Worker controls are in place.
 - Public proof, when approved, may expose only `playback/public/` test assets. It must not expose source/original/master, unscanned, private, or Premium-only objects.
 
