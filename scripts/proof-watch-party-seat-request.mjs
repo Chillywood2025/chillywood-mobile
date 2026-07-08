@@ -42,6 +42,8 @@ const {
   decodePartySeatRequestMessage,
   emptyWatchPartyLiveSeatRequestState,
   encodePartySeatRequestMessage,
+  mergeWatchPartyLiveRoster,
+  resolveWatchPartyLiveParticipantRole,
   shouldTriggerWatchPartyLiveSharedPlaybackRecovery,
   shouldAutoOpenWatchPartySeatRequestReview,
   watchPartyLiveContractMatchesDesiredAuthority,
@@ -205,6 +207,112 @@ const approvedRosterParticipants = [
     isRequestingToSpeak: false,
   },
 ];
+const approvedMemberships = [
+  {
+    userId: hostId,
+    role: "host",
+    stageRole: "host",
+    canSpeak: true,
+    isMuted: false,
+    membershipState: "active",
+    displayName: "Proof Host",
+  },
+  {
+    userId: viewerId,
+    role: "viewer",
+    stageRole: "speaker",
+    canSpeak: true,
+    isMuted: false,
+    membershipState: "active",
+    displayName: "Proof Viewer",
+  },
+];
+const hostMergedRoster = mergeWatchPartyLiveRoster({
+  memberships: approvedMemberships,
+  presenceParticipants: [
+    {
+      id: hostId,
+      liveKitIdentity: "lk-host-device",
+      name: "Proof Host",
+      role: "host",
+      stageRole: "host",
+      canSpeak: true,
+      isSpeaking: true,
+    },
+  ],
+  currentUserId: hostId,
+  currentLiveKitIdentity: "lk-host-device",
+  roomHostUserId: hostId,
+});
+assert(hostMergedRoster.length === 2, "host device roster must keep the approved viewer even if viewer presence is briefly missing");
+assert(
+  hostMergedRoster.find((entry) => entry.id === hostId)?.role === "host",
+  "host device roster must keep the real host as host",
+);
+assert(
+  hostMergedRoster.find((entry) => entry.id === viewerId)?.stageRole === "speaker",
+  "host device roster must keep the approved viewer visible as speaker from membership",
+);
+assert(
+  new Set(hostMergedRoster.map((entry) => entry.id)).size === 2,
+  "host device roster must not duplicate self fallback when membership already has the host",
+);
+const viewerMergedRoster = mergeWatchPartyLiveRoster({
+  memberships: approvedMemberships,
+  presenceParticipants: [
+    {
+      id: viewerId,
+      liveKitIdentity: "lk-viewer-device",
+      name: "Proof Viewer",
+      role: "viewer",
+      stageRole: "listener",
+      canSpeak: false,
+      isSpeaking: true,
+    },
+  ],
+  currentUserId: viewerId,
+  currentLiveKitIdentity: "lk-viewer-device",
+  roomHostUserId: hostId,
+});
+assert(viewerMergedRoster.length === 2, "viewer device roster must keep the host even if host presence is briefly missing");
+assert(
+  viewerMergedRoster.find((entry) => entry.id === hostId)?.role === "host",
+  "viewer device roster must keep the real host visible as host from membership",
+);
+assert(
+  viewerMergedRoster.find((entry) => entry.id === viewerId)?.stageRole === "speaker",
+  "viewer device roster must prefer approved speaker membership over stale viewer presence",
+);
+assert(
+  new Set(viewerMergedRoster.map((entry) => entry.id)).size === 2,
+  "viewer device roster must contain exactly two unique participants after approval",
+);
+assert(
+  resolveWatchPartyLiveParticipantRole({
+    participantId: hostId,
+    roomHostUserId: hostId,
+    membershipRole: "host",
+    membershipStageRole: "host",
+    membershipCanSpeak: true,
+    presenceRole: "viewer",
+    presenceStageRole: "speaker",
+    presenceCanSpeak: true,
+  }).role === "host",
+  "stale presence must not demote the room host",
+);
+assert(
+  resolveWatchPartyLiveParticipantRole({
+    participantId: viewerId,
+    roomHostUserId: hostId,
+    membershipRole: "viewer",
+    membershipStageRole: "speaker",
+    membershipCanSpeak: true,
+    presenceRole: "viewer",
+    presenceStageRole: "listener",
+    presenceCanSpeak: false,
+  }).stageRole === "speaker",
+  "approved speaker membership must override stale listener presence",
+);
 const hostDeviceRoster = buildWatchPartyLiveParticipantRoster({
   participants: approvedRosterParticipants,
   currentUserId: hostId,
@@ -464,9 +572,12 @@ assert(
 );
 assert(
   playerSource.includes("buildWatchPartyLiveParticipantRoster")
+    && playerSource.includes("mergeWatchPartyLiveRoster")
+    && playerSource.includes("memberships: Object.values(partyMembershipMapRef.current)")
+    && playerSource.includes("liveBubbleParticipants.find((participant) => participant.id === trackedUserId)")
     && playerSource.includes("currentParticipantIdentity={watchPartyLiveKitIdentity || trackedUserId}")
     && playerSource.includes("currentParticipantIdentityAliases={[trackedUserId, watchPartyLiveKitIdentityRef.current].filter(Boolean)}"),
-  "Player must pass helper-built roster and explicit current identity aliases into the LiveKit bubble surface",
+  "Player must merge membership-authoritative roster state and pass explicit current identity aliases into the LiveKit bubble surface",
 );
 assert(
   playerSource.includes("partyMembershipRosterPollRef.current = setInterval")
@@ -550,5 +661,6 @@ console.log(JSON.stringify({
   hostRequestReviewTargets: true,
   commentSendReachableWithoutShare: true,
   reactionReachableWithoutShare: true,
+  postApprovalRosterConvergenceGuarded: true,
   helperBackedProof: true,
 }, null, 2));

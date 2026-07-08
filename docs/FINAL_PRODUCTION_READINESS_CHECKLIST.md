@@ -2,7 +2,7 @@
 
 ## July 7, 2026 Watch-Party Live Source-Truth Follow-Up
 
-Status: Source-repaired, guard/proof upgraded, OTA-published, installed proof Partial on viewer camera request / host approval.
+Status: Source-repaired, guard/proof upgraded, installed proof Partial on post-approval roster/bubble/feed convergence.
 
 Watch-Party Live sidecar/shared-player now has source-truth coverage for the remaining app-controlled failure modes without changing the locked fullscreen layout. Source commit `833520e5ba6fad86160b93df1da45cd510b1c433` is on `origin/main`; Android EAS Update production runtime `1.0.0` published group `0d23919f-bedb-40b4-9428-6550bdfd765c`, Android update `019f3da7-dcd6-7732-a757-cb36b1bd7c61`. R3 visibility is recovered over wireless ADB and both devices read back Play-installed v80. The custom fullscreen row remains the same left comments rail, center shared player/video surface, and right portrait-reused LiveKit bubble rail. Guard coverage rejects replacing the right rail with fake participants, removing the rails, or falling back to normal native fullscreen for shared playback.
 
@@ -18,7 +18,7 @@ Latest request-control follow-up: installed room `ZWZ2KP` proved the new testID 
 
 Final pre-proof reachability follow-up: installed room `42L39G` showed the regular Shared Player social/bubble panel could render while request/comment/reaction controls stayed unreachable because the control deck was still inside the auto-hide overlay gate. The source now mounts `shared-player-regular-controls` outside that hidden pointer/opacity gate and prioritizes the compact comment input/send row, without changing fullscreen rails or the major Shared Player layout. Public production still requires installed closure after a fresh OTA from this source.
 
-Current post-approval follow-up: the newest installed photos show the approved Watch-Party Live bubble/feed state is still not production-ready. One phone can show only self or no remote bubbles, while the other can show confusing `SPEAKER`/`You` plus a host bubble for the same displayed identity. The current source follow-up keeps the locked layout unchanged and separates app participant IDs from LiveKit render identities, passes explicit current-device aliases to the LiveKit bubble surface, routes bubble taps through app participant IDs, and polls membership authority so the Shared Player roster is not presence-only. Public production remains No-Go for Watch-Party Live until this source is validation-clean, OTA-published, and installed-proved.
+Current post-approval follow-up: the newest installed photos show the approved Watch-Party Live bubble/feed state is still not production-ready. One phone can show only self or no remote bubbles, while the other can show confusing `SPEAKER`/`You` plus a host bubble for the same displayed identity. The current source follow-up keeps the locked layout unchanged and makes durable active room membership the base Shared Player bubble roster; realtime presence only enriches display/speaking/LiveKit identity state and cannot delete active members. Room host and membership host remain host, approved speaker membership / `canSpeak` wins over stale presence, self fallback cannot duplicate a membership participant, and Player proof logs now include membership, presence, rendered bubble, missing bubble, duplicate bubble, and role-map diagnostics. Public production remains No-Go for Watch-Party Live until this source is validation-clean, OTA-published, and installed-proved.
 
 ## July 7, 2026 Live Stage Source-Truth Follow-Up
 

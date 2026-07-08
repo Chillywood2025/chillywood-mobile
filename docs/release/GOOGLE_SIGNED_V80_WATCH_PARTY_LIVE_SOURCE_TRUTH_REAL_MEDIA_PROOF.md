@@ -4,7 +4,7 @@ Date: 2026-07-07
 
 Verdict: Partial. Watch-Party Live real-media playback, regular comments, locked viewer controls, fullscreen rails, return-to-room, and request/approval reachability have supporting installed proof, but the newest installed photos show the approved-state host/viewer roster and LiveKit bubble/feed presentation is still unstable.
 
-Source commit: `833520e5ba6fad86160b93df1da45cd510b1c433`.
+Initial source-truth commit: `833520e5ba6fad86160b93df1da45cd510b1c433`.
 
 Android EAS Update production runtime `1.0.0`: group `0d23919f-bedb-40b4-9428-6550bdfd765c`, Android update `019f3da7-dcd6-7732-a757-cb36b1bd7c61`.
 
@@ -16,7 +16,7 @@ Request-control follow-up: source commit `ad1611b9810299a2ffb98cfdefc15d193a2869
 
 Approval persistence follow-up: source commit `67494ab9c1496d39d2f58790f2cab1f66d34ffe9` is on `origin/main`; Android EAS Update production runtime `1.0.0` published group `b8e6bce3-ef2d-4b92-ba69-5727017f6902`, Android update `019f3f4a-13be-74ca-824a-28ba49cc8add`, message `Fix Watch-Party Live approval persistence fallback 67494ab`.
 
-Current post-approval roster/bubble source follow-up: local source separates app participant IDs from LiveKit render identities, passes explicit current-device identity aliases into `LiveKitStageMediaSurface`, routes bubble taps through app participant IDs, and refreshes the Shared Player roster from membership authority instead of depending only on transient presence. This follow-up is not installed-proved until a fresh OTA and two-phone packet show stable host/viewer bubbles and identity-safe approved feed/fallback after approval.
+Current post-approval roster/bubble source follow-up: local source now makes durable active room membership the base Shared Player bubble roster. Realtime presence can enrich display name, speaking state, preview/avatar, request state, and LiveKit render identity, but it cannot remove an active member that membership still says is in the room. Role precedence is room host / membership host first, approved speaker membership or `canSpeak` second, and presence only as fallback. The Player resolves current/tapped participants through the merged roster, passes explicit current-device identity aliases into `LiveKitStageMediaSurface`, and logs membership/presence/rendered-bubble identity diagnostics for missing and duplicate bubble states. This follow-up is not installed-proved until a fresh OTA and two-phone packet show stable host/viewer bubbles and identity-safe approved feed/fallback after approval.
 
 ## Executive Summary
 
@@ -41,6 +41,8 @@ The installed rerun after that OTA used fresh real-media room `ZWZ2KP` and prove
 Final pre-proof reachability follow-up: a later installed rerun on fresh room `42L39G` showed the regular Shared Player could still render the bubble/social panel while leaving the request/comment/reaction controls unreachable. Source root cause: those controls were still mounted inside an auto-hide animated overlay gated by `effectiveControlsVisible`, opacity, and pointer events, so Android could expose the content surface and social panel without reachable lower-control proof targets. The source now mounts the regular Shared Player controls in a stable `shared-player-regular-controls` deck outside that hidden overlay gate, keeps `Request Camera`, reaction, host review, error, and comment test targets in the approved lower Shared Player structure, and prioritizes the compact comment input/send row over a clipped title/list. Fullscreen remains unchanged: the left comments rail, center video surface, and right LiveKit bubble rail keep their locked custom layout.
 
 Post-approval installed regression: after the approval-persistence OTA, the newest photos show one phone with no remote bubbles or only the local/self bubble, while the other can show confusing `SPEAKER`/`You` plus a host bubble for the same displayed identity. That invalidates any Closed claim for the approved roster/bubble/feed state. Carry forward only the installed basics already proved: room `38M7L3` real-media playback on R5 and R3, visible regular comments, locked viewer playback controls, fullscreen rails unchanged, and return-to-room, plus prior reachability proof for comment/reaction/request/approval. The final closure still requires a fresh two-phone proof after the roster/bubble source follow-up.
+
+Latest source root cause classification: the approved-state bubble deck was still too dependent on realtime presence and local/self fallback after membership and LiveKit authority changed. That allowed device-local presence gaps or identity alias drift to look like missing remote participants, duplicate self, or stale role labels. The fix moves roster construction into helper-backed source truth: active/reconnecting membership is authoritative, presence cannot delete active members, stale presence cannot demote the room host or downgrade an approved speaker, self fallback cannot duplicate membership rows, and the LiveKit bubble surface receives app participant IDs plus LiveKit identity aliases for identity-safe render/tap mapping.
 
 ## Fullscreen/Layout No-Change
 
@@ -81,6 +83,8 @@ Source behavior now covered:
 - The explicit `Request Camera` path passes the visible Shared Player participant id into the versioned request helper, so it does not depend on a stale party-user/ref identity.
 - Regular Shared Player request/comment/reaction controls now mount in a stable lower control deck outside the hidden auto-hide overlay pointer/opacity gate.
 - Regular Shared Player compact comments prioritize the input/send composer so installed proof can tap comment controls without falling through to Android Share/intent UI.
+- Post-approval roster convergence now uses `mergeWatchPartyLiveRoster(...)` and `resolveWatchPartyLiveParticipantRole(...)` from the source-truth helper. Durable membership is the base roster; presence enriches only; both host and approved viewer remain visible after approval even if one device misses a presence packet; host remains host; approved viewer becomes speaker/seated; and the Player resolves bubble taps/current participant state from that merged roster.
+- Player debug/proof logs now include membership identities, presence identities, rendered bubble identities, missing bubble identities, duplicate bubble identities, and merged role maps. Do not commit raw private identifiers in proof artifacts; use the diagnostics only for local installed triage and redact summaries.
 
 ## Proof Boundaries
 
@@ -133,6 +137,7 @@ Current installed-proof status:
 - Latest request-control follow-up reroutes explicit request and self-bubble request through the visible participant id and makes the regular comments dock input/send reachable. Installed proof remains required after OTA group `6f83ca92-a7c8-41f5-b4d3-864998e2823e`.
 - Final pre-proof reachability follow-up moves the regular Shared Player control deck outside the hidden auto-hide overlay gate and keeps compact comments focused on input/send. Installed proof remains required after the fresh OTA from this source.
 - Strict installed proof is Partial: explicit `Request Camera` / approval reachability has supporting proof, but newest installed photos show the approved roster/bubble/feed state can collapse or duplicate identities. The current source follow-up must be OTA-published and installed-proved before closure.
+- The current source proof now rejects the photo failure mode: an approved two-member room may not render only self, may not drop host/viewer on one device because presence is stale, may not duplicate self fallback, and may not let stale presence override host/speaker membership roles. Installed proof remains required after OTA.
 - no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, source change, or fullscreen layout change was performed.
 
 Next exact proof/fix step:

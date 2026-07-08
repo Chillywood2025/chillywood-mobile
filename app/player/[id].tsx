@@ -168,10 +168,11 @@ import {
   closeWatchPartySeatRequestReview,
   createWatchPartySeatRequestVersion,
   emptyWatchPartyLiveSeatRequestState,
-  shouldTriggerWatchPartyLiveSharedPlaybackRecovery,
   isWatchPartySeatRequestExpired,
+  mergeWatchPartyLiveRoster,
   resolveDesiredWatchPartyLiveAuthority,
   shouldAutoOpenWatchPartySeatRequestReview,
+  shouldTriggerWatchPartyLiveSharedPlaybackRecovery,
   watchPartyLiveContractMatchesDesiredAuthority,
   type WatchPartyLiveSeatRequestState,
 } from "../../_lib/watch-party/watch-party-live-source-truth";
@@ -5558,24 +5559,31 @@ export default function PlayerScreen() {
     return merged.slice(0, LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS);
   }, [activeParticipantIds, speakingParticipantIds]);
   const trackedUserId = useMemo(() => String(partyUserId || "").trim() || "anon", [partyUserId]);
-  const liveBubbleParticipants = useMemo(() => {
-    const seen = new Set<string>();
-    const unique = partyParticipants.filter((participant) => {
-      if (!participant.id || seen.has(participant.id)) return false;
-      seen.add(participant.id);
-      return true;
-    });
-
-    return unique.sort((a, b) => {
-      const aMe = a.id === trackedUserId ? 1 : 0;
-      const bMe = b.id === trackedUserId ? 1 : 0;
-      if (aMe !== bMe) return bMe - aMe;
-      const rank = (role: "host" | "co-host" | "viewer") => (role === "host" ? 0 : role === "co-host" ? 1 : 2);
-      const roleDiff = rank(a.role) - rank(b.role);
-      if (roleDiff !== 0) return roleDiff;
-      return a.name.localeCompare(b.name);
-    });
-  }, [partyParticipants, trackedUserId]);
+  const liveBubbleParticipants = useMemo<PartyParticipant[]>(() => (
+    mergeWatchPartyLiveRoster({
+      memberships: Object.values(partyMembershipMapRef.current),
+      presenceParticipants: partyParticipants,
+      currentUserId: trackedUserId,
+      currentLiveKitIdentity: watchPartyLiveKitIdentity || watchPartyLiveKitIdentityRef.current || trackedUserId,
+      roomHostUserId: partyRoomHostUserIdRef.current,
+      currentDisplayName: partyDisplayNameRef.current,
+      currentAvatarUrl: partyAvatarUrlRef.current,
+      currentCameraPreviewUrl: myCameraPreviewUrlRef.current,
+    }).map((participant) => ({
+      id: participant.id,
+      liveKitIdentity: participant.liveKitIdentity || participant.id,
+      name: participant.name,
+      role: participant.role === "host" ? "host" : participant.role === "co-host" ? "co-host" : "viewer",
+      avatarUrl: participant.avatarUrl || undefined,
+      cameraPreviewUrl: participant.cameraPreviewUrl || undefined,
+      stageRole: participant.stageRole,
+      isLive: participant.isLive ?? true,
+      muted: !!participant.muted,
+      canSpeak: !!participant.canSpeak,
+      isSpeaking: !!participant.isSpeaking,
+      isRequestingToSpeak: !!participant.isRequestingToSpeak,
+    }))
+  ), [partyParticipants, trackedUserId, watchPartyLiveKitIdentity]);
   const activePartySpeakerSeatCount = useMemo(
     () => liveBubbleParticipants.filter((participant) => (
       participant.role === "host"
@@ -5639,8 +5647,8 @@ export default function PlayerScreen() {
     && !!watchPartyLiveKitJoinContract
     && !watchPartyLiveKitJoinContractExpired;
   const currentWatchPartyParticipant = useMemo(
-    () => partyParticipants.find((participant) => participant.id === trackedUserId) ?? null,
-    [partyParticipants, trackedUserId],
+    () => liveBubbleParticipants.find((participant) => participant.id === trackedUserId) ?? null,
+    [liveBubbleParticipants, trackedUserId],
   );
   const currentWatchPartyParticipantMuted = useMemo(() => {
     if (currentWatchPartyParticipant) return !!currentWatchPartyParticipant.muted;
@@ -5821,8 +5829,12 @@ export default function PlayerScreen() {
   const onWatchPartyLiveKitParticipantPress = useCallback((identity: string) => {
     const participantIdentity = String(identity ?? "").trim();
     if (!participantIdentity) return;
-    const tappedParticipant = partyParticipants.find((entry) => entry.id === participantIdentity) ?? null;
-    const currentParticipant = partyParticipants.find((entry) => entry.id === trackedUserId) ?? null;
+    const tappedParticipant = liveBubbleParticipants.find((entry) => entry.id === participantIdentity)
+      ?? partyParticipants.find((entry) => entry.id === participantIdentity)
+      ?? null;
+    const currentParticipant = liveBubbleParticipants.find((entry) => entry.id === trackedUserId)
+      ?? partyParticipants.find((entry) => entry.id === trackedUserId)
+      ?? null;
     debugLog("livekit", "watch-party-live bubble tapped", {
       roomName: partyId,
       currentUserId: trackedUserId,
@@ -5850,6 +5862,7 @@ export default function PlayerScreen() {
     onPressSharedPlayerRequestCamera("bubble");
   }, [
     currentWatchPartyHostAuthority.isHost,
+    liveBubbleParticipants,
     onPressSharedPlayerRequestCamera,
     partyId,
     partyParticipants,
@@ -5926,9 +5939,16 @@ export default function PlayerScreen() {
   ]);
   useEffect(() => {
     if (!inWatchParty || Platform.OS === "web") return;
+    const membershipIdentities = Object.keys(partyMembershipMapRef.current).filter(Boolean);
+    const presenceIdentities = partyParticipants.map((participant) => participant.id).filter(Boolean);
+    const bubbleRenderedIdentities = liveBubbleParticipants.map((participant) => participant.id).filter(Boolean);
+    const bubbleRenderedIdentitySet = new Set(bubbleRenderedIdentities);
+    const missingBubbleIdentities = membershipIdentities.filter((identity) => !bubbleRenderedIdentitySet.has(identity));
+    const duplicateBubbleIdentities = bubbleRenderedIdentities.filter((identity, index) => bubbleRenderedIdentities.indexOf(identity) !== index);
     debugLog("livekit", "watch-party-live authority state", {
       roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
       currentUserId: trackedUserId,
+      localIdentity: watchPartyLiveKitIdentity || watchPartyLiveKitIdentityRef.current || trackedUserId,
       desiredParticipantRole: desiredWatchPartyLiveKitParticipantRole,
       desiredCanPublish: desiredWatchPartyLiveKitCanPublish,
       contractParticipantRole: watchPartyLiveKitJoinContract?.participantRole ?? null,
@@ -5937,9 +5957,22 @@ export default function PlayerScreen() {
       membershipAuthority: currentWatchPartyMembershipAuthoritySignature,
       hostAuthority: currentWatchPartyHostAuthority,
       pendingSeatRequestIds: Object.keys(pendingPartySeatRequestsRef.current),
-      participantIds: partyParticipants.map((participant) => participant.id),
+      membershipIdentities,
+      presenceIdentities,
+      bubbleRenderedIdentities,
+      missingBubbleIdentities,
+      duplicateBubbleIdentities,
+      roleMap: JSON.stringify(liveBubbleParticipants.map((participant) => ({
+        participantId: participant.id,
+        liveKitIdentity: participant.liveKitIdentity || participant.id,
+        role: participant.role,
+        stageRole: participant.stageRole,
+        canSpeak: participant.canSpeak,
+        isRequestingToSpeak: participant.isRequestingToSpeak,
+      }))),
       participantLabelEntries: JSON.stringify(watchPartyLiveKitParticipantRoster.map((participant) => ({
         identity: participant.identity,
+        participantId: participant.participantId,
         label: participant.label,
         role: participant.role,
         canPublish: participant.canPublish,
@@ -5952,6 +5985,7 @@ export default function PlayerScreen() {
     desiredWatchPartyLiveKitCanPublish,
     desiredWatchPartyLiveKitParticipantRole,
     inWatchParty,
+    liveBubbleParticipants,
     partyId,
     partyParticipants,
     publishWatchPartyLiveKitVideo,

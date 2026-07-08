@@ -10,7 +10,7 @@ Current latest truth:
 - Strict real media was `Chi'llywood City Lights`, `sourceType=creator_video`, `sourceId=c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, `classification=real-media`.
 - Carry-forward room `38M7L3` proved actual real-media playback on both devices, visible regular Shared Player comments, locked viewer playback controls, fullscreen left comments / center video / right LiveKit bubble rails unchanged, and return-to-room.
 - Later room `PKL35Z` proved comment/reaction/request/approval reachability, but the newest user photos show the approved-state roster/feed is still unstable: one phone can show only self/no remote bubbles, another can show `SPEAKER`/`You` plus a host bubble for the same displayed identity.
-- Current source follow-up separates app participant IDs from LiveKit render identities, passes explicit current-device identity aliases into the LiveKit bubble surface, routes bubble taps through app participant IDs, and polls membership authority so the Shared Player bubble roster does not depend only on transient presence.
+- Current source follow-up makes durable active room membership the base Watch-Party Live bubble roster. Realtime presence can enrich display, speaking, preview, and LiveKit identity fields, but it cannot delete active members that membership says are still in the room. Role precedence is room host / membership host first, approved speaker membership or `canSpeak` second, and presence only as fallback. The Player resolves current/tapped participants from the merged roster, passes identity aliases into the LiveKit bubble surface, and logs membership/presence/rendered-bubble identity diagnostics so a self-only or duplicate bubble state is proof-detectable.
 - This is not Closed until a fresh OTA and installed proof show stable host/viewer bubbles, no confusing `You HOST`/self-only collapse, matching speaker/canPublish authority, and identity-safe approved feed/fallback after approval.
 
 Superseded historical trail retained for context:
@@ -43,7 +43,7 @@ Superseded historical trail retained for context:
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
 
 Next exact step:
-1. Finish validating the current roster/bubble source fix, update docs, commit/push, and publish a fresh OTA from aligned `origin/main`.
+1. Finish validating the current membership-authoritative roster/bubble source fix, update docs, commit/push, and publish a fresh OTA from aligned `origin/main`.
 2. Rerun only the focused installed packet on Play-installed devices with approved sandbox Premium: real-media Shared Player, request/approval, R3 speaker/canPublish, stable bubbles on both phones, no self-only or duplicate host/self collapse, and identity-safe approved feed/fallback.
 3. Do not reopen playback, real-media classification, regular comments visibility, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, or backend LiveKit routing unless a fresh regression appears.
 

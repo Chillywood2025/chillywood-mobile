@@ -169,6 +169,26 @@ assertIncludes(
   "Watch-Party Live source-truth helper must reject Synced Playing without actual video playback proof",
 );
 assertIncludes(
+  watchPartyLiveSourceTruth,
+  "export const mergeWatchPartyLiveRoster",
+  "Watch-Party Live source-truth helper must merge membership-authoritative roster state",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "export const resolveWatchPartyLiveParticipantRole",
+  "Watch-Party Live source-truth helper must own role precedence between membership and presence",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "membershipStageRole === \"speaker\" || options.membershipCanSpeak === true",
+  "Watch-Party Live role resolution must prefer approved speaker membership over stale presence",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
+  "presenceRole = normalizeParticipantRole(options.presenceRole)",
+  "Watch-Party Live role resolution may only consult presence after membership truth",
+);
+assertIncludes(
   player,
   "watchPartyLiveMediaSourceDebugMetadata",
   "Player runtime must wire Watch-Party Live media classification metadata",
@@ -753,6 +773,36 @@ assertIncludes(
 );
 assertIncludes(
   player,
+  "membershipIdentities",
+  "Player Watch-Party LiveKit proof logs must include membership identities for roster convergence",
+);
+assertIncludes(
+  player,
+  "presenceIdentities",
+  "Player Watch-Party LiveKit proof logs must include realtime presence identities for roster convergence",
+);
+assertIncludes(
+  player,
+  "bubbleRenderedIdentities",
+  "Player Watch-Party LiveKit proof logs must include rendered bubble identities",
+);
+assertIncludes(
+  player,
+  "missingBubbleIdentities",
+  "Player Watch-Party LiveKit proof logs must expose membership participants missing from bubbles",
+);
+assertIncludes(
+  player,
+  "duplicateBubbleIdentities",
+  "Player Watch-Party LiveKit proof logs must expose duplicate rendered participants",
+);
+assertIncludes(
+  player,
+  "roleMap: JSON.stringify(liveBubbleParticipants.map",
+  "Player Watch-Party LiveKit proof logs must include the merged role map",
+);
+assertIncludes(
+  player,
   "const resolvePartyParticipantDisplayName = (options: {",
   "Player Watch-Party participant labels must resolve through one sanitizer",
 );
@@ -775,6 +825,31 @@ assertIncludes(
   player,
   "buildWatchPartyLiveParticipantRoster",
   "Player Watch-Party LiveKit roster must be built by the shared source-truth helper",
+);
+assertIncludes(
+  player,
+  "mergeWatchPartyLiveRoster",
+  "Player Watch-Party bubble participants must come from the membership-authoritative roster merge",
+);
+assertIncludes(
+  player,
+  "memberships: Object.values(partyMembershipMapRef.current)",
+  "Player Watch-Party bubble roster must use durable membership as its base source",
+);
+assertIncludes(
+  player,
+  "presenceParticipants: partyParticipants",
+  "Player Watch-Party bubble roster may enrich membership with realtime presence",
+);
+assertIncludes(
+  player,
+  "liveBubbleParticipants.find((participant) => participant.id === trackedUserId)",
+  "Player Watch-Party current participant must be resolved from the merged roster, not raw presence only",
+);
+assertIncludes(
+  player,
+  "const tappedParticipant = liveBubbleParticipants.find((entry) => entry.id === participantIdentity)",
+  "Player Watch-Party bubble taps must resolve remote viewers from the merged roster so focus does not hide them",
 );
 assertIncludes(
   player,

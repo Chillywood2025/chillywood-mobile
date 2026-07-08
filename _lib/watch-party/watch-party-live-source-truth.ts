@@ -58,8 +58,26 @@ export type WatchPartyLiveRosterParticipant = {
   muted?: boolean | null;
   canSpeak?: boolean | null;
   isRequestingToSpeak?: boolean | null;
+  isSpeaking?: boolean | null;
+  isLive?: boolean | null;
   avatarUrl?: string | null;
   cameraPreviewUrl?: string | null;
+};
+
+export type WatchPartyLiveRosterMembership = {
+  userId: string;
+  role?: string | null;
+  stageRole?: string | null;
+  canSpeak?: boolean | null;
+  isMuted?: boolean | null;
+  membershipState?: string | null;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  cameraPreviewUrl?: string | null;
+};
+
+export type WatchPartyLivePresenceParticipant = Partial<WatchPartyLiveRosterParticipant> & {
+  id: string;
 };
 
 export type WatchPartyLiveParticipantRosterEntry = {
@@ -340,6 +358,204 @@ const normalizeIdentityList = (...values: unknown[]) => {
     identities.push(normalized);
   });
   return identities;
+};
+
+const normalizeMembershipState = (value: unknown) => {
+  const state = sanitizeIdentifier(value).toLowerCase();
+  if (state === "active" || state === "reconnecting") return state;
+  if (state === "left" || state === "removed") return state;
+  return state || "active";
+};
+
+const normalizeParticipantRole = (value: unknown): WatchPartyLiveParticipantRole | "" => {
+  const role = sanitizeIdentifier(value).toLowerCase();
+  if (role === "host") return "host";
+  if (role === "co-host" || role === "cohost") return "co-host";
+  if (role === "viewer") return "viewer";
+  return "";
+};
+
+const normalizeStageRole = (value: unknown): WatchPartyLiveParticipantStageRole | "" => {
+  const role = sanitizeIdentifier(value).toLowerCase();
+  if (role === "host") return "host";
+  if (role === "speaker") return "speaker";
+  if (role === "listener" || role === "audience" || role === "viewer") return "listener";
+  return "";
+};
+
+export const resolveWatchPartyLiveParticipantRole = (options: {
+  participantId?: string | null;
+  roomHostUserId?: string | null;
+  membershipRole?: string | null;
+  membershipStageRole?: string | null;
+  membershipCanSpeak?: boolean | null;
+  presenceRole?: string | null;
+  presenceStageRole?: string | null;
+  presenceCanSpeak?: boolean | null;
+}): {
+  role: WatchPartyLiveParticipantRole;
+  stageRole: WatchPartyLiveParticipantStageRole;
+  canSpeak: boolean;
+} => {
+  const participantId = sanitizeIdentifier(options.participantId);
+  const roomHostUserId = sanitizeIdentifier(options.roomHostUserId);
+  const membershipRole = normalizeParticipantRole(options.membershipRole);
+  const membershipStageRole = normalizeStageRole(options.membershipStageRole);
+  const hasMembershipTruth = !!membershipRole || !!membershipStageRole || typeof options.membershipCanSpeak === "boolean";
+
+  if (
+    (participantId && roomHostUserId && participantId === roomHostUserId)
+    || membershipRole === "host"
+    || membershipStageRole === "host"
+  ) {
+    return {
+      role: "host",
+      stageRole: "host",
+      canSpeak: true,
+    };
+  }
+
+  if (membershipStageRole === "speaker" || options.membershipCanSpeak === true) {
+    return {
+      role: "viewer",
+      stageRole: "speaker",
+      canSpeak: true,
+    };
+  }
+
+  if (hasMembershipTruth) {
+    return {
+      role: membershipRole || "viewer",
+      stageRole: "listener",
+      canSpeak: false,
+    };
+  }
+
+  const presenceRole = normalizeParticipantRole(options.presenceRole);
+  const presenceStageRole = normalizeStageRole(options.presenceStageRole);
+  if (presenceRole === "host" || presenceStageRole === "host") {
+    return {
+      role: "host",
+      stageRole: "host",
+      canSpeak: true,
+    };
+  }
+  if (presenceStageRole === "speaker" || options.presenceCanSpeak === true) {
+    return {
+      role: "viewer",
+      stageRole: "speaker",
+      canSpeak: true,
+    };
+  }
+  return {
+    role: presenceRole || "viewer",
+    stageRole: "listener",
+    canSpeak: false,
+  };
+};
+
+export const mergeWatchPartyLiveRoster = (options: {
+  memberships?: WatchPartyLiveRosterMembership[];
+  presenceParticipants?: WatchPartyLivePresenceParticipant[];
+  currentUserId?: string | null;
+  currentLiveKitIdentity?: string | null;
+  roomHostUserId?: string | null;
+  currentDisplayName?: string | null;
+  currentAvatarUrl?: string | null;
+  currentCameraPreviewUrl?: string | null;
+  showPresenceOnlyParticipants?: boolean | null;
+}): WatchPartyLiveRosterParticipant[] => {
+  const currentUserId = sanitizeIdentifier(options.currentUserId);
+  const currentLiveKitIdentity = sanitizeIdentifier(options.currentLiveKitIdentity);
+  const roomHostUserId = sanitizeIdentifier(options.roomHostUserId);
+  const memberships = options.memberships ?? [];
+  const presenceParticipants = options.presenceParticipants ?? [];
+  const presenceById = new Map<string, WatchPartyLivePresenceParticipant>();
+  const existingOrder = new Map<string, number>();
+  presenceParticipants.forEach((participant, index) => {
+    const participantId = sanitizeIdentifier(participant.id);
+    if (!participantId || presenceById.has(participantId)) return;
+    presenceById.set(participantId, participant);
+    existingOrder.set(participantId, index);
+  });
+
+  const activeMemberships = memberships.filter((membership) => {
+    const participantId = sanitizeIdentifier(membership.userId);
+    if (!participantId) return false;
+    const state = normalizeMembershipState(membership.membershipState);
+    return state === "active" || state === "reconnecting";
+  });
+  const nextById = new Map<string, WatchPartyLiveRosterParticipant>();
+
+  const buildParticipant = (
+    participantId: string,
+    membership: WatchPartyLiveRosterMembership | null,
+    presence: WatchPartyLivePresenceParticipant | null,
+  ): WatchPartyLiveRosterParticipant => {
+    const role = resolveWatchPartyLiveParticipantRole({
+      participantId,
+      roomHostUserId,
+      membershipRole: membership?.role,
+      membershipStageRole: membership?.stageRole,
+      membershipCanSpeak: membership?.canSpeak,
+      presenceRole: presence?.role,
+      presenceStageRole: presence?.stageRole,
+      presenceCanSpeak: presence?.canSpeak,
+    });
+    const isCurrentUser = participantId === currentUserId;
+    const displayName = sanitizeIdentifier(
+      isCurrentUser ? "You" : membership?.displayName || presence?.name || (role.role === "host" ? "Host" : "Guest"),
+    );
+
+    return {
+      id: participantId,
+      liveKitIdentity: sanitizeIdentifier(presence?.liveKitIdentity) || (isCurrentUser ? currentLiveKitIdentity : "") || participantId,
+      name: displayName || (isCurrentUser ? "You" : role.role === "host" ? "Host" : "Guest"),
+      role: role.role,
+      stageRole: role.stageRole,
+      muted: membership?.isMuted ?? presence?.muted ?? false,
+      canSpeak: role.canSpeak,
+      isRequestingToSpeak: !!presence?.isRequestingToSpeak && !role.canSpeak && role.role !== "host",
+      isSpeaking: !!presence?.isSpeaking,
+      isLive: presence?.isLive ?? true,
+      avatarUrl: sanitizeIdentifier(membership?.avatarUrl) || sanitizeIdentifier(presence?.avatarUrl) || (isCurrentUser ? sanitizeIdentifier(options.currentAvatarUrl) : "") || null,
+      cameraPreviewUrl: sanitizeIdentifier(membership?.cameraPreviewUrl) || sanitizeIdentifier(presence?.cameraPreviewUrl) || (isCurrentUser ? sanitizeIdentifier(options.currentCameraPreviewUrl) : "") || null,
+    };
+  };
+
+  activeMemberships.forEach((membership) => {
+    const participantId = sanitizeIdentifier(membership.userId);
+    if (!participantId || nextById.has(participantId)) return;
+    nextById.set(participantId, buildParticipant(participantId, membership, presenceById.get(participantId) ?? null));
+  });
+
+  if (options.showPresenceOnlyParticipants || activeMemberships.length === 0) {
+    presenceById.forEach((presence, participantId) => {
+      if (!participantId || nextById.has(participantId)) return;
+      nextById.set(participantId, buildParticipant(participantId, null, presence));
+    });
+  }
+
+  if (currentUserId && !nextById.has(currentUserId)) {
+    nextById.set(currentUserId, buildParticipant(currentUserId, null, presenceById.get(currentUserId) ?? null));
+  }
+
+  return Array.from(nextById.values()).sort((a, b) => {
+    const aMe = a.id === currentUserId ? 1 : 0;
+    const bMe = b.id === currentUserId ? 1 : 0;
+    if (aMe !== bMe) return bMe - aMe;
+    const rank = (participant: WatchPartyLiveRosterParticipant) => {
+      if (participant.role === "host" || participant.stageRole === "host") return 0;
+      if (participant.stageRole === "speaker" || participant.canSpeak) return 1;
+      if (participant.isRequestingToSpeak) return 2;
+      return 3;
+    };
+    const roleDiff = rank(a) - rank(b);
+    if (roleDiff !== 0) return roleDiff;
+    const orderDiff = (existingOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (existingOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER);
+    if (orderDiff !== 0) return orderDiff;
+    return a.name.localeCompare(b.name);
+  });
 };
 
 export const buildWatchPartyLiveParticipantRoster = (options: {
