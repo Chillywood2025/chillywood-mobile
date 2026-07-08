@@ -211,6 +211,7 @@
     "guard:livekit-heartbeat-monitor-policy": "node ./scripts/guard-livekit-heartbeat-monitor-policy.mjs",
     "guard:livekit-passive-load-policy": "node ./scripts/guard-livekit-passive-load-policy.mjs",
     "guard:watch-party-live-audio-mix": "node ./scripts/guard-watch-party-live-audio-mix.mjs",
+    "guard:media-delivery-architecture": "node ./scripts/guard-media-delivery-architecture.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs && npm run guard:live-stage-contract && npm run guard:live-stage-approved-seats",
     "guard:live-stage-contract": "node ./scripts/guard-live-stage-contract.mjs",
