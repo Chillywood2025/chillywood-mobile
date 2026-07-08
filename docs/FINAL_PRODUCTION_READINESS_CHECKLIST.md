@@ -619,6 +619,7 @@ This checklist excludes the known Google Play subscription base-plan provider bl
 | --- | --- | --- | --- |
 | Route ownership and Live Stage flow | Closed | Already closed | Watch-Party LiveKit and Live Stage guards cover route ownership. |
 | Shared player / old room handling | Closed | Already closed | Old-room handling guard required in validation. |
+| Watch-Party Live Shared Player installed closure | Partial | Active launch blocker for this lane | Latest source commit `19f4959bcd61f0f9c9720a6dc275a4fb2da7dded` makes Party Room LiveKit prewarm non-blocking before `/player` routing after installed XML proved the Shared Player buttons were clickable test-ID targets. Android OTA group `fd2b4bc1-b1e0-4f25-aa6d-95dfda3a65d9`, update `019f4297-677e-7286-a16b-73fa3cc064f3`. Rerun installed proof from this OTA; do not count source proof as installed closure. |
 | Seat request/approval and 4 active cap | Closed | Already closed | Live Stage seat approval and active camera/mic cap are guarded. |
 | Token authority / metrics | Closed | Already closed | LiveKit authority and metrics guards are part of proof history. |
 | Passive viewer proof | Partial | Post-launch polish | Synthetic/passive proof closed; larger real-device capacity proof remains future. |
