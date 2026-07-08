@@ -658,6 +658,19 @@ assert(
   "regular Shared Player comments must expose visible compact input/send proof targets",
 );
 assert(
+  playerSource.includes('testID="shared-player-lower-dock-scroll"')
+    && playerSource.includes('keyboardShouldPersistTaps="handled"')
+    && playerSource.includes('keyboardDismissMode="on-drag"')
+    && playerSource.includes("titleParticipantFeedDockContentKeyboard"),
+  "regular Shared Player lower dock must be scrollable and keyboard-safe so comments are not cut off",
+);
+assert(
+  playerSource.includes("const sharedPartyCommentsKeyboardActive = isSharedPartyPlayback && !isPlayerFullscreen && watchPartyCommentKeyboardOpen;")
+    && playerSource.includes("setWatchPartyCommentKeyboardOpen(true);")
+    && playerSource.includes("setPartyCommentsOpen(true);"),
+  "regular Shared Player default visible comment input must activate keyboard-safe comment mode",
+);
+assert(
   playerSource.includes('testID="shared-player-regular-controls"')
     && !playerSource.slice(
       playerSource.indexOf("const renderTitleParticipantExpandedPanel = () => ("),

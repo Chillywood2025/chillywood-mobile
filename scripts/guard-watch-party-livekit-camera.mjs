@@ -275,6 +275,21 @@ assertIncludes(
 );
 assertIncludes(
   player,
+  "const sharedPartyCommentsKeyboardActive = isSharedPartyPlayback && !isPlayerFullscreen && watchPartyCommentKeyboardOpen;",
+  "regular Shared Player comments must enter keyboard-safe mode when the default visible composer is focused",
+);
+assertIncludes(
+  player,
+  'testID="shared-player-lower-dock-scroll"',
+  "regular Shared Player lower dock must expose a scroll container for clipped comments/composer states",
+);
+assertIncludes(
+  player,
+  'keyboardShouldPersistTaps="handled"',
+  "regular Shared Player lower dock scroll must keep comment Send taps handled while the keyboard is open",
+);
+assertIncludes(
+  player,
   "watch-party-live shared video watchdog check",
   "Android shared playback must log watchdog checks when sync says playing but render has no progress",
 );
@@ -1474,6 +1489,11 @@ assertIncludes(
   playerPartyCommentsContent,
   "!compactSharedDock ? (",
   "regular Shared Player compact comments must prioritize the input/send composer over a clipped title/list",
+);
+assertIncludes(
+  playerPartyCommentsContent,
+  "setPartyCommentsOpen(true);",
+  "regular Shared Player comment input focus must open keyboard-safe comment mode",
 );
 assertNotIncludes(
   playerPartyCommentsContent,

@@ -1,9 +1,11 @@
 # Live Watch-Party Layout Lock
 
 Date: 2026-04-27
-Last updated: 2026-05-01
+Last updated: 2026-07-08
 
 Status: user-approved layout contract. Runtime proof remains tracked separately.
+
+July 8, 2026 status note: the Watch-Party Live regular Shared Player comment-dock fix is considered layout-lock compliant because it keeps shared content at the top, people/participants below the shared content, and visible comments in the lower approved placement. It only makes the existing non-fullscreen lower dock scrollable/keyboard-safe so the visible composer and Send button are not clipped by Android keyboard or bottom inset. It does not change the locked Shared Player fullscreen rails.
 
 ## 1. Purpose
 

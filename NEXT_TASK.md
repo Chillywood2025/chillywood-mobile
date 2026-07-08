@@ -1,19 +1,18 @@
 # NEXT TASK
 
-# Watch-Party Live Source-Truth Repair
+# Watch-Party Live Comment Composer OTA Proof
 
 Current latest truth:
-- Watch-Party Live Shared Player is Partial after the newest installed post-approval bubble/feed photos.
+- Watch-Party Live Shared Player is Partial after the newest installed comment-composer screenshot.
 - Governing doc: `docs/release/GOOGLE_SIGNED_V80_WATCH_PARTY_LIVE_SOURCE_TRUTH_REAL_MEDIA_PROOF.md`.
 - Current artifact folder: `/tmp/google-play-internal-v80-watch-party-live-installed-roster-proof-20260707-224324/`.
-- Starting aligned commit for this follow-up: `f9e7912d53e46a9657a30fb5113569a4122c2696`.
 - Strict real media was `Chi'llywood City Lights`, `sourceType=creator_video`, `sourceId=c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, `classification=real-media`.
 - Carry-forward room `38M7L3` proved actual real-media playback on both devices, visible regular Shared Player comments, locked viewer playback controls, fullscreen left comments / center video / right LiveKit bubble rails unchanged, and return-to-room.
-- Later room `PKL35Z` proved comment/reaction/request/approval reachability, but the newest user photos and latest room `V7G4QL` show the roster/feed is still unstable: one phone can show no bubbles or only self, and the other can show confusing current-user/host preview copy.
-- R3 visibility was recovered through mDNS at `10.0.0.27:41063`, mapped to serial `R3CXA0DS5JV`; R5 stayed USB-visible. Latest proof room `V7G4QL` used `Chi'llywood City Lights` real media with both devices Play-installed v80. R5 host reached Shared Player but rendered the generic `Shared playback stays here if the room drops back from live camera.` fallback instead of host/viewer bubbles. R3 viewer rendered two bubbles but showed confusing preview/header copy (`user230455 · You`, with an earlier `You · Host` state).
 - Source commit `c41c1254ec349b640f5eaa12790731df942b01e8` makes durable active room membership the base Watch-Party Live bubble roster, drops remote LiveKit identities that collide with the current device identity, uses durable app participant id for `You`, and renders membership roster placeholders while LiveKit bubbles are syncing instead of hiding room members. Follow-up source commit `cb546f06d65f5bb05ec1c66cccb79ce47ee7039a` removes the remaining ambiguous host/viewer preview concatenation by rendering a neutral room count (`1 in room`, `2 in room`, etc.) while leaving role truth on the bubbles/status badges.
 - Android EAS Update production runtime `1.0.0` for the roster presentation fix was group `2554255e-5591-439b-8474-b4de7b01da3f`, Android update `019f3ff1-f211-75a4-be34-20ca98ce0504`. The latest neutral-preview OTA is group `9a6ce961-1632-4488-a189-98403ea72b78`, Android update `019f3ff9-39f4-714e-91b9-c9a5de71ba61`, message `Clarify Watch-Party Live roster preview cb546f0`.
-- This is not Closed until this fresh OTA is installed-proved: both devices must show host + viewer bubbles, no no-bubble fallback when active members exist, no self-only collapse, no host/viewer role mix, matching speaker/canPublish authority after approval, and identity-safe approved feed/fallback.
+- R3 visibility was recovered through mDNS at `10.0.0.27:41063`, mapped to serial `R3CXA0DS5JV`; R5 stayed USB-visible. Fresh room `KFUFYC` on the neutral-preview OTA proved the roster/approval fix: both devices showed two unique bubbles after approval, no self-only/no-bubble collapse, no duplicate self, host remained host, viewer became speaker, and the approved viewer camera bubble/feed or seated participant surface was identity-safe.
+- The newest remaining installed screenshot shows the regular Shared Player bottom comment composer cut off by the bottom edge/keyboard. This is now the open app-controlled source issue; it does not reopen playback, real media, fullscreen rails, Premium, LiveKit backend, or roster convergence unless a fresh regression appears.
+- Current source follow-up keeps fullscreen unchanged and makes the regular non-fullscreen lower dock scrollable, activates keyboard-safe comment mode when the visible composer receives focus, closes the Shared Player menu while composing, and keeps Send taps handled while the keyboard is open.
 
 Superseded historical trail retained for context:
 - Watch-Party Live sidecar/shared-player source truth is repaired, validated, pushed, and OTA-published through the real-media playback lane. Installed proof remains Partial, but the real-media playback blocker is resolved: both R5 and R3 rendered actual video in the same Shared Player on the fresh OTA. A July 7 camera-request packet then narrowed the remaining blocker to installed Shared Player camera-request/comment-reaction reachability and request persistence: tapping the viewer's own audience bubble/card did not produce a visible pending request, and the host never received a review/approval surface.
@@ -45,9 +44,9 @@ Superseded historical trail retained for context:
 - `npm run proof:watch-party-seat-request` imports the real Watch-Party Live helper module rather than proving a duplicate model.
 
 Next exact step:
-1. Load the fresh Android OTA group `9a6ce961-1632-4488-a189-98403ea72b78` / update `019f3ff9-39f4-714e-91b9-c9a5de71ba61` on both Play-installed devices.
-2. Rerun only the focused installed packet on Play-installed devices after the fresh OTA loads: real-media Shared Player, comment/reaction, request/approval, R3 speaker/canPublish, stable bubbles on both phones, no self-only/no-bubble collapse, no host/viewer role mix, and identity-safe approved feed/fallback.
-3. Do not reopen playback, real-media classification, regular comments visibility, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, or backend LiveKit routing unless a fresh regression appears.
+1. Commit/push the regular Shared Player comment-dock source/guard/doc fix, publish a fresh Android OTA from aligned `origin/main`, and record the group/update/runtime.
+2. Rerun only the focused installed packet on Play-installed devices after that OTA loads: open `Chi'llywood City Lights`, confirm carry-forward playback/roster basics, focus the visible bottom comment composer, verify the lower dock scrolls/keyboard does not block input or Send, send a viewer comment, and confirm host receipt.
+3. Do not reopen playback, real-media classification, fullscreen rails, Premium, Party Room, App Links, Chat/native calls, LiveKit backend, or roster convergence unless a fresh regression appears.
 
 # Android App Links / Domain Association Closed
 

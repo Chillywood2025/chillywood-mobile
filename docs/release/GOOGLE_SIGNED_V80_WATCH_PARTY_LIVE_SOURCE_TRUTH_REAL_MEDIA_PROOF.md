@@ -2,7 +2,7 @@
 
 Date: 2026-07-07
 
-Verdict: Partial. Watch-Party Live real-media playback, regular comments, locked viewer controls, fullscreen rails, return-to-room, and request/approval reachability have supporting installed proof, but the newest installed photos show the approved-state host/viewer roster and LiveKit bubble/feed presentation is still unstable.
+Verdict: Partial. Watch-Party Live real-media playback, locked viewer controls, fullscreen rails, return-to-room, request/approval reachability, and post-approval host/viewer bubble convergence have supporting installed proof. The remaining app-controlled blocker is regular Shared Player comment-composer usability: the visible bottom composer can be cut off and keyboard-blocked until the latest source fix is OTA-installed and proved.
 
 Initial source-truth commit: `833520e5ba6fad86160b93df1da45cd510b1c433`.
 
@@ -46,6 +46,8 @@ Post-approval installed regression: after the approval-persistence OTA, the newe
 
 Latest source root cause classification: the bubble deck and helper preview line were still too dependent on realtime presence, local/self fallback, and transient LiveKit identity aliases after membership and LiveKit authority changed. That allowed device-local presence gaps or identity alias drift to look like missing remote participants, duplicate self, stale role labels, or a remote host row labeled as the current viewer. The fix moves roster construction into helper-backed source truth: active/reconnecting membership is authoritative, presence cannot delete active members, stale presence cannot demote the room host or downgrade an approved speaker, self fallback cannot duplicate membership rows, remote identity aliases that collide with the current device are ignored for presentation, the LiveKit bubble surface treats durable roster `isCurrentUser` as the source of truth for `You`, the regular Shared Player renders roster placeholders while LiveKit is syncing instead of hiding active members, and the preview/helper line is now a neutral member count rather than a host/viewer label list.
 
+Latest installed packet after the neutral roster OTA used fresh room `KFUFYC` with R5 host and R3 viewer on Play-installed v80. It proved the roster/approval fix: both devices showed two unique bubbles after host approval, host remained host, viewer became speaker, no device showed only self, no duplicate self bubble appeared, R3 showed speaker state, and R5 showed an identity-safe viewer camera bubble/feed or seated participant surface. The lane still stayed Partial because the next user screenshot showed the regular Shared Player bottom comment composer clipped by the bottom edge/keyboard after approval. The current source follow-up keeps the fullscreen rails unchanged and makes the regular non-fullscreen lower dock scrollable, activates keyboard-safe comment mode when the visible composer is focused, closes the Shared Player menu while composing, and keeps Send taps handled while the keyboard is open.
+
 ## Fullscreen/Layout No-Change
 
 The locked fullscreen layout remains:
@@ -74,6 +76,8 @@ Source behavior now covered:
 - Player runtime now logs redacted Watch-Party Live media source classification metadata when resolving shared playback. This makes installed proof able to distinguish `real-media` from `fixture-or-proof`, `bundled-fallback`, and `missing-source` without exposing private playback URLs.
 - Regular Shared Player comments are visible in the approved lower/bottom placement when `isSharedPartyPlayback && !isPlayerFullscreen`; the button may still focus/toggle controls, but comments are no longer menu-only.
 - Regular Shared Player comments use a compact dock layout for the always-visible bottom surface so input/send remain reachable without opening Android Share or moving the fullscreen rails.
+- Regular Shared Player lower dock is scrollable in non-fullscreen mode, with `keyboardShouldPersistTaps="handled"` and keyboard-safe bottom padding so the composer and Send button remain reachable when Android opens the keyboard.
+- Focusing the default visible regular Shared Player comment input now opens keyboard-safe comment mode and closes the Shared Player menu instead of leaving the composer clipped behind the keyboard.
 - Android shared playback is render-proof aware. A real-media shared source showing sync state without load/progress triggers a bounded recovery sequence and cannot close installed playback proof from `Synced · Playing` alone.
 - Watch-Party Live contracts are authority-strict: desired host/speaker publish state is not publish-ready unless the active token contract matches room, identity, role, and canPublish.
 - Camera-seat requests carry request versions; duplicate pending events do not reopen an X-closed review for the same request.
@@ -147,11 +151,12 @@ Current installed-proof status:
 - Latest request-control follow-up reroutes explicit request and self-bubble request through the visible participant id and makes the regular comments dock input/send reachable. Installed proof remains required after OTA group `6f83ca92-a7c8-41f5-b4d3-864998e2823e`.
 - Final pre-proof reachability follow-up moves the regular Shared Player control deck outside the hidden auto-hide overlay gate and keeps compact comments focused on input/send. Installed proof remains required after the fresh OTA from this source.
 - Fresh room `V7G4QL` on the latest OTA proved R3 visibility was recovered but exposed the current source defect before approval closure: R5 host Shared Player rendered the generic shared-playback fallback instead of member bubbles, while R3 viewer rendered two bubbles with confusing preview/header copy such as `user230455 · You` or briefly `You · Host`.
-- Strict installed proof is Partial: explicit `Request Camera` / approval reachability has supporting proof, but newest installed photos and room `V7G4QL` show the roster/bubble/feed state can collapse, hide members, or mix current-user/host labels. Source commit `cb546f06d65f5bb05ec1c66cccb79ce47ee7039a` is validation-clean and OTA-published as group `9a6ce961-1632-4488-a189-98403ea72b78`; it must be installed-proved before closure.
+- Fresh room `KFUFYC` on OTA group `9a6ce961-1632-4488-a189-98403ea72b78` proved the roster/bubble/feed state after approval: both devices showed host + viewer bubbles, no self-only/no-bubble collapse, no duplicate self bubble, no host/viewer role mix, R3 became speaker, and R5 showed an identity-safe viewer camera bubble/feed or seated participant surface.
+- Strict installed proof is still Partial only because the latest comment-composer screenshot shows the regular Shared Player bottom composer can be clipped/keyboard-blocked. The current source fix is validation-clean locally but still needs a fresh OTA and installed comment-send proof.
 - The current source proof now rejects the photo failure mode: an active two-member room may not render no bubbles or only self, may not drop host/viewer because LiveKit is still syncing, may not duplicate self fallback, may not let stale presence override host/speaker membership roles, may not let a transient LiveKit identity collision label a remote participant as `You`, and may not render a host/viewer label list in the social preview line. Installed proof remains required after the fresh OTA.
 - no sideload, `adb install`, uninstall, clear data, logout, app reset, Premium bypass, manual entitlement grant, provider production mutation, source change, or fullscreen layout change was performed.
 
 Next exact proof/fix step:
 
-1. Load Android OTA group `9a6ce961-1632-4488-a189-98403ea72b78` / update `019f3ff9-39f4-714e-91b9-c9a5de71ba61` on both Play-installed devices.
-2. Rerun the focused installed packet with strict real media and Premium-active Play-installed devices: request/approval, matching speaker/canPublish authority, stable bubbles on both phones, no no-bubble/self-only collapse, no host/viewer role mix, identity-safe approved feed/fallback, locked viewer controls, fullscreen rails unchanged, and return-to-room.
+1. Publish the regular Shared Player comment-dock fix as a fresh Android OTA from aligned `origin/main`.
+2. Rerun the focused installed packet with strict real media and Premium-active Play-installed devices: carry forward playback/roster basics, focus the visible bottom comment composer, prove the lower dock can scroll and the keyboard does not block input/Send, send a viewer comment, confirm host receipt, and only then close the remaining comment-composer lane.

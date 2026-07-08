@@ -7190,7 +7190,7 @@ export default function PlayerScreen() {
     !!livePresenceEvent && !partyCommentsOpen && !liveFilterSheetOpen && shouldUseLiveModeLowerDock;
   const roomCommentsTitle = isLiveMode ? "Live Room Comments" : "Room Comments";
   const roomCommentsEmptyText = isLiveMode ? "No live room comments yet." : "No room comments yet.";
-  const sharedPartyCommentsKeyboardActive = isSharedPartyPlayback && partyCommentsOpen && watchPartyCommentKeyboardOpen;
+  const sharedPartyCommentsKeyboardActive = isSharedPartyPlayback && !isPlayerFullscreen && watchPartyCommentKeyboardOpen;
   const standaloneAccessPresentation = useMemo(() => {
     if (!isStandalonePlayer) return null;
     if (standaloneAccessLoading) {
@@ -8550,7 +8550,11 @@ export default function PlayerScreen() {
               resetAutoHideTimer();
             }}
             onFocus={() => {
-              if (isSharedPartyPlayback) setWatchPartyCommentKeyboardOpen(true);
+              if (isSharedPartyPlayback) {
+                setWatchPartyCommentKeyboardOpen(true);
+                setWatchPartyMenuOpen(false);
+                setPartyCommentsOpen(true);
+              }
               setControlsVisible(true);
               resetAutoHideTimer();
             }}
@@ -9969,7 +9973,20 @@ export default function PlayerScreen() {
 
           {isSharedPartyPlayback && source && !isPlayerFullscreen ? (
             <View style={[styles.titleParticipantFeedDock, hasActiveRailParticipants && styles.titleWatchPartyRailDockActive]}>
-              {renderTitleParticipantExpandedPanel()}
+              <ScrollView
+                testID="shared-player-lower-dock-scroll"
+                style={styles.titleParticipantFeedDockScroll}
+                contentContainerStyle={[
+                  styles.titleParticipantFeedDockContent,
+                  sharedPartyCommentsKeyboardActive && styles.titleParticipantFeedDockContentKeyboard,
+                ]}
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
+                {renderTitleParticipantExpandedPanel()}
+              </ScrollView>
             </View>
           ) : null}
           {renderWatchPartyLiveModeOverlayCluster()}
@@ -11405,15 +11422,23 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 0,
     backgroundColor: "rgba(8,10,18,0.46)",
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 22,
     minHeight: 176,
     maxHeight: 430,
     shadowColor: "#000",
     shadowOpacity: 0.22,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
+  },
+  titleParticipantFeedDockScroll: {
+    maxHeight: 430,
+  },
+  titleParticipantFeedDockContent: {
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 28,
+  },
+  titleParticipantFeedDockContentKeyboard: {
+    paddingBottom: 96,
   },
   titleWatchPartyRailDockActive: {
     backgroundColor: "rgba(12,10,20,0.62)",
