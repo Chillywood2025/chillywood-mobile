@@ -325,6 +325,15 @@ export const watchPartyLiveContractMatchesDesiredAuthority = (
   && contract.requestedGrants?.canPublish === desired.canPublish
 );
 
+export const canUseWatchPartyLiveRenderableContract = (
+  contract: WatchPartyLiveJoinContractLike,
+  options?: { roomName?: string | null; isExpired?: boolean | null },
+) => (
+  !!contract
+  && options?.isExpired !== true
+  && (!sanitizeIdentifier(options?.roomName) || contract.roomName === sanitizeIdentifier(options?.roomName))
+);
+
 export const canRenderWatchPartyParticipantSpecificTrack = (options: {
   participantId: string;
   localParticipantIdentity: string;

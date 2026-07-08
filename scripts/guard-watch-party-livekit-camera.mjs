@@ -162,6 +162,11 @@ assertIncludes(
 );
 assertIncludes(
   watchPartyLiveSourceTruth,
+  "canUseWatchPartyLiveRenderableContract",
+  "Watch-Party Live source-truth helper must keep bubble rendering stable during LiveKit authority refresh",
+);
+assertIncludes(
+  watchPartyLiveSourceTruth,
   "canRenderWatchPartyParticipantSpecificTrack",
   "Watch-Party Live source-truth helper must own identity-safe track checks",
 );
@@ -934,8 +939,18 @@ assertIncludes(
 );
 assertIncludes(
   playerWatchPartyLiveKitContractRefresh,
-  "watch-party-live publish contract still downgraded; refreshing snapshot before one retry",
-  "Player Watch-Party LiveKit must retry once after refreshing membership authority",
+  "watch-party-live publish contract still downgraded; refreshing snapshot before bounded retry",
+  "Player Watch-Party LiveKit must retry with a bounded membership/token refresh window",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1);",
+  "Player Watch-Party LiveKit bounded retry must force a new token request after membership refresh",
+);
+assertIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "watchPartyLiveKitAuthorityRetryAttemptsRef.current[authorityRetryKey]",
+  "Player Watch-Party LiveKit bounded retry must count attempts per authority key",
 );
 assertIncludes(
   playerWatchPartyLiveKitContractRefresh,
@@ -952,6 +967,11 @@ assertNotIncludes(
   playerWatchPartyLiveKitContractRefresh,
   "kept backend-authoritative watch-party-live contract after guarded publish retry",
   "Player Watch-Party LiveKit must not keep downgraded publish contracts as ready",
+);
+assertNotIncludes(
+  playerWatchPartyLiveKitContractRefresh,
+  "refreshing snapshot before one retry",
+  "Player Watch-Party LiveKit must not use the old one-shot publish retry",
 );
 assertIncludes(
   playerWatchPartyLiveKitContractRefresh,
@@ -1832,6 +1852,51 @@ assertIncludes(
   playerFallbackHandler,
   "setWatchPartyLiveKitJoinContract(null);",
   "Player Watch-Party LiveKit fallback must explicitly clear the prepared contract",
+);
+assertIncludes(
+  playerFallbackHandler,
+  "setWatchPartyLiveKitRenderableContract(null);",
+  "Player Watch-Party LiveKit fallback must clear the cached renderable contract only on real fallback",
+);
+assertIncludes(
+  player,
+  "const activeWatchPartyLiveKitJoinContract = canUseWatchPartyLiveRenderableContract(",
+  "Player must select a stable renderable LiveKit contract separately from publish authority",
+);
+assertIncludes(
+  player,
+  "shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract ? (",
+  "Player Watch-Party Live bubble surface must stay on the LiveKit renderer during authority refresh",
+);
+assertNotIncludes(
+  player,
+  "shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (",
+  "Player Watch-Party Live bubble surface must not swap to placeholder roster when join contract is temporarily cleared",
+);
+assertIncludes(
+  player,
+  "{desiredWatchPartyLiveKitParticipantRole.toUpperCase()}",
+  "Player Watch-Party Live role pill must use membership/room desired role instead of transient token role",
+);
+assertNotIncludes(
+  player,
+  "{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}",
+  "Player Watch-Party Live role pill must not flicker from transient token role",
+);
+assertIncludes(
+  player,
+  "const partyPresencePreviewText = useMemo(() => {",
+  "Player must isolate the top-video presence preview from the real Watch-Party Live bubble panel",
+);
+assertIncludes(
+  player,
+  "if (isSharedPartyPlayback) return \"\";",
+  "Shared Player must not show a competing participant-name preview pill over the video surface",
+);
+assertIncludes(
+  player,
+  "{partyPresencePreviewText}",
+  "Non-shared Player presence previews should keep using the neutralized preview text helper",
 );
 assertIncludes(
   liveStageEntryHandler,

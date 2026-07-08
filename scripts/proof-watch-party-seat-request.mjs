@@ -36,6 +36,7 @@ const {
   buildWatchPartyLiveParticipantRoster,
   canCloseWatchPartyLiveActualPlaybackProof,
   canRenderWatchPartyParticipantSpecificTrack,
+  canUseWatchPartyLiveRenderableContract,
   classifyWatchPartyLiveMediaSource,
   closeWatchPartySeatRequestReview,
   createWatchPartySeatRequestVersion,
@@ -415,6 +416,27 @@ assert(
     { roomName: "ROOM1" },
   ) === false,
   "speaker desired state must reject viewer/no-publish LiveKit contract",
+);
+assert(
+  canUseWatchPartyLiveRenderableContract(
+    { roomName: "ROOM1", participantRole: "viewer", requestedGrants: { canPublish: false } },
+    { roomName: "ROOM1", isExpired: false },
+  ) === true,
+  "downgraded viewer/no-publish contract may keep the LiveKit bubble surface rendered during speaker authority refresh",
+);
+assert(
+  canUseWatchPartyLiveRenderableContract(
+    { roomName: "OTHER", participantRole: "viewer", requestedGrants: { canPublish: false } },
+    { roomName: "ROOM1", isExpired: false },
+  ) === false,
+  "renderable contract cache must not leak across rooms",
+);
+assert(
+  canUseWatchPartyLiveRenderableContract(
+    { roomName: "ROOM1", participantRole: "viewer", requestedGrants: { canPublish: false } },
+    { roomName: "ROOM1", isExpired: true },
+  ) === false,
+  "expired renderable contracts must not keep the LiveKit bubble surface alive",
 );
 assert(
   watchPartyLiveContractMatchesDesiredAuthority(

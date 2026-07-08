@@ -164,6 +164,7 @@ import {
 import {
   applyWatchPartySeatRequestEvent,
   buildWatchPartyLiveParticipantRoster,
+  canUseWatchPartyLiveRenderableContract,
   classifyWatchPartyLiveMediaSource,
   closeWatchPartySeatRequestReview,
   createWatchPartySeatRequestVersion,
@@ -223,6 +224,8 @@ const WATCH_PARTY_LIVE_DUCK_DOWN_MILLIS = 250;
 const WATCH_PARTY_LIVE_RESTORE_MILLIS = 700;
 const WATCH_PARTY_LIVE_VOICE_IDLE_MILLIS = 650;
 const WATCH_PARTY_LIVE_VOLUME_TICK_MILLIS = 50;
+const WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT = 6;
+const WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_BASE_DELAY_MILLIS = 550;
 const WATCH_PARTY_SHARED_ANDROID_VIDEO_WATCHDOG_MILLIS = 4500;
 const WATCH_PARTY_SHARED_ANDROID_VIDEO_MAX_RECOVERIES = 2;
 const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
@@ -1106,12 +1109,14 @@ export default function PlayerScreen() {
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
   const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
+  const [watchPartyLiveKitRenderableContract, setWatchPartyLiveKitRenderableContract] = useState<LiveKitTokenReady | null>(null);
+  const [watchPartyLiveKitAuthorityRetrySerial, setWatchPartyLiveKitAuthorityRetrySerial] = useState(0);
   // Live-stage controls stay persistent; shared Player chrome should auto-hide like standalone Player chrome.
   const shouldPinWatchPartyControls = inWatchParty
     && isLiveModeFlag
     && watchPartyEntryAllowed
     && Platform.OS !== "web"
-    && !!watchPartyLiveKitJoinContract;
+    && !!(watchPartyLiveKitJoinContract || watchPartyLiveKitRenderableContract);
   const effectiveControlsVisible = shouldPinWatchPartyControls || controlsVisible;
   const isCreatorStandalonePlaybackSurface = !inWatchParty
     && !isLiveModeFlag
@@ -1169,6 +1174,7 @@ export default function PlayerScreen() {
   const suppressNextSpeakingEventRef = useRef<Record<string, "start" | "stop" | undefined>>({});
   const watchPartyLiveKitContractRequestKeyRef = useRef("");
   const watchPartyLiveKitAuthorityRetryKeyRef = useRef("");
+  const watchPartyLiveKitAuthorityRetryAttemptsRef = useRef<Record<string, number>>({});
   const watchPartyLiveKitAuthorityRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchPartyLiveKitMountedRef = useRef(true);
   const lastPartyMembershipRosterRefreshAtRef = useRef(0);
@@ -2186,6 +2192,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (!inWatchParty || !partyId || !watchPartyEntryAllowed) {
       setWatchPartyLiveKitJoinContract((current) => (current ? null : current));
+      setWatchPartyLiveKitRenderableContract((current) => (current ? null : current));
       setPartyViewerCount((current) => (current === 0 ? current : 0));
       setViewerCount((current) => (current === 1 ? current : 1));
       setPartyParticipantPreview((current) => (current.length === 0 ? current : []));
@@ -5685,11 +5692,31 @@ export default function PlayerScreen() {
   const playerMediaIsInteractive = playerAppState === "active";
   const watchPartyLiveKitJoinContractExpired = !!watchPartyLiveKitJoinContract
     && isLiveKitParticipantTokenExpired(watchPartyLiveKitJoinContract.participantToken);
+  const watchPartyLiveKitRenderableContractExpired = !!watchPartyLiveKitRenderableContract
+    && isLiveKitParticipantTokenExpired(watchPartyLiveKitRenderableContract.participantToken);
+  const activeWatchPartyLiveKitJoinContract = canUseWatchPartyLiveRenderableContract(
+    watchPartyLiveKitJoinContract,
+    { roomName: partyId, isExpired: watchPartyLiveKitJoinContractExpired },
+  )
+    ? watchPartyLiveKitJoinContract
+    : canUseWatchPartyLiveRenderableContract(
+      watchPartyLiveKitRenderableContract,
+      { roomName: partyId, isExpired: watchPartyLiveKitRenderableContractExpired },
+    )
+      ? watchPartyLiveKitRenderableContract
+      : null;
   const shouldRenderWatchPartyLiveKit = inWatchParty
     && watchPartyEntryAllowed
     && Platform.OS !== "web"
-    && !!watchPartyLiveKitJoinContract
-    && !watchPartyLiveKitJoinContractExpired;
+    && !!activeWatchPartyLiveKitJoinContract;
+  useEffect(() => {
+    if (canUseWatchPartyLiveRenderableContract(
+      watchPartyLiveKitJoinContract,
+      { roomName: partyId, isExpired: watchPartyLiveKitJoinContractExpired },
+    )) {
+      setWatchPartyLiveKitRenderableContract(watchPartyLiveKitJoinContract);
+    }
+  }, [partyId, watchPartyLiveKitJoinContract, watchPartyLiveKitJoinContractExpired]);
   const currentWatchPartyParticipant = useMemo(
     () => liveBubbleParticipants.find((participant) => participant.id === trackedUserId) ?? null,
     [liveBubbleParticipants, trackedUserId],
@@ -6048,8 +6075,10 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (!inWatchParty || !partyId || !watchPartyEntryAllowed || Platform.OS === "web") {
       setWatchPartyLiveKitJoinContract(null);
+      setWatchPartyLiveKitRenderableContract(null);
       watchPartyLiveKitContractRequestKeyRef.current = "";
       watchPartyLiveKitAuthorityRetryKeyRef.current = "";
+      watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
       return;
     }
 
@@ -6085,6 +6114,7 @@ export default function PlayerScreen() {
     ) {
       watchPartyLiveKitContractRequestKeyRef.current = "";
       watchPartyLiveKitAuthorityRetryKeyRef.current = "";
+      watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
       return;
     }
 
@@ -6102,6 +6132,14 @@ export default function PlayerScreen() {
         staleRoleContract,
         membershipAuthority: currentWatchPartyMembershipAuthoritySignature,
       });
+      if (canUseWatchPartyLiveRenderableContract(
+        watchPartyLiveKitJoinContract,
+        { roomName: partyId, isExpired: contractRoomMismatch || watchPartyLiveKitJoinContractExpired },
+      )) {
+        setWatchPartyLiveKitRenderableContract(watchPartyLiveKitJoinContract);
+      } else if (contractRoomMismatch || watchPartyLiveKitJoinContractExpired) {
+        setWatchPartyLiveKitRenderableContract(null);
+      }
       setWatchPartyLiveKitJoinContract(null);
     }
 
@@ -6120,6 +6158,7 @@ export default function PlayerScreen() {
       if (preparedContractMatchesDesired) {
         watchPartyLiveKitContractRequestKeyRef.current = "";
         watchPartyLiveKitAuthorityRetryKeyRef.current = "";
+        watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
         setWatchPartyLiveKitJoinContract(preparedContract);
         debugLog("livekit", "consumed watch-party-live join contract", {
           roomName: preparedContract.roomName,
@@ -6197,17 +6236,28 @@ export default function PlayerScreen() {
           setWatchPartyLiveKitJoinContract(joinResult);
           watchPartyLiveKitContractRequestKeyRef.current = "";
           watchPartyLiveKitAuthorityRetryKeyRef.current = "";
+          watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
           return;
         }
 
+        if (canUseWatchPartyLiveRenderableContract(joinResult, { roomName: partyId })) {
+          setWatchPartyLiveKitRenderableContract(joinResult);
+        }
         setWatchPartyLiveKitJoinContract(null);
         if (desiredWatchPartyLiveKitCanPublish) {
-          if (watchPartyLiveKitAuthorityRetryKeyRef.current !== authorityRetryKey) {
+          const previousRetryCount = watchPartyLiveKitAuthorityRetryAttemptsRef.current[authorityRetryKey] ?? 0;
+          if (previousRetryCount < WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT) {
+            const nextRetryCount = previousRetryCount + 1;
+            const retryDelayMillis = WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_BASE_DELAY_MILLIS + ((nextRetryCount - 1) * 350);
             watchPartyLiveKitAuthorityRetryKeyRef.current = authorityRetryKey;
+            watchPartyLiveKitAuthorityRetryAttemptsRef.current = {
+              ...watchPartyLiveKitAuthorityRetryAttemptsRef.current,
+              [authorityRetryKey]: nextRetryCount,
+            };
             if (watchPartyLiveKitAuthorityRetryTimeoutRef.current) {
               clearTimeout(watchPartyLiveKitAuthorityRetryTimeoutRef.current);
             }
-            debugLog("livekit", "watch-party-live publish contract still downgraded; refreshing snapshot before one retry", {
+            debugLog("livekit", "watch-party-live publish contract still downgraded; refreshing snapshot before bounded retry", {
               roomName: joinResult.roomName,
               currentUserId: trackedUserId,
               desiredParticipantRole: desiredWatchPartyLiveKitParticipantRole,
@@ -6215,6 +6265,9 @@ export default function PlayerScreen() {
               participantRole: joinResult.participantRole,
               canPublish: joinResultCanPublish,
               membershipAuthority: currentWatchPartyMembershipAuthoritySignature,
+              retryAttempt: nextRetryCount,
+              retryLimit: WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT,
+              retryDelayMillis,
             });
             watchPartyLiveKitAuthorityRetryTimeoutRef.current = setTimeout(() => {
               watchPartyLiveKitAuthorityRetryTimeoutRef.current = null;
@@ -6223,10 +6276,11 @@ export default function PlayerScreen() {
                 if (!watchPartyLiveKitMountedRef.current) return;
                 watchPartyLiveKitContractRequestKeyRef.current = "";
                 setWatchPartyLiveKitJoinContract(null);
+                setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1);
               });
-            }, 650);
+            }, retryDelayMillis);
           } else {
-            debugLog("livekit", "watch-party-live publish contract retry already used for authority snapshot", {
+            debugLog("livekit", "watch-party-live publish contract bounded retry exhausted", {
               roomName: joinResult.roomName,
               currentUserId: trackedUserId,
               desiredParticipantRole: desiredWatchPartyLiveKitParticipantRole,
@@ -6234,6 +6288,7 @@ export default function PlayerScreen() {
               participantRole: joinResult.participantRole,
               canPublish: joinResultCanPublish,
               membershipAuthority: currentWatchPartyMembershipAuthoritySignature,
+              retryLimit: WATCH_PARTY_LIVEKIT_AUTHORITY_RETRY_LIMIT,
             });
           }
         }
@@ -6265,6 +6320,7 @@ export default function PlayerScreen() {
     partyId,
     refreshPartyMembershipSnapshot,
     trackedUserId,
+    watchPartyLiveKitAuthorityRetrySerial,
     watchPartyLiveKitIdentity,
     watchPartyEntryAllowed,
     watchPartyLiveKitJoinContract?.participantRole,
@@ -6279,6 +6335,7 @@ export default function PlayerScreen() {
       roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
     });
     setWatchPartyLiveKitJoinContract(null);
+    setWatchPartyLiveKitRenderableContract(null);
   }, [partyId, watchPartyLiveKitJoinContract?.roomName]);
 
   useEffect(() => {
@@ -7211,6 +7268,10 @@ export default function PlayerScreen() {
     if (liveBubbleParticipants.length === 1) return "1 in room";
     return `${liveBubbleParticipants.length} in room`;
   }, [liveBubbleParticipants]);
+  const partyPresencePreviewText = useMemo(() => {
+    if (isSharedPartyPlayback) return "";
+    return partyParticipantPreview.join(" · ");
+  }, [isSharedPartyPlayback, partyParticipantPreview]);
   const compactPartySyncStatus = useMemo(() => {
     if (!partySyncStatus) return "";
     return partySyncStatus
@@ -8088,9 +8149,9 @@ export default function PlayerScreen() {
   };
 
   const renderWatchPartyBubbleGridSurface = (containerStyle?: object) => (
-    shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
+    shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract ? (
       <LiveKitStageMediaSurface
-        joinContract={watchPartyLiveKitJoinContract}
+        joinContract={activeWatchPartyLiveKitJoinContract}
         onFallback={onWatchPartyLiveKitFallback}
         active={playerMediaIsInteractive}
         fillParent={false}
@@ -8181,9 +8242,9 @@ export default function PlayerScreen() {
               {watchPartySyncLabel || watchPartyAudienceLabel || "Shared playback syncing"}
             </Text>
           </View>
-          {watchPartyLiveKitJoinContract ? (
+          {activeWatchPartyLiveKitJoinContract ? (
             <View style={[styles.watchPartySocialMetaPill, styles.watchPartySocialMetaPillRole]}>
-              <Text style={styles.watchPartySocialRoleText}>{watchPartyLiveKitJoinContract.participantRole.toUpperCase()}</Text>
+              <Text style={styles.watchPartySocialRoleText}>{desiredWatchPartyLiveKitParticipantRole.toUpperCase()}</Text>
             </View>
           ) : null}
         </View>
@@ -8668,7 +8729,7 @@ export default function PlayerScreen() {
       style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
       pointerEvents="auto"
     >
-      {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract
+      {shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract
         ? renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)
         : null}
     </View>
@@ -9837,9 +9898,9 @@ export default function PlayerScreen() {
                       <Text style={styles.partyPresenceIcon}>👥</Text>
                       <Text style={styles.partyPresenceCount}>{viewerCount}</Text>
                     </View>
-                    {partyParticipantPreview.length > 0 ? (
+                    {partyPresencePreviewText ? (
                       <Text style={styles.partyPresenceHint} numberOfLines={1}>
-                        {partyParticipantPreview.join(" · ")}
+                        {partyPresencePreviewText}
                       </Text>
                     ) : null}
                   </Animated.View>

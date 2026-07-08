@@ -1,8 +1,17 @@
 # NEXT TASK
 
-# Watch-Party Live Final Camera/Reaction Proof
+# Watch-Party Live Stable Bubble Surface / Final Camera Proof
 
-Latest foreground media-bubble update:
+Latest stable-bubble source update:
+- New installed photos after the foreground media-bubble OTA invalidated the prior "works now" carry-forward. The app is still Partial.
+- Current source root cause: during post-approval LiveKit authority refresh, Player can clear `watchPartyLiveKitJoinContract`, swap the real `LiveKitStageMediaSurface` for the separate placeholder membership roster, flicker the role pill from transient token role, and leave the approved speaker waiting without an identity-matched camera feed.
+- Current source fix in this lane keeps a separate renderable LiveKit contract so the real LiveKit bubble surface stays mounted during token/authority refresh. It still does not treat downgraded viewer/no-publish contracts as publish-ready.
+- Speaker/canPublish token refresh now uses a bounded membership-refresh retry window instead of the old single retry that could silently stop after one downgraded response.
+- The Shared Player top-video presence pill no longer lists participant names during Watch-Party Live; it keeps the count only so it does not compete with the real bubble panel.
+- Validation passed: LiveKit routing health (`eligibleServerCount=1`, `heartbeatAgeSeconds=20`, no recent no-eligible-server blocker), heartbeat policy, Premium sandbox policy, Watch-Party LiveKit guard, old-room handling, Watch-Party seat-request proof, Live Stage proof, runtime validation, route contracts, TypeScript, `deno check supabase/functions/livekit-token/index.ts`, diff checks, and changed-hunk secret scan. Commit/push, OTA, and installed proof are still required.
+- Do not change fullscreen rails/layout, Premium, Watch-Party Party Room source semantics, LiveKit routing/heartbeat/cutoffs, App Links, Chat/native, auth/RLS, billing, payout/cashout, sideload/install/logout/clear-data/uninstall/reinstall.
+
+Superseded foreground media-bubble update:
 - Source commit `f9882fc3fcbd23e7765d17f432c47a78ed056f5c` is pushed to `origin/main`.
 - Android EAS Update production runtime `1.0.0`: group `ecd5dfde-3650-40e9-a3c9-8431ed8806ec`, Android update `019f42a7-167d-70bf-a8f1-fea8d81469c3`, message `Fix Watch-Party foreground media bubbles f9882fc3`.
 - Root cause of the latest “bubbles but no feed” screenshots: the roster/role source was correct, but Watch-Party LiveKit could still be disabled by transient Android foreground `blur` events while the app stayed visible, leaving only membership placeholder bubbles. Publish-capable host/speaker bubbles also showed the role label before `Camera preparing`, which made missing track state look inert instead of actively preparing.
