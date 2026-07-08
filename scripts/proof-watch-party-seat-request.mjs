@@ -670,6 +670,19 @@ assert(
     && playerSource.includes("setPartyCommentsOpen(true);"),
   "regular Shared Player default visible comment input must activate keyboard-safe comment mode",
 );
+const sharedPlayerDockSource = playerSource.slice(
+  playerSource.indexOf("const renderTitleParticipantExpandedPanel = () => ("),
+  playerSource.indexOf("const renderCreatorVideoCommentsPanel = () => {"),
+);
+assert(
+  sharedPlayerDockSource.includes("{sharedPartyCommentsKeyboardActive ? null : (")
+    && sharedPlayerDockSource.includes("!sharedPartyCommentsKeyboardActive && watchPartyMenuOpen")
+    && sharedPlayerDockSource.indexOf("{sharedPartyCommentsKeyboardActive ? null : (")
+      < sharedPlayerDockSource.indexOf('testID={shouldShowRegularSharedComments ? "shared-player-visible-comments" : undefined}')
+    && sharedPlayerDockSource.indexOf('testID={shouldShowRegularSharedComments ? "shared-player-visible-comments" : undefined}')
+      < sharedPlayerDockSource.indexOf("!sharedPartyCommentsKeyboardActive && watchPartyMenuOpen"),
+  "regular Shared Player keyboard comment mode must prioritize the composer above action/control rows",
+);
 assert(
   playerSource.includes('testID="shared-player-regular-controls"')
     && !playerSource.slice(

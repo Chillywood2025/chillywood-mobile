@@ -280,6 +280,32 @@ assertIncludes(
 );
 assertIncludes(
   player,
+  "{sharedPartyCommentsKeyboardActive ? null : (",
+  "regular Shared Player keyboard comment mode must hide action rows so the composer stays reachable",
+);
+assertIncludes(
+  player,
+  "!sharedPartyCommentsKeyboardActive && watchPartyMenuOpen",
+  "regular Shared Player keyboard comment mode must hide the controls menu below the composer",
+);
+const sharedPlayerDockForKeyboard = sliceBetween(
+  player,
+  "const renderTitleParticipantExpandedPanel = () => (",
+  "const renderCreatorVideoCommentsPanel = () => {",
+  "Player Shared Player keyboard dock boundary",
+);
+if (
+  !(
+    sharedPlayerDockForKeyboard.indexOf("{sharedPartyCommentsKeyboardActive ? null : (")
+      < sharedPlayerDockForKeyboard.indexOf('testID={shouldShowRegularSharedComments ? "shared-player-visible-comments" : undefined}')
+      && sharedPlayerDockForKeyboard.indexOf('testID={shouldShowRegularSharedComments ? "shared-player-visible-comments" : undefined}')
+        < sharedPlayerDockForKeyboard.indexOf("!sharedPartyCommentsKeyboardActive && watchPartyMenuOpen")
+  )
+) {
+  fail("regular Shared Player keyboard mode must render comments between hidden action rows and hidden menu controls");
+}
+assertIncludes(
+  player,
   'testID="shared-player-lower-dock-scroll"',
   "regular Shared Player lower dock must expose a scroll container for clipped comments/composer states",
 );

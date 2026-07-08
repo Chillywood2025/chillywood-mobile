@@ -8159,75 +8159,79 @@ export default function PlayerScreen() {
           sharedPartyCommentsKeyboardActive && styles.watchPartyDockOverlayKeyboard,
         ]}
       >
-        <View style={styles.watchPartyDockActionRow}>
-          <TouchableOpacity
-            style={styles.watchPartyDockActionBtn}
-            onPress={onPressWatchPartyRoom}
-            activeOpacity={0.88}
-            testID="shared-player-party-room-button"
-          >
-            <Text style={styles.watchPartyDockActionText}>Party Room</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.watchPartyDockActionBtn, partyCommentsOpen && styles.watchPartyDockActionBtnActive]}
-            onPress={onToggleWatchPartyComments}
-            activeOpacity={0.88}
-            testID="shared-player-room-comments-button"
-          >
-            <Text style={[styles.watchPartyDockActionText, partyCommentsOpen && styles.watchPartyDockActionTextActive]}>Room Comments</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.watchPartyDockActionBtn}
-            onPress={onPressSharedPlayerQuickReaction}
-            activeOpacity={0.88}
-            testID="shared-player-reaction-button"
-            accessibilityRole="button"
-            accessibilityLabel="Send a quick room reaction"
-          >
-            <Text style={styles.watchPartyDockActionText}>React</Text>
-          </TouchableOpacity>
-          {shouldRenderSharedPlayerRequestCameraControl ? (
-            <TouchableOpacity
-              style={[
-                styles.watchPartyDockActionBtn,
-                currentWatchPartyViewerRequestPending && styles.watchPartyDockActionBtnActive,
-                currentWatchPartyViewerRequestPending && styles.secondaryBtnDisabled,
-              ]}
-              onPress={() => {
-                void onPressSharedPlayerRequestCamera("dock");
-              }}
-              disabled={currentWatchPartyViewerRequestPending}
-              activeOpacity={0.88}
-              testID={currentWatchPartyViewerRequestPending ? "shared-player-request-camera-pending" : "shared-player-request-camera-button"}
-              accessibilityRole="button"
-              accessibilityLabel={currentWatchPartyViewerRequestPending ? "Camera request pending" : "Request camera"}
-              accessibilityState={{ disabled: currentWatchPartyViewerRequestPending }}
-            >
-              <Text style={[
-                styles.watchPartyDockActionText,
-                currentWatchPartyViewerRequestPending && styles.watchPartyDockActionTextActive,
-              ]}>
-                {currentWatchPartyViewerRequestPending ? "Request pending" : "Request Camera"}
+        {sharedPartyCommentsKeyboardActive ? null : (
+          <>
+            <View style={styles.watchPartyDockActionRow}>
+              <TouchableOpacity
+                style={styles.watchPartyDockActionBtn}
+                onPress={onPressWatchPartyRoom}
+                activeOpacity={0.88}
+                testID="shared-player-party-room-button"
+              >
+                <Text style={styles.watchPartyDockActionText}>Party Room</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.watchPartyDockActionBtn, partyCommentsOpen && styles.watchPartyDockActionBtnActive]}
+                onPress={onToggleWatchPartyComments}
+                activeOpacity={0.88}
+                testID="shared-player-room-comments-button"
+              >
+                <Text style={[styles.watchPartyDockActionText, partyCommentsOpen && styles.watchPartyDockActionTextActive]}>Room Comments</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.watchPartyDockActionBtn}
+                onPress={onPressSharedPlayerQuickReaction}
+                activeOpacity={0.88}
+                testID="shared-player-reaction-button"
+                accessibilityRole="button"
+                accessibilityLabel="Send a quick room reaction"
+              >
+                <Text style={styles.watchPartyDockActionText}>React</Text>
+              </TouchableOpacity>
+              {shouldRenderSharedPlayerRequestCameraControl ? (
+                <TouchableOpacity
+                  style={[
+                    styles.watchPartyDockActionBtn,
+                    currentWatchPartyViewerRequestPending && styles.watchPartyDockActionBtnActive,
+                    currentWatchPartyViewerRequestPending && styles.secondaryBtnDisabled,
+                  ]}
+                  onPress={() => {
+                    void onPressSharedPlayerRequestCamera("dock");
+                  }}
+                  disabled={currentWatchPartyViewerRequestPending}
+                  activeOpacity={0.88}
+                  testID={currentWatchPartyViewerRequestPending ? "shared-player-request-camera-pending" : "shared-player-request-camera-button"}
+                  accessibilityRole="button"
+                  accessibilityLabel={currentWatchPartyViewerRequestPending ? "Camera request pending" : "Request camera"}
+                  accessibilityState={{ disabled: currentWatchPartyViewerRequestPending }}
+                >
+                  <Text style={[
+                    styles.watchPartyDockActionText,
+                    currentWatchPartyViewerRequestPending && styles.watchPartyDockActionTextActive,
+                  ]}>
+                    {currentWatchPartyViewerRequestPending ? "Request pending" : "Request Camera"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.watchPartyDockActionBtn, watchPartyMenuOpen && styles.watchPartyDockActionBtnActive]}
+                onPress={onToggleWatchPartyMenu}
+                activeOpacity={0.88}
+                testID="shared-player-controls-button"
+              >
+                <Text style={[styles.watchPartyDockActionText, watchPartyMenuOpen && styles.watchPartyDockActionTextActive]}>Controls</Text>
+              </TouchableOpacity>
+            </View>
+
+            {watchPartyCameraRequestError ? (
+              <Text testID="shared-player-camera-request-error" style={styles.watchPartyCameraRequestErrorText}>
+                {watchPartyCameraRequestError}
               </Text>
-            </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            style={[styles.watchPartyDockActionBtn, watchPartyMenuOpen && styles.watchPartyDockActionBtnActive]}
-            onPress={onToggleWatchPartyMenu}
-            activeOpacity={0.88}
-            testID="shared-player-controls-button"
-          >
-            <Text style={[styles.watchPartyDockActionText, watchPartyMenuOpen && styles.watchPartyDockActionTextActive]}>Controls</Text>
-          </TouchableOpacity>
-        </View>
+            ) : null}
 
-        {watchPartyCameraRequestError ? (
-          <Text testID="shared-player-camera-request-error" style={styles.watchPartyCameraRequestErrorText}>
-            {watchPartyCameraRequestError}
-          </Text>
-        ) : null}
-
-        {renderWatchPartyLiveHostReviewCard()}
+            {renderWatchPartyLiveHostReviewCard()}
+          </>
+        )}
 
         {shouldShowRegularSharedComments || partyCommentsOpen ? (
           <View
@@ -8241,7 +8245,7 @@ export default function PlayerScreen() {
           </View>
         ) : null}
 
-        {watchPartyMenuOpen ? (
+        {!sharedPartyCommentsKeyboardActive && watchPartyMenuOpen ? (
           <View style={styles.watchPartyDockCard}>
             <Text style={styles.watchPartyDockCardTitle}>Player Controls</Text>
             {renderWatchPartyLiveAudioMixControls()}
