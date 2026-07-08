@@ -95,6 +95,10 @@ R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 
 
 R2 proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded and is kept for proof traceability.
 
+R2 public-playback proof bucket status: separate bucket `chillywood-media-public-playback-proof` exists, created 2026-07-08T23:47:12.035Z, and is distinct from the private proof bucket.
+
+R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded through authorized Wrangler access and is kept for proof traceability.
+
 R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled; r2.dev public access is disabled and no custom domains are connected.
 
 R2 custom-domain/cache planning status: planned only; read-only audit confirmed the proof bucket exists, r2.dev is disabled, no custom domains are connected, and the proof object still reads back through authorized Wrangler access.
@@ -122,6 +126,9 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 
 - Cloudflare custom domain/cache is the near-term delivery/cache layer for safe playback assets.
 - The planned custom hostname is `media.chillywoodstream.com`.
+- The private proof bucket is `chillywood-media-proof`.
+- The separate public-playback proof bucket is `chillywood-media-public-playback-proof`.
+- The private proof bucket and public-playback proof bucket must remain distinct.
 - Allowed public proof prefix: `playback/public/`.
 - Private blocked prefixes: `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/`.
 - Safe first CDN target is public/demo/ready playback assets only under the allowed public prefix.
@@ -148,6 +155,17 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - Do not connect `media.chillywoodstream.com` directly to `chillywood-media-proof` while that bucket is a mixed private/proof bucket.
 - Do not claim cache savings, CDN delivery, or production media delivery until a public proof path is connected, cache headers are observed, and telemetry/log ingestion is in place.
 
+### Public-Playback Proof Bucket
+
+- `chillywood-media-public-playback-proof` is a separate R2 bucket for harmless public-safe proof assets only.
+- The bucket currently contains only the harmless text proof object `playback/public/proof/hello.txt`.
+- The bucket must not contain `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, `unscanned/`, real creator media, original/master media, unscanned uploads, private media, or Premium-only media.
+- The bucket remains private at this checkpoint: r2.dev public access is disabled and no custom domain is connected.
+- Explicit owner approval is required before enabling any public access on this bucket. The approval must name the exact action: enabling r2.dev for temporary proof, or connecting `media.chillywoodstream.com` to this public-playback proof bucket.
+- r2.dev, if approved later, is temporary proof access only and not the production delivery path.
+- `media.chillywoodstream.com`, if approved later, may point only at this separate public-playback proof bucket or another safe public-playback surface that contains no private media.
+- App production playback must remain on the resolver/direct signed-origin fallback until resolver proof, signed/token CDN access for non-public assets, cache proof, telemetry, takedown purge, and Premium gating are implemented and proved.
+
 ### Staged Cloudflare Proof Plan
 
 - CLI/API preflight: Wrangler authentication is available without printing tokens, R2 is enabled, and the private proof bucket exists.
@@ -155,9 +173,12 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - The proof bucket remains private. Public bucket access, the r2.dev public development URL, and custom domains were not enabled during the private-origin proof.
 - Proof object target: `playback/public/proof/hello.txt`.
 - Private-origin proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.
+- Separate public-playback proof bucket target: `chillywood-media-public-playback-proof`.
+- Public-playback proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - No production playback config was switched.
 - Read-only custom-domain/cache audit: bucket list shows `chillywood-media-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.
+- Public-playback proof audit: bucket list shows `chillywood-media-public-playback-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.
 - Stop before public access. Do not connect `media.chillywoodstream.com` until the owner approves that the bucket/surface contains only safe public playback assets or token/WAF/Worker controls are in place.
 - Public proof, when approved, may expose only `playback/public/` test assets. It must not expose source/original/master, unscanned, private, or Premium-only objects.
 

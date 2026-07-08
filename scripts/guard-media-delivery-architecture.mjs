@@ -96,6 +96,8 @@ assertIncludes(architecture, "Cloudflare R2 private origin status: enabled for p
 assertIncludes(architecture, "R2 CLI/API proof status: private remote proof upload/readback succeeded through authorized Wrangler access; no R2 CDN playback is live.", "R2 CLI/API proof status");
 assertIncludes(architecture, "R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.", "R2 proof bucket status");
 assertIncludes(architecture, "R2 proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded and is kept for proof traceability.", "R2 proof object status");
+assertIncludes(architecture, "R2 public-playback proof bucket status: separate bucket `chillywood-media-public-playback-proof` exists, created 2026-07-08T23:47:12.035Z, and is distinct from the private proof bucket.", "R2 public-playback proof bucket status");
+assertIncludes(architecture, "R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded through authorized Wrangler access and is kept for proof traceability.", "R2 public-playback proof object status");
 assertIncludes(architecture, "R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled; r2.dev public access is disabled and no custom domains are connected.", "R2 public exposure status");
 assertIncludes(architecture, "R2 custom-domain/cache planning status: planned only; read-only audit confirmed the proof bucket exists, r2.dev is disabled, no custom domains are connected, and the proof object still reads back through authorized Wrangler access.", "R2 custom-domain/cache planning status");
 assertIncludes(architecture, "Media bandwidth telemetry status: foundation only, not live.", "media delivery architecture doc");
@@ -105,6 +107,9 @@ assertIncludes(architecture, "Near-term chosen path: Cloudflare R2 private origi
 assertIncludes(architecture, "Cloudflare R2 is the target origin because the owner already has the domain on Cloudflare.", "Cloudflare R2 domain rationale");
 assertIncludes(architecture, "Keep the R2 bucket private by default.", "R2 private bucket policy");
 assertIncludes(architecture, "The planned custom hostname is `media.chillywoodstream.com`.", "Cloudflare custom hostname plan");
+assertIncludes(architecture, "The private proof bucket is `chillywood-media-proof`.", "private proof bucket identity");
+assertIncludes(architecture, "The separate public-playback proof bucket is `chillywood-media-public-playback-proof`.", "public-playback proof bucket identity");
+assertIncludes(architecture, "The private proof bucket and public-playback proof bucket must remain distinct.", "bucket separation policy");
 assertIncludes(architecture, "Allowed public proof prefix: `playback/public/`.", "allowed public proof prefix");
 assertIncludes(architecture, "Private blocked prefixes: `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/`.", "private blocked prefixes");
 assertIncludes(architecture, "Original/master files are private processing sources.", "media delivery architecture doc");
@@ -124,7 +129,14 @@ assertIncludes(architecture, "A direct custom domain on a mixed bucket must be t
 assertIncludes(architecture, "Recommended safest next architecture: create a separate public-playback proof bucket or public-playback surface containing only approved `playback/public/` assets, then connect `media.chillywoodstream.com` only to that safe surface after explicit owner approval.", "safe public-playback proof architecture");
 assertIncludes(architecture, "Alternative safe architecture: keep the R2 bucket private and put `media.chillywoodstream.com` on a Worker route that allowlists `playback/public/`, blocks private prefixes, applies token checks for paid/Premium paths, sets cache headers by asset class, and reads R2 through a private binding.", "Worker gateway architecture");
 assertIncludes(architecture, "Do not connect `media.chillywoodstream.com` directly to `chillywood-media-proof` while that bucket is a mixed private/proof bucket.", "proof bucket custom-domain prohibition");
+assertIncludes(architecture, "`chillywood-media-public-playback-proof` is a separate R2 bucket for harmless public-safe proof assets only.", "public-playback proof bucket purpose");
+assertIncludes(architecture, "The bucket currently contains only the harmless text proof object `playback/public/proof/hello.txt`.", "public-playback proof bucket contents");
+assertIncludes(architecture, "The bucket must not contain `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, `unscanned/`, real creator media, original/master media, unscanned uploads, private media, or Premium-only media.", "public-playback proof bucket forbidden contents");
+assertIncludes(architecture, "The bucket remains private at this checkpoint: r2.dev public access is disabled and no custom domain is connected.", "public-playback proof bucket private checkpoint");
+assertIncludes(architecture, "Explicit owner approval is required before enabling any public access on this bucket. The approval must name the exact action: enabling r2.dev for temporary proof, or connecting `media.chillywoodstream.com` to this public-playback proof bucket.", "public-playback proof bucket approval checkpoint");
+assertIncludes(architecture, "`media.chillywoodstream.com`, if approved later, may point only at this separate public-playback proof bucket or another safe public-playback surface that contains no private media.", "public-playback custom-domain boundary");
 assertIncludes(architecture, "Read-only custom-domain/cache audit: bucket list shows `chillywood-media-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.", "read-only custom-domain/cache audit");
+assertIncludes(architecture, "Public-playback proof audit: bucket list shows `chillywood-media-public-playback-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.", "public-playback proof audit");
 assertIncludes(architecture, "Supabase/Edge resolver remains the access-control and playback decision layer.", "Supabase/Edge resolver boundary");
 assertIncludes(architecture, "The app must ask the backend resolver for playback; the app must not hard-code R2 or Cloudflare custom-domain decisions.", "app resolver contract");
 assertIncludes(architecture, "Creator-video Watch-Party sources must use the same creator-video playback resolver path as standalone Player.", "media delivery architecture doc");
@@ -145,6 +157,9 @@ assertIncludes(architecture, "Private/Premium CDN delivery requires token/signed
 assertIncludes(architecture, "Optional future managed-video alternative: Cloudflare Stream is optional later and is not required for this R2/custom-domain path.", "Cloudflare Stream classification");
 assertIncludes(architecture, "Current/legacy fallback: Hetzner Object Storage or any already-configured S3-compatible origin", "Hetzner fallback classification");
 assertIncludes(architecture, "Optional future CDN alternative: Bunny CDN remains an alternative only", "Bunny classification");
+assertIncludes(currentState, "The private proof bucket remains private, the public-playback proof bucket is distinct and still private", "current state bucket separation");
+assertIncludes(nextTask, "Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from `chillywood-media-proof`.", "next task bucket separation");
+assertIncludes(nextTask, "Do not enable public access on `chillywood-media-proof`.", "private bucket public access prohibition");
 
 const transcodeLiveClaims = claimSentences(
   docsCorpus,
@@ -201,7 +216,7 @@ if (bunnyChosenClaims.length) {
 }
 
 const publicR2OriginalClaims = claimSentences(
-  docsCorpus,
+  mediaStatusCorpus,
   /\b(R2|original|master|source)\b/i,
   /\b(publicly exposed|public access|public bucket|public CDN|public cache|public path)\b/i,
 );
@@ -236,6 +251,13 @@ for (const sentence of splitSentences(mediaStatusCorpus)) {
     && /\b(switched|uses|serves|live|active|deployed|production-ready)\b/i.test(sentence)
     && !/\b(not|no|unchanged|until|do not|must not|fallback|planned|future|without)\b/i.test(sentence)) {
     fail(`docs claim production playback switched to R2 before resolver proof: ${sentence}`);
+  }
+
+  if (/\b(chillywood-media-public-playback-proof|public-playback proof bucket|public playback bucket)\b/i.test(sentence)
+    && /\b(contains|stores|includes|uploads?|uploaded)\b/i.test(sentence)
+    && /\b(originals\/|uploads\/|private\/|premium\/|processing\/|moderation-blocked\/|unscanned\/|original\/master|private media|Premium-only|creator media)\b/i.test(sentence)
+    && !/\b(must not|does not|no|not|forbidden|blocked)\b/i.test(sentence)) {
+    fail(`public-playback proof bucket must not contain private/original/Premium paths: ${sentence}`);
   }
 }
 

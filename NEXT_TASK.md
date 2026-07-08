@@ -6,17 +6,20 @@ Current latest truth:
 - Cloudflare R2 is enabled and private proof bucket `chillywood-media-proof` exists.
 - Harmless text object `playback/public/proof/hello.txt` was uploaded to remote R2 and read back through authorized Wrangler access only; byte-for-byte readback matched.
 - The proof object is kept as harmless text proof traceability unless the owner later requests cleanup.
-- r2.dev public access is disabled, no public bucket access is enabled, no custom domain is connected, and no cache rule was applied.
+- Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from `chillywood-media-proof`.
+- The public-playback proof bucket contains only harmless public-safe proof object `playback/public/proof/hello.txt`, uploaded/read back through authorized Wrangler access.
+- r2.dev public access is disabled on both buckets, no public bucket access is enabled, no custom domain is connected, and no cache rule was applied.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
 - Read-only audit confirmed the proof bucket still exists, the proof object still reads back through authorized Wrangler access, r2.dev is disabled, and no custom domains are connected.
 - Cloudflare R2 custom domains should be treated as public bucket exposure, not a native prefix-limited publish switch. Do not connect `media.chillywoodstream.com` directly to a mixed bucket.
 
 Next exact media step:
-1. Plan `media.chillywoodstream.com` custom domain/cache without applying it.
-2. Prefer a separate public-playback proof bucket/surface containing only `playback/public/` assets, or a Worker/WAF-token gateway that blocks private prefixes before R2 reads.
-3. Do not enable public bucket access, r2.dev, custom domain, cache rules, signed/token CDN playback, or production playback switching until explicitly approved and proved.
-4. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
+1. If the owner approves, enable public proof access only on `chillywood-media-public-playback-proof`, either temporary r2.dev proof or `media.chillywoodstream.com` custom-domain proof.
+2. Do not enable public access on `chillywood-media-proof`.
+3. Do not connect `media.chillywoodstream.com` until the owner explicitly approves that exact phase.
+4. Do not enable cache rules, signed/token CDN playback, or production playback switching until explicitly approved and proved.
+5. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
 
 # Watch-Party Live / Live Stage Seated Self-Mute Follow-Up
 
