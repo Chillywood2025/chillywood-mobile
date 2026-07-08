@@ -9141,6 +9141,7 @@ export default function PlayerScreen() {
               styles.videoWrap,
               styles.videoWrapFramework,
               inWatchParty && styles.videoWrapWatchPartyTitle,
+              sharedPartyCommentsKeyboardActive && styles.videoWrapWatchPartyTitleKeyboard,
               isPlayerFullscreen && styles.videoWrapStandaloneFullscreen,
               !inWatchParty && !isLiveMode && isCreatorVideoPlayback && creatorVideoCommentKeyboardOpen && styles.videoWrapCreatorDiscussionKeyboard,
               isLiveMode && styles.liveRoomWrap,
@@ -10212,6 +10213,10 @@ const styles = StyleSheet.create({
   },
   videoWrapWatchPartyTitle: {
     marginBottom: 1,
+  },
+  videoWrapWatchPartyTitleKeyboard: {
+    height: 184,
+    marginBottom: 0,
   },
   videoWrapStandaloneFullscreen: {
     height: "100%",

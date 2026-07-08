@@ -675,6 +675,11 @@ assert(
     && playerSource.includes("setPartyCommentsOpen(true);"),
   "regular Shared Player default visible comment input must activate keyboard-safe comment mode",
 );
+assert(
+  playerSource.includes("sharedPartyCommentsKeyboardActive && styles.videoWrapWatchPartyTitleKeyboard")
+    && playerSource.includes("videoWrapWatchPartyTitleKeyboard: {"),
+  "regular Shared Player keyboard comment mode must shrink the shared video so the composer and Send row stay above the Android keyboard",
+);
 const sharedPlayerDockSource = playerSource.slice(
   playerSource.indexOf("const renderTitleParticipantExpandedPanel = () => ("),
   playerSource.indexOf("const renderCreatorVideoCommentsPanel = () => {"),

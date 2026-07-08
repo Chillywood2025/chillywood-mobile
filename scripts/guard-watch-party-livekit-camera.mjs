@@ -280,6 +280,16 @@ assertIncludes(
 );
 assertIncludes(
   player,
+  "sharedPartyCommentsKeyboardActive && styles.videoWrapWatchPartyTitleKeyboard",
+  "regular Shared Player must shrink the shared video while the Android comment keyboard is active so the composer is not covered",
+);
+assertIncludes(
+  player,
+  "videoWrapWatchPartyTitleKeyboard: {",
+  "regular Shared Player keyboard-safe video shrink style must remain present",
+);
+assertIncludes(
+  player,
   "{sharedPartyCommentsKeyboardActive ? null : (",
   "regular Shared Player keyboard comment mode must hide action rows so the composer stays reachable",
 );

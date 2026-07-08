@@ -69,6 +69,8 @@ July 8 regular Shared Player keyboard note: the non-fullscreen lower dock may sc
 
 July 8 regular Shared Player touch-layer note: non-fullscreen Android touch priority may be adjusted so the visible lower dock sits above the shared-video tap target. This is not a fullscreen layout change. The fullscreen left comments rail, center shared video surface, and right LiveKit bubble rail remain the same three-zone row.
 
+July 8 regular Shared Player keyboard-height note: while the non-fullscreen Watch-Party Live comment keyboard is active, the top shared-video surface may shrink temporarily so the existing lower comments composer and Send row remain visible above Android's keyboard. This is a regular portrait Shared Player reachability fix only; the fullscreen left comments rail, center shared video surface, and right LiveKit bubble rail remain unchanged.
+
 Repo-side validation passed. EAS production candidate update group `40b451bc-f4fc-4929-9052-46baa8cff145` downloaded and applied on the Play-installed `R5CR120QCBF` runtime `1.0.0`; user visual confirmation reported the shared-player fullscreen view works after the final right-rail reuse fix.
 
 June 10 scroll-stabilization update:
