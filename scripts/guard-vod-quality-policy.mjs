@@ -31,6 +31,7 @@ const scanSafeResolverMigration = read("supabase/migrations/20260623170000_creat
 const trustedRenditionMigration = read("supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
 const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md");
+const mediaTranscodeWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
 const vodLib = read("_lib/vodQuality.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
@@ -41,6 +42,7 @@ const packageJson = read("package.json");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
 const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 const mediaRenditionMigrationDryRunProof = read("scripts/proof-media-rendition-migration-dry-run.mjs");
+const mediaTranscodeWorkerLocalProof = read("scripts/proof-media-transcode-worker-local.mjs");
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "performance policy");
@@ -78,6 +80,9 @@ assertIncludes(vodDoc, "Clients cannot mark rows ready, set `public_playback_pat
 assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-policy` statically proves the migration SQL and docs keep client writes blocked", "VOD doc migration policy proof");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-dry-run` passes static SQL validation plus runtime apply/RLS checks in an in-memory disposable local Postgres runtime via `@electric-sql/pglite`.", "VOD doc migration dry-run runtime proof");
 assertIncludes(vodDoc, "proves anon/authenticated trusted writes are denied, proves service-role/worker writes pass, proves resolver-safe anon select returns one clean public-ready row", "VOD doc migration dry-run RLS proof");
+assertIncludes(vodDoc, "Production transcode worker runbook and local proof harness: `docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md` and `npm run proof:media-transcode-worker-local` model the future worker locally with the approved City Lights demo only.", "VOD doc production transcode worker local proof");
+assertIncludes(vodDoc, "Production transcode worker design/local proof exists, but the production worker is not deployed.", "VOD doc production worker not deployed");
+assertIncludes(vodDoc, "PITR or owner-approved backup/restore readiness is required before future production worker writes, production backfill, or worker activation.", "VOD doc PITR worker gate");
 assertIncludes(vodDoc, "Production schema readback and rollback-only RLS proof passed on 2026-07-09, final production row counts stayed zero, and production playback remains unchanged.", "VOD doc production schema proof");
 assertIncludes(vodDoc, "Trusted backend migration schema is applied to production as empty schema only.", "VOD doc trusted migration schema-only");
 assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded disposable local Postgres runtime, and production rollback-only RLS proof passed with final row counts back to zero.", "VOD doc trusted migration proof checkpoint");
@@ -95,6 +100,10 @@ assertIncludes(mediaMigrationPlan, "## Dry-Run Status", "trusted rendition migra
 assertIncludes(mediaMigrationPlan, "`npm run proof:media-rendition-migration-dry-run`", "trusted rendition migration plan dry-run proof script");
 assertIncludes(mediaMigrationPlan, "Static SQL validation passed.", "trusted rendition migration plan static dry-run status");
 assertIncludes(mediaMigrationPlan, "Runtime dry-run passed in an in-memory disposable local Postgres runtime via `@electric-sql/pglite`.", "trusted rendition migration plan runtime dry-run status");
+assertIncludes(mediaMigrationPlan, "## Worker Runbook And Local Proof Status", "trusted rendition migration plan worker local proof section");
+assertIncludes(mediaMigrationPlan, "`npm run proof:media-transcode-worker-local` is local proof only.", "trusted rendition migration plan local worker proof");
+assertIncludes(mediaTranscodeWorkerRunbook, "Status: design and local proof only.", "media transcode worker runbook status");
+assertIncludes(mediaTranscodeWorkerRunbook, "The worker must never mark `is_ready=true` before source probing, HLS generation, upload-path validation, manifest validation, and resolver eligibility checks pass.", "media transcode worker runbook ready guard");
 
 assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_transcode_jobs"', "trusted rendition draft jobs table");
 assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_renditions"', "trusted rendition draft renditions table");
@@ -148,6 +157,7 @@ assertNotMatches(mediaRenditionMetadata, /\b(?:supabase\.from|insert\s*\(|upsert
 assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "trusted media rendition metadata proof script");
 assertIncludes(packageJson, "\"proof:media-rendition-migration-policy\"", "trusted media rendition migration policy proof script");
 assertIncludes(packageJson, "\"proof:media-rendition-migration-dry-run\"", "trusted media rendition migration dry-run proof script");
+assertIncludes(packageJson, "\"proof:media-transcode-worker-local\"", "local transcode worker proof script");
 assertIncludes(mediaRenditionMetadataProof, "trusted-media-rendition-metadata", "trusted media rendition metadata proof mode");
 assertIncludes(mediaRenditionMetadataProof, "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1", "trusted media rendition City Lights source id");
 assertIncludes(mediaRenditionMetadataProof, "360p", "trusted media rendition 360p fixture proof");
@@ -192,6 +202,14 @@ assertIncludes(mediaRenditionMigrationDryRunProof, "productionSchemaMigrationApp
 assertIncludes(mediaRenditionMigrationDryRunProof, "productionDataRowsWritten: false", "trusted media rendition migration dry-run no production data rows");
 assertIncludes(mediaRenditionMigrationDryRunProof, "productionBackfillRun: false", "trusted media rendition migration dry-run no production backfill");
 assertIncludes(mediaRenditionMigrationDryRunProof, "productionPlaybackSwitched: false", "trusted media rendition migration dry-run no production playback switch");
+assertIncludes(mediaTranscodeWorkerLocalProof, "media-transcode-worker-local", "local transcode worker proof mode");
+assertIncludes(mediaTranscodeWorkerLocalProof, "playback/public/proof-worker/chillywood-city-lights/v1-b670602fa00934ca-local-hls", "local transcode worker output prefix");
+assertIncludes(mediaTranscodeWorkerLocalProof, "productionWorkerDeployed: false", "local transcode worker no production worker deploy");
+assertIncludes(mediaTranscodeWorkerLocalProof, "productionDbWritesEnabled: false", "local transcode worker no production DB writes");
+assertIncludes(mediaTranscodeWorkerLocalProof, "productionRowsWritten: false", "local transcode worker no production row writes");
+assertIncludes(mediaTranscodeWorkerLocalProof, "productionPlaybackSwitched: false", "local transcode worker no production playback switch");
+assertIncludes(mediaTranscodeWorkerLocalProof, "pitrBackupGateRequired: true", "local transcode worker PITR gate");
+assertNotMatches(mediaTranscodeWorkerLocalProof, /\bsupabase\.from\b|\bcreateClient\b|\bwrangler\b/i, "local transcode worker proof must not write production DB, create a Supabase client, or upload through Wrangler");
 
 assertIncludes(creatorVideos, "resolveSignedVideoPlaybackSource", "creator video player resolver integration");
 assertIncludes(creatorVideos, "recordOriginalVideoRendition(id)", "creator upload original status");

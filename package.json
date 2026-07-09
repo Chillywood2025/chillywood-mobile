@@ -217,6 +217,7 @@
     "proof:media-delivery-hls-demo": "node ./scripts/proof-media-delivery-hls-demo.mjs",
     "proof:media-delivery-telemetry": "node ./scripts/proof-media-delivery-telemetry.mjs",
     "proof:media-transcode-queue-hls": "node ./scripts/proof-media-transcode-queue-hls.mjs",
+    "proof:media-transcode-worker-local": "node ./scripts/proof-media-transcode-worker-local.mjs",
     "proof:media-rendition-metadata": "node ./scripts/proof-media-rendition-metadata.mjs",
     "proof:media-rendition-migration-policy": "node ./scripts/proof-media-rendition-migration-policy.mjs",
     "proof:media-rendition-migration-dry-run": "node ./scripts/proof-media-rendition-migration-dry-run.mjs",

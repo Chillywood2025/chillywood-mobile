@@ -199,6 +199,16 @@ Runtime dry-run behavior when a safe database is provided:
 
 This dry-run status remains non-production proof. The production schema has now been applied separately as schema only; dry-run proof still does not make production transcoding or production playback live.
 
+## Worker Runbook And Local Proof Status
+
+`docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md` now defines the future production transcode worker design: a container/VM worker with ffmpeg and ffprobe, trusted `media_transcode_jobs` input, private-source safety checks, queued/probing/transcoding/uploading/ready lifecycle, output validation before ready rows, partial-output cleanup, service-role-only writes, redacted logs, rollback controls, and activation gates.
+
+`npm run proof:media-transcode-worker-local` is local proof only. It uses the approved public-safe City Lights demo MP4, simulates `queued -> probing -> transcoding -> uploading -> ready`, generates 360p and 480p HLS locally, validates master/variant/segment outputs and ffmpeg decode, simulates upload keys under `playback/public/proof-worker/`, builds trusted `media_renditions` rows in memory, validates resolver eligibility, builds sanitized telemetry events, proves a failed job cannot publish ready rows, and runs a disposable PGlite worker-policy proof.
+
+The local worker proof does not connect to production DB, does not write production rows, does not upload R2 objects, does not deploy a worker, does not run a production queue processor, and does not switch playback.
+
+Backup/PITR gate: PITR is currently off, WAL-G is enabled, and no manual backup records were listed in the production schema closeout. PITR or an owner-approved backup/restore method is required before future production worker writes, production backfill, or worker activation.
+
 ## Backfill Strategy
 
 1. Do not backfill existing production creator videos automatically.
@@ -229,7 +239,7 @@ This dry-run status remains non-production proof. The production schema has now 
 1. Owner approval to apply the schema migration: complete for schema only.
 2. Migration dry-run and disposable runtime apply: complete.
 3. Production schema readback plus rollback-only RLS/policy proof: complete.
-4. Backend worker deployment plan and staging worker proof: pending.
+4. Backend worker runbook and local proof harness: complete for design/local proof only; production worker deployment and staging worker proof remain pending.
 5. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
 6. Resolver migration behind disabled config: pending.
 7. Cache HIT and telemetry proof for the migrated source: pending.
