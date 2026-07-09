@@ -20,6 +20,7 @@ const sanitizedEnv = (extra = {}) => {
     "MEDIA_BACKUP_R2_BUCKET",
     "MEDIA_BACKUP_R2_PREFIX",
     "MEDIA_BACKUP_EXPORT_MODE",
+    "MEDIA_BACKUP_DATABASE_SOURCE",
     "MEDIA_BACKUP_PROJECT_REF",
     "CLOUDFLARE_API_TOKEN",
     "CLOUDFLARE_API_KEY",
@@ -274,6 +275,19 @@ requireProof(missingEnvWrite.json?.reason === "missing_required_env_for_write_mo
 requireProof(missingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_URL"), "missing-env write should require database URL by name only");
 assertNoSecretLikeText("missing-env write output", missingEnvWrite.text);
 
+const linkedSourceMissingEnvWrite = runRunner({
+  mode: "write",
+  env: {
+    MEDIA_BACKUP_DATABASE_SOURCE: "linked",
+    MEDIA_BACKUP_EXPORT_MODE: "js",
+  },
+});
+requireProof(linkedSourceMissingEnvWrite.status !== 0, "linked-source write should fail closed when write env is missing");
+requireProof(linkedSourceMissingEnvWrite.json?.reason === "missing_required_env_for_write_mode", "linked-source missing-env write should explain missing env");
+requireProof(!linkedSourceMissingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_URL"), "linked-source write should not require raw database URL");
+requireProof(linkedSourceMissingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_RUNNER_ENABLED"), "linked-source write should still require runner enablement");
+assertNoSecretLikeText("linked-source missing-env output", linkedSourceMissingEnvWrite.text);
+
 const publicBucketWrite = runRunner({
   mode: "write",
   env: {
@@ -290,6 +304,22 @@ requireProof(publicBucketWrite.json?.reason === "unsafe_backup_target_refused", 
 requireProof(publicBucketWrite.json?.targetFailures?.includes("public_playback_bucket_denied"), "public bucket denial should be explicit");
 requireProof(!publicBucketWrite.text.includes("redacted@localhost"), "runner output must not include database URL value");
 assertNoSecretLikeText("public bucket denial output", publicBucketWrite.text);
+
+const linkedPublicBucketWrite = runRunner({
+  mode: "write",
+  env: {
+    MEDIA_BACKUP_RUNNER_ENABLED: "true",
+    MEDIA_BACKUP_MODE: "write",
+    MEDIA_BACKUP_DATABASE_SOURCE: "linked",
+    MEDIA_BACKUP_R2_BUCKET: "chillywood-media-public-playback-proof",
+    MEDIA_BACKUP_R2_PREFIX: "backups/media-worker/",
+    MEDIA_BACKUP_EXPORT_MODE: "js",
+  },
+});
+requireProof(linkedPublicBucketWrite.status !== 0, "linked-source public bucket target should fail closed before DB access");
+requireProof(linkedPublicBucketWrite.json?.reason === "unsafe_backup_target_refused", "linked-source public bucket target should be refused");
+requireProof(linkedPublicBucketWrite.json?.targetFailures?.includes("public_playback_bucket_denied"), "linked-source public bucket denial should be explicit");
+assertNoSecretLikeText("linked-source public bucket denial output", linkedPublicBucketWrite.text);
 
 const mediaDomainWrite = runRunner({
   mode: "write",
@@ -331,7 +361,10 @@ const summary = {
   proof: "media-worker-backup-runner",
   dryRunPassed: dryRun.status === 0 && dryRun.json?.dryRun === true,
   missingEnvFailClosed: missingEnvWrite.status !== 0 && missingEnvWrite.json?.failClosed === true,
+  linkedSourceDoesNotRequireRawDbUrl: linkedSourceMissingEnvWrite.status !== 0
+    && !linkedSourceMissingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_URL"),
   publicBucketTargetDenied: publicBucketWrite.status !== 0,
+  linkedSourcePublicBucketTargetDenied: linkedPublicBucketWrite.status !== 0,
   mediaDomainTargetDenied: mediaDomainWrite.status !== 0,
   manifestShapeValid: dryRun.json?.manifestValid === true,
   checksumGenerationPassed: Boolean(fixtureSha["schema.sql"] && fixtureSha["data-media-worker.sql"]),

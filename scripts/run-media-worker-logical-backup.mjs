@@ -26,10 +26,10 @@ const excludedScopes = [
   "creator_originals",
   "signed_urls",
 ];
-const requiredWriteEnv = [
+const requiredBaseWriteEnv = [
   "MEDIA_BACKUP_RUNNER_ENABLED",
   "MEDIA_BACKUP_MODE",
-  "MEDIA_BACKUP_DATABASE_URL",
+  "MEDIA_BACKUP_EXPORT_MODE",
   "MEDIA_BACKUP_R2_BUCKET",
   "MEDIA_BACKUP_R2_PREFIX",
 ];
@@ -38,6 +38,7 @@ const publicPlaybackBucket = "chillywood-media-public-playback-proof";
 const mediaPublicDomain = "media.chillywoodstream.com";
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 const allowedExportModes = ["auto", "pg_dump", "js"];
+const allowedDatabaseSources = ["url", "linked"];
 
 const parseArgValue = (name) => {
   const prefix = `${name}=`;
@@ -48,6 +49,7 @@ const parseArgValue = (name) => {
 const mode = parseArgValue("--mode") ?? process.env.MEDIA_BACKUP_MODE ?? "dry-run";
 const writeMode = mode === "write";
 const exportModeRequested = process.env.MEDIA_BACKUP_EXPORT_MODE ?? "auto";
+const databaseSourceRequested = process.env.MEDIA_BACKUP_DATABASE_SOURCE ?? "url";
 
 const sha256Hex = (input) => createHash("sha256").update(input).digest("hex");
 
@@ -97,9 +99,23 @@ const commandAvailable = (command, args = ["--version"]) => {
 const pgDumpAvailable = () => commandAvailable("pg_dump");
 const psqlAvailable = () => commandAvailable("psql");
 
+const requiredWriteEnv = () => [
+  ...requiredBaseWriteEnv,
+  databaseSourceRequested === "linked" ? "MEDIA_BACKUP_DATABASE_SOURCE" : "MEDIA_BACKUP_DATABASE_URL",
+];
+
 const resolveExportMode = () => {
+  if (!allowedDatabaseSources.includes(databaseSourceRequested)) {
+    failClosed("invalid_database_source", { allowedDatabaseSources });
+  }
   if (!allowedExportModes.includes(exportModeRequested)) {
     failClosed("invalid_export_mode", { allowedExportModes });
+  }
+  if (databaseSourceRequested === "linked") {
+    if (exportModeRequested === "pg_dump") {
+      failClosed("linked_database_source_requires_js_export", { allowedExportModes: ["auto", "js"] });
+    }
+    return "js";
   }
   if (exportModeRequested === "js") return "js";
   if (exportModeRequested === "pg_dump") {
@@ -603,7 +619,70 @@ const getRowCounts = (databaseUrl) => {
   }
 };
 
+const runSupabaseLinkedQuery = (sql) => {
+  const result = spawnSync(npxCommand, ["supabase", "db", "query", "--linked", sql], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    maxBuffer: 50 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status !== 0) {
+    failClosed("supabase_linked_query_failed_without_secret_output", {
+      databaseSource: "linked",
+      requiredTables: backupTables,
+    });
+  }
+  try {
+    const parsed = JSON.parse(result.stdout || "{}");
+    if (!Array.isArray(parsed.rows)) throw new Error("missing_rows");
+    return parsed.rows;
+  } catch {
+    failClosed("supabase_linked_query_json_parse_failed", {
+      databaseSource: "linked",
+      requiredTables: backupTables,
+    });
+  }
+};
+
+const normalizeJsonRow = (entry) => {
+  if (typeof entry.row === "string") return JSON.parse(entry.row);
+  if (entry.row && typeof entry.row === "object") return entry.row;
+  return entry;
+};
+
 const runJsExport = async (databaseUrl) => {
+  if (databaseSourceRequested === "linked") {
+    const countRows = runSupabaseLinkedQuery([
+      "select",
+      "  (select count(*)::int from public.media_transcode_jobs) as media_transcode_jobs,",
+      "  (select count(*)::int from public.media_renditions) as media_renditions",
+    ].join(" "));
+    const jobRows = runSupabaseLinkedQuery("select row_to_json(t)::text as row from (select * from public.media_transcode_jobs order by created_at asc, id asc) t");
+    const renditionRows = runSupabaseLinkedQuery("select row_to_json(t)::text as row from (select * from public.media_renditions order by created_at asc, id asc) t");
+    const jsonLines = [];
+    for (const entry of jobRows) {
+      const row = normalizeJsonRow(entry);
+      assertNoUnsafeBackupValue("media_transcode_jobs", row);
+      jsonLines.push(JSON.stringify({ table: "media_transcode_jobs", row }));
+    }
+    for (const entry of renditionRows) {
+      const row = normalizeJsonRow(entry);
+      assertNoUnsafeBackupValue("media_renditions", row);
+      jsonLines.push(JSON.stringify({ table: "media_renditions", row }));
+    }
+    const counts = countRows[0] ?? {};
+    return {
+      schemaSql: buildStandaloneJsSchemaSql(),
+      dataContent: `${jsonLines.join("\n")}${jsonLines.length ? "\n" : ""}`,
+      dataFileName: "data-media-worker.jsonl.gz",
+      rowCounts: {
+        media_transcode_jobs: Number(counts.media_transcode_jobs ?? jobRows.length),
+        media_renditions: Number(counts.media_renditions ?? renditionRows.length),
+      },
+      toolUsed: "supabase_linked_js_select_export",
+    };
+  }
+
   const client = new PostgresSimpleClient(databaseUrl);
   try {
     await client.connect();
@@ -692,6 +771,7 @@ const createArtifacts = ({
   objectPrefix,
   backupId,
   createdAt,
+  databaseSource = databaseSourceRequested,
 }) => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-worker-backup-"));
   const artifactPaths = {
@@ -710,7 +790,8 @@ const createArtifacts = ({
     backup_id: backupId,
     created_at: createdAt,
     source_project_ref_redacted: redactProjectRef(process.env.MEDIA_BACKUP_PROJECT_REF),
-    database_host_redacted: writeMode ? "redacted" : "not_used_dry_run",
+    database_source: databaseSource,
+    database_host_redacted: writeMode && databaseSource === "linked" ? "supabase_linked_management_api" : (writeMode ? "redacted" : "not_used_dry_run"),
     scope: "media_worker",
     tables_included: backupTables,
     tables_excluded: excludedScopes,
@@ -782,7 +863,8 @@ if (!writeMode) {
     dryRun: true,
     backupRunnerAvailable: true,
     uploadAttempted: false,
-    writeModeRequiresEnv: requiredWriteEnv,
+    writeModeRequiresEnv: requiredWriteEnv(),
+    databaseSourceRequested,
     exportModeRequested,
     exportModeResolved,
     pgDumpAvailable: pgDumpAvailable(),
@@ -806,7 +888,7 @@ if (!writeMode) {
   safeExit(0, summary);
 }
 
-const missing = requiredWriteEnv.filter((name) => !process.env[name]);
+const missing = requiredWriteEnv().filter((name) => !process.env[name]);
 if (missing.length > 0) {
   failClosed("missing_required_env_for_write_mode", { missingEnv: missing });
 }
@@ -885,6 +967,7 @@ try {
     uploadSucceeded: true,
     backupId,
     objectPrefix,
+    databaseSource: databaseSourceRequested,
     exportModeRequested,
     exportModeResolved,
     tablesIncluded: backupTables,

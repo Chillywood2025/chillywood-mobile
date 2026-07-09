@@ -102,7 +102,9 @@ assertIncludes(vodDoc, "Operator control and auditor proofs are source-backed an
 assertIncludes(vodDoc, "Scheduled R2 logical backup gate:", "VOD doc scheduled backup gate");
 assertIncludes(vodDoc, "`scripts/run-media-worker-logical-backup.mjs` is the real manual backup runner", "VOD doc manual backup runner");
 assertIncludes(vodDoc, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports JS SELECT export fallback without local `pg_dump`/`psql`", "VOD doc backup runner JS export");
-assertIncludes(vodDoc, "`npm run proof:media-worker-backup-runner` proves dry-run, fail-closed write mode, public bucket/domain denial, manifest/checksum generation, JS JSONL restore into disposable PGlite, and resolver-safe query.", "VOD doc backup runner proof");
+assertIncludes(vodDoc, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw DB URL.", "VOD doc backup runner linked DB source");
+assertIncludes(vodDoc, "`npm run proof:media-worker-backup-runner` proves dry-run, fail-closed write mode, linked-source no-raw-DB-URL behavior, public bucket/domain denial, manifest/checksum generation, JS JSONL restore into disposable PGlite, and resolver-safe query.", "VOD doc backup runner proof");
+assertIncludes(vodDoc, "The first real manual backup completed on 2026-07-09 under private R2 prefix `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`", "VOD doc completed real backup");
 assertIncludes(vodDoc, "`npm run proof:media-scheduled-backup-gate` proves no backup, stale backup, or missing restore drill blocks automation", "VOD doc scheduled backup proof");
 assertIncludes(vodDoc, "No scheduler is deployed, no worker is enabled, no production playback switch happened, and this is logical backup/restore only, not PITR.", "VOD doc scheduled backup safety boundary");
 assertIncludes(vodDoc, "Trusted backend migration schema is applied to production and contains only the first controlled City Lights proof rows.", "VOD doc trusted migration one-job rows");
@@ -231,8 +233,11 @@ assertIncludes(mediaScheduledBackupGateProof, "productionPlaybackSwitched: false
 assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_RUNNER_ENABLED", "backup runner enable gate");
 assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_R2_PREFIX", "backup runner prefix env");
 assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_EXPORT_MODE", "backup runner export mode env");
+assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_DATABASE_SOURCE", "backup runner linked database source env");
+assertIncludes(mediaWorkerBackupRunner, "allowedDatabaseSources = [\"url\", \"linked\"]", "backup runner database source contract");
 assertIncludes(mediaWorkerBackupRunner, "allowedExportModes = [\"auto\", \"pg_dump\", \"js\"]", "backup runner export mode contract");
 assertIncludes(mediaWorkerBackupRunner, "runJsExport", "backup runner JS export function");
+assertIncludes(mediaWorkerBackupRunner, "runSupabaseLinkedQuery", "backup runner Supabase linked query source");
 assertIncludes(mediaWorkerBackupRunner, "data-media-worker.jsonl.gz", "backup runner JSONL artifact");
 assertIncludes(mediaWorkerBackupRunner, "select row_to_json(t)::text as row from (select * from public.media_transcode_jobs", "backup runner scoped jobs select");
 assertIncludes(mediaWorkerBackupRunner, "select row_to_json(t)::text as row from (select * from public.media_renditions", "backup runner scoped renditions select");
@@ -240,7 +245,9 @@ assertIncludes(mediaWorkerBackupRunner, "backups/media-worker/", "backup runner 
 assertIncludes(mediaWorkerBackupRunner, "chillywood-media-public-playback-proof", "backup runner public bucket denial");
 assertIncludes(mediaWorkerBackupRunner, "media.chillywoodstream.com", "backup runner public media domain denial");
 assertIncludes(mediaWorkerBackupRunnerProof, "missingEnvFailClosed", "backup runner proof missing-env fail-closed");
+assertIncludes(mediaWorkerBackupRunnerProof, "linkedSourceDoesNotRequireRawDbUrl", "backup runner proof linked source no raw DB URL");
 assertIncludes(mediaWorkerBackupRunnerProof, "publicBucketTargetDenied", "backup runner proof public bucket denial");
+assertIncludes(mediaWorkerBackupRunnerProof, "linkedSourcePublicBucketTargetDenied", "backup runner proof linked public bucket denial");
 assertIncludes(mediaWorkerBackupRunnerProof, "jsExportManifestValid", "backup runner proof JS manifest");
 assertIncludes(mediaWorkerBackupRunnerProof, "pgDumpAbsenceDoesNotBlockJsMode", "backup runner proof pg_dump absence");
 assertIncludes(mediaWorkerBackupRunnerProof, "jsDataArtifactRestorePassed", "backup runner proof JS data restore");
