@@ -9,6 +9,7 @@ import path from "node:path";
 const repoRoot = process.cwd();
 const draftMigrationPath = "supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql";
 const databaseUrlEnvName = "MEDIA_RENDITION_DRY_RUN_DATABASE_URL";
+const embeddedRuntimePackage = "@electric-sql/pglite";
 
 const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 const migration = read(draftMigrationPath);
@@ -74,6 +75,14 @@ const checkLocalPort = (host, port, timeoutMs = 500) => new Promise((resolve) =>
   socket.once("error", () => finish(false));
   socket.connect(port, host);
 });
+
+const importEmbeddedPostgres = async () => {
+  try {
+    return await import(embeddedRuntimePackage);
+  } catch {
+    return null;
+  }
+};
 
 const redactError = (value) => (
   String(value ?? "")
@@ -228,6 +237,15 @@ const classifyDryRunDatabaseUrl = (rawUrl) => {
   };
 };
 
+const proveProductionDbRefusal = () => {
+  try {
+    classifyDryRunDatabaseUrl("postgresql://dry_run_user:redacted@db.production.example.com/production");
+    return false;
+  } catch {
+    return true;
+  }
+};
+
 const writeTempSql = (sql) => {
   const filePath = path.join(os.tmpdir(), `chillywood-media-rendition-dry-run-${process.pid}-${Date.now()}.sql`);
   fs.writeFileSync(filePath, sql);
@@ -373,18 +391,344 @@ const insertReadyRenditionSql = (suffix, overrides = {}) => {
   `;
 };
 
+const runEmbeddedPostgresDryRun = async (capability) => {
+  const embeddedPostgres = await importEmbeddedPostgres();
+  if (!embeddedPostgres?.PGlite) return null;
+
+  const db = new embeddedPostgres.PGlite();
+  const exec = async (sql) => db.exec(sql);
+  const query = async (sql) => (await db.query(sql)).rows;
+  const resetRole = async () => {
+    try {
+      await exec("reset role;");
+    } catch {
+      // Best-effort cleanup after an expected permission failure.
+    }
+  };
+  const expectDenied = async (label, sql) => {
+    await resetRole();
+    try {
+      await exec(sql);
+      throw new Error(`${label} unexpectedly succeeded`);
+    } catch (error) {
+      await resetRole();
+      if (String(error?.message ?? "").includes("unexpectedly succeeded")) throw error;
+      return {
+        label,
+        denied: true,
+        sqlState: String(error?.code ?? "error"),
+      };
+    }
+  };
+
+  try {
+    await exec(`
+      create role "anon";
+      create role "authenticated";
+      create role "service_role" bypassrls;
+      create schema if not exists auth;
+      create or replace function auth.uid()
+      returns uuid
+      language sql
+      stable
+      as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      create or replace function public.has_platform_role(text[])
+      returns boolean
+      language sql
+      stable
+      as $$
+        select false
+      $$;
+      create table if not exists public."videos" (
+        "id" uuid primary key default gen_random_uuid()
+      );
+      grant usage on schema public to "anon", "authenticated", "service_role";
+      grant usage on schema auth to "anon", "authenticated", "service_role";
+      grant execute on function auth.uid() to "anon", "authenticated", "service_role";
+      grant execute on function public.has_platform_role(text[]) to "anon", "authenticated", "service_role";
+    `);
+    await exec(migration);
+
+    const tableRows = await query(`
+      select relname, relrowsecurity
+      from pg_class
+      where relname in ('media_transcode_jobs', 'media_renditions')
+      order by relname;
+    `);
+    const tableMap = new Map(tableRows.map((row) => [row.relname, row]));
+    for (const tableName of ["media_transcode_jobs", "media_renditions"]) {
+      if (!tableMap.has(tableName)) throw new Error(`${tableName} missing after embedded apply`);
+      if (tableMap.get(tableName).relrowsecurity !== true) throw new Error(`${tableName} RLS not enabled`);
+    }
+
+    const indexRows = await query(`
+      select indexname
+      from pg_indexes
+      where tablename in ('media_transcode_jobs', 'media_renditions')
+      order by indexname;
+    `);
+    const indexNames = indexRows.map((row) => row.indexname);
+    for (const indexName of [
+      "media_transcode_jobs_source_idx",
+      "media_transcode_jobs_status_idx",
+      "media_transcode_jobs_creator_idx",
+      "media_renditions_source_idx",
+      "media_renditions_ready_idx",
+      "media_renditions_label_idx",
+      "media_renditions_delivery_provider_idx",
+      "media_renditions_visibility_idx",
+      "media_renditions_job_idx",
+    ]) {
+      if (!indexNames.includes(indexName)) throw new Error(`${indexName} missing after embedded apply`);
+    }
+
+    const policyRows = await query(`
+      select policyname
+      from pg_policies
+      where tablename in ('media_transcode_jobs', 'media_renditions')
+      order by policyname;
+    `);
+    const policyNames = policyRows.map((row) => row.policyname);
+    for (const policyName of [
+      "media_transcode_jobs_select_owner_operator",
+      "media_transcode_jobs_no_direct_client_insert",
+      "media_transcode_jobs_no_direct_client_update",
+      "media_transcode_jobs_no_direct_client_delete",
+      "media_renditions_select_owner_operator",
+      "media_renditions_select_public_safe_metadata",
+      "media_renditions_no_direct_client_insert",
+      "media_renditions_no_direct_client_update",
+      "media_renditions_no_direct_client_delete",
+    ]) {
+      if (!policyNames.includes(policyName)) throw new Error(`${policyName} missing after embedded apply`);
+    }
+
+    const grantRows = await query(`
+      select
+        has_table_privilege('service_role', 'public.media_transcode_jobs', 'insert') as service_job_insert,
+        has_table_privilege('service_role', 'public.media_transcode_jobs', 'update') as service_job_update,
+        has_table_privilege('service_role', 'public.media_renditions', 'insert') as service_rendition_insert,
+        has_table_privilege('service_role', 'public.media_renditions', 'update') as service_rendition_update,
+        has_table_privilege('anon', 'public.media_renditions', 'insert') as anon_rendition_insert,
+        has_table_privilege('authenticated', 'public.media_renditions', 'update') as authenticated_rendition_update,
+        has_table_privilege('authenticated', 'public.media_transcode_jobs', 'insert') as authenticated_job_insert;
+    `);
+    const grants = grantRows[0] ?? {};
+    if (
+      grants.service_job_insert !== true
+      || grants.service_job_update !== true
+      || grants.service_rendition_insert !== true
+      || grants.service_rendition_update !== true
+      || grants.anon_rendition_insert !== false
+      || grants.authenticated_rendition_update !== false
+      || grants.authenticated_job_insert !== false
+    ) {
+      throw new Error("embedded apply grants do not match trusted writer/client denial contract");
+    }
+
+    const clientWriteDenials = [
+      await expectDenied("anon/client insert trusted ready rendition row", `
+        set role "anon";
+        ${insertReadyRenditionSql("anon-denied")}
+      `),
+      await expectDenied("authenticated/client update is_ready=true", `
+        set role "authenticated";
+        update public."media_renditions"
+        set "is_ready" = true
+        where "media_id" = 'dry-run-media-safe';
+      `),
+      await expectDenied("authenticated/client set public_playback_path", `
+        set role "authenticated";
+        update public."media_renditions"
+        set "public_playback_path" = 'playback/public/dry-run/client-set/master.m3u8'
+        where "media_id" = 'dry-run-media-safe';
+      `),
+      await expectDenied("authenticated/client set is_public_playback_safe=true", `
+        set role "authenticated";
+        update public."media_renditions"
+        set "is_public_playback_safe" = true
+        where "media_id" = 'dry-run-media-safe';
+      `),
+      await expectDenied("authenticated/client insert trusted transcode job as ready", `
+        set role "authenticated";
+        insert into public."media_transcode_jobs" (
+          "source_type", "source_id", "input_provider", "input_path",
+          "output_provider", "output_prefix", "status", "requested_renditions",
+          "worker_version", "source_hash", "proof_mode"
+        )
+        values (
+          'proof_demo', 'client-ready-job', 'cloudflare_r2_custom_domain',
+          'playback/public/dry-run/client/input.mp4',
+          'cloudflare_r2_custom_domain', 'playback/public/dry-run/client',
+          'ready', '["360p"]'::jsonb, 'client-worker',
+          'sha256:client', true
+        );
+      `),
+    ];
+
+    await exec(`
+      reset role;
+      set role "service_role";
+      insert into public."media_transcode_jobs" (
+        "source_type", "source_id", "input_provider", "input_path",
+        "output_provider", "output_prefix", "status", "requested_renditions",
+        "worker_version", "source_hash", "proof_mode"
+      )
+      values (
+        'proof_demo', 'dry-run-source-safe', 'cloudflare_r2_custom_domain',
+        'playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4',
+        'cloudflare_r2_custom_domain', 'playback/public/dry-run/safe',
+        'queued', '["360p", "480p"]'::jsonb, 'dry-run-worker-v1',
+        'sha256:dry-run-source', true
+      );
+      update public."media_transcode_jobs"
+      set "status" = 'probing', "started_at" = timezone('utc'::text, now())
+      where "source_id" = 'dry-run-source-safe';
+      update public."media_transcode_jobs"
+      set "status" = 'transcoding'
+      where "source_id" = 'dry-run-source-safe';
+      update public."media_transcode_jobs"
+      set "status" = 'uploading'
+      where "source_id" = 'dry-run-source-safe';
+      update public."media_transcode_jobs"
+      set "status" = 'ready',
+          "completed_renditions" = '["360p", "480p"]'::jsonb,
+          "completed_at" = timezone('utc'::text, now())
+      where "source_id" = 'dry-run-source-safe';
+      insert into public."media_transcode_jobs" (
+        "source_type", "source_id", "input_provider", "input_path",
+        "output_provider", "output_prefix", "status", "requested_renditions",
+        "worker_version", "source_hash", "error_code", "error_message", "proof_mode"
+      )
+      values (
+        'proof_demo', 'dry-run-source-failed', 'cloudflare_r2_custom_domain',
+        'playback/public/dry-run/failed/input.mp4',
+        'cloudflare_r2_custom_domain', 'playback/public/dry-run/failed',
+        'failed', '["360p"]'::jsonb, 'dry-run-worker-v1',
+        'sha256:dry-run-failed', 'proof_failed', 'proof failure state', true
+      );
+      ${insertReadyRenditionSql("safe")}
+      reset role;
+    `);
+
+    const safetyCaseDenials = [
+      await expectDenied("original/master row cannot be public CDN eligible", `
+        set role "service_role";
+        ${insertReadyRenditionSql("original", {
+          renditionLabel: "original",
+          visibility: "private",
+          bucketRole: "private_origin",
+          publicSafe: false,
+          isOriginal: true,
+        })}
+      `),
+      await expectDenied("Premium row cannot be public CDN eligible without token mode", `
+        set role "service_role";
+        ${insertReadyRenditionSql("premium", { visibility: "premium" })}
+      `),
+      await expectDenied("private row cannot be public CDN eligible without token mode", `
+        set role "service_role";
+        ${insertReadyRenditionSql("private", { visibility: "private" })}
+      `),
+      await expectDenied("unscanned row cannot be resolver eligible", `
+        set role "service_role";
+        ${insertReadyRenditionSql("unscanned", { scanStatus: "pending_scan" })}
+      `),
+      await expectDenied("moderation-blocked row cannot be resolver eligible", `
+        set role "service_role";
+        ${insertReadyRenditionSql("moderation-blocked", { moderationStatus: "blocked" })}
+      `),
+      await expectDenied("wrong bucket role cannot be resolver eligible", `
+        set role "service_role";
+        ${insertReadyRenditionSql("wrong-bucket", { bucketRole: "private_origin" })}
+      `),
+      await expectDenied("non-public prefix cannot be resolver eligible", `
+        set role "service_role";
+        ${insertReadyRenditionSql("non-public-prefix", {
+          publicPlaybackPath: "private/dry-run/non-public-prefix/master.m3u8",
+          manifestPath: "private/dry-run/non-public-prefix/master.m3u8",
+          variantPlaylistPath: "private/dry-run/non-public-prefix/480p/index.m3u8",
+        })}
+      `),
+    ];
+
+    await exec('set role "anon";');
+    const resolverRows = await query(`
+      select
+        count(*)::int as safe_count,
+        min("public_playback_path") as path
+      from public."media_renditions"
+      where "source_type" = 'proof_demo'
+        and "source_id" = 'dry-run-source-safe'
+        and "is_ready" = true
+        and "is_public_playback_safe" = true
+        and "visibility" = 'public'
+        and "delivery_provider" = 'cloudflare_r2_custom_domain'
+        and "storage_provider" = 'cloudflare_r2'
+        and "bucket_role" = 'public_playback'
+        and "scan_status" in ('clean', 'approved')
+        and "moderation_status" in ('clean', 'approved', 'allowed')
+        and "public_playback_path" like 'playback/public/%';
+    `);
+    await resetRole();
+    const resolverSafeCount = Number(resolverRows[0]?.safe_count ?? 0);
+    if (resolverSafeCount !== 1) {
+      throw new Error(`resolver-safe anon select expected 1 row, got ${resolverSafeCount}`);
+    }
+
+    return {
+      status: "passed",
+      runtime: "pglite_disposable_local",
+      safeBecause: "in-memory disposable local Postgres runtime; no network DB URL, no production Supabase project, no production service-role key",
+      target: "embedded-local-disposable",
+      migrationApplied: true,
+      tablesExist: ["media_transcode_jobs", "media_renditions"],
+      indexesVerified: indexNames,
+      policiesVerified: policyNames,
+      grantsVerified: {
+        serviceRoleCanWrite: true,
+        anonAuthenticatedDirectWritesDenied: true,
+      },
+      rlsEnabled: true,
+      clientWriteDenials,
+      serviceRoleWorkerWrites: {
+        queuedJobInsertAllowed: true,
+        statusTransitionsAllowed: ["queued", "probing", "transcoding", "uploading", "ready"],
+        readyPublicSafeRenditionInsertAllowed: true,
+        failedJobInsertAllowed: true,
+      },
+      safetyCaseDenials,
+      resolverSafeSelect: {
+        role: "anon",
+        count: resolverSafeCount,
+        path: resolverRows[0]?.path,
+      },
+      capability,
+    };
+  } finally {
+    await db.close();
+  }
+};
+
 const runRuntimeDryRun = async () => {
   const rawUrl = process.env[databaseUrlEnvName];
   const psqlAvailable = commandExists("psql");
   const defaultSupabaseLocalPortOpen = await checkLocalPort("127.0.0.1", 54322);
+  const embeddedPostgresAvailable = Boolean(await importEmbeddedPostgres());
 
   const capability = {
     psqlAvailable,
     defaultSupabaseLocalPortOpen,
     databaseUrlProvided: Boolean(rawUrl),
+    embeddedPostgresAvailable,
   };
 
   if (!rawUrl) {
+    const embeddedResult = await runEmbeddedPostgresDryRun(capability);
+    if (embeddedResult) return embeddedResult;
+
     return {
       status: "skipped_static_only",
       reason: `${databaseUrlEnvName} is not set; no local/shadow database runtime is available in this shell`,
@@ -597,13 +941,41 @@ const runRuntimeDryRun = async () => {
 };
 
 const staticValidation = validateStaticSql();
+const staticSqlValidationPassed = failures.length === 0;
 const localShadow = await runRuntimeDryRun().catch((error) => {
   fail(`local/shadow dry-run failed: ${redactError(error.message)}`);
   return null;
 });
+const productionDbRefused = proveProductionDbRefusal();
+if (!productionDbRefused) {
+  fail("production-looking database URL was not refused");
+}
+
+const runtimeApplyAttempted = Boolean(localShadow && localShadow.status !== "skipped_static_only");
+const runtimeApplyPassed = Boolean(localShadow?.status === "passed");
+const clientWriteDenied = Boolean(
+  localShadow?.clientWriteDenials?.length >= 5
+  && localShadow.clientWriteDenials.every((result) => result.denied === true),
+);
+const serviceRoleWritePassed = Boolean(
+  localShadow?.serviceRoleWorkerWrites?.queuedJobInsertAllowed === true
+  && localShadow?.serviceRoleWorkerWrites?.readyPublicSafeRenditionInsertAllowed === true,
+);
+const resolverSafeSelectPassed = Boolean(localShadow?.resolverSafeSelect?.count === 1);
 
 assertNotMatches(
-  JSON.stringify({ staticValidation, localShadow }),
+  JSON.stringify({
+    staticValidation,
+    localShadow,
+    staticSqlValidationPassed,
+    runtimeApplyAttempted,
+    runtimeApplyPassed,
+    clientWriteDenied,
+    serviceRoleWritePassed,
+    resolverSafeSelectPassed,
+    productionDbRefused,
+    noSecretsPrinted: true,
+  }),
   /\bAKIA[0-9A-Z]{16}\b|\bASIA[0-9A-Z]{16}\b|\bX-Amz-Signature=[A-Fa-f0-9]{32,}\b|\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b/,
   "dry-run proof output",
 );
@@ -619,6 +991,14 @@ console.log(JSON.stringify({
   productionMigrationApplied: false,
   productionDbWritesEnabled: false,
   productionPlaybackSwitched: false,
+  staticSqlValidationPassed,
+  runtimeApplyAttempted,
+  runtimeApplyPassed,
+  clientWriteDenied,
+  serviceRoleWritePassed,
+  resolverSafeSelectPassed,
+  productionDbRefused,
+  noSecretsPrinted: true,
   staticValidation,
   localShadow,
 }, null, 2));

@@ -177,12 +177,15 @@ The dry-run proof script statically validates the draft SQL every time: table na
 Current workstation result on 2026-07-09:
 
 - Static SQL validation passed.
-- Supabase CLI is available, but local Supabase/Postgres runtime is not available from this shell.
-- `supabase db push --dry-run --local` did not apply anything; it failed before migration execution because local Postgres on `127.0.0.1:54322` was not reachable.
-- `supabase status` confirmed Docker/local Supabase was not reachable because the Docker daemon was not running.
-- No `psql`, `postgres`, `initdb`, or `pg_ctl` executable was available in the shell.
-- No `MEDIA_RENDITION_DRY_RUN_DATABASE_URL` safe local/shadow database URL was set.
-- Therefore local/shadow apply and live RLS role simulation were skipped and remain pending.
+- Runtime dry-run passed in an in-memory disposable local Postgres runtime via `@electric-sql/pglite`.
+- The runtime was safe because it used no network database URL, no production Supabase project, and no production service-role key.
+- The proof applied the minimal Supabase fixture schema plus `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql`, then verified `media_transcode_jobs`, `media_renditions`, indexes, RLS enablement, policies, and grants.
+- Anon/authenticated client writes were denied for ready rendition inserts, trusted path/readiness/public-safe updates, and ready transcode-job inserts.
+- Service-role/worker writes passed for queued job insert, `queued -> probing -> transcoding -> uploading -> ready` status updates, failed job insert, and ready public-safe rendition insert.
+- Resolver-safe anon select returned exactly one clean, public, ready, public-playback row under `playback/public/`.
+- Safety cases denied public CDN eligibility for original/master, Premium/private, unscanned, moderation-blocked, wrong-bucket-role, and non-public-prefix rows.
+- The script also proves production-looking DB URLs are refused and reports `noSecretsPrinted=true`.
+- Docker/local Supabase and `psql` are still unavailable in this shell, so the non-production runtime proof uses the embedded disposable local database rather than a network DB URL.
 
 Runtime dry-run behavior when a safe database is provided:
 

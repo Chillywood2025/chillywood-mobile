@@ -76,11 +76,11 @@ assertIncludes(vodDoc, "Draft migration `supabase/migrations/20260709033207_trus
 assertIncludes(vodDoc, "service role or backend worker authority the only trusted write path", "VOD doc trusted write authority");
 assertIncludes(vodDoc, "Clients cannot mark rows ready, set `public_playback_path`, set `is_public_playback_safe`, set `worker_version`, set `source_hash`, or create public CDN eligibility from client-controlled data.", "VOD doc client trusted write block");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-policy` statically proves the draft SQL and docs keep client writes blocked", "VOD doc migration policy proof");
-assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-dry-run` currently passes static SQL validation only.", "VOD doc migration dry-run static proof");
-assertIncludes(vodDoc, "Local/shadow apply and live RLS role simulation were skipped because Docker/local Supabase/Postgres, `psql`, and a safe `MEDIA_RENDITION_DRY_RUN_DATABASE_URL` are unavailable in this shell", "VOD doc migration dry-run limitation");
+assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-dry-run` passes static SQL validation plus runtime apply/RLS checks in an in-memory disposable local Postgres runtime via `@electric-sql/pglite`.", "VOD doc migration dry-run runtime proof");
+assertIncludes(vodDoc, "proves anon/authenticated trusted writes are denied, proves service-role/worker writes pass, proves resolver-safe anon select returns one clean public-ready row", "VOD doc migration dry-run RLS proof");
 assertIncludes(vodDoc, "No production `video_renditions` writes are live.", "VOD doc no production writes");
 assertIncludes(vodDoc, "Trusted backend migration policy is design/proof-only.", "VOD doc trusted migration proof-only");
-assertIncludes(vodDoc, "Trusted backend migration dry-run is static-only at this checkpoint; runtime local/shadow RLS checks are pending a safe local/shadow database.", "VOD doc trusted migration dry-run checkpoint");
+assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded disposable local Postgres runtime; a real Supabase staging/shadow apply still requires explicit owner approval and a safe non-production database.", "VOD doc trusted migration dry-run checkpoint");
 
 assertIncludes(mediaMigrationPlan, "Status: design/proof only.", "trusted rendition migration plan status");
 assertIncludes(mediaMigrationPlan, "The draft migration has not been applied to production.", "trusted rendition migration plan unapplied status");
@@ -93,7 +93,7 @@ assertIncludes(mediaMigrationPlan, "A separate `media_renditions` table is safer
 assertIncludes(mediaMigrationPlan, "## Dry-Run Status", "trusted rendition migration plan dry-run section");
 assertIncludes(mediaMigrationPlan, "`npm run proof:media-rendition-migration-dry-run`", "trusted rendition migration plan dry-run proof script");
 assertIncludes(mediaMigrationPlan, "Static SQL validation passed.", "trusted rendition migration plan static dry-run status");
-assertIncludes(mediaMigrationPlan, "local/shadow apply and live RLS role simulation were skipped and remain pending.", "trusted rendition migration plan runtime dry-run limitation");
+assertIncludes(mediaMigrationPlan, "Runtime dry-run passed in an in-memory disposable local Postgres runtime via `@electric-sql/pglite`.", "trusted rendition migration plan runtime dry-run status");
 
 assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_transcode_jobs"', "trusted rendition draft jobs table");
 assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_renditions"', "trusted rendition draft renditions table");
@@ -175,7 +175,13 @@ assertIncludes(mediaRenditionMigrationPolicyProof, "productionPlaybackSwitched: 
 assertNotMatches(mediaRenditionMigrationPolicyProof, /\bsupabase\.from\b|\bcreateClient\b/i, "trusted rendition migration policy proof must not write production DB or create a Supabase client");
 assertIncludes(mediaRenditionMigrationDryRunProof, "media-rendition-migration-dry-run", "trusted media rendition migration dry-run proof mode");
 assertIncludes(mediaRenditionMigrationDryRunProof, "MEDIA_RENDITION_DRY_RUN_DATABASE_URL", "trusted media rendition migration dry-run safe DB env");
-assertIncludes(mediaRenditionMigrationDryRunProof, "skipped_static_only", "trusted media rendition migration dry-run static-only proof");
+assertIncludes(mediaRenditionMigrationDryRunProof, "pglite_disposable_local", "trusted media rendition migration dry-run embedded runtime proof");
+assertIncludes(mediaRenditionMigrationDryRunProof, "runtimeApplyPassed", "trusted media rendition migration dry-run runtime apply field");
+assertIncludes(mediaRenditionMigrationDryRunProof, "clientWriteDenied", "trusted media rendition migration dry-run client denial field");
+assertIncludes(mediaRenditionMigrationDryRunProof, "serviceRoleWritePassed", "trusted media rendition migration dry-run service role field");
+assertIncludes(mediaRenditionMigrationDryRunProof, "resolverSafeSelectPassed", "trusted media rendition migration dry-run resolver select field");
+assertIncludes(mediaRenditionMigrationDryRunProof, "productionDbRefused", "trusted media rendition migration dry-run production refusal field");
+assertIncludes(mediaRenditionMigrationDryRunProof, "noSecretsPrinted", "trusted media rendition migration dry-run no secrets field");
 assertIncludes(mediaRenditionMigrationDryRunProof, "clientWriteDenials", "trusted media rendition migration dry-run client denial proof");
 assertIncludes(mediaRenditionMigrationDryRunProof, "serviceRoleWorkerWrites", "trusted media rendition migration dry-run service role proof");
 assertIncludes(mediaRenditionMigrationDryRunProof, "resolverSafeSelect", "trusted media rendition migration dry-run resolver-safe select proof");
