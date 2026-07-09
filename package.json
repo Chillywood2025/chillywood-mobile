@@ -243,6 +243,7 @@
     "media-scan:run-one": "node ./scripts/media-scan-cli.mjs --mode=run-one --source=linked",
     "media-scan:run-auto": "node ./scripts/media-scan-cli.mjs --mode=run-auto --source=linked",
     "media-scan:audit": "node ./scripts/media-scan-cli.mjs --mode=audit --source=linked",
+    "proof:media-scan-private-access": "node ./scripts/proof-media-scan-private-access.mjs",
     "proof:media-scan-auto-cycle": "node ./scripts/proof-media-scan-auto-cycle.mjs",
     "proof:media-cdn-rollout-planner": "node ./scripts/proof-media-cdn-rollout-planner.mjs",
     "proof:media-catalog-readiness": "node ./scripts/proof-media-catalog-readiness.mjs",

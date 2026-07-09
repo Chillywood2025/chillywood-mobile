@@ -86,6 +86,8 @@ const mediaCatalogReadinessCli = read("scripts/media-catalog-readiness-cli.mjs")
 const mediaCatalogReadinessProof = read("scripts/proof-media-catalog-readiness.mjs");
 const mediaScanCli = read("scripts/media-scan-cli.mjs");
 const mediaScanAutomationProof = read("scripts/proof-media-scan-automation.mjs");
+const mediaScanPrivateAccessFunction = read("supabase/functions/media-scan-private-access/index.ts");
+const mediaScanPrivateAccessProof = read("scripts/proof-media-scan-private-access.mjs");
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "performance policy");
@@ -268,7 +270,7 @@ assertIncludes(mediaAutomationDiscovery, "original_only_blocked", "media automat
 assertIncludes(mediaAutomationDiscovery, "unscanned_blocked", "media automation discovery unscanned block");
 assertIncludes(mediaAutomationDiscovery, "moderation_blocked", "media automation discovery moderation block");
 assertIncludes(mediaCatalogReadinessRunbook, "Catalog readiness CLI is read-only.", "catalog readiness runbook read-only");
-assertIncludes(mediaCatalogReadinessRunbook, "This lane does not execute scans", "catalog readiness runbook scan execution boundary");
+assertIncludes(mediaCatalogReadinessRunbook, "The scanner CLI is the separate trusted execution path", "catalog readiness runbook scan execution boundary");
 assertIncludes(mediaCatalogReadinessRunbook, "Do not mark unscanned media clean without scanner proof.", "catalog readiness runbook scan proof boundary");
 assertIncludes(mediaCatalogReadinessRunbook, "Private and Premium media remain excluded.", "catalog readiness runbook private Premium boundary");
 assertIncludes(mediaCatalogReadiness, "| \"needs_scan\"", "catalog readiness needs scan classification");
@@ -288,9 +290,17 @@ assertIncludes(packageJson, "\"media-catalog:readiness-plan\"", "package catalog
 assertIncludes(packageJson, "\"media-catalog:scan-plan\"", "package catalog scan plan script");
 assertIncludes(packageJson, "\"proof:media-catalog-readiness\"", "package catalog readiness proof script");
 assertNotMatches(mediaCatalogReadinessCli, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "catalog readiness CLI must not mutate DB");
-assertIncludes(mediaCatalogReadinessRunbook, "Production scan write status: disabled in the new CLI source-proof build.", "scan automation runbook no production write");
+assertIncludes(mediaCatalogReadinessRunbook, "Trusted backend scanner gateway", "scan automation runbook backend gateway");
 assertIncludes(mediaCatalogReadinessRunbook, "The implemented scanner proof is ffprobe media-readability only.", "scan automation runbook ffprobe boundary");
 assertIncludes(mediaCatalogReadinessRunbook, "It is not full malware scanning, not NSFW/content moderation, and not a replacement for moderation policy.", "scan automation runbook overclaim guard");
+assertIncludes(mediaScanPrivateAccessFunction, "MEDIA_SCAN_OPERATOR_TOKEN_SHA256", "scan gateway token hash");
+assertIncludes(mediaScanPrivateAccessFunction, "x-media-scan-operator-token", "scan gateway token header");
+assertIncludes(mediaScanPrivateAccessFunction, "private_denied", "scan gateway private denial");
+assertIncludes(mediaScanPrivateAccessFunction, "premium_denied", "scan gateway Premium denial");
+assertIncludes(mediaScanPrivateAccessFunction, "streamS3Object", "scan gateway S3 support");
+assertIncludes(mediaScanPrivateAccessFunction, "streamSupabaseStorageObject", "scan gateway Supabase Storage support");
+assertIncludes(mediaScanPrivateAccessFunction, "observed_readable_required", "scan gateway clean proof");
+assertIncludes(mediaScanPrivateAccessProof, "noSignedUrlReturned", "scan gateway proof no signed URL return");
 assertIncludes(mediaScanAutomation, "| \"scan_skipped_private\"", "scan automation private skip");
 assertIncludes(mediaScanAutomation, "| \"scan_skipped_premium\"", "scan automation Premium skip");
 assertIncludes(mediaScanAutomation, "scanner_proof_required_for_clean", "scan automation clean proof requirement");
@@ -298,9 +308,11 @@ assertIncludes(mediaScanAutomation, "decoded_stream_required_for_clean", "scan a
 assertIncludes(mediaScanAutomation, "moderation_not_allowed", "scan automation moderation gate");
 assertIncludes(mediaScanCli, "MEDIA_SCAN_RUN_ONE_CONFIRM", "scan CLI confirmation env");
 assertIncludes(mediaScanCli, "production_scan_write_not_enabled_in_this_source_proof_build", "scan CLI no production write");
-assertIncludes(mediaScanCli, "MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN", "scan CLI trusted download token");
-assertIncludes(mediaScanCli, "media-storage create_download_url", "scan CLI backend signed-download path");
-assertIncludes(mediaScanCli, "trusted_scan_download_access_missing", "scan CLI trusted download missing gate");
+assertIncludes(mediaScanCli, "MEDIA_SCAN_OPERATOR_TOKEN", "scan CLI operator token");
+assertIncludes(mediaScanCli, "MEDIA_SCAN_ACCESS_MODE", "scan CLI backend mode");
+assertIncludes(mediaScanCli, "media-scan-private-access", "scan CLI backend gateway path");
+assertIncludes(mediaScanCli, "trusted_scan_gateway_download_denied", "scan CLI gateway download denial");
+assertIncludes(mediaScanCli, "trusted_scan_gateway_record_denied", "scan CLI gateway record denial");
 assertIncludes(mediaScanCli, "ffprobe_media_readability_only_not_malware_or_content_moderation", "scan CLI overclaim guard");
 assertIncludes(mediaScanCli, "sourceId: publicSafeToIdentify ? result.sourceId : \"[redacted]\"", "scan CLI private row redaction");
 assertIncludes(mediaScanAutomationProof, "private candidate skipped", "scan proof private skip");

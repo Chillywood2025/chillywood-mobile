@@ -2,13 +2,13 @@
 
 Last updated: 2026-07-09
 
-Status: Catalog readiness automation is source/proofed and CLI-read-only. It classifies catalog rows, identifies public scan candidates, and plans scan/moderation readiness steps. Scanner automation is also source/proofed for ffprobe media-readability planning and now has a trusted S3 download path through the existing backend `media-storage` signer when `MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN` is provided, but production scan writes are disabled in the CLI source-proof build. No command marks media clean without trusted scanner proof, no command processes/transcodes media, and no command switches playback.
+Status: Catalog readiness automation is source/proofed and CLI-read-only for classification. It classifies catalog rows, identifies public scan candidates, and plans scan/moderation readiness steps. Scanner automation now has a deployed trusted backend gateway for ffprobe media-readability scans; it can stream public scan candidates through backend authority, record trusted scan results after proof, and deny private/Premium rows. No command processes/transcodes media, and no command switches playback.
 
 ## Purpose
 
 The media automation pipeline cannot transcode unscanned creator videos into public Cloudflare R2/HLS output. Catalog readiness fills the gap before transcode automation: it explains why rows are excluded, identifies which public rows may be queued for scanning, and keeps private, Premium, original/master, unsupported, missing-source, and moderation-blocked media out of the public CDN path.
 
-Catalog readiness CLI is read-only. This lane does not execute scans on production media. The scanner CLI can plan and dry-run a public scan candidate, but `run-one` fails closed unless the explicit confirmation is present and still refuses production writes in this source-proof build. This lane does not execute moderation promotion.
+Catalog readiness CLI is read-only. The scanner CLI is the separate trusted execution path: it can plan, dry-run, and run public scan candidates only with explicit confirmation and backend scanner authority. It does not execute moderation promotion.
 
 ## Commands
 
@@ -27,9 +27,22 @@ npm run proof:media-scan-auto-cycle
 
 The production commands use linked Supabase read-only queries. They return sanitized counts and public-candidate metadata only. They do not print DB URLs, signed URLs, private storage paths, service-role keys, or private/Premium excluded-row details.
 
-## Trusted Scan Download Path
+## Trusted backend scanner gateway
 
-The CLI must not require a raw local service-role key for S3-backed scan downloads. For S3/Hetzner candidates it can call the existing `media-storage` Edge Function action `create_download_url` using an authenticated scanner/operator access token supplied as `MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN`. The function owns the S3 secrets server-side, verifies the requested object against the catalog row, and returns a short-lived signed URL to the CLI. The CLI downloads that URL only to a `0600` temp file, runs ffprobe media-readability, deletes the temp file, and never prints the signed URL.
+The CLI must not require a raw local service-role key, S3 key, R2 key, or user browser token for scan downloads. The deployed `media-scan-private-access` Edge Function is the trusted scanner gateway. It uses a narrow scanner operator token, stores only `MEDIA_SCAN_OPERATOR_TOKEN_SHA256` server-side, validates requests with constant-time hash comparison, and never logs or returns storage credentials.
+
+Gateway actions:
+
+- `audit_candidate`: returns redacted metadata for a public, non-Premium, scan-pending candidate.
+- `download`: revalidates public/non-Premium/not moderation-blocked source state and streams source bytes to the scanner without returning a signed URL.
+- `record_scan_result`: accepts trusted scanner output with scanner name/version and ffprobe proof, then writes the scan result through backend authority.
+
+Supported backend storage paths:
+
+- S3/Hetzner-backed source objects in the configured production source bucket.
+- Supabase Storage-backed source objects in `creator-videos`.
+
+The CLI writes streamed bytes only to a `0600` temp file, runs ffprobe media-readability, deletes the temp file, and never prints signed URLs or private object URLs.
 
 Current linked storage classification for the five scan candidates:
 
@@ -37,7 +50,7 @@ Current linked storage classification for the five scan candidates:
 - One candidate is Supabase Storage-backed in bucket `creator-videos` with object metadata present and redacted.
 - None has a public playback URL.
 
-The current session had no `MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN` in process env, so `media-scan:run-one` and `media-scan:run-auto` stopped at `trusted_scan_download_access_missing`. Supabase Storage-backed candidates still need the existing service-role scanner worker path or a future backend stream/download function; they are not reachable through Wrangler R2 proof-bucket access.
+The proof run generated a scanner operator token, stored only its SHA-256 as a Supabase function secret, kept the raw token out of logs and git, and used it only for the production scan proof. Missing-token and invalid-token requests were denied. Private and Premium candidate requests were denied.
 
 ## Classifications
 
@@ -55,12 +68,12 @@ The current session had no `MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN` in process env, so
 
 ## Current Linked Readback
 
-First production catalog readiness readback on 2026-07-09:
+Latest production catalog readiness readback after the trusted gateway scan proof on 2026-07-09:
 
 - `totalRows=27`
-- `ready_for_transcode=0`
+- `ready_for_transcode=5`
 - `already_audited_hls=1`
-- `needs_scan=5`
+- `needs_scan=0`
 - `needs_moderation_review=0`
 - `private_excluded=12`
 - `premium_excluded=9`
@@ -70,7 +83,7 @@ First production catalog readiness readback on 2026-07-09:
 - `blocked_moderation=0`
 - `denied_source=0`
 
-The five scan candidates are public, source-present, non-Premium rows with `scan_status=manual_review` and safe moderation readback. They are scan candidates only, not transcode candidates:
+The five former scan candidates are public, source-present, non-Premium rows that passed ffprobe media-readability through the backend gateway and now read back as ready for transcode under the existing scan/moderation gates:
 
 - `3de36e39-67e6-45ca-a12f-d5b1560473cb` — `Chillywoodtest profile upload`
 - `4c0b42c4-fe11-44ce-8c31-d6a1fd41821b` — `Cover Card Preview`
@@ -98,11 +111,11 @@ The repository has scanner infrastructure documented elsewhere, but this catalog
 
 The implemented scanner proof is ffprobe media-readability only. It can prove that a media file is readable and has streams/duration. It is not full malware scanning, not NSFW/content moderation, and not a replacement for moderation policy. The existing malware scan pipeline uses service-role-only RPCs and scanner authority; clients cannot write clean scan results.
 
-Production scan write status: disabled in the new CLI source-proof build. `media-scan:run-one` requires `MEDIA_SCAN_RUN_ONE_CONFIRM=I_UNDERSTAND_PUBLIC_SCAN_ONE`; with no `MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN` it fails closed at `trusted_scan_download_access_missing`, and with a download token it still cannot mark clean unless trusted scan completion authority exists. `media-scan:run-auto` requires `MEDIA_SCAN_AUTO_CONFIRM=I_UNDERSTAND_PUBLIC_SCAN_BATCH`, automatically selects public scan candidates up to the safe cap, skips private/Premium rows, and fails closed at the same trusted download/write gates until a trusted scanner runtime with source-download authority and service-role/RPC completion is available. Future production scan writes must use the trusted service-role scanner path, include scanner name/version/proof, read back the result, and still require moderation-safe state before `ready_for_transcode`.
+Production scan write status: closed for the first public scan batch proof. `media-scan:run-one` requires `MEDIA_SCAN_RUN_ONE_CONFIRM=I_UNDERSTAND_PUBLIC_SCAN_ONE`; `media-scan:run-auto` requires `MEDIA_SCAN_AUTO_CONFIRM=I_UNDERSTAND_PUBLIC_SCAN_BATCH`, automatically selects public scan candidates up to the safe cap, skips private/Premium rows, and writes only through the backend gateway. Every trusted scan result must include scanner name/version/proof, read back cleanly, and still require moderation-safe state before `ready_for_transcode`.
 
 ## First Autonomous Cycle Attempt
 
-The first full autonomous readiness -> scan -> transcode -> audit -> CDN/HLS cycle attempt is Partial at the scan execution gate. Backup verification, restore drill, worker preflight, automation status, and catalog readiness preflight passed. `media-scan:run-auto` selected all five public non-Premium scan candidates and skipped `12` private plus `9` Premium rows, then stopped before mutation because `MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN` was missing for the existing backend signed-download path. No scan result was written, no row became `ready_for_transcode`, no transcode batch ran, no HLS output was uploaded, and no playback scope changed.
+The first full autonomous readiness -> scan -> transcode -> audit -> CDN/HLS cycle attempt is Partial at the transcode execution gate. Backup verification, restore drill, worker preflight, automation status, and catalog readiness preflight passed. `media-scan:run-auto` selected all five public non-Premium scan candidates, skipped `12` private plus `9` Premium rows, streamed the objects through the backend gateway, ran ffprobe media-readability, and wrote trusted clean scan results for exactly those five rows. Readiness then showed `ready_for_transcode=5` and `needs_scan=0`. Auto-discovery found `eligible_needs_transcode=5`, planned a safe batch size of `1`, and dry-run passed. `media-automation:run-auto` still failed closed with `batch_execution_not_enabled_in_source_proof_build`; no transcode job, new rendition row, HLS output, or playback scope change occurred.
 
 ## Safety Rules
 
@@ -112,6 +125,6 @@ The first full autonomous readiness -> scan -> transcode -> audit -> CDN/HLS cyc
 - Moderation-blocked media cannot be transcoded.
 - Readiness planning performs no mutation.
 - Scanner planning performs no mutation.
-- `run-one` and `run-auto` require explicit confirmation and are write-disabled in this source-proof build.
+- Scanner `run-one` and `run-auto` require explicit confirmation and backend scanner authority.
 - Proof and CLI output must redact private URLs, signed URLs, object paths, and secrets.
 - Transcode automation may only consume rows after scan and moderation gates promote them to `ready_for_transcode`.

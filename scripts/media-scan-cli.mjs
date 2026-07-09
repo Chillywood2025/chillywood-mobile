@@ -16,7 +16,9 @@ const runAutoConfirmValue = "I_UNDERSTAND_PUBLIC_SCAN_BATCH";
 const expectedProjectRef = "bmkkhihfbmsnnmcqkoly";
 const defaultFunctionsUrl = `https://${expectedProjectRef}.supabase.co/functions/v1`;
 const mediaStorageFunctionUrl = `${String(process.env.MEDIA_SCAN_FUNCTIONS_URL || defaultFunctionsUrl).replace(/\/+$/g, "")}/media-storage`;
+const mediaScanGatewayFunctionUrl = `${String(process.env.MEDIA_SCAN_FUNCTIONS_URL || defaultFunctionsUrl).replace(/\/+$/g, "")}/media-scan-private-access`;
 const privateDownloadMode = String(process.env.MEDIA_SCAN_PRIVATE_DOWNLOAD_MODE || "media-storage-function").trim();
+const scanAccessMode = String(process.env.MEDIA_SCAN_ACCESS_MODE || "backend_gateway").trim();
 
 const args = Object.fromEntries(process.argv.slice(2).filter((arg) => arg.startsWith("--")).map((arg) => {
   const [key, ...value] = arg.slice(2).split("=");
@@ -30,7 +32,6 @@ const maxJobs = Number.parseInt(String(args.maxJobs || process.env.MEDIA_SCAN_MA
 
 function safeExit(code, payload) {
   const output = JSON.stringify({
-    ...payload,
     noSecretsPrinted: true,
     readOnly: !["run-one", "run-auto"].includes(mode),
     mutationAttempted: false,
@@ -40,6 +41,7 @@ function safeExit(code, payload) {
     playbackSwitched: false,
     privateMediaExposed: false,
     premiumMediaExposed: false,
+    ...payload,
   }, null, 2);
   if (code === 0) process.stdout.write(`${output}\n`);
   else process.stderr.write(`${output}\n`);
@@ -77,6 +79,21 @@ function assertSafeDownloadToken() {
       acceptedDownloadMode: privateDownloadMode,
       rawServiceRoleRequired: false,
       backendPath: "media-storage create_download_url",
+    });
+  }
+  assertNoSecretLikeText({ tokenPresent: true });
+  return token;
+}
+
+function assertSafeOperatorToken() {
+  const token = String(process.env.MEDIA_SCAN_OPERATOR_TOKEN || "").trim();
+  if (!token) {
+    failClosed("media_scan_operator_token_missing", {
+      missingCredential: "MEDIA_SCAN_OPERATOR_TOKEN",
+      acceptedAccessMode: "backend_gateway",
+      rawServiceRoleRequired: false,
+      rawStorageCredentialsRequired: false,
+      backendPath: "media-scan-private-access",
     });
   }
   assertNoSecretLikeText({ tokenPresent: true });
@@ -263,6 +280,118 @@ async function downloadViaMediaStorageFunction(row) {
       failClosed("trusted_scan_download_or_ffprobe_failed", { errorCode: "download_or_ffprobe_failed" });
     }
     throw error;
+  }
+}
+
+async function downloadViaBackendGateway(row) {
+  const token = assertSafeOperatorToken();
+  const response = await fetch(mediaScanGatewayFunctionUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-media-scan-operator-token": token,
+    },
+    body: JSON.stringify({
+      action: "download",
+      source_type: row.source_type || "creator_video",
+      source_id: row.source_id,
+    }),
+  });
+  if (!response.ok || !response.body) {
+    const payload = await response.json().catch(() => null);
+    failClosed("trusted_scan_gateway_download_denied", {
+      httpStatus: response.status,
+      errorCode: typeof payload?.error === "string" ? payload.error : "download_denied",
+      blockedReasons: Array.isArray(payload?.blockedReasons) ? payload.blockedReasons : undefined,
+      rawServiceRoleRequired: false,
+      rawStorageCredentialsRequired: false,
+      backendPath: "media-scan-private-access",
+    });
+  }
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-scan-gateway-download-"));
+  const tmpFile = path.join(tmpDir, "candidate-media");
+  try {
+    await pipeline(response.body, createWriteStream(tmpFile, { mode: 0o600 }));
+    const fileStat = await stat(tmpFile);
+    const scanResult = await runFfprobeLocalFile(tmpFile);
+    return {
+      tmpDir,
+      scanResult,
+      downloadedBytes: fileStat.size,
+      storageProvider: response.headers.get("x-media-scan-storage-provider") || "backend_gateway",
+    };
+  } catch (error) {
+    rmSync(tmpDir, { recursive: true, force: true });
+    failClosed("trusted_scan_gateway_download_or_ffprobe_failed", { errorCode: "download_or_ffprobe_failed" });
+  }
+}
+
+async function recordScanResultViaBackendGateway(row, scanResult) {
+  const token = assertSafeOperatorToken();
+  const response = await fetch(mediaScanGatewayFunctionUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-media-scan-operator-token": token,
+    },
+    body: JSON.stringify({
+      action: "record_scan_result",
+      source_type: row.source_type || "creator_video",
+      source_id: row.source_id,
+      scanner_name: scanResult.scannerName,
+      scanner_version: scanResult.scannerVersion,
+      scanner_type: scanResult.scannerType,
+      status: scanResult.status,
+      proof: scanResult.proof,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload || typeof payload !== "object") {
+    failClosed("trusted_scan_gateway_record_denied", {
+      httpStatus: response.status,
+      errorCode: typeof payload?.error === "string" ? payload.error : "record_denied",
+      blockedReasons: Array.isArray(payload?.blockedReasons) ? payload.blockedReasons : undefined,
+      rawServiceRoleRequired: false,
+      rawStorageCredentialsRequired: false,
+      backendPath: "media-scan-private-access",
+    });
+  }
+  assertNoSecretLikeText(payload);
+  return payload;
+}
+
+async function runLinkedScanForEntry(entry) {
+  const downloader = scanAccessMode === "backend_gateway"
+    ? downloadViaBackendGateway
+    : downloadViaMediaStorageFunction;
+  const download = await downloader(entry.row);
+  try {
+    if (scanAccessMode !== "backend_gateway") {
+      failClosed("trusted_scan_result_write_authority_missing", {
+        trustedDownloadPassed: true,
+        acceptedAccessMode: scanAccessMode,
+        missingCredential: "backend gateway scan completion authority",
+        productionRowsWritten: false,
+      });
+    }
+    const recordResult = scanAccessMode === "backend_gateway"
+      ? await recordScanResultViaBackendGateway(entry.row, download.scanResult)
+      : null;
+    return {
+      sourceType: entry.classification.sourceType,
+      sourceId: entry.classification.sourceId,
+      title: entry.classification.title,
+      storageProvider: download.storageProvider,
+      downloadedBytes: download.downloadedBytes,
+      scanStatus: download.scanResult.status,
+      scannerName: download.scanResult.scannerName,
+      scannerVersion: download.scanResult.scannerVersion,
+      scannerType: download.scanResult.scannerType,
+      proof: download.scanResult.proof,
+      recordResult: recordResult?.result ?? null,
+    };
+  } finally {
+    rmSync(download.tmpDir, { recursive: true, force: true });
   }
 }
 
@@ -496,31 +625,41 @@ if (mode === "run-one") {
   if (dataSource === "linked") {
     const selected = selectedScanRows(readCatalogRows())[0];
     if (!selected) failClosed("no_public_scan_candidate_available");
-    const download = await downloadViaMediaStorageFunction(selected.row);
-    try {
-      failClosed("trusted_scan_result_write_authority_missing", {
-        trustedDownloadPassed: true,
-        selectedSource: {
-          sourceType: selected.classification.sourceType,
-          sourceId: selected.classification.sourceId,
-          title: selected.classification.title,
-        },
-        scannerTypeSelected: "ffprobe_media_readability",
-        scannerTypeDisclosure: "ffprobe_media_readability_only_not_malware_or_content_moderation",
-        downloadedBytes: download.downloadedBytes,
-        scanResult: {
-          status: download.scanResult.status,
-          scannerName: download.scanResult.scannerName,
-          scannerVersion: download.scanResult.scannerVersion,
-          scannerType: download.scanResult.scannerType,
-          proof: download.scanResult.proof,
-        },
-        missingCredential: "trusted scan completion authority",
-        productionRowsWritten: false,
-      });
-    } finally {
-      rmSync(download.tmpDir, { recursive: true, force: true });
-    }
+    const result = await runLinkedScanForEntry(selected);
+    safeExit(0, {
+      ok: true,
+      mode,
+      dataSource: "linked_supabase_backend_gateway",
+      accessMode: scanAccessMode,
+      selectedPublicScanCandidates: 1,
+      scannedCount: 1,
+      scanCleanCount: result.scanStatus === "clean" ? 1 : 0,
+      scanFailedCount: result.scanStatus === "scan_failed" ? 1 : 0,
+      selectedSource: {
+        sourceType: result.sourceType,
+        sourceId: result.sourceId,
+        title: result.title,
+      },
+      storageProvider: result.storageProvider,
+      downloadedBytes: result.downloadedBytes,
+      scannerTypeSelected: "ffprobe_media_readability",
+      scannerTypeDisclosure: "ffprobe_media_readability_only_not_malware_or_content_moderation",
+      scanResult: {
+        status: result.scanStatus,
+        scannerName: result.scannerName,
+        scannerVersion: result.scannerVersion,
+        scannerType: result.scannerType,
+        proof: result.proof,
+      },
+      trustedBackendGatewayUsed: scanAccessMode === "backend_gateway",
+      rawServiceRoleRequired: false,
+      rawStorageCredentialsRequired: false,
+      mutationAttempted: true,
+      productionRowsWritten: true,
+      mediaProcessed: true,
+      transcodeStarted: false,
+      playbackSwitched: false,
+    });
   }
   failClosed("production_scan_write_not_enabled_in_this_source_proof_build", {
     trustedWriteRequired: true,
@@ -538,24 +677,55 @@ if (mode === "run-auto") {
   const output = buildScanOutput();
   if (dataSource === "linked") {
     const selected = selectedScanRows(readCatalogRows());
-    if (selected.length > 0) {
-      const firstStorage = readStorageMetadataForSource(selected[0].row.source_id);
-      const firstProvider = String(firstStorage.storage_provider || "").trim().toLowerCase();
-      if (firstProvider === "s3" && !process.env.MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN) {
-        failClosed("trusted_scan_download_access_missing", {
-          missingCredential: "MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN",
-          acceptedConfirmation: true,
-          rawServiceRoleRequired: false,
-          backendPath: "media-storage create_download_url",
-          selectedPublicScanCandidates: selected.length,
-          skippedPrivateCount: output.skippedPrivateCount,
-          skippedPremiumCount: output.skippedPremiumCount,
-          scannerTypeSelected: output.scannerTypeSelected,
-          scannerTypeDisclosure: output.scannerTypeDisclosure,
-          plan: output.plan,
-        });
-      }
+    if (selected.length === 0) {
+      safeExit(0, {
+        ok: true,
+        mode,
+        dataSource: "linked_supabase_read_only",
+        selectedPublicScanCandidates: 0,
+        scannedCount: 0,
+        reason: "no_public_scan_candidate_available",
+        skippedPrivateCount: output.skippedPrivateCount,
+        skippedPremiumCount: output.skippedPremiumCount,
+      });
     }
+    const results = [];
+    for (const entry of selected) {
+      results.push(await runLinkedScanForEntry(entry));
+    }
+    safeExit(0, {
+      ok: true,
+      mode,
+      dataSource: "linked_supabase_backend_gateway",
+      accessMode: scanAccessMode,
+      selectedPublicScanCandidates: selected.length,
+      scannedCount: results.length,
+      scanCleanCount: results.filter((result) => result.scanStatus === "clean").length,
+      scanFailedCount: results.filter((result) => result.scanStatus === "scan_failed").length,
+      skippedPrivateCount: output.skippedPrivateCount,
+      skippedPremiumCount: output.skippedPremiumCount,
+      scannerTypeSelected: output.scannerTypeSelected,
+      scannerTypeDisclosure: output.scannerTypeDisclosure,
+      trustedBackendGatewayUsed: scanAccessMode === "backend_gateway",
+      rawServiceRoleRequired: false,
+      rawStorageCredentialsRequired: false,
+      results: results.map((result) => ({
+        sourceType: result.sourceType,
+        sourceId: result.sourceId,
+        title: result.title,
+        storageProvider: result.storageProvider,
+        downloadedBytes: result.downloadedBytes,
+        scanStatus: result.scanStatus,
+        scannerType: result.scannerType,
+        decodedStreams: result.proof.decodedStreams,
+        durationMillis: result.proof.durationMillis,
+      })),
+      mutationAttempted: true,
+      productionRowsWritten: true,
+      mediaProcessed: true,
+      transcodeStarted: false,
+      playbackSwitched: false,
+    });
   }
   failClosed("production_scan_batch_write_not_enabled_in_this_source_proof_build", {
     trustedWriteRequired: true,
