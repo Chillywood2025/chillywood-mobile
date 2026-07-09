@@ -49,7 +49,7 @@ const parseArgValue = (name) => {
 const mode = parseArgValue("--mode") ?? process.env.MEDIA_BACKUP_MODE ?? "dry-run";
 const writeMode = mode === "write";
 const exportModeRequested = process.env.MEDIA_BACKUP_EXPORT_MODE ?? "auto";
-const databaseSourceRequested = process.env.MEDIA_BACKUP_DATABASE_SOURCE ?? "url";
+const databaseSourceRequested = process.env.MEDIA_BACKUP_DATABASE_SOURCE ?? (process.env.MEDIA_BACKUP_DATABASE_URL ? "url" : "linked");
 
 const sha256Hex = (input) => createHash("sha256").update(input).digest("hex");
 
@@ -883,6 +883,8 @@ if (!writeMode) {
     productionDbTouched: false,
     productionWorkerDeployed: false,
     continuousAutomationEnabled: false,
+    verifyLatestCommand: "npm run backup:media-worker:verify-latest",
+    restoreDrillCommand: "npm run backup:media-worker:restore-drill",
   };
   rmSync(artifacts.tempDir, { recursive: true, force: true });
   safeExit(0, summary);
@@ -976,6 +978,7 @@ try {
     artifactFiles: Object.keys(artifacts.artifactPaths),
     manifestValid: true,
     checksumGenerated: true,
+    checksumStatus: "generated",
     privateR2Prefix: true,
     publicBucketUsed: false,
     logicalBackupNotPitr: true,
@@ -983,6 +986,8 @@ try {
     productionDbWritesEnabled: false,
     productionWorkerDeployed: false,
     continuousAutomationEnabled: false,
+    verifyLatestCommand: "npm run backup:media-worker:verify-latest",
+    restoreDrillCommand: "npm run backup:media-worker:restore-drill",
   });
 } finally {
   if (existsSync(artifacts.tempDir)) {

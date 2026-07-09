@@ -92,6 +92,7 @@ const mediaTranscodeOperatorProof = read("scripts/proof-media-transcode-operator
 const mediaTranscodeWorkerAuditorProof = read("scripts/proof-media-transcode-worker-auditor.mjs");
 const mediaScheduledBackupGateProof = read("scripts/proof-media-scheduled-backup-gate.mjs");
 const mediaWorkerBackupRunner = read("scripts/run-media-worker-logical-backup.mjs");
+const mediaWorkerBackupCli = read("scripts/media-worker-backup-cli.mjs");
 const mediaWorkerBackupRunnerProof = read("scripts/proof-media-worker-backup-runner.mjs");
 const mediaRecoveryBackupRestoreProof = read("scripts/proof-media-recovery-backup-restore.mjs");
 const mediaWorkerRollbackDrillProof = read("scripts/proof-media-worker-rollback-drill.mjs");
@@ -984,6 +985,11 @@ assertIncludes(mediaRecoveryOperatorRunbook, "Backups must never be exposed thro
 assertIncludes(mediaRecoveryOperatorRunbook, "Continuous gate: still blocked.", "media recovery operator runbook continuous still blocked");
 assertIncludes(mediaRecoveryOperatorRunbook, "Scheduled Backup/Restore Policy", "media recovery operator runbook scheduled backup policy section");
 assertIncludes(mediaRecoveryOperatorRunbook, "Status: manual runner implemented, first real manual backup complete, scheduler not deployed.", "media recovery operator runbook scheduled backup status");
+assertIncludes(mediaRecoveryOperatorRunbook, "CLI operation commands:", "media recovery operator runbook CLI commands section");
+assertIncludes(mediaRecoveryOperatorRunbook, "`npm run backup:media-worker:status`", "media recovery operator runbook status command");
+assertIncludes(mediaRecoveryOperatorRunbook, "`npm run backup:media-worker:verify-latest`", "media recovery operator runbook verify command");
+assertIncludes(mediaRecoveryOperatorRunbook, "`npm run backup:media-worker:restore-drill`", "media recovery operator runbook restore command");
+assertIncludes(mediaRecoveryOperatorRunbook, "Backups are CLI-controlled only; there is no GitHub Actions media-worker backup workflow and no cron schedule.", "media recovery operator runbook CLI-only backup statement");
 assertIncludes(mediaRecoveryOperatorRunbook, "`scripts/run-media-worker-logical-backup.mjs` can create scoped media-worker logical backup artifacts and upload them to private R2 only when explicitly run in write mode", "media recovery operator runbook manual backup runner");
 assertIncludes(mediaRecoveryOperatorRunbook, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` controls export mode", "media recovery operator runbook export mode");
 assertIncludes(mediaRecoveryOperatorRunbook, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing `MEDIA_BACKUP_DATABASE_URL`", "media recovery operator runbook linked DB source");
@@ -995,6 +1001,11 @@ assertIncludes(mediaTranscodeWorkerRunbook, "R2 logical backup/restore gate stat
 assertIncludes(mediaTranscodeWorkerRunbook, "Continuous automation readiness classification: Blocked.", "media transcode worker runbook continuous blocked after logical backup");
 assertIncludes(mediaTranscodeWorkerRunbook, "Scheduled R2 Logical Backup Gate", "media transcode worker runbook scheduled backup section");
 assertIncludes(mediaTranscodeWorkerRunbook, "Status: manual logical backup runner implemented, first real manual backup complete, scheduler not deployed.", "media transcode worker runbook scheduled backup status");
+assertIncludes(mediaTranscodeWorkerRunbook, "CLI-only operation commands:", "media transcode worker runbook CLI commands section");
+assertIncludes(mediaTranscodeWorkerRunbook, "`npm run backup:media-worker:preflight`", "media transcode worker runbook preflight command");
+assertIncludes(mediaTranscodeWorkerRunbook, "`npm run backup:media-worker:verify-latest`", "media transcode worker runbook verify command");
+assertIncludes(mediaTranscodeWorkerRunbook, "`npm run backup:media-worker:restore-drill`", "media transcode worker runbook restore command");
+assertIncludes(mediaTranscodeWorkerRunbook, "No GitHub Actions workflow, cron schedule, deployed scheduler, continuous worker, queue processor, additional media processing, or playback switch is enabled.", "media transcode worker runbook no workflow cron");
 assertIncludes(mediaTranscodeWorkerRunbook, "`npm run proof:media-worker-backup-runner` proves the real runner and restore drill surface:", "media transcode worker runbook backup runner proof");
 assertIncludes(mediaTranscodeWorkerRunbook, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports both the existing dump-tool path and a Node JS SELECT export fallback", "media transcode worker runbook export mode");
 assertIncludes(mediaTranscodeWorkerRunbook, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw database URL", "media transcode worker runbook linked DB source");
@@ -1002,6 +1013,10 @@ assertIncludes(mediaTranscodeWorkerRunbook, "`_lib/mediaRecoveryOperator.ts` def
 assertIncludes(mediaTranscodeWorkerRunbook, "`npm run proof:media-scheduled-backup-gate` proves:", "media transcode worker runbook scheduled proof");
 assertIncludes(architecture, "R2 logical backup/restore gate status: Closed for the completed one-job proof only.", "architecture one-job logical backup gate");
 assertIncludes(architecture, "Scheduled R2 logical backup gate status: manual runner implemented, first real manual backup complete, schedule not deployed.", "architecture scheduled backup status");
+assertIncludes(architecture, "Backup operation is CLI-controlled only; no GitHub Actions media-worker backup workflow, cron schedule, or scheduler exists.", "architecture CLI-only backup statement");
+assertIncludes(architecture, "`backup:media-worker:status` shows the latest prefix, scoped production row counts, worker-running state, and continuous-gate state.", "architecture backup status command");
+assertIncludes(architecture, "`backup:media-worker:verify-latest` reads the latest private R2 backup artifacts, verifies SHA-256 checksums, confirms the public bucket and media domain do not expose them, and prints no secrets.", "architecture backup verify command");
+assertIncludes(architecture, "`backup:media-worker:restore-drill` restores the latest backup into disposable PGlite and checks row counts plus resolver-safe filtering.", "architecture backup restore command");
 assertIncludes(architecture, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` now supports JS SELECT export fallback", "architecture backup runner export mode");
 assertIncludes(architecture, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw database URL.", "architecture linked DB source backup runner");
 assertIncludes(architecture, "First manual backup completed on 2026-07-09 at private R2 prefix `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`", "architecture completed real manual backup");
@@ -1010,12 +1025,14 @@ assertIncludes(architecture, "No cron schedule, GitHub Actions schedule, product
 assertIncludes(architecture, "R2 scheduled logical backup is not PITR.", "architecture scheduled backup not PITR");
 assertIncludes(currentState, "R2-backed logical backup/restore readiness is Closed for this one-job proof lane only, not continuous production automation.", "current state one-job logical backup gate");
 assertIncludes(currentState, "Scheduled R2 logical backup/restore gate now has a real manual runner and the first real manual production logical backup is complete", "current state scheduled backup gate");
+assertIncludes(currentState, "CLI operation is the only backup operation path; no GitHub Actions media-worker backup workflow, cron schedule, deployed scheduler, production worker, queue processor, or playback switch exists.", "current state CLI-only backup statement");
 assertIncludes(currentState, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports JS SELECT export fallback without local `pg_dump`/`psql`", "current state JS export fallback");
 assertIncludes(currentState, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` lets the runner use Supabase CLI linked read-only queries instead of requiring or printing a raw DB URL.", "current state linked DB source");
 assertIncludes(currentState, "backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/", "current state completed real backup prefix");
 assertIncludes(currentState, "No cron schedule, GitHub Actions schedule, production worker, queue processor, additional production media processing, PITR/billing change, or production playback switch happened.", "current state scheduled backup safety boundary");
 assertIncludes(nextTask, "R2-backed logical backup/restore readiness is closed for one-job proof only", "next task one-job logical backup gate");
 assertIncludes(nextTask, "Scheduled R2 logical backup/restore gate now has a real manual runner and the first real manual production logical backup is complete", "next task scheduled backup gate");
+assertIncludes(nextTask, "CLI operation is the only backup operation path; no GitHub Actions media-worker backup workflow, cron schedule, deployed scheduler, production worker, queue processor, or playback switch exists.", "next task CLI-only backup statement");
 assertIncludes(nextTask, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports JS SELECT export fallback without local `pg_dump`/`psql`", "next task JS export fallback");
 assertIncludes(nextTask, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw DB URL.", "next task linked DB source");
 assertIncludes(nextTask, "backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/", "next task completed real backup prefix");
@@ -1031,6 +1048,10 @@ assertIncludes(packageJson, "\"proof:media-transcode-worker-safety\"", "package 
 assertIncludes(packageJson, "\"proof:media-scheduled-backup-gate\"", "package media scheduled backup gate proof script");
 assertIncludes(packageJson, "\"backup:media-worker:dry-run\"", "package media worker backup dry-run script");
 assertIncludes(packageJson, "\"backup:media-worker:run\"", "package media worker backup run script");
+assertIncludes(packageJson, "\"backup:media-worker:preflight\"", "package media worker backup preflight script");
+assertIncludes(packageJson, "\"backup:media-worker:status\"", "package media worker backup status script");
+assertIncludes(packageJson, "\"backup:media-worker:verify-latest\"", "package media worker backup verify latest script");
+assertIncludes(packageJson, "\"backup:media-worker:restore-drill\"", "package media worker backup restore drill script");
 assertIncludes(packageJson, "\"proof:media-worker-backup-runner\"", "package media worker backup runner proof script");
 assertIncludes(mediaRecoveryOperator, "MediaBackupSchedulePolicy", "media recovery operator scheduled backup policy type");
 assertIncludes(mediaRecoveryOperator, "MediaBackupFreshnessResult", "media recovery operator backup freshness type");
@@ -1120,6 +1141,20 @@ assertIncludes(mediaWorkerBackupRunner, "failClosed", "backup runner fail-closed
 assertIncludes(mediaWorkerBackupRunner, "logical_backup_not_pitr", "backup runner logical backup not PITR manifest field");
 assertIncludes(mediaWorkerBackupRunner, "public_bucket_used", "backup runner public bucket manifest field");
 assertIncludes(mediaWorkerBackupRunner, "production_rows_written", "backup runner no production rows manifest field");
+assertIncludes(mediaWorkerBackupCli, "validModes = [\"preflight\", \"status\", \"verify-latest\", \"restore-drill\"]", "backup CLI operation modes");
+assertIncludes(mediaWorkerBackupCli, "defaultLatestBackupPrefix", "backup CLI default latest prefix");
+assertIncludes(mediaWorkerBackupCli, "runSupabaseLinkedQuery", "backup CLI linked Supabase read-only query");
+assertIncludes(mediaWorkerBackupCli, "readWorkerCounts", "backup CLI status row counts");
+assertIncludes(mediaWorkerBackupCli, "downloadLatestBackup", "backup CLI private R2 readback");
+assertIncludes(mediaWorkerBackupCli, "verifyDownloadedBackup", "backup CLI checksum verification");
+assertIncludes(mediaWorkerBackupCli, "restoreIntoPglite", "backup CLI restore drill");
+assertIncludes(mediaWorkerBackupCli, "publicPlaybackBucketContainsBackup", "backup CLI public bucket check");
+assertIncludes(mediaWorkerBackupCli, "mediaDomainHttpStatus", "backup CLI public domain check");
+assertIncludes(mediaWorkerBackupCli, "productionDbMutation: false", "backup CLI no production DB mutation");
+assertIncludes(mediaWorkerBackupCli, "continuousAutomationEnabled: false", "backup CLI no continuous automation");
+assertIncludes(mediaWorkerBackupCli, "cronOrSchedulerAdded: false", "backup CLI no cron scheduler");
+assertIncludes(mediaWorkerBackupCli, "mediaWorkerGitHubWorkflowExists", "backup CLI workflow status");
+assertIncludes(mediaWorkerBackupCli, "secret_like_value_refused", "backup CLI secret guard");
 assertIncludes(mediaWorkerBackupRunnerProof, "media-worker-backup-runner", "backup runner proof mode");
 assertIncludes(mediaWorkerBackupRunnerProof, "dryRunPassed", "backup runner proof dry-run");
 assertIncludes(mediaWorkerBackupRunnerProof, "missingEnvFailClosed", "backup runner proof missing-env fail closed");
@@ -1142,9 +1177,7 @@ assertNotMatches(docsCorpus, /\bcontinuous (?:worker )?(?:automation|processing)
 assertNotMatches(docsCorpus, /\bbackup artifacts? (?:may|can|should) (?:be )?(?:stored|uploaded|served)[^.]*chillywood-media-public-playback-proof\b/i, "docs must not allow public playback bucket backups");
 assertNotMatches(docsCorpus, /\bbackup artifacts? (?:may|can|should) (?:be )?(?:served|exposed)[^.]*media\.chillywoodstream\.com\b/i, "docs must not allow public media domain backups");
 if (exists(".github/workflows/media-worker-logical-backup.yml")) {
-  const mediaWorkerBackupWorkflow = read(".github/workflows/media-worker-logical-backup.yml");
-  assertNotMatches(mediaWorkerBackupWorkflow, /\bschedule\s*:/i, "media worker backup workflow must not have cron schedule");
-  assertIncludes(mediaWorkerBackupWorkflow, "workflow_dispatch", "media worker backup workflow must be manual-only");
+  fail("media worker backup workflow must not exist; backups are CLI-only");
 }
 assertIncludes(mediaRenditionMetadataProof, "trusted-media-rendition-metadata", "trusted rendition metadata proof mode");
 assertIncludes(mediaRenditionMetadataProof, "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1", "trusted rendition metadata City Lights source id");

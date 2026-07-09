@@ -272,8 +272,20 @@ const missingEnvWrite = runRunner({ mode: "write" });
 requireProof(missingEnvWrite.status !== 0, "write mode should fail closed when env is missing");
 requireProof(missingEnvWrite.json?.failClosed === true, "missing-env write should report failClosed");
 requireProof(missingEnvWrite.json?.reason === "missing_required_env_for_write_mode", "missing-env write should explain missing env");
-requireProof(missingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_URL"), "missing-env write should require database URL by name only");
+requireProof(!missingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_URL"), "default missing-env write should not require raw database URL");
+requireProof(missingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_SOURCE"), "default missing-env write should require linked database source confirmation");
 assertNoSecretLikeText("missing-env write output", missingEnvWrite.text);
+
+const urlSourceMissingEnvWrite = runRunner({
+  mode: "write",
+  env: {
+    MEDIA_BACKUP_DATABASE_SOURCE: "url",
+    MEDIA_BACKUP_EXPORT_MODE: "js",
+  },
+});
+requireProof(urlSourceMissingEnvWrite.status !== 0, "url-source write should fail closed when database URL is missing");
+requireProof(urlSourceMissingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_URL"), "url-source write should require database URL by name only");
+assertNoSecretLikeText("url-source missing-env output", urlSourceMissingEnvWrite.text);
 
 const linkedSourceMissingEnvWrite = runRunner({
   mode: "write",
@@ -361,6 +373,8 @@ const summary = {
   proof: "media-worker-backup-runner",
   dryRunPassed: dryRun.status === 0 && dryRun.json?.dryRun === true,
   missingEnvFailClosed: missingEnvWrite.status !== 0 && missingEnvWrite.json?.failClosed === true,
+  urlSourceRequiresRawDbUrl: urlSourceMissingEnvWrite.status !== 0
+    && urlSourceMissingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_URL"),
   linkedSourceDoesNotRequireRawDbUrl: linkedSourceMissingEnvWrite.status !== 0
     && !linkedSourceMissingEnvWrite.json?.missingEnv?.includes("MEDIA_BACKUP_DATABASE_URL"),
   publicBucketTargetDenied: publicBucketWrite.status !== 0,

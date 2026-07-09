@@ -50,6 +50,7 @@ const mediaTranscodeOperatorProof = read("scripts/proof-media-transcode-operator
 const mediaTranscodeWorkerAuditorProof = read("scripts/proof-media-transcode-worker-auditor.mjs");
 const mediaScheduledBackupGateProof = read("scripts/proof-media-scheduled-backup-gate.mjs");
 const mediaWorkerBackupRunner = read("scripts/run-media-worker-logical-backup.mjs");
+const mediaWorkerBackupCli = read("scripts/media-worker-backup-cli.mjs");
 const mediaWorkerBackupRunnerProof = read("scripts/proof-media-worker-backup-runner.mjs");
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
@@ -101,12 +102,13 @@ assertIncludes(vodDoc, "PITR or owner-approved scheduled backup/restore readines
 assertIncludes(vodDoc, "Operator control and auditor proofs are source-backed and were used for one approved production proof. They did not deploy a worker, did not enable continuous mode, and did not switch playback.", "VOD doc operator production boundary");
 assertIncludes(vodDoc, "Scheduled R2 logical backup gate:", "VOD doc scheduled backup gate");
 assertIncludes(vodDoc, "`scripts/run-media-worker-logical-backup.mjs` is the real manual backup runner", "VOD doc manual backup runner");
+assertIncludes(vodDoc, "`npm run backup:media-worker:status`, `npm run backup:media-worker:verify-latest`, and `npm run backup:media-worker:restore-drill` are the CLI-only operator commands", "VOD doc CLI-only backup commands");
 assertIncludes(vodDoc, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports JS SELECT export fallback without local `pg_dump`/`psql`", "VOD doc backup runner JS export");
 assertIncludes(vodDoc, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw DB URL.", "VOD doc backup runner linked DB source");
 assertIncludes(vodDoc, "`npm run proof:media-worker-backup-runner` proves dry-run, fail-closed write mode, linked-source no-raw-DB-URL behavior, public bucket/domain denial, manifest/checksum generation, JS JSONL restore into disposable PGlite, and resolver-safe query.", "VOD doc backup runner proof");
 assertIncludes(vodDoc, "The first real manual backup completed on 2026-07-09 under private R2 prefix `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`", "VOD doc completed real backup");
 assertIncludes(vodDoc, "`npm run proof:media-scheduled-backup-gate` proves no backup, stale backup, or missing restore drill blocks automation", "VOD doc scheduled backup proof");
-assertIncludes(vodDoc, "No scheduler is deployed, no worker is enabled, no production playback switch happened, and this is logical backup/restore only, not PITR.", "VOD doc scheduled backup safety boundary");
+assertIncludes(vodDoc, "No GitHub Actions workflow, cron, scheduler, worker enablement, or production playback switch exists for this lane, and this is logical backup/restore only, not PITR.", "VOD doc scheduled backup safety boundary");
 assertIncludes(vodDoc, "Trusted backend migration schema is applied to production and contains only the first controlled City Lights proof rows.", "VOD doc trusted migration one-job rows");
 assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded disposable local Postgres runtime, and production rollback-only RLS proof passed with final row counts back to zero.", "VOD doc trusted migration proof checkpoint");
 
@@ -244,6 +246,14 @@ assertIncludes(mediaWorkerBackupRunner, "select row_to_json(t)::text as row from
 assertIncludes(mediaWorkerBackupRunner, "backups/media-worker/", "backup runner private prefix");
 assertIncludes(mediaWorkerBackupRunner, "chillywood-media-public-playback-proof", "backup runner public bucket denial");
 assertIncludes(mediaWorkerBackupRunner, "media.chillywoodstream.com", "backup runner public media domain denial");
+assertIncludes(packageJson, "\"backup:media-worker:status\"", "package media worker backup status script");
+assertIncludes(packageJson, "\"backup:media-worker:verify-latest\"", "package media worker backup verify latest script");
+assertIncludes(packageJson, "\"backup:media-worker:restore-drill\"", "package media worker backup restore drill script");
+assertIncludes(mediaWorkerBackupCli, "validModes = [\"preflight\", \"status\", \"verify-latest\", \"restore-drill\"]", "backup CLI modes");
+assertIncludes(mediaWorkerBackupCli, "downloadLatestBackup", "backup CLI private R2 readback");
+assertIncludes(mediaWorkerBackupCli, "restoreIntoPglite", "backup CLI PGlite restore");
+assertIncludes(mediaWorkerBackupCli, "publicPlaybackBucketContainsBackup", "backup CLI public bucket proof");
+assertIncludes(mediaWorkerBackupCli, "mediaDomainHttpStatus", "backup CLI public domain proof");
 assertIncludes(mediaWorkerBackupRunnerProof, "missingEnvFailClosed", "backup runner proof missing-env fail-closed");
 assertIncludes(mediaWorkerBackupRunnerProof, "linkedSourceDoesNotRequireRawDbUrl", "backup runner proof linked source no raw DB URL");
 assertIncludes(mediaWorkerBackupRunnerProof, "publicBucketTargetDenied", "backup runner proof public bucket denial");

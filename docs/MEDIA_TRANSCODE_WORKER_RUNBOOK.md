@@ -151,7 +151,15 @@ Continuous automation readiness classification: Blocked. Continuous production w
 
 ## Scheduled R2 Logical Backup Gate
 
-Status: manual logical backup runner implemented, first real manual backup complete, scheduler not deployed. `scripts/run-media-worker-logical-backup.mjs` is disabled/dry-run by default and can write/upload only when manually invoked with `MEDIA_BACKUP_RUNNER_ENABLED=true`, `MEDIA_BACKUP_MODE=write`, a private R2 backup bucket, and `MEDIA_BACKUP_R2_PREFIX=backups/media-worker/`. `MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports both the existing dump-tool path and a Node JS SELECT export fallback; when `pg_dump`/`psql` are missing, `auto` resolves to JS and emits `schema.sql.gz` plus `data-media-worker.jsonl.gz`. `MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw database URL; `MEDIA_BACKUP_DATABASE_URL` remains available for safe URL-based environments. No cron schedule is configured, no continuous worker is enabled, no queue processor is running, no additional production media has been processed, and production playback remains unchanged. First real manual backup completed on 2026-07-09 at private R2 prefix `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`; row counts were `media_transcode_jobs=1` and `media_renditions=2`, R2 readback checksums matched, public bucket/domain probes did not expose artifacts, and disposable PGlite restore matched the manifest row counts.
+Status: manual logical backup runner implemented, first real manual backup complete, scheduler not deployed. `scripts/run-media-worker-logical-backup.mjs` is disabled/dry-run by default and can write/upload only when manually invoked with `MEDIA_BACKUP_RUNNER_ENABLED=true`, `MEDIA_BACKUP_MODE=write`, a private R2 backup bucket, and `MEDIA_BACKUP_R2_PREFIX=backups/media-worker/`. `MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports both the existing dump-tool path and a Node JS SELECT export fallback; when `pg_dump`/`psql` are missing, `auto` resolves to JS and emits `schema.sql.gz` plus `data-media-worker.jsonl.gz`. `MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw database URL; `MEDIA_BACKUP_DATABASE_URL` remains available for safe URL-based environments. Backup operation is CLI-only from Codex/local terminal. No GitHub Actions workflow, cron schedule, deployed scheduler, continuous worker, queue processor, additional media processing, or playback switch is enabled. First real manual backup completed on 2026-07-09 at private R2 prefix `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`; row counts were `media_transcode_jobs=1` and `media_renditions=2`, R2 readback checksums matched, public bucket/domain probes did not expose artifacts, and disposable PGlite restore matched the manifest row counts.
+
+CLI-only operation commands:
+
+- `npm run backup:media-worker:preflight` checks linked Supabase identity for project `bmkkhihfbmsnnmcqkoly`, private R2 target, scoped row counts, no running worker, no media-worker workflow/cron, and unchanged production playback.
+- `npm run backup:media-worker:status` prints the latest backup prefix and current media-worker table counts without secrets.
+- `npm run backup:media-worker:verify-latest` verifies the latest private R2 backup manifest and checksums and confirms no public bucket or `media.chillywoodstream.com` exposure.
+- `npm run backup:media-worker:restore-drill` restores the latest backup into disposable PGlite and verifies row counts plus resolver-safe filtering.
+- `npm run backup:media-worker:run` is still manual backup creation only. It does not deploy or run the media worker.
 
 Scheduled backup policy for future limited automation:
 
@@ -185,6 +193,7 @@ Scheduled backup policy for future limited automation:
 - write mode fails closed when required env is missing
 - JS export mode works without `pg_dump`/`psql`, uses SELECT-only reads for `media_transcode_jobs` and `media_renditions`, and emits a JSONL data artifact
 - linked-source JS export works through Supabase CLI linked read-only queries without requiring or printing a raw database URL
+- `backup:media-worker:status`, `backup:media-worker:verify-latest`, and `backup:media-worker:restore-drill` pass against the latest private R2 backup prefix
 - public playback bucket targets, `media.chillywoodstream.com`, and non-`backups/media-worker/` prefixes are denied before any DB access
 - backup scope is limited to `media_transcode_jobs` and `media_renditions`; auth, billing, payouts, private media, creator originals, and signed URLs are excluded
 - manifest shape and checksum generation are validated
