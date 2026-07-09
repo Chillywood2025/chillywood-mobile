@@ -58,14 +58,18 @@ const nextTask = read("NEXT_TASK.md");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
 const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md");
 const mediaTranscodeWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
+const mediaRecoveryOperatorRunbook = read("docs/MEDIA_RECOVERY_OPERATOR_RUNBOOK.md");
 const wave2Doc = read("docs/WAVE2_CREATOR_MEDIA_CLOSURE_RUNBOOK.md");
-const docsCorpus = [architecture, vodDoc, mediaMigrationPlan, mediaTranscodeWorkerRunbook, wave2Doc].join("\n\n");
+const docsCorpus = [architecture, vodDoc, mediaMigrationPlan, mediaTranscodeWorkerRunbook, mediaRecoveryOperatorRunbook, wave2Doc].join("\n\n");
 const mediaStatusCorpus = [architecture, currentState, nextTask].join("\n\n");
 
 const mediaStorage = read("_lib/mediaStorage.ts");
 const mediaDelivery = read("_lib/mediaDelivery.ts");
 const mediaDeliveryTelemetry = read("_lib/mediaDeliveryTelemetry.ts");
 const mediaTranscodeQueue = read("_lib/mediaTranscodeQueue.ts");
+const mediaTranscodeOperator = read("_lib/mediaTranscodeOperator.ts");
+const mediaTranscodeWorkerSafety = read("_lib/mediaTranscodeWorkerSafety.ts");
+const mediaRecoveryOperator = read("_lib/mediaRecoveryOperator.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
@@ -84,6 +88,8 @@ const mediaDeliveryTelemetryProof = read("scripts/proof-media-delivery-telemetry
 const mediaTranscodeQueueProof = read("scripts/proof-media-transcode-queue-hls.mjs");
 const mediaTranscodeWorkerLocalProof = read("scripts/proof-media-transcode-worker-local.mjs");
 const mediaTranscodeBackupGateProof = read("scripts/proof-media-transcode-backup-gate.mjs");
+const mediaTranscodeOperatorProof = read("scripts/proof-media-transcode-operator-control.mjs");
+const mediaTranscodeWorkerAuditorProof = read("scripts/proof-media-transcode-worker-auditor.mjs");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
 const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 const mediaRenditionMigrationDryRunProof = read("scripts/proof-media-rendition-migration-dry-run.mjs");
@@ -93,6 +99,9 @@ const sourceCorpus = [
   mediaDelivery,
   mediaDeliveryTelemetry,
   mediaTranscodeQueue,
+  mediaTranscodeOperator,
+  mediaTranscodeWorkerSafety,
+  mediaRecoveryOperator,
   mediaRenditionMetadata,
   mediaStorageFunction,
   creatorVideos,
@@ -866,6 +875,89 @@ assertNotMatches(mediaTranscodeBackupGateProof, /\bsupabase\.from\b|\bcreateClie
 assertNotMatches(mediaStatusCorpus, /\bBackup\/PITR gate status:\s*(?:Closed|Complete|Ready)\b/, "media status docs must not close backup gate while readback is blocked");
 assertNotMatches(mediaStatusCorpus, /\bPITR (?:is )?enabled\b/i, "media status docs must not claim PITR enabled while readback is disabled");
 assertNotMatches(mediaStatusCorpus, /(?<!no )(?<!not )\bproduction transcode worker (?:is )?(?:live|deployed|running|ready)\b/i, "media status docs must not claim production worker live while backup gate is blocked");
+assertIncludes(mediaTranscodeOperator, "MediaTranscodeOperatorMode", "media transcode operator mode type");
+assertIncludes(mediaTranscodeOperator, "| \"disabled\"", "media transcode operator disabled mode");
+assertIncludes(mediaTranscodeOperator, "| \"dry_run\"", "media transcode operator dry-run mode");
+assertIncludes(mediaTranscodeOperator, "| \"one_job\"", "media transcode operator one-job mode");
+assertIncludes(mediaTranscodeOperator, "| \"continuous\"", "media transcode operator continuous mode");
+assertIncludes(mediaTranscodeOperator, "MediaTranscodeOperatorState", "media transcode operator state type");
+assertIncludes(mediaTranscodeOperator, "| \"emergency_stop\"", "media transcode operator emergency stop state");
+assertIncludes(mediaTranscodeOperator, "MEDIA_TRANSCODE_OPERATOR_DEFAULT_MODE: MediaTranscodeOperatorMode = \"disabled\"", "media transcode operator disabled default");
+assertIncludes(mediaTranscodeOperator, "emergency_stop_always_blocks", "media transcode operator emergency stop wins");
+assertIncludes(mediaTranscodeOperator, "worker_cannot_self_enable", "media transcode operator worker self-enable block");
+assertIncludes(mediaTranscodeOperator, "dry_run_plan_only_no_writes", "media transcode operator dry-run no writes");
+assertIncludes(mediaTranscodeOperator, "one_job_requires_source_allowlist", "media transcode operator one-job source allowlist");
+assertIncludes(mediaTranscodeOperator, "one_job_requires_max_jobs_per_run_one", "media transcode operator one-job max jobs");
+assertIncludes(mediaTranscodeOperator, "one_job_requires_backfill_disabled", "media transcode operator backfill block");
+assertIncludes(mediaTranscodeOperator, "one_job_requires_backup_gate_or_owner_override", "media transcode operator one-job backup/override gate");
+assertIncludes(mediaTranscodeOperator, "continuous_requires_backup_gate_closed", "media transcode operator continuous backup gate");
+assertIncludes(mediaTranscodeOperator, "backup_gate_not_closed_for_continuous", "media transcode operator continuous blocked reason");
+assertIncludes(mediaTranscodeOperator, "MEDIA_TRANSCODE_OPERATOR_PENDING_AUDIT_STATUS", "media transcode operator pending-audit status");
+assertIncludes(mediaTranscodeOperator, "resolveOperatorAutoDisable", "media transcode operator auto-disable helper");
+assertIncludes(mediaTranscodeWorkerSafety, "resolveTranscodeWorkerActivation", "media transcode worker safety activation helper");
+assertIncludes(mediaTranscodeWorkerSafety, "requestTranscodeWorkerLease", "media transcode worker safety lease request helper");
+assertIncludes(mediaTranscodeWorkerSafety, "validateTranscodeWorkerLease", "media transcode worker safety lease validation helper");
+assertIncludes(mediaTranscodeWorkerSafety, "missing_operator_lease", "media transcode worker safety no-lease block");
+assertIncludes(mediaTranscodeWorkerSafety, "lease_source_mismatch", "media transcode worker safety source mismatch block");
+assertIncludes(mediaTranscodeWorkerSafety, "lease_expired_or_job_stalled", "media transcode worker safety lease expiry block");
+assertIncludes(mediaTranscodeWorkerSafety, "max_job_count_exceeded", "media transcode worker safety max job block");
+assertIncludes(mediaTranscodeWorkerSafety, "canWorkerWriteRenditionStatus", "media transcode worker safety pending audit writer helper");
+assertIncludes(mediaTranscodeWorkerSafety, "status === MEDIA_TRANSCODE_OPERATOR_PENDING_AUDIT_STATUS", "media transcode worker safety pending-audit-only writes");
+assertIncludes(mediaTranscodeWorkerSafety, "canResolverTrustWorkerWrittenRows", "media transcode worker safety resolver trust helper");
+assertIncludes(mediaTranscodeWorkerSafety, "quarantineTranscodeWorkerBatch", "media transcode worker safety quarantine helper");
+assertIncludes(mediaRecoveryOperator, "auditMediaRecoveryBatch", "media recovery operator audit helper");
+assertIncludes(mediaRecoveryOperator, "batch_id", "media recovery operator batch id");
+assertIncludes(mediaRecoveryOperator, "source_id_mismatch", "media recovery operator source mismatch proof");
+assertIncludes(mediaRecoveryOperator, "row_count_mismatch", "media recovery operator row count proof");
+assertIncludes(mediaRecoveryOperator, "unexpected_ready_row_before_audit", "media recovery operator ready-before-audit block");
+assertIncludes(mediaRecoveryOperator, "original_or_master_public_playback_blocked", "media recovery operator original/master block");
+assertIncludes(mediaRecoveryOperator, "premium_or_private_public_playback_blocked", "media recovery operator Premium/private block");
+assertIncludes(mediaRecoveryOperator, "non_public_playback_prefix", "media recovery operator public prefix block");
+assertIncludes(mediaRecoveryOperator, "outside_exact_r2_prefix", "media recovery operator exact prefix block");
+assertIncludes(mediaRecoveryOperator, "canResolverTrustAuditedRows", "media recovery operator resolver trust helper");
+assertIncludes(mediaRecoveryOperator, "buildMediaRecoveryRollbackPlan", "media recovery operator rollback plan helper");
+assertNotMatches(mediaTranscodeOperator, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "media transcode operator helper must not perform network or database writes");
+assertNotMatches(mediaTranscodeWorkerSafety, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "media transcode worker safety helper must not perform network or database writes");
+assertNotMatches(mediaRecoveryOperator, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "media recovery operator helper must not perform network or database writes");
+assertIncludes(mediaTranscodeWorkerRunbook, "Operator-Controlled Worker Safety", "media transcode worker runbook operator section");
+assertIncludes(mediaTranscodeWorkerRunbook, "worker code cannot self-enable; it must receive an operator lease", "media transcode worker runbook lease requirement");
+assertIncludes(mediaTranscodeWorkerRunbook, "worker may write only `pending_audit` rows", "media transcode worker runbook pending audit rows");
+assertIncludes(mediaTranscodeWorkerRunbook, "resolver trust is allowed only after the auditor passes", "media transcode worker runbook audit before resolver trust");
+assertIncludes(mediaTranscodeWorkerRunbook, "Self-auditing and operator leases reduce blast radius for one controlled job, but they do not replace true PITR", "media transcode worker runbook PITR boundary");
+assertIncludes(mediaRecoveryOperatorRunbook, "Status: source/proof-only.", "media recovery operator runbook status");
+assertIncludes(mediaRecoveryOperatorRunbook, "The recovery operator is the independent audit gate between worker output and resolver trust.", "media recovery operator runbook purpose");
+assertIncludes(mediaRecoveryOperatorRunbook, "`one_job` requires an allowlisted source id, `max_jobs_per_run=1`, backfill disabled", "media recovery operator runbook one-job requirements");
+assertIncludes(mediaRecoveryOperatorRunbook, "`continuous` is denied while the backup/PITR gate is Blocked or Partial.", "media recovery operator runbook continuous blocked");
+assertIncludes(mediaRecoveryOperatorRunbook, "Audit pass is required before resolver trust.", "media recovery operator runbook audit pass");
+assertIncludes(mediaRecoveryOperatorRunbook, "Self-auditing reduces blast radius for a single owner-approved job, but it does not replace true PITR", "media recovery operator runbook PITR boundary");
+assertIncludes(architecture, "Operator-controlled worker safety status:", "architecture operator control status");
+assertIncludes(architecture, "Auditor/resolver trust status:", "architecture auditor trust status");
+assertIncludes(currentState, "Operator-controlled media transcode safety is source/proof-only", "current state operator control status");
+assertIncludes(nextTask, "Operator-controlled media transcode safety exists in source/proof only", "next task operator control status");
+assertIncludes(packageJson, "\"proof:media-transcode-operator-control\"", "package media transcode operator proof script");
+assertIncludes(packageJson, "\"proof:media-transcode-worker-auditor\"", "package media transcode worker auditor proof script");
+assertIncludes(packageJson, "\"proof:media-recovery-operator\"", "package media recovery operator proof script");
+assertIncludes(packageJson, "\"proof:media-transcode-worker-safety\"", "package media transcode worker safety proof script");
+assertIncludes(mediaTranscodeOperatorProof, "defaultDisabled", "operator proof default disabled");
+assertIncludes(mediaTranscodeOperatorProof, "emergencyStopDenied", "operator proof emergency stop");
+assertIncludes(mediaTranscodeOperatorProof, "dryRunNoWrites", "operator proof dry run no writes");
+assertIncludes(mediaTranscodeOperatorProof, "oneJobLeaseGranted", "operator proof one-job lease");
+assertIncludes(mediaTranscodeOperatorProof, "continuousModeBlockedByBackupGate", "operator proof continuous backup gate");
+assertIncludes(mediaTranscodeOperatorProof, "workerSelfEnableDenied", "operator proof worker self-enable block");
+assertIncludes(mediaTranscodeOperatorProof, "auditPassAutoDisables", "operator proof audit pass auto-disable");
+assertIncludes(mediaTranscodeOperatorProof, "auditFailureQuarantinesAndAutoDisables", "operator proof quarantine auto-disable");
+assertIncludes(mediaTranscodeOperatorProof, "selfAuditReplacesPitrForContinuousProduction: false", "operator proof self-audit PITR boundary");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "operatorLeaseRequired", "worker auditor proof lease required");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "leaseSourceMismatchDenied", "worker auditor proof source mismatch");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "maxJobsExceededDenied", "worker auditor proof max jobs");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "leaseExpiryBlocksStalledJob", "worker auditor proof lease expiry");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "workerWritesPendingAuditOnly", "worker auditor proof pending audit writes");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "auditPassRequiredBeforeResolverTrust", "worker auditor proof audit before trust");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "auditFailureQuarantines", "worker auditor proof quarantine");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "rollbackPlanScopedToBatchAndPrefix", "worker auditor proof rollback scope");
+assertIncludes(mediaTranscodeWorkerAuditorProof, "autoDisableAfterAuditPassOrFailure", "worker auditor proof auto-disable");
+assertNotMatches(docsCorpus, /\bself[- ]auditing replaces PITR\b/i, "docs must not claim self-auditing replaces PITR");
+assertNotMatches(docsCorpus, /\bPITR is unnecessary\b/i, "docs must not claim PITR unnecessary");
 assertIncludes(mediaRenditionMetadataProof, "trusted-media-rendition-metadata", "trusted rendition metadata proof mode");
 assertIncludes(mediaRenditionMetadataProof, "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1", "trusted rendition metadata City Lights source id");
 assertIncludes(mediaRenditionMetadataProof, "playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8", "trusted rendition metadata HLS master path");

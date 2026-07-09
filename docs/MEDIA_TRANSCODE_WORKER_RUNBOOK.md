@@ -116,8 +116,48 @@ Abort production worker activation if any of these are true:
 
 Before worker activation, run a restore readiness drill or document an owner-approved restore method with the restore window, rollback steps, responsible operator, and stop criteria.
 
+## Operator-Controlled Worker Safety
+
+`_lib/mediaTranscodeOperator.ts`, `_lib/mediaTranscodeWorkerSafety.ts`, and `_lib/mediaRecoveryOperator.ts` define a source/proof-only operator control model for any future worker. This does not deploy a worker, does not write production rows, and does not switch playback.
+
+Operator rules:
+
+- default mode is `disabled`
+- `emergency_stop` always blocks every mode
+- `dry_run` is plan-only and cannot write rows
+- `one_job` requires `allowed_source_ids`, `max_jobs_per_run=1`, backfill disabled, a public/allowed source, and either a Closed backup gate or explicit owner one-job override
+- `continuous` is denied while the backup/PITR gate is Blocked or Partial
+- worker code cannot self-enable; it must receive an operator lease
+- leases are source-bound, max-job-bound, and expire if the job stalls
+- one-job mode auto-disables after success or failure
+- audit failure quarantines the batch and auto-disables the worker lane
+
+Worker rules:
+
+- worker must call the operator before running
+- worker must refuse if no lease is present
+- worker must refuse if the source id differs from the lease
+- worker must refuse when the lease max job count is reached
+- worker may write only `pending_audit` rows in this proof model
+- worker must not mark rows resolver-ready before the auditor passes
+- worker stops after one job in `one_job` mode
+
+Auditor rules:
+
+- auditor re-reads rows by `batch_id`
+- auditor verifies exact `source_id`, exact row count, public paths under `playback/public/`, clean/approved scan state, allowed moderation state, no original/private/Premium public playback, no unexpected ready rows, and exact rollback scope
+- resolver trust is allowed only after the auditor passes
+- rollback plans are scoped to the exact `batch_id` and R2 prefix
+
+Self-auditing and operator leases reduce blast radius for one controlled job, but they do not replace true PITR or a verified restore path for continuous production. No continuous production worker writes/backfill are allowed while the backup/PITR gate remains Blocked or Partial.
+
 ## Local Proof Harness
 
 `npm run proof:media-transcode-worker-local` is the current worker proof. It uses only the approved public-safe City Lights demo MP4, builds an in-memory/mock transcode job, simulates claim and status transitions, runs ffprobe, generates local 360p and 480p HLS with ffmpeg, validates manifests and segments, simulates upload object keys under `playback/public/proof-worker/`, builds trusted `media_renditions` rows in memory, validates resolver eligibility, builds sanitized telemetry events, proves failed-job behavior, and runs a disposable PGlite write-policy proof when available.
 
 The local proof harness does not connect to the production database, does not write production rows, does not upload private/original/Premium media, does not deploy a worker, and does not switch production playback.
+
+Additional safety proofs:
+
+- `npm run proof:media-transcode-operator-control` proves disabled default, emergency stop precedence, dry-run no-write behavior, one-job allowlist lease, max-job/backfill denial, backup-gate owner override limits, continuous-mode denial while the backup gate is blocked, worker self-enable denial, auto-disable, quarantine, and resolver ignoring pending/quarantined rows.
+- `npm run proof:media-transcode-worker-auditor` proves lease validation, source mismatch denial, max-job denial, lease expiry, pending-audit-only worker writes, auditor pass/fail behavior, exact rollback scope, resolver trust only after audit pass, quarantine, and auto-disable.
