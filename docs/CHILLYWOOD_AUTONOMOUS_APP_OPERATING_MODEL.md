@@ -85,6 +85,7 @@ These can run autonomously only with emergency stop, audit, rollback, fallback, 
 - repeated public-safe media transcode batches inside configured caps
 - automatic quarantine on audit failure
 - automatic fallback to signed origin when CDN eligibility fails
+- one bounded `continuous_limited` loop iteration when backup, restore-drill, audit, rollback, telemetry, cap, kill-switch, and emergency-stop gates pass
 
 ## 7. Level 3 Owner Approval Examples
 
@@ -101,6 +102,7 @@ These require owner approval before execution:
 - changing CDN access for private, Premium, original/master, unscanned, or moderation-blocked media
 - deploying a long-running production worker, daemon, cron, or scheduler
 - enabling continuous worker automation beyond the approved caps
+- broad uncapped media backfill, cap increases above the hard limit, or destructive cleanup
 
 ## 8. Level 4 Examples
 
@@ -123,6 +125,10 @@ Private, Premium, original/master, unscanned, moderation-blocked, unsupported, m
 Batch size can grow automatically after clean runs, but only inside configured caps and with emergency stop, rollback, audit, fallback, and reporting active. Broad catalog backfill remains Level 3 until separately approved.
 
 Rollback/quarantine must be automatic for failed audits or anomaly detection. Resolver trust must require audit pass.
+
+Queue processing is autonomous only as a bounded, lease-based, capped operation. The processor must require backup gate, kill switch, max concurrency, retry cap, dead-letter/quarantine, audit before resolver trust, and exact rollback scope. It must pause on audit failure, unsafe CDN rows, stale backup/restore drill, active unfinished jobs over threshold, private/Premium/original candidate detection, output/cache validation failure, or high error rate.
+
+Scheduler/daemon activation is not an ordinary Level 0 action. Disabled templates may exist and be source/proofed autonomously, but enabling a long-running production daemon, cron, scheduler, or GitHub Actions schedule crosses the deployment boundary and requires the relevant Level 3 approval unless a future policy explicitly classifies a bounded limited scheduler as safe.
 
 ## 10. Cost Policy
 

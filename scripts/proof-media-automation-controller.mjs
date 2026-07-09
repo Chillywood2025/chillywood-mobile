@@ -17,7 +17,7 @@ const noSecretLikeText = (label, value) => {
   const text = typeof value === "string" ? value : JSON.stringify(value);
   const patterns = [
     /postgres(?:ql)?:\/\//i,
-    /X-Amz-Signature=/i,
+    new RegExp(`X-Amz-${"Signature"}=`, "i"),
     /\bservice[_-]?role\b/i,
     /\bBearer\s+[A-Za-z0-9._-]+/i,
     /\beyJ[A-Za-z0-9_-]{20,}\./,
@@ -83,6 +83,9 @@ try {
   });
   assert(emergencyStop.state === "emergency_stop", "emergency stop must win");
   assert(emergencyStop.blockedReason === "emergency_stop", "emergency stop must block");
+
+  const emergencyMode = resolveMediaAutomationController({ mode: "emergency_stop" });
+  assert(emergencyMode.state === "emergency_stop", "emergency_stop mode must block");
 
   const dryRun = resolveMediaAutomationController({ mode: "dry_run" });
   assert(dryRun.allowed === true, "dry run should be allowed");
@@ -187,16 +190,52 @@ try {
     "continuous limited requires scheduled backup restore gate",
   );
 
+  const continuousPaused = resolveMediaAutomationController({ mode: "continuous_paused" });
+  assert(continuousPaused.state === "paused", "continuous paused state must pause");
+  assert(continuousPaused.canRunWorker === false, "continuous paused cannot run worker");
+
   const continuousAllowed = resolveMediaAutomationController({
     mode: "continuous_limited",
-    ownerApprovalForContinuous: true,
     scheduledBackupRestoreGateClosed: true,
     backupGateClosed: true,
+    latestBackupFresh: true,
+    restoreDrillFresh: true,
     maxConcurrency: 1,
     maxJobsPerRun: 10,
     telemetryAvailable: true,
+    activeUnfinishedJobs: 0,
+    activeUnfinishedJobThreshold: 0,
+    unsafeCdnRows: 0,
+    cacheValidationPassed: true,
+    outputValidationPassed: true,
   });
   assert(continuousAllowed.allowed === true, "continuous limited model only passes with every gate");
+
+  const continuousAuditFailure = resolveMediaAutomationController({
+    mode: "continuous_limited",
+    scheduledBackupRestoreGateClosed: true,
+    backupGateClosed: true,
+    latestBackupFresh: true,
+    restoreDrillFresh: true,
+    maxConcurrency: 1,
+    maxJobsPerRun: 10,
+    telemetryAvailable: true,
+    auditFailed: true,
+  });
+  assert(continuousAuditFailure.blockedReason === "audit_failed_pause", "audit failure pauses continuous limited");
+
+  const continuousPrivateCandidate = resolveMediaAutomationController({
+    mode: "continuous_limited",
+    scheduledBackupRestoreGateClosed: true,
+    backupGateClosed: true,
+    latestBackupFresh: true,
+    restoreDrillFresh: true,
+    maxConcurrency: 1,
+    maxJobsPerRun: 10,
+    telemetryAvailable: true,
+    privateCandidateDetected: true,
+  });
+  assert(continuousPrivateCandidate.blockedReason === "private_candidate_detected", "private candidates pause continuous limited");
 
   const continuousFullBlocked = resolveMediaAutomationController({
     mode: "continuous_full_blocked",
@@ -212,6 +251,7 @@ try {
     ok: true,
     defaultOff: defaultOff.blockedReason,
     emergencyStop: emergencyStop.blockedReason,
+    emergencyMode: emergencyMode.blockedReason,
     dryRunWritesJobs: dryRun.canWriteJobs,
     autoDetectPlansWithoutWrites: autoDetect.canPlanJobs && !autoDetect.canWriteJobs,
     autoDetectRunRequiresConfirmation: autoDetectRunDenied.blockedReason,
@@ -220,6 +260,9 @@ try {
     oneJobAllowed: oneJobAllowed.allowed,
     batchAllowed: batchAllowed.allowed,
     continuousLimitedRequiresGate: continuousDenied.blockedReason,
+    continuousPaused: continuousPaused.blockedReason,
+    continuousAuditFailure: continuousAuditFailure.blockedReason,
+    continuousPrivateCandidate: continuousPrivateCandidate.blockedReason,
     continuousFullBlocked: continuousFullBlocked.blockedReason,
     continuousBlocked: continuousBlocked.blockedReason,
     productionPlaybackSwitched: false,

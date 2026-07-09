@@ -1,0 +1,19 @@
+# Chi'llywood media automation timer template.
+# Disabled template only: no cron/scheduler/daemon is active from this repo.
+
+[Unit]
+Description=Chi'llywood media automation worker timer (disabled template)
+
+[Timer]
+# Example cadence for a future owner/policy-approved limited automation loop.
+# Do not enable until backup/restore, audit, rollback, telemetry, and emergency
+# stop gates are proved in the target environment.
+OnCalendar=hourly
+Persistent=false
+RandomizedDelaySec=300
+Unit=media-automation-worker.service
+
+[Install]
+# Intentionally not enabled by this repo. There is no active scheduler until an
+# operator explicitly installs and enables this timer after all gates pass.
+WantedBy=timers.target

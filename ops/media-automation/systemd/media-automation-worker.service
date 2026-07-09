@@ -1,0 +1,37 @@
+# Chi'llywood media automation worker template.
+# This file is a disabled template only. Do not install/start it until the
+# source proofs, backup/restore gate, audit/rollback gate, and autonomous
+# policy gate pass for continuous_limited operation.
+
+[Unit]
+Description=Chi'llywood media automation worker (disabled template)
+Wants=network-online.target
+After=network-online.target
+ConditionEnvironment=MEDIA_AUTOMATION_MODE=continuous_limited
+ConditionEnvironment=MEDIA_AUTOMATION_REQUIRE_BACKUP_GATE=true
+ConditionEnvironment=MEDIA_AUTOMATION_DISABLE_BACKFILL=true
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/chillywood-mobile
+Environment=MEDIA_AUTOMATION_MODE=continuous_limited
+Environment=MEDIA_AUTOMATION_EMERGENCY_STOP=false
+Environment=MEDIA_AUTOMATION_REQUIRE_BACKUP_GATE=true
+Environment=MEDIA_AUTOMATION_DISABLE_BACKFILL=true
+Environment=MEDIA_AUTOMATION_MAX_BATCH_SIZE=1
+Environment=MEDIA_AUTOMATION_MAX_CONCURRENCY=1
+Environment=MEDIA_AUTOMATION_SAFE_LOGGING=true
+Environment=MEDIA_AUTOMATION_DRY_RUN=true
+ExecStart=/usr/bin/npm run media-automation:run-continuous-once
+Restart=no
+TimeoutStartSec=3600
+
+# Secrets are supplied by the host environment/secret manager. Never echo
+# DB URLs, service-role keys, Cloudflare credentials, signed URLs, or tokens.
+# Emergency stop: set MEDIA_AUTOMATION_EMERGENCY_STOP=true and do not run the
+# timer/service again until audit and rollback status are clean.
+
+[Install]
+# Intentionally not enabled by this repo. Future activation must explicitly run
+# systemctl enable/start after the policy gates pass.
+WantedBy=multi-user.target

@@ -78,6 +78,9 @@ const mediaAutomationDiscovery = read("_lib/mediaAutomationDiscovery.ts");
 const mediaAutomationBatchPolicy = read("_lib/mediaAutomationBatchPolicy.ts");
 const mediaAutomationJobs = read("_lib/mediaAutomationJobs.ts");
 const mediaAutomationWorkerLoop = read("_lib/mediaAutomationWorkerLoop.ts");
+const chillywoodAutonomyPolicy = read("_lib/chillywoodAutonomyPolicy.ts");
+const mediaAutomationBackfillPolicy = read("_lib/mediaAutomationBackfillPolicy.ts");
+const mediaAutomationQueueProcessor = read("_lib/mediaAutomationQueueProcessor.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const vodQuality = read("_lib/vodQuality.ts");
@@ -115,6 +118,9 @@ const mediaAutomationCli = read("scripts/media-automation-cli.mjs");
 const mediaAutomationControllerProof = read("scripts/proof-media-automation-controller.mjs");
 const mediaAutomationDiscoveryProof = read("scripts/proof-media-automation-discovery.mjs");
 const mediaAutomationBatchPolicyProof = read("scripts/proof-media-automation-batch-policy.mjs");
+const mediaAutomationBackfillPolicyProof = read("scripts/proof-media-automation-backfill-policy.mjs");
+const mediaAutomationQueueProcessorProof = read("scripts/proof-media-automation-queue-processor.mjs");
+const mediaAutomationSchedulerTemplatesProof = read("scripts/proof-media-automation-scheduler-templates.mjs");
 const mediaAutomationCliProof = read("scripts/proof-media-automation-cli.mjs");
 const mediaAutomationBatchPlannerProof = read("scripts/proof-media-automation-batch-planner.mjs");
 const mediaAutomationWorkerLoopProof = read("scripts/proof-media-automation-worker-loop.mjs");
@@ -136,6 +142,9 @@ const sourceCorpus = [
   mediaAutomationBatchPolicy,
   mediaAutomationJobs,
   mediaAutomationWorkerLoop,
+  chillywoodAutonomyPolicy,
+  mediaAutomationBackfillPolicy,
+  mediaAutomationQueueProcessor,
   mediaAutomationCli,
   mediaTranscodeWorkerCli,
   mediaStorageFunction,
@@ -743,6 +752,8 @@ assertIncludes(mediaCdnRolloutPlannerProof, "productionBackfillRun: false", "med
 assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
 assertIncludes(mediaAutomationOperatorRunbook, "Status: source/proofed automation architecture only.", "media automation runbook status");
 assertIncludes(mediaAutomationOperatorRunbook, "No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live.", "media automation runbook no deployment");
+assertIncludes(mediaAutomationOperatorRunbook, "continuous limited automation is source/proofed/templates only", "media automation runbook continuous template boundary");
+assertIncludes(mediaAutomationOperatorRunbook, "Safe Level 0/1 media operations should not require owner approval", "media automation runbook autonomy boundary");
 assertIncludes(mediaAutomationOperatorRunbook, "City Lights remains the canary proof, not the final hardcoded model.", "media automation runbook canary boundary");
 assertIncludes(mediaAutomationOperatorRunbook, "Normal CLI operation is auto-detect: the owner does not manually pick every source id and does not manually choose the batch size.", "media automation runbook auto-detect normal operation");
 assertIncludes(mediaAutomationOperatorRunbook, "R2 logical backups are not true PITR.", "media automation runbook PITR boundary");
@@ -757,12 +768,19 @@ assertIncludes(mediaAutomationController, "| \"auto_detect_run\"", "media automa
 assertIncludes(mediaAutomationController, "| \"one_job\"", "media automation controller one-job mode");
 assertIncludes(mediaAutomationController, "| \"batch\"", "media automation controller batch mode");
 assertIncludes(mediaAutomationController, "| \"continuous_limited\"", "media automation controller continuous limited mode");
+assertIncludes(mediaAutomationController, "| \"continuous_paused\"", "media automation controller continuous paused mode");
+assertIncludes(mediaAutomationController, "| \"emergency_stop\"", "media automation controller emergency stop mode");
 assertIncludes(mediaAutomationController, "| \"continuous_full_blocked\"", "media automation controller continuous full blocked mode");
 assertIncludes(mediaAutomationController, "emergency_stop_overrides_all_modes", "media automation controller emergency stop");
 assertIncludes(mediaAutomationController, "dry_run_writes_nothing", "media automation controller dry-run no writes");
 assertIncludes(mediaAutomationController, "one_job_requires_source_allowlist", "media automation controller one-job allowlist");
 assertIncludes(mediaAutomationController, "batch_requires_owner_approval", "media automation controller batch owner approval");
 assertIncludes(mediaAutomationController, "continuous_limited_requires_scheduled_backup_restore", "media automation controller continuous backup restore gate");
+assertIncludes(mediaAutomationController, "continuous_limited_requires_no_audit_failure", "media automation controller audit failure block");
+assertIncludes(mediaAutomationController, "continuous_limited_requires_cache_validation", "media automation controller cache validation gate");
+assertIncludes(mediaAutomationController, "continuous_limited_requires_output_validation", "media automation controller output validation gate");
+assertIncludes(mediaAutomationController, "continuous_limited_requires_no_private_candidates", "media automation controller private candidate gate");
+assertIncludes(mediaAutomationController, "continuous_limited_requires_low_error_rate", "media automation controller error rate gate");
 assertIncludes(mediaAutomationController, "auto_detect_run_requires_confirmation", "media automation controller auto-run confirmation");
 assertIncludes(mediaAutomationController, "auto_detect_run_requires_no_active_unfinished_jobs", "media automation controller active job block");
 assertIncludes(mediaAutomationController, "auto_detect_run_requires_no_unsafe_cdn_rows", "media automation controller unsafe CDN block");
@@ -791,7 +809,26 @@ assertIncludes(mediaAutomationBatchPolicy, "active_unfinished_jobs_present", "me
 assertIncludes(mediaAutomationBatchPolicy, "unsafe_cdn_rows_present", "media automation batch policy unsafe row block");
 assertIncludes(mediaAutomationBatchPolicy, "latest_backup_stale", "media automation batch policy stale backup block");
 assertIncludes(mediaAutomationBatchPolicy, "restore_drill_stale", "media automation batch policy stale restore drill block");
+assertIncludes(mediaAutomationBatchPolicy, "high_error_rate", "media automation batch policy error rate block");
+assertIncludes(mediaAutomationBatchPolicy, "cpu_capacity_low_reduces_cap", "media automation batch policy cpu pressure cap reduction");
 assertIncludes(mediaAutomationBatchPolicy, "manualBatchSizeRequired: false", "media automation batch policy no manual batch size");
+assertIncludes(chillywoodAutonomyPolicy, "classifyAutonomousOperation", "autonomy policy classifier");
+assertIncludes(chillywoodAutonomyPolicy, "requiresOwnerApproval", "autonomy policy owner approval helper");
+assertIncludes(chillywoodAutonomyPolicy, "level_0_fully_autonomous", "autonomy policy level 0");
+assertIncludes(chillywoodAutonomyPolicy, "paid_provider_billing_change", "autonomy policy billing boundary");
+assertIncludes(chillywoodAutonomyPolicy, "auth_rls_change", "autonomy policy auth RLS boundary");
+assertIncludes(chillywoodAutonomyPolicy, "broad_uncapped_backfill", "autonomy policy broad backfill boundary");
+assertIncludes(chillywoodAutonomyPolicy, "app_store_public_release", "autonomy policy app store boundary");
+assertIncludes(mediaAutomationBackfillPolicy, "backfill_disabled_by_default", "media automation backfill disabled default");
+assertIncludes(mediaAutomationBackfillPolicy, "broad_backfill_requires_owner_approval", "media automation backfill owner approval boundary");
+assertIncludes(mediaAutomationBackfillPolicy, "private_media_blocked", "media automation backfill private block");
+assertIncludes(mediaAutomationBackfillPolicy, "small_backfill_batch_cap_invalid", "media automation backfill cap");
+assertIncludes(mediaAutomationQueueProcessor, "leaseRequired: true", "media automation queue processor lease required");
+assertIncludes(mediaAutomationQueueProcessor, "backupGateRequired: true", "media automation queue processor backup gate");
+assertIncludes(mediaAutomationQueueProcessor, "killSwitchRequired: true", "media automation queue processor kill switch");
+assertIncludes(mediaAutomationQueueProcessor, "deadLetterRequired: true", "media automation queue processor dead letter");
+assertIncludes(mediaAutomationQueueProcessor, "quarantineRequired: true", "media automation queue processor quarantine");
+assertIncludes(mediaAutomationQueueProcessor, "unsafe_queue_item_blocked", "media automation queue unsafe block");
 assertIncludes(mediaAutomationJobs, "playback/public/auto/", "media automation jobs public output prefix");
 assertIncludes(mediaAutomationJobs, "rollbackScope", "media automation jobs rollback scope");
 assertIncludes(mediaAutomationJobs, "buildAutoDetectedTranscodeJobPlan", "media automation jobs auto job plan helper");
@@ -805,18 +842,27 @@ assertIncludes(mediaAutomationWorkerLoop, "batch_dry_run_passed", "media automat
 assertIncludes(mediaAutomationWorkerLoop, "playback_cdn_selected", "media automation worker loop CDN selected telemetry");
 assertIncludes(mediaAutomationWorkerLoop, "playback_fallback_used", "media automation worker loop fallback telemetry");
 assertIncludes(mediaAutomationWorkerLoop, "rollback_executed", "media automation worker loop rollback telemetry");
+assertIncludes(mediaAutomationWorkerLoop, "automation_started", "media automation worker loop automation telemetry");
+assertIncludes(mediaAutomationWorkerLoop, "automation_paused", "media automation worker loop pause telemetry");
+assertIncludes(mediaAutomationWorkerLoop, "emergency_stop_triggered", "media automation worker loop emergency telemetry");
+assertIncludes(mediaAutomationWorkerLoop, "cost_summary_reported", "media automation worker loop cost telemetry");
 assertIncludes(mediaAutomationWorkerLoop, "claimAutomationBatchLease", "media automation worker loop auto lease alias");
 assertIncludes(mediaAutomationWorkerLoop, "quarantineAutomationWorkerBatch", "media automation worker loop quarantine");
 assertIncludes(mediaAutomationWorkerLoop, "status: \"pending_audit\" | \"audit_passed\" | \"audit_failed\" | \"quarantined\"", "media automation worker loop pending/quarantine states");
 assertIncludes(mediaAutomationCli, "MEDIA_AUTOMATION_RUN_CONFIRM", "media automation CLI owner confirmation env");
 assertIncludes(mediaAutomationCli, "I_UNDERSTAND_BATCH_AUTOMATION", "media automation CLI owner confirmation value");
 assertIncludes(mediaAutomationCli, "I_UNDERSTAND_AUTO_DETECT_BATCH", "media automation CLI auto confirmation value");
+assertIncludes(mediaAutomationCli, "I_UNDERSTAND_ONE_CONTINUOUS_LIMITED_CYCLE", "media automation CLI continuous once confirmation value");
+assertIncludes(mediaAutomationCli, "I_UNDERSTAND_BROAD_BACKFILL_RISK", "media automation CLI broad backfill confirmation value");
 assertIncludes(mediaAutomationCli, "\"plan-auto\"", "media automation CLI plan-auto command");
 assertIncludes(mediaAutomationCli, "\"dry-run-auto\"", "media automation CLI dry-run-auto command");
 assertIncludes(mediaAutomationCli, "\"run-auto\"", "media automation CLI run-auto command");
+assertIncludes(mediaAutomationCli, "\"run-continuous-once\"", "media automation CLI bounded continuous command");
+assertIncludes(mediaAutomationCli, "\"report\"", "media automation CLI report command");
 assertIncludes(mediaAutomationCli, "manualSourceIdsRequired: false", "media automation CLI no manual source ids");
 assertIncludes(mediaAutomationCli, "manualBatchSizeRequired: false", "media automation CLI no manual batch size");
 assertIncludes(mediaAutomationCli, "batch_execution_not_enabled_in_source_proof_build", "media automation CLI fail-closed run batch");
+assertIncludes(mediaAutomationCli, "continuous_limited_once_not_enabled_in_source_proof_build", "media automation CLI fail-closed continuous once");
 assertIncludes(mediaAutomationCli, "playback/public/auto/", "media automation CLI exact output prefix");
 assertIncludes(mediaAutomationCli, "productionRowsWritten: false", "media automation CLI no production writes");
 assertIncludes(mediaAutomationCli, "cronSchedulerAdded: false", "media automation CLI no scheduler");
@@ -827,6 +873,8 @@ assertIncludes(mediaAutomationControllerProof, "autoDetectPlansWithoutWrites", "
 assertIncludes(mediaAutomationControllerProof, "autoDetectRunRequiresConfirmation", "media automation controller proof auto run confirmation");
 assertIncludes(mediaAutomationControllerProof, "unsafeCdnRowsBlockAutoRun", "media automation controller proof unsafe row block");
 assertIncludes(mediaAutomationControllerProof, "continuousLimitedRequiresGate", "media automation controller proof continuous gate");
+assertIncludes(mediaAutomationControllerProof, "continuousAuditFailure", "media automation controller proof audit failure");
+assertIncludes(mediaAutomationControllerProof, "continuousPrivateCandidate", "media automation controller proof private candidate");
 assertIncludes(mediaAutomationDiscoveryProof, "eligible_needs_transcode", "media automation discovery proof eligible transcode");
 assertIncludes(mediaAutomationDiscoveryProof, "excluded_private", "media automation discovery proof excluded private");
 assertIncludes(mediaAutomationDiscoveryProof, "private_blocked", "media automation discovery proof private block");
@@ -840,9 +888,23 @@ assertIncludes(mediaAutomationBatchPolicyProof, "activeUnfinishedJobsBatchSize",
 assertIncludes(mediaAutomationBatchPolicyProof, "unsafeCdnRowsBatchSize", "media automation batch policy proof unsafe row block");
 assertIncludes(mediaAutomationBatchPolicyProof, "staleBackupBatchSize", "media automation batch policy proof stale backup");
 assertIncludes(mediaAutomationBatchPolicyProof, "staleRestoreDrillBatchSize", "media automation batch policy proof stale restore");
+assertIncludes(mediaAutomationBatchPolicyProof, "highErrorRateBatchSize", "media automation batch policy proof error rate");
+assertIncludes(mediaAutomationBatchPolicyProof, "cpuPressureBatchSize", "media automation batch policy proof cpu pressure");
 assertIncludes(mediaAutomationBatchPolicyProof, "manualSourceIdsRequired", "media automation batch policy proof source auto");
 assertIncludes(mediaAutomationBatchPolicyProof, "manualBatchSizeRequired", "media automation batch policy proof batch auto");
+assertIncludes(mediaAutomationBackfillPolicyProof, "defaultBackfillAllowed", "media automation backfill proof default disabled");
+assertIncludes(mediaAutomationBackfillPolicyProof, "smallCappedAllowed", "media automation backfill proof small capped");
+assertIncludes(mediaAutomationBackfillPolicyProof, "broadOwnerApprovalRequired", "media automation backfill proof broad approval");
+assertIncludes(mediaAutomationQueueProcessorProof, "missing_queue_lease", "media automation queue proof lease block");
+assertIncludes(mediaAutomationQueueProcessorProof, "backup_gate_not_closed", "media automation queue proof backup gate");
+assertIncludes(mediaAutomationQueueProcessorProof, "kill_switch_missing", "media automation queue proof kill switch");
+assertIncludes(mediaAutomationQueueProcessorProof, "unsafe_queue_item_blocked", "media automation queue proof unsafe block");
+assertIncludes(mediaAutomationSchedulerTemplatesProof, "disabledByDefault", "media automation scheduler proof disabled");
+assertIncludes(mediaAutomationSchedulerTemplatesProof, "cronAdded: false", "media automation scheduler proof no cron");
 assertIncludes(mediaAutomationCliProof, "runAutoRequiresConfirmation", "media automation CLI proof run auto confirmation");
+assertIncludes(mediaAutomationCliProof, "continuousOnceRequiresConfirmation", "media automation CLI proof continuous confirmation");
+assertIncludes(mediaAutomationCliProof, "continuousOnceFailClosed", "media automation CLI proof continuous fail closed");
+assertIncludes(mediaAutomationCliProof, "reportOnly", "media automation CLI proof report");
 assertIncludes(mediaAutomationCliProof, "manualSourceIdsRequired", "media automation CLI proof no manual source ids");
 assertIncludes(mediaAutomationCliProof, "manualBatchSizeRequired", "media automation CLI proof no manual batch size");
 assertIncludes(mediaAutomationCliProof, "broadPrefixDenied", "media automation CLI proof broad rollback denied");
@@ -857,7 +919,7 @@ assertIncludes(mediaAutomationWorkerLoopProof, "auditPassResolverEligible", "med
 assertIncludes(mediaAutomationWorkerLoopProof, "auditFailureQuarantine", "media automation worker proof quarantine");
 assertIncludes(mediaAutomationWorkerLoopProof, "resolverIgnoresPendingOrQuarantinedRows", "media automation worker proof resolver block");
 assertNotMatches(mediaAutomationCli, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media automation CLI must not mutate DB");
-assertNotMatches(mediaAutomationController + mediaAutomationDiscovery + mediaAutomationJobs + mediaAutomationWorkerLoop, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/i, "media automation helpers must not perform network or database writes");
+assertNotMatches(mediaAutomationController + mediaAutomationDiscovery + mediaAutomationJobs + mediaAutomationWorkerLoop + mediaAutomationBackfillPolicy + mediaAutomationQueueProcessor, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/i, "media automation helpers must not perform network or database writes");
 assertNotMatches(mediaAutomationOperatorRunbook, /\b(?:continuous automation is live|worker is deployed|cron is configured|scheduler is configured|R2 logical backups? (?:are|is) true PITR)\b/i, "media automation runbook must not overclaim deployment or PITR");
 assertIncludes(mediaMigrationPlan, "Status: production schema applied, with one scoped owner-approved proof job.", "trusted rendition migration plan status");
 assertIncludes(mediaMigrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "trusted rendition migration plan production schema status");

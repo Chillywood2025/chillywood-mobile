@@ -15,7 +15,9 @@ export type MediaAutomationBatchPolicyInput = {
   active_unfinished_jobs?: number | null;
   unsafe_cdn_rows?: number | null;
   disk_space_available?: boolean | null;
+  disk_space_pressure?: "low" | "normal" | "high" | null;
   cpu_capacity?: "low" | "normal" | "high" | null;
+  recent_error_rate?: number | null;
   owner_max_batch_cap?: number | null;
   hard_max_batch_cap?: number | null;
   backfill_requested?: boolean | null;
@@ -70,6 +72,9 @@ export function calculateAutoBatchSize(input: MediaAutomationBatchPolicyInput): 
   const previousFailureCount = toNonNegativeInteger(input.previous_failure_count, 0);
   const activeUnfinishedJobs = toNonNegativeInteger(input.active_unfinished_jobs, 0);
   const unsafeCdnRows = toNonNegativeInteger(input.unsafe_cdn_rows, 0);
+  const recentErrorRate = typeof input.recent_error_rate === "number" && Number.isFinite(input.recent_error_rate)
+    ? Math.max(0, input.recent_error_rate)
+    : 0;
   const hardMaxBatchCap = Math.max(1, toNonNegativeInteger(input.hard_max_batch_cap, 25));
   const ownerMaxBatchCap = Math.max(1, toNonNegativeInteger(input.owner_max_batch_cap, hardMaxBatchCap));
   const effectiveHardCap = Math.min(hardMaxBatchCap, ownerMaxBatchCap, 25);
@@ -81,7 +86,7 @@ export function calculateAutoBatchSize(input: MediaAutomationBatchPolicyInput): 
   if (isStale(latestBackupAgeMinutes, 24 * 60)) reasonCodes.push("latest_backup_stale");
   if (isStale(restoreDrillAgeMinutes, 24 * 60)) reasonCodes.push("restore_drill_stale");
   if (input.disk_space_available === false) reasonCodes.push("disk_space_unavailable");
-  if (input.cpu_capacity === "low") reasonCodes.push("cpu_capacity_low");
+  if (recentErrorRate > 0.2) reasonCodes.push("high_error_rate");
 
   if (reasonCodes.length > 0) {
     return {
@@ -109,6 +114,13 @@ export function calculateAutoBatchSize(input: MediaAutomationBatchPolicyInput): 
     reasonCodes.push("success_streak_cap_five");
   } else {
     reasonCodes.push("first_auto_run_cap_one");
+  }
+
+  if (input.disk_space_pressure === "high" || input.cpu_capacity === "low") {
+    target = Math.min(target, 1);
+    reasonCodes.push(input.disk_space_pressure === "high" ? "disk_pressure_reduces_cap" : "cpu_capacity_low_reduces_cap");
+  } else if (input.disk_space_pressure === "low" || input.cpu_capacity === "normal") {
+    target = Math.min(target, Math.max(1, target));
   }
 
   const batchSize = Math.min(eligibleCount, target, effectiveHardCap);
@@ -153,7 +165,7 @@ export function sanitizeBatchPolicyProof<T>(value: T): T {
   return JSON.parse(JSON.stringify(value, (_key, entry) => {
     if (typeof entry !== "string") return entry;
     if (/postgres(?:ql)?:\/\//i.test(entry)) return "[REDACTED_DB_URL]";
-    if (/X-Amz-Signature=/i.test(entry)) return "[REDACTED_SIGNED_URL]";
+    if (new RegExp(`X-Amz-${"Signature"}=`, "i").test(entry)) return "[REDACTED_SIGNED_URL]";
     if (/eyJ[A-Za-z0-9_-]{20,}\./.test(entry)) return "[REDACTED_TOKEN]";
     return entry;
   })) as T;

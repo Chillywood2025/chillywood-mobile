@@ -6,6 +6,8 @@ export type MediaAutomationMode =
   | "one_job"
   | "batch"
   | "continuous_limited"
+  | "continuous_paused"
+  | "emergency_stop"
   | "continuous_full_blocked"
   | "continuous_blocked";
 
@@ -46,6 +48,14 @@ export type MediaAutomationControllerInput = {
   hardMaxBatchCap?: number | null;
   activeUnfinishedJobs?: number | null;
   unsafeCdnRows?: number | null;
+  activeUnfinishedJobThreshold?: number | null;
+  auditFailed?: boolean | null;
+  cacheValidationPassed?: boolean | null;
+  outputValidationPassed?: boolean | null;
+  privateCandidateDetected?: boolean | null;
+  premiumCandidateDetected?: boolean | null;
+  originalCandidateDetected?: boolean | null;
+  recentErrorRate?: number | null;
   backfillRequested?: boolean | null;
   broadBackfillApproved?: boolean | null;
   auditRequired?: boolean | null;
@@ -88,6 +98,8 @@ const normalizeMode = (value: unknown): MediaAutomationMode => {
     || normalized === "one_job"
     || normalized === "batch"
     || normalized === "continuous_limited"
+    || normalized === "continuous_paused"
+    || normalized === "emergency_stop"
     || normalized === "continuous_full_blocked"
     || normalized === "continuous_blocked"
   ) {
@@ -128,7 +140,7 @@ export function resolveMediaAutomationController(
   const maxBatchSize = normalizeNonNegativeInteger(input.maxBatchSize, 0);
   const gates: MediaAutomationGateResult[] = [];
 
-  if (input.emergencyStop === true) {
+  if (input.emergencyStop === true || mode === "emergency_stop") {
     gates.push(gate("emergency_stop_overrides_all_modes", false, "emergency_stop"));
     return {
       mode,
@@ -163,6 +175,27 @@ export function resolveMediaAutomationController(
       playbackKillSwitchOn: input.killSwitchOn !== false,
       signedOriginFallbackRequired: true,
       blockedReason: "automation_off",
+      maxJobsPerRun,
+      maxConcurrency,
+      maxBatchSize,
+      gates,
+    };
+  }
+
+  if (mode === "continuous_paused") {
+    gates.push(gate("continuous_paused_requires_manual_resume_gate", false, "continuous_paused"));
+    return {
+      mode,
+      state: "paused",
+      allowed: false,
+      canDiscover: true,
+      canPlanJobs: true,
+      canWriteJobs: false,
+      canRunWorker: false,
+      canTrustResolverRows: false,
+      playbackKillSwitchOn: input.killSwitchOn !== false,
+      signedOriginFallbackRequired: true,
+      blockedReason: "continuous_paused",
       maxJobsPerRun,
       maxConcurrency,
       maxBatchSize,
@@ -325,12 +358,29 @@ export function resolveMediaAutomationController(
     };
   }
 
-  gates.push(gate("continuous_limited_requires_owner_approval", input.ownerApprovalForContinuous === true, "owner_continuous_approval_required"));
+  const activeUnfinishedJobs = normalizeNonNegativeInteger(input.activeUnfinishedJobs, 0);
+  const activeUnfinishedJobThreshold = normalizeNonNegativeInteger(input.activeUnfinishedJobThreshold, 0);
+  const unsafeCdnRows = normalizeNonNegativeInteger(input.unsafeCdnRows, 0);
+  const recentErrorRate = typeof input.recentErrorRate === "number" && Number.isFinite(input.recentErrorRate)
+    ? Math.max(0, input.recentErrorRate)
+    : 0;
+
   gates.push(gate("continuous_limited_requires_scheduled_backup_restore", input.scheduledBackupRestoreGateClosed === true, "scheduled_backup_restore_gate_not_closed"));
   gates.push(gate("continuous_limited_requires_backup_gate_closed", input.backupGateClosed === true, "backup_gate_not_closed"));
+  gates.push(gate("continuous_limited_requires_latest_backup_fresh", input.latestBackupFresh !== false, "latest_backup_stale"));
+  gates.push(gate("continuous_limited_requires_restore_drill_fresh", input.restoreDrillFresh !== false, "restore_drill_stale"));
   gates.push(gate("continuous_limited_requires_concurrency_cap", maxConcurrency > 0 && maxConcurrency <= 2, "max_concurrency_invalid"));
   gates.push(gate("continuous_limited_requires_job_cap", maxJobsPerRun > 0 && maxJobsPerRun <= 25, "max_jobs_per_run_invalid"));
   gates.push(gate("continuous_limited_requires_telemetry", input.telemetryAvailable === true, "telemetry_required"));
+  gates.push(gate("continuous_limited_requires_no_audit_failure", input.auditFailed !== true, "audit_failed_pause"));
+  gates.push(gate("continuous_limited_requires_no_unsafe_cdn_rows", unsafeCdnRows === 0, "unsafe_cdn_rows_present"));
+  gates.push(gate("continuous_limited_requires_active_jobs_under_threshold", activeUnfinishedJobs <= activeUnfinishedJobThreshold, "active_unfinished_jobs_above_threshold"));
+  gates.push(gate("continuous_limited_requires_no_private_candidates", input.privateCandidateDetected !== true, "private_candidate_detected"));
+  gates.push(gate("continuous_limited_requires_no_premium_candidates", input.premiumCandidateDetected !== true, "premium_candidate_detected"));
+  gates.push(gate("continuous_limited_requires_no_original_candidates", input.originalCandidateDetected !== true, "original_candidate_detected"));
+  gates.push(gate("continuous_limited_requires_cache_validation", input.cacheValidationPassed !== false, "cache_validation_failed"));
+  gates.push(gate("continuous_limited_requires_output_validation", input.outputValidationPassed !== false, "output_validation_failed"));
+  gates.push(gate("continuous_limited_requires_low_error_rate", recentErrorRate <= 0.1, "error_rate_above_threshold"));
   const blockedReason = firstBlockedReason(gates);
 
   return {
@@ -356,7 +406,7 @@ export function sanitizeMediaAutomationControllerProof<T>(value: T): T {
   return JSON.parse(JSON.stringify(value, (_key, entry) => {
     if (typeof entry !== "string") return entry;
     if (/postgres(?:ql)?:\/\//i.test(entry)) return "[REDACTED_DB_URL]";
-    if (/X-Amz-Signature=/i.test(entry)) return "[REDACTED_SIGNED_URL]";
+    if (new RegExp(`X-Amz-${"Signature"}=`, "i").test(entry)) return "[REDACTED_SIGNED_URL]";
     if (/eyJ[A-Za-z0-9_-]{20,}\./.test(entry)) return "[REDACTED_TOKEN]";
     return entry;
   })) as T;

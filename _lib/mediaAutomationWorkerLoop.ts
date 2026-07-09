@@ -44,6 +44,7 @@ export type MediaAutomationBatchAuditResult = {
 };
 
 export const MEDIA_AUTOMATION_TELEMETRY_EVENTS = [
+  "automation_started",
   "auto_discovery_started",
   "candidate_classified",
   "batch_planned",
@@ -66,6 +67,9 @@ export const MEDIA_AUTOMATION_TELEMETRY_EVENTS = [
   "playback_fallback_used",
   "rollback_planned",
   "rollback_executed",
+  "automation_paused",
+  "emergency_stop_triggered",
+  "cost_summary_reported",
 ] as const;
 
 const ALLOWED_SCAN = new Set(["clean", "approved"]);

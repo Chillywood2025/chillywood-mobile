@@ -4,6 +4,10 @@ Last updated: 2026-07-09
 
 Status: source/proofed automation architecture only. No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live. Production playback remains controlled by audited public `media_renditions` eligibility, kill switch, rollout mode, and signed-origin fallback.
 
+continuous limited automation is source/proofed/templates only. The new queue processor, backfill policy, systemd service template, systemd timer template, `run-continuous-once` CLI surface, and report command do not start a daemon, cron, scheduler, queue processor, or media worker. They exist to prove the safe operating model before any future activation.
+
+Safe Level 0/1 media operations should not require owner approval when they stay inside policy: eligible discovery, safe batch sizing, scoped logical backups, restore drills, public-safe media work inside caps, post-write audit, scoped rollback/quarantine, fallback playback, telemetry reporting, cache verification, and auto-pause reporting. Owner approval remains required for money/billing/provider changes, auth/RLS, Premium entitlement, payout/cashout, destructive production DB changes, broad uncapped backfill, public/private exposure policy changes, private/Premium CDN token policy, app-store/public launch, legal/compliance, payment production mutation, and public marketing claims.
+
 ## Purpose
 
 The automation operator is the scale path for many public-safe creator videos after scan, moderation, backup, transcode, upload, audit, telemetry, and rollback gates pass. City Lights remains the canary proof, not the final hardcoded model.
@@ -19,6 +23,7 @@ Normal CLI operation is auto-detect: the owner does not manually pick every sour
 - `one_job`: processes exactly one explicitly allowlisted source after a fresh backup gate and owner approval.
 - `batch`: processes a capped batch only after owner approval, backup gate closure, rollback scope, and audit rules.
 - `continuous_limited`: future mode only. It requires scheduled private R2 backup, fresh restore drill, owner approval, max concurrency, max jobs per run, retry cap, dead-letter/quarantine, telemetry, rollback, and audit pass before resolver trust.
+- `continuous_paused`: automation may report status and plans, but it cannot run worker jobs until a clean audit/rollback review resumes it.
 - `continuous_full_blocked`: blocked until a separate owner-approved production readiness lane, PITR or equivalent scheduled restore system, and explicit deployment proof.
 
 Emergency stop overrides every mode. The playback kill switch keeps fallback available even if worker automation is healthy.
@@ -26,11 +31,16 @@ Emergency stop overrides every mode. The playback kill switch keeps fallback ava
 ## Source Components
 
 - `_lib/mediaAutomationController.ts`: automation mode and gate decisions.
+- `_lib/chillywoodAutonomyPolicy.ts`: Level 0-4 autonomy classification and owner-approval boundaries.
 - `_lib/mediaAutomationDiscovery.ts`: public-safe candidate classification and batch selection.
 - `_lib/mediaAutomationBatchPolicy.ts`: adaptive batch-size and risk policy.
+- `_lib/mediaAutomationBackfillPolicy.ts`: capped backfill policy, broad-backfill owner-approval boundary, and unsafe-media blocks.
 - `_lib/mediaAutomationJobs.ts`: dry-run job plans, output prefixes, and rollback scopes.
 - `_lib/mediaAutomationWorkerLoop.ts`: lease, batch, audit, quarantine, and stop-reason model.
+- `_lib/mediaAutomationQueueProcessor.ts`: source/proof-only queue item claim/process/fail/quarantine model.
 - `scripts/media-automation-cli.mjs`: CLI-only status, discovery, batch planning, dry-run, run-gate, audit, rollback, pause, and emergency-stop commands.
+- `ops/media-automation/systemd/media-automation-worker.service`: disabled future service template only.
+- `ops/media-automation/systemd/media-automation-worker.timer`: disabled future timer template only.
 
 ## CLI Commands
 
@@ -43,14 +53,20 @@ npm run media-automation:run-auto
 npm run media-automation:plan-batch
 npm run media-automation:dry-run-batch
 npm run media-automation:run-batch
+npm run media-automation:run-continuous-once
 npm run media-automation:audit
 npm run media-automation:audit-batch
 npm run media-automation:rollback-plan
 npm run media-automation:pause
 npm run media-automation:emergency-stop
+npm run media-automation:report
 ```
 
 `media-automation:plan-auto` and `media-automation:dry-run-auto` require no manual source id and no manual batch-size input for normal operation. `media-automation:run-auto` is intentionally fail-closed unless a future confirmed run provides `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_AUTO_DETECT_BATCH` and every backup, restore, active-job, unsafe-row, dry-run, audit, rollback, and emergency-stop gate passes. Legacy `plan-batch` / `dry-run-batch` / `run-batch` aliases remain for compatibility and still recognize `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION`; they still do not deploy a worker or scheduler. This task does not enable run execution.
+
+`media-automation:run-continuous-once` is a bounded future continuous-limited loop command, not a daemon. In this source/proof build it still fails closed without `MEDIA_AUTOMATION_CONTINUOUS_ONCE_CONFIRM=I_UNDERSTAND_ONE_CONTINUOUS_LIMITED_CYCLE`, and even after confirmation it may not process media until backup, restore drill, audit, rollback, telemetry, kill-switch, output validation, and unsafe-row gates pass in a future activation lane. Broad backfill requires `MEDIA_AUTOMATION_BROAD_BACKFILL_CONFIRM=I_UNDERSTAND_BROAD_BACKFILL_RISK` plus Level 3 owner approval.
+
+`media-automation:report` is read-only. It reports candidate counts, calculated batch size, risk level, reason codes, selected count, and rollback scopes without writing rows or uploading media.
 
 Normal npm operator commands use `--source=linked` for production read-only discovery through the linked Supabase CLI. Proof scripts keep fixture mode available for deterministic source proofs. The linked source path reads only safe aggregate/classification fields and redacted eligible candidate metadata; it does not print playback URLs, signed URLs, DB URLs, service-role keys, or private excluded-row details.
 
@@ -122,6 +138,31 @@ Default policy:
 - stale restore drill forces batch size `0`
 - hard max without a later owner-approved override is `25`
 - backfill remains disabled
+- high error rate blocks or reduces automation
+- CPU/disk pressure reduces the cap or blocks when unsafe
+
+## Queue Processor Model
+
+`_lib/mediaAutomationQueueProcessor.ts` is source/proof-only. It discovers queue work only from eligible public-safe candidates, requires the automation controller to allow a bounded run, requires a lease, requires backup gate and kill switch, enforces max concurrency and max jobs per run, enforces retry cap, dead-letters retry-cap failures, quarantines audit failures, pauses automation on failure, and never grants resolver trust before audit pass.
+
+The queue processor is not live. No daemon, cron, scheduler, or queue loop is running.
+
+## Backfill Policy
+
+Broad backfill is disabled by default. Small capped backfill of public-safe eligible media can be Level 1/2 autonomous only after proofs, backup/restore gate, telemetry, audit, rollback, emergency stop, and hard batch caps pass. Broad uncapped backfill, cap increases above the hard limit, destructive cleanup, or any public/private exposure-policy change remains Level 3 and requires owner approval.
+
+Private, Premium, original/master, unscanned, moderation-blocked, unsupported, missing-source, active-job, denied, and already-audited HLS rows are not eligible for public transcode backfill.
+
+## Disabled Scheduler Templates
+
+The only scheduler artifacts are disabled templates:
+
+```text
+ops/media-automation/systemd/media-automation-worker.service
+ops/media-automation/systemd/media-automation-worker.timer
+```
+
+They document future `continuous_limited` operation with `MEDIA_AUTOMATION_REQUIRE_BACKUP_GATE=true`, `MEDIA_AUTOMATION_DISABLE_BACKFILL=true`, `MEDIA_AUTOMATION_MAX_BATCH_SIZE`, `MEDIA_AUTOMATION_MAX_CONCURRENCY`, safe logging, dry-run mode, and emergency stop. They are not installed, enabled, started, or scheduled by this repo.
 
 ## Job Policy
 
@@ -195,6 +236,9 @@ Continuous automation remains blocked from this runbook until owner approval, sc
 npm run proof:media-automation-controller
 npm run proof:media-automation-discovery
 npm run proof:media-automation-batch-policy
+npm run proof:media-automation-backfill-policy
+npm run proof:media-automation-queue-processor
+npm run proof:media-automation-scheduler-templates
 npm run proof:media-automation-cli
 npm run proof:media-automation-batch-planner
 npm run proof:media-automation-worker-loop

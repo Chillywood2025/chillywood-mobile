@@ -146,11 +146,15 @@ try {
   assert(processed.writesAttempted === false, "dry-run worker writes nothing");
   assert(processed.uploadAttempted === false, "dry-run worker uploads nothing");
   assert(processed.telemetryEvents.includes("transcode_started"), "telemetry model includes transcode event");
+  assert(processed.telemetryEvents.includes("automation_started"), "telemetry model includes automation start event");
   assert(processed.telemetryEvents.includes("auto_discovery_started"), "telemetry model includes auto discovery event");
   assert(processed.telemetryEvents.includes("batch_dry_run_passed"), "telemetry model includes dry-run event");
   assert(processed.telemetryEvents.includes("playback_cdn_selected"), "telemetry model includes CDN selected event");
   assert(processed.telemetryEvents.includes("playback_fallback_used"), "telemetry model includes fallback event");
   assert(processed.telemetryEvents.includes("rollback_executed"), "telemetry model includes rollback event");
+  assert(processed.telemetryEvents.includes("automation_paused"), "telemetry model includes pause event");
+  assert(processed.telemetryEvents.includes("emergency_stop_triggered"), "telemetry model includes emergency stop event");
+  assert(processed.telemetryEvents.includes("cost_summary_reported"), "telemetry model includes cost summary event");
 
   const autoRunPlan = planAutomationWorkerRun({
     batchId: dryRun.batchId,

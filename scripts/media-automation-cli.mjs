@@ -5,6 +5,8 @@ import { spawnSync } from "node:child_process";
 const cityLightsSourceId = "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1";
 const autoDetectConfirmation = "I_UNDERSTAND_AUTO_DETECT_BATCH";
 const legacyBatchConfirmation = "I_UNDERSTAND_BATCH_AUTOMATION";
+const continuousOnceConfirmation = "I_UNDERSTAND_ONE_CONTINUOUS_LIMITED_CYCLE";
+const broadBackfillConfirmation = "I_UNDERSTAND_BROAD_BACKFILL_RISK";
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 
 const validModes = new Set([
@@ -16,11 +18,13 @@ const validModes = new Set([
   "plan-batch",
   "dry-run-batch",
   "run-batch",
+  "run-continuous-once",
   "audit",
   "audit-batch",
   "rollback-plan",
   "pause",
   "emergency-stop",
+  "report",
 ]);
 
 const args = Object.fromEntries(process.argv.slice(2).filter((arg) => arg.startsWith("--")).map((arg) => {
@@ -49,6 +53,9 @@ function safeExit(code, payload) {
     schedulerAdded: false,
     queueProcessorRunning: false,
     continuousAutomationEnabled: false,
+    continuousLimitedSourceProofed: true,
+    continuousLimitedLive: false,
+    broadBackfillEnabled: false,
   }, null, 2);
   if (code === 0) process.stdout.write(`${output}\n`);
   else process.stderr.write(`${output}\n`);
@@ -533,6 +540,9 @@ if (mode === "status") {
     signedOriginFallbackAvailable: true,
     emergencyStopAvailable: true,
     killSwitchAvailable: true,
+    queueProcessorLive: false,
+    daemonLive: false,
+    cronLive: false,
   });
 }
 
@@ -585,6 +595,12 @@ if (mode === "plan-auto" || mode === "dry-run-auto") {
 
 if (mode === "run-auto") {
   const confirmation = args.confirm || process.env.MEDIA_AUTOMATION_RUN_CONFIRM;
+  const broadBackfillRequested = args.backfill === "true" || process.env.MEDIA_AUTOMATION_BACKFILL === "true";
+  if (broadBackfillRequested && process.env.MEDIA_AUTOMATION_BROAD_BACKFILL_CONFIRM !== broadBackfillConfirmation) {
+    failClosed("broad_backfill_confirmation_missing", {
+      requiredEnv: `MEDIA_AUTOMATION_BROAD_BACKFILL_CONFIRM=${broadBackfillConfirmation}`,
+    });
+  }
   if (rawMode === "run-batch" && confirmation !== legacyBatchConfirmation && confirmation !== autoDetectConfirmation) {
     failClosed("batch_automation_confirmation_missing", {
       requiredEnv: `MEDIA_AUTOMATION_RUN_CONFIRM=${legacyBatchConfirmation}`,
@@ -607,6 +623,26 @@ if (mode === "run-auto") {
   }
   failClosed("batch_execution_not_enabled_in_source_proof_build", {
     futureConfirmationPassed: true,
+    ...plan,
+  });
+}
+
+if (mode === "run-continuous-once") {
+  const confirmation = args.confirm || process.env.MEDIA_AUTOMATION_CONTINUOUS_ONCE_CONFIRM;
+  if (confirmation !== continuousOnceConfirmation) {
+    failClosed("continuous_limited_once_confirmation_missing", {
+      requiredEnv: `MEDIA_AUTOMATION_CONTINUOUS_ONCE_CONFIRM=${continuousOnceConfirmation}`,
+    });
+  }
+  const plan = buildAutoPlan();
+  if (plan.activeUnfinishedJobs > 0) failClosed("active_unfinished_jobs_present", plan);
+  if (plan.unsafeCdnRows > 0) failClosed("unsafe_cdn_rows_present", plan);
+  if (plan.calculatedBatchSize <= 0) failClosed("calculated_batch_size_zero", plan);
+  failClosed("continuous_limited_once_not_enabled_in_source_proof_build", {
+    futureConfirmationPassed: true,
+    boundedSingleIteration: true,
+    daemonStarted: false,
+    schedulerStarted: false,
     ...plan,
   });
 }
@@ -652,5 +688,26 @@ if (mode === "pause" || mode === "emergency-stop") {
     automationPaused: true,
     emergencyStopActive: mode === "emergency-stop",
     workerRun: false,
+  });
+}
+
+if (mode === "report") {
+  const plan = buildAutoPlan();
+  safeExit(0, {
+    ok: true,
+    requestedMode: rawMode,
+    mode,
+    reportOnly: true,
+    automationMode: "auto_detect",
+    continuousLimitedLive: false,
+    broadBackfillEnabled: false,
+    manualSourceIdsRequired: false,
+    manualBatchSizeRequired: false,
+    candidateSummary: plan.classificationCounts,
+    calculatedBatchSize: plan.calculatedBatchSize,
+    riskLevel: plan.riskLevel,
+    reasonCodes: plan.batchReasonCodes,
+    selectedCount: plan.selectedCount,
+    rollbackScopes: plan.rollbackScopes,
   });
 }

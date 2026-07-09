@@ -135,6 +135,25 @@ try {
   const staleRestore = calculateAutoBatchSize({ eligible_count: 40, latest_backup_age_minutes: 10, restore_drill_age_minutes: 24 * 60 + 1 });
   assert(staleRestore.batchSize === 0, "stale restore drill blocks");
 
+  const highErrorRate = calculateAutoBatchSize({
+    eligible_count: 40,
+    latest_backup_age_minutes: 10,
+    restore_drill_age_minutes: 10,
+    recent_error_rate: 0.25,
+  });
+  assert(highErrorRate.batchSize === 0, "high error rate blocks");
+  assert(highErrorRate.reasonCodes.includes("high_error_rate"), "high error rate reason recorded");
+
+  const cpuPressure = calculateAutoBatchSize({
+    eligible_count: 40,
+    latest_backup_age_minutes: 10,
+    restore_drill_age_minutes: 10,
+    previous_success_streak: 5,
+    cpu_capacity: "low",
+  });
+  assert(cpuPressure.batchSize === 1, "cpu pressure reduces cap to one");
+  assert(cpuPressure.reasonCodes.includes("cpu_capacity_low_reduces_cap"), "cpu pressure reason recorded");
+
   const plan = buildAutoBatchPlan(candidates, {
     latest_backup_age_minutes: 10,
     restore_drill_age_minutes: 10,
@@ -160,6 +179,8 @@ try {
     unsafeCdnRowsBatchSize: unsafeBlocked.batchSize,
     staleBackupBatchSize: staleBackup.batchSize,
     staleRestoreDrillBatchSize: staleRestore.batchSize,
+    highErrorRateBatchSize: highErrorRate.batchSize,
+    cpuPressureBatchSize: cpuPressure.batchSize,
     maxCapEnforced: successFive.batchSize <= 25,
     manualSourceIdsRequired: plan.manualSourceIdsRequired,
     manualBatchSizeRequired: plan.manualBatchSizeRequired,

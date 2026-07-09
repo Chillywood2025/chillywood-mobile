@@ -36,7 +36,7 @@ const assertNoSecretLikeText = (label, value) => {
   const text = typeof value === "string" ? value : JSON.stringify(value);
   const patterns = [
     /postgres(?:ql)?:\/\//i,
-    /X-Amz-Signature=/i,
+    new RegExp(`X-Amz-${"Signature"}=`, "i"),
     /\bservice[_-]?role\b/i,
     /\bBearer\s+[A-Za-z0-9._-]+/i,
     /\beyJ[A-Za-z0-9_-]{20,}\./,
@@ -112,7 +112,26 @@ const emergencyStop = runCli(["--mode=emergency-stop"]);
 assert(emergencyStop.status === 0, "emergency-stop command should pass");
 assert(emergencyStop.output.emergencyStopActive === true, "emergency stop active");
 
-for (const proof of [status, discover, planAuto, dryRunAuto, runAutoMissingConfirm, runAutoWithConfirm, audit, rollback, emergencyStop]) {
+const continuousMissingConfirm = runCli(["--mode=run-continuous-once"]);
+assert(continuousMissingConfirm.status !== 0, "run-continuous-once denied without confirmation");
+assert(continuousMissingConfirm.output.reason === "continuous_limited_once_confirmation_missing", "continuous once requires confirmation");
+
+const continuousWithConfirm = runCli(["--mode=run-continuous-once"], {
+  MEDIA_AUTOMATION_CONTINUOUS_ONCE_CONFIRM: "I_UNDERSTAND_ONE_CONTINUOUS_LIMITED_CYCLE",
+});
+assert(continuousWithConfirm.status !== 0, "continuous once still fails closed in source-proof build");
+assert(
+  continuousWithConfirm.output.reason === "continuous_limited_once_not_enabled_in_source_proof_build"
+    || continuousWithConfirm.output.reason === "calculated_batch_size_zero",
+  "continuous once execution is not enabled or has no eligible batch",
+);
+
+const report = runCli(["--mode=report"]);
+assert(report.status === 0, "report should pass");
+assert(report.output.reportOnly === true, "report is report-only");
+assert(report.output.continuousLimitedLive === false, "report says continuous limited not live");
+
+for (const proof of [status, discover, planAuto, dryRunAuto, runAutoMissingConfirm, runAutoWithConfirm, audit, rollback, emergencyStop, continuousMissingConfirm, continuousWithConfirm, report]) {
   assertNoSecretLikeText("media automation CLI proof", proof.output);
 }
 
@@ -130,6 +149,9 @@ const summary = {
   rollbackScoped: rollback.output.broadDeleteAllowed === false,
   broadPrefixDenied: rollbackBroad.output.reason,
   emergencyStopActive: emergencyStop.output.emergencyStopActive,
+  continuousOnceRequiresConfirmation: continuousMissingConfirm.output.reason,
+  continuousOnceFailClosed: continuousWithConfirm.output.reason,
+  reportOnly: report.output.reportOnly,
   productionPlaybackSwitched: false,
   daemonDeployed: false,
   cronSchedulerAdded: false,

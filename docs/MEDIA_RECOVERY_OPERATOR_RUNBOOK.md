@@ -2,6 +2,8 @@
 
 Status: operator/auditor source/proof model with one completed owner-approved production proof job. The recovery operator/auditor model is local code plus proof scripts; it does not deploy a production worker, does not run a production queue processor, and does not switch playback. The first controlled one-job proof wrote exactly one production `media_transcode_jobs` row plus two audited `media_renditions` rows for allowlisted City Lights only.
 
+Continuous limited automation is source/proofed/templates only. Recovery gates now model queue processing, capped backfill, disabled systemd templates, and `run-continuous-once`, but no daemon, cron, scheduler, queue processor, worker loop, or broad backfill is live.
+
 ## Purpose
 
 The recovery operator is the independent audit gate between worker output and resolver trust. A future worker can produce only `pending_audit` rows. The resolver must ignore those rows until an auditor verifies the exact batch and source, then marks only the audited rows safe for resolver trust.
@@ -13,6 +15,7 @@ The recovery operator is the independent audit gate between worker output and re
 - `dry_run` is plan-only and cannot write rows.
 - `one_job` requires an allowlisted source id, `max_jobs_per_run=1`, backfill disabled, source allowed for processing, and either Closed backup readiness or explicit owner one-job override.
 - `continuous` is denied while the backup/PITR gate is Blocked or Partial.
+- `continuous_limited` may run repeated safe batches only after scheduled/private backup, restore-drill, audit, rollback, telemetry, kill-switch, max concurrency, max jobs/run, retry/dead-letter, output-validation, and unsafe-row gates all pass.
 - Worker code cannot self-enable and cannot broaden a one-job lease.
 - The operator auto-disables after one-job success or failure.
 
