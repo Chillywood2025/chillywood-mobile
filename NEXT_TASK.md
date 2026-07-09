@@ -12,7 +12,7 @@ Current latest truth:
 - Public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returned HTTP 200 with exact harmless proof text.
 - Immutable cache proof URL `https://media.chillywoodstream.com/playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` returned exact harmless text, `Cache-Control: public, max-age=31536000, immutable`, and repeated fetches returned `cf-cache-status: HIT` with increasing `Age` after a narrow cache rule for `/playback/public/proof/cache-hit/*`.
 - Cache behavior is proved only for the harmless cache-hit proof prefix. Egress/cost savings are not claimed until media bandwidth telemetry or provider log reconciliation exists.
-- Generated demo MP4 URL `https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` returned HTTP 200, range HTTP 206, `Content-Type: video/mp4`, immutable cache metadata, warm `cf-cache-status: HIT`, and ffprobe/ffmpeg decode proof.
+- Generated demo MP4 URL `https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` returned HTTP 200, range HTTP 206, `Content-Type: video/mp4`, immutable cache metadata, warm `cf-cache-status: HIT`, ffprobe/ffmpeg decode proof, and proof-only local app playback evidence with `provider=cloudflare_r2_custom_domain`, `publicPlaybackSafe=true`, `cdnEligible=true`, `productionPlaybackSwitched=false`, `playbackStarted=true`, `rangePlaybackSupported=true`, `decoded=true`, and `decodedFrameCount=48`.
 - Public probes for `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
@@ -22,12 +22,13 @@ Current latest truth:
 - Cloudflare R2 custom domains should be treated as public bucket exposure, not a native prefix-limited publish switch. Do not connect `media.chillywoodstream.com` directly to a mixed bucket or the private proof bucket.
 
 Next exact media step:
-1. Design and implement media playback telemetry only in a separately approved lane; planned fields include `media_playback_sessions`, `media_delivery_events`, `video_id`, `creator_id`, `viewer_id`, `delivery_provider`, `playback_url_provider`, `quality`, `seconds_watched`, `estimated_bytes`, `cdn_cache_status`, nullable `watch_party_id`, `free_or_premium`, `started_at`, and `ended_at`.
-2. Do not enable public access on `chillywood-media-proof`.
-3. Do not upload real production media or private/original/Premium media to the public-playback proof bucket.
-4. Plan HLS/transcoding without claiming it live: future worker queue, ffprobe/ffmpeg, 360p/480p/720p/1080p outputs, master manifest, variant playlists, thumbnails, public-playback bucket upload after approval, and trusted `video_renditions` rows.
-5. Do not enable signed/token CDN playback or production playback switching until explicitly approved and proved.
-6. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
+1. Optional next proof is a physical installed-app UI route/card only if explicitly requested; the current proof is a resolver-controlled proof-only local app playback harness and does not change normal app UX.
+2. Design and implement media playback telemetry only in a separately approved lane; planned fields include `media_playback_sessions`, `media_delivery_events`, `video_id`, `creator_id`, `viewer_id`, `delivery_provider`, `playback_url_provider`, `quality`, `seconds_watched`, `estimated_bytes`, `cdn_cache_status`, nullable `watch_party_id`, `free_or_premium`, `started_at`, and `ended_at`.
+3. Do not enable public access on `chillywood-media-proof`.
+4. Do not upload real production media or private/original/Premium media to the public-playback proof bucket.
+5. Plan HLS/transcoding without claiming it live: future worker queue, ffprobe/ffmpeg, 360p/480p/720p/1080p outputs, master manifest, variant playlists, thumbnails, public-playback bucket upload after approval, and trusted `video_renditions` rows.
+6. Do not enable signed/token CDN playback or production playback switching until explicitly approved and proved.
+7. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
 
 # Watch-Party Live / Live Stage Seated Self-Mute Follow-Up
 

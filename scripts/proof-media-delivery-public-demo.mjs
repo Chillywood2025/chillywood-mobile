@@ -13,6 +13,7 @@ const ffmpegCommand = process.env.FFMPEG_BIN || "ffmpeg";
 const fallbackUrl = "origin-signed-direct-fallback";
 const demoProofPath = "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4";
 const demoProofUrl = "https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4";
+const allowedDemoProofPaths = new Set([demoProofPath]);
 const publicConfig = {
   deliveryProvider: "cloudflare_r2_custom_domain",
   cdnBaseUrl: "https://media.chillywoodstream.com",
@@ -161,9 +162,35 @@ const runFfmpegDecode = (url) => {
   );
 };
 
+const runFfprobeFrameCount = (url) => (
+  execFileSync(
+    ffprobeCommand,
+    [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-count_frames",
+      "-show_entries",
+      "stream=nb_read_frames",
+      "-of",
+      "json",
+      url,
+    ],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 30000,
+    },
+  )
+);
+
 const { helper, cleanup } = compileHelper();
 
 try {
+  requireProof(allowedDemoProofPaths.has(demoProofPath), "safe demo proof path must be in the local proof allowlist");
+
   const resolution = await helper.resolveMediaPlaybackDelivery({
     asset: {
       path: demoProofPath,
@@ -284,6 +311,7 @@ try {
   }
 
   let ffprobeParsed = {};
+  let decodedFrameCount = 0;
   try {
     ffprobeParsed = JSON.parse(runFfprobe(demoProofUrl));
     const firstVideoStream = ffprobeParsed.streams?.[0] ?? {};
@@ -301,6 +329,14 @@ try {
     addFailure(`ffmpeg public demo decode failed: ${error instanceof Error ? error.message : "unknown_error"}`);
   }
 
+  try {
+    const frameProbe = JSON.parse(runFfprobeFrameCount(demoProofUrl));
+    decodedFrameCount = Number(frameProbe.streams?.[0]?.nb_read_frames ?? 0);
+    requireProof(decodedFrameCount > 0, "safe demo proof video should decode at least one video frame");
+  } catch (error) {
+    addFailure(`ffprobe frame-count playback proof failed: ${error instanceof Error ? error.message : "unknown_error"}`);
+  }
+
   const forbiddenPublicProbes = [];
   for (const prefix of ["originals", "uploads", "private", "premium", "processing", "moderation-blocked", "unscanned"]) {
     const probeUrl = `https://media.chillywoodstream.com/${prefix}/proof.txt`;
@@ -311,6 +347,18 @@ try {
   }
 
   const proofSummary = {
+    appPlaybackProof: {
+      proofMode: "proof-only-local-app-playback-harness",
+      provider: resolution.provider,
+      cdnEligible: resolution.cdnEligible,
+      publicPlaybackSafe: resolution.publicPlaybackSafe,
+      productionPlaybackSwitched: false,
+      playbackUrlHost: new URL(resolution.url).host,
+      playbackStarted: fullFetch.response.status === 200 && fullFetch.bytes.length > 0,
+      rangePlaybackSupported: rangeFetch.response.status === 206,
+      decoded: decodedFrameCount > 0,
+      decodedFrameCount,
+    },
     demoProof: {
       path: demoProofPath,
       url: resolution.url,
