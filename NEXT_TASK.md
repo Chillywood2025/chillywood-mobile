@@ -19,13 +19,14 @@ Current latest truth:
 - Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
 - Staged resolver support exists in `_lib/mediaDelivery.ts` and is proved by `npm run proof:media-delivery-resolver` plus `npm run proof:media-delivery-public-demo`.
 - `npm run proof:media-delivery-real-demo` proves only the approved City Lights public demo allowlist path through `media.chillywoodstream.com`; production creator-video playback is still unchanged.
+- Telemetry foundation exists only as `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry`; no production telemetry writes, table migrations, billing/payout changes, or playback switches are live.
 - Current VOD production wiring keeps `publicPlaybackSafe: false`, so existing creator-video playback still falls back to signed origin by default.
 - The staged helper returns `media.chillywoodstream.com` only for explicit safe public playback assets under `playback/public/` with Cloudflare custom-domain config and `MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED=true`.
 - Cloudflare R2 custom domains should be treated as public bucket exposure, not a native prefix-limited publish switch. Do not connect `media.chillywoodstream.com` directly to a mixed bucket or the private proof bucket.
 
 Next exact media step:
 1. Optional next proof is a physical installed-app UI route/card only if explicitly requested; the current proof is a resolver-controlled proof-only local app playback harness and does not change normal app UX.
-2. Design and implement media playback telemetry only in a separately approved lane; planned fields include `media_playback_sessions`, `media_delivery_events`, `video_id`, `creator_id`, `viewer_id`, `delivery_provider`, `playback_url_provider`, `quality`, `seconds_watched`, `estimated_bytes`, `cdn_cache_status`, nullable `watch_party_id`, `free_or_premium`, `started_at`, and `ended_at`.
+2. If telemetry proceeds, make it a separately approved limited table-migration/backend-write lane with RLS, redaction, no raw signed URLs, and no billing/payout coupling.
 3. Do not enable public access on `chillywood-media-proof`.
 4. Do not upload real production media or private/original/Premium media to the public-playback proof bucket; the only approved real-media copy there is the City Lights public-safe demo proof object.
 5. Plan HLS/transcoding without claiming it live: future worker queue, ffprobe/ffmpeg, 360p/480p/720p/1080p outputs, master manifest, variant playlists, thumbnails, public-playback bucket upload after approval, and trusted `video_renditions` rows.

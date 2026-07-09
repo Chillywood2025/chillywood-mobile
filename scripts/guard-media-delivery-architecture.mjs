@@ -62,6 +62,7 @@ const mediaStatusCorpus = [architecture, currentState, nextTask].join("\n\n");
 
 const mediaStorage = read("_lib/mediaStorage.ts");
 const mediaDelivery = read("_lib/mediaDelivery.ts");
+const mediaDeliveryTelemetry = read("_lib/mediaDeliveryTelemetry.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const vodQuality = read("_lib/vodQuality.ts");
@@ -73,10 +74,12 @@ const packageJson = read("package.json");
 const mediaDeliveryResolverProof = read("scripts/proof-media-delivery-resolver.mjs");
 const mediaDeliveryPublicDemoProof = read("scripts/proof-media-delivery-public-demo.mjs");
 const mediaDeliveryRealDemoProof = read("scripts/proof-media-delivery-real-demo.mjs");
+const mediaDeliveryTelemetryProof = read("scripts/proof-media-delivery-telemetry.mjs");
 
 const sourceCorpus = [
   mediaStorage,
   mediaDelivery,
+  mediaDeliveryTelemetry,
   mediaStorageFunction,
   creatorVideos,
   vodQuality,
@@ -110,6 +113,8 @@ assertIncludes(architecture, "R2 public-playback proof object status: harmless t
 assertIncludes(architecture, "R2 public exposure status: `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access remains disabled on both buckets; the private bucket has no custom domain.", "R2 public exposure status");
 assertIncludes(architecture, "R2 custom-domain/cache proof status: public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returns HTTP 200 with the expected harmless text from the public-playback proof bucket; generated demo MP4 proof also returns through the same public proof hostname.", "R2 custom-domain/cache proof status");
 assertIncludes(architecture, "Media bandwidth telemetry status: planned foundation only, not live.", "media delivery architecture doc");
+assertIncludes(architecture, "Media delivery telemetry foundation status: source/proof-only helper and proof script exist; no backend writes, database table migrations, production telemetry writes, or production playback changes are live.", "media delivery telemetry foundation status");
+assertIncludes(architecture, "Telemetry proof status: `npm run proof:media-delivery-telemetry` builds CDN demo, signed-origin fallback, blocked playback, and session start/end records, estimates bytes, redacts proof identifiers, and proves no full playback URLs are included.", "media delivery telemetry proof status");
 assertIncludes(architecture, "Cache-HIT proof status: immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` returns `Cache-Control: public, max-age=31536000, immutable`; after a narrow Cloudflare Cache Rule for `/playback/public/proof/cache-hit/*`, repeated fetches returned `cf-cache-status: HIT` with `Age` increasing.", "cache HIT proof status");
 assertIncludes(architecture, "Safe demo media proof status: generated 2-second 320x180 H.264 MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` returns HTTP 200 for full fetch, HTTP 206 for byte range, `Content-Type: video/mp4`, immutable cache metadata, repeated `cf-cache-status: HIT` after warmup, and ffprobe/ffmpeg decode proof.", "safe demo media proof status");
 assertIncludes(architecture, "The proof-only local app playback harness reports `provider=cloudflare_r2_custom_domain`, `publicPlaybackSafe=true`, `cdnEligible=true`, `productionPlaybackSwitched=false`, `playbackStarted=true`, `rangePlaybackSupported=true`, `decoded=true`, and `decodedFrameCount=48`.", "proof-only app playback proof status");
@@ -123,7 +128,8 @@ assertIncludes(architecture, "Resolver staging from commit `22837a5d20c1be66ffeb
 assertIncludes(architecture, "Cache-HIT proof succeeded for immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` under a narrow cache rule.", "cache HIT checkpoint");
 assertIncludes(architecture, "Safe generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` is staged in the separate public-playback proof bucket and plays through `media.chillywoodstream.com` in the proof-only local app playback harness.", "safe demo media checkpoint");
 assertIncludes(architecture, "Real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` is proof-staged and proved through `media.chillywoodstream.com` only under the explicit real-demo allowlist.", "real demo media checkpoint");
-assertIncludes(architecture, "Media bandwidth telemetry implementation remains planned.", "telemetry planned checkpoint");
+assertIncludes(architecture, "Media bandwidth telemetry backend writes, table migrations, CDN log ingestion, and provider reconciliation remain planned.", "telemetry planned checkpoint");
+assertIncludes(architecture, "Media delivery telemetry source/proof foundation exists for future `media_delivery_events` and `media_playback_sessions`; backend writes and table migrations remain planned.", "telemetry foundation checkpoint");
 assertIncludes(architecture, "HLS/transcoding implementation remains planned.", "HLS planned checkpoint");
 assertIncludes(architecture, "Cloudflare R2 is the target origin because the owner already has the domain on Cloudflare.", "Cloudflare R2 domain rationale");
 assertIncludes(architecture, "Keep the R2 bucket private by default.", "R2 private bucket policy");
@@ -203,11 +209,13 @@ assertIncludes(currentState, "private proof bucket `chillywood-media-proof` rema
 assertIncludes(currentState, "Owner-approved `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`", "current state custom-domain boundary");
 assertIncludes(currentState, "Real public-safe City Lights demo MP4 `https://media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` returned HTTP 200, byte-range HTTP 206, `Content-Type: video/mp4`, immutable cache metadata, repeated warm `cf-cache-status: HIT`, H.264 854x480 ffprobe metadata, ffmpeg decode proof, and `decodedFrameCount=1253`.", "current state real demo proof");
 assertIncludes(currentState, "The real demo resolver proof uses `cdnAllowedPublicPlaybackPaths` so only the approved City Lights path resolves to `media.chillywoodstream.com`; non-allowlisted public-safe, private, original, Premium-only, unscanned, moderation-blocked, unsafe, default creator-video, or missing-config assets fall back or block.", "current state real demo allowlist proof");
+assertIncludes(currentState, "Media delivery telemetry foundation is source/proof-only: `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry` build sanitized `media_delivery_events` and `media_playback_sessions` shapes, estimate bytes, redact proof identifiers and URL-like values, and perform no backend writes or production telemetry table writes.", "current state telemetry foundation");
 assertIncludes(currentState, "`_lib/mediaDelivery.ts` still stages disabled-by-default Cloudflare R2 custom-domain resolver support", "current state staged resolver support");
 assertIncludes(currentState, "Current VOD production wiring passes `publicPlaybackSafe: false`, so existing creator-video playback still uses signed-origin fallback.", "current state production playback fallback");
 assertIncludes(nextTask, "Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from `chillywood-media-proof`.", "next task bucket separation");
 assertIncludes(nextTask, "Staged resolver support exists in `_lib/mediaDelivery.ts` and is proved by `npm run proof:media-delivery-resolver` plus `npm run proof:media-delivery-public-demo`.", "next task staged resolver support");
 assertIncludes(nextTask, "`npm run proof:media-delivery-real-demo` proves only the approved City Lights public demo allowlist path through `media.chillywoodstream.com`; production creator-video playback is still unchanged.", "next task real demo proof");
+assertIncludes(nextTask, "Telemetry foundation exists only as `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry`; no production telemetry writes, table migrations, billing/payout changes, or playback switches are live.", "next task telemetry foundation");
 assertIncludes(nextTask, "Current VOD production wiring keeps `publicPlaybackSafe: false`, so existing creator-video playback still falls back to signed origin by default.", "next task production fallback");
 assertIncludes(nextTask, "Do not enable public access on `chillywood-media-proof`.", "private bucket public access prohibition");
 
@@ -395,6 +403,7 @@ const secretScanCorpus = [
   mediaDeliveryResolverProof,
   mediaDeliveryPublicDemoProof,
   mediaDeliveryRealDemoProof,
+  mediaDeliveryTelemetryProof,
   packageJson,
   sourceCorpus,
 ].join("\n");
@@ -438,6 +447,18 @@ assertIncludes(mediaDelivery, "moderation_blocked", "media delivery resolver mod
 assertIncludes(mediaDelivery, "private_asset_blocked", "media delivery resolver private block");
 assertIncludes(mediaDelivery, "premium_requires_token_cdn", "media delivery resolver Premium block");
 assertIncludes(mediaDelivery, "private_cdn_delivery_not_disabled", "media delivery resolver private CDN disabled guard");
+assertIncludes(mediaDeliveryTelemetry, "buildMediaDeliveryEvent", "media delivery telemetry helper event builder");
+assertIncludes(mediaDeliveryTelemetry, "buildMediaPlaybackSessionStart", "media delivery telemetry helper session start builder");
+assertIncludes(mediaDeliveryTelemetry, "buildMediaPlaybackSessionEnd", "media delivery telemetry helper session end builder");
+assertIncludes(mediaDeliveryTelemetry, "estimatePlaybackBytes", "media delivery telemetry helper byte estimator");
+assertIncludes(mediaDeliveryTelemetry, "sanitizeMediaDeliveryTelemetryForProof", "media delivery telemetry helper proof sanitizer");
+assertIncludes(mediaDeliveryTelemetry, "media_delivery_events", "media delivery telemetry event table shape");
+assertIncludes(mediaDeliveryTelemetry, "media_playback_sessions", "media delivery telemetry session table shape");
+assertIncludes(mediaDeliveryTelemetry, "playback_url_provider", "media delivery telemetry playback URL provider field");
+assertIncludes(mediaDeliveryTelemetry, "cdn_cache_status", "media delivery telemetry CDN cache status field");
+assertIncludes(mediaDeliveryTelemetry, "proof_mode", "media delivery telemetry proof mode field");
+assertNotMatches(mediaDeliveryTelemetry, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "media delivery telemetry helper must not perform network or database writes");
+assertNotMatches(mediaDeliveryTelemetry, /\b(?:signedUrl|signed_url|privateSignedUrl|private_signed_url|playbackUrl\??:|playback_url\??:)\b/, "media delivery telemetry helper must not define full playback URL fields");
 assertIncludes(vodQuality, "resolveMediaPlaybackDelivery", "VOD helper uses staged media delivery resolver");
 assertIncludes(vodQuality, "publicPlaybackSafe: false", "production VOD defaults to signed origin fallback");
 assertIncludes(migration, '"quality_label" <> \'original\'', "resolver original exclusion");
@@ -465,6 +486,7 @@ assertIncludes(packageJson, "\"guard:media-delivery-architecture\"", "package gu
 assertIncludes(packageJson, "\"proof:media-delivery-resolver\"", "package proof script");
 assertIncludes(packageJson, "\"proof:media-delivery-public-demo\"", "package public demo proof script");
 assertIncludes(packageJson, "\"proof:media-delivery-real-demo\"", "package real demo proof script");
+assertIncludes(packageJson, "\"proof:media-delivery-telemetry\"", "package telemetry proof script");
 assertIncludes(mediaDeliveryResolverProof, "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4", "media delivery resolver proof demo path");
 assertIncludes(mediaDeliveryResolverProof, "playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4", "media delivery resolver proof real demo path");
 assertIncludes(mediaDeliveryResolverProof, "cdnAllowedPublicPlaybackPaths", "media delivery resolver proof real demo allowlist");
@@ -487,6 +509,22 @@ assertIncludes(mediaDeliveryRealDemoProof, "decodedFrameCount", "real demo media
 assertIncludes(mediaDeliveryRealDemoProof, "ffprobe", "real demo media delivery ffprobe");
 assertIncludes(mediaDeliveryRealDemoProof, "ffmpeg", "real demo media delivery ffmpeg");
 assertIncludes(mediaDeliveryRealDemoProof, "default production creator-video path", "real demo media delivery production fallback");
+assertIncludes(mediaDeliveryTelemetryProof, "buildMediaDeliveryEvent", "media delivery telemetry proof event builder");
+assertIncludes(mediaDeliveryTelemetryProof, "buildMediaPlaybackSessionStart", "media delivery telemetry proof session start");
+assertIncludes(mediaDeliveryTelemetryProof, "buildMediaPlaybackSessionEnd", "media delivery telemetry proof session end");
+assertIncludes(mediaDeliveryTelemetryProof, "estimatePlaybackBytes", "media delivery telemetry proof byte estimator");
+assertIncludes(mediaDeliveryTelemetryProof, "sanitizeMediaDeliveryTelemetryForProof", "media delivery telemetry proof sanitizer");
+assertIncludes(mediaDeliveryTelemetryProof, "productionTelemetryWritesLive: false", "media delivery telemetry proof no production writes");
+assertIncludes(mediaDeliveryTelemetryProof, "backendWritesImplemented: false", "media delivery telemetry proof no backend writes");
+assertIncludes(mediaDeliveryTelemetryProof, "tablesCreated: false", "media delivery telemetry proof no table migration");
+assertIncludes(mediaDeliveryTelemetryProof, "assertNoRawPrivateProofText", "media delivery telemetry proof raw identifier guard");
+assertIncludes(mediaDeliveryTelemetryProof, "assertNoFullUrlFields", "media delivery telemetry proof no full URL guard");
+assertIncludes(mediaDeliveryTelemetryProof, "redacted:user", "media delivery telemetry proof user redaction");
+assertIncludes(mediaDeliveryTelemetryProof, "redacted:creator", "media delivery telemetry proof creator redaction");
+assertIncludes(mediaDeliveryTelemetryProof, "redacted:watch_party", "media delivery telemetry proof Watch-Party redaction");
+assertIncludes(mediaDeliveryTelemetryProof, "premium_requires_token_cdn", "media delivery telemetry proof blocked Premium/private path");
+assertIncludes(mediaDeliveryTelemetryProof, "cloudflare_r2_custom_domain", "media delivery telemetry proof CDN demo provider");
+assertIncludes(mediaDeliveryTelemetryProof, "origin_signed_direct", "media delivery telemetry proof signed-origin fallback provider");
 
 const loadMediaDeliveryHelper = () => {
   const outDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-delivery-guard-"));
@@ -742,7 +780,119 @@ const assertMediaDeliveryHelperPolicy = async () => {
   }
 };
 
+const loadMediaDeliveryTelemetryHelper = () => {
+  const outDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-delivery-telemetry-guard-"));
+  try {
+    const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+    execFileSync(
+      npxCommand,
+      [
+        "tsc",
+        "_lib/mediaDeliveryTelemetry.ts",
+        "--target",
+        "ES2020",
+        "--module",
+        "commonjs",
+        "--moduleResolution",
+        "node",
+        "--outDir",
+        outDir,
+        "--strict",
+        "--skipLibCheck",
+      ],
+      {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+
+    const requireFromGuard = createRequire(import.meta.url);
+    for (const candidate of [
+      path.join(outDir, "mediaDeliveryTelemetry.js"),
+      path.join(outDir, "_lib", "mediaDeliveryTelemetry.js"),
+    ]) {
+      try {
+        return {
+          helper: requireFromGuard(candidate),
+          cleanup: () => rmSync(outDir, { recursive: true, force: true }),
+        };
+      } catch {
+        // Try the next compiler output shape.
+      }
+    }
+    throw new Error("compiled telemetry helper missing");
+  } catch (error) {
+    rmSync(outDir, { recursive: true, force: true });
+    throw error;
+  }
+};
+
+const assertMediaDeliveryTelemetryHelperPolicy = () => {
+  let loaded;
+  try {
+    loaded = loadMediaDeliveryTelemetryHelper();
+  } catch (error) {
+    fail(`media delivery telemetry helper must compile for guard proof: ${error instanceof Error ? error.message : "unknown_error"}`);
+    return;
+  }
+
+  try {
+    const event = loaded.helper.buildMediaDeliveryEvent({
+      id: "guard_media_delivery_event",
+      userId: "raw_user_private_guard",
+      videoId: "guard_video",
+      creatorId: "raw_creator_private_guard",
+      sourceType: "creator_video",
+      sourceId: "guard_video",
+      deliveryProvider: "cloudflare_r2_custom_domain",
+      playbackUrlProvider: "cloudflare_r2_custom_domain",
+      mediaDeliveryProvider: "cloudflare_r2_custom_domain",
+      qualityLabel: "480p",
+      publicPlaybackSafe: true,
+      cdnEligible: true,
+      fallbackUsed: false,
+      watchPartyId: "raw_watch_party_private_guard",
+      startedAt: "2026-07-09T01:00:00.000Z",
+      endedAt: "2026-07-09T01:00:10.000Z",
+      contentLengthBytes: 1000,
+      durationSeconds: 20,
+      proofMode: true,
+      createdAt: "2026-07-09T01:00:10.000Z",
+    });
+
+    if (event.table_name !== "media_delivery_events" || event.estimated_bytes !== 500) {
+      fail("media delivery telemetry helper must build event table shape and estimate playback bytes");
+    }
+
+    const sanitized = loaded.helper.sanitizeMediaDeliveryTelemetryForProof({
+      event,
+      privateSignedUrl: "https://private-origin.example/source.mp4?X-Amz-Signature=redactedproof",
+    });
+    const sanitizedText = JSON.stringify(sanitized);
+    for (const rawNeedle of [
+      "raw_user_private_guard",
+      "raw_creator_private_guard",
+      "raw_watch_party_private_guard",
+      "private-origin.example",
+      "X-Amz-Signature",
+    ]) {
+      if (sanitizedText.includes(rawNeedle)) {
+        fail(`media delivery telemetry sanitizer must not expose ${rawNeedle}`);
+      }
+    }
+    for (const redactedNeedle of ["redacted:user", "redacted:creator", "redacted:watch_party", "redacted:url"]) {
+      if (!sanitizedText.includes(redactedNeedle)) {
+        fail(`media delivery telemetry sanitizer must include ${redactedNeedle}`);
+      }
+    }
+  } finally {
+    loaded.cleanup();
+  }
+};
+
 await assertMediaDeliveryHelperPolicy();
+assertMediaDeliveryTelemetryHelperPolicy();
 
 if (failures.length) {
   console.error("Media delivery architecture guard failed:");

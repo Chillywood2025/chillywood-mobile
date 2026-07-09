@@ -108,6 +108,10 @@ R2 custom-domain/cache proof status: public proof URL `https://media.chillywoods
 
 Media bandwidth telemetry status: planned foundation only, not live.
 
+Media delivery telemetry foundation status: source/proof-only helper and proof script exist; no backend writes, database table migrations, production telemetry writes, or production playback changes are live.
+
+Telemetry proof status: `npm run proof:media-delivery-telemetry` builds CDN demo, signed-origin fallback, blocked playback, and session start/end records, estimates bytes, redacts proof identifiers, and proves no full playback URLs are included.
+
 Cache-HIT proof status: immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` returns `Cache-Control: public, max-age=31536000, immutable`; after a narrow Cloudflare Cache Rule for `/playback/public/proof/cache-hit/*`, repeated fetches returned `cf-cache-status: HIT` with `Age` increasing. Cache behavior is proved for this proof prefix only; egress or cost savings are not claimed without media bandwidth telemetry.
 
 Safe demo media proof status: generated 2-second 320x180 H.264 MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` returns HTTP 200 for full fetch, HTTP 206 for byte range, `Content-Type: video/mp4`, immutable cache metadata, repeated `cf-cache-status: HIT` after warmup, and ffprobe/ffmpeg decode proof. The proof-only local app playback harness reports `provider=cloudflare_r2_custom_domain`, `publicPlaybackSafe=true`, `cdnEligible=true`, `productionPlaybackSwitched=false`, `playbackStarted=true`, `rangePlaybackSupported=true`, `decoded=true`, and `decodedFrameCount=48`. This is not production creator media and HLS/transcoding is still not live.
@@ -138,11 +142,12 @@ Completed:
 - Safe generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` is staged in the separate public-playback proof bucket and plays through `media.chillywoodstream.com` in the proof-only local app playback harness.
 - Real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` is proof-staged and proved through `media.chillywoodstream.com` only under the explicit real-demo allowlist.
 - Demo-only resolver eligibility is proved by local proof scripts for explicit `publicPlaybackSafe` assets only.
+- Media delivery telemetry source/proof foundation exists for future `media_delivery_events` and `media_playback_sessions`; backend writes and table migrations remain planned.
 
 Planned:
 
 - Physical installed-app UI playback proof for future approved demo-media wiring remains optional and pending; the current proof is a resolver-controlled proof-only local app playback harness, not production UI.
-- Media bandwidth telemetry implementation remains planned.
+- Media bandwidth telemetry backend writes, table migrations, CDN log ingestion, and provider reconciliation remain planned.
 - HLS/transcoding implementation remains planned.
 - Premium/private signed CDN access remains planned.
 - Production media migration remains planned and requires explicit approval.
@@ -306,14 +311,18 @@ Planned:
 
 ### Media Bandwidth Telemetry
 
-- Telemetry is planned only. No `media_playback_sessions` or `media_delivery_events` implementation is live in this lane.
-- Planned `media_playback_sessions` fields: `id`, `video_id`, `creator_id`, `viewer_id`, `watch_party_id` nullable, `free_or_premium`, `delivery_provider`, `playback_url_provider`, `quality`, `started_at`, `ended_at`, `seconds_watched`, `estimated_bytes`, and `created_at`.
-- Planned `media_delivery_events` fields: `id`, `playback_session_id`, `video_id`, `creator_id`, `viewer_id`, `delivery_provider`, `playback_url_provider`, `quality`, `event_type`, `estimated_bytes`, `cdn_cache_status`, `http_status`, `watch_party_id` nullable, and `created_at`.
+- Telemetry foundation is source/proof-only. No production telemetry table writes, backend inserts, migrations, CDN log ingestion, provider reconciliation, billing changes, payout changes, or production playback changes are live in this lane.
+- `_lib/mediaDeliveryTelemetry.ts` defines pure helpers for future `media_delivery_events` and `media_playback_sessions` record shapes: `buildMediaDeliveryEvent(...)`, `buildMediaPlaybackSessionStart(...)`, `buildMediaPlaybackSessionEnd(...)`, `estimatePlaybackBytes(...)`, and `sanitizeMediaDeliveryTelemetryForProof(...)`.
+- `scripts/proof-media-delivery-telemetry.mjs` proves the helper without network/database writes. It builds a Cloudflare R2 custom-domain demo event, a signed-origin fallback event, a blocked private/original/Premium-style event, nullable and non-null Watch-Party session shapes, byte estimates, and sanitized proof output.
+- Planned `media_playback_sessions` fields: `id`, `user_id` nullable/redacted in proof, `video_id`, `creator_id` nullable, `source_type`, `source_id`, `delivery_provider`, `playback_url_provider`, `media_delivery_provider`, `quality_label`, `rendition_label` nullable, `public_playback_safe`, `cdn_eligible`, `fallback_used`, `blocked_reason` nullable, `watch_party_id` nullable, `is_premium_user` nullable, `started_at`, `ended_at` nullable, `seconds_watched` nullable, `estimated_bytes` nullable, `cdn_cache_status` nullable, `client_platform` nullable, `app_version` nullable, and `proof_mode`.
+- Planned `media_delivery_events` fields: `id`, `user_id` nullable/redacted in proof, `video_id`, `creator_id` nullable, `source_type`, `source_id`, `delivery_provider`, `playback_url_provider`, `media_delivery_provider`, `quality_label`, `rendition_label` nullable, `public_playback_safe`, `cdn_eligible`, `fallback_used`, `blocked_reason` nullable, `watch_party_id` nullable, `is_premium_user` nullable, `started_at`, `ended_at` nullable, `seconds_watched` nullable, `estimated_bytes` nullable, `cdn_cache_status` nullable, `client_platform` nullable, `app_version` nullable, and `proof_mode`.
+- The telemetry helper intentionally does not accept or emit full playback URLs, signed origin URLs, R2 signed URLs, or CDN token material. It stores provider labels such as `playback_url_provider`, not URL strings.
+- Proof output must redact raw `user_id`, `creator_id`, and `watch_party_id` values and scrub URL-like values before console output.
 - Record signed playback grants with video id, owner id, viewer id where available, quality, CDN/provider, token TTL, and request id.
 - Ingest Cloudflare cache/R2 logs or provider usage exports to get bytes served by video id, rendition, owner id, status code, cache hit/miss, and day/hour.
 - Reconcile internal grant counts with provider/CDN byte reports.
 - Roll up media egress by creator, video, quality, provider, and day.
-- Planned telemetry can support quota, abuse detection, cost controls, and owner/admin read models after implementation.
+- Planned backend telemetry can support quota, abuse detection, cost controls, and owner/admin read models after implementation.
 - Do not expose private user ids in proof docs; use redacted ids or aggregate proof when telemetry is later implemented.
 - This lane does not touch billing, payout, or cashout.
 - Do not claim real scaled media delivery proof until playback bytes are measured from CDN/provider logs or equivalent trusted telemetry.

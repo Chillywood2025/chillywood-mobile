@@ -214,6 +214,7 @@
     "proof:media-delivery-resolver": "node ./scripts/proof-media-delivery-resolver.mjs",
     "proof:media-delivery-public-demo": "node ./scripts/proof-media-delivery-public-demo.mjs",
     "proof:media-delivery-real-demo": "node ./scripts/proof-media-delivery-real-demo.mjs",
+    "proof:media-delivery-telemetry": "node ./scripts/proof-media-delivery-telemetry.mjs",
     "guard:media-delivery-architecture": "node ./scripts/guard-media-delivery-architecture.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs && npm run guard:live-stage-contract && npm run guard:live-stage-approved-seats",
