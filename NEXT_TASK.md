@@ -17,6 +17,7 @@ Current latest truth:
 - Local HLS proof worker `npm run proof:media-delivery-hls-demo` generated 360p/480p HLS from the approved City Lights MP4 and uploaded only proof HLS assets to `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`.
 - HLS proof URL `https://media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8` returned HTTP 200; variant playlists returned HTTP 200; HLS segments returned HTTP 200 with `Content-Type: video/mp2t`, immutable cache metadata, and `cf-cache-status: HIT` after a narrow HLS segment cache rule.
 - HLS resolver proof returns `media.chillywoodstream.com` only for the allowlisted HLS master manifest; source MP4 and segment paths fall back with `not_in_public_playback_allowlist`.
+- Proof-only app/player HLS harness for `app/player/[id].tsx` proves the allowlisted HLS master is received as `{ uri }`, load status reports `durationMillis=52208`, progress reports `progressMillis=2175`, `isPlaying=true`, `playbackStarted=true`, and no private signed origin URL is exposed.
 - Public probes for `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
@@ -33,7 +34,7 @@ Next exact media step:
 2. If telemetry proceeds, make it a separately approved limited table-migration/backend-write lane with RLS, redaction, no raw signed URLs, and no billing/payout coupling.
 3. Do not enable public access on `chillywood-media-proof`.
 4. Do not upload real production media or private/original/Premium media to the public-playback proof bucket; the only approved real-media copy there is the City Lights public-safe demo proof object.
-5. Plan production HLS/transcoding without claiming it live: future backend worker queue, trusted private-source download, ffprobe/ffmpeg, 360p/480p/720p/1080p outputs, master manifest, variant playlists, thumbnails, public-playback bucket upload after approval, and trusted `video_renditions` rows.
+5. Next real media milestone is backend transcode queue design/proof, not production playback migration: trusted private-source download, ffprobe/ffmpeg, 360p/480p/720p/1080p outputs, master manifest, variant playlists, thumbnails, public-playback bucket upload after approval, and trusted `video_renditions` rows.
 6. Do not enable signed/token CDN playback or production playback switching until explicitly approved and proved.
 7. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
 

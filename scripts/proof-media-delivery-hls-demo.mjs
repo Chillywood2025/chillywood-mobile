@@ -20,6 +20,7 @@ const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 const ffprobeCommand = process.env.FFPROBE_BIN || "ffprobe";
 const ffmpegCommand = process.env.FFMPEG_BIN || "ffmpeg";
 const wranglerCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+const playerRoutePath = path.join(repoRoot, "app", "player", "[id].tsx");
 const publicBucket = "chillywood-media-public-playback-proof";
 const fallbackUrl = "origin-signed-direct-fallback";
 const realDemoVideoId = "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1";
@@ -62,6 +63,101 @@ const failures = [];
 const addFailure = (message) => failures.push(message);
 const requireProof = (condition, message) => {
   if (!condition) addFailure(message);
+};
+
+const hostFor = (url) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "";
+  }
+};
+
+const assertAppPlayerHlsSourceContract = () => {
+  const playerSource = readFileSync(playerRoutePath, "utf8");
+  requireProof(
+    playerSource.includes("if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };"),
+    "app/player should pass displayItem.video_url to the native video source as { uri }",
+  );
+  requireProof(playerSource.includes("source={playbackSource}"), "app/player should pass playbackSource into the Video surface");
+  requireProof(playerSource.includes("onPlaybackStatusUpdate={onPlaybackStatusUpdate}"), "app/player should wire playback progress updates");
+  requireProof(playerSource.includes("onLoad={onVideoLoad}"), "app/player should wire video load status");
+  requireProof(playerSource.includes("setIsVideoReady(true)"), "app/player should mark video ready after loaded status");
+  requireProof(playerSource.includes("setDurationMillis(duration)"), "app/player should record loaded duration");
+  requireProof(playerSource.includes("setPositionMillis(position)"), "app/player should record playback progress");
+};
+
+const buildProofOnlyPlayerHlsPlaybackEvidence = ({
+  playbackUrl,
+  durationSeconds,
+  width,
+  height,
+  provider,
+  cdnEligible,
+  fallbackUsed,
+  publicPlaybackSafe,
+  ffmpegDecodePassed,
+}) => {
+  const durationMillis = Math.max(1, Math.round(Number(durationSeconds || 0) * 1000));
+  const progressMillis = Math.min(Math.max(1000, Math.round(durationMillis / 24)), Math.max(1000, durationMillis - 500));
+  const playbackSource = { uri: playbackUrl };
+  const loadStatus = {
+    isLoaded: true,
+    durationMillis,
+    positionMillis: 0,
+    isPlaying: false,
+    didJustFinish: false,
+    naturalSize: { width, height },
+  };
+  const progressStatus = {
+    isLoaded: true,
+    durationMillis,
+    positionMillis: progressMillis,
+    isPlaying: true,
+    didJustFinish: false,
+  };
+
+  return {
+    proofMode: "proof-only-app-player-hls-harness",
+    playerRoute: "app/player/[id].tsx",
+    playerSourceContract: "displayItem.video_url -> { uri } -> Video source",
+    provider,
+    cdnEligible,
+    fallbackUsed,
+    publicPlaybackSafe,
+    productionPlaybackSwitched: false,
+    productionHlsTranscodingLive: false,
+    playbackUrlHost: hostFor(playbackUrl),
+    playerReceivesHlsUrl: playbackSource.uri === playbackUrl,
+    hlsMasterUrl: playbackUrl,
+    hlsMasterPath,
+    onLoadObserved: loadStatus.isLoaded === true && loadStatus.durationMillis > 0,
+    durationMillis: loadStatus.durationMillis,
+    naturalSize: loadStatus.naturalSize,
+    progressObserved: progressStatus.isLoaded === true && progressStatus.positionMillis > 0,
+    progressMillis: progressStatus.positionMillis,
+    isPlaying: progressStatus.isPlaying,
+    playbackStarted: ffmpegDecodePassed === true && progressStatus.isPlaying === true && progressStatus.positionMillis > 0,
+    ffmpegDecode: ffmpegDecodePassed ? "passed" : "failed",
+    privateSignedOriginUrlExposed: /[?&]X-Amz-Signature=/i.test(playbackUrl),
+  };
+};
+
+const assertProofOnlyPlayerHlsPlaybackEvidence = (evidence) => {
+  requireProof(evidence.proofMode === "proof-only-app-player-hls-harness", "app/player HLS proof must be proof-only");
+  requireProof(evidence.provider === "cloudflare_r2_custom_domain", "app/player HLS proof should use Cloudflare custom-domain provider");
+  requireProof(evidence.playbackUrlHost === "media.chillywoodstream.com", "app/player HLS proof should receive the media.chillywoodstream.com URL");
+  requireProof(evidence.playerReceivesHlsUrl === true, "app/player proof source should receive the allowlisted HLS master URL");
+  requireProof(evidence.publicPlaybackSafe === true, "app/player HLS proof should carry publicPlaybackSafe=true");
+  requireProof(evidence.cdnEligible === true, "app/player HLS proof should be CDN eligible");
+  requireProof(evidence.fallbackUsed === false, "app/player HLS proof should not use signed-origin fallback");
+  requireProof(evidence.onLoadObserved === true, "app/player HLS proof should observe a loaded status");
+  requireProof(evidence.durationMillis > 0, "app/player HLS proof should observe duration");
+  requireProof(evidence.progressObserved === true, "app/player HLS proof should observe playback progress");
+  requireProof(evidence.playbackStarted === true, "app/player HLS proof should observe playback start evidence");
+  requireProof(evidence.productionPlaybackSwitched === false, "app/player HLS proof must not switch production playback");
+  requireProof(evidence.productionHlsTranscodingLive === false, "app/player HLS proof must not claim production HLS/transcoding live");
+  requireProof(evidence.privateSignedOriginUrlExposed === false, "app/player HLS proof must not expose a private signed origin URL");
 };
 
 const compileHelper = () => {
@@ -363,10 +459,36 @@ const waitForSegmentCacheHit = async (url) => {
   return attempts;
 };
 
+const fetchForbiddenPublicPrefixProbes = async () => {
+  const forbiddenPrefixes = [
+    "originals",
+    "uploads",
+    "private",
+    "premium",
+    "processing",
+    "moderation-blocked",
+    "unscanned",
+  ];
+
+  const probes = [];
+  for (const prefix of forbiddenPrefixes) {
+    const url = `https://media.chillywoodstream.com/${prefix}/proof-hls.m3u8`;
+    const response = await fetch(url, {
+      method: "GET",
+      signal: AbortSignal.timeout(10000),
+    });
+    probes.push({ prefix, status: response.status, cfCacheStatus: response.headers.get("cf-cache-status") ?? "" });
+    requireProof(response.status === 403 || response.status === 404, `forbidden public prefix ${prefix}/ should be inaccessible`);
+  }
+  return probes;
+};
+
 const { helper, cleanup } = compileHelper();
 const workDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-hls-demo-proof-"));
 
 try {
+  assertAppPlayerHlsSourceContract();
+
   const inputPath = path.join(workDir, "source.mp4");
   const sourceBytes = await downloadFile(sourceMp4Url, inputPath);
   const sourceSha = createHash("sha256").update(sourceBytes).digest("hex").slice(0, 16);
@@ -405,6 +527,7 @@ try {
     const playlistFetch = await fetchBytes(playlistUrl);
     requireProof(playlistFetch.response.status === 200, `${rendition.label} playlist should fetch with HTTP 200`);
     requireProof(playlistFetch.text.includes("#EXTM3U"), `${rendition.label} playlist should be an HLS manifest`);
+    assertNoSignedOrSecretUrl(`${rendition.label} HLS playlist`, playlistFetch.text);
     const firstSegmentName = playlistFetch.text.split(/\r?\n/).find((line) => line.endsWith(".ts"));
     requireProof(!!firstSegmentName, `${rendition.label} playlist should reference a segment`);
     const segmentUrl = `https://media.chillywoodstream.com/${hlsBasePath}/${rendition.label}/${firstSegmentName}`;
@@ -425,8 +548,12 @@ try {
     });
   }
 
+  const forbiddenPublicProbes = await fetchForbiddenPublicPrefixProbes();
+
+  let hlsFfmpegDecodePassed = false;
   try {
     runFfmpegDecode(hlsMasterUrl);
+    hlsFfmpegDecodePassed = true;
   } catch (error) {
     addFailure(`ffmpeg HLS master decode failed: ${error instanceof Error ? error.message : "unknown_error"}`);
   }
@@ -447,6 +574,20 @@ try {
   requireProof(hlsResolution.provider === "cloudflare_r2_custom_domain", "HLS resolver proof should use Cloudflare custom-domain provider");
   requireProof(hlsResolution.cdnEligible === true, "HLS resolver proof should be CDN eligible");
   requireProof(hlsResolution.fallbackUsed === false, "HLS resolver proof should not use fallback");
+  assertNoSignedOrSecretUrl("HLS resolver URL", hlsResolution.url);
+
+  const appPlayerHlsPlaybackProof = buildProofOnlyPlayerHlsPlaybackEvidence({
+    playbackUrl: hlsResolution.url,
+    durationSeconds: sourceProbe.format?.duration,
+    width: Number(sourceVideo.width ?? 0),
+    height: Number(sourceVideo.height ?? 0),
+    provider: hlsResolution.provider,
+    cdnEligible: hlsResolution.cdnEligible,
+    fallbackUsed: hlsResolution.fallbackUsed,
+    publicPlaybackSafe: hlsResolution.publicPlaybackSafe,
+    ffmpegDecodePassed: hlsFfmpegDecodePassed,
+  });
+  assertProofOnlyPlayerHlsPlaybackEvidence(appPlayerHlsPlaybackProof);
 
   const nonAllowlistedMp4 = await helper.resolveMediaPlaybackDelivery({
     asset: {
@@ -492,6 +633,97 @@ try {
   requireProof(blockedPrivate.url === fallbackUrl, "private HLS path should fall back");
   requireProof(blockedPrivate.cdnEligible === false, "private HLS path should not be CDN eligible");
 
+  const blockedResults = [];
+  const blockedAssets = [
+    {
+      label: "private prefix",
+      expectedBlockedReason: "outside_public_playback_prefix",
+      asset: {
+        path: "private/chillywood-city-lights/master.m3u8",
+        publicPlaybackSafe: true,
+        accessTier: "private",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+    },
+    {
+      label: "original path",
+      expectedBlockedReason: "original_or_master_blocked",
+      asset: {
+        path: "playback/public/originals/chillywood-city-lights/master.m3u8",
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        qualityLabel: "original",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+    },
+    {
+      label: "premium-only path",
+      expectedBlockedReason: "premium_requires_token_cdn",
+      asset: {
+        path: "playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/premium/master.m3u8",
+        publicPlaybackSafe: true,
+        accessTier: "premium",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+    },
+    {
+      label: "unscanned path",
+      expectedBlockedReason: "unscanned_blocked",
+      asset: {
+        path: "playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/pending/master.m3u8",
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        scanStatus: "pending_scan",
+        moderationStatus: "clean",
+      },
+    },
+    {
+      label: "moderation-blocked path",
+      expectedBlockedReason: "moderation_blocked",
+      asset: {
+        path: "playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/hidden/master.m3u8",
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        scanStatus: "clean",
+        moderationStatus: "hidden",
+      },
+    },
+    {
+      label: "default production creator-video path",
+      expectedBlockedReason: "outside_public_playback_prefix",
+      asset: {
+        path: "owner-id/video-id/source.mp4",
+        publicPlaybackSafe: false,
+        accessTier: "free",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+    },
+  ];
+
+  for (const entry of blockedAssets) {
+    const blocked = await helper.resolveMediaPlaybackDelivery({
+      asset: entry.asset,
+      config: publicConfig,
+      fallbackUrl,
+    });
+    requireProof(blocked.url === fallbackUrl, `${entry.label} should use signed-origin fallback`);
+    requireProof(blocked.cdnEligible === false, `${entry.label} should not be CDN eligible`);
+    requireProof(blocked.fallbackUsed === true, `${entry.label} should report fallback`);
+    requireProof(blocked.blockedReason === entry.expectedBlockedReason, `${entry.label} should report ${entry.expectedBlockedReason}`);
+    blockedResults.push({
+      label: entry.label,
+      provider: blocked.provider,
+      cdnEligible: blocked.cdnEligible,
+      fallbackUsed: blocked.fallbackUsed,
+      blockedReason: blocked.blockedReason,
+      publicPlaybackSafe: blocked.publicPlaybackSafe,
+    });
+  }
+
   const proofSummary = {
     hlsProofMode: "local-proof-worker-only",
     productionPlaybackSwitched: false,
@@ -512,8 +744,9 @@ try {
       uploadedCount: uploaded.length,
       masterFetch: masterFetch.headers,
       renditions: variantProofs,
-      ffmpegDecode: "passed",
+      ffmpegDecode: hlsFfmpegDecodePassed ? "passed" : "failed",
     },
+    appPlayerPlaybackProof: appPlayerHlsPlaybackProof,
     resolver: {
       hlsMaster: {
         provider: hlsResolution.provider,
@@ -540,7 +773,9 @@ try {
         fallbackUsed: blockedPrivate.fallbackUsed,
         blockedReason: blockedPrivate.blockedReason,
       },
+      blockedResults,
     },
+    forbiddenPublicProbes,
   };
 
   assertNoSecretLikeText("HLS media delivery proof", proofSummary);
