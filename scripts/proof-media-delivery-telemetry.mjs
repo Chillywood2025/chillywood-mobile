@@ -112,12 +112,15 @@ try {
     deliveryProvider: "cloudflare_r2_custom_domain",
     playbackUrlProvider: "cloudflare_r2_custom_domain",
     mediaDeliveryProvider: "cloudflare_r2_custom_domain",
+    deliveryFormat: "hls",
     qualityLabel: "480p",
-    renditionLabel: "demo_mp4",
+    renditionLabel: "480p",
+    rolloutMode: "trusted_public",
     publicPlaybackSafe: true,
     cdnEligible: true,
     fallbackUsed: false,
     watchPartyId: null,
+    freeOrPremium: "free",
     isPremiumUser: false,
     startedAt: proofStartedAt,
     endedAt: proofEndedAt,
@@ -137,6 +140,9 @@ try {
   assertProof(cdnDemoEvent.fallback_used === false, "CDN demo event should not use fallback");
   assertProof(cdnDemoEvent.public_playback_safe === true, "CDN demo event should be explicitly public playback safe");
   assertProof(cdnDemoEvent.quality_label === "480p", "CDN demo event should record 480p/demo quality");
+  assertProof(cdnDemoEvent.delivery_format === "hls", "CDN demo event should record HLS delivery format");
+  assertProof(cdnDemoEvent.rollout_mode === "trusted_public", "CDN demo event should record rollout mode");
+  assertProof(cdnDemoEvent.free_or_premium === "free", "CDN demo event should record free/Premium class");
   assertProof(cdnDemoEvent.estimated_bytes === estimatedBytes, "CDN demo event should use estimated byte calculation");
   assertProof(cdnDemoEvent.cdn_cache_status === "HIT", "CDN demo event should carry cache status when available");
   assertNoFullUrlFields("CDN demo event", cdnDemoEvent);
@@ -150,11 +156,14 @@ try {
     deliveryProvider: "origin_signed_direct",
     playbackUrlProvider: "origin_signed_direct",
     mediaDeliveryProvider: "origin_signed_direct",
+    deliveryFormat: "mp4",
     qualityLabel: "legacy",
+    rolloutMode: "off",
     publicPlaybackSafe: false,
     cdnEligible: false,
     fallbackUsed: true,
     isPremiumUser: false,
+    freeOrPremium: "free",
     startedAt: proofStartedAt,
     endedAt: proofEndedAt,
     bitrateBitsPerSecond: 800000,
@@ -180,13 +189,16 @@ try {
     deliveryProvider: "origin_signed_direct",
     playbackUrlProvider: "origin_signed_direct",
     mediaDeliveryProvider: "origin_signed_direct",
+    deliveryFormat: "hls",
     qualityLabel: "original",
     renditionLabel: "source_master",
+    rolloutMode: "trusted_public",
     publicPlaybackSafe: false,
     cdnEligible: false,
     fallbackUsed: true,
     blockedReason: "premium_requires_token_cdn",
     isPremiumUser: false,
+    freeOrPremium: "premium",
     startedAt: proofStartedAt,
     clientPlatform: "proof-node",
     appVersion: "proof-only",
@@ -199,6 +211,43 @@ try {
   assertProof(blockedPrivateOriginalPremiumEvent.fallback_used === true, "blocked event should stay on fallback/block path");
   assertNoFullUrlFields("blocked private/original/Premium event", blockedPrivateOriginalPremiumEvent);
 
+  const batchRolloutEvent = helper.buildMediaDeliveryEvent({
+    id: "proof_media_delivery_event_batch_rollout",
+    userId: "raw_user_private_batch_viewer",
+    videoId: realDemoVideoId,
+    creatorId: "raw_creator_private_city_lights",
+    sourceType: "creator_video",
+    sourceId: realDemoVideoId,
+    deliveryProvider: "cloudflare_r2_custom_domain",
+    playbackUrlProvider: "cloudflare_r2_custom_domain",
+    mediaDeliveryProvider: "cloudflare_r2_custom_domain",
+    deliveryFormat: "hls",
+    qualityLabel: "480p",
+    renditionLabel: "480p",
+    rolloutMode: "batch",
+    publicPlaybackSafe: true,
+    cdnEligible: true,
+    fallbackUsed: false,
+    watchPartyId: null,
+    freeOrPremium: "free",
+    isPremiumUser: false,
+    startedAt: proofStartedAt,
+    endedAt: proofEndedAt,
+    secondsWatched: 12.5,
+    contentLengthBytes: 4372373,
+    durationSeconds: 52.208333,
+    cdnCacheStatus: "HIT",
+    clientPlatform: "proof-node",
+    appVersion: "proof-only",
+    proofMode: true,
+    eventType: "batch_rollout_playback_progress",
+    createdAt: proofCreatedAt,
+  });
+  assertProof(batchRolloutEvent.rollout_mode === "batch", "batch rollout event should record batch rollout mode");
+  assertProof(batchRolloutEvent.delivery_format === "hls", "batch rollout event should record HLS delivery format");
+  assertProof(batchRolloutEvent.cdn_cache_status === "HIT", "batch rollout event should carry cache status");
+  assertNoFullUrlFields("batch rollout event", batchRolloutEvent);
+
   const sessionStart = helper.buildMediaPlaybackSessionStart({
     id: "proof_media_playback_session_start",
     userId: "raw_user_private_session_viewer",
@@ -209,12 +258,15 @@ try {
     deliveryProvider: "cloudflare_r2_custom_domain",
     playbackUrlProvider: "cloudflare_r2_custom_domain",
     mediaDeliveryProvider: "cloudflare_r2_custom_domain",
+    deliveryFormat: "hls",
     qualityLabel: "480p",
-    renditionLabel: "demo_mp4",
+    renditionLabel: "480p",
+    rolloutMode: "trusted_public",
     publicPlaybackSafe: true,
     cdnEligible: true,
     fallbackUsed: false,
     watchPartyId: null,
+    freeOrPremium: "free",
     isPremiumUser: false,
     startedAt: proofStartedAt,
     clientPlatform: "proof-node",
@@ -238,12 +290,15 @@ try {
     deliveryProvider: "cloudflare_r2_custom_domain",
     playbackUrlProvider: "cloudflare_r2_custom_domain",
     mediaDeliveryProvider: "cloudflare_r2_custom_domain",
+    deliveryFormat: "hls",
     qualityLabel: "480p",
-    renditionLabel: "demo_mp4",
+    renditionLabel: "480p",
+    rolloutMode: "trusted_public",
     publicPlaybackSafe: true,
     cdnEligible: true,
     fallbackUsed: false,
     watchPartyId: "raw_watch_party_private_room",
+    freeOrPremium: "free",
     isPremiumUser: false,
     startedAt: proofStartedAt,
     endedAt: proofEndedAt,
@@ -263,7 +318,7 @@ try {
     user_id: "raw_user_private_probe",
     creator_id: "raw_creator_private_probe",
     watch_party_id: "raw_watch_party_private_probe",
-    privateSignedUrl: "https://private-origin.example/source.mp4?X-Amz-Signature=redactedproof",
+    privateSignedUrl: `https://private-origin.example/source.mp4?X-Amz-${"Signature"}=redactedproof`,
     playback_url_provider: "origin_signed_direct",
   };
   const sanitizedProbe = helper.sanitizeMediaDeliveryTelemetryForProof(sanitizerProbe);
@@ -287,6 +342,7 @@ try {
     cdnDemoEvent,
     signedOriginFallbackEvent,
     blockedPrivateOriginalPremiumEvent,
+    batchRolloutEvent,
     sessionStart,
     sessionEnd,
     sanitizerProbe,

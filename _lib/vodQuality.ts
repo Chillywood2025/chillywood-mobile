@@ -9,6 +9,10 @@ import {
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { resolveMediaPlaybackDelivery } from "./mediaDelivery";
+import {
+  resolveTrustedRenditionPlaybackSource,
+  type AuditedMediaRenditionForPlayback,
+} from "./mediaPlaybackCdnEligibility";
 import { supabase } from "./supabase";
 
 export const VOD_RENDITION_QUALITY_LABELS = ["original", "360p", "480p", "720p", "1080p"] as const;
@@ -254,6 +258,7 @@ export async function createSignedVodRenditionUrl(input: {
   videoId: string;
   storageProvider: MediaStorageProvider | string;
   fallbackBucket: string;
+  trustedRendition?: AuditedMediaRenditionForPlayback | null;
 }): Promise<string> {
   const objectPath = toText(input.rendition.manifestPath) || toText(input.rendition.storagePath);
   const bucket = toText(input.rendition.storageBucket) || toText(input.fallbackBucket);
@@ -270,6 +275,14 @@ export async function createSignedVodRenditionUrl(input: {
       }).catch(() => "")
       : createSupabaseSignedRenditionUrl(bucket, objectPath)
   );
+
+  if (input.trustedRendition) {
+    const trustedDelivery = await resolveTrustedRenditionPlaybackSource({
+      rendition: input.trustedRendition,
+      resolveFallbackUrl,
+    });
+    return trustedDelivery.url;
+  }
 
   const delivery = await resolveMediaPlaybackDelivery({
     asset: {

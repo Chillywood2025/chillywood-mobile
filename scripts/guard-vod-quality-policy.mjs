@@ -34,6 +34,7 @@ const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.m
 const mediaTranscodeWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
 const vodLib = read("_lib/vodQuality.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
+const mediaPlaybackCdnEligibility = read("_lib/mediaPlaybackCdnEligibility.ts");
 const mediaTranscodeOperator = read("_lib/mediaTranscodeOperator.ts");
 const mediaTranscodeWorkerSafety = read("_lib/mediaTranscodeWorkerSafety.ts");
 const mediaRecoveryOperator = read("_lib/mediaRecoveryOperator.ts");
@@ -56,6 +57,9 @@ const mediaTranscodeWorkerCli = read("scripts/media-transcode-worker-cli.mjs");
 const mediaTranscodeWorkerCliProof = read("scripts/proof-media-transcode-worker-cli.mjs");
 const mediaWorkerCliChecklist = read("docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md");
 const mediaWorkerCliChecklistProof = read("scripts/proof-media-worker-cli-operating-checklist.mjs");
+const mediaPlaybackCdnEligibilityProof = read("scripts/proof-media-playback-cdn-eligibility.mjs");
+const mediaCdnRolloutPlanner = read("scripts/media-cdn-rollout-planner.mjs");
+const mediaCdnRolloutPlannerProof = read("scripts/proof-media-cdn-rollout-planner.mjs");
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "performance policy");
@@ -79,6 +83,8 @@ assertIncludes(vodLib, "resolveVideoPlayback", "VOD resolver helper");
 assertIncludes(vodLib, "resolveSignedVideoPlaybackSource", "signed resolver helper");
 assertIncludes(vodLib, "recordOriginalVideoRendition", "original rendition helper");
 assertIncludes(vodLib, "publicPlaybackSafe: false", "production VOD signed-origin fallback");
+assertIncludes(vodLib, "trustedRendition?: AuditedMediaRenditionForPlayback | null", "VOD trusted rendition bridge remains optional");
+assertIncludes(vodLib, "resolveTrustedRenditionPlaybackSource", "VOD trusted rendition bridge helper");
 
 assertIncludes(vodDoc, "Trusted rendition metadata foundation:", "VOD doc trusted rendition foundation");
 assertIncludes(vodDoc, "Existing `video_renditions` rows are a live schema foundation, but they are not yet trusted production Cloudflare R2/HLS playback rows.", "VOD doc trusted row boundary");
@@ -93,6 +99,10 @@ assertIncludes(vodDoc, "Clients cannot mark rows ready, set `public_playback_pat
 assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-policy` statically proves the migration SQL and docs keep client writes blocked", "VOD doc migration policy proof");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-dry-run` passes static SQL validation plus runtime apply/RLS checks in an in-memory disposable local Postgres runtime via `@electric-sql/pglite`.", "VOD doc migration dry-run runtime proof");
 assertIncludes(vodDoc, "proves anon/authenticated trusted writes are denied, proves service-role/worker writes pass, proves resolver-safe anon select returns one clean public-ready row", "VOD doc migration dry-run RLS proof");
+assertIncludes(vodDoc, "Trusted audited-rendition playback rollout:", "VOD doc trusted audited CDN rollout section");
+assertIncludes(vodDoc, "MEDIA_PLAYBACK_CDN_ROLLOUT_MODE=off | canary | batch | trusted_public", "VOD doc trusted audited CDN rollout modes");
+assertIncludes(vodDoc, "`npm run proof:media-playback-cdn-eligibility` proves default off fallback, kill switch fallback, canary CDN eligibility, batch selected-source CDN eligibility", "VOD doc trusted audited CDN proof");
+assertIncludes(vodDoc, "`npm run proof:media-cdn-rollout-planner` proves the batch planner with one eligible row and 1,000 eligible fixture rows", "VOD doc rollout planner proof");
 assertIncludes(vodDoc, "Production transcode worker runbook and local proof harness: `docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md` and `npm run proof:media-transcode-worker-local` model the future worker locally with the approved City Lights demo only.", "VOD doc production transcode worker local proof");
 assertIncludes(vodDoc, "Operator-controlled worker safety:", "VOD doc operator control section");
 assertIncludes(vodDoc, "`_lib/mediaTranscodeOperator.ts`, `_lib/mediaTranscodeWorkerSafety.ts`, `_lib/mediaRecoveryOperator.ts`", "VOD doc operator source helpers");
@@ -182,6 +192,26 @@ assertIncludes(mediaRenditionMetadata, "moderation_not_allowed", "trusted media 
 assertIncludes(mediaRenditionMetadata, "wrong_bucket_role", "trusted media rendition bucket role block");
 assertIncludes(mediaRenditionMetadata, "non_playback_prefix", "trusted media rendition prefix block");
 assertNotMatches(mediaRenditionMetadata, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "trusted media rendition metadata helper must not perform network or database writes");
+assertIncludes(mediaPlaybackCdnEligibility, "canUseAuditedPublicRenditionForCdnPlayback", "trusted audited CDN eligibility helper");
+assertIncludes(mediaPlaybackCdnEligibility, "resolveTrustedRenditionPlaybackSource", "trusted audited CDN playback source resolver");
+assertIncludes(mediaPlaybackCdnEligibility, "resolveCdnPlaybackFallback", "trusted audited CDN fallback helper");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_ENABLED", "trusted audited CDN enabled config");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_KILL_SWITCH", "trusted audited CDN kill switch config");
+assertIncludes(mediaPlaybackCdnEligibility, "\"off\" | \"canary\" | \"batch\" | \"trusted_public\"", "trusted audited CDN rollout modes");
+assertIncludes(mediaPlaybackCdnEligibility, "batch_cap_exceeded", "trusted audited CDN batch cap block");
+assertIncludes(mediaPlaybackCdnEligibility, "audit_not_passed", "trusted audited CDN audit block");
+assertIncludes(mediaPlaybackCdnEligibility, "backup_gate_not_fresh", "trusted audited CDN backup block");
+assertIncludes(mediaPlaybackCdnEligibility, "premium_requires_token_cdn", "trusted audited CDN Premium block");
+assertIncludes(mediaPlaybackCdnEligibility, "private_requires_token_cdn", "trusted audited CDN private block");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "trustedPublicValidAuditedRowCdn", "trusted audited CDN proof trusted_public");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "batchSelectedSourceCdn", "trusted audited CDN proof batch");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "privatePremiumOriginalPublicCdnAllowed: false", "trusted audited CDN proof unsafe block");
+assertIncludes(mediaCdnRolloutPlannerProof, "thousandEligibleFixtureRows", "media CDN planner proof scale rows");
+assertIncludes(mediaCdnRolloutPlannerProof, "maxBatchCapEnforced", "media CDN planner proof batch cap");
+assertIncludes(mediaCdnRolloutPlannerProof, "productionBackfillRun: false", "media CDN planner proof no backfill");
+assertIncludes(mediaCdnRolloutPlanner, "mutationAttempted: false", "media CDN planner no mutation");
+assertNotMatches(mediaPlaybackCdnEligibility, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|XMLHttpRequest|createClient)\b/, "trusted audited CDN helper must not perform network or database writes");
+assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
 assertIncludes(mediaTranscodeOperator, "MEDIA_TRANSCODE_OPERATOR_DEFAULT_MODE: MediaTranscodeOperatorMode = \"disabled\"", "media transcode operator disabled default");
 assertIncludes(mediaTranscodeOperator, "emergency_stop_always_blocks", "media transcode operator emergency stop");
 assertIncludes(mediaTranscodeOperator, "worker_cannot_self_enable", "media transcode operator worker self-enable block");
@@ -205,6 +235,10 @@ assertNotMatches(mediaTranscodeWorkerSafety, /\b(?:supabase\.from|insert\s*\(|up
 assertNotMatches(mediaRecoveryOperator, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "media recovery operator helper must not perform network or database writes");
 
 assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "trusted media rendition metadata proof script");
+assertIncludes(packageJson, "\"proof:media-playback-cdn-eligibility\"", "trusted playback CDN eligibility proof script");
+assertIncludes(packageJson, "\"proof:media-cdn-rollout-planner\"", "media CDN rollout planner proof script");
+assertIncludes(packageJson, "\"media-cdn:plan\"", "media CDN rollout planner command");
+assertIncludes(packageJson, "\"media-cdn:status\"", "media CDN rollout status command");
 assertIncludes(packageJson, "\"proof:media-rendition-migration-policy\"", "trusted media rendition migration policy proof script");
 assertIncludes(packageJson, "\"proof:media-rendition-migration-dry-run\"", "trusted media rendition migration dry-run proof script");
 assertIncludes(packageJson, "\"proof:media-transcode-worker-local\"", "local transcode worker proof script");

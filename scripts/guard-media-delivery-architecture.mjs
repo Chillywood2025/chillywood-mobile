@@ -71,6 +71,7 @@ const mediaTranscodeOperator = read("_lib/mediaTranscodeOperator.ts");
 const mediaTranscodeWorkerSafety = read("_lib/mediaTranscodeWorkerSafety.ts");
 const mediaRecoveryOperator = read("_lib/mediaRecoveryOperator.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
+const mediaPlaybackCdnEligibility = read("_lib/mediaPlaybackCdnEligibility.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const vodQuality = read("_lib/vodQuality.ts");
@@ -101,6 +102,9 @@ const mediaWorkerCliChecklistProof = read("scripts/proof-media-worker-cli-operat
 const mediaRecoveryBackupRestoreProof = read("scripts/proof-media-recovery-backup-restore.mjs");
 const mediaWorkerRollbackDrillProof = read("scripts/proof-media-worker-rollback-drill.mjs");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
+const mediaPlaybackCdnEligibilityProof = read("scripts/proof-media-playback-cdn-eligibility.mjs");
+const mediaCdnRolloutPlanner = read("scripts/media-cdn-rollout-planner.mjs");
+const mediaCdnRolloutPlannerProof = read("scripts/proof-media-cdn-rollout-planner.mjs");
 const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 const mediaRenditionMigrationDryRunProof = read("scripts/proof-media-rendition-migration-dry-run.mjs");
 
@@ -113,6 +117,7 @@ const sourceCorpus = [
   mediaTranscodeWorkerSafety,
   mediaRecoveryOperator,
   mediaRenditionMetadata,
+  mediaPlaybackCdnEligibility,
   mediaTranscodeWorkerCli,
   mediaStorageFunction,
   creatorVideos,
@@ -143,6 +148,19 @@ assertIncludes(architecture, "Status: staged resolver helpers, proof scripts, ar
 assertIncludes(architecture, "Production transcoding status: not live; no production backend transcode queue/service worker exists in this repo. Local proof scripts and a proof-only queue model exist only for the approved public-safe City Lights demo.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text and generated demo proof delivery; production CDN playback is not live.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare R2 public playback resolver status: staged helper and proof scripts exist; production playback remains disabled by default and still falls back to signed origin.", "R2 public playback resolver status");
+assertIncludes(architecture, "Trusted audited-rendition CDN eligibility status: `_lib/mediaPlaybackCdnEligibility.ts` and `npm run proof:media-playback-cdn-eligibility` now model the target resolver decision for future Cloudflare R2/HLS playback.", "trusted audited CDN eligibility status");
+assertIncludes(architecture, "The City Lights proof rows are a canary, not the long-term hardcoded path: the planned target model, not live in production in this task, is automatic CDN/HLS eligibility for any trusted audited public-safe `media_renditions` row that passes every gate.", "trusted audited CDN canary boundary");
+assertIncludes(architecture, "`MEDIA_PLAYBACK_CDN_ENABLED=false` by default.", "media playback CDN default disabled");
+assertIncludes(architecture, "`MEDIA_PLAYBACK_CDN_KILL_SWITCH=true` by default or fail-closed equivalent.", "media playback CDN kill switch");
+assertIncludes(architecture, "`MEDIA_PLAYBACK_CDN_ROLLOUT_MODE=off | canary | batch | trusted_public`.", "media playback CDN rollout modes");
+assertIncludes(architecture, "`MEDIA_PLAYBACK_CDN_FALLBACK_TO_ORIGIN=true`.", "media playback CDN fallback config");
+assertIncludes(architecture, "`MEDIA_PLAYBACK_CDN_DELIVERY_PROVIDER=cloudflare_r2_custom_domain`.", "media playback CDN delivery provider");
+assertIncludes(architecture, "`MEDIA_PLAYBACK_CDN_MAX_BATCH_SIZE=`.", "media playback CDN batch cap");
+assertIncludes(architecture, "`MEDIA_PLAYBACK_CDN_PERCENT_ROLLOUT=0`.", "media playback CDN percent rollout default");
+assertIncludes(architecture, "`trusted_public` is not live in production in this task", "trusted public rollout not live");
+assertIncludes(architecture, "Original/master, private, Premium-only without signed/token CDN, unscanned, moderation-blocked, wrong bucket role, wrong prefix, audit-pending/failed/quarantined, stale backup, global-disabled, and kill-switch-on cases all fall back or block.", "trusted audited CDN blocked cases");
+assertIncludes(architecture, "Scale rollout planner status: `scripts/media-cdn-rollout-planner.mjs`, `npm run media-cdn:plan`, `npm run media-cdn:status`, and `npm run proof:media-cdn-rollout-planner` are proof/CLI-only.", "scale rollout planner status");
+assertIncludes(architecture, "They count eligible audited public-safe HLS rows, exclude denied/private/Premium/original/pending/failed/moderation-blocked/wrong-prefix rows, require a max batch size, build exact rollback plans, redact summaries, and do not mutate the database, run backfill, enable a worker, or switch playback.", "scale rollout planner safety");
 assertIncludes(architecture, "Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.", "R2 private origin proof status");
 assertIncludes(architecture, "R2 CLI/API proof status: private and public-playback proof upload/readback succeeded through authorized Wrangler access; no production R2 CDN playback is live.", "R2 CLI/API proof status");
 assertIncludes(architecture, "R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.", "R2 proof bucket status");
@@ -300,9 +318,13 @@ assertIncludes(currentState, "The same HLS proof now includes a proof-only app/p
 assertIncludes(currentState, "Proof-only transcode queue foundation `npm run proof:media-transcode-queue-hls` models `queued -> probing -> transcoding -> uploading -> ready` for the approved City Lights demo, generates 360p/480p HLS, uploads 24 proof-only HLS objects under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`, fetches master/variant/segment objects through `media.chillywoodstream.com`, decodes the public HLS master with ffmpeg, and keeps production DB writes, production transcode service, and production playback disabled.", "current state proof-only transcode queue foundation");
 assertIncludes(currentState, "First controlled one-job production proof generated 360p/480p HLS for only City Lights source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, uploaded 24 worker-proof HLS objects under `playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/`, added one narrow Cloudflare cache rule only for that exact worker-proof `.ts` prefix, proved master/variant fetches, segment cache `MISS -> HIT` with `Age`, ffmpeg decode, explicit resolver allowlist eligibility for the worker-proof master, and forbidden-prefix 404 probes.", "current state one-job worker cache boundary");
 assertIncludes(currentState, "The real demo resolver proof uses `cdnAllowedPublicPlaybackPaths` so only the approved City Lights path resolves to `media.chillywoodstream.com`; non-allowlisted public-safe, private, original, Premium-only, unscanned, moderation-blocked, unsafe, default creator-video, or missing-config assets fall back or block.", "current state real demo allowlist proof");
-assertIncludes(currentState, "Media delivery telemetry foundation is source/proof-only: `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry` build sanitized `media_delivery_events` and `media_playback_sessions` shapes, estimate bytes, redact proof identifiers and URL-like values, and perform no backend writes or production telemetry table writes.", "current state telemetry foundation");
+assertIncludes(currentState, "Media delivery telemetry foundation is source/proof-only: `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry` build sanitized `media_delivery_events` and `media_playback_sessions` shapes, estimate bytes, include `delivery_format`, `rollout_mode`, `free_or_premium`, CDN HLS, signed-origin fallback, blocked private/Premium-style, and batch rollout event cases, redact proof identifiers and URL-like values, and perform no backend writes or production telemetry table writes.", "current state telemetry foundation");
 assertIncludes(currentState, "Trusted rendition metadata foundation is source/proof-only: `_lib/mediaRenditionMetadata.ts` and `npm run proof:media-rendition-metadata` model future Cloudflare R2 HLS rendition rows, prove the City Lights 360p/480p HLS fixture can resolve only through the explicit `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8` allowlist, and prove not-ready, original/master, Premium/private, unsafe scan/moderation, wrong bucket role, non-public prefix, non-allowlisted, and default creator-video paths block or fall back.", "current state trusted rendition metadata foundation");
 assertIncludes(currentState, "Production `video_renditions` writes, production rendition metadata writes, production transcode service, and production playback switching remain not live.", "current state trusted rendition production boundary");
+assertIncludes(currentState, "Trusted audited-rendition CDN eligibility is now source/proof-only and replaces the one-video allowlist as the target operating model without enabling production playback.", "current state trusted audited CDN eligibility");
+assertIncludes(currentState, "Rollout modes are `off`, `canary`, `batch`, and `trusted_public`; `off` remains the default, denied source ids always fall back, signed-origin fallback remains available, batch expansion is capped/reversible, and `trusted_public` is not enabled in production in this task.", "current state CDN rollout mode boundary");
+assertIncludes(currentState, "`npm run proof:media-cdn-rollout-planner` and `npm run media-cdn:plan` model scale expansion with 1,000 eligible fixture rows, max-batch enforcement, denied-source exclusion, unsafe-row exclusion, scoped rollback plans, and no DB mutation.", "current state CDN rollout planner");
+assertIncludes(currentState, "The City Lights row set is the canary proof, not the long-term hardcoded path.", "current state canary not hardcoded path");
 assertIncludes(currentState, "Trusted backend migration schema is applied to production and now contains the first owner-approved one-job proof rows only: `docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md`, migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql`, and `npm run proof:media-rendition-migration-policy` define server-owned `media_transcode_jobs` plus `media_renditions` for future Cloudflare R2/HLS rows.", "current state trusted backend migration path");
 assertIncludes(currentState, "One-job proof status: owner-approved source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1` (`Chi'llywood City Lights`) ran under the one-job lane and left exactly `media_transcode_jobs=1` plus `media_renditions=2` for 360p/480p HLS under `playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/`; there are no media worker rows for any other source.", "current state one-job production row status");
 assertIncludes(currentState, "Production data/write boundary: no production media backfill, production `video_renditions` write, production resolver bridge, deployed production transcode worker, broad queue processor, or production playback switch is live.", "current state trusted backend migration boundary");
@@ -326,8 +348,12 @@ assertIncludes(nextTask, "HLS resolver proof returns `media.chillywoodstream.com
 assertIncludes(nextTask, "Proof-only app/player HLS harness for `app/player/[id].tsx` proves the allowlisted HLS master is received as `{ uri }`, load status reports `durationMillis=52208`, progress reports `progressMillis=2175`, `isPlaying=true`, `playbackStarted=true`, and no private signed origin URL is exposed.", "next task app/player HLS proof");
 assertIncludes(nextTask, "`npm run proof:media-transcode-queue-hls` proves a source/proof-only queue model for the approved City Lights demo: local job states reach ready, 360p/480p HLS is generated, 24 proof-only objects are uploaded under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`, public HLS fetch/decode passes, completed-job resolver allowlist passes, queued/failed/non-allowlisted outputs cannot resolve, and production DB writes/playback/transcode service remain disabled.", "next task proof-only transcode queue proof");
 assertIncludes(nextTask, "A third narrow Cloudflare cache rule now applies only to `media.chillywoodstream.com/playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/*.ts`; queue segments returned immutable cache metadata with `cf-cache-status: HIT` after warmup. Queue-path cache behavior is proved only for that proof prefix, and production egress savings are not claimed.", "next task proof-only transcode queue cache boundary");
-assertIncludes(nextTask, "Telemetry foundation exists only as `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry`; no production telemetry writes, table migrations, billing/payout changes, or playback switches are live.", "next task telemetry foundation");
+assertIncludes(nextTask, "Telemetry foundation exists only as `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry`; it now covers `delivery_format`, `rollout_mode`, `free_or_premium`, CDN HLS, signed-origin fallback, blocked private/Premium-style, and batch rollout event shapes. No production telemetry writes, table migrations, billing/payout changes, or playback switches are live.", "next task telemetry foundation");
 assertIncludes(nextTask, "Trusted rendition metadata foundation exists only as `_lib/mediaRenditionMetadata.ts` and `npm run proof:media-rendition-metadata`; City Lights 360p/480p proof fixture rows can resolve the allowlisted HLS master, while not-ready, original/master, Premium/private, unsafe scan/moderation, wrong bucket role, non-public prefix, non-allowlisted, and default creator-video paths block or fall back.", "next task trusted rendition metadata foundation");
+assertIncludes(nextTask, "Trusted audited-rendition CDN eligibility is source/proof-only and replaces the one-video hardcoded allowlist as the target operating model.", "next task trusted audited CDN eligibility");
+assertIncludes(nextTask, "`MEDIA_PLAYBACK_CDN_ENABLED=false`, `MEDIA_PLAYBACK_CDN_KILL_SWITCH=true`, and `MEDIA_PLAYBACK_CDN_ROLLOUT_MODE=off` remain the default production posture; `trusted_public` is not live in production.", "next task trusted audited CDN default posture");
+assertIncludes(nextTask, "Scale rollout planning is source/proof-only: `scripts/media-cdn-rollout-planner.mjs`, `npm run media-cdn:plan`, `npm run media-cdn:status`, and `npm run proof:media-cdn-rollout-planner` count trusted eligible rows, enforce `MEDIA_PLAYBACK_CDN_MAX_BATCH_SIZE`, exclude denied/private/Premium/original/pending/blocked/wrong-prefix rows, require rollback plans, redact output, and do not mutate DB or switch playback.", "next task rollout planner guidance");
+assertIncludes(nextTask, "The next playback milestone should be an owner-approved canary-mode or batch-mode rollout proof using trusted audited `media_renditions` eligibility, not a permanent hardcoded City Lights allowlist and not all-at-once production migration.", "next task batch rollout guidance");
 assertIncludes(nextTask, "Trusted backend migration schema is applied to production and now contains only the first controlled one-job proof rows: migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` created server-owned `media_transcode_jobs` plus `media_renditions`; tables/indexes/RLS/policies/grants were read back, clients cannot write trusted ready/public-safe/path metadata, final row counts are `media_transcode_jobs=1` and `media_renditions=2` for allowlisted City Lights source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, and production playback remains unchanged.", "next task trusted backend migration path");
 assertIncludes(nextTask, "Trusted backend migration dry-run still passes static SQL validation plus runtime apply/RLS proof through `npm run proof:media-rendition-migration-dry-run` using an in-memory disposable `@electric-sql/pglite` Postgres runtime.", "next task trusted backend migration dry-run");
 assertIncludes(nextTask, "Production rollback-only RLS proof also passed: anon/authenticated trusted writes were denied, service-role/worker proof writes were allowed, resolver-safe select saw one clean public-ready proof row, unsafe/original/Premium/private/non-public-prefix public-CDN rows failed eligibility, the transaction rolled back, and no proof rows persisted.", "next task trusted backend migration production proof");
@@ -644,6 +670,58 @@ assertIncludes(mediaRenditionMetadata, "non_playback_prefix", "trusted media ren
 assertIncludes(mediaRenditionMetadata, "premium_requires_token_cdn", "trusted media rendition Premium block");
 assertIncludes(mediaRenditionMetadata, "private_requires_token_cdn", "trusted media rendition private block");
 assertNotMatches(mediaRenditionMetadata, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "trusted media rendition metadata helper must not perform network or database writes");
+assertIncludes(mediaPlaybackCdnEligibility, "canUseAuditedPublicRenditionForCdnPlayback", "trusted audited CDN eligibility helper");
+assertIncludes(mediaPlaybackCdnEligibility, "resolveTrustedRenditionPlaybackSource", "trusted audited CDN resolver helper");
+assertIncludes(mediaPlaybackCdnEligibility, "resolveCdnPlaybackFallback", "trusted audited CDN fallback helper");
+assertIncludes(mediaPlaybackCdnEligibility, "sanitizeCdnEligibilityProof", "trusted audited CDN sanitizer");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_ENABLED", "trusted audited CDN enable env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_KILL_SWITCH", "trusted audited CDN kill switch env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_ROLLOUT_MODE", "trusted audited CDN rollout env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_ALLOWED_SOURCE_IDS", "trusted audited CDN allowed source env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_DENIED_SOURCE_IDS", "trusted audited CDN denied source env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_REQUIRE_AUDIT_PASSED", "trusted audited CDN audit env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_REQUIRE_BACKUP_FRESH", "trusted audited CDN backup env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_FALLBACK_TO_ORIGIN", "trusted audited CDN fallback env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_DELIVERY_PROVIDER", "trusted audited CDN delivery provider env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_MAX_BATCH_SIZE", "trusted audited CDN max batch env");
+assertIncludes(mediaPlaybackCdnEligibility, "MEDIA_PLAYBACK_CDN_PERCENT_ROLLOUT", "trusted audited CDN percent rollout env");
+assertIncludes(mediaPlaybackCdnEligibility, "\"off\" | \"canary\" | \"batch\" | \"trusted_public\"", "trusted audited CDN rollout modes");
+assertIncludes(mediaPlaybackCdnEligibility, "killSwitch", "trusted audited CDN kill switch config");
+assertIncludes(mediaPlaybackCdnEligibility, "audit_not_passed", "trusted audited CDN audit block");
+assertIncludes(mediaPlaybackCdnEligibility, "backup_gate_not_fresh", "trusted audited CDN backup block");
+assertIncludes(mediaPlaybackCdnEligibility, "source_denied", "trusted audited CDN denied source block");
+assertIncludes(mediaPlaybackCdnEligibility, "source_not_allowed", "trusted audited CDN allowlist block");
+assertIncludes(mediaPlaybackCdnEligibility, "batch_limit_missing", "trusted audited CDN batch missing block");
+assertIncludes(mediaPlaybackCdnEligibility, "batch_cap_exceeded", "trusted audited CDN batch cap block");
+assertIncludes(mediaPlaybackCdnEligibility, "original_or_master_blocked", "trusted audited CDN original/master block");
+assertIncludes(mediaPlaybackCdnEligibility, "premium_requires_token_cdn", "trusted audited CDN Premium block");
+assertIncludes(mediaPlaybackCdnEligibility, "private_requires_token_cdn", "trusted audited CDN private block");
+assertIncludes(mediaPlaybackCdnEligibility, "wrong_bucket_role", "trusted audited CDN bucket role block");
+assertIncludes(mediaPlaybackCdnEligibility, "non_playback_prefix", "trusted audited CDN prefix block");
+assertNotMatches(mediaPlaybackCdnEligibility, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|XMLHttpRequest|createClient)\b/, "trusted audited CDN helper must not perform network or database writes");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "canaryCityLightsCdn", "trusted audited CDN proof canary case");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "batchSelectedSourceCdn", "trusted audited CDN proof batch selected case");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "batchUnselectedSourceFallback", "trusted audited CDN proof batch unselected fallback");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "batchCapEnforced", "trusted audited CDN proof batch cap");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "trustedPublicValidAuditedRowCdn", "trusted audited CDN proof trusted_public case");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "privatePremiumOriginalPublicCdnAllowed: false", "trusted audited CDN proof private Premium original blocked");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "productionPlaybackSwitched: false", "trusted audited CDN proof no playback switch");
+assertIncludes(mediaPlaybackCdnEligibilityProof, "productionBackfillRun: false", "trusted audited CDN proof no backfill");
+assertIncludes(mediaCdnRolloutPlanner, "buildMediaCdnRolloutPlan", "media CDN rollout planner plan helper");
+assertIncludes(mediaCdnRolloutPlanner, "max_batch_size_required", "media CDN rollout planner max batch requirement");
+assertIncludes(mediaCdnRolloutPlanner, "mutationAttempted: false", "media CDN rollout planner no mutation");
+assertIncludes(mediaCdnRolloutPlanner, "productionPlaybackSwitched: false", "media CDN rollout planner no playback switch");
+assertIncludes(mediaCdnRolloutPlanner, "productionBackfillRun: false", "media CDN rollout planner no backfill");
+assertIncludes(mediaCdnRolloutPlanner, "rollbackPlanRequired", "media CDN rollout planner rollback plan");
+assertIncludes(mediaCdnRolloutPlannerProof, "thousandEligibleFixtureRows", "media CDN rollout planner proof scale fixture");
+assertIncludes(mediaCdnRolloutPlannerProof, "maxBatchCapEnforced", "media CDN rollout planner proof batch cap");
+assertIncludes(mediaCdnRolloutPlannerProof, "deniedRowsExcluded", "media CDN rollout planner proof denied exclusion");
+assertIncludes(mediaCdnRolloutPlannerProof, "unsafeRowsExcluded", "media CDN rollout planner proof unsafe exclusion");
+assertIncludes(mediaCdnRolloutPlannerProof, "pendingAuditExcluded", "media CDN rollout planner proof pending audit exclusion");
+assertIncludes(mediaCdnRolloutPlannerProof, "rollbackPlanRequired", "media CDN rollout planner proof rollback required");
+assertIncludes(mediaCdnRolloutPlannerProof, "mutationAttempted: false", "media CDN rollout planner proof no mutation");
+assertIncludes(mediaCdnRolloutPlannerProof, "productionBackfillRun: false", "media CDN rollout planner proof no backfill");
+assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
 assertIncludes(mediaMigrationPlan, "Status: production schema applied, with one scoped owner-approved proof job.", "trusted rendition migration plan status");
 assertIncludes(mediaMigrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "trusted rendition migration plan production schema status");
 assertIncludes(mediaMigrationPlan, "Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, production resolver bridge, deployed production transcode worker, broad queue processor, or production playback switch is live.", "trusted rendition migration plan production data boundary");
@@ -748,6 +826,10 @@ assertIncludes(packageJson, "\"proof:media-transcode-queue-hls\"", "package tran
 assertIncludes(packageJson, "\"proof:media-transcode-worker-local\"", "package local transcode worker proof script");
 assertIncludes(packageJson, "\"proof:media-transcode-backup-gate\"", "package backup PITR proof script");
 assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "package trusted rendition metadata proof script");
+assertIncludes(packageJson, "\"proof:media-playback-cdn-eligibility\"", "package trusted playback CDN eligibility proof script");
+assertIncludes(packageJson, "\"proof:media-cdn-rollout-planner\"", "package media CDN rollout planner proof script");
+assertIncludes(packageJson, "\"media-cdn:plan\"", "package media CDN rollout planner command");
+assertIncludes(packageJson, "\"media-cdn:status\"", "package media CDN rollout status command");
 assertIncludes(packageJson, "\"proof:media-rendition-migration-policy\"", "package trusted rendition migration policy proof script");
 assertIncludes(packageJson, "\"proof:media-rendition-migration-dry-run\"", "package trusted rendition migration dry-run proof script");
 assertIncludes(mediaDeliveryResolverProof, "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4", "media delivery resolver proof demo path");

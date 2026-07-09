@@ -12,13 +12,16 @@ export type MediaDeliveryTelemetryRecord = {
   delivery_provider: string;
   playback_url_provider: string;
   media_delivery_provider: string;
+  delivery_format: string;
   quality_label: string;
   rendition_label: string | null;
+  rollout_mode: string | null;
   public_playback_safe: boolean;
   cdn_eligible: boolean;
   fallback_used: boolean;
   blocked_reason: string | null;
   watch_party_id: string | null;
+  free_or_premium: string | null;
   is_premium_user: boolean | null;
   started_at: string;
   ended_at: string | null;
@@ -58,13 +61,16 @@ export type MediaDeliveryTelemetryInput = {
   deliveryProvider?: string | null;
   playbackUrlProvider?: string | null;
   mediaDeliveryProvider?: string | null;
+  deliveryFormat?: string | null;
   qualityLabel?: string | null;
   renditionLabel?: string | null;
+  rolloutMode?: string | null;
   publicPlaybackSafe?: boolean | null;
   cdnEligible?: boolean | null;
   fallbackUsed?: boolean | null;
   blockedReason?: string | null;
   watchPartyId?: string | null;
+  freeOrPremium?: string | null;
   isPremiumUser?: boolean | null;
   startedAt?: string | Date | null;
   endedAt?: string | Date | null;
@@ -187,13 +193,16 @@ const buildBaseTelemetryRecord = (
     delivery_provider: normalizedText(input.deliveryProvider, "unknown"),
     playback_url_provider: normalizedText(input.playbackUrlProvider, "unknown"),
     media_delivery_provider: normalizedText(input.mediaDeliveryProvider, input.deliveryProvider ?? "unknown"),
+    delivery_format: normalizedText(input.deliveryFormat, "unknown"),
     quality_label: normalizedText(input.qualityLabel, "unknown"),
     rendition_label: nullableText(input.renditionLabel),
+    rollout_mode: nullableText(input.rolloutMode),
     public_playback_safe: normalizeBoolean(input.publicPlaybackSafe),
     cdn_eligible: normalizeBoolean(input.cdnEligible),
     fallback_used: normalizeBoolean(input.fallbackUsed),
     blocked_reason: nullableText(input.blockedReason),
     watch_party_id: nullableText(input.watchPartyId),
+    free_or_premium: nullableText(input.freeOrPremium),
     is_premium_user: normalizeNullableBoolean(input.isPremiumUser),
     started_at: startedAt,
     ended_at: endedAt,

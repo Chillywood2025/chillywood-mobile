@@ -92,6 +92,28 @@ Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected
 
 Cloudflare R2 public playback resolver status: staged helper and proof scripts exist; production playback remains disabled by default and still falls back to signed origin.
 
+Trusted audited-rendition CDN eligibility status: `_lib/mediaPlaybackCdnEligibility.ts` and `npm run proof:media-playback-cdn-eligibility` now model the target resolver decision for future Cloudflare R2/HLS playback. The City Lights proof rows are a canary, not the long-term hardcoded path: the planned target model, not live in production in this task, is automatic CDN/HLS eligibility for any trusted audited public-safe `media_renditions` row that passes every gate. Production playback remains unchanged because rollout is fail-closed by default.
+
+Playback CDN rollout config contract:
+
+- `MEDIA_PLAYBACK_CDN_ENABLED=false` by default.
+- `MEDIA_PLAYBACK_CDN_KILL_SWITCH=true` by default or fail-closed equivalent.
+- `MEDIA_PLAYBACK_CDN_ROLLOUT_MODE=off | canary | batch | trusted_public`.
+- `MEDIA_PLAYBACK_CDN_ALLOWED_SOURCE_IDS=`.
+- `MEDIA_PLAYBACK_CDN_DENIED_SOURCE_IDS=`.
+- `MEDIA_PLAYBACK_CDN_REQUIRE_AUDIT_PASSED=true`.
+- `MEDIA_PLAYBACK_CDN_REQUIRE_BACKUP_FRESH=true`.
+- `MEDIA_PLAYBACK_CDN_FALLBACK_TO_ORIGIN=true`.
+- `MEDIA_PLAYBACK_CDN_DELIVERY_PROVIDER=cloudflare_r2_custom_domain`.
+- `MEDIA_PLAYBACK_CDN_MAX_BATCH_SIZE=`.
+- `MEDIA_PLAYBACK_CDN_PERCENT_ROLLOUT=0`.
+
+Rollout rules: `off` keeps all creator-video playback on signed-origin fallback; `canary` allows only explicit canary source ids; `batch` allows only explicitly listed source ids with a max-batch cap; `trusted_public` is the future broad trusted-row mode where any eligible audited public-safe HLS rendition may use Cloudflare R2 custom-domain delivery. Denied source ids always fall back or block. Signed-origin fallback stays available unless the underlying media itself is blocked. `trusted_public` is not live in production in this task and must not be documented as live until installed resolver/player proof and owner approval pass.
+
+Audited public rendition CDN eligibility requires all of: `MEDIA_PLAYBACK_CDN_ENABLED=true`, `MEDIA_PLAYBACK_CDN_KILL_SWITCH=false`, a trusted rendition row, `is_ready=true`, `audit_status=passed`, `is_public_playback_safe=true`, `is_original=false`, `visibility=public`, scan clean/approved, moderation allowed/approved, `bucket_role=public_playback`, `delivery_provider=cloudflare_r2_custom_domain`, `delivery_format=hls`, manifest path under `playback/public/`, fresh/closed backup gate when required, no denied source id, and an available signed-origin fallback. Original/master, private, Premium-only without signed/token CDN, unscanned, moderation-blocked, wrong bucket role, wrong prefix, audit-pending/failed/quarantined, stale backup, global-disabled, and kill-switch-on cases all fall back or block.
+
+Scale rollout planner status: `scripts/media-cdn-rollout-planner.mjs`, `npm run media-cdn:plan`, `npm run media-cdn:status`, and `npm run proof:media-cdn-rollout-planner` are proof/CLI-only. They count eligible audited public-safe HLS rows, exclude denied/private/Premium/original/pending/failed/moderation-blocked/wrong-prefix rows, require a max batch size, build exact rollback plans, redact summaries, and do not mutate the database, run backfill, enable a worker, or switch playback. Before broad `trusted_public` rollout, the resolver query path should be read-plan-tested against production-size data; the applied migration already has source, readiness, provider, visibility, and job indexes, but a future composite or partial index may be warranted for high-volume ready/public-safe HLS lookup.
+
 R2 CLI/API proof status: private and public-playback proof upload/readback succeeded through authorized Wrangler access; no production R2 CDN playback is live.
 
 R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.
@@ -110,7 +132,7 @@ Media bandwidth telemetry status: planned foundation only, not live.
 
 Media delivery telemetry foundation status: source/proof-only helper and proof script exist; no backend writes, database table migrations, production telemetry writes, or production playback changes are live.
 
-Telemetry proof status: `npm run proof:media-delivery-telemetry` builds CDN demo, signed-origin fallback, blocked playback, and session start/end records, estimates bytes, redacts proof identifiers, and proves no full playback URLs are included.
+Telemetry proof status: `npm run proof:media-delivery-telemetry` builds CDN demo, signed-origin fallback, blocked playback, and session start/end records, estimates bytes, redacts proof identifiers, and proves no full playback URLs are included. The proof now includes `delivery_format`, `rollout_mode`, `free_or_premium`, CDN HLS playback, signed-origin fallback, blocked private/Premium-style playback, and batch rollout event shapes for future scale reporting without production telemetry writes.
 
 Cache-HIT proof status: immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` returns `Cache-Control: public, max-age=31536000, immutable`; after a narrow Cloudflare Cache Rule for `/playback/public/proof/cache-hit/*`, repeated fetches returned `cf-cache-status: HIT` with `Age` increasing. Cache behavior is proved for this proof prefix only; egress or cost savings are not claimed without media bandwidth telemetry.
 
@@ -403,7 +425,7 @@ Planned:
 
 - Telemetry foundation is source/proof-only. No production telemetry table writes, backend inserts, migrations, CDN log ingestion, provider reconciliation, billing changes, payout changes, or production playback changes are live in this lane.
 - `_lib/mediaDeliveryTelemetry.ts` defines pure helpers for future `media_delivery_events` and `media_playback_sessions` record shapes: `buildMediaDeliveryEvent(...)`, `buildMediaPlaybackSessionStart(...)`, `buildMediaPlaybackSessionEnd(...)`, `estimatePlaybackBytes(...)`, and `sanitizeMediaDeliveryTelemetryForProof(...)`.
-- `scripts/proof-media-delivery-telemetry.mjs` proves the helper without network/database writes. It builds a Cloudflare R2 custom-domain demo event, a signed-origin fallback event, a blocked private/original/Premium-style event, nullable and non-null Watch-Party session shapes, byte estimates, and sanitized proof output.
+- `scripts/proof-media-delivery-telemetry.mjs` proves the helper without network/database writes. It builds a Cloudflare R2 custom-domain HLS demo event, a signed-origin fallback event, a blocked private/original/Premium-style event, a batch rollout playback event, nullable and non-null Watch-Party session shapes, byte estimates, and sanitized proof output with `delivery_format`, `rollout_mode`, and `free_or_premium`.
 - Planned `media_playback_sessions` fields: `id`, `user_id` nullable/redacted in proof, `video_id`, `creator_id` nullable, `source_type`, `source_id`, `delivery_provider`, `playback_url_provider`, `media_delivery_provider`, `quality_label`, `rendition_label` nullable, `public_playback_safe`, `cdn_eligible`, `fallback_used`, `blocked_reason` nullable, `watch_party_id` nullable, `is_premium_user` nullable, `started_at`, `ended_at` nullable, `seconds_watched` nullable, `estimated_bytes` nullable, `cdn_cache_status` nullable, `client_platform` nullable, `app_version` nullable, and `proof_mode`.
 - Planned `media_delivery_events` fields: `id`, `user_id` nullable/redacted in proof, `video_id`, `creator_id` nullable, `source_type`, `source_id`, `delivery_provider`, `playback_url_provider`, `media_delivery_provider`, `quality_label`, `rendition_label` nullable, `public_playback_safe`, `cdn_eligible`, `fallback_used`, `blocked_reason` nullable, `watch_party_id` nullable, `is_premium_user` nullable, `started_at`, `ended_at` nullable, `seconds_watched` nullable, `estimated_bytes` nullable, `cdn_cache_status` nullable, `client_platform` nullable, `app_version` nullable, and `proof_mode`.
 - The telemetry helper intentionally does not accept or emit full playback URLs, signed origin URLs, R2 signed URLs, or CDN token material. It stores provider labels such as `playback_url_provider`, not URL strings.

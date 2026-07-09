@@ -62,7 +62,7 @@ The worker must never mark `is_ready=true` before source probing, HLS generation
 
 Worker secrets stay only on the worker host. Logs must not include service-role keys, DB URLs, provider credentials, private signed URLs, authorization headers, or raw user identifiers. The app/client path cannot insert or update trusted readiness, public playback path, `is_public_playback_safe`, `worker_version`, or `source_hash`.
 
-Public CDN eligibility comes only from backend-written trusted rows that are ready, public, clean or approved, moderation-allowed, non-original, in the public playback bucket role, under `playback/public/`, and explicitly resolver-allowlisted during staged rollout.
+Public CDN eligibility comes only from backend-written trusted rows that are ready, audit-passed, public, clean or approved, moderation-allowed, non-original, in the public playback bucket role, under `playback/public/`, and permitted by the configured rollout mode. City Lights is the canary; future expansion should use `canary`, `batch`, or `trusted_public` rollout gates with the kill switch and signed-origin fallback still active.
 
 ## Rollback
 
@@ -147,7 +147,7 @@ Rollback drill proof:
 
 One-job proof classification: Closed for the first controlled City Lights proof. The run used owner-approved source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, `max_jobs_per_run=1`, backfill disabled, fresh backup/readback/restore proof, local HLS generation, public worker-proof R2 upload, post-write audit, explicit resolver allowlist proof, scoped rollback proof, auto-disable, and no production playback switch. Any future one-job proof must repeat the gate with a fresh backup check, exact source allowlist, pending-audit worker rows, auditor pass before resolver trust, quarantine on audit failure, and no production playback switch.
 
-Continuous automation readiness classification: Blocked. Continuous production worker writes/backfill still require true PITR or a proven scheduled backup/restore system with owner approval. The R2 logical backup layer does not replace PITR for continuous production.
+Continuous automation readiness classification: Blocked. Continuous production worker writes/backfill still require true PITR or a proven scheduled backup/restore system with owner approval. Any future continuous mode also requires explicit owner approval, max concurrency, max jobs per run, dead-letter handling, retry caps, audit pass before resolver trust, rollback scope, and telemetry. Broad backfill is a separate approval path and remains denied by default. The R2 logical backup layer does not replace PITR for continuous production.
 
 ## Scheduled R2 Logical Backup Gate
 
