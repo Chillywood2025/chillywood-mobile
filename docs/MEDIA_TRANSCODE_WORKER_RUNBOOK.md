@@ -155,6 +155,7 @@ Status: manual logical backup runner implemented, first real manual backup compl
 
 CLI-only operation commands:
 
+- Final handoff checklist: `docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md`. Future sessions should use that checklist for any owner-approved allowlisted one-job run and must not infer approval for cron, a scheduler, a deployed worker service, broad backfill, continuous automation, or a production playback switch.
 - `npm run backup:media-worker:preflight` checks linked Supabase identity for project `bmkkhihfbmsnnmcqkoly`, private R2 target, scoped row counts, no running worker, no media-worker workflow/cron, and unchanged production playback.
 - `npm run backup:media-worker:status` prints the latest backup prefix and current media-worker table counts without secrets.
 - `npm run backup:media-worker:verify-latest` verifies the latest private R2 backup manifest and checksums and confirms no public bucket or `media.chillywoodstream.com` exposure.
@@ -208,6 +209,7 @@ Status: CLI command infrastructure exists and is proofed, but no new production 
 
 Package commands:
 
+- Final CLI checklist: `docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md`.
 - `npm run media-worker:preflight` checks the latest private R2 backup gate, linked Supabase project identity, scoped media-worker row counts, `max_jobs_per_run=1`, backfill disabled, source allowlist requirement, no active unfinished jobs, no media-worker cron/scheduler, public/private bucket safety, and unchanged production playback.
 - `npm run media-worker:status` reports `media_transcode_jobs`, `media_renditions`, active unfinished jobs, unsafe CDN rows, other-source rendition count, latest backup gate, and disabled worker state without printing secrets.
 - `npm run media-worker:dry-run -- --source-id=<allowlisted-source>` builds a one-job plan, expected output prefix, expected job/rendition rows, audit batch, and rollback plan. It writes no DB rows and uploads no media.

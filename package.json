@@ -238,6 +238,7 @@
     "media-worker:verify-output": "node ./scripts/media-transcode-worker-cli.mjs --mode=verify-output",
     "media-worker:rollback-plan": "node ./scripts/media-transcode-worker-cli.mjs --mode=rollback-plan",
     "proof:media-transcode-worker-cli": "node ./scripts/proof-media-transcode-worker-cli.mjs",
+    "proof:media-worker-cli-operating-checklist": "node ./scripts/proof-media-worker-cli-operating-checklist.mjs",
     "proof:media-worker-backup-runner": "node ./scripts/proof-media-worker-backup-runner.mjs",
     "proof:media-recovery-backup-restore": "node ./scripts/proof-media-recovery-backup-restore.mjs",
     "proof:media-worker-rollback-drill": "node ./scripts/proof-media-worker-rollback-drill.mjs",

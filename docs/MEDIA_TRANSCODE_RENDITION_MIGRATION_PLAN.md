@@ -245,14 +245,14 @@ Scheduled R2 logical backup gate: source-proofed policy only. `_lib/mediaRecover
 1. Owner approval to apply the schema migration: complete.
 2. Migration dry-run and disposable runtime apply: complete.
 3. Production schema readback plus rollback-only RLS/policy proof: complete.
-4. Backend worker runbook and local proof harness: complete for design/local proof only; production worker deployment and staging worker proof remain pending.
+4. Backend worker runbook and local proof harness: complete for design/local proof, plus one owner-approved manual one-job production proof for City Lights only; production worker deployment and continuous queue processing remain not live.
 5. Backup/PITR gate: Blocked until PITR or an owner-approved restore path is verified; no broad worker writes/backfill while this gate remains Blocked or Partial.
 6. One-job logical recovery gate: Closed for the completed City Lights proof with exact source allowlist, operator lease, auditor pass, rollback drill, and no playback switch.
 7. Scheduled R2 logical backup gate: source-proofed only; limited automation remains disabled until owner approval, scheduler deployment, recurring private backup readback, and recurring restore-drill proof exist.
 8. Operator-controlled one-job safety: source/proof complete and used for one approved scoped production proof; additional production use still requires explicit approval.
-9. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
-10. Resolver migration behind disabled config: pending.
-11. Cache HIT and telemetry proof for the migrated source: pending.
-12. Signed-origin fallback proof: pending.
+9. Trusted rows for a limited allowlisted source only: complete for City Lights proof rows only (`media_transcode_jobs=1`, `media_renditions=2`); any additional source still requires explicit owner approval and the CLI checklist.
+10. Resolver migration behind disabled config: staged/proofed only; no global production resolver switch or default creator-video CDN/HLS playback is live.
+11. Cache HIT and telemetry proof for the migrated source: cache HIT is proved for exact public proof prefixes, including the City Lights worker-proof segment prefix; telemetry remains source/proof-only and production egress savings are not claimed.
+12. Signed-origin fallback proof: closed as the current default boundary; existing creator-video playback remains signed-origin fallback by default.
 13. No private/original/Premium/unscanned/moderation-blocked media exposed: required for every next lane.
 14. Explicit owner approval before any production playback switch: still required.

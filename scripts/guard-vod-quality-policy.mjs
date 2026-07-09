@@ -54,6 +54,8 @@ const mediaWorkerBackupCli = read("scripts/media-worker-backup-cli.mjs");
 const mediaWorkerBackupRunnerProof = read("scripts/proof-media-worker-backup-runner.mjs");
 const mediaTranscodeWorkerCli = read("scripts/media-transcode-worker-cli.mjs");
 const mediaTranscodeWorkerCliProof = read("scripts/proof-media-transcode-worker-cli.mjs");
+const mediaWorkerCliChecklist = read("docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md");
+const mediaWorkerCliChecklistProof = read("scripts/proof-media-worker-cli-operating-checklist.mjs");
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "performance policy");
@@ -223,6 +225,15 @@ assertIncludes(packageJson, "\"media-worker:audit\"", "media worker CLI audit sc
 assertIncludes(packageJson, "\"media-worker:verify-output\"", "media worker CLI verify-output script");
 assertIncludes(packageJson, "\"media-worker:rollback-plan\"", "media worker CLI rollback-plan script");
 assertIncludes(packageJson, "\"proof:media-transcode-worker-cli\"", "media worker CLI proof script");
+assertIncludes(packageJson, "\"proof:media-worker-cli-operating-checklist\"", "media worker CLI checklist proof script");
+assertIncludes(mediaWorkerCliChecklist, "production creator-video playback remains signed-origin fallback by default", "media worker CLI checklist signed-origin fallback");
+assertIncludes(mediaWorkerCliChecklist, "Continuous automation remains blocked", "media worker CLI checklist continuous blocked");
+assertIncludes(mediaWorkerCliChecklist, "MEDIA_WORKER_RUN_ONE_CONFIRM=I_UNDERSTAND_ONE_JOB", "media worker CLI checklist run-one confirmation");
+assertIncludes(mediaWorkerCliChecklist, "npm run media-worker:dry-run -- --source-id <id>", "media worker CLI checklist dry-run");
+assertIncludes(mediaWorkerCliChecklist, "It is not PITR and does not replace PITR for continuous production.", "media worker CLI checklist PITR boundary");
+assertIncludes(mediaWorkerCliChecklistProof, "productionPlaybackUnchanged", "media worker CLI checklist proof production fallback");
+assertIncludes(mediaWorkerCliChecklistProof, "continuousAutomationBlocked", "media worker CLI checklist proof continuous blocked");
+assertNotMatches(mediaWorkerCliChecklist, /\b(?:continuous automation is closed|production playback uses CDN|production playback uses HLS|PITR is unnecessary)\b/i, "media worker CLI checklist overclaim");
 assertIncludes(mediaTranscodeOperatorProof, "defaultDisabled", "operator proof default disabled");
 assertIncludes(mediaTranscodeOperatorProof, "continuousModeBlockedByBackupGate", "operator proof continuous backup gate");
 assertIncludes(mediaTranscodeOperatorProof, "workerSelfEnableDenied", "operator proof worker self-enable denied");
