@@ -52,6 +52,27 @@ npm run media-automation:emergency-stop
 
 `media-automation:plan-auto` and `media-automation:dry-run-auto` require no manual source id and no manual batch-size input for normal operation. `media-automation:run-auto` is intentionally fail-closed unless a future confirmed run provides `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_AUTO_DETECT_BATCH` and every backup, restore, active-job, unsafe-row, dry-run, audit, rollback, and emergency-stop gate passes. Legacy `plan-batch` / `dry-run-batch` / `run-batch` aliases remain for compatibility and still recognize `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION`; they still do not deploy a worker or scheduler. This task does not enable run execution.
 
+Normal npm operator commands use `--source=linked` for production read-only discovery through the linked Supabase CLI. Proof scripts keep fixture mode available for deterministic source proofs. The linked source path reads only safe aggregate/classification fields and redacted eligible candidate metadata; it does not print playback URLs, signed URLs, DB URLs, service-role keys, or private excluded-row details.
+
+First production read-only linked run on 2026-07-09:
+
+- `totalCandidatesScanned=27`
+- `eligible_needs_transcode=0`
+- `eligible_already_has_audited_hls=1` (`Chi'llywood City Lights`)
+- `excluded_private=12`
+- `excluded_premium=9`
+- `excluded_original_master=0`
+- `excluded_unscanned=5`
+- `excluded_moderation_blocked=0`
+- `excluded_missing_source=0`
+- `excluded_unsupported_format=0`
+- `excluded_already_active_job=0`
+- `excluded_denied_source=0`
+- `excluded_already_processed=0`
+- `plan-auto` / `dry-run-auto`: `calculatedBatchSize=0`, `riskLevel=blocked`, reason `no_eligible_candidates`, selected candidates `0`, rollback scopes `0`
+
+`run-auto` was not executed. No media was processed or uploaded, no production rows were written, and playback scope did not change.
+
 ## Backup Gate
 
 Automation must verify the private R2 logical backup gate before any future write:
