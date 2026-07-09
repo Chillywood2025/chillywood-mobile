@@ -7,12 +7,12 @@ import os from "node:os";
 import path from "node:path";
 
 const repoRoot = process.cwd();
-const draftMigrationPath = "supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql";
+const migrationPath = "supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql";
 const databaseUrlEnvName = "MEDIA_RENDITION_DRY_RUN_DATABASE_URL";
 const embeddedRuntimePackage = "@electric-sql/pglite";
 
 const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
-const migration = read(draftMigrationPath);
+const migration = read(migrationPath);
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -97,7 +97,7 @@ const redactError = (value) => (
 const validateStaticSql = () => {
   const summary = {
     mode: "static",
-    migration: draftMigrationPath,
+    migration: migrationPath,
     syntaxStatic: {
       dollarQuotesBalanced: (migration.match(/\$\$/g) ?? []).length % 2 === 0,
       statementTerminators: (migration.match(/;/g) ?? []).length,
@@ -988,8 +988,9 @@ if (failures.length) {
 
 console.log(JSON.stringify({
   proof: "media-rendition-migration-dry-run",
-  productionMigrationApplied: false,
-  productionDbWritesEnabled: false,
+  productionSchemaMigrationApplied: true,
+  productionDataRowsWritten: false,
+  productionBackfillRun: false,
   productionPlaybackSwitched: false,
   staticSqlValidationPassed,
   runtimeApplyAttempted,

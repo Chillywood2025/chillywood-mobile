@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-09
 
-Status: design/proof only. The draft migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` exists in the repo, but it has not been applied to production. This plan does not switch production playback, does not migrate existing videos, and does not make production transcoding live.
+Status: production schema applied as schema only. Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` was applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`), with tables/indexes/RLS/policies/grants read back afterward. This plan does not switch production playback, does not migrate existing videos, does not backfill media rows, and does not make production transcoding live.
 
 ## Current DB Audit
 
@@ -147,13 +147,13 @@ Trusted fields:
 - Clients cannot set `worker_version` or `source_hash`.
 - Public-safe select policy must require `is_ready=true`, `is_public_playback_safe=true`, `visibility='public'`, scan-safe state, moderation-allowed state, `bucket_role='public_playback'`, `storage_provider='cloudflare_r2'`, `delivery_provider='cloudflare_r2_custom_domain'`, non-original row, and a `playback/public/` path without forbidden private prefixes.
 
-## Draft Migration Result
+## Production Schema Migration Result
 
-Draft file:
+Migration file:
 
 - `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql`
 
-The draft creates:
+The migration creates:
 
 - `media_transcode_jobs`
 - `media_renditions`
@@ -163,7 +163,11 @@ The draft creates:
 - service-role grants for worker-owned writes
 - public-safe metadata select policy constrained to safe public CDN rows
 
-The draft migration has not been applied to production.
+Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`); tables/indexes/RLS/policies/grants were read back and both `media_transcode_jobs` and `media_renditions` had row count 0 after the rollback-only runtime policy proof.
+
+Production data/write boundary: no production media backfill, real media row insert, production `video_renditions` write, production resolver bridge, production transcode worker, or production playback switch is live.
+
+Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes, allowed service-role/worker proof writes, verified resolver-safe select for one clean public-ready proof row, verified unsafe/original/Premium/private/non-public-prefix rows failed eligibility, and rolled back. Final production row counts remained `media_transcode_jobs=0` and `media_renditions=0`.
 
 ## Dry-Run Status
 
@@ -172,7 +176,7 @@ Current repo proof:
 - `npm run proof:media-rendition-migration-policy`
 - `npm run proof:media-rendition-migration-dry-run`
 
-The dry-run proof script statically validates the draft SQL every time: table names, trusted columns, indexes, grants, RLS enablement, client false-write policies, service-role worker grants, comments, original/master constraints, public CDN eligibility constraints, and ready-row worker proof requirements.
+The dry-run proof script statically validates the migration SQL every time: table names, trusted columns, indexes, grants, RLS enablement, client false-write policies, service-role worker grants, comments, original/master constraints, public CDN eligibility constraints, and ready-row worker proof requirements.
 
 Current workstation result on 2026-07-09:
 
@@ -191,9 +195,9 @@ Runtime dry-run behavior when a safe database is provided:
 
 - Set `MEDIA_RENDITION_DRY_RUN_DATABASE_URL` to a local or explicitly test/shadow-labeled Postgres URL.
 - The proof script refuses production-looking URLs and does not print connection strings.
-- For local/shadow runtime mode, the script creates a temporary database, applies minimal fixture schema plus the draft migration, verifies tables/indexes/RLS/grants/policies, proves anon/authenticated client trusted writes are denied, proves service-role/worker queued job and ready public-safe rendition inserts are allowed, proves unsafe/original/Premium public-CDN rows fail, proves resolver-safe public metadata can be selected, then drops the temporary database.
+- For local/shadow runtime mode, the script creates a temporary database, applies minimal fixture schema plus the migration, verifies tables/indexes/RLS/grants/policies, proves anon/authenticated client trusted writes are denied, proves service-role/worker queued job and ready public-safe rendition inserts are allowed, proves unsafe/original/Premium public-CDN rows fail, proves resolver-safe public metadata can be selected, then drops the temporary database.
 
-This dry-run status does not apply the migration to production and does not make production transcoding or production playback live.
+This dry-run status remains non-production proof. The production schema has now been applied separately as schema only; dry-run proof still does not make production transcoding or production playback live.
 
 ## Backfill Strategy
 
@@ -206,11 +210,11 @@ This dry-run status does not apply the migration to production and does not make
 
 ## Rollback Strategy
 
-- Because this draft adds new tables and does not alter current playback, rollback is isolated: stop worker writes, leave existing production playback on signed-origin fallback, and drop or disable the new resolver bridge if one was later added.
+- Because this migration adds new tables and does not alter current playback, rollback is isolated: stop worker writes, leave existing production playback on signed-origin fallback, and drop or disable the new resolver bridge if one was later added.
 - If the table migration is applied and then rejected before production resolver use, drop public grants/policies first, then drop `media_renditions`, `media_transcode_jobs`, and touch triggers/functions in a rollback migration.
 - Do not delete original/source media as part of metadata rollback.
 
-## Proof Required Before Apply
+## Proof Completed Before Production Schema Apply
 
 - Static proof that `anon` and `authenticated` cannot insert/update/delete trusted rows.
 - Static proof that service-role/worker authority is required for ready/public-safe fields.
@@ -222,13 +226,13 @@ This dry-run status does not apply the migration to production and does not make
 
 ## Production Activation Gates
 
-1. Owner approval to apply the migration.
-2. Migration dry-run and staging apply pass.
-3. RLS/policy proof for all roles.
-4. Backend worker deployment plan and staging worker proof.
-5. Trusted rows for a limited allowlisted source only.
-6. Resolver migration behind disabled config.
-7. Cache HIT and telemetry proof for the migrated source.
-8. Signed-origin fallback proof.
-9. No private/original/Premium/unscanned/moderation-blocked media exposed.
-10. Explicit owner approval before any production playback switch.
+1. Owner approval to apply the schema migration: complete for schema only.
+2. Migration dry-run and disposable runtime apply: complete.
+3. Production schema readback plus rollback-only RLS/policy proof: complete.
+4. Backend worker deployment plan and staging worker proof: pending.
+5. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
+6. Resolver migration behind disabled config: pending.
+7. Cache HIT and telemetry proof for the migrated source: pending.
+8. Signed-origin fallback proof: pending.
+9. No private/original/Premium/unscanned/moderation-blocked media exposed: required for every next lane.
+10. Explicit owner approval before any production playback switch: still required.

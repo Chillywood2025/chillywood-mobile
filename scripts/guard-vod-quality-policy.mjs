@@ -72,18 +72,19 @@ assertIncludes(vodDoc, "Original/master rows are private processing sources and 
 assertIncludes(vodDoc, "Premium/private rows still require signed/token CDN access later and cannot use public CDN while `MEDIA_CDN_SIGNING_MODE=off`.", "VOD doc Premium/private CDN boundary");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-metadata` uses proof-only City Lights HLS fixture rows for 360p and 480p", "VOD doc trusted fixture proof");
 assertIncludes(vodDoc, "Trusted backend migration path:", "VOD doc trusted backend migration path");
-assertIncludes(vodDoc, "Draft migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` exists but is not applied to production", "VOD doc unapplied trusted migration");
+assertIncludes(vodDoc, "Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` is applied to production as schema only", "VOD doc production schema migration");
 assertIncludes(vodDoc, "service role or backend worker authority the only trusted write path", "VOD doc trusted write authority");
 assertIncludes(vodDoc, "Clients cannot mark rows ready, set `public_playback_path`, set `is_public_playback_safe`, set `worker_version`, set `source_hash`, or create public CDN eligibility from client-controlled data.", "VOD doc client trusted write block");
-assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-policy` statically proves the draft SQL and docs keep client writes blocked", "VOD doc migration policy proof");
+assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-policy` statically proves the migration SQL and docs keep client writes blocked", "VOD doc migration policy proof");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-dry-run` passes static SQL validation plus runtime apply/RLS checks in an in-memory disposable local Postgres runtime via `@electric-sql/pglite`.", "VOD doc migration dry-run runtime proof");
 assertIncludes(vodDoc, "proves anon/authenticated trusted writes are denied, proves service-role/worker writes pass, proves resolver-safe anon select returns one clean public-ready row", "VOD doc migration dry-run RLS proof");
-assertIncludes(vodDoc, "No production `video_renditions` writes are live.", "VOD doc no production writes");
-assertIncludes(vodDoc, "Trusted backend migration policy is design/proof-only.", "VOD doc trusted migration proof-only");
-assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded disposable local Postgres runtime; a real Supabase staging/shadow apply still requires explicit owner approval and a safe non-production database.", "VOD doc trusted migration dry-run checkpoint");
+assertIncludes(vodDoc, "Production schema readback and rollback-only RLS proof passed on 2026-07-09, final production row counts stayed zero, and production playback remains unchanged.", "VOD doc production schema proof");
+assertIncludes(vodDoc, "Trusted backend migration schema is applied to production as empty schema only.", "VOD doc trusted migration schema-only");
+assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded disposable local Postgres runtime, and production rollback-only RLS proof passed with final row counts back to zero.", "VOD doc trusted migration proof checkpoint");
 
-assertIncludes(mediaMigrationPlan, "Status: design/proof only.", "trusted rendition migration plan status");
-assertIncludes(mediaMigrationPlan, "The draft migration has not been applied to production.", "trusted rendition migration plan unapplied status");
+assertIncludes(mediaMigrationPlan, "Status: production schema applied as schema only.", "trusted rendition migration plan status");
+assertIncludes(mediaMigrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "trusted rendition migration plan production schema status");
+assertIncludes(mediaMigrationPlan, "Production data/write boundary: no production media backfill, real media row insert, production `video_renditions` write, production resolver bridge, production transcode worker, or production playback switch is live.", "trusted rendition migration plan production data boundary");
 assertIncludes(mediaMigrationPlan, "`service_role` / backend worker is the only intended writer", "trusted rendition migration plan service role writer");
 assertIncludes(mediaMigrationPlan, "Public CDN eligibility must never come from app/client input", "trusted rendition migration plan client trust boundary");
 assertIncludes(mediaMigrationPlan, "Clients cannot mark rows ready.", "trusted rendition migration plan ready write block");
@@ -170,7 +171,9 @@ assertIncludes(mediaRenditionMigrationPolicyProof, "supabase/migrations/20260709
 assertIncludes(mediaRenditionMigrationPolicyProof, "clientTrustedWritesAllowed: false", "trusted media rendition migration no client writes proof");
 assertIncludes(mediaRenditionMigrationPolicyProof, "serviceRoleWorkerRequired: true", "trusted media rendition migration service role proof");
 assertIncludes(mediaRenditionMigrationPolicyProof, "publicCdnEligibilityFromTrustedRowsOnly: true", "trusted media rendition migration trusted rows proof");
-assertIncludes(mediaRenditionMigrationPolicyProof, "productionMigrationApplied: false", "trusted media rendition migration no production apply");
+assertIncludes(mediaRenditionMigrationPolicyProof, "productionSchemaMigrationApplied: true", "trusted media rendition migration production schema apply");
+assertIncludes(mediaRenditionMigrationPolicyProof, "productionMediaRowsWritten: false", "trusted media rendition migration no production media rows");
+assertIncludes(mediaRenditionMigrationPolicyProof, "productionBackfillRun: false", "trusted media rendition migration no production backfill");
 assertIncludes(mediaRenditionMigrationPolicyProof, "productionPlaybackSwitched: false", "trusted media rendition migration no production playback switch");
 assertNotMatches(mediaRenditionMigrationPolicyProof, /\bsupabase\.from\b|\bcreateClient\b/i, "trusted rendition migration policy proof must not write production DB or create a Supabase client");
 assertIncludes(mediaRenditionMigrationDryRunProof, "media-rendition-migration-dry-run", "trusted media rendition migration dry-run proof mode");
@@ -185,7 +188,9 @@ assertIncludes(mediaRenditionMigrationDryRunProof, "noSecretsPrinted", "trusted 
 assertIncludes(mediaRenditionMigrationDryRunProof, "clientWriteDenials", "trusted media rendition migration dry-run client denial proof");
 assertIncludes(mediaRenditionMigrationDryRunProof, "serviceRoleWorkerWrites", "trusted media rendition migration dry-run service role proof");
 assertIncludes(mediaRenditionMigrationDryRunProof, "resolverSafeSelect", "trusted media rendition migration dry-run resolver-safe select proof");
-assertIncludes(mediaRenditionMigrationDryRunProof, "productionMigrationApplied: false", "trusted media rendition migration dry-run no production migration");
+assertIncludes(mediaRenditionMigrationDryRunProof, "productionSchemaMigrationApplied: true", "trusted media rendition migration dry-run production schema apply");
+assertIncludes(mediaRenditionMigrationDryRunProof, "productionDataRowsWritten: false", "trusted media rendition migration dry-run no production data rows");
+assertIncludes(mediaRenditionMigrationDryRunProof, "productionBackfillRun: false", "trusted media rendition migration dry-run no production backfill");
 assertIncludes(mediaRenditionMigrationDryRunProof, "productionPlaybackSwitched: false", "trusted media rendition migration dry-run no production playback switch");
 
 assertIncludes(creatorVideos, "resolveSignedVideoPlaybackSource", "creator video player resolver integration");

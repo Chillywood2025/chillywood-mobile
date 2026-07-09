@@ -6,10 +6,10 @@ import path from "node:path";
 const repoRoot = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 
-const draftMigrationPath = "supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql";
+const migrationPath = "supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql";
 const migrationPlanPath = "docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md";
 
-const migration = read(draftMigrationPath);
+const migration = read(migrationPath);
 const migrationPlan = read(migrationPlanPath);
 const architecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
@@ -47,10 +47,10 @@ const hasNegatingLanguage = (sentence) => (
 const docsCorpus = [migrationPlan, architecture, vodDoc, currentState, nextTask].join("\n\n");
 const proofCorpus = [migration, docsCorpus, read("scripts/proof-media-rendition-migration-policy.mjs")].join("\n\n");
 
-assertIncludes(migration, 'create table if not exists public."media_transcode_jobs"', "draft migration");
-assertIncludes(migration, 'create table if not exists public."media_renditions"', "draft migration");
-assertIncludes(migration, 'alter table public."media_transcode_jobs" enable row level security;', "draft migration RLS");
-assertIncludes(migration, 'alter table public."media_renditions" enable row level security;', "draft migration RLS");
+assertIncludes(migration, 'create table if not exists public."media_transcode_jobs"', "migration");
+assertIncludes(migration, 'create table if not exists public."media_renditions"', "migration");
+assertIncludes(migration, 'alter table public."media_transcode_jobs" enable row level security;', "migration RLS");
+assertIncludes(migration, 'alter table public."media_renditions" enable row level security;', "migration RLS");
 
 for (const tableName of ["media_transcode_jobs", "media_renditions"]) {
   assertIncludes(migration, `revoke all on table public."${tableName}" from "anon";`, `${tableName} grants`);
@@ -64,12 +64,12 @@ for (const tableName of ["media_transcode_jobs", "media_renditions"]) {
 assertNotMatches(
   migration,
   /\bgrant\s+(insert|update|delete|all)\b[^;]*\bto\s+"?(anon|authenticated)"?/i,
-  "draft migration must not grant client writes",
+  "migration must not grant client writes",
 );
 assertNotMatches(
   migration,
   /for\s+(insert|update|delete)\s+to\s+(anon|authenticated)[\s\S]{0,160}(with check|using)\s*\((?!false\))/i,
-  "draft migration client write policies must be fail-closed",
+  "migration client write policies must be fail-closed",
 );
 
 for (const trustedField of [
@@ -132,24 +132,26 @@ for (const indexName of [
   assertIncludes(migration, indexName, `required index ${indexName}`);
 }
 
-assertIncludes(migrationPlan, "Status: design/proof only.", "migration plan status");
-assertIncludes(migrationPlan, "The draft migration has not been applied to production.", "migration plan unapplied status");
+assertIncludes(migrationPlan, "Status: production schema applied as schema only.", "migration plan status");
+assertIncludes(migrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "migration plan production schema apply status");
+assertIncludes(migrationPlan, "Production data/write boundary: no production media backfill, real media row insert, production `video_renditions` write, production resolver bridge, production transcode worker, or production playback switch is live.", "migration plan production data boundary");
+assertIncludes(migrationPlan, "Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes", "migration plan rollback-only proof status");
 assertIncludes(migrationPlan, "`service_role` / backend worker is the only intended writer", "migration plan write authority");
 assertIncludes(migrationPlan, "Public CDN eligibility must never come from app/client input", "migration plan client trust boundary");
 assertIncludes(migrationPlan, "Clients cannot mark rows ready.", "migration plan RLS requirements");
 assertIncludes(migrationPlan, "Clients cannot set `public_playback_path`.", "migration plan RLS requirements");
 assertIncludes(migrationPlan, "Clients cannot set `is_public_playback_safe`.", "migration plan RLS requirements");
-assertIncludes(migrationPlan, "Owner approval to apply the migration.", "migration plan activation gate");
+assertIncludes(migrationPlan, "Owner approval to apply the schema migration: complete for schema only.", "migration plan activation gate");
 
 assertIncludes(architecture, "Trusted backend migration path status:", "architecture migration status");
 assertIncludes(vodDoc, "Trusted backend migration path:", "VOD migration status");
-assertIncludes(currentState, "Trusted backend migration path is design/proof-only:", "current state migration status");
-assertIncludes(nextTask, "Trusted backend migration path exists as docs, a draft SQL migration, and `npm run proof:media-rendition-migration-policy` only;", "next task migration status");
+assertIncludes(currentState, "Trusted backend migration schema is applied to production as schema only:", "current state migration status");
+assertIncludes(nextTask, "Trusted backend migration schema is applied to production as schema only:", "next task migration status");
 
 assertMatches(
   docsCorpus,
-  /\b(production DB migration|draft migration|migration)\b[^.]*\b(not applied|has not been applied|not live)\b/i,
-  "docs must say production migration is not applied",
+  /\bproduction schema migration status\b[^.]*\bapplied to production\b/i,
+  "docs must say production schema migration is applied",
 );
 assertMatches(
   docsCorpus,
@@ -164,8 +166,8 @@ assertMatches(
 
 assertNotMatches(
   docsCorpus,
-  /\bproduction (?:DB )?migration (?:is )?(?:applied|live|active)\b/i,
-  "docs must not claim production migration is applied",
+  /\bproduction (?:media )?(?:row|data) (?:write|insert|backfill|migration)s? (?:is |are )?(?:live|active|enabled|running|complete)\b/i,
+  "docs must not claim production media row writes are live",
 );
 for (const sentence of splitSentences(docsCorpus)) {
   if (
@@ -202,8 +204,10 @@ if (failures.length) {
 
 console.log(JSON.stringify({
   proof: "media-rendition-migration-policy",
-  draftMigration: draftMigrationPath,
-  productionMigrationApplied: false,
+  migration: migrationPath,
+  productionSchemaMigrationApplied: true,
+  productionMediaRowsWritten: false,
+  productionBackfillRun: false,
   productionPlaybackSwitched: false,
   productionTranscodeWorkerLive: false,
   clientTrustedWritesAllowed: false,
