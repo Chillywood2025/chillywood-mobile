@@ -2,13 +2,13 @@
 
 Last updated: 2026-07-09
 
-Status: Catalog readiness automation is source/proofed and CLI-read-only. It classifies catalog rows, identifies public scan candidates, and plans scan/moderation readiness steps. It does not execute scans, does not mark media clean, does not write production rows, does not process/transcode media, and does not switch playback.
+Status: Catalog readiness automation is source/proofed and CLI-read-only. It classifies catalog rows, identifies public scan candidates, and plans scan/moderation readiness steps. Scanner automation is also source/proofed for ffprobe media-readability planning, but production scan writes are disabled in the CLI source-proof build. No command marks media clean without trusted scanner proof, no command processes/transcodes media, and no command switches playback.
 
 ## Purpose
 
 The media automation pipeline cannot transcode unscanned creator videos into public Cloudflare R2/HLS output. Catalog readiness fills the gap before transcode automation: it explains why rows are excluded, identifies which public rows may be queued for scanning, and keeps private, Premium, original/master, unsupported, missing-source, and moderation-blocked media out of the public CDN path.
 
-Catalog readiness CLI is read-only. This lane does not execute scans or moderation promotion.
+Catalog readiness CLI is read-only. This lane does not execute scans on production media. The scanner CLI can plan and dry-run a public scan candidate, but `run-one` fails closed unless the explicit confirmation is present and still refuses production writes in this source-proof build. This lane does not execute moderation promotion.
 
 ## Commands
 
@@ -17,6 +17,10 @@ npm run media-catalog:status
 npm run media-catalog:readiness-plan
 npm run media-catalog:scan-plan
 npm run proof:media-catalog-readiness
+npm run media-scan:status
+npm run media-scan:plan
+npm run media-scan:dry-run
+npm run proof:media-scan-automation
 ```
 
 The production commands use linked Supabase read-only queries. They return sanitized counts and public-candidate metadata only. They do not print DB URLs, signed URLs, private storage paths, service-role keys, or private/Premium excluded-row details.
@@ -74,6 +78,14 @@ Do not mark unscanned media clean without scanner proof. A future scan executor 
 
 The repository has scanner infrastructure documented elsewhere, but this catalog readiness CLI is plan-only. It does not enqueue scans, does not execute a scanner, does not change visibility, and does not promote rows to clean/approved.
 
+## Scan Automation Layer
+
+`_lib/mediaScanAutomation.ts`, `scripts/media-scan-cli.mjs`, and `npm run proof:media-scan-automation` add the scanner automation layer. The model classifies scan work as `scan_pending`, `scan_clean`, `scan_failed`, `scan_quarantined`, `scan_skipped_private`, `scan_skipped_premium`, `scan_skipped_missing_source`, `scan_skipped_unsupported`, or `scan_skipped_already_audited_hls`.
+
+The implemented scanner proof is ffprobe media-readability only. It can prove that a media file is readable and has streams/duration. It is not full malware scanning, not NSFW/content moderation, and not a replacement for moderation policy. The existing malware scan pipeline uses service-role-only RPCs and scanner authority; clients cannot write clean scan results.
+
+Production scan write status: disabled in the new CLI source-proof build. `media-scan:run-one` requires `MEDIA_SCAN_RUN_ONE_CONFIRM=I_UNDERSTAND_PUBLIC_SCAN_ONE` and then still fails closed with `production_scan_write_not_enabled_in_this_source_proof_build`. Future production scan writes must use the trusted service-role scanner path, include scanner name/version/proof, read back the result, and still require moderation-safe state before `ready_for_transcode`.
+
 ## Safety Rules
 
 - Private and Premium media remain excluded.
@@ -81,5 +93,7 @@ The repository has scanner infrastructure documented elsewhere, but this catalog
 - Unscanned media cannot be transcoded.
 - Moderation-blocked media cannot be transcoded.
 - Readiness planning performs no mutation.
+- Scanner planning performs no mutation.
+- `run-one` requires explicit confirmation and is write-disabled in this source-proof build.
 - Proof and CLI output must redact private URLs, signed URLs, object paths, and secrets.
 - Transcode automation may only consume rows after scan and moderation gates promote them to `ready_for_transcode`.

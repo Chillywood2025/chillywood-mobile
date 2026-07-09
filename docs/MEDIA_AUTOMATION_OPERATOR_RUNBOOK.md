@@ -105,6 +105,8 @@ npm run media-catalog:scan-plan
 
 The five `needs_scan` rows are scan candidates only. The catalog readiness CLI does not execute scans, does not mark media clean, does not write production rows, does not process/transcode media, and does not switch playback. Unscanned or manual-review media may become transcode candidates only after trusted scanner proof and moderation-safe readback. Private and Premium media remain excluded from the public transcode path.
 
+Scan automation source/proof status: `_lib/mediaScanAutomation.ts`, `scripts/media-scan-cli.mjs`, and `npm run proof:media-scan-automation` now model the next readiness step. The CLI supports `media-scan:status`, `media-scan:plan`, `media-scan:dry-run`, `media-scan:run-one`, and `media-scan:audit`. It uses linked read-only catalog queries by default, redacts private/Premium excluded rows, and never transcodes or switches playback. The implemented proof is ffprobe media-readability only; it must not be described as malware scanning or moderation. Production clean writes stay behind trusted scanner/service-role authority, require scanner name/version/proof/readback, and remain disabled in the new CLI source-proof build.
+
 ## Backup Gate
 
 Automation must verify the private R2 logical backup gate before any future write:

@@ -83,6 +83,7 @@ const chillywoodAutonomyPolicy = read("_lib/chillywoodAutonomyPolicy.ts");
 const mediaAutomationBackfillPolicy = read("_lib/mediaAutomationBackfillPolicy.ts");
 const mediaAutomationQueueProcessor = read("_lib/mediaAutomationQueueProcessor.ts");
 const mediaCatalogReadiness = read("_lib/mediaCatalogReadiness.ts");
+const mediaScanAutomation = read("_lib/mediaScanAutomation.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const vodQuality = read("_lib/vodQuality.ts");
@@ -118,6 +119,7 @@ const mediaCdnRolloutPlanner = read("scripts/media-cdn-rollout-planner.mjs");
 const mediaCdnRolloutPlannerProof = read("scripts/proof-media-cdn-rollout-planner.mjs");
 const mediaAutomationCli = read("scripts/media-automation-cli.mjs");
 const mediaCatalogReadinessCli = read("scripts/media-catalog-readiness-cli.mjs");
+const mediaScanCli = read("scripts/media-scan-cli.mjs");
 const mediaAutomationControllerProof = read("scripts/proof-media-automation-controller.mjs");
 const mediaAutomationDiscoveryProof = read("scripts/proof-media-automation-discovery.mjs");
 const mediaAutomationBatchPolicyProof = read("scripts/proof-media-automation-batch-policy.mjs");
@@ -128,6 +130,7 @@ const mediaAutomationCliProof = read("scripts/proof-media-automation-cli.mjs");
 const mediaAutomationBatchPlannerProof = read("scripts/proof-media-automation-batch-planner.mjs");
 const mediaAutomationWorkerLoopProof = read("scripts/proof-media-automation-worker-loop.mjs");
 const mediaCatalogReadinessProof = read("scripts/proof-media-catalog-readiness.mjs");
+const mediaScanAutomationProof = read("scripts/proof-media-scan-automation.mjs");
 const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 const mediaRenditionMigrationDryRunProof = read("scripts/proof-media-rendition-migration-dry-run.mjs");
 
@@ -150,7 +153,9 @@ const sourceCorpus = [
   mediaAutomationBackfillPolicy,
   mediaAutomationQueueProcessor,
   mediaCatalogReadiness,
+  mediaScanAutomation,
   mediaCatalogReadinessCli,
+  mediaScanCli,
   mediaAutomationCli,
   mediaTranscodeWorkerCli,
   mediaStorageFunction,
@@ -791,6 +796,31 @@ assertIncludes(packageJson, "\"media-catalog:readiness-plan\"", "package catalog
 assertIncludes(packageJson, "\"media-catalog:scan-plan\"", "package catalog scan plan script");
 assertIncludes(packageJson, "\"proof:media-catalog-readiness\"", "package catalog readiness proof script");
 assertNotMatches(mediaCatalogReadinessCli, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "catalog readiness CLI must not mutate DB");
+assertIncludes(architecture, "Scan automation status: source/proofed and no production writes.", "scan automation architecture status");
+assertIncludes(architecture, "The scanner proof is explicitly not malware scanning or content moderation.", "scan automation architecture scanner boundary");
+assertIncludes(mediaCatalogReadinessRunbook, "Production scan write status: disabled in the new CLI source-proof build.", "scan automation runbook production write boundary");
+assertIncludes(mediaCatalogReadinessRunbook, "The implemented scanner proof is ffprobe media-readability only.", "scan automation runbook ffprobe boundary");
+assertIncludes(mediaScanAutomation, "| \"scan_skipped_private\"", "scan automation private skip state");
+assertIncludes(mediaScanAutomation, "| \"scan_skipped_premium\"", "scan automation Premium skip state");
+assertIncludes(mediaScanAutomation, "| \"scan_skipped_already_audited_hls\"", "scan automation already audited skip state");
+assertIncludes(mediaScanAutomation, "scanner_name_required", "scan automation scanner name requirement");
+assertIncludes(mediaScanAutomation, "scanner_version_required", "scan automation scanner version requirement");
+assertIncludes(mediaScanAutomation, "scanner_proof_required_for_clean", "scan automation scanner proof requirement");
+assertIncludes(mediaScanAutomation, "canPromoteScanResultToReadiness", "scan automation readiness promotion helper");
+assertIncludes(mediaScanAutomation, "moderation_not_allowed", "scan automation moderation gate");
+assertIncludes(mediaScanCli, "MEDIA_SCAN_RUN_ONE_CONFIRM", "scan CLI confirmation env");
+assertIncludes(mediaScanCli, "I_UNDERSTAND_PUBLIC_SCAN_ONE", "scan CLI confirmation value");
+assertIncludes(mediaScanCli, "production_scan_write_not_enabled_in_this_source_proof_build", "scan CLI production write disabled");
+assertIncludes(mediaScanCli, "ffprobe_media_readability_only_not_malware_or_content_moderation", "scan CLI scanner type disclosure");
+assertIncludes(mediaScanCli, "sourceId: publicSafeToIdentify ? result.sourceId : \"[redacted]\"", "scan CLI private/Premium identifier redaction");
+assertIncludes(mediaScanAutomationProof, "ffprobe-readable media validates clean", "scan proof ffprobe clean case");
+assertIncludes(mediaScanAutomationProof, "ffprobe failure validates failed", "scan proof ffprobe failure case");
+assertIncludes(mediaScanAutomationProof, "run-one requires confirmation", "scan proof run-one confirmation");
+assertIncludes(packageJson, "\"media-scan:status\"", "package media scan status script");
+assertIncludes(packageJson, "\"media-scan:plan\"", "package media scan plan script");
+assertIncludes(packageJson, "\"media-scan:dry-run\"", "package media scan dry-run script");
+assertIncludes(packageJson, "\"proof:media-scan-automation\"", "package media scan proof script");
+assertNotMatches(mediaScanCli, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media scan CLI must not mutate DB");
 assertIncludes(mediaAutomationController, "MEDIA_AUTOMATION_DEFAULT_MODE: MediaAutomationMode = \"off\"", "media automation controller off default");
 assertIncludes(mediaAutomationController, "| \"dry_run\"", "media automation controller dry-run mode");
 assertIncludes(mediaAutomationController, "| \"auto_detect\"", "media automation controller auto-detect mode");
