@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const root = process.cwd();
@@ -58,6 +61,7 @@ const docsCorpus = [architecture, vodDoc, wave2Doc].join("\n\n");
 const mediaStatusCorpus = [architecture, currentState, nextTask].join("\n\n");
 
 const mediaStorage = read("_lib/mediaStorage.ts");
+const mediaDelivery = read("_lib/mediaDelivery.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const vodQuality = read("_lib/vodQuality.ts");
@@ -66,9 +70,11 @@ const player = read("app/player/[id].tsx");
 const watchPartyContentSources = read("_lib/watchPartyContentSources.ts");
 const migration = read("supabase/migrations/202605140010_vod_quality_ladder_resolver.sql");
 const packageJson = read("package.json");
+const mediaDeliveryResolverProof = read("scripts/proof-media-delivery-resolver.mjs");
 
 const sourceCorpus = [
   mediaStorage,
+  mediaDelivery,
   mediaStorageFunction,
   creatorVideos,
   vodQuality,
@@ -89,9 +95,10 @@ const hasCdnPlaybackPath = /\b(CDN_PLAYBACK|cdnPlayback|createSignedCdn|signedCd
 const hasPlaybackTelemetry = /\b(media_bandwidth_events|record_media_playback_egress|cdn_access_logs|cdn_access_log|playback_egress_bytes|rendition_bytes_served|edge_bytes_served)\b/i.test(sourceCorpus);
 const hasResumableUpload = /\b(createMultipartUpload|completeMultipartUpload|UploadPart|multipart_upload|tus|resumable_upload|direct_upload_session)\b/i.test(sourceCorpus);
 
-assertIncludes(architecture, "Status: architecture and guard only.", "media delivery architecture doc");
+assertIncludes(architecture, "Status: staged resolver helper, proof script, architecture, and guard only.", "media delivery architecture doc");
 assertIncludes(architecture, "Transcoding status: not live; no worker exists in this repo.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text proof delivery; production CDN playback is not live.", "media delivery architecture doc");
+assertIncludes(architecture, "Cloudflare R2 public playback resolver status: staged helper and proof script exist; production playback remains disabled by default and still falls back to signed origin.", "R2 public playback resolver status");
 assertIncludes(architecture, "Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.", "R2 private origin proof status");
 assertIncludes(architecture, "R2 CLI/API proof status: private and public-playback proof upload/readback succeeded through authorized Wrangler access; no production R2 CDN playback is live.", "R2 CLI/API proof status");
 assertIncludes(architecture, "R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.", "R2 proof bucket status");
@@ -143,6 +150,11 @@ assertIncludes(architecture, "Forbidden-prefix probes under `originals/`, `uploa
 assertIncludes(architecture, "Public-playback proof audit: bucket list shows `chillywood-media-public-playback-proof`, r2.dev status is disabled, custom-domain list contains `media.chillywoodstream.com`, and the proof object still reads back as harmless text through authorized Wrangler access.", "public-playback proof audit");
 assertIncludes(architecture, "Supabase/Edge resolver remains the access-control and playback decision layer.", "Supabase/Edge resolver boundary");
 assertIncludes(architecture, "The app must ask the backend resolver for playback; the app must not hard-code R2 or Cloudflare custom-domain decisions.", "app resolver contract");
+assertIncludes(architecture, "`_lib/mediaDelivery.ts` stages the Cloudflare R2 custom-domain resolver helper for future safe public playback assets.", "staged public playback resolver");
+assertIncludes(architecture, "`resolveMediaPlaybackDelivery(...)` returns `media.chillywoodstream.com` only when the delivery provider is `cloudflare_r2_custom_domain`, `MEDIA_CDN_BASE_URL` is configured, `MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED=true`, the asset path starts with `playback/public/`, and the caller explicitly marks the asset `publicPlaybackSafe`.", "staged public playback resolver contract");
+assertIncludes(architecture, "The helper blocks public CDN URLs for original/master/source paths, `original` quality, unscanned assets, moderation-blocked assets, private/owner assets, and Premium-only assets until signed/token CDN access is implemented and proved.", "staged public playback resolver blocks");
+assertIncludes(architecture, "Current VOD production wiring passes `publicPlaybackSafe: false`, so existing creator-video playback still uses signed origin fallback even if CDN config is present.", "staged public playback resolver fallback");
+assertIncludes(architecture, "Production playback remains unchanged until a later approved lane adds trusted public-safe asset metadata, cache-HIT proof, telemetry, and signed/token CDN access for non-public assets.", "staged public playback resolver production boundary");
 assertIncludes(architecture, "Creator-video Watch-Party sources must use the same creator-video playback resolver path as standalone Player.", "media delivery architecture doc");
 assertIncludes(architecture, "HLS/transcoding is a future milestone unless implemented and proved.", "HLS/transcoding status");
 assertIncludes(architecture, "Bandwidth/minutes-watched telemetry remains required before broad rollout.", "egress telemetry requirement");
@@ -163,7 +175,11 @@ assertIncludes(architecture, "Current/legacy fallback: Hetzner Object Storage or
 assertIncludes(architecture, "Optional future CDN alternative: Bunny CDN remains an alternative only", "Bunny classification");
 assertIncludes(currentState, "private proof bucket `chillywood-media-proof` remains private with r2.dev disabled and no custom domain", "current state private bucket boundary");
 assertIncludes(currentState, "Owner-approved `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`", "current state custom-domain boundary");
+assertIncludes(currentState, "`_lib/mediaDelivery.ts` now stages disabled-by-default Cloudflare R2 custom-domain resolver support", "current state staged resolver support");
+assertIncludes(currentState, "Current VOD production wiring passes `publicPlaybackSafe: false`, so existing creator-video playback still uses signed-origin fallback.", "current state production playback fallback");
 assertIncludes(nextTask, "Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from `chillywood-media-proof`.", "next task bucket separation");
+assertIncludes(nextTask, "Staged resolver support exists in `_lib/mediaDelivery.ts` and is proved by `npm run proof:media-delivery-resolver`.", "next task staged resolver support");
+assertIncludes(nextTask, "Current VOD production wiring keeps `publicPlaybackSafe: false`, so existing creator-video playback still falls back to signed origin by default.", "next task production fallback");
 assertIncludes(nextTask, "Do not enable public access on `chillywood-media-proof`.", "private bucket public access prohibition");
 
 const transcodeLiveClaims = claimSentences(
@@ -329,6 +345,7 @@ const secretScanCorpus = [
   currentState,
   nextTask,
   read("scripts/guard-media-delivery-architecture.mjs"),
+  mediaDeliveryResolverProof,
   packageJson,
   sourceCorpus,
 ].join("\n");
@@ -354,6 +371,24 @@ assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "free VOD poli
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "Premium VOD policy");
 assertIncludes(vodQuality, "VOD_FREE_PLAYBACK_QUALITY_LABELS = [\"360p\", \"480p\"]", "VOD free ladder");
 assertIncludes(vodQuality, "VOD_PREMIUM_PLAYBACK_QUALITY_LABELS = [\"720p\", \"1080p\"]", "VOD Premium ladder");
+assertIncludes(mediaDelivery, "classifyMediaDeliveryAsset", "media delivery resolver helper");
+assertIncludes(mediaDelivery, "canUseCloudflareR2PublicPlayback", "media delivery resolver helper");
+assertIncludes(mediaDelivery, "resolveCloudflareR2PublicPlaybackUrl", "media delivery resolver helper");
+assertIncludes(mediaDelivery, "resolveMediaPlaybackDelivery", "media delivery resolver helper");
+assertIncludes(mediaDelivery, "MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN", "media delivery resolver helper");
+assertIncludes(mediaDelivery, "MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT", "media delivery resolver helper");
+assertIncludes(mediaDelivery, "MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX_DEFAULT = \"playback/public/\"", "media delivery resolver helper");
+assertIncludes(mediaDelivery, "publicPlaybackSafe", "media delivery resolver explicit safety flag");
+assertIncludes(mediaDelivery, "public_playback_not_marked_safe", "media delivery resolver explicit safety block");
+assertIncludes(mediaDelivery, "outside_public_playback_prefix", "media delivery resolver prefix block");
+assertIncludes(mediaDelivery, "original_or_master_blocked", "media delivery resolver original/master block");
+assertIncludes(mediaDelivery, "unscanned_blocked", "media delivery resolver unscanned block");
+assertIncludes(mediaDelivery, "moderation_blocked", "media delivery resolver moderation block");
+assertIncludes(mediaDelivery, "private_asset_blocked", "media delivery resolver private block");
+assertIncludes(mediaDelivery, "premium_requires_token_cdn", "media delivery resolver Premium block");
+assertIncludes(mediaDelivery, "private_cdn_delivery_not_disabled", "media delivery resolver private CDN disabled guard");
+assertIncludes(vodQuality, "resolveMediaPlaybackDelivery", "VOD helper uses staged media delivery resolver");
+assertIncludes(vodQuality, "publicPlaybackSafe: false", "production VOD defaults to signed origin fallback");
 assertIncludes(migration, '"quality_label" <> \'original\'', "resolver original exclusion");
 assertIncludes(migration, "\"quality_label\" not in ('720p', '1080p')", "HD premium constraint");
 assertIncludes(migration, '"access_tier" = \'premium\' and v_has_premium', "resolver Premium entitlement check");
@@ -376,6 +411,203 @@ assertIncludes(mediaStorageFunction, "createPresignedS3Url", "current direct sig
 assertIncludes(mediaStorage, "FileSystem.uploadAsync", "current single PUT upload path");
 
 assertIncludes(packageJson, "\"guard:media-delivery-architecture\"", "package guard script");
+assertIncludes(packageJson, "\"proof:media-delivery-resolver\"", "package proof script");
+
+const loadMediaDeliveryHelper = () => {
+  const outDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-delivery-guard-"));
+  try {
+    const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+    execFileSync(
+      npxCommand,
+      [
+        "tsc",
+        "_lib/mediaDelivery.ts",
+        "--target",
+        "ES2020",
+        "--module",
+        "commonjs",
+        "--moduleResolution",
+        "node",
+        "--outDir",
+        outDir,
+        "--strict",
+        "--skipLibCheck",
+      ],
+      {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+
+    const requireFromGuard = createRequire(import.meta.url);
+    for (const candidate of [
+      path.join(outDir, "mediaDelivery.js"),
+      path.join(outDir, "_lib", "mediaDelivery.js"),
+    ]) {
+      try {
+        return {
+          helper: requireFromGuard(candidate),
+          cleanup: () => rmSync(outDir, { recursive: true, force: true }),
+        };
+      } catch {
+        // Try the next compiler output shape.
+      }
+    }
+    throw new Error("compiled helper missing");
+  } catch (error) {
+    rmSync(outDir, { recursive: true, force: true });
+    throw error;
+  }
+};
+
+const assertMediaDeliveryHelperPolicy = async () => {
+  let loaded;
+  try {
+    loaded = loadMediaDeliveryHelper();
+  } catch (error) {
+    fail(`media delivery helper must compile for guard proof: ${error instanceof Error ? error.message : "unknown_error"}`);
+    return;
+  }
+
+  try {
+    const config = {
+      deliveryProvider: "cloudflare_r2_custom_domain",
+      cdnBaseUrl: "https://media.chillywoodstream.com",
+      cdnSigningMode: "off",
+      cdnPublicPlaybackPrefix: "playback/public/",
+      cdnPrivatePlaybackDisabled: true,
+    };
+    const fallbackUrl = "origin-signed-direct-fallback";
+
+    const safePublic = await loaded.helper.resolveMediaPlaybackDelivery({
+      asset: {
+        path: "playback/public/proof/hello.txt",
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+      config,
+      fallbackUrl,
+    });
+    if (safePublic.url !== "https://media.chillywoodstream.com/playback/public/proof/hello.txt") {
+      fail("media delivery helper must return the public proof custom-domain URL only for explicit public-safe playback assets");
+    }
+
+    const blockedCases = [
+      {
+        label: "non-public prefix",
+        asset: {
+          path: "private/source.mp4",
+          publicPlaybackSafe: true,
+          accessTier: "private",
+          scanStatus: "clean",
+          moderationStatus: "clean",
+        },
+      },
+      {
+        label: "original public-prefix path",
+        asset: {
+          path: "playback/public/originals/source.mp4",
+          publicPlaybackSafe: true,
+          accessTier: "free",
+          qualityLabel: "original",
+          scanStatus: "clean",
+          moderationStatus: "clean",
+        },
+      },
+      {
+        label: "premium public-prefix path",
+        asset: {
+          path: "playback/public/proof/hd.m3u8",
+          publicPlaybackSafe: true,
+          accessTier: "premium",
+          scanStatus: "clean",
+          moderationStatus: "clean",
+        },
+      },
+      {
+        label: "unscanned public-prefix path",
+        asset: {
+          path: "playback/public/proof/pending.m3u8",
+          publicPlaybackSafe: true,
+          accessTier: "free",
+          scanStatus: "pending_scan",
+          moderationStatus: "clean",
+        },
+      },
+      {
+        label: "moderation-blocked public-prefix path",
+        asset: {
+          path: "playback/public/proof/hidden.m3u8",
+          publicPlaybackSafe: true,
+          accessTier: "free",
+          scanStatus: "clean",
+          moderationStatus: "hidden",
+        },
+      },
+      {
+        label: "public-prefix path without explicit safety",
+        asset: {
+          path: "playback/public/proof/hello.txt",
+          publicPlaybackSafe: false,
+          accessTier: "free",
+          scanStatus: "clean",
+          moderationStatus: "clean",
+        },
+      },
+    ];
+
+    for (const entry of blockedCases) {
+      const resolution = await loaded.helper.resolveMediaPlaybackDelivery({
+        asset: entry.asset,
+        config,
+        fallbackUrl,
+      });
+      if (String(resolution.url ?? "").includes("media.chillywoodstream.com")) {
+        fail(`media delivery helper must not return media.chillywoodstream.com for ${entry.label}`);
+      }
+      if (resolution.cdnEligible !== false || resolution.fallbackUsed !== true || !resolution.blockedReason) {
+        fail(`media delivery helper must block and fall back for ${entry.label}`);
+      }
+    }
+
+    const missingConfig = await loaded.helper.resolveMediaPlaybackDelivery({
+      asset: {
+        path: "playback/public/proof/hello.txt",
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+      config: { deliveryProvider: "origin_signed_direct", cdnBaseUrl: "" },
+      fallbackUrl,
+    });
+    if (missingConfig.url !== fallbackUrl || missingConfig.cdnEligible !== false) {
+      fail("media delivery helper must keep signed-origin fallback when Cloudflare CDN config is absent or disabled");
+    }
+
+    const invalidSigningMode = await loaded.helper.resolveMediaPlaybackDelivery({
+      asset: {
+        path: "playback/public/proof/hello.txt",
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+      config: { ...config, cdnSigningMode: "invalid" },
+      fallbackUrl,
+    });
+    if (invalidSigningMode.url !== fallbackUrl || invalidSigningMode.blockedReason !== "invalid_cdn_signing_mode") {
+      fail("media delivery helper must fail closed for invalid CDN signing mode config");
+    }
+  } finally {
+    loaded.cleanup();
+  }
+};
+
+await assertMediaDeliveryHelperPolicy();
 
 if (failures.length) {
   console.error("Media delivery architecture guard failed:");

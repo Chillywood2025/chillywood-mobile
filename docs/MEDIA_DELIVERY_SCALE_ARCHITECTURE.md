@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-08
 
-Status: architecture and guard only. This document does not deploy a CDN, create a transcoder, change Player UX, change Premium entitlement logic, or change LiveKit/Watch-Party behavior.
+Status: staged resolver helper, proof script, architecture, and guard only. This document does not switch production playback, create a transcoder, change Player UX, change Premium entitlement logic, or change LiveKit/Watch-Party behavior.
 
 ## Current-State Report
 
@@ -52,9 +52,9 @@ Status: architecture and guard only. This document does not deploy a CDN, create
 
 6. What is live vs only repo foundation
 
-- Live in code: direct signed S3-compatible upload, direct signed S3-compatible download, Supabase fallback signing, upload/storage metadata recording, VOD resolver helpers, and media-storage rendition authorization.
+- Live in code: direct signed S3-compatible upload, direct signed S3-compatible download, Supabase fallback signing, upload/storage metadata recording, VOD resolver helpers, media-storage rendition authorization, and a disabled-by-default Cloudflare R2 public playback resolver helper.
 - Foundation only: `video_renditions` metadata, free/Premium quality ladder policy, upload/storage usage tables, provider usage import/reconciliation tables, and admin read models.
-- Not live: transcode worker, HLS/ABR rendition generation, CDN playback, signed CDN URL/cookie issuance, per-playback media bandwidth telemetry, resumable/multipart 5 GB upload, and provider-neutral origin switching.
+- Not live: transcode worker, HLS/ABR rendition generation, production CDN playback, signed CDN URL/cookie issuance, per-playback media bandwidth telemetry, resumable/multipart 5 GB upload, and provider-neutral origin switching.
 
 7. Where original files can still be used as playback fallback
 
@@ -79,7 +79,8 @@ Status: architecture and guard only. This document does not deploy a CDN, create
 
 - `createPresignedS3Url` returns direct origin URLs.
 - Player and Watch-Party creator-video paths receive signed origin URLs, not signed CDN URLs.
-- There is no CDN host configuration, CDN signer, signed cookie/key pair, origin shield, cache purge hook, CDN log ingest, or CDN URL resolver in the current playback path.
+- There is a staged CDN URL resolver helper, but it is disabled by default and not active for production playback assets.
+- There is no CDN signer, signed cookie/key pair, origin shield, cache purge hook, CDN log ingest, or CDN URL resolver active in the current production playback path.
 
 ## Target Architecture
 
@@ -88,6 +89,8 @@ Transcoding status: not live; no worker exists in this repo.
 Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.
 
 Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text proof delivery; production CDN playback is not live.
+
+Cloudflare R2 public playback resolver status: staged helper and proof script exist; production playback remains disabled by default and still falls back to signed origin.
 
 R2 CLI/API proof status: private and public-playback proof upload/readback succeeded through authorized Wrangler access; no production R2 CDN playback is live.
 
@@ -188,10 +191,20 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 ### Cloudflare Setup Steps Before Applying Public Delivery
 
 1. Confirm the private proof bucket and harmless proof object remain non-production proof assets only.
-2. Keep `media.chillywoodstream.com` scoped to the separate public-playback proof bucket until resolver support exists.
+2. Keep `media.chillywoodstream.com` scoped to the separate public-playback proof bucket until safe demo-media resolver proof exists.
 3. Do not add cache rules beyond object metadata until HLS/hashed public assets exist.
-4. Add resolver support for safe public playback assets without changing app UX or Premium entitlement logic.
+4. Keep staged resolver support disabled for production playback by default.
 5. Keep production creator-video playback on existing resolver/direct signed-origin fallback until signed/token CDN access, telemetry, takedown purge, and Premium gating are implemented and proved.
+
+### Staged Public Playback Resolver Support
+
+- `_lib/mediaDelivery.ts` stages the Cloudflare R2 custom-domain resolver helper for future safe public playback assets.
+- `resolveMediaPlaybackDelivery(...)` returns `media.chillywoodstream.com` only when the delivery provider is `cloudflare_r2_custom_domain`, `MEDIA_CDN_BASE_URL` is configured, `MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED=true`, the asset path starts with `playback/public/`, and the caller explicitly marks the asset `publicPlaybackSafe`.
+- The helper blocks public CDN URLs for original/master/source paths, `original` quality, unscanned assets, moderation-blocked assets, private/owner assets, and Premium-only assets until signed/token CDN access is implemented and proved.
+- Current VOD production wiring passes `publicPlaybackSafe: false`, so existing creator-video playback still uses signed origin fallback even if CDN config is present.
+- The helper returns safe metadata fields: `provider`, `cdnEligible`, `fallbackUsed`, `blockedReason`, and `publicPlaybackSafe`. It does not log full private signed URLs.
+- `scripts/proof-media-delivery-resolver.mjs` proves the harmless public proof object can resolve to `https://media.chillywoodstream.com/playback/public/proof/hello.txt` under explicit config, while private, original, Premium-only, unsafe, and missing-config cases fall back or block.
+- Production playback remains unchanged until a later approved lane adds trusted public-safe asset metadata, cache-HIT proof, telemetry, and signed/token CDN access for non-public assets.
 
 ### Signed CDN Playback
 
@@ -275,12 +288,12 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 2. Add origin/provider abstraction without changing Player UX.
 3. Add Cloudflare R2 config support behind `MEDIA_ORIGIN_PROVIDER=cloudflare_r2`, with no secrets committed.
 4. Keep R2 private by default and verify direct signed R2/S3-compatible fallback.
-5. Add Cloudflare custom-domain/cache delivery for public/demo/ready playback assets only.
+5. Stage Cloudflare custom-domain/cache resolver support for public/demo/ready playback assets only, disabled for production playback by default.
 6. Add token/signed CDN access before any paid or Premium media uses the Cloudflare custom-domain/cache path.
 7. Add transcode queue and worker behind service credentials.
 8. Generate real renditions for new uploads, then backfill existing public/clean creator videos.
 9. Add media bandwidth telemetry from Cloudflare/provider logs and reconcile it with signed playback grants.
-10. Gradually prefer Cloudflare custom-domain HLS in `resolve_video_playback` while leaving single-file fallback for videos without ready renditions.
+10. Gradually prefer Cloudflare custom-domain HLS in the backend playback resolver only after public-safe asset metadata, cache-HIT proof, telemetry, takedown purge, Premium gating, and signed/token CDN access are proved; leave single-file fallback for videos without ready renditions.
 11. Disable public legacy fallback only after migration proof shows ready renditions, CDN signing, telemetry, takedown purge, Premium gating, and Watch-Party resolver behavior are all correct.
 
 ### Config Contract
@@ -302,9 +315,11 @@ R2_S3_ENDPOINT
 Config rules:
 
 - If Cloudflare R2 config is absent, current signed origin behavior remains fallback.
+- If Cloudflare R2 config is present but an asset is not explicitly `publicPlaybackSafe`, current signed origin behavior remains fallback.
 - `MEDIA_CDN_SIGNING_MODE=off` is only acceptable for public/safe playback assets.
 - Private/Premium CDN delivery requires token/signed access first.
 - `MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED=true` is the safe default until token/signed CDN access is implemented and proved.
+- Production VOD currently keeps `publicPlaybackSafe: false`, so adding these config names alone does not switch creator-video playback.
 - Do not commit R2 account ids, S3 endpoints, access keys, secret keys, API tokens, signed URLs, or provider dashboard secrets.
 
 ### Provider Abstraction

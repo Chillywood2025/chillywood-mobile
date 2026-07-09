@@ -14,13 +14,16 @@ Current latest truth:
 - Public probes for `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
+- Staged resolver support exists in `_lib/mediaDelivery.ts` and is proved by `npm run proof:media-delivery-resolver`.
+- Current VOD production wiring keeps `publicPlaybackSafe: false`, so existing creator-video playback still falls back to signed origin by default.
+- The staged helper returns `media.chillywoodstream.com` only for explicit safe public playback assets under `playback/public/` with Cloudflare custom-domain config and `MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED=true`.
 - Cloudflare R2 custom domains should be treated as public bucket exposure, not a native prefix-limited publish switch. Do not connect `media.chillywoodstream.com` directly to a mixed bucket or the private proof bucket.
 
 Next exact media step:
-1. Add resolver support for safe public playback assets without changing app UX or Premium entitlement logic.
+1. Prove cache HIT behavior or equivalent cache telemetry for the harmless proof object without claiming savings until `cf-cache-status: HIT` or trusted telemetry exists.
 2. Do not enable public access on `chillywood-media-proof`.
 3. Do not upload real production media or private/original/Premium media to the public-playback proof bucket.
-4. Do not enable cache rules, signed/token CDN playback, or production playback switching until explicitly approved and proved.
+4. Do not enable signed/token CDN playback or production playback switching until explicitly approved and proved.
 5. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
 
 # Watch-Party Live / Live Stage Seated Self-Mute Follow-Up

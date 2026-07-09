@@ -8,6 +8,7 @@ import {
   normalizeMediaStorageProvider,
   type MediaStorageProvider,
 } from "./mediaStorage";
+import { resolveMediaPlaybackDelivery } from "./mediaDelivery";
 import { supabase } from "./supabase";
 
 export const VOD_RENDITION_QUALITY_LABELS = ["original", "360p", "480p", "720p", "1080p"] as const;
@@ -258,16 +259,28 @@ export async function createSignedVodRenditionUrl(input: {
   const bucket = toText(input.rendition.storageBucket) || toText(input.fallbackBucket);
   if (!bucket || !objectPath) return "";
   const provider = normalizeMediaStorageProvider(input.storageProvider);
-  if (provider === "s3") {
-    return createSignedMediaDownload({
-      surfaceType: "creator_video",
-      provider,
-      bucket,
-      objectKey: objectPath,
-      recordId: input.videoId,
-    }).catch(() => "");
-  }
-  return createSupabaseSignedRenditionUrl(bucket, objectPath);
+  const resolveFallbackUrl = () => (
+    provider === "s3"
+      ? createSignedMediaDownload({
+        surfaceType: "creator_video",
+        provider,
+        bucket,
+        objectKey: objectPath,
+        recordId: input.videoId,
+      }).catch(() => "")
+      : createSupabaseSignedRenditionUrl(bucket, objectPath)
+  );
+
+  const delivery = await resolveMediaPlaybackDelivery({
+    asset: {
+      path: objectPath,
+      publicPlaybackSafe: false,
+      accessTier: input.rendition.accessTier,
+      qualityLabel: input.rendition.qualityLabel,
+    },
+    resolveFallbackUrl,
+  });
+  return delivery.url;
 }
 
 export const pickDefaultVodQuality = (resolution: VodPlaybackResolution): VodAllowedQuality | null => {
