@@ -9,6 +9,10 @@ import path from "node:path";
 const repoRoot = process.cwd();
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 const fallbackUrl = "origin-signed-direct-fallback";
+const publicProofPath = "playback/public/proof/hello.txt";
+const publicProofUrl = "https://media.chillywoodstream.com/playback/public/proof/hello.txt";
+const demoProofPath = "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4";
+const demoProofUrl = "https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4";
 const publicConfig = {
   deliveryProvider: "cloudflare_r2_custom_domain",
   cdnBaseUrl: "https://media.chillywoodstream.com",
@@ -90,7 +94,7 @@ const { helper, cleanup } = compileHelper();
 try {
   const safePublic = await helper.resolveMediaPlaybackDelivery({
     asset: {
-      path: "playback/public/proof/hello.txt",
+      path: publicProofPath,
       publicPlaybackSafe: true,
       accessTier: "free",
       scanStatus: "clean",
@@ -100,12 +104,44 @@ try {
     fallbackUrl,
   });
   requireProof(
-    safePublic.url === "https://media.chillywoodstream.com/playback/public/proof/hello.txt",
+    safePublic.url === publicProofUrl,
     "public safe proof object should resolve to media.chillywoodstream.com",
   );
   requireProof(safePublic.provider === "cloudflare_r2_custom_domain", "public safe proof object should use Cloudflare R2 custom-domain provider");
   requireProof(safePublic.cdnEligible === true, "public safe proof object should be CDN eligible");
   requireProof(safePublic.fallbackUsed === false, "public safe proof object should not use fallback");
+
+  const safeDemoProof = await helper.resolveMediaPlaybackDelivery({
+    asset: {
+      path: demoProofPath,
+      publicPlaybackSafe: true,
+      accessTier: "free",
+      scanStatus: "clean",
+      moderationStatus: "clean",
+    },
+    config: publicConfig,
+    fallbackUrl,
+  });
+  requireProof(safeDemoProof.url === demoProofUrl, "safe demo proof video should resolve to media.chillywoodstream.com");
+  requireProof(safeDemoProof.provider === "cloudflare_r2_custom_domain", "safe demo proof video should use Cloudflare R2 custom-domain provider");
+  requireProof(safeDemoProof.cdnEligible === true, "safe demo proof video should be CDN eligible");
+  requireProof(safeDemoProof.fallbackUsed === false, "safe demo proof video should not use fallback");
+
+  const defaultCreatorVideo = await helper.resolveMediaPlaybackDelivery({
+    asset: {
+      path: "owner-id/video-id/source.mp4",
+      publicPlaybackSafe: false,
+      accessTier: "free",
+      scanStatus: "clean",
+      moderationStatus: "clean",
+    },
+    config: publicConfig,
+    fallbackUrl,
+  });
+  requireProof(defaultCreatorVideo.url === fallbackUrl, "default creator-video source path should keep signed origin fallback");
+  requireProof(defaultCreatorVideo.provider === "origin_signed_direct", "default creator-video source path should keep origin signed provider");
+  requireProof(defaultCreatorVideo.cdnEligible === false, "default creator-video source path should not be CDN eligible");
+  requireProof(defaultCreatorVideo.fallbackUsed === true, "default creator-video source path should use fallback");
 
   const privatePath = await helper.resolveMediaPlaybackDelivery({
     asset: {
@@ -211,6 +247,20 @@ try {
       fallbackUsed: safePublic.fallbackUsed,
       publicPlaybackSafe: safePublic.publicPlaybackSafe,
       url: safePublic.url,
+    },
+    safeDemoProof: {
+      provider: safeDemoProof.provider,
+      cdnEligible: safeDemoProof.cdnEligible,
+      fallbackUsed: safeDemoProof.fallbackUsed,
+      publicPlaybackSafe: safeDemoProof.publicPlaybackSafe,
+      url: safeDemoProof.url,
+    },
+    defaultCreatorVideo: {
+      provider: defaultCreatorVideo.provider,
+      cdnEligible: defaultCreatorVideo.cdnEligible,
+      fallbackUsed: defaultCreatorVideo.fallbackUsed,
+      blockedReason: defaultCreatorVideo.blockedReason,
+      publicPlaybackSafe: defaultCreatorVideo.publicPlaybackSafe,
     },
     privatePath: {
       provider: privatePath.provider,

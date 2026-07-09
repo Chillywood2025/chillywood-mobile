@@ -71,6 +71,7 @@ const watchPartyContentSources = read("_lib/watchPartyContentSources.ts");
 const migration = read("supabase/migrations/202605140010_vod_quality_ladder_resolver.sql");
 const packageJson = read("package.json");
 const mediaDeliveryResolverProof = read("scripts/proof-media-delivery-resolver.mjs");
+const mediaDeliveryPublicDemoProof = read("scripts/proof-media-delivery-public-demo.mjs");
 
 const sourceCorpus = [
   mediaStorage,
@@ -95,22 +96,28 @@ const hasCdnPlaybackPath = /\b(CDN_PLAYBACK|cdnPlayback|createSignedCdn|signedCd
 const hasPlaybackTelemetry = /\b(media_bandwidth_events|record_media_playback_egress|cdn_access_logs|cdn_access_log|playback_egress_bytes|rendition_bytes_served|edge_bytes_served)\b/i.test(sourceCorpus);
 const hasResumableUpload = /\b(createMultipartUpload|completeMultipartUpload|UploadPart|multipart_upload|tus|resumable_upload|direct_upload_session)\b/i.test(sourceCorpus);
 
-assertIncludes(architecture, "Status: staged resolver helper, proof script, architecture, and guard only.", "media delivery architecture doc");
+assertIncludes(architecture, "Status: staged resolver helpers, proof scripts, architecture, and guard only.", "media delivery architecture doc");
 assertIncludes(architecture, "Transcoding status: not live; no worker exists in this repo.", "media delivery architecture doc");
-assertIncludes(architecture, "Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text proof delivery; production CDN playback is not live.", "media delivery architecture doc");
-assertIncludes(architecture, "Cloudflare R2 public playback resolver status: staged helper and proof script exist; production playback remains disabled by default and still falls back to signed origin.", "R2 public playback resolver status");
+assertIncludes(architecture, "Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text and generated demo proof delivery; production CDN playback is not live.", "media delivery architecture doc");
+assertIncludes(architecture, "Cloudflare R2 public playback resolver status: staged helper and proof scripts exist; production playback remains disabled by default and still falls back to signed origin.", "R2 public playback resolver status");
 assertIncludes(architecture, "Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.", "R2 private origin proof status");
 assertIncludes(architecture, "R2 CLI/API proof status: private and public-playback proof upload/readback succeeded through authorized Wrangler access; no production R2 CDN playback is live.", "R2 CLI/API proof status");
 assertIncludes(architecture, "R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.", "R2 proof bucket status");
 assertIncludes(architecture, "R2 proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded and is kept for proof traceability.", "R2 proof object status");
 assertIncludes(architecture, "R2 public-playback proof bucket status: separate bucket `chillywood-media-public-playback-proof` exists, created 2026-07-08T23:47:12.035Z, and is distinct from the private proof bucket.", "R2 public-playback proof bucket status");
-assertIncludes(architecture, "R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded through authorized Wrangler access and is kept for proof traceability.", "R2 public-playback proof object status");
+assertIncludes(architecture, "R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt`, immutable cache proof text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, and generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` are public-safe proof assets only.", "R2 public-playback proof object status");
 assertIncludes(architecture, "R2 public exposure status: `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access remains disabled on both buckets; the private bucket has no custom domain.", "R2 public exposure status");
-assertIncludes(architecture, "R2 custom-domain/cache proof status: public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returns HTTP 200 with the expected harmless text from the public-playback proof bucket.", "R2 custom-domain/cache proof status");
-assertIncludes(architecture, "Media bandwidth telemetry status: foundation only, not live.", "media delivery architecture doc");
-assertIncludes(architecture, "Cache proof status: proof object returns `Cache-Control: public, max-age=300` and `cf-cache-status: DYNAMIC`; cache savings are not proved and telemetry/cache proof is required before savings claims.", "cache proof status");
+assertIncludes(architecture, "R2 custom-domain/cache proof status: public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returns HTTP 200 with the expected harmless text from the public-playback proof bucket; generated demo MP4 proof also returns through the same public proof hostname.", "R2 custom-domain/cache proof status");
+assertIncludes(architecture, "Media bandwidth telemetry status: planned foundation only, not live.", "media delivery architecture doc");
+assertIncludes(architecture, "Cache-HIT proof status: immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` returns `Cache-Control: public, max-age=31536000, immutable`; after a narrow Cloudflare Cache Rule for `/playback/public/proof/cache-hit/*`, repeated fetches returned `cf-cache-status: HIT` with `Age` increasing.", "cache HIT proof status");
+assertIncludes(architecture, "Safe demo media proof status: generated 2-second 320x180 H.264 MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` returns HTTP 200 for full fetch, HTTP 206 for byte range, `Content-Type: video/mp4`, immutable cache metadata, repeated `cf-cache-status: HIT` after warmup, and ffprobe/ffmpeg decode proof.", "safe demo media proof status");
 assertIncludes(architecture, "5 GB resumable upload status: not live; current upload is single signed PUT.", "media delivery architecture doc");
 assertIncludes(architecture, "Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domain/cache", "Cloudflare R2 chosen path");
+assertIncludes(architecture, "Resolver staging from commit `22837a5d20c1be66ffeb5559b96f7048f6a094eb` keeps production playback unchanged.", "resolver staging checkpoint");
+assertIncludes(architecture, "Cache-HIT proof succeeded for immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` under a narrow cache rule.", "cache HIT checkpoint");
+assertIncludes(architecture, "Safe generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` is staged in the separate public-playback proof bucket and plays through `media.chillywoodstream.com`.", "safe demo media checkpoint");
+assertIncludes(architecture, "Media bandwidth telemetry implementation remains planned.", "telemetry planned checkpoint");
+assertIncludes(architecture, "HLS/transcoding implementation remains planned.", "HLS planned checkpoint");
 assertIncludes(architecture, "Cloudflare R2 is the target origin because the owner already has the domain on Cloudflare.", "Cloudflare R2 domain rationale");
 assertIncludes(architecture, "Keep the R2 bucket private by default.", "R2 private bucket policy");
 assertIncludes(architecture, "The planned custom hostname is `media.chillywoodstream.com`.", "Cloudflare custom hostname plan");
@@ -125,7 +132,7 @@ assertIncludes(architecture, "Safe first CDN target is public/demo/ready playbac
 assertIncludes(architecture, "Paid/Premium media needs token/signed CDN access before public CDN delivery.", "paid/Premium CDN signing requirement");
 assertIncludes(architecture, "Do not connect a Cloudflare R2 custom domain directly to a mixed bucket containing private originals, unscanned uploads, or paid/Premium-only media unless Cloudflare token/WAF/Worker access control is already enforcing the private paths before R2 reads.", "mixed bucket custom-domain guardrail");
 assertIncludes(architecture, "The safest first custom-domain target is a separate proof or public-playback surface that contains only approved `playback/public/` assets.", "safe custom-domain target");
-assertIncludes(architecture, "Cache headers: HLS segments and thumbnails may use long TTL plus immutable naming; HLS manifests use short TTL; the proof text object uses short or default TTL; private/original paths use no cache.", "cache TTL policy");
+assertIncludes(architecture, "Cache headers: HLS segments and thumbnails may use long TTL plus immutable naming; HLS manifests use short TTL; non-versioned proof text uses short or default TTL; versioned proof text and generated proof MP4 may use long immutable TTL; private/original paths use no cache.", "cache TTL policy");
 assertIncludes(architecture, "Proof object target: `playback/public/proof/hello.txt`.", "R2 proof object path");
 assertIncludes(architecture, "Private-origin proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.", "R2 private proof readback");
 assertIncludes(architecture, "No production media, private/original media, unscanned upload, or Premium creator media was uploaded.", "R2 proof media boundary");
@@ -133,19 +140,24 @@ assertIncludes(architecture, "No production playback config was switched.", "pro
 assertIncludes(architecture, "Cloudflare R2 custom domains are a public bucket exposure path, not a bucket-native prefix-limited publish switch.", "R2 custom-domain prefix decision");
 assertIncludes(architecture, "The current proof did not identify a safe R2 custom-domain configuration that exposes only `playback/public/` while keeping private prefixes in the same bucket unreachable by configuration alone.", "R2 prefix-limited exposure decision");
 assertIncludes(architecture, "A direct custom domain on a mixed bucket must be treated as unsafe for Chi'llywood media unless a Worker, WAF token rule, Cloudflare Access policy, or equivalent path/token control is already implemented and proved before bucket reads.", "mixed bucket public exposure guardrail");
+assertIncludes(architecture, "[R2 and Cloudflare cache](https://developers.cloudflare.com/cache/interaction-cloudflare-products/r2/)", "Cloudflare cache docs basis");
+assertIncludes(architecture, "[Cache Rules API](https://developers.cloudflare.com/cache/how-to/cache-rules/create-api/)", "Cloudflare cache rules API docs basis");
 assertIncludes(architecture, "Recommended safest next architecture: create a separate public-playback proof bucket or public-playback surface containing only approved `playback/public/` assets, then connect `media.chillywoodstream.com` only to that safe surface after explicit owner approval.", "safe public-playback proof architecture");
 assertIncludes(architecture, "Alternative safe architecture: keep the R2 bucket private and put `media.chillywoodstream.com` on a Worker route that allowlists `playback/public/`, blocks private prefixes, applies token checks for paid/Premium paths, sets cache headers by asset class, and reads R2 through a private binding.", "Worker gateway architecture");
 assertIncludes(architecture, "Do not connect `media.chillywoodstream.com` directly to `chillywood-media-proof` while that bucket is a mixed private/proof bucket.", "proof bucket custom-domain prohibition");
 assertIncludes(architecture, "`chillywood-media-public-playback-proof` is a separate R2 bucket for harmless public-safe proof assets only.", "public-playback proof bucket purpose");
-assertIncludes(architecture, "The bucket currently contains only the harmless text proof object `playback/public/proof/hello.txt`.", "public-playback proof bucket contents");
+assertIncludes(architecture, "The bucket currently contains only harmless public-safe proof assets: text proof object `playback/public/proof/hello.txt`, cache-HIT text proof object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, and generated demo proof MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`.", "public-playback proof bucket contents");
 assertIncludes(architecture, "The bucket must not contain `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, `unscanned/`, real creator media, original/master media, unscanned uploads, private media, or Premium-only media.", "public-playback proof bucket forbidden contents");
-assertIncludes(architecture, "The bucket is publicly reachable only through `media.chillywoodstream.com` for the harmless proof object; r2.dev public access is disabled.", "public-playback proof bucket public checkpoint");
+assertIncludes(architecture, "The bucket is publicly reachable only through `media.chillywoodstream.com` for harmless public-safe proof objects; r2.dev public access is disabled.", "public-playback proof bucket public checkpoint");
 assertIncludes(architecture, "Explicit owner approval was limited to connecting `media.chillywoodstream.com` to this public-playback proof bucket. No approval was given for production playback, private media, Premium media, or the private proof bucket.", "public-playback proof bucket approval checkpoint");
 assertIncludes(architecture, "`media.chillywoodstream.com` points only at this separate public-playback proof bucket at this checkpoint.", "public-playback custom-domain connected boundary");
 assertIncludes(architecture, "Read-only custom-domain/cache audit: bucket list shows `chillywood-media-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.", "read-only custom-domain/cache audit");
 assertIncludes(architecture, "Custom-domain proof connected `media.chillywoodstream.com` only to `chillywood-media-public-playback-proof`.", "public-playback custom-domain proof");
 assertIncludes(architecture, "Public proof fetch returned HTTP 200 and exact body `chillywood r2 public playback proof 2026-07-08T23:47:15Z`.", "public proof fetch");
-assertIncludes(architecture, "Cache proof fetches returned `Cache-Control: public, max-age=300`, `Content-Type: text/plain`, and `cf-cache-status: DYNAMIC`; no cache savings are claimed.", "cache proof fetch");
+assertIncludes(architecture, "Cache-HIT proof used immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` with body `chillywood r2 cache proof 20260709T003701Z 3c152e0012db`.", "cache HIT object proof");
+assertIncludes(architecture, "A narrow Cloudflare Cache Rule was applied only to `media.chillywoodstream.com/playback/public/proof/cache-hit/*`; repeated fetches returned HTTP 200, exact text match, `Cache-Control: public, max-age=31536000, immutable`, `Content-Type: text/plain`, `cf-cache-status: HIT`, and increasing `Age` after warmup. No egress or cost savings are claimed.", "cache HIT proof fetch");
+assertIncludes(architecture, "Safe demo media proof uploaded generated MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` to the public-playback proof bucket only.", "safe demo media upload proof");
+assertIncludes(architecture, "Safe demo media public fetch returned HTTP 200, `Content-Type: video/mp4`, `Cache-Control: public, max-age=31536000, immutable`, `Accept-Ranges: bytes`, and byte-range fetch returned HTTP 206; repeated warm fetches returned `cf-cache-status: HIT`. ffprobe identified H.264 320x180 duration 2 seconds, and ffmpeg decode passed.", "safe demo media playback proof");
 assertIncludes(architecture, "Forbidden-prefix probes under `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404 through the public proof hostname.", "forbidden prefix public proof");
 assertIncludes(architecture, "Public-playback proof audit: bucket list shows `chillywood-media-public-playback-proof`, r2.dev status is disabled, custom-domain list contains `media.chillywoodstream.com`, and the proof object still reads back as harmless text through authorized Wrangler access.", "public-playback proof audit");
 assertIncludes(architecture, "Supabase/Edge resolver remains the access-control and playback decision layer.", "Supabase/Edge resolver boundary");
@@ -175,10 +187,10 @@ assertIncludes(architecture, "Current/legacy fallback: Hetzner Object Storage or
 assertIncludes(architecture, "Optional future CDN alternative: Bunny CDN remains an alternative only", "Bunny classification");
 assertIncludes(currentState, "private proof bucket `chillywood-media-proof` remains private with r2.dev disabled and no custom domain", "current state private bucket boundary");
 assertIncludes(currentState, "Owner-approved `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`", "current state custom-domain boundary");
-assertIncludes(currentState, "`_lib/mediaDelivery.ts` now stages disabled-by-default Cloudflare R2 custom-domain resolver support", "current state staged resolver support");
+assertIncludes(currentState, "`_lib/mediaDelivery.ts` still stages disabled-by-default Cloudflare R2 custom-domain resolver support", "current state staged resolver support");
 assertIncludes(currentState, "Current VOD production wiring passes `publicPlaybackSafe: false`, so existing creator-video playback still uses signed-origin fallback.", "current state production playback fallback");
 assertIncludes(nextTask, "Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from `chillywood-media-proof`.", "next task bucket separation");
-assertIncludes(nextTask, "Staged resolver support exists in `_lib/mediaDelivery.ts` and is proved by `npm run proof:media-delivery-resolver`.", "next task staged resolver support");
+assertIncludes(nextTask, "Staged resolver support exists in `_lib/mediaDelivery.ts` and is proved by `npm run proof:media-delivery-resolver` plus `npm run proof:media-delivery-public-demo`.", "next task staged resolver support");
 assertIncludes(nextTask, "Current VOD production wiring keeps `publicPlaybackSafe: false`, so existing creator-video playback still falls back to signed origin by default.", "next task production fallback");
 assertIncludes(nextTask, "Do not enable public access on `chillywood-media-proof`.", "private bucket public access prohibition");
 
@@ -291,6 +303,24 @@ if (scaledMediaClaims.length && !hasPlaybackTelemetry) {
   fail(`docs claim real scaled media delivery without playback telemetry: ${scaledMediaClaims.join(" | ")}`);
 }
 
+const telemetryLiveClaims = claimSentences(
+  deliveryClaimsCorpus,
+  /\b(media_playback_sessions|media_delivery_events|telemetry|media bandwidth)\b/i,
+  /\b(live|active|implemented|proved|closed|production-ready)\b/i,
+).filter((sentence) => !/\b(after|until|before|planned|future|required|requires)\b/i.test(sentence));
+if (telemetryLiveClaims.length && !hasPlaybackTelemetry) {
+  fail(`docs claim media telemetry is live without implementation proof: ${telemetryLiveClaims.join(" | ")}`);
+}
+
+const productionMediaCdnClaims = claimSentences(
+  mediaStatusCorpus,
+  /\b(media\.chillywoodstream\.com|Cloudflare custom domain|public-playback proof bucket)\b/i,
+  /\b(production media|production creator|existing creator-video|creator videos?)\b.*\b(serves|serving|live|active|deployed|switched|migrated)\b|\b(serves|serving|live|active|deployed|switched|migrated)\b.*\b(production media|production creator|existing creator-video|creator videos?)\b/i,
+);
+if (productionMediaCdnClaims.length) {
+  fail(`media.chillywoodstream.com must not be described as serving production media before approved migration proof: ${productionMediaCdnClaims.join(" | ")}`);
+}
+
 const egressProtectionClaims = claimSentences(
   deliveryClaimsCorpus,
   /\b(egress|cost protection|low-egress|broad rollout)\b/i,
@@ -302,11 +332,11 @@ if (egressProtectionClaims.length && !/Bandwidth\/minutes-watched telemetry rema
 
 const cacheSavingsClaims = claimSentences(
   deliveryClaimsCorpus,
-  /\b(cache savings|cache hit|egress savings|cost savings|CF-Cache-Status|cache proof)\b/i,
+  /\b(cache savings|egress savings|cost savings|reduced egress|reduced cost|saves egress|saves cost)\b/i,
   /\b(live|active|proved|closed|production-ready|achieved|reduced|saving|saves)\b/i,
 );
 if (cacheSavingsClaims.length && !hasPlaybackTelemetry) {
-  fail(`cache/egress savings cannot be claimed without telemetry and cache proof: ${cacheSavingsClaims.join(" | ")}`);
+  fail(`cache/egress savings cannot be claimed without telemetry proof: ${cacheSavingsClaims.join(" | ")}`);
 }
 
 const resumableClaims = claimSentences(
@@ -346,6 +376,7 @@ const secretScanCorpus = [
   nextTask,
   read("scripts/guard-media-delivery-architecture.mjs"),
   mediaDeliveryResolverProof,
+  mediaDeliveryPublicDemoProof,
   packageJson,
   sourceCorpus,
 ].join("\n");
@@ -412,6 +443,13 @@ assertIncludes(mediaStorage, "FileSystem.uploadAsync", "current single PUT uploa
 
 assertIncludes(packageJson, "\"guard:media-delivery-architecture\"", "package guard script");
 assertIncludes(packageJson, "\"proof:media-delivery-resolver\"", "package proof script");
+assertIncludes(packageJson, "\"proof:media-delivery-public-demo\"", "package public demo proof script");
+assertIncludes(mediaDeliveryResolverProof, "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4", "media delivery resolver proof demo path");
+assertIncludes(mediaDeliveryResolverProof, "default creator-video source path should keep signed origin fallback", "media delivery resolver proof production fallback");
+assertIncludes(mediaDeliveryPublicDemoProof, "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4", "public demo media delivery proof path");
+assertIncludes(mediaDeliveryPublicDemoProof, "ffprobe", "public demo media delivery proof ffprobe");
+assertIncludes(mediaDeliveryPublicDemoProof, "ffmpeg", "public demo media delivery proof ffmpeg");
+assertIncludes(mediaDeliveryPublicDemoProof, "default production creator-video path", "public demo media delivery production fallback");
 
 const loadMediaDeliveryHelper = () => {
   const outDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-delivery-guard-"));
@@ -495,6 +533,21 @@ const assertMediaDeliveryHelperPolicy = async () => {
       fail("media delivery helper must return the public proof custom-domain URL only for explicit public-safe playback assets");
     }
 
+    const safeDemoProof = await loaded.helper.resolveMediaPlaybackDelivery({
+      asset: {
+        path: "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4",
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+      config,
+      fallbackUrl,
+    });
+    if (safeDemoProof.url !== "https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4") {
+      fail("media delivery helper must return the public demo custom-domain URL only for explicit public-safe playback assets");
+    }
+
     const blockedCases = [
       {
         label: "non-public prefix",
@@ -551,6 +604,16 @@ const assertMediaDeliveryHelperPolicy = async () => {
         label: "public-prefix path without explicit safety",
         asset: {
           path: "playback/public/proof/hello.txt",
+          publicPlaybackSafe: false,
+          accessTier: "free",
+          scanStatus: "clean",
+          moderationStatus: "clean",
+        },
+      },
+      {
+        label: "default creator-video source path",
+        asset: {
+          path: "owner-id/video-id/source.mp4",
           publicPlaybackSafe: false,
           accessTier: "free",
           scanStatus: "clean",

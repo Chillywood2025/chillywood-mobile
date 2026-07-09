@@ -1,8 +1,8 @@
 # Chi'llywood Media Delivery Scale Architecture
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
-Status: staged resolver helper, proof script, architecture, and guard only. This document does not switch production playback, create a transcoder, change Player UX, change Premium entitlement logic, or change LiveKit/Watch-Party behavior.
+Status: staged resolver helpers, proof scripts, architecture, and guard only. This document does not switch production playback, create a transcoder, change Player UX, change Premium entitlement logic, or change LiveKit/Watch-Party behavior.
 
 ## Current-State Report
 
@@ -88,9 +88,9 @@ Transcoding status: not live; no worker exists in this repo.
 
 Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.
 
-Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text proof delivery; production CDN playback is not live.
+Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text and generated demo proof delivery; production CDN playback is not live.
 
-Cloudflare R2 public playback resolver status: staged helper and proof script exist; production playback remains disabled by default and still falls back to signed origin.
+Cloudflare R2 public playback resolver status: staged helper and proof scripts exist; production playback remains disabled by default and still falls back to signed origin.
 
 R2 CLI/API proof status: private and public-playback proof upload/readback succeeded through authorized Wrangler access; no production R2 CDN playback is live.
 
@@ -100,19 +100,43 @@ R2 proof object status: harmless text object `playback/public/proof/hello.txt` u
 
 R2 public-playback proof bucket status: separate bucket `chillywood-media-public-playback-proof` exists, created 2026-07-08T23:47:12.035Z, and is distinct from the private proof bucket.
 
-R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded through authorized Wrangler access and is kept for proof traceability.
+R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt`, immutable cache proof text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, and generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` are public-safe proof assets only.
 
 R2 public exposure status: `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access remains disabled on both buckets; the private bucket has no custom domain.
 
-R2 custom-domain/cache proof status: public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returns HTTP 200 with the expected harmless text from the public-playback proof bucket.
+R2 custom-domain/cache proof status: public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returns HTTP 200 with the expected harmless text from the public-playback proof bucket; generated demo MP4 proof also returns through the same public proof hostname.
 
-Media bandwidth telemetry status: foundation only, not live.
+Media bandwidth telemetry status: planned foundation only, not live.
 
-Cache proof status: proof object returns `Cache-Control: public, max-age=300` and `cf-cache-status: DYNAMIC`; cache savings are not proved and telemetry/cache proof is required before savings claims.
+Cache-HIT proof status: immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` returns `Cache-Control: public, max-age=31536000, immutable`; after a narrow Cloudflare Cache Rule for `/playback/public/proof/cache-hit/*`, repeated fetches returned `cf-cache-status: HIT` with `Age` increasing. Cache behavior is proved for this proof prefix only; egress or cost savings are not claimed without media bandwidth telemetry.
+
+Safe demo media proof status: generated 2-second 320x180 H.264 MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` returns HTTP 200 for full fetch, HTTP 206 for byte range, `Content-Type: video/mp4`, immutable cache metadata, repeated `cf-cache-status: HIT` after warmup, and ffprobe/ffmpeg decode proof. This is not production creator media and HLS/transcoding is still not live.
 
 5 GB resumable upload status: not live; current upload is single signed PUT.
 
 Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domain/cache, with Supabase/Edge resolver access control and direct signed R2/S3-compatible fallback.
+
+### Checkpoint Summary
+
+Completed:
+
+- R2 is enabled.
+- Private proof bucket `chillywood-media-proof` exists and remains private.
+- Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from the private proof bucket.
+- `media.chillywoodstream.com` is connected only to the public-playback proof bucket.
+- Harmless public text proof `playback/public/proof/hello.txt` returns through `media.chillywoodstream.com`.
+- Resolver staging from commit `22837a5d20c1be66ffeb5559b96f7048f6a094eb` keeps production playback unchanged.
+- Cache-HIT proof succeeded for immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` under a narrow cache rule.
+- Safe generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` is staged in the separate public-playback proof bucket and plays through `media.chillywoodstream.com`.
+- Demo-only resolver eligibility is proved by local proof scripts for explicit `publicPlaybackSafe` assets only.
+
+Planned:
+
+- App-installed playback proof for future approved demo-media UI wiring remains optional and pending; the current proof is a local resolver/source and public HTTP playback proof.
+- Media bandwidth telemetry implementation remains planned.
+- HLS/transcoding implementation remains planned.
+- Premium/private signed CDN access remains planned.
+- Production media migration remains planned and requires explicit approval.
 
 ### Origin Storage
 
@@ -143,7 +167,7 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - The safest first custom-domain target is a separate proof or public-playback surface that contains only approved `playback/public/` assets.
 - Use cache keys that separate video id, rendition quality, manifest/segment path, and authorization token shape.
 - Configure Cloudflare to fetch from private R2 origin only after origin access and cache rules are explicitly proved.
-- Cache headers: HLS segments and thumbnails may use long TTL plus immutable naming; HLS manifests use short TTL; the proof text object uses short or default TTL; private/original paths use no cache.
+- Cache headers: HLS segments and thumbnails may use long TTL plus immutable naming; HLS manifests use short TTL; non-versioned proof text uses short or default TTL; versioned proof text and generated proof MP4 may use long immutable TTL; private/original paths use no cache.
 - Add purge/invalidation by video id and rendition path for takedowns, moderation changes, and entitlement policy changes.
 
 ### Prefix-Limited Public Exposure Decision
@@ -152,18 +176,18 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - The current proof did not identify a safe R2 custom-domain configuration that exposes only `playback/public/` while keeping private prefixes in the same bucket unreachable by configuration alone.
 - A direct custom domain on a mixed bucket must be treated as unsafe for Chi'llywood media unless a Worker, WAF token rule, Cloudflare Access policy, or equivalent path/token control is already implemented and proved before bucket reads.
 - R2 S3 presigned URLs remain valid for the R2 S3 API endpoint, but they do not protect R2 custom-domain URLs. Custom-domain authentication requires Cloudflare-layer controls such as WAF HMAC/token validation or a Worker gateway.
-- Official Cloudflare docs basis: [R2 public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/), [Protect an R2 bucket with Cloudflare Access](https://developers.cloudflare.com/r2/tutorials/cloudflare-access/), [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/), and [How R2 works with cache](https://developers.cloudflare.com/r2/how-r2-works/).
+- Official Cloudflare docs basis: [R2 public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/), [Protect an R2 bucket with Cloudflare Access](https://developers.cloudflare.com/r2/tutorials/cloudflare-access/), [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/), [R2 and Cloudflare cache](https://developers.cloudflare.com/cache/interaction-cloudflare-products/r2/), [Cache Rules](https://developers.cloudflare.com/cache/how-to/cache-rules/), [Cache Rules API](https://developers.cloudflare.com/cache/how-to/cache-rules/create-api/), and [Cloudflare cache responses](https://developers.cloudflare.com/cache/concepts/cache-responses/).
 - Recommended safest next architecture: create a separate public-playback proof bucket or public-playback surface containing only approved `playback/public/` assets, then connect `media.chillywoodstream.com` only to that safe surface after explicit owner approval.
 - Alternative safe architecture: keep the R2 bucket private and put `media.chillywoodstream.com` on a Worker route that allowlists `playback/public/`, blocks private prefixes, applies token checks for paid/Premium paths, sets cache headers by asset class, and reads R2 through a private binding.
 - Do not connect `media.chillywoodstream.com` directly to `chillywood-media-proof` while that bucket is a mixed private/proof bucket.
-- Do not claim cache savings, CDN delivery, or production media delivery until a public proof path is connected, cache headers are observed, and telemetry/log ingestion is in place.
+- Do not claim cache savings, CDN delivery for production media, or production media delivery until telemetry/log ingestion and production-safe resolver migration are in place.
 
 ### Public-Playback Proof Bucket
 
 - `chillywood-media-public-playback-proof` is a separate R2 bucket for harmless public-safe proof assets only.
-- The bucket currently contains only the harmless text proof object `playback/public/proof/hello.txt`.
+- The bucket currently contains only harmless public-safe proof assets: text proof object `playback/public/proof/hello.txt`, cache-HIT text proof object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, and generated demo proof MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`.
 - The bucket must not contain `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, `unscanned/`, real creator media, original/master media, unscanned uploads, private media, or Premium-only media.
-- The bucket is publicly reachable only through `media.chillywoodstream.com` for the harmless proof object; r2.dev public access is disabled.
+- The bucket is publicly reachable only through `media.chillywoodstream.com` for harmless public-safe proof objects; r2.dev public access is disabled.
 - Explicit owner approval was limited to connecting `media.chillywoodstream.com` to this public-playback proof bucket. No approval was given for production playback, private media, Premium media, or the private proof bucket.
 - r2.dev, if approved later, is temporary proof access only and not the production delivery path.
 - `media.chillywoodstream.com` points only at this separate public-playback proof bucket at this checkpoint.
@@ -180,7 +204,10 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - Public-playback proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.
 - Custom-domain proof connected `media.chillywoodstream.com` only to `chillywood-media-public-playback-proof`.
 - Public proof fetch returned HTTP 200 and exact body `chillywood r2 public playback proof 2026-07-08T23:47:15Z`.
-- Cache proof fetches returned `Cache-Control: public, max-age=300`, `Content-Type: text/plain`, and `cf-cache-status: DYNAMIC`; no cache savings are claimed.
+- Cache-HIT proof used immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` with body `chillywood r2 cache proof 20260709T003701Z 3c152e0012db`.
+- A narrow Cloudflare Cache Rule was applied only to `media.chillywoodstream.com/playback/public/proof/cache-hit/*`; repeated fetches returned HTTP 200, exact text match, `Cache-Control: public, max-age=31536000, immutable`, `Content-Type: text/plain`, `cf-cache-status: HIT`, and increasing `Age` after warmup. No egress or cost savings are claimed.
+- Safe demo media proof uploaded generated MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` to the public-playback proof bucket only.
+- Safe demo media public fetch returned HTTP 200, `Content-Type: video/mp4`, `Cache-Control: public, max-age=31536000, immutable`, `Accept-Ranges: bytes`, and byte-range fetch returned HTTP 206; repeated warm fetches returned `cf-cache-status: HIT`. ffprobe identified H.264 320x180 duration 2 seconds, and ffmpeg decode passed.
 - Forbidden-prefix probes under `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404 through the public proof hostname.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - No production playback config was switched.
@@ -191,8 +218,8 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 ### Cloudflare Setup Steps Before Applying Public Delivery
 
 1. Confirm the private proof bucket and harmless proof object remain non-production proof assets only.
-2. Keep `media.chillywoodstream.com` scoped to the separate public-playback proof bucket until safe demo-media resolver proof exists.
-3. Do not add cache rules beyond object metadata until HLS/hashed public assets exist.
+2. Keep `media.chillywoodstream.com` scoped to the separate public-playback proof bucket until a later approved production migration plan exists.
+3. Keep cache rules narrow. The only applied cache rule in this lane is the cache-HIT proof prefix `media.chillywoodstream.com/playback/public/proof/cache-hit/*`; do not add broad Cache Everything behavior.
 4. Keep staged resolver support disabled for production playback by default.
 5. Keep production creator-video playback on existing resolver/direct signed-origin fallback until signed/token CDN access, telemetry, takedown purge, and Premium gating are implemented and proved.
 
@@ -203,7 +230,8 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - The helper blocks public CDN URLs for original/master/source paths, `original` quality, unscanned assets, moderation-blocked assets, private/owner assets, and Premium-only assets until signed/token CDN access is implemented and proved.
 - Current VOD production wiring passes `publicPlaybackSafe: false`, so existing creator-video playback still uses signed origin fallback even if CDN config is present.
 - The helper returns safe metadata fields: `provider`, `cdnEligible`, `fallbackUsed`, `blockedReason`, and `publicPlaybackSafe`. It does not log full private signed URLs.
-- `scripts/proof-media-delivery-resolver.mjs` proves the harmless public proof object can resolve to `https://media.chillywoodstream.com/playback/public/proof/hello.txt` under explicit config, while private, original, Premium-only, unsafe, and missing-config cases fall back or block.
+- `scripts/proof-media-delivery-resolver.mjs` proves the harmless public proof object can resolve to `https://media.chillywoodstream.com/playback/public/proof/hello.txt` and the generated demo MP4 can resolve to `https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` under explicit config, while private, original, Premium-only, unsafe, default creator-video, and missing-config cases fall back or block.
+- `scripts/proof-media-delivery-public-demo.mjs` proves the generated demo MP4 resolves through the helper, fetches over `media.chillywoodstream.com`, supports byte-range playback, decodes with ffprobe/ffmpeg, has no signed-origin query string, and keeps private/original/Premium/unscanned/moderation-blocked/default creator-video paths on fallback or block.
 - Production playback remains unchanged until a later approved lane adds trusted public-safe asset metadata, cache-HIT proof, telemetry, and signed/token CDN access for non-public assets.
 
 ### Signed CDN Playback
@@ -229,17 +257,21 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 
 - HLS/transcoding is a future milestone unless implemented and proved.
 - Generate HLS VOD packages for 360p, 480p, 720p, and 1080p only when the source supports that output without fake upscaling claims.
+- Free quality target remains 360p/480p. Premium quality target remains 720p/1080p only with backend entitlement proof.
+- Original/master files remain private processing inputs and must not be listed as normal playback renditions.
 - Store each rendition's manifest path, segment prefix, codec, dimensions, bitrate, duration, checksum or manifest hash, byte size, and status in trusted metadata.
 - Prefer a master manifest that lists only resolver-allowed variants or generate per-viewer signed access to a static master where CDN signing prevents unauthorized segment access.
 - Keep MP4 fallback only as a legacy compatibility path until HLS coverage is proved.
+- HLS live claim requires future proof that a worker ran, rendition files exist, the manifest plays, the resolver returns the HLS URL, cache HIT is proved for segments, and signed-origin fallback still works.
 
 ### Transcode Worker Queue
 
 - Add a backend-owned queue such as `video_transcode_jobs` or an external durable queue.
 - Queue one job after a creator-video upload row exists and the source object is scan-safe enough for processing.
-- The worker should claim jobs idempotently, download the private source, probe with `ffprobe`, transcode with controlled profiles, upload renditions, write `video_renditions`, and mark failed jobs with safe error codes.
+- Future worker flow: claim jobs idempotently, download the private source, probe with `ffprobe`, transcode with `ffmpeg`, produce 360p/480p/720p/1080p renditions when allowed by source dimensions, write an HLS master manifest, write variant playlists and segments, generate thumbnails, upload derived public-safe playback assets to the public-playback bucket only after scan/moderation approval, insert `video_renditions` rows, and mark failed jobs with safe error codes.
 - Workers must use service credentials that are never exposed to the client.
 - Retries, dead-letter handling, cleanup of partial renditions, and no-upscale policy must be explicit before claiming transcode closure.
+- Do not claim HLS/transcoding live until the worker run, output files, manifest playback, resolver URL, cache HIT for segments, and fallback proof all exist.
 
 ### Free vs Premium Quality Ladder
 
@@ -259,11 +291,16 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 
 ### Media Bandwidth Telemetry
 
+- Telemetry is planned only. No `media_playback_sessions` or `media_delivery_events` implementation is live in this lane.
+- Planned `media_playback_sessions` fields: `id`, `video_id`, `creator_id`, `viewer_id`, `watch_party_id` nullable, `free_or_premium`, `delivery_provider`, `playback_url_provider`, `quality`, `started_at`, `ended_at`, `seconds_watched`, `estimated_bytes`, and `created_at`.
+- Planned `media_delivery_events` fields: `id`, `playback_session_id`, `video_id`, `creator_id`, `viewer_id`, `delivery_provider`, `playback_url_provider`, `quality`, `event_type`, `estimated_bytes`, `cdn_cache_status`, `http_status`, `watch_party_id` nullable, and `created_at`.
 - Record signed playback grants with video id, owner id, viewer id where available, quality, CDN/provider, token TTL, and request id.
 - Ingest Cloudflare cache/R2 logs or provider usage exports to get bytes served by video id, rendition, owner id, status code, cache hit/miss, and day/hour.
 - Reconcile internal grant counts with provider/CDN byte reports.
 - Roll up media egress by creator, video, quality, provider, and day.
-- Use telemetry for quota, abuse detection, cost controls, and owner/admin read models.
+- Planned telemetry can support quota, abuse detection, cost controls, and owner/admin read models after implementation.
+- Do not expose private user ids in proof docs; use redacted ids or aggregate proof when telemetry is later implemented.
+- This lane does not touch billing, payout, or cashout.
 - Do not claim real scaled media delivery proof until playback bytes are measured from CDN/provider logs or equivalent trusted telemetry.
 - Bandwidth/minutes-watched telemetry remains required before broad rollout.
 

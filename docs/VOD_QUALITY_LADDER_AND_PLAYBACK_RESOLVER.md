@@ -61,6 +61,8 @@ The Free VOD rendition enforcement proof was retried against the same selected v
 - This lane does not create a transcoder.
 - This lane does not create fake 360p/480p/720p/1080p files.
 - Existing single-file creator videos can still play through legacy fallback until real renditions exist.
+- Cloudflare R2 public playback support is staged only for explicit `publicPlaybackSafe` assets under `playback/public/`. The generated proof MP4 at `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` proves the custom-domain path for a harmless demo object; existing creator-video playback still passes `publicPlaybackSafe: false` and falls back to signed origin.
+- HLS/ABR renditions are not live in the R2 proof lane. A live claim still requires a real worker run, real rendition files, trusted `video_renditions` rows, manifest playback, resolver return, segment cache proof, and fallback proof.
 - Full live enforcement of Free/Premium VOD quality remains blocked until:
   - real rendition files are generated,
   - rendition rows are inserted by a trusted worker/service,
