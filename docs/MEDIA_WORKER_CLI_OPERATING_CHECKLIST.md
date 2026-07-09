@@ -126,3 +126,16 @@ If any gate, output check, audit, or resolver proof fails:
 - Storing backups in the public playback bucket.
 - Serving backups through `media.chillywoodstream.com`.
 - Treating R2 logical backups as PostgreSQL PITR.
+
+## Automation Operator Source/Proof
+
+The scale automation operator is now available as source/proof infrastructure only:
+
+```sh
+npm run media-automation:status
+npm run media-automation:discover
+npm run media-automation:plan-batch
+npm run media-automation:dry-run-batch
+```
+
+Do not run `media-automation:run-batch` without a future owner-approved batch lane and `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION`. The automation operator still has no daemon, cron, scheduler, queue processor, production media processing, broad backfill, or playback switch.

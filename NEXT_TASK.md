@@ -42,6 +42,7 @@ Current latest truth:
 - Final CLI media-worker operating checklist is the canonical handoff for future media-worker operations: `docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md` requires backup preflight/status/verify/restore, worker preflight/status/dry-run, exact source allowlist, `max_jobs_per_run=1`, backfill disabled, owner confirmation for run-one, scoped audit/verify-output/rollback-plan, and emergency stop behavior. `npm run proof:media-worker-cli-operating-checklist` guards that the checklist keeps continuous automation blocked, production playback unchanged, no cron/scheduler instructions, no secrets, and no PITR replacement claim.
 - Trusted audited-rendition CDN eligibility replaces the one-video hardcoded allowlist as the target operating model. `_lib/mediaPlaybackCdnEligibility.ts`, `_lib/vodQuality.ts`, and `npm run proof:media-playback-cdn-eligibility` prove default signed-origin fallback, fail-closed kill switch behavior, canary eligibility for City Lights, batch eligibility for selected sources, `trusted_public` eligibility for any audited public-safe HLS row, stale-backup fallback, denied-source fallback, and private/original/Premium/unscanned/moderation-blocked/wrong-prefix blocking. `MEDIA_PLAYBACK_CDN_ENABLED=false`, `MEDIA_PLAYBACK_CDN_KILL_SWITCH=true`, and `MEDIA_PLAYBACK_CDN_ROLLOUT_MODE=off` remain the default source posture; `trusted_public` may be active only through explicit owner-approved rollout config and all row/backup gates.
 - Scale rollout planning is source/proof-only: `scripts/media-cdn-rollout-planner.mjs`, `npm run media-cdn:plan`, `npm run media-cdn:status`, and `npm run proof:media-cdn-rollout-planner` count trusted eligible rows, enforce `MEDIA_PLAYBACK_CDN_MAX_BATCH_SIZE`, exclude denied/private/Premium/original/pending/blocked/wrong-prefix rows, require rollback plans, redact output, and do not mutate DB or switch playback.
+- Media automation operator source/proof now exists for scale: `_lib/mediaAutomationController.ts`, `_lib/mediaAutomationDiscovery.ts`, `_lib/mediaAutomationJobs.ts`, `_lib/mediaAutomationWorkerLoop.ts`, `scripts/media-automation-cli.mjs`, `docs/MEDIA_AUTOMATION_OPERATOR_RUNBOOK.md`, and proofs `proof:media-automation-controller`, `proof:media-automation-discovery`, `proof:media-automation-batch-planner`, and `proof:media-automation-worker-loop`. It is source/proof only: no daemon, cron, scheduler, queue processor, production media processing, production DB writes, broad backfill, or playback broadening happened.
 - Production HLS/transcoding is still not live: no production backend transcode queue/service worker, no trusted production `video_renditions` rows for the proof HLS assets, no production rendition metadata writes, and no creator-video playback migration.
 - Creator-video playback has a guarded trusted `media_renditions` bridge; default config still falls back to signed origin unless rollout flags and row-level trust gates pass.
 - The staged helper returns `media.chillywoodstream.com` only for explicit safe public playback assets under `playback/public/` with Cloudflare custom-domain config and `MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED=true`.
@@ -49,18 +50,20 @@ Current latest truth:
 
 Next exact media step:
 1. No immediate media task is required unless the owner wants to observe the active audited-row rollout, run `media-cdn:plan`, or approve a small batch expansion.
-2. Use `docs/MEDIA_CDN_BATCH_ROLLOUT_RUNBOOK.md` before any playback expansion. Use CLI checklist for any future allowlisted one-job media worker run. Checklist: `docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md`.
-3. Any expansion should be batch-based, capped, reversible, and based on trusted audited `media_renditions` eligibility. Do not make a permanent hardcoded City Lights path, and do not run an all-at-once production migration.
-4. Do not tell future sessions to enable cron, scheduler, deployed worker service, queue processor, broad automation, broad backfill, or private/Premium public-CDN playback.
-5. Any additional worker one-job lane must use a fresh backup gate check, operator lease, exact source allowlist, `max_jobs_per_run=1`, backfill disabled, pending-audit rows, auditor pass before resolver trust, auto-disable, quarantine on audit failure, and no broad playback switch.
-6. Continuous worker mode remains blocked until paid PITR or a deployed/proved scheduled private backup plus recurring restore-drill system is explicitly approved and verified; the current scheduled backup gate has a manual runner and proof, but no deployed schedule.
-7. Do not present self-auditing or R2 logical backup as PITR-equivalent for continuous production.
-8. Do not enable paid PITR or other backup add-ons without explicit owner approval.
-9. Do not enable signed/token CDN playback or production playback switching until explicitly approved and proved.
-10. Do not upload real production media or private/original/Premium media to the public-playback proof bucket; the only approved real-media copy there is the City Lights public-safe demo proof object.
-11. Do not enable public access on `chillywood-media-proof`.
-12. Next real media milestone is explicit owner approval for an installed playback/resolver bridge proof or production worker deployment design, not production playback migration.
-13. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
+2. First CDN/HLS Batch 1 candidate planning is complete in `docs/MEDIA_CDN_BATCH_1_CANDIDATE_PLAN.md`: the read-only catalog audit found `0` new selectable public-safe candidates, so no batch should run today.
+3. Use `docs/MEDIA_CDN_BATCH_ROLLOUT_RUNBOOK.md` before any playback expansion. Use CLI checklist for any future allowlisted one-job media worker run. Checklist: `docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md`.
+4. Any expansion should be batch-based, capped, reversible, and based on trusted audited `media_renditions` eligibility.
+5. Automation operator source/proof is available for future owner-approved batch work, but it is not deployed. Do not make a permanent hardcoded City Lights path, run broad backfill, deploy a worker, add cron/scheduler, switch additional videos, or run an all-at-once production migration.
+6. Do not tell future sessions to enable cron, scheduler, deployed worker service, queue processor, broad automation, broad backfill, or private/Premium public-CDN playback.
+7. Any additional worker one-job lane must use a fresh backup gate check, operator lease, exact source allowlist, `max_jobs_per_run=1`, backfill disabled, pending-audit rows, auditor pass before resolver trust, auto-disable, quarantine on audit failure, and no broad playback switch.
+8. Continuous worker mode remains blocked until paid PITR or a deployed/proved scheduled private backup plus recurring restore-drill system is explicitly approved and verified; the current scheduled backup gate has a manual runner and proof, but no deployed schedule.
+9. Do not present self-auditing or R2 logical backup as PITR-equivalent for continuous production.
+10. Do not enable paid PITR or other backup add-ons without explicit owner approval.
+11. Do not enable signed/token CDN playback or production playback switching until explicitly approved and proved.
+12. Do not upload real production media or private/original/Premium media to the public-playback proof bucket; the only approved real-media copy there is the City Lights public-safe demo proof object.
+13. Do not enable public access on `chillywood-media-proof`.
+14. Next real media milestone is explicit owner approval for an installed playback/resolver bridge proof or production worker deployment design, not production playback migration.
+15. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
 
 # Watch-Party Live / Live Stage Seated Self-Mute Follow-Up
 

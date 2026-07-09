@@ -59,8 +59,9 @@ const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
 const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md");
 const mediaTranscodeWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
 const mediaRecoveryOperatorRunbook = read("docs/MEDIA_RECOVERY_OPERATOR_RUNBOOK.md");
+const mediaAutomationOperatorRunbook = read("docs/MEDIA_AUTOMATION_OPERATOR_RUNBOOK.md");
 const wave2Doc = read("docs/WAVE2_CREATOR_MEDIA_CLOSURE_RUNBOOK.md");
-const docsCorpus = [architecture, vodDoc, mediaMigrationPlan, mediaTranscodeWorkerRunbook, mediaRecoveryOperatorRunbook, wave2Doc].join("\n\n");
+const docsCorpus = [architecture, vodDoc, mediaMigrationPlan, mediaTranscodeWorkerRunbook, mediaRecoveryOperatorRunbook, mediaAutomationOperatorRunbook, wave2Doc].join("\n\n");
 const mediaStatusCorpus = [architecture, currentState, nextTask].join("\n\n");
 
 const mediaStorage = read("_lib/mediaStorage.ts");
@@ -72,6 +73,10 @@ const mediaTranscodeWorkerSafety = read("_lib/mediaTranscodeWorkerSafety.ts");
 const mediaRecoveryOperator = read("_lib/mediaRecoveryOperator.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
 const mediaPlaybackCdnEligibility = read("_lib/mediaPlaybackCdnEligibility.ts");
+const mediaAutomationController = read("_lib/mediaAutomationController.ts");
+const mediaAutomationDiscovery = read("_lib/mediaAutomationDiscovery.ts");
+const mediaAutomationJobs = read("_lib/mediaAutomationJobs.ts");
+const mediaAutomationWorkerLoop = read("_lib/mediaAutomationWorkerLoop.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const vodQuality = read("_lib/vodQuality.ts");
@@ -105,6 +110,11 @@ const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata
 const mediaPlaybackCdnEligibilityProof = read("scripts/proof-media-playback-cdn-eligibility.mjs");
 const mediaCdnRolloutPlanner = read("scripts/media-cdn-rollout-planner.mjs");
 const mediaCdnRolloutPlannerProof = read("scripts/proof-media-cdn-rollout-planner.mjs");
+const mediaAutomationCli = read("scripts/media-automation-cli.mjs");
+const mediaAutomationControllerProof = read("scripts/proof-media-automation-controller.mjs");
+const mediaAutomationDiscoveryProof = read("scripts/proof-media-automation-discovery.mjs");
+const mediaAutomationBatchPlannerProof = read("scripts/proof-media-automation-batch-planner.mjs");
+const mediaAutomationWorkerLoopProof = read("scripts/proof-media-automation-worker-loop.mjs");
 const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 const mediaRenditionMigrationDryRunProof = read("scripts/proof-media-rendition-migration-dry-run.mjs");
 
@@ -118,6 +128,11 @@ const sourceCorpus = [
   mediaRecoveryOperator,
   mediaRenditionMetadata,
   mediaPlaybackCdnEligibility,
+  mediaAutomationController,
+  mediaAutomationDiscovery,
+  mediaAutomationJobs,
+  mediaAutomationWorkerLoop,
+  mediaAutomationCli,
   mediaTranscodeWorkerCli,
   mediaStorageFunction,
   creatorVideos,
@@ -722,6 +737,65 @@ assertIncludes(mediaCdnRolloutPlannerProof, "rollbackPlanRequired", "media CDN r
 assertIncludes(mediaCdnRolloutPlannerProof, "mutationAttempted: false", "media CDN rollout planner proof no mutation");
 assertIncludes(mediaCdnRolloutPlannerProof, "productionBackfillRun: false", "media CDN rollout planner proof no backfill");
 assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
+assertIncludes(mediaAutomationOperatorRunbook, "Status: source/proofed automation architecture only.", "media automation runbook status");
+assertIncludes(mediaAutomationOperatorRunbook, "No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live.", "media automation runbook no deployment");
+assertIncludes(mediaAutomationOperatorRunbook, "City Lights remains the canary proof, not the final hardcoded model.", "media automation runbook canary boundary");
+assertIncludes(mediaAutomationOperatorRunbook, "R2 logical backups are not true PITR.", "media automation runbook PITR boundary");
+assertIncludes(mediaAutomationOperatorRunbook, "MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION", "media automation runbook owner confirmation");
+assertIncludes(mediaAutomationOperatorRunbook, "Audit pass is required before resolver trust.", "media automation runbook audit gate");
+assertIncludes(mediaAutomationOperatorRunbook, "Rollback plans target only the exact `batch_id` and exact R2 output prefix.", "media automation runbook rollback scope");
+assertIncludes(mediaAutomationController, "MEDIA_AUTOMATION_DEFAULT_MODE: MediaAutomationMode = \"off\"", "media automation controller off default");
+assertIncludes(mediaAutomationController, "| \"dry_run\"", "media automation controller dry-run mode");
+assertIncludes(mediaAutomationController, "| \"one_job\"", "media automation controller one-job mode");
+assertIncludes(mediaAutomationController, "| \"batch\"", "media automation controller batch mode");
+assertIncludes(mediaAutomationController, "| \"continuous_limited\"", "media automation controller continuous limited mode");
+assertIncludes(mediaAutomationController, "| \"continuous_full_blocked\"", "media automation controller continuous full blocked mode");
+assertIncludes(mediaAutomationController, "emergency_stop_overrides_all_modes", "media automation controller emergency stop");
+assertIncludes(mediaAutomationController, "dry_run_writes_nothing", "media automation controller dry-run no writes");
+assertIncludes(mediaAutomationController, "one_job_requires_source_allowlist", "media automation controller one-job allowlist");
+assertIncludes(mediaAutomationController, "batch_requires_owner_approval", "media automation controller batch owner approval");
+assertIncludes(mediaAutomationController, "continuous_limited_requires_scheduled_backup_restore", "media automation controller continuous backup restore gate");
+assertIncludes(mediaAutomationController, "broad_backfill_disabled_by_default", "media automation controller broad backfill block");
+assertIncludes(mediaAutomationDiscovery, "private_blocked", "media automation discovery private block");
+assertIncludes(mediaAutomationDiscovery, "premium_blocked", "media automation discovery Premium block");
+assertIncludes(mediaAutomationDiscovery, "original_only_blocked", "media automation discovery original block");
+assertIncludes(mediaAutomationDiscovery, "unscanned_blocked", "media automation discovery unscanned block");
+assertIncludes(mediaAutomationDiscovery, "moderation_blocked", "media automation discovery moderation block");
+assertIncludes(mediaAutomationJobs, "playback/public/auto/", "media automation jobs public output prefix");
+assertIncludes(mediaAutomationJobs, "rollbackScope", "media automation jobs rollback scope");
+assertIncludes(mediaAutomationJobs, "mutationAttempted: false", "media automation jobs dry-run no mutation");
+assertIncludes(mediaAutomationWorkerLoop, "leasesRequired: true", "media automation worker loop lease required");
+assertIncludes(mediaAutomationWorkerLoop, "auditRequiredBeforeResolverTrust: true", "media automation worker loop audit required");
+assertIncludes(mediaAutomationWorkerLoop, "MEDIA_AUTOMATION_TELEMETRY_EVENTS", "media automation worker loop telemetry events");
+assertIncludes(mediaAutomationWorkerLoop, "rollback_executed", "media automation worker loop rollback telemetry");
+assertIncludes(mediaAutomationWorkerLoop, "quarantineAutomationWorkerBatch", "media automation worker loop quarantine");
+assertIncludes(mediaAutomationWorkerLoop, "status: \"pending_audit\" | \"audit_passed\" | \"audit_failed\" | \"quarantined\"", "media automation worker loop pending/quarantine states");
+assertIncludes(mediaAutomationCli, "MEDIA_AUTOMATION_RUN_CONFIRM", "media automation CLI owner confirmation env");
+assertIncludes(mediaAutomationCli, "I_UNDERSTAND_BATCH_AUTOMATION", "media automation CLI owner confirmation value");
+assertIncludes(mediaAutomationCli, "batch_execution_not_enabled_in_source_proof_build", "media automation CLI fail-closed run batch");
+assertIncludes(mediaAutomationCli, "playback/public/auto/", "media automation CLI exact output prefix");
+assertIncludes(mediaAutomationCli, "productionRowsWritten: false", "media automation CLI no production writes");
+assertIncludes(mediaAutomationCli, "cronSchedulerAdded: false", "media automation CLI no scheduler");
+assertIncludes(mediaAutomationControllerProof, "defaultOff", "media automation controller proof default off");
+assertIncludes(mediaAutomationControllerProof, "emergencyStop", "media automation controller proof emergency stop");
+assertIncludes(mediaAutomationControllerProof, "dryRunWritesJobs", "media automation controller proof dry-run no writes");
+assertIncludes(mediaAutomationControllerProof, "continuousLimitedRequiresGate", "media automation controller proof continuous gate");
+assertIncludes(mediaAutomationDiscoveryProof, "private_blocked", "media automation discovery proof private block");
+assertIncludes(mediaAutomationDiscoveryProof, "premium_blocked", "media automation discovery proof Premium block");
+assertIncludes(mediaAutomationDiscoveryProof, "original_only_blocked", "media automation discovery proof original block");
+assertIncludes(mediaAutomationDiscoveryProof, "unscanned_blocked", "media automation discovery proof unscanned block");
+assertIncludes(mediaAutomationDiscoveryProof, "moderation_blocked", "media automation discovery proof moderation block");
+assertIncludes(mediaAutomationBatchPlannerProof, "oneThousandEligibleFixtureRows", "media automation batch proof scale fixture");
+assertIncludes(mediaAutomationBatchPlannerProof, "mutationAttempted", "media automation batch proof no mutation");
+assertIncludes(mediaAutomationBatchPlannerProof, "productionRowsWritten", "media automation batch proof no production rows");
+assertIncludes(mediaAutomationBatchPlannerProof, "rollbackPlanRequired", "media automation batch proof rollback required");
+assertIncludes(mediaAutomationWorkerLoopProof, "missing_worker_lease", "media automation worker proof lease block");
+assertIncludes(mediaAutomationWorkerLoopProof, "auditPassResolverEligible", "media automation worker proof audit pass");
+assertIncludes(mediaAutomationWorkerLoopProof, "auditFailureQuarantine", "media automation worker proof quarantine");
+assertIncludes(mediaAutomationWorkerLoopProof, "resolverIgnoresPendingOrQuarantinedRows", "media automation worker proof resolver block");
+assertNotMatches(mediaAutomationCli, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media automation CLI must not mutate DB");
+assertNotMatches(mediaAutomationController + mediaAutomationDiscovery + mediaAutomationJobs + mediaAutomationWorkerLoop, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/i, "media automation helpers must not perform network or database writes");
+assertNotMatches(mediaAutomationOperatorRunbook, /\b(?:continuous automation is live|worker is deployed|cron is configured|scheduler is configured|R2 logical backups? (?:are|is) true PITR)\b/i, "media automation runbook must not overclaim deployment or PITR");
 assertIncludes(mediaMigrationPlan, "Status: production schema applied, with one scoped owner-approved proof job.", "trusted rendition migration plan status");
 assertIncludes(mediaMigrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "trusted rendition migration plan production schema status");
 assertIncludes(mediaMigrationPlan, "Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, deployed production transcode worker, broad queue processor, private/Premium public-CDN path, or broad playback migration is live.", "trusted rendition migration plan production data boundary");

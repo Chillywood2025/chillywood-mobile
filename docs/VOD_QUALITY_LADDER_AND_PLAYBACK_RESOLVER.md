@@ -55,6 +55,12 @@ Trusted audited-rendition playback rollout:
 - `npm run proof:media-playback-cdn-eligibility` proves default off fallback, kill switch fallback, `EXPO_PUBLIC_` rollout config support, canary CDN eligibility, batch selected-source CDN eligibility, `trusted_public` eligibility for City Lights and a generic second audited public row, stale backup fallback, denied source fallback, and blocking/fallback for audit-pending proof rows, private, Premium, original/master, unscanned, moderation-blocked, wrong bucket role, and wrong-prefix rows without printing private signed URLs.
 - `npm run proof:media-cdn-rollout-planner` proves the batch planner with one eligible row and 1,000 eligible fixture rows, max-batch cap enforcement, denied/private/Premium/original/pending/failed/wrong-prefix exclusion, scoped rollback-plan creation, and no DB mutation or playback switch.
 
+## Media Automation Operator Foundation
+
+- `_lib/mediaAutomationController.ts`, `_lib/mediaAutomationDiscovery.ts`, `_lib/mediaAutomationJobs.ts`, and `_lib/mediaAutomationWorkerLoop.ts` define source/proof-only automation for scale: default `off`, dry-run no writes, one-job allowlist, owner-approved capped batch mode, continuous-limited gating, eligible public-safe discovery, dry-run job plans, lease-bound worker runs, audit-before-resolver-trust, quarantine, rollback, and telemetry event names.
+- `scripts/media-automation-cli.mjs` exposes CLI-only `media-automation:*` commands for status, discovery, plan-batch, dry-run-batch, gated run-batch, audit-batch, rollback-plan, pause, and emergency-stop. No daemon, cron, scheduler, deployed worker, queue processor, production DB write, production media processing, backfill, or playback switch is enabled by these commands.
+- `npm run proof:media-automation-controller`, `npm run proof:media-automation-discovery`, `npm run proof:media-automation-batch-planner`, and `npm run proof:media-automation-worker-loop` prove emergency stop, backup/restore gate denial for continuous mode, unsafe candidate exclusion, audited-HLS skip, max batch cap, owner confirmation requirement, audit pass before resolver trust, quarantine on audit failure, scoped rollback, and no secret/private URL output.
+
 Trusted backend migration path:
 
 - `docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md` designs the server-owned migration path for future `media_transcode_jobs` and `media_renditions`.

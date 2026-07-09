@@ -12,6 +12,7 @@ Status: controlled rollout guide for audited public-safe Cloudflare R2/HLS playb
 - Latest private backup prefix: `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`.
 - Continuous worker automation and broad backfill remain blocked.
 - Active rollout scope: trusted audited public-safe rows only; currently production row counts are `media_transcode_jobs=1`, `media_renditions=2`, `unsafe_cdn_rows=0`, and `other_source_renditions=0`.
+- First Batch 1 candidate plan: `docs/MEDIA_CDN_BATCH_1_CANDIDATE_PLAN.md`. The read-only catalog audit found `27` creator-video rows, `1` already eligible audited CDN/HLS source, `0` new selectable public-safe Batch 1 candidates, `0` needs-transcode rows under the current gate, `12` not-public rows, `10` paid/Premium locked rows, `27` source rows without `clean` or `approved` scan status, and `2` rows with moderation not allowed/approved/clean. Batch 1 is empty until scan approval and owner approval make new public-safe rows eligible.
 
 ## Rollout Modes
 
@@ -82,6 +83,8 @@ The planner must:
 - produce a rollback plan scoped to exact source ids and exact output prefixes
 - perform no DB mutation
 - switch no playback config by itself
+
+The first production catalog audit is intentionally a no-run plan: no additional videos are selected because every non-City-Lights row fails at least one public-safe gate. Six non-City-Lights rows are public, source-present, non-paid, and moderation-clean, but remain blocked by `scan_status=manual_review`; they must not be processed until scan approval is explicit.
 
 ## Activation
 

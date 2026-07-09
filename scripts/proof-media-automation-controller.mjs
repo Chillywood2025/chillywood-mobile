@@ -1,0 +1,172 @@
+#!/usr/bin/env node
+
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+const repoRoot = process.cwd();
+const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+
+const assert = (condition, message) => {
+  if (!condition) throw new Error(message);
+};
+
+const noSecretLikeText = (label, value) => {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  const patterns = [
+    /postgres(?:ql)?:\/\//i,
+    /X-Amz-Signature=/i,
+    /\bservice[_-]?role\b/i,
+    /\bBearer\s+[A-Za-z0-9._-]+/i,
+    /\beyJ[A-Za-z0-9_-]{20,}\./,
+  ];
+  const match = patterns.find((pattern) => pattern.test(text));
+  assert(!match, `${label} contained secret-like text`);
+};
+
+const compileController = () => {
+  const outDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-automation-controller-"));
+  try {
+    execFileSync(
+      npxCommand,
+      [
+        "tsc",
+        "_lib/mediaAutomationController.ts",
+        "--target",
+        "ES2020",
+        "--module",
+        "commonjs",
+        "--moduleResolution",
+        "node",
+        "--outDir",
+        outDir,
+        "--strict",
+        "--skipLibCheck",
+      ],
+      {
+        cwd: repoRoot,
+        stdio: ["ignore", "pipe", "pipe"],
+        encoding: "utf8",
+      },
+    );
+    const requireFromHere = createRequire(import.meta.url);
+    const helper = requireFromHere(path.join(outDir, "mediaAutomationController.js"));
+    return { helper, cleanup: () => rmSync(outDir, { recursive: true, force: true }) };
+  } catch (error) {
+    rmSync(outDir, { recursive: true, force: true });
+    throw error;
+  }
+};
+
+const loaded = compileController();
+
+try {
+  const {
+    resolveMediaAutomationController,
+    sanitizeMediaAutomationControllerProof,
+  } = loaded.helper;
+
+  const defaultOff = resolveMediaAutomationController();
+  assert(defaultOff.mode === "off", "default mode must be off");
+  assert(defaultOff.allowed === false, "default mode must not allow automation");
+  assert(defaultOff.canRunWorker === false, "default mode must not run worker");
+
+  const emergencyStop = resolveMediaAutomationController({
+    mode: "batch",
+    emergencyStop: true,
+    backupGateClosed: true,
+    ownerApprovalForBatch: true,
+    maxBatchSize: 5,
+    maxJobsPerRun: 5,
+  });
+  assert(emergencyStop.state === "emergency_stop", "emergency stop must win");
+  assert(emergencyStop.blockedReason === "emergency_stop", "emergency stop must block");
+
+  const dryRun = resolveMediaAutomationController({ mode: "dry_run" });
+  assert(dryRun.allowed === true, "dry run should be allowed");
+  assert(dryRun.canWriteJobs === false, "dry run must not write jobs");
+  assert(dryRun.canRunWorker === false, "dry run must not run worker");
+
+  const oneJobDenied = resolveMediaAutomationController({
+    mode: "one_job",
+    backupGateClosed: true,
+    maxJobsPerRun: 1,
+  });
+  assert(oneJobDenied.blockedReason === "source_allowlist_required", "one job requires allowlist");
+
+  const oneJobAllowed = resolveMediaAutomationController({
+    mode: "one_job",
+    sourceAllowlistCount: 1,
+    backupGateClosed: true,
+    maxJobsPerRun: 1,
+  });
+  assert(oneJobAllowed.allowed === true, "one job should pass with allowlist and backup gate");
+  assert(oneJobAllowed.maxJobsPerRun === 1, "one job must stay one job");
+
+  const batchDenied = resolveMediaAutomationController({
+    mode: "batch",
+    backupGateClosed: true,
+    maxBatchSize: 5,
+    maxJobsPerRun: 5,
+  });
+  assert(batchDenied.blockedReason === "owner_batch_approval_required", "batch requires owner approval");
+
+  const batchAllowed = resolveMediaAutomationController({
+    mode: "batch",
+    ownerApprovalForBatch: true,
+    backupGateClosed: true,
+    maxBatchSize: 5,
+    maxJobsPerRun: 5,
+  });
+  assert(batchAllowed.allowed === true, "batch passes only after owner approval and backup gate");
+
+  const continuousDenied = resolveMediaAutomationController({
+    mode: "continuous_limited",
+    ownerApprovalForContinuous: true,
+    backupGateClosed: true,
+    maxConcurrency: 1,
+    maxJobsPerRun: 10,
+    telemetryAvailable: true,
+  });
+  assert(
+    continuousDenied.blockedReason === "scheduled_backup_restore_gate_not_closed",
+    "continuous limited requires scheduled backup restore gate",
+  );
+
+  const continuousAllowed = resolveMediaAutomationController({
+    mode: "continuous_limited",
+    ownerApprovalForContinuous: true,
+    scheduledBackupRestoreGateClosed: true,
+    backupGateClosed: true,
+    maxConcurrency: 1,
+    maxJobsPerRun: 10,
+    telemetryAvailable: true,
+  });
+  assert(continuousAllowed.allowed === true, "continuous limited model only passes with every gate");
+
+  const continuousFullBlocked = resolveMediaAutomationController({
+    mode: "continuous_full_blocked",
+    ownerApprovalForContinuous: true,
+    scheduledBackupRestoreGateClosed: true,
+  });
+  assert(continuousFullBlocked.allowed === false, "continuous full remains blocked");
+
+  const summary = sanitizeMediaAutomationControllerProof({
+    ok: true,
+    defaultOff: defaultOff.blockedReason,
+    emergencyStop: emergencyStop.blockedReason,
+    dryRunWritesJobs: dryRun.canWriteJobs,
+    oneJobAllowed: oneJobAllowed.allowed,
+    batchAllowed: batchAllowed.allowed,
+    continuousLimitedRequiresGate: continuousDenied.blockedReason,
+    continuousFullBlocked: continuousFullBlocked.blockedReason,
+    productionPlaybackSwitched: false,
+    daemonDeployed: false,
+  });
+  noSecretLikeText("controller proof", summary);
+  console.log(JSON.stringify(summary, null, 2));
+} finally {
+  loaded.cleanup();
+}
