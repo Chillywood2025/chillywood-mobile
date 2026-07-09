@@ -149,4 +149,6 @@ Do not run `media-automation:run-auto` without a future confirmed batch lane and
 
 `media-automation:run-continuous-once` is bounded source/proof infrastructure only. It requires `MEDIA_AUTOMATION_CONTINUOUS_ONCE_CONFIRM=I_UNDERSTAND_ONE_CONTINUOUS_LIMITED_CYCLE` in a future lane and still must stop after one limited loop iteration. It does not start a daemon, cron, or scheduler. `media-automation:report` is read-only and can summarize candidates, calculated batch size, risk, reasons, selected count, and rollback scopes.
 
+First production CLI auto-detect cycle status: Pass-No-op. The CLI ran through preflight, discovery, plan-auto, dry-run-auto, and report; the calculated batch size was `0` because there were no `eligible_needs_transcode` candidates. `run-auto` was not executed, and no production rows, media uploads, playback scope, daemon, cron, scheduler, or queue processor changed.
+
 Disabled templates under `ops/media-automation/systemd/` document a future service/timer deployment shape only. They are not installed, enabled, or started by this repo.

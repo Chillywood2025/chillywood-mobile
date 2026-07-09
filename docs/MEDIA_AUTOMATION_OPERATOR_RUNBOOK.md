@@ -89,6 +89,8 @@ First production read-only linked run on 2026-07-09:
 
 `run-auto` was not executed. No media was processed or uploaded, no production rows were written, and playback scope did not change.
 
+First full production CLI auto-detect cycle result: Pass-No-op. Backup preflight/status/verify-latest/restore-drill, worker preflight/status, automation status, discovery, plan-auto, dry-run-auto, and report all ran successfully. The report matched the dry-run plan with `calculatedBatchSize=0`, `riskLevel=blocked`, reason `no_eligible_candidates`, selected count `0`, rollback scopes `[]`, no production DB writes, no media upload, no daemon/cron/scheduler/queue processor, and no playback broadening.
+
 ## Backup Gate
 
 Automation must verify the private R2 logical backup gate before any future write:

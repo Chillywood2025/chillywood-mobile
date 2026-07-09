@@ -93,6 +93,8 @@ For future limited automation, `media-automation:run-continuous-once` is a bound
 
 The first production catalog audit is intentionally a no-run plan: no additional videos are selected because every non-City-Lights row fails at least one public-safe gate. Six non-City-Lights rows are public, source-present, non-paid, and moderation-clean, but remain blocked by `scan_status=manual_review`; they must not be processed until scan approval is explicit.
 
+The first full production CLI auto-detect cycle also ended as Pass-No-op. `media-automation:report` confirmed `calculatedBatchSize=0`, reason `no_eligible_candidates`, no selected candidates, no rollback scopes, no `run-auto`, no production DB writes, no media uploads, and no playback broadening.
+
 ## Activation
 
 Use only non-secret rollout flags:
