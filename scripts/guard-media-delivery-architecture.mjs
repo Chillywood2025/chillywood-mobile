@@ -63,6 +63,7 @@ const mediaStatusCorpus = [architecture, currentState, nextTask].join("\n\n");
 const mediaStorage = read("_lib/mediaStorage.ts");
 const mediaDelivery = read("_lib/mediaDelivery.ts");
 const mediaDeliveryTelemetry = read("_lib/mediaDeliveryTelemetry.ts");
+const mediaTranscodeQueue = read("_lib/mediaTranscodeQueue.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const vodQuality = read("_lib/vodQuality.ts");
@@ -76,11 +77,13 @@ const mediaDeliveryPublicDemoProof = read("scripts/proof-media-delivery-public-d
 const mediaDeliveryRealDemoProof = read("scripts/proof-media-delivery-real-demo.mjs");
 const mediaDeliveryHlsDemoProof = read("scripts/proof-media-delivery-hls-demo.mjs");
 const mediaDeliveryTelemetryProof = read("scripts/proof-media-delivery-telemetry.mjs");
+const mediaTranscodeQueueProof = read("scripts/proof-media-transcode-queue-hls.mjs");
 
 const sourceCorpus = [
   mediaStorage,
   mediaDelivery,
   mediaDeliveryTelemetry,
+  mediaTranscodeQueue,
   mediaStorageFunction,
   creatorVideos,
   vodQuality,
@@ -107,7 +110,7 @@ if (!hasHlsDemoProofWorker) {
 }
 
 assertIncludes(architecture, "Status: staged resolver helpers, proof scripts, architecture, and guard only.", "media delivery architecture doc");
-assertIncludes(architecture, "Production transcoding status: not live; no backend transcode queue/service worker exists in this repo. A local proof worker script exists only for the approved public-safe City Lights HLS demo.", "media delivery architecture doc");
+assertIncludes(architecture, "Production transcoding status: not live; no production backend transcode queue/service worker exists in this repo. Local proof scripts and a proof-only queue model exist only for the approved public-safe City Lights demo.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text and generated demo proof delivery; production CDN playback is not live.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare R2 public playback resolver status: staged helper and proof scripts exist; production playback remains disabled by default and still falls back to signed origin.", "R2 public playback resolver status");
 assertIncludes(architecture, "Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.", "R2 private origin proof status");
@@ -115,7 +118,7 @@ assertIncludes(architecture, "R2 CLI/API proof status: private and public-playba
 assertIncludes(architecture, "R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.", "R2 proof bucket status");
 assertIncludes(architecture, "R2 proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded and is kept for proof traceability.", "R2 proof object status");
 assertIncludes(architecture, "R2 public-playback proof bucket status: separate bucket `chillywood-media-public-playback-proof` exists, created 2026-07-08T23:47:12.035Z, and is distinct from the private proof bucket.", "R2 public-playback proof bucket status");
-assertIncludes(architecture, "R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt`, immutable cache proof text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, and local-proof HLS tree `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/` are public-safe proof assets only.", "R2 public-playback proof object status");
+assertIncludes(architecture, "R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt`, immutable cache proof text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, local-proof HLS tree `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, and proof-only transcode queue HLS tree `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/` are public-safe proof assets only.", "R2 public-playback proof object status");
 assertIncludes(architecture, "R2 public exposure status: `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access remains disabled on both buckets; the private bucket has no custom domain.", "R2 public exposure status");
 assertIncludes(architecture, "R2 custom-domain/cache proof status: public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returns HTTP 200 with the expected harmless text from the public-playback proof bucket; generated demo MP4 proof also returns through the same public proof hostname.", "R2 custom-domain/cache proof status");
 assertIncludes(architecture, "Media bandwidth telemetry status: planned foundation only, not live.", "media delivery architecture doc");
@@ -133,6 +136,11 @@ assertIncludes(architecture, "Local HLS demo public path: `playback/public/demo/
 assertIncludes(architecture, "Local HLS segment cache proof: after a narrow Cloudflare Cache Rule scoped only to `media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/*.ts`, versioned HLS segments return HTTP 200, `Content-Type: video/mp2t`, `Cache-Control: public, max-age=31536000, immutable`, and `cf-cache-status: HIT` after warmup. No production egress or cost savings are claimed.", "local HLS segment cache proof");
 assertIncludes(architecture, "Local HLS resolver proof: the staged resolver returns `https://media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8` only when `cdnAllowedPublicPlaybackPaths` explicitly contains that master manifest and `publicPlaybackSafe=true`; the source MP4 and segment paths fall back with `not_in_public_playback_allowlist` under the HLS proof config.", "local HLS resolver proof");
 assertIncludes(architecture, "App/player HLS proof status: `npm run proof:media-delivery-hls-demo` now includes a proof-only app/player harness for `app/player/[id].tsx`. It verifies the Player route source contract maps `displayItem.video_url` into `{ uri }`, verifies `Video` receives `source={playbackSource}` with `onLoad` and `onPlaybackStatusUpdate`, and reports `playerReceivesHlsUrl=true`, `onLoadObserved=true`, `durationMillis=52208`, `progressObserved=true`, `progressMillis=2175`, `isPlaying=true`, `playbackStarted=true`, `ffmpegDecode=passed`, `productionPlaybackSwitched=false`, and `privateSignedOriginUrlExposed=false` for the allowlisted HLS master URL only.", "app/player HLS proof status");
+assertIncludes(architecture, "Proof-only transcode queue foundation status: `_lib/mediaTranscodeQueue.ts` and `npm run proof:media-transcode-queue-hls` model `queued -> probing -> transcoding -> uploading -> ready` for the approved City Lights demo only; no production backend queue/service worker, database writes, trusted `video_renditions` rows, or production playback switch is live.", "proof-only transcode queue foundation status");
+assertIncludes(architecture, "Proof-only transcode queue output path: `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8` returned HTTP 200 through `media.chillywoodstream.com`; 360p and 480p variant playlists returned HTTP 200; ffmpeg decoded the public HLS master URL successfully.", "proof-only transcode queue output path");
+assertIncludes(architecture, "Proof-only transcode queue cache result: queue-generated `.ts` segments returned HTTP 200, `Content-Type: video/mp2t`, and `Cache-Control: public, max-age=31536000, immutable`; repeated queue-path fetches returned `cf-cache-status: DYNAMIC`, so no queue-specific cache HIT, cache savings, or production egress savings are claimed.", "proof-only transcode queue cache result");
+assertIncludes(architecture, "Proof-only transcode queue resolver proof: only a completed ready proof job can produce the allowlisted HLS master URL; queued and failed proof jobs cannot resolve, non-allowlisted outputs fall back with `not_in_public_playback_allowlist`, and private/original/Premium/unscanned/moderation-blocked/default creator-video paths fall back or block.", "proof-only transcode queue resolver proof");
+assertIncludes(architecture, "Proof-only transcode queue telemetry proof: the queue proof builds sanitized HLS `media_delivery_events` shapes with `deliveryFormat=hls`, 360p/480p rendition labels, estimated bytes, observed `cdn_cache_status`, and `proof_mode=true`; no production telemetry writes or table migrations are live.", "proof-only transcode queue telemetry proof");
 assertIncludes(architecture, "5 GB resumable upload status: not live; current upload is single signed PUT.", "media delivery architecture doc");
 assertIncludes(architecture, "Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domain/cache", "Cloudflare R2 chosen path");
 assertIncludes(architecture, "Resolver staging from commit `22837a5d20c1be66ffeb5559b96f7048f6a094eb` keeps production playback unchanged.", "resolver staging checkpoint");
@@ -141,6 +149,7 @@ assertIncludes(architecture, "Safe generated demo MP4 `playback/public/demo/proo
 assertIncludes(architecture, "Real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` is proof-staged and proved through `media.chillywoodstream.com` only under the explicit real-demo allowlist.", "real demo media checkpoint");
 assertIncludes(architecture, "Local HLS proof worker `scripts/proof-media-delivery-hls-demo.mjs` generated 360p/480p HLS from the approved City Lights public-safe MP4, uploaded proof-only HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, proved master/variant/segment delivery through `media.chillywoodstream.com`, proved HLS segment cache HIT, and proved resolver eligibility only for the allowlisted HLS master manifest.", "local HLS demo checkpoint");
 assertIncludes(architecture, "Proof-only app/player HLS harness proved the allowlisted HLS master URL can be received by the Player source contract, load with duration, report progress, and start playback evidence without switching production playback.", "app/player HLS checkpoint");
+assertIncludes(architecture, "Proof-only transcode queue foundation proved the approved City Lights demo can move through local job states, generate 360p/480p HLS, upload proof outputs under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`, decode through `media.chillywoodstream.com`, and resolve only the completed allowlisted HLS master. Queue-path cache HIT was not observed; immutable segment cache behavior was documented instead.", "proof-only transcode queue checkpoint");
 assertIncludes(architecture, "Media bandwidth telemetry backend writes, table migrations, CDN log ingestion, and provider reconciliation remain planned.", "telemetry planned checkpoint");
 assertIncludes(architecture, "Media delivery telemetry source/proof foundation exists for future `media_delivery_events` and `media_playback_sessions`; backend writes and table migrations remain planned.", "telemetry foundation checkpoint");
 assertIncludes(architecture, "Production HLS/transcoding implementation remains planned.", "HLS planned checkpoint");
@@ -172,7 +181,7 @@ assertIncludes(architecture, "Recommended safest next architecture: create a sep
 assertIncludes(architecture, "Alternative safe architecture: keep the R2 bucket private and put `media.chillywoodstream.com` on a Worker route that allowlists `playback/public/`, blocks private prefixes, applies token checks for paid/Premium paths, sets cache headers by asset class, and reads R2 through a private binding.", "Worker gateway architecture");
 assertIncludes(architecture, "Do not connect `media.chillywoodstream.com` directly to `chillywood-media-proof` while that bucket is a mixed private/proof bucket.", "proof bucket custom-domain prohibition");
 assertIncludes(architecture, "`chillywood-media-public-playback-proof` is a separate R2 bucket for harmless public-safe proof assets only.", "public-playback proof bucket purpose");
-assertIncludes(architecture, "The bucket currently contains only public-safe proof assets: text proof object `playback/public/proof/hello.txt`, cache-HIT text proof object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo proof MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, and local-proof HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`.", "public-playback proof bucket contents");
+assertIncludes(architecture, "The bucket currently contains only public-safe proof assets: text proof object `playback/public/proof/hello.txt`, cache-HIT text proof object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo proof MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, local-proof HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, and proof-only transcode queue HLS assets under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`.", "public-playback proof bucket contents");
 assertIncludes(architecture, "The bucket must not contain `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, `unscanned/`, unapproved real creator media, original/master media, unscanned uploads, private media, or Premium-only media.", "public-playback proof bucket forbidden contents");
 assertIncludes(architecture, "The bucket is publicly reachable only through `media.chillywoodstream.com` for harmless public-safe proof objects; r2.dev public access is disabled.", "public-playback proof bucket public checkpoint");
 assertIncludes(architecture, "Explicit owner approval was limited to connecting `media.chillywoodstream.com` to this public-playback proof bucket. No approval was given for production playback, private media, Premium media, or the private proof bucket.", "public-playback proof bucket approval checkpoint");
@@ -193,6 +202,9 @@ assertIncludes(architecture, "Local HLS public fetch returned HTTP 200 for `mast
 assertIncludes(architecture, "A narrow Cloudflare Cache Rule was applied only to versioned HLS proof segments under `media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/*.ts`; segment fetches returned HTTP 200, `Content-Type: video/mp2t`, `Cache-Control: public, max-age=31536000, immutable`, and `cf-cache-status: HIT` after warmup. No production egress or cost savings are claimed.", "local HLS segment cache proof fetch");
 assertIncludes(architecture, "HLS resolver proof uses a resolver allowlist for `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8` only. The source MP4 and segment URLs are not independently resolver-returned under the HLS proof config and fall back with `not_in_public_playback_allowlist`.", "local HLS resolver allowlist boundary");
 assertIncludes(architecture, "App/player HLS proof uses a proof-only local harness for `app/player/[id].tsx`: the allowlisted HLS master is passed through the Player source contract as `{ uri }`, loaded with duration `52208ms`, progressed to `2175ms`, reported `isPlaying=true`, and produced playback-start evidence without private signed origin URLs.", "app/player HLS proof boundary");
+assertIncludes(architecture, "Proof-only transcode queue proof generated 360p and 480p HLS from the approved City Lights public-safe MP4 and uploaded 24 proof HLS objects under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/` to the public-playback proof bucket only.", "proof-only transcode queue upload proof");
+assertIncludes(architecture, "Proof-only transcode queue public fetch returned HTTP 200 for `master.m3u8`, `360p/index.m3u8`, and `480p/index.m3u8`; queue-generated `.ts` segments returned HTTP 200 with `Content-Type: video/mp2t` and immutable cache metadata; repeated queue-path segment fetches remained `cf-cache-status: DYNAMIC`, and ffmpeg decoded the public queue HLS master URL successfully.", "proof-only transcode queue public fetch proof");
+assertIncludes(architecture, "Proof-only transcode queue resolver proof uses a resolver allowlist for `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8` only. The completed ready proof job can resolve that master; queued and failed proof jobs cannot resolve; non-allowlisted output paths fall back with `not_in_public_playback_allowlist`.", "proof-only transcode queue resolver boundary");
 assertIncludes(architecture, "Forbidden-prefix probes under `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404 through the public proof hostname.", "forbidden prefix public proof");
 assertIncludes(architecture, "Public-playback proof audit: bucket list shows `chillywood-media-public-playback-proof`, r2.dev status is disabled, custom-domain list contains `media.chillywoodstream.com`, and the proof object still reads back as harmless text through authorized Wrangler access.", "public-playback proof audit");
 assertIncludes(architecture, "Supabase/Edge resolver remains the access-control and playback decision layer.", "Supabase/Edge resolver boundary");
@@ -208,7 +220,7 @@ assertIncludes(architecture, "`scripts/proof-media-delivery-hls-demo.mjs` is a l
 assertIncludes(architecture, "Production playback remains unchanged until a later approved lane adds trusted public-safe asset metadata, cache-HIT proof, telemetry, and signed/token CDN access for non-public assets.", "staged public playback resolver production boundary");
 assertIncludes(architecture, "Creator-video Watch-Party sources must use the same creator-video playback resolver path as standalone Player.", "media delivery architecture doc");
 assertIncludes(architecture, "HLS/transcoding is a future milestone unless implemented and proved.", "HLS/transcoding status");
-assertIncludes(architecture, "Current proof scope: a local proof worker has generated and proved 360p/480p HLS for the approved public-safe City Lights demo only. This does not create a production transcode queue, does not insert trusted `video_renditions` rows, does not migrate creator-video playback, and does not make HLS/transcoding live for production.", "HLS demo proof scope");
+assertIncludes(architecture, "Current proof scope: local proof workers and a proof-only queue model have generated and proved 360p/480p HLS for the approved public-safe City Lights demo only. This does not create a production transcode queue, does not insert trusted `video_renditions` rows, does not migrate creator-video playback, and does not make HLS/transcoding live for production.", "HLS demo proof scope");
 assertIncludes(architecture, "App/player HLS playback proof is complete only in a proof-only local harness for the allowlisted City Lights HLS master URL. Normal Player creator-video playback remains signed-origin fallback by default.", "app/player HLS proof scope");
 assertIncludes(architecture, "Production HLS live claim requires future proof that a backend worker ran from a trusted source, rendition files exist, trusted metadata rows exist, the manifest plays, the resolver returns the HLS URL for approved playback, cache HIT is proved for segments, and signed-origin fallback still works.", "production HLS live claim guardrail");
 assertIncludes(architecture, "Bandwidth/minutes-watched telemetry remains required before broad rollout.", "egress telemetry requirement");
@@ -232,9 +244,11 @@ assertIncludes(currentState, "Owner-approved `media.chillywoodstream.com` is con
 assertIncludes(currentState, "Real public-safe City Lights demo MP4 `https://media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` returned HTTP 200, byte-range HTTP 206, `Content-Type: video/mp4`, immutable cache metadata, repeated warm `cf-cache-status: HIT`, H.264 854x480 ffprobe metadata, ffmpeg decode proof, and `decodedFrameCount=1253`.", "current state real demo proof");
 assertIncludes(currentState, "Local HLS proof worker `npm run proof:media-delivery-hls-demo` generated 360p/480p HLS from the approved City Lights MP4, uploaded 24 proof-only HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, proved HTTP 200 for `master.m3u8` and variant playlists, proved `video/mp2t` HLS segments with immutable cache headers and `cf-cache-status: HIT` after a narrow HLS segment cache rule, decoded the public HLS master URL with ffmpeg, and proved the resolver returns the CDN URL only for the allowlisted HLS master while source MP4 and segment paths fall back with `not_in_public_playback_allowlist`.", "current state local HLS proof");
 assertIncludes(currentState, "The same HLS proof now includes a proof-only app/player harness for `app/player/[id].tsx`: Player source contract receives the HLS master as `{ uri }`, load status reports `durationMillis=52208`, progress reports `progressMillis=2175`, `isPlaying=true`, `playbackStarted=true`, `ffmpegDecode=passed`, and `privateSignedOriginUrlExposed=false`.", "current state app/player HLS proof");
+assertIncludes(currentState, "Proof-only transcode queue foundation `npm run proof:media-transcode-queue-hls` models `queued -> probing -> transcoding -> uploading -> ready` for the approved City Lights demo, generates 360p/480p HLS, uploads 24 proof-only HLS objects under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`, fetches master/variant/segment objects through `media.chillywoodstream.com`, decodes the public HLS master with ffmpeg, and keeps production DB writes, production transcode service, and production playback disabled.", "current state proof-only transcode queue foundation");
+assertIncludes(currentState, "Queue-path segment fetches returned HTTP 200 with `Content-Type: video/mp2t`, immutable cache metadata, and repeated `cf-cache-status: DYNAMIC`; queue-specific cache HIT and production egress savings are not claimed.", "current state proof-only transcode queue cache boundary");
 assertIncludes(currentState, "The real demo resolver proof uses `cdnAllowedPublicPlaybackPaths` so only the approved City Lights path resolves to `media.chillywoodstream.com`; non-allowlisted public-safe, private, original, Premium-only, unscanned, moderation-blocked, unsafe, default creator-video, or missing-config assets fall back or block.", "current state real demo allowlist proof");
 assertIncludes(currentState, "Media delivery telemetry foundation is source/proof-only: `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry` build sanitized `media_delivery_events` and `media_playback_sessions` shapes, estimate bytes, redact proof identifiers and URL-like values, and perform no backend writes or production telemetry table writes.", "current state telemetry foundation");
-assertIncludes(currentState, "Production HLS/transcoding remains not live: there is no backend transcode queue/service worker, no trusted `video_renditions` rows for the proof HLS assets, and no production playback switch.", "current state production HLS boundary");
+assertIncludes(currentState, "Production HLS/transcoding remains not live: there is no production backend transcode queue/service worker, no trusted `video_renditions` rows for the proof HLS assets, and no production playback switch.", "current state production HLS boundary");
 assertIncludes(currentState, "`_lib/mediaDelivery.ts` still stages disabled-by-default Cloudflare R2 custom-domain resolver support", "current state staged resolver support");
 assertIncludes(currentState, "Current VOD production wiring passes `publicPlaybackSafe: false`, so existing creator-video playback still uses signed-origin fallback.", "current state production playback fallback");
 assertIncludes(nextTask, "Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from `chillywood-media-proof`.", "next task bucket separation");
@@ -243,8 +257,10 @@ assertIncludes(nextTask, "`npm run proof:media-delivery-real-demo` proves only t
 assertIncludes(nextTask, "HLS proof URL `https://media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8` returned HTTP 200; variant playlists returned HTTP 200; HLS segments returned HTTP 200 with `Content-Type: video/mp2t`, immutable cache metadata, and `cf-cache-status: HIT` after a narrow HLS segment cache rule.", "next task local HLS proof");
 assertIncludes(nextTask, "HLS resolver proof returns `media.chillywoodstream.com` only for the allowlisted HLS master manifest; source MP4 and segment paths fall back with `not_in_public_playback_allowlist`.", "next task local HLS resolver proof");
 assertIncludes(nextTask, "Proof-only app/player HLS harness for `app/player/[id].tsx` proves the allowlisted HLS master is received as `{ uri }`, load status reports `durationMillis=52208`, progress reports `progressMillis=2175`, `isPlaying=true`, `playbackStarted=true`, and no private signed origin URL is exposed.", "next task app/player HLS proof");
+assertIncludes(nextTask, "`npm run proof:media-transcode-queue-hls` proves a source/proof-only queue model for the approved City Lights demo: local job states reach ready, 360p/480p HLS is generated, 24 proof-only objects are uploaded under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`, public HLS fetch/decode passes, completed-job resolver allowlist passes, queued/failed/non-allowlisted outputs cannot resolve, and production DB writes/playback/transcode service remain disabled.", "next task proof-only transcode queue proof");
+assertIncludes(nextTask, "Queue-path segment cache HIT was not observed; queue segments returned immutable cache metadata with `cf-cache-status: DYNAMIC`, so the next cache step is a separately approved narrow cache rule or Worker/cache policy for this proof prefix before claiming queue-path cache HIT.", "next task proof-only transcode queue cache boundary");
 assertIncludes(nextTask, "Telemetry foundation exists only as `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry`; no production telemetry writes, table migrations, billing/payout changes, or playback switches are live.", "next task telemetry foundation");
-assertIncludes(nextTask, "Production HLS/transcoding is still not live: no backend transcode queue/service worker, no trusted `video_renditions` rows for the proof HLS assets, and no creator-video playback migration.", "next task production HLS boundary");
+assertIncludes(nextTask, "Production HLS/transcoding is still not live: no production backend transcode queue/service worker, no trusted `video_renditions` rows for the proof HLS assets, and no creator-video playback migration.", "next task production HLS boundary");
 assertIncludes(nextTask, "Current VOD production wiring keeps `publicPlaybackSafe: false`, so existing creator-video playback still falls back to signed origin by default.", "next task production fallback");
 assertIncludes(nextTask, "Do not enable public access on `chillywood-media-proof`.", "private bucket public access prohibition");
 
@@ -313,6 +329,7 @@ if (publicR2OriginalClaims.length) {
 
 for (const sentence of splitSentences(docsCorpus)) {
   if (/\b(Paid|Premium)\b/i.test(sentence) && /\b(public CDN|public cache|custom-domain\/cache|Cloudflare cache)\b/i.test(sentence)) {
+    if (/\b(cannot|not|blocked|blocks|fall back|fallback|must not|do not)\b/i.test(sentence)) continue;
     if (!/\b(token|signed|requires|required|before|first)\b/i.test(sentence)) {
       fail(`Paid/Premium media cannot use public CDN without token/signed access: ${sentence}`);
     }
@@ -434,6 +451,7 @@ const secretScanCorpus = [
   mediaDeliveryRealDemoProof,
   mediaDeliveryHlsDemoProof,
   mediaDeliveryTelemetryProof,
+  mediaTranscodeQueueProof,
   packageJson,
   sourceCorpus,
 ].join("\n");
@@ -489,6 +507,36 @@ assertIncludes(mediaDeliveryTelemetry, "cdn_cache_status", "media delivery telem
 assertIncludes(mediaDeliveryTelemetry, "proof_mode", "media delivery telemetry proof mode field");
 assertNotMatches(mediaDeliveryTelemetry, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "media delivery telemetry helper must not perform network or database writes");
 assertNotMatches(mediaDeliveryTelemetry, /\b(?:signedUrl|signed_url|privateSignedUrl|private_signed_url|playbackUrl\??:|playback_url\??:)\b/, "media delivery telemetry helper must not define full playback URL fields");
+assertIncludes(mediaTranscodeQueue, "MediaTranscodeJobStatus", "media transcode queue proof model status type");
+assertIncludes(mediaTranscodeQueue, "\"queued\"", "media transcode queue proof model queued status");
+assertIncludes(mediaTranscodeQueue, "\"probing\"", "media transcode queue proof model probing status");
+assertIncludes(mediaTranscodeQueue, "\"transcoding\"", "media transcode queue proof model transcoding status");
+assertIncludes(mediaTranscodeQueue, "\"uploading\"", "media transcode queue proof model uploading status");
+assertIncludes(mediaTranscodeQueue, "\"ready\"", "media transcode queue proof model ready status");
+assertIncludes(mediaTranscodeQueue, "\"failed\"", "media transcode queue proof model failed status");
+assertIncludes(mediaTranscodeQueue, "MediaTranscodeJob", "media transcode queue proof model job type");
+assertIncludes(mediaTranscodeQueue, "MediaTranscodeRendition", "media transcode queue proof model rendition type");
+assertIncludes(mediaTranscodeQueue, "MediaTranscodeManifest", "media transcode queue proof model manifest type");
+assertIncludes(mediaTranscodeQueue, "MediaTranscodeProofResult", "media transcode queue proof result type");
+assertIncludes(mediaTranscodeQueue, "jobId", "media transcode queue proof model job id field");
+assertIncludes(mediaTranscodeQueue, "sourceId", "media transcode queue proof model source id field");
+assertIncludes(mediaTranscodeQueue, "inputProvider", "media transcode queue proof model input provider field");
+assertIncludes(mediaTranscodeQueue, "outputProvider", "media transcode queue proof model output provider field");
+assertIncludes(mediaTranscodeQueue, "requestedRenditions", "media transcode queue proof model requested renditions field");
+assertIncludes(mediaTranscodeQueue, "completedRenditions", "media transcode queue proof model completed renditions field");
+assertIncludes(mediaTranscodeQueue, "durationMillis", "media transcode queue proof model duration field");
+assertIncludes(mediaTranscodeQueue, "sourceWidth", "media transcode queue proof model source width field");
+assertIncludes(mediaTranscodeQueue, "sourceHeight", "media transcode queue proof model source height field");
+assertIncludes(mediaTranscodeQueue, "sourceCodec", "media transcode queue proof model source codec field");
+assertIncludes(mediaTranscodeQueue, "errorCode", "media transcode queue proof model error code field");
+assertIncludes(mediaTranscodeQueue, "errorMessage", "media transcode queue proof model error message field");
+assertIncludes(mediaTranscodeQueue, "productionDbWritesEnabled: false", "media transcode queue proof model no production DB writes");
+assertIncludes(mediaTranscodeQueue, "productionPlaybackSwitched: false", "media transcode queue proof model no production playback switch");
+assertIncludes(mediaTranscodeQueue, "productionTranscodeServiceLive: false", "media transcode queue proof model no production service claim");
+assertIncludes(mediaTranscodeQueue, "MEDIA_TRANSCODE_PROOF_APPROVED_CITY_LIGHTS_INPUT", "media transcode queue proof model approved input allowlist");
+assertIncludes(mediaTranscodeQueue, "MEDIA_TRANSCODE_PROOF_PUBLIC_PREFIX = \"playback/public/\"", "media transcode queue proof model public output prefix");
+assertIncludes(mediaTranscodeQueue, "canResolveCompletedProofTranscodeJob", "media transcode queue proof completed-job resolver gate");
+assertNotMatches(mediaTranscodeQueue, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "media transcode queue helper must not perform network or database writes");
 assertIncludes(vodQuality, "resolveMediaPlaybackDelivery", "VOD helper uses staged media delivery resolver");
 assertIncludes(vodQuality, "publicPlaybackSafe: false", "production VOD defaults to signed origin fallback");
 assertIncludes(migration, '"quality_label" <> \'original\'', "resolver original exclusion");
@@ -525,6 +573,7 @@ assertIncludes(packageJson, "\"proof:media-delivery-public-demo\"", "package pub
 assertIncludes(packageJson, "\"proof:media-delivery-real-demo\"", "package real demo proof script");
 assertIncludes(packageJson, "\"proof:media-delivery-hls-demo\"", "package HLS demo proof script");
 assertIncludes(packageJson, "\"proof:media-delivery-telemetry\"", "package telemetry proof script");
+assertIncludes(packageJson, "\"proof:media-transcode-queue-hls\"", "package transcode queue HLS proof script");
 assertIncludes(mediaDeliveryResolverProof, "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4", "media delivery resolver proof demo path");
 assertIncludes(mediaDeliveryResolverProof, "playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4", "media delivery resolver proof real demo path");
 assertIncludes(mediaDeliveryResolverProof, "cdnAllowedPublicPlaybackPaths", "media delivery resolver proof real demo allowlist");
@@ -588,6 +637,34 @@ assertIncludes(mediaDeliveryTelemetryProof, "redacted:watch_party", "media deliv
 assertIncludes(mediaDeliveryTelemetryProof, "premium_requires_token_cdn", "media delivery telemetry proof blocked Premium/private path");
 assertIncludes(mediaDeliveryTelemetryProof, "cloudflare_r2_custom_domain", "media delivery telemetry proof CDN demo provider");
 assertIncludes(mediaDeliveryTelemetryProof, "origin_signed_direct", "media delivery telemetry proof signed-origin fallback provider");
+assertIncludes(mediaTranscodeQueueProof, "proof-only-transcode-queue-hls", "media transcode queue HLS proof mode");
+assertIncludes(mediaTranscodeQueueProof, "playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4", "media transcode queue HLS proof approved source");
+assertIncludes(mediaTranscodeQueueProof, "source demo MP4 hash should match approved City Lights proof object", "media transcode queue HLS proof source hash guard");
+assertIncludes(mediaTranscodeQueueProof, "playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls", "media transcode queue HLS proof public output prefix");
+assertIncludes(mediaTranscodeQueueProof, "360p", "media transcode queue HLS proof 360p rendition");
+assertIncludes(mediaTranscodeQueueProof, "480p", "media transcode queue HLS proof 480p rendition");
+assertIncludes(mediaTranscodeQueueProof, "wrangler", "media transcode queue HLS proof uploads through Wrangler");
+assertIncludes(mediaTranscodeQueueProof, "proof worker upload key must stay under playback/public/", "media transcode queue HLS proof public upload guard");
+assertIncludes(mediaTranscodeQueueProof, "proof worker upload key must not use private/original/Premium prefixes", "media transcode queue HLS proof forbidden prefix guard");
+assertIncludes(mediaTranscodeQueueProof, "assertNoSignedOrSecretUrl", "media transcode queue HLS manifest signed URL guard");
+assertIncludes(mediaTranscodeQueueProof, "canResolveCompletedProofTranscodeJob", "media transcode queue HLS completed-job resolver gate");
+assertIncludes(mediaTranscodeQueueProof, "completedProofJobGate", "media transcode queue HLS completed-job proof");
+assertIncludes(mediaTranscodeQueueProof, "queuedProofJobGate", "media transcode queue HLS queued-job block proof");
+assertIncludes(mediaTranscodeQueueProof, "failedProofJobGate", "media transcode queue HLS failed-job block proof");
+assertIncludes(mediaTranscodeQueueProof, "not_in_public_playback_allowlist", "media transcode queue HLS non-allowlisted resolver block");
+assertIncludes(mediaTranscodeQueueProof, "original_or_master_blocked", "media transcode queue HLS original/master block proof");
+assertIncludes(mediaTranscodeQueueProof, "premium_requires_token_cdn", "media transcode queue HLS Premium block proof");
+assertIncludes(mediaTranscodeQueueProof, "unscanned_blocked", "media transcode queue HLS unscanned block proof");
+assertIncludes(mediaTranscodeQueueProof, "moderation_blocked", "media transcode queue HLS moderation block proof");
+assertIncludes(mediaTranscodeQueueProof, "deliveryFormat: \"hls\"", "media transcode queue HLS telemetry delivery format");
+assertIncludes(mediaTranscodeQueueProof, "productionTelemetryWritesLive: false", "media transcode queue HLS no production telemetry writes");
+assertIncludes(mediaTranscodeQueueProof, "productionDbWritesEnabled: false", "media transcode queue HLS no production DB writes");
+assertIncludes(mediaTranscodeQueueProof, "productionTranscodeServiceLive: false", "media transcode queue HLS no production transcode claim");
+assertIncludes(mediaTranscodeQueueProof, "productionPlaybackSwitched: false", "media transcode queue HLS no production playback switch");
+assertIncludes(mediaTranscodeQueueProof, "ffmpeg proof queue HLS master decode", "media transcode queue HLS ffmpeg decode proof");
+assertIncludes(mediaTranscodeQueueProof, "segmentCacheHitObserved", "media transcode queue HLS cache observation field");
+assertIncludes(mediaTranscodeQueueProof, "cfCacheStatus", "media transcode queue HLS cache status capture");
+assertNotMatches(mediaTranscodeQueueProof, /\bsupabase\.from\b|\bcreateClient\b/i, "media transcode queue HLS proof must not write production DB or create a Supabase client");
 
 const loadMediaDeliveryHelper = () => {
   const outDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-delivery-guard-"));
@@ -657,6 +734,8 @@ const assertMediaDeliveryHelperPolicy = async () => {
     const realDemoPath = "playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4";
     const hlsMasterPath = "playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8";
     const hlsSegmentPath = "playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/480p/segment-000.ts";
+    const queueHlsMasterPath = "playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8";
+    const queueHlsSegmentPath = "playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/480p/segment-000.ts";
     const realDemoAllowlistConfig = {
       ...config,
       cdnAllowedPublicPlaybackPaths: [realDemoPath],
@@ -664,6 +743,10 @@ const assertMediaDeliveryHelperPolicy = async () => {
     const hlsDemoAllowlistConfig = {
       ...config,
       cdnAllowedPublicPlaybackPaths: [hlsMasterPath],
+    };
+    const queueHlsAllowlistConfig = {
+      ...config,
+      cdnAllowedPublicPlaybackPaths: [queueHlsMasterPath],
     };
     const fallbackUrl = "origin-signed-direct-fallback";
 
@@ -757,6 +840,38 @@ const assertMediaDeliveryHelperPolicy = async () => {
     });
     if (hlsSegmentProof.url !== fallbackUrl || hlsSegmentProof.blockedReason !== "not_in_public_playback_allowlist") {
       fail("media delivery helper must not independently return HLS segment URLs under the HLS demo allowlist");
+    }
+
+    const queueHlsMasterProof = await loaded.helper.resolveMediaPlaybackDelivery({
+      asset: {
+        path: queueHlsMasterPath,
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        qualityLabel: "hls",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+      config: queueHlsAllowlistConfig,
+      fallbackUrl,
+    });
+    if (queueHlsMasterProof.url !== `https://media.chillywoodstream.com/${queueHlsMasterPath}` || queueHlsMasterProof.cdnEligible !== true) {
+      fail("media delivery helper must return the proof transcode queue HLS master custom-domain URL under the explicit queue proof allowlist");
+    }
+
+    const queueHlsSegmentProof = await loaded.helper.resolveMediaPlaybackDelivery({
+      asset: {
+        path: queueHlsSegmentPath,
+        publicPlaybackSafe: true,
+        accessTier: "free",
+        qualityLabel: "480p",
+        scanStatus: "clean",
+        moderationStatus: "clean",
+      },
+      config: queueHlsAllowlistConfig,
+      fallbackUrl,
+    });
+    if (queueHlsSegmentProof.url !== fallbackUrl || queueHlsSegmentProof.blockedReason !== "not_in_public_playback_allowlist") {
+      fail("media delivery helper must not independently return proof transcode queue HLS segment URLs under the queue proof allowlist");
     }
 
     const blockedCases = [

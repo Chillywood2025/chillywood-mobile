@@ -84,7 +84,7 @@ Status: staged resolver helpers, proof scripts, architecture, and guard only. Th
 
 ## Target Architecture
 
-Production transcoding status: not live; no backend transcode queue/service worker exists in this repo. A local proof worker script exists only for the approved public-safe City Lights HLS demo.
+Production transcoding status: not live; no production backend transcode queue/service worker exists in this repo. Local proof scripts and a proof-only queue model exist only for the approved public-safe City Lights demo.
 
 Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.
 
@@ -100,7 +100,7 @@ R2 proof object status: harmless text object `playback/public/proof/hello.txt` u
 
 R2 public-playback proof bucket status: separate bucket `chillywood-media-public-playback-proof` exists, created 2026-07-08T23:47:12.035Z, and is distinct from the private proof bucket.
 
-R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt`, immutable cache proof text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, and local-proof HLS tree `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/` are public-safe proof assets only.
+R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt`, immutable cache proof text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, local-proof HLS tree `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, and proof-only transcode queue HLS tree `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/` are public-safe proof assets only.
 
 R2 public exposure status: `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access remains disabled on both buckets; the private bucket has no custom domain.
 
@@ -134,6 +134,16 @@ Local HLS resolver proof: the staged resolver returns `https://media.chillywoods
 
 App/player HLS proof status: `npm run proof:media-delivery-hls-demo` now includes a proof-only app/player harness for `app/player/[id].tsx`. It verifies the Player route source contract maps `displayItem.video_url` into `{ uri }`, verifies `Video` receives `source={playbackSource}` with `onLoad` and `onPlaybackStatusUpdate`, and reports `playerReceivesHlsUrl=true`, `onLoadObserved=true`, `durationMillis=52208`, `progressObserved=true`, `progressMillis=2175`, `isPlaying=true`, `playbackStarted=true`, `ffmpegDecode=passed`, `productionPlaybackSwitched=false`, and `privateSignedOriginUrlExposed=false` for the allowlisted HLS master URL only.
 
+Proof-only transcode queue foundation status: `_lib/mediaTranscodeQueue.ts` and `npm run proof:media-transcode-queue-hls` model `queued -> probing -> transcoding -> uploading -> ready` for the approved City Lights demo only; no production backend queue/service worker, database writes, trusted `video_renditions` rows, or production playback switch is live.
+
+Proof-only transcode queue output path: `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8` returned HTTP 200 through `media.chillywoodstream.com`; 360p and 480p variant playlists returned HTTP 200; ffmpeg decoded the public HLS master URL successfully.
+
+Proof-only transcode queue cache result: queue-generated `.ts` segments returned HTTP 200, `Content-Type: video/mp2t`, and `Cache-Control: public, max-age=31536000, immutable`; repeated queue-path fetches returned `cf-cache-status: DYNAMIC`, so no queue-specific cache HIT, cache savings, or production egress savings are claimed.
+
+Proof-only transcode queue resolver proof: only a completed ready proof job can produce the allowlisted HLS master URL; queued and failed proof jobs cannot resolve, non-allowlisted outputs fall back with `not_in_public_playback_allowlist`, and private/original/Premium/unscanned/moderation-blocked/default creator-video paths fall back or block.
+
+Proof-only transcode queue telemetry proof: the queue proof builds sanitized HLS `media_delivery_events` shapes with `deliveryFormat=hls`, 360p/480p rendition labels, estimated bytes, observed `cdn_cache_status`, and `proof_mode=true`; no production telemetry writes or table migrations are live.
+
 5 GB resumable upload status: not live; current upload is single signed PUT.
 
 Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domain/cache, with Supabase/Edge resolver access control and direct signed R2/S3-compatible fallback.
@@ -153,6 +163,7 @@ Completed:
 - Real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` is proof-staged and proved through `media.chillywoodstream.com` only under the explicit real-demo allowlist.
 - Local HLS proof worker `scripts/proof-media-delivery-hls-demo.mjs` generated 360p/480p HLS from the approved City Lights public-safe MP4, uploaded proof-only HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, proved master/variant/segment delivery through `media.chillywoodstream.com`, proved HLS segment cache HIT, and proved resolver eligibility only for the allowlisted HLS master manifest.
 - Proof-only app/player HLS harness proved the allowlisted HLS master URL can be received by the Player source contract, load with duration, report progress, and start playback evidence without switching production playback.
+- Proof-only transcode queue foundation proved the approved City Lights demo can move through local job states, generate 360p/480p HLS, upload proof outputs under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`, decode through `media.chillywoodstream.com`, and resolve only the completed allowlisted HLS master. Queue-path cache HIT was not observed; immutable segment cache behavior was documented instead.
 - Demo-only resolver eligibility is proved by local proof scripts for explicit `publicPlaybackSafe` assets only.
 - Media delivery telemetry source/proof foundation exists for future `media_delivery_events` and `media_playback_sessions`; backend writes and table migrations remain planned.
 
@@ -211,7 +222,7 @@ Planned:
 ### Public-Playback Proof Bucket
 
 - `chillywood-media-public-playback-proof` is a separate R2 bucket for harmless public-safe proof assets only.
-- The bucket currently contains only public-safe proof assets: text proof object `playback/public/proof/hello.txt`, cache-HIT text proof object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo proof MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, and local-proof HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`.
+- The bucket currently contains only public-safe proof assets: text proof object `playback/public/proof/hello.txt`, cache-HIT text proof object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo proof MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, local-proof HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, and proof-only transcode queue HLS assets under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`.
 - The bucket must not contain `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, `unscanned/`, unapproved real creator media, original/master media, unscanned uploads, private media, or Premium-only media.
 - The bucket is publicly reachable only through `media.chillywoodstream.com` for harmless public-safe proof objects; r2.dev public access is disabled.
 - Explicit owner approval was limited to connecting `media.chillywoodstream.com` to this public-playback proof bucket. No approval was given for production playback, private media, Premium media, or the private proof bucket.
@@ -243,6 +254,9 @@ Planned:
 - A narrow Cloudflare Cache Rule was applied only to versioned HLS proof segments under `media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/*.ts`; segment fetches returned HTTP 200, `Content-Type: video/mp2t`, `Cache-Control: public, max-age=31536000, immutable`, and `cf-cache-status: HIT` after warmup. No production egress or cost savings are claimed.
 - HLS resolver proof uses a resolver allowlist for `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8` only. The source MP4 and segment URLs are not independently resolver-returned under the HLS proof config and fall back with `not_in_public_playback_allowlist`.
 - App/player HLS proof uses a proof-only local harness for `app/player/[id].tsx`: the allowlisted HLS master is passed through the Player source contract as `{ uri }`, loaded with duration `52208ms`, progressed to `2175ms`, reported `isPlaying=true`, and produced playback-start evidence without private signed origin URLs.
+- Proof-only transcode queue proof generated 360p and 480p HLS from the approved City Lights public-safe MP4 and uploaded 24 proof HLS objects under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/` to the public-playback proof bucket only.
+- Proof-only transcode queue public fetch returned HTTP 200 for `master.m3u8`, `360p/index.m3u8`, and `480p/index.m3u8`; queue-generated `.ts` segments returned HTTP 200 with `Content-Type: video/mp2t` and immutable cache metadata; repeated queue-path segment fetches remained `cf-cache-status: DYNAMIC`, and ffmpeg decoded the public queue HLS master URL successfully.
+- Proof-only transcode queue resolver proof uses a resolver allowlist for `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8` only. The completed ready proof job can resolve that master; queued and failed proof jobs cannot resolve; non-allowlisted output paths fall back with `not_in_public_playback_allowlist`.
 - Forbidden-prefix probes under `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404 through the public proof hostname.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - No production playback config was switched.
@@ -270,6 +284,7 @@ Planned:
 - `scripts/proof-media-delivery-public-demo.mjs` proves the generated demo MP4 resolves through the helper, fetches over `media.chillywoodstream.com`, supports byte-range playback, decodes with ffprobe/ffmpeg and frame-count proof, reports proof-only app playback metadata, has no signed-origin query string, and keeps private/original/Premium/unscanned/moderation-blocked/default creator-video paths on fallback or block.
 - `scripts/proof-media-delivery-real-demo.mjs` proves the approved City Lights demo resolves through the explicit allowlist, fetches over `media.chillywoodstream.com`, supports byte-range playback, decodes with ffprobe/ffmpeg and frame-count proof, keeps a non-allowlisted public-safe demo path on fallback with `not_in_public_playback_allowlist`, and keeps private/original/Premium/unscanned/moderation-blocked/default creator-video paths on fallback or block.
 - `scripts/proof-media-delivery-hls-demo.mjs` is a local proof worker that downloads the approved City Lights public-safe MP4, generates 360p/480p HLS, uploads proof-only HLS assets to the public-playback proof bucket, proves public master/variant/segment fetches plus segment cache HIT and ffmpeg decode, proves the proof-only app/player HLS harness receives the allowlisted master, load/progress/playback evidence is present, and proves the resolver returns only the allowlisted HLS master manifest while source MP4 and segment paths fall back.
+- `_lib/mediaTranscodeQueue.ts` and `scripts/proof-media-transcode-queue-hls.mjs` add a source/proof-only backend transcode queue foundation. The proof models `queued -> probing -> transcoding -> uploading -> ready`, generates 360p/480p HLS from the approved City Lights public-safe MP4, uploads only under `playback/public/proof-transcode/`, builds sanitized HLS telemetry shapes, proves completed-job resolver eligibility for the allowlisted master, and proves queued/failed/non-allowlisted/private/original/Premium/unscanned/moderation-blocked paths cannot resolve to public CDN.
 - Production playback remains unchanged until a later approved lane adds trusted public-safe asset metadata, cache-HIT proof, telemetry, and signed/token CDN access for non-public assets.
 
 ### Signed CDN Playback
@@ -294,7 +309,9 @@ Planned:
 ### HLS/ABR Renditions
 
 - HLS/transcoding is a future milestone unless implemented and proved.
-- Current proof scope: a local proof worker has generated and proved 360p/480p HLS for the approved public-safe City Lights demo only. This does not create a production transcode queue, does not insert trusted `video_renditions` rows, does not migrate creator-video playback, and does not make HLS/transcoding live for production.
+- Current proof scope: local proof workers and a proof-only queue model have generated and proved 360p/480p HLS for the approved public-safe City Lights demo only. This does not create a production transcode queue, does not insert trusted `video_renditions` rows, does not migrate creator-video playback, and does not make HLS/transcoding live for production.
+- The proof-only queue output lives under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`. It proves source probing, local ffmpeg rendition generation, public R2 upload, manifest/variant/segment fetch, public HLS decode, resolver completed-job gating, and telemetry event shaping without production DB writes.
+- Queue-path segments returned immutable cache metadata but `cf-cache-status: DYNAMIC`; queue-specific cache HIT remains a future proof step if a narrow cache rule or Worker/cache policy is explicitly approved.
 - App/player HLS playback proof is complete only in a proof-only local harness for the allowlisted City Lights HLS master URL. Normal Player creator-video playback remains signed-origin fallback by default.
 - Generate HLS VOD packages for 360p, 480p, 720p, and 1080p only when the source supports that output without fake upscaling claims.
 - Free quality target remains 360p/480p. Premium quality target remains 720p/1080p only with backend entitlement proof.
@@ -306,6 +323,10 @@ Planned:
 
 ### Transcode Worker Queue
 
+- Proof-only foundation: `_lib/mediaTranscodeQueue.ts` defines `MediaTranscodeJob`, `MediaTranscodeJobStatus`, `MediaTranscodeRendition`, `MediaTranscodeManifest`, and `MediaTranscodeProofResult` for local proof modeling only.
+- Proof-only statuses: `queued`, `probing`, `transcoding`, `uploading`, `ready`, and `failed`.
+- Proof-only fields include `jobId`, `sourceId`, `sourceType`, `inputProvider`, `inputPath`, `outputProvider`, `outputPrefix`, `requestedRenditions`, `completedRenditions`, `durationMillis`, `sourceWidth`, `sourceHeight`, `sourceCodec`, `errorCode`, `errorMessage`, `createdAt`, and `updatedAt`.
+- `npm run proof:media-transcode-queue-hls` proves the approved City Lights demo can move through that model and upload HLS outputs to the public-playback proof bucket. It performs no production DB writes, creates no queue table, inserts no `video_renditions` rows, and does not switch production playback.
 - Add a backend-owned queue such as `video_transcode_jobs` or an external durable queue.
 - Queue one job after a creator-video upload row exists and the source object is scan-safe enough for processing.
 - Future worker flow: claim jobs idempotently, download the private source, probe with `ffprobe`, transcode with `ffmpeg`, produce 360p/480p/720p/1080p renditions when allowed by source dimensions, write an HLS master manifest, write variant playlists and segments, generate thumbnails, upload derived public-safe playback assets to the public-playback bucket only after scan/moderation approval, insert `video_renditions` rows, and mark failed jobs with safe error codes.
