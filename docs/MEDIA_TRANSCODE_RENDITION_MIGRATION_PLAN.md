@@ -207,7 +207,7 @@ This dry-run status remains non-production proof. The production schema has now 
 
 The local worker proof does not connect to production DB, does not write production rows, does not upload R2 objects, does not deploy a worker, does not run a production queue processor, and does not switch playback.
 
-Backup/PITR gate: PITR is currently off, WAL-G is enabled, and no manual backup records were listed in the production schema closeout. PITR or an owner-approved backup/restore method is required before future production worker writes, production backfill, or worker activation.
+Backup/PITR gate: Blocked for production worker writes/backfill/activation. Production readback on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`, `us-west-2`, `ACTIVE_HEALTHY`) returned `pitr_enabled=false`, `walg_enabled=true`, `backups=[]`, and `physical_backup_data={}`. Management API billing add-on readback returned no selected add-ons and listed PITR as paid available variants `pitr_7` (`$100/month`), `pitr_14` (`$200/month`), and `pitr_28` (`$400/month`). Enabling PITR is a provider billing/add-on mutation and requires explicit owner approval. WAL-G alone is not treated as sufficient for the worker-write/backfill gate without a verified restore window, latest backup metadata, or restore drill. No production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
 
 ## Backfill Strategy
 
@@ -240,9 +240,10 @@ Backup/PITR gate: PITR is currently off, WAL-G is enabled, and no manual backup 
 2. Migration dry-run and disposable runtime apply: complete.
 3. Production schema readback plus rollback-only RLS/policy proof: complete.
 4. Backend worker runbook and local proof harness: complete for design/local proof only; production worker deployment and staging worker proof remain pending.
-5. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
-6. Resolver migration behind disabled config: pending.
-7. Cache HIT and telemetry proof for the migrated source: pending.
-8. Signed-origin fallback proof: pending.
-9. No private/original/Premium/unscanned/moderation-blocked media exposed: required for every next lane.
-10. Explicit owner approval before any production playback switch: still required.
+5. Backup/PITR gate: Blocked until PITR or an owner-approved restore path is verified; no worker writes/backfill while this gate remains Blocked or Partial.
+6. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
+7. Resolver migration behind disabled config: pending.
+8. Cache HIT and telemetry proof for the migrated source: pending.
+9. Signed-origin fallback proof: pending.
+10. No private/original/Premium/unscanned/moderation-blocked media exposed: required for every next lane.
+11. Explicit owner approval before any production playback switch: still required.

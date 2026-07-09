@@ -82,6 +82,9 @@ assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-dry-run` passes
 assertIncludes(vodDoc, "proves anon/authenticated trusted writes are denied, proves service-role/worker writes pass, proves resolver-safe anon select returns one clean public-ready row", "VOD doc migration dry-run RLS proof");
 assertIncludes(vodDoc, "Production transcode worker runbook and local proof harness: `docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md` and `npm run proof:media-transcode-worker-local` model the future worker locally with the approved City Lights demo only.", "VOD doc production transcode worker local proof");
 assertIncludes(vodDoc, "Production transcode worker design/local proof exists, but the production worker is not deployed.", "VOD doc production worker not deployed");
+assertIncludes(vodDoc, "Backup/PITR gate status is Blocked", "VOD doc backup gate blocked");
+assertIncludes(vodDoc, "`pitr_enabled=false`, `walg_enabled=true`, `backups=[]`, and `physical_backup_data={}`", "VOD doc backup gate readback");
+assertIncludes(vodDoc, "paid PITR variants require explicit owner approval before any provider billing/add-on mutation", "VOD doc PITR billing approval");
 assertIncludes(vodDoc, "PITR or owner-approved backup/restore readiness is required before future production worker writes, production backfill, or worker activation.", "VOD doc PITR worker gate");
 assertIncludes(vodDoc, "Production schema readback and rollback-only RLS proof passed on 2026-07-09, final production row counts stayed zero, and production playback remains unchanged.", "VOD doc production schema proof");
 assertIncludes(vodDoc, "Trusted backend migration schema is applied to production as empty schema only.", "VOD doc trusted migration schema-only");
@@ -158,6 +161,7 @@ assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "trusted media
 assertIncludes(packageJson, "\"proof:media-rendition-migration-policy\"", "trusted media rendition migration policy proof script");
 assertIncludes(packageJson, "\"proof:media-rendition-migration-dry-run\"", "trusted media rendition migration dry-run proof script");
 assertIncludes(packageJson, "\"proof:media-transcode-worker-local\"", "local transcode worker proof script");
+assertIncludes(packageJson, "\"proof:media-transcode-backup-gate\"", "backup PITR proof script");
 assertIncludes(mediaRenditionMetadataProof, "trusted-media-rendition-metadata", "trusted media rendition metadata proof mode");
 assertIncludes(mediaRenditionMetadataProof, "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1", "trusted media rendition City Lights source id");
 assertIncludes(mediaRenditionMetadataProof, "360p", "trusted media rendition 360p fixture proof");

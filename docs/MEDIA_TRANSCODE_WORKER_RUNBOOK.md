@@ -92,7 +92,29 @@ Production worker activation requires all of these gates:
 - owner explicitly approves any production writes/backfill
 - installed playback proof passes before any production playback switch
 
-Current backup gate: PITR is off, WAL-G is enabled, and no manual backup records were listed in the prior production migration closeout. Treat PITR/backup readiness as a blocker before future production writes, backfill, or worker activation.
+Backup/PITR gate status: Blocked for production worker writes/backfill/activation.
+
+Current backup/PITR readback on 2026-07-09:
+
+- Production project ref: `bmkkhihfbmsnnmcqkoly`.
+- Production project name: `Chillywood2025's Project`.
+- Production region/status: `us-west-2` / `ACTIVE_HEALTHY`.
+- `supabase backups list --project-ref bmkkhihfbmsnnmcqkoly -o json` returned `pitr_enabled=false`, `walg_enabled=true`, `backups=[]`, and `physical_backup_data={}`.
+- Supabase Management API billing add-on readback returned no selected add-ons and listed paid PITR variants: `pitr_7` with 7-day restore window at `$100/month`, `pitr_14` with 14-day restore window at `$200/month`, and `pitr_28` with 28-day restore window at `$400/month`.
+- Enabling PITR is a provider billing/add-on mutation and requires explicit owner approval before any change.
+
+Classification: Blocked. WAL-G is visible but is not treated as sufficient for production media worker writes/backfill because no restore window, latest backup metadata, or restore drill is verified. Do not enable PITR or any paid backup feature without explicit owner approval. No production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
+
+Abort production worker activation if any of these are true:
+
+- project ref/name/status does not match the expected production project
+- PITR is disabled and no owner-approved restore path is verified
+- backup metadata or restore window cannot be read back
+- enabling PITR requires a billing or plan change without explicit owner approval
+- no restore drill or owner-accepted rollback method is documented
+- production row writes/backfill are requested before this gate is Closed
+
+Before worker activation, run a restore readiness drill or document an owner-approved restore method with the restore window, rollback steps, responsible operator, and stop criteria.
 
 ## Local Proof Harness
 
