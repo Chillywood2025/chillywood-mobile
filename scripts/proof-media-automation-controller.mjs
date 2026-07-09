@@ -89,6 +89,58 @@ try {
   assert(dryRun.canWriteJobs === false, "dry run must not write jobs");
   assert(dryRun.canRunWorker === false, "dry run must not run worker");
 
+  const autoDetect = resolveMediaAutomationController({ mode: "auto_detect" });
+  assert(autoDetect.allowed === true, "auto detect planning should be allowed");
+  assert(autoDetect.canDiscover === true, "auto detect discovers candidates");
+  assert(autoDetect.canPlanJobs === true, "auto detect plans jobs");
+  assert(autoDetect.canWriteJobs === false, "auto detect must not write jobs");
+  assert(autoDetect.canRunWorker === false, "auto detect must not run worker");
+
+  const autoDetectRunDenied = resolveMediaAutomationController({
+    mode: "auto_detect_run",
+    backupGateClosed: true,
+    latestBackupFresh: true,
+    restoreDrillFresh: true,
+    calculatedBatchSize: 1,
+    hardMaxBatchCap: 25,
+    dryRunPlanPassed: true,
+    activeUnfinishedJobs: 0,
+    unsafeCdnRows: 0,
+  });
+  assert(
+    autoDetectRunDenied.blockedReason === "auto_detect_run_confirmation_required",
+    "auto detect run requires explicit confirmation",
+  );
+
+  const autoDetectRunAllowed = resolveMediaAutomationController({
+    mode: "auto_detect_run",
+    autoDetectRunConfirmed: true,
+    backupGateClosed: true,
+    latestBackupFresh: true,
+    restoreDrillFresh: true,
+    calculatedBatchSize: 1,
+    hardMaxBatchCap: 25,
+    dryRunPlanPassed: true,
+    activeUnfinishedJobs: 0,
+    unsafeCdnRows: 0,
+  });
+  assert(autoDetectRunAllowed.allowed === true, "auto detect run passes only with gates and confirmation");
+  assert(autoDetectRunAllowed.maxJobsPerRun === 1, "auto detect run uses calculated batch size");
+
+  const autoDetectUnsafeRows = resolveMediaAutomationController({
+    mode: "auto_detect_run",
+    autoDetectRunConfirmed: true,
+    backupGateClosed: true,
+    latestBackupFresh: true,
+    restoreDrillFresh: true,
+    calculatedBatchSize: 1,
+    hardMaxBatchCap: 25,
+    dryRunPlanPassed: true,
+    activeUnfinishedJobs: 0,
+    unsafeCdnRows: 1,
+  });
+  assert(autoDetectUnsafeRows.blockedReason === "unsafe_cdn_rows_present", "unsafe CDN rows block auto run");
+
   const oneJobDenied = resolveMediaAutomationController({
     mode: "one_job",
     backupGateClosed: true,
@@ -153,15 +205,23 @@ try {
   });
   assert(continuousFullBlocked.allowed === false, "continuous full remains blocked");
 
+  const continuousBlocked = resolveMediaAutomationController({ mode: "continuous_blocked" });
+  assert(continuousBlocked.allowed === false, "continuous blocked mode cannot run");
+
   const summary = sanitizeMediaAutomationControllerProof({
     ok: true,
     defaultOff: defaultOff.blockedReason,
     emergencyStop: emergencyStop.blockedReason,
     dryRunWritesJobs: dryRun.canWriteJobs,
+    autoDetectPlansWithoutWrites: autoDetect.canPlanJobs && !autoDetect.canWriteJobs,
+    autoDetectRunRequiresConfirmation: autoDetectRunDenied.blockedReason,
+    autoDetectRunAllowed: autoDetectRunAllowed.allowed,
+    unsafeCdnRowsBlockAutoRun: autoDetectUnsafeRows.blockedReason,
     oneJobAllowed: oneJobAllowed.allowed,
     batchAllowed: batchAllowed.allowed,
     continuousLimitedRequiresGate: continuousDenied.blockedReason,
     continuousFullBlocked: continuousFullBlocked.blockedReason,
+    continuousBlocked: continuousBlocked.blockedReason,
     productionPlaybackSwitched: false,
     daemonDeployed: false,
   });

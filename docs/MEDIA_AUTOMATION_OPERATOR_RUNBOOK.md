@@ -8,10 +8,14 @@ Status: source/proofed automation architecture only. No daemon, cron, scheduler,
 
 The automation operator is the scale path for many public-safe creator videos after scan, moderation, backup, transcode, upload, audit, telemetry, and rollback gates pass. City Lights remains the canary proof, not the final hardcoded model.
 
+Normal CLI operation is auto-detect: the owner does not manually pick every source id and does not manually choose the batch size. The CLI discovers eligible public-safe candidates, calculates a safe adaptive batch size from backup/restore freshness plus recent success/failure state, plans exact job and rollback scopes, and still requires explicit confirmation before any future run path.
+
 ## Modes
 
 - `off`: default. Discovery/status can run, but no jobs are planned, written, or processed.
 - `dry_run`: reads fixture or catalog state and builds plans only. It writes nothing and uploads nothing.
+- `auto_detect`: discovers eligible candidates and builds an adaptive plan only. It writes nothing and uploads nothing.
+- `auto_detect_run`: future CLI run path for one automatically planned safe batch only. It requires explicit confirmation, fresh backup/restore gate, no active unfinished jobs, no unsafe CDN rows, dry-run pass, calculated positive batch size, and emergency stop off.
 - `one_job`: processes exactly one explicitly allowlisted source after a fresh backup gate and owner approval.
 - `batch`: processes a capped batch only after owner approval, backup gate closure, rollback scope, and audit rules.
 - `continuous_limited`: future mode only. It requires scheduled private R2 backup, fresh restore drill, owner approval, max concurrency, max jobs per run, retry cap, dead-letter/quarantine, telemetry, rollback, and audit pass before resolver trust.
@@ -23,6 +27,7 @@ Emergency stop overrides every mode. The playback kill switch keeps fallback ava
 
 - `_lib/mediaAutomationController.ts`: automation mode and gate decisions.
 - `_lib/mediaAutomationDiscovery.ts`: public-safe candidate classification and batch selection.
+- `_lib/mediaAutomationBatchPolicy.ts`: adaptive batch-size and risk policy.
 - `_lib/mediaAutomationJobs.ts`: dry-run job plans, output prefixes, and rollback scopes.
 - `_lib/mediaAutomationWorkerLoop.ts`: lease, batch, audit, quarantine, and stop-reason model.
 - `scripts/media-automation-cli.mjs`: CLI-only status, discovery, batch planning, dry-run, run-gate, audit, rollback, pause, and emergency-stop commands.
@@ -32,16 +37,20 @@ Emergency stop overrides every mode. The playback kill switch keeps fallback ava
 ```sh
 npm run media-automation:status
 npm run media-automation:discover
+npm run media-automation:plan-auto
+npm run media-automation:dry-run-auto
+npm run media-automation:run-auto
 npm run media-automation:plan-batch
 npm run media-automation:dry-run-batch
 npm run media-automation:run-batch
+npm run media-automation:audit
 npm run media-automation:audit-batch
 npm run media-automation:rollback-plan
 npm run media-automation:pause
 npm run media-automation:emergency-stop
 ```
 
-`media-automation:run-batch` is intentionally fail-closed unless a future owner-approved run provides `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION`. This task does not enable run execution.
+`media-automation:plan-auto` and `media-automation:dry-run-auto` require no manual source id and no manual batch-size input for normal operation. `media-automation:run-auto` is intentionally fail-closed unless a future confirmed run provides `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_AUTO_DETECT_BATCH` and every backup, restore, active-job, unsafe-row, dry-run, audit, rollback, and emergency-stop gate passes. Legacy `plan-batch` / `dry-run-batch` / `run-batch` aliases remain for compatibility and still recognize `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION`; they still do not deploy a worker or scheduler. This task does not enable run execution.
 
 ## Backup Gate
 
@@ -61,23 +70,41 @@ R2 logical backups are not true PITR. They are scoped application-level backup a
 
 Candidates are classified as:
 
-- `eligible_public_safe`
-- `already_has_audited_hls`
-- `needs_transcode`
-- `private_blocked`
-- `premium_blocked`
-- `original_only_blocked`
-- `unscanned_blocked`
-- `moderation_blocked`
-- `missing_source_blocked`
-- `unsupported_format_blocked`
-- `denied_source_blocked`
+- `eligible_needs_transcode`
+- `eligible_already_has_audited_hls`
+- `excluded_private`
+- `excluded_premium`
+- `excluded_original_master`
+- `excluded_unscanned`
+- `excluded_moderation_blocked`
+- `excluded_missing_source`
+- `excluded_unsupported_format`
+- `excluded_already_active_job`
+- `excluded_denied_source`
+- `excluded_already_processed`
 
-Only public-safe videos can become worker candidates. Existing audited HLS rows are skipped unless a future owner-approved forced reprocess explicitly allows it. Private, Premium, original/master-only, unscanned, moderation-blocked, missing-source, unsupported, and denied-source rows are excluded.
+Only public-safe videos can become worker candidates. Existing audited HLS rows are skipped unless a future approved forced reprocess explicitly allows it. Private, Premium, original/master-only, unscanned, moderation-blocked, missing-source, unsupported, active-job, already-processed, and denied-source rows are excluded.
+
+## Auto Batch-Size Policy
+
+The owner should not have to manually choose a normal batch size. `_lib/mediaAutomationBatchPolicy.ts` calculates the batch size from eligible count, latest backup age, restore-drill age, previous success streak, previous failures, active unfinished jobs, unsafe CDN rows, and hard caps.
+
+Default policy:
+
+- first auto run: max `1`
+- after one clean run: max `5`
+- after repeated clean runs: max `10`, then `25`
+- any failure drops the next cap back to `1`
+- active unfinished jobs force batch size `0`
+- unsafe CDN rows force batch size `0`
+- stale backup forces batch size `0`
+- stale restore drill forces batch size `0`
+- hard max without a later owner-approved override is `25`
+- backfill remains disabled
 
 ## Job Policy
 
-Job planning is dry-run by default. Future write mode requires owner approval, a closed backup gate, capped batch size, source allowlist or batch list, no duplicate active job for the same source, and an exact rollback scope.
+Job planning is dry-run by default. Auto-detected plans select only candidates from discovery, enforce the calculated batch cap, require no manual source picking, assign every job an exact output prefix, require audit, and build exact rollback scope. Future write mode requires the closed backup/restore gate, no duplicate active job for the same source, no unsafe categories in the selected batch, and explicit run confirmation.
 
 Public output prefix:
 
@@ -98,20 +125,29 @@ Audit pass is required before resolver trust. Audit failure quarantines the batc
 Automation telemetry is source/proof-only unless a future backend write lane implements it. Required event shapes include:
 
 - `candidate_discovered`
+- `auto_discovery_started`
+- `candidate_classified`
+- `batch_planned`
+- `batch_dry_run_passed`
+- `batch_started`
 - `job_planned`
 - `job_claimed`
+- `job_transcode_started`
 - `transcode_started`
+- `job_transcode_completed`
 - `transcode_completed`
 - `output_uploaded`
 - `audit_passed`
 - `audit_failed`
 - `resolver_eligible`
 - `playback_started`
+- `playback_cdn_selected`
 - `playback_fallback`
+- `playback_fallback_used`
 - `rollback_planned`
 - `rollback_executed`
 
-Events must include rollout mode, automation mode, source type/id, delivery provider, delivery format, rendition label, fallback status, estimated bytes, cache status if available, and no private URLs or secrets.
+Events must include rollout mode, automation mode, batch size, source type/id, delivery provider, delivery format, rendition label, fallback status, estimated bytes, cache status if available, and no private URLs or secrets.
 
 ## Rollback
 
@@ -137,8 +173,10 @@ Continuous automation remains blocked from this runbook until owner approval, sc
 ```sh
 npm run proof:media-automation-controller
 npm run proof:media-automation-discovery
+npm run proof:media-automation-batch-policy
+npm run proof:media-automation-cli
 npm run proof:media-automation-batch-planner
 npm run proof:media-automation-worker-loop
 ```
 
-These proofs cover fail-closed defaults, emergency stop, dry-run no writes, continuous-mode denial with the backup gate open, public-safe inclusion, unsafe exclusion, audited-HLS skip, batch cap, owner confirmation, audit pass/quarantine, scoped rollback, resolver ignoring pending/quarantined rows, no secret output, and no production playback switch.
+These proofs cover fail-closed defaults, emergency stop, dry-run no writes, auto-detect candidate discovery, adaptive batch sizing, continuous-mode denial with the backup gate open, public-safe inclusion, unsafe exclusion, audited-HLS skip, active-job and unsafe-row blocks, stale backup/restore blocks, confirmation for `run-auto`, audit pass/quarantine, scoped rollback, resolver ignoring pending/quarantined rows, no secret output, and no production playback switch.

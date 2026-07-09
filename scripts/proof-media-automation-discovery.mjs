@@ -68,6 +68,8 @@ const rows = [
     source_present: true,
     has_audited_hls: true,
   },
+  { source_type: "creator_video", source_id: "active-job", visibility: "public", scan_status: "clean", moderation_status: "allowed", source_present: true, has_active_unfinished_job: true },
+  { source_type: "creator_video", source_id: "already-processed", visibility: "public", scan_status: "clean", moderation_status: "allowed", source_present: true, already_processed: true },
   { source_type: "creator_video", source_id: "private", visibility: "private", scan_status: "clean", moderation_status: "allowed", source_present: true },
   { source_type: "creator_video", source_id: "premium", visibility: "public", scan_status: "clean", moderation_status: "allowed", source_present: true, paid_or_premium_locked: true },
   { source_type: "creator_video", source_id: "original", visibility: "public", scan_status: "clean", moderation_status: "allowed", source_present: true, is_original_only: true },
@@ -83,26 +85,39 @@ const loaded = compileDiscovery();
 try {
   const {
     classifyMediaAutomationCandidate,
+    discoverEligibleMediaCandidates,
     discoverEligibleTranscodeSources,
+    filterAutomationCandidates,
     buildTranscodeCandidateBatch,
     sanitizeAutomationDiscoveryProof,
   } = loaded.helper;
 
   const classified = rows.map((row) => classifyMediaAutomationCandidate(row, { deniedSourceIds: ["denied"] }));
   const byId = new Map(classified.map((candidate) => [candidate.sourceId, candidate]));
-  assert(byId.get("eligible-public-safe").classification === "needs_transcode", "public safe row needs transcode");
-  assert(byId.get("already-audited").classification === "already_has_audited_hls", "audited HLS row is skipped");
-  assert(byId.get("private").classification === "private_blocked", "private row blocked");
-  assert(byId.get("premium").classification === "premium_blocked", "premium row blocked");
-  assert(byId.get("original").classification === "original_only_blocked", "original row blocked");
-  assert(byId.get("unscanned").classification === "unscanned_blocked", "unscanned row blocked");
-  assert(byId.get("moderation").classification === "moderation_blocked", "moderation row blocked");
-  assert(byId.get("missing").classification === "missing_source_blocked", "missing source blocked");
-  assert(byId.get("unsupported").classification === "unsupported_format_blocked", "unsupported format blocked");
-  assert(byId.get("denied").classification === "denied_source_blocked", "denied source blocked");
+  assert(byId.get("eligible-public-safe").classification === "eligible_needs_transcode", "public safe row needs transcode");
+  assert(byId.get("already-audited").classification === "eligible_already_has_audited_hls", "audited HLS row is skipped");
+  assert(byId.get("active-job").classification === "excluded_already_active_job", "active unfinished job blocked");
+  assert(byId.get("already-processed").classification === "excluded_already_processed", "already processed row blocked");
+  assert(byId.get("private").classification === "excluded_private", "private row blocked");
+  assert(byId.get("premium").classification === "excluded_premium", "premium row blocked");
+  assert(byId.get("original").classification === "excluded_original_master", "original row blocked");
+  assert(byId.get("unscanned").classification === "excluded_unscanned", "unscanned row blocked");
+  assert(byId.get("moderation").classification === "excluded_moderation_blocked", "moderation row blocked");
+  assert(byId.get("missing").classification === "excluded_missing_source", "missing source blocked");
+  assert(byId.get("unsupported").classification === "excluded_unsupported_format", "unsupported format blocked");
+  assert(byId.get("denied").classification === "excluded_denied_source", "denied source blocked");
+  assert(byId.get("private").legacyClassification === "private_blocked", "legacy private label retained for guard compatibility");
+  assert(byId.get("premium").legacyClassification === "premium_blocked", "legacy premium label retained for guard compatibility");
+  assert(byId.get("original").legacyClassification === "original_only_blocked", "legacy original label retained for guard compatibility");
+  assert(byId.get("unscanned").legacyClassification === "unscanned_blocked", "legacy unscanned label retained for guard compatibility");
+  assert(byId.get("moderation").legacyClassification === "moderation_blocked", "legacy moderation label retained for guard compatibility");
 
   const eligible = discoverEligibleTranscodeSources(rows, { deniedSourceIds: ["denied"] });
   assert(eligible.length === 1, "only one row is eligible for new transcode");
+  const autoDiscovered = discoverEligibleMediaCandidates(rows, { deniedSourceIds: ["denied"] });
+  assert(autoDiscovered.length === 1, "auto discovery does not need manual source ids");
+  const filtered = filterAutomationCandidates(classified);
+  assert(filtered.length === 1, "candidate filtering excludes unsafe and already-audited rows");
 
   const batch = buildTranscodeCandidateBatch(rows, { maxBatchSize: 1, deniedSourceIds: ["denied"] });
   assert(batch.selected.length === 1, "batch cap selects one");
@@ -112,7 +127,10 @@ try {
   const summary = sanitizeAutomationDiscoveryProof({
     ok: true,
     classifications: Object.fromEntries(classified.map((candidate) => [candidate.sourceId, candidate.classification])),
+    legacyClassifications: Object.fromEntries(classified.map((candidate) => [candidate.sourceId, candidate.legacyClassification])),
     eligibleCount: eligible.length,
+    autoDiscoveredCount: autoDiscovered.length,
+    manualSourceIdsRequired: false,
     selectedCount: batch.selected.length,
     blockedCounts: batch.blockedCounts,
     mutationAttempted: batch.mutationAttempted,

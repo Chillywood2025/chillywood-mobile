@@ -134,8 +134,13 @@ The scale automation operator is now available as source/proof infrastructure on
 ```sh
 npm run media-automation:status
 npm run media-automation:discover
+npm run media-automation:plan-auto
+npm run media-automation:dry-run-auto
+npm run media-automation:run-auto
 npm run media-automation:plan-batch
 npm run media-automation:dry-run-batch
 ```
 
-Do not run `media-automation:run-batch` without a future owner-approved batch lane and `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION`. The automation operator still has no daemon, cron, scheduler, queue processor, production media processing, broad backfill, or playback switch.
+Normal automation is CLI auto-detect. The owner does not manually pick every video and does not manually choose the batch size: discovery excludes unsafe media, the batch policy calculates a safe cap, and dry-run builds exact rollback scopes before any future run.
+
+Do not run `media-automation:run-auto` without a future confirmed batch lane and `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_AUTO_DETECT_BATCH`. Do not run legacy `media-automation:run-batch` without the same safety posture and confirmation. The automation operator still has no daemon, cron, scheduler, queue processor, production media processing, broad backfill, or playback switch.

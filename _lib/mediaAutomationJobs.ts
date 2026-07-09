@@ -24,6 +24,15 @@ export type MediaAutomationJobPlanInput = {
   forceAlreadyAudited?: boolean | null;
 };
 
+export type MediaAutomationRollbackPlanEntry = {
+  batchId: string;
+  sourceId: string;
+  sourceType: string;
+  exactOutputPrefix: string;
+  exactRollbackScope: string;
+  broadRollbackAllowed: false;
+};
+
 const toText = (value: unknown) => String(value ?? "").trim();
 
 const slugify = (value: string) => (
@@ -116,6 +125,46 @@ export function createMediaTranscodeJobsDryRun(input: MediaAutomationJobPlanInpu
     productionRowsWritten: false,
     maxBatchCapEnforced: plans.length <= maxBatchSize,
   };
+}
+
+export function buildAutoDetectedTranscodeJobPlan(input: MediaAutomationJobPlanInput): {
+  batchId: string;
+  plans: MediaAutomationJobPlan[];
+  mutationAttempted: false;
+  productionRowsWritten: false;
+  manualSourceIdsRequired: false;
+  manualBatchSizeRequired: false;
+  maxBatchCapEnforced: boolean;
+} {
+  const dryRun = createMediaTranscodeJobsDryRun({
+    ...input,
+    mode: "dry_run",
+    writesAllowed: false,
+  });
+  return {
+    ...dryRun,
+    manualSourceIdsRequired: false,
+    manualBatchSizeRequired: false,
+  };
+}
+
+export function validateAutoDetectedJobPlan(plan: MediaAutomationJobPlan): MediaAutomationJobPlan {
+  return validateMediaTranscodeJobPlan(plan);
+}
+
+export function buildAutoDetectedRollbackPlan(plans: MediaAutomationJobPlan[]): MediaAutomationRollbackPlanEntry[] {
+  return plans.map((plan) => ({
+    batchId: plan.batchId,
+    sourceId: plan.sourceId,
+    sourceType: plan.sourceType,
+    exactOutputPrefix: plan.outputPrefix,
+    exactRollbackScope: plan.rollbackScope,
+    broadRollbackAllowed: false,
+  }));
+}
+
+export function sanitizeAutoJobPlanProof<T>(value: T): T {
+  return sanitizeJobPlanProof(value);
 }
 
 export function sanitizeJobPlanProof<T>(value: T): T {

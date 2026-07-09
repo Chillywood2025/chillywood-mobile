@@ -113,6 +113,8 @@ try {
     playbackUrlProvider: "cloudflare_r2_custom_domain",
     mediaDeliveryProvider: "cloudflare_r2_custom_domain",
     deliveryFormat: "hls",
+    automationMode: "auto_detect",
+    batchSize: 5,
     qualityLabel: "480p",
     renditionLabel: "480p",
     rolloutMode: "trusted_public",
@@ -222,6 +224,8 @@ try {
     playbackUrlProvider: "cloudflare_r2_custom_domain",
     mediaDeliveryProvider: "cloudflare_r2_custom_domain",
     deliveryFormat: "hls",
+    automationMode: "auto_detect",
+    batchSize: 5,
     qualityLabel: "480p",
     renditionLabel: "480p",
     rolloutMode: "batch",
@@ -245,6 +249,8 @@ try {
   });
   assertProof(batchRolloutEvent.rollout_mode === "batch", "batch rollout event should record batch rollout mode");
   assertProof(batchRolloutEvent.delivery_format === "hls", "batch rollout event should record HLS delivery format");
+  assertProof(batchRolloutEvent.automation_mode === "auto_detect", "batch rollout event should record auto-detect automation mode");
+  assertProof(batchRolloutEvent.batch_size === 5, "batch rollout event should record batch size");
   assertProof(batchRolloutEvent.cdn_cache_status === "HIT", "batch rollout event should carry cache status");
   assertNoFullUrlFields("batch rollout event", batchRolloutEvent);
 

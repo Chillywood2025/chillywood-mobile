@@ -1,14 +1,19 @@
 export type MediaAutomationMode =
   | "off"
   | "dry_run"
+  | "auto_detect"
+  | "auto_detect_run"
   | "one_job"
   | "batch"
   | "continuous_limited"
-  | "continuous_full_blocked";
+  | "continuous_full_blocked"
+  | "continuous_blocked";
 
 export type MediaAutomationState =
   | "off"
   | "dry_run_only"
+  | "auto_detect_ready"
+  | "auto_detect_run_ready"
   | "ready_for_one_job"
   | "ready_for_batch"
   | "ready_for_limited_continuous"
@@ -29,10 +34,18 @@ export type MediaAutomationControllerInput = {
   scheduledBackupRestoreGateClosed?: boolean | null;
   ownerApprovalForBatch?: boolean | null;
   ownerApprovalForContinuous?: boolean | null;
+  autoDetectRunConfirmed?: boolean | null;
+  latestBackupFresh?: boolean | null;
+  restoreDrillFresh?: boolean | null;
+  dryRunPlanPassed?: boolean | null;
   sourceAllowlistCount?: number | null;
   maxBatchSize?: number | null;
   maxJobsPerRun?: number | null;
   maxConcurrency?: number | null;
+  calculatedBatchSize?: number | null;
+  hardMaxBatchCap?: number | null;
+  activeUnfinishedJobs?: number | null;
+  unsafeCdnRows?: number | null;
   backfillRequested?: boolean | null;
   broadBackfillApproved?: boolean | null;
   auditRequired?: boolean | null;
@@ -70,10 +83,13 @@ const normalizeMode = (value: unknown): MediaAutomationMode => {
   const normalized = toText(value).toLowerCase();
   if (
     normalized === "dry_run"
+    || normalized === "auto_detect"
+    || normalized === "auto_detect_run"
     || normalized === "one_job"
     || normalized === "batch"
     || normalized === "continuous_limited"
     || normalized === "continuous_full_blocked"
+    || normalized === "continuous_blocked"
   ) {
     return normalized;
   }
@@ -154,8 +170,9 @@ export function resolveMediaAutomationController(
     };
   }
 
-  if (mode === "continuous_full_blocked") {
+  if (mode === "continuous_full_blocked" || mode === "continuous_blocked") {
     gates.push(gate("continuous_full_requires_future_owner_approval", false, "continuous_full_blocked"));
+    gates.push(gate("continuous_blocked_cannot_run", false, "continuous_blocked"));
     return {
       mode,
       state: "blocked",
@@ -195,6 +212,66 @@ export function resolveMediaAutomationController(
       maxJobsPerRun,
       maxConcurrency,
       maxBatchSize,
+      gates,
+    };
+  }
+
+  if (mode === "auto_detect") {
+    gates.push(gate("auto_detect_discovers_candidates_without_manual_source_ids", true));
+    gates.push(gate("auto_detect_calculates_batch_size_without_manual_batch_size", true));
+    gates.push(gate("auto_detect_plan_only_writes_nothing", true));
+    const blockedReason = firstBlockedReason(gates);
+    return {
+      mode,
+      state: blockedReason ? "blocked" : "auto_detect_ready",
+      allowed: !blockedReason,
+      canDiscover: !blockedReason,
+      canPlanJobs: !blockedReason,
+      canWriteJobs: false,
+      canRunWorker: false,
+      canTrustResolverRows: false,
+      playbackKillSwitchOn: input.killSwitchOn !== false,
+      signedOriginFallbackRequired: true,
+      blockedReason,
+      maxJobsPerRun,
+      maxConcurrency,
+      maxBatchSize,
+      gates,
+    };
+  }
+
+  if (mode === "auto_detect_run") {
+    const calculatedBatchSize = normalizeNonNegativeInteger(input.calculatedBatchSize, maxBatchSize);
+    const hardMaxBatchCap = normalizeNonNegativeInteger(input.hardMaxBatchCap, 25);
+    const activeUnfinishedJobs = normalizeNonNegativeInteger(input.activeUnfinishedJobs, 0);
+    const unsafeCdnRows = normalizeNonNegativeInteger(input.unsafeCdnRows, 0);
+    gates.push(gate("auto_detect_run_requires_confirmation", input.autoDetectRunConfirmed === true, "auto_detect_run_confirmation_required"));
+    gates.push(gate("auto_detect_run_requires_backup_gate_closed", input.backupGateClosed === true, "backup_gate_not_closed"));
+    gates.push(gate("auto_detect_run_requires_latest_backup_fresh", input.latestBackupFresh !== false, "latest_backup_stale"));
+    gates.push(gate("auto_detect_run_requires_restore_drill_fresh", input.restoreDrillFresh !== false, "restore_drill_stale"));
+    gates.push(gate("auto_detect_run_requires_no_active_unfinished_jobs", activeUnfinishedJobs === 0, "active_unfinished_jobs_present"));
+    gates.push(gate("auto_detect_run_requires_no_unsafe_cdn_rows", unsafeCdnRows === 0, "unsafe_cdn_rows_present"));
+    gates.push(gate("auto_detect_run_requires_positive_calculated_batch_size", calculatedBatchSize > 0, "calculated_batch_size_zero"));
+    gates.push(gate("auto_detect_run_requires_batch_under_hard_cap", calculatedBatchSize > 0 && calculatedBatchSize <= hardMaxBatchCap, "calculated_batch_size_exceeds_hard_cap"));
+    gates.push(gate("auto_detect_run_requires_dry_run_plan_passed", input.dryRunPlanPassed === true, "dry_run_plan_required"));
+    gates.push(gate("auto_detect_run_manual_source_ids_not_required", true));
+    gates.push(gate("auto_detect_run_manual_batch_size_not_required", true));
+    const blockedReason = firstBlockedReason(gates);
+    return {
+      mode,
+      state: blockedReason ? "blocked" : "auto_detect_run_ready",
+      allowed: !blockedReason,
+      canDiscover: !blockedReason,
+      canPlanJobs: !blockedReason,
+      canWriteJobs: !blockedReason,
+      canRunWorker: !blockedReason,
+      canTrustResolverRows: false,
+      playbackKillSwitchOn: input.killSwitchOn === true,
+      signedOriginFallbackRequired: true,
+      blockedReason,
+      maxJobsPerRun: calculatedBatchSize,
+      maxConcurrency,
+      maxBatchSize: calculatedBatchSize,
       gates,
     };
   }

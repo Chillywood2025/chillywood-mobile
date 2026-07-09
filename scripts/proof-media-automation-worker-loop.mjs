@@ -78,7 +78,9 @@ try {
   const {
     planAutomationWorkerRun,
     claimAutomationWorkerBatch,
+    claimAutomationBatchLease,
     processAutomationWorkerBatchDryRun,
+    processAutomationBatchDryRun,
     completeAutomationWorkerBatchAudit,
     quarantineAutomationWorkerBatch,
   } = loaded.loop;
@@ -102,6 +104,21 @@ try {
     maxConcurrency: 1,
   });
   assert(decision.allowed === true, "batch decision allowed after gates");
+
+  const autoDecision = resolveMediaAutomationController({
+    mode: "auto_detect_run",
+    autoDetectRunConfirmed: true,
+    backupGateClosed: true,
+    latestBackupFresh: true,
+    restoreDrillFresh: true,
+    dryRunPlanPassed: true,
+    calculatedBatchSize: 1,
+    hardMaxBatchCap: 25,
+    activeUnfinishedJobs: 0,
+    unsafeCdnRows: 0,
+    maxConcurrency: 1,
+  });
+  assert(autoDecision.allowed === true, "auto-detect run decision allowed after gates");
 
   const batch = buildTranscodeCandidateBatch(rows, { maxBatchSize: 1 });
   const dryRun = createMediaTranscodeJobsDryRun({
@@ -129,7 +146,22 @@ try {
   assert(processed.writesAttempted === false, "dry-run worker writes nothing");
   assert(processed.uploadAttempted === false, "dry-run worker uploads nothing");
   assert(processed.telemetryEvents.includes("transcode_started"), "telemetry model includes transcode event");
+  assert(processed.telemetryEvents.includes("auto_discovery_started"), "telemetry model includes auto discovery event");
+  assert(processed.telemetryEvents.includes("batch_dry_run_passed"), "telemetry model includes dry-run event");
+  assert(processed.telemetryEvents.includes("playback_cdn_selected"), "telemetry model includes CDN selected event");
+  assert(processed.telemetryEvents.includes("playback_fallback_used"), "telemetry model includes fallback event");
   assert(processed.telemetryEvents.includes("rollback_executed"), "telemetry model includes rollback event");
+
+  const autoRunPlan = planAutomationWorkerRun({
+    batchId: dryRun.batchId,
+    decision: autoDecision,
+    plans: dryRun.plans,
+  });
+  assert(autoRunPlan.allowed === true, "auto-detect worker plan allowed after gates");
+  const autoLease = claimAutomationBatchLease({ runPlan: autoRunPlan, plans: dryRun.plans, nowMillis: 2 });
+  assert(autoLease !== null, "auto-detect lease granted after gates");
+  const autoProcessed = processAutomationBatchDryRun({ lease: autoLease, plans: dryRun.plans });
+  assert(autoProcessed.processed === true, "auto-detect worker dry-run processes batch");
 
   const passAudit = completeAutomationWorkerBatchAudit({
     batchId: dryRun.batchId,
@@ -189,11 +221,14 @@ try {
     ok: true,
     continuousDeniedWithGateOpen: deniedContinuous.blockedReason,
     batchAllowed: decision.allowed,
+    autoDetectRunAllowed: autoDecision.allowed,
     leaseGranted: Boolean(lease),
+    autoDetectLeaseGranted: Boolean(autoLease),
     noLeaseDenied: noLeaseProcess.stopReason,
     dryRunWritesAttempted: processed.writesAttempted,
     dryRunUploadAttempted: processed.uploadAttempted,
     telemetryEvents: processed.telemetryEvents,
+    autoDetectTelemetryEvents: autoProcessed.telemetryEvents,
     auditPassResolverEligible: passAudit.resolverEligible,
     auditFailureQuarantine: quarantine.state,
     resolverIgnoresPendingOrQuarantinedRows: true,

@@ -44,17 +44,26 @@ export type MediaAutomationBatchAuditResult = {
 };
 
 export const MEDIA_AUTOMATION_TELEMETRY_EVENTS = [
+  "auto_discovery_started",
+  "candidate_classified",
+  "batch_planned",
+  "batch_dry_run_passed",
+  "batch_started",
   "candidate_discovered",
   "job_planned",
   "job_claimed",
+  "job_transcode_started",
   "transcode_started",
+  "job_transcode_completed",
   "transcode_completed",
   "output_uploaded",
   "audit_passed",
   "audit_failed",
   "resolver_eligible",
   "playback_started",
+  "playback_cdn_selected",
   "playback_fallback",
+  "playback_fallback_used",
   "rollback_planned",
   "rollback_executed",
 ] as const;
@@ -118,6 +127,15 @@ export function claimAutomationWorkerBatch(input: {
   };
 }
 
+export function claimAutomationBatchLease(input: {
+  runPlan: MediaAutomationWorkerRunPlan;
+  plans: MediaAutomationJobPlan[];
+  nowMillis: number;
+  leaseTtlMillis?: number | null;
+}): MediaAutomationWorkerLease | null {
+  return claimAutomationWorkerBatch(input);
+}
+
 export function processAutomationWorkerBatchDryRun(input: {
   lease: MediaAutomationWorkerLease | null;
   plans: MediaAutomationJobPlan[];
@@ -163,6 +181,13 @@ export function processAutomationWorkerBatchDryRun(input: {
     telemetryEvents: [...MEDIA_AUTOMATION_TELEMETRY_EVENTS],
     stopReason: null,
   };
+}
+
+export function processAutomationBatchDryRun(input: {
+  lease: MediaAutomationWorkerLease | null;
+  plans: MediaAutomationJobPlan[];
+}): ReturnType<typeof processAutomationWorkerBatchDryRun> {
+  return processAutomationWorkerBatchDryRun(input);
 }
 
 export function completeAutomationWorkerBatchAudit(input: {

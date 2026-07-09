@@ -1,4 +1,16 @@
 export type MediaAutomationCandidateClassification =
+  | "eligible_needs_transcode"
+  | "eligible_already_has_audited_hls"
+  | "excluded_private"
+  | "excluded_premium"
+  | "excluded_original_master"
+  | "excluded_unscanned"
+  | "excluded_moderation_blocked"
+  | "excluded_missing_source"
+  | "excluded_unsupported_format"
+  | "excluded_already_active_job"
+  | "excluded_denied_source"
+  | "excluded_already_processed"
   | "eligible_public_safe"
   | "already_has_audited_hls"
   | "needs_transcode"
@@ -23,6 +35,8 @@ export type MediaAutomationCandidateRow = {
   paid_or_premium_locked?: boolean | null;
   is_original_only?: boolean | null;
   has_audited_hls?: boolean | null;
+  has_active_unfinished_job?: boolean | null;
+  already_processed?: boolean | null;
   current_playback_source?: string | null;
 };
 
@@ -31,6 +45,7 @@ export type MediaAutomationCandidate = {
   sourceId: string;
   title: string;
   classification: MediaAutomationCandidateClassification;
+  legacyClassification: MediaAutomationCandidateClassification;
   publicSafe: boolean;
   needsTranscode: boolean;
   alreadyHasAuditedHls: boolean;
@@ -51,6 +66,21 @@ const PUBLIC_SCAN_STATUSES = new Set(["clean", "approved"]);
 const PUBLIC_MODERATION_STATUSES = new Set(["clean", "approved", "allowed"]);
 const SUPPORTED_VIDEO_MIME_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm", "video/x-m4v", "application/vnd.apple.mpegurl"]);
 
+export const MEDIA_AUTOMATION_CLASSIFICATION_ALIASES: Record<string, MediaAutomationCandidateClassification> = {
+  eligible_needs_transcode: "needs_transcode",
+  eligible_already_has_audited_hls: "already_has_audited_hls",
+  excluded_private: "private_blocked",
+  excluded_premium: "premium_blocked",
+  excluded_original_master: "original_only_blocked",
+  excluded_unscanned: "unscanned_blocked",
+  excluded_moderation_blocked: "moderation_blocked",
+  excluded_missing_source: "missing_source_blocked",
+  excluded_unsupported_format: "unsupported_format_blocked",
+  excluded_denied_source: "denied_source_blocked",
+  excluded_already_active_job: "needs_transcode",
+  excluded_already_processed: "already_has_audited_hls",
+};
+
 const toText = (value: unknown) => String(value ?? "").trim();
 const toLowerText = (value: unknown) => toText(value).toLowerCase();
 
@@ -69,30 +99,34 @@ export function classifyMediaAutomationCandidate(
   const premiumLocked = row.paid_or_premium_locked === true || visibility === "premium";
   const originalOnly = row.is_original_only === true;
   const alreadyHasAuditedHls = row.has_audited_hls === true;
+  const hasActiveUnfinishedJob = row.has_active_unfinished_job === true;
+  const alreadyProcessed = row.already_processed === true;
 
-  if (!sourceId || deniedSourceIds.has(sourceId)) blockedReasons.push("denied_source_blocked");
-  if (visibility !== "public") blockedReasons.push("private_blocked");
-  if (premiumLocked) blockedReasons.push("premium_blocked");
-  if (originalOnly) blockedReasons.push("original_only_blocked");
-  if (!sourcePresent) blockedReasons.push("missing_source_blocked");
-  if (!PUBLIC_SCAN_STATUSES.has(scanStatus)) blockedReasons.push("unscanned_blocked");
-  if (!PUBLIC_MODERATION_STATUSES.has(moderationStatus)) blockedReasons.push("moderation_blocked");
-  if (!SUPPORTED_VIDEO_MIME_TYPES.has(mimeType)) blockedReasons.push("unsupported_format_blocked");
+  if (!sourceId || deniedSourceIds.has(sourceId)) blockedReasons.push("excluded_denied_source");
+  if (visibility !== "public") blockedReasons.push("excluded_private");
+  if (premiumLocked) blockedReasons.push("excluded_premium");
+  if (originalOnly) blockedReasons.push("excluded_original_master");
+  if (!sourcePresent) blockedReasons.push("excluded_missing_source");
+  if (hasActiveUnfinishedJob) blockedReasons.push("excluded_already_active_job");
+  if (!PUBLIC_SCAN_STATUSES.has(scanStatus)) blockedReasons.push("excluded_unscanned");
+  if (!PUBLIC_MODERATION_STATUSES.has(moderationStatus)) blockedReasons.push("excluded_moderation_blocked");
+  if (!SUPPORTED_VIDEO_MIME_TYPES.has(mimeType)) blockedReasons.push("excluded_unsupported_format");
+  if (alreadyProcessed) blockedReasons.push("excluded_already_processed");
 
-  let classification: MediaAutomationCandidateClassification = "eligible_public_safe";
+  let classification: MediaAutomationCandidateClassification = "eligible_needs_transcode";
   if (blockedReasons.length > 0) {
     classification = blockedReasons[0] as MediaAutomationCandidateClassification;
   } else if (alreadyHasAuditedHls) {
-    classification = "already_has_audited_hls";
-  } else {
-    classification = "needs_transcode";
+    classification = "eligible_already_has_audited_hls";
   }
+  const legacyClassification = MEDIA_AUTOMATION_CLASSIFICATION_ALIASES[classification] ?? classification;
 
   return {
     sourceType: toText(row.source_type) || "creator_video",
     sourceId,
     title: toText(row.title) || "(untitled)",
     classification,
+    legacyClassification,
     publicSafe: blockedReasons.length === 0,
     needsTranscode: blockedReasons.length === 0 && !alreadyHasAuditedHls,
     alreadyHasAuditedHls,
@@ -105,10 +139,27 @@ export function discoverEligibleTranscodeSources(
   rows: MediaAutomationCandidateRow[],
   options: { deniedSourceIds?: string[] | null; includeAlreadyAudited?: boolean | null } = {},
 ): MediaAutomationCandidate[] {
+  return discoverEligibleMediaCandidates(rows, options);
+}
+
+export function discoverEligibleMediaCandidates(
+  rows: MediaAutomationCandidateRow[],
+  options: { deniedSourceIds?: string[] | null; includeAlreadyAudited?: boolean | null } = {},
+): MediaAutomationCandidate[] {
   return rows
     .map((row) => classifyMediaAutomationCandidate(row, options))
     .filter((candidate) => candidate.publicSafe)
     .filter((candidate) => options.includeAlreadyAudited === true || !candidate.alreadyHasAuditedHls);
+}
+
+export function filterAutomationCandidates(
+  candidates: MediaAutomationCandidate[],
+  options: { includeAlreadyAudited?: boolean | null; includeAlreadyProcessed?: boolean | null } = {},
+): MediaAutomationCandidate[] {
+  return candidates
+    .filter((candidate) => candidate.publicSafe)
+    .filter((candidate) => options.includeAlreadyAudited === true || !candidate.alreadyHasAuditedHls)
+    .filter((candidate) => options.includeAlreadyProcessed === true || candidate.classification !== "excluded_already_processed");
 }
 
 export function buildTranscodeCandidateBatch(
@@ -121,9 +172,7 @@ export function buildTranscodeCandidateBatch(
 ): MediaAutomationCandidateBatch {
   const maxBatchSize = Math.max(0, Math.floor(Number(options.maxBatchSize) || 0));
   const candidates = rows.map((row) => classifyMediaAutomationCandidate(row, options));
-  const eligible = candidates
-    .filter((candidate) => candidate.publicSafe)
-    .filter((candidate) => options.includeAlreadyAudited === true || !candidate.alreadyHasAuditedHls);
+  const eligible = filterAutomationCandidates(candidates, options);
   const selected = eligible.slice(0, maxBatchSize);
   const blockedCounts: Record<string, number> = {};
   for (const candidate of candidates) {

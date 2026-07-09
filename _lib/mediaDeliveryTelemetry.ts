@@ -13,6 +13,8 @@ export type MediaDeliveryTelemetryRecord = {
   playback_url_provider: string;
   media_delivery_provider: string;
   delivery_format: string;
+  automation_mode: string | null;
+  batch_size: number | null;
   quality_label: string;
   rendition_label: string | null;
   rollout_mode: string | null;
@@ -62,6 +64,8 @@ export type MediaDeliveryTelemetryInput = {
   playbackUrlProvider?: string | null;
   mediaDeliveryProvider?: string | null;
   deliveryFormat?: string | null;
+  automationMode?: string | null;
+  batchSize?: number | null;
   qualityLabel?: string | null;
   renditionLabel?: string | null;
   rolloutMode?: string | null;
@@ -194,6 +198,8 @@ const buildBaseTelemetryRecord = (
     playback_url_provider: normalizedText(input.playbackUrlProvider, "unknown"),
     media_delivery_provider: normalizedText(input.mediaDeliveryProvider, input.deliveryProvider ?? "unknown"),
     delivery_format: normalizedText(input.deliveryFormat, "unknown"),
+    automation_mode: nullableText(input.automationMode),
+    batch_size: normalizeNonNegativeInteger(input.batchSize),
     quality_label: normalizedText(input.qualityLabel, "unknown"),
     rendition_label: nullableText(input.renditionLabel),
     rollout_mode: nullableText(input.rolloutMode),
