@@ -84,7 +84,7 @@ Status: staged resolver helpers, proof scripts, architecture, and guard only. Th
 
 ## Target Architecture
 
-Transcoding status: not live; no worker exists in this repo.
+Production transcoding status: not live; no backend transcode queue/service worker exists in this repo. A local proof worker script exists only for the approved public-safe City Lights HLS demo.
 
 Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.
 
@@ -100,7 +100,7 @@ R2 proof object status: harmless text object `playback/public/proof/hello.txt` u
 
 R2 public-playback proof bucket status: separate bucket `chillywood-media-public-playback-proof` exists, created 2026-07-08T23:47:12.035Z, and is distinct from the private proof bucket.
 
-R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt`, immutable cache proof text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, and approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` are public-safe proof assets only.
+R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt`, immutable cache proof text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, and local-proof HLS tree `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/` are public-safe proof assets only.
 
 R2 public exposure status: `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access remains disabled on both buckets; the private bucket has no custom domain.
 
@@ -124,6 +124,14 @@ Real safe demo playback/decode proof reports H.264 854x480 duration 52.208333 se
 
 Real demo resolver proof uses `cdnAllowedPublicPlaybackPaths` to allow only `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`; another public-safe demo path falls back with `not_in_public_playback_allowlist`.
 
+Local HLS demo proof status: `scripts/proof-media-delivery-hls-demo.mjs` downloads the approved City Lights public-safe MP4, verifies SHA-256 short hash `b670602fa00934ca`, locally generates 360p and 480p HLS with ffmpeg, uploads only proof HLS assets to `chillywood-media-public-playback-proof`, and proves `master.m3u8`, variant playlists, segments, and ffmpeg HLS decode through `media.chillywoodstream.com`. This is a local proof worker only; production HLS/transcoding remains not live.
+
+Local HLS demo public path: `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8` returns HTTP 200 with `Content-Type: application/vnd.apple.mpegurl` and `Cache-Control: public, max-age=300`; variant playlists `360p/index.m3u8` and `480p/index.m3u8` return HTTP 200 and reference versioned `.ts` segments.
+
+Local HLS segment cache proof: after a narrow Cloudflare Cache Rule scoped only to `media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/*.ts`, versioned HLS segments return HTTP 200, `Content-Type: video/mp2t`, `Cache-Control: public, max-age=31536000, immutable`, and `cf-cache-status: HIT` after warmup. No production egress or cost savings are claimed.
+
+Local HLS resolver proof: the staged resolver returns `https://media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8` only when `cdnAllowedPublicPlaybackPaths` explicitly contains that master manifest and `publicPlaybackSafe=true`; the source MP4 and segment paths fall back with `not_in_public_playback_allowlist` under the HLS proof config.
+
 5 GB resumable upload status: not live; current upload is single signed PUT.
 
 Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domain/cache, with Supabase/Edge resolver access control and direct signed R2/S3-compatible fallback.
@@ -141,6 +149,7 @@ Completed:
 - Cache-HIT proof succeeded for immutable harmless text object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` under a narrow cache rule.
 - Safe generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` is staged in the separate public-playback proof bucket and plays through `media.chillywoodstream.com` in the proof-only local app playback harness.
 - Real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` is proof-staged and proved through `media.chillywoodstream.com` only under the explicit real-demo allowlist.
+- Local HLS proof worker `scripts/proof-media-delivery-hls-demo.mjs` generated 360p/480p HLS from the approved City Lights public-safe MP4, uploaded proof-only HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, proved master/variant/segment delivery through `media.chillywoodstream.com`, proved HLS segment cache HIT, and proved resolver eligibility only for the allowlisted HLS master manifest.
 - Demo-only resolver eligibility is proved by local proof scripts for explicit `publicPlaybackSafe` assets only.
 - Media delivery telemetry source/proof foundation exists for future `media_delivery_events` and `media_playback_sessions`; backend writes and table migrations remain planned.
 
@@ -148,7 +157,7 @@ Planned:
 
 - Physical installed-app UI playback proof for future approved demo-media wiring remains optional and pending; the current proof is a resolver-controlled proof-only local app playback harness, not production UI.
 - Media bandwidth telemetry backend writes, table migrations, CDN log ingestion, and provider reconciliation remain planned.
-- HLS/transcoding implementation remains planned.
+- Production HLS/transcoding implementation remains planned.
 - Premium/private signed CDN access remains planned.
 - Production media migration remains planned and requires explicit approval.
 
@@ -199,7 +208,7 @@ Planned:
 ### Public-Playback Proof Bucket
 
 - `chillywood-media-public-playback-proof` is a separate R2 bucket for harmless public-safe proof assets only.
-- The bucket currently contains only public-safe proof assets: text proof object `playback/public/proof/hello.txt`, cache-HIT text proof object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo proof MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, and approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`.
+- The bucket currently contains only public-safe proof assets: text proof object `playback/public/proof/hello.txt`, cache-HIT text proof object `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo proof MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`, and local-proof HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`.
 - The bucket must not contain `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, `unscanned/`, unapproved real creator media, original/master media, unscanned uploads, private media, or Premium-only media.
 - The bucket is publicly reachable only through `media.chillywoodstream.com` for harmless public-safe proof objects; r2.dev public access is disabled.
 - Explicit owner approval was limited to connecting `media.chillywoodstream.com` to this public-playback proof bucket. No approval was given for production playback, private media, Premium media, or the private proof bucket.
@@ -226,6 +235,10 @@ Planned:
 - Real safe demo media proof uploaded approved public-safe Chi'llywood City Lights MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` to the public-playback proof bucket only.
 - Real safe demo media public fetch returned HTTP 200, `Content-Type: video/mp4`, `Cache-Control: public, max-age=31536000, immutable`, `Accept-Ranges: bytes`, byte-range fetch returned HTTP 206, and repeated warm fetches returned `cf-cache-status: HIT`. ffprobe identified H.264 854x480 duration 52.208333 seconds, ffmpeg decode passed, and frame-count proof decoded 1253 frames.
 - Real demo proof uses a resolver allowlist for `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` only. It does not enable CDN URLs for all creator videos.
+- Local HLS proof worker generated 360p and 480p HLS from the approved City Lights public-safe MP4 and uploaded 24 proof HLS objects under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/` to the public-playback proof bucket only.
+- Local HLS public fetch returned HTTP 200 for `master.m3u8`, `360p/index.m3u8`, and `480p/index.m3u8`; ffmpeg decoded the public HLS master URL successfully.
+- A narrow Cloudflare Cache Rule was applied only to versioned HLS proof segments under `media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/*.ts`; segment fetches returned HTTP 200, `Content-Type: video/mp2t`, `Cache-Control: public, max-age=31536000, immutable`, and `cf-cache-status: HIT` after warmup. No production egress or cost savings are claimed.
+- HLS resolver proof uses a resolver allowlist for `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/master.m3u8` only. The source MP4 and segment URLs are not independently resolver-returned under the HLS proof config and fall back with `not_in_public_playback_allowlist`.
 - Forbidden-prefix probes under `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404 through the public proof hostname.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - No production playback config was switched.
@@ -237,7 +250,7 @@ Planned:
 
 1. Confirm the private proof bucket and harmless proof object remain non-production proof assets only.
 2. Keep `media.chillywoodstream.com` scoped to the separate public-playback proof bucket until a later approved production migration plan exists.
-3. Keep cache rules narrow. The only applied cache rule in this lane is the cache-HIT proof prefix `media.chillywoodstream.com/playback/public/proof/cache-hit/*`; do not add broad Cache Everything behavior.
+3. Keep cache rules narrow. The only applied cache rules in this lane are the cache-HIT proof prefix `media.chillywoodstream.com/playback/public/proof/cache-hit/*` and the City Lights HLS proof segment path `media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/*.ts`; do not add broad Cache Everything behavior.
 4. Keep staged resolver support disabled for production playback by default.
 5. Keep production creator-video playback on existing resolver/direct signed-origin fallback until signed/token CDN access, telemetry, takedown purge, and Premium gating are implemented and proved.
 
@@ -252,6 +265,7 @@ Planned:
 - `scripts/proof-media-delivery-resolver.mjs` proves the harmless public proof object can resolve to `https://media.chillywoodstream.com/playback/public/proof/hello.txt` and the generated demo MP4 can resolve to `https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` under explicit config, while private, original, Premium-only, unsafe, default creator-video, and missing-config cases fall back or block.
 - `scripts/proof-media-delivery-public-demo.mjs` proves the generated demo MP4 resolves through the helper, fetches over `media.chillywoodstream.com`, supports byte-range playback, decodes with ffprobe/ffmpeg and frame-count proof, reports proof-only app playback metadata, has no signed-origin query string, and keeps private/original/Premium/unscanned/moderation-blocked/default creator-video paths on fallback or block.
 - `scripts/proof-media-delivery-real-demo.mjs` proves the approved City Lights demo resolves through the explicit allowlist, fetches over `media.chillywoodstream.com`, supports byte-range playback, decodes with ffprobe/ffmpeg and frame-count proof, keeps a non-allowlisted public-safe demo path on fallback with `not_in_public_playback_allowlist`, and keeps private/original/Premium/unscanned/moderation-blocked/default creator-video paths on fallback or block.
+- `scripts/proof-media-delivery-hls-demo.mjs` is a local proof worker that downloads the approved City Lights public-safe MP4, generates 360p/480p HLS, uploads proof-only HLS assets to the public-playback proof bucket, proves public master/variant/segment fetches plus segment cache HIT and ffmpeg decode, and proves the resolver returns only the allowlisted HLS master manifest while source MP4 and segment paths fall back.
 - Production playback remains unchanged until a later approved lane adds trusted public-safe asset metadata, cache-HIT proof, telemetry, and signed/token CDN access for non-public assets.
 
 ### Signed CDN Playback
@@ -276,13 +290,14 @@ Planned:
 ### HLS/ABR Renditions
 
 - HLS/transcoding is a future milestone unless implemented and proved.
+- Current proof scope: a local proof worker has generated and proved 360p/480p HLS for the approved public-safe City Lights demo only. This does not create a production transcode queue, does not insert trusted `video_renditions` rows, does not migrate creator-video playback, and does not make HLS/transcoding live for production.
 - Generate HLS VOD packages for 360p, 480p, 720p, and 1080p only when the source supports that output without fake upscaling claims.
 - Free quality target remains 360p/480p. Premium quality target remains 720p/1080p only with backend entitlement proof.
 - Original/master files remain private processing inputs and must not be listed as normal playback renditions.
 - Store each rendition's manifest path, segment prefix, codec, dimensions, bitrate, duration, checksum or manifest hash, byte size, and status in trusted metadata.
 - Prefer a master manifest that lists only resolver-allowed variants or generate per-viewer signed access to a static master where CDN signing prevents unauthorized segment access.
 - Keep MP4 fallback only as a legacy compatibility path until HLS coverage is proved.
-- HLS live claim requires future proof that a worker ran, rendition files exist, the manifest plays, the resolver returns the HLS URL, cache HIT is proved for segments, and signed-origin fallback still works.
+- Production HLS live claim requires future proof that a backend worker ran from a trusted source, rendition files exist, trusted metadata rows exist, the manifest plays, the resolver returns the HLS URL for approved playback, cache HIT is proved for segments, and signed-origin fallback still works.
 
 ### Transcode Worker Queue
 
