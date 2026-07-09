@@ -1,6 +1,6 @@
 # Media Transcode Worker Runbook
 
-Status: no production worker is deployed and no queue processor is running. The production schema for `media_transcode_jobs` and `media_renditions` is applied, and the first owner-approved one-job proof wrote exactly one City Lights job plus two audited HLS rendition rows. Creator-video playback still falls back to signed origin by default; the proof did not switch production playback.
+Status: no production worker is deployed and no queue processor is running. The production schema for `media_transcode_jobs` and `media_renditions` is applied, and the first owner-approved one-job proof wrote exactly one City Lights job plus two audited HLS rendition rows. Creator-video playback now has a guarded audited-row CDN/HLS bridge, but default source config still falls back to signed origin and any activation must keep the kill switch and signed-origin fallback.
 
 ## Runtime Choice
 
@@ -62,7 +62,7 @@ The worker must never mark `is_ready=true` before source probing, HLS generation
 
 Worker secrets stay only on the worker host. Logs must not include service-role keys, DB URLs, provider credentials, private signed URLs, authorization headers, or raw user identifiers. The app/client path cannot insert or update trusted readiness, public playback path, `is_public_playback_safe`, `worker_version`, or `source_hash`.
 
-Public CDN eligibility comes only from backend-written trusted rows that are ready, audit-passed, public, clean or approved, moderation-allowed, non-original, in the public playback bucket role, under `playback/public/`, and permitted by the configured rollout mode. City Lights is the canary; future expansion should use `canary`, `batch`, or `trusted_public` rollout gates with the kill switch and signed-origin fallback still active.
+Public CDN eligibility comes only from backend-written trusted rows that are ready, public, clean or approved, moderation-allowed, non-original, in the public playback bucket role, under `playback/public/`, visible through the public-safe RLS policy, and permitted by the configured rollout mode. City Lights is the canary; expansion uses `canary`, `batch`, or `trusted_public` rollout gates with the kill switch and signed-origin fallback still active.
 
 ## Rollback
 

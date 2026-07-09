@@ -165,7 +165,7 @@ The migration creates:
 
 Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`); tables/indexes/RLS/policies/grants were read back and both `media_transcode_jobs` and `media_renditions` had row count 0 after the rollback-only runtime policy proof.
 
-Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, production resolver bridge, deployed production transcode worker, broad queue processor, or production playback switch is live.
+Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, deployed production transcode worker, broad queue processor, private/Premium public-CDN path, or broad playback migration is live.
 
 Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes, allowed service-role/worker proof writes, verified resolver-safe select for one clean public-ready proof row, verified unsafe/original/Premium/private/non-public-prefix rows failed eligibility, and rolled back. Final production row counts from that migration proof returned to `media_transcode_jobs=0` and `media_renditions=0`; current production row counts after the later one-job proof are `media_transcode_jobs=1` and `media_renditions=2`, scoped only to City Lights source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`.
 
@@ -253,6 +253,6 @@ Scheduled R2 logical backup gate: source-proofed policy only. `_lib/mediaRecover
 9. Trusted rows for a limited allowlisted source only: complete for City Lights proof rows only (`media_transcode_jobs=1`, `media_renditions=2`); any additional source still requires explicit owner approval and the CLI checklist.
 10. Resolver migration behind disabled config: staged/proofed only; no global production resolver switch or default creator-video CDN/HLS playback is live.
 11. Cache HIT and telemetry proof for the migrated source: cache HIT is proved for exact public proof prefixes, including the City Lights worker-proof segment prefix; telemetry remains source/proof-only and production egress savings are not claimed.
-12. Signed-origin fallback proof: closed as the current default boundary; existing creator-video playback remains signed-origin fallback by default.
+12. Signed-origin fallback proof: closed as the current default boundary; existing creator-video playback keeps signed-origin fallback unless audited-row rollout gates pass.
 13. No private/original/Premium/unscanned/moderation-blocked media exposed: required for every next lane.
 14. Explicit owner approval before any production playback switch: still required.

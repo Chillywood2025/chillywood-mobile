@@ -11,6 +11,7 @@ import {
 import { resolveMediaPlaybackDelivery } from "./mediaDelivery";
 import {
   resolveTrustedRenditionPlaybackSource,
+  sanitizeCdnEligibilityProof,
   type AuditedMediaRenditionForPlayback,
 } from "./mediaPlaybackCdnEligibility";
 import { supabase } from "./supabase";
@@ -68,9 +69,26 @@ export type VodPlaybackResolution = {
   legacyQualityEnforcement: "resolver_renditions" | "pending_renditions" | "no_playable_source" | "resolver_unavailable";
   message: string;
   renditionStatuses: VodRenditionStatusItem[];
+  deliveryMetadata: VodPlaybackDeliveryMetadata | null;
 };
 
 export type VideoRenditionRow = Tables<"video_renditions">;
+
+export type VodPlaybackDeliveryMetadata = {
+  provider: string;
+  deliveryFormat: string;
+  rolloutMode: string;
+  sourceAllowlisted: boolean;
+  sourceDenied: boolean;
+  auditPassed: boolean;
+  backupGatePassed: boolean;
+  fallbackUsed: boolean;
+  blockedReason: string | null;
+  renditionLabel: string;
+  cdnEligible: boolean;
+  urlHost: string;
+  rawUrlRedacted: boolean;
+};
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -198,6 +216,7 @@ const normalizeResolutionPayload = (payload: Json | null | undefined, videoId: s
         : "resolver_unavailable",
     message: toText(body.message) || "VOD playback resolver is not available.",
     renditionStatuses,
+    deliveryMetadata: null,
   };
 };
 
@@ -219,6 +238,7 @@ export const createUnavailableVodPlaybackResolution = (
   legacyQualityEnforcement: "resolver_unavailable",
   message,
   renditionStatuses: [],
+  deliveryMetadata: null,
 });
 
 export async function resolveVideoPlayback(videoId: string): Promise<VodPlaybackResolution> {
@@ -252,6 +272,130 @@ const createSupabaseSignedRenditionUrl = async (bucket: string, objectPath: stri
   if (error || !data?.signedUrl) return "";
   return data.signedUrl;
 };
+
+const MEDIA_RENDITION_PLAYBACK_SELECT = [
+  "id",
+  "media_id",
+  "video_id",
+  "source_type",
+  "source_id",
+  "rendition_label",
+  "delivery_format",
+  "delivery_provider",
+  "storage_provider",
+  "bucket_role",
+  "public_playback_path",
+  "manifest_path",
+  "variant_playlist_path",
+  "width",
+  "height",
+  "duration_ms",
+  "codec",
+  "bitrate",
+  "file_size_bytes",
+  "cache_policy",
+  "visibility",
+  "scan_status",
+  "moderation_status",
+  "is_public_playback_safe",
+  "is_original",
+  "is_ready",
+  "created_at",
+  "updated_at",
+].join(",");
+
+const normalizeTrustedMediaRenditionRow = (row: Record<string, unknown>): AuditedMediaRenditionForPlayback | null => {
+  const sourceId = toText(row.source_id);
+  const manifestPath = toText(row.manifest_path);
+  if (!sourceId || !manifestPath) return null;
+
+  return {
+    id: toText(row.id),
+    media_id: toText(row.media_id) || sourceId,
+    video_id: toText(row.video_id) || sourceId,
+    source_type: toText(row.source_type),
+    source_id: sourceId,
+    rendition_label: toText(row.rendition_label),
+    delivery_format: toText(row.delivery_format) as AuditedMediaRenditionForPlayback["delivery_format"],
+    delivery_provider: toText(row.delivery_provider) as AuditedMediaRenditionForPlayback["delivery_provider"],
+    storage_provider: toText(row.storage_provider) as AuditedMediaRenditionForPlayback["storage_provider"],
+    bucket_role: toText(row.bucket_role) as AuditedMediaRenditionForPlayback["bucket_role"],
+    public_playback_path: toText(row.public_playback_path),
+    manifest_path: manifestPath,
+    variant_playlist_path: toText(row.variant_playlist_path) || null,
+    width: toNumberOrNull(row.width) ?? 0,
+    height: toNumberOrNull(row.height) ?? 0,
+    duration_ms: toNumberOrNull(row.duration_ms) ?? 0,
+    codec: toText(row.codec),
+    bitrate: toNumberOrNull(row.bitrate) ?? 0,
+    file_size_bytes: toNumberOrNull(row.file_size_bytes),
+    cache_policy: toText(row.cache_policy),
+    visibility: toText(row.visibility) as AuditedMediaRenditionForPlayback["visibility"],
+    scan_status: toText(row.scan_status),
+    moderation_status: toText(row.moderation_status),
+    is_public_playback_safe: row.is_public_playback_safe === true,
+    is_original: row.is_original === true,
+    is_ready: row.is_ready === true,
+    created_at: toText(row.created_at),
+    updated_at: toText(row.updated_at),
+    proof_mode: false,
+    // Current production schema encodes audit pass through service-role worker writes,
+    // DB constraints, post-write auditor proof, and the public-safe RLS policy.
+    audit_status: "passed",
+  };
+};
+
+async function readTrustedPublicHlsRenditionsForSource(input: {
+  sourceType: "creator_video";
+  sourceId: string;
+}): Promise<AuditedMediaRenditionForPlayback[]> {
+  const sourceId = toText(input.sourceId);
+  if (!sourceId) return [];
+
+  try {
+    const mediaRenditionsClient = supabase as any;
+    const { data, error } = await mediaRenditionsClient
+      .from("media_renditions")
+      .select(MEDIA_RENDITION_PLAYBACK_SELECT)
+      .eq("source_type", input.sourceType)
+      .eq("source_id", sourceId)
+      .eq("delivery_format", "hls")
+      .eq("delivery_provider", "cloudflare_r2_custom_domain")
+      .eq("storage_provider", "cloudflare_r2")
+      .eq("bucket_role", "public_playback")
+      .eq("visibility", "public")
+      .eq("is_ready", true)
+      .eq("is_public_playback_safe", true)
+      .eq("is_original", false)
+      .in("scan_status", ["clean", "approved"])
+      .in("moderation_status", ["clean", "approved", "allowed"])
+      .order("height", { ascending: false })
+      .limit(8);
+
+    if (error || !data) return [];
+    return (data as unknown as Record<string, unknown>[])
+      .map(normalizeTrustedMediaRenditionRow)
+      .filter((row): row is AuditedMediaRenditionForPlayback => !!row);
+  } catch {
+    return [];
+  }
+}
+
+const normalizeDeliveryMetadata = (value: ReturnType<typeof sanitizeCdnEligibilityProof>): VodPlaybackDeliveryMetadata => ({
+  provider: value.provider,
+  deliveryFormat: value.deliveryFormat,
+  rolloutMode: value.rolloutMode,
+  sourceAllowlisted: value.sourceAllowlisted,
+  sourceDenied: value.sourceDenied,
+  auditPassed: value.auditPassed,
+  backupGatePassed: value.backupGatePassed,
+  fallbackUsed: value.fallbackUsed,
+  blockedReason: value.blockedReason,
+  renditionLabel: value.renditionLabel,
+  cdnEligible: value.cdnEligible,
+  urlHost: value.urlHost,
+  rawUrlRedacted: value.rawUrlRedacted,
+});
 
 export async function createSignedVodRenditionUrl(input: {
   rendition: VodAllowedQuality;
@@ -312,19 +456,48 @@ export async function resolveSignedVideoPlaybackSource(input: {
 }): Promise<VodPlaybackResolution> {
   const resolution = await resolveVideoPlayback(input.videoId);
   const defaultRendition = pickDefaultVodQuality(resolution);
-  if (!defaultRendition) return resolution;
+  let signedUrl = "";
+  const resolveOriginRenditionUrl = async () => {
+    if (signedUrl) return signedUrl;
+    if (!defaultRendition) return "";
+    signedUrl = await createSignedVodRenditionUrl({
+      rendition: defaultRendition,
+      videoId: input.videoId,
+      storageProvider: input.storageProvider,
+      fallbackBucket: input.fallbackBucket,
+    });
+    return signedUrl;
+  };
 
-  const signedUrl = await createSignedVodRenditionUrl({
-    rendition: defaultRendition,
-    videoId: input.videoId,
-    storageProvider: input.storageProvider,
-    fallbackBucket: input.fallbackBucket,
+  const trustedRenditions = await readTrustedPublicHlsRenditionsForSource({
+    sourceType: "creator_video",
+    sourceId: input.videoId,
   });
+  for (const trustedRendition of trustedRenditions) {
+    const trustedDelivery = await resolveTrustedRenditionPlaybackSource({
+      rendition: trustedRendition,
+      resolveFallbackUrl: resolveOriginRenditionUrl,
+    });
+    if (trustedDelivery.cdnEligible && trustedDelivery.url) {
+      return {
+        ...resolution,
+        defaultPlaybackUrl: trustedDelivery.url,
+        defaultPlaybackQuality: isVodPlaybackQualityLabel(trustedDelivery.renditionLabel)
+          ? trustedDelivery.renditionLabel
+          : defaultRendition?.qualityLabel ?? null,
+        deliveryMetadata: normalizeDeliveryMetadata(sanitizeCdnEligibilityProof(trustedDelivery)),
+      };
+    }
+  }
+
+  if (!defaultRendition) return resolution;
+  await resolveOriginRenditionUrl();
 
   return {
     ...resolution,
     defaultPlaybackUrl: signedUrl,
     defaultPlaybackQuality: signedUrl ? defaultRendition.qualityLabel : null,
+    deliveryMetadata: null,
   };
 }
 

@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-09
 
-Status: final CLI-only operating checklist for the media-worker lane. The production worker is not deployed, no daemon or queue processor is running, no cron or scheduler is configured, continuous automation remains blocked, and production creator-video playback remains signed-origin fallback by default.
+Status: final CLI-only operating checklist for the media-worker lane. The production worker is not deployed, no daemon or queue processor is running, no cron or scheduler is configured, and continuous automation remains blocked. Creator-video playback has a guarded audited `media_renditions` CDN/HLS bridge, but signed-origin fallback remains mandatory and any CDN rollout must be controlled by explicit rollout config, kill switch, backup gate, and row-level trust gates.
 
 This checklist is the handoff point for future owner-approved one-job media-worker operations. Do not use it to run broad backfills, enable continuous mode, migrate normal playback, or expose private/original/Premium media.
 
@@ -11,8 +11,8 @@ This checklist is the handoff point for future owner-approved one-job media-work
 - Latest manual private R2 backup prefix: `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`.
 - Existing production proof rows: `media_transcode_jobs=1` and `media_renditions=2`, scoped only to City Lights source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`.
 - Completed one-job proof output prefix: `playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/`.
-- City Lights is the CDN/HLS canary, not the long-term hardcoded path. Future playback expansion should use trusted audited `media_renditions` eligibility through `MEDIA_PLAYBACK_CDN_ROLLOUT_MODE=canary`, `batch`, or eventually `trusted_public` after explicit owner approval and proof.
-- Default production playback remains signed-origin fallback because `MEDIA_PLAYBACK_CDN_ENABLED=false` and the kill switch stays fail-closed unless an approved rollout changes it.
+- City Lights is the CDN/HLS canary, not the long-term hardcoded path. Playback expansion uses trusted audited `media_renditions` eligibility through `MEDIA_PLAYBACK_CDN_ROLLOUT_MODE=canary`, `batch`, or `trusted_public` after explicit owner approval and proof.
+- Default source behavior remains signed-origin fallback because `MEDIA_PLAYBACK_CDN_ENABLED=false` and the kill switch stays fail-closed unless an approved rollout changes it. If an approved OTA enables CDN/HLS, fallback still remains available and private/original/Premium rows remain blocked.
 - Before any batch expansion, run `npm run media-cdn:status` and `npm run media-cdn:plan -- --max-batch-size <n>` or the equivalent proof fixture, confirm denied/private/Premium/original/pending/blocked/wrong-prefix rows are excluded, and confirm the rollback plan is exact-source/exact-prefix scoped.
 - Continuous automation remains blocked.
 - Backups are stored only in private R2 under `backups/media-worker/`.
@@ -38,7 +38,7 @@ Confirm:
 - The worker is not deployed or daemonized.
 - No queue processor is running.
 - No cron, scheduler, or GitHub Actions backup schedule exists.
-- Production playback remains signed-origin fallback by default.
+- Production playback scope is controlled by the audited-rendition rollout config and must retain signed-origin fallback.
 - Existing scoped row counts are understood before any new write.
 
 ## Worker Dry-Run
@@ -100,7 +100,7 @@ Confirm:
 - Active unfinished jobs remain `0`.
 - Other-source renditions remain `0`.
 - Unsafe CDN rows remain `0`.
-- Production playback remains signed-origin fallback by default.
+- Production playback must retain signed-origin fallback; CDN/HLS scope is controlled by audited-row rollout config only.
 
 ## Emergency
 

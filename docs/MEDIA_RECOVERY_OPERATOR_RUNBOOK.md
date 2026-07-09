@@ -82,7 +82,7 @@ Status: manual runner implemented, first real manual backup complete, scheduler 
 
 CLI operation commands:
 
-- Final handoff checklist: `docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md`. Use it before any future owner-approved one-job run. It keeps backups CLI-controlled, requires backup verify/restore, requires one-job owner confirmation, keeps continuous automation blocked, and keeps production playback on signed-origin fallback by default.
+- Final handoff checklist: `docs/MEDIA_WORKER_CLI_OPERATING_CHECKLIST.md`. Use it before any future owner-approved one-job run. It keeps backups CLI-controlled, requires backup verify/restore, requires one-job owner confirmation, keeps continuous automation blocked, and keeps signed-origin fallback available and blocks broad playback migration.
 - `npm run backup:media-worker:preflight` checks the linked Supabase project identity, scoped production row counts, private R2 target, no public playback bucket target, no `media.chillywoodstream.com` target, no media-worker GitHub Actions workflow, no cron/scheduler, no running worker, and unchanged production playback status.
 - `npm run backup:media-worker:status` prints the latest backup prefix, scoped row counts, worker-running state, and gate state without secrets.
 - `npm run backup:media-worker:verify-latest` reads the latest private R2 artifacts for `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`, verifies SHA-256 checksums, parses the manifest, confirms not exposed through the public playback bucket or media domain, and prints the restore-drill command to run next.
@@ -136,7 +136,7 @@ Proof:
 - Auditor result: passed for exact source, exact row count, public-safe HLS paths, clean/allowed state, non-original rows, no private/Premium paths, and no unexpected ready rows before audit.
 - Rollback result: not executed because audit passed, but a scoped rollback plan was proved for only this job/batch and output prefix; broad, missing, private, Premium, and original/master rollback targets were denied.
 - Final row counts: `media_transcode_jobs=1`, `media_renditions=2`, all for the allowlisted City Lights source.
-- Production playback remains signed-origin fallback by default.
+- Production playback must retain signed-origin fallback; CDN/HLS scope is controlled by audited-row rollout config only.
 
 ## Proofs
 

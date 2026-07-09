@@ -101,7 +101,7 @@ assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-dry-run` passes
 assertIncludes(vodDoc, "proves anon/authenticated trusted writes are denied, proves service-role/worker writes pass, proves resolver-safe anon select returns one clean public-ready row", "VOD doc migration dry-run RLS proof");
 assertIncludes(vodDoc, "Trusted audited-rendition playback rollout:", "VOD doc trusted audited CDN rollout section");
 assertIncludes(vodDoc, "MEDIA_PLAYBACK_CDN_ROLLOUT_MODE=off | canary | batch | trusted_public", "VOD doc trusted audited CDN rollout modes");
-assertIncludes(vodDoc, "`npm run proof:media-playback-cdn-eligibility` proves default off fallback, kill switch fallback, canary CDN eligibility, batch selected-source CDN eligibility", "VOD doc trusted audited CDN proof");
+assertIncludes(vodDoc, "`npm run proof:media-playback-cdn-eligibility` proves default off fallback, kill switch fallback, `EXPO_PUBLIC_` rollout config support, canary CDN eligibility, batch selected-source CDN eligibility", "VOD doc trusted audited CDN proof");
 assertIncludes(vodDoc, "`npm run proof:media-cdn-rollout-planner` proves the batch planner with one eligible row and 1,000 eligible fixture rows", "VOD doc rollout planner proof");
 assertIncludes(vodDoc, "Production transcode worker runbook and local proof harness: `docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md` and `npm run proof:media-transcode-worker-local` model the future worker locally with the approved City Lights demo only.", "VOD doc production transcode worker local proof");
 assertIncludes(vodDoc, "Operator-controlled worker safety:", "VOD doc operator control section");
@@ -128,7 +128,7 @@ assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded
 
 assertIncludes(mediaMigrationPlan, "Status: production schema applied, with one scoped owner-approved proof job.", "trusted rendition migration plan status");
 assertIncludes(mediaMigrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "trusted rendition migration plan production schema status");
-assertIncludes(mediaMigrationPlan, "Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, production resolver bridge, deployed production transcode worker, broad queue processor, or production playback switch is live.", "trusted rendition migration plan production data boundary");
+assertIncludes(mediaMigrationPlan, "Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, deployed production transcode worker, broad queue processor, private/Premium public-CDN path, or broad playback migration is live.", "trusted rendition migration plan production data boundary");
 assertIncludes(mediaMigrationPlan, "`service_role` / backend worker is the only intended writer", "trusted rendition migration plan service role writer");
 assertIncludes(mediaMigrationPlan, "Public CDN eligibility must never come from app/client input", "trusted rendition migration plan client trust boundary");
 assertIncludes(mediaMigrationPlan, "Clients cannot mark rows ready.", "trusted rendition migration plan ready write block");
@@ -260,7 +260,7 @@ assertIncludes(packageJson, "\"media-worker:verify-output\"", "media worker CLI 
 assertIncludes(packageJson, "\"media-worker:rollback-plan\"", "media worker CLI rollback-plan script");
 assertIncludes(packageJson, "\"proof:media-transcode-worker-cli\"", "media worker CLI proof script");
 assertIncludes(packageJson, "\"proof:media-worker-cli-operating-checklist\"", "media worker CLI checklist proof script");
-assertIncludes(mediaWorkerCliChecklist, "production creator-video playback remains signed-origin fallback by default", "media worker CLI checklist signed-origin fallback");
+assertIncludes(mediaWorkerCliChecklist, "signed-origin fallback remains mandatory", "media worker CLI checklist signed-origin fallback");
 assertIncludes(mediaWorkerCliChecklist, "Continuous automation remains blocked", "media worker CLI checklist continuous blocked");
 assertIncludes(mediaWorkerCliChecklist, "MEDIA_WORKER_RUN_ONE_CONFIRM=I_UNDERSTAND_ONE_JOB", "media worker CLI checklist run-one confirmation");
 assertIncludes(mediaWorkerCliChecklist, "npm run media-worker:dry-run -- --source-id <id>", "media worker CLI checklist dry-run");

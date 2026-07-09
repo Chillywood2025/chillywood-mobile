@@ -116,11 +116,36 @@ export type MediaPlaybackCdnResolution = MediaPlaybackCdnEligibility & {
 const toText = (value: unknown) => String(value ?? "").trim();
 const toLowerText = (value: unknown) => toText(value).toLowerCase();
 
+const EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ENV: Record<string, string | undefined> = {
+  MEDIA_PLAYBACK_CDN_ENABLED: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ENABLED,
+  MEDIA_PLAYBACK_CDN_KILL_SWITCH: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_KILL_SWITCH,
+  MEDIA_PLAYBACK_CDN_ROLLOUT_MODE: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ROLLOUT_MODE,
+  MEDIA_PLAYBACK_CDN_ALLOWED_SOURCE_IDS: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ALLOWED_SOURCE_IDS,
+  MEDIA_PLAYBACK_CDN_DENIED_SOURCE_IDS: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_DENIED_SOURCE_IDS,
+  MEDIA_PLAYBACK_CDN_REQUIRE_AUDIT_PASSED: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_REQUIRE_AUDIT_PASSED,
+  MEDIA_PLAYBACK_CDN_REQUIRE_BACKUP_FRESH: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_REQUIRE_BACKUP_FRESH,
+  MEDIA_PLAYBACK_CDN_FALLBACK_TO_ORIGIN: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_FALLBACK_TO_ORIGIN,
+  MEDIA_PLAYBACK_CDN_DELIVERY_PROVIDER: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_DELIVERY_PROVIDER,
+  MEDIA_PLAYBACK_CDN_MAX_BATCH_SIZE: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_MAX_BATCH_SIZE,
+  MEDIA_PLAYBACK_CDN_PERCENT_ROLLOUT: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_PERCENT_ROLLOUT,
+  MEDIA_PLAYBACK_CDN_BACKUP_GATE_STATUS: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_GATE_STATUS,
+  MEDIA_PLAYBACK_CDN_BACKUP_GATE: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_GATE,
+  MEDIA_PLAYBACK_CDN_BACKUP_FRESH: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_FRESH,
+  MEDIA_PLAYBACK_CDN_BACKUP_CLOSED: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_CLOSED,
+  MEDIA_PLAYBACK_CDN_BACKUP_LATEST_VERIFIED: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_LATEST_VERIFIED,
+  MEDIA_PLAYBACK_CDN_RESTORE_DRILL_PASSED: process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_RESTORE_DRILL_PASSED,
+  MEDIA_CDN_BASE_URL: process.env.EXPO_PUBLIC_MEDIA_CDN_BASE_URL,
+  MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX: process.env.EXPO_PUBLIC_MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX,
+  MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED: process.env.EXPO_PUBLIC_MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED,
+  MEDIA_CDN_SIGNING_MODE: process.env.EXPO_PUBLIC_MEDIA_CDN_SIGNING_MODE,
+};
+
 const readProcessEnv = (name: string) => {
   const processLike = (globalThis as unknown as {
     process?: { env?: Record<string, string | undefined> };
   }).process;
-  return toText(processLike?.env?.[name]);
+  const env = processLike?.env ?? {};
+  return toText(env[name] ?? EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ENV[name] ?? env[`EXPO_PUBLIC_${name}`]);
 };
 
 const normalizeBoolean = (value: unknown, defaultValue = false) => {
@@ -177,6 +202,23 @@ const normalizeBackupGate = (value: MediaPlaybackCdnBackupGate | null | undefine
     closed: value.closed === true,
     latestBackupVerified: value.latestBackupVerified === true,
     restoreDrillPassed: value.restoreDrillPassed === true,
+  };
+};
+
+const readBackupGateFromEnv = (): MediaPlaybackCdnBackupGate | null => {
+  const status = readProcessEnv("MEDIA_PLAYBACK_CDN_BACKUP_GATE_STATUS")
+    || readProcessEnv("MEDIA_PLAYBACK_CDN_BACKUP_GATE");
+  const fresh = readProcessEnv("MEDIA_PLAYBACK_CDN_BACKUP_FRESH");
+  const closed = readProcessEnv("MEDIA_PLAYBACK_CDN_BACKUP_CLOSED");
+  const latestBackupVerified = readProcessEnv("MEDIA_PLAYBACK_CDN_BACKUP_LATEST_VERIFIED");
+  const restoreDrillPassed = readProcessEnv("MEDIA_PLAYBACK_CDN_RESTORE_DRILL_PASSED");
+  if (!status && !fresh && !closed && !latestBackupVerified && !restoreDrillPassed) return null;
+  return {
+    status,
+    fresh: normalizeBoolean(fresh, false),
+    closed: normalizeBoolean(closed, false),
+    latestBackupVerified: normalizeBoolean(latestBackupVerified, false),
+    restoreDrillPassed: normalizeBoolean(restoreDrillPassed, false),
   };
 };
 
@@ -259,7 +301,7 @@ export function readMediaPlaybackCdnConfig(
       true,
     ),
     cdnSigningMode: toLowerText(overrides.cdnSigningMode ?? readProcessEnv("MEDIA_CDN_SIGNING_MODE")) || "off",
-    backupGate: normalizeBackupGate(overrides.backupGate),
+    backupGate: normalizeBackupGate(overrides.backupGate ?? readBackupGateFromEnv()),
   };
 }
 

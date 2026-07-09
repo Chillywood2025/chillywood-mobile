@@ -300,6 +300,34 @@ const buildCreatorPlayerTitle = (video: CreatorVideo): TitleRow => ({
   content_access_rule: "open",
 });
 
+const resolveSafePlaybackHost = (value: string | null | undefined) => {
+  const url = String(value ?? "").trim();
+  if (!url || !/^https?:\/\//i.test(url)) return "";
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "invalid-url";
+  }
+};
+
+const logCreatorVideoPlaybackResolution = (video: CreatorVideo) => {
+  const delivery = video.playbackDelivery;
+  console.info("[media-playback-resolution]", {
+    sourceType: "creator_video",
+    sourceId: video.id,
+    playbackHost: resolveSafePlaybackHost(video.playbackUrl),
+    provider: delivery?.provider ?? "origin_signed_direct",
+    deliveryFormat: delivery?.deliveryFormat ?? "unknown",
+    rolloutMode: delivery?.rolloutMode ?? "off",
+    cdnEligible: delivery?.cdnEligible === true,
+    fallbackUsed: delivery?.fallbackUsed !== false,
+    auditPassed: delivery?.auditPassed === true,
+    backupGatePassed: delivery?.backupGatePassed === true,
+    blockedReason: delivery?.blockedReason ?? null,
+    rawUrlRedacted: true,
+  });
+};
+
 const buildSpectatorPlayerTitle = (input: {
   id: string;
   title: string | null;
@@ -1394,6 +1422,7 @@ export default function PlayerScreen() {
           const video = await readCreatorVideoForPlayer(routeId);
           if (video && active) {
             debugLog("player", "match source resolved", { source: "creator-video:id" });
+            logCreatorVideoPlaybackResolution(video);
             setPlaybackSourceKind("creator-video");
             setCreatorVideo(video);
             setItem(buildCreatorPlayerTitle(video));
@@ -6751,10 +6780,11 @@ export default function PlayerScreen() {
       });
       setPaidVideoUnlockMessage(result.message);
       if (result.ok) {
-        const refreshed = await readCreatorVideoForPlayer(creatorVideo.id);
-        if (refreshed) {
-          setCreatorVideo(refreshed);
-          setItem(buildCreatorPlayerTitle(refreshed));
+      const refreshed = await readCreatorVideoForPlayer(creatorVideo.id);
+      if (refreshed) {
+        logCreatorVideoPlaybackResolution(refreshed);
+        setCreatorVideo(refreshed);
+        setItem(buildCreatorPlayerTitle(refreshed));
           setPlaybackLoadError(null);
           setIsVideoReady(false);
         }

@@ -204,6 +204,71 @@ try {
   );
   requireProof(trustedPublic.cdnEligible === true, "trusted_public valid audited public row should be CDN eligible");
 
+  const genericTrustedPublicPath = "playback/public/worker-proof/generic-audited-source/batch-0001/master.m3u8";
+  const genericTrustedPublic = await resolve(
+    {
+      ...validRow,
+      id: "generic-trusted-public-row",
+      media_id: "generic-audited-source",
+      video_id: "generic-audited-source",
+      source_id: "generic-audited-source",
+      public_playback_path: genericTrustedPublicPath,
+      manifest_path: genericTrustedPublicPath,
+      variant_playlist_path: genericTrustedPublicPath.replace("master.m3u8", "480p/index.m3u8"),
+    },
+    enabledTrustedPublicConfig,
+  );
+  requireProof(
+    genericTrustedPublic.url === `https://media.chillywoodstream.com/${genericTrustedPublicPath}`,
+    "trusted_public should resolve a generic audited public-safe row, not only City Lights",
+  );
+  requireProof(genericTrustedPublic.cdnEligible === true, "generic trusted_public row should be CDN eligible");
+
+  const oldEnv = {};
+  for (const name of [
+    "EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ENABLED",
+    "EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_KILL_SWITCH",
+    "EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ROLLOUT_MODE",
+    "EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_DELIVERY_PROVIDER",
+    "EXPO_PUBLIC_MEDIA_CDN_BASE_URL",
+    "EXPO_PUBLIC_MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX",
+    "EXPO_PUBLIC_MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED",
+    "EXPO_PUBLIC_MEDIA_CDN_SIGNING_MODE",
+    "EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_GATE_STATUS",
+    "EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_LATEST_VERIFIED",
+    "EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_RESTORE_DRILL_PASSED",
+  ]) {
+    oldEnv[name] = process.env[name];
+  }
+  process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ENABLED = "true";
+  process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_KILL_SWITCH = "false";
+  process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_ROLLOUT_MODE = "trusted_public";
+  process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_DELIVERY_PROVIDER = "cloudflare_r2_custom_domain";
+  process.env.EXPO_PUBLIC_MEDIA_CDN_BASE_URL = "https://media.chillywoodstream.com";
+  process.env.EXPO_PUBLIC_MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX = "playback/public/";
+  process.env.EXPO_PUBLIC_MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED = "true";
+  process.env.EXPO_PUBLIC_MEDIA_CDN_SIGNING_MODE = "off";
+  process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_GATE_STATUS = "closed_for_latest_manual_backup";
+  process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_BACKUP_LATEST_VERIFIED = "true";
+  process.env.EXPO_PUBLIC_MEDIA_PLAYBACK_CDN_RESTORE_DRILL_PASSED = "true";
+  const prefixedEnvConfig = playbackCdnEligibility.readMediaPlaybackCdnConfig();
+  const prefixedEnvResolution = await playbackCdnEligibility.resolveTrustedRenditionPlaybackSource({
+    rendition: validRow,
+    fallbackUrl,
+  });
+  for (const [name, value] of Object.entries(oldEnv)) {
+    if (value == null) delete process.env[name];
+    else process.env[name] = value;
+  }
+  requireProof(prefixedEnvConfig.enabled === true, "EXPO_PUBLIC rollout env should enable CDN playback");
+  requireProof(prefixedEnvConfig.killSwitch === false, "EXPO_PUBLIC kill switch env should disable kill switch");
+  requireProof(prefixedEnvConfig.rolloutMode === "trusted_public", "EXPO_PUBLIC rollout mode should be trusted_public");
+  requireProof(
+    prefixedEnvResolution.cdnEligible === true
+      && prefixedEnvResolution.url === `https://media.chillywoodstream.com/${workerProofMasterPath}`,
+    "EXPO_PUBLIC rollout env should resolve the audited City Lights HLS master",
+  );
+
   const blockedCases = [
     {
       label: "audit pending",
@@ -300,6 +365,8 @@ try {
     playbackCdnEligibility.sanitizeCdnEligibilityProof(canaryCityLights),
     playbackCdnEligibility.sanitizeCdnEligibilityProof(batchSelected),
     playbackCdnEligibility.sanitizeCdnEligibilityProof(trustedPublic),
+    playbackCdnEligibility.sanitizeCdnEligibilityProof(genericTrustedPublic),
+    playbackCdnEligibility.sanitizeCdnEligibilityProof(prefixedEnvResolution),
     ...blockedResults,
     playbackCdnEligibility.sanitizeCdnEligibilityProof(fallbackAvailable),
   ];
@@ -318,6 +385,8 @@ try {
     batchUnselectedSourceFallback: batchUnselected.blockedReason === "source_not_allowed",
     batchCapEnforced: batchCapExceeded.blockedReason === "batch_cap_exceeded",
     trustedPublicValidAuditedRowCdn: trustedPublic.cdnEligible === true,
+    trustedPublicGenericAuditedRowCdn: genericTrustedPublic.cdnEligible === true,
+    expoPublicEnvActivationCdn: prefixedEnvResolution.cdnEligible === true,
     blockedCaseCount: blockedResults.length,
     signedOriginFallbackAvailable: fallbackAvailable.fallbackAvailable === true,
     productionPlaybackSwitched: false,
