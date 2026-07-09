@@ -604,6 +604,7 @@ try {
     requireProof(segmentCache.attempts.some((attempt) => attempt.status === 200), `${rendition.label} proof queue segment should fetch with HTTP 200`);
     requireProof(/^video\/mp2t\b/i.test(lastSegmentAttempt.contentType ?? ""), `${rendition.label} proof queue segment should return video/mp2t`);
     requireProof(/max-age=31536000/i.test(lastSegmentAttempt.cacheControl ?? ""), `${rendition.label} proof queue segment should carry immutable cache metadata`);
+    requireProof(segmentCache.hit, `${rendition.label} proof queue segment should prove cf-cache-status HIT after narrow proof-transcode cache rule`);
     variantProofs.push({
       label: rendition.label,
       playlistUrl,
@@ -803,6 +804,7 @@ try {
       masterFetch: masterFetch.headers,
       renditions: variantProofs,
       ffmpegDecode: hlsFfmpegDecodePassed ? "passed" : "failed",
+      queueSegmentCacheHitObserved: variantProofs.some((variant) => variant.segmentCache.hit),
       segmentCacheHitObserved: variantProofs.some((variant) => variant.segmentCache.hit),
       segmentCacheBehavior: variantProofs.map((variant) => ({
         label: variant.label,
