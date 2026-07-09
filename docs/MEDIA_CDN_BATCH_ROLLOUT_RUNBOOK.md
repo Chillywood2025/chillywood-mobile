@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-09
 
-Status: controlled rollout guide for audited public-safe Cloudflare R2/HLS playback. This runbook does not deploy a worker, run backfill, enable cron, or switch private/original/Premium media to public CDN.
+Status: controlled rollout guide for audited public-safe Cloudflare R2/HLS playback. Controlled `trusted_public` activation was installed-proved for the City Lights audited production rows on EAS Update group `8e7a8c95-241d-4853-9bf3-ebfb063255e4` / Android update `019f483e-a504-7baa-80e1-dadf7a47cb0d`. This runbook does not deploy a worker, run backfill, enable cron, or switch private/original/Premium media to public CDN.
 
 ## Current Scope
 
@@ -11,6 +11,7 @@ Status: controlled rollout guide for audited public-safe Cloudflare R2/HLS playb
 - Current worker-proof HLS prefix: `playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/`.
 - Latest private backup prefix: `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`.
 - Continuous worker automation and broad backfill remain blocked.
+- Active rollout scope: trusted audited public-safe rows only; currently production row counts are `media_transcode_jobs=1`, `media_renditions=2`, `unsafe_cdn_rows=0`, and `other_source_renditions=0`.
 
 ## Rollout Modes
 
