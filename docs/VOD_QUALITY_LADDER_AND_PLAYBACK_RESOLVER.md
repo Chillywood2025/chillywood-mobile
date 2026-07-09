@@ -44,6 +44,14 @@ Trusted rendition metadata foundation:
 - Original/master rows are private processing sources and cannot be marked normal playback. Premium/private rows still require signed/token CDN access later and cannot use public CDN while `MEDIA_CDN_SIGNING_MODE=off`.
 - `npm run proof:media-rendition-metadata` uses proof-only City Lights HLS fixture rows for 360p and 480p under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8`; it does not insert production database rows.
 
+Trusted backend migration path:
+
+- `docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md` designs the server-owned migration path for future `media_transcode_jobs` and `media_renditions`.
+- Draft migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` exists but is not applied to production; it does not switch production playback or make a production transcode worker live.
+- A separate `media_renditions` table is safer than extending live `video_renditions` in this lane because current creator-video playback, storage signing, and resolver fallback behavior remain untouched until explicit owner approval.
+- The draft RLS/write contract makes service role or backend worker authority the only trusted write path for ready/public-safe rendition metadata. Clients cannot mark rows ready, set `public_playback_path`, set `is_public_playback_safe`, set `worker_version`, set `source_hash`, or create public CDN eligibility from client-controlled data.
+- `npm run proof:media-rendition-migration-policy` statically proves the draft SQL and docs keep client writes blocked, require ready/public-safe/clean/moderation-allowed public CDN rows, block original/master normal playback, block Premium/private public CDN without token mode, and keep production playback unchanged.
+
 Client integration:
 
 - `_lib/vodQuality.ts` normalizes resolver output and signs only the resolver-selected rendition where possible.
@@ -74,6 +82,7 @@ The Free VOD rendition enforcement proof was retried against the same selected v
 - Media delivery telemetry is source/proof-only in the R2 proof lane. `_lib/mediaDeliveryTelemetry.ts` can shape future playback session and delivery event records, but no VOD production telemetry table writes, quality enforcement changes, or playback migration are live.
 - Production HLS/ABR renditions are not live in the R2 proof lane. A live production claim still requires a backend worker run from trusted private source, real rendition files, trusted `video_renditions` rows, manifest playback, resolver return, segment cache proof, and fallback proof.
 - Trusted rendition metadata for Cloudflare R2/HLS is source/proof-only. `_lib/mediaRenditionMetadata.ts` and `npm run proof:media-rendition-metadata` prove a local City Lights fixture can bridge trusted ready public-safe HLS metadata into the existing `media.chillywoodstream.com` allowlist, while not-ready, original/master, Premium/private, unsafe scan/moderation, wrong bucket role, non-public prefix, non-allowlisted, and default creator-video source paths all block or fall back. No production `video_renditions` writes are live.
+- Trusted backend migration policy is design/proof-only. The draft `media_transcode_jobs` and `media_renditions` migration is not applied, no production DB writes are live, and production playback remains signed-origin fallback by default.
 - Full live enforcement of Free/Premium VOD quality remains blocked until:
   - real rendition files are generated,
   - rendition rows are inserted by a trusted worker/service,

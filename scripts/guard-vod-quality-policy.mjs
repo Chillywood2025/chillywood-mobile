@@ -28,7 +28,9 @@ const assertNotMatches = (content, pattern, label) => {
 
 const migration = read("supabase/migrations/202605140010_vod_quality_ladder_resolver.sql");
 const scanSafeResolverMigration = read("supabase/migrations/20260623170000_creator_media_scan_safe_playback_resolver.sql");
+const trustedRenditionMigration = read("supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
+const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md");
 const vodLib = read("_lib/vodQuality.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
@@ -37,6 +39,7 @@ const player = read("app/player/[id].tsx");
 const performancePolicy = read("_lib/performancePolicy.ts");
 const packageJson = read("package.json");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
+const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "performance policy");
@@ -67,7 +70,45 @@ assertIncludes(vodDoc, "`_lib/mediaRenditionMetadata.ts` defines the source-only
 assertIncludes(vodDoc, "Original/master rows are private processing sources and cannot be marked normal playback.", "VOD doc original/master CDN boundary");
 assertIncludes(vodDoc, "Premium/private rows still require signed/token CDN access later and cannot use public CDN while `MEDIA_CDN_SIGNING_MODE=off`.", "VOD doc Premium/private CDN boundary");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-metadata` uses proof-only City Lights HLS fixture rows for 360p and 480p", "VOD doc trusted fixture proof");
+assertIncludes(vodDoc, "Trusted backend migration path:", "VOD doc trusted backend migration path");
+assertIncludes(vodDoc, "Draft migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` exists but is not applied to production", "VOD doc unapplied trusted migration");
+assertIncludes(vodDoc, "service role or backend worker authority the only trusted write path", "VOD doc trusted write authority");
+assertIncludes(vodDoc, "Clients cannot mark rows ready, set `public_playback_path`, set `is_public_playback_safe`, set `worker_version`, set `source_hash`, or create public CDN eligibility from client-controlled data.", "VOD doc client trusted write block");
+assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-policy` statically proves the draft SQL and docs keep client writes blocked", "VOD doc migration policy proof");
 assertIncludes(vodDoc, "No production `video_renditions` writes are live.", "VOD doc no production writes");
+assertIncludes(vodDoc, "Trusted backend migration policy is design/proof-only.", "VOD doc trusted migration proof-only");
+
+assertIncludes(mediaMigrationPlan, "Status: design/proof only.", "trusted rendition migration plan status");
+assertIncludes(mediaMigrationPlan, "The draft migration has not been applied to production.", "trusted rendition migration plan unapplied status");
+assertIncludes(mediaMigrationPlan, "`service_role` / backend worker is the only intended writer", "trusted rendition migration plan service role writer");
+assertIncludes(mediaMigrationPlan, "Public CDN eligibility must never come from app/client input", "trusted rendition migration plan client trust boundary");
+assertIncludes(mediaMigrationPlan, "Clients cannot mark rows ready.", "trusted rendition migration plan ready write block");
+assertIncludes(mediaMigrationPlan, "Clients cannot set `public_playback_path`.", "trusted rendition migration plan path write block");
+assertIncludes(mediaMigrationPlan, "Clients cannot set `is_public_playback_safe`.", "trusted rendition migration plan public safety write block");
+assertIncludes(mediaMigrationPlan, "A separate `media_renditions` table is safer", "trusted rendition migration plan separate table decision");
+
+assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_transcode_jobs"', "trusted rendition draft jobs table");
+assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_renditions"', "trusted rendition draft renditions table");
+assertIncludes(trustedRenditionMigration, 'alter table public."media_transcode_jobs" enable row level security;', "trusted rendition draft jobs RLS");
+assertIncludes(trustedRenditionMigration, 'alter table public."media_renditions" enable row level security;', "trusted rendition draft renditions RLS");
+assertIncludes(trustedRenditionMigration, 'grant all on table public."media_transcode_jobs" to "service_role";', "trusted rendition draft jobs service role grant");
+assertIncludes(trustedRenditionMigration, 'grant all on table public."media_renditions" to "service_role";', "trusted rendition draft renditions service role grant");
+assertIncludes(trustedRenditionMigration, "media_transcode_jobs_no_direct_client_insert", "trusted rendition draft jobs insert block");
+assertIncludes(trustedRenditionMigration, "media_transcode_jobs_no_direct_client_update", "trusted rendition draft jobs update block");
+assertIncludes(trustedRenditionMigration, "media_renditions_no_direct_client_insert", "trusted rendition draft renditions insert block");
+assertIncludes(trustedRenditionMigration, "media_renditions_no_direct_client_update", "trusted rendition draft renditions update block");
+assertIncludes(trustedRenditionMigration, 'constraint "media_renditions_original_private_check"', "trusted rendition draft original private constraint");
+assertIncludes(trustedRenditionMigration, 'constraint "media_renditions_hd_not_public_free_check"', "trusted rendition draft HD public/free constraint");
+assertIncludes(trustedRenditionMigration, 'constraint "media_renditions_ready_requires_worker_proof_check"', "trusted rendition draft ready worker proof constraint");
+assertIncludes(trustedRenditionMigration, 'constraint "media_renditions_public_cdn_safety_check"', "trusted rendition draft public CDN safety constraint");
+assertIncludes(trustedRenditionMigration, '"is_ready" = true', "trusted rendition draft ready public CDN requirement");
+assertIncludes(trustedRenditionMigration, '"is_public_playback_safe" = true', "trusted rendition draft public safety requirement");
+assertIncludes(trustedRenditionMigration, '"bucket_role" = \'public_playback\'', "trusted rendition draft public bucket role requirement");
+assertIncludes(trustedRenditionMigration, '"scan_status" in (\'clean\', \'approved\')', "trusted rendition draft scan requirement");
+assertIncludes(trustedRenditionMigration, '"moderation_status" in (\'clean\', \'approved\', \'allowed\')', "trusted rendition draft moderation requirement");
+assertIncludes(trustedRenditionMigration, '"public_playback_path" like \'playback/public/%\'', "trusted rendition draft public prefix requirement");
+assertIncludes(trustedRenditionMigration, 'originals?|masters?|sources?|uploads|private|premium|processing|moderation[-_]blocked|unscanned', "trusted rendition draft forbidden prefix guard");
+assertNotMatches(trustedRenditionMigration, /\bgrant\s+(insert|update|delete|all)\b[^;]*\bto\s+"?(anon|authenticated)"?/i, "trusted rendition draft must not grant client writes");
 
 assertIncludes(mediaRenditionMetadata, "TrustedMediaRenditionMetadata", "trusted media rendition metadata model");
 assertIncludes(mediaRenditionMetadata, "delivery_format", "trusted media rendition delivery format field");
@@ -96,6 +137,7 @@ assertIncludes(mediaRenditionMetadata, "non_playback_prefix", "trusted media ren
 assertNotMatches(mediaRenditionMetadata, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "trusted media rendition metadata helper must not perform network or database writes");
 
 assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "trusted media rendition metadata proof script");
+assertIncludes(packageJson, "\"proof:media-rendition-migration-policy\"", "trusted media rendition migration policy proof script");
 assertIncludes(mediaRenditionMetadataProof, "trusted-media-rendition-metadata", "trusted media rendition metadata proof mode");
 assertIncludes(mediaRenditionMetadataProof, "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1", "trusted media rendition City Lights source id");
 assertIncludes(mediaRenditionMetadataProof, "360p", "trusted media rendition 360p fixture proof");
@@ -114,6 +156,14 @@ assertIncludes(mediaRenditionMetadataProof, "productionVideoRenditionWritesLive:
 assertIncludes(mediaRenditionMetadataProof, "productionDbWritesEnabled: false", "trusted media rendition no production DB writes");
 assertIncludes(mediaRenditionMetadataProof, "productionPlaybackSwitched: false", "trusted media rendition no production playback switch");
 assertNotMatches(mediaRenditionMetadataProof, /\bsupabase\.from\b|\bcreateClient\b/i, "trusted rendition metadata proof must not write production DB or create a Supabase client");
+assertIncludes(mediaRenditionMigrationPolicyProof, "media-rendition-migration-policy", "trusted media rendition migration policy proof mode");
+assertIncludes(mediaRenditionMigrationPolicyProof, "supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql", "trusted media rendition migration policy draft path");
+assertIncludes(mediaRenditionMigrationPolicyProof, "clientTrustedWritesAllowed: false", "trusted media rendition migration no client writes proof");
+assertIncludes(mediaRenditionMigrationPolicyProof, "serviceRoleWorkerRequired: true", "trusted media rendition migration service role proof");
+assertIncludes(mediaRenditionMigrationPolicyProof, "publicCdnEligibilityFromTrustedRowsOnly: true", "trusted media rendition migration trusted rows proof");
+assertIncludes(mediaRenditionMigrationPolicyProof, "productionMigrationApplied: false", "trusted media rendition migration no production apply");
+assertIncludes(mediaRenditionMigrationPolicyProof, "productionPlaybackSwitched: false", "trusted media rendition migration no production playback switch");
+assertNotMatches(mediaRenditionMigrationPolicyProof, /\bsupabase\.from\b|\bcreateClient\b/i, "trusted rendition migration policy proof must not write production DB or create a Supabase client");
 
 assertIncludes(creatorVideos, "resolveSignedVideoPlaybackSource", "creator video player resolver integration");
 assertIncludes(creatorVideos, "recordOriginalVideoRendition(id)", "creator upload original status");

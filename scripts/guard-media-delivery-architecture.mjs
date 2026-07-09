@@ -56,8 +56,9 @@ const architecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
 const currentState = read("CURRENT_STATE.md");
 const nextTask = read("NEXT_TASK.md");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
+const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md");
 const wave2Doc = read("docs/WAVE2_CREATOR_MEDIA_CLOSURE_RUNBOOK.md");
-const docsCorpus = [architecture, vodDoc, wave2Doc].join("\n\n");
+const docsCorpus = [architecture, vodDoc, mediaMigrationPlan, wave2Doc].join("\n\n");
 const mediaStatusCorpus = [architecture, currentState, nextTask].join("\n\n");
 
 const mediaStorage = read("_lib/mediaStorage.ts");
@@ -72,6 +73,7 @@ const performancePolicy = read("_lib/performancePolicy.ts");
 const player = read("app/player/[id].tsx");
 const watchPartyContentSources = read("_lib/watchPartyContentSources.ts");
 const migration = read("supabase/migrations/202605140010_vod_quality_ladder_resolver.sql");
+const trustedRenditionMigration = read("supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql");
 const packageJson = read("package.json");
 const mediaDeliveryResolverProof = read("scripts/proof-media-delivery-resolver.mjs");
 const mediaDeliveryPublicDemoProof = read("scripts/proof-media-delivery-public-demo.mjs");
@@ -80,6 +82,7 @@ const mediaDeliveryHlsDemoProof = read("scripts/proof-media-delivery-hls-demo.mj
 const mediaDeliveryTelemetryProof = read("scripts/proof-media-delivery-telemetry.mjs");
 const mediaTranscodeQueueProof = read("scripts/proof-media-transcode-queue-hls.mjs");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
+const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 
 const sourceCorpus = [
   mediaStorage,
@@ -146,6 +149,8 @@ assertIncludes(architecture, "Proof-only transcode queue resolver proof: only a 
 assertIncludes(architecture, "Proof-only transcode queue telemetry proof: the queue proof builds sanitized HLS `media_delivery_events` shapes with `deliveryFormat=hls`, 360p/480p rendition labels, estimated bytes, observed `cdn_cache_status`, and `proof_mode=true`; no production telemetry writes or table migrations are live.", "proof-only transcode queue telemetry proof");
 assertIncludes(architecture, "Trusted rendition metadata foundation status: `_lib/mediaRenditionMetadata.ts` and `npm run proof:media-rendition-metadata` are source/proof-only.", "trusted rendition metadata foundation status");
 assertIncludes(architecture, "No production `video_renditions` writes, production database migration, backend worker write path, or production playback switch is live.", "trusted rendition metadata production boundary");
+assertIncludes(architecture, "Trusted backend migration path status: `docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md`, draft migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql`, and `npm run proof:media-rendition-migration-policy` design and statically prove the server-owned `media_transcode_jobs` plus `media_renditions` path.", "trusted backend migration path status");
+assertIncludes(architecture, "The draft migration is not applied; production DB writes, production rendition writes, production transcode worker, and production playback remain unchanged.", "trusted backend migration production boundary");
 assertIncludes(architecture, "Trusted City Lights HLS fixture status: the proof fixture models 360p and 480p HLS rows for creator video `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1` using master manifest `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8`.", "trusted City Lights HLS fixture status");
 assertIncludes(architecture, "The resolver proof returns `media.chillywoodstream.com` only when the row is ready, public, clean or approved, moderation-allowed, `bucket_role=public_playback`, `storage_provider=cloudflare_r2`, `delivery_provider=cloudflare_r2_custom_domain`, `is_public_playback_safe=true`, `is_original=false`, under `playback/public/`, and explicitly allowlisted.", "trusted rendition resolver eligibility status");
 assertIncludes(architecture, "Trusted rendition block proof status: `npm run proof:media-rendition-metadata` proves not-ready rows, original/master rows, Premium rows, private rows, unsafe scan states, moderation-blocked states, wrong bucket roles, non-`playback/public/` prefixes, non-allowlisted public-safe rows, and default creator-video source paths all block or fall back without a public CDN URL.", "trusted rendition block proof status");
@@ -159,10 +164,11 @@ assertIncludes(architecture, "Local HLS proof worker `scripts/proof-media-delive
 assertIncludes(architecture, "Proof-only app/player HLS harness proved the allowlisted HLS master URL can be received by the Player source contract, load with duration, report progress, and start playback evidence without switching production playback.", "app/player HLS checkpoint");
 assertIncludes(architecture, "Proof-only transcode queue foundation proved the approved City Lights demo can move through local job states, generate 360p/480p HLS, upload proof outputs under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`, decode through `media.chillywoodstream.com`, resolve only the completed allowlisted HLS master, and prove queue-path segment cache HIT under a narrow proof-only cache rule.", "proof-only transcode queue checkpoint");
 assertIncludes(architecture, "Trusted rendition metadata source/proof foundation models future Cloudflare R2 HLS rows and proves only the City Lights ready public-safe HLS fixture can bridge into the existing resolver allowlist.", "trusted rendition metadata checkpoint");
+assertIncludes(architecture, "Trusted backend migration path is designed and proofed with a draft, unapplied SQL migration for server-owned `media_transcode_jobs` and `media_renditions`; clients cannot write trusted readiness, public-safe, path, worker version, or source hash fields.", "trusted backend migration checkpoint");
 assertIncludes(architecture, "Media bandwidth telemetry backend writes, table migrations, CDN log ingestion, and provider reconciliation remain planned.", "telemetry planned checkpoint");
 assertIncludes(architecture, "Media delivery telemetry source/proof foundation exists for future `media_delivery_events` and `media_playback_sessions`; backend writes and table migrations remain planned.", "telemetry foundation checkpoint");
 assertIncludes(architecture, "Production HLS/transcoding implementation remains planned.", "HLS planned checkpoint");
-assertIncludes(architecture, "Production trusted `video_renditions` or replacement rendition-metadata writes remain planned; the current trusted rendition metadata foundation is source/proof-only.", "trusted rendition production writes planned checkpoint");
+assertIncludes(architecture, "Production trusted `video_renditions` or replacement rendition-metadata writes remain planned; the current trusted rendition metadata foundation and trusted backend migration path are source/proof-only unless the owner explicitly approves applying the draft migration.", "trusted rendition production writes planned checkpoint");
 assertIncludes(architecture, "Cloudflare R2 is the target origin because the owner already has the domain on Cloudflare.", "Cloudflare R2 domain rationale");
 assertIncludes(architecture, "Keep the R2 bucket private by default.", "R2 private bucket policy");
 assertIncludes(architecture, "The planned custom hostname is `media.chillywoodstream.com`.", "Cloudflare custom hostname plan");
@@ -261,6 +267,9 @@ assertIncludes(currentState, "The real demo resolver proof uses `cdnAllowedPubli
 assertIncludes(currentState, "Media delivery telemetry foundation is source/proof-only: `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry` build sanitized `media_delivery_events` and `media_playback_sessions` shapes, estimate bytes, redact proof identifiers and URL-like values, and perform no backend writes or production telemetry table writes.", "current state telemetry foundation");
 assertIncludes(currentState, "Trusted rendition metadata foundation is source/proof-only: `_lib/mediaRenditionMetadata.ts` and `npm run proof:media-rendition-metadata` model future Cloudflare R2 HLS rendition rows, prove the City Lights 360p/480p HLS fixture can resolve only through the explicit `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8` allowlist, and prove not-ready, original/master, Premium/private, unsafe scan/moderation, wrong bucket role, non-public prefix, non-allowlisted, and default creator-video paths block or fall back.", "current state trusted rendition metadata foundation");
 assertIncludes(currentState, "Production `video_renditions` writes, production rendition metadata writes, production transcode service, and production playback switching remain not live.", "current state trusted rendition production boundary");
+assertIncludes(currentState, "Trusted backend migration path is design/proof-only: `docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md`, draft migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql`, and `npm run proof:media-rendition-migration-policy` define server-owned `media_transcode_jobs` plus `media_renditions` for future Cloudflare R2/HLS rows.", "current state trusted backend migration path");
+assertIncludes(currentState, "The draft migration is not applied; no production DB writes, production `video_renditions` writes, production transcode worker, production resolver bridge, or production playback switch is live.", "current state trusted backend migration boundary");
+assertIncludes(currentState, "clients cannot mark rows ready, set `public_playback_path`, set `is_public_playback_safe`, or create trusted CDN eligibility from client-controlled data.", "current state trusted client write boundary");
 assertIncludes(currentState, "Production HLS/transcoding remains not live: there is no production backend transcode queue/service worker, no trusted `video_renditions` rows for the proof HLS assets, and no production playback switch.", "current state production HLS boundary");
 assertIncludes(currentState, "`_lib/mediaDelivery.ts` still stages disabled-by-default Cloudflare R2 custom-domain resolver support", "current state staged resolver support");
 assertIncludes(currentState, "Current VOD production wiring passes `publicPlaybackSafe: false`, so existing creator-video playback still uses signed-origin fallback.", "current state production playback fallback");
@@ -274,6 +283,7 @@ assertIncludes(nextTask, "`npm run proof:media-transcode-queue-hls` proves a sou
 assertIncludes(nextTask, "A third narrow Cloudflare cache rule now applies only to `media.chillywoodstream.com/playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/*.ts`; queue segments returned immutable cache metadata with `cf-cache-status: HIT` after warmup. Queue-path cache behavior is proved only for that proof prefix, and production egress savings are not claimed.", "next task proof-only transcode queue cache boundary");
 assertIncludes(nextTask, "Telemetry foundation exists only as `_lib/mediaDeliveryTelemetry.ts` and `npm run proof:media-delivery-telemetry`; no production telemetry writes, table migrations, billing/payout changes, or playback switches are live.", "next task telemetry foundation");
 assertIncludes(nextTask, "Trusted rendition metadata foundation exists only as `_lib/mediaRenditionMetadata.ts` and `npm run proof:media-rendition-metadata`; City Lights 360p/480p proof fixture rows can resolve the allowlisted HLS master, while not-ready, original/master, Premium/private, unsafe scan/moderation, wrong bucket role, non-public prefix, non-allowlisted, and default creator-video paths block or fall back.", "next task trusted rendition metadata foundation");
+assertIncludes(nextTask, "Trusted backend migration path exists as docs, a draft SQL migration, and `npm run proof:media-rendition-migration-policy` only; draft migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` is not applied, clients cannot write trusted ready/public-safe/path metadata, production DB writes are not live, and production playback remains unchanged.", "next task trusted backend migration path");
 assertIncludes(nextTask, "Production HLS/transcoding is still not live: no production backend transcode queue/service worker, no trusted production `video_renditions` rows for the proof HLS assets, no production rendition metadata writes, and no creator-video playback migration.", "next task production HLS boundary");
 assertIncludes(nextTask, "Current VOD production wiring keeps `publicPlaybackSafe: false`, so existing creator-video playback still falls back to signed origin by default.", "next task production fallback");
 assertIncludes(nextTask, "Do not enable public access on `chillywood-media-proof`.", "private bucket public access prohibition");
@@ -467,6 +477,9 @@ const secretScanCorpus = [
   mediaDeliveryTelemetryProof,
   mediaTranscodeQueueProof,
   mediaRenditionMetadataProof,
+  mediaRenditionMigrationPolicyProof,
+  mediaMigrationPlan,
+  trustedRenditionMigration,
   packageJson,
   sourceCorpus,
 ].join("\n");
@@ -577,6 +590,37 @@ assertIncludes(mediaRenditionMetadata, "non_playback_prefix", "trusted media ren
 assertIncludes(mediaRenditionMetadata, "premium_requires_token_cdn", "trusted media rendition Premium block");
 assertIncludes(mediaRenditionMetadata, "private_requires_token_cdn", "trusted media rendition private block");
 assertNotMatches(mediaRenditionMetadata, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/, "trusted media rendition metadata helper must not perform network or database writes");
+assertIncludes(mediaMigrationPlan, "Status: design/proof only.", "trusted rendition migration plan status");
+assertIncludes(mediaMigrationPlan, "The draft migration has not been applied to production.", "trusted rendition migration plan unapplied status");
+assertIncludes(mediaMigrationPlan, "`service_role` / backend worker is the only intended writer", "trusted rendition migration plan write authority");
+assertIncludes(mediaMigrationPlan, "Public CDN eligibility must never come from app/client input", "trusted rendition migration plan client trust boundary");
+assertIncludes(mediaMigrationPlan, "Clients cannot mark rows ready.", "trusted rendition migration plan ready write block");
+assertIncludes(mediaMigrationPlan, "Clients cannot set `public_playback_path`.", "trusted rendition migration plan public path write block");
+assertIncludes(mediaMigrationPlan, "Clients cannot set `is_public_playback_safe`.", "trusted rendition migration plan public safety write block");
+assertIncludes(mediaMigrationPlan, "A separate `media_renditions` table is safer", "trusted rendition migration plan separate table decision");
+assertIncludes(mediaMigrationPlan, "Owner approval to apply the migration.", "trusted rendition migration plan production activation gate");
+assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_transcode_jobs"', "trusted rendition draft migration jobs table");
+assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_renditions"', "trusted rendition draft migration renditions table");
+assertIncludes(trustedRenditionMigration, 'alter table public."media_transcode_jobs" enable row level security;', "trusted rendition draft migration jobs RLS");
+assertIncludes(trustedRenditionMigration, 'alter table public."media_renditions" enable row level security;', "trusted rendition draft migration renditions RLS");
+assertIncludes(trustedRenditionMigration, 'grant all on table public."media_transcode_jobs" to "service_role";', "trusted rendition draft migration jobs service role grant");
+assertIncludes(trustedRenditionMigration, 'grant all on table public."media_renditions" to "service_role";', "trusted rendition draft migration renditions service role grant");
+assertIncludes(trustedRenditionMigration, "media_transcode_jobs_no_direct_client_insert", "trusted rendition draft migration jobs client insert block");
+assertIncludes(trustedRenditionMigration, "media_transcode_jobs_no_direct_client_update", "trusted rendition draft migration jobs client update block");
+assertIncludes(trustedRenditionMigration, "media_renditions_no_direct_client_insert", "trusted rendition draft migration renditions client insert block");
+assertIncludes(trustedRenditionMigration, "media_renditions_no_direct_client_update", "trusted rendition draft migration renditions client update block");
+assertIncludes(trustedRenditionMigration, 'constraint "media_renditions_original_private_check"', "trusted rendition draft migration original private constraint");
+assertIncludes(trustedRenditionMigration, 'constraint "media_renditions_hd_not_public_free_check"', "trusted rendition draft migration HD public/free constraint");
+assertIncludes(trustedRenditionMigration, 'constraint "media_renditions_ready_requires_worker_proof_check"', "trusted rendition draft migration ready worker proof constraint");
+assertIncludes(trustedRenditionMigration, 'constraint "media_renditions_public_cdn_safety_check"', "trusted rendition draft migration public CDN safety constraint");
+assertIncludes(trustedRenditionMigration, '"is_ready" = true', "trusted rendition draft migration public CDN ready requirement");
+assertIncludes(trustedRenditionMigration, '"is_public_playback_safe" = true', "trusted rendition draft migration public CDN safety requirement");
+assertIncludes(trustedRenditionMigration, '"bucket_role" = \'public_playback\'', "trusted rendition draft migration public bucket role requirement");
+assertIncludes(trustedRenditionMigration, '"scan_status" in (\'clean\', \'approved\')', "trusted rendition draft migration scan-safe requirement");
+assertIncludes(trustedRenditionMigration, '"moderation_status" in (\'clean\', \'approved\', \'allowed\')', "trusted rendition draft migration moderation-safe requirement");
+assertIncludes(trustedRenditionMigration, '"public_playback_path" like \'playback/public/%\'', "trusted rendition draft migration public prefix requirement");
+assertIncludes(trustedRenditionMigration, 'originals?|masters?|sources?|uploads|private|premium|processing|moderation[-_]blocked|unscanned', "trusted rendition draft migration forbidden prefix guard");
+assertNotMatches(trustedRenditionMigration, /\bgrant\s+(insert|update|delete|all)\b[^;]*\bto\s+"?(anon|authenticated)"?/i, "trusted rendition draft migration must not grant client writes");
 assertIncludes(vodQuality, "resolveMediaPlaybackDelivery", "VOD helper uses staged media delivery resolver");
 assertIncludes(vodQuality, "publicPlaybackSafe: false", "production VOD defaults to signed origin fallback");
 assertIncludes(migration, '"quality_label" <> \'original\'', "resolver original exclusion");
@@ -615,6 +659,7 @@ assertIncludes(packageJson, "\"proof:media-delivery-hls-demo\"", "package HLS de
 assertIncludes(packageJson, "\"proof:media-delivery-telemetry\"", "package telemetry proof script");
 assertIncludes(packageJson, "\"proof:media-transcode-queue-hls\"", "package transcode queue HLS proof script");
 assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "package trusted rendition metadata proof script");
+assertIncludes(packageJson, "\"proof:media-rendition-migration-policy\"", "package trusted rendition migration policy proof script");
 assertIncludes(mediaDeliveryResolverProof, "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4", "media delivery resolver proof demo path");
 assertIncludes(mediaDeliveryResolverProof, "playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4", "media delivery resolver proof real demo path");
 assertIncludes(mediaDeliveryResolverProof, "cdnAllowedPublicPlaybackPaths", "media delivery resolver proof real demo allowlist");
@@ -729,6 +774,16 @@ assertIncludes(mediaRenditionMetadataProof, "productionDbWritesEnabled: false", 
 assertIncludes(mediaRenditionMetadataProof, "productionPlaybackSwitched: false", "trusted rendition metadata no production playback switch");
 assertIncludes(mediaRenditionMetadataProof, "productionTranscodeServiceLive: false", "trusted rendition metadata no production transcode claim");
 assertNotMatches(mediaRenditionMetadataProof, /\bsupabase\.from\b|\bcreateClient\b/i, "trusted rendition metadata proof must not write production DB or create a Supabase client");
+assertIncludes(mediaRenditionMigrationPolicyProof, "media-rendition-migration-policy", "trusted rendition migration policy proof mode");
+assertIncludes(mediaRenditionMigrationPolicyProof, "supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql", "trusted rendition migration policy draft path");
+assertIncludes(mediaRenditionMigrationPolicyProof, "clientTrustedWritesAllowed: false", "trusted rendition migration policy client write proof");
+assertIncludes(mediaRenditionMigrationPolicyProof, "serviceRoleWorkerRequired: true", "trusted rendition migration policy service role proof");
+assertIncludes(mediaRenditionMigrationPolicyProof, "publicCdnEligibilityFromTrustedRowsOnly: true", "trusted rendition migration policy trusted rows proof");
+assertIncludes(mediaRenditionMigrationPolicyProof, "originalMasterNormalPlaybackAllowed: false", "trusted rendition migration policy original/master proof");
+assertIncludes(mediaRenditionMigrationPolicyProof, "premiumPrivatePublicCdnWithoutTokenAllowed: false", "trusted rendition migration policy Premium/private proof");
+assertIncludes(mediaRenditionMigrationPolicyProof, "productionMigrationApplied: false", "trusted rendition migration policy no production migration claim");
+assertIncludes(mediaRenditionMigrationPolicyProof, "productionPlaybackSwitched: false", "trusted rendition migration policy no production playback switch");
+assertNotMatches(mediaRenditionMigrationPolicyProof, /\bsupabase\.from\b|\bcreateClient\b/i, "trusted rendition migration policy proof must not write production DB or create a Supabase client");
 
 const loadMediaDeliveryHelper = () => {
   const outDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-delivery-guard-"));
