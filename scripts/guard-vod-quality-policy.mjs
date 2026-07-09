@@ -79,7 +79,7 @@ assertIncludes(vodDoc, "Original/master rows are private processing sources and 
 assertIncludes(vodDoc, "Premium/private rows still require signed/token CDN access later and cannot use public CDN while `MEDIA_CDN_SIGNING_MODE=off`.", "VOD doc Premium/private CDN boundary");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-metadata` uses proof-only City Lights HLS fixture rows for 360p and 480p", "VOD doc trusted fixture proof");
 assertIncludes(vodDoc, "Trusted backend migration path:", "VOD doc trusted backend migration path");
-assertIncludes(vodDoc, "Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` is applied to production as schema only", "VOD doc production schema migration");
+assertIncludes(vodDoc, "Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` is applied to production; it does not switch production playback, backfill media rows, or make a production transcode worker live. The only production rows in the new media worker tables are the first controlled City Lights proof job and two audited HLS renditions.", "VOD doc production schema migration");
 assertIncludes(vodDoc, "service role or backend worker authority the only trusted write path", "VOD doc trusted write authority");
 assertIncludes(vodDoc, "Clients cannot mark rows ready, set `public_playback_path`, set `is_public_playback_safe`, set `worker_version`, set `source_hash`, or create public CDN eligibility from client-controlled data.", "VOD doc client trusted write block");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-migration-policy` statically proves the migration SQL and docs keep client writes blocked", "VOD doc migration policy proof");
@@ -94,15 +94,14 @@ assertIncludes(vodDoc, "Production transcode worker design/local proof exists, b
 assertIncludes(vodDoc, "Backup/PITR gate status is Blocked", "VOD doc backup gate blocked");
 assertIncludes(vodDoc, "`pitr_enabled=false`, `walg_enabled=true`, `backups=[]`, and `physical_backup_data={}`", "VOD doc backup gate readback");
 assertIncludes(vodDoc, "paid PITR variants require explicit owner approval before any provider billing/add-on mutation", "VOD doc PITR billing approval");
-assertIncludes(vodDoc, "PITR or owner-approved backup/restore readiness is required before future production worker writes, production backfill, or worker activation.", "VOD doc PITR worker gate");
-assertIncludes(vodDoc, "Operator control and auditor proofs are source-only. They do not write production rows, do not deploy a worker, and do not switch playback.", "VOD doc operator production boundary");
-assertIncludes(vodDoc, "Production schema readback and rollback-only RLS proof passed on 2026-07-09, final production row counts stayed zero, and production playback remains unchanged.", "VOD doc production schema proof");
-assertIncludes(vodDoc, "Trusted backend migration schema is applied to production as empty schema only.", "VOD doc trusted migration schema-only");
+assertIncludes(vodDoc, "PITR or owner-approved scheduled backup/restore readiness is required before future broad production worker writes, production backfill, or continuous worker activation.", "VOD doc PITR worker gate");
+assertIncludes(vodDoc, "Operator control and auditor proofs are source-backed and were used for one approved production proof. They did not deploy a worker, did not enable continuous mode, and did not switch playback.", "VOD doc operator production boundary");
+assertIncludes(vodDoc, "Trusted backend migration schema is applied to production and contains only the first controlled City Lights proof rows.", "VOD doc trusted migration one-job rows");
 assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded disposable local Postgres runtime, and production rollback-only RLS proof passed with final row counts back to zero.", "VOD doc trusted migration proof checkpoint");
 
-assertIncludes(mediaMigrationPlan, "Status: production schema applied as schema only.", "trusted rendition migration plan status");
+assertIncludes(mediaMigrationPlan, "Status: production schema applied, with one scoped owner-approved proof job.", "trusted rendition migration plan status");
 assertIncludes(mediaMigrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "trusted rendition migration plan production schema status");
-assertIncludes(mediaMigrationPlan, "Production data/write boundary: no production media backfill, real media row insert, production `video_renditions` write, production resolver bridge, production transcode worker, or production playback switch is live.", "trusted rendition migration plan production data boundary");
+assertIncludes(mediaMigrationPlan, "Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, production resolver bridge, deployed production transcode worker, broad queue processor, or production playback switch is live.", "trusted rendition migration plan production data boundary");
 assertIncludes(mediaMigrationPlan, "`service_role` / backend worker is the only intended writer", "trusted rendition migration plan service role writer");
 assertIncludes(mediaMigrationPlan, "Public CDN eligibility must never come from app/client input", "trusted rendition migration plan client trust boundary");
 assertIncludes(mediaMigrationPlan, "Clients cannot mark rows ready.", "trusted rendition migration plan ready write block");
@@ -115,7 +114,7 @@ assertIncludes(mediaMigrationPlan, "Static SQL validation passed.", "trusted ren
 assertIncludes(mediaMigrationPlan, "Runtime dry-run passed in an in-memory disposable local Postgres runtime via `@electric-sql/pglite`.", "trusted rendition migration plan runtime dry-run status");
 assertIncludes(mediaMigrationPlan, "## Worker Runbook And Local Proof Status", "trusted rendition migration plan worker local proof section");
 assertIncludes(mediaMigrationPlan, "`npm run proof:media-transcode-worker-local` is local proof only.", "trusted rendition migration plan local worker proof");
-assertIncludes(mediaTranscodeWorkerRunbook, "Status: design and local proof only.", "media transcode worker runbook status");
+assertIncludes(mediaTranscodeWorkerRunbook, "Status: no production worker is deployed and no queue processor is running.", "media transcode worker runbook status");
 assertIncludes(mediaTranscodeWorkerRunbook, "The worker must never mark `is_ready=true` before source probing, HLS generation, upload-path validation, manifest validation, and resolver eligibility checks pass.", "media transcode worker runbook ready guard");
 
 assertIncludes(trustedRenditionMigration, 'create table if not exists public."media_transcode_jobs"', "trusted rendition draft jobs table");
@@ -224,7 +223,8 @@ assertIncludes(mediaRenditionMigrationPolicyProof, "clientTrustedWritesAllowed: 
 assertIncludes(mediaRenditionMigrationPolicyProof, "serviceRoleWorkerRequired: true", "trusted media rendition migration service role proof");
 assertIncludes(mediaRenditionMigrationPolicyProof, "publicCdnEligibilityFromTrustedRowsOnly: true", "trusted media rendition migration trusted rows proof");
 assertIncludes(mediaRenditionMigrationPolicyProof, "productionSchemaMigrationApplied: true", "trusted media rendition migration production schema apply");
-assertIncludes(mediaRenditionMigrationPolicyProof, "productionMediaRowsWritten: false", "trusted media rendition migration no production media rows");
+assertIncludes(mediaRenditionMigrationPolicyProof, "scopedOneJobRowsWritten: true", "trusted media rendition migration scoped one-job rows");
+assertIncludes(mediaRenditionMigrationPolicyProof, "productionRowsForOtherSourcesWritten: false", "trusted media rendition migration no other-source production rows");
 assertIncludes(mediaRenditionMigrationPolicyProof, "productionBackfillRun: false", "trusted media rendition migration no production backfill");
 assertIncludes(mediaRenditionMigrationPolicyProof, "productionPlaybackSwitched: false", "trusted media rendition migration no production playback switch");
 assertNotMatches(mediaRenditionMigrationPolicyProof, /\bsupabase\.from\b|\bcreateClient\b/i, "trusted rendition migration policy proof must not write production DB or create a Supabase client");

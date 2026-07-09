@@ -1,6 +1,6 @@
 # Media Recovery Operator Runbook
 
-Status: operator/auditor source/proof-only, with a private R2 logical backup proof artifact. The recovery operator/auditor model is local code plus proof scripts. It does not deploy a production worker, does not run a production queue processor, does not write production `media_transcode_jobs` or `media_renditions` rows, and does not switch playback.
+Status: operator/auditor source/proof model with one completed owner-approved production proof job. The recovery operator/auditor model is local code plus proof scripts; it does not deploy a production worker, does not run a production queue processor, and does not switch playback. The first controlled one-job proof wrote exactly one production `media_transcode_jobs` row plus two audited `media_renditions` rows for allowlisted City Lights only.
 
 ## Purpose
 
@@ -45,14 +45,14 @@ Self-auditing reduces blast radius for a single owner-approved job, but it does 
 
 Status: Closed for one-job backup/restore readiness only. Recovery Operator is application-level logical backup, restore drill, audit, and rollback safety. It is not true PostgreSQL PITR and does not store Supabase WAL.
 
-Latest private R2 backup artifact prefix:
+Latest private R2 backup artifact prefix used before the first controlled one-job proof:
 
-- `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-0712c0fbc441/`
+- `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-b81c7b1423c6/`
 
 Backup scope:
 
 - Included: `media_transcode_jobs`, `media_renditions`.
-- Included data: production read-only row counts were `media_transcode_jobs=0` and `media_renditions=0`, so the scoped data artifact is intentionally empty.
+- Included data: the one-job pre-write production row counts were `media_transcode_jobs=0` and `media_renditions=0`, so the scoped data artifact used for the proof was intentionally empty. After the proof, current scoped production row counts are `media_transcode_jobs=1` and `media_renditions=2` for the allowlisted City Lights source only.
 - Excluded: auth user data, creator video rows, profiles, billing, payouts, private media objects, and existing `video_renditions`.
 - Backup type: logical, not PITR.
 - Restore target: disposable DB only.
@@ -72,9 +72,20 @@ Proof result:
 - The disposable PGlite restore verified tables, indexes, RLS enabled flags, row counts, resolver-safe select behavior, and unsafe-row exclusion.
 - `npm run proof:media-worker-rollback-drill` proved a fake batch rollback plan scoped to exact `batch_id` and exact R2 prefix, denied missing batch, denied broad prefixes, denied private/Premium/original paths, preserved unrelated rows, and deleted no real R2 objects.
 
-One-job gate: verified R2 logical backup plus restore and rollback drills closes the backup gate for a future one-job proof only when the owner accepts the risk and operator one-job constraints remain active.
+One-job gate: verified R2 logical backup plus restore and rollback drills closed the gate for the completed City Lights proof because the owner accepted the one-job risk and operator constraints remained active. Any future one-job proof must create or verify a fresh scoped backup before writes.
 
 Continuous gate: still blocked. Continuous automation requires PITR or a proven scheduled backup/restore system; the R2 logical backup layer does not replace PITR for broad production automation.
+
+## Completed One-Job Recovery Proof
+
+- Source: Chi'llywood City Lights, creator video `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`.
+- Job id: `0341d2d1-c02c-4719-91c5-bea9809f4739`.
+- Output prefix: `playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/`.
+- Backup used: `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-b81c7b1423c6/`.
+- Auditor result: passed for exact source, exact row count, public-safe HLS paths, clean/allowed state, non-original rows, no private/Premium paths, and no unexpected ready rows before audit.
+- Rollback result: not executed because audit passed, but a scoped rollback plan was proved for only this job/batch and output prefix; broad, missing, private, Premium, and original/master rollback targets were denied.
+- Final row counts: `media_transcode_jobs=1`, `media_renditions=2`, all for the allowlisted City Lights source.
+- Production playback remains signed-origin fallback by default.
 
 ## Proofs
 

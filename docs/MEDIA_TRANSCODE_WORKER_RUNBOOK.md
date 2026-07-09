@@ -1,6 +1,6 @@
 # Media Transcode Worker Runbook
 
-Status: design and local proof only. The production schema for `media_transcode_jobs` and `media_renditions` is applied, but no production transcode worker is deployed, no production queue processor is running, no production media rows are written, and creator-video playback still falls back to signed origin by default.
+Status: no production worker is deployed and no queue processor is running. The production schema for `media_transcode_jobs` and `media_renditions` is applied, and the first owner-approved one-job proof wrote exactly one City Lights job plus two audited HLS rendition rows. Creator-video playback still falls back to signed origin by default; the proof did not switch production playback.
 
 ## Runtime Choice
 
@@ -92,7 +92,7 @@ Production worker activation requires all of these gates:
 - owner explicitly approves any production writes/backfill
 - installed playback proof passes before any production playback switch
 
-Backup/PITR gate status: Blocked for production worker writes/backfill/activation.
+Backup/PITR gate status: Blocked for broad production worker writes/backfill/continuous activation.
 
 Current backup/PITR readback on 2026-07-09:
 
@@ -103,20 +103,20 @@ Current backup/PITR readback on 2026-07-09:
 - Supabase Management API billing add-on readback returned no selected add-ons and listed paid PITR variants: `pitr_7` with 7-day restore window at `$100/month`, `pitr_14` with 14-day restore window at `$200/month`, and `pitr_28` with 28-day restore window at `$400/month`.
 - Enabling PITR is a provider billing/add-on mutation and requires explicit owner approval before any change.
 
-Classification: Blocked. WAL-G is visible but is not treated as sufficient for broad production media worker writes/backfill because no true PITR restore window or scheduled restore system is verified. Do not enable PITR or any paid backup feature without explicit owner approval. No production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
+Classification: Blocked for continuous automation. WAL-G is visible but is not treated as sufficient for broad production media worker writes/backfill because no true PITR restore window or scheduled restore system is verified. Do not enable PITR or any paid backup feature without explicit owner approval. No broad production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
 
 ## R2 Logical Backup/Restore Gate
 
 R2 logical backup/restore gate status: Closed for one-job proof readiness only. This is an application-level logical backup, restore drill, audit, and rollback layer. It is not true PostgreSQL PITR, it does not store Supabase WAL, and it does not make continuous production automation safe.
 
-Latest successful backup artifact prefix:
+Latest successful backup artifact prefix used before the first controlled one-job proof:
 
-- `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-0712c0fbc441/`
+- `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-b81c7b1423c6/`
 
 Backup scope:
 
 - Included tables: `media_transcode_jobs`, `media_renditions`.
-- Included data: scoped table row counts were read back as `media_transcode_jobs=0` and `media_renditions=0`, so the data artifact is intentionally empty.
+- Included data: scoped table row counts were read back as `media_transcode_jobs=0` and `media_renditions=0` before the one-job write, so the pre-write data artifact is intentionally empty.
 - Included schema: scoped media worker schema generated from applied migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` with disposable-restore fixture metadata.
 - Excluded tables: auth users, creator videos, profiles, billing, payouts, private media objects, and existing `video_renditions`, because the one-job worker proof rollback gate only needs the server-owned media worker tables.
 - Backup type: logical, not PITR.
@@ -145,9 +145,27 @@ Rollback drill proof:
 - Missing batch id, broad `playback/public/` prefix, private paths, Premium rows, and original/master rows are denied.
 - The drill deletes no real R2 objects.
 
-One-job readiness classification: Closed for one-job proof readiness with owner acceptance and existing operator constraints. A future one-job proof must still use disabled-by-default operator mode, exact source allowlist, `max_jobs_per_run=1`, backfill disabled, pending-audit worker rows, auditor pass before resolver trust, auto-disable, quarantine on audit failure, and no production playback switch.
+One-job proof classification: Closed for the first controlled City Lights proof. The run used owner-approved source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`, `max_jobs_per_run=1`, backfill disabled, fresh backup/readback/restore proof, local HLS generation, public worker-proof R2 upload, post-write audit, explicit resolver allowlist proof, scoped rollback proof, auto-disable, and no production playback switch. Any future one-job proof must repeat the gate with a fresh backup check, exact source allowlist, pending-audit worker rows, auditor pass before resolver trust, quarantine on audit failure, and no production playback switch.
 
 Continuous automation readiness classification: Blocked. Continuous production worker writes/backfill still require true PITR or a proven scheduled backup/restore system with owner approval. The R2 logical backup layer does not replace PITR for continuous production.
+
+## First Controlled One-Job Production Proof
+
+Status: Closed for one allowlisted proof job only.
+
+- Source: Chi'llywood City Lights, creator video `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`.
+- Job id: `0341d2d1-c02c-4719-91c5-bea9809f4739`.
+- Output prefix: `playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/`.
+- Public HLS master: `https://media.chillywoodstream.com/playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/master.m3u8`.
+- Generated renditions: 360p and 480p HLS only.
+- R2 upload: 24 public-safe HLS objects uploaded only to `chillywood-media-public-playback-proof` under the output prefix.
+- Cache proof: a Cloudflare cache rule was added only for `media.chillywoodstream.com/playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/*.ts`; a 360p segment returned `MISS` then repeated `HIT` with `Age`.
+- DB write: one `media_transcode_jobs` row and two `media_renditions` rows were written for this source only. No rows were written for any other source.
+- Audit: post-write auditor verified exact row count, source id, rendition labels, public prefix, no forbidden/private prefixes, non-original rows, public visibility, clean scan status, allowed moderation status, public playback bucket role, no unexpected ready rows before audit, and no other-source rows.
+- Resolver proof: the worker-proof master resolves to `media.chillywoodstream.com` only with an explicit proof allowlist; default creator-video playback still falls back to signed origin.
+- Rollback proof: scoped rollback plan targets only this job/batch and exact R2 prefix, preserves unrelated rows, and denies missing batch, broad prefix, private, Premium, and original/master rollback targets.
+- Worker final state: auto-disabled after one-job success. No continuous mode, long-running worker, or production queue processor is active.
+- Production playback: unchanged.
 
 Abort production worker activation if any of these are true:
 

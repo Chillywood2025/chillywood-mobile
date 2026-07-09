@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-09
 
-Status: production schema applied as schema only. Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` was applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`), with tables/indexes/RLS/policies/grants read back afterward. This plan does not switch production playback, does not migrate existing videos, does not backfill media rows, and does not make production transcoding live.
+Status: production schema applied, with one scoped owner-approved proof job. Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` was applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`), with tables/indexes/RLS/policies/grants read back afterward. The first controlled City Lights one-job proof wrote exactly one `media_transcode_jobs` row and two audited `media_renditions` rows. This plan does not switch production playback, does not migrate existing videos broadly, does not backfill media rows, and does not make a production transcode worker live.
 
 ## Current DB Audit
 
@@ -165,9 +165,9 @@ The migration creates:
 
 Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`); tables/indexes/RLS/policies/grants were read back and both `media_transcode_jobs` and `media_renditions` had row count 0 after the rollback-only runtime policy proof.
 
-Production data/write boundary: no production media backfill, real media row insert, production `video_renditions` write, production resolver bridge, production transcode worker, or production playback switch is live.
+Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, production resolver bridge, deployed production transcode worker, broad queue processor, or production playback switch is live.
 
-Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes, allowed service-role/worker proof writes, verified resolver-safe select for one clean public-ready proof row, verified unsafe/original/Premium/private/non-public-prefix rows failed eligibility, and rolled back. Final production row counts remained `media_transcode_jobs=0` and `media_renditions=0`.
+Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes, allowed service-role/worker proof writes, verified resolver-safe select for one clean public-ready proof row, verified unsafe/original/Premium/private/non-public-prefix rows failed eligibility, and rolled back. Final production row counts from that migration proof returned to `media_transcode_jobs=0` and `media_renditions=0`; current production row counts after the later one-job proof are `media_transcode_jobs=1` and `media_renditions=2`, scoped only to City Lights source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`.
 
 ## Dry-Run Status
 
@@ -197,7 +197,7 @@ Runtime dry-run behavior when a safe database is provided:
 - The proof script refuses production-looking URLs and does not print connection strings.
 - For local/shadow runtime mode, the script creates a temporary database, applies minimal fixture schema plus the migration, verifies tables/indexes/RLS/grants/policies, proves anon/authenticated client trusted writes are denied, proves service-role/worker queued job and ready public-safe rendition inserts are allowed, proves unsafe/original/Premium public-CDN rows fail, proves resolver-safe public metadata can be selected, then drops the temporary database.
 
-This dry-run status remains non-production proof. The production schema has now been applied separately as schema only; dry-run proof still does not make production transcoding or production playback live.
+This dry-run status remains non-production proof. The production schema has been applied separately, and the later one-job proof wrote only the scoped City Lights job/rendition rows; dry-run proof still does not make production transcoding or production playback live.
 
 ## Worker Runbook And Local Proof Status
 
@@ -207,11 +207,11 @@ This dry-run status remains non-production proof. The production schema has now 
 
 The local worker proof does not connect to production DB, does not write production rows, does not upload R2 objects, does not deploy a worker, does not run a production queue processor, and does not switch playback.
 
-Operator-controlled worker safety is source/proof-only: `_lib/mediaTranscodeOperator.ts`, `_lib/mediaTranscodeWorkerSafety.ts`, and `_lib/mediaRecoveryOperator.ts` require disabled default mode, emergency-stop precedence, source-bound one-job leases, `max_jobs_per_run=1`, backfill disabled, pending-audit-only worker writes, auditor pass before resolver trust, auto-disable after one-job success/failure, and quarantine on audit failure. `continuous` remains denied while the backup/PITR gate is Blocked or Partial. This safety model reduces one-job blast radius but does not replace PITR or a verified restore path for continuous production.
+Operator-controlled worker safety is source/proofed and was used for the first controlled one-job proof: `_lib/mediaTranscodeOperator.ts`, `_lib/mediaTranscodeWorkerSafety.ts`, and `_lib/mediaRecoveryOperator.ts` require disabled default mode, emergency-stop precedence, source-bound one-job leases, `max_jobs_per_run=1`, backfill disabled, pending-audit-only worker writes, auditor pass before resolver trust, auto-disable after one-job success/failure, and quarantine on audit failure. `continuous` remains denied while the backup/PITR gate is Blocked or Partial. This safety model reduces one-job blast radius but does not replace PITR or a verified restore path for continuous production.
 
-Backup/PITR gate: Blocked for production worker writes/backfill/activation. Production readback on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`, `us-west-2`, `ACTIVE_HEALTHY`) returned `pitr_enabled=false`, `walg_enabled=true`, `backups=[]`, and `physical_backup_data={}`. Management API billing add-on readback returned no selected add-ons and listed PITR as paid available variants `pitr_7` (`$100/month`), `pitr_14` (`$200/month`), and `pitr_28` (`$400/month`). Enabling PITR is a provider billing/add-on mutation and requires explicit owner approval. WAL-G alone is not treated as sufficient for the worker-write/backfill gate without a verified restore window, latest backup metadata, or restore drill. No production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
+Backup/PITR gate: Blocked for broad production worker writes/backfill/continuous activation. Production readback on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`, `us-west-2`, `ACTIVE_HEALTHY`) returned `pitr_enabled=false`, `walg_enabled=true`, `backups=[]`, and `physical_backup_data={}`. Management API billing add-on readback returned no selected add-ons and listed PITR as paid available variants `pitr_7` (`$100/month`), `pitr_14` (`$200/month`), and `pitr_28` (`$400/month`). Enabling PITR is a provider billing/add-on mutation and requires explicit owner approval. WAL-G alone is not treated as sufficient for the broad worker-write/backfill gate without a verified restore window, latest backup metadata, or restore drill. No broad production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
 
-R2 logical backup/restore gate: Closed for one-job proof readiness only. The scoped logical backup includes only `media_transcode_jobs` and `media_renditions`; production row counts were read back as zero for both tables, so the data artifact is intentionally empty. The latest artifacts are stored only in private R2 bucket `chillywood-media-proof` under `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-0712c0fbc441/` and include `manifest.json`, `schema.sql.gz`, `data-media-worker.sql.gz`, and `sha256sums.txt`. `npm run proof:media-recovery-backup-restore` verified private R2 readback checksums, confirmed the public playback bucket and public media domain did not expose the backup, restored into disposable PGlite, and proved resolver-safe selection. `npm run proof:media-worker-rollback-drill` proved exact-batch/exact-prefix rollback and denied missing batch, broad prefix, private, Premium, and original/master rollback targets. This is application-level logical backup and restore proof, not true PostgreSQL PITR and not continuous automation readiness.
+R2 logical backup/restore gate: Closed for the completed one-job proof only. The scoped logical backup includes only `media_transcode_jobs` and `media_renditions`; before the one-job write, production row counts were read back as zero for both tables, so the data artifact was intentionally empty. The latest artifacts used for the proof are stored only in private R2 bucket `chillywood-media-proof` under `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-b81c7b1423c6/` and include `manifest.json`, `schema.sql.gz`, `data-media-worker.sql.gz`, and `sha256sums.txt`. `npm run proof:media-recovery-backup-restore` verified private R2 readback checksums, confirmed the public playback bucket and public media domain did not expose the backup, restored into disposable PGlite, and proved resolver-safe selection. `npm run proof:media-worker-rollback-drill` plus the one-job rollback proof proved exact-batch/exact-prefix rollback and denied missing batch, broad prefix, private, Premium, and original/master rollback targets. This is application-level logical backup and restore proof, not true PostgreSQL PITR and not continuous automation readiness.
 
 ## Backfill Strategy
 
@@ -240,13 +240,13 @@ R2 logical backup/restore gate: Closed for one-job proof readiness only. The sco
 
 ## Production Activation Gates
 
-1. Owner approval to apply the schema migration: complete for schema only.
+1. Owner approval to apply the schema migration: complete.
 2. Migration dry-run and disposable runtime apply: complete.
 3. Production schema readback plus rollback-only RLS/policy proof: complete.
 4. Backend worker runbook and local proof harness: complete for design/local proof only; production worker deployment and staging worker proof remain pending.
 5. Backup/PITR gate: Blocked until PITR or an owner-approved restore path is verified; no worker writes/backfill while this gate remains Blocked or Partial.
-6. One-job logical recovery gate: Closed only for a future owner-accepted one-job proof with exact source allowlist, operator lease, auditor pass, rollback drill, and no playback switch.
-6. Operator-controlled one-job safety: source/proof complete; production use still requires explicit approval and no production rows are written by this proof.
+6. One-job logical recovery gate: Closed for the completed City Lights proof with exact source allowlist, operator lease, auditor pass, rollback drill, and no playback switch.
+6. Operator-controlled one-job safety: source/proof complete and used for one approved scoped production proof; additional production use still requires explicit approval.
 7. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
 8. Resolver migration behind disabled config: pending.
 9. Cache HIT and telemetry proof for the migrated source: pending.

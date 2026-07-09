@@ -53,7 +53,7 @@ for (const needle of requiredReadbackStrings) {
 
 assertIncludes(
   runbook,
-  "Backup/PITR gate status: Blocked for production worker writes/backfill/activation.",
+  "Backup/PITR gate status: Blocked for broad production worker writes/backfill/continuous activation.",
   "worker runbook backup gate classification",
 );
 assertIncludes(
@@ -63,7 +63,7 @@ assertIncludes(
 );
 assertIncludes(
   runbook,
-  "No production worker writes or backfill while the backup/PITR gate is Blocked or Partial.",
+  "No broad production worker writes or backfill while the backup/PITR gate is Blocked or Partial.",
   "worker runbook blocked/partial no-write rule",
 );
 assertIncludes(
@@ -74,12 +74,12 @@ assertIncludes(
 
 assertIncludes(
   migrationPlan,
-  "Backup/PITR gate: Blocked for production worker writes/backfill/activation.",
+  "Backup/PITR gate: Blocked for broad production worker writes/backfill/continuous activation.",
   "migration plan backup gate classification",
 );
 assertIncludes(
   architecture,
-  "Backup/PITR activation gate: Blocked for production worker writes/backfill/activation.",
+  "Backup/PITR activation gate: Blocked for broad production worker writes/backfill/continuous activation.",
   "architecture backup gate classification",
 );
 assertIncludes(
@@ -89,7 +89,7 @@ assertIncludes(
 );
 assertIncludes(
   currentState,
-  "Backup/PITR gate status is Blocked for production worker writes/backfill/activation",
+  "Backup/PITR gate status is still Blocked for broad production worker writes/backfill/continuous activation",
   "current state backup gate classification",
 );
 assertIncludes(
@@ -109,7 +109,7 @@ const mediaBackupGateCorpus = [
 
 assertIncludes(
   mediaBackupGateCorpus,
-  "No production worker writes or backfill while the gate is Blocked or Partial.",
+  "No broad production worker writes or backfill while the gate is Blocked or Partial.",
   "backup gate no-write rule",
 );
 assertIncludes(

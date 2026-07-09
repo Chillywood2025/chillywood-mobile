@@ -132,21 +132,21 @@ for (const indexName of [
   assertIncludes(migration, indexName, `required index ${indexName}`);
 }
 
-assertIncludes(migrationPlan, "Status: production schema applied as schema only.", "migration plan status");
+assertIncludes(migrationPlan, "Status: production schema applied, with one scoped owner-approved proof job.", "migration plan status");
 assertIncludes(migrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "migration plan production schema apply status");
-assertIncludes(migrationPlan, "Production data/write boundary: no production media backfill, real media row insert, production `video_renditions` write, production resolver bridge, production transcode worker, or production playback switch is live.", "migration plan production data boundary");
+assertIncludes(migrationPlan, "Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, production resolver bridge, deployed production transcode worker, broad queue processor, or production playback switch is live.", "migration plan production data boundary");
 assertIncludes(migrationPlan, "Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes", "migration plan rollback-only proof status");
 assertIncludes(migrationPlan, "`service_role` / backend worker is the only intended writer", "migration plan write authority");
 assertIncludes(migrationPlan, "Public CDN eligibility must never come from app/client input", "migration plan client trust boundary");
 assertIncludes(migrationPlan, "Clients cannot mark rows ready.", "migration plan RLS requirements");
 assertIncludes(migrationPlan, "Clients cannot set `public_playback_path`.", "migration plan RLS requirements");
 assertIncludes(migrationPlan, "Clients cannot set `is_public_playback_safe`.", "migration plan RLS requirements");
-assertIncludes(migrationPlan, "Owner approval to apply the schema migration: complete for schema only.", "migration plan activation gate");
+assertIncludes(migrationPlan, "Owner approval to apply the schema migration: complete.", "migration plan activation gate");
 
 assertIncludes(architecture, "Trusted backend migration path status:", "architecture migration status");
 assertIncludes(vodDoc, "Trusted backend migration path:", "VOD migration status");
-assertIncludes(currentState, "Trusted backend migration schema is applied to production as schema only:", "current state migration status");
-assertIncludes(nextTask, "Trusted backend migration schema is applied to production as schema only:", "next task migration status");
+assertIncludes(currentState, "Trusted backend migration schema is applied to production and now contains the first owner-approved one-job proof rows only:", "current state migration status");
+assertIncludes(nextTask, "Trusted backend migration schema is applied to production and now contains only the first controlled one-job proof rows:", "next task migration status");
 
 assertMatches(
   docsCorpus,
@@ -206,7 +206,9 @@ console.log(JSON.stringify({
   proof: "media-rendition-migration-policy",
   migration: migrationPath,
   productionSchemaMigrationApplied: true,
-  productionMediaRowsWritten: false,
+  scopedOneJobRowsWritten: true,
+  productionMediaBackfillRun: false,
+  productionRowsForOtherSourcesWritten: false,
   productionBackfillRun: false,
   productionPlaybackSwitched: false,
   productionTranscodeWorkerLive: false,
