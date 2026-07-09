@@ -103,7 +103,51 @@ Current backup/PITR readback on 2026-07-09:
 - Supabase Management API billing add-on readback returned no selected add-ons and listed paid PITR variants: `pitr_7` with 7-day restore window at `$100/month`, `pitr_14` with 14-day restore window at `$200/month`, and `pitr_28` with 28-day restore window at `$400/month`.
 - Enabling PITR is a provider billing/add-on mutation and requires explicit owner approval before any change.
 
-Classification: Blocked. WAL-G is visible but is not treated as sufficient for production media worker writes/backfill because no restore window, latest backup metadata, or restore drill is verified. Do not enable PITR or any paid backup feature without explicit owner approval. No production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
+Classification: Blocked. WAL-G is visible but is not treated as sufficient for broad production media worker writes/backfill because no true PITR restore window or scheduled restore system is verified. Do not enable PITR or any paid backup feature without explicit owner approval. No production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
+
+## R2 Logical Backup/Restore Gate
+
+R2 logical backup/restore gate status: Closed for one-job proof readiness only. This is an application-level logical backup, restore drill, audit, and rollback layer. It is not true PostgreSQL PITR, it does not store Supabase WAL, and it does not make continuous production automation safe.
+
+Latest successful backup artifact prefix:
+
+- `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-0712c0fbc441/`
+
+Backup scope:
+
+- Included tables: `media_transcode_jobs`, `media_renditions`.
+- Included data: scoped table row counts were read back as `media_transcode_jobs=0` and `media_renditions=0`, so the data artifact is intentionally empty.
+- Included schema: scoped media worker schema generated from applied migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` with disposable-restore fixture metadata.
+- Excluded tables: auth users, creator videos, profiles, billing, payouts, private media objects, and existing `video_renditions`, because the one-job worker proof rollback gate only needs the server-owned media worker tables.
+- Backup type: logical, not PITR.
+- Restore target: disposable PGlite database only.
+
+R2 storage/readback proof:
+
+- Objects were uploaded only to private R2 bucket `chillywood-media-proof` under the backup prefix.
+- Required objects: `manifest.json`, `schema.sql.gz`, `data-media-worker.sql.gz`, and `sha256sums.txt`.
+- `npm run proof:media-recovery-backup-restore` read every object back through authorized Wrangler access and verified matching SHA-256 checksums.
+- `chillywood-media-public-playback-proof` did not contain backup artifacts.
+- `https://media.chillywoodstream.com/backups/media-worker/.../manifest.json` returned `404`, so the public media domain did not expose the backup.
+- The manifest records `logical_backup_not_pitr=true`, `contains_secrets=false`, `public_bucket_used=false`, and `production_rows_written=false`.
+
+Restore drill proof:
+
+- `npm run proof:media-recovery-backup-restore` restored the schema/data artifacts into a disposable PGlite database.
+- The restore verified `media_transcode_jobs` and `media_renditions`, required indexes, RLS enabled flags, expected empty row counts, and a resolver-safe query.
+- Synthetic clean public-ready rows were selected by the resolver-safe query, while synthetic Premium/private/original/unscanned/moderation-blocked/wrong-bucket cases were excluded.
+- No production DB rows were written.
+
+Rollback drill proof:
+
+- `npm run proof:media-worker-rollback-drill` creates a fake worker batch under `playback/public/proof-rollback/chillywood-city-lights/v1-b670602fa00934ca-drill/` in a disposable PGlite database only.
+- The rollback plan targets only the exact `batch_id` and exact R2 prefix, quarantines only scoped rows, revokes resolver trust only for scoped rows, and leaves unrelated rows untouched.
+- Missing batch id, broad `playback/public/` prefix, private paths, Premium rows, and original/master rows are denied.
+- The drill deletes no real R2 objects.
+
+One-job readiness classification: Closed for one-job proof readiness with owner acceptance and existing operator constraints. A future one-job proof must still use disabled-by-default operator mode, exact source allowlist, `max_jobs_per_run=1`, backfill disabled, pending-audit worker rows, auditor pass before resolver trust, auto-disable, quarantine on audit failure, and no production playback switch.
+
+Continuous automation readiness classification: Blocked. Continuous production worker writes/backfill still require true PITR or a proven scheduled backup/restore system with owner approval. The R2 logical backup layer does not replace PITR for continuous production.
 
 Abort production worker activation if any of these are true:
 

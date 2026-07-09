@@ -211,6 +211,8 @@ Operator-controlled worker safety is source/proof-only: `_lib/mediaTranscodeOper
 
 Backup/PITR gate: Blocked for production worker writes/backfill/activation. Production readback on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`, `us-west-2`, `ACTIVE_HEALTHY`) returned `pitr_enabled=false`, `walg_enabled=true`, `backups=[]`, and `physical_backup_data={}`. Management API billing add-on readback returned no selected add-ons and listed PITR as paid available variants `pitr_7` (`$100/month`), `pitr_14` (`$200/month`), and `pitr_28` (`$400/month`). Enabling PITR is a provider billing/add-on mutation and requires explicit owner approval. WAL-G alone is not treated as sufficient for the worker-write/backfill gate without a verified restore window, latest backup metadata, or restore drill. No production worker writes or backfill while the backup/PITR gate is Blocked or Partial.
 
+R2 logical backup/restore gate: Closed for one-job proof readiness only. The scoped logical backup includes only `media_transcode_jobs` and `media_renditions`; production row counts were read back as zero for both tables, so the data artifact is intentionally empty. The latest artifacts are stored only in private R2 bucket `chillywood-media-proof` under `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-0712c0fbc441/` and include `manifest.json`, `schema.sql.gz`, `data-media-worker.sql.gz`, and `sha256sums.txt`. `npm run proof:media-recovery-backup-restore` verified private R2 readback checksums, confirmed the public playback bucket and public media domain did not expose the backup, restored into disposable PGlite, and proved resolver-safe selection. `npm run proof:media-worker-rollback-drill` proved exact-batch/exact-prefix rollback and denied missing batch, broad prefix, private, Premium, and original/master rollback targets. This is application-level logical backup and restore proof, not true PostgreSQL PITR and not continuous automation readiness.
+
 ## Backfill Strategy
 
 1. Do not backfill existing production creator videos automatically.
@@ -243,6 +245,7 @@ Backup/PITR gate: Blocked for production worker writes/backfill/activation. Prod
 3. Production schema readback plus rollback-only RLS/policy proof: complete.
 4. Backend worker runbook and local proof harness: complete for design/local proof only; production worker deployment and staging worker proof remain pending.
 5. Backup/PITR gate: Blocked until PITR or an owner-approved restore path is verified; no worker writes/backfill while this gate remains Blocked or Partial.
+6. One-job logical recovery gate: Closed only for a future owner-accepted one-job proof with exact source allowlist, operator lease, auditor pass, rollback drill, and no playback switch.
 6. Operator-controlled one-job safety: source/proof complete; production use still requires explicit approval and no production rows are written by this proof.
 7. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
 8. Resolver migration behind disabled config: pending.
