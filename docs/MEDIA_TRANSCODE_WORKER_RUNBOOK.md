@@ -151,7 +151,7 @@ Continuous automation readiness classification: Blocked. Continuous production w
 
 ## Scheduled R2 Logical Backup Gate
 
-Status: manual logical backup runner implemented, scheduler not deployed. `scripts/run-media-worker-logical-backup.mjs` is disabled/dry-run by default and can write/upload only when manually invoked with `MEDIA_BACKUP_RUNNER_ENABLED=true`, `MEDIA_BACKUP_MODE=write`, a scoped backup database URL, a private R2 backup bucket, and `MEDIA_BACKUP_R2_PREFIX=backups/media-worker/`. No cron schedule is configured, no continuous worker is enabled, no queue processor is running, no additional production media has been processed, and production playback remains unchanged.
+Status: manual logical backup runner implemented, scheduler not deployed. `scripts/run-media-worker-logical-backup.mjs` is disabled/dry-run by default and can write/upload only when manually invoked with `MEDIA_BACKUP_RUNNER_ENABLED=true`, `MEDIA_BACKUP_MODE=write`, a scoped backup database URL, a private R2 backup bucket, and `MEDIA_BACKUP_R2_PREFIX=backups/media-worker/`. `MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports both the existing dump-tool path and a Node JS SELECT export fallback; when `pg_dump`/`psql` are missing, `auto` resolves to JS and emits `schema.sql.gz` plus `data-media-worker.jsonl.gz`. No cron schedule is configured, no continuous worker is enabled, no queue processor is running, no additional production media has been processed, and production playback remains unchanged. First real manual backup remains pending until required private write-mode env is present.
 
 Scheduled backup policy for future limited automation:
 
@@ -183,6 +183,7 @@ Scheduled backup policy for future limited automation:
 
 - `backup:media-worker:dry-run` creates a redacted dry-run plan without production DB credentials and attempts no upload
 - write mode fails closed when required env is missing
+- JS export mode works without `pg_dump`/`psql`, uses SELECT-only reads for `media_transcode_jobs` and `media_renditions`, and emits a JSONL data artifact
 - public playback bucket targets, `media.chillywoodstream.com`, and non-`backups/media-worker/` prefixes are denied before any DB access
 - backup scope is limited to `media_transcode_jobs` and `media_renditions`; auth, billing, payouts, private media, creator originals, and signed URLs are excluded
 - manifest shape and checksum generation are validated
