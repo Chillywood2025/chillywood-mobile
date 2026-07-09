@@ -52,6 +52,8 @@ const mediaScheduledBackupGateProof = read("scripts/proof-media-scheduled-backup
 const mediaWorkerBackupRunner = read("scripts/run-media-worker-logical-backup.mjs");
 const mediaWorkerBackupCli = read("scripts/media-worker-backup-cli.mjs");
 const mediaWorkerBackupRunnerProof = read("scripts/proof-media-worker-backup-runner.mjs");
+const mediaTranscodeWorkerCli = read("scripts/media-transcode-worker-cli.mjs");
+const mediaTranscodeWorkerCliProof = read("scripts/proof-media-transcode-worker-cli.mjs");
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "performance policy");
@@ -213,6 +215,14 @@ assertIncludes(packageJson, "\"proof:media-scheduled-backup-gate\"", "scheduled 
 assertIncludes(packageJson, "\"backup:media-worker:dry-run\"", "media worker backup dry-run script");
 assertIncludes(packageJson, "\"backup:media-worker:run\"", "media worker backup run script");
 assertIncludes(packageJson, "\"proof:media-worker-backup-runner\"", "media worker backup runner proof script");
+assertIncludes(packageJson, "\"media-worker:preflight\"", "media worker CLI preflight script");
+assertIncludes(packageJson, "\"media-worker:dry-run\"", "media worker CLI dry-run script");
+assertIncludes(packageJson, "\"media-worker:status\"", "media worker CLI status script");
+assertIncludes(packageJson, "\"media-worker:run-one\"", "media worker CLI run-one script");
+assertIncludes(packageJson, "\"media-worker:audit\"", "media worker CLI audit script");
+assertIncludes(packageJson, "\"media-worker:verify-output\"", "media worker CLI verify-output script");
+assertIncludes(packageJson, "\"media-worker:rollback-plan\"", "media worker CLI rollback-plan script");
+assertIncludes(packageJson, "\"proof:media-transcode-worker-cli\"", "media worker CLI proof script");
 assertIncludes(mediaTranscodeOperatorProof, "defaultDisabled", "operator proof default disabled");
 assertIncludes(mediaTranscodeOperatorProof, "continuousModeBlockedByBackupGate", "operator proof continuous backup gate");
 assertIncludes(mediaTranscodeOperatorProof, "workerSelfEnableDenied", "operator proof worker self-enable denied");
@@ -254,6 +264,20 @@ assertIncludes(mediaWorkerBackupCli, "downloadLatestBackup", "backup CLI private
 assertIncludes(mediaWorkerBackupCli, "restoreIntoPglite", "backup CLI PGlite restore");
 assertIncludes(mediaWorkerBackupCli, "publicPlaybackBucketContainsBackup", "backup CLI public bucket proof");
 assertIncludes(mediaWorkerBackupCli, "mediaDomainHttpStatus", "backup CLI public domain proof");
+assertIncludes(mediaTranscodeWorkerCli, "MEDIA_WORKER_RUN_ONE_CONFIRM", "worker CLI run-one confirmation gate");
+assertIncludes(mediaTranscodeWorkerCli, "I_UNDERSTAND_ONE_JOB", "worker CLI run-one confirmation value");
+assertIncludes(mediaTranscodeWorkerCli, "allowedSourceIds", "worker CLI source allowlist");
+assertIncludes(mediaTranscodeWorkerCli, "max_jobs_must_be_one", "worker CLI max jobs guard");
+assertIncludes(mediaTranscodeWorkerCli, "backfill_disabled_required", "worker CLI backfill guard");
+assertIncludes(mediaTranscodeWorkerCli, "run_one_execution_not_implemented_in_cli_infrastructure_build", "worker CLI infrastructure-only run-one");
+assertIncludes(mediaTranscodeWorkerCli, "productionPlaybackSwitched: false", "worker CLI no playback switch");
+assertIncludes(mediaTranscodeWorkerCli, "writesAttempted: false", "worker CLI dry-run no writes");
+assertIncludes(mediaTranscodeWorkerCli, "playback/public/worker-proof/chillywood-city-lights/", "worker CLI scoped public proof prefix");
+assertIncludes(mediaTranscodeWorkerCliProof, "defaultRunOneDenied", "worker CLI proof default run-one denial");
+assertIncludes(mediaTranscodeWorkerCliProof, "dryRunDoesNoWrites", "worker CLI proof dry-run no writes");
+assertIncludes(mediaTranscodeWorkerCliProof, "runOneRequiresConfirmation", "worker CLI proof confirmation required");
+assertIncludes(mediaTranscodeWorkerCliProof, "rollbackPlanScoped", "worker CLI proof scoped rollback");
+assertIncludes(mediaTranscodeWorkerCliProof, "productionDbWritesEnabled: false", "worker CLI proof no production DB writes");
 assertIncludes(mediaWorkerBackupRunnerProof, "missingEnvFailClosed", "backup runner proof missing-env fail-closed");
 assertIncludes(mediaWorkerBackupRunnerProof, "linkedSourceDoesNotRequireRawDbUrl", "backup runner proof linked source no raw DB URL");
 assertIncludes(mediaWorkerBackupRunnerProof, "publicBucketTargetDenied", "backup runner proof public bucket denial");

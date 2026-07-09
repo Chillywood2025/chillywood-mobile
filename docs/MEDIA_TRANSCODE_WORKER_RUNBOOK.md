@@ -202,6 +202,22 @@ Scheduled backup policy for future limited automation:
 
 No GitHub Actions cron is added. A future workflow must be `workflow_dispatch` only by default, require private backup secrets, and require explicit owner approval before any schedule is added.
 
+## CLI-Only One-Job Worker Controls
+
+Status: CLI command infrastructure exists and is proofed, but no new production media job was processed by this lane. The worker remains CLI-only, with no daemon, no cron, no scheduler, no deployed queue processor, no broad backfill, and no production playback switch.
+
+Package commands:
+
+- `npm run media-worker:preflight` checks the latest private R2 backup gate, linked Supabase project identity, scoped media-worker row counts, `max_jobs_per_run=1`, backfill disabled, source allowlist requirement, no active unfinished jobs, no media-worker cron/scheduler, public/private bucket safety, and unchanged production playback.
+- `npm run media-worker:status` reports `media_transcode_jobs`, `media_renditions`, active unfinished jobs, unsafe CDN rows, other-source rendition count, latest backup gate, and disabled worker state without printing secrets.
+- `npm run media-worker:dry-run -- --source-id=<allowlisted-source>` builds a one-job plan, expected output prefix, expected job/rendition rows, audit batch, and rollback plan. It writes no DB rows and uploads no media.
+- `npm run media-worker:run-one -- --source-id=<allowlisted-source>` is infrastructure only until a future owner-approved run. It fails closed unless the source is allowlisted, `max_jobs=1`, backfill is disabled, the backup gate is closed, dry-run has passed, and `MEDIA_WORKER_RUN_ONE_CONFIRM=I_UNDERSTAND_ONE_JOB` is present. In this task it still does not execute production writes.
+- `npm run media-worker:audit -- --source-id=<source-id> --batch-id=<batch-id>` scopes audit to that exact source and batch. It can perform read-only scoped checks, but it does not mark rows ready.
+- `npm run media-worker:verify-output -- --source-id=<source-id> --output-prefix=<exact-prefix>` verifies only the exact worker-proof HLS prefix and denies broad, private, original, Premium, processing, moderation-blocked, or unscanned paths.
+- `npm run media-worker:rollback-plan -- --source-id=<source-id> --batch-id=<batch-id> --output-prefix=<exact-prefix>` creates a scoped rollback plan only. It does not delete R2 objects or mutate DB rows.
+
+`npm run proof:media-transcode-worker-cli` proves default `run-one` denial, missing-source denial, non-allowlisted source denial, `max_jobs > 1` denial, backfill denial, stale backup gate denial, dry-run no-write behavior, explicit run-one confirmation requirement, one-job-only planning, audit scope requirements, exact-prefix output verification, scoped rollback planning, broad-prefix denial, private-path denial, public/private bucket safety, no production playback switch, no worker deployment, no queue processor, and no secrets in proof output.
+
 ## First Controlled One-Job Production Proof
 
 Status: Closed for one allowlisted proof job only.

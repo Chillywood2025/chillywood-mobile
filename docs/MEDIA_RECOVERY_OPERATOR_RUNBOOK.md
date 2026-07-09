@@ -89,6 +89,22 @@ CLI operation commands:
 - `npm run backup:media-worker:dry-run` remains the no-upload planning path.
 - `npm run backup:media-worker:run` remains manual write/upload mode only; it does not run a worker or write media worker DB rows.
 
+## CLI-Only One-Job Worker Operations
+
+Status: `scripts/media-transcode-worker-cli.mjs` provides CLI-only one-job worker operation commands for future controlled proofs. This task added command infrastructure and proof coverage only; it did not process another production media job, deploy a worker service, add cron, add a scheduler, write production rows, or switch playback.
+
+Commands:
+
+- `npm run media-worker:preflight` verifies the latest private R2 backup gate, restore-drill availability, linked project identity, source allowlist requirement, `max_jobs_per_run=1`, backfill disabled, no active unfinished jobs, public/private bucket safety, and unchanged playback.
+- `npm run media-worker:dry-run -- --source-id=<allowlisted-source>` builds a one-job lease plan, expected job/rendition rows, expected output prefix, audit batch, and rollback plan without DB writes or uploads.
+- `npm run media-worker:status` reads scoped row counts and reports disabled worker state without secrets.
+- `npm run media-worker:run-one` fails closed unless a future approved run supplies the explicit source id, allowlist, closed backup gate, one-job max, backfill disabled, and `MEDIA_WORKER_RUN_ONE_CONFIRM=I_UNDERSTAND_ONE_JOB`. The current implementation remains infrastructure-only and does not write production rows in this task.
+- `npm run media-worker:audit` requires `source_id` plus `batch_id` and audits only that scoped batch/source.
+- `npm run media-worker:verify-output` requires an exact `playback/public/worker-proof/chillywood-city-lights/<batch>/` output prefix and denies broad or forbidden paths.
+- `npm run media-worker:rollback-plan` requires source, batch, and exact output prefix, then creates a plan-only rollback scoped to those values. Broad prefixes, private paths, Premium paths, and original/master paths are denied.
+
+`npm run proof:media-transcode-worker-cli` proves the command surface remains safe by default: run-one is denied by default, source and allowlist are required, `max_jobs > 1` and backfill are denied, stale backup gate is denied, dry-run does no writes, run-one requires explicit confirmation, audit requires exact scope, rollback is exact-prefix only, broad/private paths are denied, production playback is not switched, and no secrets are printed.
+
 Scheduled media-worker logical backups are the lower-cost recovery layer for future limited automation if the owner accepts the risk. They are not true PostgreSQL PITR and do not store Supabase WAL.
 
 Policy:

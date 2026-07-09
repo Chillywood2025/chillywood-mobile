@@ -94,6 +94,8 @@ const mediaScheduledBackupGateProof = read("scripts/proof-media-scheduled-backup
 const mediaWorkerBackupRunner = read("scripts/run-media-worker-logical-backup.mjs");
 const mediaWorkerBackupCli = read("scripts/media-worker-backup-cli.mjs");
 const mediaWorkerBackupRunnerProof = read("scripts/proof-media-worker-backup-runner.mjs");
+const mediaTranscodeWorkerCli = read("scripts/media-transcode-worker-cli.mjs");
+const mediaTranscodeWorkerCliProof = read("scripts/proof-media-transcode-worker-cli.mjs");
 const mediaRecoveryBackupRestoreProof = read("scripts/proof-media-recovery-backup-restore.mjs");
 const mediaWorkerRollbackDrillProof = read("scripts/proof-media-worker-rollback-drill.mjs");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
@@ -109,6 +111,7 @@ const sourceCorpus = [
   mediaTranscodeWorkerSafety,
   mediaRecoveryOperator,
   mediaRenditionMetadata,
+  mediaTranscodeWorkerCli,
   mediaStorageFunction,
   creatorVideos,
   vodQuality,
@@ -1023,6 +1026,12 @@ assertIncludes(architecture, "First manual backup completed on 2026-07-09 at pri
 assertIncludes(architecture, "`npm run proof:media-worker-backup-runner` proves dry-run behavior, missing-env fail-closed behavior, linked-source no-raw-DB-URL behavior, public bucket/domain denial, manifest/checksum generation, JS JSONL restore into disposable PGlite, and resolver-safe query.", "architecture backup runner proof");
 assertIncludes(architecture, "No cron schedule, GitHub Actions schedule, production worker, queue processor, additional production media processing, or production playback switch is enabled.", "architecture scheduled backup safety boundary");
 assertIncludes(architecture, "R2 scheduled logical backup is not PITR.", "architecture scheduled backup not PITR");
+assertIncludes(architecture, "CLI-only one-job media worker command status:", "architecture CLI-only worker command status");
+assertIncludes(architecture, "`scripts/media-transcode-worker-cli.mjs` and `npm run proof:media-transcode-worker-cli` provide source/proof infrastructure", "architecture worker CLI proof status");
+assertIncludes(architecture, "`media-worker:preflight`, `media-worker:dry-run`, `media-worker:status`, `media-worker:run-one`, `media-worker:audit`, `media-worker:verify-output`, and `media-worker:rollback-plan`", "architecture worker CLI command list");
+assertIncludes(architecture, "`run-one` is fail-closed by default", "architecture worker run-one fail closed");
+assertIncludes(architecture, "`MEDIA_WORKER_RUN_ONE_CONFIRM=I_UNDERSTAND_ONE_JOB`", "architecture worker run-one confirmation");
+assertIncludes(architecture, "this task did not process another production job, deploy a worker service, add cron, add a scheduler, write production rows, or switch playback.", "architecture worker CLI no production mutation");
 assertIncludes(currentState, "R2-backed logical backup/restore readiness is Closed for this one-job proof lane only, not continuous production automation.", "current state one-job logical backup gate");
 assertIncludes(currentState, "Scheduled R2 logical backup/restore gate now has a real manual runner and the first real manual production logical backup is complete", "current state scheduled backup gate");
 assertIncludes(currentState, "CLI operation is the only backup operation path; no GitHub Actions media-worker backup workflow, cron schedule, deployed scheduler, production worker, queue processor, or playback switch exists.", "current state CLI-only backup statement");
@@ -1030,6 +1039,10 @@ assertIncludes(currentState, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` support
 assertIncludes(currentState, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` lets the runner use Supabase CLI linked read-only queries instead of requiring or printing a raw DB URL.", "current state linked DB source");
 assertIncludes(currentState, "backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/", "current state completed real backup prefix");
 assertIncludes(currentState, "No cron schedule, GitHub Actions schedule, production worker, queue processor, additional production media processing, PITR/billing change, or production playback switch happened.", "current state scheduled backup safety boundary");
+assertIncludes(currentState, "CLI-only one-job media worker controls are now source/proof infrastructure only", "current state worker CLI status");
+assertIncludes(currentState, "`media-worker:preflight`, `media-worker:dry-run`, `media-worker:status`, `media-worker:run-one`, `media-worker:audit`, `media-worker:verify-output`, and `media-worker:rollback-plan`", "current state worker CLI command list");
+assertIncludes(currentState, "`npm run proof:media-transcode-worker-cli` proves default run-one denial", "current state worker CLI proof");
+assertIncludes(currentState, "This task did not process another production media job; run-one remains infrastructure-only until a future explicit owner-approved run.", "current state worker CLI production boundary");
 assertIncludes(nextTask, "R2-backed logical backup/restore readiness is closed for one-job proof only", "next task one-job logical backup gate");
 assertIncludes(nextTask, "Scheduled R2 logical backup/restore gate now has a real manual runner and the first real manual production logical backup is complete", "next task scheduled backup gate");
 assertIncludes(nextTask, "CLI operation is the only backup operation path; no GitHub Actions media-worker backup workflow, cron schedule, deployed scheduler, production worker, queue processor, or playback switch exists.", "next task CLI-only backup statement");
@@ -1037,6 +1050,9 @@ assertIncludes(nextTask, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports JS
 assertIncludes(nextTask, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw DB URL.", "next task linked DB source");
 assertIncludes(nextTask, "backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/", "next task completed real backup prefix");
 assertIncludes(nextTask, "No cron schedule, GitHub Actions schedule, production worker, queue processor, PITR/billing change, additional production media processing, or production playback switch happened.", "next task scheduled backup safety boundary");
+assertIncludes(nextTask, "CLI-only one-job media transcode worker commands exist as command/proof infrastructure only", "next task worker CLI status");
+assertIncludes(nextTask, "`npm run proof:media-transcode-worker-cli` proves default run-one denial", "next task worker CLI proof");
+assertIncludes(nextTask, "This task did not process another production job; `run-one` remains infrastructure-only until a future explicit owner-approved run.", "next task worker CLI production boundary");
 assertIncludes(architecture, "Operator-controlled worker safety status:", "architecture operator control status");
 assertIncludes(architecture, "Auditor/resolver trust status:", "architecture auditor trust status");
 assertIncludes(currentState, "Operator-controlled media transcode safety is source/proof-only", "current state operator control status");
@@ -1052,6 +1068,14 @@ assertIncludes(packageJson, "\"backup:media-worker:preflight\"", "package media 
 assertIncludes(packageJson, "\"backup:media-worker:status\"", "package media worker backup status script");
 assertIncludes(packageJson, "\"backup:media-worker:verify-latest\"", "package media worker backup verify latest script");
 assertIncludes(packageJson, "\"backup:media-worker:restore-drill\"", "package media worker backup restore drill script");
+assertIncludes(packageJson, "\"media-worker:preflight\"", "package media worker preflight script");
+assertIncludes(packageJson, "\"media-worker:dry-run\"", "package media worker dry-run script");
+assertIncludes(packageJson, "\"media-worker:status\"", "package media worker status script");
+assertIncludes(packageJson, "\"media-worker:run-one\"", "package media worker run-one script");
+assertIncludes(packageJson, "\"media-worker:audit\"", "package media worker audit script");
+assertIncludes(packageJson, "\"media-worker:verify-output\"", "package media worker verify output script");
+assertIncludes(packageJson, "\"media-worker:rollback-plan\"", "package media worker rollback plan script");
+assertIncludes(packageJson, "\"proof:media-transcode-worker-cli\"", "package media transcode worker CLI proof script");
 assertIncludes(packageJson, "\"proof:media-worker-backup-runner\"", "package media worker backup runner proof script");
 assertIncludes(mediaRecoveryOperator, "MediaBackupSchedulePolicy", "media recovery operator scheduled backup policy type");
 assertIncludes(mediaRecoveryOperator, "MediaBackupFreshnessResult", "media recovery operator backup freshness type");
@@ -1155,6 +1179,43 @@ assertIncludes(mediaWorkerBackupCli, "continuousAutomationEnabled: false", "back
 assertIncludes(mediaWorkerBackupCli, "cronOrSchedulerAdded: false", "backup CLI no cron scheduler");
 assertIncludes(mediaWorkerBackupCli, "mediaWorkerGitHubWorkflowExists", "backup CLI workflow status");
 assertIncludes(mediaWorkerBackupCli, "secret_like_value_refused", "backup CLI secret guard");
+assertIncludes(mediaTranscodeWorkerCli, "validModes = [", "worker CLI mode contract");
+assertIncludes(mediaTranscodeWorkerCli, "\"preflight\"", "worker CLI preflight mode");
+assertIncludes(mediaTranscodeWorkerCli, "\"dry-run\"", "worker CLI dry-run mode");
+assertIncludes(mediaTranscodeWorkerCli, "\"status\"", "worker CLI status mode");
+assertIncludes(mediaTranscodeWorkerCli, "\"run-one\"", "worker CLI run-one mode");
+assertIncludes(mediaTranscodeWorkerCli, "\"audit\"", "worker CLI audit mode");
+assertIncludes(mediaTranscodeWorkerCli, "\"verify-output\"", "worker CLI verify-output mode");
+assertIncludes(mediaTranscodeWorkerCli, "\"rollback-plan\"", "worker CLI rollback-plan mode");
+assertIncludes(mediaTranscodeWorkerCli, "allowedSourceIds", "worker CLI source allowlist");
+assertIncludes(mediaTranscodeWorkerCli, "MEDIA_WORKER_RUN_ONE_CONFIRM", "worker CLI run-one confirmation env");
+assertIncludes(mediaTranscodeWorkerCli, "I_UNDERSTAND_ONE_JOB", "worker CLI run-one confirmation value");
+assertIncludes(mediaTranscodeWorkerCli, "max_jobs_must_be_one", "worker CLI max jobs guard");
+assertIncludes(mediaTranscodeWorkerCli, "backfill_disabled_required", "worker CLI backfill guard");
+assertIncludes(mediaTranscodeWorkerCli, "backup_gate_not_closed", "worker CLI backup gate guard");
+assertIncludes(mediaTranscodeWorkerCli, "run_one_confirmation_missing", "worker CLI missing confirmation guard");
+assertIncludes(mediaTranscodeWorkerCli, "run_one_execution_not_implemented_in_cli_infrastructure_build", "worker CLI run-one infrastructure-only guard");
+assertIncludes(mediaTranscodeWorkerCli, "unsafe_output_prefix_refused", "worker CLI unsafe prefix guard");
+assertIncludes(mediaTranscodeWorkerCli, "playback/public/worker-proof/chillywood-city-lights/", "worker CLI exact public proof prefix");
+assertIncludes(mediaTranscodeWorkerCli, "forbiddenPublicSegments", "worker CLI forbidden path segments");
+assertIncludes(mediaTranscodeWorkerCli, "writesAttempted: false", "worker CLI no writes in dry-run");
+assertIncludes(mediaTranscodeWorkerCli, "mediaUploaded: false", "worker CLI no upload in dry-run");
+assertIncludes(mediaTranscodeWorkerCli, "queueProcessorRun: false", "worker CLI no queue processor");
+assertIncludes(mediaTranscodeWorkerCli, "continuousAutomationEnabled: false", "worker CLI no continuous automation");
+assertIncludes(mediaTranscodeWorkerCli, "productionWorkerDeployed: false", "worker CLI no deployed worker");
+assertIncludes(mediaTranscodeWorkerCli, "productionPlaybackSwitched: false", "worker CLI no playback switch");
+assertIncludes(mediaTranscodeWorkerCliProof, "defaultRunOneDenied", "worker CLI proof default run-one denial");
+assertIncludes(mediaTranscodeWorkerCliProof, "nonAllowlistedSourceDenied", "worker CLI proof non-allowlisted source denial");
+assertIncludes(mediaTranscodeWorkerCliProof, "maxJobsGreaterThanOneDenied", "worker CLI proof max jobs denial");
+assertIncludes(mediaTranscodeWorkerCliProof, "backfillDenied", "worker CLI proof backfill denial");
+assertIncludes(mediaTranscodeWorkerCliProof, "missingOrStaleBackupDenied", "worker CLI proof backup gate denial");
+assertIncludes(mediaTranscodeWorkerCliProof, "dryRunDoesNoWrites", "worker CLI proof dry-run no writes");
+assertIncludes(mediaTranscodeWorkerCliProof, "runOneRequiresConfirmation", "worker CLI proof confirmation required");
+assertIncludes(mediaTranscodeWorkerCliProof, "runOneInfrastructureOnlyNoProductionWrite", "worker CLI proof infrastructure-only run-one");
+assertIncludes(mediaTranscodeWorkerCliProof, "rollbackPlanScoped", "worker CLI proof scoped rollback");
+assertIncludes(mediaTranscodeWorkerCliProof, "broadPrefixRollbackDenied", "worker CLI proof broad prefix denial");
+assertIncludes(mediaTranscodeWorkerCliProof, "publicPrivateBucketSafetyEnforced", "worker CLI proof private path denial");
+assertIncludes(mediaTranscodeWorkerCliProof, "productionDbWritesEnabled: false", "worker CLI proof no production DB writes");
 assertIncludes(mediaWorkerBackupRunnerProof, "media-worker-backup-runner", "backup runner proof mode");
 assertIncludes(mediaWorkerBackupRunnerProof, "dryRunPassed", "backup runner proof dry-run");
 assertIncludes(mediaWorkerBackupRunnerProof, "missingEnvFailClosed", "backup runner proof missing-env fail closed");
