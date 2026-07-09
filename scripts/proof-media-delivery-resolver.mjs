@@ -13,12 +13,18 @@ const publicProofPath = "playback/public/proof/hello.txt";
 const publicProofUrl = "https://media.chillywoodstream.com/playback/public/proof/hello.txt";
 const demoProofPath = "playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4";
 const demoProofUrl = "https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4";
+const realDemoPath = "playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4";
+const realDemoUrl = "https://media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4";
 const publicConfig = {
   deliveryProvider: "cloudflare_r2_custom_domain",
   cdnBaseUrl: "https://media.chillywoodstream.com",
   cdnSigningMode: "off",
   cdnPublicPlaybackPrefix: "playback/public/",
   cdnPrivatePlaybackDisabled: true,
+};
+const realDemoAllowlistConfig = {
+  ...publicConfig,
+  cdnAllowedPublicPlaybackPaths: [realDemoPath],
 };
 
 const failures = [];
@@ -126,6 +132,36 @@ try {
   requireProof(safeDemoProof.provider === "cloudflare_r2_custom_domain", "safe demo proof video should use Cloudflare R2 custom-domain provider");
   requireProof(safeDemoProof.cdnEligible === true, "safe demo proof video should be CDN eligible");
   requireProof(safeDemoProof.fallbackUsed === false, "safe demo proof video should not use fallback");
+
+  const realDemoProof = await helper.resolveMediaPlaybackDelivery({
+    asset: {
+      path: realDemoPath,
+      publicPlaybackSafe: true,
+      accessTier: "free",
+      scanStatus: "clean",
+      moderationStatus: "clean",
+    },
+    config: realDemoAllowlistConfig,
+    fallbackUrl,
+  });
+  requireProof(realDemoProof.url === realDemoUrl, "real City Lights demo should resolve to media.chillywoodstream.com only under the explicit allowlist config");
+  requireProof(realDemoProof.provider === "cloudflare_r2_custom_domain", "real City Lights demo should use Cloudflare R2 custom-domain provider");
+  requireProof(realDemoProof.cdnEligible === true, "real City Lights demo should be CDN eligible under its explicit allowlist");
+  requireProof(realDemoProof.fallbackUsed === false, "real City Lights demo should not use fallback under its explicit allowlist");
+
+  const nonAllowlistedPublic = await helper.resolveMediaPlaybackDelivery({
+    asset: {
+      path: demoProofPath,
+      publicPlaybackSafe: true,
+      accessTier: "free",
+      scanStatus: "clean",
+      moderationStatus: "clean",
+    },
+    config: realDemoAllowlistConfig,
+    fallbackUrl,
+  });
+  requireProof(nonAllowlistedPublic.url === fallbackUrl, "public-safe path outside the real demo allowlist should keep fallback");
+  requireProof(nonAllowlistedPublic.blockedReason === "not_in_public_playback_allowlist", "public-safe path outside the real demo allowlist should report allowlist block");
 
   const defaultCreatorVideo = await helper.resolveMediaPlaybackDelivery({
     asset: {
@@ -254,6 +290,20 @@ try {
       fallbackUsed: safeDemoProof.fallbackUsed,
       publicPlaybackSafe: safeDemoProof.publicPlaybackSafe,
       url: safeDemoProof.url,
+    },
+    realDemoProof: {
+      provider: realDemoProof.provider,
+      cdnEligible: realDemoProof.cdnEligible,
+      fallbackUsed: realDemoProof.fallbackUsed,
+      publicPlaybackSafe: realDemoProof.publicPlaybackSafe,
+      url: realDemoProof.url,
+    },
+    nonAllowlistedPublic: {
+      provider: nonAllowlistedPublic.provider,
+      cdnEligible: nonAllowlistedPublic.cdnEligible,
+      fallbackUsed: nonAllowlistedPublic.fallbackUsed,
+      blockedReason: nonAllowlistedPublic.blockedReason,
+      publicPlaybackSafe: nonAllowlistedPublic.publicPlaybackSafe,
     },
     defaultCreatorVideo: {
       provider: defaultCreatorVideo.provider,

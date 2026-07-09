@@ -18,6 +18,7 @@ export type MediaDeliveryBlockedReason =
   | "invalid_path"
   | "absolute_url_not_allowed"
   | "outside_public_playback_prefix"
+  | "not_in_public_playback_allowlist"
   | "public_playback_not_marked_safe"
   | "forbidden_private_prefix"
   | "original_or_master_blocked"
@@ -33,6 +34,7 @@ export type MediaDeliveryConfig = {
   cdnSigningMode: MediaCdnSigningMode | string;
   cdnPublicPlaybackPrefix: string;
   cdnPrivatePlaybackDisabled: boolean;
+  cdnAllowedPublicPlaybackPaths: string[];
 };
 
 export type MediaDeliveryAssetInput = {
@@ -142,6 +144,13 @@ const normalizePrefix = (value: unknown) => {
   return prefix.endsWith("/") ? prefix : `${prefix}/`;
 };
 
+const normalizeAllowedPublicPlaybackPaths = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(value.map((entry) => normalizeAssetPath(entry)).filter(Boolean)),
+  );
+};
+
 const isInvalidObjectPath = (value: string) => (
   !value
   || value.includes("..")
@@ -172,6 +181,9 @@ export function readMediaDeliveryConfig(overrides: MediaDeliveryConfigInput = {}
     ),
     cdnPrivatePlaybackDisabled: normalizeBoolean(
       overrides.cdnPrivatePlaybackDisabled ?? readProcessEnv("MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED"),
+    ),
+    cdnAllowedPublicPlaybackPaths: normalizeAllowedPublicPlaybackPaths(
+      overrides.cdnAllowedPublicPlaybackPaths,
     ),
   };
 }
@@ -260,6 +272,12 @@ export function canUseCloudflareR2PublicPlayback(
     blockedReason = "private_cdn_delivery_not_disabled";
   } else if (!blockedReason && config.cdnSigningMode !== "off" && config.cdnSigningMode !== "token") {
     blockedReason = "invalid_cdn_signing_mode";
+  } else if (
+    !blockedReason
+    && config.cdnAllowedPublicPlaybackPaths.length > 0
+    && !config.cdnAllowedPublicPlaybackPaths.includes(classification.path)
+  ) {
+    blockedReason = "not_in_public_playback_allowlist";
   }
 
   return {

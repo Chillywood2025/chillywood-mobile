@@ -7,16 +7,18 @@ Current latest truth:
 - Private proof bucket `chillywood-media-proof` remains private, with r2.dev disabled and no custom domain.
 - The proof object is kept as harmless text proof traceability unless the owner later requests cleanup.
 - Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from `chillywood-media-proof`.
-- The public-playback proof bucket contains only harmless public-safe proof assets: `playback/public/proof/hello.txt`, cache-HIT text proof `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, and generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`.
+- The public-playback proof bucket contains only public-safe proof assets: `playback/public/proof/hello.txt`, cache-HIT text proof `playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt`, generated demo MP4 `playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4`, and approved real public-safe City Lights demo MP4 `playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4`.
 - `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access is disabled on both buckets.
 - Public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returned HTTP 200 with exact harmless proof text.
 - Immutable cache proof URL `https://media.chillywoodstream.com/playback/public/proof/cache-hit/chillywood-cache-proof-v1-3c152e0012db.txt` returned exact harmless text, `Cache-Control: public, max-age=31536000, immutable`, and repeated fetches returned `cf-cache-status: HIT` with increasing `Age` after a narrow cache rule for `/playback/public/proof/cache-hit/*`.
 - Cache behavior is proved only for the harmless cache-hit proof prefix. Egress/cost savings are not claimed until media bandwidth telemetry or provider log reconciliation exists.
 - Generated demo MP4 URL `https://media.chillywoodstream.com/playback/public/demo/proof-video/v1/chillywood-proof-video-v1-bcf1c879c9a3.mp4` returned HTTP 200, range HTTP 206, `Content-Type: video/mp4`, immutable cache metadata, warm `cf-cache-status: HIT`, ffprobe/ffmpeg decode proof, and proof-only local app playback evidence with `provider=cloudflare_r2_custom_domain`, `publicPlaybackSafe=true`, `cdnEligible=true`, `productionPlaybackSwitched=false`, `playbackStarted=true`, `rangePlaybackSupported=true`, `decoded=true`, and `decodedFrameCount=48`.
+- Real City Lights public demo URL `https://media.chillywoodstream.com/playback/public/demo/chillywood-city-lights/v1/chillywood-city-lights-v1-b670602fa00934ca.mp4` returned HTTP 200, range HTTP 206, `Content-Type: video/mp4`, immutable cache metadata, warm `cf-cache-status: HIT`, H.264 854x480 ffprobe metadata, ffmpeg decode proof, and `decodedFrameCount=1253`.
 - Public probes for `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
 - Staged resolver support exists in `_lib/mediaDelivery.ts` and is proved by `npm run proof:media-delivery-resolver` plus `npm run proof:media-delivery-public-demo`.
+- `npm run proof:media-delivery-real-demo` proves only the approved City Lights public demo allowlist path through `media.chillywoodstream.com`; production creator-video playback is still unchanged.
 - Current VOD production wiring keeps `publicPlaybackSafe: false`, so existing creator-video playback still falls back to signed origin by default.
 - The staged helper returns `media.chillywoodstream.com` only for explicit safe public playback assets under `playback/public/` with Cloudflare custom-domain config and `MEDIA_CDN_PRIVATE_PLAYBACK_DISABLED=true`.
 - Cloudflare R2 custom domains should be treated as public bucket exposure, not a native prefix-limited publish switch. Do not connect `media.chillywoodstream.com` directly to a mixed bucket or the private proof bucket.
@@ -25,7 +27,7 @@ Next exact media step:
 1. Optional next proof is a physical installed-app UI route/card only if explicitly requested; the current proof is a resolver-controlled proof-only local app playback harness and does not change normal app UX.
 2. Design and implement media playback telemetry only in a separately approved lane; planned fields include `media_playback_sessions`, `media_delivery_events`, `video_id`, `creator_id`, `viewer_id`, `delivery_provider`, `playback_url_provider`, `quality`, `seconds_watched`, `estimated_bytes`, `cdn_cache_status`, nullable `watch_party_id`, `free_or_premium`, `started_at`, and `ended_at`.
 3. Do not enable public access on `chillywood-media-proof`.
-4. Do not upload real production media or private/original/Premium media to the public-playback proof bucket.
+4. Do not upload real production media or private/original/Premium media to the public-playback proof bucket; the only approved real-media copy there is the City Lights public-safe demo proof object.
 5. Plan HLS/transcoding without claiming it live: future worker queue, ffprobe/ffmpeg, 360p/480p/720p/1080p outputs, master manifest, variant playlists, thumbnails, public-playback bucket upload after approval, and trusted `video_renditions` rows.
 6. Do not enable signed/token CDN playback or production playback switching until explicitly approved and proved.
 7. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
