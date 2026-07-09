@@ -76,6 +76,29 @@ One-job gate: verified R2 logical backup plus restore and rollback drills closed
 
 Continuous gate: still blocked. Continuous automation requires PITR or a proven scheduled backup/restore system; the R2 logical backup layer does not replace PITR for broad production automation.
 
+## Scheduled Backup/Restore Policy
+
+Status: source-proofed only. No scheduler is deployed, no production queue processor is running, no additional production media was processed, and production playback remains signed-origin fallback by default.
+
+Scheduled media-worker logical backups are the lower-cost recovery layer for future limited automation if the owner accepts the risk. They are not true PostgreSQL PITR and do not store Supabase WAL.
+
+Policy:
+
+- Scope: `media_transcode_jobs`, `media_renditions`, and supporting schema/migration metadata needed for disposable restore proof.
+- Frequency: create a fresh scoped logical backup before every worker run; if limited automation is later approved, also run a scheduled daily scoped backup.
+- Freshness: limited automation requires a verified backup less than 24 hours old; one-job proof or backfill-like runs require a verified backup less than 1 hour old.
+- Restore drill: at least one successful restore drill is required after schema changes; recurring restore drill freshness is required before limited automation can be treated as closed.
+- Storage: private R2 bucket only, under `backups/media-worker/YYYY/MM/DD/<backup_id>/`.
+- Public surfaces: backup artifacts must never be stored in `chillywood-media-public-playback-proof` and must never be served through `media.chillywoodstream.com`.
+- Retention: keep the latest daily backups, keep the latest restore-drill-passed backup, and make older private backups cleanup candidates only after the retention window.
+- Continuous automation: remains blocked unless scheduled private R2 backup freshness and restore-drill freshness are passing; broad backfill still requires explicit owner approval and PITR or an owner-accepted scheduled restore system.
+
+Proof:
+
+- `npm run proof:media-scheduled-backup-gate` proves missing backups block automation, stale backups block automation, fresh backups without restore drills block automation, fresh private backup plus fresh restore drill closes the limited-automation backup gate, one-job owner override requires a fresh manual backup, public bucket backup targets are denied, secret-like artifacts are denied, retention keeps the latest restore-drill-passed backup, and broad backfill remains denied without explicit owner approval.
+- The proof is dry-run/source-only. It does not create a production backup, write production rows, deploy a scheduler, run a worker, or switch playback.
+- This is logical backup/restore proof, not true PITR.
+
 ## Completed One-Job Recovery Proof
 
 - Source: Chi'llywood City Lights, creator video `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`.

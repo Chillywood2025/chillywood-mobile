@@ -60,6 +60,97 @@ export type MediaWorkerBackupGateStatus =
   | "closed_for_continuous"
   | "blocked_pitr_required";
 
+export type MediaBackupScheduleFrequency =
+  | "before_worker_run"
+  | "daily";
+
+export type MediaBackupSchedulePolicy = {
+  scope: "media_worker";
+  tables: string[];
+  frequency: MediaBackupScheduleFrequency[];
+  maxLimitedAutomationBackupAgeHours: number;
+  maxOneJobBackupAgeHours: number;
+  maxRestoreDrillAgeHours: number;
+  privateR2BucketRole: "private_backup";
+  privateR2PrefixRoot: string;
+  publicPlaybackBucketDenied: true;
+  logicalBackupNotPitr: true;
+  continuousRequiresScheduledBackupAndRestoreDrill: true;
+};
+
+export type MediaBackupFreshnessStatus =
+  | "missing"
+  | "stale"
+  | "fresh"
+  | "invalid_target"
+  | "contains_secret_like_value";
+
+export type MediaBackupFreshnessResult = {
+  status: MediaBackupFreshnessStatus;
+  passed: boolean;
+  checkedAt: string;
+  artifactCreatedAt: string | null;
+  ageHours: number | null;
+  maxAgeHours: number;
+  privateBackupTarget: boolean;
+  logicalBackupNotPitr: true;
+  failures: string[];
+};
+
+export type MediaBackupRetentionPolicy = {
+  keepLastDailyBackups: number;
+  keepLatestRestoreDrillPassed: true;
+  minimumRetentionDays: number;
+  privateR2PrefixRoot: string;
+};
+
+export type MediaBackupRetentionPlan = {
+  keepBackupIds: string[];
+  deleteCandidateBackupIds: string[];
+  latestRestoreDrillPassedBackupId: string | null;
+  deniedPublicBucketTargets: string[];
+  privateR2PrefixRoot: string;
+};
+
+export type MediaBackupSchedulerState = {
+  schedulerConfigured: boolean;
+  schedulerDeployed: boolean;
+  schedulerDryRunOnly: boolean;
+  lastBackupAt: string | null;
+  lastRestoreDrillAt: string | null;
+  lastBackupVerified: boolean;
+  lastRestoreDrillPassed: boolean;
+  targetBucketRole: "private_backup" | "public_playback" | string;
+  targetPrefix: string;
+};
+
+export type MediaScheduledBackupRequirementResult = {
+  required: boolean;
+  backupMaxAgeHours: number;
+  restoreDrillMaxAgeHours: number;
+  ownerAcceptanceRequired: boolean;
+  pitrStillRequiredForBroadBackfill: boolean;
+  logicalBackupNotPitr: true;
+  reasons: string[];
+};
+
+export type MediaContinuousWorkerBackupGateResult = {
+  status:
+    | "blocked_missing_scheduled_backup"
+    | "blocked_stale_scheduled_backup"
+    | "blocked_restore_drill_missing"
+    | "blocked_scheduler_not_deployed"
+    | "blocked_public_backup_target"
+    | "blocked_backfill_requires_owner_approval"
+    | "closed_for_limited_automation"
+    | "closed_for_continuous_with_pitr";
+  closedForLimitedAutomation: boolean;
+  closedForContinuous: boolean;
+  ownerApprovalRequired: boolean;
+  logicalBackupNotPitr: true;
+  failures: string[];
+};
+
 export type MediaRecoveryBackupManifest = {
   backup_id: string;
   created_at: string;
@@ -219,6 +310,293 @@ const isSafePrivateBackupPrefix = (prefix: string) => {
     && !normalized.startsWith(PUBLIC_PREFIX)
     && !findForbiddenSegment(normalized);
 };
+
+const hoursBetween = (older: string | null | undefined, newer: string | null | undefined) => {
+  const olderTime = Date.parse(toText(older));
+  const newerTime = Date.parse(toText(newer));
+  if (!Number.isFinite(olderTime) || !Number.isFinite(newerTime)) return null;
+  return Math.max(0, (newerTime - olderTime) / (60 * 60 * 1000));
+};
+
+export const MEDIA_BACKUP_DEFAULT_SCHEDULE_POLICY: MediaBackupSchedulePolicy = {
+  scope: "media_worker",
+  tables: ["media_transcode_jobs", "media_renditions"],
+  frequency: ["before_worker_run", "daily"],
+  maxLimitedAutomationBackupAgeHours: 24,
+  maxOneJobBackupAgeHours: 1,
+  maxRestoreDrillAgeHours: 24,
+  privateR2BucketRole: "private_backup",
+  privateR2PrefixRoot: "backups/media-worker/",
+  publicPlaybackBucketDenied: true,
+  logicalBackupNotPitr: true,
+  continuousRequiresScheduledBackupAndRestoreDrill: true,
+};
+
+export const MEDIA_BACKUP_DEFAULT_RETENTION_POLICY: MediaBackupRetentionPolicy = {
+  keepLastDailyBackups: 7,
+  keepLatestRestoreDrillPassed: true,
+  minimumRetentionDays: 30,
+  privateR2PrefixRoot: "backups/media-worker/",
+};
+
+export function resolveScheduledMediaBackupRequirement(input: {
+  mode: "one_job" | "limited_automation" | "continuous" | "backfill";
+  ownerAcceptedOneJobRisk?: boolean | null;
+  explicitOwnerApproval?: boolean | null;
+  policy?: MediaBackupSchedulePolicy | null;
+}): MediaScheduledBackupRequirementResult {
+  const policy = input.policy ?? MEDIA_BACKUP_DEFAULT_SCHEDULE_POLICY;
+  const reasons: string[] = [];
+  const mode = input.mode;
+
+  if (mode === "one_job") {
+    reasons.push("fresh_manual_backup_required_before_one_job");
+    if (input.ownerAcceptedOneJobRisk !== true) reasons.push("owner_one_job_acceptance_required");
+    return {
+      required: true,
+      backupMaxAgeHours: policy.maxOneJobBackupAgeHours,
+      restoreDrillMaxAgeHours: policy.maxRestoreDrillAgeHours,
+      ownerAcceptanceRequired: input.ownerAcceptedOneJobRisk !== true,
+      pitrStillRequiredForBroadBackfill: true,
+      logicalBackupNotPitr: true,
+      reasons,
+    };
+  }
+
+  if (mode === "backfill") {
+    reasons.push("backfill_requires_pitr_or_scheduled_restore_system");
+    if (input.explicitOwnerApproval !== true) reasons.push("explicit_owner_backfill_approval_required");
+    return {
+      required: true,
+      backupMaxAgeHours: policy.maxOneJobBackupAgeHours,
+      restoreDrillMaxAgeHours: policy.maxRestoreDrillAgeHours,
+      ownerAcceptanceRequired: input.explicitOwnerApproval !== true,
+      pitrStillRequiredForBroadBackfill: true,
+      logicalBackupNotPitr: true,
+      reasons,
+    };
+  }
+
+  reasons.push("scheduled_backup_and_restore_drill_required_for_limited_automation");
+  return {
+    required: true,
+    backupMaxAgeHours: policy.maxLimitedAutomationBackupAgeHours,
+    restoreDrillMaxAgeHours: policy.maxRestoreDrillAgeHours,
+    ownerAcceptanceRequired: mode === "continuous",
+    pitrStillRequiredForBroadBackfill: true,
+    logicalBackupNotPitr: true,
+    reasons,
+  };
+}
+
+export function evaluateMediaBackupFreshness(input: {
+  artifactCreatedAt?: string | null;
+  now: string;
+  maxAgeHours: number;
+  manifestVerified?: boolean | null;
+  checksumReadbackPassed?: boolean | null;
+  targetBucketRole?: string | null;
+  targetPrefix?: string | null;
+  publicBucketUsed?: boolean | null;
+  containsSecrets?: boolean | null;
+  manifestText?: string | null;
+}): MediaBackupFreshnessResult {
+  const failures: string[] = [];
+  const targetPrefix = normalizeObjectPath(input.targetPrefix);
+  const privateBackupTarget = input.targetBucketRole === "private_backup"
+    && input.publicBucketUsed !== true
+    && isSafePrivateBackupPrefix(targetPrefix);
+  const ageHours = hoursBetween(input.artifactCreatedAt, input.now);
+  const maxAgeHours = Math.max(0, Number(input.maxAgeHours));
+
+  if (!input.artifactCreatedAt || ageHours === null) failures.push("missing_or_invalid_backup_timestamp");
+  if (ageHours !== null && maxAgeHours > 0 && ageHours > maxAgeHours) failures.push("backup_stale");
+  if (input.manifestVerified !== true) failures.push("backup_manifest_not_verified");
+  if (input.checksumReadbackPassed !== true) failures.push("backup_checksum_readback_missing");
+  if (!privateBackupTarget) failures.push("backup_target_must_be_private_r2_media_worker_prefix");
+  if (input.containsSecrets === true) failures.push("backup_manifest_contains_secret");
+  if (input.manifestText && isSecretLikeText(input.manifestText)) failures.push("backup_manifest_contains_secret_like_text");
+  if (input.manifestText && /media\.chillywoodstream\.com|chillywood-media-public-playback-proof/i.test(input.manifestText)) {
+    failures.push("backup_manifest_references_public_delivery_surface");
+  }
+
+  let status: MediaBackupFreshnessStatus = "fresh";
+  if (failures.includes("missing_or_invalid_backup_timestamp")) status = "missing";
+  else if (failures.includes("backup_manifest_contains_secret") || failures.includes("backup_manifest_contains_secret_like_text")) {
+    status = "contains_secret_like_value";
+  } else if (failures.includes("backup_target_must_be_private_r2_media_worker_prefix")) status = "invalid_target";
+  else if (failures.includes("backup_stale")) status = "stale";
+
+  return {
+    status,
+    passed: failures.length === 0,
+    checkedAt: input.now,
+    artifactCreatedAt: input.artifactCreatedAt ?? null,
+    ageHours,
+    maxAgeHours,
+    privateBackupTarget,
+    logicalBackupNotPitr: true,
+    failures,
+  };
+}
+
+export function evaluateRestoreDrillFreshness(input: {
+  restoreDrillCompletedAt?: string | null;
+  now: string;
+  maxAgeHours: number;
+  restoreDrillPassed?: boolean | null;
+  disposableDbUsed?: boolean | null;
+  productionDbTouched?: boolean | null;
+}): MediaBackupFreshnessResult {
+  const ageHours = hoursBetween(input.restoreDrillCompletedAt, input.now);
+  const failures: string[] = [];
+  const maxAgeHours = Math.max(0, Number(input.maxAgeHours));
+
+  if (!input.restoreDrillCompletedAt || ageHours === null) failures.push("missing_or_invalid_restore_drill_timestamp");
+  if (ageHours !== null && maxAgeHours > 0 && ageHours > maxAgeHours) failures.push("restore_drill_stale");
+  if (input.restoreDrillPassed !== true) failures.push("restore_drill_not_passed");
+  if (input.disposableDbUsed !== true) failures.push("restore_drill_must_use_disposable_db");
+  if (input.productionDbTouched === true) failures.push("restore_drill_must_not_touch_production_db");
+
+  return {
+    status: failures.includes("missing_or_invalid_restore_drill_timestamp")
+      ? "missing"
+      : failures.includes("restore_drill_stale") ? "stale" : "fresh",
+    passed: failures.length === 0,
+    checkedAt: input.now,
+    artifactCreatedAt: input.restoreDrillCompletedAt ?? null,
+    ageHours,
+    maxAgeHours,
+    privateBackupTarget: true,
+    logicalBackupNotPitr: true,
+    failures,
+  };
+}
+
+export function resolveContinuousWorkerBackupGate(input: {
+  schedulerState: MediaBackupSchedulerState;
+  backupFreshness: MediaBackupFreshnessResult;
+  restoreDrillFreshness: MediaBackupFreshnessResult;
+  pitrEnabled?: boolean | null;
+  limitedAutomationRequested?: boolean | null;
+  broadBackfillRequested?: boolean | null;
+  explicitOwnerBackfillApproval?: boolean | null;
+}): MediaContinuousWorkerBackupGateResult {
+  const failures: string[] = [];
+  const scheduler = input.schedulerState;
+
+  if (scheduler.schedulerConfigured !== true || scheduler.schedulerDeployed !== true) {
+    failures.push("scheduled_backup_not_deployed");
+  }
+  if (scheduler.schedulerDryRunOnly === true) failures.push("scheduled_backup_is_dry_run_only");
+  if (scheduler.targetBucketRole !== "private_backup" || !isSafePrivateBackupPrefix(scheduler.targetPrefix)) {
+    failures.push("scheduled_backup_target_must_be_private_r2");
+  }
+  if (!input.backupFreshness.passed) failures.push(...input.backupFreshness.failures);
+  if (!input.restoreDrillFreshness.passed) failures.push(...input.restoreDrillFreshness.failures);
+  if (input.broadBackfillRequested === true && input.explicitOwnerBackfillApproval !== true) {
+    failures.push("broad_backfill_requires_explicit_owner_approval");
+  }
+
+  if (failures.includes("scheduled_backup_target_must_be_private_r2")) {
+    return {
+      status: "blocked_public_backup_target",
+      closedForLimitedAutomation: false,
+      closedForContinuous: false,
+      ownerApprovalRequired: true,
+      logicalBackupNotPitr: true,
+      failures,
+    };
+  }
+  if (failures.includes("scheduled_backup_not_deployed") || failures.includes("scheduled_backup_is_dry_run_only")) {
+    return {
+      status: "blocked_scheduler_not_deployed",
+      closedForLimitedAutomation: false,
+      closedForContinuous: false,
+      ownerApprovalRequired: true,
+      logicalBackupNotPitr: true,
+      failures,
+    };
+  }
+  if (!input.backupFreshness.passed) {
+    return {
+      status: input.backupFreshness.status === "missing" ? "blocked_missing_scheduled_backup" : "blocked_stale_scheduled_backup",
+      closedForLimitedAutomation: false,
+      closedForContinuous: false,
+      ownerApprovalRequired: true,
+      logicalBackupNotPitr: true,
+      failures,
+    };
+  }
+  if (!input.restoreDrillFreshness.passed) {
+    return {
+      status: "blocked_restore_drill_missing",
+      closedForLimitedAutomation: false,
+      closedForContinuous: false,
+      ownerApprovalRequired: true,
+      logicalBackupNotPitr: true,
+      failures,
+    };
+  }
+  if (failures.includes("broad_backfill_requires_explicit_owner_approval")) {
+    return {
+      status: "blocked_backfill_requires_owner_approval",
+      closedForLimitedAutomation: false,
+      closedForContinuous: false,
+      ownerApprovalRequired: true,
+      logicalBackupNotPitr: true,
+      failures,
+    };
+  }
+
+  return {
+    status: input.pitrEnabled === true ? "closed_for_continuous_with_pitr" : "closed_for_limited_automation",
+    closedForLimitedAutomation: true,
+    closedForContinuous: input.pitrEnabled === true,
+    ownerApprovalRequired: input.pitrEnabled !== true,
+    logicalBackupNotPitr: true,
+    failures,
+  };
+}
+
+export function buildMediaBackupRetentionPlan(input: {
+  backups: Array<{
+    backup_id: string;
+    created_at: string;
+    r2_object_prefix: string;
+    restore_drill_passed?: boolean | null;
+  }>;
+  policy?: MediaBackupRetentionPolicy | null;
+}): MediaBackupRetentionPlan {
+  const policy = input.policy ?? MEDIA_BACKUP_DEFAULT_RETENTION_POLICY;
+  const sorted = [...input.backups]
+    .filter((backup) => toText(backup.backup_id))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const safeBackups = sorted.filter((backup) => isSafePrivateBackupPrefix(backup.r2_object_prefix));
+  const keep = new Set(safeBackups.slice(0, Math.max(1, policy.keepLastDailyBackups)).map((backup) => backup.backup_id));
+  const latestRestoreDrillPassed = safeBackups.find((backup) => backup.restore_drill_passed === true) ?? null;
+  const deniedPublicBucketTargets = sorted
+    .filter((backup) => !isSafePrivateBackupPrefix(backup.r2_object_prefix))
+    .map((backup) => backup.backup_id);
+
+  if (latestRestoreDrillPassed && policy.keepLatestRestoreDrillPassed) {
+    keep.add(latestRestoreDrillPassed.backup_id);
+  }
+
+  return {
+    keepBackupIds: [...keep],
+    deleteCandidateBackupIds: safeBackups
+      .filter((backup) => !keep.has(backup.backup_id))
+      .map((backup) => backup.backup_id),
+    latestRestoreDrillPassedBackupId: latestRestoreDrillPassed?.backup_id ?? null,
+    deniedPublicBucketTargets,
+    privateR2PrefixRoot: policy.privateR2PrefixRoot,
+  };
+}
+
+export function sanitizeScheduledBackupProof<T>(value: T): T {
+  return sanitizeMediaRecoveryProof(value);
+}
 
 export function buildMediaRecoveryBackupManifest(
   input: MediaRecoveryBackupManifest,

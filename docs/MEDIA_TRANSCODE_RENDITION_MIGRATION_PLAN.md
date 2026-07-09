@@ -213,6 +213,8 @@ Backup/PITR gate: Blocked for broad production worker writes/backfill/continuous
 
 R2 logical backup/restore gate: Closed for the completed one-job proof only. The scoped logical backup includes only `media_transcode_jobs` and `media_renditions`; before the one-job write, production row counts were read back as zero for both tables, so the data artifact was intentionally empty. The latest artifacts used for the proof are stored only in private R2 bucket `chillywood-media-proof` under `backups/media-worker/2026/07/09/media-worker-logical-20260709-one-job-readiness-b81c7b1423c6/` and include `manifest.json`, `schema.sql.gz`, `data-media-worker.sql.gz`, and `sha256sums.txt`. `npm run proof:media-recovery-backup-restore` verified private R2 readback checksums, confirmed the public playback bucket and public media domain did not expose the backup, restored into disposable PGlite, and proved resolver-safe selection. `npm run proof:media-worker-rollback-drill` plus the one-job rollback proof proved exact-batch/exact-prefix rollback and denied missing batch, broad prefix, private, Premium, and original/master rollback targets. This is application-level logical backup and restore proof, not true PostgreSQL PITR and not continuous automation readiness.
 
+Scheduled R2 logical backup gate: source-proofed policy only. `_lib/mediaRecoveryOperator.ts` now models scheduled media-worker logical backups for `media_transcode_jobs` and `media_renditions`, backup freshness, restore-drill freshness, retention, and continuous-worker backup gating. `npm run proof:media-scheduled-backup-gate` proves continuous automation remains blocked when no backup exists, when backup is stale, or when restore drill is missing; proves fresh private backup plus fresh restore drill closes only the limited-automation backup gate; proves one-job override requires a fresh manual backup; denies public playback bucket backup targets and secret-like artifacts; keeps the latest restore-drill-passed backup in retention; and keeps broad backfill denied without explicit owner approval. No scheduler is deployed, no production worker is enabled, no additional production media is processed, and no playback switch is live. This scheduled R2 layer is application-level logical backup/restore, not PostgreSQL PITR.
+
 ## Backfill Strategy
 
 1. Do not backfill existing production creator videos automatically.
@@ -244,12 +246,13 @@ R2 logical backup/restore gate: Closed for the completed one-job proof only. The
 2. Migration dry-run and disposable runtime apply: complete.
 3. Production schema readback plus rollback-only RLS/policy proof: complete.
 4. Backend worker runbook and local proof harness: complete for design/local proof only; production worker deployment and staging worker proof remain pending.
-5. Backup/PITR gate: Blocked until PITR or an owner-approved restore path is verified; no worker writes/backfill while this gate remains Blocked or Partial.
+5. Backup/PITR gate: Blocked until PITR or an owner-approved restore path is verified; no broad worker writes/backfill while this gate remains Blocked or Partial.
 6. One-job logical recovery gate: Closed for the completed City Lights proof with exact source allowlist, operator lease, auditor pass, rollback drill, and no playback switch.
-6. Operator-controlled one-job safety: source/proof complete and used for one approved scoped production proof; additional production use still requires explicit approval.
-7. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
-8. Resolver migration behind disabled config: pending.
-9. Cache HIT and telemetry proof for the migrated source: pending.
-10. Signed-origin fallback proof: pending.
-11. No private/original/Premium/unscanned/moderation-blocked media exposed: required for every next lane.
-12. Explicit owner approval before any production playback switch: still required.
+7. Scheduled R2 logical backup gate: source-proofed only; limited automation remains disabled until owner approval, scheduler deployment, recurring private backup readback, and recurring restore-drill proof exist.
+8. Operator-controlled one-job safety: source/proof complete and used for one approved scoped production proof; additional production use still requires explicit approval.
+9. Trusted rows for a limited allowlisted source only: pending and requires explicit approval.
+10. Resolver migration behind disabled config: pending.
+11. Cache HIT and telemetry proof for the migrated source: pending.
+12. Signed-origin fallback proof: pending.
+13. No private/original/Premium/unscanned/moderation-blocked media exposed: required for every next lane.
+14. Explicit owner approval before any production playback switch: still required.

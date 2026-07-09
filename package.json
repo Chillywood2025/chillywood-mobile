@@ -223,6 +223,7 @@
     "proof:media-transcode-worker-auditor": "node ./scripts/proof-media-transcode-worker-auditor.mjs",
     "proof:media-recovery-operator": "node ./scripts/proof-media-transcode-worker-auditor.mjs --alias=media-recovery-operator",
     "proof:media-transcode-worker-safety": "node ./scripts/proof-media-transcode-operator-control.mjs --alias=media-transcode-worker-safety",
+    "proof:media-scheduled-backup-gate": "node ./scripts/proof-media-scheduled-backup-gate.mjs",
     "proof:media-recovery-backup-restore": "node ./scripts/proof-media-recovery-backup-restore.mjs",
     "proof:media-worker-rollback-drill": "node ./scripts/proof-media-worker-rollback-drill.mjs",
     "proof:media-rendition-metadata": "node ./scripts/proof-media-rendition-metadata.mjs",
