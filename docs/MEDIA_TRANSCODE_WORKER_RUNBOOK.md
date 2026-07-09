@@ -151,7 +151,7 @@ Continuous automation readiness classification: Blocked. Continuous production w
 
 ## Scheduled R2 Logical Backup Gate
 
-Status: source-proofed policy and dry-run gate only. No scheduler is deployed, no continuous worker is enabled, no queue processor is running, no additional production media has been processed, and production playback remains unchanged.
+Status: manual logical backup runner implemented, scheduler not deployed. `scripts/run-media-worker-logical-backup.mjs` is disabled/dry-run by default and can write/upload only when manually invoked with `MEDIA_BACKUP_RUNNER_ENABLED=true`, `MEDIA_BACKUP_MODE=write`, a scoped backup database URL, a private R2 backup bucket, and `MEDIA_BACKUP_R2_PREFIX=backups/media-worker/`. No cron schedule is configured, no continuous worker is enabled, no queue processor is running, no additional production media has been processed, and production playback remains unchanged.
 
 Scheduled backup policy for future limited automation:
 
@@ -178,6 +178,18 @@ Scheduled backup policy for future limited automation:
 - retention keeps the latest restore-drill-passed backup
 - broad backfill remains denied without explicit owner approval
 - scheduler dry-run does not create a production backup, write production rows, deploy a scheduler, run a worker, or switch playback
+
+`npm run proof:media-worker-backup-runner` proves the real runner and restore drill surface:
+
+- `backup:media-worker:dry-run` creates a redacted dry-run plan without production DB credentials and attempts no upload
+- write mode fails closed when required env is missing
+- public playback bucket targets, `media.chillywoodstream.com`, and non-`backups/media-worker/` prefixes are denied before any DB access
+- backup scope is limited to `media_transcode_jobs` and `media_renditions`; auth, billing, payouts, private media, creator originals, and signed URLs are excluded
+- manifest shape and checksum generation are validated
+- a fixture backup restores into disposable PGlite and resolver-safe selection returns only clean public-safe rows
+- no production DB write, worker deployment, queue processor, cron schedule, or production playback switch occurs
+
+No GitHub Actions cron is added. A future workflow must be `workflow_dispatch` only by default, require private backup secrets, and require explicit owner approval before any schedule is added.
 
 ## First Controlled One-Job Production Proof
 

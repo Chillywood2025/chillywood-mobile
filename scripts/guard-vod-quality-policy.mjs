@@ -49,6 +49,8 @@ const mediaTranscodeWorkerLocalProof = read("scripts/proof-media-transcode-worke
 const mediaTranscodeOperatorProof = read("scripts/proof-media-transcode-operator-control.mjs");
 const mediaTranscodeWorkerAuditorProof = read("scripts/proof-media-transcode-worker-auditor.mjs");
 const mediaScheduledBackupGateProof = read("scripts/proof-media-scheduled-backup-gate.mjs");
+const mediaWorkerBackupRunner = read("scripts/run-media-worker-logical-backup.mjs");
+const mediaWorkerBackupRunnerProof = read("scripts/proof-media-worker-backup-runner.mjs");
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "performance policy");
@@ -98,6 +100,8 @@ assertIncludes(vodDoc, "paid PITR variants require explicit owner approval befor
 assertIncludes(vodDoc, "PITR or owner-approved scheduled backup/restore readiness is required before future broad production worker writes, production backfill, or continuous worker activation.", "VOD doc PITR worker gate");
 assertIncludes(vodDoc, "Operator control and auditor proofs are source-backed and were used for one approved production proof. They did not deploy a worker, did not enable continuous mode, and did not switch playback.", "VOD doc operator production boundary");
 assertIncludes(vodDoc, "Scheduled R2 logical backup gate:", "VOD doc scheduled backup gate");
+assertIncludes(vodDoc, "`scripts/run-media-worker-logical-backup.mjs` is the real manual backup runner", "VOD doc manual backup runner");
+assertIncludes(vodDoc, "`npm run proof:media-worker-backup-runner` proves dry-run, fail-closed write mode, public bucket/domain denial, manifest/checksum generation, and disposable PGlite restore/resolver-safe query.", "VOD doc backup runner proof");
 assertIncludes(vodDoc, "`npm run proof:media-scheduled-backup-gate` proves no backup, stale backup, or missing restore drill blocks automation", "VOD doc scheduled backup proof");
 assertIncludes(vodDoc, "No scheduler is deployed, no worker is enabled, no production playback switch happened, and this is logical backup/restore only, not PITR.", "VOD doc scheduled backup safety boundary");
 assertIncludes(vodDoc, "Trusted backend migration schema is applied to production and contains only the first controlled City Lights proof rows.", "VOD doc trusted migration one-job rows");
@@ -201,6 +205,9 @@ assertIncludes(packageJson, "\"proof:media-transcode-worker-auditor\"", "worker 
 assertIncludes(packageJson, "\"proof:media-recovery-operator\"", "recovery operator proof script");
 assertIncludes(packageJson, "\"proof:media-transcode-worker-safety\"", "worker safety proof script");
 assertIncludes(packageJson, "\"proof:media-scheduled-backup-gate\"", "scheduled backup gate proof script");
+assertIncludes(packageJson, "\"backup:media-worker:dry-run\"", "media worker backup dry-run script");
+assertIncludes(packageJson, "\"backup:media-worker:run\"", "media worker backup run script");
+assertIncludes(packageJson, "\"proof:media-worker-backup-runner\"", "media worker backup runner proof script");
 assertIncludes(mediaTranscodeOperatorProof, "defaultDisabled", "operator proof default disabled");
 assertIncludes(mediaTranscodeOperatorProof, "continuousModeBlockedByBackupGate", "operator proof continuous backup gate");
 assertIncludes(mediaTranscodeOperatorProof, "workerSelfEnableDenied", "operator proof worker self-enable denied");
@@ -215,9 +222,19 @@ assertIncludes(mediaScheduledBackupGateProof, "staleBackupBlocksContinuous", "sc
 assertIncludes(mediaScheduledBackupGateProof, "freshBackupWithoutRestoreBlocksContinuous", "scheduled backup gate restore drill proof");
 assertIncludes(mediaScheduledBackupGateProof, "freshBackupAndRestoreClosesLimitedAutomation", "scheduled backup gate limited automation proof");
 assertIncludes(mediaScheduledBackupGateProof, "logicalBackupClosesFullContinuousPitrGate", "scheduled backup gate not PITR proof");
+assertIncludes(mediaScheduledBackupGateProof, "actualBackupRunnerAvailable", "scheduled backup gate runner availability proof");
+assertIncludes(mediaScheduledBackupGateProof, "continuousAutomationAllowed", "scheduled backup gate continuous automation proof");
 assertIncludes(mediaScheduledBackupGateProof, "publicBucketBackupTargetDenied", "scheduled backup gate public bucket denial");
 assertIncludes(mediaScheduledBackupGateProof, "broadBackfillDeniedWithoutExplicitOwnerApproval", "scheduled backup gate backfill denial");
 assertIncludes(mediaScheduledBackupGateProof, "productionPlaybackSwitched: false", "scheduled backup gate playback unchanged");
+assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_RUNNER_ENABLED", "backup runner enable gate");
+assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_R2_PREFIX", "backup runner prefix env");
+assertIncludes(mediaWorkerBackupRunner, "backups/media-worker/", "backup runner private prefix");
+assertIncludes(mediaWorkerBackupRunner, "chillywood-media-public-playback-proof", "backup runner public bucket denial");
+assertIncludes(mediaWorkerBackupRunner, "media.chillywoodstream.com", "backup runner public media domain denial");
+assertIncludes(mediaWorkerBackupRunnerProof, "missingEnvFailClosed", "backup runner proof missing-env fail-closed");
+assertIncludes(mediaWorkerBackupRunnerProof, "publicBucketTargetDenied", "backup runner proof public bucket denial");
+assertIncludes(mediaWorkerBackupRunnerProof, "resolverSafeQueryPassed", "backup runner proof resolver-safe query");
 assertNotMatches(vodDoc, /\bR2 (?:scheduled )?logical backup(?:s)? (?:is|are|equals?|replace[s]?) (?:true )?(?:PostgreSQL )?PITR\b/i, "VOD doc must not claim R2 logical backup is PITR");
 assertNotMatches(vodDoc, /\bcontinuous (?:worker )?(?:automation|processing) (?:is )?(?:enabled|running|deployed|live)\b/i, "VOD doc must not claim continuous worker processing is live");
 assertIncludes(mediaRenditionMetadataProof, "trusted-media-rendition-metadata", "trusted media rendition metadata proof mode");

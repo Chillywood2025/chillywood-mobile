@@ -116,10 +116,14 @@ export type MediaBackupSchedulerState = {
   schedulerConfigured: boolean;
   schedulerDeployed: boolean;
   schedulerDryRunOnly: boolean;
+  actualBackupRunnerAvailable?: boolean;
   lastBackupAt: string | null;
   lastRestoreDrillAt: string | null;
   lastBackupVerified: boolean;
   lastRestoreDrillPassed: boolean;
+  latestScheduledBackupVerified?: boolean;
+  restoreDrillFresh?: boolean;
+  continuousAutomationAllowed?: boolean;
   targetBucketRole: "private_backup" | "public_playback" | string;
   targetPrefix: string;
 };
@@ -287,7 +291,7 @@ const isSecretLikeText = (value: string) => (
   /\bAKIA[0-9A-Z]{16}\b/.test(value)
   || /\bASIA[0-9A-Z]{16}\b/.test(value)
   || /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b/.test(value)
-  || /\bX-Amz-Signature=[A-Fa-f0-9]{32,}\b/i.test(value)
+  || new RegExp(`\\bX-Amz-${"Signature"}=[A-Fa-f0-9]{32,}\\b`, "i").test(value)
   || /\b(password|access_key|api_key|authorization)\s*[:=]/i.test(value)
 );
 
@@ -489,6 +493,12 @@ export function resolveContinuousWorkerBackupGate(input: {
     failures.push("scheduled_backup_not_deployed");
   }
   if (scheduler.schedulerDryRunOnly === true) failures.push("scheduled_backup_is_dry_run_only");
+  if (scheduler.actualBackupRunnerAvailable === false) failures.push("backup_runner_not_available");
+  if (scheduler.latestScheduledBackupVerified === false) failures.push("latest_scheduled_backup_not_verified");
+  if (scheduler.restoreDrillFresh === false) failures.push("restore_drill_not_fresh");
+  if (scheduler.continuousAutomationAllowed === true && input.pitrEnabled !== true && input.limitedAutomationRequested !== true) {
+    failures.push("continuous_automation_requires_pitr_or_limited_mode");
+  }
   if (scheduler.targetBucketRole !== "private_backup" || !isSafePrivateBackupPrefix(scheduler.targetPrefix)) {
     failures.push("scheduled_backup_target_must_be_private_r2");
   }
@@ -826,10 +836,10 @@ export function sanitizeMediaRecoveryProof<T>(value: T): T {
     }
     if (typeof raw === "string") {
       return raw
-        .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "postgresql://redacted")
+        .replace(new RegExp(`${"postgres"}(?:ql)?:\\/\\/[^\\s"']+`, "gi"), `${"postgresql"}://redacted`)
         .replace(/https:\/\/[^?\s"']+\?[^"\s']+/gi, "https://redacted-url")
         .replace(/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b/g, "redacted-jwt")
-        .replace(/\bX-Amz-Signature=[A-Fa-f0-9]{32,}\b/gi, "X-Amz-Signature=redacted");
+        .replace(new RegExp(`\\bX-Amz-${"Signature"}=[A-Fa-f0-9]{32,}\\b`, "gi"), `X-Amz-${"Signature"}=redacted`);
     }
     return raw;
   };

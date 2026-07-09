@@ -78,7 +78,7 @@ Continuous gate: still blocked. Continuous automation requires PITR or a proven 
 
 ## Scheduled Backup/Restore Policy
 
-Status: source-proofed only. No scheduler is deployed, no production queue processor is running, no additional production media was processed, and production playback remains signed-origin fallback by default.
+Status: manual runner implemented, scheduler not deployed. `scripts/run-media-worker-logical-backup.mjs` can create scoped media-worker logical backup artifacts and upload them to private R2 only when explicitly run in write mode with `MEDIA_BACKUP_RUNNER_ENABLED=true`, `MEDIA_BACKUP_MODE=write`, `MEDIA_BACKUP_DATABASE_URL`, `MEDIA_BACKUP_R2_BUCKET`, and `MEDIA_BACKUP_R2_PREFIX=backups/media-worker/`. Default mode is dry-run; missing credentials fail closed. No cron schedule, production queue processor, additional production media processing, or production playback switch is enabled.
 
 Scheduled media-worker logical backups are the lower-cost recovery layer for future limited automation if the owner accepts the risk. They are not true PostgreSQL PITR and do not store Supabase WAL.
 
@@ -96,7 +96,8 @@ Policy:
 Proof:
 
 - `npm run proof:media-scheduled-backup-gate` proves missing backups block automation, stale backups block automation, fresh backups without restore drills block automation, fresh private backup plus fresh restore drill closes the limited-automation backup gate, one-job owner override requires a fresh manual backup, public bucket backup targets are denied, secret-like artifacts are denied, retention keeps the latest restore-drill-passed backup, and broad backfill remains denied without explicit owner approval.
-- The proof is dry-run/source-only. It does not create a production backup, write production rows, deploy a scheduler, run a worker, or switch playback.
+- `npm run proof:media-worker-backup-runner` proves the real runner dry-runs without production credentials, fails closed when write-mode env is missing, denies `chillywood-media-public-playback-proof`, denies `media.chillywoodstream.com`, validates manifest/checksum generation, restores a fixture backup into disposable PGlite, and proves a resolver-safe query over restored media-worker data. It does not require production DB access to pass.
+- The scheduled-gate proof is dry-run/source-only. The runner can create a real scoped backup only when manually invoked with required private env; no scheduler or cron is deployed. It does not write production rows, run a worker, or switch playback.
 - This is logical backup/restore proof, not true PITR.
 
 ## Completed One-Job Recovery Proof

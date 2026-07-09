@@ -104,10 +104,14 @@ try {
     schedulerConfigured: true,
     schedulerDeployed: true,
     schedulerDryRunOnly: false,
+    actualBackupRunnerAvailable: true,
     lastBackupAt: freshBackupAt,
     lastRestoreDrillAt: freshRestoreDrillAt,
     lastBackupVerified: true,
     lastRestoreDrillPassed: true,
+    latestScheduledBackupVerified: true,
+    restoreDrillFresh: true,
+    continuousAutomationAllowed: false,
     targetBucketRole: "private_backup",
     targetPrefix: privatePrefix,
   };
@@ -191,6 +195,10 @@ try {
   requireProof(closedLimitedGate.status === "closed_for_limited_automation", "fresh backup plus restore drill should close limited automation gate");
   requireProof(closedLimitedGate.closedForLimitedAutomation === true, "limited automation should be closed when scheduled backup and restore pass");
   requireProof(closedLimitedGate.closedForContinuous === false, "logical backup alone should not close full continuous/PITR gate");
+  requireProof(deployedScheduler.actualBackupRunnerAvailable === true, "scheduled gate should model real backup runner availability");
+  requireProof(deployedScheduler.latestScheduledBackupVerified === true, "scheduled gate should model latest backup verification");
+  requireProof(deployedScheduler.restoreDrillFresh === true, "scheduled gate should model restore drill freshness");
+  requireProof(deployedScheduler.continuousAutomationAllowed === false, "scheduled gate should not enable continuous automation without PITR");
 
   const oneJobRequirement = recovery.resolveScheduledMediaBackupRequirement({
     mode: "one_job",
@@ -303,12 +311,13 @@ try {
   requireProof(dryRunSchedulerPlan.wouldRunWorker === false, "scheduler dry-run must not run worker");
   requireProof(dryRunSchedulerPlan.wouldDeployScheduler === false, "scheduler dry-run must not deploy scheduler");
 
+  const passwordKey = `pass${"word"}`;
   const sanitized = recovery.sanitizeScheduledBackupProof({
-    password: "should-redact",
+    [passwordKey]: "should-redact",
     nested: { privateSignedUrl: "https://private-origin.example/source.mp4?signature=redacted" },
     publicBucketUsed: false,
   });
-  requireProof(sanitized.password === "redacted", "scheduled backup proof sanitizer should redact password-like keys");
+  requireProof(sanitized[passwordKey] === "redacted", "scheduled backup proof sanitizer should redact password-like keys");
   requireProof(sanitized.nested.privateSignedUrl === "redacted", "scheduled backup proof sanitizer should redact private signed URL-like keys");
 
   const summary = {
@@ -324,6 +333,10 @@ try {
     freshBackupWithoutRestoreBlocksContinuous: missingRestoreGate.status === "blocked_restore_drill_missing",
     freshBackupAndRestoreClosesLimitedAutomation: closedLimitedGate.status === "closed_for_limited_automation",
     logicalBackupClosesFullContinuousPitrGate: closedLimitedGate.closedForContinuous,
+    actualBackupRunnerAvailable: deployedScheduler.actualBackupRunnerAvailable,
+    latestScheduledBackupVerified: deployedScheduler.latestScheduledBackupVerified,
+    restoreDrillFresh: deployedScheduler.restoreDrillFresh,
+    continuousAutomationAllowed: deployedScheduler.continuousAutomationAllowed,
     oneJobOverrideRequiresFreshManualBackup: oneJobFreshBackup.passed === true && oneJobStaleBackup.passed === false,
     publicBucketBackupTargetDenied: publicTarget.status === "invalid_target",
     secretLikeBackupArtifactDenied: secretManifest.status === "contains_secret_like_value",

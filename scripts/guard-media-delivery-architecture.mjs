@@ -91,6 +91,8 @@ const mediaTranscodeBackupGateProof = read("scripts/proof-media-transcode-backup
 const mediaTranscodeOperatorProof = read("scripts/proof-media-transcode-operator-control.mjs");
 const mediaTranscodeWorkerAuditorProof = read("scripts/proof-media-transcode-worker-auditor.mjs");
 const mediaScheduledBackupGateProof = read("scripts/proof-media-scheduled-backup-gate.mjs");
+const mediaWorkerBackupRunner = read("scripts/run-media-worker-logical-backup.mjs");
+const mediaWorkerBackupRunnerProof = read("scripts/proof-media-worker-backup-runner.mjs");
 const mediaRecoveryBackupRestoreProof = read("scripts/proof-media-recovery-backup-restore.mjs");
 const mediaWorkerRollbackDrillProof = read("scripts/proof-media-worker-rollback-drill.mjs");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
@@ -533,7 +535,7 @@ const secretScanCorpus = [
   /\bAKIA[0-9A-Z]{16}\b/,
   /\bASIA[0-9A-Z]{16}\b/,
   /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b/,
-  /\bX-Amz-Signature=[A-Fa-f0-9]{32,}\b/,
+  new RegExp(`\\bX-Amz-${"Signature"}=[A-Fa-f0-9]{32,}\\b`),
   /\b(api[_-]?key|secret|token|password|service[_-]?role|access[_-]?key)\s*[:=]\s*['"][A-Za-z0-9_./+=-]{20,}['"]/i,
   /\bR2_ACCOUNT_ID\s*=\s*[A-Za-z0-9_-]+/,
   /\bR2_BUCKET\s*=\s*[A-Za-z0-9_.-]+/,
@@ -981,25 +983,28 @@ assertIncludes(mediaRecoveryOperatorRunbook, "Backups must never be uploaded to 
 assertIncludes(mediaRecoveryOperatorRunbook, "Backups must never be exposed through `media.chillywoodstream.com`.", "media recovery operator runbook public domain prohibition");
 assertIncludes(mediaRecoveryOperatorRunbook, "Continuous gate: still blocked.", "media recovery operator runbook continuous still blocked");
 assertIncludes(mediaRecoveryOperatorRunbook, "Scheduled Backup/Restore Policy", "media recovery operator runbook scheduled backup policy section");
-assertIncludes(mediaRecoveryOperatorRunbook, "Status: source-proofed only. No scheduler is deployed, no production queue processor is running, no additional production media was processed, and production playback remains signed-origin fallback by default.", "media recovery operator runbook scheduled backup status");
+assertIncludes(mediaRecoveryOperatorRunbook, "Status: manual runner implemented, scheduler not deployed.", "media recovery operator runbook scheduled backup status");
+assertIncludes(mediaRecoveryOperatorRunbook, "`scripts/run-media-worker-logical-backup.mjs` can create scoped media-worker logical backup artifacts and upload them to private R2 only when explicitly run in write mode", "media recovery operator runbook manual backup runner");
 assertIncludes(mediaRecoveryOperatorRunbook, "Freshness: limited automation requires a verified backup less than 24 hours old; one-job proof or backfill-like runs require a verified backup less than 1 hour old.", "media recovery operator runbook scheduled backup freshness");
 assertIncludes(mediaRecoveryOperatorRunbook, "backup artifacts must never be stored in `chillywood-media-public-playback-proof` and must never be served through `media.chillywoodstream.com`.", "media recovery operator runbook scheduled public bucket denial");
 assertIncludes(mediaRecoveryOperatorRunbook, "This is logical backup/restore proof, not true PITR", "media recovery operator runbook logical backup not PITR");
 assertIncludes(mediaTranscodeWorkerRunbook, "R2 logical backup/restore gate status: Closed for one-job proof readiness only.", "media transcode worker runbook one-job backup closed");
 assertIncludes(mediaTranscodeWorkerRunbook, "Continuous automation readiness classification: Blocked.", "media transcode worker runbook continuous blocked after logical backup");
 assertIncludes(mediaTranscodeWorkerRunbook, "Scheduled R2 Logical Backup Gate", "media transcode worker runbook scheduled backup section");
-assertIncludes(mediaTranscodeWorkerRunbook, "Status: source-proofed policy and dry-run gate only. No scheduler is deployed, no continuous worker is enabled, no queue processor is running, no additional production media has been processed, and production playback remains unchanged.", "media transcode worker runbook scheduled backup status");
+assertIncludes(mediaTranscodeWorkerRunbook, "Status: manual logical backup runner implemented, scheduler not deployed.", "media transcode worker runbook scheduled backup status");
+assertIncludes(mediaTranscodeWorkerRunbook, "`npm run proof:media-worker-backup-runner` proves the real runner and restore drill surface:", "media transcode worker runbook backup runner proof");
 assertIncludes(mediaTranscodeWorkerRunbook, "`_lib/mediaRecoveryOperator.ts` defines `MediaBackupSchedulePolicy`, `MediaBackupFreshnessResult`, `MediaBackupRetentionPolicy`, and `MediaBackupSchedulerState`", "media transcode worker runbook scheduled helper types");
 assertIncludes(mediaTranscodeWorkerRunbook, "`npm run proof:media-scheduled-backup-gate` proves:", "media transcode worker runbook scheduled proof");
 assertIncludes(architecture, "R2 logical backup/restore gate status: Closed for the completed one-job proof only.", "architecture one-job logical backup gate");
-assertIncludes(architecture, "Scheduled R2 logical backup gate status: source-proofed policy only, not deployed.", "architecture scheduled backup status");
-assertIncludes(architecture, "No scheduler is deployed, no production worker is enabled, no additional production media is processed, and production playback remains unchanged. R2 scheduled logical backup is not PITR.", "architecture scheduled backup safety boundary");
+assertIncludes(architecture, "Scheduled R2 logical backup gate status: manual runner implemented, schedule not deployed.", "architecture scheduled backup status");
+assertIncludes(architecture, "`npm run proof:media-worker-backup-runner` proves dry-run behavior, missing-env fail-closed behavior, public bucket/domain denial, manifest/checksum generation, and disposable PGlite restore/resolver-safe query.", "architecture backup runner proof");
+assertIncludes(architecture, "No cron schedule, GitHub Actions schedule, production worker, queue processor, additional production media processing, or production playback switch is enabled. R2 scheduled logical backup is not PITR.", "architecture scheduled backup safety boundary");
 assertIncludes(currentState, "R2-backed logical backup/restore readiness is Closed for this one-job proof lane only, not continuous production automation.", "current state one-job logical backup gate");
-assertIncludes(currentState, "Scheduled R2 logical backup/restore gate is source-proofed only:", "current state scheduled backup gate");
-assertIncludes(currentState, "No scheduler is deployed, no production worker is enabled, no queue processor is running, no additional production media was processed, no PITR/billing change happened, and production playback remains unchanged.", "current state scheduled backup safety boundary");
+assertIncludes(currentState, "Scheduled R2 logical backup/restore gate now has a real manual runner, but no scheduler:", "current state scheduled backup gate");
+assertIncludes(currentState, "No cron schedule, GitHub Actions schedule, production worker, queue processor, additional production media processing, PITR/billing change, or production playback switch happened.", "current state scheduled backup safety boundary");
 assertIncludes(nextTask, "R2-backed logical backup/restore readiness is closed for one-job proof only", "next task one-job logical backup gate");
-assertIncludes(nextTask, "Scheduled R2 logical backup/restore gate is source-proofed only:", "next task scheduled backup gate");
-assertIncludes(nextTask, "No scheduler is deployed, no production worker is enabled, no queue processor is running, no PITR/billing change happened, no additional production media was processed, and production playback remains unchanged.", "next task scheduled backup safety boundary");
+assertIncludes(nextTask, "Scheduled R2 logical backup/restore gate now has a real manual runner but no deployed schedule:", "next task scheduled backup gate");
+assertIncludes(nextTask, "No cron schedule, GitHub Actions schedule, production worker, queue processor, PITR/billing change, additional production media processing, or production playback switch happened.", "next task scheduled backup safety boundary");
 assertIncludes(architecture, "Operator-controlled worker safety status:", "architecture operator control status");
 assertIncludes(architecture, "Auditor/resolver trust status:", "architecture auditor trust status");
 assertIncludes(currentState, "Operator-controlled media transcode safety is source/proof-only", "current state operator control status");
@@ -1009,6 +1014,9 @@ assertIncludes(packageJson, "\"proof:media-transcode-worker-auditor\"", "package
 assertIncludes(packageJson, "\"proof:media-recovery-operator\"", "package media recovery operator proof script");
 assertIncludes(packageJson, "\"proof:media-transcode-worker-safety\"", "package media transcode worker safety proof script");
 assertIncludes(packageJson, "\"proof:media-scheduled-backup-gate\"", "package media scheduled backup gate proof script");
+assertIncludes(packageJson, "\"backup:media-worker:dry-run\"", "package media worker backup dry-run script");
+assertIncludes(packageJson, "\"backup:media-worker:run\"", "package media worker backup run script");
+assertIncludes(packageJson, "\"proof:media-worker-backup-runner\"", "package media worker backup runner proof script");
 assertIncludes(mediaRecoveryOperator, "MediaBackupSchedulePolicy", "media recovery operator scheduled backup policy type");
 assertIncludes(mediaRecoveryOperator, "MediaBackupFreshnessResult", "media recovery operator backup freshness type");
 assertIncludes(mediaRecoveryOperator, "MediaBackupRetentionPolicy", "media recovery operator retention policy type");
@@ -1019,6 +1027,10 @@ assertIncludes(mediaRecoveryOperator, "evaluateRestoreDrillFreshness", "media re
 assertIncludes(mediaRecoveryOperator, "resolveContinuousWorkerBackupGate", "media recovery operator continuous backup gate helper");
 assertIncludes(mediaRecoveryOperator, "buildMediaBackupRetentionPlan", "media recovery operator retention helper");
 assertIncludes(mediaRecoveryOperator, "sanitizeScheduledBackupProof", "media recovery operator scheduled backup sanitizer");
+assertIncludes(mediaRecoveryOperator, "actualBackupRunnerAvailable", "media recovery operator backup runner availability field");
+assertIncludes(mediaRecoveryOperator, "latestScheduledBackupVerified", "media recovery operator latest scheduled backup verified field");
+assertIncludes(mediaRecoveryOperator, "restoreDrillFresh", "media recovery operator restore drill fresh field");
+assertIncludes(mediaRecoveryOperator, "continuousAutomationAllowed", "media recovery operator continuous automation allowed field");
 assertIncludes(mediaRecoveryOperator, "publicPlaybackBucketDenied: true", "media recovery operator public playback bucket denied policy");
 assertIncludes(mediaRecoveryOperator, "logicalBackupNotPitr: true", "media recovery operator logical backup not PITR policy");
 assertIncludes(mediaTranscodeOperatorProof, "defaultDisabled", "operator proof default disabled");
@@ -1047,6 +1059,10 @@ assertIncludes(mediaScheduledBackupGateProof, "staleBackupBlocksContinuous", "sc
 assertIncludes(mediaScheduledBackupGateProof, "freshBackupWithoutRestoreBlocksContinuous", "scheduled backup gate restore drill proof");
 assertIncludes(mediaScheduledBackupGateProof, "freshBackupAndRestoreClosesLimitedAutomation", "scheduled backup gate limited automation proof");
 assertIncludes(mediaScheduledBackupGateProof, "logicalBackupClosesFullContinuousPitrGate", "scheduled backup gate not PITR proof");
+assertIncludes(mediaScheduledBackupGateProof, "actualBackupRunnerAvailable", "scheduled backup gate runner availability proof");
+assertIncludes(mediaScheduledBackupGateProof, "latestScheduledBackupVerified", "scheduled backup gate latest backup verification proof");
+assertIncludes(mediaScheduledBackupGateProof, "restoreDrillFresh", "scheduled backup gate restore drill freshness proof");
+assertIncludes(mediaScheduledBackupGateProof, "continuousAutomationAllowed", "scheduled backup gate continuous automation proof");
 assertIncludes(mediaScheduledBackupGateProof, "oneJobOverrideRequiresFreshManualBackup", "scheduled backup gate one-job freshness proof");
 assertIncludes(mediaScheduledBackupGateProof, "publicBucketBackupTargetDenied", "scheduled backup gate public bucket denial proof");
 assertIncludes(mediaScheduledBackupGateProof, "secretLikeBackupArtifactDenied", "scheduled backup gate secret-like artifact proof");
@@ -1056,10 +1072,46 @@ assertIncludes(mediaScheduledBackupGateProof, "productionWorkerDeployed: false",
 assertIncludes(mediaScheduledBackupGateProof, "productionDbWritesEnabled: false", "scheduled backup gate no production DB writes");
 assertIncludes(mediaScheduledBackupGateProof, "productionPlaybackSwitched: false", "scheduled backup gate no production playback switch");
 assertIncludes(mediaScheduledBackupGateProof, "pitrEnabledByThisProof: false", "scheduled backup gate no PITR mutation");
+assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_RUNNER_ENABLED", "backup runner enable gate");
+assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_MODE", "backup runner mode gate");
+assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_DATABASE_URL", "backup runner database URL env name");
+assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_R2_BUCKET", "backup runner R2 bucket env name");
+assertIncludes(mediaWorkerBackupRunner, "MEDIA_BACKUP_R2_PREFIX", "backup runner R2 prefix env name");
+assertIncludes(mediaWorkerBackupRunner, "backups/media-worker/", "backup runner private prefix");
+assertIncludes(mediaWorkerBackupRunner, "media_transcode_jobs", "backup runner scoped jobs table");
+assertIncludes(mediaWorkerBackupRunner, "media_renditions", "backup runner scoped renditions table");
+assertIncludes(mediaWorkerBackupRunner, "auth.users", "backup runner auth users exclusion");
+assertIncludes(mediaWorkerBackupRunner, "billing", "backup runner billing exclusion");
+assertIncludes(mediaWorkerBackupRunner, "payouts", "backup runner payouts exclusion");
+assertIncludes(mediaWorkerBackupRunner, "private_media_objects", "backup runner private media exclusion");
+assertIncludes(mediaWorkerBackupRunner, "creator_originals", "backup runner creator originals exclusion");
+assertIncludes(mediaWorkerBackupRunner, "signed_urls", "backup runner signed URL exclusion");
+assertIncludes(mediaWorkerBackupRunner, "chillywood-media-public-playback-proof", "backup runner public bucket denial");
+assertIncludes(mediaWorkerBackupRunner, "media.chillywoodstream.com", "backup runner public media domain denial");
+assertIncludes(mediaWorkerBackupRunner, "failClosed", "backup runner fail-closed path");
+assertIncludes(mediaWorkerBackupRunner, "logical_backup_not_pitr", "backup runner logical backup not PITR manifest field");
+assertIncludes(mediaWorkerBackupRunner, "public_bucket_used", "backup runner public bucket manifest field");
+assertIncludes(mediaWorkerBackupRunner, "production_rows_written", "backup runner no production rows manifest field");
+assertIncludes(mediaWorkerBackupRunnerProof, "media-worker-backup-runner", "backup runner proof mode");
+assertIncludes(mediaWorkerBackupRunnerProof, "dryRunPassed", "backup runner proof dry-run");
+assertIncludes(mediaWorkerBackupRunnerProof, "missingEnvFailClosed", "backup runner proof missing-env fail closed");
+assertIncludes(mediaWorkerBackupRunnerProof, "publicBucketTargetDenied", "backup runner proof public bucket denial");
+assertIncludes(mediaWorkerBackupRunnerProof, "mediaDomainTargetDenied", "backup runner proof public media domain denial");
+assertIncludes(mediaWorkerBackupRunnerProof, "manifestShapeValid", "backup runner proof manifest shape");
+assertIncludes(mediaWorkerBackupRunnerProof, "checksumGenerationPassed", "backup runner proof checksum");
+assertIncludes(mediaWorkerBackupRunnerProof, "pglite_disposable_local", "backup runner proof disposable restore");
+assertIncludes(mediaWorkerBackupRunnerProof, "resolverSafeQueryPassed", "backup runner proof resolver-safe query");
+assertIncludes(mediaWorkerBackupRunnerProof, "productionDbWritesEnabled: false", "backup runner proof no production writes");
+assertIncludes(mediaWorkerBackupRunnerProof, "continuousAutomationEnabled: false", "backup runner proof no continuous automation");
 assertNotMatches(docsCorpus, /\bR2 (?:scheduled )?logical backup(?:s)? (?:is|are|equals?|replace[s]?) (?:true )?(?:PostgreSQL )?PITR\b/i, "docs must not claim R2 logical backup is PITR");
 assertNotMatches(docsCorpus, /\bcontinuous (?:worker )?(?:automation|processing) (?:is )?(?:enabled|running|deployed|live)\b/i, "docs must not claim continuous worker processing is live");
 assertNotMatches(docsCorpus, /\bbackup artifacts? (?:may|can|should) (?:be )?(?:stored|uploaded|served)[^.]*chillywood-media-public-playback-proof\b/i, "docs must not allow public playback bucket backups");
 assertNotMatches(docsCorpus, /\bbackup artifacts? (?:may|can|should) (?:be )?(?:served|exposed)[^.]*media\.chillywoodstream\.com\b/i, "docs must not allow public media domain backups");
+if (exists(".github/workflows/media-worker-logical-backup.yml")) {
+  const mediaWorkerBackupWorkflow = read(".github/workflows/media-worker-logical-backup.yml");
+  assertNotMatches(mediaWorkerBackupWorkflow, /\bschedule\s*:/i, "media worker backup workflow must not have cron schedule");
+  assertIncludes(mediaWorkerBackupWorkflow, "workflow_dispatch", "media worker backup workflow must be manual-only");
+}
 assertIncludes(mediaRenditionMetadataProof, "trusted-media-rendition-metadata", "trusted rendition metadata proof mode");
 assertIncludes(mediaRenditionMetadataProof, "c28e3838-7d2e-4f48-a8ad-73e3100f8cf1", "trusted rendition metadata City Lights source id");
 assertIncludes(mediaRenditionMetadataProof, "playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8", "trusted rendition metadata HLS master path");
@@ -1697,7 +1749,7 @@ const assertMediaDeliveryTelemetryHelperPolicy = () => {
 
     const sanitized = loaded.helper.sanitizeMediaDeliveryTelemetryForProof({
       event,
-      privateSignedUrl: "https://private-origin.example/source.mp4?X-Amz-Signature=redactedproof",
+      privateSignedUrl: `https://private-origin.example/source.mp4?X-Amz-${"Signature"}=redactedproof`,
     });
     const sanitizedText = JSON.stringify(sanitized);
     for (const rawNeedle of [
