@@ -51,6 +51,7 @@ Trusted backend migration path:
 - A separate `media_renditions` table is safer than extending live `video_renditions` in this lane because current creator-video playback, storage signing, and resolver fallback behavior remain untouched until explicit owner approval.
 - The draft RLS/write contract makes service role or backend worker authority the only trusted write path for ready/public-safe rendition metadata. Clients cannot mark rows ready, set `public_playback_path`, set `is_public_playback_safe`, set `worker_version`, set `source_hash`, or create public CDN eligibility from client-controlled data.
 - `npm run proof:media-rendition-migration-policy` statically proves the draft SQL and docs keep client writes blocked, require ready/public-safe/clean/moderation-allowed public CDN rows, block original/master normal playback, block Premium/private public CDN without token mode, and keep production playback unchanged.
+- `npm run proof:media-rendition-migration-dry-run` currently passes static SQL validation only. Local/shadow apply and live RLS role simulation were skipped because Docker/local Supabase/Postgres, `psql`, and a safe `MEDIA_RENDITION_DRY_RUN_DATABASE_URL` are unavailable in this shell; production migration remains unapplied.
 
 Client integration:
 
@@ -83,6 +84,7 @@ The Free VOD rendition enforcement proof was retried against the same selected v
 - Production HLS/ABR renditions are not live in the R2 proof lane. A live production claim still requires a backend worker run from trusted private source, real rendition files, trusted `video_renditions` rows, manifest playback, resolver return, segment cache proof, and fallback proof.
 - Trusted rendition metadata for Cloudflare R2/HLS is source/proof-only. `_lib/mediaRenditionMetadata.ts` and `npm run proof:media-rendition-metadata` prove a local City Lights fixture can bridge trusted ready public-safe HLS metadata into the existing `media.chillywoodstream.com` allowlist, while not-ready, original/master, Premium/private, unsafe scan/moderation, wrong bucket role, non-public prefix, non-allowlisted, and default creator-video source paths all block or fall back. No production `video_renditions` writes are live.
 - Trusted backend migration policy is design/proof-only. The draft `media_transcode_jobs` and `media_renditions` migration is not applied, no production DB writes are live, and production playback remains signed-origin fallback by default.
+- Trusted backend migration dry-run is static-only at this checkpoint; runtime local/shadow RLS checks are pending a safe local/shadow database.
 - Full live enforcement of Free/Premium VOD quality remains blocked until:
   - real rendition files are generated,
   - rendition rows are inserted by a trusted worker/service,

@@ -165,6 +165,33 @@ The draft creates:
 
 The draft migration has not been applied to production.
 
+## Dry-Run Status
+
+Current repo proof:
+
+- `npm run proof:media-rendition-migration-policy`
+- `npm run proof:media-rendition-migration-dry-run`
+
+The dry-run proof script statically validates the draft SQL every time: table names, trusted columns, indexes, grants, RLS enablement, client false-write policies, service-role worker grants, comments, original/master constraints, public CDN eligibility constraints, and ready-row worker proof requirements.
+
+Current workstation result on 2026-07-09:
+
+- Static SQL validation passed.
+- Supabase CLI is available, but local Supabase/Postgres runtime is not available from this shell.
+- `supabase db push --dry-run --local` did not apply anything; it failed before migration execution because local Postgres on `127.0.0.1:54322` was not reachable.
+- `supabase status` confirmed Docker/local Supabase was not reachable because the Docker daemon was not running.
+- No `psql`, `postgres`, `initdb`, or `pg_ctl` executable was available in the shell.
+- No `MEDIA_RENDITION_DRY_RUN_DATABASE_URL` safe local/shadow database URL was set.
+- Therefore local/shadow apply and live RLS role simulation were skipped and remain pending.
+
+Runtime dry-run behavior when a safe database is provided:
+
+- Set `MEDIA_RENDITION_DRY_RUN_DATABASE_URL` to a local or explicitly test/shadow-labeled Postgres URL.
+- The proof script refuses production-looking URLs and does not print connection strings.
+- For local/shadow runtime mode, the script creates a temporary database, applies minimal fixture schema plus the draft migration, verifies tables/indexes/RLS/grants/policies, proves anon/authenticated client trusted writes are denied, proves service-role/worker queued job and ready public-safe rendition inserts are allowed, proves unsafe/original/Premium public-CDN rows fail, proves resolver-safe public metadata can be selected, then drops the temporary database.
+
+This dry-run status does not apply the migration to production and does not make production transcoding or production playback live.
+
 ## Backfill Strategy
 
 1. Do not backfill existing production creator videos automatically.
