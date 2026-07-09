@@ -91,6 +91,20 @@ First production read-only linked run on 2026-07-09:
 
 First full production CLI auto-detect cycle result: Pass-No-op. Backup preflight/status/verify-latest/restore-drill, worker preflight/status, automation status, discovery, plan-auto, dry-run-auto, and report all ran successfully. The report matched the dry-run plan with `calculatedBatchSize=0`, `riskLevel=blocked`, reason `no_eligible_candidates`, selected count `0`, rollback scopes `[]`, no production DB writes, no media upload, no daemon/cron/scheduler/queue processor, and no playback broadening.
 
+## Catalog Readiness
+
+Catalog readiness bridges the no-op discovery state to future safe transcode candidates. It is read-only and plan-only:
+
+```sh
+npm run media-catalog:status
+npm run media-catalog:readiness-plan
+npm run media-catalog:scan-plan
+```
+
+`_lib/mediaCatalogReadiness.ts` and `scripts/media-catalog-readiness-cli.mjs` classify rows as `ready_for_transcode`, `already_audited_hls`, `needs_scan`, `needs_moderation_review`, `private_excluded`, `premium_excluded`, `original_master_excluded`, `missing_source`, `unsupported_format`, `blocked_moderation`, or `denied_source`. The first linked readback scanned `27` rows and found `ready_for_transcode=0`, `already_audited_hls=1`, `needs_scan=5`, `private_excluded=12`, `premium_excluded=9`, and zero moderation-review, original/master, missing-source, unsupported, blocked, or denied rows.
+
+The five `needs_scan` rows are scan candidates only. The catalog readiness CLI does not execute scans, does not mark media clean, does not write production rows, does not process/transcode media, and does not switch playback. Unscanned or manual-review media may become transcode candidates only after trusted scanner proof and moderation-safe readback. Private and Premium media remain excluded from the public transcode path.
+
 ## Backup Gate
 
 Automation must verify the private R2 logical backup gate before any future write:

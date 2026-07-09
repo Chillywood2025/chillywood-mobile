@@ -12,7 +12,7 @@ Status: controlled rollout guide for audited public-safe Cloudflare R2/HLS playb
 - Latest private backup prefix: `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`.
 - Continuous worker automation and broad backfill remain blocked.
 - Active rollout scope: trusted audited public-safe rows only; currently production row counts are `media_transcode_jobs=1`, `media_renditions=2`, `unsafe_cdn_rows=0`, and `other_source_renditions=0`.
-- First Batch 1 candidate plan: `docs/MEDIA_CDN_BATCH_1_CANDIDATE_PLAN.md`. The read-only catalog audit found `27` creator-video rows, `1` already eligible audited CDN/HLS source, `0` new selectable public-safe Batch 1 candidates, `0` needs-transcode rows under the current gate, `12` not-public rows, `10` paid/Premium locked rows, `27` source rows without `clean` or `approved` scan status, and `2` rows with moderation not allowed/approved/clean. Batch 1 is empty until scan approval and owner approval make new public-safe rows eligible.
+- First Batch 1 candidate plan: `docs/MEDIA_CDN_BATCH_1_CANDIDATE_PLAN.md` is historical. Current linked CLI readiness readback found `27` creator-video rows, `1` already eligible audited CDN/HLS source, `0` ready-for-transcode rows, `5` public scan candidates, `12` private/non-public rows, and `9` Premium rows. Batch 1 is empty until scanner proof and moderation-safe readback make new public-safe rows eligible.
 
 ## Rollout Modes
 
@@ -91,9 +91,11 @@ The preferred media-worker expansion path is CLI auto-detect, not manual source 
 
 For future limited automation, `media-automation:run-continuous-once` is a bounded one-iteration CLI surface only. It requires `MEDIA_AUTOMATION_CONTINUOUS_ONCE_CONFIRM=I_UNDERSTAND_ONE_CONTINUOUS_LIMITED_CYCLE`, a fresh backup/restore gate, no active unfinished jobs, no unsafe CDN rows, audit/rollback/fallback/kill-switch gates, and still stops after the single iteration. Disabled systemd templates under `ops/media-automation/systemd/` are not installed or enabled.
 
-The first production catalog audit is intentionally a no-run plan: no additional videos are selected because every non-City-Lights row fails at least one public-safe gate. Six non-City-Lights rows are public, source-present, non-paid, and moderation-clean, but remain blocked by `scan_status=manual_review`; they must not be processed until scan approval is explicit.
+The first production catalog audit is intentionally a no-run plan: no additional videos are selected because every non-City-Lights row fails at least one public-safe gate. Five non-City-Lights rows are public, source-present, non-paid, and moderation-clean, but remain blocked by `scan_status=manual_review`; they must not be processed until scanner proof and scan approval are explicit.
 
 The first full production CLI auto-detect cycle also ended as Pass-No-op. `media-automation:report` confirmed `calculatedBatchSize=0`, reason `no_eligible_candidates`, no selected candidates, no rollback scopes, no `run-auto`, no production DB writes, no media uploads, and no playback broadening.
+
+Catalog readiness automation narrows that next step without processing media. `npm run media-catalog:status`, `npm run media-catalog:readiness-plan`, and `npm run media-catalog:scan-plan` currently report `ready_for_transcode=0`, `already_audited_hls=1`, `needs_scan=5`, `private_excluded=12`, and `premium_excluded=9`. The `needs_scan` rows are public scan candidates only; they are not CDN/HLS or transcode candidates until trusted scanner proof plus moderation-safe readback promotes them. The readiness CLI is read-only and does not execute scans, mark media clean, write rows, upload media, or switch playback.
 
 ## Activation
 

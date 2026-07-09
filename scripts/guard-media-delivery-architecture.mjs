@@ -60,8 +60,9 @@ const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.m
 const mediaTranscodeWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
 const mediaRecoveryOperatorRunbook = read("docs/MEDIA_RECOVERY_OPERATOR_RUNBOOK.md");
 const mediaAutomationOperatorRunbook = read("docs/MEDIA_AUTOMATION_OPERATOR_RUNBOOK.md");
+const mediaCatalogReadinessRunbook = read("docs/MEDIA_CATALOG_READINESS_RUNBOOK.md");
 const wave2Doc = read("docs/WAVE2_CREATOR_MEDIA_CLOSURE_RUNBOOK.md");
-const docsCorpus = [architecture, vodDoc, mediaMigrationPlan, mediaTranscodeWorkerRunbook, mediaRecoveryOperatorRunbook, mediaAutomationOperatorRunbook, wave2Doc].join("\n\n");
+const docsCorpus = [architecture, vodDoc, mediaMigrationPlan, mediaTranscodeWorkerRunbook, mediaRecoveryOperatorRunbook, mediaAutomationOperatorRunbook, mediaCatalogReadinessRunbook, wave2Doc].join("\n\n");
 const mediaStatusCorpus = [architecture, currentState, nextTask].join("\n\n");
 
 const mediaStorage = read("_lib/mediaStorage.ts");
@@ -81,6 +82,7 @@ const mediaAutomationWorkerLoop = read("_lib/mediaAutomationWorkerLoop.ts");
 const chillywoodAutonomyPolicy = read("_lib/chillywoodAutonomyPolicy.ts");
 const mediaAutomationBackfillPolicy = read("_lib/mediaAutomationBackfillPolicy.ts");
 const mediaAutomationQueueProcessor = read("_lib/mediaAutomationQueueProcessor.ts");
+const mediaCatalogReadiness = read("_lib/mediaCatalogReadiness.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const vodQuality = read("_lib/vodQuality.ts");
@@ -115,6 +117,7 @@ const mediaPlaybackCdnEligibilityProof = read("scripts/proof-media-playback-cdn-
 const mediaCdnRolloutPlanner = read("scripts/media-cdn-rollout-planner.mjs");
 const mediaCdnRolloutPlannerProof = read("scripts/proof-media-cdn-rollout-planner.mjs");
 const mediaAutomationCli = read("scripts/media-automation-cli.mjs");
+const mediaCatalogReadinessCli = read("scripts/media-catalog-readiness-cli.mjs");
 const mediaAutomationControllerProof = read("scripts/proof-media-automation-controller.mjs");
 const mediaAutomationDiscoveryProof = read("scripts/proof-media-automation-discovery.mjs");
 const mediaAutomationBatchPolicyProof = read("scripts/proof-media-automation-batch-policy.mjs");
@@ -124,6 +127,7 @@ const mediaAutomationSchedulerTemplatesProof = read("scripts/proof-media-automat
 const mediaAutomationCliProof = read("scripts/proof-media-automation-cli.mjs");
 const mediaAutomationBatchPlannerProof = read("scripts/proof-media-automation-batch-planner.mjs");
 const mediaAutomationWorkerLoopProof = read("scripts/proof-media-automation-worker-loop.mjs");
+const mediaCatalogReadinessProof = read("scripts/proof-media-catalog-readiness.mjs");
 const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 const mediaRenditionMigrationDryRunProof = read("scripts/proof-media-rendition-migration-dry-run.mjs");
 
@@ -145,6 +149,8 @@ const sourceCorpus = [
   chillywoodAutonomyPolicy,
   mediaAutomationBackfillPolicy,
   mediaAutomationQueueProcessor,
+  mediaCatalogReadiness,
+  mediaCatalogReadinessCli,
   mediaAutomationCli,
   mediaTranscodeWorkerCli,
   mediaStorageFunction,
@@ -761,6 +767,30 @@ assertIncludes(mediaAutomationOperatorRunbook, "MEDIA_AUTOMATION_RUN_CONFIRM=I_U
 assertIncludes(mediaAutomationOperatorRunbook, "MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_AUTO_DETECT_BATCH", "media automation runbook auto-detect confirmation");
 assertIncludes(mediaAutomationOperatorRunbook, "Audit pass is required before resolver trust.", "media automation runbook audit gate");
 assertIncludes(mediaAutomationOperatorRunbook, "Rollback plans target only the exact `batch_id` and exact R2 output prefix.", "media automation runbook rollback scope");
+assertIncludes(architecture, "Catalog readiness automation status: source/proofed and read-only.", "catalog readiness architecture status");
+assertIncludes(architecture, "`ready_for_transcode=0`, `already_audited_hls=1`, `needs_scan=5`, `private_excluded=12`, `premium_excluded=9`", "catalog readiness linked readback");
+assertIncludes(mediaCatalogReadinessRunbook, "Catalog readiness CLI is read-only.", "catalog readiness runbook read-only status");
+assertIncludes(mediaCatalogReadinessRunbook, "This lane does not execute scans", "catalog readiness runbook scan execution boundary");
+assertIncludes(mediaCatalogReadinessRunbook, "Do not mark unscanned media clean without scanner proof.", "catalog readiness runbook scan proof boundary");
+assertIncludes(mediaCatalogReadinessRunbook, "Private and Premium media remain excluded.", "catalog readiness runbook private Premium boundary");
+assertIncludes(mediaCatalogReadiness, "| \"needs_scan\"", "catalog readiness needs scan classification");
+assertIncludes(mediaCatalogReadiness, "| \"ready_for_transcode\"", "catalog readiness ready classification");
+assertIncludes(mediaCatalogReadiness, "| \"private_excluded\"", "catalog readiness private classification");
+assertIncludes(mediaCatalogReadiness, "| \"premium_excluded\"", "catalog readiness Premium classification");
+assertIncludes(mediaCatalogReadiness, "canQueueMediaForScan", "catalog readiness scan queue helper");
+assertIncludes(mediaCatalogReadiness, "canPromoteScanResultToTranscodeEligibility", "catalog readiness transcode promotion helper");
+assertIncludes(mediaCatalogReadiness, "classification === \"ready_for_transcode\"", "catalog readiness promotion requires ready");
+assertIncludes(mediaCatalogReadinessCli, "scanExecutionAvailableInThisCommand: false", "catalog readiness CLI scan execution disabled");
+assertIncludes(mediaCatalogReadinessCli, "productionRowsWritten: false", "catalog readiness CLI no production writes");
+assertIncludes(mediaCatalogReadinessCli, "mediaProcessed: false", "catalog readiness CLI no media processing");
+assertIncludes(mediaCatalogReadinessCli, "playbackSwitched: false", "catalog readiness CLI no playback switch");
+assertIncludes(mediaCatalogReadinessProof, "unscanned public media needs scan", "catalog readiness proof unscanned block");
+assertIncludes(mediaCatalogReadinessProof, "unscanned cannot promote", "catalog readiness proof no unscanned promotion");
+assertIncludes(packageJson, "\"media-catalog:status\"", "package catalog status script");
+assertIncludes(packageJson, "\"media-catalog:readiness-plan\"", "package catalog readiness plan script");
+assertIncludes(packageJson, "\"media-catalog:scan-plan\"", "package catalog scan plan script");
+assertIncludes(packageJson, "\"proof:media-catalog-readiness\"", "package catalog readiness proof script");
+assertNotMatches(mediaCatalogReadinessCli, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "catalog readiness CLI must not mutate DB");
 assertIncludes(mediaAutomationController, "MEDIA_AUTOMATION_DEFAULT_MODE: MediaAutomationMode = \"off\"", "media automation controller off default");
 assertIncludes(mediaAutomationController, "| \"dry_run\"", "media automation controller dry-run mode");
 assertIncludes(mediaAutomationController, "| \"auto_detect\"", "media automation controller auto-detect mode");
