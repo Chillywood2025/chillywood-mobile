@@ -144,6 +144,12 @@ Proof-only transcode queue resolver proof: only a completed ready proof job can 
 
 Proof-only transcode queue telemetry proof: the queue proof builds sanitized HLS `media_delivery_events` shapes with `deliveryFormat=hls`, 360p/480p rendition labels, estimated bytes, observed `cdn_cache_status`, and `proof_mode=true`; no production telemetry writes or table migrations are live.
 
+Trusted rendition metadata foundation status: `_lib/mediaRenditionMetadata.ts` and `npm run proof:media-rendition-metadata` are source/proof-only. They model future trusted Cloudflare R2 HLS rendition rows with delivery format/provider, storage provider, bucket role, public playback path, master manifest path, variant playlist path, cache policy, scan/moderation state, public playback safety, original/master flag, and readiness. No production `video_renditions` writes, production database migration, backend worker write path, or production playback switch is live.
+
+Trusted City Lights HLS fixture status: the proof fixture models 360p and 480p HLS rows for creator video `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1` using master manifest `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8`. The resolver proof returns `media.chillywoodstream.com` only when the row is ready, public, clean or approved, moderation-allowed, `bucket_role=public_playback`, `storage_provider=cloudflare_r2`, `delivery_provider=cloudflare_r2_custom_domain`, `is_public_playback_safe=true`, `is_original=false`, under `playback/public/`, and explicitly allowlisted.
+
+Trusted rendition block proof status: `npm run proof:media-rendition-metadata` proves not-ready rows, original/master rows, Premium rows, private rows, unsafe scan states, moderation-blocked states, wrong bucket roles, non-`playback/public/` prefixes, non-allowlisted public-safe rows, and default creator-video source paths all block or fall back without a public CDN URL.
+
 5 GB resumable upload status: not live; current upload is single signed PUT.
 
 Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domain/cache, with Supabase/Edge resolver access control and direct signed R2/S3-compatible fallback.
@@ -164,6 +170,7 @@ Completed:
 - Local HLS proof worker `scripts/proof-media-delivery-hls-demo.mjs` generated 360p/480p HLS from the approved City Lights public-safe MP4, uploaded proof-only HLS assets under `playback/public/demo/chillywood-city-lights/hls/v1-b670602fa00934ca-hls/`, proved master/variant/segment delivery through `media.chillywoodstream.com`, proved HLS segment cache HIT, and proved resolver eligibility only for the allowlisted HLS master manifest.
 - Proof-only app/player HLS harness proved the allowlisted HLS master URL can be received by the Player source contract, load with duration, report progress, and start playback evidence without switching production playback.
 - Proof-only transcode queue foundation proved the approved City Lights demo can move through local job states, generate 360p/480p HLS, upload proof outputs under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/`, decode through `media.chillywoodstream.com`, resolve only the completed allowlisted HLS master, and prove queue-path segment cache HIT under a narrow proof-only cache rule.
+- Trusted rendition metadata source/proof foundation models future Cloudflare R2 HLS rows and proves only the City Lights ready public-safe HLS fixture can bridge into the existing resolver allowlist.
 - Demo-only resolver eligibility is proved by local proof scripts for explicit `publicPlaybackSafe` assets only.
 - Media delivery telemetry source/proof foundation exists for future `media_delivery_events` and `media_playback_sessions`; backend writes and table migrations remain planned.
 
@@ -172,6 +179,7 @@ Planned:
 - Physical installed-app UI playback proof for future approved demo-media wiring remains optional and pending; the current proof is a resolver-controlled proof-only local app playback harness, not production UI.
 - Media bandwidth telemetry backend writes, table migrations, CDN log ingestion, and provider reconciliation remain planned.
 - Production HLS/transcoding implementation remains planned.
+- Production trusted `video_renditions` or replacement rendition-metadata writes remain planned; the current trusted rendition metadata foundation is source/proof-only.
 - Premium/private signed CDN access remains planned.
 - Production media migration remains planned and requires explicit approval.
 

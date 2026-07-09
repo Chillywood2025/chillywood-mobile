@@ -217,6 +217,7 @@
     "proof:media-delivery-hls-demo": "node ./scripts/proof-media-delivery-hls-demo.mjs",
     "proof:media-delivery-telemetry": "node ./scripts/proof-media-delivery-telemetry.mjs",
     "proof:media-transcode-queue-hls": "node ./scripts/proof-media-transcode-queue-hls.mjs",
+    "proof:media-rendition-metadata": "node ./scripts/proof-media-rendition-metadata.mjs",
     "guard:media-delivery-architecture": "node ./scripts/guard-media-delivery-architecture.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs && npm run guard:live-stage-contract && npm run guard:live-stage-approved-seats",
