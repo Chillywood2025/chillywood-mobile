@@ -298,6 +298,9 @@ assertIncludes(mediaScanAutomation, "decoded_stream_required_for_clean", "scan a
 assertIncludes(mediaScanAutomation, "moderation_not_allowed", "scan automation moderation gate");
 assertIncludes(mediaScanCli, "MEDIA_SCAN_RUN_ONE_CONFIRM", "scan CLI confirmation env");
 assertIncludes(mediaScanCli, "production_scan_write_not_enabled_in_this_source_proof_build", "scan CLI no production write");
+assertIncludes(mediaScanCli, "MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN", "scan CLI trusted download token");
+assertIncludes(mediaScanCli, "media-storage create_download_url", "scan CLI backend signed-download path");
+assertIncludes(mediaScanCli, "trusted_scan_download_access_missing", "scan CLI trusted download missing gate");
 assertIncludes(mediaScanCli, "ffprobe_media_readability_only_not_malware_or_content_moderation", "scan CLI overclaim guard");
 assertIncludes(mediaScanCli, "sourceId: publicSafeToIdentify ? result.sourceId : \"[redacted]\"", "scan CLI private row redaction");
 assertIncludes(mediaScanAutomationProof, "private candidate skipped", "scan proof private skip");

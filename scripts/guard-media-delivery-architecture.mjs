@@ -811,6 +811,10 @@ assertIncludes(mediaScanAutomation, "moderation_not_allowed", "scan automation m
 assertIncludes(mediaScanCli, "MEDIA_SCAN_RUN_ONE_CONFIRM", "scan CLI confirmation env");
 assertIncludes(mediaScanCli, "I_UNDERSTAND_PUBLIC_SCAN_ONE", "scan CLI confirmation value");
 assertIncludes(mediaScanCli, "production_scan_write_not_enabled_in_this_source_proof_build", "scan CLI production write disabled");
+assertIncludes(mediaScanCli, "MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN", "scan CLI trusted download token");
+assertIncludes(mediaScanCli, "media-storage create_download_url", "scan CLI backend signed-download path");
+assertIncludes(mediaScanCli, "trusted_scan_download_access_missing", "scan CLI missing trusted download gate");
+assertIncludes(mediaScanCli, "rawServiceRoleRequired: false", "scan CLI does not require raw local service-role for signed download path");
 assertIncludes(mediaScanCli, "ffprobe_media_readability_only_not_malware_or_content_moderation", "scan CLI scanner type disclosure");
 assertIncludes(mediaScanCli, "sourceId: publicSafeToIdentify ? result.sourceId : \"[redacted]\"", "scan CLI private/Premium identifier redaction");
 assertIncludes(mediaScanAutomationProof, "ffprobe-readable media validates clean", "scan proof ffprobe clean case");

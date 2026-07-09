@@ -2,14 +2,21 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync } from "node:fs";
+import { createWriteStream, mkdtempSync, rmSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 
 const repoRoot = process.cwd();
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
-const validModes = new Set(["status", "plan", "dry-run", "run-one", "audit"]);
+const validModes = new Set(["status", "plan", "dry-run", "run-one", "run-auto", "audit"]);
 const runOneConfirmValue = "I_UNDERSTAND_PUBLIC_SCAN_ONE";
+const runAutoConfirmValue = "I_UNDERSTAND_PUBLIC_SCAN_BATCH";
+const expectedProjectRef = "bmkkhihfbmsnnmcqkoly";
+const defaultFunctionsUrl = `https://${expectedProjectRef}.supabase.co/functions/v1`;
+const mediaStorageFunctionUrl = `${String(process.env.MEDIA_SCAN_FUNCTIONS_URL || defaultFunctionsUrl).replace(/\/+$/g, "")}/media-storage`;
+const privateDownloadMode = String(process.env.MEDIA_SCAN_PRIVATE_DOWNLOAD_MODE || "media-storage-function").trim();
 
 const args = Object.fromEntries(process.argv.slice(2).filter((arg) => arg.startsWith("--")).map((arg) => {
   const [key, ...value] = arg.slice(2).split("=");
@@ -18,13 +25,14 @@ const args = Object.fromEntries(process.argv.slice(2).filter((arg) => arg.starts
 
 const mode = String(args.mode || "status").trim();
 const dataSource = String(args.source || process.env.MEDIA_SCAN_DATABASE_SOURCE || "fixture").trim();
-const maxJobs = Number.parseInt(String(args.maxJobs || process.env.MEDIA_SCAN_MAX_JOBS || "1"), 10);
+const defaultMaxJobs = mode === "run-auto" ? "5" : "1";
+const maxJobs = Number.parseInt(String(args.maxJobs || process.env.MEDIA_SCAN_MAX_JOBS || defaultMaxJobs), 10);
 
 function safeExit(code, payload) {
   const output = JSON.stringify({
     ...payload,
     noSecretsPrinted: true,
-    readOnly: mode !== "run-one",
+    readOnly: !["run-one", "run-auto"].includes(mode),
     mutationAttempted: false,
     productionRowsWritten: false,
     mediaProcessed: false,
@@ -61,6 +69,20 @@ function assertNoSecretLikeText(value) {
   }
 }
 
+function assertSafeDownloadToken() {
+  const token = String(process.env.MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN || "").trim();
+  if (!token) {
+    failClosed("trusted_scan_download_access_missing", {
+      missingCredential: "MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN",
+      acceptedDownloadMode: privateDownloadMode,
+      rawServiceRoleRequired: false,
+      backendPath: "media-storage create_download_url",
+    });
+  }
+  assertNoSecretLikeText({ tokenPresent: true });
+  return token;
+}
+
 function runJsonCommand(command, commandArgs, failureReason, maxBuffer = 50 * 1024 * 1024) {
   const result = spawnSync(command, commandArgs, {
     cwd: repoRoot,
@@ -88,6 +110,160 @@ function runSupabaseLinkedQuery(sql) {
   );
   if (!Array.isArray(parsed.rows)) failClosed("supabase_linked_query_missing_rows");
   return parsed.rows;
+}
+
+function sqlLiteral(value) {
+  return `'${String(value ?? "").replaceAll("'", "''")}'`;
+}
+
+function readStorageMetadataForSource(sourceId) {
+  if (!/^[0-9a-fA-F-]{36}$/.test(String(sourceId || ""))) {
+    failClosed("source_id_unsafe_for_storage_metadata_lookup");
+  }
+  const rows = runSupabaseLinkedQuery(`
+    select
+      coalesce(storage_provider, '') as storage_provider,
+      coalesce(storage_bucket, '') as storage_bucket,
+      coalesce(
+        nullif(storage_object_key, ''),
+        case when coalesce(storage_path, '') !~* '^https?://' then nullif(storage_path, '') else '' end
+      ) as storage_object_key
+    from public.videos
+    where id = ${sqlLiteral(sourceId)}::uuid
+    limit 1;
+  `);
+  const row = rows[0] || {};
+  return {
+    storage_provider: row.storage_provider,
+    storage_bucket: row.storage_bucket,
+    storage_object_key: row.storage_object_key,
+  };
+}
+
+async function runFfprobeLocalFile(filePath) {
+  const versionResult = spawnSync("ffprobe", ["-version"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (versionResult.status !== 0) {
+    return {
+      status: "scan_failed",
+      scannerName: "ffprobe",
+      scannerVersion: "unavailable",
+      scannerType: "ffprobe_media_readability",
+      proof: { observedReadable: false, decodedStreams: 0, errorCode: "ffprobe_unavailable" },
+    };
+  }
+  const scannerVersion = (versionResult.stdout || "ffprobe").split(/\r?\n/)[0]?.trim() || "ffprobe";
+  const result = spawnSync("ffprobe", [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration:stream=codec_type",
+    "-of",
+    "json",
+    filePath,
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status !== 0) {
+    return {
+      status: "scan_failed",
+      scannerName: "ffprobe",
+      scannerVersion,
+      scannerType: "ffprobe_media_readability",
+      proof: { observedReadable: false, decodedStreams: 0, errorCode: "ffprobe_failed" },
+    };
+  }
+  const parsed = JSON.parse(result.stdout || "{}");
+  const decodedStreams = Array.isArray(parsed.streams) ? parsed.streams.length : 0;
+  const durationMillis = Math.round(Number(parsed.format?.duration || 0) * 1000);
+  return {
+    status: decodedStreams > 0 ? "clean" : "scan_failed",
+    scannerName: "ffprobe",
+    scannerVersion,
+    scannerType: "ffprobe_media_readability",
+    proof: {
+      observedReadable: decodedStreams > 0,
+      decodedStreams,
+      durationMillis,
+      errorCode: decodedStreams > 0 ? null : "ffprobe_no_streams",
+    },
+  };
+}
+
+async function downloadViaMediaStorageFunction(row) {
+  if (privateDownloadMode !== "media-storage-function") {
+    failClosed("unsupported_private_scan_download_mode", {
+      privateDownloadMode,
+      supportedModes: ["media-storage-function"],
+    });
+  }
+  const storage = {
+    ...row,
+    ...(row.storage_provider && row.storage_bucket && row.storage_object_key ? {} : readStorageMetadataForSource(row.source_id)),
+  };
+  const provider = String(storage.storage_provider || "").trim().toLowerCase();
+  const bucket = String(storage.storage_bucket || "").trim();
+  const objectKey = String(storage.storage_object_key || "").trim();
+  if (provider !== "s3") {
+    failClosed("trusted_scan_download_provider_not_supported_by_media_storage_path", {
+      storageProvider: provider || "missing",
+      supportedProvider: "s3",
+      fallbackRequired: provider === "supabase" ? "service_role_storage_worker_or_new_backend_stream_function" : "provider_specific_trusted_worker",
+    });
+  }
+  if (!bucket || !objectKey) failClosed("trusted_scan_download_missing_object_metadata");
+  const accessToken = assertSafeDownloadToken();
+  const response = await fetch(mediaStorageFunctionUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      action: "create_download_url",
+      surfaceType: "creator_video",
+      bucket,
+      objectKey,
+      recordId: row.source_id,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload || typeof payload !== "object") {
+    failClosed("trusted_scan_download_function_denied", {
+      httpStatus: response.status,
+      errorCode: typeof payload?.error === "string" ? payload.error : "download_denied",
+    });
+  }
+  const downloadUrl = String(payload.downloadUrl || "").trim();
+  if (!downloadUrl) failClosed("trusted_scan_download_function_missing_url");
+  assertNoSecretLikeText({ downloadUrlRedacted: "[REDACTED_SIGNED_URL]" });
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "chillywood-media-scan-download-"));
+  const tmpFile = path.join(tmpDir, "candidate-media");
+  try {
+    const download = await fetch(downloadUrl);
+    if (!download.ok || !download.body) {
+      failClosed("trusted_scan_download_fetch_failed", { httpStatus: download.status });
+    }
+    await pipeline(download.body, createWriteStream(tmpFile, { mode: 0o600 }));
+    const fileStat = await stat(tmpFile);
+    const scanResult = await runFfprobeLocalFile(tmpFile);
+    return {
+      tmpDir,
+      scanResult,
+      downloadedBytes: fileStat.size,
+    };
+  } catch (error) {
+    rmSync(tmpDir, { recursive: true, force: true });
+    if (error && typeof error === "object" && "message" in error) {
+      failClosed("trusted_scan_download_or_ffprobe_failed", { errorCode: "download_or_ffprobe_failed" });
+    }
+    throw error;
+  }
 }
 
 function assertSupportedModeAndSource() {
@@ -218,6 +394,19 @@ function readCatalogRows() {
   return catalog;
 }
 
+function selectedScanRows(rows) {
+  const loaded = compileHelper();
+  try {
+    const classifications = rows.map((row) => loaded.helper.classifyMediaScanCandidate(row));
+    return rows
+      .map((row, index) => ({ row, classification: classifications[index] }))
+      .filter((entry) => entry.classification.canScan)
+      .slice(0, Math.max(1, Math.min(Number.isFinite(maxJobs) ? maxJobs : 1, 25)));
+  } finally {
+    loaded.cleanup();
+  }
+}
+
 function commandAvailable(command) {
   const result = spawnSync("sh", ["-lc", `command -v ${command}`], { encoding: "utf8" });
   return result.status === 0;
@@ -304,9 +493,80 @@ if (mode === "run-one") {
       requiredConfirmationValue: runOneConfirmValue,
     });
   }
+  if (dataSource === "linked") {
+    const selected = selectedScanRows(readCatalogRows())[0];
+    if (!selected) failClosed("no_public_scan_candidate_available");
+    const download = await downloadViaMediaStorageFunction(selected.row);
+    try {
+      failClosed("trusted_scan_result_write_authority_missing", {
+        trustedDownloadPassed: true,
+        selectedSource: {
+          sourceType: selected.classification.sourceType,
+          sourceId: selected.classification.sourceId,
+          title: selected.classification.title,
+        },
+        scannerTypeSelected: "ffprobe_media_readability",
+        scannerTypeDisclosure: "ffprobe_media_readability_only_not_malware_or_content_moderation",
+        downloadedBytes: download.downloadedBytes,
+        scanResult: {
+          status: download.scanResult.status,
+          scannerName: download.scanResult.scannerName,
+          scannerVersion: download.scanResult.scannerVersion,
+          scannerType: download.scanResult.scannerType,
+          proof: download.scanResult.proof,
+        },
+        missingCredential: "trusted scan completion authority",
+        productionRowsWritten: false,
+      });
+    } finally {
+      rmSync(download.tmpDir, { recursive: true, force: true });
+    }
+  }
   failClosed("production_scan_write_not_enabled_in_this_source_proof_build", {
     trustedWriteRequired: true,
     acceptedConfirmation: true,
+  });
+}
+
+if (mode === "run-auto") {
+  if (process.env.MEDIA_SCAN_AUTO_CONFIRM !== runAutoConfirmValue) {
+    failClosed("media_scan_run_auto_confirmation_missing", {
+      requiredConfirmationEnv: "MEDIA_SCAN_AUTO_CONFIRM",
+      requiredConfirmationValue: runAutoConfirmValue,
+    });
+  }
+  const output = buildScanOutput();
+  if (dataSource === "linked") {
+    const selected = selectedScanRows(readCatalogRows());
+    if (selected.length > 0) {
+      const firstStorage = readStorageMetadataForSource(selected[0].row.source_id);
+      const firstProvider = String(firstStorage.storage_provider || "").trim().toLowerCase();
+      if (firstProvider === "s3" && !process.env.MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN) {
+        failClosed("trusted_scan_download_access_missing", {
+          missingCredential: "MEDIA_SCAN_DOWNLOAD_ACCESS_TOKEN",
+          acceptedConfirmation: true,
+          rawServiceRoleRequired: false,
+          backendPath: "media-storage create_download_url",
+          selectedPublicScanCandidates: selected.length,
+          skippedPrivateCount: output.skippedPrivateCount,
+          skippedPremiumCount: output.skippedPremiumCount,
+          scannerTypeSelected: output.scannerTypeSelected,
+          scannerTypeDisclosure: output.scannerTypeDisclosure,
+          plan: output.plan,
+        });
+      }
+    }
+  }
+  failClosed("production_scan_batch_write_not_enabled_in_this_source_proof_build", {
+    trustedWriteRequired: true,
+    acceptedConfirmation: true,
+    dataSource: dataSource === "linked" ? "linked_supabase_read_only" : "fixture",
+    selectedPublicScanCandidates: output.plan.plannedJobCount,
+    skippedPrivateCount: output.skippedPrivateCount,
+    skippedPremiumCount: output.skippedPremiumCount,
+    scannerTypeSelected: output.scannerTypeSelected,
+    scannerTypeDisclosure: output.scannerTypeDisclosure,
+    plan: output.plan,
   });
 }
 
