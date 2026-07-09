@@ -87,9 +87,9 @@ Transcoding status: not live; no worker exists in this repo.
 
 Cloudflare R2 private origin status: enabled for proof only; not configured as app production playback by this repo change.
 
-Cloudflare custom domain/cache status: target delivery/cache layer for safe playback assets, not deployed by this repo change.
+Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket for harmless text proof delivery; production CDN playback is not live.
 
-R2 CLI/API proof status: private remote proof upload/readback succeeded through authorized Wrangler access; no R2 CDN playback is live.
+R2 CLI/API proof status: private and public-playback proof upload/readback succeeded through authorized Wrangler access; no production R2 CDN playback is live.
 
 R2 proof bucket status: private bucket `chillywood-media-proof` exists, created 2026-07-08T23:26:44.468Z.
 
@@ -99,13 +99,13 @@ R2 public-playback proof bucket status: separate bucket `chillywood-media-public
 
 R2 public-playback proof object status: harmless text object `playback/public/proof/hello.txt` upload/readback succeeded through authorized Wrangler access and is kept for proof traceability.
 
-R2 public exposure status: no public bucket access, r2.dev public URL, custom domain, or cache rule was enabled; r2.dev public access is disabled and no custom domains are connected.
+R2 public exposure status: `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access remains disabled on both buckets; the private bucket has no custom domain.
 
-R2 custom-domain/cache planning status: planned only; read-only audit confirmed the proof bucket exists, r2.dev is disabled, no custom domains are connected, and the proof object still reads back through authorized Wrangler access.
+R2 custom-domain/cache proof status: public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returns HTTP 200 with the expected harmless text from the public-playback proof bucket.
 
 Media bandwidth telemetry status: foundation only, not live.
 
-Cache savings status: not proved; telemetry/cache proof is required before savings claims.
+Cache proof status: proof object returns `Cache-Control: public, max-age=300` and `cf-cache-status: DYNAMIC`; cache savings are not proved and telemetry/cache proof is required before savings claims.
 
 5 GB resumable upload status: not live; current upload is single signed PUT.
 
@@ -160,10 +160,10 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - `chillywood-media-public-playback-proof` is a separate R2 bucket for harmless public-safe proof assets only.
 - The bucket currently contains only the harmless text proof object `playback/public/proof/hello.txt`.
 - The bucket must not contain `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, `unscanned/`, real creator media, original/master media, unscanned uploads, private media, or Premium-only media.
-- The bucket remains private at this checkpoint: r2.dev public access is disabled and no custom domain is connected.
-- Explicit owner approval is required before enabling any public access on this bucket. The approval must name the exact action: enabling r2.dev for temporary proof, or connecting `media.chillywoodstream.com` to this public-playback proof bucket.
+- The bucket is publicly reachable only through `media.chillywoodstream.com` for the harmless proof object; r2.dev public access is disabled.
+- Explicit owner approval was limited to connecting `media.chillywoodstream.com` to this public-playback proof bucket. No approval was given for production playback, private media, Premium media, or the private proof bucket.
 - r2.dev, if approved later, is temporary proof access only and not the production delivery path.
-- `media.chillywoodstream.com`, if approved later, may point only at this separate public-playback proof bucket or another safe public-playback surface that contains no private media.
+- `media.chillywoodstream.com` points only at this separate public-playback proof bucket at this checkpoint.
 - App production playback must remain on the resolver/direct signed-origin fallback until resolver proof, signed/token CDN access for non-public assets, cache proof, telemetry, takedown purge, and Premium gating are implemented and proved.
 
 ### Staged Cloudflare Proof Plan
@@ -175,21 +175,23 @@ Near-term chosen path: Cloudflare R2 private origin plus Cloudflare custom domai
 - Private-origin proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.
 - Separate public-playback proof bucket target: `chillywood-media-public-playback-proof`.
 - Public-playback proof used authorized remote Wrangler access to upload the harmless text proof object and read it back byte-for-byte.
+- Custom-domain proof connected `media.chillywoodstream.com` only to `chillywood-media-public-playback-proof`.
+- Public proof fetch returned HTTP 200 and exact body `chillywood r2 public playback proof 2026-07-08T23:47:15Z`.
+- Cache proof fetches returned `Cache-Control: public, max-age=300`, `Content-Type: text/plain`, and `cf-cache-status: DYNAMIC`; no cache savings are claimed.
+- Forbidden-prefix probes under `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404 through the public proof hostname.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - No production playback config was switched.
 - Read-only custom-domain/cache audit: bucket list shows `chillywood-media-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.
-- Public-playback proof audit: bucket list shows `chillywood-media-public-playback-proof`, r2.dev status is disabled, custom-domain list is empty, and the proof object still reads back as harmless text through authorized Wrangler access.
-- Stop before public access. Do not connect `media.chillywoodstream.com` until the owner approves that the bucket/surface contains only safe public playback assets or token/WAF/Worker controls are in place.
+- Public-playback proof audit: bucket list shows `chillywood-media-public-playback-proof`, r2.dev status is disabled, custom-domain list contains `media.chillywoodstream.com`, and the proof object still reads back as harmless text through authorized Wrangler access.
 - Public proof, when approved, may expose only `playback/public/` test assets. It must not expose source/original/master, unscanned, private, or Premium-only objects.
 
 ### Cloudflare Setup Steps Before Applying Public Delivery
 
 1. Confirm the private proof bucket and harmless proof object remain non-production proof assets only.
-2. Decide whether `media.chillywoodstream.com` will point to a separate public-playback bucket/surface or to a Worker/WAF-token protected path layer.
-3. Document the exact Cloudflare dashboard/API steps before applying them.
-4. Add Cloudflare cache rules only for approved public playback paths: long TTL for immutable segments/thumbnails, short TTL for manifests, no cache for private/original paths.
-5. Confirm cache headers and Cloudflare cache status only on approved proof paths.
-6. Keep production creator-video playback on existing resolver/direct signed-origin fallback until signed/token CDN access, telemetry, takedown purge, and Premium gating are implemented and proved.
+2. Keep `media.chillywoodstream.com` scoped to the separate public-playback proof bucket until resolver support exists.
+3. Do not add cache rules beyond object metadata until HLS/hashed public assets exist.
+4. Add resolver support for safe public playback assets without changing app UX or Premium entitlement logic.
+5. Keep production creator-video playback on existing resolver/direct signed-origin fallback until signed/token CDN access, telemetry, takedown purge, and Premium gating are implemented and proved.
 
 ### Signed CDN Playback
 

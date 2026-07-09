@@ -4,20 +4,22 @@
 
 Current latest truth:
 - Cloudflare R2 is enabled and private proof bucket `chillywood-media-proof` exists.
-- Harmless text object `playback/public/proof/hello.txt` was uploaded to remote R2 and read back through authorized Wrangler access only; byte-for-byte readback matched.
+- Private proof bucket `chillywood-media-proof` remains private, with r2.dev disabled and no custom domain.
 - The proof object is kept as harmless text proof traceability unless the owner later requests cleanup.
 - Separate public-playback proof bucket `chillywood-media-public-playback-proof` exists and is distinct from `chillywood-media-proof`.
-- The public-playback proof bucket contains only harmless public-safe proof object `playback/public/proof/hello.txt`, uploaded/read back through authorized Wrangler access.
-- r2.dev public access is disabled on both buckets, no public bucket access is enabled, no custom domain is connected, and no cache rule was applied.
+- The public-playback proof bucket contains only harmless public-safe proof object `playback/public/proof/hello.txt`, uploaded/read back through authorized Wrangler access and listed as the only object.
+- `media.chillywoodstream.com` is connected only to `chillywood-media-public-playback-proof`; r2.dev public access is disabled on both buckets.
+- Public proof URL `https://media.chillywoodstream.com/playback/public/proof/hello.txt` returned HTTP 200 with exact harmless proof text.
+- Repeat proof fetches returned `Cache-Control: public, max-age=300`, `Content-Type: text/plain`, and `cf-cache-status: DYNAMIC`; cache savings are not proved.
+- Public probes for `originals/`, `uploads/`, `private/`, `premium/`, `processing/`, `moderation-blocked/`, and `unscanned/` returned HTTP 404.
 - No production media, private/original media, unscanned upload, or Premium creator media was uploaded.
 - Production playback remains unchanged on the backend resolver/direct signed-origin fallback.
-- Read-only audit confirmed the proof bucket still exists, the proof object still reads back through authorized Wrangler access, r2.dev is disabled, and no custom domains are connected.
-- Cloudflare R2 custom domains should be treated as public bucket exposure, not a native prefix-limited publish switch. Do not connect `media.chillywoodstream.com` directly to a mixed bucket.
+- Cloudflare R2 custom domains should be treated as public bucket exposure, not a native prefix-limited publish switch. Do not connect `media.chillywoodstream.com` directly to a mixed bucket or the private proof bucket.
 
 Next exact media step:
-1. If the owner approves, enable public proof access only on `chillywood-media-public-playback-proof`, either temporary r2.dev proof or `media.chillywoodstream.com` custom-domain proof.
+1. Add resolver support for safe public playback assets without changing app UX or Premium entitlement logic.
 2. Do not enable public access on `chillywood-media-proof`.
-3. Do not connect `media.chillywoodstream.com` until the owner explicitly approves that exact phase.
+3. Do not upload real production media or private/original/Premium media to the public-playback proof bucket.
 4. Do not enable cache rules, signed/token CDN playback, or production playback switching until explicitly approved and proved.
 5. Do not change app UX, Premium, LiveKit, Watch-Party, Live Stage, App Links, Chat/native, auth/RLS, billing, payout, or cashout behavior for this media lane.
 
