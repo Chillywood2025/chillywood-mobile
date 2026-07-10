@@ -1,0 +1,15 @@
+name = "chillywood-premium-media-access-proof"
+main = "worker.mjs"
+compatibility_date = "2026-07-09"
+workers_dev = false
+routes = [
+  { pattern = "premium-media-proof.chillywoodstream.com", custom_domain = true },
+]
+
+[[r2_buckets]]
+binding = "PREMIUM_MEDIA_R2_BUCKET"
+bucket_name = "chillywood-media-proof"
+
+[vars]
+PREMIUM_MEDIA_ALLOWED_PREFIX = "playback/protected/premium/"
+PREMIUM_MEDIA_REQUIRE_USER_HEADER = "true"

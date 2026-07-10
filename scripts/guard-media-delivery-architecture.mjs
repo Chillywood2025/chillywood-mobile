@@ -76,6 +76,7 @@ const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
 const mediaPlaybackCdnEligibility = read("_lib/mediaPlaybackCdnEligibility.ts");
 const mediaPremiumCdnToken = read("_lib/mediaPremiumCdnToken.ts");
 const premiumCdnWorker = read("workers/premium-media-access/worker.mjs");
+const premiumCdnWorkerConfig = read("workers/premium-media-access/wrangler.toml");
 const mediaAutomationController = read("_lib/mediaAutomationController.ts");
 const mediaAutomationDiscovery = read("_lib/mediaAutomationDiscovery.ts");
 const mediaAutomationBatchPolicy = read("_lib/mediaAutomationBatchPolicy.ts");
@@ -119,6 +120,7 @@ const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata
 const mediaPlaybackCdnEligibilityProof = read("scripts/proof-media-playback-cdn-eligibility.mjs");
 const mediaPremiumCdnTokenProof = read("scripts/proof-media-premium-cdn-token.mjs");
 const premiumCdnWorkerProof = read("scripts/proof-premium-cdn-worker.mjs");
+const premiumCdnWorkerLiveProof = read("scripts/proof-premium-cdn-worker-live.mjs");
 const mediaCdnRolloutPlanner = read("scripts/media-cdn-rollout-planner.mjs");
 const mediaCdnRolloutPlannerProof = read("scripts/proof-media-cdn-rollout-planner.mjs");
 const mediaAutomationCli = read("scripts/media-automation-cli.mjs");
@@ -152,6 +154,7 @@ const sourceCorpus = [
   mediaPlaybackCdnEligibility,
   mediaPremiumCdnToken,
   premiumCdnWorker,
+  premiumCdnWorkerConfig,
   mediaAutomationController,
   mediaAutomationDiscovery,
   mediaAutomationBatchPolicy,
@@ -768,6 +771,11 @@ assertIncludes(premiumCdnWorker, "premiumEntitlement !== true", "Premium CDN Wor
 assertIncludes(premiumCdnWorker, "public_free_path_bypasses_premium_worker", "Premium CDN Worker public free bypass");
 assertIncludes(premiumCdnWorker, "tokenRedacted", "Premium CDN Worker redacted logging");
 assertNotMatches(premiumCdnWorker, /\bconsole\.(log|info|warn|error)\b/, "Premium CDN Worker must not log tokens");
+assertIncludes(premiumCdnWorkerConfig, "name = \"chillywood-premium-media-access-proof\"", "Premium CDN Worker proof deployment name");
+assertIncludes(premiumCdnWorkerConfig, "workers_dev = false", "Premium CDN Worker must not publish workers.dev");
+assertIncludes(premiumCdnWorkerConfig, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker proof custom domain");
+assertIncludes(premiumCdnWorkerConfig, "bucket_name = \"chillywood-media-proof\"", "Premium CDN Worker private proof bucket binding");
+assertIncludes(premiumCdnWorkerConfig, "PREMIUM_MEDIA_ALLOWED_PREFIX = \"playback/protected/premium/\"", "Premium CDN Worker protected allowed prefix");
 assertIncludes(mediaPremiumCdnTokenProof, "free user cannot get 720p token", "Premium CDN token proof free user denial");
 assertIncludes(mediaPremiumCdnTokenProof, "Premium user can get scoped 720p token claims", "Premium CDN token proof 720p");
 assertIncludes(mediaPremiumCdnTokenProof, "Premium user can get scoped 1080p token claims", "Premium CDN token proof 1080p");
@@ -781,6 +789,12 @@ assertIncludes(premiumCdnWorkerProof, "wrong source should be denied", "Premium 
 assertIncludes(premiumCdnWorkerProof, "wrong path should be denied", "Premium CDN Worker proof wrong path");
 assertIncludes(premiumCdnWorkerProof, "non-Premium token should be denied", "Premium CDN Worker proof non-Premium");
 assertIncludes(premiumCdnWorkerProof, "public 360p/480p path should not require Premium worker", "Premium CDN Worker proof public SD bypass");
+assertIncludes(premiumCdnWorkerLiveProof, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker live proof hostname");
+assertIncludes(premiumCdnWorkerLiveProof, "playback/protected/premium/proof/hello/720p/hello.txt", "Premium CDN Worker live proof object");
+assertIncludes(premiumCdnWorkerLiveProof, "valid Premium token + proof 720p path should return HTTP 200", "Premium CDN Worker live proof allow");
+assertIncludes(premiumCdnWorkerLiveProof, "missing token should be denied", "Premium CDN Worker live proof missing token denial");
+assertIncludes(premiumCdnWorkerLiveProof, "wrong source should be denied", "Premium CDN Worker live proof wrong source denial");
+assertIncludes(premiumCdnWorkerLiveProof, "non-Premium token should be denied", "Premium CDN Worker live proof non-Premium denial");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "canaryCityLightsCdn", "trusted audited CDN proof canary case");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "batchSelectedSourceCdn", "trusted audited CDN proof batch selected case");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "batchUnselectedSourceFallback", "trusted audited CDN proof batch unselected fallback");
@@ -805,13 +819,13 @@ assertIncludes(mediaCdnRolloutPlannerProof, "mutationAttempted: false", "media C
 assertIncludes(mediaCdnRolloutPlannerProof, "productionBackfillRun: false", "media CDN rollout planner proof no backfill");
 assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
 assertIncludes(vodDoc, "Premium signed/token CDN foundation exists in source/proof only.", "VOD doc Premium token source/proof boundary");
-assertIncludes(vodDoc, "Protected Premium HD delivery path is source/proofed through `workers/premium-media-access/worker.mjs`.", "VOD doc Premium Worker source/proof boundary");
-assertIncludes(vodDoc, "It is not deployed and does not make HD live.", "VOD doc Premium Worker not live");
+assertIncludes(vodDoc, "Protected Premium HD delivery path is deployed/proved only on the isolated proof Worker `chillywood-premium-media-access-proof` at `premium-media-proof.chillywoodstream.com`.", "VOD doc Premium Worker deployed proof boundary");
+assertIncludes(vodDoc, "It is not routed through `media.chillywoodstream.com`, does not generate or activate HD, and does not make Premium HD playback live.", "VOD doc Premium Worker not live");
 assertIncludes(architecture, "Premium HD token mode is source/proof foundation only.", "architecture doc Premium token source/proof boundary");
 assertIncludes(architecture, "Without the signer, HD falls back/blocks.", "architecture doc Premium token signer fallback");
-assertIncludes(architecture, "Protected Premium HD delivery architecture: `workers/premium-media-access/worker.mjs` is the chosen source/proof path.", "architecture doc Premium Worker choice");
+assertIncludes(architecture, "Protected Premium HD delivery architecture: `workers/premium-media-access/worker.mjs` is the selected Worker path, and the isolated proof deployment is live only as Worker `chillywood-premium-media-access-proof` on `premium-media-proof.chillywoodstream.com`.", "architecture doc Premium Worker choice");
 assertIncludes(architecture, "It denies missing/expired/wrong-source/wrong-path/wrong-rendition/non-Premium/private/original/unscanned/moderation-blocked requests", "architecture doc Premium Worker deny cases");
-assertIncludes(architecture, "and is not deployed.", "architecture doc Premium Worker deployment boundary");
+assertIncludes(architecture, "No 720p/1080p media has been generated, no Premium HD playback is live, and production playback is unchanged.", "architecture doc Premium Worker deployment boundary");
 assertIncludes(mediaAutomationOperatorRunbook, "Status: CLI auto-detect bounded execution is live for safe Level 0/1 candidates, while daemon/cron/scheduler/continuous automation remains off.", "media automation runbook status");
 assertIncludes(mediaAutomationOperatorRunbook, "No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live.", "media automation runbook no deployment");
 assertIncludes(mediaAutomationOperatorRunbook, "continuous limited automation is source/proofed/templates only", "media automation runbook continuous template boundary");
@@ -1164,6 +1178,7 @@ assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "package trust
 assertIncludes(packageJson, "\"proof:media-playback-cdn-eligibility\"", "package trusted playback CDN eligibility proof script");
 assertIncludes(packageJson, "\"proof:media-premium-cdn-token\"", "package Premium CDN token proof script");
 assertIncludes(packageJson, "\"proof:premium-cdn-worker\"", "package Premium CDN Worker proof script");
+assertIncludes(packageJson, "\"proof:premium-cdn-worker-live\"", "package Premium CDN Worker live proof script");
 assertIncludes(packageJson, "\"proof:media-cdn-rollout-planner\"", "package media CDN rollout planner proof script");
 assertIncludes(packageJson, "\"media-cdn:plan\"", "package media CDN rollout planner command");
 assertIncludes(packageJson, "\"media-cdn:status\"", "package media CDN rollout status command");

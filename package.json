@@ -219,6 +219,7 @@
     "proof:media-playback-cdn-eligibility": "node ./scripts/proof-media-playback-cdn-eligibility.mjs",
     "proof:media-premium-cdn-token": "node ./scripts/proof-media-premium-cdn-token.mjs",
     "proof:premium-cdn-worker": "node ./scripts/proof-premium-cdn-worker.mjs",
+    "proof:premium-cdn-worker-live": "node ./scripts/proof-premium-cdn-worker-live.mjs",
     "media-cdn:plan": "node ./scripts/media-cdn-rollout-planner.mjs --mode=plan",
     "media-cdn:status": "node ./scripts/media-cdn-rollout-planner.mjs --mode=status --max-batch-size=1",
     "media-automation:status": "node ./scripts/media-automation-cli.mjs --mode=status --source=linked",
