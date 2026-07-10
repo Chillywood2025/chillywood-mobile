@@ -13,6 +13,9 @@ verify_jwt = false
 [functions.media-scan-private-access]
 verify_jwt = false
 
+[functions.media-object-storage-migration]
+verify_jwt = false
+
 [functions.premium-media-playback-token]
 verify_jwt = false
 

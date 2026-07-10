@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const args = new Map(process.argv.slice(2).map((arg) => {
   const [key, ...rest] = arg.replace(/^--/, "").split("=");
@@ -12,6 +13,9 @@ const source = args.get("source") || "fixture";
 
 const R2_ORIGIN_BUCKET = "chillywood-media-origin";
 const LEGACY_HETZNER_BUCKET = "chillywood-media-prod";
+const expectedProjectRef = "bmkkhihfbmsnnmcqkoly";
+const defaultFunctionsUrl = `https://${expectedProjectRef}.supabase.co/functions/v1`;
+const migrationFunctionUrl = `${String(process.env.MEDIA_OBJECT_MIGRATION_FUNCTIONS_URL || defaultFunctionsUrl).replace(/\/+$/g, "")}/media-object-storage-migration`;
 
 const fixtureRows = [
   { table_name: "videos", row_id: "public-video", source_type: "creator_video", source_id: "public-video", storage_provider: "s3", storage_bucket: LEGACY_HETZNER_BUCKET, object_key_present: true, visibility: "public", access_tier: "free", scan_status: "clean", moderation_status: "clean", is_original: false },
@@ -156,6 +160,105 @@ const parseSupabaseJson = (output) => {
   return JSON.parse(output.slice(start));
 };
 
+const assertNoSecretLikeText = (value) => {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  if (
+    /postgres(?:ql)?:\/\//i.test(text)
+    || new RegExp(`X-Amz-${"Signature"}=`, "i").test(text)
+    || /\bBearer\s+[A-Za-z0-9._-]+/i.test(text)
+    || /https?:\/\/(?!bmkkhihfbmsnnmcqkoly\.supabase\.co\b|media\.chillywoodstream\.com\b|premium-media\.chillywoodstream\.com\b)[^\s"']+/i.test(text)
+  ) {
+    throw new Error("secret_or_private_url_like_value_refused");
+  }
+};
+
+const readMigrationOperatorTokenFromLocalSecretFile = () => {
+  const configuredPath = String(process.env.MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN_FILE || "").trim();
+  const candidates = configuredPath ? [configuredPath] : [".env.media-object-migration.local", ".env.local"];
+  for (const path of candidates) {
+    try {
+      const content = readFileSync(path, "utf8");
+      const match = content.match(/^MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN=(.+)$/m);
+      if (match?.[1]) return match[1].trim();
+    } catch {
+      // Missing local secret files are expected on most machines.
+    }
+  }
+  return "";
+};
+
+const assertMigrationOperatorToken = () => {
+  const token = String(process.env.MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN || readMigrationOperatorTokenFromLocalSecretFile() || "").trim();
+  if (!token) {
+    console.error(JSON.stringify({
+      ok: false,
+      blocked: true,
+      reason: "media_object_migration_operator_token_missing",
+      missingCredential: "MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN",
+      acceptedSources: ["MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN", "MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN_FILE", "existing_untracked_local_secret_file"],
+      rawServiceRoleRequired: false,
+      rawStorageCredentialsRequired: false,
+      objectKeysRedacted: true,
+      secretsPrinted: false,
+    }, null, 2));
+    process.exit(1);
+  }
+  assertNoSecretLikeText({ tokenRedacted: "[REDACTED_MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN]" });
+  return token;
+};
+
+const invokeMigrationFunction = async (action, payload = {}) => {
+  const token = assertMigrationOperatorToken();
+  const response = await fetch(migrationFunctionUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-media-object-migration-token": token,
+    },
+    body: JSON.stringify({ action, ...payload }),
+    signal: AbortSignal.timeout(120000),
+  });
+  const bodyText = await response.text();
+  assertNoSecretLikeText(bodyText);
+  let body;
+  try {
+    body = JSON.parse(bodyText || "{}");
+  } catch {
+    body = { ok: false, responseNotJson: true };
+  }
+  return { status: response.status, ok: response.ok, body };
+};
+
+const handleBackendMode = async () => {
+  const actionByMode = {
+    status: "audit_inventory",
+    inventory: "audit_inventory",
+    "dry-run": "update_metadata_dry_run",
+    copy: "copy_batch",
+    run: "copy_batch",
+    "db-update": "update_metadata_batch",
+    verify: "verify_object",
+    "zero-hetzner": "zero_ref_audit",
+  };
+  const action = actionByMode[mode];
+  if (!action) {
+    console.error(JSON.stringify({ ok: false, reason: "unsupported_backend_mode", mode, objectKeysRedacted: true, secretsPrinted: false }, null, 2));
+    process.exit(1);
+  }
+  const limit = Number.parseInt(String(args.get("limit") || process.env.MEDIA_OBJECT_MIGRATION_BATCH_LIMIT || "100"), 10);
+  const result = await invokeMigrationFunction(action, {
+    limit: Number.isFinite(limit) ? limit : 100,
+    table_name: args.get("table") || args.get("table_name"),
+    row_id: args.get("row") || args.get("row_id"),
+  });
+  console.log(JSON.stringify({
+    backendFunction: "media-object-storage-migration",
+    httpStatus: result.status,
+    ...result.body,
+  }, null, 2));
+  process.exit(result.ok && result.body?.ok !== false ? 0 : 1);
+};
+
 const queryLinkedRows = (sql) => {
   const output = execFileSync("npx", ["supabase", "db", "query", "--linked", "--output-format", "json", sql], {
     cwd: process.cwd(),
@@ -236,6 +339,10 @@ const buildRedactedManifest = (rows) => rows.filter(isHetznerObjectRef).map((row
 const loadRows = () => source === "linked" ? queryLinkedRows(inventorySql) : fixtureRows;
 const loadCounts = () => source === "linked" ? queryLinkedRows(countsSql) : [];
 
+if (source === "backend") {
+  await handleBackendMode();
+}
+
 const rows = loadRows();
 const summary = summarize(rows);
 const counts = mode === "status" || mode === "inventory" ? loadCounts() : [];
@@ -245,7 +352,7 @@ if (mode === "copy" || mode === "run" || mode === "db-update") {
     ok: false,
     mode,
     blocked: true,
-    reason: "copy_and_db_update_require_verified_trusted_copier_and_r2_origin_credentials",
+    reason: "copy_and_db_update_require_backend_copier_source_and_r2_origin_credentials",
     hetznerFallbackRetained: true,
     objectKeysRedacted: true,
     secretsPrinted: false,
@@ -280,7 +387,7 @@ console.log(JSON.stringify({
   mediaPublicDomainUsedForOriginals: false,
   legacyHetznerFallbackRetained: true,
   copyReady: false,
-  copyBlockedReason: "local process has no Hetzner/S3 read credential, no R2 origin write credential, and no deployed trusted all-object copier",
+  copyBlockedReason: "copy requires source=backend trusted copier plus backend R2 private-origin write config",
   dbUpdateReady: false,
   dbUpdateBlockedReason: "DB metadata must not move until every copied object has verified size/checksum/readback",
   summary,

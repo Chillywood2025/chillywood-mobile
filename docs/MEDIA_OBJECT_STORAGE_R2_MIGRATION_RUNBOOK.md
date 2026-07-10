@@ -1,6 +1,6 @@
 # Media Object Storage R2 Migration Runbook
 
-Status: Partial. Cloudflare R2 private origin bucket `chillywood-media-origin` exists and is the target for future source/original media, but Hetzner Object Storage is not ready for shutdown. No media was processed, no media rows were written, no objects were copied, and no Hetzner objects were deleted in this pass.
+Status: Partial. Cloudflare R2 private origin bucket `chillywood-media-origin` exists and is the target for future source/original media, and trusted backend copier Edge Function `media-object-storage-migration` is deployed. Hetzner Object Storage is still not ready for shutdown because the copier is blocked before copy by missing R2 private-origin write config. No media was processed, no media rows were written, no objects were copied, and no Hetzner objects were deleted in this pass.
 
 ## Scope
 
@@ -19,6 +19,8 @@ Read-only production inventory found remaining Hetzner/S3 object-storage referen
 - Total Hetzner/S3 reference rows: 31.
 
 Object keys are treated as private migration metadata and are redacted from normal logs and docs.
+
+The live trusted copier inventory also found `31` Hetzner/S3 reference rows and `22` distinct object refs. Missing/invalid copier operator tokens returned `401`, and a valid proof-session operator token returned redacted inventory without object keys, signed URLs, or secrets.
 
 ## R2 Target
 
@@ -50,6 +52,16 @@ New source/original upload support is source-prepared but not switched on:
 
 `supabase/functions/media-storage/index.ts` can source private signed upload/download URLs from the R2 origin config when that env is configured. Until then, deployed production behavior may still use the current Hetzner/S3 env. `supabase/functions/media-scan-private-access/index.ts` can read migrated `cloudflare_r2` private-origin rows for public-safe scan/transcode candidates when the same private-origin env is configured.
 
+The trusted migration copier uses backend authority only:
+
+- Function: `media-object-storage-migration`
+- Auth header: `x-media-object-migration-token`
+- Stored server-side secret: `MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN_SHA256`
+- CLI backend source: `node ./scripts/media-object-storage-r2-migration.mjs --source=backend`
+- Required R2 write config before live copy: `MEDIA_ORIGIN_PRIVATE_ONLY=true`, `MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED=true`, `MEDIA_ORIGIN_BUCKET=chillywood-media-origin`, `MEDIA_ORIGIN_R2_ENDPOINT`, `MEDIA_ORIGIN_R2_ACCESS_KEY_ID`, and `MEDIA_ORIGIN_R2_SECRET_ACCESS_KEY` or the equivalent `R2_ORIGIN_*` names.
+
+The copier never returns raw signed source URLs or storage credentials. It denies target buckets/prefixes that would put source/original objects into public playback, protected Premium playback, or `media.chillywoodstream.com`.
+
 ## Migration Procedure
 
 1. Run a fresh read-only inventory:
@@ -68,9 +80,19 @@ npm run media-object-storage:r2-dry-run
 
 4. Confirm no target path starts with `playback/public/`, `playback/protected/`, or `playback/premium/`.
 
-5. Confirm a trusted copier exists for all migration categories, including private and Premium object-storage refs. The scanner gateway is not enough for full migration because it intentionally denies private/Premium scan/transcode access.
+5. Confirm the trusted copier is deployed and token-gated:
 
-6. Copy objects from Hetzner/S3 to R2 private origin only after the trusted copier and R2 write credentials are configured in backend authority.
+```bash
+npm run media-object-storage:r2-backend-inventory
+```
+
+This requires `MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN` or an ignored local token file. The token value must never be printed.
+
+6. Copy objects from Hetzner/S3 to R2 private origin only after R2 write credentials are configured in backend authority:
+
+```bash
+npm run media-object-storage:r2-copy-batch
+```
 
 7. Verify every object by size plus checksum/ETag when available.
 
@@ -99,6 +121,8 @@ Hetzner LiveKit remains separate even after object-storage shutdown readiness.
 
 ## Current Blocker
 
-Full migration is blocked before copy/DB update because the local process has no Hetzner/S3 read credential, no R2 origin write credential, and no deployed trusted all-object copier for private/Premium/source refs. The existing scan gateway is intentionally narrower: it can read public-safe scan/transcode candidates, and now has R2 private-origin support for migrated rows, but it denies private and Premium media.
+Full migration is blocked before copy/DB update because the deployed trusted copier has no R2 private-origin write config. Supabase already has legacy Hetzner/S3 source secret names, and the copier can inventory via service-role backend authority, but copy returned `r2_origin_write_config_missing` with these required names: `MEDIA_ORIGIN_PRIVATE_ONLY=true`, `MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED=true`, `MEDIA_ORIGIN_BUCKET` or `R2_ORIGIN_BUCKET`, `MEDIA_ORIGIN_R2_ENDPOINT` or `R2_ORIGIN_ENDPOINT`, `MEDIA_ORIGIN_R2_ACCESS_KEY_ID` or `R2_ORIGIN_ACCESS_KEY_ID`, and `MEDIA_ORIGIN_R2_SECRET_ACCESS_KEY` or `R2_ORIGIN_SECRET_ACCESS_KEY`.
+
+The existing scan gateway remains intentionally narrower: it can read public-safe scan/transcode candidates and has R2 private-origin support for migrated rows, but it denies private and Premium media. It is not the all-object migration copier.
 
 Do not delete Hetzner objects. Do not disable Hetzner Object Storage. Do not remove fallback until the zero-reference audit and retention decision close.
