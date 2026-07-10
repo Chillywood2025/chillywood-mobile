@@ -257,6 +257,7 @@
     "media-object-storage:r2-inventory": "node ./scripts/media-object-storage-r2-migration.mjs --mode=inventory --source=linked",
     "media-object-storage:r2-dry-run": "node ./scripts/media-object-storage-r2-migration.mjs --mode=dry-run --source=linked",
     "media-object-storage:r2-backend-inventory": "node ./scripts/media-object-storage-r2-migration.mjs --mode=inventory --source=backend",
+    "media-object-storage:r2-reconcile": "node ./scripts/media-object-storage-r2-migration.mjs --mode=reconcile --source=backend",
     "media-object-storage:r2-backend-dry-run": "node ./scripts/media-object-storage-r2-migration.mjs --mode=dry-run --source=backend",
     "media-object-storage:r2-copy-batch": "node ./scripts/media-object-storage-r2-migration.mjs --mode=copy --source=backend",
     "media-object-storage:r2-update-metadata": "node ./scripts/media-object-storage-r2-migration.mjs --mode=db-update --source=backend",

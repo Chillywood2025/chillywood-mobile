@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 type MigrationAction =
   | "audit_inventory"
+  | "reconcile_objects"
   | "copy_object"
   | "verify_object"
   | "copy_batch"
@@ -20,6 +21,7 @@ type InventoryReference = {
   storageProvider: string;
   storageBucket: string;
   storageObjectKey: string;
+  storageObjectKeyCandidates: string[];
   visibility: string;
   accessTier: string;
   scanStatus: string;
@@ -54,12 +56,55 @@ type CopyResult = {
   targetObjectKey: string;
   copied: boolean;
   verified: boolean;
+  skipped: boolean;
+  sourceStatus: ReconciliationStatus;
+  skipReason: string;
   sourceSizeBytes: number | null;
   targetSizeBytes: number | null;
   sourceEtagPresent: boolean;
   targetEtagPresent: boolean;
   checksumComparable: boolean;
   checksumMatched: boolean | null;
+};
+
+type ReconciliationStatus =
+  | "exists_exact"
+  | "exists_normalized_key"
+  | "exists_path_style"
+  | "exists_alt_key"
+  | "missing_404"
+  | "permission_denied_403"
+  | "bucket_missing"
+  | "unsupported_provider"
+  | "duplicate_ref"
+  | "already_r2_equivalent_exists"
+  | "unknown_error";
+
+type ObjectKeyCandidateKind = "exact" | "normalized_key" | "alt_key";
+
+type ObjectKeyCandidate = {
+  objectKey: string;
+  kind: ObjectKeyCandidateKind;
+};
+
+type HeadResult = {
+  ok: boolean;
+  status: number;
+  sizeBytes: number | null;
+  etag: string;
+  contentType: string;
+  forcePathStyle: boolean;
+};
+
+type ReconciliationResult = {
+  entry: ManifestEntry;
+  status: ReconciliationStatus;
+  resolvedObjectKey: string;
+  resolvedCandidateKind: ObjectKeyCandidateKind | "";
+  sourceHead: HeadResult | null;
+  targetExists: boolean;
+  targetSizeBytes: number | null;
+  targetEtagPresent: boolean;
 };
 
 const JSON_HEADERS = {
@@ -163,6 +208,7 @@ const normalizeAction = (value: unknown): MigrationAction | null => {
   const action = toLowerText(value);
   if (
     action === "audit_inventory"
+    || action === "reconcile_objects"
     || action === "copy_object"
     || action === "verify_object"
     || action === "copy_batch"
@@ -173,6 +219,8 @@ const normalizeAction = (value: unknown): MigrationAction | null => {
   ) return action;
   return null;
 };
+
+const shouldIncludeEntries = (payload: Record<string, unknown>) => payload.include_entries === true;
 
 const normalizeProvider = (value: unknown) => {
   const provider = toLowerText(value);
@@ -195,6 +243,45 @@ const isSafeObjectKey = (value: string) => (
   && !/^https?:\/\//i.test(value)
   && !/[\u0000-\u001F\u007F]/u.test(value)
 );
+
+const safeDecodeURIComponent = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
+
+const normalizeObjectKeyValue = (value: string, bucket = LEGACY_HETZNER_BUCKET) => {
+  const candidates = new Set<string>();
+  const addCandidate = (candidate: string) => {
+    const trimmed = toText(candidate).replace(/^\/+/u, "");
+    if (!trimmed) return;
+    candidates.add(trimmed);
+    candidates.add(safeDecodeURIComponent(trimmed));
+    for (const key of Array.from(candidates)) {
+      const withBucketPrefix = `${bucket}/`;
+      if (key.startsWith(withBucketPrefix)) candidates.add(key.slice(withBucketPrefix.length));
+    }
+  };
+
+  if (isHttpUrl(value)) {
+    try {
+      const url = new URL(value);
+      addCandidate(url.pathname);
+    } catch {
+      // Ignore unparsable URLs. The migration never returns or logs raw URL values.
+    }
+  } else {
+    addCandidate(value);
+  }
+
+  return Array.from(candidates).filter(isSafeObjectKey);
+};
+
+const uniqueObjectKeys = (values: string[]) => Array.from(new Set(values.filter(isSafeObjectKey)));
 
 const encodeObjectKey = (objectKey: string) => objectKey
   .split("/")
@@ -392,28 +479,46 @@ const isHetznerObjectStorageReference = (reference: InventoryReference) => {
   return normalizeProvider(reference.storageProvider) === "hetzner_s3" || reference.storageBucket === LEGACY_HETZNER_BUCKET;
 };
 
-const sourceObjectKeyFrom = (row: Record<string, unknown>) =>
-  toText(row.storage_object_key)
-  || (toText(row.storage_path).match(/^https?:\/\//i) ? "" : toText(row.storage_path))
-  || (toText(row.manifest_path).match(/^https?:\/\//i) ? "" : toText(row.manifest_path))
-  || (toText(row.public_playback_path).match(/^https?:\/\//i) ? "" : toText(row.public_playback_path))
-  || (toText(row.protected_playback_path).match(/^https?:\/\//i) ? "" : toText(row.protected_playback_path));
+const sourceObjectKeyFieldsFrom = (row: Record<string, unknown>) => [
+  toText(row.storage_object_key),
+  toText(row.storage_path),
+  toText(row.manifest_path),
+  toText(row.public_playback_path),
+  toText(row.protected_playback_path),
+].filter(Boolean);
 
-const fromRow = (tableName: string, row: Record<string, unknown>, overrides: Partial<InventoryReference> = {}): InventoryReference => ({
-  tableName,
-  rowId: toText(row.id),
-  sourceType: toText(overrides.sourceType) || toText(row.source_type) || tableName,
-  sourceId: toText(overrides.sourceId) || toText(row.source_id) || toText(row.video_id) || toText(row.target_id) || toText(row.id),
-  storageProvider: toText(overrides.storageProvider) || toText(row.storage_provider),
-  storageBucket: toText(overrides.storageBucket) || toText(row.storage_bucket),
-  storageObjectKey: toText(overrides.storageObjectKey) || sourceObjectKeyFrom(row),
-  visibility: toText(overrides.visibility) || toText(row.visibility) || tableName,
-  accessTier: toText(overrides.accessTier) || toText(row.access_tier) || (toLowerText(row.visibility) === "premium" ? "premium" : "free"),
-  scanStatus: toText(overrides.scanStatus) || toText(row.scan_status) || toText(row.status),
-  moderationStatus: toText(overrides.moderationStatus) || toText(row.moderation_status) || toText(row.status),
-  isOriginal: Boolean(overrides.isOriginal ?? (toLowerText(row.quality_label) === "original")),
-  liveKitRelated: Boolean(overrides.liveKitRelated) || isLiveKitReference(row.storage_bucket) || isLiveKitReference(row.storage_path),
-});
+const sourceObjectKeyCandidatesFrom = (row: Record<string, unknown>, bucket = LEGACY_HETZNER_BUCKET) => uniqueObjectKeys(
+  sourceObjectKeyFieldsFrom(row).flatMap((value) => normalizeObjectKeyValue(value, bucket)),
+);
+
+const sourceObjectKeyFrom = (row: Record<string, unknown>) => sourceObjectKeyCandidatesFrom(row)[0] ?? "";
+
+const fromRow = (tableName: string, row: Record<string, unknown>, overrides: Partial<InventoryReference> = {}): InventoryReference => {
+  const storageBucket = toText(overrides.storageBucket) || toText(row.storage_bucket);
+  const rowCandidates = sourceObjectKeyCandidatesFrom(row, storageBucket || LEGACY_HETZNER_BUCKET);
+  const storageObjectKey = toText(overrides.storageObjectKey) || rowCandidates[0] || sourceObjectKeyFrom(row);
+  const storageObjectKeyCandidates = uniqueObjectKeys([
+    storageObjectKey,
+    ...rowCandidates,
+    ...(overrides.storageObjectKeyCandidates ?? []),
+  ]);
+  return {
+    tableName,
+    rowId: toText(row.id),
+    sourceType: toText(overrides.sourceType) || toText(row.source_type) || tableName,
+    sourceId: toText(overrides.sourceId) || toText(row.source_id) || toText(row.video_id) || toText(row.target_id) || toText(row.id),
+    storageProvider: toText(overrides.storageProvider) || toText(row.storage_provider),
+    storageBucket,
+    storageObjectKey,
+    storageObjectKeyCandidates,
+    visibility: toText(overrides.visibility) || toText(row.visibility) || tableName,
+    accessTier: toText(overrides.accessTier) || toText(row.access_tier) || (toLowerText(row.visibility) === "premium" ? "premium" : "free"),
+    scanStatus: toText(overrides.scanStatus) || toText(row.scan_status) || toText(row.status),
+    moderationStatus: toText(overrides.moderationStatus) || toText(row.moderation_status) || toText(row.status),
+    isOriginal: Boolean(overrides.isOriginal ?? (toLowerText(row.quality_label) === "original")),
+    liveKitRelated: Boolean(overrides.liveKitRelated) || isLiveKitReference(row.storage_bucket) || isLiveKitReference(row.storage_path),
+  };
+};
 
 const queryTable = async (
   adminClient: SupabaseClient,
@@ -540,6 +645,7 @@ const redactedManifestEntry = (entry: ManifestEntry, extra: Record<string, unkno
   sourceBucket: entry.sourceBucket,
   sourceObjectKeyRedacted: true,
   sourceObjectKeyPresent: entry.sourceObjectKeyPresent,
+  sourceObjectKeyCandidateCount: entry.storageObjectKeyCandidates.length || (entry.sourceObjectKeyPresent ? 1 : 0),
   targetProvider: entry.targetProvider,
   targetBucket: entry.targetBucket,
   targetObjectKey: entry.targetObjectKey,
@@ -604,21 +710,243 @@ const headSourceObject = async (config: S3Config, objectKey: string) => {
   return last;
 };
 
-const copyObject = async (entry: ManifestEntry, sourceConfig: S3Config, targetConfig: S3Config): Promise<CopyResult> => {
+const objectKeyCandidatesForEntry = (entry: ManifestEntry): ObjectKeyCandidate[] => {
+  const candidates: ObjectKeyCandidate[] = [];
+  const seen = new Set<string>();
+  const add = (objectKey: string, kind: ObjectKeyCandidateKind) => {
+    for (const candidate of normalizeObjectKeyValue(objectKey, entry.sourceBucket || LEGACY_HETZNER_BUCKET)) {
+      if (seen.has(candidate)) continue;
+      seen.add(candidate);
+      candidates.push({ objectKey: candidate, kind });
+    }
+  };
+
+  add(entry.storageObjectKey, "exact");
+  for (const candidate of entry.storageObjectKeyCandidates) {
+    add(candidate, candidate === entry.storageObjectKey ? "exact" : "alt_key");
+  }
+  for (const candidate of Array.from(seen)) {
+    const normalized = normalizeObjectKeyValue(candidate, entry.sourceBucket || LEGACY_HETZNER_BUCKET);
+    for (const normalizedCandidate of normalized) {
+      if (seen.has(normalizedCandidate)) continue;
+      seen.add(normalizedCandidate);
+      candidates.push({ objectKey: normalizedCandidate, kind: "normalized_key" });
+    }
+  }
+  return candidates;
+};
+
+const statusForResolvedCandidate = (candidate: ObjectKeyCandidate, head: HeadResult): ReconciliationStatus => {
+  if (candidate.kind === "exact" && head.forcePathStyle) return "exists_path_style";
+  if (candidate.kind === "exact") return "exists_exact";
+  if (candidate.kind === "normalized_key") return "exists_normalized_key";
+  return "exists_alt_key";
+};
+
+const isExistingSourceStatus = (status: ReconciliationStatus) => (
+  status === "exists_exact"
+  || status === "exists_normalized_key"
+  || status === "exists_path_style"
+  || status === "exists_alt_key"
+);
+
+const reconcileObject = async (
+  entry: ManifestEntry,
+  sourceConfig: S3Config,
+  targetConfig: S3Config,
+): Promise<ReconciliationResult> => {
+  if (normalizeProvider(entry.storageProvider) !== "hetzner_s3") {
+    return {
+      entry,
+      status: "unsupported_provider",
+      resolvedObjectKey: "",
+      resolvedCandidateKind: "",
+      sourceHead: null,
+      targetExists: false,
+      targetSizeBytes: null,
+      targetEtagPresent: false,
+    };
+  }
+  if (entry.sourceBucket !== sourceConfig.bucket) {
+    return {
+      entry,
+      status: "bucket_missing",
+      resolvedObjectKey: "",
+      resolvedCandidateKind: "",
+      sourceHead: null,
+      targetExists: false,
+      targetSizeBytes: null,
+      targetEtagPresent: false,
+    };
+  }
+
+  let saw404 = false;
+  let sawUnknown = false;
+  for (const candidate of objectKeyCandidatesForEntry(entry)) {
+    const virtualHostHead = await headObject(sourceConfig, candidate.objectKey, false);
+    if (virtualHostHead.ok) {
+      return {
+        entry,
+        status: statusForResolvedCandidate(candidate, virtualHostHead),
+        resolvedObjectKey: candidate.objectKey,
+        resolvedCandidateKind: candidate.kind,
+        sourceHead: virtualHostHead,
+        targetExists: false,
+        targetSizeBytes: null,
+        targetEtagPresent: false,
+      };
+    }
+    if (virtualHostHead.status === 403) {
+      return {
+        entry,
+        status: "permission_denied_403",
+        resolvedObjectKey: candidate.objectKey,
+        resolvedCandidateKind: candidate.kind,
+        sourceHead: virtualHostHead,
+        targetExists: false,
+        targetSizeBytes: null,
+        targetEtagPresent: false,
+      };
+    }
+    saw404 ||= virtualHostHead.status === 404;
+    sawUnknown ||= virtualHostHead.status !== 404;
+
+    const pathStyleHead = await headObject(sourceConfig, candidate.objectKey, true);
+    if (pathStyleHead.ok) {
+      return {
+        entry,
+        status: statusForResolvedCandidate(candidate, pathStyleHead),
+        resolvedObjectKey: candidate.objectKey,
+        resolvedCandidateKind: candidate.kind,
+        sourceHead: pathStyleHead,
+        targetExists: false,
+        targetSizeBytes: null,
+        targetEtagPresent: false,
+      };
+    }
+    if (pathStyleHead.status === 403) {
+      return {
+        entry,
+        status: "permission_denied_403",
+        resolvedObjectKey: candidate.objectKey,
+        resolvedCandidateKind: candidate.kind,
+        sourceHead: pathStyleHead,
+        targetExists: false,
+        targetSizeBytes: null,
+        targetEtagPresent: false,
+      };
+    }
+    saw404 ||= pathStyleHead.status === 404;
+    sawUnknown ||= pathStyleHead.status !== 404;
+  }
+
+  const targetHead = await headObject(targetConfig, entry.targetObjectKey);
+  if (targetHead.ok) {
+    return {
+      entry,
+      status: "already_r2_equivalent_exists",
+      resolvedObjectKey: "",
+      resolvedCandidateKind: "",
+      sourceHead: null,
+      targetExists: true,
+      targetSizeBytes: targetHead.sizeBytes,
+      targetEtagPresent: !!targetHead.etag,
+    };
+  }
+
+  return {
+    entry,
+    status: saw404 && !sawUnknown ? "missing_404" : "unknown_error",
+    resolvedObjectKey: "",
+    resolvedCandidateKind: "",
+    sourceHead: null,
+    targetExists: false,
+    targetSizeBytes: null,
+    targetEtagPresent: false,
+  };
+};
+
+const redactedReconciliationEntry = (result: ReconciliationResult) => redactedManifestEntry(result.entry, {
+  reconciliationStatus: result.status,
+  resolvedObjectKeyRedacted: !!result.resolvedObjectKey,
+  resolvedCandidateKind: result.resolvedCandidateKind || null,
+  sourceSizeBytes: result.sourceHead?.sizeBytes ?? null,
+  sourceEtagPresent: !!result.sourceHead?.etag,
+  targetExists: result.targetExists,
+  targetSizeBytes: result.targetSizeBytes,
+  targetEtagPresent: result.targetEtagPresent,
+});
+
+const summarizeReconciliation = (results: ReconciliationResult[], duplicateCount: number) => {
+  const byStatus = results.reduce<Record<string, number>>((summary, result) => {
+    summary[result.status] = (summary[result.status] ?? 0) + 1;
+    return summary;
+  }, {});
+  const existsCount = results.filter((result) => isExistingSourceStatus(result.status)).length;
+  return {
+    totalDistinctRefs: results.length,
+    existsCount,
+    missingCount: byStatus.missing_404 ?? 0,
+    permissionDeniedCount: byStatus.permission_denied_403 ?? 0,
+    duplicateCount,
+    unknownCount: byStatus.unknown_error ?? 0,
+    alreadyR2EquivalentCount: byStatus.already_r2_equivalent_exists ?? 0,
+    byStatus,
+  };
+};
+
+const reconcileObjects = async (
+  entries: ManifestEntry[],
+  sourceConfig: S3Config,
+  targetConfig: S3Config,
+) => {
+  const results: ReconciliationResult[] = [];
+  for (const entry of entries) {
+    results.push(await reconcileObject(entry, sourceConfig, targetConfig));
+  }
+  return results;
+};
+
+const copyObject = async (
+  entry: ManifestEntry,
+  sourceConfig: S3Config,
+  targetConfig: S3Config,
+  reconciled?: ReconciliationResult,
+): Promise<CopyResult> => {
   const targetValidation = validateR2Target(targetConfig.bucket, entry.targetObjectKey);
   if (!targetValidation.ok) throw new Error("unsafe_r2_target");
   if (entry.sourceBucket !== sourceConfig.bucket) throw new Error("invalid_source_bucket");
   if (targetConfig.bucket !== R2_ORIGIN_BUCKET) throw new Error("invalid_target_bucket");
 
-  const sourceHead = await headSourceObject(sourceConfig, entry.storageObjectKey);
-  if (!sourceHead.ok) throw new Error(`source_object_head_failed_${sourceHead.status}`);
+  const reconciliation = reconciled ?? await reconcileObject(entry, sourceConfig, targetConfig);
+  if (!isExistingSourceStatus(reconciliation.status) || !reconciliation.sourceHead || !reconciliation.resolvedObjectKey) {
+    return {
+      tableName: entry.tableName,
+      rowId: entry.rowId,
+      targetBucket: entry.targetBucket,
+      targetObjectKey: entry.targetObjectKey,
+      copied: false,
+      verified: false,
+      skipped: true,
+      sourceStatus: reconciliation.status,
+      skipReason: reconciliation.status,
+      sourceSizeBytes: null,
+      targetSizeBytes: reconciliation.targetSizeBytes,
+      sourceEtagPresent: false,
+      targetEtagPresent: reconciliation.targetEtagPresent,
+      checksumComparable: false,
+      checksumMatched: null,
+    };
+  }
+
+  const sourceHead = reconciliation.sourceHead;
 
   const sourceUrl = await createPresignedS3Url({
     method: "GET",
     endpoint: sourceConfig.endpoint,
     region: sourceConfig.region,
     bucket: sourceConfig.bucket,
-    objectKey: entry.storageObjectKey,
+    objectKey: reconciliation.resolvedObjectKey,
     accessKeyId: sourceConfig.accessKeyId,
     secretAccessKey: sourceConfig.secretAccessKey,
     expiresSeconds: 120,
@@ -662,6 +990,9 @@ const copyObject = async (entry: ManifestEntry, sourceConfig: S3Config, targetCo
     targetObjectKey: entry.targetObjectKey,
     copied: true,
     verified,
+    skipped: false,
+    sourceStatus: reconciliation.status,
+    skipReason: "",
     sourceSizeBytes: sourceHead.sizeBytes,
     targetSizeBytes: targetHead.sizeBytes,
     sourceEtagPresent: !!sourceHead.etag,
@@ -696,6 +1027,89 @@ const updateMetadataDryRun = (manifest: ManifestEntry[]) => ({
   rollbackScope: "exact_row_ids_and_exact_r2_target_keys",
   hetznerFallbackRetained: true,
 });
+
+const migrationSourceKey = (entry: ManifestEntry) => `${entry.sourceBucket}\n${entry.storageObjectKey}`;
+
+const verifyCopiedEntry = async (
+  reconciliation: ReconciliationResult,
+  targetConfig: S3Config,
+) => {
+  if (!isExistingSourceStatus(reconciliation.status) || !reconciliation.sourceHead) return false;
+  const targetHead = await headObject(targetConfig, reconciliation.entry.targetObjectKey);
+  if (!targetHead.ok) return false;
+  const checksumComparable = !!reconciliation.sourceHead.etag
+    && !!targetHead.etag
+    && !reconciliation.sourceHead.etag.includes("-")
+    && !targetHead.etag.includes("-");
+  const checksumMatched = checksumComparable ? reconciliation.sourceHead.etag === targetHead.etag : null;
+  return reconciliation.sourceHead.sizeBytes !== null
+    && targetHead.sizeBytes !== null
+    && reconciliation.sourceHead.sizeBytes === targetHead.sizeBytes
+    && checksumMatched !== false;
+};
+
+const updateCopiedMetadataBatch = async (input: {
+  adminClient: SupabaseClient;
+  manifest: ManifestEntry[];
+  reconciliation: ReconciliationResult[];
+  targetConfig: S3Config;
+}) => {
+  const verifiedSourceKeys = new Set<string>();
+  for (const result of input.reconciliation) {
+    if (await verifyCopiedEntry(result, input.targetConfig)) {
+      verifiedSourceKeys.add(migrationSourceKey(result.entry));
+    }
+  }
+
+  const rowsToUpdate = input.manifest.filter((entry) => verifiedSourceKeys.has(migrationSourceKey(entry)));
+  if (rowsToUpdate.length === 0) {
+    return {
+      ok: false,
+      blocked: true,
+      reason: "no_verified_copied_rows_for_metadata_update",
+      updatedRows: 0,
+      skippedRows: input.manifest.length,
+    };
+  }
+
+  const batchId = `media-object-storage-r2-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  const updates = rowsToUpdate.map((entry) => ({
+    migration_id: entry.migrationId,
+    table_name: entry.tableName,
+    row_id: entry.rowId,
+    source_type: entry.sourceType,
+    source_id: entry.sourceId,
+    target_bucket: entry.targetBucket,
+    target_object_key: entry.targetObjectKey,
+  }));
+  const { data, error } = await input.adminClient.rpc("media_object_storage_migrate_verified_rows", {
+    p_batch_id: batchId,
+    p_updates: updates,
+  });
+  if (error) {
+    return {
+      ok: false,
+      blocked: true,
+      reason: "metadata_update_rpc_failed",
+      errorCode: error.code ?? "unknown",
+      updatedRows: 0,
+      skippedRows: input.manifest.length,
+    };
+  }
+  const updatedRows = Number(data?.updated_rows ?? 0);
+  return {
+    ok: true,
+    batchId,
+    updatedRows,
+    skippedRows: input.manifest.length - updatedRows,
+    updated: updates.map((row) => ({
+      tableName: row.table_name,
+      rowId: row.row_id,
+      targetBucket: row.target_bucket,
+      targetObjectKey: row.target_object_key,
+    })),
+  };
+};
 
 const zeroRefAudit = (references: InventoryReference[]) => {
   const summary = summarizeInventory(references);
@@ -783,13 +1197,6 @@ const handler = async (req: Request): Promise<Response> => {
           hetznerFallbackRetained: true,
         });
       }
-      return json(409, {
-        ok: false,
-        action,
-        blocked: true,
-        reason: "metadata_update_not_executed_without_persisted_verified_copy_manifest",
-        hetznerFallbackRetained: true,
-      });
     }
 
     const plan = dryRunPlan(distinct);
@@ -832,6 +1239,56 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
+    if (action === "reconcile_objects") {
+      const reconciliation = await reconcileObjects(distinct, sourceConfig.config, targetConfig.config);
+      const reconciliationSummary = summarizeReconciliation(reconciliation, Math.max(0, manifest.length - distinct.length));
+      const includeEntries = shouldIncludeEntries(payload);
+      return json(reconciliationSummary.permissionDeniedCount > 0 ? 409 : 200, {
+        ok: reconciliationSummary.permissionDeniedCount === 0,
+        action,
+        summary,
+        reconciliation: reconciliationSummary,
+        redactedReconciliation: includeEntries ? reconciliation.map(redactedReconciliationEntry) : undefined,
+        redactedReconciliationCount: reconciliation.length,
+        entriesOmittedByDefault: !includeEntries,
+        hetznerFallbackRetained: true,
+      });
+    }
+
+    if (action === "update_metadata_batch") {
+      const reconciliation = await reconcileObjects(distinct, sourceConfig.config, targetConfig.config);
+      const reconciliationSummary = summarizeReconciliation(reconciliation, Math.max(0, manifest.length - distinct.length));
+      const includeEntries = shouldIncludeEntries(payload);
+      if (reconciliationSummary.permissionDeniedCount > 0) {
+        return json(409, {
+          ok: false,
+          action,
+          blocked: true,
+          reason: "permission_denied_403",
+          reconciliation: reconciliationSummary,
+          redactedReconciliation: includeEntries ? reconciliation.map(redactedReconciliationEntry) : undefined,
+          redactedReconciliationCount: reconciliation.length,
+          entriesOmittedByDefault: !includeEntries,
+          hetznerFallbackRetained: true,
+        });
+      }
+      const updateResult = await updateCopiedMetadataBatch({
+        adminClient,
+        manifest,
+        reconciliation,
+        targetConfig: targetConfig.config,
+      });
+      return json(updateResult.ok ? 200 : 409, {
+        action,
+        ...updateResult,
+        reconciliation: reconciliationSummary,
+        redactedReconciliation: includeEntries ? reconciliation.map(redactedReconciliationEntry) : undefined,
+        redactedReconciliationCount: reconciliation.length,
+        entriesOmittedByDefault: !includeEntries,
+        hetznerFallbackRetained: true,
+      });
+    }
+
     if (action === "copy_object" || action === "verify_object") {
       const entry = selectEntry(manifest, payload);
       if (!entry) return json(404, { ok: false, error: "manifest_entry_not_found" });
@@ -853,6 +1310,9 @@ const handler = async (req: Request): Promise<Response> => {
         result: redactedManifestEntry(entry, {
           copied: result.copied,
           verified: result.verified,
+          skipped: result.skipped,
+          sourceStatus: result.sourceStatus,
+          skipReason: result.skipReason || null,
           sourceSizeBytes: result.sourceSizeBytes,
           targetSizeBytes: result.targetSizeBytes,
           checksumComparable: result.checksumComparable,
@@ -868,32 +1328,109 @@ const handler = async (req: Request): Promise<Response> => {
         ? Math.min(MAX_COPY_BATCH_LIMIT, Math.max(1, Math.floor(requestedLimit)))
         : DEFAULT_COPY_BATCH_LIMIT;
       const selected = distinct.slice(0, limit);
-      const results: CopyResult[] = [];
-      for (const entry of selected) {
-        const result = await copyObject(entry, sourceConfig.config, targetConfig.config);
-        results.push(result);
-        if (!result.verified) break;
+      const reconciliation = await reconcileObjects(selected, sourceConfig.config, targetConfig.config);
+      const reconciliationSummary = summarizeReconciliation(reconciliation, Math.max(0, manifest.length - distinct.length));
+      const includeEntries = shouldIncludeEntries(payload);
+      if (reconciliationSummary.permissionDeniedCount > 0) {
+        return json(409, {
+          ok: false,
+          action,
+          blocked: true,
+          reason: "permission_denied_403",
+          selectedCount: selected.length,
+          reconciliation: reconciliationSummary,
+          redactedReconciliation: includeEntries ? reconciliation.map(redactedReconciliationEntry) : undefined,
+          redactedReconciliationCount: reconciliation.length,
+          entriesOmittedByDefault: !includeEntries,
+          dbUpdateReady: false,
+          hetznerFallbackRetained: true,
+        });
       }
-      const allVerified = results.length === selected.length && results.every((result) => result.verified);
-      return json(allVerified ? 200 : 409, {
-        ok: allVerified,
+      const results: CopyResult[] = [];
+      for (const reconciled of reconciliation) {
+        if (!isExistingSourceStatus(reconciled.status)) {
+          results.push(await copyObject(reconciled.entry, sourceConfig.config, targetConfig.config, reconciled));
+          continue;
+        }
+        try {
+          results.push(await copyObject(reconciled.entry, sourceConfig.config, targetConfig.config, reconciled));
+        } catch (error) {
+          const failureReason = sanitizeFailureReason(error);
+          if (
+            failureReason.includes("_403")
+            || failureReason.startsWith("r2_origin_")
+            || failureReason === "unsafe_r2_target"
+            || failureReason === "invalid_source_bucket"
+            || failureReason === "invalid_target_bucket"
+          ) {
+            return json(409, {
+              ok: false,
+              action,
+              blocked: true,
+              reason: failureReason,
+              selectedCount: selected.length,
+              reconciliation: reconciliationSummary,
+              redactedReconciliation: includeEntries ? reconciliation.map(redactedReconciliationEntry) : undefined,
+              redactedReconciliationCount: reconciliation.length,
+              entriesOmittedByDefault: !includeEntries,
+              dbUpdateReady: false,
+              hetznerFallbackRetained: true,
+            });
+          }
+          results.push({
+            tableName: reconciled.entry.tableName,
+            rowId: reconciled.entry.rowId,
+            targetBucket: reconciled.entry.targetBucket,
+            targetObjectKey: reconciled.entry.targetObjectKey,
+            copied: false,
+            verified: false,
+            skipped: true,
+            sourceStatus: reconciled.status,
+            skipReason: failureReason,
+            sourceSizeBytes: reconciled.sourceHead?.sizeBytes ?? null,
+            targetSizeBytes: null,
+            sourceEtagPresent: !!reconciled.sourceHead?.etag,
+            targetEtagPresent: false,
+            checksumComparable: false,
+            checksumMatched: null,
+          });
+        }
+      }
+      const copiedResults = results.filter((result) => result.copied);
+      const verifiedResults = results.filter((result) => result.verified);
+      const skippedResults = results.filter((result) => result.skipped);
+      const copyFailures = results.filter((result) => result.copied && !result.verified);
+      const allCopyableVerified = copiedResults.length === reconciliationSummary.existsCount && copyFailures.length === 0;
+      return json(200, {
+        ok: allCopyableVerified && skippedResults.length === 0,
+        partial: skippedResults.length > 0 || !allCopyableVerified,
         action,
         selectedCount: selected.length,
-        copiedCount: results.length,
-        verifiedCount: results.filter((result) => result.verified).length,
-        results: results.map((result) => ({
+        copiedCount: copiedResults.length,
+        verifiedCount: verifiedResults.length,
+        skippedCount: skippedResults.length,
+        copyFailedCount: copyFailures.length,
+        reconciliation: reconciliationSummary,
+        redactedReconciliation: includeEntries ? reconciliation.map(redactedReconciliationEntry) : undefined,
+        redactedReconciliationCount: reconciliation.length,
+        entriesOmittedByDefault: !includeEntries,
+        results: includeEntries ? results.map((result) => ({
           tableName: result.tableName,
           rowId: result.rowId,
           targetBucket: result.targetBucket,
           targetObjectKey: result.targetObjectKey,
           copied: result.copied,
           verified: result.verified,
+          skipped: result.skipped,
+          sourceStatus: result.sourceStatus,
+          skipReason: result.skipReason || null,
           sourceSizeBytes: result.sourceSizeBytes,
           targetSizeBytes: result.targetSizeBytes,
           checksumComparable: result.checksumComparable,
           checksumMatched: result.checksumMatched,
-        })),
-        dbUpdateReady: allVerified,
+        })) : undefined,
+        resultCount: results.length,
+        dbUpdateReady: allCopyableVerified && copiedResults.length > 0,
         hetznerFallbackRetained: true,
       });
     }

@@ -233,6 +233,8 @@ const handleBackendMode = async () => {
   const actionByMode = {
     status: "audit_inventory",
     inventory: "audit_inventory",
+    reconcile: "reconcile_objects",
+    "reconcile-objects": "reconcile_objects",
     "dry-run": "update_metadata_dry_run",
     copy: "copy_batch",
     run: "copy_batch",

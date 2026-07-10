@@ -58,12 +58,18 @@ includes(config, "[functions.media-object-storage-migration]", "migration copier
 includes(migrationFunction, "MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN_SHA256", "migration copier function");
 includes(migrationFunction, "x-media-object-migration-token", "migration copier function");
 includes(migrationFunction, "timingSafeEqualHex", "migration copier function");
+includes(migrationFunction, "reconcile_objects", "migration copier function");
+includes(migrationFunction, "missing_404", "migration copier function");
+includes(migrationFunction, "permission_denied_403", "migration copier function");
 includes(migrationFunction, "copy_batch", "migration copier function");
 includes(migrationFunction, "update_metadata_batch", "migration copier function");
 includes(migrationFunction, "rollback_metadata_batch", "migration copier function");
+includes(migrationFunction, "media_object_storage_migrate_verified_rows", "migration copier function");
 includes(migrationFunction, "R2_ORIGIN_SECRET_ACCESS_KEY", "migration copier function");
 includes(migrationFunction, "MEDIA_ORIGIN_R2_SECRET_ACCESS_KEY", "migration copier function");
 includes(migrationFunction, "metadata_update_disabled_until_copy_verify_backup_and_restore_drill_pass", "migration copier function");
+includes(migrationFunction, "skippedCount", "migration copier function");
+includes(migrationFunction, "entriesOmittedByDefault", "migration copier function");
 includes(migrationFunction, "playback/public/", "migration copier function");
 includes(migrationFunction, "liveKitTouched: false", "migration copier function");
 

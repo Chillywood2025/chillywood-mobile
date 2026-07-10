@@ -34,6 +34,7 @@ requireText(migrationFunction, "x-media-object-migration-token", "migration copi
 requireText(migrationFunction, "timingSafeEqualHex", "migration copier constant-time comparison");
 requireText(migrationFunction, "media_object_migration_operator_token_required", "migration copier missing token denial");
 requireText(migrationFunction, "audit_inventory", "migration copier inventory action");
+requireText(migrationFunction, "reconcile_objects", "migration copier reconciliation action");
 requireText(migrationFunction, "copy_object", "migration copier copy-object action");
 requireText(migrationFunction, "copy_batch", "migration copier copy-batch action");
 requireText(migrationFunction, "verify_object", "migration copier verify action");
@@ -41,6 +42,11 @@ requireText(migrationFunction, "update_metadata_dry_run", "migration copier meta
 requireText(migrationFunction, "update_metadata_batch", "migration copier metadata update action");
 requireText(migrationFunction, "rollback_metadata_batch", "migration copier rollback action");
 requireText(migrationFunction, "zero_ref_audit", "migration copier zero-ref action");
+requireText(migrationFunction, "missing_404", "migration copier missing refs are classified");
+requireText(migrationFunction, "permission_denied_403", "migration copier permission failures block copy");
+requireText(migrationFunction, "skippedCount", "migration copier reports skipped missing/unsupported refs");
+requireText(migrationFunction, "entriesOmittedByDefault", "migration copier keeps live summary responses bounded");
+requireText(migrationFunction, "media_object_storage_migrate_verified_rows", "migration copier metadata update RPC");
 requireText(migrationFunction, "LEGACY_S3_ACCESS_KEY_ID", "migration copier legacy S3 backend env");
 requireText(migrationFunction, "R2_ORIGIN_ACCESS_KEY_ID", "migration copier R2 origin backend env");
 requireText(migrationFunction, "MEDIA_ORIGIN_R2_ACCESS_KEY_ID", "migration copier media-origin R2 env fallback");
@@ -57,6 +63,7 @@ requireText(migrationFunction, "secretsPrinted: false", "migration copier secret
 
 requireText(cli, "source === \"backend\"", "migration CLI backend source");
 requireText(cli, "media-object-storage-migration", "migration CLI calls trusted copier");
+requireText(cli, "reconcile: \"reconcile_objects\"", "migration CLI exposes backend reconciliation");
 requireText(cli, "MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN", "migration CLI operator token env");
 requireText(cli, "media_object_migration_operator_token_missing", "migration CLI missing token fail-closed reason");
 requireText(cli, "rawServiceRoleRequired: false", "migration CLI does not need local service-role key");
