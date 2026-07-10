@@ -108,6 +108,29 @@ const missingEnvResponse = (reason: string, names: string[]) => json(409, {
   hetznerFallbackRetained: true,
 });
 
+const sanitizeFailureReason = (error: unknown) => {
+  const message = error instanceof Error ? error.message : "unknown_error";
+  const allowed = [
+    "unsafe_r2_target",
+    "invalid_source_bucket",
+    "invalid_target_bucket",
+    "source_object_head_failed",
+    "source_object_download_failed",
+    "r2_origin_upload_failed",
+    "r2_origin_readback_failed",
+    "inventory_videos_failed",
+    "inventory_social_attachments_failed",
+    "inventory_media_scan_jobs_failed",
+    "inventory_video_renditions_failed",
+    "inventory_media_renditions_failed",
+  ];
+  if (allowed.includes(message)) return message;
+  if (/^(source_object_head_failed|source_object_download_failed|r2_origin_upload_failed|r2_origin_readback_failed)_[0-9]{3}$/u.test(message)) {
+    return message;
+  }
+  return "media_object_storage_migration_failed";
+};
+
 const bytesToHex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
@@ -201,11 +224,19 @@ const getSigningKey = async (secretAccessKey: string, dateStamp: string, region:
   return hmac(serviceKey, "aws4_request");
 };
 
-const createS3ObjectUrl = (endpoint: string, bucket: string, objectKey: string) => {
+const createS3ObjectUrl = (endpoint: string, bucket: string, objectKey: string, forcePathStyle = false) => {
   const endpointUrl = new URL(endpoint);
-  const host = `${bucket}.${endpointUrl.host}`;
+  const bucketPrefix = `${bucket}.`.toLowerCase();
+  const endpointHost = endpointUrl.host.toLowerCase();
+  const endpointHostIncludesBucket = endpointHost.startsWith(bucketPrefix);
+  const host = forcePathStyle
+    ? endpointHostIncludesBucket ? endpointUrl.host.slice(bucket.length + 1) : endpointUrl.host
+    : endpointHostIncludesBucket ? endpointUrl.host : `${bucket}.${endpointUrl.host}`;
+  const canonicalUri = forcePathStyle
+    ? `/${encodeURIComponent(bucket)}/${encodeObjectKey(objectKey)}`
+    : `/${encodeObjectKey(objectKey)}`;
   return {
-    canonicalUri: `/${encodeObjectKey(objectKey)}`,
+    canonicalUri,
     host,
     protocol: endpointUrl.protocol || "https:",
   };
@@ -220,9 +251,15 @@ const createPresignedS3Url = async (input: {
   accessKeyId: string;
   secretAccessKey: string;
   expiresSeconds: number;
+  forcePathStyle?: boolean;
 }) => {
   const { amzDate, dateStamp } = formatAmzDates();
-  const { canonicalUri, host, protocol } = createS3ObjectUrl(input.endpoint, input.bucket, input.objectKey);
+  const { canonicalUri, host, protocol } = createS3ObjectUrl(
+    input.endpoint,
+    input.bucket,
+    input.objectKey,
+    Boolean(input.forcePathStyle),
+  );
   const credentialScope = `${dateStamp}/${input.region}/s3/aws4_request`;
   const queryParams: Record<string, string> = {
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
@@ -534,7 +571,7 @@ const selectEntry = (manifest: ManifestEntry[], payload: Record<string, unknown>
   return manifest.find((entry) => entry.tableName === tableName && entry.rowId === rowId) ?? null;
 };
 
-const headObject = async (config: S3Config, objectKey: string) => {
+const headObject = async (config: S3Config, objectKey: string, forcePathStyle = false) => {
   const url = await createPresignedS3Url({
     method: "HEAD",
     endpoint: config.endpoint,
@@ -544,9 +581,10 @@ const headObject = async (config: S3Config, objectKey: string) => {
     accessKeyId: config.accessKeyId,
     secretAccessKey: config.secretAccessKey,
     expiresSeconds: 60,
+    forcePathStyle,
   });
   const response = await fetch(url, { method: "HEAD" });
-  if (!response.ok) return { ok: false, status: response.status, sizeBytes: null, etag: "", contentType: "" };
+  if (!response.ok) return { ok: false, status: response.status, sizeBytes: null, etag: "", contentType: "", forcePathStyle };
   const sizeText = response.headers.get("content-length");
   const parsedSize = sizeText ? Number.parseInt(sizeText, 10) : Number.NaN;
   return {
@@ -555,7 +593,15 @@ const headObject = async (config: S3Config, objectKey: string) => {
     sizeBytes: Number.isFinite(parsedSize) ? parsedSize : null,
     etag: toText(response.headers.get("etag")).replaceAll('"', ""),
     contentType: toText(response.headers.get("content-type")) || "application/octet-stream",
+    forcePathStyle,
   };
+};
+
+const headSourceObject = async (config: S3Config, objectKey: string) => {
+  let last = await headObject(config, objectKey, false);
+  if (last.ok) return last;
+  last = await headObject(config, objectKey, true);
+  return last;
 };
 
 const copyObject = async (entry: ManifestEntry, sourceConfig: S3Config, targetConfig: S3Config): Promise<CopyResult> => {
@@ -564,8 +610,8 @@ const copyObject = async (entry: ManifestEntry, sourceConfig: S3Config, targetCo
   if (entry.sourceBucket !== sourceConfig.bucket) throw new Error("invalid_source_bucket");
   if (targetConfig.bucket !== R2_ORIGIN_BUCKET) throw new Error("invalid_target_bucket");
 
-  const sourceHead = await headObject(sourceConfig, entry.storageObjectKey);
-  if (!sourceHead.ok) throw new Error("source_object_head_failed");
+  const sourceHead = await headSourceObject(sourceConfig, entry.storageObjectKey);
+  if (!sourceHead.ok) throw new Error(`source_object_head_failed_${sourceHead.status}`);
 
   const sourceUrl = await createPresignedS3Url({
     method: "GET",
@@ -576,6 +622,7 @@ const copyObject = async (entry: ManifestEntry, sourceConfig: S3Config, targetCo
     accessKeyId: sourceConfig.accessKeyId,
     secretAccessKey: sourceConfig.secretAccessKey,
     expiresSeconds: 120,
+    forcePathStyle: sourceHead.forcePathStyle,
   });
   const targetUrl = await createPresignedS3Url({
     method: "PUT",
@@ -589,7 +636,7 @@ const copyObject = async (entry: ManifestEntry, sourceConfig: S3Config, targetCo
   });
 
   const sourceResponse = await fetch(sourceUrl);
-  if (!sourceResponse.ok || !sourceResponse.body) throw new Error("source_object_download_failed");
+  if (!sourceResponse.ok || !sourceResponse.body) throw new Error(`source_object_download_failed_${sourceResponse.status}`);
   const uploadResponse = await fetch(targetUrl, {
     method: "PUT",
     body: sourceResponse.body,
@@ -597,10 +644,10 @@ const copyObject = async (entry: ManifestEntry, sourceConfig: S3Config, targetCo
       "Content-Type": sourceHead.contentType || sourceResponse.headers.get("content-type") || "application/octet-stream",
     },
   });
-  if (!uploadResponse.ok) throw new Error("r2_origin_upload_failed");
+  if (!uploadResponse.ok) throw new Error(`r2_origin_upload_failed_${uploadResponse.status}`);
 
   const targetHead = await headObject(targetConfig, entry.targetObjectKey);
-  if (!targetHead.ok) throw new Error("r2_origin_readback_failed");
+  if (!targetHead.ok) throw new Error(`r2_origin_readback_failed_${targetHead.status}`);
   const checksumComparable = !!sourceHead.etag && !!targetHead.etag && !sourceHead.etag.includes("-") && !targetHead.etag.includes("-");
   const checksumMatched = checksumComparable ? sourceHead.etag === targetHead.etag : null;
   const verified = sourceHead.sizeBytes !== null
@@ -853,10 +900,12 @@ const handler = async (req: Request): Promise<Response> => {
 
     return json(400, { ok: false, error: "unhandled_action" });
   } catch (error) {
-    console.error("media-object-storage-migration failure", error instanceof Error ? error.message : "unknown_error");
+    const failureReason = sanitizeFailureReason(error);
+    console.error("media-object-storage-migration failure", failureReason);
     return json(500, {
       ok: false,
       error: "media_object_storage_migration_failed",
+      failureReason,
       hetznerFallbackRetained: true,
     });
   }

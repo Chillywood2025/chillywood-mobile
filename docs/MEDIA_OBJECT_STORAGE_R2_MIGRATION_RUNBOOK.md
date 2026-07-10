@@ -1,6 +1,6 @@
 # Media Object Storage R2 Migration Runbook
 
-Status: Partial. Cloudflare R2 private origin bucket `chillywood-media-origin` exists and is the target for future source/original media, and trusted backend copier Edge Function `media-object-storage-migration` is deployed. Hetzner Object Storage is still not ready for shutdown because the copier is blocked before copy by missing R2 private-origin write config. No media was processed, no media rows were written, no objects were copied, and no Hetzner objects were deleted in this pass.
+Status: Partial. Cloudflare R2 private origin bucket `chillywood-media-origin` exists and is the target for future source/original media, and trusted backend copier Edge Function `media-object-storage-migration` is deployed. The missing R2 private-origin write config was added through a bucket-scoped R2 S3 credential stored as Supabase function secrets without printing values. Live copy still stopped before any DB metadata update because the first selected legacy Hetzner/S3 source row returned `source_object_head_failed_404` even after virtual-host and path-style source addressing fallback. No media rows were written, no DB metadata was migrated, no Hetzner objects were deleted, and Hetzner fallback remains retained.
 
 ## Scope
 
@@ -20,7 +20,7 @@ Read-only production inventory found remaining Hetzner/S3 object-storage referen
 
 Object keys are treated as private migration metadata and are redacted from normal logs and docs.
 
-The live trusted copier inventory also found `31` Hetzner/S3 reference rows and `22` distinct object refs. Missing/invalid copier operator tokens returned `401`, and a valid proof-session operator token returned redacted inventory without object keys, signed URLs, or secrets.
+The live trusted copier inventory also found `31` Hetzner/S3 reference rows and `22` distinct object refs. Missing/invalid copier operator tokens returned `401`, and a valid proof-session operator token returned redacted inventory without object keys, signed URLs, or secrets. A copy attempt now reaches the source-read stage but fails on the first redacted `videos` source row with `source_object_head_failed_404`; object keys remain redacted.
 
 ## R2 Target
 
@@ -121,7 +121,9 @@ Hetzner LiveKit remains separate even after object-storage shutdown readiness.
 
 ## Current Blocker
 
-Full migration is blocked before copy/DB update because the deployed trusted copier has no R2 private-origin write config. Supabase already has legacy Hetzner/S3 source secret names, and the copier can inventory via service-role backend authority, but copy returned `r2_origin_write_config_missing` with these required names: `MEDIA_ORIGIN_PRIVATE_ONLY=true`, `MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED=true`, `MEDIA_ORIGIN_BUCKET` or `R2_ORIGIN_BUCKET`, `MEDIA_ORIGIN_R2_ENDPOINT` or `R2_ORIGIN_ENDPOINT`, `MEDIA_ORIGIN_R2_ACCESS_KEY_ID` or `R2_ORIGIN_ACCESS_KEY_ID`, and `MEDIA_ORIGIN_R2_SECRET_ACCESS_KEY` or `R2_ORIGIN_SECRET_ACCESS_KEY`.
+The previous `r2_origin_write_config_missing` blocker is cleared. The backend now has `MEDIA_ORIGIN_PRIVATE_ONLY=true`, `MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED=true`, `MEDIA_ORIGIN_BUCKET=chillywood-media-origin`, `MEDIA_ORIGIN_R2_ENDPOINT`, `MEDIA_ORIGIN_R2_REGION=auto`, `MEDIA_ORIGIN_R2_ACCESS_KEY_ID`, and `MEDIA_ORIGIN_R2_SECRET_ACCESS_KEY` stored as Supabase function secrets.
+
+Full migration is still blocked before DB metadata update because live copy returned `source_object_head_failed_404` for the first selected legacy source row. The copier now tries both virtual-host and path-style legacy source addressing, so the next step is to reconcile that row's stored Hetzner/S3 object key or restore the missing source object before rerunning copy. Do not update DB metadata, switch new uploads, or shut down Hetzner Object Storage until all source objects copy and verify.
 
 The existing scan gateway remains intentionally narrower: it can read public-safe scan/transcode candidates and has R2 private-origin support for migrated rows, but it denies private and Premium media. It is not the all-object migration copier.
 
