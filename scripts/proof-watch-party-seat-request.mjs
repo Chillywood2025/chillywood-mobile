@@ -675,6 +675,26 @@ assert(
     && playerSource.includes("currentParticipantIdentityAliases={[trackedUserId, watchPartyLiveKitIdentityRef.current].filter(Boolean)}"),
   "Player must merge membership-authoritative roster state and pass explicit current identity aliases into the LiveKit bubble surface",
 );
+const playerSelfMuteStart = playerSource.indexOf("const onPressSharedPlayerSelfMute = useCallback(async () => {");
+const playerSelfMuteEnd = playerSource.indexOf("const watchPartyLiveSharedPlaybackControlsLocked", playerSelfMuteStart);
+const playerSelfMuteSource = playerSelfMuteStart >= 0 && playerSelfMuteEnd > playerSelfMuteStart
+  ? playerSource.slice(playerSelfMuteStart, playerSelfMuteEnd)
+  : "";
+assert(
+  playerSelfMuteSource.includes("setWatchPartyLiveKitRenderableContract((current) => {")
+    && !playerSelfMuteSource.includes("setWatchPartyLiveKitRenderableContract(null);"),
+  "self mute/unmute authority refresh must preserve the renderable LiveKit surface instead of clearing real bubbles",
+);
+const livekitBubbleGridStart = livekitSurfaceSource.indexOf("const bubbleGridItems = useMemo<BubbleGridItem[]>(() => {");
+const livekitBubbleGridEnd = livekitSurfaceSource.indexOf("const participantLabelEntries = useMemo(() => {", livekitBubbleGridStart);
+const livekitBubbleGridSource = livekitBubbleGridStart >= 0 && livekitBubbleGridEnd > livekitBubbleGridStart
+  ? livekitSurfaceSource.slice(livekitBubbleGridStart, livekitBubbleGridEnd)
+  : "";
+assert(
+  livekitBubbleGridSource.includes("participantRosterByIdentity.forEach((entry, identity) => {")
+    && livekitBubbleGridSource.includes("const trackRef = aliases.map((alias) => trackByIdentity.get(alias) ?? null).find(Boolean) ?? null;"),
+  "LiveKit bubble grid must create roster placeholder items even before camera tracks publish",
+);
 assert(
   playerSource.includes("partyMembershipRosterPollRef.current = setInterval")
     && playerSource.includes("refreshMembershipRosterFromAuthority(true).catch(() => null);"),

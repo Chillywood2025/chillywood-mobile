@@ -81,11 +81,23 @@ const playerFallbackHandler = sliceBetween(
   "useEffect(() => {\n    if (!activeParticipantId) return;",
   "Player Watch-Party LiveKit fallback handler boundary",
 );
+const playerSharedPlayerSelfMute = sliceBetween(
+  player,
+  "const onPressSharedPlayerSelfMute = useCallback(async () => {",
+  "const watchPartyLiveSharedPlaybackControlsLocked",
+  "Player Watch-Party LiveKit self mute handler boundary",
+);
 const playerWatchPartyLiveKitContractRefresh = sliceBetween(
   player,
   "useEffect(() => {\n    if (!inWatchParty || !partyId || !watchPartyEntryAllowed || Platform.OS === \"web\") {",
   "const onWatchPartyLiveKitFallback = useCallback(",
   "Player Watch-Party LiveKit contract refresh boundary",
+);
+const livekitBubbleGridItems = sliceBetween(
+  livekitSurface,
+  "const bubbleGridItems = useMemo<BubbleGridItem[]>(() => {",
+  "const participantLabelEntries = useMemo(() => {",
+  "LiveKit stage media bubble-grid items boundary",
 );
 const playerWatchPartySeatPersistence = sliceBetween(
   player,
@@ -753,6 +765,16 @@ assertIncludes(
   livekitSurface,
   "const bubbleGridItems = useMemo<BubbleGridItem[]>(() => {",
   "LiveKit media surface must build roster-aware bubble-grid items",
+);
+assertIncludes(
+  livekitBubbleGridItems,
+  "participantRosterByIdentity.forEach((entry, identity) => {",
+  "LiveKit bubble-grid items must include roster participants before track-only fallbacks",
+);
+assertIncludes(
+  livekitBubbleGridItems,
+  "const trackRef = aliases.map((alias) => trackByIdentity.get(alias) ?? null).find(Boolean) ?? null;",
+  "LiveKit bubble-grid items must preserve placeholders for roster participants without camera tracks",
 );
 assertIncludes(
   livekitSurface,
@@ -1902,6 +1924,16 @@ assertIncludes(
   playerFallbackHandler,
   "setWatchPartyLiveKitRenderableContract(null);",
   "Player Watch-Party LiveKit fallback must clear the cached renderable contract only on real fallback",
+);
+assertIncludes(
+  playerSharedPlayerSelfMute,
+  "setWatchPartyLiveKitRenderableContract((current) => {",
+  "Player Watch-Party LiveKit self mute must preserve the renderable contract during authority refresh",
+);
+assertNotIncludes(
+  playerSharedPlayerSelfMute,
+  "setWatchPartyLiveKitRenderableContract(null);",
+  "Player Watch-Party LiveKit self mute must not collapse the LiveKit surface to the roster placeholder during authority refresh",
 );
 assertIncludes(
   player,

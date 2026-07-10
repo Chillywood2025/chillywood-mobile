@@ -5887,8 +5887,22 @@ export default function PlayerScreen() {
         muted: updatedMembership.isMuted,
         isRequestingToSpeak: false,
       }).catch(() => {});
+      setWatchPartyLiveKitRenderableContract((current) => {
+        if (canUseWatchPartyLiveRenderableContract(
+          watchPartyLiveKitJoinContract,
+          { roomName: partyId, isExpired: watchPartyLiveKitJoinContractExpired },
+        )) {
+          return watchPartyLiveKitJoinContract;
+        }
+        if (canUseWatchPartyLiveRenderableContract(
+          current,
+          { roomName: partyId, isExpired: !!current && isLiveKitParticipantTokenExpired(current.participantToken) },
+        )) {
+          return current;
+        }
+        return null;
+      });
       setWatchPartyLiveKitJoinContract(null);
-      setWatchPartyLiveKitRenderableContract(null);
       setWatchPartyLiveKitAuthorityRetrySerial((value) => value + 1);
       showLivePresenceEvent(updatedMembership.isMuted ? "You muted yourself" : "You unmuted yourself");
       debugLog("livekit", "watch-party-live self mute persisted", {
@@ -5922,6 +5936,8 @@ export default function PlayerScreen() {
     syncCurrentPartyPresence,
     trackedUserId,
     watchPartySelfMuteBusy,
+    watchPartyLiveKitJoinContract,
+    watchPartyLiveKitJoinContractExpired,
   ]);
   const watchPartyLiveSharedPlaybackControlsLocked = isSharedPartyPlayback && !currentWatchPartyHostAuthority.isHost;
   const desiredWatchPartyLiveKitParticipantRole = useMemo<LiveKitTokenReady["participantRole"]>(() => {

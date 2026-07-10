@@ -319,6 +319,7 @@
     "guard:autonomous-operating-model": "node ./scripts/guard-autonomous-operating-model.mjs",
     "guard:media-delivery-architecture": "node ./scripts/guard-media-delivery-architecture.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
+    "guard:watch-party-livekit-camera": "node ./scripts/guard-watch-party-livekit-camera.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs && npm run guard:live-stage-contract && npm run guard:live-stage-approved-seats",
     "guard:live-stage-contract": "node ./scripts/guard-live-stage-contract.mjs",
     "guard:live-stage-approved-seats": "node ./scripts/guard-live-stage-approved-seats.mjs",
