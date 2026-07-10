@@ -233,9 +233,13 @@ const handleBackendMode = async () => {
   const actionByMode = {
     status: "audit_inventory",
     inventory: "audit_inventory",
+    classify: "classify_stale_refs",
+    "classify-stale": "classify_stale_refs",
     reconcile: "reconcile_objects",
     "reconcile-objects": "reconcile_objects",
     "dry-run": "update_metadata_dry_run",
+    backup: "backup_storage_metadata",
+    "backup-metadata": "backup_storage_metadata",
     copy: "copy_batch",
     run: "copy_batch",
     "db-update": "update_metadata_batch",

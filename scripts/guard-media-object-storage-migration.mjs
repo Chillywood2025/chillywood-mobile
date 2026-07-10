@@ -38,7 +38,7 @@ includes(docs, "private R2 origin", "migration docs");
 includes(docs, "0 Hetzner object-storage", "migration docs");
 includes(docs, "Hetzner fallback retained", "migration docs");
 includesAny(docs, ["no media was processed", "No media was processed"], "migration docs");
-includesAny(docs, ["no media rows were written", "No media rows were written"], "migration docs");
+includesAny(docs, ["no playback rows were written", "No playback rows were written", "no media_transcode_jobs or media_renditions rows were written"], "migration docs");
 includes(docs, "not ready for shutdown", "migration docs");
 
 includes(helper, "MEDIA_ORIGIN_BUCKET = \"chillywood-media-origin\"", "migration helper");

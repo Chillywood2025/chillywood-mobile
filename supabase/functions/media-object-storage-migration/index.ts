@@ -2,11 +2,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 type MigrationAction =
   | "audit_inventory"
+  | "classify_stale_refs"
   | "reconcile_objects"
   | "copy_object"
   | "verify_object"
   | "copy_batch"
   | "update_metadata_dry_run"
+  | "backup_storage_metadata"
   | "update_metadata_batch"
   | "zero_ref_audit"
   | "rollback_metadata_batch";
@@ -119,6 +121,7 @@ const LEGACY_HETZNER_BUCKET = "chillywood-media-prod";
 const R2_ORIGIN_BUCKET = "chillywood-media-origin";
 const ALLOWED_TARGET_PREFIXES = ["originals/", "uploads/", "source/", "processing/", "quarantine/"];
 const FORBIDDEN_TARGET_PREFIXES = ["playback/public/", "playback/protected/", "playback/premium/"];
+const STORAGE_METADATA_BACKUP_PREFIX = "backups/media-object-storage/";
 const DEFAULT_COPY_BATCH_LIMIT = 25;
 const MAX_COPY_BATCH_LIMIT = 100;
 const textEncoder = new TextEncoder();
@@ -163,6 +166,8 @@ const sanitizeFailureReason = (error: unknown) => {
     "source_object_download_failed",
     "r2_origin_upload_failed",
     "r2_origin_readback_failed",
+    "r2_origin_backup_upload_failed",
+    "r2_origin_backup_readback_failed",
     "inventory_videos_failed",
     "inventory_social_attachments_failed",
     "inventory_media_scan_jobs_failed",
@@ -170,7 +175,7 @@ const sanitizeFailureReason = (error: unknown) => {
     "inventory_media_renditions_failed",
   ];
   if (allowed.includes(message)) return message;
-  if (/^(source_object_head_failed|source_object_download_failed|r2_origin_upload_failed|r2_origin_readback_failed)_[0-9]{3}$/u.test(message)) {
+  if (/^(source_object_head_failed|source_object_download_failed|r2_origin_upload_failed|r2_origin_readback_failed|r2_origin_backup_upload_failed|r2_origin_backup_readback_failed)_[0-9]{3}$/u.test(message)) {
     return message;
   }
   return "media_object_storage_migration_failed";
@@ -208,11 +213,13 @@ const normalizeAction = (value: unknown): MigrationAction | null => {
   const action = toLowerText(value);
   if (
     action === "audit_inventory"
+    || action === "classify_stale_refs"
     || action === "reconcile_objects"
     || action === "copy_object"
     || action === "verify_object"
     || action === "copy_batch"
     || action === "update_metadata_dry_run"
+    || action === "backup_storage_metadata"
     || action === "update_metadata_batch"
     || action === "zero_ref_audit"
     || action === "rollback_metadata_batch"
@@ -568,7 +575,7 @@ const readInventoryReferences = async (adminClient: SupabaseClient) => {
     (row) => fromRow("video_renditions", row, {
       sourceType: "creator_video",
       sourceId: toText(row.video_id),
-      storageProvider: "s3",
+      storageProvider: toText(row.storage_bucket) === R2_ORIGIN_BUCKET ? "cloudflare_r2" : "s3",
       visibility: "rendition",
       moderationStatus: toText(row.status),
       isOriginal: toLowerText(row.quality_label) === "original",
@@ -708,6 +715,62 @@ const headSourceObject = async (config: S3Config, objectKey: string) => {
   if (last.ok) return last;
   last = await headObject(config, objectKey, true);
   return last;
+};
+
+const validatePrivateBackupTarget = (targetConfig: S3Config, objectKey: string) => ({
+  ok: targetConfig.bucket === R2_ORIGIN_BUCKET
+    && objectKey.startsWith(STORAGE_METADATA_BACKUP_PREFIX)
+    && isSafeObjectKey(objectKey)
+    && !FORBIDDEN_TARGET_PREFIXES.some((prefix) => objectKey.startsWith(prefix)),
+  privateOriginBucket: targetConfig.bucket === R2_ORIGIN_BUCKET,
+  backupPrefix: objectKey.startsWith(STORAGE_METADATA_BACKUP_PREFIX),
+});
+
+const putR2TextObject = async (
+  config: S3Config,
+  objectKey: string,
+  body: string,
+  contentType = "application/json; charset=utf-8",
+) => {
+  const validation = validatePrivateBackupTarget(config, objectKey);
+  if (!validation.ok) throw new Error("unsafe_r2_target");
+  const url = await createPresignedS3Url({
+    method: "PUT",
+    endpoint: config.endpoint,
+    region: config.region,
+    bucket: config.bucket,
+    objectKey,
+    accessKeyId: config.accessKeyId,
+    secretAccessKey: config.secretAccessKey,
+    expiresSeconds: 120,
+  });
+  const response = await fetch(url, {
+    method: "PUT",
+    body,
+    headers: { "Content-Type": contentType },
+  });
+  if (!response.ok) throw new Error(`r2_origin_backup_upload_failed_${response.status}`);
+  const head = await headObject(config, objectKey);
+  if (!head.ok) throw new Error(`r2_origin_backup_readback_failed_${head.status}`);
+  return head;
+};
+
+const getR2TextObject = async (config: S3Config, objectKey: string) => {
+  const validation = validatePrivateBackupTarget(config, objectKey);
+  if (!validation.ok) throw new Error("unsafe_r2_target");
+  const url = await createPresignedS3Url({
+    method: "GET",
+    endpoint: config.endpoint,
+    region: config.region,
+    bucket: config.bucket,
+    objectKey,
+    accessKeyId: config.accessKeyId,
+    secretAccessKey: config.secretAccessKey,
+    expiresSeconds: 120,
+  });
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`r2_origin_backup_readback_failed_${response.status}`);
+  return response.text();
 };
 
 const objectKeyCandidatesForEntry = (entry: ManifestEntry): ObjectKeyCandidate[] => {
@@ -1106,8 +1169,274 @@ const updateCopiedMetadataBatch = async (input: {
       tableName: row.table_name,
       rowId: row.row_id,
       targetBucket: row.target_bucket,
-      targetObjectKey: row.target_object_key,
+      targetObjectKeyRedacted: true,
     })),
+  };
+};
+
+const storageMetadataBackupTables = [
+  "videos",
+  "social_attachments",
+  "media_scan_jobs",
+  "video_renditions",
+  "media_renditions",
+  "media_transcode_jobs",
+];
+
+const readBackupRows = async (adminClient: SupabaseClient, table: string) => {
+  const { data, error } = await adminClient.from(table).select("*").limit(10000);
+  if (error) {
+    return {
+      table,
+      ok: false,
+      errorCode: error.code ?? "unknown",
+      rowCount: 0,
+      rows: [] as Record<string, unknown>[],
+    };
+  }
+  const rows = (data ?? []) as Record<string, unknown>[];
+  return {
+    table,
+    ok: true,
+    errorCode: "",
+    rowCount: rows.length,
+    rows,
+  };
+};
+
+const readMigrationAuditRowsForBackup = async (adminClient: SupabaseClient) => {
+  try {
+    const { data, error } = await adminClient
+      .schema("private")
+      .from("media_object_storage_migration_audit")
+      .select("*")
+      .limit(10000);
+    if (error) {
+      return {
+        ok: false,
+        reason: "private_migration_audit_schema_not_readable_via_rest",
+        errorCode: error.code ?? "unknown",
+        rowCount: 0,
+        rows: [] as Record<string, unknown>[],
+      };
+    }
+    const rows = (data ?? []) as Record<string, unknown>[];
+    return { ok: true, reason: "", errorCode: "", rowCount: rows.length, rows };
+  } catch {
+    return {
+      ok: false,
+      reason: "private_migration_audit_schema_not_readable_via_rest",
+      errorCode: "unknown",
+      rowCount: 0,
+      rows: [] as Record<string, unknown>[],
+    };
+  }
+};
+
+const createStorageMetadataBackup = async (input: {
+  adminClient: SupabaseClient;
+  references: InventoryReference[];
+  manifest: ManifestEntry[];
+  reconciliation: ReconciliationResult[];
+  targetConfig: S3Config;
+}) => {
+  const backupId = `storage-metadata-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  const backupPrefix = `${STORAGE_METADATA_BACKUP_PREFIX}${backupId}/`;
+  const storageRows: Record<string, Record<string, unknown>[]> = {};
+  const tableCounts: Record<string, number> = {};
+  const tableStatuses: Record<string, string> = {};
+
+  for (const table of storageMetadataBackupTables) {
+    const result = await readBackupRows(input.adminClient, table);
+    tableCounts[table] = result.rowCount;
+    tableStatuses[table] = result.ok ? "backed_up" : `blocked_${result.errorCode}`;
+    if (!result.ok) {
+      return {
+        ok: false,
+        blocked: true,
+        reason: "storage_metadata_backup_table_read_failed",
+        failedTable: table,
+        errorCode: result.errorCode,
+        tableCounts,
+        tableStatuses,
+      };
+    }
+    storageRows[table] = result.rows;
+  }
+
+  const migrationAudit = await readMigrationAuditRowsForBackup(input.adminClient);
+  const reconciliationSummary = summarizeReconciliation(
+    input.reconciliation,
+    Math.max(0, input.manifest.length - distinctManifest(input.manifest).length),
+  );
+  const backupPayload = {
+    backupId,
+    createdAt: new Date().toISOString(),
+    scope: "media_object_storage_storage_metadata_before_r2_metadata_update",
+    liveKitTouched: false,
+    objectKeysRedactedInResponse: true,
+    containsPrivateStorageMetadata: true,
+    storedInPrivateR2OriginOnly: true,
+    r2PrivateOriginBucket: R2_ORIGIN_BUCKET,
+    tableCounts,
+    inventorySummary: summarizeInventory(input.references),
+    reconciliationSummary,
+    storageRows,
+    migrationAudit: {
+      readable: migrationAudit.ok,
+      reason: migrationAudit.reason,
+      errorCode: migrationAudit.errorCode,
+      rowCount: migrationAudit.rowCount,
+      rows: migrationAudit.rows,
+    },
+    migrationPlan: input.manifest.map((entry) => ({
+      tableName: entry.tableName,
+      rowId: entry.rowId,
+      sourceType: entry.sourceType,
+      sourceId: entry.sourceId,
+      sourceProvider: entry.sourceProvider,
+      sourceBucket: entry.sourceBucket,
+      sourceObjectKey: entry.storageObjectKey,
+      targetProvider: entry.targetProvider,
+      targetBucket: entry.targetBucket,
+      targetObjectKey: entry.targetObjectKey,
+    })),
+  };
+  const backupText = JSON.stringify(backupPayload);
+  const backupSha256 = await sha256Hex(backupText);
+  const storageObjectKey = `${backupPrefix}storage-metadata.json`;
+  await putR2TextObject(input.targetConfig, storageObjectKey, backupText);
+  const readbackText = await getR2TextObject(input.targetConfig, storageObjectKey);
+  const readbackSha256 = await sha256Hex(readbackText);
+  const readbackPayload = JSON.parse(readbackText) as Record<string, unknown>;
+  const readbackCounts = readbackPayload.tableCounts as Record<string, number> | undefined;
+  const restoreDrillPassed = backupSha256 === readbackSha256
+    && storageMetadataBackupTables.every((table) => Number(readbackCounts?.[table] ?? -1) === tableCounts[table]);
+
+  const manifestPayload = {
+    backupId,
+    createdAt: backupPayload.createdAt,
+    storageMetadataObjectKey: storageObjectKey,
+    storageMetadataSha256: backupSha256,
+    backupPrefix,
+    tableCounts,
+    restoreDrillPassed,
+    privateR2OriginBucket: R2_ORIGIN_BUCKET,
+    liveKitTouched: false,
+    objectKeysRedactedInResponse: true,
+  };
+  const manifestText = JSON.stringify(manifestPayload);
+  const manifestObjectKey = `${backupPrefix}manifest.json`;
+  const sumsObjectKey = `${backupPrefix}sha256sums.txt`;
+  await putR2TextObject(input.targetConfig, manifestObjectKey, manifestText);
+  await putR2TextObject(input.targetConfig, sumsObjectKey, `${backupSha256}  storage-metadata.json\n${await sha256Hex(manifestText)}  manifest.json\n`, "text/plain; charset=utf-8");
+  const manifestReadback = JSON.parse(await getR2TextObject(input.targetConfig, manifestObjectKey)) as Record<string, unknown>;
+
+  return {
+    ok: restoreDrillPassed && manifestReadback.backupId === backupId,
+    blocked: !(restoreDrillPassed && manifestReadback.backupId === backupId),
+    reason: restoreDrillPassed ? "storage_metadata_backup_restore_drill_passed" : "storage_metadata_backup_restore_drill_failed",
+    backupId,
+    backupPrefix,
+    storageMetadataObjectKey: storageObjectKey,
+    manifestObjectKey,
+    checksumsObjectKey: sumsObjectKey,
+    storageMetadataSha256: backupSha256,
+    tableCounts,
+    tableStatuses,
+    migrationAuditBackupStatus: migrationAudit.ok ? "backed_up" : migrationAudit.reason,
+    restoreDrillPassed,
+    readbackChecksumMatched: backupSha256 === readbackSha256,
+    privateR2OriginBucket: R2_ORIGIN_BUCKET,
+    publicPlaybackBucketUsed: false,
+    hetznerFallbackRetained: true,
+  };
+};
+
+const targetSelectFor = (tableName: string) => {
+  if (tableName === "videos") return "id,title,visibility,scan_status,moderation_status,storage_provider,storage_bucket,updated_at";
+  if (tableName === "social_attachments") return "id,surface_type,scan_status,moderation_status,storage_provider,storage_bucket,updated_at";
+  if (tableName === "video_renditions") return "id,video_id,quality_label,access_tier,status,scan_status,storage_bucket,updated_at";
+  if (tableName === "media_renditions") return "id,source_type,source_id,visibility,rendition_label,scan_status,moderation_status,storage_provider,storage_bucket,is_original,is_ready,updated_at";
+  return "";
+};
+
+const readTargetRowStatus = async (adminClient: SupabaseClient, tableName: string, rowId: string) => {
+  const select = targetSelectFor(tableName);
+  if (!select || !rowId) return { supportedTargetTable: false, exists: false, row: null as Record<string, unknown> | null };
+  const { data, error } = await adminClient.from(tableName).select(select).eq("id", rowId).maybeSingle();
+  if (error) {
+    return {
+      supportedTargetTable: true,
+      exists: false,
+      readErrorCode: error.code ?? "unknown",
+      row: null as Record<string, unknown> | null,
+    };
+  }
+  return { supportedTargetTable: true, exists: !!data, row: data as Record<string, unknown> | null };
+};
+
+const classifyUnresolvedMigrationRefs = async (input: {
+  adminClient: SupabaseClient;
+  manifest: ManifestEntry[];
+  reconciliation: ReconciliationResult[];
+}) => {
+  const statusBySourceKey = new Map(input.reconciliation.map((result) => [migrationSourceKey(result.entry), result]));
+  const unresolvedEntries = input.manifest
+    .map((entry) => ({ entry, reconciliation: statusBySourceKey.get(migrationSourceKey(entry)) }))
+    .filter(({ reconciliation }) => reconciliation && !isExistingSourceStatus(reconciliation.status) && reconciliation.status !== "already_r2_equivalent_exists");
+
+  const rows = [];
+  const byClassification: Record<string, number> = {};
+  for (const { entry, reconciliation } of unresolvedEntries) {
+    const targetStatus = entry.tableName === "media_scan_jobs"
+      ? await readTargetRowStatus(input.adminClient, entry.sourceType, entry.sourceId)
+      : await readTargetRowStatus(input.adminClient, entry.tableName, entry.rowId);
+    const targetMissing = targetStatus.supportedTargetTable && !targetStatus.exists;
+    const unresolvedStatus = reconciliation?.status ?? "unknown_error";
+    let classification = "unknown_requires_review";
+    if (unresolvedStatus === "unsupported_provider") {
+      classification = "unsupported_provider_blocker";
+    } else if (entry.tableName === "media_scan_jobs" && targetMissing && entry.sourceType === "social_attachments") {
+      classification = "social_attachment_stale_ref";
+    } else if (entry.tableName === "media_scan_jobs" && targetMissing) {
+      classification = "old_proof_or_test_stale_ref";
+    } else if (unresolvedStatus === "missing_404" && !targetStatus.exists) {
+      classification = "old_proof_or_test_stale_ref";
+    } else if (unresolvedStatus === "missing_404" && targetStatus.exists) {
+      classification = "active_required_missing_source";
+    }
+    byClassification[classification] = (byClassification[classification] ?? 0) + 1;
+    rows.push({
+      tableName: entry.tableName,
+      rowId: entry.rowId,
+      sourceType: entry.sourceType,
+      sourceId: entry.sourceId,
+      visibility: entry.visibility,
+      accessTier: entry.accessTier,
+      scanStatus: entry.scanStatus,
+      moderationStatus: entry.moderationStatus,
+      unresolvedStatus,
+      classification,
+      targetTable: entry.tableName === "media_scan_jobs" ? entry.sourceType : entry.tableName,
+      targetRowExists: targetStatus.exists,
+      targetRowReadErrorCode: "readErrorCode" in targetStatus ? targetStatus.readErrorCode : "",
+      safeReversibleStatusUpdateExists: false,
+      dbMetadataUpdateAllowed: false,
+      shutdownBlocking: true,
+      objectKeysRedacted: true,
+    });
+  }
+
+  return {
+    ok: true,
+    unresolvedRows: rows.length,
+    byClassification,
+    activeRequiredMissingSourceCount: byClassification.active_required_missing_source ?? 0,
+    unsupportedProviderBlockerCount: byClassification.unsupported_provider_blocker ?? 0,
+    shutdownBlockedByUnresolvedRefs: rows.length > 0,
+    missingRefsTreatedAsMigrated: false,
+    redactedRows: rows,
   };
 };
 
@@ -1148,6 +1477,7 @@ const handler = async (req: Request): Promise<Response> => {
     const summary = summarizeInventory(references);
 
     if (action === "audit_inventory") {
+      const includeEntries = shouldIncludeEntries(payload);
       return json(200, {
         ok: true,
         action,
@@ -1155,7 +1485,8 @@ const handler = async (req: Request): Promise<Response> => {
         distinctObjectReferenceCount: distinct.length,
         redactedManifestCount: manifest.length,
         redactedDistinctManifestCount: distinct.length,
-        redactedManifest: manifest.map((entry) => redactedManifestEntry(entry)),
+        redactedManifest: includeEntries ? manifest.map((entry) => redactedManifestEntry(entry)) : undefined,
+        entriesOmittedByDefault: !includeEntries,
         r2PrivateOriginBucket: R2_ORIGIN_BUCKET,
         hetznerFallbackRetained: true,
       });
@@ -1252,6 +1583,61 @@ const handler = async (req: Request): Promise<Response> => {
         redactedReconciliationCount: reconciliation.length,
         entriesOmittedByDefault: !includeEntries,
         hetznerFallbackRetained: true,
+      });
+    }
+
+    if (action === "classify_stale_refs") {
+      const reconciliation = await reconcileObjects(distinct, sourceConfig.config, targetConfig.config);
+      const reconciliationSummary = summarizeReconciliation(reconciliation, Math.max(0, manifest.length - distinct.length));
+      if (reconciliationSummary.permissionDeniedCount > 0) {
+        return json(409, {
+          ok: false,
+          action,
+          blocked: true,
+          reason: "permission_denied_403",
+          reconciliation: reconciliationSummary,
+          hetznerFallbackRetained: true,
+        });
+      }
+      const classification = await classifyUnresolvedMigrationRefs({
+        adminClient,
+        manifest,
+        reconciliation,
+      });
+      return json(200, {
+        action,
+        summary,
+        reconciliation: reconciliationSummary,
+        ...classification,
+        hetznerFallbackRetained: true,
+      });
+    }
+
+    if (action === "backup_storage_metadata") {
+      const reconciliation = await reconcileObjects(distinct, sourceConfig.config, targetConfig.config);
+      const reconciliationSummary = summarizeReconciliation(reconciliation, Math.max(0, manifest.length - distinct.length));
+      if (reconciliationSummary.permissionDeniedCount > 0) {
+        return json(409, {
+          ok: false,
+          action,
+          blocked: true,
+          reason: "permission_denied_403",
+          reconciliation: reconciliationSummary,
+          hetznerFallbackRetained: true,
+        });
+      }
+      const backup = await createStorageMetadataBackup({
+        adminClient,
+        references,
+        manifest,
+        reconciliation,
+        targetConfig: targetConfig.config,
+      });
+      return json(backup.ok ? 200 : 409, {
+        action,
+        summary,
+        reconciliation: reconciliationSummary,
+        ...backup,
       });
     }
 

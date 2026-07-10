@@ -34,11 +34,13 @@ requireText(migrationFunction, "x-media-object-migration-token", "migration copi
 requireText(migrationFunction, "timingSafeEqualHex", "migration copier constant-time comparison");
 requireText(migrationFunction, "media_object_migration_operator_token_required", "migration copier missing token denial");
 requireText(migrationFunction, "audit_inventory", "migration copier inventory action");
+requireText(migrationFunction, "classify_stale_refs", "migration copier stale-ref classification action");
 requireText(migrationFunction, "reconcile_objects", "migration copier reconciliation action");
 requireText(migrationFunction, "copy_object", "migration copier copy-object action");
 requireText(migrationFunction, "copy_batch", "migration copier copy-batch action");
 requireText(migrationFunction, "verify_object", "migration copier verify action");
 requireText(migrationFunction, "update_metadata_dry_run", "migration copier metadata dry-run action");
+requireText(migrationFunction, "backup_storage_metadata", "migration copier storage metadata backup action");
 requireText(migrationFunction, "update_metadata_batch", "migration copier metadata update action");
 requireText(migrationFunction, "rollback_metadata_batch", "migration copier rollback action");
 requireText(migrationFunction, "zero_ref_audit", "migration copier zero-ref action");
@@ -58,12 +60,15 @@ requireText(migrationFunction, "chillywood-media-origin", "migration copier priv
 requireText(migrationFunction, "chillywood-media-prod", "migration copier legacy Hetzner bucket");
 requireText(migrationFunction, "isLiveKitReference", "migration copier LiveKit boundary");
 requireText(migrationFunction, "metadata_update_disabled_until_copy_verify_backup_and_restore_drill_pass", "migration copier metadata update gate");
+requireText(migrationFunction, "storage_metadata_backup_restore_drill_passed", "migration copier backup restore drill gate");
 requireText(migrationFunction, "signedUrlsPrinted: false", "migration copier response redaction");
 requireText(migrationFunction, "secretsPrinted: false", "migration copier secret redaction");
 
 requireText(cli, "source === \"backend\"", "migration CLI backend source");
 requireText(cli, "media-object-storage-migration", "migration CLI calls trusted copier");
 requireText(cli, "reconcile: \"reconcile_objects\"", "migration CLI exposes backend reconciliation");
+requireText(cli, "\"classify-stale\": \"classify_stale_refs\"", "migration CLI exposes backend stale classification");
+requireText(cli, "\"backup-metadata\": \"backup_storage_metadata\"", "migration CLI exposes backend backup");
 requireText(cli, "MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN", "migration CLI operator token env");
 requireText(cli, "media_object_migration_operator_token_missing", "migration CLI missing token fail-closed reason");
 requireText(cli, "rawServiceRoleRequired: false", "migration CLI does not need local service-role key");
@@ -114,6 +119,11 @@ assert(blockedPayload.hetznerFallbackRetained === true, "copy block retains Hetz
 const backendMissingToken = spawnSync(process.execPath, ["scripts/media-object-storage-r2-migration.mjs", "--mode=copy", "--source=backend"], {
   cwd: process.cwd(),
   encoding: "utf8",
+  env: {
+    ...process.env,
+    MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN: "",
+    MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN_FILE: "/tmp/chillywood-missing-media-object-migration-token",
+  },
 });
 assert(backendMissingToken.status !== 0, "backend copy mode must fail closed without operator token");
 const backendMissingPayload = JSON.parse(backendMissingToken.stdout || backendMissingToken.stderr || "{}");
