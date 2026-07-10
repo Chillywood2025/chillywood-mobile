@@ -232,7 +232,7 @@ const signManifestChildPath = async (decision, keyMaterial, childPath) => {
     renditionLabel: childScope.renditionLabel,
   };
   const childToken = await signPremiumMediaAccessTokenForProof(childClaims, keyMaterial);
-  return `${childPath}?token=${encodeURIComponent(childToken)}`;
+  return `/${childPath}?token=${encodeURIComponent(childToken)}`;
 };
 
 const rewriteManifestAttributeUris = async ({ line, decision, keyMaterial }) => {

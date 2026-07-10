@@ -813,7 +813,7 @@ assertIncludes(premiumCdnWorkerProof, "wrong source should be denied", "Premium 
 assertIncludes(premiumCdnWorkerProof, "wrong path should be denied", "Premium CDN Worker proof wrong path");
 assertIncludes(premiumCdnWorkerProof, "non-Premium token should be denied", "Premium CDN Worker proof non-Premium");
 assertIncludes(premiumCdnWorkerProof, "public 360p/480p path should not require Premium worker", "Premium CDN Worker proof public SD bypass");
-assertIncludes(premiumCdnWorkerProof, "Worker should rewrite HLS child playlist URI with child-scoped token", "Premium CDN Worker proof HLS child token rewrite");
+assertIncludes(premiumCdnWorkerProof, "Worker should rewrite HLS child playlist URI with a root-relative child-scoped token", "Premium CDN Worker proof HLS child token rewrite");
 assertIncludes(premiumCdnWorkerProof, "Worker should deny manifests containing absolute child URLs", "Premium CDN Worker proof absolute URI denial");
 assertIncludes(premiumHdTokenIssuerProof, "Premium user + valid 720p row should receive token claims", "Premium HD token issuer proof 720p");
 assertIncludes(premiumHdTokenIssuerProof, "Premium user + valid 1080p row should receive token claims", "Premium HD token issuer proof 1080p");
@@ -858,7 +858,7 @@ assertIncludes(architecture, "Protected Premium HD delivery architecture: `worke
 assertIncludes(architecture, "It denies missing/expired/wrong-source/wrong-path/wrong-rendition/non-Premium/private/original/unscanned/moderation-blocked requests", "architecture doc Premium Worker deny cases");
 assertIncludes(architecture, "Production now has `5` protected Premium HD rows, all under `playback/protected/premium/`, with unsigned public HD exposure `0`.", "architecture doc Premium HD protected rows");
 assertIncludes(architecture, "Live app token issuance architecture: Supabase Edge Function `premium-media-playback-token` is deployed", "architecture doc Premium token issuer deployed");
-assertIncludes(architecture, "resolved safely to `origin_signed_direct` fallback with `tokenized=false` and `protectedPlayback=false`", "architecture doc installed free fallback proof");
+assertIncludes(architecture, "Installed proof on Play-installed `R5CR120QCBF` is Closed", "architecture doc installed Premium HD proof closed");
 assertIncludes(mediaAutomationOperatorRunbook, "Status: CLI auto-detect bounded execution is live for safe Level 0/1 candidates, while daemon/cron/scheduler/continuous automation remains off.", "media automation runbook status");
 assertIncludes(mediaAutomationOperatorRunbook, "No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live.", "media automation runbook no deployment");
 assertIncludes(mediaAutomationOperatorRunbook, "continuous limited automation is source/proofed/templates only", "media automation runbook continuous template boundary");

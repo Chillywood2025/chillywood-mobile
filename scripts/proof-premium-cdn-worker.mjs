@@ -245,13 +245,13 @@ try {
   requireProof(fetchResponse.status === 200, "Worker should proxy matching protected object when token and bucket pass");
   requireProof(fetchResponse.headers.get("x-premium-media-access") === "allowed", "Worker response should mark protected access allowed");
   const rewrittenManifest = await fetchResponse.text();
-  requireProof(/index\.m3u8\?token=/.test(rewrittenManifest), "Worker should rewrite HLS child playlist URI with child-scoped token");
+  requireProof(/\/playback\/protected\/premium\/.*index\.m3u8\?token=/.test(rewrittenManifest), "Worker should rewrite HLS child playlist URI with a root-relative child-scoped token");
   requireProof(!rewrittenManifest.includes("private.example"), "rewritten manifest should not contain private absolute URLs");
   const childToken = rewrittenManifest.match(/token=([A-Za-z0-9._-]+)/)?.[1] ?? "";
   requireProof(!!childToken, "rewritten child playlist should contain a scoped token");
-  const childPlaylistPath = `${fetchClaims.path.split("/").slice(0, -1).join("/")}/index.m3u8`;
+  const childPlaylistUrl = new URL(rewrittenManifest.match(/^(?!#)([^\r\n]+)$/m)?.[1]?.trim() ?? "", `https://media.chillywoodstream.com/${fetchClaims.path}`);
   const childPlaylistResponse = await worker.default.fetch(
-    new Request(`https://media.chillywoodstream.com/${childPlaylistPath}?token=${childToken}`),
+    new Request(childPlaylistUrl),
     {
       ...env,
       PREMIUM_MEDIA_R2_BUCKET: mockBucket,
@@ -259,11 +259,11 @@ try {
   );
   requireProof(childPlaylistResponse.status === 200, "rewritten child playlist token should be accepted without user header");
   const childPlaylist = await childPlaylistResponse.text();
-  requireProof(/segment-000\.ts\?token=/.test(childPlaylist), "Worker should rewrite HLS segment URI with child-scoped token");
+  requireProof(/\/playback\/protected\/premium\/.*segment-000\.ts\?token=/.test(childPlaylist), "Worker should rewrite HLS segment URI with a root-relative child-scoped token");
   const segmentToken = childPlaylist.match(/token=([A-Za-z0-9._-]+)/)?.[1] ?? "";
-  const segmentPath = `${fetchClaims.path.split("/").slice(0, -1).join("/")}/segment-000.ts`;
+  const segmentUrl = new URL(childPlaylist.match(/^(?!#)([^\r\n]+)$/m)?.[1]?.trim() ?? "", childPlaylistUrl);
   const segmentResponse = await worker.default.fetch(
-    new Request(`https://media.chillywoodstream.com/${segmentPath}?token=${segmentToken}`),
+    new Request(segmentUrl),
     {
       ...env,
       PREMIUM_MEDIA_R2_BUCKET: mockBucket,

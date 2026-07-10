@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: server-side protected Premium HD delivery Closed; backend token issuer deployed/proved; installed free/non-Premium fallback proved; installed Premium playback remains Partial pending a Premium-active installed session.
+Status: Closed. Server-side protected Premium HD delivery, backend token issuance, resolver integration, free/non-Premium denial, and Play-installed Premium HD playback are proved end to end.
 
 ## Result
 
@@ -38,6 +38,7 @@ The protected Worker verifies short-lived Premium tokens before serving HD objec
 - free/non-Premium token: denied
 - wrong path token: denied
 - private/original/unsafe paths: denied by source proof
+- HLS child playlists and media segments are rewritten with root-relative scoped token URLs so native HLS clients do not resolve protected children under the wrong parent path.
 
 Token values, signed URLs, DB URLs, service-role keys, and provider credentials were not printed or committed.
 
@@ -67,8 +68,17 @@ Android EAS Update was published for the app resolver integration:
 - update group `22916970-0161-4411-930a-3570eb5625fb`
 - Android update `019f4a0b-efff-71c9-bae5-9198bb001160`
 
-Installed app proof is Partial. The available Play-installed device `R5CR120QCBF` was verified as `com.chillywood.mobile` from `com.android.vending`, versionCode `80`, versionName `1.0.0`, and Expo Updates applied the Android update above. An HD-capable creator video opened in the installed app, but the installed session resolved safely to fallback with redacted metadata `provider=origin_signed_direct`, `fallbackUsed=true`, `tokenized=false`, and `protectedPlayback=false`. That proves the installed free/non-Premium fallback/denial path; installed Premium HD playback still needs a Premium-active installed session to prove `tokenized=true` and `protectedPlayback=true`.
+Installed app Premium HD proof is Closed. The Play-installed device `R5CR120QCBF` was verified as `com.chillywood.mobile` from `com.android.vending`, versionCode `80`, versionName `1.0.0`, and Expo Updates applied the Android update above. The installed session matched Supabase user `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f`; a Google Play / RevenueCat sandbox Premium purchase renewed during the proof window; RevenueCat webhook rows granted Premium; and `monetization_has_active_premium` returned `true` for that user before playback.
+
+Installed Premium resolver proof:
+
+- 1080p source `3de36e39-67e6-45ca-a12f-d5b1560473cb` resolved with redacted metadata `playbackHost=premium-media-proof.chillywoodstream.com`, `provider=cloudflare_r2_premium_token`, `deliveryFormat=hls`, `rolloutMode=trusted_public`, `cdnEligible=true`, `fallbackUsed=false`, `auditPassed=true`, `backupGatePassed=true`, `renditionLabel=1080p`, `premiumTokenRequired=true`, `tokenized=true`, `protectedPlayback=true`, and `rawUrlRedacted=true`.
+- 720p-only source `4999b741-8854-4bc8-a2f0-45907b870db3` resolved with the same protected metadata and `renditionLabel=720p`.
+- Android playback proof showed ExoPlayer initialization, AVC/AAC decoder activity, and active Android media playback for the protected HD streams.
+- No playback-token value, signed URL, DB URL, service-role key, Cloudflare credential, or private provider value was printed or committed.
 
 Follow-up RCA on 2026-07-09 is recorded in `docs/release/PLAY_SANDBOX_PREMIUM_HD_RCA_20260709.md`. The installed replay matched Supabase user `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f`; that user's RevenueCat sandbox Premium entitlement had expired on `2026-07-08T17:58:59.352Z`, and `monetization_has_active_premium` returned `false` during the replay. The selected HD source had ready protected 720p/1080p rows, and the deployed token issuer responded safely when probed unauthenticated, so this was not a missing HD row, Worker, token secret, or resolver deployment issue. No code fix or Premium bypass was applied.
+
+Final closeout RCA on 2026-07-10 found one real production bug after the sandbox Premium renewal: the protected Worker rewrote HLS child playlist/segment URIs as relative paths, so native HLS clients resolved them beneath the parent manifest directory and received protected Worker `403` responses. The fix is limited to `workers/premium-media-access/worker.mjs`: child playlist and segment URIs are now root-relative protected paths with scoped child tokens. The Worker was redeployed, the Edge Function and Worker signer secret were aligned without printing the secret, and live Worker proof then returned HTTP 200 for valid protected proof access while denying missing/expired/wrong/non-Premium/private/original cases.
 
 No daemon, cron, scheduler, broad backfill, Premium entitlement change, billing/provider change, app UX change, or production playback fallback removal happened.

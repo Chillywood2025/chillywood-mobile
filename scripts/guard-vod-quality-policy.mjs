@@ -192,7 +192,7 @@ assertIncludes(premiumCdnWorkerProof, "wrong source should be denied", "Premium 
 assertIncludes(premiumCdnWorkerProof, "wrong path should be denied", "Premium CDN Worker proof wrong path");
 assertIncludes(premiumCdnWorkerProof, "non-Premium token should be denied", "Premium CDN Worker proof non-Premium");
 assertIncludes(premiumCdnWorkerProof, "public 360p/480p path should not require Premium worker", "Premium CDN Worker proof public SD bypass");
-assertIncludes(premiumCdnWorkerProof, "Worker should rewrite HLS child playlist URI with child-scoped token", "Premium CDN Worker proof HLS child token rewrite");
+assertIncludes(premiumCdnWorkerProof, "Worker should rewrite HLS child playlist URI with a root-relative child-scoped token", "Premium CDN Worker proof HLS child token rewrite");
 assertIncludes(premiumCdnWorkerProof, "Worker should deny manifests containing absolute child URLs", "Premium CDN Worker proof absolute URI denial");
 assertIncludes(premiumHdTokenIssuerProof, "Premium user + valid 720p row should receive token claims", "Premium HD token issuer proof 720p");
 assertIncludes(premiumHdTokenIssuerProof, "Premium user + valid 1080p row should receive token claims", "Premium HD token issuer proof 1080p");
@@ -225,7 +225,7 @@ assertIncludes(vodDoc, "`npm run proof:media-premium-cdn-token` proves free user
 assertIncludes(vodDoc, "`npm run proof:premium-cdn-worker` proves valid 720p/1080p Premium tokens", "VOD doc Premium CDN Worker proof");
 assertIncludes(vodDoc, "`npm run proof:premium-cdn-worker-live` proved the deployed proof Worker", "VOD doc Premium CDN Worker live proof");
 assertIncludes(vodDoc, "Live backend token issuance is deployed through Supabase Edge Function `premium-media-playback-token`", "VOD doc Premium HD token issuer deployed");
-assertIncludes(vodDoc, "Installed proof on an HD-capable video showed safe fallback with `tokenized=false` and `protectedPlayback=false`", "VOD doc installed free fallback proof");
+assertIncludes(vodDoc, "Installed Premium HD proof on Play-installed `R5CR120QCBF` is Closed", "VOD doc installed Premium HD proof closed");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-metadata` uses proof-only City Lights HLS fixture rows for 360p and 480p", "VOD doc trusted fixture proof");
 assertIncludes(vodDoc, "Trusted backend migration path:", "VOD doc trusted backend migration path");
 assertIncludes(vodDoc, "Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` is applied to production; it does not switch production playback, backfill media rows, or make a production transcode worker live. The only production rows in the new media worker tables are the first controlled City Lights proof job and two audited HLS renditions.", "VOD doc production schema migration");
