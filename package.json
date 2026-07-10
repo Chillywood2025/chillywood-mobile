@@ -217,6 +217,7 @@
     "proof:media-delivery-hls-demo": "node ./scripts/proof-media-delivery-hls-demo.mjs",
     "proof:media-delivery-telemetry": "node ./scripts/proof-media-delivery-telemetry.mjs",
     "proof:media-playback-cdn-eligibility": "node ./scripts/proof-media-playback-cdn-eligibility.mjs",
+    "proof:media-premium-cdn-token": "node ./scripts/proof-media-premium-cdn-token.mjs",
     "media-cdn:plan": "node ./scripts/media-cdn-rollout-planner.mjs --mode=plan",
     "media-cdn:status": "node ./scripts/media-cdn-rollout-planner.mjs --mode=status --max-batch-size=1",
     "media-automation:status": "node ./scripts/media-automation-cli.mjs --mode=status --source=linked",

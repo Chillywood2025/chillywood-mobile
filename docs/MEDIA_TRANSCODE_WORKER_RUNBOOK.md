@@ -48,7 +48,7 @@ Before probing or transcoding, the worker must verify:
 3. Run ffprobe and record source duration, width, height, codec, and source hash.
 4. Verify the requested ladder is allowed for the source and account policy. Use `_lib/mediaRenditionLadder.ts` rather than a hardcoded rendition list.
 5. Mark the job `transcoding`.
-6. Run ffmpeg to generate source-supported HLS renditions: 360p when the source is at least 360px tall, 480p when at least 480px, 720p only when at least 720px, and 1080p only when at least 1080px. 360p/480p are free; 720p/1080p are Premium and must not use public CDN until signed/token Premium delivery exists.
+6. Run ffmpeg to generate source-supported HLS renditions: 360p when the source is at least 360px tall, 480p when at least 480px, 720p only when at least 720px, and 1080p only when at least 1080px. 360p/480p are free; 720p/1080p are Premium and must not use unsigned public CDN. Premium HD requires protected Premium output paths, active entitlement proof, short-lived tokenized CDN access, and HD generation proof before activation.
 7. Validate every output: master manifest, variant playlists, segment existence, segment decode, no private/signed-origin URLs in manifests, and no forbidden output prefix.
 8. Mark the job `uploading`.
 9. Upload to the public playback bucket only for clean, moderation-allowed, public-safe playback assets.
@@ -68,7 +68,7 @@ Worker secrets stay only on the worker host. Logs must not include service-role 
 
 Public CDN eligibility comes only from backend-written trusted rows that are ready, public, clean or approved, moderation-allowed, non-original, in the public playback bucket role, under `playback/public/`, visible through the public-safe RLS policy, and permitted by the configured rollout mode. City Lights is the canary; expansion uses `canary`, `batch`, or `trusted_public` rollout gates with the kill switch and signed-origin fallback still active.
 
-HD ladder policy: do not upscale. A 480p source can generate only 360p/480p; a 720p source can add 720p; a 1080p source can add 720p/1080p. Premium HD remains blocked from public R2/HLS without a signed/token delivery mode and entitlement proof.
+HD ladder policy: do not upscale. A 480p source can generate only 360p/480p; a 720p source can add 720p; a 1080p source can add 720p/1080p. Premium HD token claims are source/proofed, but live Premium HD remains blocked from public R2/HLS until protected Premium paths, a tokenized URL signer, entitlement proof, and HD generation proof are installed.
 
 Queue processor policy: the future processor must be disabled by default, require a lease, require backup gate and kill switch, enforce max concurrency and max jobs per run, enforce retry cap, dead-letter retry-cap failures, quarantine audit failures, pause on anomaly, and never mark rows resolver-trusted before audit pass.
 

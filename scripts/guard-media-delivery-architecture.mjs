@@ -74,6 +74,7 @@ const mediaTranscodeWorkerSafety = read("_lib/mediaTranscodeWorkerSafety.ts");
 const mediaRecoveryOperator = read("_lib/mediaRecoveryOperator.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
 const mediaPlaybackCdnEligibility = read("_lib/mediaPlaybackCdnEligibility.ts");
+const mediaPremiumCdnToken = read("_lib/mediaPremiumCdnToken.ts");
 const mediaAutomationController = read("_lib/mediaAutomationController.ts");
 const mediaAutomationDiscovery = read("_lib/mediaAutomationDiscovery.ts");
 const mediaAutomationBatchPolicy = read("_lib/mediaAutomationBatchPolicy.ts");
@@ -115,6 +116,7 @@ const mediaRecoveryBackupRestoreProof = read("scripts/proof-media-recovery-backu
 const mediaWorkerRollbackDrillProof = read("scripts/proof-media-worker-rollback-drill.mjs");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
 const mediaPlaybackCdnEligibilityProof = read("scripts/proof-media-playback-cdn-eligibility.mjs");
+const mediaPremiumCdnTokenProof = read("scripts/proof-media-premium-cdn-token.mjs");
 const mediaCdnRolloutPlanner = read("scripts/media-cdn-rollout-planner.mjs");
 const mediaCdnRolloutPlannerProof = read("scripts/proof-media-cdn-rollout-planner.mjs");
 const mediaAutomationCli = read("scripts/media-automation-cli.mjs");
@@ -146,6 +148,7 @@ const sourceCorpus = [
   mediaRecoveryOperator,
   mediaRenditionMetadata,
   mediaPlaybackCdnEligibility,
+  mediaPremiumCdnToken,
   mediaAutomationController,
   mediaAutomationDiscovery,
   mediaAutomationBatchPolicy,
@@ -738,9 +741,25 @@ assertIncludes(mediaPlaybackCdnEligibility, "batch_cap_exceeded", "trusted audit
 assertIncludes(mediaPlaybackCdnEligibility, "original_or_master_blocked", "trusted audited CDN original/master block");
 assertIncludes(mediaPlaybackCdnEligibility, "premium_requires_token_cdn", "trusted audited CDN Premium block");
 assertIncludes(mediaPlaybackCdnEligibility, "private_requires_token_cdn", "trusted audited CDN private block");
+assertIncludes(mediaPlaybackCdnEligibility, "premiumTokenRequired", "trusted audited CDN Premium token integration");
+assertIncludes(mediaPlaybackCdnEligibility, "premium_token_signer_unavailable", "trusted audited CDN Premium token signer gate");
+assertIncludes(mediaPlaybackCdnEligibility, "resolvePremiumTokenizedUrl", "trusted audited CDN Premium tokenized URL resolver");
 assertIncludes(mediaPlaybackCdnEligibility, "wrong_bucket_role", "trusted audited CDN bucket role block");
 assertIncludes(mediaPlaybackCdnEligibility, "non_playback_prefix", "trusted audited CDN prefix block");
 assertNotMatches(mediaPlaybackCdnEligibility, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|XMLHttpRequest|createClient)\b/, "trusted audited CDN helper must not perform network or database writes");
+assertIncludes(mediaPremiumCdnToken, "buildPremiumCdnTokenClaims", "Premium CDN token model helper");
+assertIncludes(mediaPremiumCdnToken, "validatePremiumCdnTokenClaims", "Premium CDN token validation helper");
+assertIncludes(mediaPremiumCdnToken, "canIssuePremiumCdnToken", "Premium CDN token issue gate");
+assertIncludes(mediaPremiumCdnToken, "MEDIA_PREMIUM_CDN_TOKEN_DEFAULT_TTL_SECONDS = 300", "Premium CDN token short TTL");
+assertIncludes(mediaPremiumCdnToken, "\"playback/premium/\"", "Premium CDN protected prefix");
+assertIncludes(mediaPremiumCdnToken, "\"playback/protected/premium/\"", "Premium CDN protected prefix");
+assertIncludes(mediaPremiumCdnToken, "premium_entitlement_required", "Premium CDN entitlement gate");
+assertIncludes(mediaPremiumCdnToken, "outside_premium_cdn_prefix", "Premium CDN protected path gate");
+assertIncludes(mediaPremiumCdnTokenProof, "free user cannot get 720p token", "Premium CDN token proof free user denial");
+assertIncludes(mediaPremiumCdnTokenProof, "Premium user can get scoped 720p token claims", "Premium CDN token proof 720p");
+assertIncludes(mediaPremiumCdnTokenProof, "Premium user can get scoped 1080p token claims", "Premium CDN token proof 1080p");
+assertIncludes(mediaPremiumCdnTokenProof, "Premium HD falls back when token signer is unavailable", "Premium CDN token proof signer unavailable fallback");
+assertIncludes(mediaPremiumCdnTokenProof, "public 360p/480p remains unsigned CDN eligible without Premium token", "Premium CDN token proof free public playback");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "canaryCityLightsCdn", "trusted audited CDN proof canary case");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "batchSelectedSourceCdn", "trusted audited CDN proof batch selected case");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "batchUnselectedSourceFallback", "trusted audited CDN proof batch unselected fallback");
@@ -764,6 +783,9 @@ assertIncludes(mediaCdnRolloutPlannerProof, "rollbackPlanRequired", "media CDN r
 assertIncludes(mediaCdnRolloutPlannerProof, "mutationAttempted: false", "media CDN rollout planner proof no mutation");
 assertIncludes(mediaCdnRolloutPlannerProof, "productionBackfillRun: false", "media CDN rollout planner proof no backfill");
 assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
+assertIncludes(vodDoc, "Premium signed/token CDN foundation exists in source/proof only.", "VOD doc Premium token source/proof boundary");
+assertIncludes(architecture, "Premium HD token mode is source/proof foundation only.", "architecture doc Premium token source/proof boundary");
+assertIncludes(architecture, "Without the signer, HD falls back/blocks.", "architecture doc Premium token signer fallback");
 assertIncludes(mediaAutomationOperatorRunbook, "Status: CLI auto-detect bounded execution is live for safe Level 0/1 candidates, while daemon/cron/scheduler/continuous automation remains off.", "media automation runbook status");
 assertIncludes(mediaAutomationOperatorRunbook, "No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live.", "media automation runbook no deployment");
 assertIncludes(mediaAutomationOperatorRunbook, "continuous limited automation is source/proofed/templates only", "media automation runbook continuous template boundary");
@@ -1114,6 +1136,7 @@ assertIncludes(packageJson, "\"proof:media-transcode-worker-local\"", "package l
 assertIncludes(packageJson, "\"proof:media-transcode-backup-gate\"", "package backup PITR proof script");
 assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "package trusted rendition metadata proof script");
 assertIncludes(packageJson, "\"proof:media-playback-cdn-eligibility\"", "package trusted playback CDN eligibility proof script");
+assertIncludes(packageJson, "\"proof:media-premium-cdn-token\"", "package Premium CDN token proof script");
 assertIncludes(packageJson, "\"proof:media-cdn-rollout-planner\"", "package media CDN rollout planner proof script");
 assertIncludes(packageJson, "\"media-cdn:plan\"", "package media CDN rollout planner command");
 assertIncludes(packageJson, "\"media-cdn:status\"", "package media CDN rollout status command");

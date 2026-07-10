@@ -10,6 +10,12 @@ import {
   canUseTrustedRenditionForPublicCdn,
   type TrustedMediaRenditionMetadata,
 } from "./mediaRenditionMetadata";
+import {
+  canIssuePremiumCdnToken,
+  validatePremiumCdnTokenClaims,
+  type MediaPremiumCdnTokenBlockedReason,
+  type MediaPremiumCdnTokenClaims,
+} from "./mediaPremiumCdnToken";
 
 export type MediaPlaybackCdnRolloutMode = "off" | "canary" | "batch" | "trusted_public";
 export type MediaPlaybackCdnAuditStatus = "pending" | "passed" | "failed" | "quarantined" | string;
@@ -45,6 +51,9 @@ export type MediaPlaybackCdnConfig = {
   cdnPublicPlaybackPrefix: string;
   cdnPrivatePlaybackDisabled: boolean;
   cdnSigningMode: "off" | "token" | string;
+  viewerUserId: string;
+  viewerPremiumActive: boolean;
+  premiumTokenTtlSeconds: number;
   backupGate: MediaPlaybackCdnBackupGate | null;
 };
 
@@ -81,6 +90,15 @@ export type MediaPlaybackCdnBlockedReason =
   | "original_or_master_blocked"
   | "premium_requires_token_cdn"
   | "private_requires_token_cdn"
+  | "free_rendition_does_not_need_token"
+  | "premium_entitlement_required"
+  | "missing_user_scope"
+  | "unsupported_visibility"
+  | "premium_token_path_required"
+  | "premium_token_signer_unavailable"
+  | "premium_token_claims_invalid"
+  | "premium_token_expired"
+  | "premium_token_scope_mismatch"
   | "missing_manifest_path"
   | "manifest_path_mismatch"
   | "variant_path_mismatch"
@@ -107,6 +125,9 @@ export type MediaPlaybackCdnEligibility = {
   fallbackAvailable: boolean;
   maxBatchSize: number;
   percentRollout: number;
+  premiumTokenRequired: boolean;
+  premiumTokenEligible: boolean;
+  premiumTokenClaims: MediaPremiumCdnTokenClaims | null;
 };
 
 export type MediaPlaybackCdnResolution = MediaPlaybackCdnEligibility & {
@@ -301,9 +322,44 @@ export function readMediaPlaybackCdnConfig(
       true,
     ),
     cdnSigningMode: toLowerText(overrides.cdnSigningMode ?? readProcessEnv("MEDIA_CDN_SIGNING_MODE")) || "off",
+    viewerUserId: toText(overrides.viewerUserId),
+    viewerPremiumActive: normalizeBoolean(overrides.viewerPremiumActive, false),
+    premiumTokenTtlSeconds: normalizeNonNegativeInteger(overrides.premiumTokenTtlSeconds) || 300,
     backupGate: normalizeBackupGate(overrides.backupGate ?? readBackupGateFromEnv()),
   };
 }
+
+const mapPremiumTokenBlockedReason = (
+  reason: MediaPremiumCdnTokenBlockedReason | null,
+): MediaPlaybackCdnBlockedReason => {
+  if (reason === "premium_entitlement_required") return "premium_entitlement_required";
+  if (reason === "missing_user_scope") return "missing_user_scope";
+  if (reason === "free_rendition_does_not_need_token") return "free_rendition_does_not_need_token";
+  if (reason === "unsupported_visibility") return "unsupported_visibility";
+  if (reason === "outside_premium_cdn_prefix" || reason === "missing_playback_path" || reason === "invalid_playback_path") {
+    return "premium_token_path_required";
+  }
+  if (
+    reason === "token_expired"
+    || reason === "token_not_yet_valid"
+  ) return "premium_token_expired";
+  if (
+    reason === "source_scope_mismatch"
+    || reason === "rendition_scope_mismatch"
+    || reason === "path_scope_mismatch"
+    || reason === "user_scope_mismatch"
+  ) return "premium_token_scope_mismatch";
+  if (reason === "private_media_blocked") return "private_requires_token_cdn";
+  if (reason === "original_or_master_blocked") return "original_or_master_blocked";
+  if (reason === "scan_not_clean") return "scan_not_clean";
+  if (reason === "moderation_not_allowed") return "moderation_not_allowed";
+  if (reason === "not_ready") return "not_ready";
+  if (reason === "public_playback_not_marked_safe") return "public_playback_not_marked_safe";
+  if (reason === "wrong_bucket_role") return "wrong_bucket_role";
+  if (reason === "unsupported_delivery_provider") return "unsupported_delivery_provider";
+  if (reason === "unsupported_delivery_format") return "unsupported_delivery_format";
+  return "premium_token_claims_invalid";
+};
 
 export function canUseAuditedPublicRenditionForCdnPlayback(
   row: AuditedMediaRenditionForPlayback | null | undefined,
@@ -320,6 +376,8 @@ export function canUseAuditedPublicRenditionForCdnPlayback(
   const backupGatePassed = !config.requireBackupFresh || isBackupGateFreshOrClosed(config.backupGate);
   const batchSourceCount = config.allowedSourceIds.length;
   const batchCapExceeded = config.maxBatchSize > 0 && batchSourceCount > config.maxBatchSize;
+  let premiumTokenRequired = false;
+  let premiumTokenClaims: MediaPremiumCdnTokenClaims | null = null;
 
   let blockedReason: MediaPlaybackCdnBlockedReason | null = null;
   if (!row) blockedReason = "missing_trusted_rendition";
@@ -342,6 +400,48 @@ export function canUseAuditedPublicRenditionForCdnPlayback(
   else if (!isValidHttpsBaseUrl(config.cdnBaseUrl)) blockedReason = "invalid_cdn_base_url";
   else if (config.cdnPrivatePlaybackDisabled !== true) blockedReason = "private_cdn_delivery_not_disabled";
   else if (config.cdnSigningMode !== "off" && config.cdnSigningMode !== "token") blockedReason = "invalid_cdn_signing_mode";
+  else if (trustedGate?.blockedReason === "premium_requires_token_cdn") {
+    premiumTokenRequired = true;
+    if (config.cdnSigningMode !== "token") {
+      blockedReason = "premium_requires_token_cdn";
+    } else {
+      const tokenDecision = canIssuePremiumCdnToken({
+        userId: config.viewerUserId,
+        premiumActive: config.viewerPremiumActive,
+        sourceType: row.source_type,
+        sourceId: row.source_id,
+        renditionLabel: row.rendition_label,
+        path: row.manifest_path || row.public_playback_path,
+        visibility: row.visibility,
+        scanStatus: row.scan_status,
+        moderationStatus: row.moderation_status,
+        isOriginal: row.is_original,
+        isReady: row.is_ready,
+        isPublicPlaybackSafe: row.is_public_playback_safe,
+        bucketRole: row.bucket_role,
+        deliveryFormat: row.delivery_format,
+        deliveryProvider: row.delivery_provider,
+        ttlSeconds: config.premiumTokenTtlSeconds,
+      });
+      if (!tokenDecision.allowed || !tokenDecision.claims) {
+        blockedReason = mapPremiumTokenBlockedReason(tokenDecision.blockedReason);
+      } else {
+        const validation = validatePremiumCdnTokenClaims({
+          claims: tokenDecision.claims,
+          userId: config.viewerUserId,
+          sourceType: row.source_type,
+          sourceId: row.source_id,
+          renditionLabel: row.rendition_label,
+          path: row.manifest_path || row.public_playback_path,
+        });
+        if (!validation.valid) {
+          blockedReason = mapPremiumTokenBlockedReason(validation.blockedReason);
+        } else {
+          premiumTokenClaims = tokenDecision.claims;
+        }
+      }
+    }
+  }
   else if (trustedGate?.blockedReason) blockedReason = trustedGate.blockedReason;
 
   return {
@@ -365,6 +465,9 @@ export function canUseAuditedPublicRenditionForCdnPlayback(
     fallbackAvailable: config.fallbackToOrigin === true,
     maxBatchSize: config.maxBatchSize,
     percentRollout: config.percentRollout,
+    premiumTokenRequired,
+    premiumTokenEligible: !!premiumTokenClaims,
+    premiumTokenClaims,
   };
 }
 
@@ -396,6 +499,7 @@ export async function resolveTrustedRenditionPlaybackSource(input: {
   config?: MediaPlaybackCdnConfigInput;
   fallbackUrl?: string | null;
   resolveFallbackUrl?: () => string | Promise<string>;
+  resolvePremiumTokenizedUrl?: (claims: MediaPremiumCdnTokenClaims) => string | Promise<string>;
 }): Promise<MediaPlaybackCdnResolution> {
   const config = readMediaPlaybackCdnConfig(input.config);
   const eligibility = canUseAuditedPublicRenditionForCdnPlayback(input.rendition, config);
@@ -407,6 +511,37 @@ export async function resolveTrustedRenditionPlaybackSource(input: {
       resolveFallbackUrl: input.resolveFallbackUrl,
       config,
     });
+  }
+
+  if (eligibility.premiumTokenRequired) {
+    if (!eligibility.premiumTokenClaims || !input.resolvePremiumTokenizedUrl) {
+      return resolveCdnPlaybackFallback({
+        eligibility: { ...eligibility, blockedReason: "premium_token_signer_unavailable" },
+        fallbackUrl: input.fallbackUrl,
+        resolveFallbackUrl: input.resolveFallbackUrl,
+        config,
+      });
+    }
+
+    const premiumUrl = toText(await input.resolvePremiumTokenizedUrl(eligibility.premiumTokenClaims));
+    if (!premiumUrl || !isValidHttpsBaseUrl(premiumUrl)) {
+      return resolveCdnPlaybackFallback({
+        eligibility: { ...eligibility, blockedReason: "premium_token_signer_unavailable" },
+        fallbackUrl: input.fallbackUrl,
+        resolveFallbackUrl: input.resolveFallbackUrl,
+        config,
+      });
+    }
+
+    return {
+      ...eligibility,
+      provider: MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN,
+      cdnEligible: true,
+      fallbackUsed: false,
+      blockedReason: null,
+      fallbackAvailable: config.fallbackToOrigin === true,
+      url: premiumUrl,
+    };
   }
 
   const cdnUrl = resolveCloudflareR2PublicPlaybackUrl(
@@ -474,6 +609,9 @@ export function sanitizeCdnEligibilityProof(value: MediaPlaybackCdnResolution | 
     fallbackAvailable: value.fallbackAvailable,
     maxBatchSize: value.maxBatchSize,
     percentRollout: value.percentRollout,
+    premiumTokenRequired: value.premiumTokenRequired,
+    premiumTokenEligible: value.premiumTokenEligible,
+    premiumTokenClaimsPresent: !!value.premiumTokenClaims,
     urlHost,
     urlPath,
     urlPresent: !!maybeUrl,
