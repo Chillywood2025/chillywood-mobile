@@ -34,6 +34,7 @@ const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.m
 const mediaTranscodeWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
 const mediaCatalogReadinessRunbook = read("docs/MEDIA_CATALOG_READINESS_RUNBOOK.md");
 const vodLib = read("_lib/vodQuality.ts");
+const mediaRenditionLadder = read("_lib/mediaRenditionLadder.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
 const mediaPlaybackCdnEligibility = read("_lib/mediaPlaybackCdnEligibility.ts");
 const mediaTranscodeOperator = read("_lib/mediaTranscodeOperator.ts");
@@ -45,6 +46,7 @@ const player = read("app/player/[id].tsx");
 const performancePolicy = read("_lib/performancePolicy.ts");
 const packageJson = read("package.json");
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
+const mediaRenditionLadderProof = read("scripts/proof-media-rendition-ladder.mjs");
 const mediaRenditionMigrationPolicyProof = read("scripts/proof-media-rendition-migration-policy.mjs");
 const mediaRenditionMigrationDryRunProof = read("scripts/proof-media-rendition-migration-dry-run.mjs");
 const mediaTranscodeWorkerLocalProof = read("scripts/proof-media-transcode-worker-local.mjs");
@@ -107,6 +109,16 @@ assertIncludes(scanSafeResolverMigration, "public.media_scan_public_safe(renditi
 
 assertIncludes(vodLib, "VOD_FREE_PLAYBACK_QUALITY_LABELS = [\"360p\", \"480p\"]", "VOD lib");
 assertIncludes(vodLib, "VOD_PREMIUM_PLAYBACK_QUALITY_LABELS = [\"720p\", \"1080p\"]", "VOD lib");
+assertIncludes(mediaRenditionLadder, "getSupportedRenditionsForSource", "media rendition ladder helper");
+assertIncludes(mediaRenditionLadder, "getFreeRenditionsForSource", "media rendition ladder helper");
+assertIncludes(mediaRenditionLadder, "getPremiumRenditionsForSource", "media rendition ladder helper");
+assertIncludes(mediaRenditionLadder, "shouldGenerateRendition", "media rendition ladder helper");
+assertIncludes(mediaRenditionLadder, "accessTier: \"premium\"", "media rendition ladder Premium tier");
+assertIncludes(mediaRenditionLadder, "sourceHeight >= entry.height", "media rendition ladder must not upscale by default");
+assertNotIncludes(mediaAutomationJobs, 'requestedRenditions: ["360p", "480p"]', "media automation jobs must not hardcode fixed SD ladder");
+assertIncludes(mediaAutomationJobs, "getSupportedRenditionsForSource", "media automation jobs must use source-aware ladder");
+assertIncludes(mediaRenditionLadderProof, "480p source should produce free SD only", "media rendition ladder proof");
+assertIncludes(mediaRenditionLadderProof, "1080p source should include true 1080p", "media rendition ladder proof");
 assertIncludes(vodLib, "resolveVideoPlayback", "VOD resolver helper");
 assertIncludes(vodLib, "resolveSignedVideoPlaybackSource", "signed resolver helper");
 assertIncludes(vodLib, "recordOriginalVideoRendition", "original rendition helper");

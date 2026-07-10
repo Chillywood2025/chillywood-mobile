@@ -46,9 +46,9 @@ Before probing or transcoding, the worker must verify:
 1. Claim one queued job with service-role or trusted worker authority.
 2. Mark the job `probing`.
 3. Run ffprobe and record source duration, width, height, codec, and source hash.
-4. Verify the requested ladder is allowed for the source and account policy.
+4. Verify the requested ladder is allowed for the source and account policy. Use `_lib/mediaRenditionLadder.ts` rather than a hardcoded rendition list.
 5. Mark the job `transcoding`.
-6. Run ffmpeg to generate HLS renditions such as 360p and 480p, with future 720p/1080p gated by Premium policy and source dimensions.
+6. Run ffmpeg to generate source-supported HLS renditions: 360p when the source is at least 360px tall, 480p when at least 480px, 720p only when at least 720px, and 1080p only when at least 1080px. 360p/480p are free; 720p/1080p are Premium and must not use public CDN until signed/token Premium delivery exists.
 7. Validate every output: master manifest, variant playlists, segment existence, segment decode, no private/signed-origin URLs in manifests, and no forbidden output prefix.
 8. Mark the job `uploading`.
 9. Upload to the public playback bucket only for clean, moderation-allowed, public-safe playback assets.
@@ -67,6 +67,8 @@ The worker must never mark `is_ready=true` before source probing, HLS generation
 Worker secrets stay only on the worker host. Logs must not include service-role keys, DB URLs, provider credentials, private signed URLs, authorization headers, or raw user identifiers. The app/client path cannot insert or update trusted readiness, public playback path, `is_public_playback_safe`, `worker_version`, or `source_hash`.
 
 Public CDN eligibility comes only from backend-written trusted rows that are ready, public, clean or approved, moderation-allowed, non-original, in the public playback bucket role, under `playback/public/`, visible through the public-safe RLS policy, and permitted by the configured rollout mode. City Lights is the canary; expansion uses `canary`, `batch`, or `trusted_public` rollout gates with the kill switch and signed-origin fallback still active.
+
+HD ladder policy: do not upscale. A 480p source can generate only 360p/480p; a 720p source can add 720p; a 1080p source can add 720p/1080p. Premium HD remains blocked from public R2/HLS without a signed/token delivery mode and entitlement proof.
 
 Queue processor policy: the future processor must be disabled by default, require a lease, require backup gate and kill switch, enforce max concurrency and max jobs per run, enforce retry cap, dead-letter retry-cap failures, quarantine audit failures, pause on anomaly, and never mark rows resolver-trusted before audit pass.
 

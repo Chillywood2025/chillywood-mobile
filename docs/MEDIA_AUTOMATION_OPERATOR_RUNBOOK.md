@@ -14,6 +14,8 @@ The automation operator is the scale path for many public-safe creator videos af
 
 Normal CLI operation is auto-detect: the owner does not manually pick every source id and does not manually choose the batch size. The CLI discovers eligible public-safe candidates, calculates a safe adaptive batch size from backup/restore freshness plus recent success/failure state, plans exact job and rollback scopes, and can execute one bounded batch only after confirmation and every safety gate passes.
 
+Rendition selection is source-aware. Automation planning uses `_lib/mediaRenditionLadder.ts` instead of a fixed 360p/480p list: 480p sources plan 360p/480p, 720p sources can add 720p, and 1080p sources can add 720p/1080p. Premium HD is planned as Premium-only and remains blocked from the current public R2/HLS execution path until signed/token Premium CDN delivery is implemented and proved.
+
 ## Modes
 
 - `off`: default. Discovery/status can run, but no jobs are planned, written, or processed.

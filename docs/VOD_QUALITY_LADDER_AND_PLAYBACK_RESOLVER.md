@@ -8,6 +8,8 @@ This document records the repo-side foundation for VOD quality enforcement. It d
 
 - Free VOD playback target: 360p / 480p max.
 - Premium VOD playback target: 720p / 1080p max when those renditions actually exist.
+- Rendition generation is source-aware: 360p requires a source at least 360px tall, 480p requires at least 480px, 720p requires at least 720px, and 1080p requires at least 1080px. The worker must not upscale low-resolution uploads to create fake HD.
+- `_lib/mediaRenditionLadder.ts` owns the source-aware ladder selection for automation planning. It marks 360p/480p as `free` and 720p/1080p as `premium`.
 - Original/master uploads are private processing sources. They are not regular playback renditions.
 - Player must ask the backend resolver which qualities are allowed. The client must not guess Premium access or HD access locally.
 - Missing or unavailable Premium entitlement proof fails closed to free-only for non-owner viewers.
@@ -39,10 +41,13 @@ Trusted rendition metadata foundation:
 
 - Existing `video_renditions` rows are a live schema foundation, but they are not yet trusted production Cloudflare R2/HLS playback rows.
 - The current schema has quality, status, access tier, storage bucket/path, and optional manifest path. It does not yet carry enough Cloudflare-ready trust metadata to safely choose public HLS by itself: delivery format, delivery provider, storage provider, bucket role, public playback path, master manifest path, variant playlist path, cache policy, scan/moderation state copied onto the rendition, public playback safety, original/master flag, and explicit readiness all need to be trusted inputs before production CDN playback can use rows.
+- Automation job plans no longer request a fixed 360p/480p pair. `_lib/mediaAutomationJobs.ts` uses `_lib/mediaRenditionLadder.ts` so known 720p/1080p sources can request Premium HD renditions in the plan, while unknown dimensions stay conservative free-only until ffprobe/readback is available.
 - `_lib/mediaRenditionMetadata.ts` defines the source-only `TrustedMediaRenditionMetadata` contract for the future row shape and `canUseTrustedRenditionForPublicCdn(...)` for public CDN eligibility.
 - Public CDN eligibility requires `is_ready=true`, `is_public_playback_safe=true`, `scan_status` clean or approved, `moderation_status` allowed/clean/approved, `bucket_role=public_playback`, `storage_provider=cloudflare_r2`, `delivery_provider=cloudflare_r2_custom_domain`, a `playback/public/` path, and `is_original=false`.
 - Original/master rows are private processing sources and cannot be marked normal playback. Premium/private rows still require signed/token CDN access later and cannot use public CDN while `MEDIA_CDN_SIGNING_MODE=off`.
+- Premium HD generation remains gated from the current public R2/HLS execution path until signed/token Premium CDN delivery exists; free public playback remains capped at 480p.
 - `npm run proof:media-rendition-metadata` uses proof-only City Lights HLS fixture rows for 360p and 480p under `playback/public/proof-transcode/chillywood-city-lights/v1-b670602fa00934ca-queue-hls/master.m3u8`; it does not insert production database rows.
+- `npm run proof:media-rendition-ladder` proves source-aware 480p/720p/1080p selection, no-upscale behavior, free/Premium tier mapping, conservative unknown-dimension planning, and that Premium/private CDN rows remain blocked without token mode.
 
 Trusted audited-rendition playback rollout:
 

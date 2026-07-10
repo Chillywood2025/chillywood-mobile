@@ -33,10 +33,11 @@ const mediaScanGatewayFunctionUrl = `${String(process.env.MEDIA_SCAN_FUNCTIONS_U
 const publicPlaybackBucket = "chillywood-media-public-playback-proof";
 const publicPlaybackHost = "media.chillywoodstream.com";
 const mediaAutomationWorkerVersion = "media-automation-cli-auto-hls-v1";
-const requestedRenditions = [
+const renditionLadder = [
   {
     label: "360p",
     height: 360,
+    accessTier: "free",
     bandwidth: 900000,
     audioBandwidth: "96k",
     videoBitrate: "800k",
@@ -46,13 +47,35 @@ const requestedRenditions = [
   {
     label: "480p",
     height: 480,
+    accessTier: "free",
     bandwidth: 1600000,
     audioBandwidth: "128k",
     videoBitrate: "1400k",
     maxrate: "1498k",
     bufsize: "2100k",
   },
+  {
+    label: "720p",
+    height: 720,
+    accessTier: "premium",
+    bandwidth: 3000000,
+    audioBandwidth: "128k",
+    videoBitrate: "2600k",
+    maxrate: "2782k",
+    bufsize: "3900k",
+  },
+  {
+    label: "1080p",
+    height: 1080,
+    accessTier: "premium",
+    bandwidth: 5800000,
+    audioBandwidth: "160k",
+    videoBitrate: "5200k",
+    maxrate: "5564k",
+    bufsize: "7800k",
+  },
 ];
+const premiumHlsDeliveryMode = String(process.env.MEDIA_AUTOMATION_PREMIUM_HLS_MODE || "disabled").trim().toLowerCase();
 
 const validModes = new Set([
   "status",
@@ -306,7 +329,15 @@ function selectSupportedRenditions(probe) {
     : null;
   const sourceHeight = Number(videoStream?.height || 0);
   const sourceWidth = Number(videoStream?.width || 0);
-  const selected = requestedRenditions.filter((rendition) => sourceHeight >= rendition.height);
+  const sourceSupported = renditionLadder.filter((rendition) => sourceHeight >= rendition.height);
+  const selected = sourceSupported.filter((rendition) => rendition.accessTier === "free");
+  const premiumDeferred = sourceSupported.filter((rendition) => rendition.accessTier === "premium");
+  if (premiumDeferred.length && premiumHlsDeliveryMode !== "disabled") {
+    failClosed("premium_hls_token_delivery_not_implemented", {
+      premiumRenditionsDeferred: premiumDeferred.map((rendition) => rendition.label),
+      signedTokenModeRequired: true,
+    });
+  }
   if (!selected.length) {
     const error = new Error("source_resolution_below_minimum_hls_rendition");
     error.code = "source_resolution_below_minimum_hls_rendition";
@@ -314,7 +345,14 @@ function selectSupportedRenditions(probe) {
     error.sourceHeight = sourceHeight;
     throw error;
   }
-  return { selected, sourceWidth, sourceHeight, sourceCodec: String(videoStream?.codec_name || "") };
+  return {
+    selected,
+    premiumDeferred,
+    sourceSupportedLabels: sourceSupported.map((rendition) => rendition.label),
+    sourceWidth,
+    sourceHeight,
+    sourceCodec: String(videoStream?.codec_name || ""),
+  };
 }
 
 function contentTypeFor(filePath) {
@@ -673,6 +711,7 @@ function insertJobRow({ jobId, sourceId, metadata, outputPrefix, requestedLabels
 
 function insertPendingRenditionRows({ jobId, sourceId, metadata, outputPrefix, renditions, durationMillis, sourceHash }) {
   for (const rendition of renditions) {
+    if (rendition.accessTier === "premium") failClosed("premium_public_hls_rendition_refused", { renditionLabel: rendition.label });
     const manifestPath = `${outputPrefix}master.m3u8`;
     const variantPath = `${outputPrefix}${rendition.label}/index.m3u8`;
     runSupabaseLinkedQuery(`
@@ -706,7 +745,7 @@ function insertPendingRenditionRows({ jobId, sourceId, metadata, outputPrefix, r
         ${rendition.bitrate || rendition.bandwidth},
         ${rendition.fileSizeBytes || 0},
         'hls_manifest_300_segments_immutable',
-        'public',
+        ${sqlLiteral(rendition.accessTier === "premium" ? "premium" : "public")},
         ${sqlLiteral(metadata.scanStatus)},
         ${sqlLiteral(metadata.moderationStatus)},
         false,
@@ -779,22 +818,24 @@ async function executeCandidate(candidate) {
   const uploadedKeys = [];
   try {
     const sourceHash = `sha256:${sha256File(download.tmpFile)}`;
+    const initialProbe = runFfprobeJson(download.tmpFile);
+    const sourceMetrics = selectSupportedRenditions(initialProbe);
+    const selectedRenditions = sourceMetrics.selected;
     insertJobRow({
       jobId,
       sourceId: candidate.sourceId,
       metadata,
       outputPrefix,
-      requestedLabels: requestedRenditions.map((rendition) => rendition.label),
+      requestedLabels: selectedRenditions.map((rendition) => rendition.label),
       sourceHash,
     });
-    const initialProbe = runFfprobeJson(download.tmpFile);
-    const sourceMetrics = selectSupportedRenditions(initialProbe);
-    const selectedRenditions = sourceMetrics.selected;
     updateJobStatus(jobId, "probing", {
       source_width: sourceMetrics.sourceWidth,
       source_height: sourceMetrics.sourceHeight,
       source_codec: sourceMetrics.sourceCodec,
       duration_ms: mediaDurationMillis(initialProbe),
+      source_supported_renditions: sourceMetrics.sourceSupportedLabels,
+      premium_renditions_deferred: sourceMetrics.premiumDeferred.map((rendition) => rendition.label),
     });
     updateJobStatus(jobId, "transcoding");
     const generated = selectedRenditions.map((rendition) => generateRendition(download.tmpFile, outputRoot, rendition));

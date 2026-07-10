@@ -31,6 +31,8 @@ export type MediaAutomationCandidateRow = {
   scan_status?: string | null;
   moderation_status?: string | null;
   mime_type?: string | null;
+  source_width?: number | null;
+  source_height?: number | null;
   source_present?: boolean | null;
   paid_or_premium_locked?: boolean | null;
   is_original_only?: boolean | null;
@@ -50,6 +52,8 @@ export type MediaAutomationCandidate = {
   needsTranscode: boolean;
   alreadyHasAuditedHls: boolean;
   currentPlaybackSource: string;
+  sourceWidth: number | null;
+  sourceHeight: number | null;
   blockedReasons: string[];
 };
 
@@ -83,6 +87,11 @@ export const MEDIA_AUTOMATION_CLASSIFICATION_ALIASES: Record<string, MediaAutoma
 
 const toText = (value: unknown) => String(value ?? "").trim();
 const toLowerText = (value: unknown) => toText(value).toLowerCase();
+const toNumberOrNull = (value: unknown): number | null => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
 
 export function classifyMediaAutomationCandidate(
   row: MediaAutomationCandidateRow,
@@ -131,6 +140,8 @@ export function classifyMediaAutomationCandidate(
     needsTranscode: blockedReasons.length === 0 && !alreadyHasAuditedHls,
     alreadyHasAuditedHls,
     currentPlaybackSource: toText(row.current_playback_source) || "signed-origin-fallback",
+    sourceWidth: toNumberOrNull(row.source_width),
+    sourceHeight: toNumberOrNull(row.source_height),
     blockedReasons,
   };
 }

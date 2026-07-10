@@ -1,4 +1,5 @@
 import type { MediaAutomationCandidate } from "./mediaAutomationDiscovery";
+import { getSupportedRenditionsForSource } from "./mediaRenditionLadder";
 
 export type MediaAutomationJobPlan = {
   jobId: string;
@@ -63,10 +64,18 @@ export function buildMediaTranscodeJobPlan(input: {
   const candidate = input.candidate;
   const outputPrefix = outputPrefixFor(candidate, batchId);
   const failures: string[] = [];
+  const requestedRenditions = getSupportedRenditionsForSource(
+    { width: candidate.sourceWidth, height: candidate.sourceHeight },
+    {
+      premiumEnabled: true,
+      unknownSourceStrategy: "conservative_free",
+    },
+  ).map((rendition) => rendition.label);
 
   if (!candidate.publicSafe) failures.push("candidate_not_public_safe");
   if (!candidate.needsTranscode) failures.push(candidate.alreadyHasAuditedHls ? "already_has_audited_hls" : "candidate_does_not_need_transcode");
   if (!isSafeOutputPrefix(outputPrefix)) failures.push("unsafe_output_prefix");
+  if (requestedRenditions.length === 0) failures.push("source_resolution_below_minimum_hls_rendition");
 
   return {
     jobId: `job-${batchId}-${slugify(candidate.sourceId).slice(0, 12)}`,
@@ -76,7 +85,7 @@ export function buildMediaTranscodeJobPlan(input: {
     title: candidate.title,
     outputPrefix,
     rollbackScope: `batch_id=${batchId};source_id=${candidate.sourceId};exact_prefix=${outputPrefix}`,
-    requestedRenditions: ["360p", "480p"],
+    requestedRenditions,
     dryRun: input.mode !== "one_job" && input.mode !== "batch" && input.mode !== "continuous_limited",
     writesAllowed: input.writesAllowed === true,
     valid: failures.length === 0,

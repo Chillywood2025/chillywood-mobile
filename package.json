@@ -285,6 +285,7 @@
     "proof:media-recovery-backup-restore": "node ./scripts/proof-media-recovery-backup-restore.mjs",
     "proof:media-worker-rollback-drill": "node ./scripts/proof-media-worker-rollback-drill.mjs",
     "proof:media-rendition-metadata": "node ./scripts/proof-media-rendition-metadata.mjs",
+    "proof:media-rendition-ladder": "node ./scripts/proof-media-rendition-ladder.mjs",
     "proof:media-rendition-migration-policy": "node ./scripts/proof-media-rendition-migration-policy.mjs",
     "proof:media-rendition-migration-dry-run": "node ./scripts/proof-media-rendition-migration-dry-run.mjs",
     "guard:autonomous-operating-model": "node ./scripts/guard-autonomous-operating-model.mjs",
