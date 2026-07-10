@@ -88,6 +88,9 @@ export type VodPlaybackDeliveryMetadata = {
   cdnEligible: boolean;
   urlHost: string;
   rawUrlRedacted: boolean;
+  premiumTokenRequired?: boolean;
+  tokenized?: boolean;
+  protectedPlayback?: boolean;
 };
 
 const toText = (value: unknown) => String(value ?? "").trim();
@@ -395,7 +398,91 @@ const normalizeDeliveryMetadata = (value: ReturnType<typeof sanitizeCdnEligibili
   cdnEligible: value.cdnEligible,
   urlHost: value.urlHost,
   rawUrlRedacted: value.rawUrlRedacted,
+  premiumTokenRequired: value.premiumTokenRequired,
+  tokenized: value.premiumTokenEligible,
+  protectedPlayback: value.provider === "cloudflare_r2_premium_token",
 });
+
+type PremiumHdTokenIssuerResponse = {
+  ok?: boolean;
+  playbackUrl?: unknown;
+  provider?: unknown;
+  deliveryFormat?: unknown;
+  renditionLabel?: unknown;
+  tokenized?: unknown;
+  protectedPlayback?: unknown;
+};
+
+const isSafePremiumWorkerPlaybackUrl = (value: unknown) => {
+  const url = toText(value);
+  if (!url || !/^https:\/\//i.test(url)) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:"
+      && parsed.hostname.endsWith("chillywoodstream.com")
+      && parsed.pathname.startsWith("/playback/protected/premium/")
+      && !!parsed.searchParams.get("token");
+  } catch {
+    return false;
+  }
+};
+
+async function requestPremiumHdPlaybackTokenForSource(sourceId: string): Promise<{
+  playbackUrl: string;
+  renditionLabel: VodPlaybackQualityLabel;
+  deliveryMetadata: VodPlaybackDeliveryMetadata;
+} | null> {
+  const normalizedSourceId = toText(sourceId);
+  if (!normalizedSourceId) return null;
+
+  try {
+    const { data, error } = await supabase.functions.invoke<PremiumHdTokenIssuerResponse>(
+      "premium-media-playback-token",
+      {
+        body: {
+          source_type: "creator_video",
+          source_id: normalizedSourceId,
+        },
+      },
+    );
+    if (error || data?.ok !== true || !isSafePremiumWorkerPlaybackUrl(data.playbackUrl)) return null;
+    const renditionLabel = toText(data.renditionLabel);
+    if (!isVodPremiumPlaybackQuality(renditionLabel)) return null;
+    const playbackQuality = renditionLabel as VodPlaybackQualityLabel;
+
+    let urlHost = "";
+    try {
+      urlHost = new URL(toText(data.playbackUrl)).hostname;
+    } catch {
+      urlHost = "invalid_url";
+    }
+
+    return {
+      playbackUrl: toText(data.playbackUrl),
+      renditionLabel: playbackQuality,
+      deliveryMetadata: {
+        provider: toText(data.provider) || "cloudflare_r2_premium_token",
+        deliveryFormat: toText(data.deliveryFormat) || "hls",
+        rolloutMode: "trusted_public",
+        sourceAllowlisted: false,
+        sourceDenied: false,
+        auditPassed: true,
+        backupGatePassed: true,
+        fallbackUsed: false,
+        blockedReason: null,
+        renditionLabel: playbackQuality,
+        cdnEligible: true,
+        urlHost,
+        rawUrlRedacted: true,
+        premiumTokenRequired: true,
+        tokenized: data.tokenized === true,
+        protectedPlayback: data.protectedPlayback === true,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
 
 export async function createSignedVodRenditionUrl(input: {
   rendition: VodAllowedQuality;
@@ -468,6 +555,16 @@ export async function resolveSignedVideoPlaybackSource(input: {
     });
     return signedUrl;
   };
+
+  const premiumHdTokenizedPlayback = await requestPremiumHdPlaybackTokenForSource(input.videoId);
+  if (premiumHdTokenizedPlayback) {
+    return {
+      ...resolution,
+      defaultPlaybackUrl: premiumHdTokenizedPlayback.playbackUrl,
+      defaultPlaybackQuality: premiumHdTokenizedPlayback.renditionLabel,
+      deliveryMetadata: premiumHdTokenizedPlayback.deliveryMetadata,
+    };
+  }
 
   const trustedRenditions = await readTrustedPublicHlsRenditionsForSource({
     sourceType: "creator_video",

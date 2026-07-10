@@ -323,6 +323,10 @@ const logCreatorVideoPlaybackResolution = (video: CreatorVideo) => {
     fallbackUsed: delivery?.fallbackUsed !== false,
     auditPassed: delivery?.auditPassed === true,
     backupGatePassed: delivery?.backupGatePassed === true,
+    renditionLabel: delivery?.renditionLabel ?? video.playbackQualityLabel ?? null,
+    premiumTokenRequired: delivery?.premiumTokenRequired === true,
+    tokenized: delivery?.tokenized === true,
+    protectedPlayback: delivery?.protectedPlayback === true,
     blockedReason: delivery?.blockedReason ?? null,
     rawUrlRedacted: true,
   });

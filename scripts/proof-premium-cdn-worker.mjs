@@ -72,7 +72,7 @@ const loaded = compileHelpers();
 const env = {
   PREMIUM_CDN_TOKEN_SECRET: proofKeyMaterial,
   PREMIUM_MEDIA_ALLOWED_PREFIX: "playback/protected/premium/",
-  PREMIUM_MEDIA_REQUIRE_USER_HEADER: "true",
+  PREMIUM_MEDIA_REQUIRE_USER_HEADER: "false",
 };
 
 const buildClaims = (overrides = {}) => {
@@ -122,6 +122,11 @@ try {
   const valid720 = await verify({ requestPath: claims720.path, token: token720 });
   requireProof(valid720.allowed === true, "valid Premium token + matching 720p path should be allowed");
   requireProof(valid720.reason === "allowed", "valid 720p reason should be allowed");
+  const valid720WithoutUserHeader = await verify({ requestPath: claims720.path, token: token720, userId: "" });
+  requireProof(
+    valid720WithoutUserHeader.allowed === true,
+    "valid Premium token should work without custom user header for native HLS child requests",
+  );
 
   const claims1080 = buildClaims({
     renditionLabel: "1080p",
@@ -195,10 +200,33 @@ try {
   const fetchToken = await sign(fetchClaims);
   const mockBucket = {
     async get(key) {
-      if (key !== fetchClaims.path) return null;
+      if (key === fetchClaims.path) {
+        return {
+          body: "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=1800000,RESOLUTION=1280x720\nindex.m3u8\n",
+          httpMetadata: { contentType: "application/vnd.apple.mpegurl" },
+        };
+      }
+      if (key.endsWith("/index.m3u8")) {
+        return {
+          body: "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.0,\nsegment-000.ts\n#EXT-X-ENDLIST\n",
+          httpMetadata: { contentType: "application/vnd.apple.mpegurl" },
+        };
+      }
+      if (key.endsWith("/segment-000.ts")) {
+        return {
+          body: "proof-segment",
+          httpMetadata: { contentType: "video/mp2t" },
+        };
+      }
+      if (key.includes("absolute-uri-proof")) {
+        return {
+          body: "#EXTM3U\nhttps://private.example.invalid/segment.ts\n",
+          httpMetadata: { contentType: "application/vnd.apple.mpegurl" },
+        };
+      }
       return {
-        body: "#EXTM3U\n#EXT-X-VERSION:3\n",
-        httpMetadata: { contentType: "application/vnd.apple.mpegurl" },
+        body: "",
+        httpMetadata: { contentType: "application/octet-stream" },
       };
     },
   };
@@ -216,6 +244,48 @@ try {
   );
   requireProof(fetchResponse.status === 200, "Worker should proxy matching protected object when token and bucket pass");
   requireProof(fetchResponse.headers.get("x-premium-media-access") === "allowed", "Worker response should mark protected access allowed");
+  const rewrittenManifest = await fetchResponse.text();
+  requireProof(/index\.m3u8\?token=/.test(rewrittenManifest), "Worker should rewrite HLS child playlist URI with child-scoped token");
+  requireProof(!rewrittenManifest.includes("private.example"), "rewritten manifest should not contain private absolute URLs");
+  const childToken = rewrittenManifest.match(/token=([A-Za-z0-9._-]+)/)?.[1] ?? "";
+  requireProof(!!childToken, "rewritten child playlist should contain a scoped token");
+  const childPlaylistPath = `${fetchClaims.path.split("/").slice(0, -1).join("/")}/index.m3u8`;
+  const childPlaylistResponse = await worker.default.fetch(
+    new Request(`https://media.chillywoodstream.com/${childPlaylistPath}?token=${childToken}`),
+    {
+      ...env,
+      PREMIUM_MEDIA_R2_BUCKET: mockBucket,
+    },
+  );
+  requireProof(childPlaylistResponse.status === 200, "rewritten child playlist token should be accepted without user header");
+  const childPlaylist = await childPlaylistResponse.text();
+  requireProof(/segment-000\.ts\?token=/.test(childPlaylist), "Worker should rewrite HLS segment URI with child-scoped token");
+  const segmentToken = childPlaylist.match(/token=([A-Za-z0-9._-]+)/)?.[1] ?? "";
+  const segmentPath = `${fetchClaims.path.split("/").slice(0, -1).join("/")}/segment-000.ts`;
+  const segmentResponse = await worker.default.fetch(
+    new Request(`https://media.chillywoodstream.com/${segmentPath}?token=${segmentToken}`),
+    {
+      ...env,
+      PREMIUM_MEDIA_R2_BUCKET: mockBucket,
+    },
+  );
+  requireProof(segmentResponse.status === 200, "rewritten segment token should be accepted without user header");
+
+  const absoluteUriClaims = buildClaims({
+    path: "playback/protected/premium/creator_video/premium-source-001/batch-001/720p/absolute-uri-proof/master.m3u8",
+    nowEpochSeconds: fetchNow,
+    ttlSeconds: 300,
+  });
+  const absoluteUriResponse = await worker.default.fetch(
+    new Request(`https://media.chillywoodstream.com/${absoluteUriClaims.path}`, {
+      headers: { authorization: `Bearer ${await sign(absoluteUriClaims)}` },
+    }),
+    {
+      ...env,
+      PREMIUM_MEDIA_R2_BUCKET: mockBucket,
+    },
+  );
+  requireProof(absoluteUriResponse.status === 403, "Worker should deny manifests containing absolute child URLs");
 
   const deniedLog = worker.buildRedactedPremiumMediaLog({
     ...missingToken,
@@ -247,6 +317,10 @@ try {
     },
     allowedLog,
     fetchStatus: fetchResponse.status,
+    rewrittenChildPlaylist: true,
+    rewrittenSegment: true,
+    validWithoutUserHeader: valid720WithoutUserHeader.allowed,
+    absoluteManifestUriDenied: absoluteUriResponse.status === 403,
   };
   assertNoTokenLikeOutput("premium worker proof", sanitized);
   requireProof(!JSON.stringify(sanitized).includes(token720), "sanitized proof output must not include raw token");
@@ -261,6 +335,7 @@ try {
     deployed: false,
     cases: {
       valid720Allowed: true,
+      valid720WithoutUserHeaderAllowed: true,
       valid1080Allowed: true,
       missingTokenDenied: true,
       expiredTokenDenied: true,
@@ -271,6 +346,8 @@ try {
       privateOriginalUnscannedModerationBlockedDenied: true,
       tokenValueNotPrinted: true,
       publicSdBypassesPremiumWorker: true,
+      hlsManifestsRewriteChildTokens: true,
+      absoluteManifestUrisDenied: true,
     },
     sanitized,
   }, null, 2));

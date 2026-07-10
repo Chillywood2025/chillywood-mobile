@@ -192,6 +192,97 @@ const cacheControlFor = (path) => (
     : "private, max-age=31536000, immutable"
 );
 
+const dirnameForPath = (path) => path.split("/").slice(0, -1).join("/");
+
+const resolveManifestChildPath = (parentPath, value) => {
+  const line = toText(value);
+  if (!line || line.startsWith("#")) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(line)) return { error: "absolute_manifest_uri_blocked" };
+  const [pathPart] = line.split("?");
+  const normalized = normalizePath(pathPart.startsWith("/")
+    ? pathPart
+    : `${dirnameForPath(parentPath)}/${pathPart}`);
+  if (isInvalidPath(normalized)) return { error: "invalid_manifest_uri" };
+  if (!isProtectedPremiumPath(normalized)) return { error: "manifest_uri_outside_premium_prefix" };
+  const scope = extractScopeFromPath(normalized);
+  return { path: normalized, scope };
+};
+
+const resolveScopedManifestChildPath = (decision, value) => {
+  const resolved = resolveManifestChildPath(decision.path, value);
+  if (!resolved || resolved.error) {
+    return { ok: false, reason: resolved?.error ?? "invalid_manifest_uri", path: "" };
+  }
+  if (resolved.scope.sourceType !== decision.sourceType || resolved.scope.sourceId !== decision.sourceId) {
+    return { ok: false, reason: "manifest_uri_source_scope_mismatch", path: "" };
+  }
+  if (resolved.scope.renditionLabel !== decision.renditionLabel) {
+    return { ok: false, reason: "manifest_uri_rendition_scope_mismatch", path: "" };
+  }
+  return { ok: true, reason: null, path: resolved.path };
+};
+
+const signManifestChildPath = async (decision, keyMaterial, childPath) => {
+  const childScope = extractScopeFromPath(childPath);
+  const childClaims = {
+    ...decision.claims,
+    path: childPath,
+    sourceType: childScope.sourceType,
+    sourceId: childScope.sourceId,
+    renditionLabel: childScope.renditionLabel,
+  };
+  const childToken = await signPremiumMediaAccessTokenForProof(childClaims, keyMaterial);
+  return `${childPath}?token=${encodeURIComponent(childToken)}`;
+};
+
+const rewriteManifestAttributeUris = async ({ line, decision, keyMaterial }) => {
+  const uriMatches = [...line.matchAll(/URI="([^"]+)"/g)];
+  if (!uriMatches.length) return { ok: true, reason: null, line };
+
+  let rewrittenLine = line;
+  for (const match of uriMatches) {
+    const rawUri = match[1];
+    const resolved = resolveScopedManifestChildPath(decision, rawUri);
+    if (!resolved.ok) return { ok: false, reason: resolved.reason, line: "" };
+    const signedUri = await signManifestChildPath(decision, keyMaterial, resolved.path);
+    rewrittenLine = rewrittenLine.replace(`URI="${rawUri}"`, `URI="${signedUri}"`);
+  }
+
+  return { ok: true, reason: null, line: rewrittenLine };
+};
+
+export async function rewritePremiumHlsManifestForProof(input) {
+  const manifest = String(input.manifest ?? "");
+  const decision = input.decision ?? {};
+  const env = input.env ?? {};
+  const keyMaterial = toText(env.PREMIUM_CDN_TOKEN_SECRET);
+  if (!keyMaterial) return { ok: false, reason: "missing_token_signer", manifest: "" };
+  if (!decision.claims) return { ok: false, reason: "missing_parent_claims", manifest: "" };
+
+  const lines = manifest.split(/\r?\n/);
+  const rewritten = [];
+  for (const line of lines) {
+    if (!toText(line)) {
+      rewritten.push(line);
+      continue;
+    }
+    if (toText(line).startsWith("#")) {
+      const rewrittenAttributeLine = await rewriteManifestAttributeUris({ line, decision, keyMaterial });
+      if (!rewrittenAttributeLine.ok) {
+        return { ok: false, reason: rewrittenAttributeLine.reason ?? "invalid_manifest_attribute_uri", manifest: "" };
+      }
+      rewritten.push(rewrittenAttributeLine.line);
+      continue;
+    }
+
+    const resolved = resolveScopedManifestChildPath(decision, line);
+    if (!resolved.ok) return { ok: false, reason: resolved.reason ?? "invalid_manifest_uri", manifest: "" };
+    rewritten.push(await signManifestChildPath(decision, keyMaterial, resolved.path));
+  }
+
+  return { ok: true, reason: null, manifest: rewritten.join("\n") };
+}
+
 const safeNowEpochSeconds = (value) => {
   const parsed = Number(value);
   if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
@@ -301,6 +392,19 @@ export async function fetchPremiumMediaObject(decision, env) {
   }
   const object = await bucket.get(decision.objectKey);
   if (!object) return responseForDenied("premium_media_object_not_found", 404);
+  if (decision.objectKey.endsWith(".m3u8")) {
+    const manifest = await new Response(object.body).text();
+    const rewritten = await rewritePremiumHlsManifestForProof({ manifest, decision, env });
+    if (!rewritten.ok) return responseForDenied(rewritten.reason ?? "manifest_rewrite_failed", 403);
+    return new Response(rewritten.manifest, {
+      status: 200,
+      headers: {
+        "content-type": object.httpMetadata?.contentType ?? contentTypeFor(decision.objectKey),
+        "cache-control": cacheControlFor(decision.objectKey),
+        "x-premium-media-access": "allowed",
+      },
+    });
+  }
   return new Response(object.body, {
     status: 200,
     headers: {

@@ -220,6 +220,7 @@
     "proof:media-premium-cdn-token": "node ./scripts/proof-media-premium-cdn-token.mjs",
     "proof:premium-cdn-worker": "node ./scripts/proof-premium-cdn-worker.mjs",
     "proof:premium-cdn-worker-live": "node ./scripts/proof-premium-cdn-worker-live.mjs",
+    "proof:premium-hd-token-issuer": "node ./scripts/proof-premium-hd-token-issuer.mjs",
     "proof:media-premium-hd-renditions": "node ./scripts/proof-media-premium-hd-renditions.mjs",
     "proof:media-premium-hd-resolver": "node ./scripts/proof-media-premium-hd-resolver.mjs",
     "media-premium-hd:plan": "node ./scripts/media-premium-hd-cli.mjs --mode=plan",

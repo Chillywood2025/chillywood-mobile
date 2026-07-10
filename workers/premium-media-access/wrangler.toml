@@ -12,4 +12,4 @@ bucket_name = "chillywood-media-proof"
 
 [vars]
 PREMIUM_MEDIA_ALLOWED_PREFIX = "playback/protected/premium/"
-PREMIUM_MEDIA_REQUIRE_USER_HEADER = "true"
+PREMIUM_MEDIA_REQUIRE_USER_HEADER = "false"

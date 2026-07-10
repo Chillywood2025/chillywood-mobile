@@ -2,13 +2,15 @@
 
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 const repoRoot = process.cwd();
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 const fallbackUrl = "origin-signed-direct-fallback";
+const vodQualitySource = readFileSync(path.join(repoRoot, "_lib/vodQuality.ts"), "utf8");
+const playerSource = readFileSync(path.join(repoRoot, "app/player/[id].tsx"), "utf8");
 const failures = [];
 const requireProof = (condition, message) => {
   if (!condition) failures.push(message);
@@ -137,6 +139,18 @@ const loaded = compileHelpers();
 
 try {
   const { resolveTrustedRenditionPlaybackSource, sanitizeCdnEligibilityProof } = loaded.eligibility;
+  requireProof(
+    vodQualitySource.includes("premium-media-playback-token"),
+    "installed resolver should call backend Premium HD token issuer",
+  );
+  requireProof(
+    vodQualitySource.includes("isSafePremiumWorkerPlaybackUrl"),
+    "installed resolver should validate protected Worker playback URL shape",
+  );
+  requireProof(
+    playerSource.includes("tokenized") && playerSource.includes("protectedPlayback"),
+    "installed player proof metadata should expose tokenized/protected flags without raw URLs",
+  );
 
   const premiumResolved = await resolveTrustedRenditionPlaybackSource({
     rendition: premiumRow,
