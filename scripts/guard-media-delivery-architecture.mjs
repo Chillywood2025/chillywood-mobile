@@ -75,6 +75,7 @@ const mediaRecoveryOperator = read("_lib/mediaRecoveryOperator.ts");
 const mediaRenditionMetadata = read("_lib/mediaRenditionMetadata.ts");
 const mediaPlaybackCdnEligibility = read("_lib/mediaPlaybackCdnEligibility.ts");
 const mediaPremiumCdnToken = read("_lib/mediaPremiumCdnToken.ts");
+const premiumCdnWorker = read("workers/premium-media-access/worker.mjs");
 const mediaAutomationController = read("_lib/mediaAutomationController.ts");
 const mediaAutomationDiscovery = read("_lib/mediaAutomationDiscovery.ts");
 const mediaAutomationBatchPolicy = read("_lib/mediaAutomationBatchPolicy.ts");
@@ -117,6 +118,7 @@ const mediaWorkerRollbackDrillProof = read("scripts/proof-media-worker-rollback-
 const mediaRenditionMetadataProof = read("scripts/proof-media-rendition-metadata.mjs");
 const mediaPlaybackCdnEligibilityProof = read("scripts/proof-media-playback-cdn-eligibility.mjs");
 const mediaPremiumCdnTokenProof = read("scripts/proof-media-premium-cdn-token.mjs");
+const premiumCdnWorkerProof = read("scripts/proof-premium-cdn-worker.mjs");
 const mediaCdnRolloutPlanner = read("scripts/media-cdn-rollout-planner.mjs");
 const mediaCdnRolloutPlannerProof = read("scripts/proof-media-cdn-rollout-planner.mjs");
 const mediaAutomationCli = read("scripts/media-automation-cli.mjs");
@@ -149,6 +151,7 @@ const sourceCorpus = [
   mediaRenditionMetadata,
   mediaPlaybackCdnEligibility,
   mediaPremiumCdnToken,
+  premiumCdnWorker,
   mediaAutomationController,
   mediaAutomationDiscovery,
   mediaAutomationBatchPolicy,
@@ -755,11 +758,29 @@ assertIncludes(mediaPremiumCdnToken, "\"playback/premium/\"", "Premium CDN prote
 assertIncludes(mediaPremiumCdnToken, "\"playback/protected/premium/\"", "Premium CDN protected prefix");
 assertIncludes(mediaPremiumCdnToken, "premium_entitlement_required", "Premium CDN entitlement gate");
 assertIncludes(mediaPremiumCdnToken, "outside_premium_cdn_prefix", "Premium CDN protected path gate");
+assertIncludes(mediaPremiumCdnToken, "premiumEntitlement: true", "Premium CDN entitlement claim");
+assertIncludes(premiumCdnWorker, "PREMIUM_CDN_TOKEN_SECRET", "Premium CDN Worker token verifier env");
+assertIncludes(premiumCdnWorker, "PREMIUM_MEDIA_R2_BUCKET", "Premium CDN Worker R2 binding env");
+assertIncludes(premiumCdnWorker, "PREMIUM_MEDIA_ALLOWED_PREFIX", "Premium CDN Worker allowed prefix env");
+assertIncludes(premiumCdnWorker, "playback/premium/", "Premium CDN Worker protected prefix");
+assertIncludes(premiumCdnWorker, "playback/protected/premium/", "Premium CDN Worker protected prefix");
+assertIncludes(premiumCdnWorker, "premiumEntitlement !== true", "Premium CDN Worker entitlement claim block");
+assertIncludes(premiumCdnWorker, "public_free_path_bypasses_premium_worker", "Premium CDN Worker public free bypass");
+assertIncludes(premiumCdnWorker, "tokenRedacted", "Premium CDN Worker redacted logging");
+assertNotMatches(premiumCdnWorker, /\bconsole\.(log|info|warn|error)\b/, "Premium CDN Worker must not log tokens");
 assertIncludes(mediaPremiumCdnTokenProof, "free user cannot get 720p token", "Premium CDN token proof free user denial");
 assertIncludes(mediaPremiumCdnTokenProof, "Premium user can get scoped 720p token claims", "Premium CDN token proof 720p");
 assertIncludes(mediaPremiumCdnTokenProof, "Premium user can get scoped 1080p token claims", "Premium CDN token proof 1080p");
 assertIncludes(mediaPremiumCdnTokenProof, "Premium HD falls back when token signer is unavailable", "Premium CDN token proof signer unavailable fallback");
 assertIncludes(mediaPremiumCdnTokenProof, "public 360p/480p remains unsigned CDN eligible without Premium token", "Premium CDN token proof free public playback");
+assertIncludes(premiumCdnWorkerProof, "valid Premium token + matching 720p path should be allowed", "Premium CDN Worker proof 720p");
+assertIncludes(premiumCdnWorkerProof, "valid Premium token + matching 1080p path should be allowed", "Premium CDN Worker proof 1080p");
+assertIncludes(premiumCdnWorkerProof, "missing token should be denied", "Premium CDN Worker proof missing token");
+assertIncludes(premiumCdnWorkerProof, "expired token should be denied", "Premium CDN Worker proof expired token");
+assertIncludes(premiumCdnWorkerProof, "wrong source should be denied", "Premium CDN Worker proof wrong source");
+assertIncludes(premiumCdnWorkerProof, "wrong path should be denied", "Premium CDN Worker proof wrong path");
+assertIncludes(premiumCdnWorkerProof, "non-Premium token should be denied", "Premium CDN Worker proof non-Premium");
+assertIncludes(premiumCdnWorkerProof, "public 360p/480p path should not require Premium worker", "Premium CDN Worker proof public SD bypass");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "canaryCityLightsCdn", "trusted audited CDN proof canary case");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "batchSelectedSourceCdn", "trusted audited CDN proof batch selected case");
 assertIncludes(mediaPlaybackCdnEligibilityProof, "batchUnselectedSourceFallback", "trusted audited CDN proof batch unselected fallback");
@@ -784,8 +805,13 @@ assertIncludes(mediaCdnRolloutPlannerProof, "mutationAttempted: false", "media C
 assertIncludes(mediaCdnRolloutPlannerProof, "productionBackfillRun: false", "media CDN rollout planner proof no backfill");
 assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
 assertIncludes(vodDoc, "Premium signed/token CDN foundation exists in source/proof only.", "VOD doc Premium token source/proof boundary");
+assertIncludes(vodDoc, "Protected Premium HD delivery path is source/proofed through `workers/premium-media-access/worker.mjs`.", "VOD doc Premium Worker source/proof boundary");
+assertIncludes(vodDoc, "It is not deployed and does not make HD live.", "VOD doc Premium Worker not live");
 assertIncludes(architecture, "Premium HD token mode is source/proof foundation only.", "architecture doc Premium token source/proof boundary");
 assertIncludes(architecture, "Without the signer, HD falls back/blocks.", "architecture doc Premium token signer fallback");
+assertIncludes(architecture, "Protected Premium HD delivery architecture: `workers/premium-media-access/worker.mjs` is the chosen source/proof path.", "architecture doc Premium Worker choice");
+assertIncludes(architecture, "It denies missing/expired/wrong-source/wrong-path/wrong-rendition/non-Premium/private/original/unscanned/moderation-blocked requests", "architecture doc Premium Worker deny cases");
+assertIncludes(architecture, "and is not deployed.", "architecture doc Premium Worker deployment boundary");
 assertIncludes(mediaAutomationOperatorRunbook, "Status: CLI auto-detect bounded execution is live for safe Level 0/1 candidates, while daemon/cron/scheduler/continuous automation remains off.", "media automation runbook status");
 assertIncludes(mediaAutomationOperatorRunbook, "No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live.", "media automation runbook no deployment");
 assertIncludes(mediaAutomationOperatorRunbook, "continuous limited automation is source/proofed/templates only", "media automation runbook continuous template boundary");
@@ -1137,6 +1163,7 @@ assertIncludes(packageJson, "\"proof:media-transcode-backup-gate\"", "package ba
 assertIncludes(packageJson, "\"proof:media-rendition-metadata\"", "package trusted rendition metadata proof script");
 assertIncludes(packageJson, "\"proof:media-playback-cdn-eligibility\"", "package trusted playback CDN eligibility proof script");
 assertIncludes(packageJson, "\"proof:media-premium-cdn-token\"", "package Premium CDN token proof script");
+assertIncludes(packageJson, "\"proof:premium-cdn-worker\"", "package Premium CDN Worker proof script");
 assertIncludes(packageJson, "\"proof:media-cdn-rollout-planner\"", "package media CDN rollout planner proof script");
 assertIncludes(packageJson, "\"media-cdn:plan\"", "package media CDN rollout planner command");
 assertIncludes(packageJson, "\"media-cdn:status\"", "package media CDN rollout status command");

@@ -68,7 +68,7 @@ Worker secrets stay only on the worker host. Logs must not include service-role 
 
 Public CDN eligibility comes only from backend-written trusted rows that are ready, public, clean or approved, moderation-allowed, non-original, in the public playback bucket role, under `playback/public/`, visible through the public-safe RLS policy, and permitted by the configured rollout mode. City Lights is the canary; expansion uses `canary`, `batch`, or `trusted_public` rollout gates with the kill switch and signed-origin fallback still active.
 
-HD ladder policy: do not upscale. A 480p source can generate only 360p/480p; a 720p source can add 720p; a 1080p source can add 720p/1080p. Premium HD token claims are source/proofed, but live Premium HD remains blocked from public R2/HLS until protected Premium paths, a tokenized URL signer, entitlement proof, and HD generation proof are installed.
+HD ladder policy: do not upscale. A 480p source can generate only 360p/480p; a 720p source can add 720p; a 1080p source can add 720p/1080p. Premium HD token claims and the protected Cloudflare Worker verifier are source/proofed, but live Premium HD remains blocked until protected Premium paths, a deployed Worker, tokenized URL signing from backend entitlement proof, trusted Premium rows, HD generation proof, and installed playback proof are complete.
 
 Queue processor policy: the future processor must be disabled by default, require a lease, require backup gate and kill switch, enforce max concurrency and max jobs per run, enforce retry cap, dead-letter retry-cap failures, quarantine audit failures, pause on anomaly, and never mark rows resolver-trusted before audit pass.
 

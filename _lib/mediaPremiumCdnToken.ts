@@ -3,6 +3,7 @@ export type MediaPremiumCdnRenditionLabel = "720p" | "1080p";
 export type MediaPremiumCdnTokenClaims = {
   tokenType: "premium_cdn_playback";
   version: 1;
+  premiumEntitlement: true;
   userId: string;
   sourceType: string;
   sourceId: string;
@@ -37,7 +38,8 @@ export type MediaPremiumCdnTokenBlockedReason =
   | "user_scope_mismatch"
   | "source_scope_mismatch"
   | "rendition_scope_mismatch"
-  | "path_scope_mismatch";
+  | "path_scope_mismatch"
+  | "premium_entitlement_claim_missing";
 
 export type MediaPremiumCdnTokenInput = {
   userId?: string | null;
@@ -128,6 +130,14 @@ const isPremiumRenditionLabel = (value: string): value is MediaPremiumCdnRenditi
   PREMIUM_RENDITION_LABELS.has(value)
 );
 
+const pathMatchesSourceScope = (path: string, sourceType: string, sourceId: string) => {
+  if (!sourceType || !sourceId) return false;
+  const encodedSourceType = encodeURIComponent(sourceType);
+  const encodedSourceId = encodeURIComponent(sourceId);
+  return path.startsWith(`playback/premium/${encodedSourceType}/${encodedSourceId}/`)
+    || path.startsWith(`playback/protected/premium/${encodedSourceType}/${encodedSourceId}/`);
+};
+
 const TOKEN_OR_SECRET_QUERY_PATTERN = new RegExp(
   `(?:cdn[_-]?token|signature|x-amz-signature|jwt|sec${"ret"}|pass${"word"})=`,
   "i",
@@ -167,6 +177,7 @@ export function canIssuePremiumCdnToken(input: MediaPremiumCdnTokenInput): Media
   else if (isInvalidObjectPath(path)) blockedReason = "invalid_playback_path";
   else if (!isPremiumProtectedPath(path)) blockedReason = "outside_premium_cdn_prefix";
   else if (!sourceType || !sourceId) blockedReason = "source_scope_mismatch";
+  else if (!pathMatchesSourceScope(path, sourceType, sourceId)) blockedReason = "source_scope_mismatch";
 
   return {
     allowed: !blockedReason,
@@ -176,6 +187,7 @@ export function canIssuePremiumCdnToken(input: MediaPremiumCdnTokenInput): Media
       : {
         tokenType: "premium_cdn_playback",
         version: 1,
+        premiumEntitlement: true,
         userId,
         sourceType,
         sourceId,
@@ -203,6 +215,9 @@ export function validatePremiumCdnTokenClaims(
   if (!claims || claims.tokenType !== "premium_cdn_playback" || claims.version !== 1) {
     return { valid: false, blockedReason: "token_type_mismatch" };
   }
+  if (claims.premiumEntitlement !== true) {
+    return { valid: false, blockedReason: "premium_entitlement_claim_missing" };
+  }
   if (claims.issuedAtEpochSeconds > now + 30) {
     return { valid: false, blockedReason: "token_not_yet_valid" };
   }
@@ -226,6 +241,9 @@ export function validatePremiumCdnTokenClaims(
   }
   if (!isPremiumProtectedPath(claims.path) || isInvalidObjectPath(claims.path)) {
     return { valid: false, blockedReason: "outside_premium_cdn_prefix" };
+  }
+  if (!pathMatchesSourceScope(claims.path, claims.sourceType, claims.sourceId)) {
+    return { valid: false, blockedReason: "source_scope_mismatch" };
   }
 
   return { valid: true, blockedReason: null };
