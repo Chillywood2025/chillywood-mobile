@@ -247,6 +247,7 @@ const buildStandaloneJsSchemaSql = () => [
   "  storage_bucket text,",
   "  storage_path text,",
   "  public_playback_path text,",
+  "  protected_playback_path text,",
   "  manifest_path text,",
   "  variant_playlist_path text,",
   "  width integer,",
@@ -260,6 +261,7 @@ const buildStandaloneJsSchemaSql = () => [
   "  scan_status text not null,",
   "  moderation_status text not null,",
   "  is_public_playback_safe boolean not null,",
+  "  is_protected_playback_safe boolean not null default false,",
   "  is_original boolean not null,",
   "  is_ready boolean not null,",
   "  worker_version text,",
@@ -287,12 +289,14 @@ const buildFixtureSchemaSql = () => [
   "  source_id text not null,",
   "  rendition_label text not null,",
   "  public_playback_path text,",
+  "  protected_playback_path text,",
   "  visibility text not null,",
   "  scan_status text not null,",
   "  moderation_status text not null,",
   "  bucket_role text not null,",
   "  is_original boolean not null,",
   "  is_public_playback_safe boolean not null,",
+  "  is_protected_playback_safe boolean not null default false,",
   "  is_ready boolean not null,",
   "  created_at text not null",
   ");",
@@ -728,7 +732,7 @@ const uploadWithWrangler = ({ bucket, objectPrefix, files }) => {
   }
   for (const [name, filePath] of Object.entries(files)) {
     const target = `${bucket}/${objectPrefix}${name}`;
-    const result = spawnSync(npxCommand, ["wrangler", "r2", "object", "put", target, "--file", filePath], {
+    const result = spawnSync(npxCommand, ["wrangler", "r2", "object", "put", target, "--file", filePath, "--remote"], {
       cwd: repoRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],

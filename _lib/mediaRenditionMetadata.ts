@@ -8,9 +8,10 @@ export const TRUSTED_RENDITION_CITY_LIGHTS_HLS_MASTER_PATH =
 export type TrustedMediaRenditionDeliveryFormat = "mp4" | "hls";
 export type TrustedMediaRenditionDeliveryProvider =
   | "origin_signed_direct"
-  | "cloudflare_r2_custom_domain";
+  | "cloudflare_r2_custom_domain"
+  | "cloudflare_r2_premium_token";
 export type TrustedMediaRenditionStorageProvider = "cloudflare_r2" | "hetzner_s3" | "supabase_storage" | "unknown";
-export type TrustedMediaRenditionBucketRole = "public_playback" | "private_origin";
+export type TrustedMediaRenditionBucketRole = "public_playback" | "private_origin" | "protected_premium";
 export type TrustedMediaRenditionVisibility = "public" | "premium" | "private";
 export type TrustedMediaRenditionScanStatus = "clean" | "approved" | "pending" | "failed" | "unscanned" | string;
 export type TrustedMediaRenditionModerationStatus =
@@ -34,6 +35,7 @@ export type TrustedMediaRenditionMetadata = {
   storage_provider: TrustedMediaRenditionStorageProvider;
   bucket_role: TrustedMediaRenditionBucketRole;
   public_playback_path: string;
+  protected_playback_path?: string | null;
   manifest_path: string | null;
   variant_playlist_path: string | null;
   width: number;
@@ -47,6 +49,7 @@ export type TrustedMediaRenditionMetadata = {
   scan_status: TrustedMediaRenditionScanStatus;
   moderation_status: TrustedMediaRenditionModerationStatus;
   is_public_playback_safe: boolean;
+  is_protected_playback_safe?: boolean | null;
   is_original: boolean;
   is_ready: boolean;
   created_at: string;
@@ -137,16 +140,25 @@ const findForbiddenPathSegment = (path: string) => (
 );
 
 const dirname = (path: string) => path.split("/").slice(0, -1).join("/");
+const isPremiumProtectedPath = (path: string) => (
+  path.startsWith("playback/premium/")
+  || path.startsWith("playback/protected/premium/")
+);
 
 export function classifyTrustedMediaRendition(
   row: TrustedMediaRenditionMetadata,
 ): TrustedMediaRenditionClassification {
   const manifestPath = normalizeObjectPath(row.manifest_path);
   const publicPlaybackPath = normalizeObjectPath(row.public_playback_path);
-  const playbackPath = row.delivery_format === "hls" ? manifestPath : publicPlaybackPath;
+  const protectedPlaybackPath = normalizeObjectPath(row.protected_playback_path);
+  const playbackPath = row.delivery_format === "hls"
+    ? manifestPath
+    : (protectedPlaybackPath || publicPlaybackPath);
   const variantPlaylistPath = normalizeObjectPath(row.variant_playlist_path);
   const forbiddenPathSegment = findForbiddenPathSegment(playbackPath);
   const renditionLabel = toLowerText(row.rendition_label);
+  const isPremiumRendition = row.visibility === "premium" && (renditionLabel === "720p" || renditionLabel === "1080p");
+  const premiumForbiddenPathSegment = forbiddenPathSegment === "premium" ? null : forbiddenPathSegment;
   const isOriginalOrMaster = row.is_original === true
     || ORIGINAL_OR_MASTER_LABELS.has(renditionLabel)
     || forbiddenPathSegment === "original"
@@ -160,9 +172,35 @@ export function classifyTrustedMediaRendition(
   let blockedReason: TrustedMediaRenditionBlockedReason | null = null;
   if (row.is_ready !== true) blockedReason = "not_ready";
   else if (isOriginalOrMaster) blockedReason = "original_or_master_blocked";
-  else if (row.is_public_playback_safe !== true) blockedReason = "public_playback_not_marked_safe";
   else if (!PUBLIC_SCAN_STATUSES.has(toLowerText(row.scan_status))) blockedReason = "scan_not_clean";
   else if (!PUBLIC_MODERATION_STATUSES.has(toLowerText(row.moderation_status))) blockedReason = "moderation_not_allowed";
+  else if (isPremiumRendition) {
+    if (row.is_protected_playback_safe !== true) blockedReason = "public_playback_not_marked_safe";
+    else if (row.bucket_role !== "protected_premium") blockedReason = "wrong_bucket_role";
+    else if (row.storage_provider !== "cloudflare_r2") blockedReason = "unsupported_storage_provider";
+    else if (row.delivery_provider !== "cloudflare_r2_premium_token") blockedReason = "unsupported_delivery_provider";
+    else if (!playbackPath) blockedReason = "missing_public_playback_path";
+    else if (isInvalidObjectPath(playbackPath)) blockedReason = "invalid_public_playback_path";
+    else if (!isPremiumProtectedPath(playbackPath)) blockedReason = "premium_requires_token_cdn";
+    else if (premiumForbiddenPathSegment) blockedReason = "forbidden_private_prefix";
+    else if (row.width <= 0 || row.height <= 0 || row.duration_ms <= 0 || row.bitrate <= 0) {
+      blockedReason = "invalid_dimensions";
+    } else if (row.delivery_format === "hls" && !manifestPath) {
+      blockedReason = "missing_manifest_path";
+    } else if (row.delivery_format === "hls" && protectedPlaybackPath && protectedPlaybackPath !== manifestPath) {
+      blockedReason = "manifest_path_mismatch";
+    } else if (row.delivery_format === "hls" && !manifestPath.endsWith("/master.m3u8")) {
+      blockedReason = "manifest_path_mismatch";
+    } else if (
+      row.delivery_format === "hls"
+      && variantPlaylistPath
+      && !variantPlaylistPath.startsWith(`${dirname(manifestPath)}/`)
+    ) {
+      blockedReason = "variant_path_mismatch";
+    } else {
+      blockedReason = "premium_requires_token_cdn";
+    }
+  } else if (row.is_public_playback_safe !== true) blockedReason = "public_playback_not_marked_safe";
   else if (row.visibility === "premium") blockedReason = "premium_requires_token_cdn";
   else if (row.visibility === "private") blockedReason = "private_requires_token_cdn";
   else if (row.bucket_role !== "public_playback") blockedReason = "wrong_bucket_role";

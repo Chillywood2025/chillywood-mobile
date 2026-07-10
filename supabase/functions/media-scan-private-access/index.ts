@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-type GatewayAction = "audit_candidate" | "download" | "transcode_download" | "record_scan_result";
+type GatewayAction = "audit_candidate" | "download" | "transcode_download" | "premium_hd_download" | "record_scan_result";
 type SupabaseClient = any;
 
 type GatewayPayload = {
@@ -93,7 +93,13 @@ const authenticateScanner = async (req: Request) => {
 
 const normalizeAction = (value: unknown): GatewayAction | null => {
   const action = toLowerText(value);
-  if (action === "audit_candidate" || action === "download" || action === "transcode_download" || action === "record_scan_result") return action;
+  if (
+    action === "audit_candidate"
+    || action === "download"
+    || action === "transcode_download"
+    || action === "premium_hd_download"
+    || action === "record_scan_result"
+  ) return action;
   return null;
 };
 
@@ -274,7 +280,7 @@ const validateCandidate = async (
   adminClient: SupabaseClient,
   sourceType: string,
   sourceId: string,
-  options: { requirePendingScan: boolean; requireCleanScan?: boolean },
+  options: { requirePendingScan: boolean; requireCleanScan?: boolean; allowAlreadyAuditedHls?: boolean },
 ) => {
   const read = await readCandidate(adminClient, sourceType, sourceId);
   if ("error" in read) return read;
@@ -294,7 +300,9 @@ const validateCandidate = async (
   if (options.requireCleanScan && !PUBLIC_SCAN_CLEAN_STATUSES.has(toLowerText(candidate.scan_status))) {
     blockedReasons.push("scan_not_clean");
   }
-  if (await hasAuditedHls(adminClient, sourceId)) blockedReasons.push("already_audited_hls");
+  if (options.allowAlreadyAuditedHls !== true && await hasAuditedHls(adminClient, sourceId)) {
+    blockedReasons.push("already_audited_hls");
+  }
   if (!isSupportedMimeType(candidate.mime_type)) blockedReasons.push("unsupported_mime_type");
   if (!storage.provider || !["s3", "supabase"].includes(storage.provider)) blockedReasons.push("unsupported_storage_provider");
   if (!storage.bucket || !isSafeObjectKey(storage.objectKey)) blockedReasons.push("missing_source_object");
@@ -492,7 +500,8 @@ Deno.serve(async (req): Promise<Response> => {
 
     const validation = await validateCandidate(adminClient, sourceType, sourceId, {
       requirePendingScan: action === "download" || action === "record_scan_result",
-      requireCleanScan: action === "transcode_download",
+      requireCleanScan: action === "transcode_download" || action === "premium_hd_download",
+      allowAlreadyAuditedHls: action === "premium_hd_download",
     });
     if ("error" in validation) return validation.error ?? json(403, { error: "candidate_not_scannable" });
     const validated = validation as { candidate: ScanCandidate; storage: { provider: string; bucket: string; objectKey: string } };
@@ -507,7 +516,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    if (action === "download" || action === "transcode_download") {
+    if (action === "download" || action === "transcode_download" || action === "premium_hd_download") {
       if (storage.provider === "s3") return streamS3Object(storage);
       if (storage.provider === "supabase") return streamSupabaseStorageObject(supabaseUrl, serviceRoleKey, storage);
       return json(403, { error: "unsupported_storage_provider" });

@@ -16,7 +16,7 @@ const mediaPublicDomain = "media.chillywoodstream.com";
 const expectedProjectRef = "bmkkhihfbmsnnmcqkoly";
 const expectedProjectName = "Chillywood2025's Project";
 const expectedProjectRegion = "us-west-2";
-const defaultLatestBackupPrefix = "backups/media-worker/2026/07/10/media-worker-logical-20260710T003002-02eab4b4c5cd/";
+const defaultLatestBackupPrefix = "backups/media-worker/2026/07/10/media-worker-logical-20260710T024048-5de12265dded/";
 const artifactFiles = ["schema.sql.gz", "data-media-worker.jsonl.gz", "manifest.json", "sha256sums.txt"];
 const validModes = ["preflight", "status", "verify-latest", "restore-drill"];
 
@@ -170,7 +170,7 @@ function downloadLatestBackup() {
   try {
     for (const file of artifactFiles) {
       const outputPath = path.join(tempDir, file);
-      const result = spawnSync(npxCommand, ["wrangler", "r2", "object", "get", `${bucket}/${latestPrefix}${file}`, "--file", outputPath], {
+      const result = spawnSync(npxCommand, ["wrangler", "r2", "object", "get", `${bucket}/${latestPrefix}${file}`, "--file", outputPath, "--remote"], {
         cwd: repoRoot,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
@@ -223,7 +223,7 @@ function verifyDownloadedBackup(download) {
 }
 
 function checkPublicExposure() {
-  const publicBucketResult = spawnSync(npxCommand, ["wrangler", "r2", "object", "get", `${publicPlaybackBucket}/${latestPrefix}manifest.json`, "--file", path.join(os.tmpdir(), `chillywood-public-bucket-${randomUUID()}.json`)], {
+  const publicBucketResult = spawnSync(npxCommand, ["wrangler", "r2", "object", "get", `${publicPlaybackBucket}/${latestPrefix}manifest.json`, "--file", path.join(os.tmpdir(), `chillywood-public-bucket-${randomUUID()}.json`), "--remote"], {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

@@ -1,10 +1,12 @@
 export const MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT = "origin_signed_direct" as const;
 export const MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN = "cloudflare_r2_custom_domain" as const;
+export const MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN = "cloudflare_r2_premium_token" as const;
 export const MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX_DEFAULT = "playback/public/";
 
 export type MediaDeliveryProvider =
   | typeof MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT
-  | typeof MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN;
+  | typeof MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN
+  | typeof MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN;
 
 export type MediaCdnSigningMode = "off" | "token";
 
@@ -126,7 +128,11 @@ const normalizeBoolean = (value: unknown) => {
 const normalizeDeliveryProvider = (value: unknown): MediaDeliveryProvider => (
   toLowerText(value) === MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN
     ? MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN
-    : MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT
+    : (
+      toLowerText(value) === MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN
+        ? MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN
+        : MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT
+    )
 );
 
 const normalizeSigningMode = (value: unknown): MediaCdnSigningMode | string => (

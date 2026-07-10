@@ -109,12 +109,13 @@ try {
     source_id: "premium-hd-source",
     rendition_label: "720p",
     delivery_format: "hls",
-    delivery_provider: "cloudflare_r2_custom_domain",
+    delivery_provider: "cloudflare_r2_premium_token",
     storage_provider: "cloudflare_r2",
-    bucket_role: "public_playback",
-    public_playback_path: "playback/premium/creator_video/premium-hd-source/batch-001/720p/master.m3u8",
-    manifest_path: "playback/premium/creator_video/premium-hd-source/batch-001/720p/master.m3u8",
-    variant_playlist_path: "playback/premium/creator_video/premium-hd-source/batch-001/720p/index.m3u8",
+    bucket_role: "protected_premium",
+    public_playback_path: "",
+    protected_playback_path: "playback/protected/premium/creator_video/premium-hd-source/batch-001/720p/master.m3u8",
+    manifest_path: "playback/protected/premium/creator_video/premium-hd-source/batch-001/720p/master.m3u8",
+    variant_playlist_path: "playback/protected/premium/creator_video/premium-hd-source/batch-001/720p/index.m3u8",
     width: 1280,
     height: 720,
     duration_ms: 60000,
@@ -125,7 +126,8 @@ try {
     visibility: "premium",
     scan_status: "clean",
     moderation_status: "allowed",
-    is_public_playback_safe: true,
+    is_public_playback_safe: false,
+    is_protected_playback_safe: true,
     is_original: false,
     is_ready: true,
     created_at: "2026-07-09T00:00:00.000Z",
@@ -142,7 +144,7 @@ try {
     requireAuditPassed: true,
     requireBackupFresh: false,
     fallbackToOrigin: true,
-    playbackDeliveryProvider: "cloudflare_r2_custom_domain",
+    playbackDeliveryProvider: "cloudflare_r2_premium_token",
     maxBatchSize: 0,
     percentRollout: 0,
     cdnBaseUrl: "https://media.chillywoodstream.com",
@@ -167,6 +169,7 @@ try {
     isOriginal: basePremiumRendition.is_original,
     isReady: basePremiumRendition.is_ready,
     isPublicPlaybackSafe: basePremiumRendition.is_public_playback_safe,
+    isProtectedPlaybackSafe: basePremiumRendition.is_protected_playback_safe,
     bucketRole: basePremiumRendition.bucket_role,
     deliveryFormat: basePremiumRendition.delivery_format,
     deliveryProvider: basePremiumRendition.delivery_provider,
@@ -185,7 +188,7 @@ try {
   const premiumUser1080 = canIssuePremiumCdnToken({
     ...tokenInput,
     renditionLabel: "1080p",
-    path: "playback/premium/creator_video/premium-hd-source/batch-001/1080p/master.m3u8",
+    path: "playback/protected/premium/creator_video/premium-hd-source/batch-001/1080p/master.m3u8",
   });
   requireProof(premiumUser1080.allowed === true && premiumUser1080.claims?.renditionLabel === "1080p", "Premium user can get scoped 1080p token claims");
 
@@ -206,7 +209,7 @@ try {
     sourceType: "creator_video",
     sourceId: "premium-hd-source",
     renditionLabel: "720p",
-    path: "playback/premium/creator_video/premium-hd-source/batch-001/1080p/master.m3u8",
+    path: "playback/protected/premium/creator_video/premium-hd-source/batch-001/1080p/master.m3u8",
     nowEpochSeconds: now + 60,
   });
   requireProof(!wrongPath.valid && wrongPath.blockedReason === "path_scope_mismatch", "token fails wrong path");

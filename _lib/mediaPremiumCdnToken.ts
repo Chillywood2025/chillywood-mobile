@@ -54,6 +54,7 @@ export type MediaPremiumCdnTokenInput = {
   isOriginal?: boolean | null;
   isReady?: boolean | null;
   isPublicPlaybackSafe?: boolean | null;
+  isProtectedPlaybackSafe?: boolean | null;
   bucketRole?: string | null;
   deliveryFormat?: string | null;
   deliveryProvider?: string | null;
@@ -166,11 +167,11 @@ export function canIssuePremiumCdnToken(input: MediaPremiumCdnTokenInput): Media
   else if (visibility !== "premium") blockedReason = "unsupported_visibility";
   else if (input.isReady !== true) blockedReason = "not_ready";
   else if (input.isOriginal === true) blockedReason = "original_or_master_blocked";
-  else if (input.isPublicPlaybackSafe !== true) blockedReason = "public_playback_not_marked_safe";
+  else if (input.isProtectedPlaybackSafe !== true) blockedReason = "public_playback_not_marked_safe";
   else if (!CLEAN_SCAN_STATUSES.has(scanStatus)) blockedReason = "scan_not_clean";
   else if (!ALLOWED_MODERATION_STATUSES.has(moderationStatus)) blockedReason = "moderation_not_allowed";
-  else if (toLowerText(input.bucketRole) !== "public_playback") blockedReason = "wrong_bucket_role";
-  else if (toLowerText(input.deliveryProvider) !== "cloudflare_r2_custom_domain") {
+  else if (toLowerText(input.bucketRole) !== "protected_premium") blockedReason = "wrong_bucket_role";
+  else if (toLowerText(input.deliveryProvider) !== "cloudflare_r2_premium_token") {
     blockedReason = "unsupported_delivery_provider";
   } else if (toLowerText(input.deliveryFormat) !== "hls") blockedReason = "unsupported_delivery_format";
   else if (!path) blockedReason = "missing_playback_path";

@@ -71,12 +71,12 @@ const loaded = compileHelpers();
 
 const env = {
   PREMIUM_CDN_TOKEN_SECRET: proofKeyMaterial,
-  PREMIUM_MEDIA_ALLOWED_PREFIX: "playback/premium/",
+  PREMIUM_MEDIA_ALLOWED_PREFIX: "playback/protected/premium/",
   PREMIUM_MEDIA_REQUIRE_USER_HEADER: "true",
 };
 
 const buildClaims = (overrides = {}) => {
-  const basePath = overrides.path ?? "playback/premium/creator_video/premium-source-001/batch-001/720p/master.m3u8";
+  const basePath = overrides.path ?? "playback/protected/premium/creator_video/premium-source-001/batch-001/720p/master.m3u8";
   const decision = loaded.premiumToken.canIssuePremiumCdnToken({
     userId: overrides.userId ?? "premium-user-001",
     premiumActive: overrides.premiumActive ?? true,
@@ -89,10 +89,11 @@ const buildClaims = (overrides = {}) => {
     moderationStatus: overrides.moderationStatus ?? "allowed",
     isOriginal: overrides.isOriginal ?? false,
     isReady: overrides.isReady ?? true,
-    isPublicPlaybackSafe: overrides.isPublicPlaybackSafe ?? true,
-    bucketRole: overrides.bucketRole ?? "public_playback",
+    isPublicPlaybackSafe: overrides.isPublicPlaybackSafe ?? false,
+    isProtectedPlaybackSafe: overrides.isProtectedPlaybackSafe ?? true,
+    bucketRole: overrides.bucketRole ?? "protected_premium",
     deliveryFormat: overrides.deliveryFormat ?? "hls",
-    deliveryProvider: overrides.deliveryProvider ?? "cloudflare_r2_custom_domain",
+    deliveryProvider: overrides.deliveryProvider ?? "cloudflare_r2_premium_token",
     nowEpochSeconds: overrides.nowEpochSeconds ?? now,
     ttlSeconds: overrides.ttlSeconds ?? 300,
   });
@@ -124,7 +125,7 @@ try {
 
   const claims1080 = buildClaims({
     renditionLabel: "1080p",
-    path: "playback/premium/creator_video/premium-source-001/batch-001/1080p/master.m3u8",
+    path: "playback/protected/premium/creator_video/premium-source-001/batch-001/1080p/master.m3u8",
   });
   const valid1080 = await verify({ requestPath: claims1080.path, token: await sign(claims1080) });
   requireProof(valid1080.allowed === true, "valid Premium token + matching 1080p path should be allowed");
@@ -144,7 +145,7 @@ try {
   requireProof(wrongSource.allowed === false && wrongSource.reason === "source_scope_mismatch", "wrong source should be denied");
 
   const wrongPath = await verify({
-    requestPath: "playback/premium/creator_video/premium-source-001/batch-001/720p/other.m3u8",
+    requestPath: "playback/protected/premium/creator_video/premium-source-001/batch-001/720p/other.m3u8",
     token: token720,
   });
   requireProof(wrongPath.allowed === false && wrongPath.reason === "path_scope_mismatch", "wrong path should be denied");
@@ -157,19 +158,19 @@ try {
   const nonPremium = await verify({ requestPath: claims720.path, token: await sign(nonPremiumClaims) });
   requireProof(nonPremium.allowed === false && nonPremium.reason === "premium_entitlement_missing", "non-Premium token should be denied");
 
-  const privatePath = "playback/premium/creator_video/premium-source-001/private/720p/master.m3u8";
+  const privatePath = "playback/protected/premium/creator_video/premium-source-001/private/720p/master.m3u8";
   const privateOriginal = await verify({ requestPath: privatePath, token: token720 });
   requireProof(privateOriginal.allowed === false && privateOriginal.reason === "private_path_blocked", "private path should be denied");
 
-  const originalPath = "playback/premium/creator_video/premium-source-001/original/720p/master.m3u8";
+  const originalPath = "playback/protected/premium/creator_video/premium-source-001/original/720p/master.m3u8";
   const original = await verify({ requestPath: originalPath, token: token720 });
   requireProof(original.allowed === false && original.reason === "original_path_blocked", "original path should be denied");
 
-  const unscannedPath = "playback/premium/creator_video/premium-source-001/unscanned/720p/master.m3u8";
+  const unscannedPath = "playback/protected/premium/creator_video/premium-source-001/unscanned/720p/master.m3u8";
   const unscanned = await verify({ requestPath: unscannedPath, token: token720 });
   requireProof(unscanned.allowed === false && unscanned.reason === "unscanned_path_blocked", "unscanned path should be denied");
 
-  const blockedPath = "playback/premium/creator_video/premium-source-001/moderation-blocked/720p/master.m3u8";
+  const blockedPath = "playback/protected/premium/creator_video/premium-source-001/moderation-blocked/720p/master.m3u8";
   const moderationBlocked = await verify({ requestPath: blockedPath, token: token720 });
   requireProof(
     moderationBlocked.allowed === false && moderationBlocked.reason === "moderation-blocked_path_blocked",

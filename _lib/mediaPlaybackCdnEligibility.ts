@@ -1,6 +1,7 @@
 import {
   MEDIA_CDN_PUBLIC_PLAYBACK_PREFIX_DEFAULT,
   MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN,
+  MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN,
   MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT,
   resolveCloudflareR2PublicPlaybackUrl,
   type MediaDeliveryProvider,
@@ -199,7 +200,11 @@ const normalizePercent = (value: unknown) => {
 const normalizeDeliveryProvider = (value: unknown): MediaDeliveryProvider => (
   toLowerText(value) === MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN
     ? MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN
-    : MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT
+    : (
+      toLowerText(value) === MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN
+        ? MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN
+        : MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT
+    )
 );
 
 export function resolveCdnRolloutMode(value: unknown): MediaPlaybackCdnRolloutMode {
@@ -393,7 +398,10 @@ export function canUseAuditedPublicRenditionForCdnPlayback(
   else if (config.rolloutMode === "batch" && batchCapExceeded) blockedReason = "batch_cap_exceeded";
   else if (!backupGatePassed) blockedReason = "backup_gate_not_fresh";
   else if (!auditPassed) blockedReason = "audit_not_passed";
-  else if (config.playbackDeliveryProvider !== MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN) {
+  else if (
+    config.playbackDeliveryProvider !== MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN
+    && config.playbackDeliveryProvider !== MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN
+  ) {
     blockedReason = "unsupported_rollout_delivery_provider";
   } else if (row.delivery_format !== "hls") blockedReason = "unsupported_delivery_format";
   else if (!config.cdnBaseUrl) blockedReason = "missing_cdn_base_url";
@@ -418,6 +426,7 @@ export function canUseAuditedPublicRenditionForCdnPlayback(
         isOriginal: row.is_original,
         isReady: row.is_ready,
         isPublicPlaybackSafe: row.is_public_playback_safe,
+        isProtectedPlaybackSafe: row.is_protected_playback_safe,
         bucketRole: row.bucket_role,
         deliveryFormat: row.delivery_format,
         deliveryProvider: row.delivery_provider,
@@ -447,7 +456,11 @@ export function canUseAuditedPublicRenditionForCdnPlayback(
   return {
     provider: blockedReason
       ? MEDIA_DELIVERY_PROVIDER_ORIGIN_SIGNED_DIRECT
-      : MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN,
+      : (
+        row?.delivery_provider === MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN
+          ? MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN
+          : MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN
+      ),
     cdnEligible: !blockedReason,
     fallbackUsed: !!blockedReason,
     blockedReason,
@@ -535,7 +548,7 @@ export async function resolveTrustedRenditionPlaybackSource(input: {
 
     return {
       ...eligibility,
-      provider: MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_CUSTOM_DOMAIN,
+      provider: MEDIA_DELIVERY_PROVIDER_CLOUDFLARE_R2_PREMIUM_TOKEN,
       cdnEligible: true,
       fallbackUsed: false,
       blockedReason: null,

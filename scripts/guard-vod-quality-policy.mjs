@@ -189,9 +189,9 @@ assertIncludes(vodDoc, "Existing `video_renditions` rows are a live schema found
 assertIncludes(vodDoc, "`_lib/mediaRenditionMetadata.ts` defines the source-only `TrustedMediaRenditionMetadata` contract", "VOD doc trusted source model");
 assertIncludes(vodDoc, "Original/master rows are private processing sources and cannot be marked normal playback.", "VOD doc original/master CDN boundary");
 assertIncludes(vodDoc, "Premium/private rows still require signed/token CDN access later and cannot use public CDN while `MEDIA_CDN_SIGNING_MODE=off`.", "VOD doc Premium/private CDN boundary");
-assertIncludes(vodDoc, "Premium signed/token CDN foundation exists in source/proof only.", "VOD doc Premium CDN token source/proof boundary");
-assertIncludes(vodDoc, "Protected Premium HD delivery path is deployed/proved only on the isolated proof Worker `chillywood-premium-media-access-proof` at `premium-media-proof.chillywoodstream.com`.", "VOD doc Premium CDN Worker deployed proof boundary");
-assertIncludes(vodDoc, "It is not routed through `media.chillywoodstream.com`, does not generate or activate HD, and does not make Premium HD playback live.", "VOD doc Premium CDN Worker not live");
+assertIncludes(vodDoc, "Premium signed/token CDN delivery is active for audited protected Premium rows.", "VOD doc Premium CDN token active boundary");
+assertIncludes(vodDoc, "Protected Premium HD delivery path is deployed/proved on the isolated Worker `chillywood-premium-media-access-proof` at `premium-media-proof.chillywoodstream.com`.", "VOD doc Premium CDN Worker deployed proof boundary");
+assertIncludes(vodDoc, "Production currently has `5` audited protected Premium HD rows: `4` source-supported 720p rows and `1` source-supported 1080p row.", "VOD doc Premium HD row count");
 assertIncludes(vodDoc, "If token mode or signer is unavailable, HD falls back/blocks", "VOD doc Premium CDN signer boundary");
 assertIncludes(vodDoc, "`npm run proof:media-premium-cdn-token` proves free users cannot get HD tokens", "VOD doc Premium CDN token proof");
 assertIncludes(vodDoc, "`npm run proof:premium-cdn-worker` proves valid 720p/1080p Premium tokens", "VOD doc Premium CDN Worker proof");
@@ -225,13 +225,13 @@ assertIncludes(vodDoc, "`npm run backup:media-worker:status`, `npm run backup:me
 assertIncludes(vodDoc, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports JS SELECT export fallback without local `pg_dump`/`psql`", "VOD doc backup runner JS export");
 assertIncludes(vodDoc, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw DB URL.", "VOD doc backup runner linked DB source");
 assertIncludes(vodDoc, "`npm run proof:media-worker-backup-runner` proves dry-run, fail-closed write mode, linked-source no-raw-DB-URL behavior, public bucket/domain denial, manifest/checksum generation, JS JSONL restore into disposable PGlite, and resolver-safe query.", "VOD doc backup runner proof");
-assertIncludes(vodDoc, "Latest backup after the bounded auto-transcode cycle is `backups/media-worker/2026/07/10/media-worker-logical-20260710T003002-02eab4b4c5cd/` with row counts `media_transcode_jobs=6` and `media_renditions=10`.", "VOD doc completed real backup");
+assertIncludes(vodDoc, "Latest backup after the bounded auto-transcode cycle is `backups/media-worker/2026/07/10/media-worker-logical-20260710T024048-5de12265dded/` with row counts `media_transcode_jobs=10` and `media_renditions=15`.", "VOD doc completed real backup");
 assertIncludes(vodDoc, "`npm run proof:media-worker-backup-runner` proves dry-run, fail-closed write mode, linked-source no-raw-DB-URL behavior, public bucket/domain denial, manifest/checksum generation, JS JSONL restore into disposable PGlite, and resolver-safe query.", "VOD doc backup runner proof");
 assertIncludes(vodDoc, "No GitHub Actions workflow, cron, scheduler, worker enablement, or production playback switch exists for this lane, and this is logical backup/restore only, not PITR.", "VOD doc scheduled backup safety boundary");
 assertIncludes(vodDoc, "Trusted backend migration schema is applied to production and now contains audited media-worker rows from City Lights plus the bounded CLI auto-detect cycle", "VOD doc trusted migration one-job rows");
 assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded disposable local Postgres runtime, and production rollback-only RLS proof passed with final row counts back to zero.", "VOD doc trusted migration proof checkpoint");
 
-assertIncludes(mediaMigrationPlan, "Status: production schema applied, with scoped audited rows from the City Lights one-job proof plus the bounded CLI auto-detect cycle.", "trusted rendition migration plan status");
+assertIncludes(mediaMigrationPlan, "Status: production schema applied, with scoped audited rows from the City Lights one-job proof, bounded CLI auto-detect cycle, and protected Premium HD pass.", "trusted rendition migration plan status");
 assertIncludes(mediaMigrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "trusted rendition migration plan production schema status");
 assertIncludes(mediaMigrationPlan, "Production data/write boundary after the bounded CLI auto-detect cycle: City Lights plus four public-safe auto-detected sources have audited HLS rows, and one 320x180 source has a scoped unsupported failed-job marker with no uploaded objects or rendition rows.", "trusted rendition migration plan production data boundary");
 assertIncludes(mediaMigrationPlan, "`service_role` / backend worker is the only intended writer", "trusted rendition migration plan service role writer");
@@ -498,6 +498,8 @@ assertIncludes(packageJson, "\"proof:media-playback-cdn-eligibility\"", "trusted
 assertIncludes(packageJson, "\"proof:media-premium-cdn-token\"", "Premium CDN token proof script");
 assertIncludes(packageJson, "\"proof:premium-cdn-worker\"", "Premium CDN Worker proof script");
 assertIncludes(packageJson, "\"proof:premium-cdn-worker-live\"", "Premium CDN Worker live proof script");
+assertIncludes(packageJson, "\"proof:media-premium-hd-renditions\"", "Premium HD renditions proof script");
+assertIncludes(packageJson, "\"proof:media-premium-hd-resolver\"", "Premium HD resolver proof script");
 assertIncludes(packageJson, "\"proof:media-cdn-rollout-planner\"", "media CDN rollout planner proof script");
 assertIncludes(packageJson, "\"media-cdn:plan\"", "media CDN rollout planner command");
 assertIncludes(packageJson, "\"media-cdn:status\"", "media CDN rollout status command");
