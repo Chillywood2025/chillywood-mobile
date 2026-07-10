@@ -224,6 +224,8 @@ assertIncludes(vodDoc, "If token mode or signer is unavailable, HD falls back/bl
 assertIncludes(vodDoc, "`npm run proof:media-premium-cdn-token` proves free users cannot get HD tokens", "VOD doc Premium CDN token proof");
 assertIncludes(vodDoc, "`npm run proof:premium-cdn-worker` proves valid 720p/1080p Premium tokens", "VOD doc Premium CDN Worker proof");
 assertIncludes(vodDoc, "`npm run proof:premium-cdn-worker-live` proved the deployed proof Worker", "VOD doc Premium CDN Worker live proof");
+assertIncludes(vodDoc, "Live backend token issuance is deployed through Supabase Edge Function `premium-media-playback-token`", "VOD doc Premium HD token issuer deployed");
+assertIncludes(vodDoc, "Installed proof on an HD-capable video showed safe fallback with `tokenized=false` and `protectedPlayback=false`", "VOD doc installed free fallback proof");
 assertIncludes(vodDoc, "`npm run proof:media-rendition-metadata` uses proof-only City Lights HLS fixture rows for 360p and 480p", "VOD doc trusted fixture proof");
 assertIncludes(vodDoc, "Trusted backend migration path:", "VOD doc trusted backend migration path");
 assertIncludes(vodDoc, "Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` is applied to production; it does not switch production playback, backfill media rows, or make a production transcode worker live. The only production rows in the new media worker tables are the first controlled City Lights proof job and two audited HLS renditions.", "VOD doc production schema migration");

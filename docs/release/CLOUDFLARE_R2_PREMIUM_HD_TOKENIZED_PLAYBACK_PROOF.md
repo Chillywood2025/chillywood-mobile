@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: server-side protected Premium HD delivery Closed; installed app Premium HD proof not run.
+Status: server-side protected Premium HD delivery Closed; backend token issuer deployed/proved; installed free/non-Premium fallback proved; installed Premium playback remains Partial pending a Premium-active installed session.
 
 ## Result
 
@@ -58,6 +58,15 @@ Rows were inserted pending/audit-gated, then promoted only after output validati
 
 Free 360p/480p public HLS remains unchanged. Premium HD is not exposed from `playback/public/`.
 
-Installed app Premium HD playback proof was not run in this pass because the app/backend live Premium token issuer and OTA integration were not added here. The next app-facing milestone is token issuance from active Premium entitlement proof, then installed Premium/free fallback proof.
+The live backend token issuer is now deployed as Supabase Edge Function `premium-media-playback-token`. It authenticates the signed-in Supabase user, checks the existing `monetization_has_active_premium` entitlement path, verifies protected `media_renditions` rows, and issues short-lived Worker-compatible playback tokens only for 720p/1080p protected Premium HLS rows. Missing auth, invalid auth, non-Premium proof cases, wrong source/path/rendition, and missing issuer env fail closed in source/deployed proofs.
+
+Android EAS Update was published for the app resolver integration:
+
+- source commit `f6f6bd9d2ce3ed7179876c7c7c9cdbaab1374198`
+- runtime `1.0.0`
+- update group `22916970-0161-4411-930a-3570eb5625fb`
+- Android update `019f4a0b-efff-71c9-bae5-9198bb001160`
+
+Installed app proof is Partial. The available Play-installed device `R5CR120QCBF` was verified as `com.chillywood.mobile` from `com.android.vending`, versionCode `80`, versionName `1.0.0`, and Expo Updates applied the Android update above. An HD-capable creator video opened in the installed app, but the installed session resolved safely to fallback with redacted metadata `provider=origin_signed_direct`, `fallbackUsed=true`, `tokenized=false`, and `protectedPlayback=false`. That proves the installed free/non-Premium fallback/denial path; installed Premium HD playback still needs a Premium-active installed session to prove `tokenized=true` and `protectedPlayback=true`.
 
 No daemon, cron, scheduler, broad backfill, Premium entitlement change, billing/provider change, app UX change, or production playback fallback removal happened.
