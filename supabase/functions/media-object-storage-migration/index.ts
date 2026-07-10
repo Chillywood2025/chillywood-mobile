@@ -13,6 +13,7 @@ type MigrationAction =
   | "backup_storage_metadata"
   | "update_metadata_batch"
   | "zero_ref_audit"
+  | "export_shutdown_packet"
   | "rollback_metadata_batch";
 
 type SupabaseClient = any;
@@ -139,6 +140,7 @@ const R2_ORIGIN_BUCKET = "chillywood-media-origin";
 const ALLOWED_TARGET_PREFIXES = ["originals/", "uploads/", "source/", "processing/", "quarantine/"];
 const FORBIDDEN_TARGET_PREFIXES = ["playback/public/", "playback/protected/", "playback/premium/"];
 const STORAGE_METADATA_BACKUP_PREFIX = "backups/media-object-storage/";
+const HETZNER_SHUTDOWN_EXPORT_PREFIX = "backups/hetzner-object-storage-shutdown/";
 const DEFAULT_COPY_BATCH_LIMIT = 25;
 const MAX_COPY_BATCH_LIMIT = 100;
 const textEncoder = new TextEncoder();
@@ -241,6 +243,7 @@ const normalizeAction = (value: unknown): MigrationAction | null => {
     || action === "backup_storage_metadata"
     || action === "update_metadata_batch"
     || action === "zero_ref_audit"
+    || action === "export_shutdown_packet"
     || action === "rollback_metadata_batch"
   ) return action;
   return null;
@@ -738,11 +741,12 @@ const headSourceObject = async (config: S3Config, objectKey: string) => {
 
 const validatePrivateBackupTarget = (targetConfig: S3Config, objectKey: string) => ({
   ok: targetConfig.bucket === R2_ORIGIN_BUCKET
-    && objectKey.startsWith(STORAGE_METADATA_BACKUP_PREFIX)
+    && (objectKey.startsWith(STORAGE_METADATA_BACKUP_PREFIX) || objectKey.startsWith(HETZNER_SHUTDOWN_EXPORT_PREFIX))
     && isSafeObjectKey(objectKey)
     && !FORBIDDEN_TARGET_PREFIXES.some((prefix) => objectKey.startsWith(prefix)),
   privateOriginBucket: targetConfig.bucket === R2_ORIGIN_BUCKET,
   backupPrefix: objectKey.startsWith(STORAGE_METADATA_BACKUP_PREFIX),
+  shutdownExportPrefix: objectKey.startsWith(HETZNER_SHUTDOWN_EXPORT_PREFIX),
 });
 
 const putR2TextObject = async (
@@ -1741,6 +1745,162 @@ const zeroRefAudit = async (adminClient: SupabaseClient, references: InventoryRe
   };
 };
 
+const shutdownExportDatePath = (date: Date) => {
+  const [year, month, day] = date.toISOString().slice(0, 10).split("-");
+  return `${year}/${month}/${day}`;
+};
+
+const buildShutdownExportInventory = async (
+  references: InventoryReference[],
+  resolutionRows: Record<string, unknown>[],
+) => {
+  const resolutionByRow = new Map(
+    resolutionRows.map((row) => [`${toText(row.table_name)}:${toText(row.row_id)}`, row]),
+  );
+  const hetznerReferences = references.filter(isHetznerObjectStorageReference);
+  return Promise.all(hetznerReferences.map(async (reference) => {
+    const resolution = resolutionByRow.get(`${reference.tableName}:${reference.rowId}`);
+    const activeDependency = resolution
+      ? Boolean(resolution.active_dependency)
+      : true;
+    return {
+      tableName: reference.tableName,
+      rowId: reference.rowId,
+      sourceType: reference.sourceType,
+      sourceId: reference.sourceId,
+      storageProvider: normalizeProvider(reference.storageProvider),
+      storageBucketRedacted: bucketRedaction(reference.storageBucket),
+      objectKeyHash: await sha256Hex(reference.storageObjectKey || `${reference.tableName}:${reference.rowId}`),
+      objectKeyRedacted: true,
+      objectKeyPresent: !!reference.storageObjectKey,
+      sizeBytes: null,
+      sizeAvailable: false,
+      visibility: reference.visibility,
+      accessTier: reference.accessTier,
+      scanStatus: reference.scanStatus,
+      moderationStatus: reference.moderationStatus,
+      isOriginal: reference.isOriginal,
+      copiedToR2Status: activeDependency ? "unresolved_not_shutdown_ready" : "not_copied_historical_stale_ref",
+      r2TargetBucket: activeDependency ? "" : R2_ORIGIN_BUCKET,
+      r2TargetPrefix: activeDependency ? "" : "not_applicable_historical_scan_job",
+      resolutionStatus: toText(resolution?.resolution_status) || "unresolved",
+      resolutionReason: resolution ? "redacted_resolution_record_present" : "missing_resolution_record",
+      activeDependency,
+      shutdownBlocker: resolution ? Boolean(resolution.shutdown_blocker) : true,
+      liveKitRelated: reference.liveKitRelated,
+    };
+  }));
+};
+
+const createShutdownExportPacket = async (input: {
+  adminClient: SupabaseClient;
+  references: InventoryReference[];
+  targetConfig: S3Config;
+}) => {
+  const zeroRef = await zeroRefAudit(input.adminClient, input.references);
+  const referenceResolutions = await readReferenceResolutionRowsForBackup(input.adminClient);
+  const resolutionRows = referenceResolutions.rows;
+  const createdAt = new Date();
+  const exportId = `hetzner-object-storage-shutdown-${createdAt.toISOString().replace(/[:.]/g, "-")}`;
+  const exportPrefix = `${HETZNER_SHUTDOWN_EXPORT_PREFIX}${shutdownExportDatePath(createdAt)}/${exportId}/`;
+  const inventory = await buildShutdownExportInventory(input.references, resolutionRows);
+  const activeDependencyCount = inventory.filter((entry) => entry.activeDependency).length;
+  const shutdownReady = zeroRef.hetznerObjectStorageShutdownReady === true
+    && activeDependencyCount === 0
+    && Number(zeroRef.unresolvedUnknownRefs ?? 0) === 0;
+  const exportPayload = {
+    exportId,
+    createdAt: createdAt.toISOString(),
+    scope: "hetzner_object_storage_shutdown_readiness_packet",
+    objectStorageOnly: true,
+    liveKitTouched: false,
+    liveKitOutOfScope: true,
+    providerShutdownExecuted: false,
+    hetznerObjectsDeleted: false,
+    hetznerFallbackRetained: true,
+    objectKeysRedacted: true,
+    signedUrlsPrinted: false,
+    secretsPrinted: false,
+    storedInPrivateR2OriginOnly: true,
+    r2PrivateOriginBucket: R2_ORIGIN_BUCKET,
+    exportPrefix,
+    inventorySummary: summarizeInventory(input.references),
+    zeroRefAudit: zeroRef,
+    resolutionSummary: zeroRef.resolutionSummary,
+    referenceResolutionRowCount: referenceResolutions.rowCount,
+    referenceResolutionBackupStatus: referenceResolutions.ok ? "included" : referenceResolutions.reason,
+    rawHetznerInventory: inventory,
+    objectCount: inventory.length,
+    bucketName: LEGACY_HETZNER_BUCKET,
+    shutdownReadinessStatus: shutdownReady ? "shutdown_ready_after_owner_fallback_decision" : "not_shutdown_ready",
+    fallbackDecisionPacket: {
+      recommended: "keep Hetzner Object Storage read-only fallback for 7 days, with writes disabled, then delete/cancel through owner-controlled provider workflow",
+      immediateShutdownOption: "owner may choose immediate provider shutdown only after accepting no Hetzner fallback and preserving this export packet",
+      providerShutdownExecuted: false,
+      liveKitExcluded: true,
+    },
+  };
+  const exportText = JSON.stringify(exportPayload);
+  const exportSha256 = await sha256Hex(exportText);
+  const packetObjectKey = `${exportPrefix}hetzner-object-storage-shutdown-packet.json`;
+  await putR2TextObject(input.targetConfig, packetObjectKey, exportText);
+  const packetReadbackText = await getR2TextObject(input.targetConfig, packetObjectKey);
+  const packetReadbackSha256 = await sha256Hex(packetReadbackText);
+  const manifestPayload = {
+    exportId,
+    createdAt: exportPayload.createdAt,
+    exportPrefix,
+    packetObjectKey,
+    packetSha256: exportSha256,
+    shutdownReadinessStatus: exportPayload.shutdownReadinessStatus,
+    rawHetznerObjectStorageReferences: zeroRef.rawHetznerObjectStorageReferences,
+    resolvedHistoricalStaleRefs: zeroRef.resolvedHistoricalStaleRefs,
+    activeUnresolvedHetznerObjectRefs: zeroRef.activeUnresolvedHetznerObjectRefs,
+    unresolvedUnknownRefs: zeroRef.unresolvedUnknownRefs,
+    objectKeysRedacted: true,
+    liveKitTouched: false,
+    providerShutdownExecuted: false,
+  };
+  const manifestText = JSON.stringify(manifestPayload);
+  const manifestObjectKey = `${exportPrefix}manifest.json`;
+  const checksumsObjectKey = `${exportPrefix}sha256sums.txt`;
+  await putR2TextObject(input.targetConfig, manifestObjectKey, manifestText);
+  const manifestSha256 = await sha256Hex(manifestText);
+  await putR2TextObject(
+    input.targetConfig,
+    checksumsObjectKey,
+    `${exportSha256}  hetzner-object-storage-shutdown-packet.json\n${manifestSha256}  manifest.json\n`,
+    "text/plain; charset=utf-8",
+  );
+  const manifestReadback = JSON.parse(await getR2TextObject(input.targetConfig, manifestObjectKey)) as Record<string, unknown>;
+  const readbackOk = packetReadbackSha256 === exportSha256 && manifestReadback.exportId === exportId;
+  return {
+    ok: shutdownReady && readbackOk,
+    blocked: !(shutdownReady && readbackOk),
+    reason: shutdownReady && readbackOk ? "hetzner_object_storage_shutdown_export_packet_ready" : "hetzner_object_storage_shutdown_export_packet_blocked",
+    exportId,
+    exportPrefix,
+    packetObjectKey,
+    manifestObjectKey,
+    checksumsObjectKey,
+    packetSha256: exportSha256,
+    readbackChecksumMatched: packetReadbackSha256 === exportSha256,
+    manifestReadbackPassed: manifestReadback.exportId === exportId,
+    privateR2OriginBucket: R2_ORIGIN_BUCKET,
+    publicPlaybackBucketUsed: false,
+    mediaDomainUsedForOriginals: false,
+    objectCount: inventory.length,
+    rawHetznerObjectStorageReferences: zeroRef.rawHetznerObjectStorageReferences,
+    resolvedHistoricalStaleRefs: zeroRef.resolvedHistoricalStaleRefs,
+    activeUnresolvedHetznerObjectRefs: zeroRef.activeUnresolvedHetznerObjectRefs,
+    unresolvedUnknownRefs: zeroRef.unresolvedUnknownRefs,
+    shutdownReadinessStatus: exportPayload.shutdownReadinessStatus,
+    hetznerFallbackRetained: true,
+    providerShutdownExecuted: false,
+    liveKitTouched: false,
+  };
+};
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: JSON_HEADERS, status: 200 });
   if (req.method !== "POST") return json(405, { ok: false, error: "method_not_allowed" });
@@ -1848,21 +2008,8 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    const sourceConfig = readLegacyS3Config();
-    if (!sourceConfig.config) return missingEnvResponse("legacy_s3_read_config_missing", sourceConfig.missing);
     const targetConfig = readR2OriginConfig();
     if (!targetConfig.config) return missingEnvResponse("r2_origin_write_config_missing", targetConfig.missing);
-    if (sourceConfig.config.bucket !== LEGACY_HETZNER_BUCKET) {
-      return json(409, {
-        ok: false,
-        action,
-        blocked: true,
-        reason: "unexpected_legacy_s3_bucket",
-        expectedBucket: LEGACY_HETZNER_BUCKET,
-        actualBucketMatchesExpected: false,
-        hetznerFallbackRetained: true,
-      });
-    }
     if (targetConfig.config.bucket !== R2_ORIGIN_BUCKET) {
       return json(409, {
         ok: false,
@@ -1875,6 +2022,32 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
+    if (action === "export_shutdown_packet") {
+      const exportPacket = await createShutdownExportPacket({
+        adminClient,
+        references,
+        targetConfig: targetConfig.config,
+      });
+      return json(exportPacket.ok ? 200 : 409, {
+        action,
+        summary,
+        ...exportPacket,
+      });
+    }
+
+    const sourceConfig = readLegacyS3Config();
+    if (!sourceConfig.config) return missingEnvResponse("legacy_s3_read_config_missing", sourceConfig.missing);
+    if (sourceConfig.config.bucket !== LEGACY_HETZNER_BUCKET) {
+      return json(409, {
+        ok: false,
+        action,
+        blocked: true,
+        reason: "unexpected_legacy_s3_bucket",
+        expectedBucket: LEGACY_HETZNER_BUCKET,
+        actualBucketMatchesExpected: false,
+        hetznerFallbackRetained: true,
+      });
+    }
     if (action === "reconcile_objects") {
       const reconciliation = await reconcileObjects(distinct, sourceConfig.config, targetConfig.config);
       const reconciliationSummary = summarizeReconciliation(reconciliation, Math.max(0, manifest.length - distinct.length));

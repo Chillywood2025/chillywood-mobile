@@ -263,6 +263,7 @@
     "media-object-storage:r2-apply-resolutions": "node ./scripts/media-object-storage-r2-migration.mjs --mode=apply-resolutions --source=backend",
     "media-object-storage:r2-backend-dry-run": "node ./scripts/media-object-storage-r2-migration.mjs --mode=dry-run --source=backend",
     "media-object-storage:r2-backup-metadata": "node ./scripts/media-object-storage-r2-migration.mjs --mode=backup-metadata --source=backend",
+    "media-object-storage:r2-shutdown-export": "node ./scripts/media-object-storage-r2-migration.mjs --mode=shutdown-export --source=backend",
     "media-object-storage:r2-copy-batch": "node ./scripts/media-object-storage-r2-migration.mjs --mode=copy --source=backend",
     "media-object-storage:r2-update-metadata": "node ./scripts/media-object-storage-r2-migration.mjs --mode=db-update --source=backend",
     "media-object-storage:r2-zero-hetzner": "node ./scripts/media-object-storage-r2-migration.mjs --mode=zero-hetzner --source=backend",

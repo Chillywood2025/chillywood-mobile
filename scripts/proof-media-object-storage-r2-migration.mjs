@@ -43,6 +43,8 @@ requireText(migrationFunction, "copy_batch", "migration copier copy-batch action
 requireText(migrationFunction, "verify_object", "migration copier verify action");
 requireText(migrationFunction, "update_metadata_dry_run", "migration copier metadata dry-run action");
 requireText(migrationFunction, "backup_storage_metadata", "migration copier storage metadata backup action");
+requireText(migrationFunction, "export_shutdown_packet", "migration copier final shutdown export action");
+requireText(migrationFunction, "backups/hetzner-object-storage-shutdown/", "migration copier private shutdown export prefix");
 requireText(migrationFunction, "update_metadata_batch", "migration copier metadata update action");
 requireText(migrationFunction, "rollback_metadata_batch", "migration copier rollback action");
 requireText(migrationFunction, "zero_ref_audit", "migration copier zero-ref action");
@@ -77,6 +79,7 @@ requireText(cli, "\"classify-stale\": \"classify_stale_refs\"", "migration CLI e
 requireText(cli, "\"resolution-plan\": \"resolve_stale_refs_dry_run\"", "migration CLI exposes backend stale resolution dry-run");
 requireText(cli, "\"apply-resolutions\": \"apply_stale_ref_resolutions\"", "migration CLI exposes backend stale resolution apply");
 requireText(cli, "\"backup-metadata\": \"backup_storage_metadata\"", "migration CLI exposes backend backup");
+requireText(cli, "\"shutdown-export\": \"export_shutdown_packet\"", "migration CLI exposes backend shutdown export");
 requireText(cli, "MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN", "migration CLI operator token env");
 requireText(cli, "media_object_migration_operator_token_missing", "migration CLI missing token fail-closed reason");
 requireText(cli, "rawServiceRoleRequired: false", "migration CLI does not need local service-role key");

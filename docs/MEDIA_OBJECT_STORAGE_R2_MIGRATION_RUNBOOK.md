@@ -1,6 +1,6 @@
 # Media Object Storage R2 Migration Runbook
 
-Status: Closed for shutdown readiness by active-reference semantics. Cloudflare R2 private origin bucket `chillywood-media-origin` exists and is the target for source/original media, and trusted backend copier Edge Function `media-object-storage-migration` is deployed. The missing R2 private-origin write config was added through a bucket-scoped R2 S3 credential stored as Supabase function secrets without printing values. Full reconciliation HEAD/checks exact, normalized-key, path-style, and alternate-key candidates. Of the original `22` distinct legacy refs, `16` existed and were copied/readback verified in R2 private origin, `5` were `missing_404`, `1` was `unsupported_provider`, duplicate row refs were detected, and `permission_denied_403=0`. A fresh affected storage-metadata backup/restore gate closed at private R2 prefix `backups/media-object-storage/storage-metadata-2026-07-10T21-26-24-644Z/`, then the transactional metadata RPC migrated `24` copied+verified row refs to `cloudflare_r2` / `chillywood-media-origin`. New creator-media upload origin now points to R2 private origin with Hetzner writes disabled and read fallback retained. A final stale-ref lane backed up metadata at `backups/media-object-storage/storage-metadata-2026-07-10T22-28-53-006Z/` and wrote audit-only resolution records for the `7` remaining raw `media_scan_jobs` Hetzner refs. They remain raw historical scan rows, but all are resolved non-active stale history, active unresolved refs are `0`, and shutdown readiness is true after owner-controlled fallback retention/export; in active-reference terms there are 0 Hetzner object-storage dependencies left. No Hetzner/S3 objects were deleted, and Hetzner LiveKit remains out of scope.
+Status: Closed for shutdown readiness by active-reference semantics, with final shutdown/export packet complete. Cloudflare R2 private origin bucket `chillywood-media-origin` exists and is the target for source/original media, and trusted backend copier Edge Function `media-object-storage-migration` is deployed. The missing R2 private-origin write config was added through a bucket-scoped R2 S3 credential stored as Supabase function secrets without printing values. Full reconciliation HEAD/checks exact, normalized-key, path-style, and alternate-key candidates. Of the original `22` distinct legacy refs, `16` existed and were copied/readback verified in R2 private origin, `5` were `missing_404`, `1` was `unsupported_provider`, duplicate row refs were detected, and `permission_denied_403=0`. A fresh affected storage-metadata backup/restore gate closed at private R2 prefix `backups/media-object-storage/storage-metadata-2026-07-10T21-26-24-644Z/`, then the transactional metadata RPC migrated `24` copied+verified row refs to `cloudflare_r2` / `chillywood-media-origin`. New creator-media upload origin now points to R2 private origin with Hetzner writes disabled and read fallback retained. A final stale-ref lane backed up metadata at `backups/media-object-storage/storage-metadata-2026-07-10T22-28-53-006Z/` and wrote audit-only resolution records for the `7` remaining raw `media_scan_jobs` Hetzner refs. They remain raw historical scan rows, but all are resolved non-active stale history, active unresolved refs are `0`, and shutdown readiness is true after owner-controlled fallback retention/export; in active-reference terms there are 0 Hetzner object-storage dependencies left. Final export `hetzner-object-storage-shutdown-2026-07-10T22-59-48-461Z` is stored privately under `backups/hetzner-object-storage-shutdown/2026/07/10/hetzner-object-storage-shutdown-2026-07-10T22-59-48-461Z/`. No Hetzner/S3 objects were deleted, and Hetzner LiveKit remains out of scope.
 
 ## Scope
 
@@ -122,6 +122,25 @@ The current resolution batch wrote `7` non-blocking private resolution rows and 
 
 12. Keep Hetzner fallback retained through a retention window.
 
+13. Write the final shutdown/export packet:
+
+```bash
+npm run media-object-storage:r2-shutdown-export
+```
+
+The current final shutdown/export packet is private in `chillywood-media-origin`:
+
+- Export id: `hetzner-object-storage-shutdown-2026-07-10T22-59-48-461Z`
+- Prefix: `backups/hetzner-object-storage-shutdown/2026/07/10/hetzner-object-storage-shutdown-2026-07-10T22-59-48-461Z/`
+- Packet: `hetzner-object-storage-shutdown-packet.json`
+- Manifest: `manifest.json`
+- Checksums: `sha256sums.txt`
+- Packet SHA-256: `1b91365b34218d50d33939620ed9bf5c3eac50352950f6ec6843a98e7bc761db`
+- Readback checksum: passed.
+- Public playback bucket used: false.
+- Provider shutdown executed: false.
+- Object keys: redacted/hash-only.
+
 ## Shutdown Gate
 
 Hetzner Object Storage may be prepared for owner-controlled shutdown only after all of these are true:
@@ -147,4 +166,10 @@ Full shutdown readiness is closed by active-reference semantics. The final audit
 
 The existing scan gateway remains intentionally narrower: it can read public-safe scan/transcode candidates and has R2 private-origin support for migrated rows, but it denies private and Premium media. It is not the all-object migration copier.
 
-Do not delete Hetzner objects inside normal app/media tasks. Hetzner Object Storage may be shut down only through an owner-controlled shutdown/export step after fallback retention is accepted. Do not remove fallback until that retention decision closes.
+## Fallback Decision Packet
+
+Option A is recommended: keep Hetzner Object Storage as read-only fallback for 7 days with writes disabled, monitor upload/scanner/transcode/playback health, then delete/cancel through an owner-controlled provider workflow.
+
+Option B is owner-approved immediate shutdown: the export packet is complete, active object-storage refs are zero, and the owner accepts no Hetzner fallback before manually shutting down/deleting/canceling the Object Storage resource.
+
+Do not delete Hetzner objects inside normal app/media tasks. Hetzner Object Storage may be shut down only through an owner-controlled provider step after the fallback decision is accepted. Do not remove fallback until that decision closes.

@@ -244,6 +244,8 @@ const handleBackendMode = async () => {
     "dry-run": "update_metadata_dry_run",
     backup: "backup_storage_metadata",
     "backup-metadata": "backup_storage_metadata",
+    "shutdown-export": "export_shutdown_packet",
+    "export-shutdown-packet": "export_shutdown_packet",
     copy: "copy_batch",
     run: "copy_batch",
     "db-update": "update_metadata_batch",
