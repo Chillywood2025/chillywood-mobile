@@ -23,6 +23,7 @@ export type MediaCatalogReadinessRow = {
   paid_or_premium_locked?: boolean | null;
   is_original_only?: boolean | null;
   has_audited_hls?: boolean | null;
+  unsupported_failed_job?: boolean | null;
 };
 
 export type MediaCatalogReadinessResult = {
@@ -103,6 +104,7 @@ export function classifyMediaCatalogReadiness(
   const premiumLocked = row.paid_or_premium_locked === true || visibility === "premium";
   const originalOnly = row.is_original_only === true;
   const alreadyAuditedHls = row.has_audited_hls === true;
+  const unsupportedFailedJob = row.unsupported_failed_job === true;
   const blockedReasons: string[] = [];
 
   let classification: MediaCatalogReadinessClassification = "ready_for_transcode";
@@ -124,6 +126,9 @@ export function classifyMediaCatalogReadiness(
   } else if (!isSupportedMimeType(row.mime_type)) {
     classification = "unsupported_format";
     blockedReasons.push("unsupported_format");
+  } else if (unsupportedFailedJob) {
+    classification = "unsupported_format";
+    blockedReasons.push("source_resolution_below_minimum_hls_rendition");
   } else if (BLOCKED_SCAN_STATUSES.has(scanStatus) || BLOCKED_MODERATION_STATUSES.has(moderationStatus)) {
     classification = "blocked_moderation";
     blockedReasons.push(BLOCKED_SCAN_STATUSES.has(scanStatus) ? "scan_blocked" : "moderation_blocked");

@@ -79,9 +79,11 @@ assert(runAutoMissingConfirm.output.reason === "auto_detect_batch_confirmation_m
 const runAutoWithConfirm = runCli(["--mode=run-auto"], {
   MEDIA_AUTOMATION_RUN_CONFIRM: "I_UNDERSTAND_AUTO_DETECT_BATCH",
 });
-assert(runAutoWithConfirm.status !== 0, "source-proof run-auto still fails closed");
-assert(runAutoWithConfirm.output.reason === "batch_execution_not_enabled_in_source_proof_build", "run-auto execution not enabled");
+assert(runAutoWithConfirm.status === 0, "fixture run-auto executes bounded safe batch simulation");
+assert(runAutoWithConfirm.output.executionMode === "fixture_simulated", "fixture run-auto does not write production rows");
 assert(runAutoWithConfirm.output.futureConfirmationPassed === true, "confirmation was recognized");
+assert(runAutoWithConfirm.output.auditPassed === true, "fixture run-auto models audit pass");
+assert(runAutoWithConfirm.output.productionRowsWritten === false, "fixture run-auto writes no production rows");
 
 const auditDenied = runCli(["--mode=audit"]);
 assert(auditDenied.status !== 0, "audit requires batch/source scope");
@@ -144,7 +146,7 @@ const summary = {
   calculatedBatchSize: planAuto.output.calculatedBatchSize,
   dryRunWritesNothing: dryRunAuto.output.productionRowsWritten === false,
   runAutoRequiresConfirmation: runAutoMissingConfirm.output.reason,
-  runAutoFailClosedAfterConfirmation: runAutoWithConfirm.output.reason,
+  runAutoBoundedExecution: runAutoWithConfirm.output.executionMode,
   auditRequiresScope: auditDenied.output.reason,
   rollbackScoped: rollback.output.broadDeleteAllowed === false,
   broadPrefixDenied: rollbackBroad.output.reason,

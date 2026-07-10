@@ -117,6 +117,7 @@ const rows = [
   { source_type: "creator_video", source_id: "original", visibility: "public", scan_status: "clean", moderation_status: "allowed", mime_type: "video/mp4", source_present: true, is_original_only: true },
   { source_type: "creator_video", source_id: "missing", visibility: "public", scan_status: "clean", moderation_status: "allowed", mime_type: "video/mp4", source_present: false },
   { source_type: "creator_video", source_id: "unsupported", visibility: "public", scan_status: "clean", moderation_status: "allowed", mime_type: "application/octet-stream", source_present: true },
+  { source_type: "creator_video", source_id: "unsupported-low-res", visibility: "public", scan_status: "clean", moderation_status: "allowed", mime_type: "video/mp4", source_present: true, unsupported_failed_job: true },
   { source_type: "creator_video", source_id: "blocked", visibility: "public", scan_status: "clean", moderation_status: "blocked", mime_type: "video/mp4", source_present: true },
   { source_type: "creator_video", source_id: "denied", visibility: "public", scan_status: "clean", moderation_status: "allowed", mime_type: "video/mp4", source_present: true },
   {
@@ -153,6 +154,7 @@ try {
   assert(byId.get("blocked").classification === "blocked_moderation", "moderation blocked stays blocked");
   assert(byId.get("missing").classification === "missing_source", "missing source classified");
   assert(byId.get("unsupported").classification === "unsupported_format", "unsupported format classified");
+  assert(byId.get("unsupported-low-res").classification === "unsupported_format", "low-resolution failed job classified unsupported");
   assert(byId.get("already-audited").classification === "already_audited_hls", "already audited HLS classified");
   assert(byId.get("original").classification === "original_master_excluded", "original/master excluded");
   assert(byId.get("denied").classification === "denied_source", "denied source classified");

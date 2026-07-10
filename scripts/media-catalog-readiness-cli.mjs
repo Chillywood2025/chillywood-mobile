@@ -182,7 +182,15 @@ catalog as (
           )
       )
     ) as paid_or_premium_locked,
-    exists (select 1 from trusted_hls h where h.source_id = v.id::text) as has_audited_hls
+    exists (select 1 from trusted_hls h where h.source_id = v.id::text) as has_audited_hls,
+    exists (
+      select 1
+      from public.media_transcode_jobs j
+      where j.source_type = 'creator_video'
+        and j.source_id = v.id::text
+        and j.status = 'failed'
+        and j.error_code in ('source_resolution_below_minimum_hls_rendition')
+    ) as unsupported_failed_job
   from public.videos v
 )
 select json_agg(to_jsonb(catalog) order by title, source_id) as catalog

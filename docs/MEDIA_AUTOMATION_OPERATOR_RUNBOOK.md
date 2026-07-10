@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-09
 
-Status: source/proofed automation architecture only. No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live. Production playback remains controlled by audited public `media_renditions` eligibility, kill switch, rollout mode, and signed-origin fallback.
+Status: CLI auto-detect bounded execution is live for safe Level 0/1 candidates, while daemon/cron/scheduler/continuous automation remains off. No daemon, cron, scheduler, GitHub Actions schedule, deployed production worker, broad backfill, queue processor, or continuous worker is live. Production playback remains controlled by audited public `media_renditions` eligibility, kill switch, rollout mode, and signed-origin fallback.
 
 continuous limited automation is source/proofed/templates only. The new queue processor, backfill policy, systemd service template, systemd timer template, `run-continuous-once` CLI surface, and report command do not start a daemon, cron, scheduler, queue processor, or media worker. They exist to prove the safe operating model before any future activation.
 
@@ -12,14 +12,14 @@ Safe Level 0/1 media operations should not require owner approval when they stay
 
 The automation operator is the scale path for many public-safe creator videos after scan, moderation, backup, transcode, upload, audit, telemetry, and rollback gates pass. City Lights remains the canary proof, not the final hardcoded model.
 
-Normal CLI operation is auto-detect: the owner does not manually pick every source id and does not manually choose the batch size. The CLI discovers eligible public-safe candidates, calculates a safe adaptive batch size from backup/restore freshness plus recent success/failure state, plans exact job and rollback scopes, and still requires explicit confirmation before any future run path.
+Normal CLI operation is auto-detect: the owner does not manually pick every source id and does not manually choose the batch size. The CLI discovers eligible public-safe candidates, calculates a safe adaptive batch size from backup/restore freshness plus recent success/failure state, plans exact job and rollback scopes, and can execute one bounded batch only after confirmation and every safety gate passes.
 
 ## Modes
 
 - `off`: default. Discovery/status can run, but no jobs are planned, written, or processed.
 - `dry_run`: reads fixture or catalog state and builds plans only. It writes nothing and uploads nothing.
 - `auto_detect`: discovers eligible candidates and builds an adaptive plan only. It writes nothing and uploads nothing.
-- `auto_detect_run`: future CLI run path for one automatically planned safe batch only. It requires explicit confirmation, fresh backup/restore gate, no active unfinished jobs, no unsafe CDN rows, dry-run pass, calculated positive batch size, and emergency stop off.
+- `auto_detect_run`: CLI run path for one automatically planned safe batch only. It requires explicit confirmation, fresh backup/restore gate, no active unfinished jobs, no unsafe CDN rows, dry-run pass, calculated positive batch size, scoped rollback plan, and emergency stop off.
 - `one_job`: processes exactly one explicitly allowlisted source after a fresh backup gate and owner approval.
 - `batch`: processes a capped batch only after owner approval, backup gate closure, rollback scope, and audit rules.
 - `continuous_limited`: future mode only. It requires scheduled private R2 backup, fresh restore drill, owner approval, max concurrency, max jobs per run, retry cap, dead-letter/quarantine, telemetry, rollback, and audit pass before resolver trust.
@@ -62,7 +62,7 @@ npm run media-automation:emergency-stop
 npm run media-automation:report
 ```
 
-`media-automation:plan-auto` and `media-automation:dry-run-auto` require no manual source id and no manual batch-size input for normal operation. `media-automation:run-auto` is intentionally fail-closed unless a future confirmed run provides `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_AUTO_DETECT_BATCH` and every backup, restore, active-job, unsafe-row, dry-run, audit, rollback, and emergency-stop gate passes. Legacy `plan-batch` / `dry-run-batch` / `run-batch` aliases remain for compatibility and still recognize `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION`; they still do not deploy a worker or scheduler. This task does not enable run execution.
+`media-automation:plan-auto` and `media-automation:dry-run-auto` require no manual source id and no manual batch-size input for normal operation. `media-automation:run-auto` is intentionally fail-closed unless a confirmed run provides `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_AUTO_DETECT_BATCH` and every backup, restore, active-job, unsafe-row, dry-run, audit, rollback, and emergency-stop gate passes. Legacy `plan-batch` / `dry-run-batch` / `run-batch` aliases remain for compatibility and still recognize `MEDIA_AUTOMATION_RUN_CONFIRM=I_UNDERSTAND_BATCH_AUTOMATION`; they still do not deploy a worker or scheduler. The first bounded production run-auto cycle processed four supported public-safe candidates, recorded one unsupported 320x180 failed-job marker, and stopped with no eligible work remaining.
 
 `media-automation:run-continuous-once` is a bounded future continuous-limited loop command, not a daemon. In this source/proof build it still fails closed without `MEDIA_AUTOMATION_CONTINUOUS_ONCE_CONFIRM=I_UNDERSTAND_ONE_CONTINUOUS_LIMITED_CYCLE`, and even after confirmation it may not process media until backup, restore drill, audit, rollback, telemetry, kill-switch, output validation, and unsafe-row gates pass in a future activation lane. Broad backfill requires `MEDIA_AUTOMATION_BROAD_BACKFILL_CONFIRM=I_UNDERSTAND_BROAD_BACKFILL_RISK` plus Level 3 owner approval.
 
@@ -89,7 +89,7 @@ Historical pre-scan read-only linked run on 2026-07-09:
 
 `run-auto` was not executed. No media was processed or uploaded, no production rows were written, and playback scope did not change.
 
-That Pass-No-op state is superseded by the trusted scanner gateway proof. Current post-scan auto-discovery finds `eligible_needs_transcode=5`, `eligible_already_has_audited_hls=1`, `excluded_private=12`, `excluded_premium=9`, and zero unscanned, original/master, moderation-blocked, missing-source, unsupported, active-job, denied, or already-processed rows. `plan-auto` / `dry-run-auto` calculate `calculatedBatchSize=1`, `riskLevel=low`, and one scoped candidate. `media-automation:run-auto` remains fail-closed at `batch_execution_not_enabled_in_source_proof_build`; no transcode job, new rendition row, R2/HLS output, daemon/cron/scheduler/queue processor, or playback broadening is live.
+That Pass-No-op state is superseded by the trusted scanner gateway plus bounded auto-transcode proof. Post-scan auto-discovery initially found `eligible_needs_transcode=5`; `media-automation:run-auto` processed four supported safe candidates one at a time under the first-run cap of `1`, uploaded HLS to `playback/public/auto/`, wrote/audited/promoted service-owned rows, and verified public HLS fetch/decode. Final auto-discovery finds `eligible_needs_transcode=0`, `eligible_already_has_audited_hls=5`, `excluded_private=12`, `excluded_premium=9`, `excluded_unsupported_format=1`, and zero unscanned, original/master, moderation-blocked, missing-source, active-job, denied, or already-processed rows. No daemon, cron, scheduler, queue processor, broad backfill, or playback fallback removal is live.
 
 ## Catalog Readiness
 
@@ -101,13 +101,13 @@ npm run media-catalog:readiness-plan
 npm run media-catalog:scan-plan
 ```
 
-`_lib/mediaCatalogReadiness.ts` and `scripts/media-catalog-readiness-cli.mjs` classify rows as `ready_for_transcode`, `already_audited_hls`, `needs_scan`, `needs_moderation_review`, `private_excluded`, `premium_excluded`, `original_master_excluded`, `missing_source`, `unsupported_format`, `blocked_moderation`, or `denied_source`. After the trusted scanner gateway proof, linked readback scanned `27` rows and found `ready_for_transcode=5`, `already_audited_hls=1`, `needs_scan=0`, `private_excluded=12`, `premium_excluded=9`, and zero moderation-review, original/master, missing-source, unsupported, blocked, or denied rows.
+`_lib/mediaCatalogReadiness.ts` and `scripts/media-catalog-readiness-cli.mjs` classify rows as `ready_for_transcode`, `already_audited_hls`, `needs_scan`, `needs_moderation_review`, `private_excluded`, `premium_excluded`, `original_master_excluded`, `missing_source`, `unsupported_format`, `blocked_moderation`, or `denied_source`. After the trusted scanner and bounded transcode cycle, linked readback scanned `27` rows and found `ready_for_transcode=0`, `already_audited_hls=5`, `needs_scan=0`, `private_excluded=12`, `premium_excluded=9`, `unsupported_format=1`, and zero moderation-review, original/master, missing-source, blocked, or denied rows.
 
 The five former `needs_scan` rows are now ready for transcode under the existing scan/moderation gates. The catalog readiness CLI still does not execute scans, mark media clean, write production rows, process/transcode media, or switch playback. Unscanned or manual-review media may become transcode candidates only after trusted scanner proof and moderation-safe readback. Private and Premium media remain excluded from the public transcode path.
 
 Scan automation status: `_lib/mediaScanAutomation.ts`, `scripts/media-scan-cli.mjs`, `supabase/functions/media-scan-private-access`, `npm run proof:media-scan-private-access`, `npm run proof:media-scan-automation`, and `npm run proof:media-scan-auto-cycle` now close the public scan-candidate readiness step. The CLI supports `media-scan:status`, `media-scan:plan`, `media-scan:dry-run`, `media-scan:run-one`, `media-scan:run-auto`, and `media-scan:audit`. It uses linked catalog queries by default, redacts private/Premium excluded rows, and never transcodes or switches playback. The implemented scanner proof is ffprobe media-readability only; it must not be described as malware scanning or moderation. The backend gateway uses a narrow scanner operator token with only `MEDIA_SCAN_OPERATOR_TOKEN_SHA256` stored server-side, streams S3/Hetzner and Supabase Storage source bytes through backend authority, never returns signed URLs, and writes clean/failed scan results only with scanner name/version plus ffprobe proof. The first production scan batch scanned five public candidates, skipped `12` private and `9` Premium rows, and promoted those five rows to `ready_for_transcode` under existing scan/moderation gates.
 
-First post-scan auto-transcode attempt: `media-automation:discover` found `eligible_needs_transcode=5` and `eligible_already_has_audited_hls=1`; `media-automation:plan-auto` calculated a safe first batch size of `1`; `media-automation:dry-run-auto` built a no-write plan. `media-automation:run-auto` still fails closed with `batch_execution_not_enabled_in_source_proof_build`, so no transcode job, new rendition row, R2/HLS output, playback broadening, daemon, cron, scheduler, or queue processor is live.
+First post-scan auto-transcode cycle: `media-automation:discover` found `eligible_needs_transcode=5` and `eligible_already_has_audited_hls=1`; `media-automation:plan-auto` calculated a safe first batch size of `1`; `media-automation:dry-run-auto` built a no-write plan. Confirmed `media-automation:run-auto` processed four supported safe candidates, audited/promoted two HLS renditions per source, and stopped when discovery returned `eligible_needs_transcode=0`. One 320x180 source is classified `excluded_unsupported_format` for the current minimum HLS ladder. No daemon, cron, scheduler, queue processor, broad backfill, private/Premium processing, or fallback removal is live.
 
 ## Backup Gate
 

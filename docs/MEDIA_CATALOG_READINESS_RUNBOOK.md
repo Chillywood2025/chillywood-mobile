@@ -71,7 +71,7 @@ The proof run generated a scanner operator token, stored only its SHA-256 as a S
 Latest production catalog readiness readback after the trusted gateway scan proof on 2026-07-09:
 
 - `totalRows=27`
-- `ready_for_transcode=5`
+- `ready_for_transcode=0`
 - `already_audited_hls=1`
 - `needs_scan=0`
 - `needs_moderation_review=0`
@@ -115,7 +115,7 @@ Production scan write status: closed for the first public scan batch proof. `med
 
 ## First Autonomous Cycle Attempt
 
-The first full autonomous readiness -> scan -> transcode -> audit -> CDN/HLS cycle attempt is Partial at the transcode execution gate. Backup verification, restore drill, worker preflight, automation status, and catalog readiness preflight passed. `media-scan:run-auto` selected all five public non-Premium scan candidates, skipped `12` private plus `9` Premium rows, streamed the objects through the backend gateway, ran ffprobe media-readability, and wrote trusted clean scan results for exactly those five rows. Readiness then showed `ready_for_transcode=5` and `needs_scan=0`. Auto-discovery found `eligible_needs_transcode=5`, planned a safe batch size of `1`, and dry-run passed. `media-automation:run-auto` still failed closed with `batch_execution_not_enabled_in_source_proof_build`; no transcode job, new rendition row, HLS output, or playback scope change occurred.
+The first full autonomous readiness -> scan -> transcode -> audit -> CDN/HLS cycle is Closed for current safe work. Backup verification, restore drill, worker preflight, automation status, and catalog readiness preflight passed. `media-scan:run-auto` selected all five public non-Premium scan candidates, skipped `12` private plus `9` Premium rows, streamed the objects through the backend gateway, ran ffprobe media-readability, and wrote trusted clean scan results for exactly those five rows. `media-automation:run-auto` then processed four supported safe candidates in bounded batches, uploaded HLS output under `playback/public/auto/`, audited/promoted rows, and verified public HLS fetch/decode. The fifth candidate is 320x180, below the current 360p minimum ladder, so it is now classified `unsupported_format` and has only a scoped failed job marker with no HLS upload or rendition row. Final readiness shows `ready_for_transcode=0`, `already_audited_hls=5`, `needs_scan=0`, `private_excluded=12`, `premium_excluded=9`, and `unsupported_format=1`.
 
 ## Safety Rules
 

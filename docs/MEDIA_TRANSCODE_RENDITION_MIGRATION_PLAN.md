@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-09
 
-Status: production schema applied, with one scoped owner-approved proof job. Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` was applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`), with tables/indexes/RLS/policies/grants read back afterward. The first controlled City Lights one-job proof wrote exactly one `media_transcode_jobs` row and two audited `media_renditions` rows. This plan does not switch production playback, does not migrate existing videos broadly, does not backfill media rows, and does not make a production transcode worker live.
+Status: production schema applied, with scoped audited rows from the City Lights one-job proof plus the bounded CLI auto-detect cycle. Migration `supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql` was applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`), with tables/indexes/RLS/policies/grants read back afterward. Current production counts are `media_transcode_jobs=6`, `media_renditions=10`, `active_unfinished_jobs=0`, and `unsafe_cdn_rows=0`. This plan does not switch production playback broadly, does not migrate existing videos blindly, does not backfill media rows broadly, and does not make a production transcode worker live.
 
 ## Current DB Audit
 
@@ -165,9 +165,9 @@ The migration creates:
 
 Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`); tables/indexes/RLS/policies/grants were read back and both `media_transcode_jobs` and `media_renditions` had row count 0 after the rollback-only runtime policy proof.
 
-Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, deployed production transcode worker, broad queue processor, private/Premium public-CDN path, or broad playback migration is live.
+Production data/write boundary after the bounded CLI auto-detect cycle: City Lights plus four public-safe auto-detected sources have audited HLS rows, and one 320x180 source has a scoped unsupported failed-job marker with no uploaded objects or rendition rows. No production media backfill, production `video_renditions` write, deployed production transcode worker, broad queue processor, private/Premium public-CDN path, or broad playback migration is live.
 
-Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes, allowed service-role/worker proof writes, verified resolver-safe select for one clean public-ready proof row, verified unsafe/original/Premium/private/non-public-prefix rows failed eligibility, and rolled back. Final production row counts from that migration proof returned to `media_transcode_jobs=0` and `media_renditions=0`; current production row counts after the later one-job proof are `media_transcode_jobs=1` and `media_renditions=2`, scoped only to City Lights source `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`.
+Production runtime policy proof: a rollback-only production transaction denied anon/authenticated trusted writes, allowed service-role/worker proof writes, verified resolver-safe select for one clean public-ready proof row, verified unsafe/original/Premium/private/non-public-prefix rows failed eligibility, and rolled back. Final production row counts from that migration proof returned to `media_transcode_jobs=0` and `media_renditions=0`; current production row counts after the later one-job proof plus bounded CLI auto-detect cycle are `media_transcode_jobs=6` and `media_renditions=10`.
 
 ## Dry-Run Status
 
@@ -250,7 +250,7 @@ Scheduled R2 logical backup gate: source-proofed policy only. `_lib/mediaRecover
 6. One-job logical recovery gate: Closed for the completed City Lights proof with exact source allowlist, operator lease, auditor pass, rollback drill, and no playback switch.
 7. Scheduled R2 logical backup gate: source-proofed only; limited automation remains disabled until owner approval, scheduler deployment, recurring private backup readback, and recurring restore-drill proof exist.
 8. Operator-controlled one-job safety: source/proof complete and used for one approved scoped production proof; additional production use still requires explicit approval.
-9. Trusted rows for a limited allowlisted source only: complete for City Lights proof rows only (`media_transcode_jobs=1`, `media_renditions=2`); any additional source still requires explicit owner approval and the CLI checklist.
+9. Trusted rows for safe Level 0/1 audited public media: complete for City Lights plus four bounded auto-detected public-safe sources (`media_transcode_jobs=6`, `media_renditions=10`); future batches remain capped, audited, rollback-scoped, and blocked for private/Premium/original/unscanned/moderation-blocked media.
 10. Resolver migration behind disabled config: staged/proofed only; no global production resolver switch or default creator-video CDN/HLS playback is live.
 11. Cache HIT and telemetry proof for the migrated source: cache HIT is proved for exact public proof prefixes, including the City Lights worker-proof segment prefix; telemetry remains source/proof-only and production egress savings are not claimed.
 12. Signed-origin fallback proof: closed as the current default boundary; existing creator-video playback keeps signed-origin fallback unless audited-row rollout gates pass.

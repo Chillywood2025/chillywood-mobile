@@ -148,15 +148,15 @@ assertIncludes(vodDoc, "`npm run backup:media-worker:status`, `npm run backup:me
 assertIncludes(vodDoc, "`MEDIA_BACKUP_EXPORT_MODE=auto|pg_dump|js` supports JS SELECT export fallback without local `pg_dump`/`psql`", "VOD doc backup runner JS export");
 assertIncludes(vodDoc, "`MEDIA_BACKUP_DATABASE_SOURCE=linked` uses Supabase CLI linked read-only queries instead of requiring or printing a raw DB URL.", "VOD doc backup runner linked DB source");
 assertIncludes(vodDoc, "`npm run proof:media-worker-backup-runner` proves dry-run, fail-closed write mode, linked-source no-raw-DB-URL behavior, public bucket/domain denial, manifest/checksum generation, JS JSONL restore into disposable PGlite, and resolver-safe query.", "VOD doc backup runner proof");
-assertIncludes(vodDoc, "The first real manual backup completed on 2026-07-09 under private R2 prefix `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`", "VOD doc completed real backup");
-assertIncludes(vodDoc, "`npm run proof:media-scheduled-backup-gate` proves no backup, stale backup, or missing restore drill blocks automation", "VOD doc scheduled backup proof");
+assertIncludes(vodDoc, "Latest backup after the bounded auto-transcode cycle is `backups/media-worker/2026/07/10/media-worker-logical-20260710T003002-02eab4b4c5cd/` with row counts `media_transcode_jobs=6` and `media_renditions=10`.", "VOD doc completed real backup");
+assertIncludes(vodDoc, "`npm run proof:media-worker-backup-runner` proves dry-run, fail-closed write mode, linked-source no-raw-DB-URL behavior, public bucket/domain denial, manifest/checksum generation, JS JSONL restore into disposable PGlite, and resolver-safe query.", "VOD doc backup runner proof");
 assertIncludes(vodDoc, "No GitHub Actions workflow, cron, scheduler, worker enablement, or production playback switch exists for this lane, and this is logical backup/restore only, not PITR.", "VOD doc scheduled backup safety boundary");
-assertIncludes(vodDoc, "Trusted backend migration schema is applied to production and contains only the first controlled City Lights proof rows.", "VOD doc trusted migration one-job rows");
+assertIncludes(vodDoc, "Trusted backend migration schema is applied to production and now contains audited media-worker rows from City Lights plus the bounded CLI auto-detect cycle", "VOD doc trusted migration one-job rows");
 assertIncludes(vodDoc, "Trusted backend migration dry-run passes in the embedded disposable local Postgres runtime, and production rollback-only RLS proof passed with final row counts back to zero.", "VOD doc trusted migration proof checkpoint");
 
-assertIncludes(mediaMigrationPlan, "Status: production schema applied, with one scoped owner-approved proof job.", "trusted rendition migration plan status");
+assertIncludes(mediaMigrationPlan, "Status: production schema applied, with scoped audited rows from the City Lights one-job proof plus the bounded CLI auto-detect cycle.", "trusted rendition migration plan status");
 assertIncludes(mediaMigrationPlan, "Production schema migration status: applied to production on 2026-07-09 for project `bmkkhihfbmsnnmcqkoly` (`Chillywood2025's Project`);", "trusted rendition migration plan production schema status");
-assertIncludes(mediaMigrationPlan, "Production data/write boundary after the first one-job proof: exactly one allowlisted City Lights proof job and two audited HLS rendition rows exist in `media_transcode_jobs`/`media_renditions`; no production media backfill, production `video_renditions` write, deployed production transcode worker, broad queue processor, private/Premium public-CDN path, or broad playback migration is live.", "trusted rendition migration plan production data boundary");
+assertIncludes(mediaMigrationPlan, "Production data/write boundary after the bounded CLI auto-detect cycle: City Lights plus four public-safe auto-detected sources have audited HLS rows, and one 320x180 source has a scoped unsupported failed-job marker with no uploaded objects or rendition rows.", "trusted rendition migration plan production data boundary");
 assertIncludes(mediaMigrationPlan, "`service_role` / backend worker is the only intended writer", "trusted rendition migration plan service role writer");
 assertIncludes(mediaMigrationPlan, "Public CDN eligibility must never come from app/client input", "trusted rendition migration plan client trust boundary");
 assertIncludes(mediaMigrationPlan, "Clients cannot mark rows ready.", "trusted rendition migration plan ready write block");
@@ -241,7 +241,7 @@ assertIncludes(mediaCdnRolloutPlanner, "mutationAttempted: false", "media CDN pl
 assertNotMatches(mediaPlaybackCdnEligibility, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|XMLHttpRequest|createClient)\b/, "trusted audited CDN helper must not perform network or database writes");
 assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
 assertIncludes(vodDoc, "## Media Automation Operator Foundation", "VOD doc media automation section");
-assertIncludes(mediaAutomationOperatorRunbook, "Status: source/proofed automation architecture only.", "media automation runbook proof-only status");
+assertIncludes(mediaAutomationOperatorRunbook, "Status: CLI auto-detect bounded execution is live for safe Level 0/1 candidates, while daemon/cron/scheduler/continuous automation remains off.", "media automation runbook bounded execution status");
 assertIncludes(mediaAutomationOperatorRunbook, "Normal CLI operation is auto-detect: the owner does not manually pick every source id and does not manually choose the batch size.", "media automation runbook auto-detect normal operation");
 assertIncludes(mediaAutomationOperatorRunbook, "continuous limited automation is source/proofed/templates only", "media automation runbook continuous template boundary");
 assertIncludes(mediaAutomationOperatorRunbook, "Safe Level 0/1 media operations should not require owner approval", "media automation runbook autonomy boundary");
@@ -364,7 +364,9 @@ assertIncludes(mediaAutomationCli, "\"run-continuous-once\"", "media automation 
 assertIncludes(mediaAutomationCli, "\"report\"", "media automation CLI report");
 assertIncludes(mediaAutomationCli, "manualSourceIdsRequired: false", "media automation CLI no manual source ids");
 assertIncludes(mediaAutomationCli, "manualBatchSizeRequired: false", "media automation CLI no manual batch size");
-assertIncludes(mediaAutomationCli, "batch_execution_not_enabled_in_source_proof_build", "media automation CLI fail closed");
+assertNotIncludes(mediaAutomationCli, "batch_execution_not_enabled_in_source_proof_build", "media automation CLI no source-proof-only execution gate");
+assertIncludes(mediaAutomationCli, "linked_real_bounded_auto_batch", "media automation CLI real bounded auto execution");
+assertIncludes(mediaAutomationCli, "fixture_simulated", "media automation CLI fixture proof execution");
 assertIncludes(mediaAutomationControllerProof, "defaultOff", "media automation controller proof default off");
 assertIncludes(mediaAutomationControllerProof, "autoDetectRunRequiresConfirmation", "media automation controller proof auto run confirmation");
 assertIncludes(mediaAutomationDiscoveryProof, "eligible_needs_transcode", "media automation discovery proof eligible classification");
@@ -386,7 +388,11 @@ assertIncludes(mediaAutomationCliProof, "manualSourceIdsRequired", "media automa
 assertIncludes(mediaAutomationBatchPlannerProof, "oneThousandEligibleFixtureRows", "media automation batch proof scale rows");
 assertIncludes(mediaAutomationWorkerLoopProof, "auditPassResolverEligible", "media automation worker proof audit pass");
 assertIncludes(mediaAutomationWorkerLoopProof, "auditFailureQuarantine", "media automation worker proof quarantine");
-assertNotMatches(mediaAutomationCli, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media automation CLI must not mutate DB");
+assertNotMatches(mediaAutomationCli, /\b(?:upsert\s*\(|delete\s*\(|createClient)\b/i, "media automation CLI must not use broad client mutation APIs");
+assertIncludes(mediaAutomationCli, "linked_real_bounded_auto_batch", "media automation CLI linked bounded execution");
+assertIncludes(mediaAutomationCli, "insertJobRow", "media automation CLI scoped job insert helper");
+assertIncludes(mediaAutomationCli, "insertPendingRenditionRows", "media automation CLI pending rendition insert helper");
+assertIncludes(mediaAutomationCli, "auditAndPromoteRows", "media automation CLI audit-gated promotion helper");
 assertNotMatches(mediaAutomationController + mediaAutomationDiscovery + mediaAutomationBatchPolicy + mediaAutomationJobs + mediaAutomationWorkerLoop + mediaAutomationBackfillPolicy + mediaAutomationQueueProcessor, /\b(?:supabase\.from|insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|fetch\s*\(|XMLHttpRequest|createClient)\b/i, "media automation helpers must not perform network or database writes");
 assertIncludes(mediaTranscodeOperator, "MEDIA_TRANSCODE_OPERATOR_DEFAULT_MODE: MediaTranscodeOperatorMode = \"disabled\"", "media transcode operator disabled default");
 assertIncludes(mediaTranscodeOperator, "emergency_stop_always_blocks", "media transcode operator emergency stop");

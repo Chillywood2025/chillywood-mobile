@@ -7,11 +7,11 @@ Status: controlled rollout guide for audited public-safe Cloudflare R2/HLS playb
 ## Current Scope
 
 - City Lights remains the canary source: `c28e3838-7d2e-4f48-a8ad-73e3100f8cf1`.
-- Existing production media-worker rows: `media_transcode_jobs=1`, `media_renditions=2`.
+- Existing production media-worker rows: `media_transcode_jobs=6`, `media_renditions=10`.
 - Current worker-proof HLS prefix: `playback/public/worker-proof/chillywood-city-lights/worker-one-job-20260709-b81c7b1423c6/`.
-- Latest private backup prefix: `backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/`.
+- Latest private backup prefix: `backups/media-worker/2026/07/10/media-worker-logical-20260710T003002-02eab4b4c5cd/`.
 - Continuous worker automation and broad backfill remain blocked.
-- Active rollout scope: trusted audited public-safe rows only; currently production row counts are `media_transcode_jobs=1`, `media_renditions=2`, `unsafe_cdn_rows=0`, and `other_source_renditions=0`.
+- Active rollout scope: trusted audited public-safe rows only; currently production row counts are `media_transcode_jobs=6`, `media_renditions=10`, `unsafe_cdn_rows=0`, and `other_source_renditions=8`.
 - First Batch 1 candidate plan: `docs/MEDIA_CDN_BATCH_1_CANDIDATE_PLAN.md` is historical. Current linked CLI readiness readback found `27` creator-video rows, `1` already eligible audited CDN/HLS source, `0` ready-for-transcode rows, `5` public scan candidates, `12` private/non-public rows, and `9` Premium rows. Batch 1 is empty until scanner proof and moderation-safe readback make new public-safe rows eligible.
 
 ## Rollout Modes

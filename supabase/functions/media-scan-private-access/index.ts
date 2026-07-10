@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-type GatewayAction = "audit_candidate" | "download" | "record_scan_result";
+type GatewayAction = "audit_candidate" | "download" | "transcode_download" | "record_scan_result";
 type SupabaseClient = any;
 
 type GatewayPayload = {
@@ -39,6 +39,7 @@ const JSON_HEADERS = {
 
 const textEncoder = new TextEncoder();
 const PUBLIC_SCAN_PENDING_STATUSES = new Set(["", "pending", "pending_scan", "scanning", "manual_review", "unscanned"]);
+const PUBLIC_SCAN_CLEAN_STATUSES = new Set(["clean", "approved"]);
 const BLOCKED_SCAN_STATUSES = new Set(["malware", "malware_detected", "quarantined"]);
 const PUBLIC_MODERATION_STATUSES = new Set(["clean", "approved", "allowed"]);
 const BLOCKED_MODERATION_STATUSES = new Set(["blocked", "hidden", "removed", "banned", "rejected"]);
@@ -92,7 +93,7 @@ const authenticateScanner = async (req: Request) => {
 
 const normalizeAction = (value: unknown): GatewayAction | null => {
   const action = toLowerText(value);
-  if (action === "audit_candidate" || action === "download" || action === "record_scan_result") return action;
+  if (action === "audit_candidate" || action === "download" || action === "transcode_download" || action === "record_scan_result") return action;
   return null;
 };
 
@@ -255,7 +256,6 @@ const hasAuditedHls = async (adminClient: SupabaseClient, sourceId: string) => {
     .eq("visibility", "public")
     .eq("is_original", false)
     .eq("bucket_role", "public_playback")
-    .eq("audit_status", "passed")
     .like("public_playback_path", "playback/public/%")
     .limit(1)
     .maybeSingle();
@@ -274,7 +274,7 @@ const validateCandidate = async (
   adminClient: SupabaseClient,
   sourceType: string,
   sourceId: string,
-  options: { requirePendingScan: boolean },
+  options: { requirePendingScan: boolean; requireCleanScan?: boolean },
 ) => {
   const read = await readCandidate(adminClient, sourceType, sourceId);
   if ("error" in read) return read;
@@ -290,6 +290,9 @@ const validateCandidate = async (
   if (BLOCKED_SCAN_STATUSES.has(toLowerText(candidate.scan_status))) blockedReasons.push("scan_blocked");
   if (options.requirePendingScan && !PUBLIC_SCAN_PENDING_STATUSES.has(toLowerText(candidate.scan_status))) {
     blockedReasons.push("scan_not_pending");
+  }
+  if (options.requireCleanScan && !PUBLIC_SCAN_CLEAN_STATUSES.has(toLowerText(candidate.scan_status))) {
+    blockedReasons.push("scan_not_clean");
   }
   if (await hasAuditedHls(adminClient, sourceId)) blockedReasons.push("already_audited_hls");
   if (!isSupportedMimeType(candidate.mime_type)) blockedReasons.push("unsupported_mime_type");
@@ -488,7 +491,8 @@ Deno.serve(async (req): Promise<Response> => {
     if (!sourceId) return json(400, { error: "invalid_source_id" });
 
     const validation = await validateCandidate(adminClient, sourceType, sourceId, {
-      requirePendingScan: action !== "audit_candidate",
+      requirePendingScan: action === "download" || action === "record_scan_result",
+      requireCleanScan: action === "transcode_download",
     });
     if ("error" in validation) return validation.error ?? json(403, { error: "candidate_not_scannable" });
     const validated = validation as { candidate: ScanCandidate; storage: { provider: string; bucket: string; objectKey: string } };
@@ -503,7 +507,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    if (action === "download") {
+    if (action === "download" || action === "transcode_download") {
       if (storage.provider === "s3") return streamS3Object(storage);
       if (storage.provider === "supabase") return streamSupabaseStorageObject(supabaseUrl, serviceRoleKey, storage);
       return json(403, { error: "unsupported_storage_provider" });

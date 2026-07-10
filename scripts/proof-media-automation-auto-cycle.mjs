@@ -68,6 +68,14 @@ assert(deniedRun.status !== 0, "run-auto denied without confirmation");
 assert(deniedRun.output.reason === "auto_detect_batch_confirmation_missing", "run-auto requires confirmation");
 assert(deniedRun.output.productionRowsWritten === false, "denied run-auto writes no rows");
 
+const confirmedRun = runAutomationCli("run-auto", {
+  MEDIA_AUTOMATION_RUN_CONFIRM: "I_UNDERSTAND_AUTO_DETECT_BATCH",
+});
+assert(confirmedRun.status === 0, "confirmed fixture run-auto executes bounded safe batch simulation");
+assert(confirmedRun.output.executionMode === "fixture_simulated", "fixture run-auto remains non-production");
+assert(confirmedRun.output.productionRowsWritten === false, "fixture run-auto writes no production rows");
+assert(confirmedRun.output.auditPassed === true, "fixture run-auto models audit pass");
+
 const report = runAutomationCli("report");
 assert(report.status === 0, "report passes");
 assert(report.output.productionRowsWritten === false, "report writes no rows");
@@ -83,6 +91,7 @@ console.log(JSON.stringify({
   calculatedBatchSize: plan.output.calculatedBatchSize,
   dryRunWritesRows: dryRun.output.productionRowsWritten,
   runAutoRequiresConfirmation: deniedRun.output.reason,
+  confirmedRunAutoExecution: confirmedRun.output.executionMode,
   daemonLive: false,
   cronLive: false,
   continuousAutomationEnabled: false,

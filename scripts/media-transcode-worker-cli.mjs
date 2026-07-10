@@ -19,7 +19,7 @@ const mediaPublicDomain = "media.chillywoodstream.com";
 const expectedProjectRef = "bmkkhihfbmsnnmcqkoly";
 const expectedProjectName = "Chillywood2025's Project";
 const expectedProjectRegion = "us-west-2";
-const latestBackupPrefix = "backups/media-worker/2026/07/09/media-worker-logical-20260709T152048-8820af024114/";
+const latestBackupPrefix = "backups/media-worker/2026/07/10/media-worker-logical-20260710T003002-02eab4b4c5cd/";
 const validModes = [
   "preflight",
   "dry-run",
