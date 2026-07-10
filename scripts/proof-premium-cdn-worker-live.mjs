@@ -8,7 +8,8 @@ import path from "node:path";
 
 const repoRoot = process.cwd();
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
-const defaultWorkerUrl = "https://premium-media-proof.chillywoodstream.com";
+const defaultWorkerUrl = "https://premium-media.chillywoodstream.com";
+const fallbackWorkerUrl = "https://premium-media-proof.chillywoodstream.com";
 const workerUrl = (process.env.PREMIUM_CDN_WORKER_URL || defaultWorkerUrl).replace(/\/+$/g, "");
 const now = Math.floor(Date.now() / 1000);
 const proofPath = "playback/protected/premium/proof/hello/720p/hello.txt";
@@ -198,6 +199,7 @@ try {
 
   const sanitized = {
     workerUrl,
+    fallbackWorkerUrlRetained: fallbackWorkerUrl,
     proofPath,
     valid: { status: valid.status, header: valid.header, textMatches: valid.text.trim() === expectedProofText },
     missingToken: { status: missingToken.status, reason: missingToken.reason },

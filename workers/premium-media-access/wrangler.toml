@@ -3,6 +3,7 @@ main = "worker.mjs"
 compatibility_date = "2026-07-09"
 workers_dev = false
 routes = [
+  { pattern = "premium-media.chillywoodstream.com", custom_domain = true },
   { pattern = "premium-media-proof.chillywoodstream.com", custom_domain = true },
 ]
 

@@ -156,7 +156,7 @@ try {
     rendition: premiumRow,
     config,
     fallbackUrl,
-    resolvePremiumTokenizedUrl: (claims) => `https://premium-media-proof.chillywoodstream.com/${claims.path}?token=[REDACTED_TOKEN]`,
+    resolvePremiumTokenizedUrl: (claims) => `https://premium-media.chillywoodstream.com/${claims.path}?token=[REDACTED_TOKEN]`,
   });
   requireProof(premiumResolved.cdnEligible === true, "Premium active viewer resolves HD CDN");
   requireProof(premiumResolved.fallbackUsed === false, "Premium active viewer does not fallback for HD");
@@ -168,7 +168,7 @@ try {
     rendition: premiumRow,
     config: { ...config, viewerPremiumActive: false },
     fallbackUrl,
-    resolvePremiumTokenizedUrl: (claims) => `https://premium-media-proof.chillywoodstream.com/${claims.path}?token=[REDACTED_TOKEN]`,
+    resolvePremiumTokenizedUrl: (claims) => `https://premium-media.chillywoodstream.com/${claims.path}?token=[REDACTED_TOKEN]`,
   });
   requireProof(freeViewer.url === fallbackUrl, "free viewer falls back instead of receiving HD");
   requireProof(freeViewer.blockedReason === "premium_entitlement_required", "free viewer is denied by Premium entitlement gate");

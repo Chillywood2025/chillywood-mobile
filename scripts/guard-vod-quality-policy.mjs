@@ -151,7 +151,8 @@ assertIncludes(premiumCdnWorker, "public_free_path_bypasses_premium_worker", "Pr
 assertNotMatches(premiumCdnWorker, /\bconsole\.(log|info|warn|error)\b/, "Premium CDN Worker must not log tokens");
 assertIncludes(premiumCdnWorkerConfig, "name = \"chillywood-premium-media-access-proof\"", "Premium CDN Worker proof deployment name");
 assertIncludes(premiumCdnWorkerConfig, "workers_dev = false", "Premium CDN Worker must not publish workers.dev");
-assertIncludes(premiumCdnWorkerConfig, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker proof custom domain");
+assertIncludes(premiumCdnWorkerConfig, "premium-media.chillywoodstream.com", "Premium CDN Worker production custom domain");
+assertIncludes(premiumCdnWorkerConfig, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker proof fallback custom domain");
 assertIncludes(premiumCdnWorkerConfig, "bucket_name = \"chillywood-media-proof\"", "Premium CDN Worker private proof bucket binding");
 assertIncludes(premiumCdnWorkerConfig, "PREMIUM_MEDIA_ALLOWED_PREFIX = \"playback/protected/premium/\"", "Premium CDN Worker protected allowed prefix");
 assertIncludes(premiumCdnWorkerConfig, "PREMIUM_MEDIA_REQUIRE_USER_HEADER = \"false\"", "Premium CDN Worker native HLS child request compatibility");
@@ -199,7 +200,8 @@ assertIncludes(premiumHdTokenIssuerProof, "Premium user + valid 1080p row should
 assertIncludes(premiumHdTokenIssuerProof, "free user should be denied HD token", "Premium HD token issuer proof free denial");
 assertIncludes(premiumHdTokenIssuerProof, "missingEnvFailsClosed", "Premium HD token issuer proof missing env fail closed");
 assertIncludes(premiumHdTokenIssuerProof, "publicSdUnchanged", "Premium HD token issuer proof public SD unchanged");
-assertIncludes(premiumCdnWorkerLiveProof, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker live proof hostname");
+assertIncludes(premiumCdnWorkerLiveProof, "premium-media.chillywoodstream.com", "Premium CDN Worker preferred live proof hostname");
+assertIncludes(premiumCdnWorkerLiveProof, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker fallback live proof hostname");
 assertIncludes(premiumCdnWorkerLiveProof, "playback/protected/premium/proof/hello/720p/hello.txt", "Premium CDN Worker live proof object");
 assertIncludes(premiumCdnWorkerLiveProof, "valid Premium token + proof 720p path should return HTTP 200", "Premium CDN Worker live proof allow");
 assertIncludes(premiumCdnWorkerLiveProof, "missing token should be denied", "Premium CDN Worker live proof missing token denial");
@@ -218,7 +220,7 @@ assertIncludes(vodDoc, "`_lib/mediaRenditionMetadata.ts` defines the source-only
 assertIncludes(vodDoc, "Original/master rows are private processing sources and cannot be marked normal playback.", "VOD doc original/master CDN boundary");
 assertIncludes(vodDoc, "Premium/private rows still require signed/token CDN access later and cannot use public CDN while `MEDIA_CDN_SIGNING_MODE=off`.", "VOD doc Premium/private CDN boundary");
 assertIncludes(vodDoc, "Premium signed/token CDN delivery is active for audited protected Premium rows.", "VOD doc Premium CDN token active boundary");
-assertIncludes(vodDoc, "Protected Premium HD delivery path is deployed/proved on the isolated Worker `chillywood-premium-media-access-proof` at `premium-media-proof.chillywoodstream.com`.", "VOD doc Premium CDN Worker deployed proof boundary");
+assertIncludes(vodDoc, "Protected Premium HD delivery path is deployed/proved on the isolated Worker `chillywood-premium-media-access-proof` at preferred production host `premium-media.chillywoodstream.com`; the old `premium-media-proof.chillywoodstream.com` host remains attached as a temporary fallback during migration.", "VOD doc Premium CDN Worker deployed proof boundary");
 assertIncludes(vodDoc, "Production currently has `5` audited protected Premium HD rows: `4` source-supported 720p rows and `1` source-supported 1080p row.", "VOD doc Premium HD row count");
 assertIncludes(vodDoc, "If token mode or signer is unavailable, HD falls back/blocks", "VOD doc Premium CDN signer boundary");
 assertIncludes(vodDoc, "`npm run proof:media-premium-cdn-token` proves free users cannot get HD tokens", "VOD doc Premium CDN token proof");

@@ -6,7 +6,7 @@ Status: Closed. Server-side protected Premium HD delivery, backend token issuanc
 
 ## Result
 
-Protected Premium HD R2/HLS playback is live for the current HD-capable audited public-safe sources through the isolated Worker `chillywood-premium-media-access-proof` at `premium-media-proof.chillywoodstream.com`.
+Protected Premium HD R2/HLS playback is live for the current HD-capable audited public-safe sources through the isolated Worker `chillywood-premium-media-access-proof`. Preferred production host is `premium-media.chillywoodstream.com`; the old `premium-media-proof.chillywoodstream.com` proof host remains attached as a temporary fallback during hostname migration.
 
 The pass generated only source-supported HD:
 
@@ -72,7 +72,7 @@ Installed app Premium HD proof is Closed. The Play-installed device `R5CR120QCBF
 
 Installed Premium resolver proof:
 
-- 1080p source `3de36e39-67e6-45ca-a12f-d5b1560473cb` resolved with redacted metadata `playbackHost=premium-media-proof.chillywoodstream.com`, `provider=cloudflare_r2_premium_token`, `deliveryFormat=hls`, `rolloutMode=trusted_public`, `cdnEligible=true`, `fallbackUsed=false`, `auditPassed=true`, `backupGatePassed=true`, `renditionLabel=1080p`, `premiumTokenRequired=true`, `tokenized=true`, `protectedPlayback=true`, and `rawUrlRedacted=true`.
+- 1080p source `3de36e39-67e6-45ca-a12f-d5b1560473cb` previously resolved with redacted metadata `playbackHost=premium-media-proof.chillywoodstream.com`, `provider=cloudflare_r2_premium_token`, `deliveryFormat=hls`, `rolloutMode=trusted_public`, `cdnEligible=true`, `fallbackUsed=false`, `auditPassed=true`, `backupGatePassed=true`, `renditionLabel=1080p`, `premiumTokenRequired=true`, `tokenized=true`, `protectedPlayback=true`, and `rawUrlRedacted=true`. Hostname migration now makes `premium-media.chillywoodstream.com` the preferred issuer/Worker host while retaining the proof hostname fallback.
 - 720p-only source `4999b741-8854-4bc8-a2f0-45907b870db3` resolved with the same protected metadata and `renditionLabel=720p`.
 - Android playback proof showed ExoPlayer initialization, AVC/AAC decoder activity, and active Android media playback for the protected HD streams.
 - No playback-token value, signed URL, DB URL, service-role key, Cloudflare credential, or private provider value was printed or committed.
@@ -80,5 +80,7 @@ Installed Premium resolver proof:
 Follow-up RCA on 2026-07-09 is recorded in `docs/release/PLAY_SANDBOX_PREMIUM_HD_RCA_20260709.md`. The installed replay matched Supabase user `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f`; that user's RevenueCat sandbox Premium entitlement had expired on `2026-07-08T17:58:59.352Z`, and `monetization_has_active_premium` returned `false` during the replay. The selected HD source had ready protected 720p/1080p rows, and the deployed token issuer responded safely when probed unauthenticated, so this was not a missing HD row, Worker, token secret, or resolver deployment issue. No code fix or Premium bypass was applied.
 
 Final closeout RCA on 2026-07-10 found one real production bug after the sandbox Premium renewal: the protected Worker rewrote HLS child playlist/segment URIs as relative paths, so native HLS clients resolved them beneath the parent manifest directory and received protected Worker `403` responses. The fix is limited to `workers/premium-media-access/worker.mjs`: child playlist and segment URIs are now root-relative protected paths with scoped child tokens. The Worker was redeployed, the Edge Function and Worker signer secret were aligned without printing the secret, and live Worker proof then returned HTTP 200 for valid protected proof access while denying missing/expired/wrong/non-Premium/private/original cases.
+
+Hostname migration on 2026-07-10 moved the preferred protected Premium host from `premium-media-proof.chillywoodstream.com` to `premium-media.chillywoodstream.com`. Worker `chillywood-premium-media-access-proof` keeps both custom domains attached during migration; version `2b717ab2-e1fc-47ef-a9c4-378f09292fe4` added the clean host route, active version `6c0ec125-332e-414d-9fef-b7a3afaf0ee8` aligned the signer secret, and live proof passed on both hostnames. The Supabase token issuer secret `PREMIUM_MEDIA_WORKER_BASE_URL` now points to `https://premium-media.chillywoodstream.com`. No token value, signer secret, signed URL, Cloudflare credential, DB URL, or service-role key was printed or committed.
 
 No daemon, cron, scheduler, broad backfill, Premium entitlement change, billing/provider change, app UX change, or production playback fallback removal happened.

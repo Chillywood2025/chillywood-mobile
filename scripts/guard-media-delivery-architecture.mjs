@@ -776,7 +776,8 @@ assertIncludes(premiumCdnWorker, "tokenRedacted", "Premium CDN Worker redacted l
 assertNotMatches(premiumCdnWorker, /\bconsole\.(log|info|warn|error)\b/, "Premium CDN Worker must not log tokens");
 assertIncludes(premiumCdnWorkerConfig, "name = \"chillywood-premium-media-access-proof\"", "Premium CDN Worker proof deployment name");
 assertIncludes(premiumCdnWorkerConfig, "workers_dev = false", "Premium CDN Worker must not publish workers.dev");
-assertIncludes(premiumCdnWorkerConfig, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker proof custom domain");
+assertIncludes(premiumCdnWorkerConfig, "premium-media.chillywoodstream.com", "Premium CDN Worker production custom domain");
+assertIncludes(premiumCdnWorkerConfig, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker proof fallback custom domain");
 assertIncludes(premiumCdnWorkerConfig, "bucket_name = \"chillywood-media-proof\"", "Premium CDN Worker private proof bucket binding");
 assertIncludes(premiumCdnWorkerConfig, "PREMIUM_MEDIA_ALLOWED_PREFIX = \"playback/protected/premium/\"", "Premium CDN Worker protected allowed prefix");
 assertIncludes(premiumCdnWorkerConfig, "PREMIUM_MEDIA_REQUIRE_USER_HEADER = \"false\"", "Premium CDN Worker native HLS child request compatibility");
@@ -820,7 +821,8 @@ assertIncludes(premiumHdTokenIssuerProof, "Premium user + valid 1080p row should
 assertIncludes(premiumHdTokenIssuerProof, "free user should be denied HD token", "Premium HD token issuer proof free denial");
 assertIncludes(premiumHdTokenIssuerProof, "missingEnvFailsClosed", "Premium HD token issuer proof missing env fail closed");
 assertIncludes(premiumHdTokenIssuerProof, "publicSdUnchanged", "Premium HD token issuer proof public SD unchanged");
-assertIncludes(premiumCdnWorkerLiveProof, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker live proof hostname");
+assertIncludes(premiumCdnWorkerLiveProof, "premium-media.chillywoodstream.com", "Premium CDN Worker preferred live proof hostname");
+assertIncludes(premiumCdnWorkerLiveProof, "premium-media-proof.chillywoodstream.com", "Premium CDN Worker fallback live proof hostname");
 assertIncludes(premiumCdnWorkerLiveProof, "playback/protected/premium/proof/hello/720p/hello.txt", "Premium CDN Worker live proof object");
 assertIncludes(premiumCdnWorkerLiveProof, "valid Premium token + proof 720p path should return HTTP 200", "Premium CDN Worker live proof allow");
 assertIncludes(premiumCdnWorkerLiveProof, "missing token should be denied", "Premium CDN Worker live proof missing token denial");
@@ -850,11 +852,11 @@ assertIncludes(mediaCdnRolloutPlannerProof, "mutationAttempted: false", "media C
 assertIncludes(mediaCdnRolloutPlannerProof, "productionBackfillRun: false", "media CDN rollout planner proof no backfill");
 assertNotMatches(mediaCdnRolloutPlanner, /\b(?:insert\s*\(|upsert\s*\(|delete\s*\(|update\s*\(|createClient)\b/i, "media CDN rollout planner must not mutate DB");
 assertIncludes(vodDoc, "Premium signed/token CDN delivery is active for audited protected Premium rows.", "VOD doc Premium token active boundary");
-assertIncludes(vodDoc, "Protected Premium HD delivery path is deployed/proved on the isolated Worker `chillywood-premium-media-access-proof` at `premium-media-proof.chillywoodstream.com`.", "VOD doc Premium Worker deployed proof boundary");
+assertIncludes(vodDoc, "Protected Premium HD delivery path is deployed/proved on the isolated Worker `chillywood-premium-media-access-proof` at preferred production host `premium-media.chillywoodstream.com`; the old `premium-media-proof.chillywoodstream.com` host remains attached as a temporary fallback during migration.", "VOD doc Premium Worker deployed proof boundary");
 assertIncludes(vodDoc, "Production currently has `5` audited protected Premium HD rows: `4` source-supported 720p rows and `1` source-supported 1080p row.", "VOD doc Premium HD row count");
 assertIncludes(architecture, "Premium HD token mode is active for protected audited rows only.", "architecture doc Premium token active boundary");
 assertIncludes(architecture, "Without the signer, HD falls back/blocks.", "architecture doc Premium token signer fallback");
-assertIncludes(architecture, "Protected Premium HD delivery architecture: `workers/premium-media-access/worker.mjs` is the selected Worker path, and the isolated proof deployment is live as Worker `chillywood-premium-media-access-proof` on `premium-media-proof.chillywoodstream.com`.", "architecture doc Premium Worker choice");
+assertIncludes(architecture, "Protected Premium HD delivery architecture: `workers/premium-media-access/worker.mjs` is the selected Worker path, and the isolated Worker deployment `chillywood-premium-media-access-proof` now prefers `premium-media.chillywoodstream.com` while retaining `premium-media-proof.chillywoodstream.com` as a temporary fallback route.", "architecture doc Premium Worker choice");
 assertIncludes(architecture, "It denies missing/expired/wrong-source/wrong-path/wrong-rendition/non-Premium/private/original/unscanned/moderation-blocked requests", "architecture doc Premium Worker deny cases");
 assertIncludes(architecture, "Production now has `5` protected Premium HD rows, all under `playback/protected/premium/`, with unsigned public HD exposure `0`.", "architecture doc Premium HD protected rows");
 assertIncludes(architecture, "Live app token issuance architecture: Supabase Edge Function `premium-media-playback-token` is deployed", "architecture doc Premium token issuer deployed");

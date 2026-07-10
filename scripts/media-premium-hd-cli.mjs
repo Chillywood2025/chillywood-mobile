@@ -26,7 +26,10 @@ const defaultFunctionsUrl = `https://${expectedProjectRef}.supabase.co/functions
 const mediaScanGatewayFunctionUrl = `${String(process.env.MEDIA_SCAN_FUNCTIONS_URL || defaultFunctionsUrl).replace(/\/+$/g, "")}/media-scan-private-access`;
 const protectedBucket = "chillywood-media-proof";
 const protectedPrefix = "playback/protected/premium/";
-const premiumWorkerHost = "premium-media-proof.chillywoodstream.com";
+const premiumWorkerHost = String(process.env.PREMIUM_MEDIA_WORKER_HOST || "premium-media.chillywoodstream.com")
+  .trim()
+  .replace(/^https?:\/\//i, "")
+  .replace(/\/+$/g, "");
 const workerVersion = "media-premium-hd-cli-v1";
 const proofUserId = "premium-hd-proof-user";
 const workerSecretDefaultFile = "/tmp/chillywood-premium-cdn-worker-proof-secret";
