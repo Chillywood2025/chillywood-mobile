@@ -185,17 +185,29 @@ export const summarizeMediaObjectStorageInventory = (
 
 export const canCloseHetznerObjectStorage = (input: {
   remainingHetznerObjectStorageReferences: number;
+  resolvedHistoricalHetznerObjectStorageReferences?: number | null;
+  activeUnresolvedHetznerObjectStorageReferences?: number | null;
   liveKitHetznerReferences?: number | null;
   copyVerified: boolean;
   dbUpdated: boolean;
   newUploadsR2: boolean;
 }) => ({
-  ok: input.remainingHetznerObjectStorageReferences === 0
+  ok: (
+    input.remainingHetznerObjectStorageReferences === 0
+    || (
+      Number(input.remainingHetznerObjectStorageReferences ?? 0) > 0
+      && Number(input.activeUnresolvedHetznerObjectStorageReferences ?? input.remainingHetznerObjectStorageReferences) === 0
+      && Number(input.resolvedHistoricalHetznerObjectStorageReferences ?? 0) === Number(input.remainingHetznerObjectStorageReferences ?? 0)
+    )
+  )
     && input.copyVerified
     && input.dbUpdated
     && input.newUploadsR2,
   liveKitOutOfScope: Number(input.liveKitHetznerReferences ?? 0) >= 0,
-  requiresFallbackRetentionDecision: input.remainingHetznerObjectStorageReferences === 0
+  requiresFallbackRetentionDecision: (
+    input.remainingHetznerObjectStorageReferences === 0
+    || Number(input.activeUnresolvedHetznerObjectStorageReferences ?? input.remainingHetznerObjectStorageReferences) === 0
+  )
     && input.copyVerified
     && input.dbUpdated
     && input.newUploadsR2,

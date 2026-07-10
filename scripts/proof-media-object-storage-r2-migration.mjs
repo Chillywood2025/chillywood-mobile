@@ -35,6 +35,8 @@ requireText(migrationFunction, "timingSafeEqualHex", "migration copier constant-
 requireText(migrationFunction, "media_object_migration_operator_token_required", "migration copier missing token denial");
 requireText(migrationFunction, "audit_inventory", "migration copier inventory action");
 requireText(migrationFunction, "classify_stale_refs", "migration copier stale-ref classification action");
+requireText(migrationFunction, "resolve_stale_refs_dry_run", "migration copier stale-ref resolution dry-run action");
+requireText(migrationFunction, "apply_stale_ref_resolutions", "migration copier stale-ref resolution apply action");
 requireText(migrationFunction, "reconcile_objects", "migration copier reconciliation action");
 requireText(migrationFunction, "copy_object", "migration copier copy-object action");
 requireText(migrationFunction, "copy_batch", "migration copier copy-batch action");
@@ -49,6 +51,10 @@ requireText(migrationFunction, "permission_denied_403", "migration copier permis
 requireText(migrationFunction, "skippedCount", "migration copier reports skipped missing/unsupported refs");
 requireText(migrationFunction, "entriesOmittedByDefault", "migration copier keeps live summary responses bounded");
 requireText(migrationFunction, "media_object_storage_migrate_verified_rows", "migration copier metadata update RPC");
+requireText(migrationFunction, "media_object_storage_resolve_scan_job_refs", "migration copier stale resolution RPC");
+requireText(migrationFunction, "media_object_storage_reference_resolution_summary", "migration copier resolution summary RPC");
+requireText(migrationFunction, "rawRefsTreatedAsMigrated: false", "migration copier does not pretend historical refs were migrated");
+requireText(migrationFunction, "activeUnresolvedHetznerObjectRefs", "migration copier reports active unresolved refs");
 requireText(migrationFunction, "LEGACY_S3_ACCESS_KEY_ID", "migration copier legacy S3 backend env");
 requireText(migrationFunction, "R2_ORIGIN_ACCESS_KEY_ID", "migration copier R2 origin backend env");
 requireText(migrationFunction, "MEDIA_ORIGIN_R2_ACCESS_KEY_ID", "migration copier media-origin R2 env fallback");
@@ -68,6 +74,8 @@ requireText(cli, "source === \"backend\"", "migration CLI backend source");
 requireText(cli, "media-object-storage-migration", "migration CLI calls trusted copier");
 requireText(cli, "reconcile: \"reconcile_objects\"", "migration CLI exposes backend reconciliation");
 requireText(cli, "\"classify-stale\": \"classify_stale_refs\"", "migration CLI exposes backend stale classification");
+requireText(cli, "\"resolution-plan\": \"resolve_stale_refs_dry_run\"", "migration CLI exposes backend stale resolution dry-run");
+requireText(cli, "\"apply-resolutions\": \"apply_stale_ref_resolutions\"", "migration CLI exposes backend stale resolution apply");
 requireText(cli, "\"backup-metadata\": \"backup_storage_metadata\"", "migration CLI exposes backend backup");
 requireText(cli, "MEDIA_OBJECT_MIGRATION_OPERATOR_TOKEN", "migration CLI operator token env");
 requireText(cli, "media_object_migration_operator_token_missing", "migration CLI missing token fail-closed reason");

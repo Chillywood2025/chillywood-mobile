@@ -11,12 +11,14 @@ const helper = readFileSync("_lib/mediaObjectStorageMigration.ts", "utf8");
 const cli = readFileSync("scripts/media-object-storage-r2-migration.mjs", "utf8");
 
 assert(helper.includes("canCloseHetznerObjectStorage"), "helper exposes shutdown readiness check");
-assert(helper.includes("remainingHetznerObjectStorageReferences === 0"), "shutdown requires zero object-storage refs");
+assert(helper.includes("activeUnresolvedHetznerObjectStorageReferences"), "shutdown checks active unresolved object-storage refs");
+assert(helper.includes("resolvedHistoricalHetznerObjectStorageReferences"), "shutdown distinguishes resolved historical refs");
 assert(helper.includes("liveKitOutOfScope"), "helper marks LiveKit out of scope");
 assert(helper.includes("copyVerified"), "shutdown requires copy verification");
 assert(helper.includes("dbUpdated"), "shutdown requires DB update");
 assert(helper.includes("newUploadsR2"), "shutdown requires new upload path on R2");
 assert(cli.includes("mode === \"zero-hetzner\""), "CLI exposes zero-Hetzner audit mode");
+assert(cli.includes("remainingHetznerObjectStorageReferences"), "CLI reports raw object-storage refs");
 assert(cli.includes("liveKitOutOfScope: true"), "CLI reports LiveKit as out of scope");
 assert(cli.includes("hetznerObjectStorageShutdownReady"), "CLI reports object-storage shutdown readiness only");
 
@@ -34,7 +36,8 @@ assert(payload.secretsPrinted === false, "no secrets printed");
 
 console.log(JSON.stringify({
   ok: true,
-  zeroObjectStorageRefsRequired: true,
+  zeroActiveUnresolvedRefsRequired: true,
+  rawHistoricalRefsCanRemainOnlyWhenResolved: true,
   liveKitNotShutdownCandidate: true,
   copyDbAndUploadProofRequired: true,
   remainingRefsBlockShutdown: true,

@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 type MigrationAction =
   | "audit_inventory"
   | "classify_stale_refs"
+  | "resolve_stale_refs_dry_run"
+  | "apply_stale_ref_resolutions"
   | "reconcile_objects"
   | "copy_object"
   | "verify_object"
@@ -109,6 +111,21 @@ type ReconciliationResult = {
   targetEtagPresent: boolean;
 };
 
+type ResolutionClassification =
+  | "stale_scan_history_social_attachment"
+  | "stale_scan_history_proof_test"
+  | "stale_scan_history_missing_source"
+  | "unsupported_provider_stale"
+  | "active_required_scan_dependency"
+  | "unknown_requires_owner_review";
+
+type ResolutionStatus =
+  | "stale_history"
+  | "orphaned_scan_job"
+  | "unsupported_provider_stale"
+  | "active_required"
+  | "unknown";
+
 const JSON_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "content-type, x-media-object-migration-token",
@@ -214,6 +231,8 @@ const normalizeAction = (value: unknown): MigrationAction | null => {
   if (
     action === "audit_inventory"
     || action === "classify_stale_refs"
+    || action === "resolve_stale_refs_dry_run"
+    || action === "apply_stale_ref_resolutions"
     || action === "reconcile_objects"
     || action === "copy_object"
     || action === "verify_object"
@@ -1233,6 +1252,48 @@ const readMigrationAuditRowsForBackup = async (adminClient: SupabaseClient) => {
   }
 };
 
+const readReferenceResolutionRowsForBackup = async (adminClient: SupabaseClient) => {
+  try {
+    const { data, error } = await adminClient.rpc("media_object_storage_reference_resolutions_backup");
+    if (error) {
+      return {
+        ok: false,
+        reason: "private_reference_resolution_backup_rpc_unavailable",
+        errorCode: error.code ?? "unknown",
+        rowCount: 0,
+        rows: [] as Record<string, unknown>[],
+      };
+    }
+    const rows = Array.isArray(data?.rows) ? data.rows as Record<string, unknown>[] : [];
+    return {
+      ok: data?.ok === true,
+      reason: data?.ok === true ? "" : "private_reference_resolution_backup_rpc_failed",
+      errorCode: "",
+      rowCount: Number(data?.row_count ?? rows.length),
+      rows,
+    };
+  } catch {
+    return {
+      ok: false,
+      reason: "private_reference_resolution_backup_rpc_unavailable",
+      errorCode: "unknown",
+      rowCount: 0,
+      rows: [] as Record<string, unknown>[],
+    };
+  }
+};
+
+const readReferenceResolutionSummaryForBackup = async (adminClient: SupabaseClient) => {
+  try {
+    return await readResolutionSummary(adminClient);
+  } catch {
+    return {
+      ok: false,
+      reason: "private_reference_resolution_summary_unavailable",
+    };
+  }
+};
+
 const createStorageMetadataBackup = async (input: {
   adminClient: SupabaseClient;
   references: InventoryReference[];
@@ -1265,6 +1326,8 @@ const createStorageMetadataBackup = async (input: {
   }
 
   const migrationAudit = await readMigrationAuditRowsForBackup(input.adminClient);
+  const referenceResolutions = await readReferenceResolutionRowsForBackup(input.adminClient);
+  const referenceResolutionSummary = await readReferenceResolutionSummaryForBackup(input.adminClient);
   const reconciliationSummary = summarizeReconciliation(
     input.reconciliation,
     Math.max(0, input.manifest.length - distinctManifest(input.manifest).length),
@@ -1289,6 +1352,14 @@ const createStorageMetadataBackup = async (input: {
       rowCount: migrationAudit.rowCount,
       rows: migrationAudit.rows,
     },
+    referenceResolutions: {
+      readable: referenceResolutions.ok,
+      reason: referenceResolutions.reason,
+      errorCode: referenceResolutions.errorCode,
+      rowCount: referenceResolutions.rowCount,
+      rows: referenceResolutions.rows,
+    },
+    referenceResolutionSummary,
     migrationPlan: input.manifest.map((entry) => ({
       tableName: entry.tableName,
       rowId: entry.rowId,
@@ -1345,6 +1416,8 @@ const createStorageMetadataBackup = async (input: {
     tableCounts,
     tableStatuses,
     migrationAuditBackupStatus: migrationAudit.ok ? "backed_up" : migrationAudit.reason,
+    referenceResolutionBackupStatus: referenceResolutions.ok ? "backed_up" : referenceResolutions.reason,
+    referenceResolutionRowCount: referenceResolutions.rowCount,
     restoreDrillPassed,
     readbackChecksumMatched: backupSha256 === readbackSha256,
     privateR2OriginBucket: R2_ORIGIN_BUCKET,
@@ -1376,6 +1449,116 @@ const readTargetRowStatus = async (adminClient: SupabaseClient, tableName: strin
   return { supportedTargetTable: true, exists: !!data, row: data as Record<string, unknown> | null };
 };
 
+const readScanJobStatus = async (adminClient: SupabaseClient, rowId: string) => {
+  const { data, error } = await adminClient
+    .from("media_scan_jobs")
+    .select("id,target_table,target_column,target_id,status,attempt_count,max_attempts,completed_at,created_at,updated_at,scanner_provider,storage_provider,storage_bucket")
+    .eq("id", rowId)
+    .maybeSingle();
+  if (error) {
+    return {
+      exists: false,
+      readErrorCode: error.code ?? "unknown",
+      row: null as Record<string, unknown> | null,
+      activeOrRetryable: true,
+    };
+  }
+  const row = data as Record<string, unknown> | null;
+  const status = toLowerText(row?.status);
+  const attemptCount = Number(row?.attempt_count ?? 0);
+  const maxAttempts = Number(row?.max_attempts ?? 0);
+  const activeOrRetryable = status === "pending_scan"
+    || status === "scanning"
+    || (status === "scan_failed" && attemptCount < maxAttempts);
+  return {
+    exists: !!row,
+    readErrorCode: "",
+    row,
+    activeOrRetryable,
+  };
+};
+
+const targetUsesR2PrivateOrigin = (targetStatus: Awaited<ReturnType<typeof readTargetRowStatus>>) => {
+  const row = targetStatus.row;
+  if (!row) return false;
+  return normalizeProvider(row.storage_provider) === "cloudflare_r2"
+    || toText(row.storage_bucket) === R2_ORIGIN_BUCKET;
+};
+
+const bucketRedaction = (bucket: string) => {
+  if (bucket === LEGACY_HETZNER_BUCKET) return "legacy_hetzner_bucket";
+  if (bucket === R2_ORIGIN_BUCKET) return "r2_private_origin_bucket";
+  return bucket ? "redacted_bucket" : "bucket_missing";
+};
+
+const resolutionStatusForClassification = (classification: ResolutionClassification): ResolutionStatus => {
+  if (classification === "unsupported_provider_stale") return "unsupported_provider_stale";
+  if (classification === "active_required_scan_dependency") return "active_required";
+  if (classification === "unknown_requires_owner_review") return "unknown";
+  if (classification === "stale_scan_history_social_attachment") return "stale_history";
+  return "orphaned_scan_job";
+};
+
+const resolutionReasonForClassification = (classification: ResolutionClassification) => {
+  if (classification === "stale_scan_history_social_attachment") {
+    return "inactive scan-job history for a social attachment whose current source row is missing or no longer depends on legacy object storage";
+  }
+  if (classification === "stale_scan_history_proof_test") {
+    return "inactive old proof/test scan-job history with no current runtime source dependency";
+  }
+  if (classification === "stale_scan_history_missing_source") {
+    return "inactive scan-job history whose target source is missing or already replaced outside legacy object storage";
+  }
+  if (classification === "unsupported_provider_stale") {
+    return "inactive unsupported-provider scan-job history with no current runtime source dependency";
+  }
+  if (classification === "active_required_scan_dependency") {
+    return "scan job or target source may still require the legacy object";
+  }
+  return "scan-job storage dependency could not be proven historical";
+};
+
+const buildResolutionRecord = async (input: {
+  entry: ManifestEntry;
+  classification: ResolutionClassification;
+  targetStatus: Awaited<ReturnType<typeof readTargetRowStatus>>;
+  scanJob: Awaited<ReturnType<typeof readScanJobStatus>>;
+  unresolvedStatus: ReconciliationStatus;
+}) => {
+  const resolutionStatus = resolutionStatusForClassification(input.classification);
+  const shutdownBlocker = resolutionStatus === "active_required" || resolutionStatus === "unknown";
+  const objectKeyHash = await sha256Hex(input.entry.storageObjectKey || `${input.entry.tableName}:${input.entry.rowId}`);
+  return {
+    table_name: input.entry.tableName,
+    row_id: input.entry.rowId,
+    object_key_hash: objectKeyHash,
+    resolution_status: resolutionStatus,
+    resolution_reason: resolutionReasonForClassification(input.classification),
+    resolved_by: "media-object-storage-migration",
+    migration_id: "media-object-storage-stale-ref-resolution",
+    old_provider: input.entry.storageProvider || "unknown",
+    old_bucket_redacted: bucketRedaction(input.entry.storageBucket),
+    active_dependency: shutdownBlocker,
+    shutdown_blocker: shutdownBlocker,
+    metadata: {
+      classification: input.classification,
+      unresolvedStatus: input.unresolvedStatus,
+      sourceType: input.entry.sourceType,
+      sourceId: input.entry.sourceId,
+      targetTable: input.entry.tableName === "media_scan_jobs" ? input.entry.sourceType : input.entry.tableName,
+      targetRowExists: input.targetStatus.exists,
+      targetUsesR2PrivateOrigin: targetUsesR2PrivateOrigin(input.targetStatus),
+      targetRowReadErrorCode: "readErrorCode" in input.targetStatus ? input.targetStatus.readErrorCode : "",
+      scanJobStatus: toLowerText(input.scanJob.row?.status),
+      scanJobActiveOrRetryable: input.scanJob.activeOrRetryable,
+      scanJobCreatedAt: toText(input.scanJob.row?.created_at),
+      scanJobUpdatedAt: toText(input.scanJob.row?.updated_at),
+      scanJobCompletedAt: toText(input.scanJob.row?.completed_at),
+      objectKeysRedacted: true,
+    },
+  };
+};
+
 const classifyUnresolvedMigrationRefs = async (input: {
   adminClient: SupabaseClient;
   manifest: ManifestEntry[];
@@ -1388,25 +1571,46 @@ const classifyUnresolvedMigrationRefs = async (input: {
 
   const rows = [];
   const byClassification: Record<string, number> = {};
+  const resolutionPlan = [];
   for (const { entry, reconciliation } of unresolvedEntries) {
     const targetStatus = entry.tableName === "media_scan_jobs"
       ? await readTargetRowStatus(input.adminClient, entry.sourceType, entry.sourceId)
       : await readTargetRowStatus(input.adminClient, entry.tableName, entry.rowId);
+    const scanJob = entry.tableName === "media_scan_jobs"
+      ? await readScanJobStatus(input.adminClient, entry.rowId)
+      : { exists: false, readErrorCode: "", row: null, activeOrRetryable: false };
     const targetMissing = targetStatus.supportedTargetTable && !targetStatus.exists;
+    const targetReplacedByR2 = targetUsesR2PrivateOrigin(targetStatus);
     const unresolvedStatus = reconciliation?.status ?? "unknown_error";
-    let classification = "unknown_requires_review";
-    if (unresolvedStatus === "unsupported_provider") {
-      classification = "unsupported_provider_blocker";
-    } else if (entry.tableName === "media_scan_jobs" && targetMissing && entry.sourceType === "social_attachments") {
-      classification = "social_attachment_stale_ref";
+    let classification: ResolutionClassification = "unknown_requires_owner_review";
+    if (entry.tableName === "media_scan_jobs" && scanJob.activeOrRetryable) {
+      classification = "active_required_scan_dependency";
+    } else if (unresolvedStatus === "unsupported_provider") {
+      classification = (
+        targetMissing
+        || targetReplacedByR2
+        || !targetStatus.supportedTargetTable
+      ) ? "unsupported_provider_stale" : "unknown_requires_owner_review";
+    } else if (entry.tableName === "media_scan_jobs" && entry.sourceType === "social_attachments" && (targetMissing || targetReplacedByR2)) {
+      classification = "stale_scan_history_social_attachment";
     } else if (entry.tableName === "media_scan_jobs" && targetMissing) {
-      classification = "old_proof_or_test_stale_ref";
+      classification = "stale_scan_history_proof_test";
+    } else if (entry.tableName === "media_scan_jobs" && targetReplacedByR2) {
+      classification = "stale_scan_history_missing_source";
     } else if (unresolvedStatus === "missing_404" && !targetStatus.exists) {
-      classification = "old_proof_or_test_stale_ref";
+      classification = "stale_scan_history_proof_test";
     } else if (unresolvedStatus === "missing_404" && targetStatus.exists) {
-      classification = "active_required_missing_source";
+      classification = "active_required_scan_dependency";
     }
     byClassification[classification] = (byClassification[classification] ?? 0) + 1;
+    const resolution = await buildResolutionRecord({
+      entry,
+      classification,
+      targetStatus,
+      scanJob,
+      unresolvedStatus,
+    });
+    resolutionPlan.push(resolution);
     rows.push({
       tableName: entry.tableName,
       rowId: entry.rowId,
@@ -1418,34 +1622,121 @@ const classifyUnresolvedMigrationRefs = async (input: {
       moderationStatus: entry.moderationStatus,
       unresolvedStatus,
       classification,
+      resolutionStatus: resolution.resolution_status,
       targetTable: entry.tableName === "media_scan_jobs" ? entry.sourceType : entry.tableName,
       targetRowExists: targetStatus.exists,
+      targetUsesR2PrivateOrigin: targetReplacedByR2,
       targetRowReadErrorCode: "readErrorCode" in targetStatus ? targetStatus.readErrorCode : "",
-      safeReversibleStatusUpdateExists: false,
+      scanJobStatus: toLowerText(scanJob.row?.status),
+      scanJobActiveOrRetryable: scanJob.activeOrRetryable,
+      scanJobCreatedAt: toText(scanJob.row?.created_at),
+      scanJobUpdatedAt: toText(scanJob.row?.updated_at),
+      scanJobCompletedAt: toText(scanJob.row?.completed_at),
+      safeReversibleResolutionMetadataExists: true,
       dbMetadataUpdateAllowed: false,
-      shutdownBlocking: true,
+      shutdownBlocking: resolution.shutdown_blocker,
       objectKeysRedacted: true,
     });
   }
 
+  const shutdownBlockingRows = rows.filter((row) => row.shutdownBlocking);
   return {
     ok: true,
     unresolvedRows: rows.length,
     byClassification,
-    activeRequiredMissingSourceCount: byClassification.active_required_missing_source ?? 0,
-    unsupportedProviderBlockerCount: byClassification.unsupported_provider_blocker ?? 0,
-    shutdownBlockedByUnresolvedRefs: rows.length > 0,
+    activeRequiredMissingSourceCount: byClassification.active_required_scan_dependency ?? 0,
+    unknownRequiresReviewCount: byClassification.unknown_requires_owner_review ?? 0,
+    unsupportedProviderStaleCount: byClassification.unsupported_provider_stale ?? 0,
+    staleHistoryCount: rows.length - shutdownBlockingRows.length,
+    shutdownBlockedByUnresolvedRefs: shutdownBlockingRows.length > 0,
     missingRefsTreatedAsMigrated: false,
+    resolutionPlan,
+    resolutionPlanRows: resolutionPlan.length,
+    safeResolutionRows: resolutionPlan.filter((row) => row.shutdown_blocker === false).length,
+    blockingResolutionRows: resolutionPlan.filter((row) => row.shutdown_blocker === true).length,
     redactedRows: rows,
   };
 };
 
-const zeroRefAudit = (references: InventoryReference[]) => {
-  const summary = summarizeInventory(references);
+const readResolutionSummary = async (adminClient: SupabaseClient) => {
+  const { data, error } = await adminClient.rpc("media_object_storage_reference_resolution_summary");
+  if (error) {
+    return {
+      ok: false,
+      reason: "reference_resolution_summary_unavailable",
+      errorCode: error.code ?? "unknown",
+      raw_media_scan_jobs_hetzner_refs: 0,
+      resolved_stale_refs: 0,
+      active_unresolved_hetzner_object_refs: 0,
+      unresolved_active_refs: 0,
+      unresolved_unknown_refs: 0,
+      shutdown_ready_by_resolution: false,
+    };
+  }
+  return data as Record<string, unknown>;
+};
+
+const applyStaleRefResolutions = async (adminClient: SupabaseClient, resolutionPlan: Array<Record<string, unknown>>) => {
+  const safeResolutions = resolutionPlan.filter((resolution) => resolution.shutdown_blocker === false);
+  if (!safeResolutions.length) {
+    return {
+      ok: false,
+      blocked: true,
+      reason: "no_safe_stale_ref_resolutions_to_apply",
+      resolvedRows: 0,
+      skippedRows: resolutionPlan.length,
+    };
+  }
+  const batchId = `media-object-storage-stale-ref-resolution-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  const { data, error } = await adminClient.rpc("media_object_storage_resolve_scan_job_refs", {
+    p_batch_id: batchId,
+    p_resolutions: safeResolutions,
+  });
+  if (error) {
+    return {
+      ok: false,
+      blocked: true,
+      reason: "stale_ref_resolution_rpc_failed",
+      errorCode: error.code ?? "unknown",
+      resolvedRows: 0,
+      skippedRows: resolutionPlan.length,
+    };
+  }
   return {
-    ok: summary.hetznerObjectStorageReferences === 0,
+    ok: true,
+    batchId,
+    resolvedRows: Number(data?.resolved_rows ?? safeResolutions.length),
+    skippedRows: resolutionPlan.length - safeResolutions.length,
+  };
+};
+
+const zeroRefAudit = async (adminClient: SupabaseClient, references: InventoryReference[]) => {
+  const summary = summarizeInventory(references);
+  const resolutionSummary = await readResolutionSummary(adminClient);
+  const rawMediaScanRefs = Number(resolutionSummary.raw_media_scan_jobs_hetzner_refs ?? 0);
+  const activeResolutionRefs = Number(resolutionSummary.active_unresolved_hetzner_object_refs ?? summary.hetznerObjectStorageReferences);
+  const nonScanRawRefs = Math.max(0, summary.hetznerObjectStorageReferences - rawMediaScanRefs);
+  const activeUnresolvedRefs = nonScanRawRefs + activeResolutionRefs;
+  const resolvedStaleRefs = Number(resolutionSummary.resolved_stale_refs ?? 0);
+  const resolutionSummaryAvailable = resolutionSummary.ok !== false;
+  const shutdownReady = resolutionSummaryAvailable
+    && summary.hetznerObjectStorageReferences > 0
+    && activeUnresolvedRefs === 0
+    && rawMediaScanRefs === resolvedStaleRefs
+    && nonScanRawRefs === 0;
+  return {
+    ok: shutdownReady || summary.hetznerObjectStorageReferences === 0,
+    rawHetznerObjectStorageReferences: summary.hetznerObjectStorageReferences,
     remainingHetznerObjectStorageReferences: summary.hetznerObjectStorageReferences,
-    hetznerObjectStorageShutdownReady: summary.hetznerObjectStorageReferences === 0,
+    rawMediaScanJobsHetznerRefs: rawMediaScanRefs,
+    resolvedHistoricalStaleRefs: resolvedStaleRefs,
+    activeUnresolvedHetznerObjectRefs: activeUnresolvedRefs,
+    unresolvedActiveRefs: Number(resolutionSummary.unresolved_active_refs ?? activeUnresolvedRefs),
+    unresolvedUnknownRefs: Number(resolutionSummary.unresolved_unknown_refs ?? activeUnresolvedRefs),
+    resolutionSummaryAvailable,
+    resolutionSummary,
+    rawRefsTreatedAsMigrated: false,
+    hetznerObjectStorageShutdownReady: shutdownReady || summary.hetznerObjectStorageReferences === 0,
     liveKitOutOfScope: true,
   };
 };
@@ -1493,10 +1784,11 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     if (action === "zero_ref_audit") {
+      const zeroRef = await zeroRefAudit(adminClient, references);
       return json(200, {
         action,
         summary,
-        ...zeroRefAudit(references),
+        ...zeroRef,
       });
     }
 
@@ -1525,6 +1817,19 @@ const handler = async (req: Request): Promise<Response> => {
           blocked: true,
           reason: "metadata_update_disabled_until_copy_verify_backup_and_restore_drill_pass",
           requiredEnvName: "MEDIA_OBJECT_MIGRATION_DB_UPDATE_ENABLED",
+          hetznerFallbackRetained: true,
+        });
+      }
+    }
+
+    if (action === "apply_stale_ref_resolutions") {
+      if (toLowerText(readEnv("MEDIA_OBJECT_MIGRATION_RESOLUTION_UPDATE_ENABLED")) !== "true") {
+        return json(409, {
+          ok: false,
+          action,
+          blocked: true,
+          reason: "stale_ref_resolution_update_disabled_until_backup_and_dry_run_pass",
+          requiredEnvName: "MEDIA_OBJECT_MIGRATION_RESOLUTION_UPDATE_ENABLED",
           hetznerFallbackRetained: true,
         });
       }
@@ -1609,6 +1914,55 @@ const handler = async (req: Request): Promise<Response> => {
         summary,
         reconciliation: reconciliationSummary,
         ...classification,
+        hetznerFallbackRetained: true,
+      });
+    }
+
+    if (action === "resolve_stale_refs_dry_run" || action === "apply_stale_ref_resolutions") {
+      const reconciliation = await reconcileObjects(distinct, sourceConfig.config, targetConfig.config);
+      const reconciliationSummary = summarizeReconciliation(reconciliation, Math.max(0, manifest.length - distinct.length));
+      if (reconciliationSummary.permissionDeniedCount > 0) {
+        return json(409, {
+          ok: false,
+          action,
+          blocked: true,
+          reason: "permission_denied_403",
+          reconciliation: reconciliationSummary,
+          hetznerFallbackRetained: true,
+        });
+      }
+      const classification = await classifyUnresolvedMigrationRefs({
+        adminClient,
+        manifest,
+        reconciliation,
+      });
+      if (action === "resolve_stale_refs_dry_run") {
+        return json(200, {
+          action,
+          summary,
+          reconciliation: reconciliationSummary,
+          ...classification,
+          dryRunOnly: true,
+          writesPerformed: false,
+          hetznerFallbackRetained: true,
+        });
+      }
+      const applyResult = await applyStaleRefResolutions(adminClient, classification.resolutionPlan);
+      const zeroRef = await zeroRefAudit(adminClient, references);
+      return json(applyResult.ok ? 200 : 409, {
+        action,
+        summary,
+        reconciliation: reconciliationSummary,
+        classification: {
+          unresolvedRows: classification.unresolvedRows,
+          byClassification: classification.byClassification,
+          safeResolutionRows: classification.safeResolutionRows,
+          blockingResolutionRows: classification.blockingResolutionRows,
+        },
+        ...applyResult,
+        zeroRefAudit: zeroRef,
+        scanJobsDeleted: false,
+        fakeR2ObjectsCreated: false,
         hetznerFallbackRetained: true,
       });
     }
