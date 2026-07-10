@@ -63,6 +63,23 @@ const readRequiredEnv = (name: string) => {
   return value;
 };
 
+const readOptionalEnv = (name: string) => toText(Deno.env.get(name));
+
+const readR2PrivateOriginConfig = () => {
+  const privateOnly = readOptionalEnv("MEDIA_ORIGIN_PRIVATE_ONLY").toLowerCase();
+  const publicPlaybackDisabled = readOptionalEnv("MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED").toLowerCase();
+  if (privateOnly !== "true" || publicPlaybackDisabled !== "true") {
+    throw new Error("missing_private_r2_origin_safety_flags");
+  }
+  return {
+    bucket: readRequiredEnv("MEDIA_ORIGIN_BUCKET"),
+    endpoint: readRequiredEnv("MEDIA_ORIGIN_R2_ENDPOINT"),
+    region: readOptionalEnv("MEDIA_ORIGIN_R2_REGION") || "auto",
+    accessKeyId: readRequiredEnv("MEDIA_ORIGIN_R2_ACCESS_KEY_ID"),
+    secretAccessKey: readRequiredEnv("MEDIA_ORIGIN_R2_SECRET_ACCESS_KEY"),
+  };
+};
+
 const bytesToHex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
@@ -304,7 +321,7 @@ const validateCandidate = async (
     blockedReasons.push("already_audited_hls");
   }
   if (!isSupportedMimeType(candidate.mime_type)) blockedReasons.push("unsupported_mime_type");
-  if (!storage.provider || !["s3", "supabase"].includes(storage.provider)) blockedReasons.push("unsupported_storage_provider");
+  if (!storage.provider || !["s3", "supabase", "cloudflare_r2"].includes(storage.provider)) blockedReasons.push("unsupported_storage_provider");
   if (!storage.bucket || !isSafeObjectKey(storage.objectKey)) blockedReasons.push("missing_source_object");
 
   const maxBytes = Number.parseInt(toText(Deno.env.get("MEDIA_SCAN_MAX_DOWNLOAD_BYTES")) || String(512 * 1024 * 1024), 10);
@@ -365,6 +382,30 @@ const streamS3Object = async (storage: { provider: string; bucket: string; objec
       "Content-Type": response.headers.get("content-type") || "application/octet-stream",
       "Cache-Control": "no-store",
       "X-Media-Scan-Storage-Provider": "s3",
+    },
+  });
+};
+
+const streamR2PrivateOriginObject = async (storage: { provider: string; bucket: string; objectKey: string }) => {
+  const r2 = readR2PrivateOriginConfig();
+  if (storage.bucket !== r2.bucket) return json(403, { error: "invalid_r2_origin_bucket" });
+  const signedObjectUrl = await createPresignedS3GetUrl({
+    endpoint: r2.endpoint,
+    region: r2.region,
+    bucket: storage.bucket,
+    objectKey: storage.objectKey,
+    accessKeyId: r2.accessKeyId,
+    secretAccessKey: r2.secretAccessKey,
+    expiresSeconds: 60,
+  });
+  const response = await fetch(signedObjectUrl);
+  if (!response.ok || !response.body) return json(502, { error: "source_download_failed", storageProvider: "cloudflare_r2" });
+  return new Response(response.body, {
+    status: 200,
+    headers: {
+      "Content-Type": response.headers.get("content-type") || "application/octet-stream",
+      "Cache-Control": "no-store",
+      "X-Media-Scan-Storage-Provider": "cloudflare_r2",
     },
   });
 };
@@ -518,6 +559,7 @@ Deno.serve(async (req): Promise<Response> => {
 
     if (action === "download" || action === "transcode_download" || action === "premium_hd_download") {
       if (storage.provider === "s3") return streamS3Object(storage);
+      if (storage.provider === "cloudflare_r2") return streamR2PrivateOriginObject(storage);
       if (storage.provider === "supabase") return streamSupabaseStorageObject(supabaseUrl, serviceRoleKey, storage);
       return json(403, { error: "unsupported_storage_provider" });
     }

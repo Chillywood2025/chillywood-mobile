@@ -88,6 +88,10 @@ Production backend transcode service status: no daemon, queue processor, cron, s
 
 Cloudflare R2 private origin status: enabled for proof and backup use; private/original storage is not public. Playback uses only public-safe audited HLS rows in the separate public-playback bucket when rollout gates pass.
 
+Cloudflare R2 source/original migration target: private bucket `chillywood-media-origin` exists for the next source/original object-storage migration lane. It is not public and is not connected to `media.chillywoodstream.com`.
+
+Hetzner Object Storage migration status: Partial. Private R2 origin bucket `chillywood-media-origin` exists, and source now defines the fail-closed config contract for future private source/original uploads through `MEDIA_ORIGIN_PROVIDER=cloudflare_r2`, `MEDIA_ORIGIN_PRIVATE_ONLY=true`, and `MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED=true`. Read-only production inventory still found `31` Hetzner/S3 object-storage reference rows (`22` distinct object refs), so shutdown is not ready. No media was processed, no media rows were written, no objects were copied, and Hetzner fallback retained. Hetzner LiveKit is separate; do not shut down Hetzner LiveKit, `chillywood-prod-01`, or `live.chillywoodstream.com`.
+
 Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket. Controlled audited public HLS playback is active for trusted eligible `media_renditions` rows; private/original/Premium media remains blocked from public CDN.
 
 Cloudflare R2 public playback resolver status: staged helper and proof scripts exist, and the audited `media_renditions` bridge is active only through controlled rollout config. Signed-origin fallback remains mandatory, and private/original/Premium media remains blocked from public CDN.

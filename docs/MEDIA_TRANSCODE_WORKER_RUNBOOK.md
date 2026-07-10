@@ -2,6 +2,8 @@
 
 Status: no production worker is deployed and no queue processor is running. The production schema for `media_transcode_jobs` and `media_renditions` is applied. Current counts after City Lights plus the bounded CLI auto-detect cycle are `media_transcode_jobs=10`, `media_renditions=15`, `active_unfinished_jobs=0`, and `unsafe_cdn_rows=0`. Creator-video playback now has a guarded audited-row CDN/HLS bridge, but default source config still falls back to signed origin unless trusted audited-row rollout gates pass, and any activation must keep the kill switch and signed-origin fallback.
 
+Source/original object-storage note: Hetzner Object Storage -> R2 private origin is Partial. Future worker source reads should prefer private R2 origin bucket `chillywood-media-origin` after verified copy/readback/checksum and DB metadata migration, while Hetzner fallback retained during the migration window. Current production still has Hetzner/S3 object-storage refs, no objects were copied, no media rows were written by the migration lane, and Hetzner Object Storage is not ready for shutdown. This does not cover Hetzner LiveKit; do not shut down Hetzner LiveKit.
+
 Autonomous operating model: safe Level 0/1 media operations such as eligible discovery, safe batch sizing, scoped backups, restore drills, capped public-safe transcode work, post-write audit, scoped rollback/quarantine, fallback playback, telemetry reporting, cache verification, and auto-pausing on anomalies should run inside policy without owner approval. Level 3/4 boundaries still require owner approval: money/billing/provider changes, auth/RLS, Premium entitlement, payout/cashout, destructive production DB changes, broad uncapped backfill, public/private exposure changes, private/Premium CDN token policy, app-store/public launch, legal/compliance, payment production mutation, and public marketing claims.
 
 Continuous limited automation is source/proofed/templates only. Disabled templates exist under `ops/media-automation/systemd/`, and `media-automation:run-continuous-once` is a bounded future command that must stop after one iteration. No systemd service/timer is installed, enabled, or started by this repo.
@@ -23,7 +25,7 @@ Each worker run starts from a server-owned `media_transcode_jobs` row:
 - `worker_version`
 - `source_hash`
 
-The source can be a private origin object fetched by worker credentials or a known safe public proof URL. Production creator uploads must come from private origin storage and must never be downloaded by client-provided public URL metadata alone.
+The source can be a private origin object fetched by worker credentials or a known safe public proof URL. Production creator uploads should come from Cloudflare R2 private origin after the object-storage migration closes, with Hetzner/S3 read fallback retained only during the migration window. Production source objects must never be downloaded by client-provided public URL metadata alone.
 
 ## Required Safety Checks
 

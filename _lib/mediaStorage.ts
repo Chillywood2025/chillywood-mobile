@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 
 import { SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
 
-export type MediaStorageProvider = "supabase" | "s3";
+export type MediaStorageProvider = "supabase" | "s3" | "cloudflare_r2";
 export type MediaStorageSurfaceType = "creator_video" | "social_attachment";
 
 export type MediaStorageObject = {
@@ -67,9 +67,12 @@ const getMediaUploadTimeoutMs = (sizeBytes?: number | null) => {
   );
 };
 
-export const normalizeMediaStorageProvider = (value: unknown): MediaStorageProvider => (
-  toText(value).toLowerCase() === "s3" ? "s3" : "supabase"
-);
+export const normalizeMediaStorageProvider = (value: unknown): MediaStorageProvider => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "s3" || normalized === "hetzner_s3") return "s3";
+  if (normalized === "cloudflare_r2" || normalized === "r2") return "cloudflare_r2";
+  return "supabase";
+};
 
 export const getMediaStorageProviderBucket = (input: {
   provider?: unknown;
@@ -171,7 +174,7 @@ export async function createSignedMediaUpload(input: {
   const uploadUrl = toText(payload.uploadUrl);
   const expiresAt = toText(payload.expiresAt);
 
-  if (provider !== "s3" || !bucket || !objectKey || !uploadUrl) {
+  if ((provider !== "s3" && provider !== "cloudflare_r2") || !bucket || !objectKey || !uploadUrl) {
     throw new Error("Media upload is not available right now.");
   }
 
@@ -191,7 +194,7 @@ export async function createSignedMediaDownload(input: {
   objectKey: string;
   recordId?: string | null;
 }): Promise<string> {
-  if (input.provider !== "s3") return "";
+  if (input.provider !== "s3" && input.provider !== "cloudflare_r2") return "";
 
   const payload = await callMediaStorageFunction<SignedDownloadResponse>({
     action: "create_download_url",
@@ -211,7 +214,7 @@ export async function deleteStoredMediaObject(input: {
   objectKey: string;
   recordId?: string | null;
 }): Promise<void> {
-  if (input.provider !== "s3") return;
+  if (input.provider !== "s3" && input.provider !== "cloudflare_r2") return;
 
   await callMediaStorageFunction<{ ok?: boolean }>({
     action: "delete_object",

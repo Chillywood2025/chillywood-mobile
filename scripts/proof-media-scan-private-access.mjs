@@ -31,6 +31,9 @@ assertIncludes(gatewaySource, "premium_denied", "Premium candidate is denied");
 assertIncludes(gatewaySource, "moderation_blocked", "moderation-blocked candidate is denied");
 assertIncludes(gatewaySource, "streamS3Object", "S3/Hetzner streaming path exists");
 assertIncludes(gatewaySource, "streamSupabaseStorageObject", "Supabase Storage streaming path exists");
+assertIncludes(gatewaySource, "streamR2PrivateOriginObject", "Cloudflare R2 private origin streaming path exists");
+assertIncludes(gatewaySource, "MEDIA_ORIGIN_PRIVATE_ONLY", "Cloudflare R2 private origin must be private-only");
+assertIncludes(gatewaySource, "MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED", "Cloudflare R2 private origin cannot be public playback");
 assertIncludes(gatewaySource, "record_scan_result", "record scan result action exists");
 assertIncludes(gatewaySource, "observed_readable_required", "clean write requires scanner proof");
 assertIncludes(gatewaySource, "decoded_stream_required", "clean write requires decoded stream proof");
@@ -66,6 +69,7 @@ console.log(JSON.stringify({
   moderationBlockedDenied: true,
   s3HetznerSupported: true,
   supabaseStorageSupported: true,
+  cloudflareR2PrivateOriginSupported: true,
   noSignedUrlReturned: true,
   noLocalServiceRoleRequired: true,
   noLocalStorageCredentialsRequired: true,

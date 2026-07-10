@@ -7,6 +7,7 @@ import {
 
 type MediaStorageAction = "create_upload_url" | "create_download_url" | "delete_object";
 type MediaStorageSurfaceType = "creator_video" | "social_attachment";
+type MediaOriginStorageProvider = "s3" | "cloudflare_r2";
 
 type MediaStoragePayload = {
   action?: unknown;
@@ -82,6 +83,46 @@ const readRequiredEnv = (name: string) => {
   const value = toText(Deno.env.get(name));
   if (!value) throw new Error(`Missing required environment variable ${name}`);
   return value;
+};
+
+const readOptionalEnv = (name: string) => toText(Deno.env.get(name));
+
+const readMediaOriginStorageConfig = () => {
+  const mediaOriginProvider = readOptionalEnv("MEDIA_ORIGIN_PROVIDER").toLowerCase();
+
+  if (mediaOriginProvider === "cloudflare_r2") {
+    const privateOnly = readOptionalEnv("MEDIA_ORIGIN_PRIVATE_ONLY").toLowerCase();
+    const publicPlaybackDisabled = readOptionalEnv("MEDIA_ORIGIN_PUBLIC_PLAYBACK_DISABLED").toLowerCase();
+    if (privateOnly !== "true" || publicPlaybackDisabled !== "true") {
+      throw new Error("Cloudflare R2 media origin must be configured private-only with public playback disabled.");
+    }
+    return {
+      provider: "cloudflare_r2" as const,
+      bucket: readRequiredEnv("MEDIA_ORIGIN_BUCKET"),
+      endpoint: readRequiredEnv("MEDIA_ORIGIN_R2_ENDPOINT"),
+      region: readOptionalEnv("MEDIA_ORIGIN_R2_REGION") || "auto",
+      accessKeyId: readRequiredEnv("MEDIA_ORIGIN_R2_ACCESS_KEY_ID"),
+      secretAccessKey: readRequiredEnv("MEDIA_ORIGIN_R2_SECRET_ACCESS_KEY"),
+    };
+  }
+
+  const s3Provider = readRequiredEnv("S3_PROVIDER");
+  if (s3Provider.toLowerCase() !== "hetzner") {
+    throw new Error("Media storage provider is not configured for launch.");
+  }
+  return {
+    provider: "s3" as const,
+    bucket: readRequiredEnv("S3_BUCKET"),
+    endpoint: readRequiredEnv("S3_ENDPOINT"),
+    region: readRequiredEnv("S3_REGION"),
+    accessKeyId: readRequiredEnv("S3_ACCESS_KEY_ID"),
+    secretAccessKey: readRequiredEnv("S3_SECRET_ACCESS_KEY"),
+  };
+};
+
+const isSupportedObjectProvider = (value: unknown) => {
+  const provider = toText(value).toLowerCase();
+  return provider === "s3" || provider === "cloudflare_r2";
 };
 
 const normalizeAction = (value: unknown): MediaStorageAction | null => {
@@ -573,7 +614,7 @@ const readCreatorVideoForObject = async (
 
   const rowBucket = toText(data.storage_bucket);
   const rowKey = toText(data.storage_object_key) || toText(data.storage_path);
-  if (toText(data.storage_provider) !== "s3" || rowBucket !== bucket || rowKey !== objectKey) return null;
+  if (!isSupportedObjectProvider(data.storage_provider) || rowBucket !== bucket || rowKey !== objectKey) return null;
   return data as {
     id: string;
     owner_id: string;
@@ -769,7 +810,7 @@ const readSocialAttachmentForObject = async (
 
   const rowBucket = toText(data.storage_bucket);
   const rowKey = toText(data.storage_object_key) || toText(data.storage_path);
-  if (toText(data.storage_provider) !== "s3" || rowBucket !== bucket || rowKey !== objectKey) return null;
+  if (!isSupportedObjectProvider(data.storage_provider) || rowBucket !== bucket || rowKey !== objectKey) return null;
   if (data.deleted_at || !["clean", "reported"].includes(toText(data.moderation_status))) return null;
   return data as {
     id: string;
@@ -947,16 +988,7 @@ Deno.serve(async (req): Promise<Response> => {
     const supabaseUrl = readRequiredEnv("SUPABASE_URL");
     const supabaseAnonKey = readRequiredEnv("SUPABASE_ANON_KEY");
     const supabaseServiceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const s3Provider = readRequiredEnv("S3_PROVIDER");
-    const s3Bucket = readRequiredEnv("S3_BUCKET");
-    const s3Endpoint = readRequiredEnv("S3_ENDPOINT");
-    const s3Region = readRequiredEnv("S3_REGION");
-    const s3AccessKeyId = readRequiredEnv("S3_ACCESS_KEY_ID");
-    const s3SecretAccessKey = readRequiredEnv("S3_SECRET_ACCESS_KEY");
-
-    if (s3Provider.toLowerCase() !== "hetzner") {
-      return json(500, { error: "invalid_provider", message: "Media storage provider is not configured for launch." });
-    }
+    const originStorage = readMediaOriginStorageConfig();
 
     const authResult = await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
     if ("error" in authResult) return authResult.error ?? json(401, { error: "invalid_auth" });
@@ -969,13 +1001,13 @@ Deno.serve(async (req): Promise<Response> => {
     const action = normalizeAction(payload.action);
     const surfaceType = normalizeSurfaceType(payload.surfaceType);
     const objectKey = toText(payload.objectKey);
-    const bucket = toText(payload.bucket) || s3Bucket;
+    const bucket = toText(payload.bucket) || originStorage.bucket;
     const recordId = toText(payload.recordId);
 
     if (!action) return json(400, { error: "invalid_action", message: "Unknown media storage action." });
     if (!surfaceType) return json(400, { error: "invalid_surface", message: "Unknown media storage surface." });
     if (!isSafeObjectKey(objectKey)) return json(400, { error: "invalid_object_key", message: "Media object key is invalid." });
-    if (bucket !== s3Bucket) return json(403, { error: "invalid_bucket", message: "Media bucket is not allowed." });
+    if (bucket !== originStorage.bucket) return json(403, { error: "invalid_bucket", message: "Media bucket is not allowed." });
 
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: {
@@ -1034,12 +1066,12 @@ Deno.serve(async (req): Promise<Response> => {
         : SOCIAL_ATTACHMENT_UPLOAD_EXPIRES_SECONDS;
       const uploadUrl = await createPresignedS3Url({
         method: "PUT",
-        endpoint: s3Endpoint,
-        region: s3Region,
-        bucket: s3Bucket,
+        endpoint: originStorage.endpoint,
+        region: originStorage.region,
+        bucket: originStorage.bucket,
         objectKey,
-        accessKeyId: s3AccessKeyId,
-        secretAccessKey: s3SecretAccessKey,
+        accessKeyId: originStorage.accessKeyId,
+        secretAccessKey: originStorage.secretAccessKey,
         expiresSeconds,
       });
       await safeWriteMediaSecurityEvent(adminClient, user, {
@@ -1051,8 +1083,8 @@ Deno.serve(async (req): Promise<Response> => {
       });
 
       return json(200, {
-        provider: "s3",
-        bucket: s3Bucket,
+        provider: originStorage.provider,
+        bucket: originStorage.bucket,
         objectKey,
         uploadUrl,
         expiresAt: new Date(Date.now() + expiresSeconds * 1000).toISOString(),
@@ -1064,21 +1096,21 @@ Deno.serve(async (req): Promise<Response> => {
       if (!recordId && objectKeyOwner(objectKey) === user.id) {
         allowed = true;
       } else if (surfaceType === "creator_video") {
-        allowed = await canReadCreatorVideo(adminClient, user, recordId, s3Bucket, objectKey, securityContext);
+        allowed = await canReadCreatorVideo(adminClient, user, recordId, originStorage.bucket, objectKey, securityContext);
       } else {
-        allowed = await canReadSocialAttachment(adminClient, user, recordId, s3Bucket, objectKey, securityContext);
+        allowed = await canReadSocialAttachment(adminClient, user, recordId, originStorage.bucket, objectKey, securityContext);
       }
 
       if (!allowed) return json(403, { error: "not_allowed", message: "You cannot access this media object." });
 
       const downloadUrl = await createPresignedS3Url({
         method: "GET",
-        endpoint: s3Endpoint,
-        region: s3Region,
-        bucket: s3Bucket,
+        endpoint: originStorage.endpoint,
+        region: originStorage.region,
+        bucket: originStorage.bucket,
         objectKey,
-        accessKeyId: s3AccessKeyId,
-        secretAccessKey: s3SecretAccessKey,
+        accessKeyId: originStorage.accessKeyId,
+        secretAccessKey: originStorage.secretAccessKey,
         expiresSeconds: DOWNLOAD_EXPIRES_SECONDS,
       });
       await safeWriteMediaSecurityEvent(adminClient, user, {
@@ -1096,18 +1128,18 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     const allowed = surfaceType === "creator_video"
-      ? await canDeleteCreatorVideo(adminClient, user, recordId, s3Bucket, objectKey, securityContext)
-      : await canDeleteSocialAttachment(adminClient, user, recordId, s3Bucket, objectKey, securityContext);
+      ? await canDeleteCreatorVideo(adminClient, user, recordId, originStorage.bucket, objectKey, securityContext)
+      : await canDeleteSocialAttachment(adminClient, user, recordId, originStorage.bucket, objectKey, securityContext);
     if (!allowed) return json(403, { error: "not_allowed", message: "You cannot delete this media object." });
 
     const deleteUrl = await createPresignedS3Url({
       method: "DELETE",
-      endpoint: s3Endpoint,
-      region: s3Region,
-      bucket: s3Bucket,
+      endpoint: originStorage.endpoint,
+      region: originStorage.region,
+      bucket: originStorage.bucket,
       objectKey,
-      accessKeyId: s3AccessKeyId,
-      secretAccessKey: s3SecretAccessKey,
+      accessKeyId: originStorage.accessKeyId,
+      secretAccessKey: originStorage.secretAccessKey,
       expiresSeconds: 60,
     });
     const deleteResponse = await fetch(deleteUrl, { method: "DELETE" });

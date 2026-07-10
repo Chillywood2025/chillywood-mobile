@@ -4,6 +4,8 @@ Last updated: 2026-07-09
 
 Status: Catalog readiness automation is source/proofed and CLI-read-only for classification. It classifies catalog rows, identifies public scan candidates, and plans scan/moderation readiness steps. Scanner automation now has a deployed trusted backend gateway for ffprobe media-readability scans; it can stream public scan candidates through backend authority, record trusted scan results after proof, and deny private/Premium rows. No command processes/transcodes media, and no command switches playback.
 
+Object-storage migration note: the scanner gateway now has a source-prepared `cloudflare_r2` private-origin read path for future migrated public-safe scan/transcode candidates under `chillywood-media-origin`, but the Hetzner Object Storage migration is still Partial. It does not copy private/Premium refs, does not move DB metadata, and does not make Hetzner Object Storage ready for shutdown. Hetzner fallback retained; do not shut down Hetzner LiveKit.
+
 ## Purpose
 
 The media automation pipeline cannot transcode unscanned creator videos into public Cloudflare R2/HLS output. Catalog readiness fills the gap before transcode automation: it explains why rows are excluded, identifies which public rows may be queued for scanning, and keeps private, Premium, original/master, unsupported, missing-source, and moderation-blocked media out of the public CDN path.
@@ -41,6 +43,7 @@ Supported backend storage paths:
 
 - S3/Hetzner-backed source objects in the configured production source bucket.
 - Supabase Storage-backed source objects in `creator-videos`.
+- Cloudflare R2 private-origin objects in `chillywood-media-origin` after a future verified migration and env switch.
 
 The CLI writes streamed bytes only to a `0600` temp file, runs ffprobe media-readability, deletes the temp file, and never prints signed URLs or private object URLs.
 

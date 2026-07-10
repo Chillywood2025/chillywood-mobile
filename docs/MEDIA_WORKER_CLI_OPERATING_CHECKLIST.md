@@ -6,6 +6,8 @@ Status: final CLI-only operating checklist for the media-worker lane. The produc
 
 This checklist is the handoff point for future owner-approved one-job media-worker operations. Do not use it to run broad backfills, enable continuous mode, migrate normal playback, or expose private/original/Premium media.
 
+Object-storage migration status: Hetzner Object Storage -> R2 private origin is Partial. `chillywood-media-origin` exists as the private R2 origin target, but production still has `31` Hetzner/S3 object-storage reference rows and `22` distinct object refs. No media was processed, no media rows were written, no objects were copied, and Hetzner fallback retained. Do not shut down Hetzner Object Storage until the zero-reference audit closes. Do not shut down Hetzner LiveKit.
+
 ## Current Safe Baseline
 
 - Latest manual private R2 backup prefix: `backups/media-worker/2026/07/10/media-worker-logical-20260710T024048-5de12265dded/`.
