@@ -22,6 +22,7 @@ const importTypeScriptModule = async (relativePath) => {
 
 const player = readFileSync(path.join(root, "app/player/[id].tsx"), "utf8");
 const livekitSurface = readFileSync(path.join(root, "components/watch-party-live/livekit-stage-media-surface.tsx"), "utf8");
+const livekitTokenContract = readFileSync(path.join(root, "_lib/livekit/token-contract.ts"), "utf8");
 
 const {
   WATCH_PARTY_LIVEKIT_FALLBACK_ROSTER_GRACE_MILLIS,
@@ -37,6 +38,12 @@ assert.ok(player.includes("shouldRenderWatchPartyLiveKitStableShell"), "Player m
 assert.ok(player.includes("shared-player-livekit-connecting-shell"), "Player must expose stable connecting shell for installed proof");
 assert.ok(player.includes("CONNECTING LIVEKIT"), "stable shell must communicate LiveKit connection preparation");
 assert.ok(player.includes("WATCH_PARTY_LIVEKIT_FALLBACK_ROSTER_GRACE_MILLIS"), "Player must use shared grace constant");
+assert.ok(livekitTokenContract.includes("LIVEKIT_TOKEN_REFRESH_MAX_SKEW_MILLIS = 60_000"), "LiveKit token expiry keeps the normal max refresh skew");
+assert.ok(livekitTokenContract.includes("LIVEKIT_TOKEN_REFRESH_MIN_SKEW_MILLIS = 2_000"), "LiveKit token expiry keeps a minimum safety skew");
+assert.ok(livekitTokenContract.includes("LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO = 0.1"), "LiveKit token expiry must use a lifetime ratio for short TTL tokens");
+assert.ok(livekitTokenContract.includes("issuedAtSeconds"), "LiveKit token expiry must inspect issued-at time for adaptive skew");
+assert.ok(livekitTokenContract.includes("tokenLifetimeMillis * LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO"), "short-lived LiveKit tokens must not be consumed by a fixed 60s skew");
+assert.ok(livekitTokenContract.includes("notBeforeSeconds * 1000 > nowMillis"), "not-yet-valid LiveKit tokens must remain blocked");
 
 const bubbleSurfaceStart = player.indexOf("const renderWatchPartyBubbleGridSurface =");
 const bubbleSurfaceEnd = player.indexOf("const renderWatchPartySocialPanel", bubbleSurfaceStart);

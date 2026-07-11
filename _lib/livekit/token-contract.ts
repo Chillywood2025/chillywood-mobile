@@ -55,7 +55,29 @@ export type LiveKitTokenUnavailable = {
 
 export type LiveKitTokenContractResult = LiveKitTokenReady | LiveKitTokenUnavailable;
 
-const LIVEKIT_TOKEN_REFRESH_SKEW_MILLIS = 60_000;
+const LIVEKIT_TOKEN_REFRESH_MAX_SKEW_MILLIS = 60_000;
+const LIVEKIT_TOKEN_REFRESH_MIN_SKEW_MILLIS = 2_000;
+const LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO = 0.1;
+
+const getLiveKitTokenRefreshSkewMillis = (payload: { exp?: unknown; iat?: unknown }) => {
+  const expiresAtSeconds = Number(payload.exp);
+  const issuedAtSeconds = Number(payload.iat);
+  const tokenLifetimeMillis = Number.isFinite(expiresAtSeconds) && Number.isFinite(issuedAtSeconds)
+    ? Math.max(0, (expiresAtSeconds - issuedAtSeconds) * 1000)
+    : 0;
+
+  if (tokenLifetimeMillis > 0) {
+    return Math.min(
+      LIVEKIT_TOKEN_REFRESH_MAX_SKEW_MILLIS,
+      Math.max(
+        LIVEKIT_TOKEN_REFRESH_MIN_SKEW_MILLIS,
+        Math.floor(tokenLifetimeMillis * LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO),
+      ),
+    );
+  }
+
+  return LIVEKIT_TOKEN_REFRESH_MAX_SKEW_MILLIS;
+};
 
 export const isLiveKitParticipantTokenExpired = (
   participantToken: string,
@@ -65,14 +87,14 @@ export const isLiveKitParticipantTokenExpired = (
   if (!token) return true;
 
   try {
-    const payload = decodeTokenPayload(token) as { exp?: unknown; nbf?: unknown };
+    const payload = decodeTokenPayload(token) as { exp?: unknown; iat?: unknown; nbf?: unknown };
     const expiresAtSeconds = Number(payload.exp);
     const notBeforeSeconds = Number(payload.nbf);
 
     if (!Number.isFinite(expiresAtSeconds)) return true;
     if (Number.isFinite(notBeforeSeconds) && notBeforeSeconds * 1000 > nowMillis) return true;
 
-    return expiresAtSeconds * 1000 - LIVEKIT_TOKEN_REFRESH_SKEW_MILLIS <= nowMillis;
+    return expiresAtSeconds * 1000 - getLiveKitTokenRefreshSkewMillis(payload) <= nowMillis;
   } catch {
     return true;
   }
