@@ -19,6 +19,11 @@ const JSON_HEADERS = {
 const SECRET_PATTERN = /(secret|token|password|authorization|service[_-]?role|participant[_-]?token|signed[_-]?url|api[_-]?key|private[_-]?key|db[_-]?url|database[_-]?url)/i;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const toUuidOrNull = (value: unknown) => {
+  const text = toText(value);
+  return UUID_PATTERN.test(text) ? text : null;
+};
 
 const jsonResponse = (status: number, payload: JsonObject) =>
   new Response(JSON.stringify(payload), { headers: JSON_HEADERS, status });
@@ -260,7 +265,7 @@ Deno.serve(async (request) => {
       proof_plan: redactText(payload.proof_plan),
       proposed_action: redactText(payload.proposed_action),
       reason: redactText(payload.reason),
-      requested_by_actor_id: toText(payload.requested_by_actor_id) || null,
+      requested_by_actor_id: toUuidOrNull(payload.requested_by_actor_id),
       requested_by_actor_type: toText(payload.requested_by_actor_type),
       risk_summary: redactText(payload.risk_summary),
       rollback_plan: redactText(payload.rollback_plan),
