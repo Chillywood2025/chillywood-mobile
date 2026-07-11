@@ -6183,21 +6183,60 @@ export default function PlayerScreen() {
         isRequestingToSpeak: participant.isRequestingToSpeak,
       }))),
     });
+    console.info("[watch-party-live-proof] shared-player-panel-state", JSON.stringify({
+      roomNamePresent: !!(watchPartyLiveKitJoinContract?.roomName ?? watchPartyLiveKitRenderableContract?.roomName ?? partyId),
+      inWatchParty,
+      isSharedPartyPlayback,
+      watchPartyEntryAllowed,
+      shouldRenderWatchPartyLiveKit,
+      activeWatchPartyLiveKitJoinContractPresent: !!activeWatchPartyLiveKitJoinContract,
+      watchPartyLiveKitJoinContractPresent: !!watchPartyLiveKitJoinContract,
+      watchPartyLiveKitRenderableContractPresent: !!watchPartyLiveKitRenderableContract,
+      watchPartyLiveKitJoinContractExpired,
+      watchPartyLiveKitRenderableContractExpired,
+      desiredWatchPartyLiveKitParticipantRole,
+      desiredWatchPartyLiveKitCanPublish,
+      contractParticipantRole: watchPartyLiveKitJoinContract?.participantRole ?? null,
+      contractCanPublish: watchPartyLiveKitJoinContract?.requestedGrants.canPublish ?? null,
+      renderableContractParticipantRole: watchPartyLiveKitRenderableContract?.participantRole ?? null,
+      renderableContractCanPublish: watchPartyLiveKitRenderableContract?.requestedGrants.canPublish ?? null,
+      currentWatchPartyParticipantCanSpeak,
+      currentWatchPartyHostAuthority,
+      publishWatchPartyLiveKitVideo,
+      playerMediaIsInteractive,
+      cameraPermissionGranted: !!cameraPermission?.granted,
+      liveBubbleParticipantCount: liveBubbleParticipants.length,
+      participantRosterCount: watchPartyLiveKitParticipantRoster.length,
+      publishCapableRosterCount: watchPartyLiveKitParticipantRoster.filter((participant) => participant.canPublish).length,
+      membershipParticipantCount: Object.keys(partyMembershipMapRef.current).filter(Boolean).length,
+      presenceParticipantCount: partyParticipants.length,
+    }));
   }, [
+    activeWatchPartyLiveKitJoinContract,
+    cameraPermission?.granted,
     currentWatchPartyMembershipAuthoritySignature,
     currentWatchPartyHostAuthority,
+    currentWatchPartyParticipantCanSpeak,
     desiredWatchPartyLiveKitCanPublish,
     desiredWatchPartyLiveKitParticipantRole,
     inWatchParty,
+    isSharedPartyPlayback,
     liveBubbleParticipants,
     partyId,
     partyParticipants,
+    playerMediaIsInteractive,
     publishWatchPartyLiveKitVideo,
+    shouldRenderWatchPartyLiveKit,
     trackedUserId,
+    watchPartyEntryAllowed,
     watchPartyLiveKitParticipantRoster,
+    watchPartyLiveKitJoinContract,
     watchPartyLiveKitJoinContract?.participantRole,
     watchPartyLiveKitJoinContract?.requestedGrants.canPublish,
     watchPartyLiveKitJoinContract?.roomName,
+    watchPartyLiveKitJoinContractExpired,
+    watchPartyLiveKitRenderableContract,
+    watchPartyLiveKitRenderableContractExpired,
   ]);
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";
@@ -6463,13 +6502,42 @@ export default function PlayerScreen() {
   ]);
 
   const onWatchPartyLiveKitFallback = useCallback((reason: "connection_timeout" | "disconnected" | "room_error") => {
+    const validJoinContract = canUseWatchPartyLiveRenderableContract(
+      watchPartyLiveKitJoinContract,
+      { roomName: partyId, isExpired: watchPartyLiveKitJoinContractExpired },
+    );
+    const validRenderableContract = canUseWatchPartyLiveRenderableContract(
+      watchPartyLiveKitRenderableContract,
+      { roomName: partyId, isExpired: watchPartyLiveKitRenderableContractExpired },
+    );
+    const nextRenderableContract = validJoinContract
+      ? watchPartyLiveKitJoinContract
+      : validRenderableContract
+        ? watchPartyLiveKitRenderableContract
+        : null;
+    const shouldPreserveRenderableContract = reason !== "room_error" && !!nextRenderableContract;
+
     debugLog("livekit", "falling back to legacy watch-party-live playback path", {
       reason,
       roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
+      preserveRenderableContract: shouldPreserveRenderableContract,
     });
+    console.info("[watch-party-live-proof] fallback-state", JSON.stringify({
+      reason,
+      roomNamePresent: !!(watchPartyLiveKitJoinContract?.roomName ?? watchPartyLiveKitRenderableContract?.roomName ?? partyId),
+      validJoinContract,
+      validRenderableContract,
+      shouldPreserveRenderableContract,
+    }));
     setWatchPartyLiveKitJoinContract(null);
-    setWatchPartyLiveKitRenderableContract(null);
-  }, [partyId, watchPartyLiveKitJoinContract?.roomName]);
+    setWatchPartyLiveKitRenderableContract(shouldPreserveRenderableContract ? nextRenderableContract : null);
+  }, [
+    partyId,
+    watchPartyLiveKitJoinContract,
+    watchPartyLiveKitJoinContractExpired,
+    watchPartyLiveKitRenderableContract,
+    watchPartyLiveKitRenderableContractExpired,
+  ]);
 
   useEffect(() => {
     if (!activeParticipantId) return;

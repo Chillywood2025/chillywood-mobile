@@ -1007,6 +1007,36 @@ assertIncludes(
 );
 assertIncludes(
   player,
+  "[watch-party-live-proof] shared-player-panel-state",
+  "Player Watch-Party LiveKit proof logs must expose redacted installed panel render gates",
+);
+assertIncludes(
+  player,
+  "activeWatchPartyLiveKitJoinContractPresent",
+  "Player Watch-Party LiveKit proof logs must show whether a valid active/renderable contract exists",
+);
+assertIncludes(
+  player,
+  "shouldPreserveRenderableContract",
+  "Player Watch-Party LiveKit proof logs must show whether transient fallback preserved the real surface",
+);
+assertIncludes(
+  livekitSurface,
+  "[watch-party-live-proof] stage-media-state",
+  "LiveKit surface proof logs must expose redacted installed bubble grid and connection state",
+);
+assertIncludes(
+  livekitSurface,
+  "bubbleGridItemCount",
+  "LiveKit surface proof logs must include bubble-grid item count",
+);
+assertIncludes(
+  livekitSurface,
+  "connectionState",
+  "LiveKit surface proof logs must include connection state",
+);
+assertIncludes(
+  player,
   "membershipIdentities",
   "Player Watch-Party LiveKit proof logs must include membership identities for roster convergence",
 );
@@ -1922,8 +1952,18 @@ assertIncludes(
 );
 assertIncludes(
   playerFallbackHandler,
+  "shouldPreserveRenderableContract",
+  "Player Watch-Party LiveKit fallback must preserve a valid renderable contract during transient timeout/disconnect fallback",
+);
+assertIncludes(
+  playerFallbackHandler,
+  "setWatchPartyLiveKitRenderableContract(shouldPreserveRenderableContract ? nextRenderableContract : null);",
+  "Player Watch-Party LiveKit fallback must clear the cached renderable contract only when no valid renderable contract remains or a room error occurs",
+);
+assertNotIncludes(
+  playerFallbackHandler,
   "setWatchPartyLiveKitRenderableContract(null);",
-  "Player Watch-Party LiveKit fallback must clear the cached renderable contract only on real fallback",
+  "Player Watch-Party LiveKit fallback must not unconditionally swap a valid LiveKit surface to the roster placeholder",
 );
 assertIncludes(
   playerSharedPlayerSelfMute,

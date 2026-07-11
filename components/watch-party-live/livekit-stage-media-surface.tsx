@@ -523,6 +523,29 @@ function LiveKitStageMediaContent({
       lastMicrophoneError: lastMicrophoneError?.message ?? null,
       mediaDeviceFailure,
     });
+    if (surfaceLabel === "Watch-Party Live") {
+      console.info("[watch-party-live-proof] stage-media-state", JSON.stringify({
+        surfaceLabel,
+        roomNamePresent: !!joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        requestedCanPublish: joinContract.requestedGrants.canPublish === true,
+        shouldPublishLocalCamera,
+        publishLocalAudio,
+        isCameraEnabled,
+        isMicrophoneEnabled,
+        hasLocalCameraTrack: !!cameraTrack,
+        hasPublishedLocalCameraTrack: !!publishedLocalCameraTrackRef,
+        hasRemoteTrack: !!primaryRemoteTrack,
+        remoteTrackCount: remoteTracks.length,
+        remoteCameraTrackCount: remoteCameraTracks.length,
+        visibleTrackCount,
+        bubbleGridTrackCount: bubbleGridTracks.length,
+        bubbleGridItemCount: bubbleGridItems.length,
+        publishCapableBubbleCount: bubbleGridItems.filter((item) => item.canPublish).length,
+        connectionState: String(connectionState ?? ""),
+        mediaDeviceFailure,
+      }));
+    }
   }, [
     cameraTrack,
     connectionState,

@@ -685,6 +685,25 @@ assert(
     && !playerSelfMuteSource.includes("setWatchPartyLiveKitRenderableContract(null);"),
   "self mute/unmute authority refresh must preserve the renderable LiveKit surface instead of clearing real bubbles",
 );
+const playerFallbackStart = playerSource.indexOf("const onWatchPartyLiveKitFallback = useCallback(");
+const playerFallbackEnd = playerSource.indexOf("useEffect(() => {\n    if (!activeParticipantId) return;", playerFallbackStart);
+const playerFallbackSource = playerFallbackStart >= 0 && playerFallbackEnd > playerFallbackStart
+  ? playerSource.slice(playerFallbackStart, playerFallbackEnd)
+  : "";
+assert(
+  playerFallbackSource.includes("shouldPreserveRenderableContract")
+    && playerFallbackSource.includes("setWatchPartyLiveKitRenderableContract(shouldPreserveRenderableContract ? nextRenderableContract : null);")
+    && !playerFallbackSource.includes("setWatchPartyLiveKitRenderableContract(null);"),
+  "transient LiveKit timeout/disconnect fallback must preserve a valid renderable contract instead of swapping to the placeholder roster",
+);
+assert(
+  playerSource.includes("[watch-party-live-proof] shared-player-panel-state")
+    && playerSource.includes("activeWatchPartyLiveKitJoinContractPresent")
+    && livekitSurfaceSource.includes("[watch-party-live-proof] stage-media-state")
+    && livekitSurfaceSource.includes("bubbleGridItemCount")
+    && livekitSurfaceSource.includes("connectionState"),
+  "installed Watch-Party Live proof logs must expose redacted render gates, bubble counts, camera state, and connection state",
+);
 const livekitBubbleGridStart = livekitSurfaceSource.indexOf("const bubbleGridItems = useMemo<BubbleGridItem[]>(() => {");
 const livekitBubbleGridEnd = livekitSurfaceSource.indexOf("const participantLabelEntries = useMemo(() => {", livekitBubbleGridStart);
 const livekitBubbleGridSource = livekitBubbleGridStart >= 0 && livekitBubbleGridEnd > livekitBubbleGridStart
