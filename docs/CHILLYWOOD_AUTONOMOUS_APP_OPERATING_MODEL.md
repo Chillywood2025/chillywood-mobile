@@ -20,6 +20,7 @@ Current approved systems:
 
 - `media_automation`
 - `livekit_operator`
+- `money_flow_control`
 
 Future scope can be added only through registry entries that define system id, action/surface id, activation mode, allowed read scope, allowed write scope, forbidden scope, approval level, proof script, guard script, rollback/quarantine behavior, kill switch/fallback behavior, and owner/admin approval requirement for Level 3/4.
 
@@ -109,6 +110,7 @@ These require owner approval before execution:
 - RLS/auth changes
 - payout or cashout changes
 - Premium entitlement changes
+- production checkout, payment link, invoice, transfer, payout, cashout, or live provider setup changes
 - destructive migrations or destructive production DB operations
 - broad catalog backfill
 - public/private exposure changes
@@ -129,6 +131,7 @@ These require owner approval plus external confirmation:
 - app store public release
 - legal/compliance policy changes
 - payment production mutation
+- real customer charge, real payout, real transfer, or real cashout
 - public marketing claims
 - production payment/provider launch
 - provider plan upgrades or paid add-ons
@@ -153,6 +156,16 @@ Scheduler/daemon activation is not an ordinary Level 0 action. Disabled template
 LiveKit health work is autonomous only inside the scoped operator model. The operator may monitor routed LiveKit surfaces, classify router/token/heartbeat/host/render health, ingest sanitized app render/token telemetry, run legitimate heartbeat or counter refresh paths, record audit/recovery events, and maintain learning-state confidence from repeated incidents. Manual `watch_once` operation is enabled through the deployed token-gated operator, and the approved continuous path is the hardened `chillywood-prod-01` systemd timer `chillywood-livekit-operator-watch-once.timer`, which calls `watch_once` every five minutes with a narrow operator token, no service-role key, systemd privilege restrictions, and no LiveKit routing-policy mutation authority. A GitHub Actions loop may also be installed later only as the narrow `livekit-operator-reliability-loop.yml` pattern once workflow-file permission is available; the Cloudflare Cron Worker template remains blocked until the account has a Workers subdomain and the cron is proved. Safe recovery requires an explicit secret gate and remains limited to Level 1/2 actions such as legitimate heartbeat monitor/counter refresh paths and audited operator learning writes. It must not write fake heartbeats, loosen stale heartbeat cutoffs, mark unhealthy servers healthy, log tokens/secrets, mutate non-LiveKit tables, bypass Premium gates, auto-publish source OTA from telemetry, or claim a surface closed while `livekit-token` still returns `no_eligible_livekit_server`.
 
 Owner approval remains required for LiveKit secret rotation, TURN changes, routing threshold/policy expansion, provider/server replacement, destructive DB changes, and broad infrastructure changes.
+
+## 10A. Money Flow Control Policy
+
+Money and ledger work is autonomous only inside the `money_flow_control` model. Read-only reconciliation can be autonomous when it stays limited to provider readiness labels, ledger consistency checks, stale sync detection, duplicate event detection, missing-provider-data reports, risk summaries, and approval request creation.
+
+Real money mutation requires Level 3/4. Production checkout, live provider integration, payout review mutation, fraud enforcement mutation, payout eligibility rule changes, Premium entitlement logic changes, production webhook money handling, production payment links/invoices, revenue-share formula changes, and network billing rule changes require Level 3 owner/super-admin approval before execution.
+
+Real money movement requires Level 4 owner/super-admin approval plus external provider confirmation/readback. This includes real customer charge, real payout, real transfer, real cashout, production Stripe mode switch, public payment launch, provider plan/add-on, legal/compliance/tax activation, and public revenue or payout claims.
+
+The money control plane must enforce no manual Premium grant, no fake revenue, no fake creator earnings, no fake payable balance, no fake paid status, no fake transfer complete, no production charge from foundation tables, no payout release without provider confirmation, no test-mode data described as production, and no provider secrets in logs/docs/artifacts. Rachi can recommend/request, not approve.
 
 ## 11. Cost Policy
 

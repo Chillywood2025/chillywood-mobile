@@ -24,9 +24,12 @@ const approvalFunction = read("supabase/functions/autonomous-approval-request/in
 const approvalMigration = [
   read("supabase/migrations/20260711173119_autonomous_approval_requests.sql"),
   read("supabase/migrations/20260711185503_autonomous_approval_live_flow.sql"),
+  read("supabase/migrations/20260711193000_money_flow_control_approval_scope.sql"),
 ].join("\n\n");
 const ownerAuthority = read("_lib/platformOwnerAuthority.ts");
+const moneyFlowControl = read("_lib/moneyFlowControl.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
+const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
 const operatingModel = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md");
 const ownerAdminSpec = read("docs/owner-admin-rachi-implementation-spec.md");
 const livekitRunbook = read("docs/LIVEKIT_AUTONOMOUS_OPERATOR_RUNBOOK.md");
@@ -42,6 +45,7 @@ const vodGuard = read("scripts/guard-vod-quality-policy.mjs");
 
 const docs = [
   registryDoc,
+  moneyRunbook,
   operatingModel,
   ownerAdminSpec,
   livekitRunbook,
@@ -50,7 +54,7 @@ const docs = [
   nextTask,
 ].join("\n\n");
 
-for (const systemId of ["media_automation", "livekit_operator"]) {
+for (const systemId of ["media_automation", "livekit_operator", "money_flow_control"]) {
   includes(registry, `id: "${systemId}"`, "autonomous registry");
   includes(registryDoc, `\`${systemId}\``, "autonomous registry doc");
 }
@@ -82,6 +86,25 @@ for (const required of [
   "render_telemetry",
 ]) {
   includes(registry, required, "livekit operator required surfaces");
+}
+
+for (const required of [
+  "premium_revenue",
+  "revenuecat_entitlements_readback",
+  "google_play_receipts_readback",
+  "stripe_connect_foundation",
+  "creator_payout_ledger",
+  "payout_review_queue",
+  "payout_batches",
+  "provider_transfer_records",
+  "network_billing",
+  "sponsor_deals",
+  "fraud_holds",
+  "usage_metering",
+  "refunds_disputes_future",
+  "tax_compliance_future",
+]) {
+  includes(registry, required, "money flow required surfaces");
 }
 
 for (const required of [
@@ -134,6 +157,34 @@ for (const forbidden of [
   includes(registry, forbidden, "livekit operator forbidden scopes");
 }
 
+for (const forbidden of [
+  "fake MRR/ARR",
+  "fake creator earnings",
+  "fake payable balance",
+  "fake paid status",
+  "fake transfer complete",
+  "manual Premium grant",
+  "real money movement without Level 4",
+  "payout release without provider confirmation",
+  "charging customers from foundation tables",
+  "marking test-mode data as production",
+]) {
+  includes(registry, forbidden, "money flow forbidden scopes");
+}
+
+for (const required of [
+  "owner/super-admin approval for Level 3",
+  "owner/super-admin approval plus external provider confirmation for Level 4",
+  "fresh preflight before execution",
+  "exact scope match",
+  "emergency stop blocks non-read-only money mutations",
+  "provider readback before money movement closure",
+  "no manual Premium grants",
+  "no fake revenue/earnings/payable balances",
+]) {
+  includes(registry, required, "money flow required gates");
+}
+
 for (const script of [
   "proof:media-automation-controller",
   "proof:media-automation-cli",
@@ -148,6 +199,8 @@ for (const script of [
   "guard:livekit-autonomous-operator-policy",
   "guard:livekit-heartbeat-monitor-policy",
   "guard:watch-party-livekit-camera",
+  "proof:money-flow-control",
+  "guard:money-flow-control",
   "proof:autonomous-systems-contract",
   "proof:autonomous-approval-live-flow",
   "guard:autonomous-systems-contract",
@@ -193,6 +246,12 @@ matches(registry, /approvalLevel:\s*4[\s\S]*ownerApprovalRequired:\s*true/, "Lev
 notIncludes(registry, "approvalLevel: 0,\n        allowedWriteScope: [\"auth/RLS", "high-risk auth/RLS Level 0 write");
 notIncludes(registry, "approvalLevel: 1,\n        allowedWriteScope: [\"billing", "high-risk billing Level 1 write");
 notIncludes(registry, "approvalLevel: 2,\n        allowedWriteScope: [\"Premium entitlement", "high-risk Premium Level 2 write");
+matches(registry, /id:\s*"production_money_setup_or_policy_mutation"[\s\S]*approvalLevel:\s*3[\s\S]*ownerApprovalRequired:\s*true/, "Level 3 money setup registry entry");
+matches(registry, /id:\s*"real_money_movement_or_public_money_launch"[\s\S]*approvalLevel:\s*4[\s\S]*ownerApprovalRequired:\s*true/, "Level 4 money movement registry entry");
+includes(moneyFlowControl, "unknown_money_action_defaults_level_4", "money helper unknown action safety");
+includes(moneyFlowControl, "external_provider_confirmation_required_for_level_4", "money helper Level 4 confirmation");
+includes(moneyFlowControl, "manual_premium_grant_forbidden", "money helper Premium grant block");
+includes(moneyFlowControl, "fake_creator_earnings_forbidden", "money helper fake earnings block");
 
 for (const required of [
   "autonomous_approval_requests",
@@ -213,6 +272,7 @@ for (const required of [
   "mark_autonomous_approval_preflight_result",
   "mark_autonomous_approval_request_executed",
   "set_autonomous_system_emergency_state",
+  "money_flow_control",
 ]) {
   includes(approvalMigration, required, "approval request migration");
 }
@@ -300,6 +360,10 @@ for (const docNeedle of [
   "approval backing status",
   "media_automation",
   "livekit_operator",
+  "money_flow_control",
+  "Real money movement requires Level 4",
+  "external provider confirmation",
+  "no manual Premium grant",
 ]) {
   includes(docs, docNeedle, "autonomous docs");
 }

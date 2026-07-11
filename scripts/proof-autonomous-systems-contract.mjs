@@ -8,11 +8,14 @@ const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8
 
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
+const moneyFlowControl = read("_lib/moneyFlowControl.ts");
+const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
 const approvalModel = read("_lib/autonomousApprovalRequests.ts");
 const approvalFunction = read("supabase/functions/autonomous-approval-request/index.ts");
 const approvalMigration = [
   read("supabase/migrations/20260711173119_autonomous_approval_requests.sql"),
   read("supabase/migrations/20260711185503_autonomous_approval_live_flow.sql"),
+  read("supabase/migrations/20260711193000_money_flow_control_approval_scope.sql"),
 ].join("\n\n");
 const ownerAuthority = read("_lib/platformOwnerAuthority.ts");
 const admin = read("app/admin.tsx");
@@ -32,6 +35,10 @@ const contractChecks = [
   {
     name: "LiveKit system present",
     passes: () => mustInclude(registry, 'id: "livekit_operator"'),
+  },
+  {
+    name: "Money Flow system present",
+    passes: () => mustInclude(registry, 'id: "money_flow_control"') && mustInclude(registryDoc, "`money_flow_control`"),
   },
   {
     name: "valid future scope passes only with proof/guard/approval/write bounds",
@@ -85,7 +92,11 @@ const contractChecks = [
   {
     name: "Level 3 action listed as autonomous fails",
     passes: () => /approvalLevel:\s*3[\s\S]*ownerApprovalRequired:\s*true/.test(registry),
-    negative: () => !/approvalLevel:\s*3[\s\S]*ownerApprovalRequired:\s*true/.test(registry.replace("approvalLevel: 3", "approvalLevel: 2")),
+    negative: () => {
+      const surface = registry.match(/id:\s*"broad_media_backfill_or_new_scheduler"[\s\S]*?ownerApprovalRequired:\s*true,/)?.[0] ?? "";
+      const brokenSurface = surface.replace("approvalLevel: 3", "approvalLevel: 2");
+      return !/approvalLevel:\s*3[\s\S]*ownerApprovalRequired:\s*true/.test(brokenSurface);
+    },
   },
   {
     name: "scheduler overclaim fails",
@@ -106,6 +117,32 @@ const contractChecks = [
     name: "secret logging allowance fails",
     passes: () => mustInclude(approvalModel, "SECRET_KEY_PATTERN") && mustInclude(approvalFunction, "SECRET_PATTERN"),
     negative: () => mustNotInclude("allow secrets in metadata", "SECRET_KEY_PATTERN"),
+  },
+  {
+    name: "missing money surface fails",
+    passes: () => ["premium_revenue", "creator_payout_ledger", "payout_batches", "provider_transfer_records", "network_billing", "sponsor_deals", "fraud_holds", "usage_metering"].every((needle) => mustInclude(registry, needle)),
+    negative: () => !mustInclude(registry.replace("provider_transfer_records", "provider_transfer_removed"), "provider_transfer_records"),
+  },
+  {
+    name: "fake money state fails",
+    passes: () => mustInclude(registry, "fake creator earnings") && mustInclude(registry, "fake payable balance") && mustInclude(moneyFlowControl, "fake_revenue_forbidden"),
+    negative: () => !mustInclude(registry.replace("fake payable balance", "fake payable allowed"), "fake payable balance"),
+  },
+  {
+    name: "real money movement requires Level 4",
+    passes: () => /id:\s*"real_money_movement_or_public_money_launch"[\s\S]*approvalLevel:\s*4[\s\S]*ownerApprovalRequired:\s*true/.test(registry) && mustInclude(moneyFlowControl, "real_money_movement_level_4"),
+    negative: () => {
+      const broken = registry.replace(
+        /id:\s*"real_money_movement_or_public_money_launch"[\s\S]*?approvalLevel:\s*4/,
+        (match) => match.replace("approvalLevel: 4", "approvalLevel: 2"),
+      );
+      return !/id:\s*"real_money_movement_or_public_money_launch"[\s\S]*approvalLevel:\s*4[\s\S]*ownerApprovalRequired:\s*true/.test(broken);
+    },
+  },
+  {
+    name: "Level 4 money action requires external confirmation",
+    passes: () => mustInclude(moneyFlowControl, "external_provider_confirmation_required_for_level_4") && mustInclude(moneyRunbook, "external provider confirmation"),
+    negative: () => !mustInclude(moneyFlowControl.replaceAll("external_provider_confirmation_required_for_level_4", "confirmation_removed"), "external_provider_confirmation_required_for_level_4"),
   },
   {
     name: "Level 3/4 action requires approval request",
@@ -168,7 +205,8 @@ if (failures.length) {
 console.log(JSON.stringify({
   ok: true,
   proofCases: contractChecks.length,
-  systems: ["media_automation", "livekit_operator"],
+  systems: ["media_automation", "livekit_operator", "money_flow_control"],
+  moneyFlowControl: "foundation_readonly_guarded",
   approvalRequestPath: "live_owner_super_admin_backed",
   rachiCanApproveItself: false,
   operatorSelfApprovalAllowed: false,

@@ -4,6 +4,7 @@ export type AutonomousApprovalRequesterType =
   | "admin"
   | "livekit_operator"
   | "media_automation"
+  | "money_flow_control"
   | "operator"
   | "owner"
   | "rachi";
@@ -130,6 +131,7 @@ export const canActorApproveAutonomousRequest = (input: {
   if (input.request.requestedByActorType === "rachi" && input.approverRoles.includes("rachi")) return false;
   if (input.request.requestedByActorType === "livekit_operator" && input.approverRoles.includes("livekit_operator")) return false;
   if (input.request.requestedByActorType === "media_automation" && input.approverRoles.includes("media_automation")) return false;
+  if (input.request.requestedByActorType === "money_flow_control" && input.approverRoles.includes("money_flow_control")) return false;
   if (input.request.approvalLevel === 4) return input.approverRoles.includes("owner") || input.approverRoles.includes("super_admin");
   return input.approverRoles.includes("owner") || input.approverRoles.includes("super_admin") || input.approverRoles.includes("approved_admin");
 };

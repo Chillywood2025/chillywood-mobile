@@ -132,6 +132,83 @@ Required proofs/guards:
 
 Level 4 LiveKit expansion example: secret rotation, TURN changes, server replacement, or provider replacement requires owner approval plus external provider confirmation.
 
+### `money_flow_control`
+
+Status: `foundation_readonly_guarded`.
+
+Activation modes:
+- `off`
+- `dry_run`
+- `manual_cli`
+- `limited_scheduled_if_approved`
+
+Current activation: `manual_cli`
+
+Scheduler status: no money mutation scheduler enabled.
+
+Allowed surfaces:
+- `premium_revenue`
+- `revenuecat_entitlements_readback`
+- `google_play_receipts_readback`
+- `stripe_connect_foundation`
+- `creator_payout_ledger`
+- `payout_review_queue`
+- `payout_batches`
+- `provider_transfer_records`
+- `network_billing`
+- `sponsor_deals`
+- `fraud_holds`
+- `usage_metering`
+- `refunds_disputes_future`
+- `tax_compliance_future`
+
+Allowed writes:
+- read-only reconciliation reports
+- missing-provider-data detection
+- stale sync detection
+- ledger consistency checks
+- duplicate event detection
+- provider webhook validation in test mode
+- zero-dollar/sandbox proof rows
+- scoped provider status row sync
+- risk reports
+- autonomous approval request creation
+
+Forbidden:
+- fake MRR/ARR
+- fake creator earnings
+- fake payable balance
+- fake paid status
+- fake transfer complete
+- manual Premium grant
+- Premium entitlement edit outside provider proof
+- real money movement without Level 4
+- payout release without provider confirmation
+- charging customers from foundation tables
+- marking test-mode data as production
+- provider secrets in logs/docs/artifacts
+
+Required gates:
+- owner/super-admin approval for Level 3
+- owner/super-admin approval plus external provider confirmation for Level 4
+- fresh preflight before execution
+- exact scope match
+- emergency stop blocks non-read-only money mutations
+- provider readback before money movement closure
+- no manual Premium grants
+- no fake revenue/earnings/payable balances
+- secret scan
+
+Required proofs/guards:
+- `proof:money-flow-control`
+- `guard:money-flow-control`
+- `proof:autonomous-approval-live-flow`
+- `proof:autonomous-systems-contract`
+- `guard:autonomous-systems-contract`
+- `guard:autonomous-operating-model`
+
+Read-only reconciliation can be autonomous. Real money mutation requires Level 3/4. Real money movement requires Level 4 owner approval plus external provider confirmation/readback. Rachi can recommend/request, not approve.
+
 ## Expansion Contract
 
 Any new autonomous system, surface, action, scheduler, write path, or recovery action must add an explicit registry entry with:

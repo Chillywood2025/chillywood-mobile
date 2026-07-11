@@ -15,7 +15,8 @@ const mediaArchitecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
 const autonomousRegistry = read("_lib/autonomousSystemsRegistry.ts");
 const autonomousApproval = read("_lib/autonomousApprovalRequests.ts");
 const autonomousRegistryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
-const docsCorpus = [model, currentState, nextTask, mediaWorkerRunbook, recoveryRunbook, mediaArchitecture, autonomousRegistryDoc].join("\n\n");
+const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
+const docsCorpus = [model, currentState, nextTask, mediaWorkerRunbook, recoveryRunbook, mediaArchitecture, autonomousRegistryDoc, moneyRunbook].join("\n\n");
 
 const failures = [];
 
@@ -100,8 +101,18 @@ assertIncludes(model, "Ask the owner and require external confirmation before Le
 assertIncludes(model, "autonomous systems are protected by registry/contract guard", "autonomous systems contract");
 assertIncludes(model, "Level 3/4 actions create owner/admin approval requests", "approval request path");
 assertIncludes(model, "Rachi can recommend/request but cannot approve itself", "Rachi approval boundary");
+assertIncludes(model, "Money Flow Control Policy", "money flow control policy");
+assertIncludes(model, "Read-only reconciliation can be autonomous", "money read-only autonomy");
+assertIncludes(model, "Real money mutation requires Level 3/4", "money Level 3/4 boundary");
+assertIncludes(model, "Real money movement requires Level 4", "money Level 4 boundary");
+assertIncludes(model, "external provider confirmation/readback", "money external provider confirmation");
+assertIncludes(model, "no manual Premium grant", "manual Premium grant forbidden");
+assertIncludes(model, "no fake revenue", "fake revenue forbidden");
+assertIncludes(model, "no fake creator earnings", "fake creator earnings forbidden");
+assertIncludes(model, "no fake payable balance", "fake payable balance forbidden");
 assertIncludes(autonomousRegistry, "media_automation", "media autonomous system registry");
 assertIncludes(autonomousRegistry, "livekit_operator", "LiveKit autonomous system registry");
+assertIncludes(autonomousRegistry, "money_flow_control", "Money Flow Control system registry");
 assertIncludes(autonomousRegistry, "AUTONOMOUS_SYSTEM_EXPANSION_RULES", "autonomous expansion rules");
 assertIncludes(autonomousRegistry, "ownerApprovalRequired: true", "Level 3/4 owner approval requirement");
 assertIncludes(autonomousApproval, "canActorApproveAutonomousRequest", "approval request approver model");

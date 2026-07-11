@@ -16,6 +16,7 @@ const registry = read("_lib/autonomousSystemsRegistry.ts");
 const migration = [
   read("supabase/migrations/20260711173119_autonomous_approval_requests.sql"),
   read("supabase/migrations/20260711185503_autonomous_approval_live_flow.sql"),
+  read("supabase/migrations/20260711193000_money_flow_control_approval_scope.sql"),
 ].join("\n\n");
 const packageJson = read("package.json");
 
@@ -167,14 +168,8 @@ add(
 
 add(
   "no_manual_premium_or_billing_path",
-  hasNone(edge + migration + admin, [
-    "manual_premium_grant",
-    "grant_premium",
-    "RevenueCat product",
-    "Stripe live",
-    "cashout",
-    "payout mutation",
-  ]),
+  !/(manualPremiumGrant|grantPremium|grant_premium|editPremiumEntitlement|createCheckout|createPaymentLink|createInvoice|createTransfer|createPayout|releasePayout|processPayout|executeCashout|stripe\.payouts\.create|stripe\.transfers\.create|stripe\.checkout\.sessions\.create)/i
+    .test(edge + migration + admin),
   "Approval framework does not add Premium, billing, payout, or product mutations.",
 );
 

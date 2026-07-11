@@ -128,6 +128,7 @@ import {
   AUTONOMOUS_SYSTEMS_REGISTRY,
   listAutonomousApprovalRequiredSurfaces,
 } from "../_lib/autonomousSystemsRegistry";
+import { getMoneyFlowControlSummary } from "../_lib/moneyFlowControl";
 import {
   canUserReviewAutonomousApproval,
 } from "../_lib/platformOwnerAuthority";
@@ -1205,6 +1206,7 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
 
 type AdminMoneyCenterSectionId =
   | "overview"
+  | "money_flow_control"
   | "internal_sandbox_testing"
   | "kill_switches"
   | "premium"
@@ -3638,6 +3640,7 @@ export default function AdminStudioScreen() {
   const [providerReadinessNotice, setProviderReadinessNotice] = useState<string | null>(null);
   const [expandedAdminMoneyCenterSections, setExpandedAdminMoneyCenterSections] = useState<Record<AdminMoneyCenterSectionId, boolean>>({
     overview: true,
+    money_flow_control: false,
     internal_sandbox_testing: false,
     kill_switches: false,
     premium: false,
@@ -11093,6 +11096,7 @@ export default function AdminStudioScreen() {
     const adsRevenueSwitch = getPlatformMoneyKillSwitch(moneySwitches, "ads_revenue_enabled");
     const stripeConnectSwitch = getPlatformMoneyKillSwitch(moneySwitches, "stripe_connect_enabled");
     const liveMoneyOff = liveMoneySwitch.state !== "on";
+    const moneyFlowControlSummary = getMoneyFlowControlSummary();
     const readyProviderRows = providerReadinessRows.filter((row) => row.status === "active" || row.status === "sandbox_ready");
     const highRiskOnCount = moneySwitches.filter((row) => HIGH_RISK_MONEY_SWITCHES.has(row.key) && row.state === "on").length;
     const premiumReadiness = findProviderReadinessSummary(providerReadinessRows, "revenuecat", "premium_entitlement")
@@ -11159,6 +11163,48 @@ export default function AdminStudioScreen() {
             />
             <OwnerDetailGrid rows={adminLaunchReadinessRows} />
             <OwnerDetailGrid rows={adminFailureProofRows} />
+          </View>
+        ),
+      },
+      {
+        id: "money_flow_control",
+        title: "Money Flow Control",
+        summary: "Read-only ledger and provider reconciliation is guarded separately from any production money mutation.",
+        meta: `${moneyFlowControlSummary.surfaces.length} money surfaces inventoried.`,
+        statusLabel: "Guarded",
+        tone: "success",
+        children: (
+          <View testID="admin-money-flow-control-section" style={{ gap: 10 }}>
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Status" value="Read-only guarded" tone="success" />
+              <OwnerMetricTile label="Level 3" value="Owner approval" tone="manual" />
+              <OwnerMetricTile label="Level 4" value="Provider confirm" tone="danger" />
+              <OwnerMetricTile label="Blocked" value={moneyFlowControlSummary.forbiddenActions.length} tone="danger" />
+            </View>
+            <Text testID="money-flow-control-readonly-status" style={styles.ownerDetailText}>
+              Read-only reconciliation, stale sync detection, duplicate event detection, and admin summaries may run without money movement.
+            </Text>
+            <Text testID="money-flow-control-approval-required" style={styles.ownerDetailText}>
+              Production checkout, live provider setup, payout review mutation, fraud enforcement mutation, revenue-share changes, network billing changes, and Premium entitlement logic changes require Level 3 owner/super-admin approval.
+            </Text>
+            <Text testID="money-flow-control-external-confirmation-required" style={styles.ownerDetailText}>
+              Real customer charges, real payouts, real transfers, real cashout, production Stripe mode switches, public payment launch, provider plans, and compliance/tax activation require Level 4 approval plus external provider confirmation/readback.
+            </Text>
+            <Text testID="money-flow-control-blocked-actions" style={styles.ownerDetailText}>
+              Blocked actions: manual Premium grant, fake revenue, fake creator earnings, fake payable balance, fake paid status, fake transfer complete.
+            </Text>
+            <OwnerDetailGrid
+              rows={[
+                { label: "System id", value: moneyFlowControlSummary.systemId },
+                { label: "Activation", value: moneyFlowControlSummary.status },
+                { label: "Emergency stop", value: moneyFlowControlSummary.emergencyStop },
+                { label: "Approval path", value: "Existing autonomous approval requests with fresh preflight and exact scope match" },
+              ]}
+            />
+            <Text testID="money-flow-control-proof-status" style={styles.ownerDetailText}>
+              Required package gates: proof:money-flow-control, guard:money-flow-control, proof:autonomous-approval-live-flow, and guard:autonomous-systems-contract.
+            </Text>
+            <OwnerDisabledReason reason="This section is status and permission workflow only. It cannot charge a customer, create a payout, release cashout, mark paid, fake payable balance, edit Premium entitlement, or switch provider modes." />
           </View>
         ),
       },
