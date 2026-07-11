@@ -69,6 +69,7 @@ import { consumePreparedLiveKitJoinBoundary, prepareLiveKitJoinBoundary } from "
 import { WATCH_PARTY_LIVEKIT_FALLBACK_ROSTER_GRACE_MILLIS } from "../../_lib/livekitAutonomousOperator";
 import { enforceLiveKitParticipantState } from "../../_lib/livekit/participant-permissions";
 import {
+    getLiveKitParticipantTokenExpiryState,
     isLiveKitParticipantTokenExpired,
     type LiveKitTokenReady,
 } from "../../_lib/livekit/token-contract";
@@ -5731,10 +5732,20 @@ export default function PlayerScreen() {
   // Gate LiveKit/video only on real AppState backgrounding so camera bubbles
   // keep their room connection while users type comments or system UI appears.
   const playerMediaIsInteractive = playerAppState === "active";
-  const watchPartyLiveKitJoinContractExpired = !!watchPartyLiveKitJoinContract
-    && isLiveKitParticipantTokenExpired(watchPartyLiveKitJoinContract.participantToken);
-  const watchPartyLiveKitRenderableContractExpired = !!watchPartyLiveKitRenderableContract
-    && isLiveKitParticipantTokenExpired(watchPartyLiveKitRenderableContract.participantToken);
+  const watchPartyLiveKitJoinContractExpiryState = useMemo(
+    () => watchPartyLiveKitJoinContract
+      ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitJoinContract.participantToken)
+      : null,
+    [watchPartyLiveKitJoinContract?.participantToken],
+  );
+  const watchPartyLiveKitRenderableContractExpiryState = useMemo(
+    () => watchPartyLiveKitRenderableContract
+      ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitRenderableContract.participantToken)
+      : null,
+    [watchPartyLiveKitRenderableContract?.participantToken],
+  );
+  const watchPartyLiveKitJoinContractExpired = !!watchPartyLiveKitJoinContractExpiryState?.isExpired;
+  const watchPartyLiveKitRenderableContractExpired = !!watchPartyLiveKitRenderableContractExpiryState?.isExpired;
   const activeWatchPartyLiveKitJoinContract = canUseWatchPartyLiveRenderableContract(
     watchPartyLiveKitJoinContract,
     { roomName: partyId, isExpired: watchPartyLiveKitJoinContractExpired },
@@ -6236,6 +6247,13 @@ export default function PlayerScreen() {
       watchPartyLiveKitRenderableContractPresent: !!watchPartyLiveKitRenderableContract,
       watchPartyLiveKitJoinContractExpired,
       watchPartyLiveKitRenderableContractExpired,
+      watchPartyLiveKitJoinContractExpiryReason: watchPartyLiveKitJoinContractExpiryState?.reason ?? null,
+      watchPartyLiveKitJoinContractExpiryDecodeSource: watchPartyLiveKitJoinContractExpiryState?.decodeSource ?? null,
+      watchPartyLiveKitJoinContractExpiresInMillis: watchPartyLiveKitJoinContractExpiryState?.expiresInMillis ?? null,
+      watchPartyLiveKitJoinContractNotBeforeInMillis: watchPartyLiveKitJoinContractExpiryState?.notBeforeInMillis ?? null,
+      watchPartyLiveKitJoinContractExpirySkewMillis: watchPartyLiveKitJoinContractExpiryState?.skewMillis ?? null,
+      watchPartyLiveKitRenderableContractExpiryReason: watchPartyLiveKitRenderableContractExpiryState?.reason ?? null,
+      watchPartyLiveKitRenderableContractExpiryDecodeSource: watchPartyLiveKitRenderableContractExpiryState?.decodeSource ?? null,
       desiredWatchPartyLiveKitParticipantRole,
       desiredWatchPartyLiveKitCanPublish,
       contractParticipantRole: watchPartyLiveKitJoinContract?.participantRole ?? null,
@@ -6277,8 +6295,10 @@ export default function PlayerScreen() {
     watchPartyLiveKitJoinContract?.requestedGrants.canPublish,
     watchPartyLiveKitJoinContract?.roomName,
     watchPartyLiveKitJoinContractExpired,
+    watchPartyLiveKitJoinContractExpiryState,
     watchPartyLiveKitRenderableContract,
     watchPartyLiveKitRenderableContractExpired,
+    watchPartyLiveKitRenderableContractExpiryState,
   ]);
   const liveSpeakingLabel = useMemo(() => {
     if (livePrimarySpeakers.length === 0) return "🎤 Listening Room";

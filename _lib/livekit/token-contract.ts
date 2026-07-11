@@ -58,6 +58,99 @@ export type LiveKitTokenContractResult = LiveKitTokenReady | LiveKitTokenUnavail
 const LIVEKIT_TOKEN_REFRESH_MAX_SKEW_MILLIS = 60_000;
 const LIVEKIT_TOKEN_REFRESH_MIN_SKEW_MILLIS = 2_000;
 const LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO = 0.1;
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+type LiveKitDecodedTokenPayload = {
+  exp?: unknown;
+  iat?: unknown;
+  nbf?: unknown;
+};
+
+export type LiveKitParticipantTokenExpiryState = {
+  decodeSource: "fallback" | "livekit" | "unavailable";
+  expiresInMillis: number | null;
+  hasExpiresAt: boolean;
+  hasIssuedAt: boolean;
+  isExpired: boolean;
+  notBeforeInMillis: number | null;
+  reason: "expired" | "invalid_token" | "missing_exp" | "not_yet_valid" | "valid";
+  skewMillis: number;
+};
+
+const decodeBase64UrlBytes = (value: string) => {
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .replace(/=+$/g, "");
+  if (!normalized) return null;
+
+  let bits = 0;
+  let bitLength = 0;
+  const bytes: number[] = [];
+
+  for (const char of normalized) {
+    const charValue = BASE64_ALPHABET.indexOf(char);
+    if (charValue < 0) return null;
+
+    bits = (bits << 6) | charValue;
+    bitLength += 6;
+
+    if (bitLength >= 8) {
+      bitLength -= 8;
+      bytes.push((bits >> bitLength) & 0xff);
+    }
+  }
+
+  return bytes;
+};
+
+const decodeUtf8Bytes = (bytes: number[]) => {
+  if (typeof TextDecoder !== "undefined") {
+    try {
+      return new TextDecoder().decode(new Uint8Array(bytes));
+    } catch {
+      // Fall through to the percent-decoding fallback.
+    }
+  }
+
+  const percentEncoded = bytes.map((byte) => `%${byte.toString(16).padStart(2, "0")}`).join("");
+  try {
+    return decodeURIComponent(percentEncoded);
+  } catch {
+    return String.fromCharCode(...bytes);
+  }
+};
+
+const decodeLiveKitParticipantTokenPayload = (
+  token: string,
+): { payload: LiveKitDecodedTokenPayload; source: "fallback" | "livekit" } => {
+  try {
+    return {
+      payload: decodeTokenPayload(token) as LiveKitDecodedTokenPayload,
+      source: "livekit",
+    };
+  } catch {
+    // React Native release builds can fail the LiveKit/Jose helper path. The
+    // local fallback reads only unsigned timing claims and never verifies or
+    // trusts auth grants; the backend and LiveKit server still verify the token.
+  }
+
+  const payloadSegment = token.split(".")[1];
+  const payloadBytes = decodeBase64UrlBytes(payloadSegment ?? "");
+  if (!payloadBytes) throw new Error("invalid_livekit_token_payload");
+
+  const decodedPayload = decodeUtf8Bytes(payloadBytes);
+  const parsedPayload = JSON.parse(decodedPayload) as unknown;
+  if (!parsedPayload || typeof parsedPayload !== "object" || Array.isArray(parsedPayload)) {
+    throw new Error("invalid_livekit_token_payload");
+  }
+
+  return {
+    payload: parsedPayload as LiveKitDecodedTokenPayload,
+    source: "fallback",
+  };
+};
 
 const getLiveKitTokenRefreshSkewMillis = (
   payload: { exp?: unknown; iat?: unknown },
@@ -100,20 +193,85 @@ export const isLiveKitParticipantTokenExpired = (
   participantToken: string,
   nowMillis = Date.now(),
 ) => {
+  return getLiveKitParticipantTokenExpiryState(participantToken, nowMillis).isExpired;
+};
+
+export const getLiveKitParticipantTokenExpiryState = (
+  participantToken: string,
+  nowMillis = Date.now(),
+): LiveKitParticipantTokenExpiryState => {
   const token = String(participantToken ?? "").trim();
-  if (!token) return true;
+  if (!token) {
+    return {
+      decodeSource: "unavailable",
+      expiresInMillis: null,
+      hasExpiresAt: false,
+      hasIssuedAt: false,
+      isExpired: true,
+      notBeforeInMillis: null,
+      reason: "invalid_token",
+      skewMillis: 0,
+    };
+  }
 
   try {
-    const payload = decodeTokenPayload(token) as { exp?: unknown; iat?: unknown; nbf?: unknown };
+    const { payload, source } = decodeLiveKitParticipantTokenPayload(token);
     const expiresAtSeconds = Number(payload.exp);
+    const issuedAtSeconds = Number(payload.iat);
     const notBeforeSeconds = Number(payload.nbf);
 
-    if (!Number.isFinite(expiresAtSeconds)) return true;
-    if (Number.isFinite(notBeforeSeconds) && notBeforeSeconds * 1000 > nowMillis) return true;
+    if (!Number.isFinite(expiresAtSeconds)) {
+      return {
+        decodeSource: source,
+        expiresInMillis: null,
+        hasExpiresAt: false,
+        hasIssuedAt: Number.isFinite(issuedAtSeconds),
+        isExpired: true,
+        notBeforeInMillis: Number.isFinite(notBeforeSeconds) ? (notBeforeSeconds * 1000) - nowMillis : null,
+        reason: "missing_exp",
+        skewMillis: 0,
+      };
+    }
 
-    return expiresAtSeconds * 1000 - getLiveKitTokenRefreshSkewMillis(payload, nowMillis) <= nowMillis;
+    const expiresInMillis = (expiresAtSeconds * 1000) - nowMillis;
+    const notBeforeInMillis = Number.isFinite(notBeforeSeconds) ? (notBeforeSeconds * 1000) - nowMillis : null;
+    const skewMillis = getLiveKitTokenRefreshSkewMillis(payload, nowMillis);
+
+    if (typeof notBeforeInMillis === "number" && notBeforeInMillis > 0) {
+      return {
+        decodeSource: source,
+        expiresInMillis,
+        hasExpiresAt: true,
+        hasIssuedAt: Number.isFinite(issuedAtSeconds),
+        isExpired: true,
+        notBeforeInMillis,
+        reason: "not_yet_valid",
+        skewMillis,
+      };
+    }
+
+    const isExpired = expiresAtSeconds * 1000 - skewMillis <= nowMillis;
+    return {
+      decodeSource: source,
+      expiresInMillis,
+      hasExpiresAt: true,
+      hasIssuedAt: Number.isFinite(issuedAtSeconds),
+      isExpired,
+      notBeforeInMillis,
+      reason: isExpired ? "expired" : "valid",
+      skewMillis,
+    };
   } catch {
-    return true;
+    return {
+      decodeSource: "unavailable",
+      expiresInMillis: null,
+      hasExpiresAt: false,
+      hasIssuedAt: false,
+      isExpired: true,
+      notBeforeInMillis: null,
+      reason: "invalid_token",
+      skewMillis: 0,
+    };
   }
 };
 

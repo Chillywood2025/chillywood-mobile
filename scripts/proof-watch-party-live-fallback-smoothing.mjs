@@ -41,12 +41,20 @@ assert.ok(player.includes("WATCH_PARTY_LIVEKIT_FALLBACK_ROSTER_GRACE_MILLIS"), "
 assert.ok(livekitTokenContract.includes("LIVEKIT_TOKEN_REFRESH_MAX_SKEW_MILLIS = 60_000"), "LiveKit token expiry keeps the normal max refresh skew");
 assert.ok(livekitTokenContract.includes("LIVEKIT_TOKEN_REFRESH_MIN_SKEW_MILLIS = 2_000"), "LiveKit token expiry keeps a minimum safety skew");
 assert.ok(livekitTokenContract.includes("LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO = 0.1"), "LiveKit token expiry must use a lifetime ratio for short TTL tokens");
+assert.ok(livekitTokenContract.includes("decodeBase64UrlBytes"), "LiveKit token expiry must have a React Native-safe JWT payload decoder fallback");
+assert.ok(livekitTokenContract.includes("decodeLiveKitParticipantTokenPayload"), "LiveKit token expiry must not depend only on livekit-client decodeTokenPayload");
+assert.ok(livekitTokenContract.includes("source: \"fallback\""), "fallback JWT decode source must be tracked without exposing the token");
+assert.ok(livekitTokenContract.includes("reason: \"invalid_token\""), "malformed LiveKit tokens must fail closed");
 assert.ok(livekitTokenContract.includes("issuedAtSeconds"), "LiveKit token expiry must inspect issued-at time for adaptive skew");
 assert.ok(livekitTokenContract.includes("tokenLifetimeMillis * LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO"), "short-lived LiveKit tokens must not be consumed by a fixed 60s skew");
 assert.ok(livekitTokenContract.includes("remainingLifetimeMillis"), "LiveKit tokens without iat must use remaining lifetime instead of fixed 60s skew");
 assert.ok(livekitTokenContract.includes("(expiresAtSeconds * 1000) - nowMillis"), "no-iat LiveKit token expiry must be based on time remaining");
 assert.ok(livekitTokenContract.includes("getLiveKitTokenRefreshSkewMillis(payload, nowMillis)"), "expiry checks must pass nowMillis into adaptive skew");
-assert.ok(livekitTokenContract.includes("notBeforeSeconds * 1000 > nowMillis"), "not-yet-valid LiveKit tokens must remain blocked");
+assert.ok(livekitTokenContract.includes("notBeforeInMillis > 0"), "not-yet-valid LiveKit tokens must remain blocked");
+assert.ok(livekitTokenContract.includes("reason: \"not_yet_valid\""), "not-yet-valid LiveKit tokens must report a sanitized reason");
+assert.ok(player.includes("watchPartyLiveKitJoinContractExpiryReason"), "installed proof logs must include sanitized token expiry reason");
+assert.ok(player.includes("watchPartyLiveKitJoinContractExpiryDecodeSource"), "installed proof logs must include sanitized token decode source");
+assert.ok(player.includes("watchPartyLiveKitJoinContractExpiresInMillis"), "installed proof logs must expose timing only, not token values");
 
 const bubbleSurfaceStart = player.indexOf("const renderWatchPartyBubbleGridSurface =");
 const bubbleSurfaceEnd = player.indexOf("const renderWatchPartySocialPanel", bubbleSurfaceStart);
