@@ -43,6 +43,9 @@ assert.ok(livekitTokenContract.includes("LIVEKIT_TOKEN_REFRESH_MIN_SKEW_MILLIS =
 assert.ok(livekitTokenContract.includes("LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO = 0.1"), "LiveKit token expiry must use a lifetime ratio for short TTL tokens");
 assert.ok(livekitTokenContract.includes("issuedAtSeconds"), "LiveKit token expiry must inspect issued-at time for adaptive skew");
 assert.ok(livekitTokenContract.includes("tokenLifetimeMillis * LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO"), "short-lived LiveKit tokens must not be consumed by a fixed 60s skew");
+assert.ok(livekitTokenContract.includes("remainingLifetimeMillis"), "LiveKit tokens without iat must use remaining lifetime instead of fixed 60s skew");
+assert.ok(livekitTokenContract.includes("(expiresAtSeconds * 1000) - nowMillis"), "no-iat LiveKit token expiry must be based on time remaining");
+assert.ok(livekitTokenContract.includes("getLiveKitTokenRefreshSkewMillis(payload, nowMillis)"), "expiry checks must pass nowMillis into adaptive skew");
 assert.ok(livekitTokenContract.includes("notBeforeSeconds * 1000 > nowMillis"), "not-yet-valid LiveKit tokens must remain blocked");
 
 const bubbleSurfaceStart = player.indexOf("const renderWatchPartyBubbleGridSurface =");
