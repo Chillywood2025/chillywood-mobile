@@ -90,6 +90,9 @@ type AccessSheetProps = {
   titleOverride?: string;
   bodyOverride?: string;
   actionLabelOverride?: string;
+  sheetTestID?: string;
+  primaryActionTestID?: string;
+  recheckActionTestID?: string;
   onPurchaseResult?: (result: MonetizationAccessPurchaseOutcome) => AccessSheetActionFeedback | Promise<AccessSheetActionFeedback | void> | void;
   onRestoreResult?: (result: MonetizationRestoreOutcome) => AccessSheetActionFeedback | Promise<AccessSheetActionFeedback | void> | void;
   onClose: () => void;
@@ -107,6 +110,9 @@ export function AccessSheet({
   titleOverride,
   bodyOverride,
   actionLabelOverride,
+  sheetTestID,
+  primaryActionTestID,
+  recheckActionTestID,
   onPurchaseResult,
   onRestoreResult,
   onClose,
@@ -123,11 +129,13 @@ export function AccessSheet({
   const [sandboxMode, setSandboxMode] = useState<InternalTesterSandboxPurchaseModeState>({
     enabled: false,
     mode: "public",
-    label: "Internal tester sandbox purchases",
+    label: "Provider sandbox purchases",
     reason: "Checking tester access.",
     allowedRoles: [],
     liveMoneyEnabled: false,
     payoutsEnabled: false,
+    cashoutEnabled: false,
+    providerSandboxCandidate: false,
   });
 
   const resolvePurchaseMode = useCallback(async (): Promise<MonetizationPurchaseMode> => {
@@ -277,7 +285,9 @@ export function AccessSheet({
         title: "Premium required",
         body: "Watch-Party Live is included with Premium.",
         helper: "Premium unlocks Watch-Party Live, Live Watch-Party, and ad-free viewing.",
-        actionLabel: "View Premium",
+        actionLabel: sheetState?.primaryAction === "purchase" || sheetState?.primaryAction === "retry"
+          ? sheetState.primaryLabel
+          : "View Premium",
       }
     : {
         kicker: copy.kicker,
@@ -293,7 +303,7 @@ export function AccessSheet({
       return;
     }
 
-    if (isPremiumGateSheet) {
+    if (isPremiumGateSheet && sheetState?.primaryAction !== "purchase") {
       openPremiumManagement("primary");
       return;
     }
@@ -388,6 +398,11 @@ export function AccessSheet({
     user?.id,
     renderDeferredUnavailable,
   ]);
+  const primaryButtonTestID = isPremiumGateSheet
+    && sheetState?.primaryAction === "retry"
+    && sheetState.primaryLabel.toLowerCase().includes("recheck")
+      ? recheckActionTestID ?? primaryActionTestID
+      : primaryActionTestID;
 
   const onRestorePress = useCallback(async () => {
     setRestoreBusy(true);
@@ -470,7 +485,7 @@ export function AccessSheet({
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => onCloseTracked("backdrop")} />
-        <View style={styles.sheet}>
+        <View style={styles.sheet} testID={sheetTestID} collapsable={false}>
           <Text style={styles.kicker}>{displayedCopy.kicker}</Text>
           <Text style={styles.title}>{displayedCopy.title}</Text>
           <Text style={styles.body}>{displayedCopy.body}</Text>
@@ -568,6 +583,7 @@ export function AccessSheet({
               }}
               activeOpacity={0.9}
               disabled={busy}
+              testID={primaryButtonTestID}
             >
               {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryText}>{displayedCopy.actionLabel}</Text>}
             </TouchableOpacity>

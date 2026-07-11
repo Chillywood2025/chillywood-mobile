@@ -188,6 +188,8 @@ export type InternalTesterSandboxPurchaseModeState = {
   allowedRoles: string[];
   liveMoneyEnabled: boolean;
   payoutsEnabled: boolean;
+  cashoutEnabled: boolean;
+  providerSandboxCandidate: boolean;
 };
 
 export type MonetizationAccessPurchaseOutcome = {
@@ -273,9 +275,9 @@ export const PREMIUM_PURCHASE_SHELL_ON_HOLD = true;
 export const PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
   "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.";
 export const INTERNAL_TESTER_SANDBOX_PURCHASE_MODE = "internal_tester_sandbox" satisfies MonetizationPurchaseMode;
-export const INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL = "Internal tester sandbox purchases";
+export const INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL = "Provider sandbox purchases";
 export const INTERNAL_TESTER_SANDBOX_PURCHASE_COPY =
-  "Sandbox test purchase through Google Play / RevenueCat. No production money, payouts, cash-out, withdrawal, transfer, or payable balance is enabled.";
+  "Provider-backed sandbox purchase through Google Play / RevenueCat. No production money, payouts, cash-out, withdrawal, transfer, or payable balance is enabled.";
 
 export const isPremiumPurchaseShellAvailable = () => {
   const runtime = getAppMonetizationRuntimeFeatures();
@@ -309,6 +311,8 @@ export async function resolveInternalTesterSandboxPurchaseMode(options?: {
   const runtime = getAppMonetizationRuntimeFeatures();
   const liveMoneyEnabled = runtime.liveMoneyEnabled === true;
   const payoutsEnabled = runtime.payoutsEnabled === true;
+  const cashoutEnabled = runtime.cashoutEnabled === true;
+  const providerSandboxCandidate = !!String(options?.userId ?? options?.email ?? "").trim();
   const roles: string[] = [];
 
   if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) {
@@ -320,10 +324,12 @@ export async function resolveInternalTesterSandboxPurchaseMode(options?: {
       allowedRoles: roles,
       liveMoneyEnabled,
       payoutsEnabled,
+      cashoutEnabled,
+      providerSandboxCandidate,
     };
   }
 
-  if (liveMoneyEnabled || payoutsEnabled || runtime.cashoutEnabled) {
+  if (liveMoneyEnabled || payoutsEnabled || cashoutEnabled) {
     return {
       enabled: false,
       mode: "public",
@@ -332,33 +338,47 @@ export async function resolveInternalTesterSandboxPurchaseMode(options?: {
       allowedRoles: roles,
       liveMoneyEnabled,
       payoutsEnabled,
+      cashoutEnabled,
+      providerSandboxCandidate,
     };
   }
 
   const memberships = await readMyPlatformRoleMemberships().catch(() => []);
   const ownerOperator = hasPlatformRoleMembership(memberships, ["owner", "operator"]);
-  if (ownerOperator) roles.push("owner_or_operator");
+  if (ownerOperator) roles.push("owner_or_operator_diagnostic");
 
   if (isBetaOperatorIdentity({ userId: options?.userId, email: options?.email })) {
-    roles.push("runtime_allowlisted_tester");
+    roles.push("runtime_allowlisted_tester_diagnostic");
   }
 
   if (options?.betaAccessActive === true) {
-    roles.push("active_internal_tester");
+    roles.push("active_internal_tester_diagnostic");
   }
 
-  const enabled = roles.length > 0;
+  if (!providerSandboxCandidate) {
+    return {
+      enabled: false,
+      mode: "public",
+      label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
+      reason: "Sign in before starting a Google Play / RevenueCat sandbox Premium purchase.",
+      allowedRoles: roles,
+      liveMoneyEnabled,
+      payoutsEnabled,
+      cashoutEnabled,
+      providerSandboxCandidate,
+    };
+  }
 
   return {
-    enabled,
-    mode: enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : "public",
+    enabled: true,
+    mode: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE,
     label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
-    reason: enabled
-      ? "Approved internal tester sandbox mode is active. Rows remain sandbox/test/not payable and production money stays off."
-      : "This account is not approved for internal tester sandbox purchases.",
+    reason: "Provider-backed sandbox purchase mode is available for this signed-in account when Google Play billing and RevenueCat offerings are ready. Internal tester roles are diagnostics only.",
     allowedRoles: roles,
     liveMoneyEnabled,
     payoutsEnabled,
+    cashoutEnabled,
+    providerSandboxCandidate,
   };
 }
 
@@ -1274,7 +1294,7 @@ export async function readMonetizationAccessSheetState(options: {
       presentation: {
         ...presentation,
         title: "Premium access is being checked",
-        body: "Premium purchase status can be checked here. Approved internal testers can use the sandbox flow when provider setup is available; live settlement stays off.",
+        body: "Premium purchase status can be checked here. Signed-in users can use the Google Play / RevenueCat sandbox flow when provider setup is available; live settlement stays off.",
         actionLabel: "Check Premium Status",
       },
       primaryAction: "retry",
@@ -1362,12 +1382,12 @@ export async function readMonetizationAccessSheetState(options: {
     presentation,
     primaryAction: "purchase",
     primaryLabel: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
-      ? "Start sandbox test"
+      ? "Start Sandbox Premium Test"
       : presentation.actionLabel,
     primaryDisabled: false,
     helperKicker: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE ? "SANDBOX TEST" : "LIVE OFFER",
     helperBody: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
-      ? "This approved tester path opens Google Play sandbox billing only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is created."
+      ? "This provider-backed path opens Google Play sandbox billing only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is created. Premium access still requires RevenueCat and Supabase entitlement readback."
       : "This pricing is coming from the current configured offer for this build.",
     helperTone: "neutral",
     offer,

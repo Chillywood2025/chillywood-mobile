@@ -118,11 +118,13 @@ export default function SubscribeScreen() {
   const [sandboxMode, setSandboxMode] = useState<InternalTesterSandboxPurchaseModeState>({
     enabled: false,
     mode: "public",
-    label: "Internal tester sandbox purchases",
+    label: "Provider sandbox purchases",
     reason: "Checking tester access.",
     allowedRoles: [],
     liveMoneyEnabled: false,
     payoutsEnabled: false,
+    cashoutEnabled: false,
+    providerSandboxCandidate: false,
   });
   const [loading, setLoading] = useState(false);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
@@ -161,10 +163,12 @@ export default function SubscribeScreen() {
         enabled: false,
         mode: "public",
         label: current.label,
-        reason: "Sign in with an approved internal tester account to use sandbox purchases.",
+        reason: "Sign in before starting a Google Play / RevenueCat sandbox Premium purchase.",
         allowedRoles: [],
         liveMoneyEnabled: false,
         payoutsEnabled: false,
+        cashoutEnabled: false,
+        providerSandboxCandidate: false,
       } : current);
       return;
     }
@@ -185,11 +189,13 @@ export default function SubscribeScreen() {
         setSandboxMode({
           enabled: false,
           mode: "public",
-          label: "Internal tester sandbox purchases",
-          reason: "Unable to confirm internal tester sandbox access right now.",
+          label: "Provider sandbox purchases",
+          reason: "Unable to confirm provider-backed sandbox purchase access right now.",
           allowedRoles: [],
           liveMoneyEnabled: false,
           payoutsEnabled: false,
+          cashoutEnabled: false,
+          providerSandboxCandidate: false,
         });
       });
 
@@ -210,6 +216,20 @@ export default function SubscribeScreen() {
   const premiumTarget = snapshot.targets.premium_subscription;
   const hasPremium = !!premiumTarget.hasEntitlement;
   const purchaseReady = buildPurchaseReady(snapshot, activePurchaseMode);
+  const sandboxPurchaseAvailable = sandboxMode.enabled && purchaseReady && !hasPremium;
+  const sandboxBlockedReason = hasPremium
+    ? "Premium is already active."
+    : !sandboxMode.enabled
+      ? sandboxMode.reason
+      : !snapshot.configuration.shouldConfigure
+        ? snapshot.configuration.reason ?? "RevenueCat is not configured for this build."
+        : !snapshot.canMakePayments
+          ? "Google Play billing cannot make purchases on this device/account right now."
+          : !premiumTarget.offeringAvailable
+            ? "RevenueCat did not return the Premium offering for this account."
+            : premiumTarget.packageCount <= 0
+              ? "RevenueCat returned the Premium offering without purchasable packages."
+              : "Provider-backed sandbox purchase is ready.";
   const canPurchase = isSignedIn && purchaseReady && !hasPremium;
   const canRestore = isSignedIn && snapshot.configuration.shouldConfigure;
   const canManage = isSignedIn && snapshot.configuration.shouldConfigure;
@@ -220,7 +240,7 @@ export default function SubscribeScreen() {
   const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
   const availabilitySummary = purchaseReady
     ? sandboxMode.enabled
-      ? "Sandbox tester setup can open the Premium test purchase when Google Play and RevenueCat are available."
+      ? "Google Play / RevenueCat sandbox purchase can open when billing and the Premium offering are available."
       : "A verified store subscription is ready for this account."
     : FRIENDLY_UNAVAILABLE_MESSAGE;
   const primaryActionLabel = hasPremium
@@ -466,9 +486,47 @@ export default function SubscribeScreen() {
             />
             <StatusLine
               label="Sandbox availability"
-              value={sandboxMode.enabled ? "On" : "Off"}
-              body={sandboxMode.enabled ? "Internal tester sandbox path is available for this account." : sandboxMode.reason}
-              tone={sandboxMode.enabled ? "default" : "muted"}
+              value={sandboxPurchaseAvailable ? "Ready" : "Not ready"}
+              body={sandboxPurchaseAvailable ? "Provider-backed Google Play / RevenueCat sandbox purchase is available. Internal tester role is not required for this path." : sandboxBlockedReason}
+              tone={sandboxPurchaseAvailable ? "default" : "muted"}
+            />
+            <StatusLine
+              label="RevenueCat configured"
+              value={snapshot.configuration.shouldConfigure ? "Yes" : "No"}
+              body={snapshot.configuration.shouldConfigure ? `Mode: ${snapshot.configuration.mode}.` : snapshot.configuration.reason ?? "RevenueCat is not configured."}
+              tone={snapshot.configuration.shouldConfigure ? "default" : "warning"}
+            />
+            <StatusLine
+              label="Google Play billing"
+              value={snapshot.canMakePayments ? "Yes" : "No"}
+              body={snapshot.canMakePayments ? "Purchases can be attempted on this device/account." : "Billing cannot make purchases on this device/account right now."}
+              tone={snapshot.canMakePayments ? "default" : "warning"}
+            />
+            <StatusLine
+              label="Premium offering"
+              value={premiumTarget.offeringAvailable ? premiumTarget.resolvedOfferingId ?? "Available" : "Missing"}
+              body={`Configured offering: ${premiumTarget.configuredOfferingId}. Current offering: ${snapshot.currentOfferingId ?? "none"}.`}
+              tone={premiumTarget.offeringAvailable ? "default" : "warning"}
+            />
+            <StatusLine
+              label="Premium packages"
+              value={String(premiumTarget.packageCount)}
+              body={premiumTarget.packageCount > 0 ? `Packages: ${premiumTarget.availablePackageIds.join(", ") || "available"}.` : "No purchasable Premium package was returned."}
+              tone={premiumTarget.packageCount > 0 ? "default" : "warning"}
+            />
+            <StatusLine
+              label="Tester-role diagnostic"
+              value={sandboxMode.allowedRoles.length > 0 ? "Present" : "Not required"}
+              body={sandboxMode.allowedRoles.length > 0
+                ? `Diagnostics: ${sandboxMode.allowedRoles.join(", ")}. Provider-backed sandbox purchase does not require this role.`
+                : "No owner/operator/internal-tester role is required when Google Play / RevenueCat sandbox purchase is available."}
+              tone="muted"
+            />
+            <StatusLine
+              label="Money safety flags"
+              value={sandboxMode.liveMoneyEnabled || sandboxMode.payoutsEnabled || sandboxMode.cashoutEnabled ? "Blocked" : "Off"}
+              body={`liveMoney=${sandboxMode.liveMoneyEnabled ? "on" : "off"}; payouts=${sandboxMode.payoutsEnabled ? "on" : "off"}; cashout=${sandboxMode.cashoutEnabled ? "on" : "off"}.`}
+              tone={sandboxMode.liveMoneyEnabled || sandboxMode.payoutsEnabled || sandboxMode.cashoutEnabled ? "warning" : "default"}
             />
             <StatusLine
               label="Annual setup"

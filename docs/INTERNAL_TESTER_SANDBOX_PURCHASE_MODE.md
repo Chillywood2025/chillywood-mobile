@@ -1,8 +1,8 @@
-# Internal Tester Sandbox Purchase Mode
+# Provider-Backed Premium Sandbox Purchase Mode
 
-Updated: June 4, 2026
+Updated: July 10, 2026
 
-This document explains the bounded purchase mode for approved internal testers and the Owner/Admin controls around it. It does not activate production money.
+This document explains the bounded Premium sandbox purchase path for Play-installed builds using Google Play / RevenueCat sandbox billing. It does not activate production money.
 
 Creator setup flow addendum: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes `/creator-monetization-setup` for approved creators/internal testers. The screen saves real source UUIDs to approved sandbox tiers for paid content, Watch-Party Seat Passes, Live access passes, Live seat passes, event passes, tips, and physical merch. It still uses the same internal tester gate, keeps public/default purchase surfaces closed, and cannot create payout execution, payable balances, production purchases, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin authority, fake sales, or safety bypass.
 
@@ -22,12 +22,11 @@ That is why normal/public users see `Premium Unavailable` or `Temporarily unavai
 
 ## What This Mode Opens
 
-Approved internal testers can use `internal_tester_sandbox` mode to test sandbox purchases:
+Signed-in users who can reach the real Google Play / RevenueCat sandbox purchase flow can use `internal_tester_sandbox` mode to test Premium sandbox purchases without also needing an app Owner, Operator, or internal-tester role:
 
 - Premium through Google Play / RevenueCat sandbox
-- Existing sandbox digital products through the sandbox purchase launcher
-- Stripe physical merch sandbox checkout where already backed
-- Stripe Connect payout-readiness status as read-only status only
+
+Owner/Admin sandbox tools for non-Premium digital products and physical merch remain separate and may still require their own tester/admin controls. The Premium sandbox source of truth is provider-backed sandbox purchase plus RevenueCat entitlement plus Supabase Premium readback.
 
 Every opened surface must be labeled as:
 
@@ -51,15 +50,17 @@ Owner/Admin Money Center includes an `Internal Sandbox Testing` section that sum
 
 These controls are inspection and routing controls. They cannot grant admin/operator/mod/host power, create provider events, mark sandbox rows payable, enable production purchases, enable payouts, or create cash-out/withdraw/transfer actions.
 
-## Who Can Access It
+## Who Can Access Premium Sandbox Purchase
 
-The current app-side gate allows only approved test identities:
+Premium sandbox purchase availability is provider-backed. The app may show the sandbox Premium CTA when:
 
-- active Owner or Operator platform role
-- runtime-allowlisted tester identity
-- active internal beta/tester account
+- RevenueCat is configured.
+- Google Play billing can make purchases on the device/account.
+- the Premium offering resolves.
+- at least one Premium package is available.
+- live money, payouts, and cash-out remain disabled.
 
-Normal signed-in users and signed-out users remain on public/default mode.
+Owner/operator/internal-tester status is now diagnostic for this Premium path, not a hard prerequisite. Signed-out users must sign in first so RevenueCat identity and Supabase entitlement readback can point to the same logical user.
 
 Stripe physical merch checkout also enforces server-side tester access. The `stripe-merch-checkout` Edge Function accepts active Owner/Operator accounts or active `beta_access_memberships` tester rows, then still requires a sandbox physical merch product with `creates_digital_access=false`.
 
@@ -86,19 +87,21 @@ Payout readiness remains read-only. Internal testers cannot request, trigger, si
 
 ## Premium Behavior
 
-Public/default user:
+Provider sandbox unavailable:
 
-- sees Premium inactive or unavailable
-- cannot launch the sandbox purchase dialog
-- can restore/check status only where provider config allows
+- sees Premium inactive or setup unavailable
+- can restore/check status where provider config allows
+- can open Subscribe diagnostics showing RevenueCat, billing, offering, package, and money-safety state
 
-Approved internal tester:
+Provider sandbox available:
 
-- sees `Internal tester sandbox mode`
+- sees `Start Sandbox Premium Test`
 - can load RevenueCat offerings when the Play-installed build, tester account, and provider products are valid
 - can start a Google Play sandbox Premium purchase
 - still needs a real RevenueCat/backend `user_entitlements` result for Premium access
 - does not get fake Premium from the UI
+
+The Live tab keeps `strictEntitlementRequired=true`. If Premium is required, it opens the Premium access sheet or Subscribe diagnostics instead of a dead-end alert. Live opens only after RevenueCat and Supabase entitlement readback show Premium active.
 
 ## Non-Premium Sandbox Digital Products
 
@@ -139,8 +142,9 @@ The screen has no payout execution button and no production purchase button.
 Expected runtime proof path:
 
 - `/tmp/chillywood-internal-tester-sandbox-purchase-mode-proof-20260604/`
+- `npm run proof:premium-sandbox-live-tab-flow`
 
-Proof should use a Play-installed internal/closed test build when testing Google Play Billing. Do not sideload for final Google Play purchase proof.
+Proof should use a Play-installed Google Play build when testing Google Play Billing. Do not sideload for final Google Play purchase proof.
 
 ## Remaining Gaps
 

@@ -9,7 +9,9 @@ import {
   isRuntimeControlBlockedAccess,
   LIVE_FIRST_PREMIUM_UPSELL_COPY,
   requireLiveFirstPremium,
+  type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
+import { AccessSheet, type AccessSheetActionFeedback } from "../../components/monetization/access-sheet";
 import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
 
 type LiveEntry = {
@@ -27,6 +29,8 @@ const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-bra
 
 export default function LiveTabScreen() {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [premiumGate, setPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
+  const [premiumGateVisible, setPremiumGateVisible] = useState(false);
 
   const openLiveWatchParty = async () => {
     const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
@@ -37,14 +41,39 @@ export default function LiveTabScreen() {
         return;
       }
 
-      Alert.alert(
-        LIVE_FIRST_PREMIUM_UPSELL_COPY.title,
-        access?.monetization.issues[0] ?? LIVE_FIRST_PREMIUM_UPSELL_COPY.message,
-      );
+      if (access) {
+        setPremiumGate(access);
+        setPremiumGateVisible(true);
+      } else {
+        router.push({ pathname: "/subscribe", params: { source: "bottom-live-tab" } });
+      }
       return;
     }
 
     router.push({ pathname: "/watch-party", params: { mode: "live", source: "bottom-live-tab" } });
+  };
+
+  const recheckLiveAccessAfterPremiumAction = async (): Promise<AccessSheetActionFeedback> => {
+    const access = await requireLiveFirstPremium({ accessKey: "bottom-live-tab" }).catch(() => null);
+    if (access?.allowed) {
+      setPremiumGate(null);
+      setPremiumGateVisible(false);
+      router.push({ pathname: "/watch-party", params: { mode: "live", source: "bottom-live-tab" } });
+      return {
+        message: "Premium is active. Opening Live...",
+        tone: "success",
+      };
+    }
+
+    if (access) {
+      setPremiumGate(access);
+    }
+
+    return {
+      message: access?.monetization.issues[0]
+        ?? "Premium purchase was checked, but Supabase entitlement readback is not active yet. Recheck access after RevenueCat sync completes.",
+      tone: "error",
+    };
   };
 
   const entries: LiveEntry[] = [
@@ -168,6 +197,37 @@ export default function LiveTabScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+      {premiumGate?.reason === "premium_required" ? (
+        <AccessSheet
+          visible={premiumGateVisible}
+          reason="premium_required"
+          gate={premiumGate}
+          premiumUpsellTitle={LIVE_FIRST_PREMIUM_UPSELL_COPY.title}
+          premiumUpsellBody={LIVE_FIRST_PREMIUM_UPSELL_COPY.message}
+          sheetTestID="live-tab-premium-gate-sheet"
+          primaryActionTestID="live-tab-start-sandbox-premium-test"
+          recheckActionTestID="live-tab-premium-recheck-access"
+          onPurchaseResult={(result) => {
+            if (!result.ok) {
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return recheckLiveAccessAfterPremiumAction();
+          }}
+          onRestoreResult={(result) => {
+            if (!result.ok) {
+              return {
+                message: result.message,
+                tone: "error" as const,
+              };
+            }
+            return recheckLiveAccessAfterPremiumAction();
+          }}
+          onClose={() => setPremiumGateVisible(false)}
+        />
+      ) : null}
     </ImageBackground>
   );
 }
