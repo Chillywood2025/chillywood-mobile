@@ -2047,8 +2047,33 @@ assertIncludes(
 );
 assertIncludes(
   liveStageFallbackHandler,
-  "setLiveKitJoinContract(null);",
-  "Live Stage fallback must explicitly clear the prepared contract",
+  "setLiveKitRenderableJoinContract(liveKitStageSurfaceContract);",
+  "Live Stage fallback must preserve a valid renderable contract during transient room fallback",
+);
+assertIncludes(
+  liveStageFallbackHandler,
+  "setLiveKitJoinUnavailable(null);",
+  "Live Stage fallback must not let transient fallback replace a renderable surface with unavailable copy",
+);
+assertIncludes(
+  liveStage,
+  "const liveKitStageSurfaceContract = canUseLiveStageRenderableContract(",
+  "Live Stage must select a stable renderable LiveKit contract separately from token refresh authority",
+);
+assertIncludes(
+  liveStage,
+  "condition={!!(shouldRenderLiveKitStage && liveKitStageSurfaceContract)}",
+  "Live Stage host wrapper must stay mounted while a valid renderable contract exists",
+);
+assertIncludes(
+  liveStage,
+  "shouldShowLiveKitJoinUnavailable ? (",
+  "Live Stage unavailable copy must be gated behind lack of a renderable contract",
+);
+assertNotIncludes(
+  liveStage,
+  "shouldRenderLiveKitStage && liveKitJoinContract ? (",
+  "Live Stage must not swap from LiveKit surface to unavailable placeholder when join contract is temporarily cleared",
 );
 assertIncludes(
   liveStage,

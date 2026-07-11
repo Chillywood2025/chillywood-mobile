@@ -34,6 +34,7 @@ const importTypeScriptModule = async (relativePath) => {
 const {
   applyLiveStageSeatRequestEvent,
   buildLiveStageCommunityParticipants,
+  canUseLiveStageRenderableContract,
   canRenderParticipantSpecificLiveKitTrack,
   closeLiveStageSeatRequestSheet,
   createSeatRequestVersion,
@@ -43,6 +44,7 @@ const {
   resolveActualVisualHeroParticipantId,
   resolveDesiredLiveKitAuthority,
   shouldAutoOpenLiveStageSeatRequest,
+  shouldShowLiveStageJoinUnavailable,
 } = await importTypeScriptModule("_lib/watch-party/live-stage-presentation.ts");
 
 const createProofParticipant = (userId, role) => ({
@@ -429,6 +431,38 @@ assert(!liveKitContractMatchesDesiredAuthority({ participantRole: "viewer", requ
 assert(!liveKitContractMatchesDesiredAuthority({ participantRole: "speaker", requestedGrants: { canPublish: false } }, speakerDesired), "speaker/no-publish token must not be publish-ready for unmuted approved speaker");
 assert(liveKitContractMatchesDesiredAuthority({ participantRole: "viewer", requestedGrants: { canPublish: false } }, viewerDesired), "viewer/no-publish token is ready for audience viewing");
 
+const liveStageRoomName = "proof-live-stage-room";
+const renderableHostContract = {
+  roomName: liveStageRoomName,
+  participantRole: "host",
+  requestedGrants: { canPublish: true },
+};
+const transientUnavailable = {
+  status: "unavailable",
+  reason: "request_failed",
+  responseStatus: 500,
+};
+assert(
+  canUseLiveStageRenderableContract(renderableHostContract, { roomName: liveStageRoomName, isExpired: false }) === true,
+  "valid Live Stage renderable contract should remain usable during authority refresh",
+);
+assert(
+  canUseLiveStageRenderableContract(renderableHostContract, { roomName: "other-room", isExpired: false }) === false,
+  "wrong-room Live Stage renderable contract must not be reused",
+);
+assert(
+  canUseLiveStageRenderableContract(renderableHostContract, { roomName: liveStageRoomName, isExpired: true }) === false,
+  "expired Live Stage renderable contract must not be reused",
+);
+assert(
+  shouldShowLiveStageJoinUnavailable({ unavailable: transientUnavailable, hasRenderableContract: true }) === false,
+  "transient unavailable token refresh must not replace a valid Live Stage renderable contract",
+);
+assert(
+  shouldShowLiveStageJoinUnavailable({ unavailable: transientUnavailable, hasRenderableContract: false }) === true,
+  "Live Stage unavailable placeholder is allowed only when no renderable contract exists",
+);
+
 assert(canRenderParticipantSpecificLiveKitTrack({
   participantId: viewerId,
   localParticipantIdentity: hostId,
@@ -472,6 +506,7 @@ console.log(JSON.stringify({
   viewerSelfHeroLocalOnly: true,
   hostFirstInSelfHeroPartyBox: true,
   speakerContractMustMatchPublishAuthority: true,
+  transientUnavailablePreservesRenderableLiveStageSurface: true,
   participantTilesRequireIdentityMatchedTracks: true,
   viewerCanPublishAfterApproval: true,
 }, null, 2));

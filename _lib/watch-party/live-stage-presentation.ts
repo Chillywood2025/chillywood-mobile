@@ -42,6 +42,7 @@ export type LiveKitAuthorityTarget = {
 };
 
 export type LiveKitJoinContractLike = {
+  roomName?: string | null;
   participantRole?: string | null;
   requestedGrants?: {
     canPublish?: boolean | null;
@@ -206,6 +207,25 @@ export const liveKitContractMatchesDesiredAuthority = (
   && contract.participantRole === desired.participantRole
   && contract.requestedGrants?.canPublish === desired.canPublish
 );
+
+export const canUseLiveStageRenderableContract = (
+  contract: LiveKitJoinContractLike,
+  options: {
+    roomName?: string | null;
+    isExpired?: boolean;
+  },
+) => {
+  if (!contract || options.isExpired) return false;
+  const contractRoomName = sanitizeIdentifier(contract.roomName);
+  const expectedRoomName = sanitizeIdentifier(options.roomName);
+  if (!contractRoomName || !expectedRoomName) return false;
+  return contractRoomName === expectedRoomName;
+};
+
+export const shouldShowLiveStageJoinUnavailable = (options: {
+  unavailable?: unknown | null;
+  hasRenderableContract: boolean;
+}) => !!options.unavailable && !options.hasRenderableContract;
 
 export const canRenderParticipantSpecificLiveKitTrack = (options: {
   participantId: string;
