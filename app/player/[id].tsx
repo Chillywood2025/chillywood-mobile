@@ -66,6 +66,7 @@ import {
     type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
 import { consumePreparedLiveKitJoinBoundary, prepareLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
+import { WATCH_PARTY_LIVEKIT_FALLBACK_ROSTER_GRACE_MILLIS } from "../../_lib/livekitAutonomousOperator";
 import { enforceLiveKitParticipantState } from "../../_lib/livekit/participant-permissions";
 import {
     isLiveKitParticipantTokenExpired,
@@ -1144,6 +1145,8 @@ export default function PlayerScreen() {
   const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
   const [watchPartyLiveKitRenderableContract, setWatchPartyLiveKitRenderableContract] = useState<LiveKitTokenReady | null>(null);
   const [watchPartyLiveKitAuthorityRetrySerial, setWatchPartyLiveKitAuthorityRetrySerial] = useState(0);
+  const [watchPartyLiveKitFallbackRosterAllowed, setWatchPartyLiveKitFallbackRosterAllowed] = useState(false);
+  const [watchPartyLiveKitHardFallbackReason, setWatchPartyLiveKitHardFallbackReason] = useState<"expired_contract" | "room_error" | "room_mismatch" | null>(null);
   // Live-stage controls stay persistent; shared Player chrome should auto-hide like standalone Player chrome.
   const shouldPinWatchPartyControls = inWatchParty
     && isLiveModeFlag
@@ -5747,6 +5750,45 @@ export default function PlayerScreen() {
     && watchPartyEntryAllowed
     && Platform.OS !== "web"
     && !!activeWatchPartyLiveKitJoinContract;
+  const shouldDelayWatchPartyLiveKitFallbackRoster = inWatchParty
+    && watchPartyEntryAllowed
+    && Platform.OS !== "web"
+    && !shouldRenderWatchPartyLiveKit
+    && !watchPartyLiveKitHardFallbackReason;
+  const shouldRenderWatchPartyLiveKitStableShell = shouldDelayWatchPartyLiveKitFallbackRoster
+    && !watchPartyLiveKitFallbackRosterAllowed;
+  useEffect(() => {
+    if (!inWatchParty || !watchPartyEntryAllowed || Platform.OS === "web") {
+      setWatchPartyLiveKitFallbackRosterAllowed(true);
+      setWatchPartyLiveKitHardFallbackReason(null);
+      return undefined;
+    }
+
+    if (shouldRenderWatchPartyLiveKit) {
+      setWatchPartyLiveKitFallbackRosterAllowed(false);
+      setWatchPartyLiveKitHardFallbackReason(null);
+      return undefined;
+    }
+
+    if (watchPartyLiveKitHardFallbackReason) {
+      setWatchPartyLiveKitFallbackRosterAllowed(true);
+      return undefined;
+    }
+
+    setWatchPartyLiveKitFallbackRosterAllowed(false);
+    const timeout = setTimeout(() => {
+      setWatchPartyLiveKitFallbackRosterAllowed(true);
+    }, WATCH_PARTY_LIVEKIT_FALLBACK_ROSTER_GRACE_MILLIS);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [
+    inWatchParty,
+    shouldRenderWatchPartyLiveKit,
+    watchPartyEntryAllowed,
+    watchPartyLiveKitHardFallbackReason,
+  ]);
   useEffect(() => {
     if (canUseWatchPartyLiveRenderableContract(
       watchPartyLiveKitJoinContract,
@@ -6287,10 +6329,18 @@ export default function PlayerScreen() {
       watchPartyLiveKitContractRequestKeyRef.current = "";
       watchPartyLiveKitAuthorityRetryKeyRef.current = "";
       watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
+      setWatchPartyLiveKitHardFallbackReason(null);
       return;
     }
 
     if (staleContract) {
+      setWatchPartyLiveKitHardFallbackReason(
+        contractRoomMismatch
+          ? "room_mismatch"
+          : watchPartyLiveKitJoinContractExpired
+            ? "expired_contract"
+            : null,
+      );
       debugLog("livekit", "dropping stale watch-party-live join contract", {
         roomName: watchPartyLiveKitJoinContract?.roomName ?? partyId,
         currentUserId: trackedUserId,
@@ -6331,6 +6381,7 @@ export default function PlayerScreen() {
         watchPartyLiveKitContractRequestKeyRef.current = "";
         watchPartyLiveKitAuthorityRetryKeyRef.current = "";
         watchPartyLiveKitAuthorityRetryAttemptsRef.current = {};
+        setWatchPartyLiveKitHardFallbackReason(null);
         setWatchPartyLiveKitJoinContract(preparedContract);
         debugLog("livekit", "consumed watch-party-live join contract", {
           roomName: preparedContract.roomName,
@@ -6405,6 +6456,7 @@ export default function PlayerScreen() {
         });
 
         if (joinResultMatchesDesired) {
+          setWatchPartyLiveKitHardFallbackReason(null);
           setWatchPartyLiveKitJoinContract(joinResult);
           watchPartyLiveKitContractRequestKeyRef.current = "";
           watchPartyLiveKitAuthorityRetryKeyRef.current = "";
@@ -6529,6 +6581,7 @@ export default function PlayerScreen() {
       validRenderableContract,
       shouldPreserveRenderableContract,
     }));
+    setWatchPartyLiveKitHardFallbackReason(reason === "room_error" ? "room_error" : null);
     setWatchPartyLiveKitJoinContract(null);
     setWatchPartyLiveKitRenderableContract(shouldPreserveRenderableContract ? nextRenderableContract : null);
   }, [
@@ -8370,6 +8423,18 @@ export default function PlayerScreen() {
         publishLocalVideo={publishWatchPartyLiveKitVideo}
         containerStyle={containerStyle ?? styles.watchPartySocialMediaFrameInner}
       />
+    ) : shouldRenderWatchPartyLiveKitStableShell ? (
+      <View
+        style={[styles.watchPartyRosterPlaceholderSurface, containerStyle ?? styles.watchPartySocialMediaFrameInner]}
+        testID="shared-player-livekit-connecting-shell"
+      >
+        <View style={styles.watchPartySocialPlaceholder}>
+          <Text style={styles.watchPartySocialPlaceholderKicker}>CONNECTING LIVEKIT</Text>
+          <Text style={styles.watchPartySocialPlaceholderBody}>
+            Camera bubbles are preparing in this room.
+          </Text>
+        </View>
+      </View>
     ) : (
       <View style={[styles.watchPartyRosterPlaceholderSurface, containerStyle ?? styles.watchPartySocialMediaFrameInner]}>
         {liveBubbleParticipants.length > 0 ? (
@@ -8965,7 +9030,7 @@ export default function PlayerScreen() {
       style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
       pointerEvents="auto"
     >
-      {shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract
+      {(shouldRenderWatchPartyLiveKit && activeWatchPartyLiveKitJoinContract) || shouldRenderWatchPartyLiveKitStableShell
         ? renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)
         : null}
     </View>

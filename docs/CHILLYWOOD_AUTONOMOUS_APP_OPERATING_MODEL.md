@@ -86,6 +86,7 @@ These can run autonomously only with emergency stop, audit, rollback, fallback, 
 - automatic quarantine on audit failure
 - automatic fallback to signed origin when CDN eligibility fails
 - one bounded `continuous_limited` loop iteration when backup, restore-drill, audit, rollback, telemetry, cap, kill-switch, and emergency-stop gates pass
+- scoped LiveKit health recovery when host proof and routing state allow it: legitimate heartbeat monitor execution, heartbeat monitor service/timer recovery, capacity counter refresh through the monitor path, affected-surface pause/reporting, and operator audit/learning writes
 
 ## 7. Level 3 Owner Approval Examples
 
@@ -103,6 +104,10 @@ These require owner approval before execution:
 - deploying a long-running production worker, daemon, cron, or scheduler
 - enabling continuous worker automation beyond the approved caps
 - broad uncapped media backfill, cap increases above the hard limit, or destructive cleanup
+- LiveKit API key or TURN credential rotation
+- LiveKit routing policy or stale-heartbeat cutoff changes beyond approved bounds
+- LiveKit provider/server replacement, host rebuild, or broad infrastructure change
+- destructive LiveKit registry cleanup or deleting LiveKit records
 
 ## 8. Level 4 Examples
 
@@ -130,7 +135,13 @@ Queue processing is autonomous only as a bounded, lease-based, capped operation.
 
 Scheduler/daemon activation is not an ordinary Level 0 action. Disabled templates may exist and be source/proofed autonomously, but enabling a long-running production daemon, cron, scheduler, or GitHub Actions schedule crosses the deployment boundary and requires the relevant Level 3 approval unless a future policy explicitly classifies a bounded limited scheduler as safe.
 
-## 10. Cost Policy
+## 10. LiveKit Operator Policy
+
+LiveKit health work is autonomous only inside the scoped operator model. The operator may monitor routed LiveKit surfaces, classify router/token/heartbeat/host/render health, run legitimate heartbeat or counter refresh paths, record audit/recovery events, and maintain learning-state confidence from repeated incidents. It must not write fake heartbeats, loosen stale heartbeat cutoffs, mark unhealthy servers healthy, log tokens/secrets, mutate non-LiveKit tables, bypass Premium gates, or claim a surface closed while `livekit-token` still returns `no_eligible_livekit_server`.
+
+Owner approval remains required for LiveKit secret rotation, TURN changes, routing threshold/policy expansion, provider/server replacement, destructive DB changes, and broad infrastructure changes.
+
+## 11. Cost Policy
 
 Use the cheaper Cloudflare R2/HLS path automatically for eligible audited public-safe media when rollout gates pass. Keep signed-origin fallback available.
 
@@ -138,7 +149,7 @@ Report usage, cache behavior, estimated bytes, and cost summaries. Do not claim 
 
 Ask the owner before enabling new paid services, paid provider features, plan upgrades, PITR add-ons, or production payment/provider mutations.
 
-## 11. Safety Policy
+## 12. Safety Policy
 
 Emergency stop always wins.
 
@@ -150,7 +161,7 @@ No public exposure without policy: private, Premium, original/master, unscanned,
 
 Audit and rollback/quarantine are mandatory for worker output trust. Destructive production changes require owner approval.
 
-## 12. Codex Behavior Rule
+## 13. Codex Behavior Rule
 
 Do not ask the owner for Level 0 or Level 1 operations. Do the work, verify it, report what happened, and keep moving.
 

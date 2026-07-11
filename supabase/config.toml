@@ -7,6 +7,9 @@ verify_jwt = false
 [functions.livekit-heartbeat-monitor]
 verify_jwt = false
 
+[functions.livekit-operator]
+verify_jwt = false
+
 [functions.media-storage]
 verify_jwt = false
 
