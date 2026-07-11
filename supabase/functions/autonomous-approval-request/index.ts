@@ -29,6 +29,8 @@ const readRequiredEnv = (key: string) => {
   return value;
 };
 
+const readOptionalEnv = (key: string) => toText(Deno.env.get(key));
+
 const sha256Hex = async (value: string) => {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -48,12 +50,27 @@ const constantTimeEqual = (left: string, right: string) => {
   return diff === 0;
 };
 
+const createAdminClient = (): SupabaseClientLike => createClient(
+  readRequiredEnv("SUPABASE_URL"),
+  readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  { auth: { persistSession: false } },
+);
+
 const authenticateTrustedRequester = async (request: Request) => {
   const token = toText(request.headers.get("x-autonomous-approval-token"));
   if (!token) return false;
-  const expectedHash = readRequiredEnv("AUTONOMOUS_APPROVAL_REQUEST_TOKEN_SHA256");
+  const expectedHash = readOptionalEnv("AUTONOMOUS_APPROVAL_REQUEST_TOKEN_SHA256");
+  const opsApprovalToken = readOptionalEnv("OPS_APPROVAL_TOKEN");
   const actualHash = await sha256Hex(token);
-  return constantTimeEqual(actualHash, expectedHash);
+  const hashMatches = expectedHash ? constantTimeEqual(actualHash, expectedHash) : false;
+  const opsApprovalMatches = opsApprovalToken ? constantTimeEqual(token, opsApprovalToken) : false;
+  return hashMatches || opsApprovalMatches;
+};
+
+const readBearerToken = (request: Request) => {
+  const authorization = toText(request.headers.get("authorization"));
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() ?? "";
 };
 
 const redactText = (value: unknown) => String(value ?? "").replace(/[A-Za-z0-9._~+/=-]{32,}/g, "[redacted]");
@@ -113,15 +130,10 @@ const validateRequestPayload = (payload: JsonObject) => {
   return failures;
 };
 
-const createAdminClient = (): SupabaseClientLike => createClient(
-  readRequiredEnv("SUPABASE_URL"),
-  readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-  { auth: { persistSession: false } },
-);
-
 const insertApprovalEvent = async (
   client: SupabaseClientLike,
   input: {
+    actorId?: string | null;
     actorType: string;
     eventSummary: string;
     eventType: string;
@@ -129,12 +141,90 @@ const insertApprovalEvent = async (
     requestId: string;
   },
 ) => client.from("autonomous_approval_request_events").insert({
+  actor_id: input.actorId ?? null,
   actor_type: input.actorType,
   event_summary: input.eventSummary,
   event_type: input.eventType,
   metadata: safeMetadata(input.metadata),
   request_id: input.requestId,
 });
+
+const authorizeOwnerOrSuperAdmin = async (request: Request, client: SupabaseClientLike) => {
+  const bearer = readBearerToken(request);
+  if (!bearer) return { ok: false as const, error: "owner_authorization_required" };
+
+  const { data: userData, error: userError } = await client.auth.getUser(bearer);
+  const user = userData?.user;
+  if (userError || !user?.id) return { ok: false as const, error: "owner_authorization_invalid" };
+
+  const userId = user.id;
+  const email = toText(user.email).toLowerCase();
+
+  const userRows = await client
+    .from("platform_role_memberships")
+    .select("role,status")
+    .eq("status", "active")
+    .in("role", ["owner", "super_admin"])
+    .eq("user_id", userId)
+    .limit(1);
+
+  let role = toText(userRows.data?.[0]?.role);
+  if (!role && email) {
+    const emailRows = await client
+      .from("platform_role_memberships")
+      .select("role,status")
+      .eq("status", "active")
+      .in("role", ["owner", "super_admin"])
+      .eq("email", email)
+      .limit(1);
+    role = toText(emailRows.data?.[0]?.role);
+  }
+
+  if (role !== "owner" && role !== "super_admin") {
+    return { ok: false as const, error: "owner_or_super_admin_required", userId };
+  }
+
+  return { ok: true as const, role, userId };
+};
+
+const readRequests = async (client: SupabaseClientLike, status = "pending", requestId?: string) => {
+  let query = client
+    .from("autonomous_approval_requests")
+    .select("id,system_id,action_id,requested_by_actor_type,requested_by_actor_id,approval_level,status,title,reason,risk_summary,proposed_action,allowed_write_scope,forbidden_scope,rollback_plan,kill_switch_plan,proof_plan,validation_plan,expires_at,approved_by,approved_at,denied_by,denied_at,denial_reason,execution_result,metadata,created_at,updated_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (requestId) query = query.eq("id", requestId).limit(1);
+  else if (status) query = query.eq("status", status);
+
+  const { data, error } = await query;
+  if (error) throw new Error("read_requests_failed");
+
+  const ids = (data ?? []).map((row: { id: string }) => row.id);
+  if (!ids.length) return [];
+
+  const events = await client
+    .from("autonomous_approval_request_events")
+    .select("id,request_id,event_type,actor_type,actor_id,event_summary,metadata,created_at")
+    .in("request_id", ids)
+    .order("created_at", { ascending: true });
+
+  const eventsByRequest = new Map<string, unknown[]>();
+  for (const event of events.data ?? []) {
+    const requestEvents = eventsByRequest.get(event.request_id) ?? [];
+    requestEvents.push(event);
+    eventsByRequest.set(event.request_id, requestEvents);
+  }
+
+  return (data ?? []).map((row: { id: string }) => ({
+    ...row,
+    events: eventsByRequest.get(row.id) ?? [],
+  }));
+};
+
+const requireTrusted = (trusted: boolean) => (
+  trusted ? null : jsonResponse(401, { error: "autonomous_approval_token_required" })
+);
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
@@ -148,23 +238,13 @@ Deno.serve(async (request) => {
   }
 
   const action = toText(body.action);
-
-  if (action === "approve_request" || action === "deny_request") {
-    return jsonResponse(409, {
-      error: "owner_approval_execution_foundation_only",
-      ownerApprovalBacking: "explicit_owner_super_admin_backing_incomplete",
-      platformRoleTruth: "platform_role_memberships",
-      rachiCanApprove: false,
-      operatorSelfApprovalAllowed: false,
-    });
-  }
-
   const trusted = await authenticateTrustedRequester(request);
-  if (!trusted) return jsonResponse(401, { error: "autonomous_approval_token_required" });
-
   const client = createAdminClient();
 
   if (action === "create_request") {
+    const trustedFailure = requireTrusted(trusted);
+    if (trustedFailure) return trustedFailure;
+
     const payload = (body.request && typeof body.request === "object" ? body.request : body) as JsonObject;
     const failures = validateRequestPayload(payload);
     if (failures.length) return jsonResponse(422, { error: "invalid_approval_request", failures });
@@ -201,7 +281,7 @@ Deno.serve(async (request) => {
     await insertApprovalEvent(client, {
       actorType: insertPayload.requested_by_actor_type,
       eventSummary: "Autonomous Level 3/4 approval request created.",
-      eventType: "created",
+      eventType: "requested",
       metadata: { system_id: insertPayload.system_id, action_id: insertPayload.action_id },
       requestId: data.id,
     });
@@ -209,20 +289,142 @@ Deno.serve(async (request) => {
     return jsonResponse(200, { ok: true, request: data });
   }
 
-  if (action === "read_pending") {
+  if (action === "list_pending" || action === "read_pending" || action === "get_request" || action === "system_status") {
+    const owner = trusted ? null : await authorizeOwnerOrSuperAdmin(request, client);
+    if (owner && !owner.ok) return jsonResponse(403, { error: owner.error });
+
+    if (action === "system_status") {
+      const { data, error } = await client
+        .from("autonomous_system_emergency_states")
+        .select("system_id,status,reason,updated_at,metadata")
+        .order("system_id", { ascending: true });
+      if (error) return jsonResponse(500, { error: "system_status_failed" });
+      return jsonResponse(200, { ok: true, approvalExecutionStatus: "live_owner_super_admin_backed", states: data ?? [] });
+    }
+
+    try {
+      const requests = await readRequests(
+        client,
+        toText(body.status) || "pending",
+        action === "get_request" ? toText(body.request_id) : undefined,
+      );
+      return jsonResponse(200, {
+        ok: true,
+        approvalExecutionStatus: "live_owner_super_admin_backed",
+        requests,
+      });
+    } catch {
+      return jsonResponse(500, { error: "read_pending_failed" });
+    }
+  }
+
+  if (action === "approve_request") {
+    const owner = await authorizeOwnerOrSuperAdmin(request, client);
+    if (!owner.ok) return jsonResponse(403, { error: owner.error });
+
+    const requestId = toText(body.request_id);
+    if (!requestId) return jsonResponse(400, { error: "request_id_required" });
+    if (containsSecretLikeValue(body.metadata)) return jsonResponse(422, { error: "secret_like_payload_blocked" });
+
+    const rows = await readRequests(client, "", requestId);
+    const current = rows[0] as JsonObject | undefined;
+    if (!current) return jsonResponse(404, { error: "request_not_found" });
+    if (current.status !== "pending") return jsonResponse(409, { error: "request_not_pending" });
+    if (Date.parse(toText(current.expires_at)) <= Date.now()) {
+      await client.from("autonomous_approval_requests").update({ status: "expired", updated_at: new Date().toISOString() }).eq("id", requestId);
+      await insertApprovalEvent(client, {
+        actorId: owner.userId,
+        actorType: owner.role,
+        eventSummary: "Autonomous approval request expired during review.",
+        eventType: "expired",
+        requestId,
+      });
+      return jsonResponse(409, { error: "request_expired" });
+    }
+    if (toText(current.requested_by_actor_id) && toText(current.requested_by_actor_id) === owner.userId) {
+      return jsonResponse(403, { error: "self_approval_denied" });
+    }
+
     const { data, error } = await client
       .from("autonomous_approval_requests")
-      .select("id,system_id,action_id,approval_level,status,title,risk_summary,proposed_action,rollback_plan,kill_switch_plan,proof_plan,validation_plan,expires_at,created_at")
+      .update({
+        approved_at: new Date().toISOString(),
+        approved_by: owner.userId,
+        status: "approved",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", requestId)
       .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) return jsonResponse(500, { error: "read_pending_failed" });
-    return jsonResponse(200, { ok: true, approvalExecutionStatus: "foundation_only", requests: data ?? [] });
+      .select("id,status,system_id,action_id,approval_level,approved_at")
+      .single();
+    if (error) return jsonResponse(500, { error: "approve_request_failed" });
+
+    await insertApprovalEvent(client, {
+      actorId: owner.userId,
+      actorType: owner.role,
+      eventSummary: "Owner/super-admin approved autonomous Level 3/4 request. Fresh preflight is still required before execution.",
+      eventType: "approved",
+      metadata: { executionRequiresFreshPreflight: true },
+      requestId,
+    });
+
+    return jsonResponse(200, { ok: true, request: data });
+  }
+
+  if (action === "deny_request") {
+    const owner = await authorizeOwnerOrSuperAdmin(request, client);
+    if (!owner.ok) return jsonResponse(403, { error: owner.error });
+
+    const requestId = toText(body.request_id);
+    const denialReason = toText(body.denial_reason || body.reason);
+    if (!requestId) return jsonResponse(400, { error: "request_id_required" });
+    if (!denialReason) return jsonResponse(400, { error: "denial_reason_required" });
+
+    const rows = await readRequests(client, "", requestId);
+    const current = rows[0] as JsonObject | undefined;
+    if (!current) return jsonResponse(404, { error: "request_not_found" });
+    if (current.status !== "pending") return jsonResponse(409, { error: "request_not_pending" });
+    if (toText(current.requested_by_actor_id) && toText(current.requested_by_actor_id) === owner.userId) {
+      return jsonResponse(403, { error: "self_denial_denied" });
+    }
+
+    const { data, error } = await client
+      .from("autonomous_approval_requests")
+      .update({
+        denial_reason: redactText(denialReason).slice(0, 2000),
+        denied_at: new Date().toISOString(),
+        denied_by: owner.userId,
+        status: "denied",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", requestId)
+      .eq("status", "pending")
+      .select("id,status,system_id,action_id,approval_level,denied_at")
+      .single();
+    if (error) return jsonResponse(500, { error: "deny_request_failed" });
+
+    await insertApprovalEvent(client, {
+      actorId: owner.userId,
+      actorType: owner.role,
+      eventSummary: "Owner/super-admin denied autonomous approval request.",
+      eventType: "denied",
+      metadata: { reason: redactText(denialReason).slice(0, 2000) },
+      requestId,
+    });
+
+    return jsonResponse(200, { ok: true, request: data });
   }
 
   if (action === "cancel_request") {
+    const owner = trusted ? null : await authorizeOwnerOrSuperAdmin(request, client);
+    if (owner && !owner.ok) return jsonResponse(403, { error: owner.error });
+    if (!trusted && !owner?.ok) return jsonResponse(401, { error: "autonomous_approval_token_or_owner_required" });
+
     const requestId = toText(body.request_id);
     if (!requestId) return jsonResponse(400, { error: "request_id_required" });
+    const actorType = owner?.ok ? owner.role : "operator";
+    const actorId = owner?.ok ? owner.userId : null;
+
     const { data, error } = await client
       .from("autonomous_approval_requests")
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
@@ -232,31 +434,91 @@ Deno.serve(async (request) => {
       .single();
     if (error) return jsonResponse(500, { error: "cancel_request_failed" });
     await insertApprovalEvent(client, {
-      actorType: "operator",
-      eventSummary: "Autonomous approval request cancelled by trusted requester.",
+      actorId,
+      actorType,
+      eventSummary: "Autonomous approval request cancelled.",
       eventType: "cancelled",
       requestId,
     });
     return jsonResponse(200, { ok: true, request: data });
   }
 
-  if (action === "expire_old_requests") {
-    const { data, error } = await client
-      .from("autonomous_approval_requests")
-      .update({ status: "expired", updated_at: new Date().toISOString() })
-      .eq("status", "pending")
-      .lt("expires_at", new Date().toISOString())
-      .select("id,status");
-    if (error) return jsonResponse(500, { error: "expire_old_requests_failed" });
-    return jsonResponse(200, { ok: true, expiredCount: Array.isArray(data) ? data.length : 0 });
+  if (action === "mark_preflight_result") {
+    const trustedFailure = requireTrusted(trusted);
+    if (trustedFailure) return trustedFailure;
+    const requestId = toText(body.request_id);
+    if (!requestId) return jsonResponse(400, { error: "request_id_required" });
+    const { data, error } = await client.rpc("mark_autonomous_approval_preflight_result", {
+      p_metadata: safeMetadata(body.metadata),
+      p_passed: body.passed === true,
+      p_request_id: requestId,
+      p_summary: redactText(body.summary || (body.passed === true ? "Fresh preflight passed." : "Fresh preflight failed.")),
+    });
+    if (error) return jsonResponse(409, { error: "mark_preflight_result_failed" });
+    return jsonResponse(200, { ok: true, request: data });
   }
 
   if (action === "mark_executed") {
-    return jsonResponse(409, {
-      error: "execution_requires_live_owner_approval_backing",
-      executionRequiresFreshPreflight: true,
-      approvalExecutionStatus: "foundation_only",
+    const trustedFailure = requireTrusted(trusted);
+    if (trustedFailure) return trustedFailure;
+    const requestId = toText(body.request_id);
+    if (!requestId) return jsonResponse(400, { error: "request_id_required" });
+    const { data, error } = await client.rpc("mark_autonomous_approval_request_executed", {
+      p_action_id: toText(body.action_id),
+      p_execution_result: redactText(body.execution_result || "Approved autonomous action completed."),
+      p_metadata: safeMetadata(body.metadata),
+      p_request_id: requestId,
+      p_system_id: toText(body.system_id),
     });
+    if (error) return jsonResponse(409, { error: "mark_executed_failed" });
+    return jsonResponse(200, { ok: true, request: data });
+  }
+
+  if (action === "expire_old_requests") {
+    const trustedFailure = requireTrusted(trusted);
+    if (trustedFailure) return trustedFailure;
+    const { data, error } = await client.rpc("expire_autonomous_approval_requests");
+    if (error) return jsonResponse(500, { error: "expire_old_requests_failed" });
+    return jsonResponse(200, { ok: true, expiredCount: Number(data ?? 0) });
+  }
+
+  if (action === "emergency_pause_system" || action === "resume_system") {
+    const owner = await authorizeOwnerOrSuperAdmin(request, client);
+    if (!owner.ok) return jsonResponse(403, { error: owner.error });
+    const systemId = toText(body.system_id);
+    const reason = toText(body.reason) || (action === "resume_system" ? "Owner/super-admin resumed autonomous system." : "Owner/super-admin paused autonomous system.");
+    const status = action === "resume_system" ? "active" : toText(body.status) === "paused" ? "paused" : "emergency_stop";
+    if (!["media_automation", "livekit_operator"].includes(systemId)) return jsonResponse(400, { error: "unknown_system_id" });
+    if (containsSecretLikeValue(body.metadata)) return jsonResponse(422, { error: "secret_like_payload_blocked" });
+
+    const { data, error } = await client
+      .from("autonomous_system_emergency_states")
+      .upsert({
+        metadata: safeMetadata(body.metadata),
+        reason: redactText(reason).slice(0, 2000),
+        status,
+        system_id: systemId,
+        updated_at: new Date().toISOString(),
+        updated_by: owner.userId,
+      }, { onConflict: "system_id" })
+      .select("system_id,status,reason,updated_at,metadata")
+      .single();
+    if (error) return jsonResponse(500, { error: "system_state_update_failed" });
+
+    await client.from("autonomous_system_control_events").insert({
+      actor_id: owner.userId,
+      actor_role: owner.role,
+      event_summary: status === "active"
+        ? "Owner/super-admin resumed autonomous system."
+        : status === "paused"
+          ? "Owner/super-admin paused autonomous system."
+          : "Owner/super-admin put autonomous system into emergency stop.",
+      event_type: status === "active" ? "resumed" : status === "paused" ? "paused" : "emergency_paused",
+      metadata: { reason: redactText(reason).slice(0, 2000) },
+      system_id: systemId,
+    });
+
+    return jsonResponse(200, { ok: true, state: data });
   }
 
   return jsonResponse(400, { error: "unknown_action" });

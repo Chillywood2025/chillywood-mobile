@@ -10,7 +10,11 @@ const registry = read("_lib/autonomousSystemsRegistry.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 const approvalModel = read("_lib/autonomousApprovalRequests.ts");
 const approvalFunction = read("supabase/functions/autonomous-approval-request/index.ts");
-const approvalMigration = read("supabase/migrations/20260711173119_autonomous_approval_requests.sql");
+const approvalMigration = [
+  read("supabase/migrations/20260711173119_autonomous_approval_requests.sql"),
+  read("supabase/migrations/20260711185503_autonomous_approval_live_flow.sql"),
+].join("\n\n");
+const ownerAuthority = read("_lib/platformOwnerAuthority.ts");
 const admin = read("app/admin.tsx");
 const packageJson = read("package.json");
 
@@ -65,7 +69,7 @@ const contractChecks = [
   },
   {
     name: "fake heartbeat fails",
-    passes: () => mustInclude(registry, "fake heartbeat") && mustInclude(approvalFunction, "owner_approval_execution_foundation_only"),
+    passes: () => mustInclude(registry, "fake heartbeat") && mustInclude(approvalFunction, "owner_or_super_admin_required"),
     negative: () => !mustInclude(registry.replaceAll("fake heartbeat", "manual heartbeat accepted"), "fake heartbeat"),
   },
   {
@@ -105,11 +109,11 @@ const contractChecks = [
   },
   {
     name: "Level 3/4 action requires approval request",
-    passes: () => mustInclude(approvalMigration, "approval_level integer not null check (approval_level in (3, 4))") && mustInclude(registryDoc, "Level 3/4 actions create"),
+    passes: () => mustInclude(approvalMigration, "approval_level integer not null check (approval_level in (3, 4))") && mustInclude(registryDoc, "Level 3/4 actions create") && mustInclude(approvalFunction, "approve_request"),
   },
   {
     name: "operator cannot self-approve",
-    passes: () => mustInclude(approvalModel, "operatorSelfApprovalAllowed: false") && mustInclude(approvalMigration, "autonomous_approval_requests_no_self_approval"),
+    passes: () => mustInclude(approvalModel, "operatorSelfApprovalAllowed: false") && mustInclude(approvalMigration, "autonomous_approval_requests_no_self_approval") && mustInclude(ownerAuthority, "canUserApproveAutonomousRequest"),
   },
   {
     name: "Rachi cannot self-approve",
@@ -121,7 +125,7 @@ const contractChecks = [
   },
   {
     name: "execution requires fresh preflight after approval",
-    passes: () => mustInclude(approvalModel, "approvedPreflightReran") && mustInclude(approvalFunction, "executionRequiresFreshPreflight"),
+    passes: () => mustInclude(approvalModel, "approvedPreflightReran") && mustInclude(approvalMigration, "preflight_passed") && mustInclude(approvalFunction, "mark_preflight_result"),
   },
   {
     name: "admin foundation test IDs exist",
@@ -130,9 +134,23 @@ const contractChecks = [
       "autonomous-approval-request-card",
       "autonomous-approval-approve-button",
       "autonomous-approval-deny-button",
+      "autonomous-approval-cancel-button",
+      "autonomous-approval-emergency-pause-button",
+      "autonomous-approval-resume-button",
       "autonomous-approval-risk-summary",
       "autonomous-approval-rollback-plan",
+      "autonomous-approval-proof-plan",
+      "autonomous-approval-event-history",
+      "autonomous-approval-owner-locked-copy",
     ].every((needle) => mustInclude(admin, needle)),
+  },
+  {
+    name: "owner/super-admin live approval backing exists",
+    passes: () => mustInclude(approvalModel, "live_owner_super_admin_backed") && mustInclude(approvalMigration, "super_admin") && mustInclude(approvalFunction, "authorizeOwnerOrSuperAdmin"),
+  },
+  {
+    name: "emergency stop blocks execution",
+    passes: () => mustInclude(approvalModel, "emergencyStopBlocksExecution") && mustInclude(approvalMigration, "autonomous_system_emergency_state_blocks_execution"),
   },
 ];
 
@@ -151,7 +169,7 @@ console.log(JSON.stringify({
   ok: true,
   proofCases: contractChecks.length,
   systems: ["media_automation", "livekit_operator"],
-  approvalRequestPath: "foundation_only_until_owner_super_admin_backing",
+  approvalRequestPath: "live_owner_super_admin_backed",
   rachiCanApproveItself: false,
   operatorSelfApprovalAllowed: false,
   expansionRequiresRegistryEntry: true,

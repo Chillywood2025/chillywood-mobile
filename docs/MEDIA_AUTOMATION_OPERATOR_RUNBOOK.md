@@ -10,7 +10,7 @@ continuous limited automation is source/proofed/templates only. The new queue pr
 
 Safe Level 0/1 media operations should not require owner approval when they stay inside policy: eligible discovery, safe batch sizing, scoped logical backups, restore drills, public-safe media work inside caps, post-write audit, scoped rollback/quarantine, fallback playback, telemetry reporting, cache verification, and auto-pause reporting. Owner approval remains required for money/billing/provider changes, auth/RLS, Premium entitlement, payout/cashout, destructive production DB changes, broad uncapped backfill, public/private exposure policy changes, private/Premium CDN token policy, app-store/public launch, legal/compliance, payment production mutation, and public marketing claims.
 
-The media lane is one of the current approved systems in the autonomous systems contract. Its registry id is `media_automation`, and future scope can be added only through registry entries in `_lib/autonomousSystemsRegistry.ts` plus the mirrored `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`. Level 3/4 actions create owner/admin approval requests with rollback, kill-switch, proof, validation, allowed-write, and forbidden-scope plans. Rachi can recommend/request but cannot approve itself, owner authority remains above Rachi/operator, and approval backing status is foundation-only until explicit owner/super-admin backing is complete.
+The media lane is one of the current approved systems in the autonomous systems contract. Its registry id is `media_automation`, and future scope can be added only through registry entries in `_lib/autonomousSystemsRegistry.ts` plus the mirrored `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`. Level 3/4 actions create owner/admin approval requests with rollback, kill-switch, proof, validation, allowed-write, and forbidden-scope plans. Rachi can recommend/request but cannot approve itself, owner authority remains above Rachi/operator, and approval backing is live through `platform_role_memberships` owner/super-admin authority, the canonical `/admin` Autonomous Approvals section, the deployed `autonomous-approval-request` Edge Function, approval/denial RPCs, and audited request events.
 
 ## Purpose
 
@@ -271,3 +271,11 @@ npm run proof:media-automation-worker-loop
 ```
 
 These proofs cover fail-closed defaults, emergency stop, dry-run no writes, auto-detect candidate discovery, adaptive batch sizing, continuous-mode denial with the backup gate open, public-safe inclusion, unsafe exclusion, audited-HLS skip, active-job and unsafe-row blocks, stale backup/restore blocks, confirmation for `run-auto`, audit pass/quarantine, scoped rollback, resolver ignoring pending/quarantined rows, no secret output, and no production playback switch.
+
+## Level 3/4 Approval Consumption
+
+Media Level 3/4 actions, including broad catalog backfill, new long-running scheduler/daemon/worker activation, destructive cleanup, deleting private source objects, public/private exposure changes, Premium entitlement changes, billing/provider mutations, payout/cashout work, auth/RLS changes, or public release work, must create an `autonomous_approval_requests` row through the trusted approval path and stop. Rachi and `media_automation` may request/recommend, but they cannot approve themselves.
+
+Owner/super-admin review is live through `platform_role_memberships`, `/admin` Autonomous Approvals, `autonomous-approval-request`, approval/denial RPCs, and immutable approval events. Approval does not execute the media action. Before consuming an approval, media automation must re-run fresh backup/restore and scan/moderation preflight, verify the request is unexpired, verify the approved system/action/write scope matches exactly, verify the system is not paused or in emergency stop, execute only inside the approved scope, and mark execution with audit.
+
+Emergency stop blocks write execution. Read-only discovery, planning, status, and reporting can still run.

@@ -12,9 +12,11 @@ export type AutonomousApprovalRequestStatus =
   | "approved"
   | "cancelled"
   | "denied"
+  | "execution_failed"
   | "executed"
   | "expired"
   | "pending"
+  | "preflight_failed"
   | "superseded";
 
 export type AutonomousApprovalRequest = {
@@ -135,20 +137,92 @@ export const canActorApproveAutonomousRequest = (input: {
 export const canExecuteApprovedAutonomousRequest = (input: {
   approvalFresh: boolean;
   approvedPreflightReran: boolean;
+  emergencyState?: "active" | "emergency_stop" | "paused" | null;
   request: Pick<AutonomousApprovalRequest, "expiresAt" | "status">;
 }) => {
   if (input.request.status !== "approved") return false;
   if (Date.parse(input.request.expiresAt) <= Date.now()) return false;
+  if ((input.emergencyState ?? "active") !== "active") return false;
   return input.approvalFresh && input.approvedPreflightReran;
 };
 
+export const validateAutonomousApprovalExecutionScope = (input: {
+  actionId: string;
+  allowedWriteScope: readonly string[];
+  request: Pick<AutonomousApprovalRequest, "actionId" | "allowedWriteScope" | "systemId">;
+  systemId: AutonomousSystemId;
+}) => {
+  const approvedWriteScope = new Set(input.request.allowedWriteScope);
+  return input.systemId === input.request.systemId
+    && input.actionId === input.request.actionId
+    && input.allowedWriteScope.every((scope) => approvedWriteScope.has(scope));
+};
+
+export const planLevelThreeOrFourApprovalRequest = (input: {
+  actionId: string;
+  allowedWriteScope: readonly string[];
+  approvalLevel: Extract<AutonomousApprovalLevel, 3 | 4>;
+  forbiddenScope: readonly string[];
+  killSwitchPlan: string;
+  proofPlan: string;
+  proposedAction: string;
+  reason: string;
+  requestedByActorType: AutonomousApprovalRequesterType;
+  riskSummary: string;
+  rollbackPlan: string;
+  systemId: AutonomousSystemId;
+  title: string;
+  validationPlan: string;
+}) => {
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const draft: AutonomousApprovalRequestDraft = {
+    actionId: input.actionId,
+    allowedWriteScope: input.allowedWriteScope,
+    approvalLevel: input.approvalLevel,
+    expiresAt,
+    forbiddenScope: input.forbiddenScope,
+    killSwitchPlan: input.killSwitchPlan,
+    metadata: {},
+    proofPlan: input.proofPlan,
+    proposedAction: input.proposedAction,
+    reason: input.reason,
+    requestedByActorId: null,
+    requestedByActorType: input.requestedByActorType,
+    riskSummary: input.riskSummary,
+    rollbackPlan: input.rollbackPlan,
+    systemId: input.systemId,
+    title: input.title,
+    validationPlan: input.validationPlan,
+  };
+  return {
+    draft,
+    executionStatus: "approval_request_required" as const,
+    validation: validateAutonomousApprovalRequestDraft(draft),
+  };
+};
+
+export const canConsumeApprovedAutonomousRequest = (input: {
+  actionId: string;
+  allowedWriteScope: readonly string[];
+  approvalFresh: boolean;
+  approvedPreflightReran: boolean;
+  emergencyState?: "active" | "emergency_stop" | "paused" | null;
+  request: Pick<AutonomousApprovalRequest, "actionId" | "allowedWriteScope" | "expiresAt" | "status" | "systemId">;
+  systemId: AutonomousSystemId;
+}) => (
+  canExecuteApprovedAutonomousRequest(input)
+  && validateAutonomousApprovalExecutionScope(input)
+);
+
 export const buildAutonomousApprovalFoundationSummary = () => ({
-  approvalExecutionStatus: "foundation_only",
+  approvalExecutionStatus: "live_owner_super_admin_backed",
   backingTruth: "platform_role_memberships",
-  explicitOwnerSuperAdminBacking: "incomplete",
+  explicitOwnerSuperAdminBacking: "owner_or_super_admin_required",
   rachiFinalAuthority: false,
   operatorSelfApprovalAllowed: false,
   sameRequesterApprovalAllowed: false,
   executionRequiresFreshPreflight: true,
+  executionRequiresExactScopeMatch: true,
+  emergencyStopBlocksExecution: true,
   clientWritesDeniedByDefault: true,
 });

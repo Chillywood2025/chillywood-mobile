@@ -149,6 +149,12 @@ Owner authority must stay above:
 - creator/channel owner
 - Rachi
 
+Current autonomous approval backing is live for bounded Level 3/4 autonomous-operation review. Role truth is `platform_role_memberships`; `owner` and `super_admin` memberships may approve or deny autonomous approval requests from the canonical `/admin` route or the trusted approval backend. Approval is not execution: the requesting operator must re-run fresh preflight, prove exact system/action/write-scope match, verify the request is unexpired, verify emergency stop is not active, and write audit before execution can be marked complete.
+
+This live approval path is a control framework only. It does not add manual Premium entitlement controls, billing/provider mutations, payout/cashout controls, broad auth/RLS rewrites, public/private exposure changes, R2/media behavior changes, LiveKit routing-policy changes, or destructive DB authority. Those remain separate high-risk actions governed by the autonomous systems registry and owner/external confirmation rules.
+
+Rachi can create or recommend an approval request through a trusted path, but Rachi cannot approve its own request. Autonomous operators cannot approve their own requests. Owner/Super Admin authority remains final.
+
 ### 4.2 Staff Admin
 Staff admin is below owner and should split into bounded role layers over time.
 
@@ -246,13 +252,12 @@ Current doctrine:
 - Provider Transfer Records Sync Foundation source files: `supabase/functions/stripe-connect-transfer-sync/index.ts`, shared helper `supabase/functions/_shared/stripe-connect.ts`, `supabase/config.toml`, `_lib/platformFinance.ts`, read-only Admin Payouts copy in `app/admin.tsx`, generated database types, and migration `supabase/migrations/202605080010_provider_transfer_sync_foundation.sql`
 - Admin V1B2A source files: `app/(auth)/signup.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; New Accounts is enforced on signup only
 - Admin V1B2B source files: `app/channel-settings.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; Uploads is enforced on new creator-video upload submit only
-- Autonomous Systems Contract foundation source files: `_lib/autonomousSystemsRegistry.ts`, `_lib/autonomousApprovalRequests.ts`, `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`, read-only/foundation `/admin` System > Autonomous Approvals copy in `app/admin.tsx`, source migration `supabase/migrations/20260711173119_autonomous_approval_requests.sql`, source Edge Function `supabase/functions/autonomous-approval-request/index.ts`, `scripts/guard-autonomous-systems-contract.mjs`, and `scripts/proof-autonomous-systems-contract.mjs`. This protects `media_automation` and `livekit_operator`; future scope can be added only through registry entries. Level 3/4 actions create owner/admin approval requests, but approval backing status is foundation-only until explicit owner/super-admin backing is complete. Rachi can recommend/request but cannot approve itself, and owner authority remains above Rachi/operator.
+- Autonomous Systems Contract live approval files: `_lib/autonomousSystemsRegistry.ts`, `_lib/autonomousApprovalRequests.ts`, `_lib/platformOwnerAuthority.ts`, `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`, `/admin` System > Autonomous Approvals in `app/admin.tsx`, migrations `supabase/migrations/20260711173119_autonomous_approval_requests.sql` and `supabase/migrations/20260711185503_autonomous_approval_live_flow.sql`, deployed Edge Function `supabase/functions/autonomous-approval-request/index.ts`, `scripts/guard-autonomous-systems-contract.mjs`, `scripts/proof-autonomous-systems-contract.mjs`, and `scripts/proof-autonomous-approval-live-flow.mjs`. This protects `media_automation` and `livekit_operator`; future scope can be added only through registry entries. Level 3/4 actions create owner/admin approval requests backed by `platform_role_memberships` owner/super-admin authority, `/admin` review, approval/denial RPCs, audited events, emergency-state checks, and fresh-preflight execution gating. Rachi can recommend/request but cannot approve itself, and owner authority remains above Rachi/operator.
 
 ## 9. Missing Truth That Still Needs To Be Built
-- explicit owner / super-admin role truth
-- safe owner bootstrap path
-- owner-only gate truth
-- live owner/admin approval execution for autonomous Level 3/4 actions; current approval request path is source-proof/foundation-only
+- explicit owner / super-admin bootstrap UX beyond existing backend role truth
+- expanded owner-only gate truth outside the autonomous approval framework
+- installed owner-session proof for autonomous Level 3/4 approval review
 - additional Admin V1B kill switches backed by schema/config/enforcement and real reads from affected app surfaces; current real enforcement is limited to `new_accounts_enabled` on signup and `uploads_enabled` on new creator-video upload submit
 - dangerous-action audit write integration beyond current immutable foundation rows
 - real Rachi-control state and domain controls

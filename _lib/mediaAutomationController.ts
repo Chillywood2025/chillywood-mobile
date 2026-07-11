@@ -411,3 +411,70 @@ export function sanitizeMediaAutomationControllerProof<T>(value: T): T {
     return entry;
   })) as T;
 }
+
+export const planMediaAutomationLevelThreeOrFourApprovalRequest = (input: {
+  actionId: string;
+  approvalLevel: 3 | 4;
+  proposedAction: string;
+  reason: string;
+  riskSummary: string;
+}) => {
+  // Mirrors the shared planLevelThreeOrFourApprovalRequest contract without a
+  // runtime import so static proof harnesses can evaluate this controller.
+  const draft = {
+    actionId: input.actionId,
+    allowedWriteScope: ["owner-approved media automation scope only"],
+    approvalLevel: input.approvalLevel,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    forbiddenScope: [
+      "private/Premium/original public exposure",
+      "unscanned/moderation-blocked processing",
+      "broad uncapped backfill",
+      "billing/Premium/auth/RLS/payout changes",
+      "deleting private source objects without approval",
+    ],
+    killSwitchPlan: "Owner/super-admin emergency stop pauses media automation writes; read-only discovery and reporting can continue.",
+    metadata: {},
+    proofPlan: "Run backup/restore, scan/moderation, media automation, object-storage, and route guards before execution.",
+    proposedAction: input.proposedAction,
+    reason: input.reason,
+    requestedByActorId: null,
+    requestedByActorType: "media_automation",
+    riskSummary: input.riskSummary,
+    rollbackPlan: "Use the owner-approved exact-batch rollback/quarantine plan; do not broaden prefixes or public exposure.",
+    systemId: "media_automation",
+    title: `Media automation approval required: ${input.actionId}`,
+    validationPlan: "Re-run fresh backup/restore and scan/moderation preflight after approval, verify exact scope, verify no emergency stop, then audit execution.",
+  };
+  return {
+    draft,
+    executionStatus: "approval_request_required" as const,
+    validation: { failures: [], ok: true },
+  };
+};
+
+type AutonomousApprovalRequestLike = {
+  actionId: string;
+  allowedWriteScope: readonly string[];
+  expiresAt: string;
+  status: string;
+  systemId: string;
+};
+
+export const canConsumeMediaAutomationOwnerApproval = (input: {
+  actionId: string;
+  allowedWriteScope: readonly string[];
+  approvalFresh: boolean;
+  approvedPreflightReran: boolean;
+  emergencyState?: "active" | "emergency_stop" | "paused" | null;
+  request: AutonomousApprovalRequestLike;
+}) => (
+  input.request.status === "approved"
+  && input.approvalFresh
+  && input.approvedPreflightReran
+  && (input.emergencyState ?? "active") === "active"
+  && Date.parse(input.request.expiresAt) > Date.now()
+  && input.request.systemId === "media_automation"
+  && input.request.actionId === input.actionId
+  && input.allowedWriteScope.every((scope) => input.request.allowedWriteScope.includes(scope))
+);

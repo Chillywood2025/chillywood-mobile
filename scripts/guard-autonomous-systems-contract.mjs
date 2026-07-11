@@ -21,7 +21,11 @@ const matches = (source, pattern, label) => {
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 const approvalModel = read("_lib/autonomousApprovalRequests.ts");
 const approvalFunction = read("supabase/functions/autonomous-approval-request/index.ts");
-const approvalMigration = read("supabase/migrations/20260711173119_autonomous_approval_requests.sql");
+const approvalMigration = [
+  read("supabase/migrations/20260711173119_autonomous_approval_requests.sql"),
+  read("supabase/migrations/20260711185503_autonomous_approval_live_flow.sql"),
+].join("\n\n");
+const ownerAuthority = read("_lib/platformOwnerAuthority.ts");
 const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 const operatingModel = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md");
 const ownerAdminSpec = read("docs/owner-admin-rachi-implementation-spec.md");
@@ -145,6 +149,7 @@ for (const script of [
   "guard:livekit-heartbeat-monitor-policy",
   "guard:watch-party-livekit-camera",
   "proof:autonomous-systems-contract",
+  "proof:autonomous-approval-live-flow",
   "guard:autonomous-systems-contract",
 ]) {
   includes(packageJson, `"${script}"`, "package script wiring");
@@ -192,13 +197,22 @@ notIncludes(registry, "approvalLevel: 2,\n        allowedWriteScope: [\"Premium 
 for (const required of [
   "autonomous_approval_requests",
   "autonomous_approval_request_events",
+  "autonomous_system_emergency_states",
+  "autonomous_system_control_events",
   "approval_level integer not null check (approval_level in (3, 4))",
   "enable row level security",
   "revoke all on table public.autonomous_approval_requests from anon, authenticated",
   "revoke all on table public.autonomous_approval_request_events from anon, authenticated",
+  "revoke all on table public.autonomous_system_emergency_states from anon, authenticated",
   "grant select, insert, update on table public.autonomous_approval_requests to service_role",
   "grant select, insert on table public.autonomous_approval_request_events to service_role",
   "autonomous_approval_requests_no_self_approval",
+  "autonomous_actor_has_owner_authority",
+  "approve_autonomous_approval_request",
+  "deny_autonomous_approval_request",
+  "mark_autonomous_approval_preflight_result",
+  "mark_autonomous_approval_request_executed",
+  "set_autonomous_system_emergency_state",
 ]) {
   includes(approvalMigration, required, "approval request migration");
 }
@@ -206,16 +220,22 @@ for (const required of [
 for (const required of [
   "x-autonomous-approval-token",
   "AUTONOMOUS_APPROVAL_REQUEST_TOKEN_SHA256",
+  "OPS_APPROVAL_TOKEN",
   "constantTimeEqual",
-  "owner_approval_execution_foundation_only",
-  "explicit_owner_super_admin_backing_incomplete",
-  "rachiCanApprove: false",
-  "operatorSelfApprovalAllowed: false",
+  "authorizeOwnerOrSuperAdmin",
+  "owner_or_super_admin_required",
+  "live_owner_super_admin_backed",
   "create_request",
-  "read_pending",
+  "list_pending",
+  "get_request",
+  "approve_request",
+  "deny_request",
   "cancel_request",
+  "mark_preflight_result",
+  "mark_executed",
   "expire_old_requests",
-  "execution_requires_live_owner_approval_backing",
+  "emergency_pause_system",
+  "resume_system",
 ]) {
   includes(approvalFunction, required, "approval request function");
 }
@@ -227,8 +247,19 @@ for (const required of [
   "Rachi can request/recommend but cannot approve itself",
   "operatorSelfApprovalAllowed: false",
   "executionRequiresFreshPreflight: true",
+  "executionRequiresExactScopeMatch: true",
+  "emergencyStopBlocksExecution: true",
 ]) {
   includes(approvalModel, required, "approval request model");
+}
+
+for (const required of [
+  "canUserReviewAutonomousApproval",
+  "canUserApproveAutonomousRequest",
+  "canUserDenyAutonomousRequest",
+  "hasOwnerOrSuperAdminAuthority",
+]) {
+  includes(ownerAuthority, required, "owner/super-admin authority helper");
 }
 
 for (const testId of [
@@ -236,20 +267,26 @@ for (const testId of [
   "autonomous-approval-request-card",
   "autonomous-approval-approve-button",
   "autonomous-approval-deny-button",
+  "autonomous-approval-cancel-button",
+  "autonomous-approval-emergency-pause-button",
+  "autonomous-approval-resume-button",
   "autonomous-approval-risk-summary",
   "autonomous-approval-rollback-plan",
+  "autonomous-approval-proof-plan",
+  "autonomous-approval-event-history",
+  "autonomous-approval-owner-locked-copy",
 ]) {
   includes(admin, testId, "admin approval foundation testID");
 }
-includes(admin, "approvalExecutionStatus === \"foundation_only\"", "admin foundation status");
-includes(admin, "Approval execution is source-proof/foundation-only", "admin foundation copy");
+includes(admin, "approvalExecutionStatus === \"live_owner_super_admin_backed\"", "admin live status");
+includes(admin, "Owner or Super Admin role is required", "admin owner locked copy");
 notIncludes(admin, "/admin-command-center", "admin route duplication");
 
 for (const doctrine of [
   "Owner / Super Admin is above Rachi",
   "Rachi is an internal AI operations layer, never the final authority",
   "platform_role_memberships",
-  "explicit owner / super-admin role truth",
+  "backed by `platform_role_memberships` owner/super-admin authority",
 ]) {
   includes(ownerAdminSpec, doctrine, "owner/admin doctrine");
 }

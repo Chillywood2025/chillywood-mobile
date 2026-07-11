@@ -17,7 +17,7 @@ This is not a Live-tab-only operator.
 
 The operator is limited to LiveKit health and recovery state. It must not mutate R2/media storage, Premium billing, RevenueCat or Google Play products, auth/RLS unrelated behavior, payouts, cashout, App Links, or unrelated Chat/native behavior.
 
-The LiveKit operator is one of the current approved systems in the autonomous systems contract. Its registry id is `livekit_operator`, and future scope can be added only through registry entries in `_lib/autonomousSystemsRegistry.ts` plus the mirrored `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`. Level 3/4 actions create owner/admin approval requests; Rachi can recommend/request but cannot approve itself, and owner authority remains above Rachi/operator. Approval backing status is foundation-only until explicit owner/super-admin backing is complete.
+The LiveKit operator is one of the current approved systems in the autonomous systems contract. Its registry id is `livekit_operator`, and future scope can be added only through registry entries in `_lib/autonomousSystemsRegistry.ts` plus the mirrored `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`. Level 3/4 actions create owner/admin approval requests; Rachi can recommend/request but cannot approve itself, and owner authority remains above Rachi/operator. Approval backing is live through `platform_role_memberships` owner/super-admin authority, the canonical `/admin` Autonomous Approvals section, the deployed `autonomous-approval-request` Edge Function, approval/denial RPCs, and audited request events.
 
 The operator must never:
 
@@ -183,3 +183,11 @@ npm run livekit-operator:status
 Do not paste the token into chat or docs.
 
 Current deployment posture: the `livekit-operator` Edge Function is deployed, the schema migration is applied, a narrow operator token hash is active in Supabase, and the matching token is stored only in the host env file for `chillywood-livekit-operator-watch-once.timer`. Missing or invalid operator calls still deny with `401 operator_token_required`, app telemetry requires app auth, and no broad operator access exists. GitHub Actions remains a prepared template until `.github/workflows/livekit-operator-reliability-loop.yml` can be added with a GitHub credential that has workflow-file permission. The Cloudflare Cron Worker template remains inactive until the Workers subdomain prerequisite is satisfied and a schedule run is proved.
+
+## Level 3/4 Approval Consumption
+
+LiveKit Level 3/4 actions, including secret rotation, TURN credential changes, routing-policy/stale-cutoff changes, provider/server replacement, destructive LiveKit registry work, host rebuild, and broad infrastructure changes, must create an `autonomous_approval_requests` row through the trusted approval path and stop. Rachi and `livekit_operator` may request/recommend, but they cannot approve themselves.
+
+Owner/super-admin review is live through `platform_role_memberships`, `/admin` Autonomous Approvals, `autonomous-approval-request`, approval/denial RPCs, and immutable approval events. Approval does not execute the action. Before consuming an approval, the LiveKit operator must re-run fresh preflight, verify the request is unexpired, verify the approved system/action/write scope matches exactly, verify the system is not paused or in emergency stop, execute only inside the approved scope, and mark execution with audit.
+
+Emergency stop blocks write execution. Read-only status/reporting can still run.

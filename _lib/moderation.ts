@@ -40,7 +40,7 @@ export type SafetyReportCategoryCopy = {
   description: string;
 };
 export type ModerationActorRole = "member" | "official_platform" | "operator" | "owner" | "moderator";
-export type PlatformRole = "owner" | "operator" | "moderator";
+export type PlatformRole = "owner" | "super_admin" | "operator" | "moderator";
 export type PlatformStaffManagementRole = "admin" | "operator" | "moderator";
 export type PlatformStaffPermissionKey =
   | "support_inbox"
@@ -139,7 +139,7 @@ export type PlatformStaffRoleActionResult = {
   id: number | null;
   email: string;
   role: PlatformRole;
-  displayRole: "owner" | "admin" | "moderator";
+  displayRole: "owner" | "super_admin" | "admin" | "moderator";
   status: "active" | "revoked";
 };
 
@@ -369,7 +369,7 @@ const toJsonValue = (value: unknown): Json => {
 
 const normalizePlatformRole = (value: unknown): PlatformRole | null => {
   const normalized = normalizeText(value).toLowerCase();
-  if (normalized === "owner" || normalized === "operator" || normalized === "moderator") {
+  if (normalized === "owner" || normalized === "super_admin" || normalized === "operator" || normalized === "moderator") {
     return normalized;
   }
   return null;
@@ -436,6 +436,7 @@ export const formatPlatformRoleDisplayLabel = (role: PlatformRole | PlatformStaf
   const normalized = normalizeText(role).toLowerCase();
   if (normalized === "operator" || normalized === "admin") return "Admin";
   if (normalized === "owner") return "Owner";
+  if (normalized === "super_admin") return "Super Admin";
   if (normalized === "moderator") return "Moderator";
   return "Unknown";
 };
@@ -723,7 +724,7 @@ export function resolvePlatformActorRole(
   moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ): ModerationActorRole {
-  if (hasPlatformRoleMembership(memberships, ["owner"])) {
+  if (hasPlatformRoleMembership(memberships, ["owner", "super_admin"])) {
     return "owner";
   }
   if (hasPlatformRoleMembership(memberships, ["operator"])) {
@@ -742,7 +743,7 @@ export function canAccessAdminConsole(
   _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return hasPlatformRoleMembership(memberships, ["owner", "operator", "moderator"]);
+  return hasPlatformRoleMembership(memberships, ["owner", "super_admin", "operator", "moderator"]);
 }
 
 export function canReviewSafetyQueue(
@@ -756,16 +757,16 @@ export function canManagePrivilegedAdminWrites(
   _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return hasPlatformRoleMembership(memberships, ["owner"]);
+  return hasPlatformRoleMembership(memberships, ["owner", "super_admin"]);
 }
 
 export function canManageAdminRoleAssignments(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner"])
+  return hasPlatformRoleMembership(memberships, ["owner", "super_admin"])
     || hasPlatformStaffPermission(memberships, ["admin_grants"]);
 }
 
 export function canManageModeratorRoleAssignments(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner"])
+  return hasPlatformRoleMembership(memberships, ["owner", "super_admin"])
     || hasPlatformStaffPermission(memberships, ["manage_moderators"]);
 }
 
@@ -773,7 +774,7 @@ export function hasPlatformStaffPermission(
   memberships: PlatformRoleMembership[],
   requiredPermissionKeys: readonly (PlatformStaffPermissionKey | "moderator_grants")[],
 ) {
-  if (hasPlatformRoleMembership(memberships, ["owner"])) return true;
+  if (hasPlatformRoleMembership(memberships, ["owner", "super_admin"])) return true;
   const normalizedRequired = new Set(
     requiredPermissionKeys
       .map(normalizePlatformStaffPermissionKey)

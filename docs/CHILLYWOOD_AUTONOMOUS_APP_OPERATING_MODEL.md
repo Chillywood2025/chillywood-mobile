@@ -23,7 +23,7 @@ Current approved systems:
 
 Future scope can be added only through registry entries that define system id, action/surface id, activation mode, allowed read scope, allowed write scope, forbidden scope, approval level, proof script, guard script, rollback/quarantine behavior, kill switch/fallback behavior, and owner/admin approval requirement for Level 3/4.
 
-Level 3/4 actions create owner/admin approval requests before execution. The approval backing status is source-proof/foundation-only until explicit owner/super-admin backing is complete. Current staff-role truth remains `platform_role_memberships`. Rachi can recommend/request but cannot approve itself, and owner authority remains above Rachi/operator.
+Level 3/4 actions create owner/admin approval requests before execution. The approval backing status is live through `platform_role_memberships` owner/super-admin authority, `/admin` review, `autonomous-approval-request`, approval/denial RPCs, audited request events, emergency-state checks, and trusted-operator preflight/execution markers. Trusted operator request/preflight/execution markers use `AUTONOMOUS_APPROVAL_REQUEST_TOKEN_SHA256` when configured or the existing server-side `OPS_APPROVAL_TOKEN` fallback; neither token is client-bundled. Rachi can recommend/request but cannot approve itself, autonomous operators cannot self-approve, and owner authority remains above Rachi/operator. Approval never executes by itself: the operator must re-run fresh preflight, match the approved system/action/write scope exactly, verify the request is unexpired, and verify no emergency stop is active.
 
 ## 2. Operator Pattern
 

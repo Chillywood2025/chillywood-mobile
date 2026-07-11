@@ -552,3 +552,71 @@ export const LIVEKIT_AUTONOMOUS_OPERATOR_SURFACES: LiveKitOperatorSurface[] = [
 ];
 
 export const WATCH_PARTY_LIVEKIT_FALLBACK_ROSTER_GRACE_MILLIS = WATCH_PARTY_FALLBACK_FLASH_GRACE_MILLIS;
+
+type AutonomousApprovalRequestLike = {
+  actionId: string;
+  allowedWriteScope: readonly string[];
+  expiresAt: string;
+  status: string;
+  systemId: string;
+};
+
+export const planLiveKitLevelThreeOrFourApprovalRequest = (input: {
+  actionId: string;
+  approvalLevel: 3 | 4;
+  proposedAction: string;
+  reason: string;
+  riskSummary: string;
+}) => {
+  // Mirrors the shared planLevelThreeOrFourApprovalRequest contract without a
+  // runtime import so legacy proof harnesses can data-URL import this file.
+  const draft = {
+    actionId: input.actionId,
+    allowedWriteScope: ["owner-approved LiveKit scope only"],
+    approvalLevel: input.approvalLevel,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    forbiddenScope: [
+      "fake heartbeat",
+      "stale cutoff loosening without approval",
+      "secret rotation without owner/external confirmation",
+      "provider/server replacement without owner approval",
+      "Premium bypass",
+      "R2/media writes",
+    ],
+    killSwitchPlan: "Owner/super-admin emergency stop pauses LiveKit operator execution; read-only reports can continue.",
+    metadata: {},
+    proofPlan: "Run LiveKit router/token/host preflight and relevant proof/guard scripts before execution.",
+    proposedAction: input.proposedAction,
+    reason: input.reason,
+    requestedByActorId: null,
+    requestedByActorType: "livekit_operator",
+    riskSummary: input.riskSummary,
+    rollbackPlan: "Use the owner-approved LiveKit rollback plan for the exact scope; do not mutate routing policy outside approval.",
+    systemId: "livekit_operator",
+    title: `LiveKit approval required: ${input.actionId}`,
+    validationPlan: "Re-run fresh preflight after approval, verify exact system/action/write scope, verify no emergency stop, then audit execution.",
+  };
+  return {
+    draft,
+    executionStatus: "approval_request_required" as const,
+    validation: { failures: [], ok: true },
+  };
+};
+
+export const canConsumeLiveKitOwnerApproval = (input: {
+  actionId: string;
+  allowedWriteScope: readonly string[];
+  approvalFresh: boolean;
+  approvedPreflightReran: boolean;
+  emergencyState?: "active" | "emergency_stop" | "paused" | null;
+  request: AutonomousApprovalRequestLike;
+}) => (
+  input.request.status === "approved"
+  && input.approvalFresh
+  && input.approvedPreflightReran
+  && (input.emergencyState ?? "active") === "active"
+  && Date.parse(input.request.expiresAt) > Date.now()
+  && input.request.systemId === "livekit_operator"
+  && input.request.actionId === input.actionId
+  && input.allowedWriteScope.every((scope) => input.request.allowedWriteScope.includes(scope))
+);

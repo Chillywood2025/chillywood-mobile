@@ -128,6 +128,9 @@ import {
   AUTONOMOUS_SYSTEMS_REGISTRY,
   listAutonomousApprovalRequiredSurfaces,
 } from "../_lib/autonomousSystemsRegistry";
+import {
+  canUserReviewAutonomousApproval,
+} from "../_lib/platformOwnerAuthority";
 import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
@@ -1617,6 +1620,41 @@ const defaultCapabilities: AdminCapabilities = {
 
 const autonomousApprovalFoundationSummary = buildAutonomousApprovalFoundationSummary();
 const autonomousApprovalRequiredSurfaces = listAutonomousApprovalRequiredSurfaces();
+
+type AutonomousApprovalRequestReadModel = {
+  id: string;
+  system_id: string;
+  action_id: string;
+  requested_by_actor_type: string;
+  requested_by_actor_id: string | null;
+  approval_level: number;
+  status: string;
+  title: string;
+  risk_summary: string;
+  proposed_action: string;
+  allowed_write_scope: string[];
+  forbidden_scope: string[];
+  rollback_plan: string;
+  kill_switch_plan: string;
+  proof_plan: string;
+  validation_plan: string;
+  expires_at: string;
+  created_at: string;
+  events?: {
+    id: string;
+    event_type: string;
+    actor_type: string;
+    event_summary: string;
+    created_at: string;
+  }[];
+};
+
+type AutonomousSystemStateReadModel = {
+  system_id: string;
+  status: "active" | "emergency_stop" | "paused";
+  reason: string | null;
+  updated_at: string | null;
+};
 
 const toBoolean = (value: unknown) => value === true;
 
@@ -3473,6 +3511,11 @@ export default function AdminStudioScreen() {
   const [pendingCreatorVideoModeration, setPendingCreatorVideoModeration] =
     useState<PendingReportTargetModerationAction | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
+  const [autonomousApprovalRequests, setAutonomousApprovalRequests] = useState<AutonomousApprovalRequestReadModel[]>([]);
+  const [autonomousApprovalSystemStates, setAutonomousApprovalSystemStates] = useState<AutonomousSystemStateReadModel[]>([]);
+  const [autonomousApprovalLoading, setAutonomousApprovalLoading] = useState(false);
+  const [autonomousApprovalNotice, setAutonomousApprovalNotice] = useState<string | null>(null);
+  const [autonomousApprovalActionBusy, setAutonomousApprovalActionBusy] = useState<string | null>(null);
   const [rachiPostBody, setRachiPostBody] = useState("");
   const [rachiPostReason, setRachiPostReason] = useState("Official Chi'llywood update");
   const [rachiPostBusy, setRachiPostBusy] = useState(false);
@@ -3684,6 +3727,10 @@ export default function AdminStudioScreen() {
   const canAccessAdmin = isSignedIn && isActive && platformRolesChecked && canAccessAdminConsole(moderationAccess, platformRoles);
   const canReviewSafetyReports = isSignedIn && isActive && platformRolesChecked && canReviewSafetyQueue(moderationAccess, platformRoles);
   const canManagePrivilegedWrites = isSignedIn && isActive && platformRolesChecked && canManagePrivilegedAdminWrites(moderationAccess, platformRoles);
+  const canReviewAutonomousApprovals = isSignedIn
+    && isActive
+    && platformRolesChecked
+    && canUserReviewAutonomousApproval(platformRoles);
   const canAccessContentProgramming = isSignedIn
     && isActive
     && platformRolesChecked
@@ -3781,6 +3828,111 @@ export default function AdminStudioScreen() {
     },
     [canManageAdminStaff, canManageModeratorStaff],
   );
+  const loadAutonomousApprovalRequests = useCallback(async () => {
+    if (!canReviewAutonomousApprovals) {
+      setAutonomousApprovalRequests([]);
+      setAutonomousApprovalSystemStates([]);
+      setAutonomousApprovalLoading(false);
+      return;
+    }
+
+    setAutonomousApprovalLoading(true);
+    setAutonomousApprovalNotice(null);
+    try {
+      const [pendingResult, stateResult] = await Promise.all([
+        supabase.functions.invoke("autonomous-approval-request", {
+          body: { action: "list_pending" },
+        }),
+        supabase.functions.invoke("autonomous-approval-request", {
+          body: { action: "system_status" },
+        }),
+      ]);
+
+      if (pendingResult.error) throw pendingResult.error;
+      if (stateResult.error) throw stateResult.error;
+
+      const requests = Array.isArray((pendingResult.data as any)?.requests)
+        ? (pendingResult.data as any).requests as AutonomousApprovalRequestReadModel[]
+        : [];
+      const states = Array.isArray((stateResult.data as any)?.states)
+        ? (stateResult.data as any).states as AutonomousSystemStateReadModel[]
+        : [];
+
+      setAutonomousApprovalRequests(requests);
+      setAutonomousApprovalSystemStates(states);
+    } catch (err: any) {
+      setAutonomousApprovalRequests([]);
+      setAutonomousApprovalSystemStates([]);
+      setAutonomousApprovalNotice(formatAdminOperationFailure(err, "Autonomous approvals are not connected."));
+    } finally {
+      setAutonomousApprovalLoading(false);
+    }
+  }, [canReviewAutonomousApprovals]);
+
+  const runAutonomousApprovalAction = useCallback(async (
+    action: "approve_request" | "cancel_request" | "deny_request",
+    requestId: string,
+  ) => {
+    if (!canReviewAutonomousApprovals || !requestId || autonomousApprovalActionBusy) return;
+    const busyKey = `${action}:${requestId}`;
+    setAutonomousApprovalActionBusy(busyKey);
+    setAutonomousApprovalNotice(null);
+    try {
+      const body: Record<string, unknown> = {
+        action,
+        request_id: requestId,
+      };
+      if (action === "deny_request") {
+        body.denial_reason = "Denied from Admin Autonomous Approvals review.";
+      }
+      if (action === "cancel_request") {
+        body.reason = "Cancelled from Admin Autonomous Approvals review.";
+      }
+      const { error } = await supabase.functions.invoke("autonomous-approval-request", { body });
+      if (error) throw error;
+      setAutonomousApprovalNotice(
+        action === "approve_request"
+          ? "Autonomous approval request approved. Execution still requires a fresh preflight."
+          : action === "deny_request"
+            ? "Autonomous approval request denied."
+            : "Autonomous approval request cancelled.",
+      );
+      await loadAutonomousApprovalRequests();
+    } catch (err: any) {
+      setAutonomousApprovalNotice(formatAdminOperationFailure(err, "Autonomous approval action failed."));
+    } finally {
+      setAutonomousApprovalActionBusy(null);
+    }
+  }, [autonomousApprovalActionBusy, canReviewAutonomousApprovals, loadAutonomousApprovalRequests]);
+
+  const setAutonomousSystemState = useCallback(async (
+    systemId: string,
+    action: "emergency_pause_system" | "resume_system",
+  ) => {
+    if (!canReviewAutonomousApprovals || !systemId || autonomousApprovalActionBusy) return;
+    const busyKey = `${action}:${systemId}`;
+    setAutonomousApprovalActionBusy(busyKey);
+    setAutonomousApprovalNotice(null);
+    try {
+      const { error } = await supabase.functions.invoke("autonomous-approval-request", {
+        body: {
+          action,
+          reason: action === "resume_system"
+            ? "Owner/super-admin resumed autonomous system from Admin."
+            : "Owner/super-admin emergency-paused autonomous system from Admin.",
+          system_id: systemId,
+        },
+      });
+      if (error) throw error;
+      setAutonomousApprovalNotice(action === "resume_system" ? "Autonomous system resumed." : "Autonomous system emergency-paused.");
+      await loadAutonomousApprovalRequests();
+    } catch (err: any) {
+      setAutonomousApprovalNotice(formatAdminOperationFailure(err, "Autonomous system state action failed."));
+    } finally {
+      setAutonomousApprovalActionBusy(null);
+    }
+  }, [autonomousApprovalActionBusy, canReviewAutonomousApprovals, loadAutonomousApprovalRequests]);
+
   const staffSnapshotSummary = platformRoleRosterSummary;
   const activePlatformRoleRoster = useMemo(
     () => platformRoleRoster.filter((entry) => entry.status === "active"),
@@ -9988,6 +10140,7 @@ export default function AdminStudioScreen() {
         loadLiveOpsFixCenter(),
       );
     }
+    if (canReviewAutonomousApprovals) tasks.push(loadAutonomousApprovalRequests());
 
     await Promise.all(tasks);
   }, [
@@ -9995,6 +10148,7 @@ export default function AdminStudioScreen() {
     canAccessDmca,
     canAccessLiveOps,
     canManagePrivilegedWrites,
+    canReviewAutonomousApprovals,
     canReviewSafetyReports,
     canViewStaffRoles,
     loadAdminFinanceReadModel,
@@ -10002,6 +10156,7 @@ export default function AdminStudioScreen() {
     loadAdminV1ReadModel,
     loadDmcaCases,
     loadExperienceConfig,
+    loadAutonomousApprovalRequests,
     loadLiveCostGuard,
     loadLiveOpsFixCenter,
     loadPlatformRoles,
@@ -17789,36 +17944,131 @@ export default function AdminStudioScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.ownerSectionTitle}>Autonomous Approvals</Text>
                   <Text style={styles.configListBody}>
-                    Level 3/4 autonomous actions require owner/admin approval requests. This foundation is read-only until explicit owner/super-admin approval execution is backed.
+                    Level 3/4 autonomous actions require owner/super-admin review, fresh preflight, exact scope match, emergency-state check, and audited execution.
                   </Text>
                 </View>
-                <OwnerStatusPill label="Foundation" tone="manual" />
+                <OwnerStatusPill
+                  label={autonomousApprovalLoading ? "Loading" : canReviewAutonomousApprovals ? "Live" : "Locked"}
+                  tone={canReviewAutonomousApprovals ? "success" : "locked"}
+                />
               </View>
               <View style={styles.ownerMetricGrid}>
                 <OwnerMetricTile label="Systems" value={AUTONOMOUS_SYSTEMS_REGISTRY.length} tone="info" />
-                <OwnerMetricTile label="Level 3/4 Requests" value={autonomousApprovalRequiredSurfaces.length} tone="manual" />
+                <OwnerMetricTile label="Pending Requests" value={autonomousApprovalLoading ? "Loading" : autonomousApprovalRequests.length} tone={autonomousApprovalRequests.length ? "manual" : "success"} />
                 <OwnerMetricTile
                   label="Approval Execution"
-                  value={autonomousApprovalFoundationSummary.approvalExecutionStatus === "foundation_only" ? "Foundation" : "Live"}
-                  tone="locked"
+                  value={autonomousApprovalFoundationSummary.approvalExecutionStatus === "live_owner_super_admin_backed" ? "Live" : "Foundation"}
+                  tone={canReviewAutonomousApprovals ? "success" : "locked"}
                 />
                 <OwnerMetricTile label="Rachi Approval" value={autonomousApprovalFoundationSummary.rachiFinalAuthority ? "Allowed" : "Denied"} tone="success" />
               </View>
+              <View style={styles.ownerAdminSectionActions}>
+                <TouchableOpacity
+                  disabled={!canReviewAutonomousApprovals || autonomousApprovalLoading}
+                  style={[styles.ownerSecondaryButton, (!canReviewAutonomousApprovals || autonomousApprovalLoading) && styles.configSaveBtnDisabled]}
+                  onPress={() => void loadAutonomousApprovalRequests()}
+                >
+                  <Text style={styles.ownerSecondaryButtonText}>{autonomousApprovalLoading ? "Refreshing" : "Refresh Approvals"}</Text>
+                </TouchableOpacity>
+              </View>
+              {autonomousApprovalNotice ? (
+                <Text style={styles.ownerFieldHint}>{autonomousApprovalNotice}</Text>
+              ) : null}
               <View style={styles.ownerControlList}>
-                {AUTONOMOUS_SYSTEMS_REGISTRY.map((system) => (
-                  <View key={`autonomous-system-${system.id}`} testID="autonomous-approval-request-card" style={styles.ownerControlRow}>
+                {autonomousApprovalRequests.length ? autonomousApprovalRequests.map((request) => {
+                  const requestExpired = Date.parse(request.expires_at) <= Date.now();
+                  const requestActionLocked = !canReviewAutonomousApprovals
+                    || request.status !== "pending"
+                    || requestExpired
+                    || autonomousApprovalActionBusy !== null;
+                  return (
+                    <View key={`autonomous-request-${request.id}`} testID="autonomous-approval-request-card" style={styles.ownerControlRow}>
+                      <View style={styles.ownerRowHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.ownerRowTitle}>{request.title}</Text>
+                          <Text style={styles.ownerRowMeta}>
+                            {`${request.system_id} · ${request.action_id} · Level ${request.approval_level} · ${formatModerationToken(request.status)}`}
+                          </Text>
+                        </View>
+                        <OwnerStatusPill label={requestExpired ? "Expired" : formatModerationToken(request.status)} tone={request.status === "pending" && !requestExpired ? "manual" : request.status === "approved" ? "success" : "locked"} />
+                      </View>
+                      <Text testID="autonomous-approval-risk-summary" style={styles.ownerRowMessage}>
+                        {`Risk: ${request.risk_summary}`}
+                      </Text>
+                      <Text style={styles.ownerRowHint}>
+                        {`Action: ${request.proposed_action}`}
+                      </Text>
+                      <Text testID="autonomous-approval-rollback-plan" style={styles.ownerRowHint}>
+                        {`Rollback: ${request.rollback_plan}`}
+                      </Text>
+                      <Text testID="autonomous-approval-proof-plan" style={styles.ownerRowHint}>
+                        {`Proof: ${request.proof_plan}`}
+                      </Text>
+                      <Text style={styles.ownerRowHint}>
+                        {`Kill switch: ${request.kill_switch_plan}`}
+                      </Text>
+                      <Text style={styles.ownerRowHint}>
+                        {`Allowed writes: ${(request.allowed_write_scope ?? []).join("; ") || "none returned"}. Forbidden: ${(request.forbidden_scope ?? []).join("; ") || "none returned"}.`}
+                      </Text>
+                      <View testID="autonomous-approval-event-history" style={styles.configList}>
+                        {(request.events ?? []).slice(-4).map((event) => (
+                          <Text key={`autonomous-request-event-${event.id}`} style={styles.ownerRowHint}>
+                            {`${formatModerationToken(event.event_type)} · ${event.created_at ? formatModerationTimestamp(event.created_at) : "time unavailable"} · ${event.event_summary}`}
+                          </Text>
+                        ))}
+                      </View>
+                      <View style={styles.ownerAdminSectionActions}>
+                        <TouchableOpacity
+                          disabled={requestActionLocked}
+                          testID="autonomous-approval-approve-button"
+                          style={[styles.ownerSecondaryButton, requestActionLocked && styles.configSaveBtnDisabled]}
+                          onPress={() => void runAutonomousApprovalAction("approve_request", request.id)}
+                        >
+                          <Text style={styles.ownerSecondaryButtonText}>{autonomousApprovalActionBusy === `approve_request:${request.id}` ? "Approving" : "Approve"}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          disabled={requestActionLocked}
+                          testID="autonomous-approval-deny-button"
+                          style={[styles.ownerSecondaryButton, requestActionLocked && styles.configSaveBtnDisabled]}
+                          onPress={() => void runAutonomousApprovalAction("deny_request", request.id)}
+                        >
+                          <Text style={styles.ownerSecondaryButtonText}>{autonomousApprovalActionBusy === `deny_request:${request.id}` ? "Denying" : "Deny"}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          disabled={requestActionLocked}
+                          testID="autonomous-approval-cancel-button"
+                          style={[styles.ownerSecondaryButton, requestActionLocked && styles.configSaveBtnDisabled]}
+                          onPress={() => void runAutonomousApprovalAction("cancel_request", request.id)}
+                        >
+                          <Text style={styles.ownerSecondaryButtonText}>{autonomousApprovalActionBusy === `cancel_request:${request.id}` ? "Cancelling" : "Cancel"}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                }) : AUTONOMOUS_SYSTEMS_REGISTRY.map((system) => {
+                  const systemState = autonomousApprovalSystemStates.find((entry) => entry.system_id === system.id);
+                  const stateLabel = systemState?.status ?? "active";
+                  const stateActionLocked = !canReviewAutonomousApprovals || autonomousApprovalActionBusy !== null;
+                  return (
+                    <View key={`autonomous-system-${system.id}`} testID="autonomous-approval-request-card" style={styles.ownerControlRow}>
                     <View style={styles.ownerRowHeader}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.ownerRowTitle}>{system.displayName}</Text>
-                        <Text style={styles.ownerRowMeta}>{`${system.id} · ${system.activeActivationMode} · ${system.schedulerStatus}`}</Text>
+                        <Text style={styles.ownerRowMeta}>{`${system.id} · ${system.activeActivationMode} · ${system.schedulerStatus} · ${formatModerationToken(stateLabel)}`}</Text>
                       </View>
-                      <OwnerStatusPill label={system.status.includes("active") ? "Active" : "Guarded"} tone={system.status.includes("active") ? "success" : "info"} />
+                      <OwnerStatusPill label={stateLabel === "active" ? "Active" : formatModerationToken(stateLabel)} tone={stateLabel === "active" ? "success" : "manual"} />
                     </View>
                     <Text testID="autonomous-approval-risk-summary" style={styles.ownerRowMessage}>
                       {`Risk boundary: ${system.forbidden.slice(0, 4).join("; ")}.`}
                     </Text>
                     <Text testID="autonomous-approval-rollback-plan" style={styles.ownerRowHint}>
                       {`Rollback/fallback gates: ${system.requiredGates.join("; ")}.`}
+                    </Text>
+                    <Text testID="autonomous-approval-proof-plan" style={styles.ownerRowHint}>
+                      {`Required proofs: ${system.requiredProofScripts.join("; ")}.`}
+                    </Text>
+                    <Text testID="autonomous-approval-event-history" style={styles.ownerRowHint}>
+                      {systemState?.updated_at ? `Last system state change: ${formatModerationTimestamp(systemState.updated_at)}` : "No emergency-state override recorded."}
                     </Text>
                     <View style={styles.ownerAdminSectionActions}>
                       <TouchableOpacity
@@ -17835,11 +18085,46 @@ export default function AdminStudioScreen() {
                       >
                         <Text style={styles.ownerSecondaryButtonText}>Deny locked</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity
+                        disabled
+                        testID="autonomous-approval-cancel-button"
+                        style={[styles.ownerSecondaryButton, styles.configSaveBtnDisabled]}
+                      >
+                        <Text style={styles.ownerSecondaryButtonText}>Cancel locked</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.ownerAdminSectionActions}>
+                      <TouchableOpacity
+                        disabled={stateActionLocked}
+                        testID="autonomous-approval-emergency-pause-button"
+                        style={[styles.ownerSecondaryButton, stateActionLocked && styles.configSaveBtnDisabled]}
+                        onPress={() => void setAutonomousSystemState(system.id, "emergency_pause_system")}
+                      >
+                        <Text style={styles.ownerSecondaryButtonText}>{autonomousApprovalActionBusy === `emergency_pause_system:${system.id}` ? "Pausing" : "Emergency Pause"}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        disabled={stateActionLocked}
+                        testID="autonomous-approval-resume-button"
+                        style={[styles.ownerSecondaryButton, stateActionLocked && styles.configSaveBtnDisabled]}
+                        onPress={() => void setAutonomousSystemState(system.id, "resume_system")}
+                      >
+                        <Text style={styles.ownerSecondaryButtonText}>{autonomousApprovalActionBusy === `resume_system:${system.id}` ? "Resuming" : "Resume"}</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
-                ))}
+                  );
+                })}
               </View>
-              <OwnerDisabledReason reason="Approval execution is source-proof/foundation-only until explicit owner/super-admin backing is complete. Rachi and autonomous operators can request or recommend, but they cannot approve themselves or outrank the owner." />
+              {!canReviewAutonomousApprovals ? (
+                <OwnerDisabledReason
+                  reason="Owner or Super Admin role is required for live autonomous approval execution. Rachi and autonomous operators can request or recommend, but they cannot approve themselves or outrank the owner."
+                />
+              ) : null}
+              {!canReviewAutonomousApprovals ? (
+                <Text testID="autonomous-approval-owner-locked-copy" style={styles.ownerRowHint}>
+                  Live approval controls are locked until platform_role_memberships verifies Owner or Super Admin authority for this signed-in account.
+                </Text>
+              ) : null}
             </View>
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
