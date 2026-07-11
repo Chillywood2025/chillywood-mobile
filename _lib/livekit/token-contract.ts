@@ -58,6 +58,7 @@ export type LiveKitTokenContractResult = LiveKitTokenReady | LiveKitTokenUnavail
 const LIVEKIT_TOKEN_REFRESH_MAX_SKEW_MILLIS = 60_000;
 const LIVEKIT_TOKEN_REFRESH_MIN_SKEW_MILLIS = 2_000;
 const LIVEKIT_TOKEN_REFRESH_LIFETIME_RATIO = 0.1;
+const LIVEKIT_TOKEN_NOT_BEFORE_GRACE_MILLIS = 5_000;
 const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 type LiveKitDecodedTokenPayload = {
@@ -237,7 +238,10 @@ export const getLiveKitParticipantTokenExpiryState = (
     const notBeforeInMillis = Number.isFinite(notBeforeSeconds) ? (notBeforeSeconds * 1000) - nowMillis : null;
     const skewMillis = getLiveKitTokenRefreshSkewMillis(payload, nowMillis);
 
-    if (typeof notBeforeInMillis === "number" && notBeforeInMillis > 0) {
+    if (
+      typeof notBeforeInMillis === "number"
+      && notBeforeInMillis > LIVEKIT_TOKEN_NOT_BEFORE_GRACE_MILLIS
+    ) {
       return {
         decodeSource: source,
         expiresInMillis,
