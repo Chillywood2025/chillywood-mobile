@@ -12,7 +12,10 @@ const nextTask = read("NEXT_TASK.md");
 const mediaWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
 const recoveryRunbook = read("docs/MEDIA_RECOVERY_OPERATOR_RUNBOOK.md");
 const mediaArchitecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
-const docsCorpus = [model, currentState, nextTask, mediaWorkerRunbook, recoveryRunbook, mediaArchitecture].join("\n\n");
+const autonomousRegistry = read("_lib/autonomousSystemsRegistry.ts");
+const autonomousApproval = read("_lib/autonomousApprovalRequests.ts");
+const autonomousRegistryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
+const docsCorpus = [model, currentState, nextTask, mediaWorkerRunbook, recoveryRunbook, mediaArchitecture, autonomousRegistryDoc].join("\n\n");
 
 const failures = [];
 
@@ -94,6 +97,16 @@ assertIncludes(model, "No public exposure without policy", "safety public exposu
 assertIncludes(model, "Do not ask the owner for Level 0 or Level 1 operations.", "Codex Level 0/1 behavior");
 assertIncludes(model, "Ask the owner before Level 3 operations.", "Codex Level 3 behavior");
 assertIncludes(model, "Ask the owner and require external confirmation before Level 4 operations.", "Codex Level 4 behavior");
+assertIncludes(model, "autonomous systems are protected by registry/contract guard", "autonomous systems contract");
+assertIncludes(model, "Level 3/4 actions create owner/admin approval requests", "approval request path");
+assertIncludes(model, "Rachi can recommend/request but cannot approve itself", "Rachi approval boundary");
+assertIncludes(autonomousRegistry, "media_automation", "media autonomous system registry");
+assertIncludes(autonomousRegistry, "livekit_operator", "LiveKit autonomous system registry");
+assertIncludes(autonomousRegistry, "AUTONOMOUS_SYSTEM_EXPANSION_RULES", "autonomous expansion rules");
+assertIncludes(autonomousRegistry, "ownerApprovalRequired: true", "Level 3/4 owner approval requirement");
+assertIncludes(autonomousApproval, "canActorApproveAutonomousRequest", "approval request approver model");
+assertIncludes(autonomousApproval, "operatorSelfApprovalAllowed: false", "operator self-approval denial");
+assertIncludes(autonomousRegistryDoc, "future scope can be added only through registry entries", "autonomous registry doc expansion rule");
 
 assertIncludes(currentState, "Chi'llywood autonomous app operating model is now documented", "current state autonomous model");
 assertIncludes(nextTask, "Do not ask owner approval for Level 0/1 autonomous operations", "next task autonomous behavior");

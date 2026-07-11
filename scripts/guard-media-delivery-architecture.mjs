@@ -55,6 +55,7 @@ const claimSentences = (source, subjectPattern, claimPattern) => (
 const architecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
 const currentState = read("CURRENT_STATE.md");
 const nextTask = read("NEXT_TASK.md");
+const autonomousRegistry = read("_lib/autonomousSystemsRegistry.ts");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
 const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md");
 const mediaTranscodeWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
@@ -198,6 +199,11 @@ if (!hasHlsDemoProofWorker) {
 }
 
 assertIncludes(architecture, "Status: staged resolver helpers, proof scripts, architecture, and guard only.", "media delivery architecture doc");
+assertIncludes(autonomousRegistry, "id: \"media_automation\"", "autonomous media system registry");
+assertIncludes(autonomousRegistry, "private/Premium/original public exposure", "autonomous media public exposure boundary");
+assertIncludes(autonomousRegistry, "backup/restore", "autonomous media backup gate");
+assertIncludes(autonomousRegistry, "rollback/quarantine", "autonomous media rollback gate");
+assertIncludes(autonomousRegistry, "broad_media_backfill_or_new_scheduler", "autonomous media Level 3 expansion gate");
 assertIncludes(architecture, "Production backend transcode service status: no daemon, queue processor, cron, scheduler, or backend transcode service is live. Bounded CLI/operator transcode passes have produced audited public 360p/480p HLS rows and protected Premium HD rows, but no continuous worker or broad backfill is enabled.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare custom domain/cache status: `media.chillywoodstream.com` is connected only to the separate public-playback proof bucket. Controlled audited public HLS playback is active for trusted eligible `media_renditions` rows; private/original/Premium media remains blocked from public CDN.", "media delivery architecture doc");
 assertIncludes(architecture, "Cloudflare R2 public playback resolver status: staged helper and proof scripts exist, and the audited `media_renditions` bridge is active only through controlled rollout config.", "R2 public playback resolver status");

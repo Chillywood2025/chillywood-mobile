@@ -17,6 +17,8 @@ This is not a Live-tab-only operator.
 
 The operator is limited to LiveKit health and recovery state. It must not mutate R2/media storage, Premium billing, RevenueCat or Google Play products, auth/RLS unrelated behavior, payouts, cashout, App Links, or unrelated Chat/native behavior.
 
+The LiveKit operator is one of the current approved systems in the autonomous systems contract. Its registry id is `livekit_operator`, and future scope can be added only through registry entries in `_lib/autonomousSystemsRegistry.ts` plus the mirrored `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`. Level 3/4 actions create owner/admin approval requests; Rachi can recommend/request but cannot approve itself, and owner authority remains above Rachi/operator. Approval backing status is foundation-only until explicit owner/super-admin backing is complete.
+
 The operator must never:
 
 - Loosen `LIVEKIT_ROUTER_HEARTBEAT_STALE_SECONDS` to hide failures.

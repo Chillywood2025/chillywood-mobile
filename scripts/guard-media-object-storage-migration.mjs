@@ -21,6 +21,7 @@ const nextTask = read("NEXT_TASK.md");
 const architecture = read("docs/MEDIA_DELIVERY_SCALE_ARCHITECTURE.md");
 const automation = read("docs/MEDIA_AUTOMATION_OPERATOR_RUNBOOK.md");
 const worker = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
+const autonomousRegistry = read("_lib/autonomousSystemsRegistry.ts");
 const helper = read("_lib/mediaObjectStorageMigration.ts");
 const cli = read("scripts/media-object-storage-r2-migration.mjs");
 const mediaStorage = read("supabase/functions/media-storage/index.ts");
@@ -44,6 +45,9 @@ includesAny(docs, ["no playback rows were written", "No playback rows were writt
 includes(docs, "shutdown-ready by active-reference semantics", "migration docs");
 includes(docs, "activeUnresolvedHetznerObjectRefs=0", "migration docs");
 includes(docs, "not deleted, not marked migrated, and not replaced with fake R2 objects", "migration docs");
+includes(autonomousRegistry, "object-storage R2 migration/readiness", "autonomous registry");
+includes(autonomousRegistry, "object_storage_migration_and_shutdown_readiness", "autonomous registry");
+includes(autonomousRegistry, "retain Hetzner read fallback until owner shutdown decision", "autonomous registry");
 
 includes(helper, "MEDIA_ORIGIN_BUCKET = \"chillywood-media-origin\"", "migration helper");
 includes(helper, "validateR2OriginTarget", "migration helper");

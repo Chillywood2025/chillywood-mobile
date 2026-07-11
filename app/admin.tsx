@@ -123,6 +123,11 @@ import {
   getRuntimeConfigIssues,
   isLiveKitRuntimeConfigured,
 } from "../_lib/runtimeConfig";
+import { buildAutonomousApprovalFoundationSummary } from "../_lib/autonomousApprovalRequests";
+import {
+  AUTONOMOUS_SYSTEMS_REGISTRY,
+  listAutonomousApprovalRequiredSurfaces,
+} from "../_lib/autonomousSystemsRegistry";
 import { useSession } from "../_lib/session";
 import {
   readAdminAuditLog,
@@ -1609,6 +1614,9 @@ const defaultCapabilities: AdminCapabilities = {
   sponsorPlacementCol: null,
   sponsorLabelCol: null,
 };
+
+const autonomousApprovalFoundationSummary = buildAutonomousApprovalFoundationSummary();
+const autonomousApprovalRequiredSurfaces = listAutonomousApprovalRequiredSurfaces();
 
 const toBoolean = (value: unknown) => value === true;
 
@@ -17776,6 +17784,63 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
+            <View testID="admin-autonomous-approvals-section" style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ownerSectionTitle}>Autonomous Approvals</Text>
+                  <Text style={styles.configListBody}>
+                    Level 3/4 autonomous actions require owner/admin approval requests. This foundation is read-only until explicit owner/super-admin approval execution is backed.
+                  </Text>
+                </View>
+                <OwnerStatusPill label="Foundation" tone="manual" />
+              </View>
+              <View style={styles.ownerMetricGrid}>
+                <OwnerMetricTile label="Systems" value={AUTONOMOUS_SYSTEMS_REGISTRY.length} tone="info" />
+                <OwnerMetricTile label="Level 3/4 Requests" value={autonomousApprovalRequiredSurfaces.length} tone="manual" />
+                <OwnerMetricTile
+                  label="Approval Execution"
+                  value={autonomousApprovalFoundationSummary.approvalExecutionStatus === "foundation_only" ? "Foundation" : "Live"}
+                  tone="locked"
+                />
+                <OwnerMetricTile label="Rachi Approval" value={autonomousApprovalFoundationSummary.rachiFinalAuthority ? "Allowed" : "Denied"} tone="success" />
+              </View>
+              <View style={styles.ownerControlList}>
+                {AUTONOMOUS_SYSTEMS_REGISTRY.map((system) => (
+                  <View key={`autonomous-system-${system.id}`} testID="autonomous-approval-request-card" style={styles.ownerControlRow}>
+                    <View style={styles.ownerRowHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.ownerRowTitle}>{system.displayName}</Text>
+                        <Text style={styles.ownerRowMeta}>{`${system.id} · ${system.activeActivationMode} · ${system.schedulerStatus}`}</Text>
+                      </View>
+                      <OwnerStatusPill label={system.status.includes("active") ? "Active" : "Guarded"} tone={system.status.includes("active") ? "success" : "info"} />
+                    </View>
+                    <Text testID="autonomous-approval-risk-summary" style={styles.ownerRowMessage}>
+                      {`Risk boundary: ${system.forbidden.slice(0, 4).join("; ")}.`}
+                    </Text>
+                    <Text testID="autonomous-approval-rollback-plan" style={styles.ownerRowHint}>
+                      {`Rollback/fallback gates: ${system.requiredGates.join("; ")}.`}
+                    </Text>
+                    <View style={styles.ownerAdminSectionActions}>
+                      <TouchableOpacity
+                        disabled
+                        testID="autonomous-approval-approve-button"
+                        style={[styles.ownerSecondaryButton, styles.configSaveBtnDisabled]}
+                      >
+                        <Text style={styles.ownerSecondaryButtonText}>Approve locked</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        disabled
+                        testID="autonomous-approval-deny-button"
+                        style={[styles.ownerSecondaryButton, styles.configSaveBtnDisabled]}
+                      >
+                        <Text style={styles.ownerSecondaryButtonText}>Deny locked</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <OwnerDisabledReason reason="Approval execution is source-proof/foundation-only until explicit owner/super-admin backing is complete. Rachi and autonomous operators can request or recommend, but they cannot approve themselves or outrank the owner." />
+            </View>
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
                 <Text style={styles.ownerSectionTitle}>System History</Text>

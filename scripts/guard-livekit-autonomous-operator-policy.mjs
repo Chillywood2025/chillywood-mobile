@@ -15,6 +15,7 @@ const assertNotIncludes = (source, needle, message) => {
 };
 
 const operatorModel = read("_lib/livekitAutonomousOperator.ts");
+const autonomousRegistry = read("_lib/autonomousSystemsRegistry.ts");
 const operatorFunction = read("supabase/functions/livekit-operator/index.ts");
 const migration = read("supabase/migrations/20260711043323_livekit_autonomous_operator.sql");
 const player = read("app/player/[id].tsx");
@@ -29,6 +30,12 @@ const packageJson = read("package.json");
 const runbook = read("docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md");
 
 assertIncludes(operatorModel, "LIVEKIT_AUTONOMOUS_OPERATOR_SURFACES", "operator model must enumerate all LiveKit surfaces");
+assertIncludes(autonomousRegistry, "id: \"livekit_operator\"", "autonomous registry must include LiveKit operator");
+assertIncludes(autonomousRegistry, "party_room_live_sidecar", "autonomous registry must cover Party Room sidecar");
+assertIncludes(autonomousRegistry, "chat_call", "autonomous registry must cover chat-call surface");
+assertIncludes(autonomousRegistry, "fake heartbeat", "autonomous registry must forbid fake heartbeat");
+assertIncludes(autonomousRegistry, "stale cutoff loosening", "autonomous registry must forbid stale cutoff loosening");
+assertIncludes(autonomousRegistry, "secret_rotation_turn_or_server_replacement", "autonomous registry must keep Level 4 actions approval-gated");
 assertIncludes(operatorModel, "party_room_live_sidecar", "operator must cover Party Room sidecar");
 assertIncludes(operatorModel, "chat_call", "operator must cover chat-call surface");
 assertIncludes(operatorModel, "stale_heartbeat", "operator must classify stale heartbeat");

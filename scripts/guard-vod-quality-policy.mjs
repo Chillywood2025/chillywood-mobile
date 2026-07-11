@@ -29,6 +29,7 @@ const assertNotMatches = (content, pattern, label) => {
 const migration = read("supabase/migrations/202605140010_vod_quality_ladder_resolver.sql");
 const scanSafeResolverMigration = read("supabase/migrations/20260623170000_creator_media_scan_safe_playback_resolver.sql");
 const trustedRenditionMigration = read("supabase/migrations/20260709033207_trusted_media_transcode_renditions.sql");
+const autonomousRegistry = read("_lib/autonomousSystemsRegistry.ts");
 const vodDoc = read("docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md");
 const mediaMigrationPlan = read("docs/MEDIA_TRANSCODE_RENDITION_MIGRATION_PLAN.md");
 const mediaTranscodeWorkerRunbook = read("docs/MEDIA_TRANSCODE_WORKER_RUNBOOK.md");
@@ -101,6 +102,9 @@ const mediaScanPrivateAccessProof = read("scripts/proof-media-scan-private-acces
 
 assertIncludes(performancePolicy, "VOD_FREE_MAX_HEIGHT_V1 = 480", "performance policy");
 assertIncludes(performancePolicy, "VOD_PREMIUM_MAX_HEIGHT_V1 = 1080", "performance policy");
+assertIncludes(autonomousRegistry, "Premium protected HD rows", "autonomous registry Premium boundary");
+assertIncludes(autonomousRegistry, "private/Premium/original public exposure", "autonomous registry public exposure boundary");
+assertIncludes(autonomousRegistry, "billing/Premium/auth/RLS/payout changes", "autonomous registry forbidden high-risk scope");
 
 assertIncludes(migration, 'create table if not exists public."video_renditions"', "VOD migration");
 assertIncludes(migration, '"quality_label" in (\'original\', \'360p\', \'480p\', \'720p\', \'1080p\')', "VOD migration");

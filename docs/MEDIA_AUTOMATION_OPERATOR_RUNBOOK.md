@@ -10,6 +10,8 @@ continuous limited automation is source/proofed/templates only. The new queue pr
 
 Safe Level 0/1 media operations should not require owner approval when they stay inside policy: eligible discovery, safe batch sizing, scoped logical backups, restore drills, public-safe media work inside caps, post-write audit, scoped rollback/quarantine, fallback playback, telemetry reporting, cache verification, and auto-pause reporting. Owner approval remains required for money/billing/provider changes, auth/RLS, Premium entitlement, payout/cashout, destructive production DB changes, broad uncapped backfill, public/private exposure policy changes, private/Premium CDN token policy, app-store/public launch, legal/compliance, payment production mutation, and public marketing claims.
 
+The media lane is one of the current approved systems in the autonomous systems contract. Its registry id is `media_automation`, and future scope can be added only through registry entries in `_lib/autonomousSystemsRegistry.ts` plus the mirrored `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`. Level 3/4 actions create owner/admin approval requests with rollback, kill-switch, proof, validation, allowed-write, and forbidden-scope plans. Rachi can recommend/request but cannot approve itself, owner authority remains above Rachi/operator, and approval backing status is foundation-only until explicit owner/super-admin backing is complete.
+
 ## Purpose
 
 The automation operator is the scale path for many public-safe creator videos after scan, moderation, backup, transcode, upload, audit, telemetry, and rollback gates pass. City Lights remains the canary proof, not the final hardcoded model.

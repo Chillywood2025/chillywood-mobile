@@ -12,6 +12,19 @@ owner approval is required only for high-risk boundary changes: money, paid prov
 
 If a task is safely inside an already approved policy, use the operator pattern and continue. If a task crosses a high-risk boundary, stop and request approval with the proposed scope, risk, rollback, and proof plan.
 
+## 1A. Autonomous Systems Contract
+
+Chi'llywood autonomous systems are protected by registry/contract guard. The source registry is `_lib/autonomousSystemsRegistry.ts` and the operator-facing mirror is `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`.
+
+Current approved systems:
+
+- `media_automation`
+- `livekit_operator`
+
+Future scope can be added only through registry entries that define system id, action/surface id, activation mode, allowed read scope, allowed write scope, forbidden scope, approval level, proof script, guard script, rollback/quarantine behavior, kill switch/fallback behavior, and owner/admin approval requirement for Level 3/4.
+
+Level 3/4 actions create owner/admin approval requests before execution. The approval backing status is source-proof/foundation-only until explicit owner/super-admin backing is complete. Current staff-role truth remains `platform_role_memberships`. Rachi can recommend/request but cannot approve itself, and owner authority remains above Rachi/operator.
+
 ## 2. Operator Pattern
 
 Every autonomous lane follows the same operating pattern:

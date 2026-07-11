@@ -246,11 +246,13 @@ Current doctrine:
 - Provider Transfer Records Sync Foundation source files: `supabase/functions/stripe-connect-transfer-sync/index.ts`, shared helper `supabase/functions/_shared/stripe-connect.ts`, `supabase/config.toml`, `_lib/platformFinance.ts`, read-only Admin Payouts copy in `app/admin.tsx`, generated database types, and migration `supabase/migrations/202605080010_provider_transfer_sync_foundation.sql`
 - Admin V1B2A source files: `app/(auth)/signup.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; New Accounts is enforced on signup only
 - Admin V1B2B source files: `app/channel-settings.tsx` and read-only/foundation Admin Kill Switches copy in `app/admin.tsx`; Uploads is enforced on new creator-video upload submit only
+- Autonomous Systems Contract foundation source files: `_lib/autonomousSystemsRegistry.ts`, `_lib/autonomousApprovalRequests.ts`, `docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md`, read-only/foundation `/admin` System > Autonomous Approvals copy in `app/admin.tsx`, source migration `supabase/migrations/20260711173119_autonomous_approval_requests.sql`, source Edge Function `supabase/functions/autonomous-approval-request/index.ts`, `scripts/guard-autonomous-systems-contract.mjs`, and `scripts/proof-autonomous-systems-contract.mjs`. This protects `media_automation` and `livekit_operator`; future scope can be added only through registry entries. Level 3/4 actions create owner/admin approval requests, but approval backing status is foundation-only until explicit owner/super-admin backing is complete. Rachi can recommend/request but cannot approve itself, and owner authority remains above Rachi/operator.
 
 ## 9. Missing Truth That Still Needs To Be Built
 - explicit owner / super-admin role truth
 - safe owner bootstrap path
 - owner-only gate truth
+- live owner/admin approval execution for autonomous Level 3/4 actions; current approval request path is source-proof/foundation-only
 - additional Admin V1B kill switches backed by schema/config/enforcement and real reads from affected app surfaces; current real enforcement is limited to `new_accounts_enabled` on signup and `uploads_enabled` on new creator-video upload submit
 - dangerous-action audit write integration beyond current immutable foundation rows
 - real Rachi-control state and domain controls
