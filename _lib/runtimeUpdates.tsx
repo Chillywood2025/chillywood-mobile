@@ -5,6 +5,7 @@ import { AppState, InteractionManager, Platform, type AppStateStatus } from "rea
 
 import { trackEvent } from "./analytics";
 import { debugLog, reportRuntimeError } from "./logger";
+import { recordReleaseUpdateCheckResult } from "./releaseDiagnostics";
 
 const LAST_CHECK_AT_KEY = "chillywood.runtimeUpdate.lastCheckAt";
 const LAST_RELOAD_FINGERPRINT_KEY = "chillywood.runtimeUpdate.lastReloadFingerprint";
@@ -79,6 +80,10 @@ const checkForRuntimeUpdate = async (reason: RuntimeUpdateReason, force = false)
 
   const checkResult = await Updates.checkForUpdateAsync();
   const hasUpdate = checkResult.isAvailable || checkResult.isRollBackToEmbedded;
+  recordReleaseUpdateCheckResult({
+    reason,
+    status: hasUpdate ? "available" : "unavailable",
+  });
 
   debugLog("runtime-updates", "Checked for runtime update", {
     reason,
@@ -90,7 +95,17 @@ const checkForRuntimeUpdate = async (reason: RuntimeUpdateReason, force = false)
   if (!hasUpdate) return;
 
   const fetchResult = await Updates.fetchUpdateAsync();
-  if (!fetchResult.isNew && !fetchResult.isRollBackToEmbedded) return;
+  if (!fetchResult.isNew && !fetchResult.isRollBackToEmbedded) {
+    recordReleaseUpdateCheckResult({
+      reason,
+      status: "unavailable",
+    });
+    return;
+  }
+  recordReleaseUpdateCheckResult({
+    reason,
+    status: "downloaded",
+  });
 
   const fingerprint = getManifestFingerprint(fetchResult.manifest)
     ?? (fetchResult.isRollBackToEmbedded ? "rollback-to-embedded" : null);
@@ -111,6 +126,10 @@ export function RuntimeUpdateGate() {
 
       checkForRuntimeUpdate(reason, force)
         .catch((error) => {
+          recordReleaseUpdateCheckResult({
+            reason,
+            status: "error",
+          });
           reportRuntimeError("runtime-update-check", error, {
             reason,
             channel: Updates.channel,

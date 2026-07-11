@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,6 +54,12 @@ import {
   type AccessVisibility,
 } from "../_lib/accessVisibility";
 import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
+import {
+  formatReleaseDiagnosticsSummary,
+  readReleaseDiagnostics,
+  sanitizeReleaseDiagnosticsForDisplay,
+  type ReleaseDiagnosticsDisplay,
+} from "../_lib/releaseDiagnostics";
 import { supabase } from "../_lib/supabase";
 import { maskEmailAddress } from "../_lib/displayText";
 import {
@@ -322,6 +329,25 @@ function StatusPill({ label, tone = "default" }: { label: string; tone?: "defaul
   );
 }
 
+function ReleaseDiagnosticItem({
+  label,
+  testID,
+  value,
+}: {
+  label: string;
+  testID?: string;
+  value: boolean | string | null;
+}) {
+  const displayValue = value === null ? "null" : String(value);
+
+  return (
+    <View style={styles.releaseDiagnosticItem}>
+      <Text style={styles.releaseDiagnosticLabel}>{label}</Text>
+      <Text selectable style={styles.releaseDiagnosticValue} testID={testID}>{displayValue}</Text>
+    </View>
+  );
+}
+
 function SettingsAccordion({
   id,
   kicker,
@@ -485,7 +511,14 @@ export default function SettingsScreen() {
     message: "Choose your username",
   });
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [releaseDiagnostics, setReleaseDiagnostics] = useState<ReleaseDiagnosticsDisplay>(() => (
+    sanitizeReleaseDiagnosticsForDisplay(readReleaseDiagnostics())
+  ));
   const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
+  const releaseDiagnosticsSummary = useMemo(
+    () => formatReleaseDiagnosticsSummary(releaseDiagnostics),
+    [releaseDiagnostics],
+  );
   const moderationAccess = useMemo(() => getModerationAccess({
     email: user?.email ?? null,
     userId: user?.id ?? null,
@@ -501,8 +534,14 @@ export default function SettingsScreen() {
     const section = String(params.section ?? "").trim().toLowerCase();
     if (section === "notifications" || section === "activity") {
       setExpandedSections((current) => ({ ...current, notifications: true }));
+    } else if (section === "app-info" || section === "diagnostics") {
+      setExpandedSections((current) => ({ ...current, "app-info": true }));
     }
   }, [params.section]);
+
+  useEffect(() => {
+    setReleaseDiagnostics(sanitizeReleaseDiagnosticsForDisplay(readReleaseDiagnostics()));
+  }, []);
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;
@@ -1426,6 +1465,16 @@ export default function SettingsScreen() {
     void openExternalDestination(`mailto:${supportEmail}`, "Support Email");
   }, [legalConfig.supportEmail, openExternalDestination]);
 
+  const onPressCopyReleaseDiagnostics = useCallback(() => {
+    void Clipboard.setStringAsync(releaseDiagnosticsSummary)
+      .then(() => {
+        Alert.alert("App diagnostics", "Release diagnostics copied.");
+      })
+      .catch(() => {
+        Alert.alert("App diagnostics", "Diagnostics could not be copied on this device.");
+      });
+  }, [releaseDiagnosticsSummary]);
+
   const onPressManagePremium = useCallback(() => {
     trackEvent("settings_premium_manage_opened", {
       source: "settings",
@@ -2234,6 +2283,43 @@ export default function SettingsScreen() {
         <SettingsRow title="Privacy Policy" subtitle="Open the bundled privacy policy." value="View policy" onPress={() => openLocalLegalRoute("/privacy")} />
         <SettingsRow title="Terms of Use" subtitle="Open the bundled service terms." value="View policy" onPress={() => openLocalLegalRoute("/terms")} />
         <SettingsRow title="Support" subtitle={`Contact ${legalConfig.supportEmail || LEGAL_SUPPORT_EMAIL} for help.`} value="Open" onPress={onPressSupportContact} />
+        <View style={styles.releaseDiagnosticsCard} testID="release-diagnostics-card">
+          <View style={styles.releaseDiagnosticsHeader}>
+            <View style={styles.releaseDiagnosticsCopy}>
+              <Text style={styles.releaseDiagnosticsTitle}>App diagnostics</Text>
+              <Text style={styles.releaseDiagnosticsBody}>
+                Non-secret release identity for support and installed OTA proof.
+              </Text>
+            </View>
+            <StatusPill label={releaseDiagnostics.isEmergencyLaunch ? "Emergency" : "Release"} tone={releaseDiagnostics.isEmergencyLaunch ? "danger" : "muted"} />
+          </View>
+          <View style={styles.releaseDiagnosticsGrid}>
+            <ReleaseDiagnosticItem label="Application ID" value={releaseDiagnostics.applicationId} />
+            <ReleaseDiagnosticItem label="App version" value={releaseDiagnostics.appVersion} />
+            <ReleaseDiagnosticItem label="Native build" value={releaseDiagnostics.nativeBuildVersion ?? releaseDiagnostics.buildVersion} />
+            <ReleaseDiagnosticItem label="Runtime" value={releaseDiagnostics.runtimeVersion} testID="release-diagnostics-runtime-version" />
+            <ReleaseDiagnosticItem label="Channel" value={releaseDiagnostics.channel} testID="release-diagnostics-channel" />
+            <ReleaseDiagnosticItem label="Update ID" value={releaseDiagnostics.updateId} testID="release-diagnostics-update-id" />
+            <ReleaseDiagnosticItem label="Created at" value={releaseDiagnostics.createdAt} />
+            <ReleaseDiagnosticItem label="Embedded launch" value={releaseDiagnostics.isEmbeddedLaunch} testID="release-diagnostics-embedded-launch" />
+            <ReleaseDiagnosticItem label="Emergency launch" value={releaseDiagnostics.isEmergencyLaunch} testID="release-diagnostics-emergency-launch" />
+            <ReleaseDiagnosticItem label="Auto check" value={releaseDiagnostics.checkAutomatically} />
+            <ReleaseDiagnosticItem
+              label="Last update check"
+              value={releaseDiagnostics.latestKnownUpdateCheckResult
+                ? `${releaseDiagnostics.latestKnownUpdateCheckResult.status} · ${releaseDiagnostics.latestKnownUpdateCheckResult.reason}`
+                : null}
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.secondaryActionButton}
+            activeOpacity={0.86}
+            onPress={onPressCopyReleaseDiagnostics}
+            testID="release-diagnostics-copy-button"
+          >
+            <Text style={styles.secondaryActionButtonText}>Copy App Diagnostics</Text>
+          </TouchableOpacity>
+        </View>
       </SettingsAccordion>
       </ScrollView>
       <ProfileAppearanceSheet
@@ -2915,6 +3001,59 @@ const styles = StyleSheet.create({
   },
   settingsRowChildren: {
     gap: 10,
+  },
+  releaseDiagnosticsCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 12,
+    gap: 12,
+  },
+  releaseDiagnosticsHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  releaseDiagnosticsCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  releaseDiagnosticsTitle: {
+    color: "#F4F7FC",
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "900",
+  },
+  releaseDiagnosticsBody: {
+    color: "#9AA6BA",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  releaseDiagnosticsGrid: {
+    gap: 8,
+  },
+  releaseDiagnosticItem: {
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.18)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 3,
+  },
+  releaseDiagnosticLabel: {
+    color: "#7F8AA0",
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  releaseDiagnosticValue: {
+    color: "#EAF0FF",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
   },
   appearancePreviewRow: {
     flexDirection: "row",
