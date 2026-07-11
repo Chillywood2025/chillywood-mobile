@@ -72,6 +72,7 @@ import {
   type LiveKitTokenUnavailable,
   type LiveKitTokenReady,
 } from "../../../_lib/livekit/token-contract";
+import { emitLiveKitRenderTelemetryEvent } from "../../../_lib/livekit/livekitRenderTelemetry";
 import {
   LiveKitAudioSession as HybridLiveKitAudioSession,
   LiveKitRoom as HybridLiveKitRoom,
@@ -2951,6 +2952,34 @@ export default function WatchPartyLiveStageScreen({
       participantCount: displayParticipants.length,
       bubbleGridItemCount: communityCardParticipants.length,
     });
+    const telemetryParticipantRole: "host" | "speaker" | "viewer" = liveKitParticipantRole === "host" || liveKitParticipantRole === "speaker" || liveKitParticipantRole === "viewer"
+      ? liveKitParticipantRole
+      : "viewer";
+    const telemetryBase = {
+      activeContractPresent: !!liveKitJoinContract,
+      bubbleGridItemCount: communityCardParticipants.length,
+      bubbleGridTrackCount: shouldRenderLiveKitStage && publishLocalStageCamera ? 1 : 0,
+      canPublish: liveKitParticipantRole !== "viewer" && !isCurrentStageParticipantMuted,
+      fallbackReason: liveKitJoinUnavailable?.responseError ?? liveKitJoinUnavailable?.reason ?? null,
+      hasRenderableContract: !!liveKitRenderableJoinContract || !!liveKitStageSurfaceContract,
+      participantRole: telemetryParticipantRole,
+      renderableContractPresent: !!liveKitRenderableJoinContract || !!liveKitStageSurfaceContract,
+      roomType: "live" as const,
+      route: "/watch-party/live-stage/[partyId]",
+      shouldRenderSurface: shouldRenderLiveKitStage,
+      surface: "live_stage" as const,
+    };
+    if (liveKitJoinContract) {
+      emitLiveKitRenderTelemetryEvent("livekit_token_contract_present", telemetryBase);
+    }
+    if (liveKitRenderableJoinContract || liveKitStageSurfaceContract) {
+      emitLiveKitRenderTelemetryEvent("livekit_renderable_contract_set", telemetryBase);
+    }
+    if (shouldRenderLiveKitStage) {
+      emitLiveKitRenderTelemetryEvent("livekit_surface_mount_attempt", telemetryBase);
+    } else if (liveKitJoinUnavailable) {
+      emitLiveKitRenderTelemetryEvent("livekit_render_contract_missing", telemetryBase);
+    }
   }, [
     communityCardParticipants,
     currentMembershipAuthoritySignature,

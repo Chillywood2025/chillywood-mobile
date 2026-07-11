@@ -1,0 +1,54 @@
+name: LiveKit Operator Reliability Loop
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  livekit-operator-watch-once:
+    name: LiveKit health probe and scoped safe recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call LiveKit operator
+        env:
+          LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY: ${{ secrets.LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY }}
+          LIVEKIT_OPERATOR_FUNCTION_URL: ${{ secrets.LIVEKIT_OPERATOR_FUNCTION_URL }}
+          LIVEKIT_OPERATOR_TOKEN: ${{ secrets.LIVEKIT_OPERATOR_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LIVEKIT_OPERATOR_FUNCTION_URL:-}" ] || [ -z "${LIVEKIT_OPERATOR_TOKEN:-}" ]; then
+            echo "LiveKit operator workflow is configured but missing function URL or token secret."
+            exit 1
+          fi
+
+          BODY='{"action":"watch_once","enable_safe_recovery":false}'
+          if [ "${LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY:-}" = "true" ]; then
+            BODY='{"action":"watch_once","enable_safe_recovery":true}'
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            --request POST "${LIVEKIT_OPERATOR_FUNCTION_URL}" \
+            --header "Content-Type: application/json" \
+            --header "x-livekit-operator-token: ${LIVEKIT_OPERATOR_TOKEN}" \
+            --data "${BODY}" \
+            | node -e '
+              const fs = require("fs");
+              const input = fs.readFileSync(0, "utf8");
+              const redacted = input.replace(/[A-Za-z0-9._~+/=-]{32,}/g, "[redacted]");
+              const parsed = JSON.parse(redacted);
+              const summary = {
+                ok: parsed.ok === true,
+                healthState: parsed.routerHealth?.healthState ?? null,
+                reason: parsed.routerHealth?.reason ?? null,
+                eligibleServerCount: parsed.routerHealth?.eligibleServerCount ?? null,
+                plannedAction: parsed.plan?.action ?? null,
+                executionStatus: parsed.execution?.status ?? null,
+              };
+              console.log(JSON.stringify(summary, null, 2));
+              if (!summary.ok) process.exit(1);
+            '

@@ -9,6 +9,7 @@ const ACTION_BY_COMMAND = {
   "run-safe-recovery": "execute_safe_recovery",
   "surface-health": "health_snapshot",
   status: "health_snapshot",
+  "watch-once": "watch_once",
 };
 
 const redact = (value) => String(value ?? "").replace(/[A-Za-z0-9._~+/=-]{32,}/g, "[redacted]");
@@ -35,7 +36,10 @@ if (!functionUrl || !operatorToken) {
 }
 
 const response = await fetch(functionUrl, {
-  body: JSON.stringify({ action }),
+  body: JSON.stringify({
+    action,
+    enable_safe_recovery: process.env.LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY === "true",
+  }),
   headers: {
     "Content-Type": "application/json",
     "x-livekit-operator-token": operatorToken,

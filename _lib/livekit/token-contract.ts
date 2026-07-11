@@ -1,5 +1,9 @@
 import { decodeTokenPayload } from "livekit-client";
 
+import {
+  emitLiveKitRenderTelemetryEvent,
+  type LiveKitRenderTelemetryInput,
+} from "./livekitRenderTelemetry";
 import { getRuntimeLiveKitConfig, isLiveKitRuntimeConfigured } from "../runtimeConfig";
 import { supabase } from "../supabase";
 
@@ -314,6 +318,18 @@ const normalizeLiveKitRequestedGrants = (
   };
 };
 
+const getLiveKitTelemetrySurface = (surface: LiveKitJoinSurface): LiveKitRenderTelemetryInput["surface"] => {
+  if (surface === "live-stage") return "live_stage";
+  if (surface === "chat-call") return "chat_call";
+  return "watch_party_live";
+};
+
+const getLiveKitTelemetryRoomType = (surface: LiveKitJoinSurface): LiveKitRenderTelemetryInput["roomType"] => {
+  if (surface === "live-stage") return "live";
+  if (surface === "chat-call") return "chat_call";
+  return "watch_party";
+};
+
 export const getRequestedLiveKitGrants = (
   participantRole: LiveKitParticipantRole,
 ): LiveKitRequestedGrants => {
@@ -462,6 +478,34 @@ export async function requestLiveKitParticipantToken(
       endpoint: config.tokenEndpoint,
       serverUrl: config.serverUrl,
     };
+  }
+
+  const expiryState = getLiveKitParticipantTokenExpiryState(participantToken);
+  const telemetryBase = {
+    activeContractPresent: true,
+    canPublish: effectiveRequestedGrants.canPublish,
+    participantRole: effectiveParticipantRole,
+    roomType: getLiveKitTelemetryRoomType(request.surface),
+    route: request.surface,
+    shouldRenderSurface: true,
+    surface: getLiveKitTelemetrySurface(request.surface),
+    tokenExpDeltaSeconds: typeof expiryState.expiresInMillis === "number" ? expiryState.expiresInMillis / 1000 : null,
+    tokenNbfDeltaSeconds: typeof expiryState.notBeforeInMillis === "number" ? expiryState.notBeforeInMillis / 1000 : null,
+  } satisfies LiveKitRenderTelemetryInput;
+  emitLiveKitRenderTelemetryEvent("livekit_token_received", telemetryBase);
+  if (
+    expiryState.reason === "valid"
+    && typeof expiryState.notBeforeInMillis === "number"
+    && expiryState.notBeforeInMillis > 0
+  ) {
+    emitLiveKitRenderTelemetryEvent("livekit_token_nbf_future_grace_used", {
+      ...telemetryBase,
+      nbfGraceUsed: true,
+    });
+  } else if (expiryState.reason === "not_yet_valid") {
+    emitLiveKitRenderTelemetryEvent("livekit_token_nbf_rejected", telemetryBase);
+  } else if (expiryState.reason === "expired") {
+    emitLiveKitRenderTelemetryEvent("livekit_token_expired_rejected", telemetryBase);
   }
 
   return {

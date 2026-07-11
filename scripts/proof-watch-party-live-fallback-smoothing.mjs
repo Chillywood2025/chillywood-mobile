@@ -84,7 +84,7 @@ const flicker = classifyLiveKitRenderHealth({
   shouldRenderSurface: true,
   surface: "watch_party_live",
 });
-assert.equal(flicker.healthState, "render_surface_flicker");
+assert.equal(flicker.healthState, "fallback_flash_regression");
 
 const hardFailure = classifyLiveKitRenderHealth({
   hasRenderableContract: false,

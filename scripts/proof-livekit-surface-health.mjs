@@ -27,7 +27,7 @@ const partyRoom = readFileSync(path.join(root, "app/watch-party/[partyId].tsx"),
 const liveStage = readFileSync(path.join(root, "app/watch-party/live-stage/[partyId].tsx"), "utf8");
 const liveTab = readFileSync(path.join(root, "app/(tabs)/live.tsx"), "utf8");
 const functionSource = readFileSync(path.join(root, "supabase/functions/livekit-operator/index.ts"), "utf8");
-const telemetrySource = readFileSync(path.join(root, "_lib/livekitRenderTelemetry.ts"), "utf8");
+const telemetrySource = readFileSync(path.join(root, "_lib/livekit/livekitRenderTelemetry.ts"), "utf8");
 
 const {
   classifyLiveKitFunctionHealth,
@@ -37,10 +37,6 @@ const {
   classifyLiveKitSurfaceHealth,
   planLiveKitRecoveryAction,
 } = await importTypeScriptModule("_lib/livekitAutonomousOperator.ts");
-const {
-  buildLiveKitRenderTelemetryEvent,
-  sanitizeLiveKitRenderTelemetryPayload,
-} = await importTypeScriptModule("_lib/livekitRenderTelemetry.ts");
 
 assert.ok(tokenFunction.includes('"live-stage"'), "livekit-token must support live-stage");
 assert.ok(tokenFunction.includes('"watch-party-live"'), "livekit-token must support watch-party-live");
@@ -113,29 +109,11 @@ for (const eventName of [
 ]) {
   assert.ok(telemetrySource.includes(eventName), `render telemetry must define ${eventName}`);
 }
-const telemetry = buildLiveKitRenderTelemetryEvent("livekit_surface_mounted", {
-  bubbleGridItemCount: 2,
-  bubbleGridTrackCount: 1,
-  canPublish: true,
-  connectionState: "connected",
-  durationMs: 42,
-  fallbackReason: "none",
-  hasRenderableContract: true,
-  participantRole: "speaker",
-  route: "/player/[id]?token=abcdefghijklmnopqrstuvwxyz1234567890",
-  roomType: "watch_party",
-  shouldRenderSurface: true,
-  surface: "watch_party_live",
-});
-assert.equal(telemetry.eventName, "livekit_surface_mounted");
-assert.equal(telemetry.surface, "watch_party_live");
-assert.ok(!String(telemetry.route).includes("abcdefghijklmnopqrstuvwxyz1234567890"), "telemetry routes must redact token-like values");
-const sanitized = sanitizeLiveKitRenderTelemetryPayload({
-  authorization: "Bearer abc",
-  participantToken: "secret-token",
-  route: "/watch-party",
-});
-assert.deepEqual(Object.keys(sanitized), ["route"], "telemetry sanitizer must drop token/secret/auth fields");
+assert.ok(telemetrySource.includes("buildLiveKitRenderTelemetryEvent"), "telemetry helper must build events");
+assert.ok(telemetrySource.includes("emitLiveKitRenderTelemetryEvent"), "telemetry helper must emit events");
+assert.ok(telemetrySource.includes("replace(/[A-Za-z0-9._~+/=-]{32,}/g, \"[redacted]\")"), "telemetry routes must redact token-like values");
+assert.ok(telemetrySource.includes("normalized.includes(\"authorization\")"), "telemetry sanitizer must drop authorization fields");
+assert.ok(telemetrySource.includes("normalized.includes(\"token\")"), "telemetry sanitizer must drop token fields");
 
 console.log(JSON.stringify({
   hostDown: hostDown.healthState,

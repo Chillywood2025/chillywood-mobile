@@ -73,6 +73,7 @@ import {
     isLiveKitParticipantTokenExpired,
     type LiveKitTokenReady,
 } from "../../_lib/livekit/token-contract";
+import { emitLiveKitRenderTelemetryEvent } from "../../_lib/livekit/livekitRenderTelemetry";
 import { debugLog } from "../../_lib/logger";
 import { getVideoSource } from "../../_lib/mediaSources";
 import { readCreatorVideoForPlayer, type CreatorVideo } from "../../_lib/creatorVideos";
@@ -6271,6 +6272,44 @@ export default function PlayerScreen() {
       membershipParticipantCount: Object.keys(partyMembershipMapRef.current).filter(Boolean).length,
       presenceParticipantCount: partyParticipants.length,
     }));
+    const telemetryBase = {
+      activeContractPresent: !!activeWatchPartyLiveKitJoinContract,
+      bubbleGridItemCount: watchPartyLiveKitParticipantRoster.length,
+      bubbleGridTrackCount: 0,
+      canPublish: desiredWatchPartyLiveKitCanPublish,
+      hasRenderableContract: !!watchPartyLiveKitRenderableContract,
+      participantRole: desiredWatchPartyLiveKitParticipantRole,
+      renderableContractPresent: !!watchPartyLiveKitRenderableContract,
+      roomType: "watch_party" as const,
+      route: "/player/[id]",
+      shouldRenderSurface: shouldRenderWatchPartyLiveKit,
+      surface: "watch_party_live" as const,
+      tokenExpDeltaSeconds: typeof watchPartyLiveKitJoinContractExpiryState?.expiresInMillis === "number"
+        ? watchPartyLiveKitJoinContractExpiryState.expiresInMillis / 1000
+        : null,
+      tokenNbfDeltaSeconds: typeof watchPartyLiveKitJoinContractExpiryState?.notBeforeInMillis === "number"
+        ? watchPartyLiveKitJoinContractExpiryState.notBeforeInMillis / 1000
+        : null,
+    };
+    if (activeWatchPartyLiveKitJoinContract) {
+      emitLiveKitRenderTelemetryEvent("livekit_token_contract_present", telemetryBase);
+    }
+    if (watchPartyLiveKitRenderableContract) {
+      emitLiveKitRenderTelemetryEvent("livekit_renderable_contract_set", telemetryBase);
+    }
+    if (shouldRenderWatchPartyLiveKit) {
+      emitLiveKitRenderTelemetryEvent("livekit_surface_mount_attempt", telemetryBase);
+    } else if (shouldRenderWatchPartyLiveKitStableShell) {
+      emitLiveKitRenderTelemetryEvent("livekit_fallback_roster_suppressed", {
+        ...telemetryBase,
+        fallbackReason: "stable_shell_grace",
+      });
+    } else if (watchPartyLiveKitFallbackRosterAllowed) {
+      emitLiveKitRenderTelemetryEvent("livekit_fallback_roster_shown", {
+        ...telemetryBase,
+        fallbackReason: watchPartyLiveKitHardFallbackReason ?? "grace_elapsed",
+      });
+    }
   }, [
     activeWatchPartyLiveKitJoinContract,
     cameraPermission?.granted,
@@ -6287,8 +6326,11 @@ export default function PlayerScreen() {
     playerMediaIsInteractive,
     publishWatchPartyLiveKitVideo,
     shouldRenderWatchPartyLiveKit,
+    shouldRenderWatchPartyLiveKitStableShell,
     trackedUserId,
     watchPartyEntryAllowed,
+    watchPartyLiveKitFallbackRosterAllowed,
+    watchPartyLiveKitHardFallbackReason,
     watchPartyLiveKitParticipantRoster,
     watchPartyLiveKitJoinContract,
     watchPartyLiveKitJoinContract?.participantRole,
@@ -6601,6 +6643,21 @@ export default function PlayerScreen() {
       validRenderableContract,
       shouldPreserveRenderableContract,
     }));
+    emitLiveKitRenderTelemetryEvent(
+      shouldPreserveRenderableContract ? "livekit_fallback_roster_suppressed" : "livekit_fallback_roster_shown",
+      {
+        activeContractPresent: validJoinContract,
+        canPublish: nextRenderableContract?.requestedGrants.canPublish ?? false,
+        fallbackReason: reason,
+        hasRenderableContract: !!nextRenderableContract,
+        participantRole: nextRenderableContract?.participantRole ?? "viewer",
+        renderableContractPresent: !!nextRenderableContract,
+        roomType: "watch_party",
+        route: "/player/[id]",
+        shouldRenderSurface: shouldPreserveRenderableContract,
+        surface: "watch_party_live",
+      },
+    );
     setWatchPartyLiveKitHardFallbackReason(reason === "room_error" ? "room_error" : null);
     setWatchPartyLiveKitJoinContract(null);
     setWatchPartyLiveKitRenderableContract(shouldPreserveRenderableContract ? nextRenderableContract : null);

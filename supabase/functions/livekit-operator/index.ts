@@ -105,6 +105,15 @@ const authenticateOperator = async (request: Request) => {
   return constantTimeEqual(actualHash, expectedHash);
 };
 
+const authenticateAppUser = async (adminClient: SupabaseClientLike, request: Request) => {
+  const authorization = toText(request.headers.get("authorization"));
+  const accessToken = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!accessToken) return null;
+  const result = await adminClient.auth.getUser(accessToken);
+  if (result.error || !result.data?.user?.id) return null;
+  return result.data.user as { id: string };
+};
+
 const heartbeatAgeSeconds = (lastHeartbeatAt: unknown, now = Date.now()) => {
   const parsed = Date.parse(toText(lastHeartbeatAt));
   if (!Number.isFinite(parsed)) return Number.POSITIVE_INFINITY;
@@ -139,7 +148,16 @@ const planForState = (surface: string, healthState: string, reason: string) => {
   if (healthState === "capacity_full" || healthState === "capacity_counter_stale") {
     return { action: "refresh_registry_counters", autoExecutable: true, level: 1, ownerApprovalRequired: false, reason, rollbackAvailable: true, surface };
   }
-  if (healthState === "render_surface_flicker" || healthState === "camera_track_missing" || healthState === "render_contract_missing") {
+  if (
+    healthState === "render_surface_flicker"
+    || healthState === "fallback_flash_regression"
+    || healthState === "renderable_contract_regression"
+    || healthState === "surface_mount_regression"
+    || healthState === "roster_render_regression"
+    || healthState === "app_token_validation_regression"
+    || healthState === "camera_track_missing"
+    || healthState === "render_contract_missing"
+  ) {
     return { action: "stabilize_client_surface", autoExecutable: true, level: 1, ownerApprovalRequired: false, reason, rollbackAvailable: true, surface };
   }
   return { action: "owner_approval_required", autoExecutable: false, level: 3, ownerApprovalRequired: true, reason, rollbackAvailable: false, surface };
@@ -187,6 +205,59 @@ const safeInsert = async (adminClient: SupabaseClientLike, table: string, payloa
   return true;
 };
 
+const recordLearningState = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    action: string;
+    healthState: string;
+    reason: string;
+    result: "failed" | "planned" | "succeeded";
+    surface: string;
+  },
+) => {
+  const query = await adminClient
+    .from("livekit_operator_learning_state")
+    .select("id,occurrence_count,success_count,failure_count,confidence")
+    .eq("surface", input.surface)
+    .eq("health_state", input.healthState)
+    .eq("reason", input.reason)
+    .eq("preferred_action", input.action)
+    .maybeSingle();
+
+  const current = query.data as JsonObject | null;
+  const occurrenceCount = Number(current?.occurrence_count ?? 0) + 1;
+  const successCount = Number(current?.success_count ?? 0) + (input.result === "succeeded" ? 1 : 0);
+  const failureCount = Number(current?.failure_count ?? 0) + (input.result === "failed" ? 1 : 0);
+  const confidence = Math.max(0, Math.min(0.999, successCount / Math.max(occurrenceCount, 1)));
+
+  if (current?.id) {
+    await adminClient
+      .from("livekit_operator_learning_state")
+      .update({
+        confidence,
+        failure_count: failureCount,
+        last_result: input.result,
+        occurrence_count: occurrenceCount,
+        success_count: successCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", current.id);
+    return;
+  }
+
+  await safeInsert(adminClient, "livekit_operator_learning_state", {
+    confidence,
+    failure_count: failureCount,
+    health_state: input.healthState,
+    last_result: input.result,
+    occurrence_count: occurrenceCount,
+    preferred_action: input.action,
+    reason: input.reason,
+    success_count: successCount,
+    surface: input.surface,
+  });
+};
+
 const writeHealthSnapshot = async (adminClient: SupabaseClientLike, health: JsonObject, metadata?: JsonObject) => safeInsert(
   adminClient,
   "livekit_surface_health_snapshots",
@@ -222,6 +293,65 @@ const readTokenAudit = async (adminClient: SupabaseClientLike) => {
   }));
 };
 
+const readRenderNumber = (renderEvent: JsonObject, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = toNumber(renderEvent[key]);
+    if (value !== null) return value;
+  }
+  return null;
+};
+
+const readRenderBoolean = (renderEvent: JsonObject, ...keys: string[]) => {
+  for (const key of keys) {
+    if (typeof renderEvent[key] === "boolean") return renderEvent[key] === true;
+  }
+  return false;
+};
+
+const classifyRenderEvent = (renderEvent: JsonObject) => {
+  const eventName = safeLabel(renderEvent.eventName || renderEvent.event_name || "unknown");
+  const surface = safeLabel(renderEvent.surface || "watch_party_live");
+  const hasRenderableContract = readRenderBoolean(renderEvent, "hasRenderableContract", "has_renderable_contract", "renderableContractPresent", "renderable_contract_present");
+  const activeContractPresent = readRenderBoolean(renderEvent, "activeContractPresent", "active_contract_present");
+  const shouldRenderSurface = readRenderBoolean(renderEvent, "shouldRenderSurface", "should_render_surface");
+  const fallbackRosterShown = eventName === "livekit_fallback_roster_shown" || readRenderBoolean(renderEvent, "fallbackRosterShown", "fallback_roster_shown");
+  const renderableContractCleared = eventName === "livekit_renderable_contract_cleared" || readRenderBoolean(renderEvent, "renderableContractCleared", "renderable_contract_cleared");
+  const nbfDeltaSeconds = readRenderNumber(renderEvent, "nbfDeltaSecondsBucket", "nbf_delta_seconds_bucket", "tokenNbfDeltaSecondsBucket", "token_nbf_delta_seconds_bucket");
+  const bubbleGridItemCount = readRenderNumber(renderEvent, "bubbleGridItemCount", "bubble_grid_item_count");
+  const bubbleGridTrackCount = readRenderNumber(renderEvent, "bubbleGridTrackCount", "bubble_grid_track_count");
+  const rosterParticipantCount = readRenderNumber(renderEvent, "rosterParticipantCount", "roster_participant_count");
+  const canPublish = readRenderBoolean(renderEvent, "canPublish", "can_publish");
+
+  if (eventName === "livekit_token_nbf_future_grace_used" && nbfDeltaSeconds !== null && nbfDeltaSeconds >= 0 && nbfDeltaSeconds <= 5) {
+    return { confidence: 0.96, healthState: "healthy", reason: "token_nbf_future_within_grace", severity: "info", surface };
+  }
+  if (eventName === "livekit_token_nbf_rejected" || (nbfDeltaSeconds !== null && nbfDeltaSeconds > 5)) {
+    return {
+      confidence: 0.96,
+      healthState: nbfDeltaSeconds !== null && nbfDeltaSeconds > 5 ? "token_time_skew_blocker" : "app_token_validation_regression",
+      reason: nbfDeltaSeconds !== null && nbfDeltaSeconds > 5 ? "token_nbf_future_beyond_grace" : "fresh_token_rejected_by_client",
+      severity: "critical",
+      surface,
+    };
+  }
+  if (renderableContractCleared && hasRenderableContract) {
+    return { confidence: 0.95, healthState: "renderable_contract_regression", reason: "renderable_contract_cleared_while_valid", severity: "critical", surface };
+  }
+  if (fallbackRosterShown && hasRenderableContract) {
+    return { confidence: 0.95, healthState: "fallback_flash_regression", reason: "fallback_roster_shown_while_renderable_contract_valid", severity: "warning", surface };
+  }
+  if ((activeContractPresent || hasRenderableContract) && shouldRenderSurface === false && eventName !== "livekit_fallback_roster_suppressed") {
+    return { confidence: 0.94, healthState: "surface_mount_regression", reason: "active_or_renderable_contract_without_surface", severity: "critical", surface };
+  }
+  if ((rosterParticipantCount ?? 0) > 0 && (bubbleGridItemCount ?? 0) === 0) {
+    return { confidence: 0.88, healthState: "roster_render_regression", reason: "roster_participants_exist_but_bubble_grid_empty", severity: "warning", surface };
+  }
+  if (canPublish && (bubbleGridTrackCount ?? 0) === 0 && (bubbleGridItemCount ?? 0) > 0) {
+    return { confidence: 0.82, healthState: "camera_track_missing", reason: "publish_capable_participant_waiting_for_camera_track", severity: "warning", surface };
+  }
+  return { confidence: 0.9, healthState: "healthy", reason: "render_event_stable", severity: "info", surface };
+};
+
 const invokeHeartbeatMonitor = async (serverId: string) => {
   const monitorUrl = readOptionalEnv("LIVEKIT_HEARTBEAT_MONITOR_FUNCTION_URL");
   const monitorSecret = readOptionalEnv("LIVEKIT_HEARTBEAT_MONITOR_SECRET");
@@ -253,9 +383,6 @@ Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
   try {
-    const operatorOk = await authenticateOperator(request);
-    if (!operatorOk) return jsonResponse(401, { error: "operator_token_required" });
-
     const body = await request.json().catch(() => ({})) as JsonObject;
     const action = safeLabel(body.action || "health_snapshot");
     const supabaseUrl = readRequiredEnv("SUPABASE_URL");
@@ -267,12 +394,71 @@ Deno.serve(async (request: Request) => {
       },
     });
 
+    if (action === "render_event_ingest") {
+      const appUser = await authenticateAppUser(adminClient, request);
+      if (!appUser) return jsonResponse(401, { error: "authenticated_user_required" });
+
+      const renderEvent = body.render_event && typeof body.render_event === "object" ? body.render_event as JsonObject : {};
+      const classification = classifyRenderEvent(renderEvent);
+      const userHash = await sha256Hex(appUser.id);
+      const sinceIso = new Date(Date.now() - 60_000).toISOString();
+      const recent = await adminClient
+        .from("livekit_operator_events")
+        .select("id", { count: "exact", head: true })
+        .eq("surface", classification.surface)
+        .filter("metadata->>user_hash", "eq", userHash)
+        .gte("created_at", sinceIso);
+      if (typeof recent.count === "number" && recent.count > 60) {
+        return jsonResponse(429, { error: "render_telemetry_rate_limited" });
+      }
+
+      const planned = planForState(classification.surface, classification.healthState, classification.reason);
+      await safeInsert(adminClient, "livekit_operator_events", {
+        action_planned: planned.action,
+        confidence: classification.confidence,
+        health_state: classification.healthState,
+        metadata: safeMetadata({
+          ...renderEvent,
+          user_hash: userHash,
+        }),
+        reason: classification.reason,
+        severity: classification.severity,
+        surface: classification.surface,
+      });
+      await recordLearningState(adminClient, {
+        action: planned.action,
+        healthState: classification.healthState,
+        reason: classification.reason,
+        result: classification.healthState === "healthy" ? "succeeded" : "planned",
+        surface: classification.surface,
+      });
+      return jsonResponse(200, {
+        classification: {
+          healthState: classification.healthState,
+          reason: classification.reason,
+          severity: classification.severity,
+          surface: classification.surface,
+        },
+        ok: true,
+      });
+    }
+
+    const operatorOk = await authenticateOperator(request);
+    if (!operatorOk) return jsonResponse(401, { error: "operator_token_required" });
+
     if (action === "health_snapshot" || action === "router_health") {
       const routerHealth = await readRouterHealth(adminClient);
       const tokenAudit = await readTokenAudit(adminClient).catch((error) => ([{
         error: redactText(error instanceof Error ? error.message : String(error)),
       }]));
       await writeHealthSnapshot(adminClient, routerHealth, { action });
+      await recordLearningState(adminClient, {
+        action: "audit_only",
+        healthState: toText(routerHealth.healthState),
+        reason: toText(routerHealth.reason),
+        result: routerHealth.healthState === "healthy" ? "succeeded" : "planned",
+        surface: "livekit_router",
+      });
       return jsonResponse(200, { ok: true, routerHealth, surfaces: SURFACES, tokenAudit });
     }
 
@@ -287,34 +473,13 @@ Deno.serve(async (request: Request) => {
       return jsonResponse(result.ok ? 200 : 503, { ok: result.ok, result });
     }
 
-    if (action === "render_event_ingest") {
-      const renderEvent = body.render_event && typeof body.render_event === "object" ? body.render_event as JsonObject : {};
-      const fallbackAfter = toNumber(renderEvent.duration_ms);
-      const healthState = renderEvent.fallback_roster_shown === true && renderEvent.has_renderable_contract === true && (fallbackAfter === null || fallbackAfter < 1600)
-        ? "render_surface_flicker"
-        : renderEvent.has_renderable_contract === true && renderEvent.should_render_surface === false
-          ? "render_contract_missing"
-          : renderEvent.identity_mismatch_guarded === false
-            ? "render_identity_mismatch"
-            : "healthy";
-      const reason = healthState === "healthy" ? "render_event_stable" : "render_event_anomaly";
-      await safeInsert(adminClient, "livekit_operator_events", {
-        confidence: healthState === "healthy" ? 0.9 : 0.95,
-        health_state: healthState,
-        metadata: safeMetadata(renderEvent),
-        reason,
-        severity: healthState === "healthy" ? "info" : "warning",
-        surface: safeLabel(renderEvent.surface || body.surface || "watch_party_live"),
-      });
-      return jsonResponse(200, { healthState, ok: true, reason });
-    }
-
-    if (action === "plan_recovery" || action === "execute_safe_recovery") {
+    if (action === "plan_recovery" || action === "execute_safe_recovery" || action === "watch_once") {
       const routerHealth = await readRouterHealth(adminClient);
       const plan = planForState("livekit_router", toText(routerHealth.healthState), toText(routerHealth.reason));
       let execution: JsonObject = { status: "not_executed" };
+      const shouldExecute = action === "execute_safe_recovery" || (action === "watch_once" && body.enable_safe_recovery === true);
 
-      if (action === "execute_safe_recovery") {
+      if (shouldExecute) {
         if (!plan.autoExecutable || plan.ownerApprovalRequired || plan.level >= 3) {
           execution = { reason: "owner_approval_required_or_not_auto_executable", status: "blocked" };
         } else if (plan.action === "run_heartbeat_monitor" || plan.action === "refresh_registry_counters") {
@@ -342,7 +507,22 @@ Deno.serve(async (request: Request) => {
             severity: routerHealth.healthState === "healthy" ? "info" : "critical",
             surface: "livekit_router",
           });
+          await recordLearningState(adminClient, {
+            action: plan.action,
+            healthState: toText(routerHealth.healthState),
+            reason: toText(routerHealth.reason),
+            result: result.ok ? "succeeded" : "failed",
+            surface: "livekit_router",
+          });
         }
+      } else {
+        await recordLearningState(adminClient, {
+          action: plan.action,
+          healthState: toText(routerHealth.healthState),
+          reason: toText(routerHealth.reason),
+          result: routerHealth.healthState === "healthy" ? "succeeded" : "planned",
+          surface: "livekit_router",
+        });
       }
 
       return jsonResponse(200, { execution, ok: true, plan, routerHealth });

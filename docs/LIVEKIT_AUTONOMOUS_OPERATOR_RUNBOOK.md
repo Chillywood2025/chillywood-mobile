@@ -28,7 +28,8 @@ The operator must never:
 ## Components
 
 - `_lib/livekitAutonomousOperator.ts`: pure health classification, recovery planning, auto-execution gating, and learning-state model.
-- `_lib/livekitRenderTelemetry.ts`: redacted client render telemetry event helpers.
+- `_lib/livekit/livekitRenderTelemetry.ts`: redacted client render/token telemetry event helpers.
+- `_lib/livekitRenderTelemetry.ts`: compatibility re-export for older proof imports.
 - `supabase/migrations/20260711043323_livekit_autonomous_operator.sql`: scoped operator tables with RLS enabled and client writes revoked.
 - `supabase/functions/livekit-operator/index.ts`: token-gated Edge Function using `x-livekit-operator-token` and `LIVEKIT_OPERATOR_TOKEN_SHA256`.
 - `scripts/livekit-operator-cli.mjs`: CLI wrapper for status, probe, plan, safe recovery, report, surface health, and learning report.
@@ -50,6 +51,15 @@ Core states:
 - `capacity_counter_stale`
 - `capacity_full`
 - `render_surface_flicker`
+- `fallback_flash_regression`
+- `renderable_contract_regression`
+- `surface_mount_regression`
+- `roster_render_regression`
+- `app_token_validation_regression`
+- `token_time_skew_blocker`
+- `backend_router_regression`
+- `heartbeat_regression`
+- `deployment_regression`
 - `render_contract_missing`
 - `render_identity_mismatch`
 - `camera_track_missing`
@@ -97,23 +107,69 @@ Operator writes are scoped to:
 
 The learning state counts repeated incidents by surface/state/reason/action, tracks success/failure counts, stores confidence, and recommends safer future actions. It never learns from secrets and never upgrades Level 3/4 actions into autonomous actions.
 
+## Client Render And Token Telemetry
+
+The app emits sanitized telemetry to `livekit-operator` through `render_event_ingest`. This path requires an authenticated app user but does not require the operator token because it cannot execute recovery or write arbitrary health state. It stores only sanitized, rate-limited events through service-owned operator tables. Client telemetry cannot directly trigger recovery.
+
+Covered event classes include:
+
+- `livekit_token_received`
+- `livekit_token_nbf_future_grace_used`
+- `livekit_token_nbf_rejected`
+- `livekit_token_expired_rejected`
+- `livekit_renderable_contract_set`
+- `livekit_renderable_contract_preserved`
+- `livekit_renderable_contract_cleared`
+- `livekit_surface_mount_attempt`
+- `livekit_surface_mounted`
+- `livekit_fallback_roster_shown`
+- `livekit_fallback_roster_suppressed`
+- `livekit_camera_preparing`
+- `livekit_camera_track_present`
+- `livekit_bubble_grid_rendered`
+- `livekit_connection_state_changed`
+
+Token timing is bucketed. Participant tokens, LiveKit secrets, TURN secrets, auth sessions, API keys, signed URLs, provider credentials, and raw token payloads are not sent.
+
+This catches the July 11 app-side regression class: a backend-issued token with `nbf` about one second in the future is classified as normal bounded grace, while a materially future token is classified as `token_time_skew_blocker`. If a valid renderable contract is cleared or a fallback roster appears while the contract is valid, the operator records `renderable_contract_regression` or `fallback_flash_regression`.
+
+## Activation Mode
+
+Current mode: `manual_cli_active_scheduled_template_ready`.
+
+The deployed `livekit-operator` Edge Function accepts manual `watch_once` calls with the narrow operator token. `LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY=true` allows only Level 1/2 scoped actions inside the operator function. The scheduled GitHub Actions loop is prepared as a template at `ops/livekit-operator/github-actions/livekit-operator-reliability-loop.yml`, but it is not installed under `.github/workflows` in the current repo because the available GitHub OAuth credential rejected workflow-file pushes without `workflow` scope. Do not claim continuous scheduled operation until that workflow is installed and a scheduled run is proved. The template does not use service-role keys and redacts long token-like output before logging.
+
+Live proof for activation returned:
+
+- `healthState=healthy`
+- `reason=eligible_server_available`
+- `eligibleServerCount=1`
+- `plannedAction=audit_only`
+- `executionStatus=not_executed`
+
+Fail-closed checks:
+
+- missing operator token -> `401 operator_token_required`
+- unauthenticated render telemetry -> `401 authenticated_user_required`
+
 ## Proof Commands
 
 ```bash
 npm run proof:livekit-autonomous-operator
 npm run proof:livekit-surface-health
+npm run proof:livekit-render-telemetry
+npm run proof:livekit-operator-recovery-loop
 npm run proof:watch-party-live-fallback-smoothing
 npm run guard:livekit-autonomous-operator-policy
 ```
 
-Live status requires operator function URL and token in the local operator shell:
+Live status requires the operator function URL and token to already be present in
+the local operator shell:
 
 ```bash
-LIVEKIT_OPERATOR_FUNCTION_URL="https://PROJECT.functions/v1/livekit-operator" \
-LIVEKIT_OPERATOR_TOKEN="$LIVEKIT_OPERATOR_TOKEN" \
 npm run livekit-operator:status
 ```
 
 Do not paste the token into chat or docs.
 
-Current deployment posture: the `livekit-operator` Edge Function is deployed and the schema migration is applied, but the long-lived operator token is intentionally disabled unless an owner-held token is stored outside git and `LIVEKIT_OPERATOR_TOKEN_SHA256` is rotated to its hash. This preserves fail-closed behavior: missing or invalid operator calls deny with `401 operator_token_required`, and no broad operator access exists by default.
+Current deployment posture: the `livekit-operator` Edge Function is deployed, the schema migration is applied, and a narrow operator token hash is active in Supabase. Missing or invalid operator calls still deny with `401 operator_token_required`, app telemetry requires app auth, and no broad operator access exists. Scheduled operation remains a prepared template until `.github/workflows/livekit-operator-reliability-loop.yml` can be added with a GitHub credential that has workflow-file permission.

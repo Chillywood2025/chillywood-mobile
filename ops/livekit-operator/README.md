@@ -1,6 +1,10 @@
 # LiveKit Autonomous Operator Host Agent
 
 This folder documents a disabled-by-default host-side helper for `chillywood-prod-01`.
+It also contains a GitHub Actions reliability-loop template under
+`github-actions/`. That template is not live until copied to `.github/workflows/`
+with credentials that can update workflow files, committed, pushed, and proved by
+a scheduled run.
 
 The mobile app must never SSH into the host or run provider operations. The backend
 operator can report a recommended host action, and an operator may install a host

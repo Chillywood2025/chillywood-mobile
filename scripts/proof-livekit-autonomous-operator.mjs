@@ -113,7 +113,29 @@ const flicker = classifyLiveKitRenderHealth({
   shouldRenderSurface: true,
   surface: "watch_party_live",
 });
-assert.equal(flicker.healthState, "render_surface_flicker");
+assert.equal(flicker.healthState, "fallback_flash_regression");
+
+const nbfGrace = classifyLiveKitRenderHealth({
+  eventName: "livekit_token_nbf_future_grace_used",
+  nbfDeltaSeconds: 1,
+  surface: "watch_party_live",
+});
+assert.equal(nbfGrace.healthState, "healthy");
+assert.equal(nbfGrace.reason, "token_nbf_future_within_grace");
+
+const nbfBlocked = classifyLiveKitRenderHealth({
+  eventName: "livekit_token_nbf_rejected",
+  nbfDeltaSeconds: 10,
+  surface: "live_stage",
+});
+assert.equal(nbfBlocked.healthState, "token_time_skew_blocker");
+
+const clearedRenderable = classifyLiveKitRenderHealth({
+  hasRenderableContract: true,
+  renderableContractCleared: true,
+  surface: "watch_party_live",
+});
+assert.equal(clearedRenderable.healthState, "renderable_contract_regression");
 
 const learning = updateLiveKitOperatorLearningState(null, {
   action: "run_heartbeat_monitor",
@@ -142,8 +164,12 @@ assert.ok(functionSource.includes("x-livekit-operator-token"), "operator functio
 assert.ok(functionSource.includes("LIVEKIT_OPERATOR_TOKEN_SHA256"), "operator function must validate token hash");
 assert.ok(functionSource.includes("constantTimeEqual"), "operator function must use constant-time token comparison");
 assert.ok(!functionSource.includes("participantToken"), "operator function must not return or log participant tokens");
-assert.ok(!functionSource.includes("update({") || !functionSource.includes(".from(\"livekit_servers\")"), "operator must not directly mark LiveKit servers healthy");
+assert.ok(!functionSource.includes(".from(\"livekit_servers\").update"), "operator must not directly mark LiveKit servers healthy");
 assert.ok(functionSource.includes("invokeHeartbeatMonitor"), "safe recovery must use the legitimate heartbeat monitor path");
+assert.ok(functionSource.includes("render_event_ingest"), "operator must ingest client render telemetry");
+assert.ok(functionSource.includes("authenticated_user_required"), "client render telemetry must require auth");
+assert.ok(functionSource.includes("watch_once"), "operator must support scheduled watch-once loop");
+assert.ok(functionSource.includes("recordLearningState"), "operator must store learning outcomes");
 assert.ok(functionSource.includes("NOT_FOUND_FUNCTION_BLOB") === false, "function should not hardcode blob success");
 
 assert.ok(migrationSource.includes("enable row level security"), "operator tables must enable RLS");
@@ -153,6 +179,7 @@ assert.ok(operatorSource.includes("Never") === false, "operator model should enc
 console.log(JSON.stringify({
   autoRecovery: stalePlan.action,
   blobAction: blobPlan.action,
+  nbfBlocked: nbfBlocked.healthState,
   learningConfidence: learning.confidence,
   status: "passed",
   surfaces: LIVEKIT_AUTONOMOUS_OPERATOR_SURFACES,

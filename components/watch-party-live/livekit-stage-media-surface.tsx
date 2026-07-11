@@ -32,6 +32,7 @@ import {
   useLiveKitTracks as useTracks,
 } from "../../_lib/livekit/react-native-module";
 import type { LiveKitTokenReady } from "../../_lib/livekit/token-contract";
+import { emitLiveKitRenderTelemetryEvent } from "../../_lib/livekit/livekitRenderTelemetry";
 
 export type LiveKitStageParticipantRosterEntry = {
   identity: string;
@@ -546,12 +547,41 @@ function LiveKitStageMediaContent({
         mediaDeviceFailure,
       }));
     }
+    const telemetrySurface = surfaceLabel === "Watch-Party Live" ? "watch_party_live" : "live_stage";
+    const telemetryBase = {
+      activeContractPresent: true,
+      bubbleGridItemCount: bubbleGridItems.length,
+      bubbleGridTrackCount: bubbleGridTracks.length,
+      canPublish: joinContract.requestedGrants.canPublish === true,
+      connectionState: String(connectionState ?? ""),
+      hasRenderableContract: true,
+      participantRole: joinContract.participantRole,
+      renderableContractPresent: true,
+      roomType: surfaceLabel === "Watch-Party Live" ? "watch_party" as const : "live" as const,
+      route: surfaceLabel,
+      shouldRenderSurface: true,
+      surface: telemetrySurface as "live_stage" | "watch_party_live",
+    };
+    emitLiveKitRenderTelemetryEvent("livekit_surface_mounted", telemetryBase);
+    emitLiveKitRenderTelemetryEvent("livekit_connection_state_changed", telemetryBase);
+    if (bubbleGridItems.length > 0) {
+      emitLiveKitRenderTelemetryEvent("livekit_bubble_grid_rendered", telemetryBase);
+    }
+    if (cameraTrack || publishedLocalCameraTrackRef || primaryRemoteTrack) {
+      emitLiveKitRenderTelemetryEvent("livekit_camera_track_present", telemetryBase);
+    } else if (joinContract.requestedGrants.canPublish === true) {
+      emitLiveKitRenderTelemetryEvent("livekit_camera_preparing", {
+        ...telemetryBase,
+        fallbackReason: mediaDeviceFailure ?? null,
+      });
+    }
   }, [
     cameraTrack,
     connectionState,
     isCameraEnabled,
     isMicrophoneEnabled,
     joinContract.participantRole,
+    joinContract.requestedGrants.canPublish,
     joinContract.roomName,
     lastMicrophoneError?.message,
     localParticipant.identity,

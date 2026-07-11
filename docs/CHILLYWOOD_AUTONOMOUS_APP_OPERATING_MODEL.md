@@ -1,6 +1,6 @@
 # Chi'llywood Autonomous App Operating Model
 
-Last updated: 2026-07-09
+Last updated: 2026-07-11
 
 Status: governing policy for future Codex/operator work. Chi'llywood should operate autonomously by default inside approved safety policy, with owner approval reserved for high-risk boundary changes.
 
@@ -101,7 +101,7 @@ These require owner approval before execution:
 - public/private exposure changes
 - public bucket/domain exposure changes
 - changing CDN access for private, Premium, original/master, unscanned, or moderation-blocked media
-- deploying a long-running production worker, daemon, cron, or scheduler
+- deploying a long-running production worker, daemon, cron, or scheduler, except the approved narrow LiveKit reliability loop described in Section 10
 - enabling continuous worker automation beyond the approved caps
 - broad uncapped media backfill, cap increases above the hard limit, or destructive cleanup
 - LiveKit API key or TURN credential rotation
@@ -137,7 +137,7 @@ Scheduler/daemon activation is not an ordinary Level 0 action. Disabled template
 
 ## 10. LiveKit Operator Policy
 
-LiveKit health work is autonomous only inside the scoped operator model. The operator may monitor routed LiveKit surfaces, classify router/token/heartbeat/host/render health, run legitimate heartbeat or counter refresh paths, record audit/recovery events, and maintain learning-state confidence from repeated incidents. It must not write fake heartbeats, loosen stale heartbeat cutoffs, mark unhealthy servers healthy, log tokens/secrets, mutate non-LiveKit tables, bypass Premium gates, or claim a surface closed while `livekit-token` still returns `no_eligible_livekit_server`.
+LiveKit health work is autonomous only inside the scoped operator model. The operator may monitor routed LiveKit surfaces, classify router/token/heartbeat/host/render health, ingest sanitized app render/token telemetry, run legitimate heartbeat or counter refresh paths, record audit/recovery events, and maintain learning-state confidence from repeated incidents. Manual `watch_once` operation is enabled through the deployed token-gated operator. A scheduled loop may be installed only as the narrow `livekit-operator-reliability-loop.yml` pattern, calling `watch_once` every five minutes with a narrow operator token and no service-role key; if GitHub workflow-file permission is unavailable, the template remains inactive until installed and proved. Safe recovery requires an explicit secret gate and remains limited to Level 1/2 actions such as legitimate heartbeat monitor/counter refresh paths and audited operator learning writes. It must not write fake heartbeats, loosen stale heartbeat cutoffs, mark unhealthy servers healthy, log tokens/secrets, mutate non-LiveKit tables, bypass Premium gates, auto-publish source OTA from telemetry, or claim a surface closed while `livekit-token` still returns `no_eligible_livekit_server`.
 
 Owner approval remains required for LiveKit secret rotation, TURN changes, routing threshold/policy expansion, provider/server replacement, destructive DB changes, and broad infrastructure changes.
 

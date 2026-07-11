@@ -10,19 +10,28 @@ export type LiveKitOperatorSurface =
 
 export type LiveKitOperatorHealthState =
   | "camera_track_missing"
+  | "app_token_validation_regression"
+  | "backend_router_regression"
   | "capacity_counter_stale"
   | "capacity_full"
   | "degraded"
+  | "deployment_regression"
+  | "fallback_flash_regression"
   | "function_blob_missing"
   | "healthy"
+  | "heartbeat_regression"
   | "heartbeat_monitor_down"
   | "host_service_down"
   | "no_eligible_server"
   | "render_contract_missing"
   | "render_identity_mismatch"
   | "render_surface_flicker"
+  | "renderable_contract_regression"
+  | "roster_render_regression"
   | "stale_heartbeat"
+  | "surface_mount_regression"
   | "token_issuer_unavailable"
+  | "token_time_skew_blocker"
   | "unknown_requires_review"
   | "websocket_unreachable";
 
@@ -102,15 +111,20 @@ export type LiveKitFunctionHealthInput = {
 };
 
 export type LiveKitRenderHealthInput = {
+  activeContractPresent?: boolean | null;
   bubbleGridItemCount?: number | null;
   bubbleGridTrackCount?: number | null;
   canPublish?: boolean | null;
   connectionState?: string | null;
+  eventName?: string | null;
   fallbackRosterShown?: boolean | null;
   fallbackShownAfterMs?: number | null;
   hasRenderableContract?: boolean | null;
+  nbfDeltaSeconds?: number | null;
   identityMismatchGuarded?: boolean | null;
+  renderableContractCleared?: boolean | null;
   renderableContractExpired?: boolean | null;
+  rosterParticipantCount?: number | null;
   roomError?: boolean | null;
   roomMismatch?: boolean | null;
   shouldRenderSurface?: boolean | null;
@@ -305,7 +319,39 @@ export const classifyLiveKitRenderHealth = (
   input: LiveKitRenderHealthInput,
 ): LiveKitHealthClassification => {
   const fallbackShownAfterMs = asNumber(input.fallbackShownAfterMs);
+  const nbfDeltaSeconds = asNumber(input.nbfDeltaSeconds);
   const hasRenderableContract = input.hasRenderableContract === true && input.renderableContractExpired !== true;
+  const eventName = String(input.eventName ?? "").trim();
+
+  if (eventName === "livekit_token_nbf_future_grace_used" && nbfDeltaSeconds !== null && nbfDeltaSeconds >= 0 && nbfDeltaSeconds <= 5) {
+    return {
+      confidence: 0.96,
+      healthState: "healthy",
+      reason: "token_nbf_future_within_grace",
+      severity: "info",
+      surface: input.surface,
+    };
+  }
+
+  if (eventName === "livekit_token_nbf_rejected" || (nbfDeltaSeconds !== null && nbfDeltaSeconds > 5)) {
+    return {
+      confidence: 0.96,
+      healthState: nbfDeltaSeconds !== null && nbfDeltaSeconds > 5 ? "token_time_skew_blocker" : "app_token_validation_regression",
+      reason: nbfDeltaSeconds !== null && nbfDeltaSeconds > 5 ? "token_nbf_future_beyond_grace" : "fresh_token_rejected_by_client",
+      severity: "critical",
+      surface: input.surface,
+    };
+  }
+
+  if (input.renderableContractCleared && hasRenderableContract) {
+    return {
+      confidence: 0.95,
+      healthState: "renderable_contract_regression",
+      reason: "renderable_contract_cleared_while_valid",
+      severity: "critical",
+      surface: input.surface,
+    };
+  }
 
   if (input.roomError || input.roomMismatch || input.renderableContractExpired) {
     return {
@@ -320,7 +366,7 @@ export const classifyLiveKitRenderHealth = (
   if (hasRenderableContract && input.fallbackRosterShown && (fallbackShownAfterMs === null || fallbackShownAfterMs < WATCH_PARTY_FALLBACK_FLASH_GRACE_MILLIS)) {
     return {
       confidence: 0.95,
-      healthState: "render_surface_flicker",
+      healthState: "fallback_flash_regression",
       reason: "fallback_roster_shown_during_renderable_contract_grace_window",
       severity: "warning",
       surface: input.surface,
@@ -330,7 +376,7 @@ export const classifyLiveKitRenderHealth = (
   if (hasRenderableContract && input.shouldRenderSurface === false) {
     return {
       confidence: 0.94,
-      healthState: "render_contract_missing",
+      healthState: input.activeContractPresent ? "surface_mount_regression" : "render_contract_missing",
       reason: "renderable_contract_exists_but_surface_not_mounted",
       severity: "critical",
       surface: input.surface,
@@ -352,6 +398,16 @@ export const classifyLiveKitRenderHealth = (
       confidence: 0.86,
       healthState: "camera_track_missing",
       reason: "publish_capable_participant_waiting_for_camera_track",
+      severity: "warning",
+      surface: input.surface,
+    };
+  }
+
+  if ((asNumber(input.rosterParticipantCount) ?? 0) > 0 && (asNumber(input.bubbleGridItemCount) ?? 0) === 0) {
+    return {
+      confidence: 0.88,
+      healthState: "roster_render_regression",
+      reason: "roster_participants_exist_but_bubble_grid_empty",
       severity: "warning",
       surface: input.surface,
     };
@@ -406,9 +462,19 @@ export const planLiveKitRecoveryAction = (
     case "capacity_full":
       return { ...base, action: "pause_affected_surface", autoExecutable: true, level: 2, requiresOwnerApproval: false, rollbackAvailable: true };
     case "render_surface_flicker":
+    case "fallback_flash_regression":
+    case "renderable_contract_regression":
+    case "surface_mount_regression":
+    case "roster_render_regression":
+    case "app_token_validation_regression":
     case "camera_track_missing":
     case "render_contract_missing":
       return { ...base, action: "stabilize_client_surface", autoExecutable: true, level: 1, requiresOwnerApproval: false, rollbackAvailable: true };
+    case "token_time_skew_blocker":
+    case "backend_router_regression":
+    case "heartbeat_regression":
+    case "deployment_regression":
+      return { ...base, action: "owner_approval_required", autoExecutable: false, level: 3, requiresOwnerApproval: true, rollbackAvailable: false };
     case "host_service_down":
     case "websocket_unreachable":
       return { ...base, action: "owner_approval_required", autoExecutable: false, level: 3, requiresOwnerApproval: true, rollbackAvailable: false };
