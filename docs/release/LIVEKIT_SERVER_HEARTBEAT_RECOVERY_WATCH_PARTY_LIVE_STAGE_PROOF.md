@@ -10,6 +10,16 @@ Artifact folder: `/tmp/livekit-server-heartbeat-recovery-watch-party-live-stage-
 
 Premium remains Closed and Watch-Party Party Room remains Closed. The Watch-Party Live sidecar and Live Stage backend failure was LiveKit infrastructure/runtime liveness: `chillywood-prod-01` was registered as `active`, but its heartbeat was stale beyond the router's 120-second cutoff, leaving production with zero eligible LiveKit servers. The health-checked heartbeat monitor and durable watchdog templates were added, deployed, validated, and then installed on the LiveKit host after Hetzner unblocked the endpoint. Current backend readback now shows an eligible healthy server, fresh host heartbeat, reachable WSS endpoint, and successful `watch-party-live` / `live-stage` token routing.
 
+## July 10/11 Global Router Eligibility Recovery
+
+Follow-up installed debugging found the same global failure class again: the app-side Live Stage render fallback and Premium gate were fixed, but `livekit-token` returned `503 no_eligible_livekit_server`, so routed LiveKit surfaces could not receive usable token contracts. This was not caused by R2, object storage, Premium, or the Live tab button itself.
+
+Production router readback showed `chillywood-prod-01` was still the only real active server, with `wss://live.chillywoodstream.com`, normal capacity counters, and no CPU/RAM/packet-loss/bandwidth rejection. The exact rejection was `stale_heartbeat`: `last_heartbeat_at` was older than the 120-second cutoff. Host proof showed the server was reachable, Docker was active, Caddy was active, the `chillywood-livekit` container was running, and the public HTTPS/WSS host was reachable. The host heartbeat monitor service was active, but its function call returned `NOT_FOUND_FUNCTION_BLOB` for `livekit-heartbeat-monitor`, so legitimate heartbeat updates stopped.
+
+Repair action was limited to redeploying the existing `livekit-heartbeat-monitor` Edge Function source and invoking the legitimate host monitor path once from `chillywood-prod-01`. No LiveKit stale cutoff was loosened, no fake heartbeat rows were inserted, no server was marked healthy without host proof, no LiveKit server restart was required, and no secrets or participant tokens were printed. Post-repair readback showed fresh `livekit-heartbeat-monitor` heartbeats, heartbeat age under cutoff, router eligibility restored for `chillywood-prod-01`, and no fresh `no_eligible_livekit_server` blocker.
+
+Installed proof on Play-installed `R5CR120QCBF` renewed Premium through the approved Google Play / RevenueCat sandbox flow, entered Live Stage, received a `live-stage` host contract with `room_join=true`, `can_subscribe=true`, and `can_publish=true`, and rendered a visible local camera surface with `shouldRenderLiveKitStage=true` and `publishLocalStageCamera=true`. Fresh installed two-device Watch-Party Live / Party Room camera sidecar proof was not rerun in this lane; historical `watch-party-live` and `chat-call` token audit rows remain successful, and those surfaces share the repaired router eligibility path.
+
 ## July 5 Retry Closure
 
 Retry artifact folder: `/tmp/livekit-hetzner-recheck-20260705-retry2/`.
