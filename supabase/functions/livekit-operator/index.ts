@@ -525,6 +525,26 @@ Deno.serve(async (request: Request) => {
         });
       }
 
+      if (action === "watch_once") {
+        await safeInsert(adminClient, "livekit_operator_events", {
+          action_planned: plan.action,
+          action_taken: toText(execution.status) === "executed" ? plan.action : null,
+          confidence: routerHealth.healthState === "healthy" ? 0.99 : 0.9,
+          health_state: routerHealth.healthState,
+          metadata: safeMetadata({
+            action,
+            enable_safe_recovery: body.enable_safe_recovery === true,
+            execution_status: execution.status,
+            scheduler: body.scheduler,
+            source: body.source,
+          }),
+          reason: routerHealth.reason,
+          result: execution.status,
+          severity: routerHealth.healthState === "healthy" ? "info" : "critical",
+          surface: "livekit_router",
+        });
+      }
+
       return jsonResponse(200, { execution, ok: true, plan, routerHealth });
     }
 

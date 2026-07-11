@@ -12,6 +12,7 @@
     "proof:livekit-router": "node ./scripts/proof-livekit-router.mjs",
     "proof:livekit-autonomous-operator": "node ./scripts/proof-livekit-autonomous-operator.mjs",
     "proof:livekit-surface-health": "node ./scripts/proof-livekit-surface-health.mjs",
+    "proof:livekit-operator-scheduler": "node ./scripts/proof-livekit-operator-scheduler.mjs",
     "proof:watch-party-live-fallback-smoothing": "node ./scripts/proof-watch-party-live-fallback-smoothing.mjs",
     "proof:release-diagnostics": "node ./scripts/proof-release-diagnostics.mjs",
     "proof:livekit-server-metrics": "node ./scripts/proof-livekit-server-metrics.mjs",

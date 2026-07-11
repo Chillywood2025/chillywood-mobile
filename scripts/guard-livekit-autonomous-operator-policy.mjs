@@ -20,6 +20,11 @@ const migration = read("supabase/migrations/20260711043323_livekit_autonomous_op
 const player = read("app/player/[id].tsx");
 const renderTelemetry = read("_lib/livekit/livekitRenderTelemetry.ts");
 const recoveryLoopWorkflow = read("ops/livekit-operator/github-actions/livekit-operator-reliability-loop.yml");
+const cloudflareScheduler = read("workers/livekit-operator-scheduler/worker.mjs");
+const cloudflareSchedulerConfig = read("workers/livekit-operator-scheduler/wrangler.toml");
+const systemdService = read("ops/livekit-operator/systemd/chillywood-livekit-operator-watch-once.service");
+const systemdTimer = read("ops/livekit-operator/systemd/chillywood-livekit-operator-watch-once.timer");
+const systemdScript = read("ops/livekit-operator/systemd/livekit-operator-watch-once.sh");
 const packageJson = read("package.json");
 const runbook = read("docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md");
 
@@ -90,11 +95,35 @@ assertIncludes(recoveryLoopWorkflow, "LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY", "s
 assertIncludes(recoveryLoopWorkflow, "\"action\":\"watch_once\"", "operator workflow must call watch_once");
 assertNotIncludes(recoveryLoopWorkflow, "SUPABASE_SERVICE_ROLE_KEY", "operator workflow must not use service-role keys");
 
+assertIncludes(cloudflareSchedulerConfig, "workers_dev = false", "Cloudflare scheduler must not expose workers.dev");
+assertIncludes(cloudflareSchedulerConfig, "crons = [\"*/5 * * * *\"]", "Cloudflare scheduler must run every five minutes");
+assertIncludes(cloudflareSchedulerConfig, "LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY = \"true\"", "Cloudflare scheduler safe recovery must be explicitly gated");
+assertNotIncludes(cloudflareSchedulerConfig, "routes =", "Cloudflare scheduler must not attach a public route");
+assertNotIncludes(cloudflareSchedulerConfig, "LIVEKIT_OPERATOR_TOKEN =", "Cloudflare scheduler must not commit the operator token");
+assertIncludes(cloudflareScheduler, "scheduler: \"cloudflare_cron\"", "Cloudflare scheduler must identify cron source");
+assertIncludes(cloudflareScheduler, "x-livekit-operator-token", "Cloudflare scheduler must call operator with narrow token");
+assertIncludes(cloudflareScheduler, "redact(JSON.stringify(summary))", "Cloudflare scheduler must redact log output");
+assertNotIncludes(cloudflareScheduler, "SUPABASE_SERVICE_ROLE_KEY", "Cloudflare scheduler must not use service-role key");
+assertNotIncludes(cloudflareScheduler, ".from(\"livekit_servers\").update", "Cloudflare scheduler must not mutate server health directly");
+
+assertIncludes(systemdTimer, "OnUnitActiveSec=5min", "systemd scheduler must run every five minutes");
+assertIncludes(systemdTimer, "RandomizedDelaySec=15s", "systemd scheduler must use bounded jitter");
+assertIncludes(systemdService, "NoNewPrivileges=true", "systemd service must be privilege-restricted");
+assertIncludes(systemdService, "ProtectSystem=strict", "systemd service must protect host filesystem");
+assertIncludes(systemdService, "CapabilityBoundingSet=", "systemd service must not grant Linux capabilities");
+assertIncludes(systemdScript, "\"action\":\"watch_once\"", "systemd scheduler must call watch_once");
+assertIncludes(systemdScript, "\"scheduler\":\"systemd_timer\"", "systemd scheduler must identify itself");
+assertIncludes(systemdScript, "x-livekit-operator-token: ${LIVEKIT_OPERATOR_TOKEN}", "systemd scheduler must use narrow operator token");
+assertIncludes(systemdScript, "[redacted]", "systemd scheduler must redact token-like output");
+assertNotIncludes(systemdScript, "SUPABASE_SERVICE_ROLE_KEY", "systemd scheduler must not use service-role key");
+assertNotIncludes(systemdScript, ".from(\"livekit_servers\").update", "systemd scheduler must not mutate server health directly");
+
 assertIncludes(packageJson, "\"proof:livekit-autonomous-operator\"", "operator proof script must be registered");
 assertIncludes(packageJson, "\"proof:livekit-surface-health\"", "surface health proof script must be registered");
 assertIncludes(packageJson, "\"proof:watch-party-live-fallback-smoothing\"", "fallback smoothing proof script must be registered");
 assertIncludes(packageJson, "\"proof:livekit-render-telemetry\"", "render telemetry proof script must be registered");
 assertIncludes(packageJson, "\"proof:livekit-operator-recovery-loop\"", "operator recovery loop proof script must be registered");
+assertIncludes(packageJson, "\"proof:livekit-operator-scheduler\"", "operator scheduler proof script must be registered");
 assertIncludes(packageJson, "\"guard:livekit-autonomous-operator-policy\"", "operator policy guard must be registered");
 assertIncludes(packageJson, "\"livekit-operator:status\"", "operator status CLI must be registered");
 assertIncludes(packageJson, "\"livekit-operator:watch-once\"", "operator watch-once CLI must be registered");

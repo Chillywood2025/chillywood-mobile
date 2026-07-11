@@ -1,0 +1,11 @@
+name = "chillywood-livekit-operator-scheduler"
+main = "worker.mjs"
+compatibility_date = "2026-07-11"
+workers_dev = false
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY = "true"
+LIVEKIT_OPERATOR_FUNCTION_URL = "https://bmkkhihfbmsnnmcqkoly.supabase.co/functions/v1/livekit-operator"

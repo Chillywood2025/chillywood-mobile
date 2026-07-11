@@ -9,6 +9,10 @@ const operatorModel = read("_lib/livekitAutonomousOperator.ts");
 const operatorFunction = read("supabase/functions/livekit-operator/index.ts");
 const operatorCli = read("scripts/livekit-operator-cli.mjs");
 const workflow = read("ops/livekit-operator/github-actions/livekit-operator-reliability-loop.yml");
+const cloudflareScheduler = read("workers/livekit-operator-scheduler/worker.mjs");
+const cloudflareSchedulerConfig = read("workers/livekit-operator-scheduler/wrangler.toml");
+const systemdTimer = read("ops/livekit-operator/systemd/chillywood-livekit-operator-watch-once.timer");
+const systemdScript = read("ops/livekit-operator/systemd/livekit-operator-watch-once.sh");
 const packageJson = read("package.json");
 
 for (const state of [
@@ -53,11 +57,23 @@ assert.ok(workflow.includes("\"action\":\"watch_once\""), "workflow must call wa
 assert.ok(workflow.includes("replace(/[A-Za-z0-9._~+/=-]{32,}/g, \"[redacted]\")"), "workflow output must redact token-like values");
 assert.ok(!workflow.includes("SUPABASE_SERVICE_ROLE_KEY"), "workflow must not use service-role key");
 
+assert.ok(cloudflareSchedulerConfig.includes("workers_dev = false"), "Cloudflare scheduler must not expose workers.dev");
+assert.ok(cloudflareSchedulerConfig.includes("crons = [\"*/5 * * * *\"]"), "Cloudflare scheduler must run every five minutes");
+assert.ok(cloudflareSchedulerConfig.includes("LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY = \"true\""), "Cloudflare scheduler safe recovery must be explicitly enabled");
+assert.ok(cloudflareScheduler.includes("scheduler: \"cloudflare_cron\""), "Cloudflare scheduler must mark watch_once source");
+assert.ok(cloudflareScheduler.includes("x-livekit-operator-token"), "Cloudflare scheduler must use the narrow operator token");
+assert.ok(!cloudflareScheduler.includes("SUPABASE_SERVICE_ROLE_KEY"), "Cloudflare scheduler must not use service-role key");
+assert.ok(systemdTimer.includes("OnUnitActiveSec=5min"), "systemd scheduler must run every five minutes");
+assert.ok(systemdScript.includes("\"scheduler\":\"systemd_timer\""), "systemd scheduler must identify itself");
+assert.ok(systemdScript.includes("x-livekit-operator-token: ${LIVEKIT_OPERATOR_TOKEN}"), "systemd scheduler must use the narrow operator token");
+assert.ok(!systemdScript.includes("SUPABASE_SERVICE_ROLE_KEY"), "systemd scheduler must not use service-role key");
+
 assert.ok(packageJson.includes("\"livekit-operator:watch-once\""), "package scripts must include watch-once CLI");
 assert.ok(packageJson.includes("\"proof:livekit-render-telemetry\""), "package scripts must include render telemetry proof");
 assert.ok(packageJson.includes("\"proof:livekit-operator-recovery-loop\""), "package scripts must include recovery loop proof");
+assert.ok(packageJson.includes("\"proof:livekit-operator-scheduler\""), "package scripts must include scheduler proof");
 
 console.log(JSON.stringify({
-  activationMode: "manual_cli_active_scheduled_template_ready",
+  activationMode: "limited_scheduled_safe_recovery_active_systemd_timer",
   status: "passed",
 }, null, 2));

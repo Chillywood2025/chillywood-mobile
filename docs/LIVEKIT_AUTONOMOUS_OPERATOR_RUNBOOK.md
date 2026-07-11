@@ -135,9 +135,17 @@ This catches the July 11 app-side regression class: a backend-issued token with 
 
 ## Activation Mode
 
-Current mode: `manual_cli_active_scheduled_template_ready`.
+Current mode: `limited_scheduled_safe_recovery_active_systemd_timer`.
 
-The deployed `livekit-operator` Edge Function accepts manual `watch_once` calls with the narrow operator token. `LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY=true` allows only Level 1/2 scoped actions inside the operator function. The scheduled GitHub Actions loop is prepared as a template at `ops/livekit-operator/github-actions/livekit-operator-reliability-loop.yml`, but it is not installed under `.github/workflows` in the current repo because the available GitHub OAuth credential rejected workflow-file pushes without `workflow` scope. Do not claim continuous scheduled operation until that workflow is installed and a scheduled run is proved. The template does not use service-role keys and redacts long token-like output before logging.
+Scheduler option audit:
+
+- GitHub Actions: preferred when available, but the current `gh` token has `gist`, `read:org`, and `repo` scopes only. It cannot create or update `.github/workflows` without `workflow` scope, so the GitHub workflow remains a template at `ops/livekit-operator/github-actions/livekit-operator-reliability-loop.yml`.
+- Supabase scheduled function / `pg_cron`: not selected. The installed Supabase CLI is `2.75.0` and exposes no scheduler command in this workspace. A database cron path would add more database-scheduler state and token-storage decisions than the selected host timer path.
+- Cloudflare Cron Trigger: not active. The Worker template `chillywood-livekit-operator-scheduler` has `workers_dev=false`, no public routes, cron `*/5 * * * *`, a public function URL var, and a single secret `LIVEKIT_OPERATOR_TOKEN`, but live cron attachment failed with Cloudflare error `10063` because the account needs a Workers subdomain before schedules can be installed.
+- Host systemd timer: selected and active. `chillywood-livekit-operator-watch-once.timer` runs every five minutes on `chillywood-prod-01`, uses a root-readable env file at `/etc/chillywood/livekit-operator.env`, and executes only the scoped `watch_once` operator call with systemd privilege restrictions.
+- Manual CLI: remains available through `livekit-operator:watch-once`, but is no longer the only active path.
+
+The deployed `livekit-operator` Edge Function accepts manual and scheduled `watch_once` calls with the narrow operator token. `LIVEKIT_OPERATOR_ENABLE_SAFE_RECOVERY=true` allows only Level 1/2 scoped actions inside the operator function. The active systemd timer calls `watch_once` every five minutes and the operator writes an audit event for each run. The host timer does not use service-role keys, does not mutate LiveKit routing policy or server registry state directly, and redacts long token-like output before journaling.
 
 Live proof for activation returned:
 
@@ -172,4 +180,4 @@ npm run livekit-operator:status
 
 Do not paste the token into chat or docs.
 
-Current deployment posture: the `livekit-operator` Edge Function is deployed, the schema migration is applied, and a narrow operator token hash is active in Supabase. Missing or invalid operator calls still deny with `401 operator_token_required`, app telemetry requires app auth, and no broad operator access exists. Scheduled operation remains a prepared template until `.github/workflows/livekit-operator-reliability-loop.yml` can be added with a GitHub credential that has workflow-file permission.
+Current deployment posture: the `livekit-operator` Edge Function is deployed, the schema migration is applied, a narrow operator token hash is active in Supabase, and the matching token is stored only in the host env file for `chillywood-livekit-operator-watch-once.timer`. Missing or invalid operator calls still deny with `401 operator_token_required`, app telemetry requires app auth, and no broad operator access exists. GitHub Actions remains a prepared template until `.github/workflows/livekit-operator-reliability-loop.yml` can be added with a GitHub credential that has workflow-file permission. The Cloudflare Cron Worker template remains inactive until the Workers subdomain prerequisite is satisfied and a schedule run is proved.
