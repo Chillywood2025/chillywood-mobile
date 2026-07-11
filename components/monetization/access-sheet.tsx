@@ -398,11 +398,13 @@ export function AccessSheet({
     user?.id,
     renderDeferredUnavailable,
   ]);
-  const primaryButtonTestID = isPremiumGateSheet
-    && sheetState?.primaryAction === "retry"
-    && sheetState.primaryLabel.toLowerCase().includes("recheck")
-      ? recheckActionTestID ?? primaryActionTestID
-      : primaryActionTestID;
+  const primaryButtonTestID = isPremiumGateSheet && sheetState?.primaryAction === "purchase"
+    ? primaryActionTestID
+    : isPremiumGateSheet
+      && sheetState?.primaryAction === "retry"
+      && sheetState.primaryLabel.toLowerCase().includes("recheck")
+        ? recheckActionTestID
+        : undefined;
 
   const onRestorePress = useCallback(async () => {
     setRestoreBusy(true);
