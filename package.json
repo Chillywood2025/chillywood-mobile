@@ -16,6 +16,8 @@
     "proof:autonomous-systems-contract": "node ./scripts/proof-autonomous-systems-contract.mjs",
     "proof:autonomous-approval-live-flow": "node ./scripts/proof-autonomous-approval-live-flow.mjs",
     "proof:money-flow-control": "node ./scripts/proof-money-flow-control.mjs",
+    "proof:money-operator-write-scope": "node ./scripts/proof-money-operator-write-scope.mjs",
+    "proof:money-external-confirmation": "node ./scripts/proof-money-external-confirmation.mjs",
     "proof:watch-party-live-fallback-smoothing": "node ./scripts/proof-watch-party-live-fallback-smoothing.mjs",
     "proof:release-diagnostics": "node ./scripts/proof-release-diagnostics.mjs",
     "proof:livekit-server-metrics": "node ./scripts/proof-livekit-server-metrics.mjs",

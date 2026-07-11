@@ -126,7 +126,7 @@ const contractChecks = [
   {
     name: "fake money state fails",
     passes: () => mustInclude(registry, "fake creator earnings") && mustInclude(registry, "fake payable balance") && mustInclude(moneyFlowControl, "fake_revenue_forbidden"),
-    negative: () => !mustInclude(registry.replace("fake payable balance", "fake payable allowed"), "fake payable balance"),
+    negative: () => !mustInclude(registry.replaceAll("fake payable balance", "fake payable allowed"), "fake payable balance"),
   },
   {
     name: "real money movement requires Level 4",
@@ -143,6 +143,11 @@ const contractChecks = [
     name: "Level 4 money action requires external confirmation",
     passes: () => mustInclude(moneyFlowControl, "external_provider_confirmation_required_for_level_4") && mustInclude(moneyRunbook, "external provider confirmation"),
     negative: () => !mustInclude(moneyFlowControl.replaceAll("external_provider_confirmation_required_for_level_4", "confirmation_removed"), "external_provider_confirmation_required_for_level_4"),
+  },
+  {
+    name: "scoped money operator writes are explicit Level 2 registry entries",
+    passes: () => /id:\s*"scoped_money_operator_reconciliation_writes"[\s\S]*approvalLevel:\s*2[\s\S]*money_reconciliation_findings[\s\S]*money_required_review_flags/.test(registry) && mustInclude(moneyFlowControl, "MONEY_OPERATOR_ALLOWED_WRITE_TABLES"),
+    negative: () => !/id:\s*"scoped_money_operator_reconciliation_writes"[\s\S]*approvalLevel:\s*2/.test(registry.replace("scoped_money_operator_reconciliation_writes", "money_operator_removed")),
   },
   {
     name: "Level 3/4 action requires approval request",
@@ -206,7 +211,7 @@ console.log(JSON.stringify({
   ok: true,
   proofCases: contractChecks.length,
   systems: ["media_automation", "livekit_operator", "money_flow_control"],
-  moneyFlowControl: "foundation_readonly_guarded",
+  moneyFlowControl: "scoped_write_capable_guarded",
   approvalRequestPath: "live_owner_super_admin_backed",
   rachiCanApproveItself: false,
   operatorSelfApprovalAllowed: false,

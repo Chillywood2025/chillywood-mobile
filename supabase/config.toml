@@ -13,6 +13,9 @@ verify_jwt = false
 [functions.autonomous-approval-request]
 verify_jwt = false
 
+[functions.money-operator]
+verify_jwt = false
+
 [functions.media-storage]
 verify_jwt = false
 

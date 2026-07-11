@@ -159,13 +159,13 @@ Owner approval remains required for LiveKit secret rotation, TURN changes, routi
 
 ## 10A. Money Flow Control Policy
 
-Money and ledger work is autonomous only inside the `money_flow_control` model. Read-only reconciliation can be autonomous when it stays limited to provider readiness labels, ledger consistency checks, stale sync detection, duplicate event detection, missing-provider-data reports, risk summaries, and approval request creation.
+Money and ledger work is autonomous only inside the `money_flow_control` model. Read-only reconciliation can be autonomous when it stays limited to provider readiness labels, ledger consistency checks, stale sync detection, duplicate event detection, missing-provider-data reports, risk summaries, and approval request creation. The scoped Money Operator can also write only safe reconciliation/status/review/audit records: `money_operator_events`, `money_reconciliation_runs`, `money_reconciliation_findings`, `money_provider_sync_status`, `money_duplicate_event_detections`, `money_required_review_flags`, `money_flow_health_snapshots`, `money_operator_learning_state`, and Level 3/4 autonomous approval requests.
 
 Real money mutation requires Level 3/4. Production checkout, live provider integration, payout review mutation, fraud enforcement mutation, payout eligibility rule changes, Premium entitlement logic changes, production webhook money handling, production payment links/invoices, revenue-share formula changes, and network billing rule changes require Level 3 owner/super-admin approval before execution.
 
 Real money movement requires Level 4 owner/super-admin approval plus external provider confirmation/readback. This includes real customer charge, real payout, real transfer, real cashout, production Stripe mode switch, public payment launch, provider plan/add-on, legal/compliance/tax activation, and public revenue or payout claims.
 
-The money control plane must enforce no manual Premium grant, no fake revenue, no fake creator earnings, no fake payable balance, no fake paid status, no fake transfer complete, no production charge from foundation tables, no payout release without provider confirmation, no test-mode data described as production, and no provider secrets in logs/docs/artifacts. Rachi can recommend/request, not approve.
+The money control plane must enforce no manual Premium grant, no fake revenue, no fake creator earnings, no fake payable balance, no fake paid status, no fake transfer complete, no production charge from foundation tables, no payout release without provider confirmation, no transfer/payout/payment-link/invoice/cashout creation from the operator, no provider product mutation, no Stripe live-mode switch, no test-mode data described as production, and no provider secrets in logs/docs/artifacts. Rachi can recommend/request, not approve.
 
 ## 11. Cost Policy
 

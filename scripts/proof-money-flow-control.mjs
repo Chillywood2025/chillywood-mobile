@@ -23,6 +23,8 @@ const operatingModel = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md")
 const ownerAdminSpec = read("docs/owner-admin-rachi-implementation-spec.md");
 const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
 const packageJson = read("package.json");
+const moneyOperator = read("supabase/functions/money-operator/index.ts");
+const externalConfirmation = read("_lib/moneyExternalConfirmation.ts");
 
 const docs = [registryDoc, operatingModel, ownerAdminSpec, moneyRunbook].join("\n\n");
 
@@ -89,7 +91,19 @@ const proofCases = [
   },
   {
     name: "read-only Admin summary cannot execute mutation",
-    passes: () => admin.includes("admin-money-flow-control-section") && admin.includes("This section is status and permission workflow only"),
+    passes: () => admin.includes("admin-money-flow-control-section") && admin.includes("This section exposes safe status/review visibility only"),
+  },
+  {
+    name: "scoped safe operator writes are limited to reconciliation/status/review",
+    passes: () => helper.includes("MONEY_OPERATOR_ALLOWED_WRITE_TABLES") && helper.includes("money_reconciliation_findings") && helper.includes("money_required_review_flags") && helper.includes("MONEY_OPERATOR_FORBIDDEN_WRITE_SCOPES"),
+  },
+  {
+    name: "Money Operator function is token gated and blocks real-money execution",
+    passes: () => moneyOperator.includes("x-money-operator-token") && moneyOperator.includes("MONEY_OPERATOR_TOKEN_SHA256") && moneyOperator.includes("blocked_pending_owner_scope_and_external_confirmation"),
+  },
+  {
+    name: "Level 4 external confirmation helper blocks test-mode production closure",
+    passes: () => externalConfirmation.includes("test_mode_confirmation_cannot_satisfy_production") && externalConfirmation.includes("provider_reference_readback_required"),
   },
 ];
 
@@ -98,11 +112,13 @@ for (const check of proofCases) {
 }
 
 includes(registry, 'id: "money_flow_control"', "autonomous registry");
-includes(registry, "foundation_readonly_guarded", "money registry status");
+includes(registry, "scoped_write_capable_guarded", "money registry status");
 includes(registry, "owner/super-admin approval plus external provider confirmation for Level 4", "Level 4 registry gate");
 includes(registryDoc, "`money_flow_control`", "registry doc");
 includes(moneyRunbook, "Money Flow & Ledger Control Plane", "money runbook");
 includes(packageJson, '"proof:money-flow-control"', "package scripts");
+includes(packageJson, '"proof:money-operator-write-scope"', "package scripts");
+includes(packageJson, '"proof:money-external-confirmation"', "package scripts");
 includes(packageJson, '"guard:money-flow-control"', "package scripts");
 
 for (const testId of [
@@ -112,6 +128,9 @@ for (const testId of [
   "money-flow-control-external-confirmation-required",
   "money-flow-control-blocked-actions",
   "money-flow-control-proof-status",
+  "money-operator-status",
+  "money-operator-provider-sync-health",
+  "money-operator-external-confirmation-required",
 ]) {
   includes(admin, testId, "Admin Money Flow Control UI");
 }
@@ -129,7 +148,7 @@ console.log(JSON.stringify({
   ok: true,
   proofCases: proofCases.length,
   system: "money_flow_control",
-  status: "foundation_readonly_guarded",
+  status: "scoped_write_capable_guarded",
   realMoneyMovement: "level_4_owner_approval_plus_external_provider_confirmation_required",
   manualPremiumGrantAllowed: false,
   fakeRevenueAllowed: false,

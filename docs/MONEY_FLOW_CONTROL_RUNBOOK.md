@@ -1,10 +1,10 @@
 # Money Flow & Ledger Control Plane
 
-Status: `foundation_readonly_guarded`
+Status: `scoped_write_capable_guarded`
 
 Last updated: 2026-07-11
 
-This runbook governs Chi'llywood money, ledger, payout, billing, sponsor, fraud, and provider-readback foundations. It is a control plane and guardrail, not a money-moving system.
+This runbook governs Chi'llywood money, ledger, payout, billing, sponsor, fraud, and provider-readback foundations. It is a control plane and guardrail with scoped safe write authority for reconciliation/status/review/audit records only. It is not a money-moving system.
 
 ## Scope
 
@@ -37,6 +37,19 @@ Read-only reconciliation can be autonomous when it only reads or reports:
 - admin read-only summaries
 - risk reports
 - autonomous approval request creation
+
+The Money Operator may also write scoped safe records with no money movement:
+- `money_operator_events`
+- `money_reconciliation_runs`
+- `money_reconciliation_findings`
+- `money_provider_sync_status`
+- `money_duplicate_event_detections`
+- `money_required_review_flags`
+- `money_flow_health_snapshots`
+- `money_operator_learning_state`
+- `autonomous_approval_requests` for Level 3/4 actions
+
+Allowed safe fixes are limited to recording reconciliation findings, marking provider sync stale/synced/failed, marking duplicate provider/webhook event hashes, marking ledger/payout/revenue items `requires_review`, creating approval requests, recording blocked actions, recording external-confirmation requirements, writing sandbox/test-mode proof results, and updating learning state.
 
 Sandbox/test-mode proof can be Level 2 only when no real money moves, no customer is charged, no payout is released, and provider data is labeled sandbox/test-mode.
 
@@ -83,10 +96,42 @@ The control plane blocks:
 - no marking test-mode data as production
 - no provider secrets in logs, docs, artifacts, or client code
 
+Forbidden autonomous writes include marking a payout paid, releasing payouts, creating transfers or payouts, charging customers, sending invoices, creating payment links, enabling cashout, manually granting Premium, editing Premium entitlement outside provider-backed readback, creating fake revenue or fake payable balances, clearing fraud holds as paid/settled, mutating auth/RLS, mutating provider products, or switching Stripe live mode.
+
+## Money Operator Function
+
+Edge Function: `money-operator`
+
+Auth:
+- `x-money-operator-token`
+- `MONEY_OPERATOR_TOKEN_SHA256`
+- SHA-256 constant-time comparison
+- missing/invalid tokens deny
+
+Actions:
+- `health_snapshot`
+- `reconciliation_plan`
+- `run_readonly_reconciliation`
+- `sync_provider_status_safe`
+- `record_duplicate_event`
+- `mark_requires_review`
+- `create_approval_request`
+- `mark_sandbox_proof_result`
+- `learning_report`
+- `execute_approved_money_action_dry_run`
+- `execute_approved_money_action`
+
+`execute_approved_money_action` does not move money. It records or blocks according to scope and still requires the autonomous approval path plus external provider confirmation for Level 4.
+
 ## Admin Surface
 
-The canonical route remains `/admin`. The Money Flow Control section is read-only/foundation status:
+The canonical route remains `/admin`. The Money Flow Control section shows scoped operator status and read-only/safe-write visibility:
 - system status
+- latest reconciliation runs
+- required review flags
+- duplicate detections
+- provider sync health
+- blocked money actions
 - blocked production money actions
 - approval required labels
 - external provider confirmation required labels
@@ -96,7 +141,11 @@ It does not expose active payout, charge, transfer, cashout, checkout, invoice, 
 
 ## Emergency Stop
 
-`money_flow_control` emergency_stop blocks every non-read-only money mutation. Read-only reports can still run. Pause/resume remains owner/super-admin controlled through the autonomous approval framework. Emergency stop does not change provider-backed Premium readback and does not create refunds, payouts, cashout, or charges.
+`money_flow_control` emergency_stop blocks every non-reconciliation money mutation. Read-only reports can still run. Pause/resume remains owner/super-admin controlled through the autonomous approval framework. Emergency stop does not change provider-backed Premium readback and does not create refunds, payouts, cashout, or charges.
+
+## External Confirmation
+
+Level 4 real money movement requires owner approval plus external provider confirmation/readback. Valid confirmation sources are Stripe transfer/payout/charge readback, Google Play / RevenueCat receipt or customer-info readback, signed provider webhook verification, payout provider transfer ID readback, or explicitly marked owner-attested manual external confirmation. Test-mode confirmation cannot satisfy a production action. Missing confirmation means no real money state mutation.
 
 ## Approval Path
 

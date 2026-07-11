@@ -134,7 +134,7 @@ Level 4 LiveKit expansion example: secret rotation, TURN changes, server replace
 
 ### `money_flow_control`
 
-Status: `foundation_readonly_guarded`.
+Status: `scoped_write_capable_guarded`.
 
 Activation modes:
 - `off`
@@ -144,7 +144,7 @@ Activation modes:
 
 Current activation: `manual_cli`
 
-Scheduler status: no money mutation scheduler enabled.
+Scheduler status: no money movement scheduler enabled; safe operator function is token-gated and limited to reconciliation/status/review/audit writes.
 
 Allowed surfaces:
 - `premium_revenue`
@@ -163,15 +163,22 @@ Allowed surfaces:
 - `tax_compliance_future`
 
 Allowed writes:
-- read-only reconciliation reports
-- missing-provider-data detection
-- stale sync detection
-- ledger consistency checks
-- duplicate event detection
-- provider webhook validation in test mode
-- zero-dollar/sandbox proof rows
-- scoped provider status row sync
-- risk reports
+- `money_operator_events`
+- `money_reconciliation_runs`
+- `money_reconciliation_findings`
+- `money_provider_sync_status`
+- `money_duplicate_event_detections`
+- `money_required_review_flags`
+- `money_flow_health_snapshots`
+- `money_operator_learning_state`
+- record reconciliation findings
+- mark provider sync stale/synced/failed
+- mark duplicate provider/webhook event
+- mark ledger/payout/revenue item `requires_review`
+- record blocked action
+- record external confirmation requirement
+- write sandbox/test-mode proof result
+- update learning state
 - autonomous approval request creation
 
 Forbidden:
@@ -195,19 +202,26 @@ Required gates:
 - exact scope match
 - emergency stop blocks non-read-only money mutations
 - provider readback before money movement closure
+- money operator narrow token
+- money operator client write denial
+- scoped write tables only
 - no manual Premium grants
 - no fake revenue/earnings/payable balances
 - secret scan
 
 Required proofs/guards:
 - `proof:money-flow-control`
+- `proof:money-operator-write-scope`
+- `proof:money-external-confirmation`
 - `guard:money-flow-control`
 - `proof:autonomous-approval-live-flow`
 - `proof:autonomous-systems-contract`
 - `guard:autonomous-systems-contract`
 - `guard:autonomous-operating-model`
 
-Read-only reconciliation can be autonomous. Real money mutation requires Level 3/4. Real money movement requires Level 4 owner approval plus external provider confirmation/readback. Rachi can recommend/request, not approve.
+Read-only reconciliation and scoped safe reconciliation/status/review/audit writes can be autonomous. Real money mutation requires Level 3/4. Real money movement requires Level 4 owner approval plus external provider confirmation/readback. Rachi can recommend/request, not approve.
+
+The scoped Money Operator may not mark payout paid, release payout, create transfer/payout, charge a customer, send invoices, create payment links, enable cashout, manually grant Premium, edit Premium entitlement outside provider-backed readback, create fake revenue/payable balance, clear a fraud hold as paid/settled, mutate auth/RLS, mutate provider products, or switch Stripe live mode.
 
 ## Expansion Contract
 

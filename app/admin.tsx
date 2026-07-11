@@ -11169,20 +11169,41 @@ export default function AdminStudioScreen() {
       {
         id: "money_flow_control",
         title: "Money Flow Control",
-        summary: "Read-only ledger and provider reconciliation is guarded separately from any production money mutation.",
+        summary: "Scoped ledger/provider reconciliation writes are guarded separately from any production money mutation.",
         meta: `${moneyFlowControlSummary.surfaces.length} money surfaces inventoried.`,
         statusLabel: "Guarded",
         tone: "success",
         children: (
           <View testID="admin-money-flow-control-section" style={{ gap: 10 }}>
             <View style={styles.ownerMetricGrid}>
-              <OwnerMetricTile label="Status" value="Read-only guarded" tone="success" />
+              <OwnerMetricTile label="Status" value="Scoped writes" tone="success" />
               <OwnerMetricTile label="Level 3" value="Owner approval" tone="manual" />
               <OwnerMetricTile label="Level 4" value="Provider confirm" tone="danger" />
               <OwnerMetricTile label="Blocked" value={moneyFlowControlSummary.forbiddenActions.length} tone="danger" />
             </View>
             <Text testID="money-flow-control-readonly-status" style={styles.ownerDetailText}>
-              Read-only reconciliation, stale sync detection, duplicate event detection, and admin summaries may run without money movement.
+              Read-only reconciliation, stale sync detection, duplicate event detection, provider sync status, required-review flags, blocked-action audit, sandbox proof rows, and learning state may run without money movement.
+            </Text>
+            <Text testID="money-operator-status" style={styles.ownerDetailText}>
+              Money Operator status: {moneyFlowControlSummary.operatorStatus}; writes are limited to scoped operator/audit/reconciliation tables and autonomous approval requests.
+            </Text>
+            <Text testID="money-operator-latest-reconciliation-runs" style={styles.ownerDetailText}>
+              Latest reconciliation runs: visible through money_reconciliation_runs; run records cannot mark paid, payable, charged, transferred, or settled.
+            </Text>
+            <Text testID="money-operator-required-review-flags" style={styles.ownerDetailText}>
+              Required review flags: safe review-only flags for ledger/provider/payout/revenue records; they do not release payouts or grant Premium.
+            </Text>
+            <Text testID="money-operator-duplicate-detections" style={styles.ownerDetailText}>
+              Duplicate detections: provider/webhook event hashes only; no provider secrets, bank details, or full payout account values.
+            </Text>
+            <Text testID="money-operator-provider-sync-health" style={styles.ownerDetailText}>
+              Provider sync health: stale/synced/failed/blocked labels only; product IDs, provider modes, and billing products are not mutated.
+            </Text>
+            <Text testID="money-operator-blocked-actions" style={styles.ownerDetailText}>
+              Blocked money actions are recorded as audit events only and remain non-executable from this Admin Money Center.
+            </Text>
+            <Text testID="money-operator-external-confirmation-required" style={styles.ownerDetailText}>
+              External confirmation remains required for every Level 4 real-money action even after owner approval.
             </Text>
             <Text testID="money-flow-control-approval-required" style={styles.ownerDetailText}>
               Production checkout, live provider setup, payout review mutation, fraud enforcement mutation, revenue-share changes, network billing changes, and Premium entitlement logic changes require Level 3 owner/super-admin approval.
@@ -11197,14 +11218,16 @@ export default function AdminStudioScreen() {
               rows={[
                 { label: "System id", value: moneyFlowControlSummary.systemId },
                 { label: "Activation", value: moneyFlowControlSummary.status },
+                { label: "Safe write tables", value: String(moneyFlowControlSummary.allowedSafeWriteTables.length) },
+                { label: "Safe fix actions", value: String(moneyFlowControlSummary.allowedSafeFixes.length) },
                 { label: "Emergency stop", value: moneyFlowControlSummary.emergencyStop },
                 { label: "Approval path", value: "Existing autonomous approval requests with fresh preflight and exact scope match" },
               ]}
             />
             <Text testID="money-flow-control-proof-status" style={styles.ownerDetailText}>
-              Required package gates: proof:money-flow-control, guard:money-flow-control, proof:autonomous-approval-live-flow, and guard:autonomous-systems-contract.
+              Required package gates: proof:money-flow-control, proof:money-operator-write-scope, proof:money-external-confirmation, guard:money-flow-control, proof:autonomous-approval-live-flow, and guard:autonomous-systems-contract.
             </Text>
-            <OwnerDisabledReason reason="This section is status and permission workflow only. It cannot charge a customer, create a payout, release cashout, mark paid, fake payable balance, edit Premium entitlement, or switch provider modes." />
+            <OwnerDisabledReason reason="This section exposes safe status/review visibility only. It cannot charge a customer, create a payout, release cashout, mark paid, fake payable balance, edit Premium entitlement, or switch provider modes." />
           </View>
         ),
       },

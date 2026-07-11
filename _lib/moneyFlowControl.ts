@@ -3,10 +3,15 @@ import {
   sanitizeAutonomousApprovalMetadata,
   type AutonomousApprovalRequesterType,
 } from "./autonomousApprovalRequests";
+import {
+  validateMoneyExternalConfirmation,
+  type MoneyEnvironmentMode,
+  type MoneyExternalConfirmationInput,
+} from "./moneyExternalConfirmation";
 import type { AutonomousApprovalLevel } from "./autonomousSystemsRegistry";
 
 export const MONEY_FLOW_CONTROL_SYSTEM_ID = "money_flow_control" as const;
-export const MONEY_FLOW_CONTROL_STATUS = "foundation_readonly_guarded" as const;
+export const MONEY_FLOW_CONTROL_STATUS = "scoped_write_capable_guarded" as const;
 
 export const MONEY_FLOW_SURFACES = [
   "premium_revenue",
@@ -38,6 +43,14 @@ export type MoneyActionId =
   | "sandbox_webhook_validation"
   | "sandbox_zero_dollar_proof"
   | "provider_status_row_sync"
+  | "record_reconciliation_finding"
+  | "mark_provider_sync_status"
+  | "record_duplicate_provider_event"
+  | "mark_money_item_requires_review"
+  | "record_blocked_money_action"
+  | "record_external_confirmation_requirement"
+  | "write_sandbox_test_mode_proof_result"
+  | "update_money_operator_learning_state"
   | "fraud_hold_recommendation"
   | "enable_production_checkout"
   | "enable_live_provider_integration"
@@ -80,6 +93,14 @@ export const MONEY_FLOW_LEVEL_2_ACTIONS: readonly MoneyActionId[] = [
   "sandbox_webhook_validation",
   "sandbox_zero_dollar_proof",
   "provider_status_row_sync",
+  "record_reconciliation_finding",
+  "mark_provider_sync_status",
+  "record_duplicate_provider_event",
+  "mark_money_item_requires_review",
+  "record_blocked_money_action",
+  "record_external_confirmation_requirement",
+  "write_sandbox_test_mode_proof_result",
+  "update_money_operator_learning_state",
   "fraud_hold_recommendation",
 ];
 
@@ -131,6 +152,51 @@ export const MONEY_FLOW_BLOCKED_ACTION_LABELS = [
   "external_provider_confirmation_required_for_level_4",
 ] as const;
 
+export const MONEY_OPERATOR_ALLOWED_WRITE_TABLES = [
+  "money_operator_events",
+  "money_reconciliation_runs",
+  "money_reconciliation_findings",
+  "money_provider_sync_status",
+  "money_duplicate_event_detections",
+  "money_required_review_flags",
+  "money_flow_health_snapshots",
+  "money_operator_learning_state",
+  "autonomous_approval_requests",
+] as const;
+
+export const MONEY_OPERATOR_SAFE_FIX_ACTIONS = [
+  "record reconciliation findings",
+  "mark provider sync stale/synced/failed",
+  "mark duplicate provider/webhook event",
+  "mark ledger/payout/revenue item requires_review",
+  "create approval request",
+  "record blocked action",
+  "record external confirmation requirement",
+  "write sandbox/test-mode proof result",
+  "update learning state",
+] as const;
+
+export const MONEY_OPERATOR_FORBIDDEN_WRITE_SCOPES = [
+  "mark payout paid",
+  "release payout",
+  "create transfer",
+  "create payout",
+  "charge customer",
+  "send invoice",
+  "create payment link",
+  "enable cashout",
+  "manual Premium grant",
+  "Premium entitlement edit outside provider-backed flow",
+  "fake revenue",
+  "fake payable balance",
+  "clear fraud hold as paid/settled",
+  "auth/RLS mutation",
+  "provider product mutation",
+  "Stripe live mode switch",
+] as const;
+
+export type MoneyOperatorWriteTable = typeof MONEY_OPERATOR_ALLOWED_WRITE_TABLES[number];
+
 export type MoneyActionClassification = {
   actionId: string;
   approvalLevel: AutonomousApprovalLevel;
@@ -181,7 +247,7 @@ export const classifyMoneySurfaceState = (surfaceId: MoneyFlowSurfaceId | string
     return "future_blocked" as const;
   }
   return MONEY_FLOW_SURFACES.includes(surfaceId as MoneyFlowSurfaceId)
-    ? "foundation_readonly_guarded" as const
+    ? "scoped_write_capable_guarded" as const
     : "unknown_money_surface_level_4_review" as const;
 };
 
@@ -247,6 +313,72 @@ export const validateMoneyActionScope = (input: {
   };
 };
 
+export const classifyMoneyWriteScope = (writeScope: string) => {
+  const normalized = writeScope.trim();
+  const lower = normalized.toLowerCase();
+  const allowed = MONEY_OPERATOR_ALLOWED_WRITE_TABLES.includes(normalized as MoneyOperatorWriteTable)
+    || MONEY_OPERATOR_SAFE_FIX_ACTIONS.some((action) => lower === action.toLowerCase());
+  const forbidden = MONEY_OPERATOR_FORBIDDEN_WRITE_SCOPES.some((scope) => lower.includes(scope.toLowerCase()));
+  return {
+    writeScope: normalized,
+    allowed,
+    forbidden,
+    approvalLevel: (allowed && !forbidden ? 2 : 4) as AutonomousApprovalLevel,
+    reason: forbidden
+      ? "forbidden_money_operator_write_scope"
+      : allowed
+        ? "scoped_money_operator_write_allowed"
+        : "unknown_money_write_scope_defaults_level_4",
+  };
+};
+
+export const canMoneyOperatorWrite = (writeScope: string) => {
+  const classification = classifyMoneyWriteScope(writeScope);
+  return classification.allowed && !classification.forbidden;
+};
+
+export const sanitizeMoneyOperatorMetadata = sanitizeMoneyProofMetadata;
+
+export const assertExternalConfirmationForLevel4 = (input: MoneyExternalConfirmationInput) => (
+  validateMoneyExternalConfirmation(input)
+);
+
+export const validateMoneyOperatorAction = (input: {
+  actionId: string;
+  writeScopes: readonly string[];
+  environmentMode: MoneyEnvironmentMode;
+  amountCents?: number | null;
+  externalConfirmation?: MoneyExternalConfirmationInput["confirmation"];
+}) => {
+  const classification = classifyMoneyAction(input.actionId);
+  const scopeClassifications = input.writeScopes.map(classifyMoneyWriteScope);
+  const failures: string[] = [];
+
+  if (classification.forbidden) failures.push("forbidden_money_action");
+  if (classification.approvalLevel >= 3) failures.push("approval_request_required_before_execution");
+  if (input.environmentMode === "production" && typeof input.amountCents === "number" && input.amountCents > 0) {
+    failures.push("real_money_mutation_blocked");
+  }
+  if (scopeClassifications.some((scope) => scope.forbidden)) failures.push("forbidden_write_scope");
+  if (scopeClassifications.some((scope) => !scope.allowed)) failures.push("unknown_write_scope_defaults_level_4");
+
+  const confirmationValidation = validateMoneyExternalConfirmation({
+    actionId: input.actionId,
+    approvalLevel: classification.approvalLevel,
+    environmentMode: input.environmentMode,
+    confirmation: input.externalConfirmation,
+  });
+  if (!confirmationValidation.ok) failures.push(...confirmationValidation.failures);
+
+  return {
+    ok: failures.length === 0,
+    classification,
+    scopeClassifications,
+    confirmationValidation,
+    failures: Array.from(new Set(failures)),
+  };
+};
+
 export const buildMoneyApprovalRequest = (input: {
   actionId: string;
   allowedWriteScope: readonly string[];
@@ -309,12 +441,16 @@ export const getMoneyFlowControlSummary = () => ({
   systemId: MONEY_FLOW_CONTROL_SYSTEM_ID,
   status: MONEY_FLOW_CONTROL_STATUS,
   activationMode: "manual_cli",
+  operatorStatus: "scoped_safe_write_operator_no_money_movement",
   surfaces: MONEY_FLOW_SURFACES,
   allowedReadonlyActions: MONEY_FLOW_LEVEL_0_OR_1_ACTIONS,
   allowedSandboxActions: MONEY_FLOW_LEVEL_2_ACTIONS,
+  allowedSafeWriteTables: MONEY_OPERATOR_ALLOWED_WRITE_TABLES,
+  allowedSafeFixes: MONEY_OPERATOR_SAFE_FIX_ACTIONS,
   level3OwnerApprovalRequired: MONEY_FLOW_LEVEL_3_ACTIONS,
   level4ExternalConfirmationRequired: MONEY_FLOW_LEVEL_4_ACTIONS,
   forbiddenActions: MONEY_FLOW_FORBIDDEN_ACTIONS,
   blockedActionLabels: MONEY_FLOW_BLOCKED_ACTION_LABELS,
-  emergencyStop: "money_flow_control emergency_stop blocks all non-read-only money mutations",
+  forbiddenWriteScopes: MONEY_OPERATOR_FORBIDDEN_WRITE_SCOPES,
+  emergencyStop: "money_flow_control emergency_stop blocks all non-reconciliation money mutations",
 });
