@@ -13,6 +13,10 @@ const packageJson = read("package.json");
 const approvalModel = read("_lib/autonomousApprovalRequests.ts");
 const approvalFunction = read("supabase/functions/autonomous-approval-request/index.ts");
 const migration = read("supabase/migrations/20260712145220_autonomous_scoped_write_operators.sql");
+const ownerCommandHelper = read("_lib/ownerCommandOperator.ts");
+const ownerCommandFunction = read("supabase/functions/owner-command-operator/index.ts");
+const ownerCommandMigration = read("supabase/migrations/20260712180500_owner_command_operator.sql");
+const ownerCommandRunbook = read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md");
 
 const activeSystems = [
   "media_automation",
@@ -78,6 +82,46 @@ const checks = [
   {
     name: "all active systems present",
     passes: () => activeSystems.every((systemId) => registry.includes(`id: "${systemId}"`) && registryDoc.includes(`\`${systemId}\``)),
+  },
+  {
+    name: "owner command operator routes through all active systems",
+    passes: () => activeSystems.every((systemId) => ownerCommandHelper.includes(`"${systemId}"`) && ownerCommandFunction.includes(`"${systemId}"`))
+      && packageJson.includes('"proof:owner-command-operator"')
+      && packageJson.includes('"proof:owner-command-routing"')
+      && packageJson.includes('"proof:owner-command-approval-gates"')
+      && packageJson.includes('"guard:owner-command-operator"'),
+    negative: () => !ownerCommandHelper.replaceAll('"money_flow_control"', '"removed_money_flow_control"').includes('"money_flow_control"'),
+  },
+  {
+    name: "owner command cannot bypass approval gates",
+    passes: () => (
+      ownerCommandFunction.includes("approval_request_required")
+      && ownerCommandFunction.includes("owner_approval_required")
+      && ownerCommandFunction.includes("external_confirmation_required")
+      && ownerCommandFunction.includes("preflight_passed_target_operator_execution_required")
+      && ownerCommandFunction.includes("direct_mutation_performed: false")
+      && ownerCommandFunction.includes("highRiskExecuted: false")
+    ),
+    negative: () => !ownerCommandFunction.replaceAll("external_confirmation_required", "external_confirmation_removed").includes("external_confirmation_required"),
+  },
+  {
+    name: "owner command tables deny client writes",
+    passes: () => [
+      "owner_command_requests",
+      "owner_command_events",
+      "owner_command_execution_steps",
+      "owner_command_blockers",
+    ].every((table) => ownerCommandMigration.includes(`public.${table}`) && ownerCommandMigration.includes(`revoke all on table public.${table} from anon, authenticated`)),
+  },
+  {
+    name: "owner command runbook forbids god mode",
+    passes: () => (
+      ownerCommandRunbook.includes("Owner makes judgment")
+      && ownerCommandRunbook.includes("no god mode")
+      && ownerCommandRunbook.includes("routes through existing autonomous systems")
+      && ownerCommandRunbook.includes("Level 4 still needs external confirmation")
+      && ownerCommandRunbook.includes("exact blockers")
+    ),
   },
   {
     name: "new systems are scoped-write active not placeholders",

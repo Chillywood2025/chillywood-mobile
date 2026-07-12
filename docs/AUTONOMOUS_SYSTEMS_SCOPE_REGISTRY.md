@@ -512,3 +512,22 @@ Approval execution is live through `platform_role_memberships` owner/super-admin
 Owner/super-admin review is bounded to the approval framework. It does not create manual Premium toggles, provider billing controls, payout/cashout controls, broad auth/RLS mutation, R2/media behavior changes, LiveKit routing-policy changes, or destructive DB authority. Those remain governed by their registry approval level and external confirmation requirements.
 
 Do not deploy a new scheduler, daemon, worker, broad DB mutation path, public/private exposure change, payment/provider change, or secret rotation from this registry without the required approval path.
+
+## Owner Command Operator
+
+`owner_command_operator` is an orchestration layer, not a replacement for owner judgment and not a broad autonomous system. It accepts owner/super-admin-backed commands, classifies intent and risk, maps each command to the existing active autonomous systems, builds exact preflight/execution/rollback/proof plans, writes `owner_command_*` audit rows, and returns exact blockers when execution is impossible.
+
+It may execute only safe Level 0/1/2 report or scoped audit work. Level 3/4 commands create `autonomous_approval_requests` and stop. Approved Level 3/4 commands still require fresh preflight, exact scope match, active emergency state, target operator proof, and Level 4 external confirmation where applicable. Rachi can recommend/request draft work but cannot approve owner commands, and operators cannot approve their own requested work.
+
+Owner commands route through:
+
+- `media_automation` for media scan/transcode/readiness/R2 audit decisions
+- `livekit_operator` for LiveKit routing/token/heartbeat/render health decisions
+- `money_flow_control` for RevenueCat, Google Play, Stripe, provider, reconciliation, and ledger decisions
+- `notification_delivery_operator` for push delivery/token cleanup decisions
+- `release_ota_operator` for OTA/runtime/updateId/release proof decisions
+- `security_owner_operator` for owner/admin authority, RLS/security, Rachi, and approval-integrity decisions
+- `moderation_safety_operator` for report/case/review/enforcement-request decisions
+- `observability_runtime_operator` for crash, performance, analytics, runtime, and backend error-rate decisions
+
+Forbidden owner-command bypasses include direct broad DB mutation, money movement without Level 4 plus external confirmation, manual Premium grants, Premium bypass, OTA publish/rollback without approval, auth/RLS/owner-role mutation without approval, ban/restrict/delete without approval, private/Premium/original media exposure, provider product/mode changes, LiveKit routing-policy changes, R2/media behavior changes, secret output, stale preflight, scope expansion, and emergency-stop bypass.

@@ -200,6 +200,14 @@ No public exposure without policy: private, Premium, original/master, unscanned,
 
 Audit and rollback/quarantine are mandatory for worker output trust. Destructive production changes require owner approval.
 
+## 12A. Owner Command Policy
+
+Owner Command Operator turns owner judgment into executable, audited command plans. Owner makes judgment; the system classifies the command, routes it to the correct existing autonomous systems, runs preflight, executes only safe scoped Level 0/1/2 work, creates approval requests for Level 3/4, requires external confirmation for Level 4 when applicable, and reports proof or exact blockers.
+
+The owner command layer is not a god panel and does not bypass the registry. It cannot directly move money, manually grant Premium, bypass Premium, publish or rollback OTA, mutate Remote Config, mutate auth/RLS or owner roles, ban/restrict users, delete content, expose private/Premium/original media, change provider products, change LiveKit routing, change R2/media behavior, print secrets, skip fresh preflight, exceed exact scope, or execute while emergency stop is active.
+
+Rachi may recommend/request but cannot approve. Autonomous operators cannot approve their own requests. Level 3/4 commands still use the live owner/super-admin approval path and the target operator's proof/rollback/emergency-state gates.
+
 ## 13. Codex Behavior Rule
 
 Do not ask the owner for Level 0 or Level 1 operations. Do the work, verify it, report what happened, and keep moving.

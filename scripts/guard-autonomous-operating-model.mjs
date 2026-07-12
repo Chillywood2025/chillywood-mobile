@@ -16,7 +16,8 @@ const autonomousRegistry = read("_lib/autonomousSystemsRegistry.ts");
 const autonomousApproval = read("_lib/autonomousApprovalRequests.ts");
 const autonomousRegistryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
-const docsCorpus = [model, currentState, nextTask, mediaWorkerRunbook, recoveryRunbook, mediaArchitecture, autonomousRegistryDoc, moneyRunbook].join("\n\n");
+const ownerCommandRunbook = read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md");
+const docsCorpus = [model, currentState, nextTask, mediaWorkerRunbook, recoveryRunbook, mediaArchitecture, autonomousRegistryDoc, moneyRunbook, ownerCommandRunbook].join("\n\n");
 
 const failures = [];
 
@@ -101,6 +102,9 @@ assertIncludes(model, "Ask the owner and require external confirmation before Le
 assertIncludes(model, "autonomous systems are protected by registry/contract guard", "autonomous systems contract");
 assertIncludes(model, "Level 3/4 actions create owner/admin approval requests", "approval request path");
 assertIncludes(model, "Rachi can recommend/request but cannot approve itself", "Rachi approval boundary");
+assertIncludes(model, "Owner Command Operator turns owner judgment into executable, audited command plans", "owner command policy");
+assertIncludes(model, "not a god panel", "owner command no god panel");
+assertIncludes(model, "requires external confirmation for Level 4", "owner command Level 4 confirmation");
 assertIncludes(model, "Money Flow Control Policy", "money flow control policy");
 assertIncludes(model, "Read-only reconciliation can be autonomous", "money read-only autonomy");
 assertIncludes(model, "Real money mutation requires Level 3/4", "money Level 3/4 boundary");
@@ -118,6 +122,10 @@ assertIncludes(autonomousRegistry, "ownerApprovalRequired: true", "Level 3/4 own
 assertIncludes(autonomousApproval, "canActorApproveAutonomousRequest", "approval request approver model");
 assertIncludes(autonomousApproval, "operatorSelfApprovalAllowed: false", "operator self-approval denial");
 assertIncludes(autonomousRegistryDoc, "future scope can be added only through registry entries", "autonomous registry doc expansion rule");
+assertIncludes(autonomousRegistryDoc, "`owner_command_operator` is an orchestration layer", "owner command registry doc");
+assertIncludes(ownerCommandRunbook, "Owner makes judgment", "owner command runbook owner judgment");
+assertIncludes(ownerCommandRunbook, "routes through existing autonomous systems", "owner command runbook routing");
+assertIncludes(ownerCommandRunbook, "Blocked commands return exact blockers", "owner command runbook blockers");
 
 assertIncludes(currentState, "Chi'llywood autonomous app operating model is now documented", "current state autonomous model");
 assertIncludes(nextTask, "Do not ask owner approval for Level 0/1 autonomous operations", "next task autonomous behavior");

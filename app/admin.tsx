@@ -3519,6 +3519,10 @@ export default function AdminStudioScreen() {
   const [autonomousApprovalLoading, setAutonomousApprovalLoading] = useState(false);
   const [autonomousApprovalNotice, setAutonomousApprovalNotice] = useState<string | null>(null);
   const [autonomousApprovalActionBusy, setAutonomousApprovalActionBusy] = useState<string | null>(null);
+  const [ownerCommandText, setOwnerCommandText] = useState("");
+  const [ownerCommandResult, setOwnerCommandResult] = useState<Record<string, any> | null>(null);
+  const [ownerCommandBusy, setOwnerCommandBusy] = useState<string | null>(null);
+  const [ownerCommandNotice, setOwnerCommandNotice] = useState<string | null>(null);
   const [rachiPostBody, setRachiPostBody] = useState("");
   const [rachiPostReason, setRachiPostReason] = useState("Official Chi'llywood update");
   const [rachiPostBusy, setRachiPostBusy] = useState(false);
@@ -3873,6 +3877,69 @@ export default function AdminStudioScreen() {
       setAutonomousApprovalLoading(false);
     }
   }, [canReviewAutonomousApprovals]);
+
+  const runOwnerCommandCenterAction = useCallback(async (
+    action: "classify_command" | "create_command" | "dry_run_command" | "plan_command",
+  ) => {
+    if (!canReviewAutonomousApprovals || ownerCommandBusy) return;
+    const commandText = ownerCommandText.trim();
+    if (commandText.length < 6) {
+      setOwnerCommandNotice("Enter an owner command before running classification.");
+      return;
+    }
+
+    setOwnerCommandBusy(action);
+    setOwnerCommandNotice(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("owner-command-operator", {
+        body: {
+          action,
+          command_text: commandText,
+          metadata: {
+            source: "admin_owner_command_center",
+          },
+        },
+      });
+      if (error) throw error;
+
+      let result = (data ?? {}) as Record<string, any>;
+      const commandId = String(result.command?.id ?? "");
+      const plan = result.plan as Record<string, any> | undefined;
+      if (action === "create_command" && commandId && plan?.approvalRequired !== true && Array.isArray(plan?.blockers) && plan.blockers.length === 0) {
+        const executed = await supabase.functions.invoke("owner-command-operator", {
+          body: {
+            action: "execute_approved_command",
+            command_id: commandId,
+          },
+        });
+        if (executed.error) throw executed.error;
+        result = {
+          ...result,
+          execution: executed.data,
+        };
+      }
+
+      setOwnerCommandResult(result);
+      if (result.approvalRequest?.id) {
+        setOwnerCommandNotice("Approval request created. High-risk owner command stopped before execution.");
+        await loadAutonomousApprovalRequests();
+      } else if (result.execution?.ok) {
+        setOwnerCommandNotice("Safe owner command executed as scoped audit/report work.");
+      } else {
+        setOwnerCommandNotice(action === "create_command" ? "Owner command created and planned." : "Owner command classified/planned.");
+      }
+    } catch (err: any) {
+      setOwnerCommandResult(null);
+      setOwnerCommandNotice(formatAdminOperationFailure(err, "Owner command action failed."));
+    } finally {
+      setOwnerCommandBusy(null);
+    }
+  }, [
+    canReviewAutonomousApprovals,
+    loadAutonomousApprovalRequests,
+    ownerCommandBusy,
+    ownerCommandText,
+  ]);
 
   const runAutonomousApprovalAction = useCallback(async (
     action: "approve_request" | "cancel_request" | "deny_request",
@@ -18133,6 +18200,86 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
+            <View testID="admin-owner-command-center-section" style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ownerSectionTitle}>Owner Command Center</Text>
+                  <Text style={styles.configListBody}>
+                    Owner judgments are classified, routed to the right autonomous operators, preflighted, approval-gated, and audited. This panel does not create a god-mode path or bypass target operator scope.
+                  </Text>
+                </View>
+                <OwnerStatusPill label={canReviewAutonomousApprovals ? "Server gated" : "Owner locked"} tone={canReviewAutonomousApprovals ? "success" : "locked"} />
+              </View>
+              <TextInput
+                editable={canReviewAutonomousApprovals && ownerCommandBusy === null}
+                testID="owner-command-input"
+                style={styles.input}
+                placeholder="Enter owner command, for example: report autonomous system health"
+                placeholderTextColor="#8d8d8d"
+                value={ownerCommandText}
+                onChangeText={setOwnerCommandText}
+              />
+              <View style={styles.ownerAdminSectionActions}>
+                <TouchableOpacity
+                  disabled={!canReviewAutonomousApprovals || ownerCommandBusy !== null}
+                  testID="owner-command-classify-button"
+                  style={[styles.ownerSecondaryButton, (!canReviewAutonomousApprovals || ownerCommandBusy !== null) && styles.configSaveBtnDisabled]}
+                  onPress={() => void runOwnerCommandCenterAction("classify_command")}
+                >
+                  <Text style={styles.ownerSecondaryButtonText}>{ownerCommandBusy === "classify_command" ? "Classifying" : "Classify"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={!canReviewAutonomousApprovals || ownerCommandBusy !== null}
+                  testID="owner-command-plan-button"
+                  style={[styles.ownerSecondaryButton, (!canReviewAutonomousApprovals || ownerCommandBusy !== null) && styles.configSaveBtnDisabled]}
+                  onPress={() => void runOwnerCommandCenterAction("plan_command")}
+                >
+                  <Text style={styles.ownerSecondaryButtonText}>{ownerCommandBusy === "plan_command" ? "Planning" : "Plan"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={!canReviewAutonomousApprovals || ownerCommandBusy !== null}
+                  testID="owner-command-dry-run-button"
+                  style={[styles.ownerSecondaryButton, (!canReviewAutonomousApprovals || ownerCommandBusy !== null) && styles.configSaveBtnDisabled]}
+                  onPress={() => void runOwnerCommandCenterAction("dry_run_command")}
+                >
+                  <Text style={styles.ownerSecondaryButtonText}>{ownerCommandBusy === "dry_run_command" ? "Dry running" : "Dry Run"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={!canReviewAutonomousApprovals || ownerCommandBusy !== null}
+                  testID="owner-command-execute-button"
+                  style={[styles.ownerSecondaryButton, (!canReviewAutonomousApprovals || ownerCommandBusy !== null) && styles.configSaveBtnDisabled]}
+                  onPress={() => void runOwnerCommandCenterAction("create_command")}
+                >
+                  <Text style={styles.ownerSecondaryButtonText}>{ownerCommandBusy === "create_command" ? "Submitting" : "Submit / Execute Safe"}</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.ownerMetricGrid}>
+                <OwnerMetricTile label="Risk Model" value="Level 0-4" tone="info" />
+                <OwnerMetricTile label="Target Systems" value={AUTONOMOUS_SYSTEMS_REGISTRY.length} tone="info" />
+                <OwnerMetricTile label="Level 3/4" value="Approval" tone="manual" />
+                <OwnerMetricTile label="Level 4" value="External confirm" tone="danger" />
+              </View>
+              <Text testID="owner-command-risk-level" style={styles.ownerDetailText}>
+                Risk level: Level 0 read/report, Level 1 safe status, Level 2 bounded scoped writes, Level 3 owner approval, Level 4 owner approval plus external confirmation.
+              </Text>
+              <Text testID="owner-command-target-systems" style={styles.ownerDetailText}>
+                Target systems: media, LiveKit, money, notification, release, security-owner, moderation-safety, and observability-runtime operators.
+              </Text>
+              <Text testID="owner-command-blockers" style={styles.ownerDetailText}>
+                {ownerCommandResult?.classification?.blockers?.length
+                  ? `Blockers: ${ownerCommandResult.classification.blockers.join("; ")}`
+                  : "Blockers are exact: missing owner authority, ambiguous target system, approval required, external confirmation required, stale preflight, scope mismatch, emergency stop, or secret-like command payload."}
+              </Text>
+              <Text testID="owner-command-proof-report" style={styles.ownerDetailText}>
+                {ownerCommandResult
+                  ? `Last result: ${String(ownerCommandResult.command?.status ?? ownerCommandResult.result ?? ownerCommandResult.action ?? "planned")} · approval ${String(ownerCommandResult.approvalRequest?.id ? "created" : "not required or not created")}`
+                  : "Proof report includes owner_command_requests, owner_command_events, execution steps, approval request id for Level 3/4, and target operator proof where execution is allowed."}
+              </Text>
+              <Text testID="owner-command-event-history" style={styles.ownerDetailText}>
+                {ownerCommandNotice ?? "Event history is append-only audit: received, classified, planned, preflight, approval-required, blocked, executed, failed, cancelled, denied, or superseded."}
+              </Text>
+              <OwnerDisabledReason reason="The client UI does not hold owner-command tokens or execute domain mutations. Live command execution goes through the owner-command Edge Function and existing autonomous operators." />
+            </View>
             <View testID="admin-autonomous-approvals-section" style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
                 <View style={{ flex: 1 }}>

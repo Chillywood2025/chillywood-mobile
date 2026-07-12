@@ -18,6 +18,10 @@ const packageJson = read("package.json");
 const migration = read("supabase/migrations/20260712145220_autonomous_scoped_write_operators.sql");
 const observabilityMigration = read("supabase/migrations/20260712170541_observability_runtime_operator.sql");
 const sharedFn = read("supabase/functions/_shared/scoped-operator.ts");
+const ownerCommandHelper = read("_lib/ownerCommandOperator.ts");
+const ownerCommandFunction = read("supabase/functions/owner-command-operator/index.ts");
+const ownerCommandMigration = read("supabase/migrations/20260712180500_owner_command_operator.sql");
+const ownerCommandRunbook = read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md");
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -38,6 +42,66 @@ const requiredActiveSystems = [
   "moderation_safety_operator",
   "observability_runtime_operator",
 ];
+
+for (const required of [
+  "proof:owner-command-operator",
+  "proof:owner-command-routing",
+  "proof:owner-command-approval-gates",
+  "guard:owner-command-operator",
+  "owner-command:classify",
+  "owner-command:plan",
+  "owner-command:dry-run",
+  "owner-command:execute-approved",
+]) {
+  includes(packageJson, `"${required}"`, "owner command package wiring");
+}
+
+for (const systemId of requiredActiveSystems) {
+  includes(ownerCommandHelper, `"${systemId}"`, "owner command helper routing");
+  includes(ownerCommandFunction, `"${systemId}"`, "owner command function routing");
+}
+
+for (const required of [
+  "authorizeOwnerOrSuperAdmin",
+  "OWNER_COMMAND_OPERATOR_TOKEN_SHA256",
+  "x-owner-command-operator-token",
+  "createApprovalRequestForCommand",
+  "approval_request_required",
+  "owner_approval_required",
+  "external_confirmation_required",
+  "preflight_passed_target_operator_execution_required",
+  "direct_mutation_performed: false",
+  "moneyMoved: false",
+  "highRiskExecuted: false",
+]) {
+  includes(ownerCommandFunction, required, "owner command execution gates");
+}
+
+for (const table of [
+  "owner_command_requests",
+  "owner_command_events",
+  "owner_command_execution_steps",
+  "owner_command_blockers",
+]) {
+  includes(ownerCommandMigration, `public.${table}`, "owner command migration");
+  includes(ownerCommandMigration, `revoke all on table public.${table} from anon, authenticated`, "owner command client write denial");
+}
+
+for (const required of [
+  "Owner makes judgment",
+  "no god mode",
+  "routes through existing autonomous systems",
+  "Level 4 still needs external confirmation",
+  "Blocked commands return exact blockers",
+]) {
+  includes(ownerCommandRunbook, required, "owner command runbook");
+}
+
+notIncludes(ownerCommandFunction, "stripe.transfers.create", "owner command direct money movement");
+notIncludes(ownerCommandFunction, "eas update", "owner command direct OTA publish");
+notIncludes(ownerCommandFunction, "supabase.auth.admin", "owner command direct auth mutation");
+notIncludes(ownerCommandFunction, "manual_premium_grant", "owner command manual Premium grant");
+notIncludes(ownerCommandFunction, "delete_content", "owner command direct moderation enforcement");
 
 const newlyScopedSystems = [
   {
