@@ -493,7 +493,15 @@ Deno.serve(async (request) => {
     const systemId = toText(body.system_id);
     const reason = toText(body.reason) || (action === "resume_system" ? "Owner/super-admin resumed autonomous system." : "Owner/super-admin paused autonomous system.");
     const status = action === "resume_system" ? "active" : toText(body.status) === "paused" ? "paused" : "emergency_stop";
-    if (!["media_automation", "livekit_operator", "money_flow_control"].includes(systemId)) return jsonResponse(400, { error: "unknown_system_id" });
+    if (![
+      "media_automation",
+      "livekit_operator",
+      "money_flow_control",
+      "notification_delivery_operator",
+      "release_ota_operator",
+      "security_owner_operator",
+      "moderation_safety_operator",
+    ].includes(systemId)) return jsonResponse(400, { error: "unknown_system_id" });
     if (containsSecretLikeValue(body.metadata)) return jsonResponse(422, { error: "secret_like_payload_blocked" });
 
     const { data, error } = await client

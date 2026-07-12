@@ -21,8 +21,12 @@ Current approved systems:
 - `media_automation`
 - `livekit_operator`
 - `money_flow_control`
+- `notification_delivery_operator`
+- `release_ota_operator`
+- `security_owner_operator`
+- `moderation_safety_operator`
 
-Future candidate placeholders may be documented in the registry, but candidates are not active autonomous systems. The current candidate placeholders are `notification_delivery_operator`, `release_ota_operator`, `security_owner_operator`, and `moderation_safety_operator`. Each is `candidate_foundation_only`, activation `off`, no scheduler/daemon/worker, and no write authority. A candidate cannot be claimed healthy, closed, live, or scheduled until a separate approved registry/proof/guard lane activates it.
+`notification_delivery_operator`, `release_ota_operator`, `security_owner_operator`, and `moderation_safety_operator` are now scoped-write capable guarded systems. Their current activation is manual/token-gated only, with no scheduler/daemon/worker. They may write only safe status, review, finding, audit, duplicate-detection, learning, and autonomous approval-request records inside their registered tables. They cannot publish releases, roll back releases, mutate owner roles, mutate auth/RLS, rotate secrets, send broad push campaigns, bypass notification preferences, ban/restrict users, delete content, change user rights, move money, grant Premium, or change provider products without the registered Level 3/4 approval path.
 
 Future scope can be added only through registry entries that define system id, action/surface id, activation mode, allowed read scope, allowed write scope, forbidden scope, approval level, proof script, guard script, rollback/quarantine behavior, kill switch/fallback behavior, and owner/admin approval requirement for Level 3/4.
 

@@ -1207,6 +1207,7 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
 type AdminMoneyCenterSectionId =
   | "overview"
   | "money_flow_control"
+  | "scoped_autonomous_operators"
   | "internal_sandbox_testing"
   | "kill_switches"
   | "premium"
@@ -3641,6 +3642,7 @@ export default function AdminStudioScreen() {
   const [expandedAdminMoneyCenterSections, setExpandedAdminMoneyCenterSections] = useState<Record<AdminMoneyCenterSectionId, boolean>>({
     overview: true,
     money_flow_control: false,
+    scoped_autonomous_operators: false,
     internal_sandbox_testing: false,
     kill_switches: false,
     premium: false,
@@ -11229,6 +11231,67 @@ export default function AdminStudioScreen() {
               Required package gates: proof:money-flow-control, proof:money-operator-write-scope, proof:money-external-confirmation, proof:provider-webhook-reliability, proof:money-provider-reliability-loop, guard:provider-webhook-reliability, guard:money-flow-control, proof:autonomous-approval-live-flow, and guard:autonomous-systems-contract.
             </Text>
             <OwnerDisabledReason reason="This section exposes safe status/review visibility only. It cannot charge a customer, create a payout, release cashout, mark paid, fake payable balance, edit Premium entitlement, or switch provider modes." />
+          </View>
+        ),
+      },
+      {
+        id: "scoped_autonomous_operators",
+        title: "Scoped Autonomous Operators",
+        summary: "Notification, release, security-owner, and moderation operators can write safe status/review/audit records only.",
+        meta: "Manual/token-gated; no schedulers active.",
+        statusLabel: "Scoped writes",
+        tone: "success",
+        children: (
+          <View style={{ gap: 12 }}>
+            <View testID="admin-notification-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Notification Operator</Text>
+              <Text testID="each-section-required-review-list" style={styles.ownerDetailText}>
+                Required review list: delivery health, provider sync status, retry backlog, duplicate dedupe, and token cleanup evidence are recorded as review/audit rows.
+              </Text>
+              <Text testID="each-section-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: marketing blasts, preference bypass, push provider credential changes, fake system sends, and broad messaging without owner approval.
+              </Text>
+              <Text testID="each-section-approval-request" style={styles.ownerDetailText}>
+                Approval path: broad campaigns or provider config changes create autonomous approval requests and stop before execution.
+              </Text>
+            </View>
+            <View testID="admin-release-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Release / OTA Operator</Text>
+              <Text testID="each-section-required-review-list" style={styles.ownerDetailText}>
+                Required review list: runtime, channel, updateId, embedded launch, emergency launch, rollout anomaly, and rollback readiness findings.
+              </Text>
+              <Text testID="each-section-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: production OTA publish, production rollback, store release submission, runtimeVersion policy changes, fake installed proof, and hidden emergency launch.
+              </Text>
+              <Text testID="each-section-approval-request" style={styles.ownerDetailText}>
+                Approval path: production publish or rollback requires owner/super-admin approval, fresh preflight, exact scope match, and emergency-state check.
+              </Text>
+            </View>
+            <View testID="admin-security-owner-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Security / Owner Operator</Text>
+              <Text testID="each-section-required-review-list" style={styles.ownerDetailText}>
+                Required review list: owner/super-admin integrity, Rachi/operator self-approval prevention, approval integrity, admin route exposure, and secret-scan findings.
+              </Text>
+              <Text testID="each-section-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: autonomous owner role mutation, auth/RLS mutation, secret rotation, audit deletion, user bans, and exposing owner controls to non-owner users.
+              </Text>
+              <Text testID="each-section-approval-request" style={styles.ownerDetailText}>
+                Approval path: owner-role, auth/RLS, and secret-rotation work requires owner approval and cannot be approved by Rachi or the requesting operator.
+              </Text>
+            </View>
+            <View testID="admin-moderation-safety-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Moderation / Safety Operator</Text>
+              <Text testID="each-section-required-review-list" style={styles.ownerDetailText}>
+                Required review list: moderation queue health, report backlog, stale cases, duplicate reports, safety review recommendations, and live-room/upload review flags.
+              </Text>
+              <Text testID="each-section-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: permanent ban, suspend, restrict, content delete, upload/live/account disable, fraud hold enforcement, hidden enforcement, and user-rights changes.
+              </Text>
+              <Text testID="each-section-approval-request" style={styles.ownerDetailText}>
+                Approval path: enforcement creates an autonomous approval request and must preserve audit, review, and appeal/reversal trail before execution.
+              </Text>
+            </View>
+            <OwnerDisabledReason reason="These sections expose scoped status/review visibility only. They do not add push blasts, OTA publishing, rollback, owner-role mutation, auth/RLS mutation, bans, restrictions, content deletion, or schedulers." />
           </View>
         ),
       },

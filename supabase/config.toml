@@ -112,6 +112,18 @@ verify_jwt = false
 [functions.notification-dispatch]
 verify_jwt = false
 
+[functions.notification-operator]
+verify_jwt = false
+
+[functions.release-operator]
+verify_jwt = false
+
+[functions.security-owner-operator]
+verify_jwt = false
+
+[functions.moderation-safety-operator]
+verify_jwt = false
+
 [functions.chilly-chat-call-dispatch]
 verify_jwt = false
 

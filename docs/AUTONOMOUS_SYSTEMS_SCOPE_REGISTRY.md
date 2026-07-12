@@ -252,81 +252,169 @@ Provider webhook reliability monitoring covers RevenueCat, Google Play, Stripe C
 
 Error-rate classes are `healthy`, `degraded`, `critical`, `outage`, and `unknown`. A 100% provider webhook error rate must become failed/blocked provider sync status plus a reconciliation finding, and dashboard mutation must create a Level 3 approval request.
 
-## Future Candidate Placeholders
-
-The following systems are named only as candidate placeholders. They are not active autonomous systems, are not closed/healthy/live, have activation `off`, have no scheduler/daemon/worker, and have no write authority. They cannot be used to bypass Level 3/4 approval. Activation requires a new approved registry entry with approval level, read/write bounds, proof, guard, rollback/quarantine behavior, kill switch/fallback behavior, and owner/admin approval where appropriate.
-
 ### `notification_delivery_operator`
 
-Status: `candidate_foundation_only`
+Status: `scoped_write_capable_guarded`.
 
-Activation: `off`
+Current activation: `manual_cli`.
 
-Scheduler status: no scheduler, daemon, or worker.
+Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
 
-Candidate scope:
-- Expo push delivery health
-- device token cleanup
-- money notification delivery
-- chat/call/live notification delivery
+Allowed surfaces:
+- `expo_push_delivery`
+- `device_token_health`
+- `notification_preferences_readback`
+- `notification_delivery_attempts`
+- `notification_retry_queue`
+- `money_notification_delivery`
+- `livekit_live_room_notifications`
+- `chat_call_push_notifications`
+- `creator_notification_delivery`
 
-Allowed writes: none.
+Allowed writes:
+- `notification_operator_events`
+- `notification_delivery_health_snapshots`
+- `notification_delivery_attempts`
+- `notification_provider_sync_status`
+- `notification_required_review_flags`
+- `notification_duplicate_dedupe_records`
+- `user_push_tokens` disabled/revoked only after provider says `DeviceNotRegistered`
+- autonomous approval requests
+- `notification_operator_learning_state`
 
-Activation requires owner approval and a future registry/proof/guard lane before any write authority, delivery mutation, scheduler, daemon, or worker exists.
+Forbidden:
+- marketing blast sends
+- bypass notification preferences
+- owner/admin alert leakage to normal users
+- money/payment claims without provider proof
+- changing push provider credentials
+- sending notifications as fake system events
+- broad user messaging without approval
+
+Broad campaigns or provider push configuration changes require Level 3 owner/super-admin approval.
 
 ### `release_ota_operator`
 
-Status: `candidate_foundation_only`
+Status: `scoped_write_capable_guarded`.
 
-Activation: `off`
+Current activation: `manual_cli`.
 
-Scheduler status: no scheduler, daemon, or worker.
+Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
 
-Candidate scope:
-- EAS update health
-- runtime/channel/updateId diagnostics
-- embedded/emergency launch detection
-- rollout proof reporting
+Allowed surfaces:
+- `release_diagnostics`
+- `eas_update_health`
+- `runtime_channel_updateid_readback`
+- `embedded_launch_detection`
+- `emergency_launch_detection`
+- `ota_rollout_health`
+- `install_proof_status`
+- `release_rollback_readiness`
 
-Allowed writes: none.
+Allowed writes:
+- `release_operator_events`
+- `release_health_snapshots`
+- `ota_diagnostics_readback_records`
+- `rollout_anomaly_findings`
+- `release_required_review_flags`
+- `release_approval_requests`
+- `rollback_readiness_records`
+- `release_operator_learning_state`
 
-Publish or rollback automation requires owner approval and a future registry/proof/guard lane. This placeholder cannot publish OTA, roll back OTA, mutate app-store release state, or create a scheduler.
+Forbidden:
+- auto-publish production OTA without approval
+- auto-rollback production OTA without approval
+- submit Play/App Store release
+- change runtimeVersion policy
+- change public release track
+- change store listing
+- hide emergency launch
+- fake installed proof
+
+Production OTA publish, rollback, or store release mutation requires Level 4 owner/super-admin approval and fresh release preflight.
 
 ### `security_owner_operator`
 
-Status: `candidate_foundation_only`
+Status: `scoped_write_capable_guarded`.
 
-Activation: `off`
+Current activation: `manual_cli`.
 
-Scheduler status: no scheduler, daemon, or worker.
+Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
 
-Candidate scope:
-- owner/super_admin role integrity
-- Rachi/operator self-approval prevention
-- RLS/security proof health
-- secret-scan health
+Allowed surfaces:
+- `owner_super_admin_role_integrity`
+- `platform_role_memberships_readback`
+- `rachi_operator_self_approval_prevention`
+- `autonomous_approval_integrity`
+- `admin_route_exposure`
+- `secret_scan_health`
+- `rls_policy_health_readonly`
+- `security_incident_flags`
+- `emergency_pause_requests`
 
-Allowed writes: none.
+Allowed writes:
+- `security_operator_events`
+- `security_health_snapshots`
+- `security_required_review_flags`
+- `owner_authority_integrity_findings`
+- `approval_integrity_findings`
+- `secret_scan_findings`
+- autonomous approval requests
+- emergency pause request records
+- `security_operator_learning_state`
 
-Any auth/RLS mutation, owner-role mutation, approval-path mutation, or scheduler requires owner approval and a future registry/proof/guard lane. This placeholder cannot alter owner authority.
+Forbidden:
+- assign/revoke owner role autonomously
+- mutate auth/RLS autonomously
+- rotate secrets without approval
+- ban/suspend users directly
+- expose owner controls to non-owner
+- let Rachi/operator approve themselves
+- delete audit rows
+- broad system shutdown without approval except existing approved emergency-stop path
+
+Owner-role, auth/RLS, and secret-rotation work requires Level 4 owner/super-admin approval. Rachi can request/recommend, not approve.
 
 ### `moderation_safety_operator`
 
-Status: `candidate_foundation_only`
+Status: `scoped_write_capable_guarded`.
 
-Activation: `off`
+Current activation: `manual_cli`.
 
-Scheduler status: no scheduler, daemon, or worker.
+Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
 
-Candidate scope:
-- moderation queue health
-- report backlog
-- stale case detection
-- safety review flags
+Allowed surfaces:
+- `moderation_queue_health`
+- `user_report_backlog`
+- `stale_case_detection`
+- `duplicate_report_detection`
+- `content_safety_review_flags`
+- `fraud_hold_recommendations`
+- `creator_upload_review_flags`
+- `live_room_safety_review_flags`
 
-Allowed writes: none.
+Allowed writes:
+- `moderation_operator_events`
+- `moderation_health_snapshots`
+- `moderation_required_review_flags`
+- `moderation_duplicate_report_detections`
+- `moderation_case_priority_flags`
+- `moderation_stale_case_findings`
+- `safety_review_recommendations`
+- autonomous approval requests
+- `moderation_operator_learning_state`
 
-Bans, restrictions, enforcement, safety-review mutation, auth/RLS mutation, public/private exposure changes, scheduler, daemon, or worker activation require owner approval and a future registry/proof/guard lane.
+Forbidden:
+- permanent ban/suspend/restrict without approval
+- delete content without approval
+- disable uploads/live/account without approval
+- enforce fraud holds without approval
+- change user rights automatically
+- public/private exposure changes
+- moderation action without audit
+- hidden enforcement with no appeal/review trail
+
+Account rights changes, bans, restrictions, content deletion, upload/live/account disablement, and fraud-hold enforcement require owner/staff approval through the autonomous approval path.
 
 ## Expansion Contract
 
