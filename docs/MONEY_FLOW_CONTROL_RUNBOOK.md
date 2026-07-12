@@ -124,7 +124,14 @@ Actions:
 - `provider_webhook_test_plan`
 - `record_provider_webhook_delivery_status`
 - `provider_delivery_history_readback`
+- `provider_access_status`
+- `provider_access_probe`
+- `provider_dashboard_readback`
+- `provider_test_delivery_plan`
+- `provider_test_delivery_run`
 - `provider_dashboard_repair_request`
+- `provider_repair_request`
+- `provider_access_report`
 - `provider_webhook_reliability_report`
 - `watch_once`
 
@@ -159,7 +166,7 @@ Safe monitor behavior:
 - provider delivery-history readback when provider dashboard/API access exists
 - owner action when provider dashboard/API access is unavailable
 
-The monitor cannot print provider secrets, cannot manually grant Premium, cannot create charges, payouts, transfers, cashout, invoices, or payment links, cannot mutate provider products, and cannot claim test-mode proof as production readiness. Provider dashboard changes such as changing webhook URLs, signing secrets, event selections, or disabling stale duplicate integrations require an autonomous approval request before mutation.
+The monitor cannot print provider secrets, cannot manually grant Premium, cannot create charges, payouts, transfers, cashout, invoices, or payment links, cannot mutate provider products, and test-mode proof cannot satisfy production readiness. Provider dashboard changes such as changing webhook URLs, signing secrets, event selections, or disabling stale duplicate integrations require an autonomous approval request before mutation.
 
 RevenueCat dashboard test events are expected to return `200 test_received` only when the dashboard sends the configured shared secret. Test events must report `premiumGranted=false` and `liveMoneyAction=false`.
 
@@ -175,8 +182,47 @@ Duplicate/stale integration detection checks for old Supabase project hosts, wro
 
 RevenueCat Premium stale readback can be recorded when RevenueCat says active but Supabase Premium readback is stale. Money Operator may record `stale_readback` and request provider replay/readback. It must not manually grant Premium.
 
+## Provider Access Broker
+
+Provider Access Broker gives Money Operator a controlled path to provider readback without pasted secrets. It covers RevenueCat, Google Play, Stripe Connect, Stripe merch/checkout, provider readiness, and provider billing reconciliation. The broker records provider access capability rows, audit events, and provider dashboard repair requests. It does not move money.
+
+Allowed autonomous access:
+- read webhook endpoint metadata
+- read delivery health/status when the provider API exposes it
+- read enabled/disabled state
+- read last success/failure metadata when available
+- send a non-money TEST event only when the provider/API or owner dashboard session classifies it as safe
+- write Money Operator status rows
+- create autonomous approval requests
+
+Access modes are `none`, `local_env`, `supabase_secret`, `host_env`, `github_secret`, `cloudflare_secret`, `provider_api_readonly`, `provider_api_test_mode_write`, `provider_dashboard_owner_session`, and `provider_live_mutation_requires_approval`.
+
+Provider dashboard/browser owner session is still required when a provider API cannot send TEST deliveries or expose delivery history. The broker records that requirement by name only and does not fake success.
+
+Provider dashboard mutation requires owner/super-admin approval through the autonomous approval system. This includes disabling stale duplicate integrations, changing webhook URLs or headers, changing Google Pub/Sub endpoint/subscription config, changing Stripe webhook endpoint config, secret rotation, and any live-mode/provider-setting change. Fresh preflight and exact scope match are required before any approved repair.
+
+Forbidden through Provider Access Broker:
+- provider secret output or logs
+- provider dashboard mutation without approval
+- product ID or price changes
+- live-mode switch
+- charge, payout, transfer, invoice, checkout session, payment link, or cashout
+- manual Premium grant
+- Premium entitlement edit outside provider-backed flow
+
+Broker tables are RLS-enabled and client-write denied:
+- `provider_access_capabilities`
+- `provider_access_audit_events`
+- `provider_dashboard_repair_requests`
+
 Package loop commands:
 - `money-operator:provider-health`
+- `money-operator:access-status`
+- `money-operator:provider-access-probe`
+- `money-operator:provider-dashboard-readback`
+- `money-operator:provider-test-plan`
+- `money-operator:provider-test-run`
+- `money-operator:provider-repair-request`
 - `money-operator:watch-once`
 - `money-operator:report`
 

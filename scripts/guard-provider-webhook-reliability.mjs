@@ -27,16 +27,21 @@ const stripeShared = read("supabase/functions/_shared/stripe-connect.ts");
 const packageJson = read("package.json");
 const moneyGuard = read("scripts/guard-money-flow-control.mjs");
 const moneyLoopProof = read("scripts/proof-money-provider-reliability-loop.mjs");
+const providerAccessBroker = read("_lib/providerAccessBroker.ts");
+const providerAccessGuard = read("scripts/guard-provider-access-broker.mjs");
 const docs = [
   read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md"),
   read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md"),
   read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md"),
 ].join("\n\n");
 
-const corpus = [moneyOperator, revenueCat, googlePlay, stripeConnect, stripeMerch, providerReadiness, stripeShared, docs].join("\n\n");
+const corpus = [moneyOperator, providerAccessBroker, revenueCat, googlePlay, stripeConnect, stripeMerch, providerReadiness, stripeShared, docs].join("\n\n");
 
 includes(packageJson, '"proof:provider-webhook-reliability"', "package script");
 includes(packageJson, '"guard:provider-webhook-reliability"', "package script");
+includes(packageJson, '"proof:provider-access-broker"', "package script");
+includes(packageJson, '"proof:provider-dashboard-access-policy"', "package script");
+includes(packageJson, '"guard:provider-access-broker"', "package script");
 
 for (const required of [
   "provider_webhook_health",
@@ -45,6 +50,9 @@ for (const required of [
   "provider_delivery_history_readback",
   "provider_dashboard_repair_request",
   "provider_webhook_reliability_report",
+  "provider_access_status",
+  "provider_dashboard_readback",
+  "provider_test_delivery_run",
   "watch_once",
   "money_provider_sync_status",
   "money_reconciliation_findings",
@@ -99,6 +107,10 @@ for (const required of [
 
 includes(moneyOperator, "change_money_facing_config", "dashboard repair approval action");
 includes(moneyOperator, "pending_owner_approval", "dashboard repair stops for approval");
+includes(providerAccessBroker, "PROVIDER_ACCESS_BROKER_ID", "provider access broker helper");
+includes(providerAccessBroker, "provider_dashboard_owner_session", "provider dashboard owner session mode");
+includes(providerAccessBroker, "provider_api_readonly", "provider API read-only mode");
+includes(providerAccessGuard, "provider access can print secrets", "provider access guard secret print check");
 includes(moneyOperator, "classifyProviderDeliveryErrorRate", "provider error-rate classifier");
 includes(moneyOperator, "providerSyncStatusForClassification", "provider error-rate status mapping");
 includes(moneyOperator, "duplicate_webhook_integration_detection", "duplicate dashboard integration detection");
@@ -110,6 +122,8 @@ includes(docs, "Provider Webhook Reliability", "docs provider webhook monitoring
 includes(packageJson, '"proof:money-provider-reliability-loop"', "package script");
 includes(packageJson, '"money-operator:watch-once"', "package script");
 includes(packageJson, '"money-operator:provider-health"', "package script");
+includes(packageJson, '"money-operator:access-status"', "package script");
+includes(packageJson, '"money-operator:provider-dashboard-readback"', "package script");
 includes(packageJson, '"money-operator:report"', "package script");
 
 matches(moneyOperator, /PROVIDER_WEBHOOKS[\s\S]*requiredSecretNames[\s\S]*REVENUECAT_WEBHOOK_SECRET[\s\S]*GOOGLE_PLAY_WEBHOOK_SECRET[\s\S]*STRIPE_WEBHOOK_SECRET/, "secret names listed by name only");

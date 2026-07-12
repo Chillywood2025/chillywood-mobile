@@ -3,7 +3,13 @@
 const command = process.argv[2] || "provider-health";
 
 const ACTION_BY_COMMAND = {
+  "access-status": "provider_access_status",
+  "provider-access-probe": "provider_access_probe",
+  "provider-dashboard-readback": "provider_dashboard_readback",
   "provider-health": "provider_webhook_health",
+  "provider-repair-request": "provider_repair_request",
+  "provider-test-plan": "provider_test_delivery_plan",
+  "provider-test-run": "provider_test_delivery_run",
   report: "provider_webhook_reliability_report",
   "watch-once": "watch_once",
 };
@@ -15,6 +21,8 @@ const explicitFunctionUrl = process.env.MONEY_OPERATOR_FUNCTION_URL || "";
 const supabaseFunctionsUrl = process.env.SUPABASE_FUNCTIONS_URL || "";
 const functionUrl = explicitFunctionUrl || (supabaseFunctionsUrl ? `${supabaseFunctionsUrl.replace(/\/$/, "")}/money-operator` : "");
 const operatorToken = process.env.MONEY_OPERATOR_TOKEN || "";
+const provider = process.env.MONEY_OPERATOR_PROVIDER || "";
+const payloadJson = process.env.MONEY_OPERATOR_PAYLOAD_JSON || "";
 
 if (!action) {
   console.error(`Unsupported money-operator command: ${command}`);
@@ -39,6 +47,8 @@ const response = await fetch(functionUrl, {
   body: JSON.stringify({
     action,
     environment_mode: process.env.MONEY_OPERATOR_ENVIRONMENT_MODE || "test",
+    ...(provider ? { provider } : {}),
+    ...(payloadJson ? JSON.parse(payloadJson) : {}),
   }),
   headers: {
     "Content-Type": "application/json",

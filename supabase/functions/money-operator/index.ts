@@ -42,6 +42,12 @@ const SAFE_ACTIONS = new Set([
   "stale_provider_dashboard_integration_detection",
   "duplicate_webhook_integration_detection",
   "premium_stale_readback_detection",
+  "provider_access_status",
+  "provider_access_probe",
+  "provider_dashboard_readback",
+  "provider_test_delivery_plan",
+  "provider_test_delivery_run",
+  "provider_access_report",
 ]);
 const LEVEL_3_ACTIONS = new Set([
   "enable_production_checkout",
@@ -124,6 +130,58 @@ const PROVIDER_WEBHOOKS = [
     expectedMissingAuth: "400 invalid_signature",
     validTestExpectation: "sandbox signed physical-merch event only; no digital access, Premium, payout, or cashout",
     requiredSecretNames: ["STRIPE_MERCH_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET fallback"],
+  },
+] as const;
+
+const PROVIDER_ACCESS_MODES = [
+  "none",
+  "local_env",
+  "supabase_secret",
+  "host_env",
+  "github_secret",
+  "cloudflare_secret",
+  "provider_api_readonly",
+  "provider_api_test_mode_write",
+  "provider_dashboard_owner_session",
+  "provider_live_mutation_requires_approval",
+] as const;
+
+const PROVIDER_ACCESS_CAPABILITIES = [
+  {
+    provider: "revenuecat",
+    capabilities: ["webhook_endpoint_metadata", "webhook_delivery_history", "webhook_test_delivery", "provider_reconciliation_readback"],
+    requiredSecretNames: ["REVENUECAT_SECRET_API_KEY", "REVENUECAT_WEBHOOK_SECRET"],
+    optionalSecretNames: ["REVENUECAT_PROJECT_ID"],
+    accessModeWhenConfigured: "provider_api_readonly",
+    dashboardSessionFallback: true,
+    sourceOfTruth: "provider_backed_premium_truth",
+  },
+  {
+    provider: "google_play",
+    capabilities: ["webhook_endpoint_metadata", "provider_readiness_audit", "provider_reconciliation_readback"],
+    requiredSecretNames: ["GOOGLE_PLAY_WEBHOOK_SECRET", "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON", "GOOGLE_PLAY_PUBSUB_TOPIC"],
+    optionalSecretNames: [],
+    accessModeWhenConfigured: "provider_api_readonly",
+    dashboardSessionFallback: false,
+    sourceOfTruth: "revenuecat_mediated_unless_direct_google_notifications_enabled",
+  },
+  {
+    provider: "stripe_connect",
+    capabilities: ["webhook_endpoint_metadata", "webhook_delivery_history", "webhook_test_delivery", "provider_readiness_audit"],
+    requiredSecretNames: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
+    optionalSecretNames: [],
+    accessModeWhenConfigured: "provider_api_readonly",
+    dashboardSessionFallback: true,
+    sourceOfTruth: "stripe_connect_test_and_live_separated",
+  },
+  {
+    provider: "stripe_merch",
+    capabilities: ["webhook_endpoint_metadata", "webhook_delivery_history", "webhook_test_delivery", "provider_readiness_audit"],
+    requiredSecretNames: ["STRIPE_SECRET_KEY", "STRIPE_MERCH_WEBHOOK_SECRET"],
+    optionalSecretNames: ["STRIPE_WEBHOOK_SECRET"],
+    accessModeWhenConfigured: "provider_api_readonly",
+    dashboardSessionFallback: true,
+    sourceOfTruth: "stripe_physical_merch_only_test_and_live_separated",
   },
 ] as const;
 
@@ -283,6 +341,172 @@ const safeProviderWebhookRows = () => PROVIDER_WEBHOOKS.map((entry) => ({
   requiredSecretNames: entry.requiredSecretNames,
   webhookUrlPath: `/functions/v1/${entry.functionName}`,
 }));
+
+const providerAccessConfig = (provider: string) => (
+  PROVIDER_ACCESS_CAPABILITIES.find((entry) => entry.provider === provider) ?? null
+);
+
+const secretPresence = (secretName: string) => toText(Deno.env.get(secretName)).length > 0;
+
+const safeProviderAccessRows = () => PROVIDER_ACCESS_CAPABILITIES.map((entry) => {
+  const presentRequiredSecretNames = entry.requiredSecretNames.filter(secretPresence);
+  const missingRequiredSecretNames = entry.requiredSecretNames.filter((secretName) => !secretPresence(secretName));
+  const available = missingRequiredSecretNames.length === 0;
+  return {
+    provider: entry.provider,
+    capabilities: entry.capabilities,
+    accessMode: available ? entry.accessModeWhenConfigured : "none",
+    status: available
+      ? "available"
+      : entry.dashboardSessionFallback
+        ? "owner_session_required"
+        : "missing_credentials",
+    available,
+    sourceOfTruth: entry.sourceOfTruth,
+    dashboardOwnerSessionMayBeRequired: entry.dashboardSessionFallback,
+    requiredSecretNames: entry.requiredSecretNames,
+    optionalSecretNames: entry.optionalSecretNames,
+    presentRequiredSecretNames,
+    missingRequiredSecretNames,
+    moneyMoved: false,
+    providerDashboardMutated: false,
+  };
+});
+
+const providerAccessMode = (value: unknown) => {
+  const mode = safeLabel(value, "none");
+  return PROVIDER_ACCESS_MODES.includes(mode as typeof PROVIDER_ACCESS_MODES[number]) ? mode : "none";
+};
+
+const recordProviderAccessAudit = async (client: SupabaseClientLike, input: {
+  accessMode: string;
+  approvalRequestId?: string | null;
+  capability: string;
+  environmentMode: string;
+  eventType: string;
+  metadata?: JsonObject;
+  provider: string;
+  result: string;
+}) => {
+  const { data, error } = await client
+    .from("provider_access_audit_events")
+    .insert({
+      system_id: SYSTEM_ID,
+      provider: safeLabel(input.provider),
+      capability: safeLabel(input.capability),
+      event_type: safeLabel(input.eventType),
+      result: safeLabel(input.result),
+      access_mode: providerAccessMode(input.accessMode),
+      environment_mode: environmentMode(input.environmentMode),
+      money_moved: false,
+      provider_dashboard_mutated: false,
+      approval_request_id: input.approvalRequestId ?? null,
+      metadata: safeMetadata({
+        ...(input.metadata ?? {}),
+        money_moved: false,
+        provider_dashboard_mutated: false,
+      }),
+    })
+    .select("id,provider,capability,event_type,result,created_at,money_moved,provider_dashboard_mutated")
+    .single();
+  if (error) throw error;
+  return data as JsonObject;
+};
+
+const upsertProviderAccessCapability = async (client: SupabaseClientLike, input: {
+  accessMode: string;
+  approvalRequestId?: string | null;
+  available: boolean;
+  capability: string;
+  metadata?: JsonObject;
+  provider: string;
+  requiredSecretNames: readonly string[];
+  status: string;
+}) => {
+  const { data, error } = await client
+    .from("provider_access_capabilities")
+    .upsert({
+      system_id: SYSTEM_ID,
+      provider: safeLabel(input.provider),
+      capability: safeLabel(input.capability),
+      access_mode: providerAccessMode(input.accessMode),
+      status: safeLabel(input.status),
+      available: input.available,
+      last_checked_at: new Date().toISOString(),
+      requires_owner_approval: input.status === "approval_required" || input.status === "owner_session_required",
+      required_secret_names: input.requiredSecretNames,
+      forbidden_scope: [
+        "provider product mutation",
+        "live money movement",
+        "manual Premium grant",
+        "Stripe live mode switch",
+        "provider dashboard mutation without approval",
+        "secret logging",
+      ],
+      approval_request_id: input.approvalRequestId ?? null,
+      metadata: safeMetadata(input.metadata),
+    }, { onConflict: "provider,capability,access_mode" })
+    .select("id,provider,capability,access_mode,status,available,last_checked_at,requires_owner_approval")
+    .single();
+  if (error) throw error;
+  return data as JsonObject;
+};
+
+const stripeWebhookEndpointReadback = async () => {
+  const secretKey = toText(Deno.env.get("STRIPE_SECRET_KEY"));
+  if (!secretKey) return { ok: false, missingSecretNames: ["STRIPE_SECRET_KEY"], endpoints: [] as JsonObject[] };
+  const response = await fetch("https://api.stripe.com/v1/webhook_endpoints?limit=10", {
+    headers: { Authorization: `Bearer ${secretKey}` },
+    method: "GET",
+  });
+  const body = await response.json().catch(() => ({})) as JsonObject;
+  const rawEndpoints = Array.isArray(body.data) ? body.data.slice(0, 10) as JsonObject[] : [];
+  const endpoints = await Promise.all(rawEndpoints.map(async (entry: JsonObject) => {
+    const endpoint = endpointParts(entry.url);
+    return {
+      id_hash: entry.id ? await sha256Hex(toText(entry.id)) : null,
+      livemode: entry.livemode === true,
+      status: safeLabel(entry.status ?? "unknown"),
+      endpoint_host: endpoint.host,
+      endpoint_path: endpoint.path,
+      enabled_event_count: Array.isArray(entry.enabled_events) ? entry.enabled_events.length : 0,
+      event_types: Array.isArray(entry.enabled_events) ? entry.enabled_events.slice(0, 16).map((eventType) => safeLabel(eventType)) : [],
+      provider_secret_returned: false,
+    };
+  }));
+  return { ok: response.ok, status: response.status, endpoints, missingSecretNames: [] as string[] };
+};
+
+const revenueCatWebhookIntegrationReadback = async () => {
+  const apiKey = toText(Deno.env.get("REVENUECAT_SECRET_API_KEY"));
+  if (!apiKey) return { ok: false, missingSecretNames: ["REVENUECAT_SECRET_API_KEY"], integrations: [] as JsonObject[] };
+  const headers = { Authorization: `Bearer ${apiKey}` };
+  const projectsResponse = await fetch("https://api.revenuecat.com/v2/projects", { headers, method: "GET" });
+  const projectsBody = await projectsResponse.json().catch(() => ({})) as JsonObject;
+  const projects = Array.isArray(projectsBody.items) ? projectsBody.items.slice(0, 5) as JsonObject[] : [];
+  const integrations: JsonObject[] = [];
+  for (const project of projects) {
+    const projectId = toText(project.id);
+    if (!projectId) continue;
+    const webhookResponse = await fetch(`https://api.revenuecat.com/v2/projects/${encodeURIComponent(projectId)}/integrations/webhooks`, { headers, method: "GET" });
+    const webhookBody = await webhookResponse.json().catch(() => ({})) as JsonObject;
+    const items = Array.isArray(webhookBody.items) ? webhookBody.items.slice(0, 12) as JsonObject[] : [];
+    for (const item of items) {
+      const endpoint = endpointParts(item.url ?? item.endpoint_url ?? item.webhook_url);
+      integrations.push({
+        project_id_hash: await sha256Hex(projectId),
+        integration_id_hash: item.id ? await sha256Hex(toText(item.id)) : null,
+        endpoint_host: endpoint.host,
+        endpoint_path: endpoint.path,
+        status: safeLabel(item.status ?? (item.disabled === true ? "disabled" : "active_or_unknown")),
+        environment: item.environment ? safeLabel(item.environment) : null,
+        event_type_count: Array.isArray(item.event_types) ? item.event_types.length : null,
+        provider_secret_returned: false,
+      });
+    }
+  }
+  return { ok: projectsResponse.ok, status: projectsResponse.status, integrations, missingSecretNames: [] as string[] };
+};
 
 const rejectSecretPayload = (payload: JsonObject) => {
   if (containsSecretLikeValue(payload)) throw new Error("secret_like_payload_blocked");
@@ -487,6 +711,257 @@ Deno.serve(async (request) => {
           "duplicate provider webhook event replay records duplicate detection without entitlement/ledger/payout duplication",
           "RevenueCat active while Supabase Premium stale records stale_readback and requests provider replay/readback without manual grant",
         ],
+        moneyMoved: false,
+      });
+    }
+
+    if (action === "provider_access_status") {
+      const mode = environmentMode(payload.environment_mode);
+      const rows = safeProviderAccessRows();
+      const capabilityRows = [];
+      for (const row of rows) {
+        for (const capability of row.capabilities) {
+          capabilityRows.push(await upsertProviderAccessCapability(client, {
+            provider: row.provider,
+            capability,
+            accessMode: row.accessMode,
+            status: row.status,
+            available: row.available,
+            requiredSecretNames: row.requiredSecretNames,
+            metadata: {
+              optional_secret_names: row.optionalSecretNames,
+              source_of_truth: row.sourceOfTruth,
+              dashboard_owner_session_may_be_required: row.dashboardOwnerSessionMayBeRequired,
+              missing_required_secret_names: row.missingRequiredSecretNames,
+              present_required_secret_names: row.presentRequiredSecretNames,
+              secret_values_returned: false,
+              provider_dashboard_mutated: false,
+            },
+          }));
+        }
+      }
+      const auditEvent = await recordProviderAccessAudit(client, {
+        accessMode: "supabase_secret",
+        capability: "provider_access_status",
+        environmentMode: mode,
+        eventType: "provider_access_status",
+        provider: "provider_readiness",
+        result: "reported",
+        metadata: {
+          provider_count: rows.length,
+          capability_count: capabilityRows.length,
+          secret_values_returned: false,
+        },
+      });
+      return jsonResponse(200, {
+        ok: true,
+        action,
+        broker: "provider_access_broker",
+        providers: rows,
+        capabilityRows,
+        auditEvent,
+        moneyMoved: false,
+      });
+    }
+
+    if (action === "provider_access_probe") {
+      const mode = environmentMode(payload.environment_mode);
+      const provider = safeLabel(payload.provider ?? "provider_readiness");
+      const capability = safeLabel(payload.capability ?? "webhook_endpoint_metadata");
+      const config = providerAccessConfig(provider);
+      const row = safeProviderAccessRows().find((entry) => entry.provider === provider);
+      const status = row?.available ? "available" : row?.status ?? "unknown";
+      const accessMode = row?.accessMode ?? "none";
+      const capabilityRow = await upsertProviderAccessCapability(client, {
+        provider,
+        capability,
+        accessMode,
+        status,
+        available: row?.available ?? false,
+        requiredSecretNames: config?.requiredSecretNames ?? [],
+        metadata: {
+          supported_capabilities: config?.capabilities ?? [],
+          missing_required_secret_names: row?.missingRequiredSecretNames ?? [],
+          dashboard_owner_session_may_be_required: row?.dashboardOwnerSessionMayBeRequired ?? false,
+          provider_api_readonly_supported: !!config,
+          provider_dashboard_mutated: false,
+        },
+      });
+      const auditEvent = await recordProviderAccessAudit(client, {
+        accessMode,
+        capability,
+        environmentMode: mode,
+        eventType: "provider_access_probe",
+        provider,
+        result: status,
+        metadata: {
+          money_moved: false,
+          provider_dashboard_mutated: false,
+        },
+      });
+      return jsonResponse(200, { ok: true, action, provider, capability, accessMode, status, capabilityRow, auditEvent, moneyMoved: false });
+    }
+
+    if (action === "provider_dashboard_readback") {
+      const mode = environmentMode(payload.environment_mode);
+      const provider = safeLabel(payload.provider);
+      const webhookConfig = providerWebhookConfig(provider);
+      if (!webhookConfig) return jsonResponse(400, { error: "unsupported_provider_webhook" });
+      let readback: JsonObject = {};
+      let accessMode = "none";
+      let status = "owner_session_required";
+      let missingSecretNames: string[] = [];
+
+      if (provider === "revenuecat") {
+        const result = await revenueCatWebhookIntegrationReadback();
+        readback = { integrations: result.integrations, http_status: result.status ?? null };
+        missingSecretNames = result.missingSecretNames;
+        accessMode = result.ok ? "provider_api_readonly" : "none";
+        status = result.ok ? "available" : "owner_session_required";
+      } else if (provider === "stripe_connect" || provider === "stripe_merch") {
+        const result = await stripeWebhookEndpointReadback();
+        const expectedPath = webhookConfig.expectedPath;
+        readback = {
+          endpoints: result.endpoints.filter((endpoint) => toText(endpoint.endpoint_path) === expectedPath),
+          all_endpoint_count: result.endpoints.length,
+          http_status: result.status ?? null,
+        };
+        missingSecretNames = result.missingSecretNames;
+        accessMode = result.ok ? "provider_api_readonly" : "none";
+        status = result.ok ? "available" : "owner_session_required";
+      } else if (provider === "google_play") {
+        status = "missing_credentials";
+        missingSecretNames = ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON", "GOOGLE_PLAY_PUBSUB_TOPIC", "GOOGLE_PLAY_WEBHOOK_SECRET"].filter((secretName) => !secretPresence(secretName));
+        readback = {
+          source_of_truth: classifyGooglePlaySourceTruth(payload.google_play_source_truth ?? "revenuecat_mediated"),
+          direct_google_pubsub_active: missingSecretNames.length === 0,
+        };
+        accessMode = missingSecretNames.length === 0 ? "provider_api_readonly" : "none";
+      }
+
+      const capabilityRow = await upsertProviderAccessCapability(client, {
+        provider,
+        capability: "webhook_delivery_history",
+        accessMode,
+        status,
+        available: status === "available",
+        requiredSecretNames: providerAccessConfig(provider)?.requiredSecretNames ?? [],
+        metadata: {
+          ...readback,
+          missing_required_secret_names: missingSecretNames,
+          secret_values_returned: false,
+          provider_dashboard_mutated: false,
+        },
+      });
+      const auditEvent = await recordProviderAccessAudit(client, {
+        accessMode,
+        capability: "webhook_delivery_history",
+        environmentMode: mode,
+        eventType: "provider_dashboard_readback",
+        provider,
+        result: status,
+        metadata: {
+          ...readback,
+          missing_required_secret_names: missingSecretNames,
+        },
+      });
+      return jsonResponse(200, {
+        ok: true,
+        action,
+        provider,
+        accessMode,
+        status,
+        readback,
+        missingSecretNames,
+        capabilityRow,
+        auditEvent,
+        dashboardOwnerSessionRequired: status !== "available" && provider !== "google_play",
+        moneyMoved: false,
+      });
+    }
+
+    if (action === "provider_test_delivery_plan") {
+      return jsonResponse(200, {
+        ok: true,
+        action,
+        tests: safeProviderAccessRows().map((row) => ({
+          provider: row.provider,
+          accessMode: row.accessMode,
+          available: row.available,
+          dashboardOwnerSessionMayBeRequired: row.dashboardOwnerSessionMayBeRequired,
+          nonMoneyTestOnly: true,
+          moneyMoved: false,
+          providerDashboardMutationAllowed: false,
+        })),
+        moneyMoved: false,
+      });
+    }
+
+    if (action === "provider_test_delivery_run") {
+      const mode = environmentMode(payload.environment_mode);
+      const provider = safeLabel(payload.provider);
+      const providerConfig = providerWebhookConfig(provider);
+      if (!providerConfig) return jsonResponse(400, { error: "unsupported_provider_webhook" });
+      const ownerSessionAvailable = payload.provider_dashboard_owner_session_available === true || payload.ownerSessionAvailable === true;
+      const testSucceeded = payload.test_delivery_succeeded === true || payload.testDeliverySucceeded === true;
+      const result = ownerSessionAvailable
+        ? testSucceeded
+          ? "test_delivery_succeeded"
+          : "test_delivery_failed"
+        : "dashboard_owner_session_required";
+      const auditEvent = await recordProviderAccessAudit(client, {
+        accessMode: ownerSessionAvailable ? "provider_dashboard_owner_session" : "none",
+        capability: "webhook_test_delivery",
+        environmentMode: mode,
+        eventType: "provider_test_delivery_run",
+        provider,
+        result,
+        metadata: {
+          test_delivery_non_money: true,
+          premium_manually_granted: false,
+          provider_dashboard_mutated: false,
+        },
+      });
+      if (!ownerSessionAvailable) {
+        return jsonResponse(200, {
+          ok: true,
+          action,
+          provider,
+          result,
+          auditEvent,
+          ownerAction: "provider_dashboard_owner_session_required_to_send_test_event",
+          moneyMoved: false,
+        });
+      }
+      return jsonResponse(200, {
+        ok: true,
+        action,
+        provider,
+        result,
+        expectedResult: providerConfig.validTestExpectation,
+        auditEvent,
+        moneyMoved: false,
+      });
+    }
+
+    if (action === "provider_access_report") {
+      const { data: capabilities, error: capabilityError } = await client
+        .from("provider_access_capabilities")
+        .select("provider,capability,access_mode,status,available,last_checked_at,requires_owner_approval,approval_request_id,metadata")
+        .order("last_checked_at", { ascending: false })
+        .limit(64);
+      if (capabilityError) throw capabilityError;
+      const { data: repairs, error: repairError } = await client
+        .from("provider_dashboard_repair_requests")
+        .select("provider,capability,repair_status,approval_level,approval_request_id,created_at,metadata")
+        .order("created_at", { ascending: false })
+        .limit(24);
+      if (repairError) throw repairError;
+      return jsonResponse(200, {
+        ok: true,
+        action,
+        capabilities: capabilities ?? [],
+        repairRequests: repairs ?? [],
         moneyMoved: false,
       });
     }
@@ -715,7 +1190,7 @@ Deno.serve(async (request) => {
       });
     }
 
-    if (action === "provider_dashboard_repair_request") {
+    if (action === "provider_dashboard_repair_request" || action === "provider_repair_request") {
       const provider = safeLabel(payload.provider);
       const providerConfig = providerWebhookConfig(provider);
       if (!providerConfig) return jsonResponse(400, { error: "unsupported_provider_webhook" });
@@ -738,6 +1213,33 @@ Deno.serve(async (request) => {
           money_moved: false,
         },
       });
+      const { data: repairRequest, error: repairError } = await client
+        .from("provider_dashboard_repair_requests")
+        .insert({
+          system_id: SYSTEM_ID,
+          provider: providerConfig.provider,
+          capability: providerConfig.capability,
+          repair_status: "pending_owner_approval",
+          approval_level: 3,
+          approval_request_id: approvalRequest.id,
+          old_value_redacted: toText(payload.old_value_redacted ?? payload.oldValueRedacted) || "redacted",
+          proposed_value_redacted: toText(payload.proposed_value_redacted ?? payload.proposedValueRedacted) || "redacted",
+          risk_summary: "Provider dashboard webhook repair can affect event delivery and requires owner/super-admin approval.",
+          rollback_plan: "If fresh preflight or provider readback fails, leave provider dashboard unchanged and mark the request superseded or denied.",
+          proof_plan: "After approval, rerun provider dashboard readback, send non-money TEST delivery when supported, and verify no money movement.",
+          money_moved: false,
+          provider_dashboard_mutated: false,
+          metadata: safeMetadata({
+            provider: providerConfig.provider,
+            required_secret_names: providerConfig.requiredSecretNames,
+            approval_request_id: approvalRequest.id,
+            provider_dashboard_mutated: false,
+            money_moved: false,
+          }),
+        })
+        .select("id,provider,capability,repair_status,approval_request_id,money_moved,provider_dashboard_mutated")
+        .single();
+      if (repairError) throw repairError;
       const event = await insertEvent(client, {
         event_type: "provider_dashboard_repair_request_created",
         action_id: "change_money_facing_config",
@@ -745,10 +1247,25 @@ Deno.serve(async (request) => {
         result: "pending_owner_approval",
         metadata: {
           request_id: approvalRequest.id,
+          provider_repair_request_id: repairRequest.id,
           provider_dashboard_mutated: false,
         },
       });
-      return jsonResponse(200, { ok: true, action, approvalRequest, event, moneyMoved: false });
+      await recordProviderAccessAudit(client, {
+        accessMode: "provider_live_mutation_requires_approval",
+        approvalRequestId: toText(approvalRequest.id),
+        capability: providerConfig.capability,
+        environmentMode: payload.environment_mode ? toText(payload.environment_mode) : "test",
+        eventType: "provider_dashboard_repair_request_created",
+        provider: providerConfig.provider,
+        result: "pending_owner_approval",
+        metadata: {
+          provider_repair_request_id: repairRequest.id,
+          money_moved: false,
+          provider_dashboard_mutated: false,
+        },
+      });
+      return jsonResponse(200, { ok: true, action, approvalRequest, repairRequest, event, moneyMoved: false });
     }
 
     if (action === "provider_webhook_reliability_report") {

@@ -11521,6 +11521,21 @@ export default function AdminStudioScreen() {
             <Text testID="money-provider-webhook-approval-request" style={styles.ownerDetailText}>
               Provider dashboard repair creates a Level 3 autonomous approval request; it does not delete integrations, rotate secrets, change event selections, or mutate provider products by itself.
             </Text>
+            <Text testID="money-provider-access-status" style={styles.ownerDetailText}>
+              Provider Access Broker status: controlled readback only for RevenueCat, Google Play, Stripe Connect, and Stripe merch. Access mode is reported as none, server secret, provider API read-only, test-mode write, or owner dashboard session.
+            </Text>
+            <Text testID="money-provider-access-missing-credentials" style={styles.ownerDetailText}>
+              Missing credentials are shown by safe secret name only; API keys, webhook secrets, service-role values, provider tokens, and dashboard cookies are never rendered.
+            </Text>
+            <Text testID="money-provider-dashboard-session-required" style={styles.ownerDetailText}>
+              Dashboard owner session is required when provider APIs cannot send TEST deliveries or expose delivery history. That session can record proof but cannot mutate dashboard settings without approval.
+            </Text>
+            <Text testID="money-provider-test-delivery-status" style={styles.ownerDetailText}>
+              Provider TEST delivery status is non-money proof only. RevenueCat TEST must not grant Premium, Stripe TEST must not satisfy production readiness, and Google Play direct absence is readiness-only when RevenueCat mediates entitlement truth.
+            </Text>
+            <Text testID="money-provider-repair-approval-request" style={styles.ownerDetailText}>
+              Provider repair requests create autonomous approval records with redacted old/proposed values, rollback plan, proof plan, and `moneyMoved=false`.
+            </Text>
             <OwnerDetailGrid
               rows={[
                 { label: "Monetization webhook events", value: formatAdminFinanceCount(adminFinanceReadModel.monetizationWebhookEventCount, adminFinanceReadModel.loading, "sandbox/setup event", "sandbox/setup events") },

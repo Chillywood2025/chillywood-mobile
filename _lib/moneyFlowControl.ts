@@ -66,6 +66,12 @@ export type MoneyActionId =
   | "stale_provider_dashboard_integration_detection"
   | "duplicate_webhook_integration_detection"
   | "premium_stale_readback_detection"
+  | "provider_access_status"
+  | "provider_access_probe"
+  | "provider_dashboard_readback"
+  | "provider_test_delivery_plan"
+  | "provider_test_delivery_run"
+  | "provider_access_report"
   | "enable_production_checkout"
   | "enable_live_provider_integration"
   | "enable_payout_review_mutation"
@@ -122,6 +128,12 @@ export const MONEY_FLOW_LEVEL_2_ACTIONS: readonly MoneyActionId[] = [
   "stale_provider_dashboard_integration_detection",
   "duplicate_webhook_integration_detection",
   "premium_stale_readback_detection",
+  "provider_access_status",
+  "provider_access_probe",
+  "provider_dashboard_readback",
+  "provider_test_delivery_plan",
+  "provider_test_delivery_run",
+  "provider_access_report",
 ];
 
 export const MONEY_FLOW_LEVEL_3_ACTIONS: readonly MoneyActionId[] = [
@@ -182,6 +194,9 @@ export const MONEY_OPERATOR_ALLOWED_WRITE_TABLES = [
   "money_flow_health_snapshots",
   "money_operator_learning_state",
   "autonomous_approval_requests",
+  "provider_access_capabilities",
+  "provider_access_audit_events",
+  "provider_dashboard_repair_requests",
 ] as const;
 
 export const MONEY_OPERATOR_SAFE_FIX_ACTIONS = [
@@ -190,8 +205,12 @@ export const MONEY_OPERATOR_SAFE_FIX_ACTIONS = [
   "mark duplicate provider/webhook event",
   "classify provider webhook error rate",
   "record provider delivery history readback",
+  "record provider access capability status",
+  "record provider access audit events",
+  "record provider dashboard readback metadata",
   "detect stale provider dashboard integration",
   "detect duplicate webhook integration",
+  "create provider dashboard repair approval request",
   "record Premium stale readback without entitlement grant",
   "mark ledger/payout/revenue item requires_review",
   "create approval request",
@@ -232,6 +251,9 @@ export const MONEY_PROVIDER_RELIABILITY_SURFACES = [
   "provider_delivery_error_rate",
   "stale_provider_dashboard_integration_detection",
   "duplicate_webhook_integration_detection",
+  "provider_access_broker",
+  "provider_dashboard_readback",
+  "provider_test_delivery_status",
 ] as const;
 
 export const MONEY_PROVIDER_WEBHOOK_HEALTH_ROWS = [
@@ -525,6 +547,7 @@ export const getMoneyFlowControlSummary = () => ({
   allowedSafeWriteTables: MONEY_OPERATOR_ALLOWED_WRITE_TABLES,
   allowedSafeFixes: MONEY_OPERATOR_SAFE_FIX_ACTIONS,
   providerReliabilitySurfaces: MONEY_PROVIDER_RELIABILITY_SURFACES,
+  providerAccessBroker: "controlled_provider_api_and_dashboard_session_readback_no_secret_output",
   providerWebhookHealthRows: MONEY_PROVIDER_WEBHOOK_HEALTH_ROWS,
   level3OwnerApprovalRequired: MONEY_FLOW_LEVEL_3_ACTIONS,
   level4ExternalConfirmationRequired: MONEY_FLOW_LEVEL_4_ACTIONS,

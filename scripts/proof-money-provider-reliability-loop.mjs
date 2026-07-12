@@ -24,6 +24,7 @@ const admin = read("app/admin.tsx");
 const packageJson = read("package.json");
 const cli = read("scripts/money-operator-cli.mjs");
 const runbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
+const providerAccessBroker = read("_lib/providerAccessBroker.ts");
 
 for (const surface of [
   "revenuecat_webhook_delivery",
@@ -46,6 +47,9 @@ for (const action of [
   "provider_delivery_history_readback",
   "provider_dashboard_repair_request",
   "provider_webhook_reliability_report",
+  "provider_access_status",
+  "provider_dashboard_readback",
+  "provider_test_delivery_run",
   "watch_once",
 ]) {
   includes(operator, `action === "${action}"`, "money operator reliability action");
@@ -54,6 +58,9 @@ for (const action of [
 for (const script of [
   '"money-operator:watch-once"',
   '"money-operator:provider-health"',
+  '"money-operator:access-status"',
+  '"money-operator:provider-dashboard-readback"',
+  '"money-operator:provider-test-plan"',
   '"money-operator:report"',
   '"proof:money-provider-reliability-loop"',
   '"proof:provider-webhook-reliability"',
@@ -93,6 +100,11 @@ for (const testId of [
 includes(cli, "x-money-operator-token", "money operator CLI token header");
 includes(cli, "not_configured_fail_closed", "money operator CLI fail-closed behavior");
 includes(operator + runbook, "duplicate provider webhook event replay", "duplicate provider webhook event replay coverage");
+includes(providerAccessBroker, "Provider Access Broker", "Provider Access Broker source");
+includes(providerAccessBroker, "provider_api_readonly", "provider API read-only mode");
+includes(providerAccessBroker, "provider_dashboard_owner_session", "provider dashboard owner session mode");
+includes(operator, "provider_access_capabilities", "provider access capability writes");
+includes(operator, "provider_dashboard_repair_requests", "provider dashboard repair request writes");
 matches(operator, /classifyProviderDeliveryErrorRate[\s\S]*percent < 100[\s\S]*return "outage"/, "100 percent error rate outage classification");
 matches(operator, /syncStatus === "failed" \|\| syncStatus === "blocked"[\s\S]*recordProviderFinding/, "failed/blocked delivery must create finding");
 matches(operator, /dashboardIssues\.ownerActionRequired[\s\S]*createApprovalRequest/, "dashboard mutation must create approval request");

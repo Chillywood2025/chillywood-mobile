@@ -28,8 +28,9 @@ const packageJson = read("package.json");
 const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
 const moneyGuard = read("scripts/guard-money-flow-control.mjs");
 const moneyLoopProof = read("scripts/proof-money-provider-reliability-loop.mjs");
+const providerAccessBroker = read("_lib/providerAccessBroker.ts");
 
-const functionCorpus = [revenueCat, googlePlay, stripeConnect, stripeMerch, providerReadiness, stripeShared, moneyOperator].join("\n\n");
+const functionCorpus = [revenueCat, googlePlay, stripeConnect, stripeMerch, providerReadiness, stripeShared, moneyOperator, providerAccessBroker].join("\n\n");
 
 const proofCases = [
   {
@@ -149,6 +150,18 @@ const proofCases = [
       && moneyOperator.includes("money_reconciliation_findings")
       && moneyOperator.includes("provider_dashboard_repair_request"),
   },
+  {
+    name: "Provider Access Broker gives controlled readback path",
+    passes: () => providerAccessBroker.includes("classifyProviderAccessCapability")
+      && moneyOperator.includes("provider_dashboard_readback")
+      && moneyOperator.includes("provider_access_status")
+      && moneyOperator.includes("provider_test_delivery_run"),
+  },
+  {
+    name: "provider dashboard TEST requires owner session when API cannot run it",
+    passes: () => moneyOperator.includes("dashboard_owner_session_required")
+      && providerAccessBroker.includes("provider_dashboard_owner_session"),
+  },
 ];
 
 for (const check of proofCases) {
@@ -162,6 +175,9 @@ for (const required of [
   "provider_delivery_history_readback",
   "provider_dashboard_repair_request",
   "provider_webhook_reliability_report",
+  "provider_access_status",
+  "provider_dashboard_readback",
+  "provider_test_delivery_run",
   "watch_once",
   "revenuecat",
   "google_play",
@@ -173,8 +189,12 @@ for (const required of [
 
 includes(packageJson, '"proof:provider-webhook-reliability"', "package script");
 includes(packageJson, '"proof:money-provider-reliability-loop"', "package script");
+includes(packageJson, '"proof:provider-access-broker"', "package script");
+includes(packageJson, '"proof:provider-dashboard-access-policy"', "package script");
 includes(packageJson, '"money-operator:watch-once"', "package script");
 includes(packageJson, '"money-operator:provider-health"', "package script");
+includes(packageJson, '"money-operator:access-status"', "package script");
+includes(packageJson, '"money-operator:provider-dashboard-readback"', "package script");
 includes(packageJson, '"money-operator:report"', "package script");
 includes(packageJson, '"guard:provider-webhook-reliability"', "package script");
 includes(moneyRunbook, "Provider Webhook Reliability", "money runbook");

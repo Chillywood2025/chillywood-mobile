@@ -103,6 +103,9 @@ for (const required of [
   "usage_metering",
   "refunds_disputes_future",
   "tax_compliance_future",
+  "provider_access_broker",
+  "provider_dashboard_readback",
+  "provider_test_delivery_status",
 ]) {
   includes(registry, required, "money flow required surfaces");
 }
@@ -252,6 +255,7 @@ matches(registry, /id:\s*"production_money_setup_or_policy_mutation"[\s\S]*appro
 matches(registry, /id:\s*"real_money_movement_or_public_money_launch"[\s\S]*approvalLevel:\s*4[\s\S]*ownerApprovalRequired:\s*true/, "Level 4 money movement registry entry");
 matches(registry, /id:\s*"scoped_money_operator_reconciliation_writes"[\s\S]*approvalLevel:\s*2[\s\S]*money_reconciliation_findings[\s\S]*money_required_review_flags/, "scoped money operator writes registry entry");
 matches(registry, /id:\s*"provider_webhook_reliability_loop"[\s\S]*approvalLevel:\s*2[\s\S]*money_provider_sync_status[\s\S]*money_reconciliation_findings[\s\S]*provider dashboard mutation without owner approval/, "provider webhook reliability loop registry entry");
+matches(registry, /id:\s*"provider_access_broker"[\s\S]*approvalLevel:\s*2[\s\S]*provider_access_capabilities[\s\S]*provider_access_audit_events[\s\S]*provider_dashboard_repair_requests/, "provider access broker registry entry");
 includes(moneyFlowControl, "unknown_money_action_defaults_level_4", "money helper unknown action safety");
 includes(moneyFlowControl, "external_provider_confirmation_required_for_level_4", "money helper Level 4 confirmation");
 includes(moneyFlowControl, "manual_premium_grant_forbidden", "money helper Premium grant block");
@@ -259,6 +263,7 @@ includes(moneyFlowControl, "fake_creator_earnings_forbidden", "money helper fake
 includes(moneyFlowControl, "MONEY_OPERATOR_ALLOWED_WRITE_TABLES", "money helper scoped operator writes");
 includes(moneyFlowControl, "MONEY_OPERATOR_FORBIDDEN_WRITE_SCOPES", "money helper forbidden operator writes");
 includes(moneyFlowControl, "MONEY_PROVIDER_RELIABILITY_SURFACES", "money helper provider reliability surfaces");
+includes(moneyFlowControl, "providerAccessBroker", "money helper provider access broker summary");
 
 for (const required of [
   "autonomous_approval_requests",

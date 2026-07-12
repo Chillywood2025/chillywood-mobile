@@ -28,9 +28,10 @@ const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
 const operatingModel = read("docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md");
 const ownerAdminSpec = read("docs/owner-admin-rachi-implementation-spec.md");
+const providerAccessBroker = read("_lib/providerAccessBroker.ts");
 
 const docs = [registryDoc, moneyRunbook, operatingModel, ownerAdminSpec].join("\n\n");
-const source = [helper, registry, admin, docs].join("\n\n");
+const source = [helper, providerAccessBroker, registry, admin, docs].join("\n\n");
 const runtimeMoneySource = [helper, registry, admin, moneyRunbook, operatingModel].join("\n\n");
 const lowerDocs = docs.toLowerCase();
 
@@ -40,10 +41,16 @@ includes(packageJson, '"proof:money-operator-write-scope"', "package script");
 includes(packageJson, '"proof:money-external-confirmation"', "package script");
 includes(packageJson, '"proof:provider-webhook-reliability"', "package script");
 includes(packageJson, '"proof:money-provider-reliability-loop"', "package script");
+includes(packageJson, '"proof:provider-access-broker"', "package script");
+includes(packageJson, '"proof:provider-dashboard-access-policy"', "package script");
 includes(packageJson, '"money-operator:watch-once"', "package script");
 includes(packageJson, '"money-operator:provider-health"', "package script");
+includes(packageJson, '"money-operator:access-status"', "package script");
+includes(packageJson, '"money-operator:provider-dashboard-readback"', "package script");
+includes(packageJson, '"money-operator:provider-repair-request"', "package script");
 includes(packageJson, '"money-operator:report"', "package script");
 includes(packageJson, '"guard:provider-webhook-reliability"', "package script");
+includes(packageJson, '"guard:provider-access-broker"', "package script");
 includes(registry, 'id: "money_flow_control"', "autonomous registry");
 includes(registry, "scoped_write_capable_guarded", "money registry status");
 includes(registry, "owner/super-admin approval for Level 3", "Level 3 registry gate");
@@ -71,6 +78,11 @@ includes(moneyOperator, "provider_webhook_reliability_report", "provider webhook
 includes(moneyOperator, "watch_once", "provider reliability watch-once loop");
 includes(moneyOperator, "classifyProviderDeliveryErrorRate", "provider delivery error-rate classifier");
 includes(moneyOperator, "duplicate_webhook_integration_detection", "duplicate webhook integration detection");
+includes(providerAccessBroker, "classifyProviderAccessCapability", "Provider Access Broker helper");
+includes(providerAccessBroker, "provider_dashboard_owner_session", "Provider Access Broker dashboard session mode");
+includes(providerAccessBroker, "provider_live_mutation_requires_approval", "Provider Access Broker live mutation approval mode");
+includes(moneyOperator, "provider_access_status", "Provider Access Broker action");
+includes(moneyOperator, "provider_dashboard_readback", "Provider Access Broker readback action");
 
 for (const testId of [
   "admin-money-flow-control-section",
@@ -91,6 +103,11 @@ for (const testId of [
   "money-provider-webhook-error-rate-classification",
   "money-provider-webhook-owner-action",
   "money-provider-webhook-approval-request",
+  "money-provider-access-status",
+  "money-provider-access-missing-credentials",
+  "money-provider-dashboard-session-required",
+  "money-provider-test-delivery-status",
+  "money-provider-repair-approval-request",
 ]) {
   includes(admin, testId, "Admin Money Flow Control section");
 }
@@ -125,6 +142,7 @@ notMatches(runtimeMoneySource, /fake (?:MRR|ARR|creator earnings|payable balance
 notMatches(runtimeMoneySource, /manual Premium grant.{0,80}(?:allowed|enabled|active|live)(?![^.]*\bforbidden\b)/i, "manual Premium grant allowed");
 notMatches(runtimeMoneySource, /test[- ]mode.{0,80}(?:\bis\b|\bnow\b|\bequals\b|marked as|claimed as).{0,80}production(?![^.]*\b(cannot|blocked|forbidden|denied)\b)/i, "test-mode provider data claimed production");
 notMatches([helper, admin, moneyRunbook].join("\n\n"), /\b(STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|REVENUECAT_API_KEY|GOOGLE_PLAY_SERVICE_ACCOUNT|SERVICE_ROLE_KEY|SUPABASE_SERVICE_ROLE|R2_SECRET|CLOUDFLARE_API_TOKEN)\b/, "provider/service secret reference in money control source/docs");
+notMatches(providerAccessBroker, /(SECRET|TOKEN|WEBHOOK|SERVICE_ROLE|API_KEY)\s*[:=]\s*['"][^'"$]/, "Provider Access Broker secret value committed");
 notMatches(moneyOperator, /\bstripe\.(payouts|transfers|charges|checkout|paymentLinks|invoices)\.create\b/i, "money operator can create provider money movement");
 notMatches(moneyOperator, /\.from\(["'](?:payouts|creator_payouts|premium_entitlements|monetization_entitlements|money_access_ledger)["']\)\.(?:insert|update|upsert|delete)/i, "money operator mutates forbidden product/entitlement/payout tables");
 

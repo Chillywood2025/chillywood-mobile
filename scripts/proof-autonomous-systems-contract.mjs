@@ -155,6 +155,11 @@ const contractChecks = [
     negative: () => !/id:\s*"provider_webhook_reliability_loop"[\s\S]*approvalLevel:\s*2/.test(registry.replace("provider_webhook_reliability_loop", "provider_loop_removed")),
   },
   {
+    name: "provider access broker is explicit Level 2 registry scope",
+    passes: () => /id:\s*"provider_access_broker"[\s\S]*approvalLevel:\s*2[\s\S]*provider_access_capabilities[\s\S]*provider_access_audit_events[\s\S]*provider_dashboard_repair_requests/.test(registry) && mustInclude(packageJson, "proof:provider-access-broker") && mustInclude(packageJson, "guard:provider-access-broker"),
+    negative: () => !/id:\s*"provider_access_broker"[\s\S]*approvalLevel:\s*2/.test(registry.replaceAll("provider_access_broker", "provider_access_removed")),
+  },
+  {
     name: "Level 3/4 action requires approval request",
     passes: () => mustInclude(approvalMigration, "approval_level integer not null check (approval_level in (3, 4))") && mustInclude(registryDoc, "Level 3/4 actions create") && mustInclude(approvalFunction, "approve_request"),
   },

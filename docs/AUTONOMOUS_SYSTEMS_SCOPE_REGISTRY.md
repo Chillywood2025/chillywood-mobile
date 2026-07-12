@@ -158,6 +158,9 @@ Allowed surfaces:
 - `provider_delivery_error_rate`
 - `stale_provider_dashboard_integration_detection`
 - `duplicate_webhook_integration_detection`
+- `provider_access_broker`
+- `provider_dashboard_readback`
+- `provider_test_delivery_status`
 - `stripe_connect_foundation`
 - `creator_payout_ledger`
 - `payout_review_queue`
@@ -191,6 +194,9 @@ Allowed writes:
 - provider delivery-history readback metadata
 - provider delivery error-rate classification
 - stale/duplicate provider dashboard integration detection
+- provider access capability/status rows
+- provider access audit events
+- provider dashboard repair request rows
 - autonomous approval request creation
 
 Forbidden:
@@ -214,6 +220,7 @@ Required gates:
 - exact scope match
 - emergency stop blocks non-read-only money mutations
 - provider readback before money movement closure
+- provider access broker cannot print secrets or mutate dashboards without approval
 - money operator narrow token
 - money operator client write denial
 - scoped write tables only
@@ -227,8 +234,11 @@ Required proofs/guards:
 - `proof:money-external-confirmation`
 - `proof:provider-webhook-reliability`
 - `proof:money-provider-reliability-loop`
+- `proof:provider-access-broker`
+- `proof:provider-dashboard-access-policy`
 - `guard:money-flow-control`
 - `guard:provider-webhook-reliability`
+- `guard:provider-access-broker`
 - `proof:autonomous-approval-live-flow`
 - `proof:autonomous-systems-contract`
 - `guard:autonomous-systems-contract`
