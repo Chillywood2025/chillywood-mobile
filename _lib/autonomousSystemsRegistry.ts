@@ -1,5 +1,11 @@
 export type AutonomousSystemId = "livekit_operator" | "media_automation" | "money_flow_control";
 
+export type AutonomousCandidateSystemId =
+  | "notification_delivery_operator"
+  | "release_ota_operator"
+  | "security_owner_operator"
+  | "moderation_safety_operator";
+
 export type AutonomousActivationMode =
   | "off"
   | "dry_run"
@@ -38,6 +44,19 @@ export type AutonomousSystemContract = {
   requiredProofScripts: readonly string[];
   requiredGuardScripts: readonly string[];
   surfaces: readonly AutonomousSystemSurface[];
+};
+
+export type AutonomousCandidateSystemContract = {
+  id: AutonomousCandidateSystemId;
+  displayName: string;
+  status: "candidate_foundation_only";
+  activeActivationMode: "off";
+  schedulerStatus: "no_scheduler_no_daemon_no_worker";
+  scopeCandidates: readonly string[];
+  allowedWrites: readonly [];
+  forbidden: readonly string[];
+  ownerApprovalRequiredForActivation: true;
+  activationRequirements: readonly string[];
 };
 
 export const AUTONOMOUS_SYSTEM_EXPANSION_RULES = [
@@ -526,7 +545,142 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
 ] as const satisfies readonly AutonomousSystemContract[];
 
+export const AUTONOMOUS_CANDIDATE_SYSTEMS_REGISTRY = [
+  {
+    id: "notification_delivery_operator",
+    displayName: "Notification Delivery Operator",
+    status: "candidate_foundation_only",
+    activeActivationMode: "off",
+    schedulerStatus: "no_scheduler_no_daemon_no_worker",
+    scopeCandidates: [
+      "Expo push delivery health",
+      "device token cleanup",
+      "money notification delivery",
+      "chat/call/live notification delivery",
+    ],
+    allowedWrites: [],
+    forbidden: [
+      "active scheduler",
+      "daemon or worker",
+      "write authority",
+      "message delivery mutation",
+      "Premium or money mutation",
+    ],
+    ownerApprovalRequiredForActivation: true,
+    activationRequirements: [
+      "new active registry entry",
+      "approval level",
+      "read/write bounds",
+      "proof script",
+      "guard script",
+      "rollback/quarantine behavior",
+      "kill switch/fallback behavior",
+      "owner approval where required",
+    ],
+  },
+  {
+    id: "release_ota_operator",
+    displayName: "Release / OTA Operator",
+    status: "candidate_foundation_only",
+    activeActivationMode: "off",
+    schedulerStatus: "no_scheduler_no_daemon_no_worker",
+    scopeCandidates: [
+      "EAS update health",
+      "runtime/channel/updateId diagnostics",
+      "embedded/emergency launch detection",
+      "rollout proof reporting",
+    ],
+    allowedWrites: [],
+    forbidden: [
+      "active scheduler",
+      "daemon or worker",
+      "write authority",
+      "automatic OTA publish",
+      "automatic rollback",
+      "app store release mutation",
+    ],
+    ownerApprovalRequiredForActivation: true,
+    activationRequirements: [
+      "new active registry entry",
+      "approval level",
+      "read/write bounds",
+      "proof script",
+      "guard script",
+      "rollback/quarantine behavior",
+      "kill switch/fallback behavior",
+      "owner approval for publish/rollback automation",
+    ],
+  },
+  {
+    id: "security_owner_operator",
+    displayName: "Security / Owner Authority Operator",
+    status: "candidate_foundation_only",
+    activeActivationMode: "off",
+    schedulerStatus: "no_scheduler_no_daemon_no_worker",
+    scopeCandidates: [
+      "owner/super_admin role integrity",
+      "Rachi/operator self-approval prevention",
+      "RLS/security proof health",
+      "secret-scan health",
+    ],
+    allowedWrites: [],
+    forbidden: [
+      "active scheduler",
+      "daemon or worker",
+      "write authority",
+      "auth/RLS mutation",
+      "owner role mutation",
+      "approval bypass",
+    ],
+    ownerApprovalRequiredForActivation: true,
+    activationRequirements: [
+      "new active registry entry",
+      "approval level",
+      "read/write bounds",
+      "proof script",
+      "guard script",
+      "rollback/quarantine behavior",
+      "kill switch/fallback behavior",
+      "owner approval for any auth/RLS mutation",
+    ],
+  },
+  {
+    id: "moderation_safety_operator",
+    displayName: "Moderation / Safety Operator",
+    status: "candidate_foundation_only",
+    activeActivationMode: "off",
+    schedulerStatus: "no_scheduler_no_daemon_no_worker",
+    scopeCandidates: [
+      "moderation queue health",
+      "report backlog",
+      "stale case detection",
+      "safety review flags",
+    ],
+    allowedWrites: [],
+    forbidden: [
+      "active scheduler",
+      "daemon or worker",
+      "write authority",
+      "ban/restriction/enforcement mutation",
+      "auth/RLS mutation",
+      "public/private exposure mutation",
+    ],
+    ownerApprovalRequiredForActivation: true,
+    activationRequirements: [
+      "new active registry entry",
+      "approval level",
+      "read/write bounds",
+      "proof script",
+      "guard script",
+      "rollback/quarantine behavior",
+      "kill switch/fallback behavior",
+      "owner approval for bans/restrictions/enforcement",
+    ],
+  },
+] as const satisfies readonly AutonomousCandidateSystemContract[];
+
 export const AUTONOMOUS_SYSTEM_IDS = AUTONOMOUS_SYSTEMS_REGISTRY.map((system) => system.id);
+export const AUTONOMOUS_CANDIDATE_SYSTEM_IDS = AUTONOMOUS_CANDIDATE_SYSTEMS_REGISTRY.map((system) => system.id);
 
 export const findAutonomousSystemContract = (id: AutonomousSystemId) => (
   AUTONOMOUS_SYSTEMS_REGISTRY.find((system) => system.id === id) ?? null

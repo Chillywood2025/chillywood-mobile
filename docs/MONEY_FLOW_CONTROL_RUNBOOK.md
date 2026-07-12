@@ -2,7 +2,7 @@
 
 Status: `scoped_write_capable_guarded`
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 
 This runbook governs Chi'llywood money, ledger, payout, billing, sponsor, fraud, and provider-readback foundations. It is a control plane and guardrail with scoped safe write authority for reconciliation/status/review/audit records only. It is not a money-moving system.
 
@@ -169,6 +169,8 @@ Safe monitor behavior:
 The monitor cannot print provider secrets, cannot manually grant Premium, cannot create charges, payouts, transfers, cashout, invoices, or payment links, cannot mutate provider products, and test-mode proof cannot satisfy production readiness. Provider dashboard changes such as changing webhook URLs, signing secrets, event selections, or disabling stale duplicate integrations require an autonomous approval request before mutation.
 
 RevenueCat dashboard test events are expected to return `200 test_received` only when the dashboard sends the configured shared secret. Test events must report `premiumGranted=false` and `liveMoneyAction=false`.
+
+Current RevenueCat proof status: closed on 2026-07-12. A restricted RevenueCat v2 Secret API key with read-only project/integration permissions is stored only in trusted runtime secrets as `REVENUECAT_SECRET_API_KEY`. Money Operator provider readback works, active integration count is `1`, the endpoint host/path matches `bmkkhihfbmsnnmcqkoly.supabase.co/functions/v1/revenuecat-webhook`, and the RevenueCat dashboard TEST returned HTTP `200` / `test_received` with `signatureVerified=true`, `webhookProcessed=true`, `premiumGranted=false`, `liveMoneyAction=false`, and `moneyMoved=false`. No provider product, mode, webhook secret, Premium entitlement, charge, transfer, payout, invoice, payment link, cashout, or money movement changed.
 
 Google Play direct webhook delivery is readiness-only when RevenueCat remains the entitlement source of truth. Missing `GOOGLE_PLAY_WEBHOOK_SECRET` means Google Play direct webhook delivery is not configured; this must not be called a production failure if the stack intentionally uses RevenueCat for entitlement events.
 

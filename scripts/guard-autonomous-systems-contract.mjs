@@ -17,6 +17,12 @@ const notIncludes = (source, needle, label) => {
 const matches = (source, pattern, label) => {
   if (!pattern.test(source)) fail(`${label} must match ${pattern}`);
 };
+const candidateBlock = (candidateId) => {
+  const pattern = new RegExp(`id:\\s*"${candidateId}"[\\s\\S]*?activationRequirements:\\s*\\[[\\s\\S]*?\\n\\s*\\],\\n\\s*},`);
+  const match = registry.match(pattern);
+  if (!match) fail(`candidate registry missing block: ${candidateId}`);
+  return match?.[0] ?? "";
+};
 
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 const approvalModel = read("_lib/autonomousApprovalRequests.ts");
@@ -58,6 +64,42 @@ for (const systemId of ["media_automation", "livekit_operator", "money_flow_cont
   includes(registry, `id: "${systemId}"`, "autonomous registry");
   includes(registryDoc, `\`${systemId}\``, "autonomous registry doc");
 }
+
+for (const candidateId of [
+  "notification_delivery_operator",
+  "release_ota_operator",
+  "security_owner_operator",
+  "moderation_safety_operator",
+]) {
+  includes(registry, `id: "${candidateId}"`, "candidate autonomous registry");
+  includes(registryDoc, `\`${candidateId}\``, "candidate autonomous registry doc");
+  const block = candidateBlock(candidateId);
+  includes(block, 'status: "candidate_foundation_only"', `${candidateId} candidate status`);
+  includes(block, 'activeActivationMode: "off"', `${candidateId} candidate activation`);
+  includes(block, 'schedulerStatus: "no_scheduler_no_daemon_no_worker"', `${candidateId} candidate scheduler status`);
+  includes(block, "allowedWrites: []", `${candidateId} candidate write denial`);
+  includes(block, "ownerApprovalRequiredForActivation: true", `${candidateId} candidate activation approval`);
+  notIncludes(block, 'activeActivationMode: "manual_cli"', `${candidateId} candidate active mode`);
+  notIncludes(block, 'activeActivationMode: "bounded_run"', `${candidateId} candidate active mode`);
+  notIncludes(block, 'activeActivationMode: "limited_scheduled_probe"', `${candidateId} candidate active mode`);
+  notIncludes(block, 'activeActivationMode: "limited_scheduled_safe_recovery"', `${candidateId} candidate active mode`);
+}
+
+includes(registry, "AUTONOMOUS_CANDIDATE_SYSTEMS_REGISTRY", "candidate registry export");
+includes(registry, "AutonomousCandidateSystemContract", "candidate registry type");
+includes(registryDoc, "The following systems are named only as candidate placeholders", "candidate placeholder doctrine");
+includes(registryDoc, "Allowed writes: none", "candidate no-write doctrine");
+includes(registryDoc, "cannot be used to bypass Level 3/4 approval", "candidate approval doctrine");
+includes(operatingModel, "candidates are not active autonomous systems", "operating model candidate doctrine");
+includes(operatingModel, "no scheduler/daemon/worker, and no write authority", "operating model candidate no-write doctrine");
+notIncludes(currentState + nextTask, "dashboard valid TEST proof remains pending", "RevenueCat closure state");
+notIncludes(currentState + nextTask, "dashboard delivery history and dashboard TEST remain owner-session/API-capability proof gates", "RevenueCat closure state");
+notIncludes(currentState + nextTask, "a48f5fff-7c99-46ff-87e7-5bfbf2ee7bf5", "RevenueCat stale approval request");
+includes(currentState + nextTask, "RevenueCat provider readback is closed", "RevenueCat reconciled state");
+includes(currentState + nextTask, "dashboard TEST returned HTTP `200` / `test_received`", "RevenueCat dashboard TEST closure");
+includes(currentState + nextTask, "premiumGranted=false", "RevenueCat no Premium manual grant proof");
+includes(currentState + nextTask, "liveMoneyAction=false", "RevenueCat no live money proof");
+includes(currentState + nextTask, "moneyMoved=false", "RevenueCat no money moved proof");
 
 for (const required of [
   "media scan",

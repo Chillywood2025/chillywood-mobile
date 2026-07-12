@@ -1,6 +1,6 @@
 # Chi'llywood Autonomous Systems Scope Registry
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 
 This registry is the protected top-level contract for Chi'llywood autonomous systems. The source registry lives in `_lib/autonomousSystemsRegistry.ts`; this document is the operator-facing mirror. Future autonomous scope must be added through explicit registry entries with approval level, read/write bounds, guard, proof, rollback, emergency-stop/fallback, and owner/admin approval requirements. In short, future scope can be added only through registry entries.
 
@@ -251,6 +251,82 @@ The scoped Money Operator may not mark payout paid, release payout, create trans
 Provider webhook reliability monitoring covers RevenueCat, Google Play, Stripe Connect, and Stripe merch/checkout. It may record webhook delivery status, delivery-history readback metadata, last success/failure, endpoint host/path, event type, integration id hash, error-rate classification, reconciliation findings, duplicate event detections, stale/duplicate dashboard integration detections, blocked actions, and dashboard repair approval requests. It cannot mutate provider dashboards without approval, cannot print secrets, cannot manually grant Premium, cannot move money, and cannot describe sandbox/test events as production readiness.
 
 Error-rate classes are `healthy`, `degraded`, `critical`, `outage`, and `unknown`. A 100% provider webhook error rate must become failed/blocked provider sync status plus a reconciliation finding, and dashboard mutation must create a Level 3 approval request.
+
+## Future Candidate Placeholders
+
+The following systems are named only as candidate placeholders. They are not active autonomous systems, are not closed/healthy/live, have activation `off`, have no scheduler/daemon/worker, and have no write authority. They cannot be used to bypass Level 3/4 approval. Activation requires a new approved registry entry with approval level, read/write bounds, proof, guard, rollback/quarantine behavior, kill switch/fallback behavior, and owner/admin approval where appropriate.
+
+### `notification_delivery_operator`
+
+Status: `candidate_foundation_only`
+
+Activation: `off`
+
+Scheduler status: no scheduler, daemon, or worker.
+
+Candidate scope:
+- Expo push delivery health
+- device token cleanup
+- money notification delivery
+- chat/call/live notification delivery
+
+Allowed writes: none.
+
+Activation requires owner approval and a future registry/proof/guard lane before any write authority, delivery mutation, scheduler, daemon, or worker exists.
+
+### `release_ota_operator`
+
+Status: `candidate_foundation_only`
+
+Activation: `off`
+
+Scheduler status: no scheduler, daemon, or worker.
+
+Candidate scope:
+- EAS update health
+- runtime/channel/updateId diagnostics
+- embedded/emergency launch detection
+- rollout proof reporting
+
+Allowed writes: none.
+
+Publish or rollback automation requires owner approval and a future registry/proof/guard lane. This placeholder cannot publish OTA, roll back OTA, mutate app-store release state, or create a scheduler.
+
+### `security_owner_operator`
+
+Status: `candidate_foundation_only`
+
+Activation: `off`
+
+Scheduler status: no scheduler, daemon, or worker.
+
+Candidate scope:
+- owner/super_admin role integrity
+- Rachi/operator self-approval prevention
+- RLS/security proof health
+- secret-scan health
+
+Allowed writes: none.
+
+Any auth/RLS mutation, owner-role mutation, approval-path mutation, or scheduler requires owner approval and a future registry/proof/guard lane. This placeholder cannot alter owner authority.
+
+### `moderation_safety_operator`
+
+Status: `candidate_foundation_only`
+
+Activation: `off`
+
+Scheduler status: no scheduler, daemon, or worker.
+
+Candidate scope:
+- moderation queue health
+- report backlog
+- stale case detection
+- safety review flags
+
+Allowed writes: none.
+
+Bans, restrictions, enforcement, safety-review mutation, auth/RLS mutation, public/private exposure changes, scheduler, daemon, or worker activation require owner approval and a future registry/proof/guard lane.
 
 ## Expansion Contract
 

@@ -20,12 +20,24 @@ const approvalMigration = [
 const ownerAuthority = read("_lib/platformOwnerAuthority.ts");
 const admin = read("app/admin.tsx");
 const packageJson = read("package.json");
+const currentState = read("CURRENT_STATE.md");
+const nextTask = read("NEXT_TASK.md");
 
 const failures = [];
 const fail = (message) => failures.push(message);
 
 const mustInclude = (source, needle) => source.includes(needle);
 const mustNotInclude = (source, needle) => !source.includes(needle);
+const candidateBlock = (source, candidateId) => (
+  source.match(new RegExp(`id:\\s*"${candidateId}"[\\s\\S]*?activationRequirements:\\s*\\[[\\s\\S]*?\\n\\s*\\],\\n\\s*},`))?.[0] ?? ""
+);
+
+const candidateIds = [
+  "notification_delivery_operator",
+  "release_ota_operator",
+  "security_owner_operator",
+  "moderation_safety_operator",
+];
 
 const contractChecks = [
   {
@@ -39,6 +51,63 @@ const contractChecks = [
   {
     name: "Money Flow system present",
     passes: () => mustInclude(registry, 'id: "money_flow_control"') && mustInclude(registryDoc, "`money_flow_control`"),
+  },
+  {
+    name: "valid candidate placeholders pass",
+    passes: () => candidateIds.every((candidateId) => {
+      const block = candidateBlock(registry, candidateId);
+      return block
+        && mustInclude(registryDoc, `\`${candidateId}\``)
+        && mustInclude(block, 'status: "candidate_foundation_only"')
+        && mustInclude(block, 'activeActivationMode: "off"')
+        && mustInclude(block, 'schedulerStatus: "no_scheduler_no_daemon_no_worker"')
+        && mustInclude(block, "allowedWrites: []")
+        && mustInclude(block, "ownerApprovalRequiredForActivation: true");
+    }),
+    negative: () => {
+      const block = candidateBlock(registry, "notification_delivery_operator");
+      const brokenBlock = block.replace('activeActivationMode: "off"', 'activeActivationMode: "limited_scheduled_safe_recovery"');
+      return !mustInclude(brokenBlock, 'activeActivationMode: "off"');
+    },
+  },
+  {
+    name: "candidate with active scheduler fails",
+    passes: () => candidateIds.every((candidateId) => mustInclude(candidateBlock(registry, candidateId), 'schedulerStatus: "no_scheduler_no_daemon_no_worker"')),
+    negative: () => {
+      const block = candidateBlock(registry, "notification_delivery_operator");
+      const brokenBlock = block.replace('schedulerStatus: "no_scheduler_no_daemon_no_worker"', 'schedulerStatus: "candidate_scheduler_active"');
+      return !mustInclude(brokenBlock, 'schedulerStatus: "no_scheduler_no_daemon_no_worker"');
+    },
+  },
+  {
+    name: "candidate with write scope fails",
+    passes: () => candidateIds.every((candidateId) => mustInclude(candidateBlock(registry, candidateId), "allowedWrites: []")),
+    negative: () => {
+      const broken = registry.replace("allowedWrites: [],", 'allowedWrites: ["write authority"],');
+      return !mustInclude(candidateBlock(broken, "notification_delivery_operator"), "allowedWrites: []");
+    },
+  },
+  {
+    name: "candidate claiming closed/live fails",
+    passes: () => candidateIds.every((candidateId) => mustInclude(candidateBlock(registry, candidateId), 'status: "candidate_foundation_only"')) && mustInclude(registryDoc, "are not active autonomous systems, are not closed/healthy/live"),
+    negative: () => {
+      const block = candidateBlock(registry, "notification_delivery_operator");
+      const brokenBlock = block.replace('status: "candidate_foundation_only"', 'status: "live_closed_active"');
+      return !mustInclude(brokenBlock, 'status: "candidate_foundation_only"');
+    },
+  },
+  {
+    name: "RevenueCat provider readback current-state is reconciled",
+    passes: () => (
+      mustInclude(currentState + nextTask, "RevenueCat provider readback is closed")
+      && mustInclude(currentState + nextTask, "dashboard TEST returned HTTP `200` / `test_received`")
+      && mustInclude(currentState + nextTask, "premiumGranted=false")
+      && mustInclude(currentState + nextTask, "liveMoneyAction=false")
+      && mustInclude(currentState + nextTask, "moneyMoved=false")
+      && mustNotInclude(currentState + nextTask, "dashboard valid TEST proof remains pending")
+      && mustNotInclude(currentState + nextTask, "dashboard delivery history and dashboard TEST remain owner-session/API-capability proof gates")
+    ),
+    negative: () => !mustInclude((currentState + nextTask).replaceAll("RevenueCat provider readback is closed", "RevenueCat provider readback is pending"), "RevenueCat provider readback is closed"),
   },
   {
     name: "valid future scope passes only with proof/guard/approval/write bounds",
@@ -221,7 +290,11 @@ console.log(JSON.stringify({
   ok: true,
   proofCases: contractChecks.length,
   systems: ["media_automation", "livekit_operator", "money_flow_control"],
+  candidatePlaceholders: candidateIds,
+  candidatesActive: false,
+  candidateWriteAuthority: false,
   moneyFlowControl: "scoped_write_capable_guarded",
+  revenueCatProviderReadback: "closed_reconciled",
   approvalRequestPath: "live_owner_super_admin_backed",
   rachiCanApproveItself: false,
   operatorSelfApprovalAllowed: false,
