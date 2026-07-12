@@ -206,7 +206,9 @@ Current classification:
 
 ## Installed Proof Status
 
-Installed role/device proof was not run by this source audit. Current pending installed proof roles/devices:
+Installed role/device proof was not run by this source audit. A later installed preflight attempt on 2026-07-12 is recorded in `docs/release/FULL_APP_AUTHORITY_PRODUCT_BEHAVIOR_INSTALLED_TRAVERSAL_ATTEMPT.md` and was blocked before role traversal because the Play-installed app was on production OTA commit `1cdb27ea1b0410ba8ac2aa840f1acfec6f7d6964`, older than source/guard commit `b1856059e4ce2acf23c43089a2795e23ef9c7927`.
+
+Current pending installed proof roles/devices:
 
 - owner/super_admin;
 - admin/operator;
@@ -215,4 +217,4 @@ Installed role/device proof was not run by this source audit. Current pending in
 - Premium active user;
 - non-Premium user.
 
-The safe next action is a Play-installed role traversal using current production update diagnostics and seeded accounts, without manual Premium grants or high-risk actions.
+The safe next action is to make a production OTA or Play-installed build available for the current source authority surface, then run a Play-installed role traversal using current production update diagnostics and seeded accounts, without manual Premium grants or high-risk actions.
