@@ -11188,7 +11188,7 @@ export default function AdminStudioScreen() {
               Read-only reconciliation, stale sync detection, duplicate event detection, provider sync status, required-review flags, blocked-action audit, sandbox proof rows, and learning state may run without money movement.
             </Text>
             <Text testID="money-operator-status" style={styles.ownerDetailText}>
-              Money Operator status: {moneyFlowControlSummary.operatorStatus}; writes are limited to scoped operator/audit/reconciliation tables and autonomous approval requests.
+              Money Operator status: limited scheduled provider-health watch_once every ten minutes; writes are limited to scoped operator/audit/reconciliation tables and autonomous approval requests.
             </Text>
             <Text testID="money-operator-latest-reconciliation-runs" style={styles.ownerDetailText}>
               Latest reconciliation runs: visible through money_reconciliation_runs; run records cannot mark paid, payable, charged, transferred, or settled.
@@ -11294,7 +11294,7 @@ export default function AdminStudioScreen() {
             <View testID="admin-observability-operator-section" style={{ gap: 8 }}>
               <Text style={styles.ownerSectionTitle}>Observability / Runtime Health Operator</Text>
               <Text testID="observability-operator-status" style={styles.ownerDetailText}>
-                Status: scoped-write capable, manual/token-gated only; no scheduler/daemon/worker is active.
+                Status: scoped-write capable with limited scheduled watch_once every ten minutes; no release, Remote Config, provider config, or crash evidence mutation is active.
               </Text>
               <Text testID="observability-crash-findings" style={styles.ownerDetailText}>
                 Crash findings: redacted crash clusters, JS error clusters, ANR-style runtime findings, and stack signature hashes can be recorded for review.
@@ -11315,7 +11315,7 @@ export default function AdminStudioScreen() {
                 Approval path: release actions are Level 4; Remote Config, feature flag, and provider analytics config changes are Level 3. All require owner/super-admin approval, fresh preflight, exact scope match, and emergency-state check.
               </Text>
             </View>
-            <OwnerDisabledReason reason="These sections expose scoped status/review visibility only. They do not add push blasts, OTA publishing, rollback, owner-role mutation, auth/RLS mutation, bans, restrictions, content deletion, or schedulers." />
+            <OwnerDisabledReason reason="These sections expose scoped status/review visibility only. They do not add push blasts, OTA publishing, rollback, owner-role mutation, auth/RLS mutation, bans, restrictions, content deletion, crash evidence deletion, or Remote Config mutation." />
             <OwnerDisabledReason reason="Scheduled runs use hardened host systemd timers, narrow root-owned env tokens, scheduler/operator audit identity, and watch_once only. They do not expose token values or service-role keys." />
           </View>
         ),

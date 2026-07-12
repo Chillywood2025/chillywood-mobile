@@ -1276,6 +1276,20 @@ Deno.serve(async (request) => {
         .order("last_checked_at", { ascending: false })
         .limit(32);
       if (error) throw error;
+      const { data: latestEvents, error: eventsError } = await client
+        .from("money_operator_events")
+        .select("id,event_type,action_id,result,environment_mode,money_moved,metadata,created_at")
+        .eq("system_id", SYSTEM_ID)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (eventsError) throw eventsError;
+      const { data: latestSnapshots, error: snapshotsError } = await client
+        .from("money_flow_health_snapshots")
+        .select("id,health_state,eligible_for_safe_writes,latest_operator_action,environment_mode,money_moved,metadata,created_at")
+        .eq("system_id", SYSTEM_ID)
+        .order("created_at", { ascending: false })
+        .limit(3);
+      if (snapshotsError) throw snapshotsError;
       return jsonResponse(200, {
         ok: true,
         action,
@@ -1292,12 +1306,35 @@ Deno.serve(async (request) => {
           error_rate_classification: safeLabel((row.metadata as JsonObject | undefined)?.error_rate_classification ?? "unknown"),
           owner_action_required: ["failed", "blocked"].includes(safeLabel(row.sync_status)),
         })),
+        latestEvents: (latestEvents ?? []).map((row: JsonObject) => ({
+          id: row.id,
+          event_type: row.event_type,
+          action_id: row.action_id,
+          result: row.result,
+          environment_mode: row.environment_mode,
+          money_moved: row.money_moved,
+          metadata: safeMetadata(row.metadata),
+          created_at: row.created_at,
+        })),
+        latestSnapshots: (latestSnapshots ?? []).map((row: JsonObject) => ({
+          id: row.id,
+          health_state: row.health_state,
+          eligible_for_safe_writes: row.eligible_for_safe_writes,
+          latest_operator_action: row.latest_operator_action,
+          environment_mode: row.environment_mode,
+          money_moved: row.money_moved,
+          metadata: safeMetadata(row.metadata),
+          created_at: row.created_at,
+        })),
         moneyMoved: false,
       });
     }
 
     if (action === "watch_once" || action === "money_provider_reliability_watch_once") {
       const mode = environmentMode(payload.environment_mode);
+      const scheduler = safeLabel(payload.scheduler ?? "manual_cli");
+      const operatorId = safeLabel(payload.operator_id ?? SYSTEM_ID);
+      const source = safeLabel(payload.source ?? `${scheduler}:${operatorId}`);
       const { data: statuses, error } = await client
         .from("money_provider_sync_status")
         .select("provider,capability,sync_status,environment_mode,last_checked_at,last_success_at,failure_reason,money_moved,metadata")
@@ -1321,6 +1358,10 @@ Deno.serve(async (request) => {
           metadata: safeMetadata({
             provider_count: PROVIDER_WEBHOOKS.length,
             statuses_seen: activeStatuses.length,
+            scheduler,
+            operator_id: operatorId,
+            source,
+            highRiskExecuted: false,
             safe_recovery: "audit_status_only_no_provider_dashboard_mutation",
           }),
         })
@@ -1335,7 +1376,12 @@ Deno.serve(async (request) => {
         metadata: {
           provider_count: PROVIDER_WEBHOOKS.length,
           statuses_seen: activeStatuses.length,
+          scheduler,
+          operator_id: operatorId,
+          source,
           money_moved: false,
+          high_risk_executed: false,
+          provider_dashboard_mutated: false,
         },
       });
       return jsonResponse(200, {

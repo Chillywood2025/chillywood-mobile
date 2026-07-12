@@ -140,11 +140,12 @@ Activation modes:
 - `off`
 - `dry_run`
 - `manual_cli`
+- `limited_scheduled_probe`
 - `limited_scheduled_if_approved`
 
-Current activation: `manual_cli`
+Current activation: `limited_scheduled_probe`
 
-Scheduler status: no money movement scheduler enabled; safe operator function is token-gated and limited to reconciliation/status/review/audit writes.
+Scheduler status: `chillywood-money-operator-watch-once.timer_every_10_minutes` on `chillywood-prod-01`. The timer is limited to `watch_once` provider reliability/status reporting, uses a narrow operator token, and cannot move money or mutate provider dashboards.
 
 Allowed surfaces:
 - `premium_revenue`
@@ -420,9 +421,9 @@ Account rights changes, bans, restrictions, content deletion, upload/live/accoun
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_probe`.
 
-Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
+Scheduler status: `chillywood-observability-operator-watch-once.timer_every_10_minutes` on `chillywood-prod-01`. The timer is limited to `watch_once` health/finding/audit writes and cannot publish or roll back OTA, mutate Remote Config, delete crash evidence, or silence crash reporting.
 
 Allowed surfaces:
 - `crashlytics_crash_health`
@@ -433,6 +434,7 @@ Allowed surfaces:
 - `screen_render_performance`
 - `network_error_rate`
 - `edge_function_error_rate`
+- `backend_error_rate_findings`
 - `analytics_delivery_health`
 - `firebase_performance_health`
 - `release_diagnostics_health`

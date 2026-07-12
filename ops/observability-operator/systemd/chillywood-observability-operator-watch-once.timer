@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chi'llywood Observability operator watch_once every ten minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=10min
+AccuracySec=30s
+RandomizedDelaySec=45s
+Unit=chillywood-observability-operator-watch-once.service
+
+[Install]
+WantedBy=timers.target

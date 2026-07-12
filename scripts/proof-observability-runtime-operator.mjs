@@ -13,10 +13,13 @@ const sharedFn = read("supabase/functions/_shared/scoped-operator.ts");
 const admin = read("app/admin.tsx");
 const pkg = JSON.parse(read("package.json"));
 const monitoringProof = read("scripts/proof-monitoring-analytics-crash-runtime-diagnostics.mjs");
+const service = read("ops/observability-operator/systemd/chillywood-observability-operator-watch-once.service");
+const timer = read("ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer");
+const watchScript = read("ops/observability-operator/systemd/observability-operator-watch-once.sh");
 
 const checks = [
   ["registered active system", registry.includes('id: "observability_runtime_operator"') && registry.includes("Observability / Runtime Health Operator")],
-  ["manual activation no scheduler claim", registry.includes('activeActivationMode: "manual_cli"') && registry.includes("no_scheduler_no_daemon_no_worker_manual_cli_only")],
+  ["limited scheduled activation", registry.includes('activeActivationMode: "limited_scheduled_probe"') && registry.includes("chillywood-observability-operator-watch-once.timer_every_10_minutes")],
   ["proof script registered", registry.includes("proof:observability-runtime-operator") && pkg.scripts?.["proof:observability-runtime-operator"]],
   ["guard script registered", registry.includes("guard:observability-runtime-operator") && pkg.scripts?.["guard:observability-runtime-operator"]],
   ["monitoring proof linked", registry.includes("proof:monitoring-analytics-crash-runtime-diagnostics") && monitoringProof.includes("Crash/error diagnostics are sanitized")],
@@ -37,7 +40,11 @@ const checks = [
   ["release action constrained", migration.includes("release_action_executed boolean not null default false check (release_action_executed = false)")],
   ["admin section", admin.includes("admin-observability-operator-section") && admin.includes("observability-blocked-actions")],
   ["no duplicate admin route", !fs.existsSync(path.resolve(root, "app/admin-command-center.tsx"))],
-  ["no scheduler artifacts for observability", !fs.existsSync(path.resolve(root, "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer"))],
+  ["scheduler artifacts for observability", fs.existsSync(path.resolve(root, "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer"))],
+  ["systemd hardening", ["NoNewPrivileges=true", "ProtectSystem=strict", "PrivateTmp=true", "RestrictSUIDSGID=true", "LockPersonality=true", "CapabilityBoundingSet="].every((needle) => service.includes(needle))],
+  ["timer cadence", timer.includes("OnUnitActiveSec=10min") && timer.includes("RandomizedDelaySec=45s")],
+  ["watch_once identity", watchScript.includes('"action":"watch_once"') && watchScript.includes('"scheduler":"systemd_timer"') && watchScript.includes('"operator_id":"observability_runtime_operator"')],
+  ["watch script no service role", !/SERVICE_ROLE|SUPABASE_SERVICE_ROLE_KEY/i.test(service + timer + watchScript)],
 ];
 
 const failures = checks.filter(([, ok]) => !ok).map(([name]) => name);
@@ -50,8 +57,8 @@ console.log(JSON.stringify({
   ok: true,
   system: "observability_runtime_operator",
   status: "scoped_write_capable_guarded",
-  activation: "manual_cli",
-  schedulerActive: false,
+  activation: "limited_scheduled_probe",
+  schedulerActive: true,
   safeWrites: [
     "runtime_health_snapshots",
     "crash_cluster_findings",

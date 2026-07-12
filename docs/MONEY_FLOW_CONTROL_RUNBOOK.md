@@ -10,6 +10,10 @@ This runbook governs Chi'llywood money, ledger, payout, billing, sponsor, fraud,
 
 Registered system id: `money_flow_control`
 
+Current activation: `limited_scheduled_probe` through `chillywood-money-operator-watch-once.timer` every ten minutes on `chillywood-prod-01`.
+
+The scheduled loop calls only `watch_once`, records `scheduler=systemd_timer` and `operator_id=money_flow_control`, and writes provider reliability health snapshots/audit rows with `moneyMoved=false` and `highRiskExecuted=false`. It uses `/etc/chillywood/money-operator.env`, a narrow `MONEY_OPERATOR_TOKEN`, and no service-role key.
+
 Covered surfaces:
 - premium_revenue
 - revenuecat_entitlements_readback

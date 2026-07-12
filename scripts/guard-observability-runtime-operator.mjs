@@ -17,14 +17,17 @@ const docs = [
   "docs/OBSERVABILITY_RUNTIME_OPERATOR_RUNBOOK.md",
 ].map(read).join("\n");
 const pkg = JSON.parse(read("package.json"));
+const service = read("ops/observability-operator/systemd/chillywood-observability-operator-watch-once.service");
+const timer = read("ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer");
+const watchScript = read("ops/observability-operator/systemd/observability-operator-watch-once.sh");
 
 const systemStart = registry.indexOf('id: "observability_runtime_operator"');
 const systemBlock = systemStart >= 0 ? registry.slice(systemStart, registry.indexOf("\n  },", systemStart) + 4) : "";
 const failures = [];
 
 if (!systemBlock.includes("scoped_write_capable_guarded")) failures.push("system_not_scoped_write_capable");
-if (!systemBlock.includes('activeActivationMode: "manual_cli"')) failures.push("manual_activation_missing");
-if (!systemBlock.includes("no_scheduler_no_daemon_no_worker_manual_cli_only")) failures.push("scheduler_overclaimed_or_missing");
+if (!systemBlock.includes('activeActivationMode: "limited_scheduled_probe"')) failures.push("scheduled_activation_missing");
+if (!systemBlock.includes("chillywood-observability-operator-watch-once.timer_every_10_minutes")) failures.push("scheduler_status_missing");
 if (!pkg.scripts?.["proof:observability-runtime-operator"]) failures.push("package_proof_missing");
 if (!pkg.scripts?.["guard:observability-runtime-operator"]) failures.push("package_guard_missing");
 if (!fn.includes("handleScopedOperatorRequest") || !fn.includes("OBSERVABILITY_OPERATOR_TOKEN_SHA256") || !sharedFn.includes("constantTimeEqual")) failures.push("token_gate_missing");
@@ -34,7 +37,13 @@ if (!migration.includes("pii_stored = false") || !migration.includes("secrets_lo
 if (!migration.includes("release_action_executed = false")) failures.push("release_action_constraint_missing");
 if (!admin.includes("admin-observability-operator-section")) failures.push("admin_section_missing");
 if (fs.existsSync(path.resolve(root, "app/admin-command-center.tsx"))) failures.push("duplicate_admin_route_created");
-if (fs.existsSync(path.resolve(root, "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer"))) failures.push("scheduler_artifact_created_without_approval");
+if (!fs.existsSync(path.resolve(root, "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer"))) failures.push("scheduler_artifact_missing");
+for (const hardening of ["NoNewPrivileges=true", "ProtectSystem=strict", "PrivateTmp=true", "RestrictSUIDSGID=true", "LockPersonality=true", "CapabilityBoundingSet="]) {
+  if (!service.includes(hardening)) failures.push(`systemd_hardening_missing:${hardening}`);
+}
+if (!timer.includes("OnUnitActiveSec=10min") || !timer.includes("RandomizedDelaySec=45s")) failures.push("timer_cadence_missing");
+if (!watchScript.includes('"action":"watch_once"') || !watchScript.includes('"scheduler":"systemd_timer"') || !watchScript.includes('"operator_id":"observability_runtime_operator"')) failures.push("watch_once_scheduler_identity_missing");
+if (/SERVICE_ROLE|SUPABASE_SERVICE_ROLE_KEY|--service-role/i.test(service + "\n" + timer + "\n" + watchScript)) failures.push("systemd_uses_service_role_key");
 
 const requiredForbidden = [
   "delete crash evidence",
@@ -75,6 +84,6 @@ console.log(JSON.stringify({
   ok: true,
   system: "observability_runtime_operator",
   guard: "observability_runtime_boundaries_enforced",
-  schedulerActive: false,
+  schedulerActive: true,
   highRiskRequiresApproval: true,
 }, null, 2));

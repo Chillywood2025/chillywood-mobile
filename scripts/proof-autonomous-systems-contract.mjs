@@ -58,17 +58,21 @@ const scopedSystems = [
     timerPath: "ops/moderation-safety-operator/systemd/chillywood-moderation-safety-operator-watch-once.timer",
     watchScriptPath: "ops/moderation-safety-operator/systemd/moderation-safety-operator-watch-once.sh",
   },
-];
-
-const manualScopedSystems = [
   {
     id: "observability_runtime_operator",
-    activation: 'activeActivationMode: "manual_cli"',
-    schedulerStatus: "no_scheduler_no_daemon_no_worker_manual_cli_only",
-    functionPath: "supabase/functions/observability-operator/index.ts",
-    migrationPath: "supabase/migrations/20260712170541_observability_runtime_operator.sql",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-observability-operator-watch-once.timer_every_10_minutes",
+    servicePath: "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.service",
+    timerPath: "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer",
+    watchScriptPath: "ops/observability-operator/systemd/observability-operator-watch-once.sh",
   },
 ];
+
+const moneyScheduler = {
+  servicePath: "ops/money-operator/systemd/chillywood-money-operator-watch-once.service",
+  timerPath: "ops/money-operator/systemd/chillywood-money-operator-watch-once.timer",
+  watchScriptPath: "ops/money-operator/systemd/money-operator-watch-once.sh",
+};
 
 const checks = [
   {
@@ -107,20 +111,25 @@ const checks = [
     negative: () => scopedSystems.some((system) => !read(system.watchScriptPath).replace('"action":"watch_once"', '"action":"high_risk"').includes('"action":"watch_once"')),
   },
   {
-    name: "manual observability system has no scheduler claim",
-    passes: () => manualScopedSystems.every((system) => {
-      const blockStart = registry.indexOf(`id: "${system.id}"`);
-      const blockEnd = registry.indexOf("\n  },", blockStart);
-      const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
-      return block.includes("scoped_write_capable_guarded")
-        && block.includes(system.activation)
-        && block.includes(system.schedulerStatus)
-        && read(system.functionPath).includes("handleScopedOperatorRequest")
-        && read(system.migrationPath).includes("enable row level security")
-        && read(system.migrationPath).includes("from anon, authenticated")
-        && !existsSync("ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer");
-    }),
-    negative: () => registry.replace("no_scheduler_no_daemon_no_worker_manual_cli_only", "chillywood-observability-operator-watch-once.timer_every_5_minutes").includes("chillywood-observability-operator-watch-once.timer_every_5_minutes"),
+    name: "money operator scheduled provider-health loop is scoped",
+    passes: () => {
+      const service = read(moneyScheduler.servicePath);
+      const timer = read(moneyScheduler.timerPath);
+      const watchScript = read(moneyScheduler.watchScriptPath);
+      return registry.includes('id: "money_flow_control"')
+        && registry.includes('activeActivationMode: "limited_scheduled_probe"')
+        && registry.includes("chillywood-money-operator-watch-once.timer_every_10_minutes")
+        && packageJson.includes('"proof:money-operator-scheduler"')
+        && packageJson.includes('"guard:money-operator-scheduler"')
+        && service.includes("NoNewPrivileges=true")
+        && service.includes("ProtectSystem=strict")
+        && timer.includes("OnUnitActiveSec=10min")
+        && watchScript.includes('"action":"watch_once"')
+        && watchScript.includes('"scheduler":"systemd_timer"')
+        && watchScript.includes('"operator_id":"money_flow_control"')
+        && !/SERVICE_ROLE|SUPABASE_SERVICE_ROLE_KEY|checkout|payment_link|transfer|payout|cashout|invoice|manual_premium_grant/i.test(service + timer + watchScript);
+    },
+    negative: () => read(moneyScheduler.watchScriptPath).replace('"action":"watch_once"', '"action":"real_payout"').includes('"action":"real_payout"'),
   },
   {
     name: "valid future scope requires proof guard rollback kill switch approval",
@@ -234,7 +243,7 @@ console.log(JSON.stringify({
   ok: true,
   activeSystems,
   scopedWriteSystemsAdded: scopedSystems.map((system) => system.id),
-  manualScopedWriteSystemsAdded: manualScopedSystems.map((system) => system.id),
+  scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
   revenueCatReadbackReconciled: true,
   candidatePlaceholdersRemaining: 0,
 }, null, 2));

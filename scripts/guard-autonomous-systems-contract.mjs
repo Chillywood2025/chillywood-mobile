@@ -100,19 +100,28 @@ const newlyScopedSystems = [
     forbidden: ["permanent ban/suspend/restrict without approval", "delete content without approval", "hidden enforcement with no appeal/review trail"],
     highRisk: "account_rights_content_delete_or_enforcement",
   },
-];
-
-const manualScopedSystems = [
   {
     id: "observability_runtime_operator",
     proof: "proof:observability-runtime-operator",
     guard: "guard:observability-runtime-operator",
     functionPath: "supabase/functions/observability-operator/index.ts",
     adminTestId: "admin-observability-operator-section",
+    servicePath: "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.service",
+    timerPath: "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer",
+    watchScriptPath: "ops/observability-operator/systemd/observability-operator-watch-once.sh",
+    expectedActivation: 'activeActivationMode: "limited_scheduled_probe"',
+    expectedSchedulerStatus: "chillywood-observability-operator-watch-once.timer_every_10_minutes",
+    expectedCadence: "OnUnitActiveSec=10min",
     forbidden: ["delete crash evidence", "silence crash reporting", "log secrets/tokens", "publish OTA", "rollback OTA"],
     highRisk: "production_release_rollback_or_publish",
   },
 ];
+
+const moneyScheduler = {
+  servicePath: "ops/money-operator/systemd/chillywood-money-operator-watch-once.service",
+  timerPath: "ops/money-operator/systemd/chillywood-money-operator-watch-once.timer",
+  watchScriptPath: "ops/money-operator/systemd/money-operator-watch-once.sh",
+};
 
 for (const systemId of requiredActiveSystems) {
   includes(registry, `id: "${systemId}"`, "autonomous registry");
@@ -158,23 +167,33 @@ for (const system of newlyScopedSystems) {
   notIncludes(service + "\n" + timer + "\n" + watchScript, "SERVICE_ROLE", `${system.id} timer artifacts`);
 }
 
-for (const system of manualScopedSystems) {
-  const blockStart = registry.indexOf(`id: "${system.id}"`);
-  const blockEnd = registry.indexOf("\n  },", blockStart);
-  const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
-  includes(block, "scoped_write_capable_guarded", `${system.id} active status`);
-  includes(block, 'activeActivationMode: "manual_cli"', `${system.id} manual activation`);
-  includes(block, "no_scheduler_no_daemon_no_worker_manual_cli_only", `${system.id} scheduler status`);
-  includes(block, "allowedWrites", `${system.id} write scope`);
-  includes(block, system.proof, `${system.id} proof script`);
-  includes(block, system.guard, `${system.id} guard script`);
-  includes(block, system.highRisk, `${system.id} high-risk surface`);
-  for (const forbidden of system.forbidden) includes(block, forbidden, `${system.id} forbidden scope`);
-  includes(packageJson, `"${system.proof}"`, `${system.id} package proof`);
-  includes(packageJson, `"${system.guard}"`, `${system.id} package guard`);
-  includes(admin, system.adminTestId, `${system.id} admin section`);
-  includes(read(system.functionPath), "handleScopedOperatorRequest", `${system.id} edge function`);
-}
+const moneyBlockStart = registry.indexOf('id: "money_flow_control"');
+const moneyBlockEnd = registry.indexOf("\n  },", moneyBlockStart);
+const moneyBlock = moneyBlockStart >= 0 && moneyBlockEnd > moneyBlockStart ? registry.slice(moneyBlockStart, moneyBlockEnd) : "";
+const moneyService = read(moneyScheduler.servicePath);
+const moneyTimer = read(moneyScheduler.timerPath);
+const moneyWatchScript = read(moneyScheduler.watchScriptPath);
+const moneyOperatorFunction = read("supabase/functions/money-operator/index.ts");
+includes(moneyBlock, 'activeActivationMode: "limited_scheduled_probe"', "money_flow_control scheduled activation");
+includes(moneyBlock, "chillywood-money-operator-watch-once.timer_every_10_minutes", "money_flow_control scheduler status");
+includes(packageJson, '"proof:money-operator-scheduler"', "money scheduler package proof");
+includes(packageJson, '"guard:money-operator-scheduler"', "money scheduler package guard");
+includes(moneyService, "NoNewPrivileges=true", "money systemd hardening");
+includes(moneyService, "ProtectSystem=strict", "money systemd hardening");
+includes(moneyService, "PrivateTmp=true", "money systemd hardening");
+includes(moneyService, "RestrictSUIDSGID=true", "money systemd hardening");
+includes(moneyService, "CapabilityBoundingSet=", "money systemd hardening");
+includes(moneyTimer, "OnUnitActiveSec=10min", "money timer cadence");
+includes(moneyTimer, "WantedBy=timers.target", "money timer install");
+includes(moneyWatchScript, '"action":"watch_once"', "money watch_once only");
+includes(moneyWatchScript, '"scheduler":"systemd_timer"', "money scheduler identity");
+includes(moneyWatchScript, '"operator_id":"money_flow_control"', "money operator identity");
+includes(moneyWatchScript, "[redacted]", "money redacted logs");
+includes(moneyOperatorFunction, "const scheduler = safeLabel(payload.scheduler", "money watch_once audit scheduler");
+includes(moneyOperatorFunction, "operator_id: operatorId", "money watch_once audit operator");
+includes(moneyOperatorFunction, "high_risk_executed: false", "money watch_once high-risk audit");
+notIncludes(moneyService + "\n" + moneyTimer + "\n" + moneyWatchScript, "SERVICE_ROLE", "money timer artifacts");
+if (/checkout|payment_link|transfer|payout|cashout|invoice|manual_premium_grant|mark_paid/i.test(moneyWatchScript)) fail("money timer script contains forbidden money-movement command");
 
 notIncludes(registry, 'id: "notification_delivery_operator",\n    displayName: "Notification Delivery Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registry, 'id: "release_ota_operator",\n    displayName: "Release / OTA Operator",\n    status: "candidate_foundation_only"', "active registry");
@@ -290,6 +309,7 @@ if (failures.length) {
 console.log(JSON.stringify({
   ok: true,
   activeSystems: requiredActiveSystems,
-  scopedWriteSystemsAdded: [...newlyScopedSystems, ...manualScopedSystems].map((system) => system.id),
+  scopedWriteSystemsAdded: newlyScopedSystems.map((system) => system.id),
+  scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
   candidatePlaceholdersRemaining: 0,
 }, null, 2));

@@ -2,7 +2,7 @@
 
 Status: `scoped_write_capable_guarded`.
 
-Activation: `manual_cli`; no scheduler, daemon, worker, OTA publish, rollback, Remote Config mutation, provider analytics config mutation, crash evidence deletion, or crash-reporting suppression automation is active.
+Activation: `limited_scheduled_probe`; `chillywood-observability-operator-watch-once.timer` runs every ten minutes on `chillywood-prod-01` with bounded jitter. No OTA publish, rollback, Remote Config mutation, provider analytics config mutation, crash evidence deletion, or crash-reporting suppression automation is active.
 
 ## Scope
 
@@ -48,4 +48,4 @@ Store stack signature hashes and redacted summaries, not raw crash evidence, aut
 
 ## Live Status
 
-The Edge Function is `observability-operator`, protected by `x-observability-operator-token` and `OBSERVABILITY_OPERATOR_TOKEN_SHA256`. No scheduler is deployed or claimed active in this lane.
+The Edge Function is `observability-operator`, protected by `x-observability-operator-token` and `OBSERVABILITY_OPERATOR_TOKEN_SHA256`. The scheduled host runner uses `/etc/chillywood/observability-operator.env`, calls only `watch_once`, records `scheduler=systemd_timer` and `operator_id=observability_runtime_operator`, and must not use service-role keys.
