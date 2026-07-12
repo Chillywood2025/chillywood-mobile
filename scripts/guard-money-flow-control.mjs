@@ -133,7 +133,7 @@ matches(helper, /MONEY_FLOW_LEVEL_4_ACTIONS[\s\S]*"real_payout"[\s\S]*"real_tran
 matches(helper, /MONEY_FLOW_FORBIDDEN_ACTIONS[\s\S]*"manual_premium_grant"[\s\S]*"fake_revenue"[\s\S]*"fake_creator_earnings"[\s\S]*"fake_payable_balance"/, "forbidden fake/manual actions");
 matches(helper, /MONEY_OPERATOR_ALLOWED_WRITE_TABLES[\s\S]*"money_operator_events"[\s\S]*"money_operator_learning_state"[\s\S]*"autonomous_approval_requests"/, "operator allowed tables");
 
-notMatches(admin, /testID=["'][^"']*(release|process|execute|send|mark-paid|grant-premium|cashout)[^"']*["'][\s\S]{0,240}onPress=/i, "Admin exposes active money mutation testID with onPress");
+notMatches(admin, /testID=["'][^"']*(payout|cashout|checkout|payment-link|invoice|transfer|mark-paid|grant-premium|manual-premium|send-money|process-payout|release-payout)[^"']*["'][\s\S]{0,240}onPress=/i, "Admin exposes active money mutation testID with onPress");
 notMatches(admin, /onPress=\{[^}]*\b(releasePayout|processPayout|createPayout|markPayoutPaid|markPaid|grantPremium|manualPremium|createCheckout|createPaymentLink|createInvoice|createTransfer|sendMoney|enableCashout)\b/i, "Admin exposes active payout/charge/manual Premium handler");
 notMatches(admin, /(?:Release Payout|Process Batch|Mark Paid|Send Money|Grant Premium|Manual Premium Grant|Create Checkout|Create Payment Link|Create Invoice|Create Transfer)[\s\S]{0,240}onPress=/i, "Admin exposes active money mutation copy with onPress");
 

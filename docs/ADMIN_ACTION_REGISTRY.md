@@ -19,7 +19,7 @@ The source registry is `_lib/adminActionRegistry.ts`. It is the contract for act
 
 ## Forbidden Direct Buttons
 
-The registry must not contain active direct actions for manual Premium grant/edit, payout release, mark paid, process batch, send money, cashout, production charge, invoice, payment link, checkout session, production OTA publish/rollback, auth/RLS mutation, owner-role mutation, broad push campaigns, hidden enforcement, ban/restrict, or destructive content deletion.
+The registry must not contain active direct actions for manual Premium grant/edit, payout release, mark paid, process batch, send money, cashout, production charge, invoice, payment link, checkout session, production OTA publish/rollback, auth/RLS mutation, owner-role mutation, auth/RLS or owner-role mutation, broad push campaigns, hidden enforcement, ban/restrict, or destructive content deletion.
 
 High-risk controls may appear only as read-only status, blocked reason, Owner Command plan, or autonomous approval request workflow.
 
