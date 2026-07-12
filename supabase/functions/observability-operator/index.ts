@@ -1,0 +1,45 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+
+Deno.serve(handleScopedOperatorRequest({
+  systemId: "observability_runtime_operator",
+  tokenHeader: "x-observability-operator-token",
+  tokenHashEnv: "OBSERVABILITY_OPERATOR_TOKEN_SHA256",
+  tokenError: "observability_operator_token_required",
+  eventTable: "observability_operator_events",
+  snapshotTable: "runtime_health_snapshots",
+  reviewTable: "observability_required_review_flags",
+  defaultHealthState: "healthy",
+  allowedActions: [
+    "health_snapshot",
+    "crash_health",
+    "record_crash_cluster_finding",
+    "record_js_error_finding",
+    "performance_health",
+    "record_performance_regression",
+    "analytics_delivery_health",
+    "release_diagnostics_health",
+    "record_release_anomaly",
+    "backend_error_rate_report",
+    "watch_once",
+    "status",
+    "report",
+  ],
+  approvalActions: [
+    "remote_config_or_feature_flag_mutation",
+    "provider_analytics_config_mutation",
+    "production_ota_publish",
+    "production_ota_rollback",
+  ],
+  actionTables: {
+    crash_health: "observability_operator_events",
+    record_crash_cluster_finding: "crash_cluster_findings",
+    record_js_error_finding: "js_error_findings",
+    performance_health: "observability_operator_events",
+    record_performance_regression: "performance_regression_findings",
+    analytics_delivery_health: "analytics_delivery_findings",
+    release_diagnostics_health: "release_health_findings",
+    record_release_anomaly: "release_health_findings",
+    backend_error_rate_report: "backend_error_rate_findings",
+  },
+}));

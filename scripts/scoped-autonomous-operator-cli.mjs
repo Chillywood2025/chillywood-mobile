@@ -30,6 +30,13 @@ const configs = {
     urlEnv: "MODERATION_SAFETY_OPERATOR_FUNCTION_URL",
     header: "x-moderation-safety-operator-token",
   },
+  observability: {
+    systemId: "observability_runtime_operator",
+    functionName: "observability-operator",
+    tokenEnv: "OBSERVABILITY_OPERATOR_TOKEN",
+    urlEnv: "OBSERVABILITY_OPERATOR_FUNCTION_URL",
+    header: "x-observability-operator-token",
+  },
 };
 
 const commandMap = {

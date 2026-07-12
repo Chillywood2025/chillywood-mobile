@@ -501,6 +501,7 @@ Deno.serve(async (request) => {
       "release_ota_operator",
       "security_owner_operator",
       "moderation_safety_operator",
+      "observability_runtime_operator",
     ].includes(systemId)) return jsonResponse(400, { error: "unknown_system_id" });
     if (containsSecretLikeValue(body.metadata)) return jsonResponse(422, { error: "secret_like_payload_blocked" });
 

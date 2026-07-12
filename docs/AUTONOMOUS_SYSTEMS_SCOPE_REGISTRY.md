@@ -416,6 +416,63 @@ Forbidden:
 
 Account rights changes, bans, restrictions, content deletion, upload/live/account disablement, and fraud-hold enforcement require owner/staff approval through the autonomous approval path.
 
+### `observability_runtime_operator`
+
+Status: `scoped_write_capable_guarded`.
+
+Current activation: `manual_cli`.
+
+Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
+
+Allowed surfaces:
+- `crashlytics_crash_health`
+- `native_crash_clusters`
+- `js_error_clusters`
+- `anr_runtime_findings`
+- `app_startup_performance`
+- `screen_render_performance`
+- `network_error_rate`
+- `edge_function_error_rate`
+- `analytics_delivery_health`
+- `firebase_performance_health`
+- `release_diagnostics_health`
+- `ota_updateid_runtime_channel_mismatch`
+- `embedded_launch_detection`
+- `emergency_launch_detection`
+- `cross_system_incident_correlation`
+
+Allowed writes:
+- `observability_operator_events`
+- `runtime_health_snapshots`
+- `crash_cluster_findings`
+- `js_error_findings`
+- `performance_regression_findings`
+- `analytics_delivery_findings`
+- `release_health_findings`
+- `backend_error_rate_findings`
+- `observability_required_review_flags`
+- `observability_operator_learning_state`
+- autonomous approval requests
+
+Forbidden:
+- delete crash evidence
+- silence crash reporting
+- collect extra PII without approval
+- log secrets/tokens
+- publish OTA
+- rollback OTA
+- change Remote Config/feature flags without approval
+- hide emergency launch
+- fake installed proof
+- mutate auth/RLS
+- move money
+- grant Premium
+- change provider config
+- change LiveKit routing
+- change R2/media behavior
+
+Crash/error, performance, analytics-delivery, release-diagnostics, and backend error-rate findings can be written as scoped status/review/audit rows only. Remote Config or feature flag mutation requires Level 3 owner/super-admin approval. Production OTA publish or rollback requires Level 4 owner/super-admin approval and fresh release preflight. Crash evidence deletion and crash-reporting suppression are forbidden.
+
 ## Expansion Contract
 
 Any new autonomous system, surface, action, scheduler, write path, or recovery action must add an explicit registry entry with:

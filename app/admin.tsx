@@ -11291,6 +11291,30 @@ export default function AdminStudioScreen() {
                 Approval path: enforcement creates an autonomous approval request and must preserve audit, review, and appeal/reversal trail before execution.
               </Text>
             </View>
+            <View testID="admin-observability-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Observability / Runtime Health Operator</Text>
+              <Text testID="observability-operator-status" style={styles.ownerDetailText}>
+                Status: scoped-write capable, manual/token-gated only; no scheduler/daemon/worker is active.
+              </Text>
+              <Text testID="observability-crash-findings" style={styles.ownerDetailText}>
+                Crash findings: redacted crash clusters, JS error clusters, ANR-style runtime findings, and stack signature hashes can be recorded for review.
+              </Text>
+              <Text testID="observability-performance-findings" style={styles.ownerDetailText}>
+                Performance findings: startup latency, screen/render latency, Firebase Performance summaries, network timing, and backend error-rate findings can be recorded.
+              </Text>
+              <Text testID="observability-analytics-findings" style={styles.ownerDetailText}>
+                Analytics findings: Firebase Analytics delivery health and provider status labels can be recorded without provider keys or analytics schema mutation.
+              </Text>
+              <Text testID="observability-release-findings" style={styles.ownerDetailText}>
+                Release findings: updateId, runtime, channel, embedded launch, emergency launch, and OTA mismatch findings can be recorded without publishing or rolling back.
+              </Text>
+              <Text testID="observability-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: OTA publish/rollback, Remote Config or feature flag mutation, provider config mutation, crash evidence deletion, crash reporting suppression, secret/PII logging, auth/RLS changes, money movement, Premium grants, LiveKit routing, and R2/media changes.
+              </Text>
+              <Text testID="observability-approval-request" style={styles.ownerDetailText}>
+                Approval path: release actions are Level 4; Remote Config, feature flag, and provider analytics config changes are Level 3. All require owner/super-admin approval, fresh preflight, exact scope match, and emergency-state check.
+              </Text>
+            </View>
             <OwnerDisabledReason reason="These sections expose scoped status/review visibility only. They do not add push blasts, OTA publishing, rollback, owner-role mutation, auth/RLS mutation, bans, restrictions, content deletion, or schedulers." />
             <OwnerDisabledReason reason="Scheduled runs use hardened host systemd timers, narrow root-owned env tokens, scheduler/operator audit identity, and watch_once only. They do not expose token values or service-role keys." />
           </View>

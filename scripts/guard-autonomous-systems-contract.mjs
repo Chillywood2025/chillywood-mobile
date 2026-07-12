@@ -16,6 +16,7 @@ const ownerAuthority = read("_lib/platformOwnerAuthority.ts");
 const admin = read("app/admin.tsx");
 const packageJson = read("package.json");
 const migration = read("supabase/migrations/20260712145220_autonomous_scoped_write_operators.sql");
+const observabilityMigration = read("supabase/migrations/20260712170541_observability_runtime_operator.sql");
 const sharedFn = read("supabase/functions/_shared/scoped-operator.ts");
 
 const failures = [];
@@ -35,6 +36,7 @@ const requiredActiveSystems = [
   "release_ota_operator",
   "security_owner_operator",
   "moderation_safety_operator",
+  "observability_runtime_operator",
 ];
 
 const newlyScopedSystems = [
@@ -100,6 +102,18 @@ const newlyScopedSystems = [
   },
 ];
 
+const manualScopedSystems = [
+  {
+    id: "observability_runtime_operator",
+    proof: "proof:observability-runtime-operator",
+    guard: "guard:observability-runtime-operator",
+    functionPath: "supabase/functions/observability-operator/index.ts",
+    adminTestId: "admin-observability-operator-section",
+    forbidden: ["delete crash evidence", "silence crash reporting", "log secrets/tokens", "publish OTA", "rollback OTA"],
+    highRisk: "production_release_rollback_or_publish",
+  },
+];
+
 for (const systemId of requiredActiveSystems) {
   includes(registry, `id: "${systemId}"`, "autonomous registry");
   includes(registryDoc, `\`${systemId}\``, "registry docs");
@@ -144,10 +158,29 @@ for (const system of newlyScopedSystems) {
   notIncludes(service + "\n" + timer + "\n" + watchScript, "SERVICE_ROLE", `${system.id} timer artifacts`);
 }
 
+for (const system of manualScopedSystems) {
+  const blockStart = registry.indexOf(`id: "${system.id}"`);
+  const blockEnd = registry.indexOf("\n  },", blockStart);
+  const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
+  includes(block, "scoped_write_capable_guarded", `${system.id} active status`);
+  includes(block, 'activeActivationMode: "manual_cli"', `${system.id} manual activation`);
+  includes(block, "no_scheduler_no_daemon_no_worker_manual_cli_only", `${system.id} scheduler status`);
+  includes(block, "allowedWrites", `${system.id} write scope`);
+  includes(block, system.proof, `${system.id} proof script`);
+  includes(block, system.guard, `${system.id} guard script`);
+  includes(block, system.highRisk, `${system.id} high-risk surface`);
+  for (const forbidden of system.forbidden) includes(block, forbidden, `${system.id} forbidden scope`);
+  includes(packageJson, `"${system.proof}"`, `${system.id} package proof`);
+  includes(packageJson, `"${system.guard}"`, `${system.id} package guard`);
+  includes(admin, system.adminTestId, `${system.id} admin section`);
+  includes(read(system.functionPath), "handleScopedOperatorRequest", `${system.id} edge function`);
+}
+
 notIncludes(registry, 'id: "notification_delivery_operator",\n    displayName: "Notification Delivery Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registry, 'id: "release_ota_operator",\n    displayName: "Release / OTA Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registry, 'id: "security_owner_operator",\n    displayName: "Security / Owner Authority Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registry, 'id: "moderation_safety_operator",\n    displayName: "Moderation / Safety Operator",\n    status: "candidate_foundation_only"', "active registry");
+notIncludes(registry, 'id: "observability_runtime_operator",\n    displayName: "Observability / Runtime Health Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registryDoc, "candidate_foundation_only", "registry docs");
 notIncludes(registryDoc, "Allowed writes: none", "registry docs");
 
@@ -205,10 +238,23 @@ for (const table of [
 ]) {
   includes(migration, `public.${table}`, "scoped operator migration");
 }
+for (const table of [
+  "observability_operator_events",
+  "runtime_health_snapshots",
+  "crash_cluster_findings",
+  "js_error_findings",
+  "performance_regression_findings",
+]) {
+  includes(observabilityMigration, `public.${table}`, "observability operator migration");
+}
 includes(migration, "enable row level security", "scoped operator migration");
 includes(migration, "from anon, authenticated", "scoped operator client write denial");
 includes(migration, "check (user_rights_changed = false)", "scoped operator user-rights constraint");
 includes(migration, "check (money_moved = false)", "scoped operator money constraint");
+includes(observabilityMigration, "enable row level security", "observability operator migration");
+includes(observabilityMigration, "from anon, authenticated", "observability operator client write denial");
+includes(observabilityMigration, "pii_stored = false", "observability PII constraint");
+includes(observabilityMigration, "secrets_logged = false", "observability secret constraint");
 includes(sharedFn, "constantTimeEqual", "operator token gate");
 includes(sharedFn, "sanitizeOperatorMetadata", "operator redaction");
 
@@ -231,7 +277,8 @@ if (/production_ota_publish[\s\S]{0,400}approvalLevel:\s*[0123]/.test(registry))
 if (/owner_role_auth_rls_or_secret_rotation[\s\S]{0,400}approvalLevel:\s*[0123]/.test(registry)) fail("owner/auth/RLS mutation downgraded below Level 4");
 if (/account_rights_content_delete_or_enforcement[\s\S]{0,400}approvalLevel:\s*[012]/.test(registry)) fail("moderation enforcement downgraded below Level 3");
 if (/broad_notification_campaign_or_provider_config[\s\S]{0,400}approvalLevel:\s*[012]/.test(registry)) fail("notification broad send/provider config downgraded below Level 3");
-if (/REVENUECAT_SECRET_API_KEY|SERVICE_ROLE_KEY|MONEY_OPERATOR_TOKEN|NOTIFICATION_OPERATOR_TOKEN|RELEASE_OPERATOR_TOKEN|SECURITY_OWNER_OPERATOR_TOKEN|MODERATION_SAFETY_OPERATOR_TOKEN/.test(admin + registryDoc + operatingModel)) {
+if (/remote_config_or_feature_flag_mutation[\s\S]{0,400}approvalLevel:\s*[012]/.test(registry)) fail("observability feature flag mutation downgraded below Level 3");
+if (/REVENUECAT_SECRET_API_KEY|SERVICE_ROLE_KEY|MONEY_OPERATOR_TOKEN(?!_SHA256)|NOTIFICATION_OPERATOR_TOKEN(?!_SHA256)|RELEASE_OPERATOR_TOKEN(?!_SHA256)|SECURITY_OWNER_OPERATOR_TOKEN(?!_SHA256)|MODERATION_SAFETY_OPERATOR_TOKEN(?!_SHA256)|OBSERVABILITY_OPERATOR_TOKEN(?!_SHA256)/.test(admin + registryDoc + operatingModel)) {
   fail("secret name/value leaked into client-facing docs or admin copy");
 }
 
@@ -243,6 +290,6 @@ if (failures.length) {
 console.log(JSON.stringify({
   ok: true,
   activeSystems: requiredActiveSystems,
-  scopedWriteSystemsAdded: newlyScopedSystems.map((system) => system.id),
+  scopedWriteSystemsAdded: [...newlyScopedSystems, ...manualScopedSystems].map((system) => system.id),
   candidatePlaceholdersRemaining: 0,
 }, null, 2));

@@ -22,6 +22,7 @@ const activeSystems = [
   "release_ota_operator",
   "security_owner_operator",
   "moderation_safety_operator",
+  "observability_runtime_operator",
 ];
 
 const scopedSystems = [
@@ -56,6 +57,16 @@ const scopedSystems = [
     servicePath: "ops/moderation-safety-operator/systemd/chillywood-moderation-safety-operator-watch-once.service",
     timerPath: "ops/moderation-safety-operator/systemd/chillywood-moderation-safety-operator-watch-once.timer",
     watchScriptPath: "ops/moderation-safety-operator/systemd/moderation-safety-operator-watch-once.sh",
+  },
+];
+
+const manualScopedSystems = [
+  {
+    id: "observability_runtime_operator",
+    activation: 'activeActivationMode: "manual_cli"',
+    schedulerStatus: "no_scheduler_no_daemon_no_worker_manual_cli_only",
+    functionPath: "supabase/functions/observability-operator/index.ts",
+    migrationPath: "supabase/migrations/20260712170541_observability_runtime_operator.sql",
   },
 ];
 
@@ -94,6 +105,22 @@ const checks = [
         && watchScript.includes(`"operator_id":"${system.id}"`);
     }),
     negative: () => scopedSystems.some((system) => !read(system.watchScriptPath).replace('"action":"watch_once"', '"action":"high_risk"').includes('"action":"watch_once"')),
+  },
+  {
+    name: "manual observability system has no scheduler claim",
+    passes: () => manualScopedSystems.every((system) => {
+      const blockStart = registry.indexOf(`id: "${system.id}"`);
+      const blockEnd = registry.indexOf("\n  },", blockStart);
+      const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
+      return block.includes("scoped_write_capable_guarded")
+        && block.includes(system.activation)
+        && block.includes(system.schedulerStatus)
+        && read(system.functionPath).includes("handleScopedOperatorRequest")
+        && read(system.migrationPath).includes("enable row level security")
+        && read(system.migrationPath).includes("from anon, authenticated")
+        && !existsSync("ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer");
+    }),
+    negative: () => registry.replace("no_scheduler_no_daemon_no_worker_manual_cli_only", "chillywood-observability-operator-watch-once.timer_every_5_minutes").includes("chillywood-observability-operator-watch-once.timer_every_5_minutes"),
   },
   {
     name: "valid future scope requires proof guard rollback kill switch approval",
@@ -207,6 +234,7 @@ console.log(JSON.stringify({
   ok: true,
   activeSystems,
   scopedWriteSystemsAdded: scopedSystems.map((system) => system.id),
+  manualScopedWriteSystemsAdded: manualScopedSystems.map((system) => system.id),
   revenueCatReadbackReconciled: true,
   candidatePlaceholdersRemaining: 0,
 }, null, 2));

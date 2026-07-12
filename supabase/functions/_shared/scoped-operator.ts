@@ -131,6 +131,17 @@ const insertSnapshot = async (
     row.stale_case_count = Number(metadata.stale_case_count ?? 0);
     row.urgent_review_count = Number(metadata.urgent_review_count ?? 0);
   }
+  if (config.systemId === "observability_runtime_operator") {
+    row.crash_cluster_count = Number(metadata.crash_cluster_count ?? 0);
+    row.js_error_count = Number(metadata.js_error_count ?? 0);
+    row.performance_regression_count = Number(metadata.performance_regression_count ?? 0);
+    row.backend_error_rate_percent = typeof metadata.backend_error_rate_percent === "number" ? metadata.backend_error_rate_percent : null;
+    row.channel = metadata.channel ?? null;
+    row.runtime_version = metadata.runtime_version ?? null;
+    row.update_id = metadata.update_id ?? null;
+    row.embedded_launch = typeof metadata.embedded_launch === "boolean" ? metadata.embedded_launch : null;
+    row.emergency_launch = typeof metadata.emergency_launch === "boolean" ? metadata.emergency_launch : null;
+  }
   const { error } = await client.from(config.snapshotTable).insert(row);
   if (error) throw error;
   await insertEvent(client, config, actionId, "snapshot_recorded", metadata);
@@ -218,6 +229,31 @@ const insertReview = async (
     row.severity = String(metadata.severity ?? "review");
     row.target_type = metadata.target_type ?? null;
     row.target_id = metadata.target_id ?? null;
+  }
+
+  if (config.systemId === "observability_runtime_operator") {
+    row.update_id = metadata.update_id ?? null;
+    row.runtime_version = metadata.runtime_version ?? null;
+    row.channel = metadata.channel ?? null;
+    if (targetTable.includes("crash_cluster") || targetTable.includes("js_error")) {
+      row.signature_hash = metadata.signature_hash ?? null;
+    }
+    if (targetTable.includes("performance_regression")) {
+      row.metric_name = metadata.metric_name ?? null;
+      row.metric_value = typeof metadata.metric_value === "number" ? metadata.metric_value : null;
+    }
+    if (targetTable.includes("analytics_delivery")) {
+      row.provider = metadata.provider ?? null;
+      row.capability = metadata.capability ?? null;
+    }
+    if (targetTable.includes("release_health")) {
+      row.embedded_launch = typeof metadata.embedded_launch === "boolean" ? metadata.embedded_launch : null;
+      row.emergency_launch = typeof metadata.emergency_launch === "boolean" ? metadata.emergency_launch : null;
+    }
+    if (targetTable.includes("backend_error_rate")) {
+      row.backend_surface = metadata.backend_surface ?? null;
+      row.error_rate_percent = typeof metadata.error_rate_percent === "number" ? metadata.error_rate_percent : null;
+    }
   }
 
   const { error } = await client.from(targetTable).insert(row);
