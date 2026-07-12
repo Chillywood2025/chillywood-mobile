@@ -34,7 +34,7 @@ const SYSTEM_KEYWORDS: Record<string, readonly string[]> = {
   notification_delivery_operator: ["notification", "push", "expo", "device token", "delivery", "alert"],
   release_ota_operator: ["release", "ota", "eas", "updateid", "runtime", "channel", "rollback", "publish", "play store", "app store"],
   security_owner_operator: ["security", "owner", "super_admin", "super admin", "admin", "rls", "auth", "secret scan", "rachi", "approval"],
-  moderation_safety_operator: ["moderation", "safety", "report", "ban", "suspend", "restrict", "delete content", "case", "fraud hold"],
+  moderation_safety_operator: ["moderation", "safety", "user report", "safety report", "ban", "suspend", "restrict", "delete content", "case", "fraud hold"],
   observability_runtime_operator: ["observability", "crash", "crashlytics", "analytics", "performance", "anr", "runtime health", "error rate", "backend error"],
 };
 

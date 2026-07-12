@@ -19,7 +19,7 @@ const routingCases = [
   ["notification_delivery_operator", ["notification", "push", "device token"]],
   ["release_ota_operator", ["ota", "updateid", "rollback"]],
   ["security_owner_operator", ["owner", "rls", "rachi"]],
-  ["moderation_safety_operator", ["moderation", "ban", "report"]],
+  ["moderation_safety_operator", ["moderation", "ban", "user report"]],
   ["observability_runtime_operator", ["crash", "analytics", "performance"]],
 ];
 

@@ -157,7 +157,8 @@ const SYSTEM_KEYWORDS: Record<AutonomousSystemId, readonly string[]> = {
   moderation_safety_operator: [
     "moderation",
     "safety",
-    "report",
+    "user report",
+    "safety report",
     "ban",
     "suspend",
     "restrict",
