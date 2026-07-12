@@ -128,6 +128,13 @@ import {
   AUTONOMOUS_SYSTEMS_REGISTRY,
   listAutonomousApprovalRequiredSurfaces,
 } from "../_lib/autonomousSystemsRegistry";
+import {
+  ADMIN_ACTION_REGISTRY,
+  listHighRiskAdminActions,
+} from "../_lib/adminActionRegistry";
+import {
+  PLATFORM_ROLE_ACTION_MATRIX,
+} from "../_lib/platformRoleActionMatrix";
 import { getMoneyFlowControlSummary } from "../_lib/moneyFlowControl";
 import {
   canUserReviewAutonomousApproval,
@@ -18200,6 +18207,32 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
+            <View testID="admin-role-action-contract-section" style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ownerSectionTitle}>Authority & Tap Contract</Text>
+                  <Text style={styles.configListBody}>
+                    Every active owner/admin/moderator tap is registered with a role gate, approval level, reason/audit rule, denial copy, and backend authority. Unsupported or high-risk actions stay read-only, disabled, or approval-request-only.
+                  </Text>
+                </View>
+                <OwnerStatusPill label="Guarded" tone="success" />
+              </View>
+              <View style={styles.ownerMetricGrid}>
+                <OwnerMetricTile label="Roles" value={Object.keys(PLATFORM_ROLE_ACTION_MATRIX).length} tone="info" />
+                <OwnerMetricTile label="Registered Actions" value={ADMIN_ACTION_REGISTRY.length} tone="info" />
+                <OwnerMetricTile label="High Risk" value={listHighRiskAdminActions().length} tone="manual" />
+                <OwnerMetricTile label="God Panel" value="No" tone="success" />
+              </View>
+              <Text testID="admin-action-registry-status" style={styles.ownerDetailText}>
+                Registry status: /admin is canonical; /channel-studio remains creator control; /channel/[userId] and user-facing routes must not expose platform admin controls.
+              </Text>
+              <Text testID="admin-role-action-denial-copy" style={styles.ownerDetailText}>
+                Denied roles receive safe copy instead of silent failure. Moderator scope is exact review/finding/recommendation work only; owner/super_admin remains final authority.
+              </Text>
+              <Text testID="admin-high-risk-blocked-actions" style={styles.ownerDetailText}>
+                Blocked direct actions: manual Premium grants, payout release/mark-paid/send-money, production charge/invoice/payment link, broad push campaigns, release publish/rollback, auth/RLS/owner-role mutation, hidden enforcement, user bans/restrictions, and content deletion without policy/approval/audit.
+              </Text>
+            </View>
             <View testID="admin-owner-command-center-section" style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
                 <View style={{ flex: 1 }}>
@@ -18308,6 +18341,7 @@ export default function AdminStudioScreen() {
                   disabled={!canReviewAutonomousApprovals || autonomousApprovalLoading}
                   style={[styles.ownerSecondaryButton, (!canReviewAutonomousApprovals || autonomousApprovalLoading) && styles.configSaveBtnDisabled]}
                   onPress={() => void loadAutonomousApprovalRequests()}
+                  testID="autonomous-approval-refresh-button"
                 >
                   <Text style={styles.ownerSecondaryButtonText}>{autonomousApprovalLoading ? "Refreshing" : "Refresh Approvals"}</Text>
                 </TouchableOpacity>
@@ -21028,6 +21062,7 @@ export default function AdminStudioScreen() {
                         value={creatorVideoModerationReason}
                         onChangeText={setCreatorVideoModerationReason}
                         multiline
+                        testID="admin-report-target-moderation-reason-input"
                       />
                       <View style={styles.actionsRow}>
                         {(["hidden", "removed", "clean"] as const).map((status) => {
@@ -21048,6 +21083,7 @@ export default function AdminStudioScreen() {
                                 selectedSafetyReport,
                               )}
                               disabled={disabled}
+                              testID={`admin-report-target-moderation-${status}-button`}
                             >
                               {busy ? (
                                 <ActivityIndicator color="#fff" size="small" />
@@ -21081,6 +21117,7 @@ export default function AdminStudioScreen() {
                         style={[styles.orderBtn, disabled && styles.configSaveBtnDisabled]}
                         disabled={disabled}
                         onPress={() => void updateSelectedReportStatus(action)}
+                        testID={`admin-report-status-${action}-button`}
                       >
                         {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.orderBtnText}>{label}</Text>}
                       </TouchableOpacity>
@@ -21174,6 +21211,7 @@ export default function AdminStudioScreen() {
                 style={styles.cancelBtn}
                 onPress={() => setPendingCreatorVideoModeration(null)}
                 disabled={creatorVideoModerationBusy !== null}
+                testID="admin-report-target-moderation-cancel-button"
               >
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -21184,6 +21222,7 @@ export default function AdminStudioScreen() {
                 ]}
                 onPress={() => void applyCreatorVideoModeration()}
                 disabled={creatorVideoModerationBusy !== null}
+                testID="admin-report-target-moderation-confirm-button"
               >
                 {creatorVideoModerationBusy !== null ? (
                   <ActivityIndicator color="#fff" />

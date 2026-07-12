@@ -3579,6 +3579,12 @@ Account restriction and appeals operations: Closed for current production policy
 Next lane: Continue production readiness with legal/privacy/account deletion and data safety final alignment, unless a narrower blocker is found.
 # Next Task
 
+## Owner/Admin/Moderator Authority Follow-Up
+
+Owner / Super Admin / Admin / Operator / Moderator authority and tap behavior are source-closed. The current contract lives in `_lib/platformRoleActionMatrix.ts`, `_lib/adminActionRegistry.ts`, `docs/OWNER_ADMIN_MODERATOR_AUTHORITY_AND_TAP_MATRIX.md`, `docs/ADMIN_ACTION_REGISTRY.md`, and `docs/MODERATOR_AUTONOMOUS_BOUNDARIES.md`. Keep `/admin` canonical; do not create duplicate admin routes or a god panel.
+
+Future work should use the action registry for any new visible admin/moderator/owner tap. High-risk actions must route to Owner Command or autonomous approval and must not become direct buttons: no manual Premium grant, payout release/mark-paid/send-money, production charge/invoice/payment-link, direct OTA publish/rollback, owner-role/auth/RLS mutation, broad push campaign, hidden enforcement, ban/restrict, or destructive content deletion without an approved backed lane. Installed role-by-role UI proof remains useful if owner/admin/moderator/normal-user sessions are available; do not overclaim installed proof from source guards.
+
 ## Media CDN/HLS Rollout Follow-Up
 
 Current media next step: publish/prove the audited public HLS playback rollout in the installed Play app after source validation and owner-approved OTA config. Use `trusted_public` only while it still requires trusted `media_renditions` rows plus backup/audit gates; otherwise use `canary` or `batch`.
