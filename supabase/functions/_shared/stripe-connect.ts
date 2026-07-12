@@ -7,7 +7,9 @@ export type AuthenticatedUser = {
 
 type AuthResult = { user: AuthenticatedUser } | { error: Response };
 type JsonObject = Record<string, unknown>;
-export type SupabaseClientLike = ReturnType<typeof createClient>;
+// The Stripe foundation functions write to additive finance tables that may not
+// be present in generated Supabase types at Deno-check time.
+export type SupabaseClientLike = ReturnType<typeof createClient<any>>;
 
 export type StripeConnectAccountPayload = {
   creator_user_id?: unknown;

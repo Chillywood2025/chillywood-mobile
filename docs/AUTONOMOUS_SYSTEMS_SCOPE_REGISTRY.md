@@ -179,6 +179,7 @@ Allowed writes:
 - record external confirmation requirement
 - write sandbox/test-mode proof result
 - update learning state
+- provider webhook reliability status/finding/report records
 - autonomous approval request creation
 
 Forbidden:
@@ -213,7 +214,9 @@ Required proofs/guards:
 - `proof:money-flow-control`
 - `proof:money-operator-write-scope`
 - `proof:money-external-confirmation`
+- `proof:provider-webhook-reliability`
 - `guard:money-flow-control`
+- `guard:provider-webhook-reliability`
 - `proof:autonomous-approval-live-flow`
 - `proof:autonomous-systems-contract`
 - `guard:autonomous-systems-contract`
@@ -222,6 +225,8 @@ Required proofs/guards:
 Read-only reconciliation and scoped safe reconciliation/status/review/audit writes can be autonomous. Real money mutation requires Level 3/4. Real money movement requires Level 4 owner approval plus external provider confirmation/readback. Rachi can recommend/request, not approve.
 
 The scoped Money Operator may not mark payout paid, release payout, create transfer/payout, charge a customer, send invoices, create payment links, enable cashout, manually grant Premium, edit Premium entitlement outside provider-backed readback, create fake revenue/payable balance, clear a fraud hold as paid/settled, mutate auth/RLS, mutate provider products, or switch Stripe live mode.
+
+Provider webhook reliability monitoring covers RevenueCat, Google Play, Stripe Connect, and Stripe merch/checkout. It may record webhook delivery status, reconciliation findings, duplicate event detections, blocked actions, and dashboard repair approval requests. It cannot mutate provider dashboards without approval, cannot print secrets, cannot manually grant Premium, cannot move money, and cannot describe sandbox/test events as production readiness.
 
 ## Expansion Contract
 

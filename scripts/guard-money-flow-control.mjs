@@ -38,6 +38,8 @@ includes(packageJson, '"guard:money-flow-control"', "package script");
 includes(packageJson, '"proof:money-flow-control"', "package script");
 includes(packageJson, '"proof:money-operator-write-scope"', "package script");
 includes(packageJson, '"proof:money-external-confirmation"', "package script");
+includes(packageJson, '"proof:provider-webhook-reliability"', "package script");
+includes(packageJson, '"guard:provider-webhook-reliability"', "package script");
 includes(registry, 'id: "money_flow_control"', "autonomous registry");
 includes(registry, "scoped_write_capable_guarded", "money registry status");
 includes(registry, "owner/super-admin approval for Level 3", "Level 3 registry gate");
@@ -57,6 +59,10 @@ includes(moneyOperator, "x-money-operator-token", "money operator token header")
 includes(moneyOperator, "MONEY_OPERATOR_TOKEN_SHA256", "money operator token hash");
 includes(moneyOperator, "constantTimeEqual", "money operator constant-time auth");
 includes(moneyOperator, "blocked_pending_owner_scope_and_external_confirmation", "money operator blocks real money");
+includes(moneyOperator, "provider_webhook_health", "provider webhook reliability health");
+includes(moneyOperator, "record_provider_webhook_delivery_status", "provider webhook reliability status write");
+includes(moneyOperator, "provider_dashboard_repair_request", "provider dashboard repair approval path");
+includes(moneyOperator, "provider_webhook_reliability_report", "provider webhook reliability report");
 
 for (const testId of [
   "admin-money-flow-control-section",

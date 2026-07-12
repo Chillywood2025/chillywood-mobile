@@ -120,8 +120,38 @@ Actions:
 - `learning_report`
 - `execute_approved_money_action_dry_run`
 - `execute_approved_money_action`
+- `provider_webhook_health`
+- `provider_webhook_test_plan`
+- `record_provider_webhook_delivery_status`
+- `provider_dashboard_repair_request`
+- `provider_webhook_reliability_report`
 
 `execute_approved_money_action` does not move money. It records or blocks according to scope and still requires the autonomous approval path plus external provider confirmation for Level 4.
+
+## Provider Webhook Reliability
+
+Money Operator monitors provider webhook reliability for:
+- RevenueCat (`revenuecat-webhook`)
+- Google Play (`google-play-webhook`)
+- Stripe Connect (`stripe-connect-webhook`)
+- Stripe merch/checkout (`stripe-merch-webhook`)
+- provider readiness/reconciliation surfaces
+
+Safe monitor behavior:
+- endpoint shape and missing/invalid auth checks
+- provider sync status rows
+- reconciliation findings for delivery failures
+- duplicate provider/webhook event detections
+- dashboard repair approval requests
+- reliability reports
+
+The monitor cannot print provider secrets, cannot manually grant Premium, cannot create charges, payouts, transfers, cashout, invoices, or payment links, cannot mutate provider products, and cannot claim test-mode proof as production readiness. Provider dashboard changes such as changing webhook URLs, signing secrets, event selections, or disabling stale duplicate integrations require an autonomous approval request before mutation.
+
+RevenueCat dashboard test events are expected to return `200 test_received` only when the dashboard sends the configured shared secret. Test events must report `premiumGranted=false` and `liveMoneyAction=false`.
+
+Google Play direct webhook delivery is readiness-only when RevenueCat remains the entitlement source of truth. Missing `GOOGLE_PLAY_WEBHOOK_SECRET` means Google Play direct webhook delivery is not configured; this must not be called a production failure if the stack intentionally uses RevenueCat for entitlement events.
+
+Stripe Connect and Stripe merch webhook proofs must use signed test/sandbox events only. Invalid signatures fail closed. Live-mode events are rejected by the test/sandbox handlers and cannot be used to claim production money readiness.
 
 ## Admin Surface
 

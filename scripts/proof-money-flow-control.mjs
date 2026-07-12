@@ -102,6 +102,13 @@ const proofCases = [
     passes: () => moneyOperator.includes("x-money-operator-token") && moneyOperator.includes("MONEY_OPERATOR_TOKEN_SHA256") && moneyOperator.includes("blocked_pending_owner_scope_and_external_confirmation"),
   },
   {
+    name: "Money Operator monitors provider webhook reliability without dashboard mutation",
+    passes: () => moneyOperator.includes("provider_webhook_health")
+      && moneyOperator.includes("record_provider_webhook_delivery_status")
+      && moneyOperator.includes("provider_dashboard_repair_request")
+      && moneyOperator.includes("provider_dashboard_mutated: false"),
+  },
+  {
     name: "Level 4 external confirmation helper blocks test-mode production closure",
     passes: () => externalConfirmation.includes("test_mode_confirmation_cannot_satisfy_production") && externalConfirmation.includes("provider_reference_readback_required"),
   },
@@ -119,6 +126,8 @@ includes(moneyRunbook, "Money Flow & Ledger Control Plane", "money runbook");
 includes(packageJson, '"proof:money-flow-control"', "package scripts");
 includes(packageJson, '"proof:money-operator-write-scope"', "package scripts");
 includes(packageJson, '"proof:money-external-confirmation"', "package scripts");
+includes(packageJson, '"proof:provider-webhook-reliability"', "package scripts");
+includes(packageJson, '"guard:provider-webhook-reliability"', "package scripts");
 includes(packageJson, '"guard:money-flow-control"', "package scripts");
 
 for (const testId of [

@@ -67,6 +67,11 @@ for (const action of [
   "learning_report",
   "execute_approved_money_action_dry_run",
   "execute_approved_money_action",
+  "provider_webhook_health",
+  "provider_webhook_test_plan",
+  "record_provider_webhook_delivery_status",
+  "provider_dashboard_repair_request",
+  "provider_webhook_reliability_report",
 ]) {
   includes(functionSource, `action === "${action}"`, "money operator action");
 }
