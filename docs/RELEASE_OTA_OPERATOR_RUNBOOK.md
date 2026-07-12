@@ -2,7 +2,7 @@
 
 Status: `scoped_write_capable_guarded`
 
-Activation: `manual_cli`; no scheduler, daemon, worker, publish automation, or rollback automation is active.
+Activation: `limited_scheduled_probe`; hardened host timer `chillywood-release-operator-watch-once.timer` runs `watch_once` every thirty minutes. No publish automation or rollback automation is active.
 
 ## Scope
 

@@ -256,9 +256,9 @@ Error-rate classes are `healthy`, `degraded`, `critical`, `outage`, and `unknown
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_safe_recovery`.
 
-Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
+Scheduler status: `chillywood-notification-operator-watch-once.timer_every_5_minutes` on `chillywood-prod-01`.
 
 Allowed surfaces:
 - `expo_push_delivery`
@@ -297,9 +297,9 @@ Broad campaigns or provider push configuration changes require Level 3 owner/sup
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_probe`.
 
-Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
+Scheduler status: `chillywood-release-operator-watch-once.timer_every_30_minutes` on `chillywood-prod-01`.
 
 Allowed surfaces:
 - `release_diagnostics`
@@ -337,9 +337,9 @@ Production OTA publish, rollback, or store release mutation requires Level 4 own
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_probe`.
 
-Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
+Scheduler status: `chillywood-security-owner-operator-watch-once.timer_every_15_minutes` on `chillywood-prod-01`.
 
 Allowed surfaces:
 - `owner_super_admin_role_integrity`
@@ -379,9 +379,9 @@ Owner-role, auth/RLS, and secret-rotation work requires Level 4 owner/super-admi
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_probe`.
 
-Scheduler status: no scheduler, daemon, or worker; manual/token-gated only.
+Scheduler status: `chillywood-moderation-safety-operator-watch-once.timer_every_10_minutes` on `chillywood-prod-01`.
 
 Allowed surfaces:
 - `moderation_queue_health`

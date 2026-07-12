@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chi'llywood Security / Owner operator watch_once every fifteen minutes
+
+[Timer]
+OnBootSec=150s
+OnUnitActiveSec=15min
+AccuracySec=60s
+RandomizedDelaySec=60s
+Unit=chillywood-security-owner-operator-watch-once.service
+
+[Install]
+WantedBy=timers.target

@@ -44,6 +44,12 @@ const newlyScopedSystems = [
     guard: "guard:notification-delivery-operator",
     functionPath: "supabase/functions/notification-operator/index.ts",
     adminTestId: "admin-notification-operator-section",
+    servicePath: "ops/notification-operator/systemd/chillywood-notification-operator-watch-once.service",
+    timerPath: "ops/notification-operator/systemd/chillywood-notification-operator-watch-once.timer",
+    watchScriptPath: "ops/notification-operator/systemd/notification-operator-watch-once.sh",
+    expectedActivation: 'activeActivationMode: "limited_scheduled_safe_recovery"',
+    expectedSchedulerStatus: "chillywood-notification-operator-watch-once.timer_every_5_minutes",
+    expectedCadence: "OnUnitActiveSec=5min",
     forbidden: ["bypass notification preferences", "marketing blast sends", "changing push provider credentials"],
     highRisk: "broad_notification_campaign_or_provider_config",
   },
@@ -53,6 +59,12 @@ const newlyScopedSystems = [
     guard: "guard:release-ota-operator",
     functionPath: "supabase/functions/release-operator/index.ts",
     adminTestId: "admin-release-operator-section",
+    servicePath: "ops/release-operator/systemd/chillywood-release-operator-watch-once.service",
+    timerPath: "ops/release-operator/systemd/chillywood-release-operator-watch-once.timer",
+    watchScriptPath: "ops/release-operator/systemd/release-operator-watch-once.sh",
+    expectedActivation: 'activeActivationMode: "limited_scheduled_probe"',
+    expectedSchedulerStatus: "chillywood-release-operator-watch-once.timer_every_30_minutes",
+    expectedCadence: "OnUnitActiveSec=30min",
     forbidden: ["auto-publish production OTA without approval", "auto-rollback production OTA without approval", "fake installed proof"],
     highRisk: "production_publish_or_rollback",
   },
@@ -62,6 +74,12 @@ const newlyScopedSystems = [
     guard: "guard:security-owner-operator",
     functionPath: "supabase/functions/security-owner-operator/index.ts",
     adminTestId: "admin-security-owner-operator-section",
+    servicePath: "ops/security-owner-operator/systemd/chillywood-security-owner-operator-watch-once.service",
+    timerPath: "ops/security-owner-operator/systemd/chillywood-security-owner-operator-watch-once.timer",
+    watchScriptPath: "ops/security-owner-operator/systemd/security-owner-operator-watch-once.sh",
+    expectedActivation: 'activeActivationMode: "limited_scheduled_probe"',
+    expectedSchedulerStatus: "chillywood-security-owner-operator-watch-once.timer_every_15_minutes",
+    expectedCadence: "OnUnitActiveSec=15min",
     forbidden: ["assign/revoke owner role autonomously", "mutate auth/RLS autonomously", "let Rachi/operator approve themselves"],
     highRisk: "owner_role_auth_rls_or_secret_rotation",
   },
@@ -71,6 +89,12 @@ const newlyScopedSystems = [
     guard: "guard:moderation-safety-operator",
     functionPath: "supabase/functions/moderation-safety-operator/index.ts",
     adminTestId: "admin-moderation-safety-operator-section",
+    servicePath: "ops/moderation-safety-operator/systemd/chillywood-moderation-safety-operator-watch-once.service",
+    timerPath: "ops/moderation-safety-operator/systemd/chillywood-moderation-safety-operator-watch-once.timer",
+    watchScriptPath: "ops/moderation-safety-operator/systemd/moderation-safety-operator-watch-once.sh",
+    expectedActivation: 'activeActivationMode: "limited_scheduled_probe"',
+    expectedSchedulerStatus: "chillywood-moderation-safety-operator-watch-once.timer_every_10_minutes",
+    expectedCadence: "OnUnitActiveSec=10min",
     forbidden: ["permanent ban/suspend/restrict without approval", "delete content without approval", "hidden enforcement with no appeal/review trail"],
     highRisk: "account_rights_content_delete_or_enforcement",
   },
@@ -86,9 +110,12 @@ for (const system of newlyScopedSystems) {
   const blockStart = registry.indexOf(`id: "${system.id}"`);
   const blockEnd = registry.indexOf("\n  },", blockStart);
   const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
+  const service = read(system.servicePath);
+  const timer = read(system.timerPath);
+  const watchScript = read(system.watchScriptPath);
   includes(block, "scoped_write_capable_guarded", `${system.id} active status`);
-  includes(block, 'activeActivationMode: "manual_cli"', `${system.id} manual activation`);
-  includes(block, "no_scheduler_no_daemon_no_worker_manual_cli_only", `${system.id} scheduler status`);
+  includes(block, system.expectedActivation, `${system.id} scheduled activation`);
+  includes(block, system.expectedSchedulerStatus, `${system.id} scheduler status`);
   includes(block, "allowedWrites", `${system.id} write scope`);
   includes(block, "requiredProofScripts", `${system.id} proof registration`);
   includes(block, "requiredGuardScripts", `${system.id} guard registration`);
@@ -103,6 +130,18 @@ for (const system of newlyScopedSystems) {
   includes(packageJson, `"${system.guard}"`, `${system.id} package guard`);
   includes(admin, system.adminTestId, `${system.id} admin section`);
   includes(read(system.functionPath), "handleScopedOperatorRequest", `${system.id} edge function`);
+  includes(service, "NoNewPrivileges=true", `${system.id} systemd hardening`);
+  includes(service, "ProtectSystem=strict", `${system.id} systemd hardening`);
+  includes(service, "PrivateTmp=true", `${system.id} systemd hardening`);
+  includes(service, "RestrictSUIDSGID=true", `${system.id} systemd hardening`);
+  includes(service, "CapabilityBoundingSet=", `${system.id} systemd hardening`);
+  includes(timer, system.expectedCadence, `${system.id} timer cadence`);
+  includes(timer, "WantedBy=timers.target", `${system.id} timer install`);
+  includes(watchScript, '"action":"watch_once"', `${system.id} watch_once only`);
+  includes(watchScript, '"scheduler":"systemd_timer"', `${system.id} scheduler identity`);
+  includes(watchScript, `"operator_id":"${system.id}"`, `${system.id} operator identity`);
+  includes(watchScript, "[redacted]", `${system.id} redacted logs`);
+  notIncludes(service + "\n" + timer + "\n" + watchScript, "SERVICE_ROLE", `${system.id} timer artifacts`);
 }
 
 notIncludes(registry, 'id: "notification_delivery_operator",\n    displayName: "Notification Delivery Operator",\n    status: "candidate_foundation_only"', "active registry");

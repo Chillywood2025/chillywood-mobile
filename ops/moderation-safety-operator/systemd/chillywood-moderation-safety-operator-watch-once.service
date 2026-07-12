@@ -1,0 +1,21 @@
+[Unit]
+Description=Chi'llywood Moderation / Safety operator watch_once probe
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/chillywood/moderation-safety-operator.env
+Environment=OPERATOR_SCHEDULER=systemd_timer
+Environment=OPERATOR_ID=moderation_safety_operator
+Environment=OPERATOR_SOURCE=systemd_timer:chillywood-prod-01:moderation_safety_operator
+ExecStart=/opt/chillywood/moderation-safety-operator/moderation-safety-operator-watch-once.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=

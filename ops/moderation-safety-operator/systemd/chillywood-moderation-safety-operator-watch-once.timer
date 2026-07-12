@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chi'llywood Moderation / Safety operator watch_once every ten minutes
+
+[Timer]
+OnBootSec=180s
+OnUnitActiveSec=10min
+AccuracySec=45s
+RandomizedDelaySec=45s
+Unit=chillywood-moderation-safety-operator-watch-once.service
+
+[Install]
+WantedBy=timers.target

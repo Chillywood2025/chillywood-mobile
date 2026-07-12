@@ -1,0 +1,21 @@
+[Unit]
+Description=Chi'llywood Security / Owner operator watch_once probe
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/chillywood/security-owner-operator.env
+Environment=OPERATOR_SCHEDULER=systemd_timer
+Environment=OPERATOR_ID=security_owner_operator
+Environment=OPERATOR_SOURCE=systemd_timer:chillywood-prod-01:security_owner_operator
+ExecStart=/opt/chillywood/security-owner-operator/security-owner-operator-watch-once.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=

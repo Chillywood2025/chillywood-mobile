@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chi'llywood Release / OTA operator watch_once every thirty minutes
+
+[Timer]
+OnBootSec=120s
+OnUnitActiveSec=30min
+AccuracySec=60s
+RandomizedDelaySec=60s
+Unit=chillywood-release-operator-watch-once.service
+
+[Install]
+WantedBy=timers.target

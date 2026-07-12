@@ -2,7 +2,7 @@
 
 Status: `scoped_write_capable_guarded`
 
-Activation: `manual_cli`; no scheduler, daemon, worker, auth mutation, RLS mutation, owner-role mutation, or secret rotation automation is active.
+Activation: `limited_scheduled_probe`; hardened host timer `chillywood-security-owner-operator-watch-once.timer` runs `watch_once` every fifteen minutes. No auth mutation, RLS mutation, owner-role mutation, or secret rotation automation is active.
 
 ## Scope
 

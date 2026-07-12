@@ -85,6 +85,8 @@ const insertEvent = async (
 ) => {
   const { error } = await client.from(config.eventTable).insert({
     system_id: config.systemId,
+    actor_type: String(metadata.actor_type ?? "operator"),
+    actor_id: String(metadata.operator_id ?? config.systemId),
     action_id: actionId,
     result,
     environment_mode: String(metadata.environment_mode ?? "production"),
@@ -132,6 +134,32 @@ const insertSnapshot = async (
   const { error } = await client.from(config.snapshotTable).insert(row);
   if (error) throw error;
   await insertEvent(client, config, actionId, "snapshot_recorded", metadata);
+};
+
+const readReport = async (
+  client: SupabaseClient,
+  config: ScopedOperatorConfig,
+) => {
+  const { data: latestEvents, error: eventsError } = await client
+    .from(config.eventTable)
+    .select("id,system_id,actor_type,actor_id,action_id,result,environment_mode,user_rights_changed,money_moved,metadata,created_at")
+    .eq("system_id", config.systemId)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (eventsError) throw eventsError;
+
+  const { data: latestSnapshots, error: snapshotError } = await client
+    .from(config.snapshotTable)
+    .select("*")
+    .eq("system_id", config.systemId)
+    .order("created_at", { ascending: false })
+    .limit(3);
+  if (snapshotError) throw snapshotError;
+
+  return {
+    latestEvents: sanitizeOperatorMetadata(latestEvents ?? []),
+    latestSnapshots: sanitizeOperatorMetadata(latestSnapshots ?? []),
+  };
 };
 
 const insertReview = async (
@@ -246,6 +274,13 @@ const createApprovalRequest = async (
   return data;
 };
 
+const withAuditIdentity = (config: ScopedOperatorConfig, payload: Record<string, unknown>) => ({
+  ...payload,
+  scheduler: String(payload.scheduler ?? "direct_token_call"),
+  operator_id: String(payload.operator_id ?? config.systemId),
+  source: String(payload.source ?? `direct_token_call:${config.systemId}`),
+});
+
 export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => async (request: Request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: scopedOperatorCorsHeaders(config.tokenHeader) });
   if (request.method !== "POST") return scopedJsonResponse(config.tokenHeader, 405, { error: "method_not_allowed" });
@@ -272,7 +307,7 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
 
   try {
     const client = adminClient();
-    const metadata = (sanitizeOperatorMetadata({ ...payload, action }) ?? {}) as Record<string, unknown>;
+    const metadata = (sanitizeOperatorMetadata(withAuditIdentity(config, { ...payload, action })) ?? {}) as Record<string, unknown>;
 
     if (action === "create_approval_request" || config.approvalActions.includes(action)) {
       const requestRow = await createApprovalRequest(client, config, { ...payload, action_id: payload.action_id ?? action });
@@ -287,7 +322,21 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
       });
     }
 
-    if (["health_snapshot", "watch_once", "status", "report"].includes(action)) {
+    if (action === "report") {
+      const report = await readReport(client, config);
+      return scopedJsonResponse(config.tokenHeader, 200, {
+        ok: true,
+        systemId: config.systemId,
+        action,
+        result: "report_read",
+        ...report,
+        moneyMoved: false,
+        userRightsChanged: false,
+        highRiskExecuted: false,
+      });
+    }
+
+    if (["health_snapshot", "watch_once", "status"].includes(action)) {
       await insertSnapshot(client, config, action, metadata);
     } else {
       if (config.systemId === "notification_delivery_operator" && action === "mark_token_provider_revoked" && metadata.provider_evidence !== "DeviceNotRegistered") {
@@ -305,6 +354,11 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
       systemId: config.systemId,
       action,
       result: "safe_write_recorded",
+      auditIdentity: {
+        scheduler: metadata.scheduler,
+        operatorId: metadata.operator_id,
+        source: metadata.source,
+      },
       moneyMoved: false,
       userRightsChanged: false,
       highRiskExecuted: false,

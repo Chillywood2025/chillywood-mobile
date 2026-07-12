@@ -2,7 +2,7 @@
 
 Status: `scoped_write_capable_guarded`
 
-Activation: `manual_cli`; no scheduler, daemon, worker, or broad send loop is active.
+Activation: `limited_scheduled_safe_recovery`; hardened host timer `chillywood-notification-operator-watch-once.timer` runs `watch_once` every five minutes. No broad send loop is active.
 
 ## Scope
 

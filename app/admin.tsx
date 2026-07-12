@@ -11238,7 +11238,7 @@ export default function AdminStudioScreen() {
         id: "scoped_autonomous_operators",
         title: "Scoped Autonomous Operators",
         summary: "Notification, release, security-owner, and moderation operators can write safe status/review/audit records only.",
-        meta: "Manual/token-gated; no schedulers active.",
+        meta: "Limited scheduled watch_once timers active; high-risk actions remain approval-gated.",
         statusLabel: "Scoped writes",
         tone: "success",
         children: (
@@ -11292,6 +11292,7 @@ export default function AdminStudioScreen() {
               </Text>
             </View>
             <OwnerDisabledReason reason="These sections expose scoped status/review visibility only. They do not add push blasts, OTA publishing, rollback, owner-role mutation, auth/RLS mutation, bans, restrictions, content deletion, or schedulers." />
+            <OwnerDisabledReason reason="Scheduled runs use hardened host systemd timers, narrow root-owned env tokens, scheduler/operator audit identity, and watch_once only. They do not expose token values or service-role keys." />
           </View>
         ),
       },

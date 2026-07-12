@@ -87,7 +87,13 @@ const response = await fetch(url, {
     "content-type": "application/json",
     [config.header]: token,
   },
-  body: JSON.stringify({ action, environment_mode: process.env.OPERATOR_ENVIRONMENT_MODE || "production" }),
+  body: JSON.stringify({
+    action,
+    environment_mode: process.env.OPERATOR_ENVIRONMENT_MODE || "production",
+    scheduler: process.env.OPERATOR_SCHEDULER || "manual_cli",
+    operator_id: process.env.OPERATOR_ID || config.systemId,
+    source: process.env.OPERATOR_SOURCE || `manual_cli:${config.systemId}`,
+  }),
 });
 
 let body;

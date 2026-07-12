@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chi'llywood Notification operator watch_once every five minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=15s
+Unit=chillywood-notification-operator-watch-once.service
+
+[Install]
+WantedBy=timers.target

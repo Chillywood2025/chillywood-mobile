@@ -2,7 +2,7 @@
 
 Status: `scoped_write_capable_guarded`
 
-Activation: `manual_cli`; no scheduler, daemon, worker, enforcement automation, or hidden moderation action is active.
+Activation: `limited_scheduled_probe`; hardened host timer `chillywood-moderation-safety-operator-watch-once.timer` runs `watch_once` every ten minutes. No enforcement automation or hidden moderation action is active.
 
 ## Scope
 

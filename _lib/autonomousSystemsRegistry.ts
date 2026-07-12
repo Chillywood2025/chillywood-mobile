@@ -550,8 +550,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "notification_delivery_operator",
     displayName: "Notification Delivery Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "no_scheduler_no_daemon_no_worker_manual_cli_only",
+    activeActivationMode: "limited_scheduled_safe_recovery",
+    schedulerStatus: "chillywood-notification-operator-watch-once.timer_every_5_minutes",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe", "limited_scheduled_safe_recovery"],
     allowedSurfaces: [
       "expo_push_delivery",
@@ -638,8 +638,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "release_ota_operator",
     displayName: "Release / OTA Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "no_scheduler_no_daemon_no_worker_manual_cli_only",
+    activeActivationMode: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-release-operator-watch-once.timer_every_30_minutes",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe"],
     allowedSurfaces: [
       "release_diagnostics",
@@ -724,8 +724,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "security_owner_operator",
     displayName: "Security / Owner Authority Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "no_scheduler_no_daemon_no_worker_manual_cli_only",
+    activeActivationMode: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-security-owner-operator-watch-once.timer_every_15_minutes",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe", "limited_scheduled_safe_recovery"],
     allowedSurfaces: [
       "owner_super_admin_role_integrity",
@@ -812,8 +812,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "moderation_safety_operator",
     displayName: "Moderation / Safety Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "no_scheduler_no_daemon_no_worker_manual_cli_only",
+    activeActivationMode: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-moderation-safety-operator-watch-once.timer_every_10_minutes",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe", "limited_scheduled_safe_recovery"],
     allowedSurfaces: [
       "moderation_queue_health",

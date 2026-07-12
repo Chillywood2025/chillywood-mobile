@@ -25,10 +25,38 @@ const activeSystems = [
 ];
 
 const scopedSystems = [
-  "notification_delivery_operator",
-  "release_ota_operator",
-  "security_owner_operator",
-  "moderation_safety_operator",
+  {
+    id: "notification_delivery_operator",
+    activation: 'activeActivationMode: "limited_scheduled_safe_recovery"',
+    schedulerStatus: "chillywood-notification-operator-watch-once.timer_every_5_minutes",
+    servicePath: "ops/notification-operator/systemd/chillywood-notification-operator-watch-once.service",
+    timerPath: "ops/notification-operator/systemd/chillywood-notification-operator-watch-once.timer",
+    watchScriptPath: "ops/notification-operator/systemd/notification-operator-watch-once.sh",
+  },
+  {
+    id: "release_ota_operator",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-release-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/release-operator/systemd/chillywood-release-operator-watch-once.service",
+    timerPath: "ops/release-operator/systemd/chillywood-release-operator-watch-once.timer",
+    watchScriptPath: "ops/release-operator/systemd/release-operator-watch-once.sh",
+  },
+  {
+    id: "security_owner_operator",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-security-owner-operator-watch-once.timer_every_15_minutes",
+    servicePath: "ops/security-owner-operator/systemd/chillywood-security-owner-operator-watch-once.service",
+    timerPath: "ops/security-owner-operator/systemd/chillywood-security-owner-operator-watch-once.timer",
+    watchScriptPath: "ops/security-owner-operator/systemd/security-owner-operator-watch-once.sh",
+  },
+  {
+    id: "moderation_safety_operator",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-moderation-safety-operator-watch-once.timer_every_10_minutes",
+    servicePath: "ops/moderation-safety-operator/systemd/chillywood-moderation-safety-operator-watch-once.service",
+    timerPath: "ops/moderation-safety-operator/systemd/chillywood-moderation-safety-operator-watch-once.timer",
+    watchScriptPath: "ops/moderation-safety-operator/systemd/moderation-safety-operator-watch-once.sh",
+  },
 ];
 
 const checks = [
@@ -38,13 +66,34 @@ const checks = [
   },
   {
     name: "new systems are scoped-write active not placeholders",
-    passes: () => scopedSystems.every((systemId) => {
-      const blockStart = registry.indexOf(`id: "${systemId}"`);
+    passes: () => scopedSystems.every((system) => {
+      const blockStart = registry.indexOf(`id: "${system.id}"`);
       const blockEnd = registry.indexOf("\n  },", blockStart);
       const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
       return block.includes("scoped_write_capable_guarded") && !block.includes("candidate_foundation_only");
     }),
     negative: () => registry.replace('status: "scoped_write_capable_guarded"', 'status: "candidate_foundation_only"').includes("candidate_foundation_only"),
+  },
+  {
+    name: "new systems scheduled status has timer artifacts",
+    passes: () => scopedSystems.every((system) => {
+      const blockStart = registry.indexOf(`id: "${system.id}"`);
+      const blockEnd = registry.indexOf("\n  },", blockStart);
+      const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
+      const service = read(system.servicePath);
+      const timer = read(system.timerPath);
+      const watchScript = read(system.watchScriptPath);
+      return block.includes(system.activation)
+        && block.includes(system.schedulerStatus)
+        && service.includes("NoNewPrivileges=true")
+        && service.includes("ProtectSystem=strict")
+        && service.includes("CapabilityBoundingSet=")
+        && !/SERVICE_ROLE|SUPABASE_SERVICE_ROLE_KEY/i.test(service + timer + watchScript)
+        && watchScript.includes('"action":"watch_once"')
+        && watchScript.includes('"scheduler":"systemd_timer"')
+        && watchScript.includes(`"operator_id":"${system.id}"`);
+    }),
+    negative: () => scopedSystems.some((system) => !read(system.watchScriptPath).replace('"action":"watch_once"', '"action":"high_risk"').includes('"action":"watch_once"')),
   },
   {
     name: "valid future scope requires proof guard rollback kill switch approval",
@@ -157,7 +206,7 @@ if (failures.length) {
 console.log(JSON.stringify({
   ok: true,
   activeSystems,
-  scopedWriteSystemsAdded: scopedSystems,
+  scopedWriteSystemsAdded: scopedSystems.map((system) => system.id),
   revenueCatReadbackReconciled: true,
   candidatePlaceholdersRemaining: 0,
 }, null, 2));
