@@ -16,6 +16,8 @@ const migration = read("supabase/migrations/20260712180500_owner_command_operato
 const admin = read("app/admin.tsx");
 const pkg = read("package.json");
 const config = read("supabase/config.toml");
+const registry = read("_lib/autonomousSystemsRegistry.ts");
+const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
 
 for (const symbol of [
   "classifyOwnerCommandIntent",
@@ -28,6 +30,18 @@ for (const symbol of [
   "executeOwnerCommandIfApproved",
   "sanitizeOwnerCommandProof",
 ]) includes(helper, `export const ${symbol}`, "owner command helper");
+
+for (const phrase of [
+  'id: "owner_command_operator"',
+  'status: "scoped_command_router_guarded"',
+  "owner_command_classification",
+  "owner_command_approval_request_creation",
+  "direct target-table mutation outside routed operator",
+  "real_world_or_external_impact_owner_command",
+]) includes(registry, phrase, "owner command registry protection");
+
+includes(registryDoc, "`owner_command_operator`", "owner command registry docs");
+includes(registryDoc, "protected scoped command-routing control plane", "owner command registry docs");
 
 for (const table of [
   "owner_command_requests",
@@ -65,6 +79,7 @@ for (const phrase of [
   "platform_role_memberships",
   "createApprovalRequestForCommand",
   "autonomous_approval_requests",
+  "requested_by_actor_type: \"owner_command_operator\"",
   "owner_command_events",
   "owner_command_execution_steps",
   "owner_command_blockers",

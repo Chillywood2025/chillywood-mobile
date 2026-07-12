@@ -18,6 +18,28 @@ const JSON_HEADERS = {
 
 const SECRET_PATTERN = /(secret|token|password|authorization|service[_-]?role|participant[_-]?token|signed[_-]?url|api[_-]?key|private[_-]?key|db[_-]?url|database[_-]?url)/i;
 
+const ALLOWED_SYSTEM_IDS = [
+  "media_automation",
+  "livekit_operator",
+  "money_flow_control",
+  "notification_delivery_operator",
+  "release_ota_operator",
+  "security_owner_operator",
+  "moderation_safety_operator",
+  "observability_runtime_operator",
+  "owner_command_operator",
+] as const;
+
+const ALLOWED_REQUESTER_ACTOR_TYPES = [
+  "admin",
+  "moderator",
+  "operator",
+  "owner",
+  "rachi",
+  "super_admin",
+  ...ALLOWED_SYSTEM_IDS,
+] as const;
+
 const toText = (value: unknown) => String(value ?? "").trim();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const toUuidOrNull = (value: unknown) => {
@@ -126,6 +148,10 @@ const validateRequestPayload = (payload: JsonObject) => {
   if (approvalLevel !== 3 && approvalLevel !== 4) failures.push("approval_level_must_be_3_or_4");
   for (const field of requiredTextFields) {
     if (!toText(payload[field])) failures.push(`${field}_required`);
+  }
+  if (!ALLOWED_SYSTEM_IDS.includes(toText(payload.system_id) as typeof ALLOWED_SYSTEM_IDS[number])) failures.push("unknown_system_id");
+  if (!ALLOWED_REQUESTER_ACTOR_TYPES.includes(toText(payload.requested_by_actor_type) as typeof ALLOWED_REQUESTER_ACTOR_TYPES[number])) {
+    failures.push("unknown_requested_by_actor_type");
   }
   if (!safeStringArray(payload.allowed_write_scope).length) failures.push("allowed_write_scope_required");
   if (!safeStringArray(payload.forbidden_scope).length) failures.push("forbidden_scope_required");
@@ -493,16 +519,7 @@ Deno.serve(async (request) => {
     const systemId = toText(body.system_id);
     const reason = toText(body.reason) || (action === "resume_system" ? "Owner/super-admin resumed autonomous system." : "Owner/super-admin paused autonomous system.");
     const status = action === "resume_system" ? "active" : toText(body.status) === "paused" ? "paused" : "emergency_stop";
-    if (![
-      "media_automation",
-      "livekit_operator",
-      "money_flow_control",
-      "notification_delivery_operator",
-      "release_ota_operator",
-      "security_owner_operator",
-      "moderation_safety_operator",
-      "observability_runtime_operator",
-    ].includes(systemId)) return jsonResponse(400, { error: "unknown_system_id" });
+    if (!ALLOWED_SYSTEM_IDS.includes(systemId as typeof ALLOWED_SYSTEM_IDS[number])) return jsonResponse(400, { error: "unknown_system_id" });
     if (containsSecretLikeValue(body.metadata)) return jsonResponse(422, { error: "secret_like_payload_blocked" });
 
     const { data, error } = await client

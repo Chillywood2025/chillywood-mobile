@@ -6,6 +6,10 @@ This is no god mode. It does not replace the owner, Rachi does not outrank owner
 
 ## System
 
+- Registry id: `owner_command_operator`
+- Registry status: `scoped_command_router_guarded`
+- Activation: `manual_cli`
+- Scheduler: `no_scheduler_no_daemon_no_worker_manual_or_owner_invoked_only`
 - Edge Function: `owner-command-operator`
 - Helper: `_lib/ownerCommandOperator.ts`
 - Tables:
@@ -95,6 +99,8 @@ Blocked commands return exact blockers, not vague failure. Examples:
 ## Admin
 
 The canonical `/admin` Owner Command Center shows command input, risk level, target systems, blockers, proof report, and event history. The client does not hold owner-command tokens and does not run direct domain mutation. Live execution goes through the `owner-command-operator` function and existing autonomous systems.
+
+`owner_command_operator` is protected in `_lib/autonomousSystemsRegistry.ts` as the scoped judgment-execution control plane. All active autonomous operators are request-capable actors through trusted paths, but only `owner` / `super_admin` can approve Level 3/4 autonomous requests. Owner Command cannot approve itself and cannot bypass target operators.
 
 ## Validation
 

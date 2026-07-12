@@ -43,6 +43,11 @@ const requiredActiveSystems = [
   "observability_runtime_operator",
 ];
 
+const protectedAutonomousSystems = [
+  ...requiredActiveSystems,
+  "owner_command_operator",
+];
+
 for (const required of [
   "proof:owner-command-operator",
   "proof:owner-command-routing",
@@ -187,11 +192,28 @@ const moneyScheduler = {
   watchScriptPath: "ops/money-operator/systemd/money-operator-watch-once.sh",
 };
 
-for (const systemId of requiredActiveSystems) {
+for (const systemId of protectedAutonomousSystems) {
   includes(registry, `id: "${systemId}"`, "autonomous registry");
   includes(registryDoc, `\`${systemId}\``, "registry docs");
   includes(approvalFunction, systemId, "approval function system whitelist");
 }
+
+const ownerCommandBlockStart = registry.indexOf('id: "owner_command_operator"');
+const ownerCommandBlockEnd = registry.indexOf("\n  },", ownerCommandBlockStart);
+const ownerCommandBlock = ownerCommandBlockStart >= 0 && ownerCommandBlockEnd > ownerCommandBlockStart
+  ? registry.slice(ownerCommandBlockStart, ownerCommandBlockEnd)
+  : "";
+includes(ownerCommandBlock, 'status: "scoped_command_router_guarded"', "owner_command_operator protected status");
+includes(ownerCommandBlock, 'activeActivationMode: "manual_cli"', "owner_command_operator manual activation");
+includes(ownerCommandBlock, "no_scheduler_no_daemon_no_worker_manual_or_owner_invoked_only", "owner_command_operator scheduler truth");
+includes(ownerCommandBlock, "bypassing target autonomous operator", "owner_command_operator target routing gate");
+includes(ownerCommandBlock, "direct target-table mutation outside routed operator", "owner_command_operator direct mutation ban");
+includes(ownerCommandBlock, "real_world_or_external_impact_owner_command", "owner_command_operator Level 4 surface");
+includes(ownerCommandBlock, "ownerApprovalRequired: true", "owner_command_operator high-risk approval");
+includes(ownerCommandBlock, "Level 4 external confirmation where applicable", "owner_command_operator external confirmation gate");
+includes(approvalModel, '"owner_command_operator"', "owner_command_operator requester model");
+includes(ownerAuthority, "AUTONOMOUS_APPROVAL_REQUESTER_TYPES", "owner_command_operator authority requester model");
+includes(approvalFunction, '"owner_command_operator"', "owner_command_operator approval function actor");
 
 for (const system of newlyScopedSystems) {
   const blockStart = registry.indexOf(`id: "${system.id}"`);
@@ -373,6 +395,7 @@ if (failures.length) {
 console.log(JSON.stringify({
   ok: true,
   activeSystems: requiredActiveSystems,
+  protectedSystems: protectedAutonomousSystems,
   scopedWriteSystemsAdded: newlyScopedSystems.map((system) => system.id),
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
   candidatePlaceholdersRemaining: 0,

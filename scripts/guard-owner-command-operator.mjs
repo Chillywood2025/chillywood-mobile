@@ -32,6 +32,22 @@ const cli = read("scripts/owner-command-cli.mjs");
 const admin = read("app/admin.tsx");
 const packageJson = read("package.json");
 const runbook = existsSync(path.join(root, "docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md")) ? read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md") : "";
+const registry = read("_lib/autonomousSystemsRegistry.ts");
+const registryDoc = read("docs/AUTONOMOUS_SYSTEMS_SCOPE_REGISTRY.md");
+
+for (const phrase of [
+  'id: "owner_command_operator"',
+  'status: "scoped_command_router_guarded"',
+  'activeActivationMode: "manual_cli"',
+  "no_scheduler_no_daemon_no_worker_manual_or_owner_invoked_only",
+  "direct target-table mutation outside routed operator",
+  "bypassing target autonomous operator",
+  "high_risk_owner_command_request",
+  "real_world_or_external_impact_owner_command",
+]) includes(registry, phrase, "owner command registry protection");
+
+includes(registryDoc, "`owner_command_operator`", "owner command registry docs");
+includes(registryDoc, "protected scoped command-routing control plane", "owner command registry docs");
 
 for (const systemId of [
   "media_automation",
@@ -63,6 +79,7 @@ for (const phrase of [
   "external_confirmation_required",
   "approval_expired",
   "preflight_passed_target_operator_execution_required",
+  "requested_by_actor_type: \"owner_command_operator\"",
 ]) includes(fn, phrase, "approval/external gates");
 
 for (const phrase of [

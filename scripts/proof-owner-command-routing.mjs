@@ -11,6 +11,9 @@ const fail = (message) => failures.push(message);
 const includes = (source, needle, label) => {
   if (!source.includes(needle)) fail(`${label} missing: ${needle}`);
 };
+const notIncludes = (source, needle, label) => {
+  if (source.includes(needle)) fail(`${label} must not include: ${needle}`);
+};
 
 const routingCases = [
   ["media_automation", ["media", "r2", "transcode"]],
@@ -49,6 +52,13 @@ for (const expected of [
   "target_system: toText(step.targetSystem)",
   "step_index: Number(step.stepIndex",
 ]) includes(fn, expected, "routing function persistence");
+
+const helperModerationBlock = helper.match(/moderation_safety_operator:\s*\[[\s\S]*?\]/)?.[0] ?? "";
+const functionModerationBlock = fn.match(/moderation_safety_operator:\s*\[[\s\S]*?\]/)?.[0] ?? "";
+notIncludes(helperModerationBlock, '"report"', "owner command helper moderation route");
+notIncludes(functionModerationBlock, '"report"', "owner command function moderation route");
+includes(helperModerationBlock, '"user report"', "owner command explicit moderation report route");
+includes(functionModerationBlock, '"user report"', "owner command explicit moderation report route");
 
 if (failures.length) {
   console.error("proof:owner-command-routing failed");

@@ -29,6 +29,11 @@ const activeSystems = [
   "observability_runtime_operator",
 ];
 
+const protectedSystems = [
+  ...activeSystems,
+  "owner_command_operator",
+];
+
 const scopedSystems = [
   {
     id: "notification_delivery_operator",
@@ -81,7 +86,19 @@ const moneyScheduler = {
 const checks = [
   {
     name: "all active systems present",
-    passes: () => activeSystems.every((systemId) => registry.includes(`id: "${systemId}"`) && registryDoc.includes(`\`${systemId}\``)),
+    passes: () => protectedSystems.every((systemId) => registry.includes(`id: "${systemId}"`) && registryDoc.includes(`\`${systemId}\``)),
+  },
+  {
+    name: "owner command operator is protected control plane",
+    passes: () => (
+      registry.includes('id: "owner_command_operator"')
+      && registry.includes('status: "scoped_command_router_guarded"')
+      && registry.includes("no_scheduler_no_daemon_no_worker_manual_or_owner_invoked_only")
+      && registry.includes("bypassing target autonomous operator")
+      && registry.includes("real_world_or_external_impact_owner_command")
+      && registryDoc.includes("protected scoped command-routing control plane")
+    ),
+    negative: () => !registry.replace('id: "owner_command_operator"', 'id: "removed_owner_command_operator"').includes('id: "owner_command_operator"'),
   },
   {
     name: "owner command operator routes through all active systems",
@@ -212,7 +229,7 @@ const checks = [
   {
     name: "broad DB write fails",
     passes: () => registry.includes("broad DB mutation"),
-    negative: () => !registry.replace("broad DB mutation", "broad writes allowed").includes("broad DB mutation"),
+    negative: () => !registry.replaceAll("broad DB mutation", "broad writes allowed").includes("broad DB mutation"),
   },
   {
     name: "new scoped systems have proof and guard scripts",
@@ -253,7 +270,14 @@ const checks = [
   },
   {
     name: "approval path prevents self approval and requires preflight",
-    passes: () => approvalModel.includes("operatorSelfApprovalAllowed: false") && approvalFunction.includes("mark_preflight_result") && approvalFunction.includes("owner_or_super_admin_required"),
+    passes: () => (
+      approvalModel.includes("operatorSelfApprovalAllowed: false")
+      && approvalModel.includes("AUTONOMOUS_APPROVAL_REQUESTER_ACTORS")
+      && approvalModel.includes('"owner_command_operator"')
+      && approvalFunction.includes("mark_preflight_result")
+      && approvalFunction.includes("owner_or_super_admin_required")
+      && protectedSystems.every((systemId) => approvalFunction.includes(`"${systemId}"`))
+    ),
   },
   {
     name: "RevenueCat reconciled current-state text passes",
@@ -286,6 +310,7 @@ if (failures.length) {
 console.log(JSON.stringify({
   ok: true,
   activeSystems,
+  protectedSystems,
   scopedWriteSystemsAdded: scopedSystems.map((system) => system.id),
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
   revenueCatReadbackReconciled: true,

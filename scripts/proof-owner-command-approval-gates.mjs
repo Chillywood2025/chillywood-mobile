@@ -63,7 +63,7 @@ for (const phrase of [
 ]) includes(fn, phrase, "function approval gates");
 
 for (const phrase of [
-  "requested_by_actor_type: \"operator\"",
+  "requested_by_actor_type: \"owner_command_operator\"",
   "Owner Command Operator created approval request and stopped before high-risk execution.",
   "requested",
 ]) includes(fn, phrase, "approval request creation");

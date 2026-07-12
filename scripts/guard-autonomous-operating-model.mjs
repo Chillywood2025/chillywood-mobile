@@ -122,7 +122,7 @@ assertIncludes(autonomousRegistry, "ownerApprovalRequired: true", "Level 3/4 own
 assertIncludes(autonomousApproval, "canActorApproveAutonomousRequest", "approval request approver model");
 assertIncludes(autonomousApproval, "operatorSelfApprovalAllowed: false", "operator self-approval denial");
 assertIncludes(autonomousRegistryDoc, "future scope can be added only through registry entries", "autonomous registry doc expansion rule");
-assertIncludes(autonomousRegistryDoc, "`owner_command_operator` is an orchestration layer", "owner command registry doc");
+assertIncludes(autonomousRegistryDoc, "`owner_command_operator` is now a protected scoped command-routing control plane", "owner command registry doc");
 assertIncludes(ownerCommandRunbook, "Owner makes judgment", "owner command runbook owner judgment");
 assertIncludes(ownerCommandRunbook, "routes through existing autonomous systems", "owner command runbook routing");
 assertIncludes(ownerCommandRunbook, "Blocked commands return exact blockers", "owner command runbook blockers");

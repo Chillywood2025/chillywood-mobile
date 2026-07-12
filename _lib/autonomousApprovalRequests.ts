@@ -1,13 +1,40 @@
 import type { AutonomousApprovalLevel, AutonomousSystemId } from "./autonomousSystemsRegistry";
 
-export type AutonomousApprovalRequesterType =
-  | "admin"
-  | "livekit_operator"
-  | "media_automation"
-  | "money_flow_control"
-  | "operator"
-  | "owner"
-  | "rachi";
+export const HUMAN_AUTONOMOUS_APPROVAL_REQUESTER_ROLES = [
+  "admin",
+  "moderator",
+  "operator",
+  "owner",
+  "rachi",
+  "super_admin",
+] as const;
+
+export const AUTONOMOUS_APPROVAL_REQUESTER_ACTORS = [
+  "media_automation",
+  "livekit_operator",
+  "money_flow_control",
+  "notification_delivery_operator",
+  "release_ota_operator",
+  "security_owner_operator",
+  "moderation_safety_operator",
+  "observability_runtime_operator",
+  "owner_command_operator",
+] as const satisfies readonly AutonomousSystemId[];
+
+export const AUTONOMOUS_APPROVAL_REQUESTER_TYPES = [
+  ...HUMAN_AUTONOMOUS_APPROVAL_REQUESTER_ROLES,
+  ...AUTONOMOUS_APPROVAL_REQUESTER_ACTORS,
+] as const;
+
+export type AutonomousApprovalRequesterType = typeof AUTONOMOUS_APPROVAL_REQUESTER_TYPES[number];
+
+export const isAutonomousApprovalRequesterType = (value: unknown): value is AutonomousApprovalRequesterType => (
+  (AUTONOMOUS_APPROVAL_REQUESTER_TYPES as readonly string[]).includes(String(value ?? ""))
+);
+
+export const isAutonomousRequesterActor = (value: unknown): value is AutonomousSystemId => (
+  (AUTONOMOUS_APPROVAL_REQUESTER_ACTORS as readonly string[]).includes(String(value ?? ""))
+);
 
 export type AutonomousApprovalRequestStatus =
   | "approved"
@@ -129,11 +156,8 @@ export const canActorApproveAutonomousRequest = (input: {
   if (input.request.status !== "pending") return false;
   if (input.request.requestedByActorId && input.approverActorId && input.request.requestedByActorId === input.approverActorId) return false;
   if (input.request.requestedByActorType === "rachi" && input.approverRoles.includes("rachi")) return false;
-  if (input.request.requestedByActorType === "livekit_operator" && input.approverRoles.includes("livekit_operator")) return false;
-  if (input.request.requestedByActorType === "media_automation" && input.approverRoles.includes("media_automation")) return false;
-  if (input.request.requestedByActorType === "money_flow_control" && input.approverRoles.includes("money_flow_control")) return false;
-  if (input.request.approvalLevel === 4) return input.approverRoles.includes("owner") || input.approverRoles.includes("super_admin");
-  return input.approverRoles.includes("owner") || input.approverRoles.includes("super_admin") || input.approverRoles.includes("approved_admin");
+  if (isAutonomousRequesterActor(input.request.requestedByActorType) && input.approverRoles.includes(input.request.requestedByActorType)) return false;
+  return input.approverRoles.includes("owner") || input.approverRoles.includes("super_admin");
 };
 
 export const canExecuteApprovedAutonomousRequest = (input: {

@@ -1,15 +1,11 @@
-import type { AutonomousApprovalRequest } from "./autonomousApprovalRequests";
+import {
+  AUTONOMOUS_APPROVAL_REQUESTER_TYPES,
+  isAutonomousApprovalRequesterType,
+  type AutonomousApprovalRequest,
+  type AutonomousApprovalRequesterType,
+} from "./autonomousApprovalRequests";
 
-export type PlatformOwnerAuthorityRole =
-  | "admin"
-  | "livekit_operator"
-  | "media_automation"
-  | "moderator"
-  | "money_flow_control"
-  | "operator"
-  | "owner"
-  | "rachi"
-  | "super_admin";
+export type PlatformOwnerAuthorityRole = AutonomousApprovalRequesterType;
 
 export type PlatformOwnerAuthorityMembership = {
   role?: string | null;
@@ -18,20 +14,7 @@ export type PlatformOwnerAuthorityMembership = {
 
 const normalizeRole = (value: unknown): PlatformOwnerAuthorityRole | null => {
   const role = String(value ?? "").trim().toLowerCase();
-  if (
-    role === "admin"
-    || role === "livekit_operator"
-    || role === "media_automation"
-    || role === "moderator"
-    || role === "money_flow_control"
-    || role === "operator"
-    || role === "owner"
-    || role === "rachi"
-    || role === "super_admin"
-  ) {
-    return role;
-  }
-  return null;
+  return isAutonomousApprovalRequesterType(role) ? role : null;
 };
 
 export const getAutonomousApprovalAuthorityRoles = (
@@ -66,14 +49,7 @@ export const canUserApproveAutonomousRequest = (input: {
 export const canUserDenyAutonomousRequest = canUserApproveAutonomousRequest;
 
 export const canActorRequestAutonomousApproval = (actorRole: PlatformOwnerAuthorityRole) => (
-  actorRole === "admin"
-  || actorRole === "livekit_operator"
-  || actorRole === "media_automation"
-  || actorRole === "money_flow_control"
-  || actorRole === "operator"
-  || actorRole === "owner"
-  || actorRole === "rachi"
-  || actorRole === "super_admin"
+  AUTONOMOUS_APPROVAL_REQUESTER_TYPES.includes(actorRole)
 );
 
 export const sanitizeOwnerAuthorityProof = (input: {
@@ -83,6 +59,6 @@ export const sanitizeOwnerAuthorityProof = (input: {
   approvalBacking: input.approvalBacking,
   ownerOrSuperAdminPresent: hasOwnerOrSuperAdminAuthority(input.memberships),
   roles: getAutonomousApprovalAuthorityRoles(input.memberships).map((role) => (
-    role === "super_admin" ? "super_admin" : role === "owner" ? "owner" : "non_owner_staff"
+    role === "super_admin" ? "super_admin" : role === "owner" ? "owner" : role.endsWith("_operator") || role === "media_automation" || role === "money_flow_control" ? "non_human_requester" : "non_owner_staff"
   )),
 });

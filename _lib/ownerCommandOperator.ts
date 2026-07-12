@@ -1,5 +1,7 @@
 import type { AutonomousApprovalLevel, AutonomousSystemId } from "./autonomousSystemsRegistry";
 
+export type OwnerCommandTargetSystemId = Exclude<AutonomousSystemId, "owner_command_operator">;
+
 export type OwnerCommandStatus =
   | "received"
   | "classified"
@@ -36,14 +38,14 @@ export type OwnerCommandClassification = {
   riskLevel: OwnerCommandRiskLevel;
   approvalRequired: boolean;
   externalConfirmationRequired: boolean;
-  targetSystems: AutonomousSystemId[];
+  targetSystems: OwnerCommandTargetSystemId[];
   blockers: string[];
   reason: string;
 };
 
 export type OwnerCommandExecutionStep = {
   stepIndex: number;
-  targetSystem: AutonomousSystemId;
+  targetSystem: OwnerCommandTargetSystemId;
   actionId: string;
   approvalLevel: OwnerCommandRiskLevel;
   status: OwnerCommandStatus;
@@ -59,7 +61,7 @@ export type OwnerCommandExecutionPlan = {
   commandText: string;
   normalizedIntent: OwnerCommandIntent;
   approvalLevel: OwnerCommandRiskLevel;
-  targetSystems: AutonomousSystemId[];
+  targetSystems: OwnerCommandTargetSystemId[];
   allowedScope: string[];
   forbiddenScope: string[];
   preflightPlan: string[];
@@ -75,7 +77,7 @@ export type OwnerCommandExecutionPlan = {
 const SECRET_KEY_PATTERN = /(secret|token|password|credential|authorization|service[_-]?role|participant[_-]?token|signed[_-]?url|api[_-]?key|private[_-]?key|db[_-]?url|database[_-]?url|webhook[_-]?secret)/i;
 const LONG_SECRET_LIKE_PATTERN = /[A-Za-z0-9._~+/=-]{48,}/;
 
-const ACTIVE_SYSTEMS: readonly AutonomousSystemId[] = [
+const ACTIVE_SYSTEMS: readonly OwnerCommandTargetSystemId[] = [
   "media_automation",
   "livekit_operator",
   "money_flow_control",
@@ -86,7 +88,7 @@ const ACTIVE_SYSTEMS: readonly AutonomousSystemId[] = [
   "observability_runtime_operator",
 ];
 
-const SYSTEM_KEYWORDS: Record<AutonomousSystemId, readonly string[]> = {
+const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
   media_automation: [
     "media",
     "r2",
@@ -234,7 +236,7 @@ const DEFAULT_FORBIDDEN_SCOPE = [
   "scope expansion beyond command plan",
 ];
 
-const SYSTEM_FORBIDDEN_SCOPE: Record<AutonomousSystemId, readonly string[]> = {
+const SYSTEM_FORBIDDEN_SCOPE: Record<OwnerCommandTargetSystemId, readonly string[]> = {
   media_automation: [
     "private/Premium/original exposure",
     "unapproved broad media processing",
@@ -306,7 +308,7 @@ export const sanitizeOwnerCommandProof = (value: unknown): unknown => {
 
 const commandMatches = (text: string, patterns: readonly RegExp[]) => patterns.some((pattern) => pattern.test(text));
 
-export const mapOwnerCommandToAutonomousSystems = (commandText: string): AutonomousSystemId[] => {
+export const mapOwnerCommandToAutonomousSystems = (commandText: string): OwnerCommandTargetSystemId[] => {
   const text = normalizeCommandText(commandText).toLowerCase();
   const systems = ACTIVE_SYSTEMS.filter((systemId) => SYSTEM_KEYWORDS[systemId].some((keyword) => text.includes(keyword)));
   return systems.length ? systems : [];
@@ -361,7 +363,7 @@ export const classifyOwnerCommand = (commandText: string): OwnerCommandClassific
   };
 };
 
-const buildActionId = (systemId: AutonomousSystemId, riskLevel: OwnerCommandRiskLevel) => {
+const buildActionId = (systemId: OwnerCommandTargetSystemId, riskLevel: OwnerCommandRiskLevel) => {
   if (riskLevel >= 3) return "owner_command_approval_required";
   if (riskLevel === 2) return "owner_command_scoped_safe_write";
   return "owner_command_report";
@@ -369,7 +371,7 @@ const buildActionId = (systemId: AutonomousSystemId, riskLevel: OwnerCommandRisk
 
 export const validateOwnerCommandScope = (input: {
   commandText: string;
-  targetSystems: readonly AutonomousSystemId[];
+  targetSystems: readonly OwnerCommandTargetSystemId[];
   approvalLevel: OwnerCommandRiskLevel;
 }) => {
   const failures: string[] = [];

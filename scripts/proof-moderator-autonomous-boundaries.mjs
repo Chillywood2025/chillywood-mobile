@@ -42,7 +42,10 @@ for (const phrase of [
   "Rachi can request/recommend but cannot approve itself.",
   "Autonomous operators cannot approve their own Level 3/4 requests.",
   "requestedByActorType === \"rachi\"",
-  "requestedByActorType === \"money_flow_control\"",
+  "AUTONOMOUS_APPROVAL_REQUESTER_ACTORS",
+  "isAutonomousRequesterActor",
+  "\"money_flow_control\"",
+  "\"owner_command_operator\"",
 ]) requireText("autonomous approval self-approval guard", approval, phrase);
 
 for (const phrase of [

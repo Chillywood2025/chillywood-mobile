@@ -348,7 +348,7 @@ const createApprovalRequestForCommand = async (client: SupabaseClientLike, comma
       proposed_action: redactText(plan.commandText),
       reason: "Owner command maps to a Level 3/4 action and must use the existing approval path.",
       requested_by_actor_id: null,
-      requested_by_actor_type: "operator",
+      requested_by_actor_type: "owner_command_operator",
       risk_summary: approvalLevel === 4
         ? "Level 4 owner command requires owner/super-admin approval plus external confirmation."
         : "Level 3 owner command requires owner/super-admin approval and fresh preflight.",
@@ -364,7 +364,7 @@ const createApprovalRequestForCommand = async (client: SupabaseClientLike, comma
 
   await client.from("autonomous_approval_request_events").insert({
     actor_id: null,
-    actor_type: "operator",
+    actor_type: "owner_command_operator",
     event_summary: "Owner Command Operator created approval request and stopped before high-risk execution.",
     event_type: "requested",
     metadata: { command_id: commandId, created_by: "owner_command_operator" },

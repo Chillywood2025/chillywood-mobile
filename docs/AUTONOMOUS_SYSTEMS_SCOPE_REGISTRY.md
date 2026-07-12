@@ -515,7 +515,15 @@ Do not deploy a new scheduler, daemon, worker, broad DB mutation path, public/pr
 
 ## Owner Command Operator
 
-`owner_command_operator` is an orchestration layer, not a replacement for owner judgment and not a broad autonomous system. It accepts owner/super-admin-backed commands, classifies intent and risk, maps each command to the existing active autonomous systems, builds exact preflight/execution/rollback/proof plans, writes `owner_command_*` audit rows, and returns exact blockers when execution is impossible.
+`owner_command_operator` is now a protected scoped command-routing control plane in the autonomous systems registry. It is an orchestration layer, not a replacement for owner judgment and not a broad autonomous system. It accepts owner/super-admin-backed commands, classifies intent and risk, maps each command to the existing active autonomous systems, builds exact preflight/execution/rollback/proof plans, writes `owner_command_*` audit rows, and returns exact blockers when execution is impossible.
+
+Status: `scoped_command_router_guarded`.
+
+Current activation: `manual_cli`.
+
+Scheduler status: `no_scheduler_no_daemon_no_worker_manual_or_owner_invoked_only`.
+
+Allowed writes are limited to `owner_command_requests`, `owner_command_events`, `owner_command_execution_steps`, `owner_command_blockers`, autonomous approval-request creation, and target-operator safe report/audit invocation. It cannot directly mutate target-domain tables outside the routed operator.
 
 It may execute only safe Level 0/1/2 report or scoped audit work. Level 3/4 commands create `autonomous_approval_requests` and stop. Approved Level 3/4 commands still require fresh preflight, exact scope match, active emergency state, target operator proof, and Level 4 external confirmation where applicable. Rachi can recommend/request draft work but cannot approve owner commands, and operators cannot approve their own requested work.
 

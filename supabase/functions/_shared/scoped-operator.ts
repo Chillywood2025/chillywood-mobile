@@ -273,7 +273,7 @@ const createApprovalRequest = async (
   const insertPayload = {
     system_id: config.systemId,
     action_id: actionId,
-    requested_by_actor_type: "operator",
+    requested_by_actor_type: config.systemId,
     requested_by_actor_id: payload.requested_by_actor_id ?? null,
     approval_level: approvalLevel,
     status: "pending",
@@ -301,7 +301,7 @@ const createApprovalRequest = async (
   await client.from("autonomous_approval_request_events").insert({
     request_id: data.id,
     event_type: "created",
-    actor_type: "operator",
+    actor_type: config.systemId,
     actor_id: null,
     event_summary: `${config.systemId} requested approval for ${actionId}`,
     metadata: { created_by: config.systemId },

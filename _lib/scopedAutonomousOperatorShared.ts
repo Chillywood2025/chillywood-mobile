@@ -28,7 +28,7 @@ export type ScopedOperatorApprovalRequestDraft = {
   system_id: AutonomousSystemId;
   action_id: string;
   approval_level: 3 | 4;
-  requested_by_actor_type: "operator" | "livekit_operator" | "media_automation" | "rachi" | "admin" | "owner";
+  requested_by_actor_type: AutonomousSystemId;
   title: string;
   reason: string;
   risk_summary: string;
@@ -116,7 +116,7 @@ export const buildScopedOperatorApprovalRequest = (
     system_id: plan.systemId,
     action_id: plan.actionId,
     approval_level: plan.approvalLevel === 4 ? 4 : 3,
-    requested_by_actor_type: "operator",
+    requested_by_actor_type: plan.systemId,
     title,
     reason: plan.reason,
     risk_summary: `Level ${plan.approvalLevel} action for ${plan.systemId}; execution requires owner/super-admin approval, fresh preflight, exact scope match, and emergency-state check.`,
