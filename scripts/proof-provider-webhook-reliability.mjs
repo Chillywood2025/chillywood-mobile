@@ -27,6 +27,7 @@ const stripeShared = read("supabase/functions/_shared/stripe-connect.ts");
 const packageJson = read("package.json");
 const moneyRunbook = read("docs/MONEY_FLOW_CONTROL_RUNBOOK.md");
 const moneyGuard = read("scripts/guard-money-flow-control.mjs");
+const moneyLoopProof = read("scripts/proof-money-provider-reliability-loop.mjs");
 
 const functionCorpus = [revenueCat, googlePlay, stripeConnect, stripeMerch, providerReadiness, stripeShared, moneyOperator].join("\n\n");
 
@@ -83,6 +84,34 @@ const proofCases = [
       && moneyOperator.includes("provider_webhook_delivery_status_recorded"),
   },
   {
+    name: "100 percent provider error rate becomes outage/blocked with a finding",
+    passes: () => moneyOperator.includes("classifyProviderDeliveryErrorRate")
+      && moneyOperator.includes('return "outage"')
+      && moneyOperator.includes("providerSyncStatusForClassification")
+      && moneyOperator.includes("recordProviderFinding"),
+  },
+  {
+    name: "provider delivery history readback records host/path/failure without secrets",
+    passes: () => moneyOperator.includes("provider_delivery_history_readback")
+      && moneyOperator.includes("endpoint_host")
+      && moneyOperator.includes("endpoint_path")
+      && moneyOperator.includes("last_failure_code")
+      && moneyOperator.includes("integration_id_hash"),
+  },
+  {
+    name: "stale and duplicate dashboard integrations create approval path only",
+    passes: () => moneyOperator.includes("stale_provider_dashboard_integration_detection")
+      && moneyOperator.includes("duplicate_webhook_integration_detection")
+      && moneyOperator.includes("dashboardIssues.ownerActionRequired")
+      && moneyOperator.includes("createApprovalRequest"),
+  },
+  {
+    name: "Google Play can be classified as RevenueCat-mediated/readiness-only",
+    passes: () => moneyOperator.includes("classifyGooglePlaySourceTruth")
+      && moneyOperator.includes("revenuecat_mediated")
+      && moneyOperator.includes("readiness_only"),
+  },
+  {
     name: "dashboard repair requires approval",
     passes: () => moneyOperator.includes("provider_dashboard_repair_request")
       && moneyOperator.includes("change_money_facing_config")
@@ -130,8 +159,10 @@ for (const required of [
   "provider_webhook_health",
   "provider_webhook_test_plan",
   "record_provider_webhook_delivery_status",
+  "provider_delivery_history_readback",
   "provider_dashboard_repair_request",
   "provider_webhook_reliability_report",
+  "watch_once",
   "revenuecat",
   "google_play",
   "stripe_connect",
@@ -141,8 +172,13 @@ for (const required of [
 }
 
 includes(packageJson, '"proof:provider-webhook-reliability"', "package script");
+includes(packageJson, '"proof:money-provider-reliability-loop"', "package script");
+includes(packageJson, '"money-operator:watch-once"', "package script");
+includes(packageJson, '"money-operator:provider-health"', "package script");
+includes(packageJson, '"money-operator:report"', "package script");
 includes(packageJson, '"guard:provider-webhook-reliability"', "package script");
 includes(moneyRunbook, "Provider Webhook Reliability", "money runbook");
+includes(moneyLoopProof, "duplicate provider webhook event replay", "provider loop proof replay coverage");
 
 matches(moneyOperator, /PROVIDER_WEBHOOKS[\s\S]*revenuecat[\s\S]*google_play[\s\S]*stripe_connect[\s\S]*stripe_merch/, "provider webhook registry");
 notMatches(functionCorpus, /\bstripe\.(payouts|transfers|charges|checkout|paymentLinks|invoices)\.create\b/i, "provider webhook monitor creates real money movement");

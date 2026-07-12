@@ -123,8 +123,10 @@ Actions:
 - `provider_webhook_health`
 - `provider_webhook_test_plan`
 - `record_provider_webhook_delivery_status`
+- `provider_delivery_history_readback`
 - `provider_dashboard_repair_request`
 - `provider_webhook_reliability_report`
+- `watch_once`
 
 `execute_approved_money_action` does not move money. It records or blocks according to scope and still requires the autonomous approval path plus external provider confirmation for Level 4.
 
@@ -137,6 +139,16 @@ Money Operator monitors provider webhook reliability for:
 - Stripe merch/checkout (`stripe-merch-webhook`)
 - provider readiness/reconciliation surfaces
 
+Registered provider reliability surfaces:
+- `revenuecat_webhook_delivery`
+- `google_play_webhook_delivery`
+- `stripe_connect_webhook_delivery`
+- `stripe_merch_webhook_delivery`
+- `provider_readiness_audit`
+- `provider_delivery_error_rate`
+- `stale_provider_dashboard_integration_detection`
+- `duplicate_webhook_integration_detection`
+
 Safe monitor behavior:
 - endpoint shape and missing/invalid auth checks
 - provider sync status rows
@@ -144,6 +156,8 @@ Safe monitor behavior:
 - duplicate provider/webhook event detections
 - dashboard repair approval requests
 - reliability reports
+- provider delivery-history readback when provider dashboard/API access exists
+- owner action when provider dashboard/API access is unavailable
 
 The monitor cannot print provider secrets, cannot manually grant Premium, cannot create charges, payouts, transfers, cashout, invoices, or payment links, cannot mutate provider products, and cannot claim test-mode proof as production readiness. Provider dashboard changes such as changing webhook URLs, signing secrets, event selections, or disabling stale duplicate integrations require an autonomous approval request before mutation.
 
@@ -152,6 +166,21 @@ RevenueCat dashboard test events are expected to return `200 test_received` only
 Google Play direct webhook delivery is readiness-only when RevenueCat remains the entitlement source of truth. Missing `GOOGLE_PLAY_WEBHOOK_SECRET` means Google Play direct webhook delivery is not configured; this must not be called a production failure if the stack intentionally uses RevenueCat for entitlement events.
 
 Stripe Connect and Stripe merch webhook proofs must use signed test/sandbox events only. Invalid signatures fail closed. Live-mode events are rejected by the test/sandbox handlers and cannot be used to claim production money readiness.
+
+Error-rate classifications are `healthy`, `degraded`, `critical`, `outage`, and `unknown`. A 100% provider webhook error rate must record `money_provider_sync_status=blocked` or `failed`, create a `money_reconciliation_findings` row, appear in Admin Money Center, and create a Level 3 approval request when provider dashboard mutation is required.
+
+Provider delivery-history readback should capture only safe evidence: last failure code, last success time, endpoint host/path, event type, and integration id hash. Raw provider credentials, webhook signing values, request payload secrets, bank/payout details, and service-role values are forbidden.
+
+Duplicate/stale integration detection checks for old Supabase project hosts, wrong function paths, stale active integrations, and multiple active integrations for the same provider/capability. Money Operator may record findings and approval requests only. It must not delete or alter provider dashboard integrations without owner approval.
+
+RevenueCat Premium stale readback can be recorded when RevenueCat says active but Supabase Premium readback is stale. Money Operator may record `stale_readback` and request provider replay/readback. It must not manually grant Premium.
+
+Package loop commands:
+- `money-operator:provider-health`
+- `money-operator:watch-once`
+- `money-operator:report`
+
+These commands call the token-gated Money Operator only when `MONEY_OPERATOR_FUNCTION_URL` or `SUPABASE_FUNCTIONS_URL` and `MONEY_OPERATOR_TOKEN` are available. Otherwise they fail closed with no write and no money movement.
 
 ## Admin Surface
 

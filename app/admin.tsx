@@ -11097,6 +11097,7 @@ export default function AdminStudioScreen() {
     const stripeConnectSwitch = getPlatformMoneyKillSwitch(moneySwitches, "stripe_connect_enabled");
     const liveMoneyOff = liveMoneySwitch.state !== "on";
     const moneyFlowControlSummary = getMoneyFlowControlSummary();
+    const providerWebhookHealthRows = moneyFlowControlSummary.providerWebhookHealthRows;
     const readyProviderRows = providerReadinessRows.filter((row) => row.status === "active" || row.status === "sandbox_ready");
     const highRiskOnCount = moneySwitches.filter((row) => HIGH_RISK_MONEY_SWITCHES.has(row.key) && row.state === "on").length;
     const premiumReadiness = findProviderReadinessSummary(providerReadinessRows, "revenuecat", "premium_entitlement")
@@ -11225,7 +11226,7 @@ export default function AdminStudioScreen() {
               ]}
             />
             <Text testID="money-flow-control-proof-status" style={styles.ownerDetailText}>
-              Required package gates: proof:money-flow-control, proof:money-operator-write-scope, proof:money-external-confirmation, guard:money-flow-control, proof:autonomous-approval-live-flow, and guard:autonomous-systems-contract.
+              Required package gates: proof:money-flow-control, proof:money-operator-write-scope, proof:money-external-confirmation, proof:provider-webhook-reliability, proof:money-provider-reliability-loop, guard:provider-webhook-reliability, guard:money-flow-control, proof:autonomous-approval-live-flow, and guard:autonomous-systems-contract.
             </Text>
             <OwnerDisabledReason reason="This section exposes safe status/review visibility only. It cannot charge a customer, create a payout, release cashout, mark paid, fake payable balance, edit Premium entitlement, or switch provider modes." />
           </View>
@@ -11499,6 +11500,27 @@ export default function AdminStudioScreen() {
             {renderProviderReadinessLine("stripe_webhook", "stripe_webhook_signature", "Stripe webhook signature")}
             {renderProviderReadinessLine("revenuecat", "revenuecat_entitlement", "RevenueCat webhook/readiness")}
             {renderProviderReadinessLine("google_play", "google_play_subscription_product", "Google Play product/readiness")}
+            <Text testID="money-provider-webhook-health-by-provider" style={styles.ownerDetailText}>
+              Provider webhook health covers RevenueCat, Google Play, Stripe Connect, and Stripe merch/checkout through Money Operator status rows, findings, duplicate detections, and approval requests only.
+            </Text>
+            <OwnerDetailGrid
+              rows={providerWebhookHealthRows.map((row) => ({
+                label: row.provider,
+                value: `${row.surface} · ${row.expectedMode}`,
+              }))}
+            />
+            <Text testID="money-provider-webhook-last-success-failure" style={styles.ownerDetailText}>
+              Last success/failure readback is recorded from provider dashboard/API evidence when available; without provider access it remains an owner action and does not fake success.
+            </Text>
+            <Text testID="money-provider-webhook-error-rate-classification" style={styles.ownerDetailText}>
+              Error-rate classes: healthy, degraded, critical, outage, unknown. A 100% provider error rate records failed/blocked status plus a reconciliation finding.
+            </Text>
+            <Text testID="money-provider-webhook-owner-action" style={styles.ownerDetailText}>
+              Required owner actions appear when provider dashboard access is unavailable, endpoint host/path is stale, or duplicate active integrations are detected.
+            </Text>
+            <Text testID="money-provider-webhook-approval-request" style={styles.ownerDetailText}>
+              Provider dashboard repair creates a Level 3 autonomous approval request; it does not delete integrations, rotate secrets, change event selections, or mutate provider products by itself.
+            </Text>
             <OwnerDetailGrid
               rows={[
                 { label: "Monetization webhook events", value: formatAdminFinanceCount(adminFinanceReadModel.monetizationWebhookEventCount, adminFinanceReadModel.loading, "sandbox/setup event", "sandbox/setup events") },

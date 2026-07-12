@@ -70,8 +70,10 @@ for (const action of [
   "provider_webhook_health",
   "provider_webhook_test_plan",
   "record_provider_webhook_delivery_status",
+  "provider_delivery_history_readback",
   "provider_dashboard_repair_request",
   "provider_webhook_reliability_report",
+  "watch_once",
 ]) {
   includes(functionSource, `action === "${action}"`, "money operator action");
 }
@@ -91,6 +93,11 @@ for (const safeAction of [
   "record reconciliation findings",
   "mark provider sync stale/synced/failed",
   "mark duplicate provider/webhook event",
+  "classify provider webhook error rate",
+  "record provider delivery history readback",
+  "detect stale provider dashboard integration",
+  "detect duplicate webhook integration",
+  "record Premium stale readback without entitlement grant",
   "mark ledger/payout/revenue item requires_review",
   "create approval request",
   "record blocked action",
@@ -121,12 +128,19 @@ for (const testId of [
   "money-operator-provider-sync-health",
   "money-operator-blocked-actions",
   "money-operator-external-confirmation-required",
+  "money-provider-webhook-health-by-provider",
+  "money-provider-webhook-last-success-failure",
+  "money-provider-webhook-error-rate-classification",
+  "money-provider-webhook-owner-action",
+  "money-provider-webhook-approval-request",
 ]) {
   includes(admin, testId, "Admin Money Operator visibility");
 }
 
 includes(packageJson, '"proof:money-operator-write-scope"', "package script");
 includes(packageJson, '"proof:money-external-confirmation"', "package script");
+includes(packageJson, '"proof:money-provider-reliability-loop"', "package script");
+includes(packageJson, '"money-operator:watch-once"', "package script");
 includes(functionSource, "x-money-operator-token", "money operator token header");
 includes(functionSource, "MONEY_OPERATOR_TOKEN_SHA256", "money operator token hash secret");
 includes(functionSource, "constantTimeEqual", "money operator constant-time auth");

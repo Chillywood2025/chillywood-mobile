@@ -39,6 +39,10 @@ includes(packageJson, '"proof:money-flow-control"', "package script");
 includes(packageJson, '"proof:money-operator-write-scope"', "package script");
 includes(packageJson, '"proof:money-external-confirmation"', "package script");
 includes(packageJson, '"proof:provider-webhook-reliability"', "package script");
+includes(packageJson, '"proof:money-provider-reliability-loop"', "package script");
+includes(packageJson, '"money-operator:watch-once"', "package script");
+includes(packageJson, '"money-operator:provider-health"', "package script");
+includes(packageJson, '"money-operator:report"', "package script");
 includes(packageJson, '"guard:provider-webhook-reliability"', "package script");
 includes(registry, 'id: "money_flow_control"', "autonomous registry");
 includes(registry, "scoped_write_capable_guarded", "money registry status");
@@ -61,8 +65,12 @@ includes(moneyOperator, "constantTimeEqual", "money operator constant-time auth"
 includes(moneyOperator, "blocked_pending_owner_scope_and_external_confirmation", "money operator blocks real money");
 includes(moneyOperator, "provider_webhook_health", "provider webhook reliability health");
 includes(moneyOperator, "record_provider_webhook_delivery_status", "provider webhook reliability status write");
+includes(moneyOperator, "provider_delivery_history_readback", "provider delivery-history readback");
 includes(moneyOperator, "provider_dashboard_repair_request", "provider dashboard repair approval path");
 includes(moneyOperator, "provider_webhook_reliability_report", "provider webhook reliability report");
+includes(moneyOperator, "watch_once", "provider reliability watch-once loop");
+includes(moneyOperator, "classifyProviderDeliveryErrorRate", "provider delivery error-rate classifier");
+includes(moneyOperator, "duplicate_webhook_integration_detection", "duplicate webhook integration detection");
 
 for (const testId of [
   "admin-money-flow-control-section",
@@ -78,6 +86,11 @@ for (const testId of [
   "money-operator-provider-sync-health",
   "money-operator-blocked-actions",
   "money-operator-external-confirmation-required",
+  "money-provider-webhook-health-by-provider",
+  "money-provider-webhook-last-success-failure",
+  "money-provider-webhook-error-rate-classification",
+  "money-provider-webhook-owner-action",
+  "money-provider-webhook-approval-request",
 ]) {
   includes(admin, testId, "Admin Money Flow Control section");
 }

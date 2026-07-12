@@ -17,6 +17,14 @@ export const MONEY_FLOW_SURFACES = [
   "premium_revenue",
   "revenuecat_entitlements_readback",
   "google_play_receipts_readback",
+  "revenuecat_webhook_delivery",
+  "google_play_webhook_delivery",
+  "stripe_connect_webhook_delivery",
+  "stripe_merch_webhook_delivery",
+  "provider_readiness_audit",
+  "provider_delivery_error_rate",
+  "stale_provider_dashboard_integration_detection",
+  "duplicate_webhook_integration_detection",
   "stripe_connect_foundation",
   "creator_payout_ledger",
   "payout_review_queue",
@@ -52,6 +60,12 @@ export type MoneyActionId =
   | "write_sandbox_test_mode_proof_result"
   | "update_money_operator_learning_state"
   | "fraud_hold_recommendation"
+  | "provider_webhook_reliability_loop"
+  | "provider_delivery_history_readback"
+  | "provider_delivery_error_rate_classification"
+  | "stale_provider_dashboard_integration_detection"
+  | "duplicate_webhook_integration_detection"
+  | "premium_stale_readback_detection"
   | "enable_production_checkout"
   | "enable_live_provider_integration"
   | "enable_payout_review_mutation"
@@ -102,6 +116,12 @@ export const MONEY_FLOW_LEVEL_2_ACTIONS: readonly MoneyActionId[] = [
   "write_sandbox_test_mode_proof_result",
   "update_money_operator_learning_state",
   "fraud_hold_recommendation",
+  "provider_webhook_reliability_loop",
+  "provider_delivery_history_readback",
+  "provider_delivery_error_rate_classification",
+  "stale_provider_dashboard_integration_detection",
+  "duplicate_webhook_integration_detection",
+  "premium_stale_readback_detection",
 ];
 
 export const MONEY_FLOW_LEVEL_3_ACTIONS: readonly MoneyActionId[] = [
@@ -168,6 +188,11 @@ export const MONEY_OPERATOR_SAFE_FIX_ACTIONS = [
   "record reconciliation findings",
   "mark provider sync stale/synced/failed",
   "mark duplicate provider/webhook event",
+  "classify provider webhook error rate",
+  "record provider delivery history readback",
+  "detect stale provider dashboard integration",
+  "detect duplicate webhook integration",
+  "record Premium stale readback without entitlement grant",
   "mark ledger/payout/revenue item requires_review",
   "create approval request",
   "record blocked action",
@@ -196,6 +221,55 @@ export const MONEY_OPERATOR_FORBIDDEN_WRITE_SCOPES = [
 ] as const;
 
 export type MoneyOperatorWriteTable = typeof MONEY_OPERATOR_ALLOWED_WRITE_TABLES[number];
+export type ProviderWebhookErrorRateClassification = "healthy" | "degraded" | "critical" | "outage" | "unknown";
+
+export const MONEY_PROVIDER_RELIABILITY_SURFACES = [
+  "revenuecat_webhook_delivery",
+  "google_play_webhook_delivery",
+  "stripe_connect_webhook_delivery",
+  "stripe_merch_webhook_delivery",
+  "provider_readiness_audit",
+  "provider_delivery_error_rate",
+  "stale_provider_dashboard_integration_detection",
+  "duplicate_webhook_integration_detection",
+] as const;
+
+export const MONEY_PROVIDER_WEBHOOK_HEALTH_ROWS = [
+  {
+    provider: "revenuecat",
+    surface: "revenuecat_webhook_delivery",
+    expectedMode: "production provider-backed Premium entitlement events",
+    ownerAction: "Review RevenueCat dashboard delivery history, endpoint URL, shared auth, and duplicate integrations when error rate is degraded/critical/outage.",
+  },
+  {
+    provider: "google_play",
+    surface: "google_play_webhook_delivery",
+    expectedMode: "revenuecat_mediated_or_readiness_only",
+    ownerAction: "Treat direct Google Play webhook absence as readiness-only unless direct Google handling is intentionally active.",
+  },
+  {
+    provider: "stripe_connect",
+    surface: "stripe_connect_webhook_delivery",
+    expectedMode: "test/live separated; no live-mode switch here",
+    ownerAction: "Review Stripe Connect webhook endpoint/event selections only through Level 3 approval; real transfer/payout remains Level 4 plus external confirmation.",
+  },
+  {
+    provider: "stripe_merch",
+    surface: "stripe_merch_webhook_delivery",
+    expectedMode: "physical merch sandbox/test readiness separated from production",
+    ownerAction: "Review Stripe merch webhook endpoint/event selections only through Level 3 approval; no checkout/payment link/charge is created here.",
+  },
+] as const;
+
+export const classifyProviderDeliveryErrorRate = (
+  errorRatePercent: number | null | undefined,
+): ProviderWebhookErrorRateClassification => {
+  if (typeof errorRatePercent !== "number" || !Number.isFinite(errorRatePercent)) return "unknown";
+  if (errorRatePercent <= 0) return "healthy";
+  if (errorRatePercent < 25) return "degraded";
+  if (errorRatePercent < 100) return "critical";
+  return "outage";
+};
 
 export type MoneyActionClassification = {
   actionId: string;
@@ -242,6 +316,9 @@ export const classifyMoneyAction = (actionId: string): MoneyActionClassification
 export const classifyMoneySurfaceState = (surfaceId: MoneyFlowSurfaceId | string) => {
   if (surfaceId === "premium_revenue" || surfaceId === "revenuecat_entitlements_readback" || surfaceId === "google_play_receipts_readback") {
     return "provider_readback_only" as const;
+  }
+  if (MONEY_PROVIDER_RELIABILITY_SURFACES.includes(surfaceId as typeof MONEY_PROVIDER_RELIABILITY_SURFACES[number])) {
+    return "provider_webhook_reliability_guarded" as const;
   }
   if (surfaceId === "refunds_disputes_future" || surfaceId === "tax_compliance_future") {
     return "future_blocked" as const;
@@ -447,6 +524,8 @@ export const getMoneyFlowControlSummary = () => ({
   allowedSandboxActions: MONEY_FLOW_LEVEL_2_ACTIONS,
   allowedSafeWriteTables: MONEY_OPERATOR_ALLOWED_WRITE_TABLES,
   allowedSafeFixes: MONEY_OPERATOR_SAFE_FIX_ACTIONS,
+  providerReliabilitySurfaces: MONEY_PROVIDER_RELIABILITY_SURFACES,
+  providerWebhookHealthRows: MONEY_PROVIDER_WEBHOOK_HEALTH_ROWS,
   level3OwnerApprovalRequired: MONEY_FLOW_LEVEL_3_ACTIONS,
   level4ExternalConfirmationRequired: MONEY_FLOW_LEVEL_4_ACTIONS,
   forbiddenActions: MONEY_FLOW_FORBIDDEN_ACTIONS,

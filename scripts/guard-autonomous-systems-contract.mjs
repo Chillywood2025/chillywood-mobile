@@ -251,12 +251,14 @@ notIncludes(registry, "approvalLevel: 2,\n        allowedWriteScope: [\"Premium 
 matches(registry, /id:\s*"production_money_setup_or_policy_mutation"[\s\S]*approvalLevel:\s*3[\s\S]*ownerApprovalRequired:\s*true/, "Level 3 money setup registry entry");
 matches(registry, /id:\s*"real_money_movement_or_public_money_launch"[\s\S]*approvalLevel:\s*4[\s\S]*ownerApprovalRequired:\s*true/, "Level 4 money movement registry entry");
 matches(registry, /id:\s*"scoped_money_operator_reconciliation_writes"[\s\S]*approvalLevel:\s*2[\s\S]*money_reconciliation_findings[\s\S]*money_required_review_flags/, "scoped money operator writes registry entry");
+matches(registry, /id:\s*"provider_webhook_reliability_loop"[\s\S]*approvalLevel:\s*2[\s\S]*money_provider_sync_status[\s\S]*money_reconciliation_findings[\s\S]*provider dashboard mutation without owner approval/, "provider webhook reliability loop registry entry");
 includes(moneyFlowControl, "unknown_money_action_defaults_level_4", "money helper unknown action safety");
 includes(moneyFlowControl, "external_provider_confirmation_required_for_level_4", "money helper Level 4 confirmation");
 includes(moneyFlowControl, "manual_premium_grant_forbidden", "money helper Premium grant block");
 includes(moneyFlowControl, "fake_creator_earnings_forbidden", "money helper fake earnings block");
 includes(moneyFlowControl, "MONEY_OPERATOR_ALLOWED_WRITE_TABLES", "money helper scoped operator writes");
 includes(moneyFlowControl, "MONEY_OPERATOR_FORBIDDEN_WRITE_SCOPES", "money helper forbidden operator writes");
+includes(moneyFlowControl, "MONEY_PROVIDER_RELIABILITY_SURFACES", "money helper provider reliability surfaces");
 
 for (const required of [
   "autonomous_approval_requests",

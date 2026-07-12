@@ -150,6 +150,14 @@ Allowed surfaces:
 - `premium_revenue`
 - `revenuecat_entitlements_readback`
 - `google_play_receipts_readback`
+- `revenuecat_webhook_delivery`
+- `google_play_webhook_delivery`
+- `stripe_connect_webhook_delivery`
+- `stripe_merch_webhook_delivery`
+- `provider_readiness_audit`
+- `provider_delivery_error_rate`
+- `stale_provider_dashboard_integration_detection`
+- `duplicate_webhook_integration_detection`
 - `stripe_connect_foundation`
 - `creator_payout_ledger`
 - `payout_review_queue`
@@ -180,6 +188,9 @@ Allowed writes:
 - write sandbox/test-mode proof result
 - update learning state
 - provider webhook reliability status/finding/report records
+- provider delivery-history readback metadata
+- provider delivery error-rate classification
+- stale/duplicate provider dashboard integration detection
 - autonomous approval request creation
 
 Forbidden:
@@ -215,6 +226,7 @@ Required proofs/guards:
 - `proof:money-operator-write-scope`
 - `proof:money-external-confirmation`
 - `proof:provider-webhook-reliability`
+- `proof:money-provider-reliability-loop`
 - `guard:money-flow-control`
 - `guard:provider-webhook-reliability`
 - `proof:autonomous-approval-live-flow`
@@ -226,7 +238,9 @@ Read-only reconciliation and scoped safe reconciliation/status/review/audit writ
 
 The scoped Money Operator may not mark payout paid, release payout, create transfer/payout, charge a customer, send invoices, create payment links, enable cashout, manually grant Premium, edit Premium entitlement outside provider-backed readback, create fake revenue/payable balance, clear a fraud hold as paid/settled, mutate auth/RLS, mutate provider products, or switch Stripe live mode.
 
-Provider webhook reliability monitoring covers RevenueCat, Google Play, Stripe Connect, and Stripe merch/checkout. It may record webhook delivery status, reconciliation findings, duplicate event detections, blocked actions, and dashboard repair approval requests. It cannot mutate provider dashboards without approval, cannot print secrets, cannot manually grant Premium, cannot move money, and cannot describe sandbox/test events as production readiness.
+Provider webhook reliability monitoring covers RevenueCat, Google Play, Stripe Connect, and Stripe merch/checkout. It may record webhook delivery status, delivery-history readback metadata, last success/failure, endpoint host/path, event type, integration id hash, error-rate classification, reconciliation findings, duplicate event detections, stale/duplicate dashboard integration detections, blocked actions, and dashboard repair approval requests. It cannot mutate provider dashboards without approval, cannot print secrets, cannot manually grant Premium, cannot move money, and cannot describe sandbox/test events as production readiness.
+
+Error-rate classes are `healthy`, `degraded`, `critical`, `outage`, and `unknown`. A 100% provider webhook error rate must become failed/blocked provider sync status plus a reconciliation finding, and dashboard mutation must create a Level 3 approval request.
 
 ## Expansion Contract
 

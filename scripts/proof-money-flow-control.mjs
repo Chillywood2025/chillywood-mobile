@@ -105,6 +105,8 @@ const proofCases = [
     name: "Money Operator monitors provider webhook reliability without dashboard mutation",
     passes: () => moneyOperator.includes("provider_webhook_health")
       && moneyOperator.includes("record_provider_webhook_delivery_status")
+      && moneyOperator.includes("provider_delivery_history_readback")
+      && moneyOperator.includes("watch_once")
       && moneyOperator.includes("provider_dashboard_repair_request")
       && moneyOperator.includes("provider_dashboard_mutated: false"),
   },
@@ -127,6 +129,10 @@ includes(packageJson, '"proof:money-flow-control"', "package scripts");
 includes(packageJson, '"proof:money-operator-write-scope"', "package scripts");
 includes(packageJson, '"proof:money-external-confirmation"', "package scripts");
 includes(packageJson, '"proof:provider-webhook-reliability"', "package scripts");
+includes(packageJson, '"proof:money-provider-reliability-loop"', "package scripts");
+includes(packageJson, '"money-operator:watch-once"', "package scripts");
+includes(packageJson, '"money-operator:provider-health"', "package scripts");
+includes(packageJson, '"money-operator:report"', "package scripts");
 includes(packageJson, '"guard:provider-webhook-reliability"', "package scripts");
 includes(packageJson, '"guard:money-flow-control"', "package scripts");
 

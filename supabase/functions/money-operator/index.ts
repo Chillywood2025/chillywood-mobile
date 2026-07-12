@@ -36,6 +36,12 @@ const SAFE_ACTIONS = new Set([
   "write_sandbox_test_mode_proof_result",
   "update_money_operator_learning_state",
   "fraud_hold_recommendation",
+  "provider_webhook_reliability_loop",
+  "provider_delivery_history_readback",
+  "provider_delivery_error_rate_classification",
+  "stale_provider_dashboard_integration_detection",
+  "duplicate_webhook_integration_detection",
+  "premium_stale_readback_detection",
 ]);
 const LEVEL_3_ACTIONS = new Set([
   "enable_production_checkout",
@@ -73,32 +79,48 @@ const ALLOWED_ENVIRONMENTS = new Set(["sandbox", "test", "production"]);
 const PROVIDER_WEBHOOKS = [
   {
     provider: "revenuecat",
-    capability: "webhook_delivery",
+    capability: "revenuecat_webhook_delivery",
+    surface: "revenuecat_webhook_delivery",
     functionName: "revenuecat-webhook",
+    expectedHost: "bmkkhihfbmsnnmcqkoly.supabase.co",
+    expectedPath: "/functions/v1/revenuecat-webhook",
+    sourceOfTruth: "revenuecat_provider_backed_premium_truth",
     expectedMissingAuth: "401 invalid_signature",
     validTestExpectation: "200 test_received, premiumGranted=false, liveMoneyAction=false",
     requiredSecretNames: ["REVENUECAT_WEBHOOK_SECRET"],
   },
   {
     provider: "google_play",
-    capability: "webhook_delivery_or_readiness",
+    capability: "google_play_webhook_delivery",
+    surface: "google_play_webhook_delivery",
     functionName: "google-play-webhook",
+    expectedHost: "bmkkhihfbmsnnmcqkoly.supabase.co",
+    expectedPath: "/functions/v1/google-play-webhook",
+    sourceOfTruth: "revenuecat_mediated_or_readiness_only",
     expectedMissingAuth: "200 setup_required when GOOGLE_PLAY_WEBHOOK_SECRET is absent, otherwise 401 invalid_signature",
     validTestExpectation: "readiness-only unless this stack enables Google Play direct webhook processing",
     requiredSecretNames: ["GOOGLE_PLAY_WEBHOOK_SECRET"],
   },
   {
     provider: "stripe_connect",
-    capability: "webhook_delivery",
+    capability: "stripe_connect_webhook_delivery",
+    surface: "stripe_connect_webhook_delivery",
     functionName: "stripe-connect-webhook",
+    expectedHost: "bmkkhihfbmsnnmcqkoly.supabase.co",
+    expectedPath: "/functions/v1/stripe-connect-webhook",
+    sourceOfTruth: "stripe_connect_foundation_test_and_live_separated",
     expectedMissingAuth: "400 invalid_signature",
     validTestExpectation: "test-mode signed event only; no payout, transfer, checkout, or live-money action",
     requiredSecretNames: ["STRIPE_WEBHOOK_SECRET"],
   },
   {
     provider: "stripe_merch",
-    capability: "webhook_delivery",
+    capability: "stripe_merch_webhook_delivery",
+    surface: "stripe_merch_webhook_delivery",
     functionName: "stripe-merch-webhook",
+    expectedHost: "bmkkhihfbmsnnmcqkoly.supabase.co",
+    expectedPath: "/functions/v1/stripe-merch-webhook",
+    sourceOfTruth: "stripe_merch_physical_goods_only_test_and_live_separated",
     expectedMissingAuth: "400 invalid_signature",
     validTestExpectation: "sandbox signed physical-merch event only; no digital access, Premium, payout, or cashout",
     requiredSecretNames: ["STRIPE_MERCH_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET fallback"],
@@ -182,10 +204,80 @@ const providerWebhookConfig = (provider: string) => (
   PROVIDER_WEBHOOKS.find((entry) => entry.provider === provider) ?? null
 );
 
+const classifyProviderDeliveryErrorRate = (value: unknown) => {
+  const percent = Number(value);
+  if (!Number.isFinite(percent)) return "unknown";
+  if (percent <= 0) return "healthy";
+  if (percent < 25) return "degraded";
+  if (percent < 100) return "critical";
+  return "outage";
+};
+
+const providerSyncStatusForClassification = (classification: string) => {
+  if (classification === "healthy") return "synced";
+  if (classification === "degraded" || classification === "critical") return "failed";
+  if (classification === "outage") return "blocked";
+  return "stale";
+};
+
+const classifyGooglePlaySourceTruth = (value: unknown) => {
+  const mode = safeLabel(value, "revenuecat_mediated");
+  if (["direct_source_of_truth", "revenuecat_mediated", "readiness_only", "unused_stale"].includes(mode)) return mode;
+  return "revenuecat_mediated";
+};
+
+const endpointParts = (input: unknown) => {
+  const value = toText(input);
+  if (!value) return { host: null as string | null, path: null as string | null };
+  try {
+    const parsed = new URL(value);
+    return { host: parsed.host, path: parsed.pathname };
+  } catch {
+    const [host, ...pathParts] = value.replace(/^https?:\/\//, "").split("/");
+    return { host: safeLabel(host, "unknown"), path: pathParts.length ? `/${pathParts.join("/")}`.slice(0, 160) : null };
+  }
+};
+
+const safeProviderIntegrationIssues = async (payload: JsonObject, providerConfig: typeof PROVIDER_WEBHOOKS[number]) => {
+  const integrations = Array.isArray(payload.dashboard_integrations)
+    ? payload.dashboard_integrations.filter((entry) => entry && typeof entry === "object").slice(0, 12) as JsonObject[]
+    : [];
+  const activeIntegrations = integrations.filter((entry) => entry.active !== false && safeLabel(entry.status ?? "active") !== "disabled");
+  const issues: string[] = [];
+  const redactedIntegrations = [];
+
+  for (const entry of activeIntegrations) {
+    const endpoint = endpointParts(entry.endpoint_url ?? entry.endpointUrl ?? `${toText(entry.endpoint_host ?? entry.endpointHost) || providerConfig.expectedHost}${toText(entry.endpoint_path ?? entry.endpointPath) || ""}`);
+    const integrationId = toText(entry.integration_id_hash ?? entry.integrationIdHash ?? entry.integration_id ?? entry.integrationId);
+    redactedIntegrations.push({
+      active: true,
+      endpoint_host: endpoint.host,
+      endpoint_path: endpoint.path,
+      event_type: safeLabel(entry.event_type ?? entry.eventType ?? "unknown"),
+      integration_id_hash: integrationId ? await sha256Hex(integrationId) : null,
+    });
+    if (endpoint.host && endpoint.host !== providerConfig.expectedHost) issues.push("old_supabase_project_url_or_wrong_host");
+    if (endpoint.path && endpoint.path !== providerConfig.expectedPath) issues.push("wrong_function_path");
+  }
+
+  if (activeIntegrations.length > 1) issues.push("duplicate_webhook_integration_detection");
+  if (payload.stale_integration_detected === true) issues.push("stale_provider_dashboard_integration_detection");
+
+  return {
+    issues: Array.from(new Set(issues)),
+    integrations: redactedIntegrations,
+    ownerActionRequired: issues.length > 0,
+  };
+};
+
 const safeProviderWebhookRows = () => PROVIDER_WEBHOOKS.map((entry) => ({
   provider: entry.provider,
   capability: entry.capability,
+  surface: entry.surface,
   functionName: entry.functionName,
+  expectedEndpointHost: entry.expectedHost,
+  expectedEndpointPath: entry.expectedPath,
+  sourceOfTruth: entry.sourceOfTruth,
   expectedMissingAuth: entry.expectedMissingAuth,
   validTestExpectation: entry.validTestExpectation,
   requiredSecretNames: entry.requiredSecretNames,
@@ -224,6 +316,40 @@ const insertEvent = async (client: SupabaseClientLike, event: JsonObject) => {
       metadata: safeMetadata(event.metadata),
     })
     .select("id,event_type,result,created_at,money_moved")
+    .single();
+  if (error) throw error;
+  return data as JsonObject;
+};
+
+const recordProviderFinding = async (client: SupabaseClientLike, input: {
+  environmentMode: string;
+  findingType: string;
+  metadata: JsonObject;
+  providerConfig: typeof PROVIDER_WEBHOOKS[number];
+  severity: "info" | "warning" | "error" | "critical";
+}) => {
+  const { data, error } = await client
+    .from("money_reconciliation_findings")
+    .insert({
+      system_id: SYSTEM_ID,
+      finding_type: input.findingType,
+      severity: input.severity,
+      surface: input.providerConfig.surface,
+      status: "requires_review",
+      environment_mode: input.environmentMode,
+      money_moved: false,
+      external_confirmation_required: false,
+      external_confirmation_status: "not_required",
+      metadata: safeMetadata({
+        provider: input.providerConfig.provider,
+        capability: input.providerConfig.capability,
+        function_name: input.providerConfig.functionName,
+        ...input.metadata,
+        provider_dashboard_mutated: false,
+        money_moved: false,
+      }),
+    })
+    .select("id,finding_type,status,money_moved")
     .single();
   if (error) throw error;
   return data as JsonObject;
@@ -339,6 +465,7 @@ Deno.serve(async (request) => {
       return jsonResponse(200, {
         ok: true,
         action,
+        continuousReadiness: "watch_once_supported_manual_or_scheduler_safe",
         providerWebhooks: safeProviderWebhookRows(),
         snapshot,
         moneyMoved: false,
@@ -356,6 +483,9 @@ Deno.serve(async (request) => {
           "Stripe invalid signatures must fail closed",
           "Stripe test-mode events cannot claim production readiness",
           "dashboard/provider mutation requires autonomous approval request",
+          "100% provider webhook error rate records failed/blocked status and reconciliation finding",
+          "duplicate provider webhook event replay records duplicate detection without entitlement/ledger/payout duplication",
+          "RevenueCat active while Supabase Premium stale records stale_readback and requests provider replay/readback without manual grant",
         ],
         moneyMoved: false,
       });
@@ -366,8 +496,11 @@ Deno.serve(async (request) => {
       const provider = safeLabel(payload.provider);
       const providerConfig = providerWebhookConfig(provider);
       if (!providerConfig) return jsonResponse(400, { error: "unsupported_provider_webhook" });
-      const syncStatus = safeLabel(payload.sync_status ?? payload.status ?? "stale");
+      const errorRateClassification = classifyProviderDeliveryErrorRate(payload.error_rate_percent ?? payload.errorRatePercent);
+      const derivedSyncStatus = providerSyncStatusForClassification(errorRateClassification);
+      const syncStatus = safeLabel(payload.sync_status ?? payload.status ?? derivedSyncStatus);
       if (!["stale", "synced", "failed", "blocked"].includes(syncStatus)) return jsonResponse(400, { error: "invalid_sync_status" });
+      const dashboardIssues = await safeProviderIntegrationIssues(payload, providerConfig);
       const { data: statusRow, error: statusError } = await client
         .from("money_provider_sync_status")
         .upsert({
@@ -383,6 +516,18 @@ Deno.serve(async (request) => {
           metadata: safeMetadata({
             ...(payload.metadata && typeof payload.metadata === "object" ? payload.metadata as JsonObject : {}),
             function_name: providerConfig.functionName,
+            provider_surface: providerConfig.surface,
+            source_of_truth: providerConfig.provider === "google_play"
+              ? classifyGooglePlaySourceTruth(payload.google_play_source_truth ?? payload.googlePlaySourceTruth)
+              : providerConfig.sourceOfTruth,
+            error_rate_classification: errorRateClassification,
+            error_rate_percent: Number.isFinite(Number(payload.error_rate_percent ?? payload.errorRatePercent)) ? Number(payload.error_rate_percent ?? payload.errorRatePercent) : null,
+            last_failure_code: safeLabel(payload.last_failure_code ?? payload.lastFailureCode ?? "unknown"),
+            last_success_at: toText(payload.last_success_at ?? payload.lastSuccessAt) || null,
+            endpoint_host: toText(payload.endpoint_host ?? payload.endpointHost) || null,
+            endpoint_path: toText(payload.endpoint_path ?? payload.endpointPath) || null,
+            event_type: safeLabel(payload.event_type ?? payload.eventType ?? "unknown"),
+            dashboard_issues: dashboardIssues.issues,
             provider_dashboard_mutated: false,
             premium_manually_granted: false,
             money_moved: false,
@@ -394,46 +539,180 @@ Deno.serve(async (request) => {
 
       let finding: JsonObject | null = null;
       if (syncStatus === "failed" || syncStatus === "blocked") {
-        const { data, error } = await client
-          .from("money_reconciliation_findings")
-          .insert({
-            system_id: SYSTEM_ID,
-            finding_type: "provider_webhook_delivery_issue",
-            severity: syncStatus === "blocked" ? "error" : "warning",
-            surface: providerConfig.provider,
-            status: "requires_review",
-            environment_mode: mode,
+        finding = await recordProviderFinding(client, {
+          environmentMode: mode,
+          findingType: "provider_webhook_delivery_issue",
+          providerConfig,
+          severity: syncStatus === "blocked" ? "error" : "warning",
+          metadata: {
+            failure_reason: payload.failure_reason ?? "provider_webhook_delivery_issue",
+            error_rate_classification: errorRateClassification,
+            dashboard_issues: dashboardIssues.issues,
+          },
+        });
+      }
+
+      let approvalRequest: JsonObject | null = null;
+      if (dashboardIssues.ownerActionRequired || payload.provider_dashboard_mutation_required === true || payload.providerDashboardMutationRequired === true) {
+        approvalRequest = await createApprovalRequest(client, {
+          money_action_id: "change_money_facing_config",
+          title: `Provider dashboard repair approval required: ${providerConfig.provider}`,
+          reason: "Provider dashboard delivery errors or stale/duplicate integrations require owner approval before dashboard mutation.",
+          risk_summary: "Provider dashboard webhook changes can affect billing/event delivery and must not be autonomous.",
+          proposed_action: `Review ${providerConfig.provider} dashboard webhook endpoint, event selection, shared auth, and duplicate integrations.`,
+          allowed_write_scope: [
+            `provider_dashboard:${providerConfig.provider}:webhook_configuration`,
+            "money_operator_events",
+            "money_reconciliation_findings",
+            "money_provider_sync_status",
+          ],
+          metadata: {
+            provider: providerConfig.provider,
+            dashboard_issues: dashboardIssues.issues,
+            provider_dashboard_mutated: false,
             money_moved: false,
-            external_confirmation_required: false,
-            external_confirmation_status: "not_required",
-            metadata: safeMetadata({
-              provider: providerConfig.provider,
-              capability: providerConfig.capability,
-              function_name: providerConfig.functionName,
-              failure_reason: payload.failure_reason ?? "provider_webhook_delivery_issue",
-              provider_dashboard_mutated: false,
-            }),
-          })
-          .select("id,finding_type,status,money_moved")
-          .single();
-        if (error) throw error;
-        finding = data as JsonObject;
+          },
+        });
       }
 
       const event = await insertEvent(client, {
         event_type: "provider_webhook_delivery_status_recorded",
         action_id: "mark_provider_sync_status",
-        surface: providerConfig.provider,
+        surface: providerConfig.surface,
         environment_mode: mode,
         result: syncStatus,
         metadata: {
           provider: providerConfig.provider,
           capability: providerConfig.capability,
           function_name: providerConfig.functionName,
+          error_rate_classification: errorRateClassification,
           finding_created: !!finding,
+          approval_request_created: !!approvalRequest,
         },
       });
-      return jsonResponse(200, { ok: true, action, status: statusRow, finding, event, moneyMoved: false });
+      return jsonResponse(200, { ok: true, action, status: statusRow, finding, approvalRequest, event, errorRateClassification, dashboardIssues, moneyMoved: false });
+    }
+
+    if (action === "provider_delivery_history_readback") {
+      const mode = environmentMode(payload.environment_mode);
+      const provider = safeLabel(payload.provider);
+      const providerConfig = providerWebhookConfig(provider);
+      if (!providerConfig) return jsonResponse(400, { error: "unsupported_provider_webhook" });
+      const dashboardAccessAvailable = payload.dashboard_access_available === true || payload.provider_api_access_available === true;
+      const errorRateClassification = classifyProviderDeliveryErrorRate(payload.error_rate_percent ?? payload.errorRatePercent);
+      const syncStatus = providerSyncStatusForClassification(errorRateClassification);
+      const dashboardIssues = await safeProviderIntegrationIssues(payload, providerConfig);
+
+      const event = await insertEvent(client, {
+        event_type: "provider_delivery_history_readback",
+        action_id: "provider_delivery_history_readback",
+        surface: providerConfig.surface,
+        environment_mode: mode,
+        result: dashboardAccessAvailable ? errorRateClassification : "owner_action_required",
+        metadata: {
+          provider: providerConfig.provider,
+          endpoint_host: toText(payload.endpoint_host ?? payload.endpointHost) || null,
+          endpoint_path: toText(payload.endpoint_path ?? payload.endpointPath) || null,
+          event_type: safeLabel(payload.event_type ?? payload.eventType ?? "unknown"),
+          integration_id_hash: toText(payload.integration_id_hash ?? payload.integrationIdHash) || null,
+          last_failure_code: safeLabel(payload.last_failure_code ?? payload.lastFailureCode ?? "unknown"),
+          last_success_at: toText(payload.last_success_at ?? payload.lastSuccessAt) || null,
+          error_rate_classification: errorRateClassification,
+          dashboard_access_available: dashboardAccessAvailable,
+          dashboard_issues: dashboardIssues.issues,
+          money_moved: false,
+        },
+      });
+
+      let status: JsonObject | null = null;
+      let finding: JsonObject | null = null;
+      if (dashboardAccessAvailable) {
+        const { data, error } = await client
+          .from("money_provider_sync_status")
+          .upsert({
+            system_id: SYSTEM_ID,
+            provider: providerConfig.provider,
+            capability: providerConfig.capability,
+            sync_status: syncStatus,
+            environment_mode: mode,
+            money_moved: false,
+            last_checked_at: new Date().toISOString(),
+            last_success_at: syncStatus === "synced" ? new Date().toISOString() : null,
+            failure_reason: syncStatus === "failed" || syncStatus === "blocked" ? "provider_delivery_error_rate" : null,
+            metadata: safeMetadata({
+              error_rate_classification: errorRateClassification,
+              endpoint_host: toText(payload.endpoint_host ?? payload.endpointHost) || null,
+              endpoint_path: toText(payload.endpoint_path ?? payload.endpointPath) || null,
+              event_type: safeLabel(payload.event_type ?? payload.eventType ?? "unknown"),
+              integration_id_hash: toText(payload.integration_id_hash ?? payload.integrationIdHash) || null,
+              last_failure_code: safeLabel(payload.last_failure_code ?? payload.lastFailureCode ?? "unknown"),
+              last_success_at: toText(payload.last_success_at ?? payload.lastSuccessAt) || null,
+              dashboard_issues: dashboardIssues.issues,
+              provider_dashboard_mutated: false,
+            }),
+          }, { onConflict: "provider,capability,environment_mode" })
+          .select("id,provider,capability,sync_status,environment_mode,money_moved")
+          .single();
+        if (error) throw error;
+        status = data as JsonObject;
+        if (syncStatus === "failed" || syncStatus === "blocked" || dashboardIssues.issues.length > 0) {
+          finding = await recordProviderFinding(client, {
+            environmentMode: mode,
+            findingType: dashboardIssues.issues.length ? "provider_dashboard_integration_issue" : "provider_delivery_error_rate",
+            providerConfig,
+            severity: syncStatus === "blocked" ? "error" : "warning",
+            metadata: {
+              error_rate_classification: errorRateClassification,
+              dashboard_issues: dashboardIssues.issues,
+              last_failure_code: payload.last_failure_code ?? payload.lastFailureCode ?? "unknown",
+            },
+          });
+        }
+      }
+
+      let approvalRequest: JsonObject | null = null;
+      if (!dashboardAccessAvailable || dashboardIssues.ownerActionRequired || syncStatus === "blocked") {
+        approvalRequest = await createApprovalRequest(client, {
+          money_action_id: "change_money_facing_config",
+          title: `Provider webhook delivery owner action required: ${providerConfig.provider}`,
+          reason: dashboardAccessAvailable
+            ? "Provider dashboard integration issue or outage requires owner-approved dashboard repair."
+            : "Provider dashboard/API access is unavailable to the operator; owner must read provider delivery history and repair if needed.",
+          risk_summary: "Provider webhook dashboard changes affect billing/event delivery and cannot be autonomous.",
+          proposed_action: `Owner should review ${providerConfig.provider} latest webhook failures, endpoint host/path, event type, integration id, duplicate/stale integrations, and shared auth configuration.`,
+          allowed_write_scope: [
+            `provider_dashboard:${providerConfig.provider}:webhook_configuration_review`,
+            "money_operator_events",
+            "money_reconciliation_findings",
+            "money_provider_sync_status",
+          ],
+          metadata: {
+            provider: providerConfig.provider,
+            dashboard_access_available: dashboardAccessAvailable,
+            dashboard_issues: dashboardIssues.issues,
+            error_rate_classification: errorRateClassification,
+            provider_dashboard_mutated: false,
+            money_moved: false,
+          },
+        });
+      }
+
+      return jsonResponse(200, {
+        ok: true,
+        action,
+        provider: providerConfig.provider,
+        sourceOfTruth: providerConfig.provider === "google_play"
+          ? classifyGooglePlaySourceTruth(payload.google_play_source_truth ?? payload.googlePlaySourceTruth)
+          : providerConfig.sourceOfTruth,
+        errorRateClassification,
+        dashboardIssues,
+        ownerAction: dashboardAccessAvailable ? null : "provider_dashboard_or_api_access_required",
+        status,
+        finding,
+        approvalRequest,
+        event,
+        moneyMoved: false,
+      });
     }
 
     if (action === "provider_dashboard_repair_request") {
@@ -475,7 +754,7 @@ Deno.serve(async (request) => {
     if (action === "provider_webhook_reliability_report") {
       const { data: statuses, error } = await client
         .from("money_provider_sync_status")
-        .select("provider,capability,sync_status,environment_mode,last_checked_at,last_success_at,failure_reason,money_moved")
+        .select("provider,capability,sync_status,environment_mode,last_checked_at,last_success_at,failure_reason,money_moved,metadata")
         .in("provider", PROVIDER_WEBHOOKS.map((entry) => entry.provider))
         .order("last_checked_at", { ascending: false })
         .limit(32);
@@ -484,7 +763,73 @@ Deno.serve(async (request) => {
         ok: true,
         action,
         providerWebhooks: safeProviderWebhookRows(),
-        statuses: statuses ?? [],
+        statuses: (statuses ?? []).map((row: JsonObject) => ({
+          provider: row.provider,
+          capability: row.capability,
+          sync_status: row.sync_status,
+          environment_mode: row.environment_mode,
+          last_checked_at: row.last_checked_at,
+          last_success_at: row.last_success_at,
+          failure_reason: row.failure_reason,
+          money_moved: row.money_moved,
+          error_rate_classification: safeLabel((row.metadata as JsonObject | undefined)?.error_rate_classification ?? "unknown"),
+          owner_action_required: ["failed", "blocked"].includes(safeLabel(row.sync_status)),
+        })),
+        moneyMoved: false,
+      });
+    }
+
+    if (action === "watch_once" || action === "money_provider_reliability_watch_once") {
+      const mode = environmentMode(payload.environment_mode);
+      const { data: statuses, error } = await client
+        .from("money_provider_sync_status")
+        .select("provider,capability,sync_status,environment_mode,last_checked_at,last_success_at,failure_reason,money_moved,metadata")
+        .in("provider", PROVIDER_WEBHOOKS.map((entry) => entry.provider))
+        .order("last_checked_at", { ascending: false })
+        .limit(32);
+      if (error) throw error;
+      const activeStatuses = statuses ?? [];
+      const hasOutage = activeStatuses.some((row: JsonObject) => safeLabel(row.sync_status) === "blocked");
+      const hasDegraded = activeStatuses.some((row: JsonObject) => safeLabel(row.sync_status) === "failed");
+      const healthState = hasOutage ? "outage" : hasDegraded ? "degraded" : "healthy";
+      const snapshot = await client
+        .from("money_flow_health_snapshots")
+        .insert({
+          system_id: SYSTEM_ID,
+          health_state: healthState,
+          eligible_for_safe_writes: true,
+          latest_operator_action: "money_provider_reliability_watch_once",
+          environment_mode: mode,
+          money_moved: false,
+          metadata: safeMetadata({
+            provider_count: PROVIDER_WEBHOOKS.length,
+            statuses_seen: activeStatuses.length,
+            safe_recovery: "audit_status_only_no_provider_dashboard_mutation",
+          }),
+        })
+        .select("id,health_state,eligible_for_safe_writes,created_at,money_moved")
+        .single();
+      if (snapshot.error) throw snapshot.error;
+      const event = await insertEvent(client, {
+        event_type: "money_provider_reliability_watch_once",
+        action_id: "provider_webhook_reliability_loop",
+        environment_mode: mode,
+        result: healthState,
+        metadata: {
+          provider_count: PROVIDER_WEBHOOKS.length,
+          statuses_seen: activeStatuses.length,
+          money_moved: false,
+        },
+      });
+      return jsonResponse(200, {
+        ok: true,
+        action,
+        healthState,
+        snapshot: snapshot.data,
+        event,
+        providerWebhooks: safeProviderWebhookRows(),
+        statuses: activeStatuses,
+        recoveryExecuted: false,
         moneyMoved: false,
       });
     }

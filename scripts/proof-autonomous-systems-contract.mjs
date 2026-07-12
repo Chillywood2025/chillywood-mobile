@@ -150,6 +150,11 @@ const contractChecks = [
     negative: () => !/id:\s*"scoped_money_operator_reconciliation_writes"[\s\S]*approvalLevel:\s*2/.test(registry.replace("scoped_money_operator_reconciliation_writes", "money_operator_removed")),
   },
   {
+    name: "provider webhook reliability loop is explicit Level 2 registry scope",
+    passes: () => /id:\s*"provider_webhook_reliability_loop"[\s\S]*approvalLevel:\s*2[\s\S]*money_provider_sync_status[\s\S]*money_reconciliation_findings/.test(registry) && mustInclude(moneyFlowControl, "MONEY_PROVIDER_RELIABILITY_SURFACES"),
+    negative: () => !/id:\s*"provider_webhook_reliability_loop"[\s\S]*approvalLevel:\s*2/.test(registry.replace("provider_webhook_reliability_loop", "provider_loop_removed")),
+  },
+  {
     name: "Level 3/4 action requires approval request",
     passes: () => mustInclude(approvalMigration, "approval_level integer not null check (approval_level in (3, 4))") && mustInclude(registryDoc, "Level 3/4 actions create") && mustInclude(approvalFunction, "approve_request"),
   },
