@@ -218,7 +218,7 @@ const buildInput = (audit) => {
     qaTier: oneOf(textEnv("FIREBASE_TEST_LAB_QA_TIER", "tier1"), ["tier0", "tier1", "tier2", "tier3"], "tier1"),
     runReason,
     projectConfigured: audit.firebaseProjectConfigured,
-    testLabApiAvailable: audit.testLabApiAvailable && audit.testLabCatalogAccess && audit.testLabVersionsAccess,
+    testLabApiAvailable: audit.testLabCatalogAccess && audit.testLabVersionsAccess,
     artifactPresent: audit.apkPresent || audit.aabPresent,
     deviceType,
     deviceCount,
@@ -377,7 +377,7 @@ const evaluateCostGuard = (input) => {
 const buildGcloudCommand = (audit) => {
   const project = textEnv("FIREBASE_TEST_LAB_PROJECT", readGcloudProjectConfigured().value);
   const appPath = audit.apkPresent ? audit.apkPath : audit.aabPath;
-  return [
+  const command = [
     "firebase",
     "test",
     "android",
@@ -397,6 +397,9 @@ const buildGcloudCommand = (audit) => {
     "--format",
     "json",
   ];
+  const resultsBucket = textEnv("FIREBASE_TEST_LAB_RESULTS_BUCKET");
+  if (resultsBucket) command.push("--results-bucket", resultsBucket.replace(/^gs:\/\//, ""));
+  return command;
 };
 
 const buildOperatorPayload = (report) => {
