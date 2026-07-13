@@ -21,6 +21,7 @@ const ownerCommandFn = read("supabase/functions/owner-command-operator/index.ts"
 const approvalFn = read("supabase/functions/autonomous-approval-request/index.ts");
 const migration = read("supabase/migrations/20260713011606_installed_product_qa_operator.sql");
 const firebaseMigration = read("supabase/migrations/20260713033809_installed_qa_firebase_test_lab_source.sql");
+const firebaseCostCappedMigration = read("supabase/migrations/20260713044500_installed_qa_firebase_cost_capped_policy.sql");
 const edge = read("supabase/functions/installed-product-qa-operator/index.ts");
 const cli = read("scripts/installed-qa-operator-cli.mjs");
 const firebaseRunner = read("scripts/installed-qa-firebase-test-lab.mjs");
@@ -90,9 +91,14 @@ requireText("migration manual two-device seed", migration, "manual-two-device-re
 requireText("firebase migration source", firebaseMigration, "firebase_test_lab_uploaded_artifact");
 requireText("firebase migration route source check", firebaseMigration, "route_behavior_findings_source_check");
 requireText("firebase migration device source check", firebaseMigration, "device_availability_findings_source_check");
-requireText("firebase migration quota blocker", firebaseMigration, "firebase-free-quota-unknown");
-requireText("firebase migration quota risk", firebaseMigration, "firebase_free_quota_unknown");
-requireText("firebase migration zero cost", firebaseMigration, "'costEstimateUsd', 0");
+requireText("firebase cost migration policy", firebaseCostCappedMigration, "firebase-cost-capped-cheap-mode");
+requireText("firebase cost migration supersedes zero-only blocker", firebaseCostCappedMigration, "firebase-free-quota-unknown");
+requireText("firebase cost migration monthly cap", firebaseCostCappedMigration, "'monthlyBudgetUsd', 5");
+requireText("firebase cost migration per-run cap", firebaseCostCappedMigration, "'maxAllowedCostUsd', 0.25");
+requireText("firebase cost migration quota mode", firebaseCostCappedMigration, "'quotaMode', 'cost_capped_worst_case'");
+requireText("firebase cost migration physical blocked", firebaseCostCappedMigration, "'physicalDeviceAllowedByDefault', false");
+requireText("firebase cost migration broad crawl blocked", firebaseCostCappedMigration, "'broadCrawlAllowedByDefault', false");
+requireText("firebase cost migration two-device blocked", firebaseCostCappedMigration, "'twoDeviceFirebaseAllowedByDefault', false");
 
 for (const phrase of [
   "x-installed-qa-operator-token",
@@ -170,20 +176,34 @@ for (const phrase of [
 ]) requireText("CLI/package wiring", `${cli}\n${packageJson}`, phrase);
 
 for (const phrase of [
-  "FIREBASE_TEST_LAB_MAX_COST_USD",
-  "FIREBASE_TEST_LAB_MAX_COST_USD\", 0",
-  "firebase_free_quota_unknown",
-  "paid_usage_requires_owner_approval",
+  "FIREBASE_TEST_LAB_MODE",
+  "cost_capped",
+  "FIREBASE_TEST_LAB_MONTHLY_CAP_USD",
+  "FIREBASE_TEST_LAB_PER_RUN_CAP_USD",
+  "FIREBASE_TEST_LAB_ALLOW_VIRTUAL",
+  "FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY",
+  "FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE",
+  "FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL",
+  "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE",
+  "firebase_per_run_cap_exceeded",
+  "firebase_monthly_cap_exceeded",
   "firebase_physical_device_blocked_by_default",
-  "firebase_scheduled_run_blocked_by_default",
+  "firebase_scheduled_daily_limit_reached",
+  "firebase_cost_unbounded",
+  "cost_capped_worst_case",
   "firebase_test_lab_uploaded_artifact",
   "notPlayInstalledProof: true",
   "costEstimateUsd",
+  "maxAllowedCostUsd",
+  "monthlyBudgetUsd",
+  "monthlySpentEstimateUsd",
   "billingRisk",
   "quotaMode",
-  "FIREBASE_TEST_LAB_REMAINING_FREE_VIRTUAL_MINUTES",
-  "FIREBASE_TEST_LAB_ALLOW_PHYSICAL",
-  "FIREBASE_TEST_LAB_ALLOW_SCHEDULED",
+  "buildLedgerEvent",
+  "tier0",
+  "tier1",
+  "tier2",
+  "tier3",
   "installed-qa-firebase-test-lab self-test passed",
 ]) requireText("firebase runner", firebaseRunner, phrase);
 
@@ -217,13 +237,16 @@ for (const phrase of [
   "schedulerStatus=device_lab_scheduler_pending",
 ]) requireText("runbook", runbook, phrase);
 for (const phrase of [
-  "zero-cost-first",
-  "Default maximum cost: `FIREBASE_TEST_LAB_MAX_COST_USD=0`",
-  "virtual device only",
+  "cost-capped cheap mode",
+  "FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5",
+  "FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25",
+  "Tier 0",
+  "Tier 1",
+  "virtual-device",
   "not Play-installed proof",
   "Google Play Billing",
   "two-device LiveKit proof",
-  "No Firebase scheduler is active by default",
+  "No every-30-minute Firebase device schedule is allowed",
 ]) requireText("firebase runbook", `${runbook}\n${firebaseRunbook}`, phrase);
 
 if (failures.length) {

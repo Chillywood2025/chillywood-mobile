@@ -14,14 +14,33 @@ export type InstalledQaDeviceLabProvider =
   | "none";
 
 export type InstalledQaBillingRisk =
+  | "low"
   | "none"
   | "paid_approval_required"
   | "unknown";
 
 export type InstalledQaQuotaMode =
+  | "cost_capped_worst_case"
   | "free_quota"
   | "paid_approval_required"
   | "unknown";
+
+export type InstalledQaFirebaseMode =
+  | "cost_capped"
+  | "zero_cost";
+
+export type InstalledQaFirebaseRunReason =
+  | "daily_scheduled"
+  | "manual"
+  | "ota_change"
+  | "owner_command"
+  | "source_change";
+
+export type InstalledQaTier =
+  | "tier0"
+  | "tier1"
+  | "tier2"
+  | "tier3";
 
 export type InstalledQaDiscoveredBy =
   | "autonomous_operator"
@@ -92,11 +111,21 @@ export type FirebaseTestLabReadiness = {
   provider: "firebase_test_lab";
   proofSource: "firebase_test_lab_uploaded_artifact";
   canRun: boolean;
-  costEstimateUsd: 0;
+  costEstimateUsd: number;
+  maxAllowedCostUsd: number;
+  monthlyBudgetUsd: number;
+  monthlySpentEstimateUsd: number;
+  monthlyRemainingEstimateUsd: number;
   billingRisk: InstalledQaBillingRisk;
   quotaMode: InstalledQaQuotaMode;
+  labMode: InstalledQaFirebaseMode;
+  qaTier: InstalledQaTier;
+  runReason: InstalledQaFirebaseRunReason;
   deviceType: "physical" | "virtual";
   blockerClassification: InstalledQaBlockerClassification;
+  notPlayInstalledProof: true;
+  premiumProofClosed: false;
+  twoDeviceProofClosed: false;
   reason: string;
 };
 
@@ -211,90 +240,115 @@ export const classifyFirebaseTestLabReadiness = (input: {
   virtualDeviceRequested?: boolean;
   physicalDeviceRequested?: boolean;
   scheduledRequested?: boolean;
+  broadCrawlRequested?: boolean;
+  twoDeviceRequested?: boolean;
   zeroCostConfirmed?: boolean;
+  estimatedCostUsd?: number;
+  perRunCapUsd?: number;
+  monthlyBudgetUsd?: number;
+  monthlySpentEstimateUsd?: number;
+  scheduledRunCountToday?: number;
+  maxScheduledRunsPerDay?: number;
   quotaMode?: InstalledQaQuotaMode;
   billingRisk?: InstalledQaBillingRisk;
+  labMode?: InstalledQaFirebaseMode;
+  qaTier?: InstalledQaTier;
+  runReason?: InstalledQaFirebaseRunReason;
+  allowBroadCrawl?: boolean;
+  allowTwoDevice?: boolean;
   ownerApprovedPhysical?: boolean;
-  ownerApprovedSchedule?: boolean;
 }): FirebaseTestLabReadiness => {
   const quotaMode = input.quotaMode ?? "unknown";
   const billingRisk = input.billingRisk ?? "unknown";
-  const deviceType = input.physicalDeviceRequested ? "physical" : "virtual";
+  const labMode = input.labMode ?? "cost_capped";
+  const qaTier = input.qaTier ?? "tier1";
+  const runReason = input.runReason ?? (input.scheduledRequested ? "daily_scheduled" : "manual");
+  const deviceType: FirebaseTestLabReadiness["deviceType"] = input.physicalDeviceRequested ? "physical" : "virtual";
+  const costEstimateUsd = Number.isFinite(input.estimatedCostUsd) ? Math.max(0, Number(input.estimatedCostUsd)) : Number.NaN;
+  const maxAllowedCostUsd = Number.isFinite(input.perRunCapUsd) ? Math.max(0, Number(input.perRunCapUsd)) : 0.25;
+  const monthlyBudgetUsd = Number.isFinite(input.monthlyBudgetUsd) ? Math.max(0, Number(input.monthlyBudgetUsd)) : 5;
+  const monthlySpentEstimateUsd = Number.isFinite(input.monthlySpentEstimateUsd)
+    ? Math.max(0, Number(input.monthlySpentEstimateUsd))
+    : 0;
+  const monthlyRemainingEstimateUsd = Math.max(0, monthlyBudgetUsd - monthlySpentEstimateUsd);
+  const base = {
+    provider: "firebase_test_lab" as const,
+    proofSource: "firebase_test_lab_uploaded_artifact" as const,
+    costEstimateUsd: Number.isFinite(costEstimateUsd) ? costEstimateUsd : 0,
+    maxAllowedCostUsd,
+    monthlyBudgetUsd,
+    monthlySpentEstimateUsd,
+    monthlyRemainingEstimateUsd,
+    billingRisk,
+    quotaMode,
+    labMode,
+    qaTier,
+    runReason,
+    deviceType,
+    notPlayInstalledProof: true as const,
+    premiumProofClosed: false as const,
+    twoDeviceProofClosed: false as const,
+  };
+  const blocked = (
+    reason: string,
+    blockerClassification: InstalledQaBlockerClassification,
+    overrides?: Partial<FirebaseTestLabReadiness>,
+  ): FirebaseTestLabReadiness => ({
+    ...base,
+    canRun: false,
+    blockerClassification,
+    reason,
+    ...overrides,
+  });
   if (!input.firebaseProjectConfigured) {
-    return {
-      provider: "firebase_test_lab",
-      proofSource: "firebase_test_lab_uploaded_artifact",
-      canRun: false,
-      costEstimateUsd: 0,
-      billingRisk: "unknown",
-      quotaMode,
-      deviceType,
-      blockerClassification: "device_unavailable",
-      reason: "firebase_project_missing",
-    };
+    return blocked("firebase_project_missing", "device_unavailable", { billingRisk: "unknown" });
   }
   if (!input.testLabApiAvailable) {
-    return {
-      provider: "firebase_test_lab",
-      proofSource: "firebase_test_lab_uploaded_artifact",
-      canRun: false,
-      costEstimateUsd: 0,
-      billingRisk: "unknown",
-      quotaMode,
-      deviceType,
-      blockerClassification: "device_unavailable",
-      reason: "firebase_test_lab_api_unavailable",
-    };
+    return blocked("firebase_test_lab_api_unavailable", "device_unavailable", { billingRisk: "unknown" });
   }
   if (input.physicalDeviceRequested && !input.ownerApprovedPhysical) {
-    return {
-      provider: "firebase_test_lab",
-      proofSource: "firebase_test_lab_uploaded_artifact",
-      canRun: false,
-      costEstimateUsd: 0,
+    return blocked("firebase_physical_device_blocked_by_default", "unknown_requires_review", {
       billingRisk: "paid_approval_required",
-      quotaMode,
-      deviceType,
-      blockerClassification: "unknown_requires_review",
-      reason: "firebase_physical_device_requires_owner_approval",
-    };
+    });
   }
-  if (input.scheduledRequested && !input.ownerApprovedSchedule) {
-    return {
-      provider: "firebase_test_lab",
-      proofSource: "firebase_test_lab_uploaded_artifact",
-      canRun: false,
-      costEstimateUsd: 0,
+  if (input.twoDeviceRequested && !input.allowTwoDevice) {
+    return blocked("firebase_two_device_blocked_by_default", "second_device_required");
+  }
+  if (input.broadCrawlRequested && !input.allowBroadCrawl) {
+    return blocked("firebase_broad_crawl_blocked_by_default", "device_unavailable");
+  }
+  if (input.scheduledRequested && Number(input.scheduledRunCountToday ?? 0) >= Number(input.maxScheduledRunsPerDay ?? 1)) {
+    return blocked("firebase_scheduled_daily_limit_reached", "device_unavailable");
+  }
+  if (!Number.isFinite(costEstimateUsd)) {
+    return blocked("firebase_cost_unbounded", "device_unavailable", {
+      billingRisk: "unknown",
+      quotaMode: "unknown",
+    });
+  }
+  if (labMode === "zero_cost" && costEstimateUsd > 0) {
+    return blocked("firebase_zero_cost_mode_blocks_paid_estimate", "device_unavailable");
+  }
+  if (costEstimateUsd > maxAllowedCostUsd) {
+    return blocked("firebase_per_run_cap_exceeded", "device_unavailable", {
       billingRisk: "paid_approval_required",
-      quotaMode,
-      deviceType,
-      blockerClassification: "unknown_requires_review",
-      reason: "firebase_scheduled_run_requires_owner_approval",
-    };
+    });
   }
-  if (!input.zeroCostConfirmed || quotaMode !== "free_quota" || billingRisk !== "none") {
-    return {
-      provider: "firebase_test_lab",
-      proofSource: "firebase_test_lab_uploaded_artifact",
-      canRun: false,
-      costEstimateUsd: 0,
-      billingRisk,
-      quotaMode,
-      deviceType,
-      blockerClassification: "device_unavailable",
-      reason: "firebase_free_quota_unknown",
-    };
+  if (monthlySpentEstimateUsd + costEstimateUsd > monthlyBudgetUsd) {
+    return blocked("firebase_monthly_cap_exceeded", "device_unavailable", {
+      billingRisk: "paid_approval_required",
+    });
   }
   return {
-    provider: "firebase_test_lab",
-    proofSource: "firebase_test_lab_uploaded_artifact",
+    ...base,
     canRun: true,
-    costEstimateUsd: 0,
-    billingRisk: "none",
-    quotaMode: "free_quota",
-    deviceType,
+    costEstimateUsd,
+    billingRisk: input.zeroCostConfirmed && quotaMode === "free_quota" ? "none" : "low",
+    quotaMode: input.zeroCostConfirmed && quotaMode === "free_quota" ? "free_quota" : "cost_capped_worst_case",
     blockerClassification: "unknown_requires_review",
-    reason: "firebase_virtual_device_zero_cost_confirmed",
+    reason: input.zeroCostConfirmed && costEstimateUsd === 0
+      ? "firebase_virtual_device_free_quota_confirmed"
+      : "firebase_virtual_device_cost_capped_smoke_allowed",
   };
 };
 

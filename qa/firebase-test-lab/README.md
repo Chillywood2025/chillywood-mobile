@@ -1,15 +1,26 @@
 # Firebase Test Lab For Installed Product QA
 
-Firebase Test Lab is the first device-lab path for `installed_product_qa_operator`, but it is zero-cost-first and disabled for unsafe cost states.
+Firebase Test Lab is the first device-lab path for `installed_product_qa_operator`. It now runs in cost-capped cheap mode: source/backend/operator checks remain Tier 0 and do not need device proof every time, while Firebase virtual-device smoke is Tier 1 and may run only when it is useful and inside strict caps.
 
 ## Default Policy
 
-- Default maximum cost: `FIREBASE_TEST_LAB_MAX_COST_USD=0`.
-- Default device type: virtual device only.
-- Default cadence: manual/on-demand only.
-- Physical devices are blocked unless `FIREBASE_TEST_LAB_ALLOW_PHYSICAL=true` and an owner-approved no-cost quota note is provided.
-- Scheduled Firebase runs are blocked unless `FIREBASE_TEST_LAB_ALLOW_SCHEDULED=true` and quota-safe owner proof is provided.
-- If cost, quota, billing plan, or remaining no-cost minutes are unknown, the runner fails closed before starting a matrix.
+- Mode: `FIREBASE_TEST_LAB_MODE=cost_capped`.
+- Monthly cap: `FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5`.
+- Per-run cap: `FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25`.
+- Device type: `FIREBASE_TEST_LAB_ALLOW_VIRTUAL=true`, `FIREBASE_TEST_LAB_ALLOW_PHYSICAL=false`.
+- Cadence: `FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY=1`.
+- On-change smoke: `FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE=true`.
+- Broad crawls: `FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL=false`.
+- Two-device Firebase runs: `FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE=false`.
+
+Physical devices, broad crawls, two-device Firebase runs, and paid over-cap runs require explicit owner approval. Unknown cost is allowed only when the runner can bound worst-case virtual-device cost under the per-run cap and monthly remaining budget.
+
+## QA Tiers
+
+- Tier 0: source/backend/operator-only checks. These can run frequently without device lab.
+- Tier 1: Firebase virtual smoke, daily at most, after OTA/source changes, or by owner command, cost-capped.
+- Tier 2: broader Firebase virtual/physical coverage, owner-approved only.
+- Tier 3: physical Play-installed proof for Premium Billing, two-device LiveKit, camera/mic, push, and provider-backed flows, on-demand only.
 
 ## Commands
 
@@ -19,21 +30,23 @@ npm run installed-qa-operator:firebase-test-lab:self-test
 npm run installed-qa-operator:firebase-test-lab:run
 ```
 
-`status` audits local capability and prints only credential presence by name, not credential values. `run` starts a Firebase matrix only when all zero-cost guards pass.
+`status` audits local capability and prints only credential presence by name, not credential values. `run` starts a Firebase matrix only when the cost guard passes.
 
-## Required Zero-Cost Inputs For Any Run
+## Budget Ledger
 
-Set these outside the repo through the approved host/CI secret path:
+The runner records local JSONL budget events at `FIREBASE_TEST_LAB_BUDGET_LEDGER` or `/tmp/chillywood-installed-qa-firebase-test-lab-budget-ledger.jsonl`. Each run or blocked attempt records:
 
-- `FIREBASE_TEST_LAB_MAX_COST_USD=0`
-- `FIREBASE_TEST_LAB_DEVICE_TYPE=virtual`
-- `FIREBASE_TEST_LAB_ZERO_COST_CONFIRMED=true`
-- `FIREBASE_TEST_LAB_FREE_QUOTA_VERIFIED=true`
-- `FIREBASE_TEST_LAB_QUOTA_MODE=free_quota`
-- `FIREBASE_TEST_LAB_BILLING_RISK=none`
-- `FIREBASE_TEST_LAB_REMAINING_FREE_VIRTUAL_MINUTES` greater than or equal to the requested timeout
+- `costEstimateUsd`
+- `maxAllowedCostUsd`
+- `monthlyBudgetUsd`
+- `monthlySpentEstimateUsd`
+- `billingRisk`
+- `quotaMode`
+- `deviceType`
+- `runReason`
+- `matrixId` when a Firebase matrix starts
 
-If any value is missing or cannot be proven, no Firebase run is started.
+The ledger must not contain credentials, payment details, service-role keys, signed URLs, private evidence, or account passwords.
 
 ## Proof Classification
 
@@ -42,8 +55,6 @@ Firebase installs an uploaded APK/AAB in Google's lab. Findings from this path u
 - `device_lab_provider=firebase_test_lab`
 - `proofSource=firebase_test_lab_uploaded_artifact`
 - `source=firebase_test_lab_uploaded_artifact`
-- `costEstimateUsd=0`
-- `billingRisk=none` only after no-cost proof
 - `fakeProof=false`
 - `moneyMoved=false`
 - `userRightsChanged=false`
@@ -51,9 +62,9 @@ Firebase installs an uploaded APK/AAB in Google's lab. Findings from this path u
 
 This is not Play-installed proof. It must not be used to claim Google Play installer state, Play Billing, RevenueCat active Premium, push delivery on a user's Play-installed phone, or two-device LiveKit proof.
 
-## Initial Smoke Scope
+## Tier 1 Smoke Scope
 
-The first zero-cost-safe run is limited to a virtual-device Robo smoke:
+The default cost-capped Firebase smoke is limited to a virtual-device Robo smoke:
 
 - app launches.
 - no crash.
@@ -61,8 +72,8 @@ The first zero-cost-safe run is limited to a virtual-device Robo smoke:
 - `/chat` and `/creator-monetization-setup` marker findings if instrumentation or Robo reaches them.
 - normal `/admin` denial only if a safe login fixture exists.
 
-The run must not include purchase, Premium activation, two-device realtime, paid physical devices, or a broad crawl that risks quota/cost.
+The run must not include Premium purchase, Premium activation, two-device realtime, physical-device-only behavior, broad route crawls, paid physical devices, or provider/billing mutations.
 
 ## Scheduler
 
-No Firebase scheduler is active by default. A daily smoke can be considered only after owner approval, proven no-cost quota safety, virtual-device-only config, and an audit row proving the runner fired with `costEstimateUsd=0`. No every-30-minute Firebase device-lab schedule is allowed.
+No every-30-minute Firebase device schedule is allowed. A daily virtual-device smoke can be installed only after the cost guard is active, the owner approves scheduling, the timer calls the guard first, and audit rows prove scheduled runs stay within the caps. If the guard blocks, the scheduler should record a blocked/no-run event and exit without starting a Firebase matrix.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { dirname } from "node:path";
 import process from "node:process";
 
 const SYSTEM_ID = "installed_product_qa_operator";
@@ -8,6 +9,7 @@ const PROVIDER = "firebase_test_lab";
 const PROOF_SOURCE = "firebase_test_lab_uploaded_artifact";
 const FUNCTION_NAME = "installed-product-qa-operator";
 const TOKEN_HEADER = "x-installed-qa-operator-token";
+const DEFAULT_LEDGER_PATH = "/tmp/chillywood-installed-qa-firebase-test-lab-budget-ledger.jsonl";
 
 const args = process.argv.slice(2);
 const mode = args.find((arg) => !arg.startsWith("--")) || "status";
@@ -29,16 +31,8 @@ const numberEnv = (key, fallback) => {
 };
 
 const textEnv = (key, fallback = "") => String(process.env[key] ?? fallback).trim();
-
-const commandExists = (command) => spawnSync("command", ["-v", command], {
-  encoding: "utf8",
-  shell: true,
-}).status === 0;
-
-const runQuiet = (command, commandArgs) => spawnSync(command, commandArgs, {
-  encoding: "utf8",
-  stdio: "pipe",
-});
+const oneOf = (value, values, fallback) => (values.includes(value) ? value : fallback);
+const roundUsdUp = (value) => Math.ceil(Math.max(0, value) * 100) / 100;
 
 const redact = (value) => {
   if (Array.isArray(value)) return value.map(redact);
@@ -52,17 +46,58 @@ const redact = (value) => {
   ]));
 };
 
+const commandExists = (command) => spawnSync("command", ["-v", command], {
+  encoding: "utf8",
+  shell: true,
+}).status === 0;
+
+const runQuiet = (command, commandArgs) => spawnSync(command, commandArgs, {
+  encoding: "utf8",
+  stdio: "pipe",
+});
+
 const timeoutMinutes = (timeout) => {
   const value = String(timeout || "").trim().toLowerCase();
   const match = value.match(/^(\d+(?:\.\d+)?)([smh])$/);
   if (!match) return Number.NaN;
   const amount = Number(match[1]);
-  if (match[2] === "s") return amount / 60;
-  if (match[2] === "h") return amount * 60;
-  return amount;
+  if (match[2] === "s") return Math.max(1, Math.ceil(amount / 60));
+  if (match[2] === "h") return Math.ceil(amount * 60);
+  return Math.ceil(amount);
 };
 
-const oneOf = (value, values, fallback) => (values.includes(value) ? value : fallback);
+const monthKey = (date = new Date()) => date.toISOString().slice(0, 7);
+const dayKey = (date = new Date()) => date.toISOString().slice(0, 10);
+
+const readLedgerEvents = (ledgerPath) => {
+  if (!ledgerPath || !existsSync(ledgerPath)) return [];
+  return readFileSync(ledgerPath, "utf8")
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    });
+};
+
+const writeLedgerEvent = (ledgerPath, event) => {
+  if (boolEnv("FIREBASE_TEST_LAB_LEDGER_DISABLED")) return false;
+  mkdirSync(dirname(ledgerPath), { recursive: true });
+  appendFileSync(ledgerPath, `${JSON.stringify(redact(event))}\n`, { encoding: "utf8", mode: 0o600 });
+  return true;
+};
+
+const monthlySpentFromLedger = (events, currentMonth) => events
+  .filter((event) => event.month === currentMonth && event.countAgainstBudget !== false)
+  .reduce((sum, event) => sum + Number(event.costEstimateUsd || 0), 0);
+
+const scheduledRunCountFromLedger = (events, currentDay) => events
+  .filter((event) => event.day === currentDay && event.runReason === "daily_scheduled" && event.eventType === "run_completed")
+  .length;
 
 const readGcloudProjectConfigured = () => {
   if (!commandExists("gcloud")) return { configured: false, value: "" };
@@ -153,8 +188,6 @@ const auditFirebaseTestLab = () => {
       : billingResult.status === 0 && billingValue === "false"
         ? "no"
         : "unknown",
-    sparkFreeQuotaAvailable: "unknown",
-    zeroCostGuaranteed: false,
     apkPath,
     apkPresent: existsSync(apkPath),
     aabPath,
@@ -163,148 +196,181 @@ const auditFirebaseTestLab = () => {
 };
 
 const buildInput = (audit) => {
-  const deviceType = oneOf(textEnv("FIREBASE_TEST_LAB_DEVICE_TYPE", "virtual"), ["virtual", "physical"], "virtual");
-  const quotaMode = oneOf(textEnv("FIREBASE_TEST_LAB_QUOTA_MODE", "unknown"), ["free_quota", "paid_approval_required", "unknown"], "unknown");
-  const billingRisk = oneOf(textEnv("FIREBASE_TEST_LAB_BILLING_RISK", "unknown"), ["none", "paid_approval_required", "unknown"], "unknown");
-  const timeout = textEnv("FIREBASE_TEST_LAB_TIMEOUT", "5m");
-  const requiredMinutes = timeoutMinutes(timeout);
-  const remainingFreeMinutes = numberEnv(
-    deviceType === "physical"
-      ? "FIREBASE_TEST_LAB_REMAINING_FREE_PHYSICAL_MINUTES"
-      : "FIREBASE_TEST_LAB_REMAINING_FREE_VIRTUAL_MINUTES",
-    Number.NaN,
+  const ledgerPath = textEnv("FIREBASE_TEST_LAB_BUDGET_LEDGER", DEFAULT_LEDGER_PATH);
+  const ledgerEvents = readLedgerEvents(ledgerPath);
+  const currentMonth = monthKey();
+  const currentDay = dayKey();
+  const runReason = oneOf(
+    textEnv("FIREBASE_TEST_LAB_RUN_REASON", flags.has("--scheduled") ? "daily_scheduled" : "manual"),
+    ["manual", "owner_command", "daily_scheduled", "ota_change", "source_change"],
+    "manual",
   );
+  const deviceType = oneOf(textEnv("FIREBASE_TEST_LAB_DEVICE_TYPE", "virtual"), ["virtual", "physical"], "virtual");
+  const timeout = textEnv("FIREBASE_TEST_LAB_TIMEOUT", "5m");
+  const plannedMinutes = timeoutMinutes(timeout);
+  const deviceCount = boolEnv("FIREBASE_TEST_LAB_TWO_DEVICE") ? 2 : 1;
+  const monthlySpentFromEnv = numberEnv("FIREBASE_TEST_LAB_MONTHLY_SPENT_ESTIMATE_USD", Number.NaN);
+  const scheduledRunCountFromEnv = numberEnv("FIREBASE_TEST_LAB_SCHEDULED_RUN_COUNT_TODAY", Number.NaN);
+
   return {
     action: mode,
+    labMode: oneOf(textEnv("FIREBASE_TEST_LAB_MODE", "cost_capped"), ["cost_capped", "zero_cost"], "cost_capped"),
+    qaTier: oneOf(textEnv("FIREBASE_TEST_LAB_QA_TIER", "tier1"), ["tier0", "tier1", "tier2", "tier3"], "tier1"),
+    runReason,
     projectConfigured: audit.firebaseProjectConfigured,
     testLabApiAvailable: audit.testLabApiAvailable && audit.testLabCatalogAccess && audit.testLabVersionsAccess,
     artifactPresent: audit.apkPresent || audit.aabPresent,
     deviceType,
-    scheduledRequested: flags.has("--scheduled") || boolEnv("FIREBASE_TEST_LAB_SCHEDULED_RUN"),
-    allowPhysical: boolEnv("FIREBASE_TEST_LAB_ALLOW_PHYSICAL"),
-    allowScheduled: boolEnv("FIREBASE_TEST_LAB_ALLOW_SCHEDULED"),
-    physicalApprovalNotePresent: Boolean(textEnv("FIREBASE_TEST_LAB_OWNER_APPROVAL_NOTE")),
-    scheduleQuotaProofPresent: Boolean(textEnv("FIREBASE_TEST_LAB_QUOTA_SAFE_PROOF")),
-    maxCostUsd: numberEnv("FIREBASE_TEST_LAB_MAX_COST_USD", 0),
+    deviceCount,
+    timeout,
+    plannedMinutes,
+    allowVirtual: boolEnv("FIREBASE_TEST_LAB_ALLOW_VIRTUAL", true),
+    allowPhysical: boolEnv("FIREBASE_TEST_LAB_ALLOW_PHYSICAL", false),
+    allowBroadCrawl: boolEnv("FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL", false),
+    allowTwoDevice: boolEnv("FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE", false),
+    runOnOtaChange: boolEnv("FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE", true),
+    broadCrawlRequested: boolEnv("FIREBASE_TEST_LAB_BROAD_CRAWL", false),
+    twoDeviceRequested: boolEnv("FIREBASE_TEST_LAB_TWO_DEVICE", false),
+    scheduledRequested: runReason === "daily_scheduled" || flags.has("--scheduled") || boolEnv("FIREBASE_TEST_LAB_SCHEDULED_RUN"),
+    monthlyBudgetUsd: numberEnv("FIREBASE_TEST_LAB_MONTHLY_CAP_USD", 5),
+    perRunCapUsd: numberEnv("FIREBASE_TEST_LAB_PER_RUN_CAP_USD", 0.25),
+    maxScheduledRunsPerDay: numberEnv("FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY", 1),
+    virtualCostPerHourUsd: numberEnv("FIREBASE_TEST_LAB_VIRTUAL_COST_PER_HOUR_USD", 1),
+    physicalCostPerHourUsd: numberEnv("FIREBASE_TEST_LAB_PHYSICAL_COST_PER_HOUR_USD", 5),
     zeroCostConfirmed: boolEnv("FIREBASE_TEST_LAB_ZERO_COST_CONFIRMED"),
     freeQuotaVerified: boolEnv("FIREBASE_TEST_LAB_FREE_QUOTA_VERIFIED"),
-    quotaMode,
-    billingRisk,
-    timeout,
-    requiredMinutes,
-    remainingFreeMinutes,
+    quotaModeInput: oneOf(textEnv("FIREBASE_TEST_LAB_QUOTA_MODE", "unknown"), ["free_quota", "cost_capped_worst_case", "paid_approval_required", "unknown"], "unknown"),
+    monthlySpentEstimateUsd: Number.isFinite(monthlySpentFromEnv)
+      ? monthlySpentFromEnv
+      : monthlySpentFromLedger(ledgerEvents, currentMonth),
+    scheduledRunCountToday: Number.isFinite(scheduledRunCountFromEnv)
+      ? scheduledRunCountFromEnv
+      : scheduledRunCountFromLedger(ledgerEvents, currentDay),
+    ledgerPath,
+    currentMonth,
+    currentDay,
+  };
+};
+
+const estimateRunCost = (input) => {
+  if (input.zeroCostConfirmed && input.freeQuotaVerified && input.quotaModeInput === "free_quota") {
+    return {
+      costEstimateUsd: 0,
+      billingRisk: "none",
+      quotaMode: "free_quota",
+      estimateBasis: "verified_free_quota",
+    };
+  }
+  const hourlyRate = input.deviceType === "physical" ? input.physicalCostPerHourUsd : input.virtualCostPerHourUsd;
+  if (!Number.isFinite(input.plannedMinutes) || input.plannedMinutes <= 0 || !Number.isFinite(hourlyRate) || hourlyRate < 0) {
+    return {
+      costEstimateUsd: Number.NaN,
+      billingRisk: "unknown",
+      quotaMode: "unknown",
+      estimateBasis: "unbounded",
+    };
+  }
+  const estimated = roundUsdUp((input.plannedMinutes / 60) * hourlyRate * input.deviceCount);
+  return {
+    costEstimateUsd: estimated,
+    billingRisk: estimated <= input.perRunCapUsd ? "low" : "paid_approval_required",
+    quotaMode: input.quotaModeInput === "unknown" ? "cost_capped_worst_case" : input.quotaModeInput,
+    estimateBasis: "worst_case_paid_rate",
   };
 };
 
 const evaluateCostGuard = (input) => {
+  const estimate = estimateRunCost(input);
+  const monthlyRemainingEstimateUsd = roundUsdUp(input.monthlyBudgetUsd - input.monthlySpentEstimateUsd);
   const base = {
     provider: PROVIDER,
     proofSource: PROOF_SOURCE,
-    costEstimateUsd: 0,
+    labMode: input.labMode,
+    qaTier: input.qaTier,
+    runReason: input.runReason,
+    costEstimateUsd: Number.isFinite(estimate.costEstimateUsd) ? estimate.costEstimateUsd : null,
+    maxAllowedCostUsd: input.perRunCapUsd,
+    monthlyBudgetUsd: input.monthlyBudgetUsd,
+    monthlySpentEstimateUsd: input.monthlySpentEstimateUsd,
+    monthlyRemainingEstimateUsd,
+    billingRisk: estimate.billingRisk,
+    quotaMode: estimate.quotaMode,
+    estimateBasis: estimate.estimateBasis,
     deviceType: input.deviceType,
-    quotaMode: input.quotaMode,
-    billingRisk: input.billingRisk,
-    maxCostUsd: input.maxCostUsd,
+    deviceCount: input.deviceCount,
     timeout: input.timeout,
-    requiredMinutes: Number.isFinite(input.requiredMinutes) ? input.requiredMinutes : null,
-    remainingFreeMinutes: Number.isFinite(input.remainingFreeMinutes) ? input.remainingFreeMinutes : null,
+    plannedMinutes: Number.isFinite(input.plannedMinutes) ? input.plannedMinutes : null,
+    scheduledRunCountToday: input.scheduledRunCountToday,
+    maxScheduledRunsPerDay: input.maxScheduledRunsPerDay,
     notPlayInstalledProof: true,
+    premiumProofClosed: false,
+    twoDeviceProofClosed: false,
   };
 
-  if (input.maxCostUsd !== 0) {
-    return {
-      ...base,
-      canRun: false,
-      failClosed: true,
-      blocker: "paid_usage_requires_owner_approval",
-      blockerClassification: "unknown_requires_review",
+  const block = (blocker, reason, overrides = {}) => ({
+    ...base,
+    ...overrides,
+    canRun: false,
+    failClosed: true,
+    blocker,
+    blockerClassification: "device_unavailable",
+    reason,
+  });
+
+  if (!input.projectConfigured) return block("firebase_project_missing", "Firebase/GCloud project is not configured.");
+  if (!input.testLabApiAvailable) return block("firebase_credentials_missing", "Firebase Test Lab catalog or API access is unavailable.");
+  if (!input.artifactPresent) return block("firebase_artifact_missing", "No Android APK/AAB artifact is available for Firebase Test Lab.");
+  if (input.qaTier === "tier0") return block("tier0_source_only_no_device_lab", "Tier 0 is source/backend/operator-only and does not start Firebase.");
+  if (input.deviceType === "virtual" && !input.allowVirtual) return block("firebase_virtual_device_disabled", "Virtual Firebase devices are disabled by config.");
+  if (input.deviceType === "physical" && !input.allowPhysical) {
+    return block("firebase_physical_device_blocked_by_default", "Physical Firebase Test Lab runs require explicit owner approval.", {
       billingRisk: "paid_approval_required",
-      reason: "FIREBASE_TEST_LAB_MAX_COST_USD must remain 0 unless owner explicitly approves paid usage.",
-    };
+      blockerClassification: "unknown_requires_review",
+    });
   }
-  if (!input.projectConfigured) {
-    return {
-      ...base,
-      canRun: false,
-      failClosed: true,
-      blocker: "firebase_project_missing",
-      blockerClassification: "device_unavailable",
+  if (input.twoDeviceRequested && !input.allowTwoDevice) {
+    return block("firebase_two_device_blocked_by_default", "Two-device Firebase runs are disabled by default and cannot close LiveKit from one run.", {
+      blockerClassification: "second_device_required",
+    });
+  }
+  if (input.broadCrawlRequested && !input.allowBroadCrawl) {
+    return block("firebase_broad_crawl_blocked_by_default", "Broad Firebase crawls are disabled by default.");
+  }
+  if ((input.runReason === "ota_change" || input.runReason === "source_change") && !input.runOnOtaChange) {
+    return block("firebase_on_change_run_disabled", "Firebase on-change runs are disabled by config.");
+  }
+  if (input.scheduledRequested && input.scheduledRunCountToday >= input.maxScheduledRunsPerDay) {
+    return block("firebase_scheduled_daily_limit_reached", "Daily scheduled Firebase smoke limit has already been reached.");
+  }
+  if (!Number.isFinite(estimate.costEstimateUsd)) {
+    return block("firebase_cost_unbounded", "Firebase cost estimate could not be bounded before the run.", {
       billingRisk: "unknown",
-      reason: "Firebase/GCloud project is not configured.",
-    };
+      quotaMode: "unknown",
+    });
   }
-  if (!input.testLabApiAvailable) {
-    return {
-      ...base,
-      canRun: false,
-      failClosed: true,
-      blocker: "firebase_credentials_missing",
-      blockerClassification: "device_unavailable",
-      billingRisk: "unknown",
-      reason: "Firebase Test Lab catalog or API access is unavailable.",
-    };
+  if (input.labMode === "zero_cost" && estimate.costEstimateUsd > 0) {
+    return block("firebase_zero_cost_mode_blocks_paid_estimate", "Zero-cost mode requires verified free quota before running.");
   }
-  if (!input.artifactPresent) {
-    return {
-      ...base,
-      canRun: false,
-      failClosed: true,
-      blocker: "firebase_artifact_missing",
-      blockerClassification: "device_unavailable",
-      reason: "No Android APK/AAB artifact is available for Firebase Test Lab.",
-    };
-  }
-  if (input.deviceType === "physical" && (!input.allowPhysical || !input.physicalApprovalNotePresent)) {
-    return {
-      ...base,
-      canRun: false,
-      failClosed: true,
-      blocker: "firebase_physical_device_blocked_by_default",
-      blockerClassification: "unknown_requires_review",
+  if (estimate.costEstimateUsd > input.perRunCapUsd) {
+    return block("firebase_per_run_cap_exceeded", "Estimated Firebase cost exceeds the per-run cap.", {
       billingRisk: "paid_approval_required",
-      reason: "Physical Firebase Test Lab runs require explicit owner approval and no-cost quota proof.",
-    };
+    });
   }
-  if (input.scheduledRequested && (!input.allowScheduled || !input.scheduleQuotaProofPresent)) {
-    return {
-      ...base,
-      canRun: false,
-      failClosed: true,
-      blocker: "firebase_scheduled_run_blocked_by_default",
-      blockerClassification: "unknown_requires_review",
+  if (input.monthlySpentEstimateUsd + estimate.costEstimateUsd > input.monthlyBudgetUsd) {
+    return block("firebase_monthly_cap_exceeded", "Estimated Firebase cost would exceed the monthly cap.", {
       billingRisk: "paid_approval_required",
-      reason: "Scheduled Firebase Test Lab runs require owner approval and quota-safe proof.",
-    };
+    });
   }
-  if (
-    !input.zeroCostConfirmed
-    || !input.freeQuotaVerified
-    || input.quotaMode !== "free_quota"
-    || input.billingRisk !== "none"
-    || !Number.isFinite(input.remainingFreeMinutes)
-    || !Number.isFinite(input.requiredMinutes)
-    || input.remainingFreeMinutes < input.requiredMinutes
-  ) {
-    return {
-      ...base,
-      canRun: false,
-      failClosed: true,
-      blocker: "firebase_free_quota_unknown",
-      blockerClassification: "device_unavailable",
-      billingRisk: input.billingRisk === "none" ? "unknown" : input.billingRisk,
-      quotaMode: input.quotaMode === "free_quota" ? "unknown" : input.quotaMode,
-      reason: "Remaining no-cost Firebase Test Lab quota could not be proven before the run.",
-    };
-  }
+
   return {
     ...base,
     canRun: true,
     failClosed: false,
     blocker: null,
     blockerClassification: "unknown_requires_review",
-    billingRisk: "none",
-    quotaMode: "free_quota",
-    reason: "Zero-cost Firebase Test Lab virtual-device smoke is explicitly verified for this run.",
+    reason: estimate.costEstimateUsd === 0
+      ? "Verified free quota allows this Firebase virtual smoke."
+      : "Worst-case Firebase virtual-device cost is under per-run and monthly caps.",
   };
 };
 
@@ -333,6 +399,61 @@ const buildGcloudCommand = (audit) => {
   ];
 };
 
+const buildOperatorPayload = (report) => {
+  const metadata = {
+    provider: PROVIDER,
+    proofSource: PROOF_SOURCE,
+    costEstimateUsd: report.costGuard.costEstimateUsd,
+    maxAllowedCostUsd: report.costGuard.maxAllowedCostUsd,
+    monthlyBudgetUsd: report.costGuard.monthlyBudgetUsd,
+    monthlySpentEstimateUsd: report.costGuard.monthlySpentEstimateUsd,
+    billingRisk: report.costGuard.billingRisk,
+    quotaMode: report.costGuard.quotaMode,
+    deviceType: report.costGuard.deviceType,
+    runReason: report.costGuard.runReason,
+    qaTier: report.costGuard.qaTier,
+    blocker: report.costGuard.blocker,
+    matrixId: report.firebaseRun?.matrixId ?? null,
+    fakeProof: false,
+    moneyMoved: false,
+    userRightsChanged: false,
+    highRiskExecuted: false,
+    secretsLogged: false,
+  };
+  if (report.firebaseRun?.started) {
+    return {
+      action: "record_traversal_run",
+      source: PROOF_SOURCE,
+      discovered_by: "device_lab",
+      run_label: "firebase_test_lab_cost_capped_virtual_smoke",
+      device_count: 1,
+      pass_count: report.firebaseRun.status === 0 ? 1 : 0,
+      failure_count: report.firebaseRun.status === 0 ? 0 : 1,
+      blocked_count: 0,
+      two_device_required_count: 0,
+      result: report.firebaseRun.status === 0 ? "partial" : "failed",
+      blocker_classification: report.firebaseRun.status === 0 ? "unknown_requires_review" : "device_unavailable",
+      metadata,
+    };
+  }
+  return {
+    action: "record_device_availability",
+    source: PROOF_SOURCE,
+    discovered_by: "device_lab",
+    device_requirement: "Firebase Test Lab cost-capped virtual-device smoke path",
+    available_device_count: report.costGuard.canRun ? 1 : 0,
+    required_device_count: 1,
+    play_installed_device_available: false,
+    device_lab_configured: Boolean(report.costGuard.canRun),
+    blocker_classification: report.costGuard.blockerClassification,
+    result: report.costGuard.canRun ? "partial" : "blocked",
+    next_safe_action: report.costGuard.canRun
+      ? "Run only bounded cost-capped Firebase virtual smoke; keep Play-installed, Premium, and two-device proof separate."
+      : "Keep Firebase smoke pending or blocked until the cost/scheduler/device guard permits a run.",
+    metadata,
+  };
+};
+
 const reportToOperator = async (report) => {
   const token = process.env.INSTALLED_QA_OPERATOR_TOKEN;
   const explicitUrl = textEnv("INSTALLED_QA_OPERATOR_FUNCTION_URL");
@@ -341,87 +462,105 @@ const reportToOperator = async (report) => {
   if (!token || !url) {
     return { configured: false, reported: false, required: boolEnv("INSTALLED_QA_REPORT_REQUIRED") };
   }
-  const payload = {
-    action: "record_device_availability",
-    source: PROOF_SOURCE,
-    discovered_by: "device_lab",
-    device_requirement: "Firebase Test Lab zero-cost virtual-device smoke path",
-    available_device_count: report.costGuard.canRun ? 1 : 0,
-    required_device_count: 1,
-    play_installed_device_available: false,
-    device_lab_configured: Boolean(report.costGuard.canRun),
-    blocker_classification: report.costGuard.blockerClassification,
-    result: report.costGuard.canRun ? "partial" : "blocked",
-    next_safe_action: report.costGuard.canRun
-      ? "Run only the bounded zero-cost Firebase smoke; keep Play-installed, Premium, and two-device proof separate."
-      : "Keep scheduler pending until Firebase no-cost quota and billing risk are proven; no Firebase matrix was started.",
-    metadata: {
-      provider: PROVIDER,
-      proofSource: PROOF_SOURCE,
-      costEstimateUsd: report.costGuard.costEstimateUsd,
-      billingRisk: report.costGuard.billingRisk,
-      quotaMode: report.costGuard.quotaMode,
-      deviceType: report.costGuard.deviceType,
-      blocker: report.costGuard.blocker,
-      fakeProof: false,
-      moneyMoved: false,
-      userRightsChanged: false,
-      highRiskExecuted: false,
-      secretsLogged: false,
-    },
-  };
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       [TOKEN_HEADER]: token,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(buildOperatorPayload(report)),
   });
   return { configured: true, reported: response.ok, status: response.status };
 };
 
+const buildLedgerEvent = (eventType, report) => ({
+  eventType,
+  createdAt: new Date().toISOString(),
+  month: monthKey(),
+  day: dayKey(),
+  systemId: SYSTEM_ID,
+  provider: PROVIDER,
+  proofSource: PROOF_SOURCE,
+  qaTier: report.costGuard.qaTier,
+  runReason: report.costGuard.runReason,
+  costEstimateUsd: report.costGuard.costEstimateUsd ?? 0,
+  maxAllowedCostUsd: report.costGuard.maxAllowedCostUsd,
+  monthlyBudgetUsd: report.costGuard.monthlyBudgetUsd,
+  monthlySpentEstimateUsd: report.costGuard.monthlySpentEstimateUsd,
+  billingRisk: report.costGuard.billingRisk,
+  quotaMode: report.costGuard.quotaMode,
+  deviceType: report.costGuard.deviceType,
+  canRun: report.costGuard.canRun,
+  blocker: report.costGuard.blocker,
+  matrixId: report.firebaseRun?.matrixId ?? null,
+  result: report.firebaseRun?.started ? (report.firebaseRun.status === 0 ? "completed" : "failed") : "blocked_or_status",
+  countAgainstBudget: Boolean(report.firebaseRun?.started),
+  fakeProof: false,
+  moneyMoved: false,
+  userRightsChanged: false,
+  highRiskExecuted: false,
+  secretsLogged: false,
+});
+
 const runSelfTest = () => {
   const base = {
+    labMode: "cost_capped",
+    qaTier: "tier1",
+    runReason: "manual",
     projectConfigured: true,
     testLabApiAvailable: true,
     artifactPresent: true,
     deviceType: "virtual",
-    scheduledRequested: false,
+    deviceCount: 1,
+    timeout: "5m",
+    plannedMinutes: 5,
+    allowVirtual: true,
     allowPhysical: false,
-    allowScheduled: false,
-    physicalApprovalNotePresent: false,
-    scheduleQuotaProofPresent: false,
-    maxCostUsd: 0,
+    allowBroadCrawl: false,
+    allowTwoDevice: false,
+    runOnOtaChange: true,
+    broadCrawlRequested: false,
+    twoDeviceRequested: false,
+    scheduledRequested: false,
+    monthlyBudgetUsd: 5,
+    perRunCapUsd: 0.25,
+    maxScheduledRunsPerDay: 1,
+    virtualCostPerHourUsd: 1,
+    physicalCostPerHourUsd: 5,
     zeroCostConfirmed: false,
     freeQuotaVerified: false,
-    quotaMode: "unknown",
-    billingRisk: "unknown",
-    timeout: "5m",
-    requiredMinutes: 5,
-    remainingFreeMinutes: Number.NaN,
+    quotaModeInput: "unknown",
+    monthlySpentEstimateUsd: 0,
+    scheduledRunCountToday: 0,
+    ledgerPath: DEFAULT_LEDGER_PATH,
+    currentMonth: monthKey(),
+    currentDay: dayKey(),
   };
   const cases = [
-    ["unknown cost fails closed", { ...base }, "firebase_free_quota_unknown", false],
-    ["paid budget fails closed", { ...base, maxCostUsd: 1 }, "paid_usage_requires_owner_approval", false],
-    ["physical blocked by default", { ...base, deviceType: "physical" }, "firebase_physical_device_blocked_by_default", false],
-    ["scheduled blocked by default", { ...base, scheduledRequested: true }, "firebase_scheduled_run_blocked_by_default", false],
-    ["free virtual can run", {
-      ...base,
-      zeroCostConfirmed: true,
-      freeQuotaVerified: true,
-      quotaMode: "free_quota",
-      billingRisk: "none",
-      remainingFreeMinutes: 60,
-    }, null, true],
+    ["free run allowed", { ...base, zeroCostConfirmed: true, freeQuotaVerified: true, quotaModeInput: "free_quota" }, null, true, 0],
+    ["estimated 0.08 run allowed", { ...base }, null, true, 0.09],
+    ["estimated 0.50 run blocked", { ...base, plannedMinutes: 30 }, "firebase_per_run_cap_exceeded", false, 0.5],
+    ["monthly cap exceeded blocks", { ...base, monthlySpentEstimateUsd: 4.95 }, "firebase_monthly_cap_exceeded", false, 0.09],
+    ["physical blocked by default", { ...base, deviceType: "physical" }, "firebase_physical_device_blocked_by_default", false, 0.42],
+    ["more than one scheduled run/day blocked", { ...base, runReason: "daily_scheduled", scheduledRequested: true, scheduledRunCountToday: 1 }, "firebase_scheduled_daily_limit_reached", false, 0.09],
+    ["unknown unbounded cost blocked", { ...base, timeout: "bad", plannedMinutes: Number.NaN }, "firebase_cost_unbounded", false, null],
+    ["two-device blocked by default", { ...base, twoDeviceRequested: true, deviceCount: 2 }, "firebase_two_device_blocked_by_default", false, 0.17],
   ];
   const failures = [];
-  for (const [label, input, blocker, canRun] of cases) {
+  for (const [label, input, blocker, canRun, expectedCost] of cases) {
     const result = evaluateCostGuard(input);
     if (result.canRun !== canRun) failures.push(`${label}: canRun expected ${canRun}, got ${result.canRun}`);
     if (blocker && result.blocker !== blocker) failures.push(`${label}: blocker expected ${blocker}, got ${result.blocker}`);
-    if (result.costEstimateUsd !== 0) failures.push(`${label}: costEstimateUsd must stay 0`);
+    if (expectedCost !== null && result.costEstimateUsd !== expectedCost) failures.push(`${label}: cost expected ${expectedCost}, got ${result.costEstimateUsd}`);
     if (result.proofSource !== PROOF_SOURCE || !result.notPlayInstalledProof) failures.push(`${label}: Firebase proof source must not become Play-installed proof`);
+    if (result.premiumProofClosed || result.twoDeviceProofClosed) failures.push(`${label}: Firebase smoke cannot close Premium/two-device proof`);
+  }
+  const ledgerEvent = buildLedgerEvent("run_completed", {
+    costGuard: evaluateCostGuard(base),
+    firebaseRun: { started: true, status: 0, matrixId: "matrix-self-test" },
+  });
+  if (ledgerEvent.costEstimateUsd <= 0 || ledgerEvent.maxAllowedCostUsd !== 0.25 || ledgerEvent.monthlyBudgetUsd !== 5) {
+    failures.push("budget ledger event must record estimate and caps");
   }
   if (failures.length) {
     console.error("installed-qa-firebase-test-lab self-test failed");
@@ -448,6 +587,12 @@ const report = {
   action: mode,
   audit,
   costGuard,
+  qaPlan: {
+    tier0: "source/backend/operator-only; no device lab",
+    tier1: "Firebase virtual smoke; daily at most, on OTA/source change, or owner command; cost-capped",
+    tier2: "broader Firebase virtual/physical; owner-approved only",
+    tier3: "physical Play-installed, Premium Billing, two-device LiveKit, camera/mic, push; on-demand only",
+  },
   plannedTest: {
     style: "firebase_virtual_device_robo_smoke",
     preferredDeviceType: "virtual",
@@ -464,26 +609,34 @@ const report = {
   secretsLogged: false,
 };
 
-if (flags.has("--report-operator") || boolEnv("FIREBASE_TEST_LAB_REPORT_TO_OPERATOR")) {
-  report.operatorReport = await reportToOperator(report);
-  if (report.operatorReport.required && !report.operatorReport.reported) {
-    console.log(JSON.stringify(redact(report), null, 2));
-    process.exit(1);
-  }
-}
-
 if (mode === "run" && costGuard.canRun) {
   const result = runQuiet("gcloud", commandArgs);
   const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
-  const matrixMatch = output.match(/matrix(?:Id| id)?[=:]\s*([A-Za-z0-9_-]+)/i);
+  const matrixMatch = output.match(/matrix(?:Id| id)?[=:]\s*([A-Za-z0-9_-]+)/i)
+    || output.match(/matrices\/([0-9]+)/i);
   report.firebaseRun = {
-    started: result.status === 0,
+    started: true,
     status: result.status,
     matrixId: matrixMatch?.[1] ?? null,
     outputStoredInConsole: true,
   };
   report.ok = result.status === 0;
   if (result.status !== 0) report.failClosed = true;
+}
+
+if (mode === "run") {
+  report.ledgerWritten = writeLedgerEvent(input.ledgerPath, buildLedgerEvent(
+    report.firebaseRun?.started ? "run_completed" : "run_blocked",
+    report,
+  ));
+}
+
+if (flags.has("--report-operator") || boolEnv("FIREBASE_TEST_LAB_REPORT_TO_OPERATOR")) {
+  report.operatorReport = await reportToOperator(report);
+  if (report.operatorReport.required && !report.operatorReport.reported) {
+    console.log(JSON.stringify(redact(report), null, 2));
+    process.exit(1);
+  }
 }
 
 console.log(JSON.stringify(redact(report), null, 2));

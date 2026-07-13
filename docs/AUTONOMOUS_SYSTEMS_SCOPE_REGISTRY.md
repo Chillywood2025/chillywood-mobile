@@ -492,7 +492,7 @@ Allowed surfaces:
 - `account_fixture_health`
 - `device_availability`
 - `device_lab_readiness`
-- `firebase_test_lab_zero_cost_readiness`
+- `firebase_test_lab_cost_capped_readiness`
 - `two_device_realtime_proof`
 - `release_diagnostics_updateid_check`
 - `route_contract_marker_check`
@@ -529,7 +529,7 @@ Forbidden:
 
 `installed_product_qa_operator` records installed-app route, role, account-fixture, and device-readiness blockers proactively. Codex caught the current installed traversal blockers manually; this operator now turns that category into first-class QA findings and owner-command requests. Live deployment is active as of 2026-07-13: `installed-product-qa-operator` is token-gated, current OTA `019f596f-1a87-76d8-abe3-14342c8d1cf6` was proved on Play-installed `R5CR120QCBF`, and `watch_once` recorded the current blockers with `source=play_installed` / `discovered_by=autonomous_operator`. Scheduler remains pending because the production host has no stable Play-installed device/device-lab path. Premium fixture repair is provider-backed only, and two-device proof requires two Play-installed devices or approved device lab.
 
-Firebase Test Lab is zero-cost-first as the first device-lab foundation path. The source runner records only `firebase_test_lab_uploaded_artifact` proof and must not call it Play-installed proof. It defaults to virtual-device-only, manual/on-demand, `FIREBASE_TEST_LAB_MAX_COST_USD=0`, and fails closed when billing risk or free-quota state is unknown. Current audit found Firebase/Test Lab CLI/catalog access and Android artifacts, but billing/free-quota readback was not guaranteed; no Firebase matrix was started, no scheduler was installed, and `schedulerStatus=device_lab_scheduler_pending` remains. No paid Firebase run without owner approval is allowed.
+Firebase Test Lab is the first device-lab foundation path in cost-capped cheap mode. The source runner records only `firebase_test_lab_uploaded_artifact` proof and must not call it Play-installed proof. It defaults to virtual-device-only, manual/on-demand or daily/on-change when approved, `FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5`, `FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25`, `FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY=1`, physical disabled, broad crawls disabled, and two-device Firebase disabled. Unknown free quota can run only when worst-case virtual-device cost is bounded under the per-run cap and monthly remaining budget; unbounded cost still fails closed. One owner-command Tier 1 virtual smoke completed as Firebase matrix `4612242345700782646` with worst-case `costEstimateUsd=0.09`, `billingRisk=low`, and local ledger write. Firebase smoke does not close Premium/RevenueCat/Google Play Billing or two-device LiveKit proof. No Firebase scheduler is claimed active; `schedulerStatus=device_lab_scheduler_pending` remains until a daily cost-capped timer is approved, installed, fired, and audited.
 
 ### `platform_recovery_operator`
 

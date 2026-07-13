@@ -1062,7 +1062,7 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
       "account_fixture_health",
       "device_availability",
       "device_lab_readiness",
-      "firebase_test_lab_zero_cost_readiness",
+      "firebase_test_lab_cost_capped_readiness",
       "two_device_realtime_proof",
       "release_diagnostics_updateid_check",
       "route_contract_marker_check",
@@ -1099,7 +1099,7 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     ],
     requiredGates: [
       "Play-installed or approved device-lab proof source",
-      "Firebase Test Lab zero-cost guard before any matrix",
+      "Firebase Test Lab per-run and monthly cost-cap guard before any matrix",
       "Firebase uploaded artifact cannot be called Play-installed proof",
       "release diagnostics updateId/runtime/channel readback",
       "account fixture health readback",

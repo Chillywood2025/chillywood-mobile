@@ -16,6 +16,7 @@ const registry = read("_lib/autonomousSystemsRegistry.ts");
 const helper = read("_lib/installedProductQaOperator.ts");
 const migration = read("supabase/migrations/20260713011606_installed_product_qa_operator.sql");
 const firebaseMigration = read("supabase/migrations/20260713033809_installed_qa_firebase_test_lab_source.sql");
+const firebaseCostCappedMigration = read("supabase/migrations/20260713044500_installed_qa_firebase_cost_capped_policy.sql");
 const edge = read("supabase/functions/installed-product-qa-operator/index.ts");
 const cli = read("scripts/installed-qa-operator-cli.mjs");
 const firebaseRunner = read("scripts/installed-qa-firebase-test-lab.mjs");
@@ -86,9 +87,14 @@ includes(migration, "'open'", "seed findings open");
 includes(firebaseMigration, "firebase_test_lab_uploaded_artifact", "Firebase Test Lab source check");
 includes(firebaseMigration, "installed_qa_operator_events_source_check", "Firebase event source constraint");
 includes(firebaseMigration, "device_availability_findings_source_check", "Firebase device source constraint");
-includes(firebaseMigration, "firebase-free-quota-unknown", "Firebase free quota blocker seed");
-includes(firebaseMigration, "firebase_free_quota_unknown", "Firebase free quota blocker classification");
-includes(firebaseMigration, "'costEstimateUsd', 0", "Firebase zero-cost blocker seed");
+includes(firebaseCostCappedMigration, "firebase-cost-capped-cheap-mode", "Firebase cost-capped policy seed");
+includes(firebaseCostCappedMigration, "firebase-free-quota-unknown", "Firebase zero-cost blocker superseded");
+includes(firebaseCostCappedMigration, "'monthlyBudgetUsd', 5", "Firebase monthly cap");
+includes(firebaseCostCappedMigration, "'maxAllowedCostUsd', 0.25", "Firebase per-run cap");
+includes(firebaseCostCappedMigration, "'quotaMode', 'cost_capped_worst_case'", "Firebase bounded cost quota mode");
+includes(firebaseCostCappedMigration, "'physicalDeviceAllowedByDefault', false", "Firebase physical blocked by default");
+includes(firebaseCostCappedMigration, "'broadCrawlAllowedByDefault', false", "Firebase broad crawl blocked by default");
+includes(firebaseCostCappedMigration, "'twoDeviceFirebaseAllowedByDefault', false", "Firebase two-device blocked by default");
 notIncludes(migration, "grant all on table", "broad table grant");
 notIncludes(migration, "to anon", "anon grant");
 notIncludes(migration, "to authenticated", "authenticated grant");
@@ -148,18 +154,30 @@ for (const phrase of [
 notIncludes(helper, "status: \"closed\"", "manual findings must not be pre-closed");
 
 for (const phrase of [
-  "FIREBASE_TEST_LAB_MAX_COST_USD",
-  "numberEnv(\"FIREBASE_TEST_LAB_MAX_COST_USD\", 0)",
-  "firebase_free_quota_unknown",
-  "paid_usage_requires_owner_approval",
+  "FIREBASE_TEST_LAB_MODE",
+  "cost_capped",
+  "FIREBASE_TEST_LAB_MONTHLY_CAP_USD",
+  "numberEnv(\"FIREBASE_TEST_LAB_MONTHLY_CAP_USD\", 5)",
+  "FIREBASE_TEST_LAB_PER_RUN_CAP_USD",
+  "numberEnv(\"FIREBASE_TEST_LAB_PER_RUN_CAP_USD\", 0.25)",
+  "FIREBASE_TEST_LAB_ALLOW_VIRTUAL",
+  "FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY",
+  "FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE",
+  "FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL",
+  "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE",
+  "firebase_per_run_cap_exceeded",
+  "firebase_monthly_cap_exceeded",
   "firebase_physical_device_blocked_by_default",
-  "firebase_scheduled_run_blocked_by_default",
+  "firebase_scheduled_daily_limit_reached",
+  "firebase_broad_crawl_blocked_by_default",
+  "firebase_two_device_blocked_by_default",
+  "firebase_cost_unbounded",
   "FIREBASE_TEST_LAB_ZERO_COST_CONFIRMED",
   "FIREBASE_TEST_LAB_FREE_QUOTA_VERIFIED",
-  "FIREBASE_TEST_LAB_REMAINING_FREE_VIRTUAL_MINUTES",
-  "FIREBASE_TEST_LAB_ALLOW_PHYSICAL",
-  "FIREBASE_TEST_LAB_ALLOW_SCHEDULED",
   "costEstimateUsd",
+  "maxAllowedCostUsd",
+  "monthlyBudgetUsd",
+  "monthlySpentEstimateUsd",
   "billingRisk",
   "quotaMode",
   "notPlayInstalledProof: true",
@@ -167,8 +185,10 @@ for (const phrase of [
   "Google Play Billing or RevenueCat active Premium",
   "two-device LiveKit realtime",
 ]) includes(firebaseRunner, phrase, "Firebase Test Lab cost guard");
-notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_MAX_COST_USD\", 5", "Firebase paid default");
-notIncludes(firebaseRunner, "costEstimateUsd: 1", "Firebase nonzero cost estimate");
+notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_ALLOW_PHYSICAL\", true", "Firebase physical default");
+notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL\", true", "Firebase broad crawl default");
+notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE\", true", "Firebase two-device default");
+notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY\", 30", "Firebase high-frequency schedule default");
 notIncludes(firebaseRunner, "notPlayInstalledProof: false", "Firebase proof overclaim");
 
 includes(reporting, "postInstalledQaFinding", "traversal reporter");
@@ -208,9 +228,10 @@ for (const phrase of [
   "Premium fixture repair is provider-backed only",
   "two-device proof requires two Play-installed devices or approved device lab",
   "scheduler pending until device-lab path exists",
-  "Firebase Test Lab is zero-cost-first",
+  "Firebase Test Lab uses cost-capped cheap mode",
   "Firebase uploaded artifact is not Play-installed proof",
-  "no paid Firebase run without owner approval",
+  "FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5",
+  "FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25",
 ]) includes(runbook + auditDoc + firebaseRunbook, phrase, "docs");
 
 if (/schedulerStatus:\s*"chillywood-installed.*timer/i.test(registryBlock)) failures.push("scheduler claimed active without device-lab/timer proof");
