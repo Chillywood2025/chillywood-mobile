@@ -20,7 +20,12 @@ const systems = {
     cliScripts: ["platform-recovery-operator:watch-once", "platform-recovery-operator:status", "platform-recovery-operator:report"],
     tokenHeader: "x-platform-recovery-operator-token",
     tokenHashEnv: "PLATFORM_RECOVERY_OPERATOR_TOKEN_SHA256",
-    schedulerStatus: "scheduler_pending_no_hardened_host_token_path",
+    activation: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-platform-recovery-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/platform-recovery-operator/systemd/chillywood-platform-recovery-operator-watch-once.service",
+    timerPath: "ops/platform-recovery-operator/systemd/chillywood-platform-recovery-operator-watch-once.timer",
+    watchScriptPath: "ops/platform-recovery-operator/systemd/platform-recovery-operator-watch-once.sh",
+    timerCadence: "OnUnitActiveSec=30min",
     tables: [
       "platform_recovery_operator_events",
       "backup_health_snapshots",
@@ -34,7 +39,7 @@ const systems = {
     actions: ["database_backup_freshness", "restore_drill_freshness", "migration_drift_detection", "scheduled_timer_health", "watch_once"],
     approvalActions: ["production_restore", "destructive_db_mutation", "secret_rotation"],
     forbidden: ["production restore without approval", "destructive DB mutation", "secret rotation without approval", "fake backup/restore success"],
-    docs: ["no production restore", "no destructive mutation", "scheduler remains pending"],
+    docs: ["no production restore", "no destructive mutation", "Scheduler proof"],
     seed: "watch_once writes backup freshness status only",
   },
   privacyCompliance: {
@@ -50,7 +55,12 @@ const systems = {
     cliScripts: ["privacy-compliance-operator:watch-once", "privacy-compliance-operator:status", "privacy-compliance-operator:report"],
     tokenHeader: "x-privacy-compliance-operator-token",
     tokenHashEnv: "PRIVACY_COMPLIANCE_OPERATOR_TOKEN_SHA256",
-    schedulerStatus: "scheduler_pending_legal_workflow_and_hardened_host_path",
+    activation: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-privacy-compliance-operator-watch-once.timer_every_6_hours",
+    servicePath: "ops/privacy-compliance-operator/systemd/chillywood-privacy-compliance-operator-watch-once.service",
+    timerPath: "ops/privacy-compliance-operator/systemd/chillywood-privacy-compliance-operator-watch-once.timer",
+    watchScriptPath: "ops/privacy-compliance-operator/systemd/privacy-compliance-operator-watch-once.sh",
+    timerCadence: "OnUnitActiveSec=6h",
     tables: [
       "privacy_operator_events",
       "privacy_request_findings",
@@ -80,7 +90,12 @@ const systems = {
     cliScripts: ["support-success-operator:watch-once", "support-success-operator:status", "support-success-operator:report"],
     tokenHeader: "x-support-success-operator-token",
     tokenHashEnv: "SUPPORT_SUCCESS_OPERATOR_TOKEN_SHA256",
-    schedulerStatus: "scheduler_pending_support_table_and_hardened_host_path",
+    activation: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-support-success-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/support-success-operator/systemd/chillywood-support-success-operator-watch-once.service",
+    timerPath: "ops/support-success-operator/systemd/chillywood-support-success-operator-watch-once.timer",
+    watchScriptPath: "ops/support-success-operator/systemd/support-success-operator-watch-once.sh",
+    timerCadence: "OnUnitActiveSec=30min",
     tables: [
       "support_operator_events",
       "support_health_snapshots",
@@ -109,7 +124,12 @@ const systems = {
     cliScripts: ["search-ranking-integrity-operator:watch-once", "search-ranking-integrity-operator:status", "search-ranking-integrity-operator:report"],
     tokenHeader: "x-search-ranking-integrity-operator-token",
     tokenHashEnv: "SEARCH_RANKING_INTEGRITY_OPERATOR_TOKEN_SHA256",
-    schedulerStatus: "scheduler_pending_search_health_path_and_hardened_host_path",
+    activation: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-search-ranking-integrity-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/search-ranking-integrity-operator/systemd/chillywood-search-ranking-integrity-operator-watch-once.service",
+    timerPath: "ops/search-ranking-integrity-operator/systemd/chillywood-search-ranking-integrity-operator-watch-once.timer",
+    watchScriptPath: "ops/search-ranking-integrity-operator/systemd/search-ranking-integrity-operator-watch-once.sh",
+    timerCadence: "OnUnitActiveSec=30min",
     tables: [
       "search_operator_events",
       "search_health_snapshots",
@@ -213,7 +233,7 @@ const approvalFn = read("supabase/functions/autonomous-approval-request/index.ts
 const supabaseConfig = read("supabase/config.toml");
 
 requireText("registry status", block, 'status: "scoped_write_capable_guarded"');
-requireText("registry activation", block, 'activeActivationMode: "manual_cli"');
+requireText("registry activation", block, `activeActivationMode: "${config.activation}"`);
 requireText("registry allowed writes", block, "allowedWrites");
 requireText("registry owner approval", block, "ownerApprovalRequired: true");
 for (const cliScript of config.cliScripts) requireText("package CLI", packageJson, `"${cliScript}"`);
@@ -246,6 +266,24 @@ requireText("helper watch plan", helper, "WatchPlan");
 requireText("helper owner command", helper, "OwnerCommand");
 requireText("helper sanitizer", helper, "sanitize");
 requireText("runbook scheduler truth", runbook, config.schedulerStatus);
+const service = read(config.servicePath);
+const timer = read(config.timerPath);
+const watchScript = read(config.watchScriptPath);
+requireText("systemd service env", service, "EnvironmentFile=/etc/chillywood/");
+requireText("systemd service watch script", service, "ExecStart=/opt/chillywood/");
+requireText("systemd hardening", service, "NoNewPrivileges=true");
+requireText("systemd hardening", service, "ProtectSystem=strict");
+requireText("systemd hardening", service, "PrivateTmp=true");
+requireText("systemd hardening", service, "RestrictSUIDSGID=true");
+requireText("systemd hardening", service, "LockPersonality=true");
+requireText("systemd hardening", service, "CapabilityBoundingSet=");
+requireText("systemd timer cadence", timer, config.timerCadence);
+requireText("systemd timer install", timer, "WantedBy=timers.target");
+requireText("watch script action", watchScript, '"action":"watch_once"');
+requireText("watch script scheduler", watchScript, '"scheduler":"systemd_timer"');
+requireText("watch script operator id", watchScript, `"operator_id":"${config.id}"`);
+requireText("watch script redaction", watchScript, "[redacted]");
+forbidText("systemd artifacts", service + timer + watchScript, "SERVICE_ROLE");
 
 if (failures.length) {
   console.error(`${config.proofScript} failed`);
@@ -257,7 +295,7 @@ console.log(JSON.stringify({
   ok: true,
   systemId: config.id,
   status: "scoped_write_capable_guarded",
-  activation: "manual_cli",
+  activation: config.activation,
   schedulerStatus: config.schedulerStatus,
   edgeFunction: config.functionName,
   tables: config.tables.length,

@@ -1,0 +1,21 @@
+[Unit]
+Description=Chi'llywood Search / Ranking Integrity operator watch_once probe
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/chillywood/search-ranking-integrity-operator.env
+Environment=OPERATOR_SCHEDULER=systemd_timer
+Environment=OPERATOR_ID=search_ranking_integrity_operator
+Environment=OPERATOR_SOURCE=systemd_timer:chillywood-prod-01:search_ranking_integrity_operator
+ExecStart=/opt/chillywood/search-ranking-integrity-operator/search-ranking-integrity-operator-watch-once.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=

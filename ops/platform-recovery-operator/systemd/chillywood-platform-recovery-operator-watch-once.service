@@ -1,0 +1,21 @@
+[Unit]
+Description=Chi'llywood Platform Recovery operator watch_once probe
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/chillywood/platform-recovery-operator.env
+Environment=OPERATOR_SCHEDULER=systemd_timer
+Environment=OPERATOR_ID=platform_recovery_operator
+Environment=OPERATOR_SOURCE=systemd_timer:chillywood-prod-01:platform_recovery_operator
+ExecStart=/opt/chillywood/platform-recovery-operator/platform-recovery-operator-watch-once.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=

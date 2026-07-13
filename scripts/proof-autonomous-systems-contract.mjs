@@ -95,6 +95,38 @@ const scopedSystems = [
     timerPath: "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer",
     watchScriptPath: "ops/observability-operator/systemd/observability-operator-watch-once.sh",
   },
+  {
+    id: "platform_recovery_operator",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-platform-recovery-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/platform-recovery-operator/systemd/chillywood-platform-recovery-operator-watch-once.service",
+    timerPath: "ops/platform-recovery-operator/systemd/chillywood-platform-recovery-operator-watch-once.timer",
+    watchScriptPath: "ops/platform-recovery-operator/systemd/platform-recovery-operator-watch-once.sh",
+  },
+  {
+    id: "privacy_compliance_operator",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-privacy-compliance-operator-watch-once.timer_every_6_hours",
+    servicePath: "ops/privacy-compliance-operator/systemd/chillywood-privacy-compliance-operator-watch-once.service",
+    timerPath: "ops/privacy-compliance-operator/systemd/chillywood-privacy-compliance-operator-watch-once.timer",
+    watchScriptPath: "ops/privacy-compliance-operator/systemd/privacy-compliance-operator-watch-once.sh",
+  },
+  {
+    id: "support_success_operator",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-support-success-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/support-success-operator/systemd/chillywood-support-success-operator-watch-once.service",
+    timerPath: "ops/support-success-operator/systemd/chillywood-support-success-operator-watch-once.timer",
+    watchScriptPath: "ops/support-success-operator/systemd/support-success-operator-watch-once.sh",
+  },
+  {
+    id: "search_ranking_integrity_operator",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-search-ranking-integrity-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/search-ranking-integrity-operator/systemd/chillywood-search-ranking-integrity-operator-watch-once.service",
+    timerPath: "ops/search-ranking-integrity-operator/systemd/chillywood-search-ranking-integrity-operator-watch-once.timer",
+    watchScriptPath: "ops/search-ranking-integrity-operator/systemd/search-ranking-integrity-operator-watch-once.sh",
+  },
 ];
 
 const moneyScheduler = {
@@ -147,18 +179,18 @@ const checks = [
     },
   },
   {
-    name: "final manual scoped-write operators are real token-gated systems",
+    name: "final scheduled scoped-write operators are real token-gated systems",
     passes: () => [
-      ["platform_recovery_operator", "proof:platform-recovery-operator", "guard:platform-recovery-operator", "scheduler_pending_no_hardened_host_token_path", "supabase/functions/platform-recovery-operator/index.ts"],
-      ["privacy_compliance_operator", "proof:privacy-compliance-operator", "guard:privacy-compliance-operator", "scheduler_pending_legal_workflow_and_hardened_host_path", "supabase/functions/privacy-compliance-operator/index.ts"],
-      ["support_success_operator", "proof:support-success-operator", "guard:support-success-operator", "scheduler_pending_support_table_and_hardened_host_path", "supabase/functions/support-success-operator/index.ts"],
-      ["search_ranking_integrity_operator", "proof:search-ranking-integrity-operator", "guard:search-ranking-integrity-operator", "scheduler_pending_search_health_path_and_hardened_host_path", "supabase/functions/search-ranking-integrity-operator/index.ts"],
+      ["platform_recovery_operator", "proof:platform-recovery-operator", "guard:platform-recovery-operator", "chillywood-platform-recovery-operator-watch-once.timer_every_30_minutes", "supabase/functions/platform-recovery-operator/index.ts"],
+      ["privacy_compliance_operator", "proof:privacy-compliance-operator", "guard:privacy-compliance-operator", "chillywood-privacy-compliance-operator-watch-once.timer_every_6_hours", "supabase/functions/privacy-compliance-operator/index.ts"],
+      ["support_success_operator", "proof:support-success-operator", "guard:support-success-operator", "chillywood-support-success-operator-watch-once.timer_every_30_minutes", "supabase/functions/support-success-operator/index.ts"],
+      ["search_ranking_integrity_operator", "proof:search-ranking-integrity-operator", "guard:search-ranking-integrity-operator", "chillywood-search-ranking-integrity-operator-watch-once.timer_every_30_minutes", "supabase/functions/search-ranking-integrity-operator/index.ts"],
     ].every(([systemId, proof, guard, scheduler, functionPath]) => {
       const blockStart = registry.indexOf(`id: "${systemId}"`);
       const blockEnd = registry.indexOf("\n  },", blockStart);
       const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
       return block.includes("scoped_write_capable_guarded")
-        && block.includes('activeActivationMode: "manual_cli"')
+        && block.includes('activeActivationMode: "limited_scheduled_probe"')
         && block.includes(scheduler)
         && block.includes(proof)
         && block.includes(guard)
@@ -388,10 +420,6 @@ console.log(JSON.stringify({
   scopedWriteSystemsAdded: [
     ...scopedSystems.map((system) => system.id),
     "installed_product_qa_operator",
-    "platform_recovery_operator",
-    "privacy_compliance_operator",
-    "support_success_operator",
-    "search_ranking_integrity_operator",
   ],
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
   revenueCatReadbackReconciled: true,

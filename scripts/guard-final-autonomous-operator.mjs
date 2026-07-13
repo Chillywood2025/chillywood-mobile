@@ -14,7 +14,12 @@ const systems = {
     runbookPath: "docs/PLATFORM_RECOVERY_OPERATOR_RUNBOOK.md",
     proofScript: "proof:platform-recovery-operator",
     guardScript: "guard:platform-recovery-operator",
-    schedulerStatus: "scheduler_pending_no_hardened_host_token_path",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-platform-recovery-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/platform-recovery-operator/systemd/chillywood-platform-recovery-operator-watch-once.service",
+    timerPath: "ops/platform-recovery-operator/systemd/chillywood-platform-recovery-operator-watch-once.timer",
+    watchScriptPath: "ops/platform-recovery-operator/systemd/platform-recovery-operator-watch-once.sh",
+    expectedCadence: "OnUnitActiveSec=30min",
     tokenHeader: "x-platform-recovery-operator-token",
     tokenHashEnv: "PLATFORM_RECOVERY_OPERATOR_TOKEN_SHA256",
     tables: [
@@ -36,7 +41,12 @@ const systems = {
     runbookPath: "docs/PRIVACY_COMPLIANCE_OPERATOR_RUNBOOK.md",
     proofScript: "proof:privacy-compliance-operator",
     guardScript: "guard:privacy-compliance-operator",
-    schedulerStatus: "scheduler_pending_legal_workflow_and_hardened_host_path",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-privacy-compliance-operator-watch-once.timer_every_6_hours",
+    servicePath: "ops/privacy-compliance-operator/systemd/chillywood-privacy-compliance-operator-watch-once.service",
+    timerPath: "ops/privacy-compliance-operator/systemd/chillywood-privacy-compliance-operator-watch-once.timer",
+    watchScriptPath: "ops/privacy-compliance-operator/systemd/privacy-compliance-operator-watch-once.sh",
+    expectedCadence: "OnUnitActiveSec=6h",
     tokenHeader: "x-privacy-compliance-operator-token",
     tokenHashEnv: "PRIVACY_COMPLIANCE_OPERATOR_TOKEN_SHA256",
     tables: [
@@ -58,7 +68,12 @@ const systems = {
     runbookPath: "docs/SUPPORT_SUCCESS_OPERATOR_RUNBOOK.md",
     proofScript: "proof:support-success-operator",
     guardScript: "guard:support-success-operator",
-    schedulerStatus: "scheduler_pending_support_table_and_hardened_host_path",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-support-success-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/support-success-operator/systemd/chillywood-support-success-operator-watch-once.service",
+    timerPath: "ops/support-success-operator/systemd/chillywood-support-success-operator-watch-once.timer",
+    watchScriptPath: "ops/support-success-operator/systemd/support-success-operator-watch-once.sh",
+    expectedCadence: "OnUnitActiveSec=30min",
     tokenHeader: "x-support-success-operator-token",
     tokenHashEnv: "SUPPORT_SUCCESS_OPERATOR_TOKEN_SHA256",
     tables: [
@@ -79,7 +94,12 @@ const systems = {
     runbookPath: "docs/SEARCH_RANKING_INTEGRITY_OPERATOR_RUNBOOK.md",
     proofScript: "proof:search-ranking-integrity-operator",
     guardScript: "guard:search-ranking-integrity-operator",
-    schedulerStatus: "scheduler_pending_search_health_path_and_hardened_host_path",
+    activation: 'activeActivationMode: "limited_scheduled_probe"',
+    schedulerStatus: "chillywood-search-ranking-integrity-operator-watch-once.timer_every_30_minutes",
+    servicePath: "ops/search-ranking-integrity-operator/systemd/chillywood-search-ranking-integrity-operator-watch-once.service",
+    timerPath: "ops/search-ranking-integrity-operator/systemd/chillywood-search-ranking-integrity-operator-watch-once.timer",
+    watchScriptPath: "ops/search-ranking-integrity-operator/systemd/search-ranking-integrity-operator-watch-once.sh",
+    expectedCadence: "OnUnitActiveSec=30min",
     tokenHeader: "x-search-ranking-integrity-operator-token",
     tokenHashEnv: "SEARCH_RANKING_INTEGRITY_OPERATOR_TOKEN_SHA256",
     tables: [
@@ -177,7 +197,7 @@ if (config.foundationOnly) {
   const approvalFn = read("supabase/functions/autonomous-approval-request/index.ts");
 
   includes(block, 'status: "scoped_write_capable_guarded"', "registry active status");
-  includes(block, 'activeActivationMode: "manual_cli"', "registry manual activation");
+  includes(block, config.activation, "registry scheduled activation");
   includes(block, "ownerApprovalRequired: true", "registry approval gate");
   includes(approval, `"${config.id}"`, "approval requester model");
   includes(approvalFn, `"${config.id}"`, "approval function whitelist");
@@ -203,7 +223,24 @@ if (config.foundationOnly) {
   includes(migration, "check (money_moved = false)", "money DB check");
   includes(migration, "check (user_rights_changed = false)", "rights DB check");
   if (/grant all on table[\s\S]{0,120}(anon|authenticated)/i.test(migration)) failures.push(`${config.id} migration grants broad client access`);
-  if (/schedulerStatus:\s*"chillywood-[^"]*timer/i.test(block)) failures.push(`${config.id} claims scheduled activation without local systemd proof`);
+  const service = read(config.servicePath);
+  const timer = read(config.timerPath);
+  const watchScript = read(config.watchScriptPath);
+  includes(service, "EnvironmentFile=/etc/chillywood/", "systemd env file");
+  includes(service, "ExecStart=/opt/chillywood/", "systemd watch script");
+  includes(service, "NoNewPrivileges=true", "systemd hardening");
+  includes(service, "ProtectSystem=strict", "systemd hardening");
+  includes(service, "PrivateTmp=true", "systemd hardening");
+  includes(service, "RestrictSUIDSGID=true", "systemd hardening");
+  includes(service, "LockPersonality=true", "systemd hardening");
+  includes(service, "CapabilityBoundingSet=", "systemd hardening");
+  includes(timer, config.expectedCadence, "systemd timer cadence");
+  includes(timer, "WantedBy=timers.target", "systemd timer install");
+  includes(watchScript, '"action":"watch_once"', "watch_once only");
+  includes(watchScript, '"scheduler":"systemd_timer"', "scheduler identity");
+  includes(watchScript, `"operator_id":"${config.id}"`, "operator identity");
+  includes(watchScript, "[redacted]", "redacted service output");
+  notIncludes(service + "\n" + timer + "\n" + watchScript, "SERVICE_ROLE", "systemd artifacts");
   notIncludes(edge, "fakeProof: true", "edge fake proof");
   notIncludes(edge, "moneyMoved: true", "edge money movement");
   notIncludes(edge, "userRightsChanged: true", "edge rights mutation");

@@ -4,9 +4,13 @@ Status: scoped-write capable guarded.
 
 System id: `support_success_operator`
 
-Activation: `manual_cli`
+Activation: `limited_scheduled_probe`
 
-Scheduler status: `scheduler_pending_support_table_and_hardened_host_path`.
+Scheduler status: `chillywood-support-success-operator-watch-once.timer_every_30_minutes`.
+
+Live deployment status: remote DB/RLS migration is applied, Edge Function `support-success-operator` is ACTIVE, `SUPPORT_SUCCESS_OPERATOR_TOKEN_SHA256` is stored as a Supabase function secret by name only, and the raw token is stored only on `chillywood-prod-01` in `/etc/chillywood/support-success-operator.env` with `root:root` ownership and mode `600`.
+
+Scheduler proof: `chillywood-support-success-operator-watch-once.timer` is enabled/active on `chillywood-prod-01` with `OnUnitActiveSec=30min` and `RandomizedDelaySec=60s`. The service calls only `watch_once`, uses no service-role key, and the latest report row shows `scheduler=systemd_timer`, `operator_id=support_success_operator`, `money_moved=false`, and `user_rights_changed=false`.
 
 ## Purpose
 
@@ -48,6 +52,15 @@ Support responses are draft response only unless a future template-backed safe s
 - CLI: `support-success-operator:watch-once`, `support-success-operator:status`, `support-success-operator:report`
 
 Missing token or URL fails closed and prints no token value.
+
+## Systemd
+
+- Service: `ops/support-success-operator/systemd/chillywood-support-success-operator-watch-once.service`
+- Timer: `ops/support-success-operator/systemd/chillywood-support-success-operator-watch-once.timer`
+- Host script: `ops/support-success-operator/systemd/support-success-operator-watch-once.sh`
+- Host env: `/etc/chillywood/support-success-operator.env`
+
+The scheduled path may write support health, stale-ticket finding, draft, and escalation rows only. It must not issue refunds, grant Premium, mutate auth/entitlements, reset credentials, or send external legal/payment commitments.
 
 ## Validation
 

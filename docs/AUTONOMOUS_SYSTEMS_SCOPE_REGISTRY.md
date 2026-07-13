@@ -532,9 +532,9 @@ Forbidden:
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_probe`.
 
-Scheduler status: `scheduler_pending_no_hardened_host_token_path`. The scheduler is not active; scheduler remains pending until a hardened host/token/timer path is installed and proved.
+Scheduler status: `chillywood-platform-recovery-operator-watch-once.timer_every_30_minutes`. The hardened host path is active on `chillywood-prod-01`: `chillywood-platform-recovery-operator-watch-once.timer` is enabled/active, runs `watch_once` every thirty minutes with 60-second jitter, reads only `/etc/chillywood/platform-recovery-operator.env`, and writes `scheduler=systemd_timer` audit rows with `money_moved=false` and `user_rights_changed=false`.
 
 Allowed surfaces:
 - database backup freshness
@@ -578,9 +578,9 @@ Forbidden:
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_probe`.
 
-Scheduler status: `scheduler_pending_legal_workflow_and_hardened_host_path`. The scheduler is not active until legal workflow and hardened host proof exist.
+Scheduler status: `chillywood-privacy-compliance-operator-watch-once.timer_every_6_hours`. The hardened host path is active on `chillywood-prod-01`: `chillywood-privacy-compliance-operator-watch-once.timer` is enabled/active, runs `watch_once` every six hours with 120-second jitter, reads only `/etc/chillywood/privacy-compliance-operator.env`, and writes `scheduler=systemd_timer` audit rows with `money_moved=false` and `user_rights_changed=false`.
 
 Allowed surfaces:
 - privacy request intake
@@ -623,9 +623,9 @@ Forbidden:
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_probe`.
 
-Scheduler status: `scheduler_pending_support_table_and_hardened_host_path`. The scheduler is not active until support table/readback and hardened host proof exist.
+Scheduler status: `chillywood-support-success-operator-watch-once.timer_every_30_minutes`. The hardened host path is active on `chillywood-prod-01`: `chillywood-support-success-operator-watch-once.timer` is enabled/active, runs `watch_once` every thirty minutes with 60-second jitter, reads only `/etc/chillywood/support-success-operator.env`, and writes `scheduler=systemd_timer` audit rows with `money_moved=false` and `user_rights_changed=false`.
 
 Allowed surfaces:
 - support inbox health
@@ -668,9 +668,9 @@ Forbidden:
 
 Status: `scoped_write_capable_guarded`.
 
-Current activation: `manual_cli`.
+Current activation: `limited_scheduled_probe`.
 
-Scheduler status: `scheduler_pending_search_health_path_and_hardened_host_path`. The scheduler is not active until safe search-health probing and hardened host proof exist.
+Scheduler status: `chillywood-search-ranking-integrity-operator-watch-once.timer_every_30_minutes`. The hardened host path is active on `chillywood-prod-01`: `chillywood-search-ranking-integrity-operator-watch-once.timer` is enabled/active, runs `watch_once` every thirty minutes with 60-second jitter, reads only `/etc/chillywood/search-ranking-integrity-operator.env`, and writes `scheduler=systemd_timer` audit rows with `money_moved=false` and `user_rights_changed=false`.
 
 Allowed surfaces:
 - search health

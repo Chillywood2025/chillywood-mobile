@@ -4,9 +4,13 @@ Status: scoped-write capable guarded.
 
 System id: `platform_recovery_operator`
 
-Activation: `manual_cli`
+Activation: `limited_scheduled_probe`
 
-Scheduler status: `scheduler_pending_no_hardened_host_token_path`; scheduler remains pending until a hardened host, root-owned narrow token env file, systemd timer, and fired-run audit proof exist.
+Scheduler status: `chillywood-platform-recovery-operator-watch-once.timer_every_30_minutes`.
+
+Live deployment status: remote DB/RLS migration is applied, Edge Function `platform-recovery-operator` is ACTIVE, `PLATFORM_RECOVERY_OPERATOR_TOKEN_SHA256` is stored as a Supabase function secret by name only, and the raw token is stored only on `chillywood-prod-01` in `/etc/chillywood/platform-recovery-operator.env` with `root:root` ownership and mode `600`.
+
+Scheduler proof: `chillywood-platform-recovery-operator-watch-once.timer` is enabled/active on `chillywood-prod-01` with `OnUnitActiveSec=30min` and `RandomizedDelaySec=60s`. The service calls only `watch_once`, uses no service-role key, and the latest report row shows `scheduler=systemd_timer`, `operator_id=platform_recovery_operator`, `money_moved=false`, and `user_rights_changed=false`.
 
 ## Purpose
 
@@ -48,6 +52,15 @@ High-risk recovery creates Owner Command or Autonomous Approval requests and sto
 - CLI: `platform-recovery-operator:watch-once`, `platform-recovery-operator:status`, `platform-recovery-operator:report`
 
 Missing token or URL fails closed and prints no token value.
+
+## Systemd
+
+- Service: `ops/platform-recovery-operator/systemd/chillywood-platform-recovery-operator-watch-once.service`
+- Timer: `ops/platform-recovery-operator/systemd/chillywood-platform-recovery-operator-watch-once.timer`
+- Host script: `ops/platform-recovery-operator/systemd/platform-recovery-operator-watch-once.sh`
+- Host env: `/etc/chillywood/platform-recovery-operator.env`
+
+The scheduled path may record backup/restore/migration/timer/function health findings only. It must not execute restore, delete backups, rotate secrets, mutate providers, or change production data.
 
 ## Validation
 

@@ -1178,8 +1178,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "platform_recovery_operator",
     displayName: "Platform Recovery Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "scheduler_pending_no_hardened_host_token_path",
+    activeActivationMode: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-platform-recovery-operator-watch-once.timer_every_30_minutes",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe"],
     allowedSurfaces: [
       "database_backup_freshness",
@@ -1260,8 +1260,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "privacy_compliance_operator",
     displayName: "Privacy Compliance Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "scheduler_pending_legal_workflow_and_hardened_host_path",
+    activeActivationMode: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-privacy-compliance-operator-watch-once.timer_every_6_hours",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe"],
     allowedSurfaces: [
       "privacy_request_intake",
@@ -1332,8 +1332,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "support_success_operator",
     displayName: "Support Success Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "scheduler_pending_support_table_and_hardened_host_path",
+    activeActivationMode: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-support-success-operator-watch-once.timer_every_30_minutes",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe"],
     allowedSurfaces: [
       "support_inbox_health",
@@ -1404,8 +1404,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "search_ranking_integrity_operator",
     displayName: "Search / Ranking Integrity Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "scheduler_pending_search_health_path_and_hardened_host_path",
+    activeActivationMode: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-search-ranking-integrity-operator-watch-once.timer_every_30_minutes",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe"],
     allowedSurfaces: [
       "search_health",

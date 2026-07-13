@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chi'llywood Privacy Compliance operator watch_once every six hours
+
+[Timer]
+OnBootSec=180s
+OnUnitActiveSec=6h
+AccuracySec=120s
+RandomizedDelaySec=120s
+Unit=chillywood-privacy-compliance-operator-watch-once.service
+
+[Install]
+WantedBy=timers.target

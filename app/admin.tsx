@@ -11404,7 +11404,7 @@ export default function AdminStudioScreen() {
             <View testID="admin-platform-recovery-operator-section" style={{ gap: 8 }}>
               <Text style={styles.ownerSectionTitle}>Platform Recovery Operator</Text>
               <Text testID="platform-recovery-operator-status" style={styles.ownerDetailText}>
-                System id: platform_recovery_operator. Status: scoped-write capable, manual_cli; schedulerStatus=scheduler_pending_no_hardened_host_token_path.
+                System id: platform_recovery_operator. Status: scoped-write capable, limited_scheduled_probe; schedulerStatus=chillywood-platform-recovery-operator-watch-once.timer_every_30_minutes.
               </Text>
               <Text testID="platform-recovery-operator-findings" style={styles.ownerDetailText}>
                 Findings: backup freshness, restore drill freshness, migration drift, function deployment drift, timer health, token/secret presence by name, audit integrity, and recovery readiness rows only.
@@ -11419,7 +11419,7 @@ export default function AdminStudioScreen() {
             <View testID="admin-privacy-compliance-operator-section" style={{ gap: 8 }}>
               <Text style={styles.ownerSectionTitle}>Privacy Compliance Operator</Text>
               <Text testID="privacy-compliance-operator-status" style={styles.ownerDetailText}>
-                System id: privacy_compliance_operator. Status: scoped-write capable, manual_cli; schedulerStatus=scheduler_pending_legal_workflow_and_hardened_host_path.
+                System id: privacy_compliance_operator. Status: scoped-write capable, limited_scheduled_probe; schedulerStatus=chillywood-privacy-compliance-operator-watch-once.timer_every_6_hours.
               </Text>
               <Text testID="privacy-compliance-operator-findings" style={styles.ownerDetailText}>
                 Findings: privacy request intake, export/deletion planning, legal hold readback, retention status, PII exposure review, and redacted package planning rows only.
@@ -11434,7 +11434,7 @@ export default function AdminStudioScreen() {
             <View testID="admin-support-success-operator-section" style={{ gap: 8 }}>
               <Text style={styles.ownerSectionTitle}>Support Success Operator</Text>
               <Text testID="support-success-operator-status" style={styles.ownerDetailText}>
-                System id: support_success_operator. Status: scoped-write capable, manual_cli; schedulerStatus=scheduler_pending_support_table_and_hardened_host_path.
+                System id: support_success_operator. Status: scoped-write capable, limited_scheduled_probe; schedulerStatus=chillywood-support-success-operator-watch-once.timer_every_30_minutes.
               </Text>
               <Text testID="support-success-operator-findings" style={styles.ownerDetailText}>
                 Findings: support inbox health, stale tickets, account help triage, refund request classification, Premium/payment readback labels, drafts, escalations, and SLA review rows only.
@@ -11449,7 +11449,7 @@ export default function AdminStudioScreen() {
             <View testID="admin-search-ranking-integrity-operator-section" style={{ gap: 8 }}>
               <Text style={styles.ownerSectionTitle}>Search / Ranking Integrity Operator</Text>
               <Text testID="search-ranking-integrity-operator-status" style={styles.ownerDetailText}>
-                System id: search_ranking_integrity_operator. Status: scoped-write capable, manual_cli; schedulerStatus=scheduler_pending_search_health_path_and_hardened_host_path.
+                System id: search_ranking_integrity_operator. Status: scoped-write capable, limited_scheduled_probe; schedulerStatus=chillywood-search-ranking-integrity-operator-watch-once.timer_every_30_minutes.
               </Text>
               <Text testID="search-ranking-integrity-operator-findings" style={styles.ownerDetailText}>
                 Findings: search health, ranking integrity, recommendation quality, creator/content visibility anomalies, spam patterns, index freshness, latency, and discovery safety rows only.
