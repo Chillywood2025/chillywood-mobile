@@ -202,6 +202,7 @@ notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY\", 30"
 notIncludes(firebaseRunner, "notPlayInstalledProof: false", "Firebase proof overclaim");
 
 for (const phrase of [
+  "PATH=\"/snap/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}\"",
   "EnvironmentFile=/etc/chillywood/installed-product-qa-operator.env",
   "FIREBASE_TEST_LAB_MODE=cost_capped",
   "FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5",

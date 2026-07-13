@@ -220,6 +220,7 @@ for (const phrase of [
 ]) requireText("firebase runner", firebaseRunner, phrase);
 
 for (const phrase of [
+  "PATH=\"/snap/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}\"",
   "CHILLYWOOD_REPO_DIR",
   "INSTALLED_QA_OPERATOR_TOKEN",
   "FIREBASE_TEST_LAB_MODE=cost_capped",

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="/snap/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
 : "${CHILLYWOOD_REPO_DIR:?missing CHILLYWOOD_REPO_DIR}"
 : "${INSTALLED_QA_OPERATOR_TOKEN:?missing INSTALLED_QA_OPERATOR_TOKEN}"
 
