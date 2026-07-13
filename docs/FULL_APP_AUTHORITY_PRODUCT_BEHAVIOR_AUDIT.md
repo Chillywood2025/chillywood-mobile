@@ -206,15 +206,16 @@ Current classification:
 
 ## Installed Proof Status
 
-Installed role/device proof was not run by this source audit. A later installed preflight attempt on 2026-07-12 is recorded in `docs/release/FULL_APP_AUTHORITY_PRODUCT_BEHAVIOR_INSTALLED_TRAVERSAL_ATTEMPT.md` and was blocked before role traversal because the Play-installed app was on production OTA commit `1cdb27ea1b0410ba8ac2aa840f1acfec6f7d6964`, older than source/guard commit `b1856059e4ce2acf23c43089a2795e23ef9c7927`.
+Installed source/guard proof is closed. Installed Play-app proof is Partial and is recorded in `docs/release/FULL_APP_AUTHORITY_PRODUCT_BEHAVIOR_OTA_INSTALLED_TRAVERSAL_PROOF.md`.
 
-Current pending installed proof roles/devices:
+Current installed follow-up truth as of 2026-07-13:
 
-- owner/super_admin;
-- admin/operator;
-- moderator;
-- normal user/creator;
-- Premium active user;
-- non-Premium user.
+- Production OTA `8e158980-75d1-47ef-bd26-f3f9e564fdab` / Android update `019f58f4-55ea-7d55-b1b1-6ea85fdb1c56` from source commit `32e56c3abb5c046e853a9c2f3d978ba72af447f4` loaded on Play-installed device `R5CR120QCBF`, package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `80`, runtime `1.0.0`, channel `production`, embedded launch `false`, emergency launch `false`.
+- Normal signed-in `/chat` now opens `chat-inbox-screen` with `chat-search-input`; no admin/moderator/private controls appeared.
+- `/creator-monetization-setup` opens the canonical Platform Studio monetization gate with `Premium required` / `Manage Premium` markers; no money/provider/payout mutation occurred.
+- Focused moderator installed proof passed for exact moderation/admin entry with broad Admin Search, owner approvals, direct enforcement, and private evidence absent.
+- Restricted `/chat` remains installed Partial because `proof_restricted_001` readback is not actually restricted; source now has an explicit account-status denial state for a truly restricted account, but the installed fixture cannot prove it without an approved fixture correction.
+- Premium active-user proof remains installed Partial because no provider-backed Premium-active installed session was captured; no manual Premium grant or entitlement edit was performed.
+- Two-device realtime remains separate and unproved because only one Play-installed device was available.
 
-The safe next action is to make a production OTA or Play-installed build available for the current source authority surface, then run a Play-installed role traversal using current production update diagnostics and seeded accounts, without manual Premium grants or high-risk actions.
+The safe next action is limited to the unresolved installed prerequisites: approved restricted proof fixture correction or a truly restricted proof account, a provider-backed Premium-active installed account/session or approved Google Play / RevenueCat sandbox renewal, and two Play-installed devices for realtime proof. Do not reopen the full source audit or rerun unrelated traversal unless a fresh regression appears.
