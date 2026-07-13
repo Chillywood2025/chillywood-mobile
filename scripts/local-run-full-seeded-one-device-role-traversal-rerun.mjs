@@ -8,8 +8,10 @@ import { reportInstalledQaFromTraversalSummary } from "./installed-qa-reporting.
 const root = process.cwd();
 const PACKAGE_ID = "com.chillywood.mobile";
 const SERIAL = process.env.PROOF_ANDROID_SERIAL || process.env.ADB_SERIAL || "R5CR120QCBF";
-const UPDATE_GROUP = "d7aac53c-65bb-4bf7-ae69-04bfea248e0a";
+const UPDATE_GROUP = process.env.FULL_SEEDED_ONE_DEVICE_UPDATE_GROUP || "installed_product_qa_current";
+const EXPECTED_VERSION_CODE = process.env.FULL_SEEDED_ONE_DEVICE_EXPECTED_VERSION_CODE || "80";
 const AFFECTED_FIVE_ONLY = process.env.FULL_SEEDED_ONE_DEVICE_AFFECTED_ONLY === "1";
+const INSTALLED_QA_BLOCKERS_ONLY = process.env.FULL_SEEDED_ONE_DEVICE_INSTALLED_QA_BLOCKERS_ONLY === "1";
 const PROOF_EMAIL_DOMAIN = ["ch", "illy", "wood", ".test"].join("");
 const PROOF_EMAIL_REDACTION_PATTERN = new RegExp(
   `[A-Za-z0-9._%+-]+@(?!${PROOF_EMAIL_DOMAIN.replace(".", "\\.")}\\b)[A-Za-z0-9.-]+\\.[A-Za-z]{2,}`,
@@ -497,12 +499,22 @@ const affectedFiveRoutes = new Map([
   ["proof_creator_001", new Set(["/channel-studio", "/creator-monetization-setup", "/payouts"])],
 ]);
 
-const personasForRun = AFFECTED_FIVE_ONLY
+const installedQaBlockerRoutes = new Map([
+  ["proof_normal_001", new Set(["/chat"])],
+  ["proof_restricted_001", new Set(["/chat"])],
+  ["proof_creator_001", new Set(["/creator-monetization-setup"])],
+  ["proof_premium_001", new Set(["/subscribe"])],
+  ["proof_moderator_001", new Set(["/admin"])],
+]);
+
+const selectedRouteMap = INSTALLED_QA_BLOCKERS_ONLY ? installedQaBlockerRoutes : AFFECTED_FIVE_ONLY ? affectedFiveRoutes : null;
+
+const personasForRun = selectedRouteMap
   ? personas
-    .filter((persona) => affectedFiveRoutes.has(persona.label))
+    .filter((persona) => selectedRouteMap.has(persona.label))
     .map((persona) => ({
       ...persona,
-      routes: persona.routes.filter((routeDef) => affectedFiveRoutes.get(persona.label)?.has(routeDef.route)),
+      routes: persona.routes.filter((routeDef) => selectedRouteMap.get(persona.label)?.has(routeDef.route)),
     }))
   : personas;
 
@@ -625,7 +637,7 @@ for (const persona of personasForRun.filter((p) => p.emailKey && p.passwordKey))
   backendCredentialReadbacks.push(await verifyBackendCredential(persona.label, persona.emailKey, persona.passwordKey));
 }
 
-const requiredCredentialKeysForRun = AFFECTED_FIVE_ONLY
+const requiredCredentialKeysForRun = selectedRouteMap
   ? [...new Set(personasForRun.flatMap((persona) => [persona.emailKey, persona.passwordKey]).filter(Boolean))]
   : requiredCredentialKeys;
 const missingCredentialKeys = requiredCredentialKeysForRun.filter((key) => !credentialStatus[key].present);
@@ -637,7 +649,7 @@ writeJson("backend-credential-readback.json", backendCredentialReadbacks);
 if (!metadata.devices.includes(SERIAL)) {
   failures.push(`Device ${SERIAL} is not attached.`);
 }
-if (metadata.package !== PACKAGE_ID || metadata.installer !== "com.android.vending" || metadata.versionName !== "1.0.0" || metadata.versionCode !== "57") {
+if (metadata.package !== PACKAGE_ID || metadata.installer !== "com.android.vending" || metadata.versionName !== "1.0.0" || metadata.versionCode !== EXPECTED_VERSION_CODE) {
   failures.push(`Installed package metadata mismatch: ${JSON.stringify(metadata)}`);
 }
 if (missingCredentialKeys.length) {
@@ -658,7 +670,7 @@ addMatrix({
 });
 if (launchLog.fatalFound) failures.push("Fatal crash marker found in launch log window.");
 
-if (!AFFECTED_FIVE_ONLY) {
+if (!AFFECTED_FIVE_ONLY && !INSTALLED_QA_BLOCKERS_ONLY) {
   const signedOutResult = signOutThroughUi("signed-out-prep");
   addMatrix({
     role: "signed-out",
@@ -674,18 +686,24 @@ if (!AFFECTED_FIVE_ONLY) {
   for (const routeDef of routeSets.signedOut) exerciseRoute(personas[0], routeDef);
 } else {
   addMatrix({
-    role: "affected five rerun",
-    accountLabel: "proof_normal_001 / proof_creator_001",
-    routeScreen: "normal /chat, normal /admin, creator /channel-studio, creator /creator-monetization-setup, creator /payouts",
+    role: INSTALLED_QA_BLOCKERS_ONLY ? "installed QA blockers rerun" : "affected five rerun",
+    accountLabel: INSTALLED_QA_BLOCKERS_ONLY
+      ? "proof_normal_001 / proof_restricted_001 / proof_creator_001 / proof_premium_001 / proof_moderator_001"
+      : "proof_normal_001 / proof_creator_001",
+    routeScreen: INSTALLED_QA_BLOCKERS_ONLY
+      ? "normal /chat, restricted /chat, creator /creator-monetization-setup, Premium /subscribe, moderator /admin"
+      : "normal /chat, normal /admin, creator /channel-studio, creator /creator-monetization-setup, creator /payouts",
     visibleControl: "affected-only scope",
-    expectedOutcome: "rerun only the five previously blocked route-marker/control-proof items",
+    expectedOutcome: INSTALLED_QA_BLOCKERS_ONLY
+      ? "rerun only the installed QA one-device route/role/account blockers"
+      : "rerun only the five previously blocked route-marker/control-proof items",
     actualOutcome: "signed-out and unrelated role traversals intentionally skipped for targeted rerun",
     status: "Human review",
     screenshotLogReference: "",
   });
 }
 
-for (const persona of (AFFECTED_FIVE_ONLY ? personasForRun : personas.slice(1))) {
+for (const persona of (selectedRouteMap ? personasForRun : personas.slice(1))) {
   forceCloseAndOpen();
   const signOut = signOutThroughUi(`${persona.label}-prep`);
   addMatrix({
@@ -786,6 +804,7 @@ const summary = {
   updateGroup: UPDATE_GROUP,
   stableSeededProofAccountPack: "Closed",
   affectedFiveOnly: AFFECTED_FIVE_ONLY,
+  installedQaBlockersOnly: INSTALLED_QA_BLOCKERS_ONLY,
   serviceRoleUsedInThisRerun: false,
   accountsCreatedOrRecreatedInThisRerun: false,
   rolesTested: personasForRun.map((persona) => persona.role),

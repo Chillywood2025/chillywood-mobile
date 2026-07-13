@@ -94,6 +94,8 @@ for (const phrase of [
   "recordDeviceAvailability",
   "recordManualCodexGap",
   "runWatchOnce",
+  "requestedDiscoveredBy",
+  "discoveredBy",
   "CURRENT_MANUAL_FINDINGS",
   "createOwnerCommand",
   "createApprovalRequest",
@@ -134,6 +136,8 @@ notIncludes(helper, "status: \"closed\"", "manual findings must not be pre-close
 includes(reporting, "postInstalledQaFinding", "traversal reporter");
 includes(reporting, "INSTALLED_QA_REPORT_REQUIRED", "report-required fail closed");
 includes(traversal, "reportInstalledQaFromTraversalSummary", "installed traversal integration");
+includes(traversal, "FULL_SEEDED_ONE_DEVICE_INSTALLED_QA_BLOCKERS_ONLY", "installed QA targeted traversal mode");
+includes(traversal, "FULL_SEEDED_ONE_DEVICE_EXPECTED_VERSION_CODE", "current Play versionCode guard");
 includes(traversal, "installed-qa-operator-reporting-status.json", "reporting artifact");
 
 for (const script of [
@@ -148,6 +152,8 @@ for (const script of [
 ]) includes(packageJson, `"${script}"`, "package wiring");
 includes(cli, "failClosed: true", "CLI missing env fail closed");
 includes(cli, "process.exit(1)", "CLI exits nonzero on missing token/url");
+includes(cli, "INSTALLED_QA_DEVICE_COUNT", "CLI watch_once device count input");
+includes(cli, "INSTALLED_QA_DEVICE_LAB_CONFIGURED", "CLI watch_once device-lab input");
 notIncludes(cli, "console.log(token", "CLI token output");
 
 for (const source of [autonomousApproval, approvalFn, ownerCommand, ownerCommandFn]) {

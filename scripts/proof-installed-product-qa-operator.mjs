@@ -95,6 +95,8 @@ for (const phrase of [
   "create_owner_command",
   "create_approval_request",
   "watch_once",
+  "requestedDiscoveredBy",
+  "device_lab",
   "CURRENT_MANUAL_FINDINGS",
   "route_behavior_findings",
   "role_behavior_findings",
@@ -138,6 +140,8 @@ for (const phrase of [
 for (const phrase of [
   "INSTALLED_QA_OPERATOR_TOKEN",
   "INSTALLED_QA_OPERATOR_FUNCTION_URL",
+  "INSTALLED_QA_DEVICE_COUNT",
+  "INSTALLED_QA_DEVICE_LAB_CONFIGURED",
   "failClosed: true",
   "installed-qa-operator:watch-once",
   "installed-qa-operator:record-finding",
@@ -147,6 +151,8 @@ for (const phrase of [
 
 requireText("traversal reporting import", traversal, "reportInstalledQaFromTraversalSummary");
 requireText("traversal reporting status", traversal, "installedProductQaOperatorReporting");
+requireText("traversal installed QA blocker-only scope", traversal, "FULL_SEEDED_ONE_DEVICE_INSTALLED_QA_BLOCKERS_ONLY");
+requireText("traversal current Play version guard", traversal, "FULL_SEEDED_ONE_DEVICE_EXPECTED_VERSION_CODE");
 requireText("reporting helper posts route finding", reporting, "record_route_finding");
 requireText("reporting helper posts role finding", reporting, "record_role_finding");
 requireText("reporting helper posts account health", reporting, "record_account_fixture_health");

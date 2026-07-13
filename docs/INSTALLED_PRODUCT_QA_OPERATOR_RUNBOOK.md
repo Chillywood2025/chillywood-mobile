@@ -37,6 +37,14 @@ The current blockers are open QA findings discovered by Codex manual proof:
 
 Each row is recorded with `proof_source=manual_codex_proof`, `discovered_by=codex_manual`, `fakeProof=false`, `highRiskExecuted=false`, `moneyMoved=false`, and `userRightsChanged=false`. Findings remain open until a future installed proof, account fixture proof, or approved device-lab run closes them.
 
+## Live Deployment Status
+
+On 2026-07-13 the `installed-product-qa-operator` Edge Function was deployed and token-gated with `INSTALLED_QA_OPERATOR_TOKEN_SHA256`; the raw token is stored only in `/etc/chillywood/installed-product-qa-operator.env` on `chillywood-prod-01` with `root:root` ownership and mode `600`. Missing and invalid tokens return `401`, valid status/report/watch calls write safe rows only, and anon/authenticated client writes to the installed QA tables are denied by RLS.
+
+The current Android source was published to production OTA group `cdfd42a5-7c78-4cd0-9673-1f451073aa16`, Android update `019f596f-1a87-76d8-abe3-14342c8d1cf6`, from source commit `f6ac19fe0c85f4e28db715315e5829043f9fb3ed`. Play-installed device `R5CR120QCBF` loaded that update with package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `80`, runtime `1.0.0`, channel `production`, embedded launch `false`, and emergency launch `false`.
+
+Live `watch_once` now records the six current blockers with `source=play_installed`, `discovered_by=autonomous_operator`, current update/runtime/channel diagnostics, `fakeProof=false`, `highRiskExecuted=false`, `moneyMoved=false`, and `userRightsChanged=false`, and creates a safe Owner Command request. A targeted one-device traversal on the current OTA proved normal `/chat` now shows `chat-inbox-screen` / `chat-search-input`, and `/creator-monetization-setup` shows the Platform Studio `Premium required` / `Manage Premium` compatibility gate. Restricted `/chat`, Premium-active account proof, moderator boundary follow-up, and two-device realtime remain open until the exact account/device prerequisites are available.
+
 ## watch_once
 
 `watch_once` checks whether the current production OTA has installed proof coverage, whether required proof accounts are healthy, whether one or two Play-installed devices or an approved device lab is available, and whether known traversal blockers remain unresolved. If device-lab automation is configured, the operator can run the bounded installed route traversal. If no device lab exists, it still records `device_lab_unavailable` or `manual_codex_only_gap`; it must not silently pass.

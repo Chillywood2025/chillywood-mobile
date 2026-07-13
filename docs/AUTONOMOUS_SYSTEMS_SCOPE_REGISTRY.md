@@ -526,7 +526,7 @@ Forbidden:
 - Premium bypass
 - broad app-control power
 
-`installed_product_qa_operator` records installed-app route, role, account-fixture, and device-readiness blockers proactively. Codex caught the current installed traversal blockers manually; this operator now turns that category into first-class QA findings and owner-command requests. Premium fixture repair is provider-backed only, and two-device proof requires two Play-installed devices or approved device lab.
+`installed_product_qa_operator` records installed-app route, role, account-fixture, and device-readiness blockers proactively. Codex caught the current installed traversal blockers manually; this operator now turns that category into first-class QA findings and owner-command requests. Live deployment is active as of 2026-07-13: `installed-product-qa-operator` is token-gated, current OTA `019f596f-1a87-76d8-abe3-14342c8d1cf6` was proved on Play-installed `R5CR120QCBF`, and `watch_once` recorded the current blockers with `source=play_installed` / `discovered_by=autonomous_operator`. Scheduler remains pending because the production host has no stable Play-installed device/device-lab path. Premium fixture repair is provider-backed only, and two-device proof requires two Play-installed devices or approved device lab.
 
 ### `platform_recovery_operator`
 

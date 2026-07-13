@@ -251,8 +251,9 @@ const insertEvent = async (client: SupabaseClientLike, actionId: string, result:
 };
 
 const recordTraversalRun = async (client: SupabaseClientLike, payload: JsonObject) => {
+  const { account_role: _accountRole, ...base } = baseRow(payload);
   const row = {
-    ...baseRow(payload),
+    ...base,
     run_label: toText(payload.run_label ?? payload.runLabel ?? "installed_product_qa_watch_once"),
     installed_package: payload.installed_package ?? payload.installedPackage ?? null,
     installer_package: payload.installer_package ?? payload.installerPackage ?? null,
@@ -460,9 +461,21 @@ const createApprovalRequest = async (client: SupabaseClientLike, payload: JsonOb
 
 const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => {
   const deviceLabConfigured = Boolean(payload.device_lab_configured ?? payload.deviceLabConfigured ?? Deno.env.get("INSTALLED_QA_DEVICE_LAB_ENABLED") === "true");
+  const requestedSource = payload.source ?? payload.proof_source ?? payload.proofSource;
+  const source = isOneOf(requestedSource, PROOF_SOURCES)
+    ? requestedSource
+    : deviceLabConfigured
+      ? "browserstack"
+      : "manual_codex_proof";
+  const requestedDiscoveredBy = payload.discovered_by ?? payload.discoveredBy;
+  const discoveredBy = isOneOf(requestedDiscoveredBy, DISCOVERED_BY)
+    ? requestedDiscoveredBy
+    : deviceLabConfigured
+      ? "device_lab"
+      : "autonomous_operator";
   const base = {
-    source: deviceLabConfigured ? "browserstack" : "manual_codex_proof",
-    discovered_by: "autonomous_operator",
+    source,
+    discovered_by: discoveredBy,
     update_id: payload.update_id ?? payload.updateId ?? null,
     runtime_version: payload.runtime_version ?? payload.runtimeVersion ?? null,
     channel: payload.channel ?? "production",
@@ -471,7 +484,8 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
       deviceLabConfigured,
       scheduler: payload.scheduler ?? "manual_cli",
       operatorId: payload.operator_id ?? SYSTEM_ID,
-      source: payload.source ?? `manual_cli:${SYSTEM_ID}`,
+      source,
+      discoveredBy,
     },
   };
   await recordTraversalRun(client, {
@@ -485,7 +499,7 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
     blocker_classification: deviceLabConfigured ? "unknown_requires_review" : "manual_codex_only_gap",
   });
   for (const finding of CURRENT_MANUAL_FINDINGS) {
-    const findingPayload = { ...base, ...finding, discovered_by: "codex_manual", source: "manual_codex_proof" };
+    const findingPayload = { ...base, ...finding, discovered_by: discoveredBy, source };
     if (finding.action === "record_route_finding") await recordRouteFinding(client, findingPayload);
     if (finding.action === "record_role_finding") await recordRoleFinding(client, findingPayload);
     if (finding.action === "record_account_fixture_health") await recordAccountFixtureHealth(client, findingPayload);

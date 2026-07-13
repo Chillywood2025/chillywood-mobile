@@ -100,6 +100,34 @@ Current installed verdict remains `Partial` because restricted-denial proof requ
 
 - `/tmp/chillywood-installed-authority-blockers-20260713-0050`
 
+## Installed QA Live Deployment Follow-Up
+
+On 2026-07-13 the current source was published to production Android OTA for the installed QA live deployment lane.
+
+- Source commit: `f6ac19fe0c85f4e28db715315e5829043f9fb3ed`
+- Branch/channel: `production`
+- Runtime: `1.0.0`
+- EAS update group: `cdfd42a5-7c78-4cd0-9673-1f451073aa16`
+- Android update ID: `019f596f-1a87-76d8-abe3-14342c8d1cf6`
+- EAS message: `Installed QA current source f6ac19fe`
+
+The Play-installed app on `R5CR120QCBF` loaded this OTA through Settings -> App Info diagnostics:
+
+- Package: `com.chillywood.mobile`
+- Installer: `com.android.vending`
+- Version/versionCode: `1.0.0` / `80`
+- Runtime: `1.0.0`
+- Channel: `production`
+- Update ID: `019f596f-1a87-76d8-abe3-14342c8d1cf6`
+- Embedded launch: `false`
+- Emergency launch: `false`
+
+`installed-product-qa-operator` was deployed, token-gated, and ran live `watch_once`. It recorded the six current blockers with `source=play_installed`, `discovered_by=autonomous_operator`, current update/runtime/channel diagnostics, `fakeProof=false`, `highRiskExecuted=false`, `moneyMoved=false`, and `userRightsChanged=false`, and created safe Owner Command request `8a322bf5-79e9-4146-a3c6-5936c9ba5c09`.
+
+A targeted one-device installed traversal on this OTA was partially completed. It proved normal `/chat` shows `chat-inbox-screen` and `chat-search-input`, and `/creator-monetization-setup` shows the Platform Studio `Premium required` / `Manage Premium` compatibility gate and opens the Premium screen with `Premium is not active.` The runner was stopped after moderator persona switching stalled, so restricted `/chat`, Premium active-user proof, focused moderator boundary proof, and two-device realtime remain open findings rather than fake closure.
+
+Scheduler status remains `device_lab_scheduler_pending`: local ADB had one Play-installed device, the production host had no ADB/device-lab path, and no BrowserStack/device-lab credential names were available. No timer was installed or claimed.
+
 ## Safety
 
 The follow-up source change added a narrow chat account-status UI gate and stable proof scripts only. No money was moved, no Premium entitlement was manually granted, no provider product/dashboard setting was changed, no native Play build was published or rolled back, no app sideload or `adb install` was used, app data was not cleared, auth/RLS and owner roles were not mutated, users were not banned/restricted, content was not deleted, media/backfill was not processed, and no secrets/tokens/signed URLs/private evidence were committed.

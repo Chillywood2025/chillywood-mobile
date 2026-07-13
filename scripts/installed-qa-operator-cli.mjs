@@ -75,6 +75,8 @@ const basePayload = {
   update_id: process.env.INSTALLED_QA_UPDATE_ID || undefined,
   runtime_version: process.env.INSTALLED_QA_RUNTIME_VERSION || undefined,
   channel: process.env.INSTALLED_QA_CHANNEL || "production",
+  device_count: intEnv("INSTALLED_QA_DEVICE_COUNT", 0),
+  device_lab_configured: boolEnv("INSTALLED_QA_DEVICE_LAB_CONFIGURED"),
   metadata: {
     invokedBy: "installed-qa-operator-cli",
     commandKey,
