@@ -272,8 +272,8 @@ const manualScopedSystems = [
     guard: "guard:installed-product-qa-operator",
     functionPath: "supabase/functions/installed-product-qa-operator/index.ts",
     tokenNeedle: "INSTALLED_QA_OPERATOR_TOKEN_SHA256",
-    expectedActivation: 'activeActivationMode: "manual_cli"',
-    expectedSchedulerStatus: "firebase_scheduler_service_completion_blocked",
+    expectedActivation: 'activeActivationMode: "limited_scheduled_probe"',
+    expectedSchedulerStatus: "chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped",
     forbidden: ["fake installed proof", "manual Premium grant", "claiming two-device proof without proof", "silent pass on route mismatch", "grant Owner IAM", "grant Editor IAM", "grant project-wide Storage Admin"],
     highRisk: "installed_qa_high_risk_fix_request",
   },
@@ -354,8 +354,8 @@ for (const system of manualScopedSystems) {
   const blockEnd = registry.indexOf("\n  },", blockStart);
   const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
   includes(block, "scoped_write_capable_guarded", `${system.id} active status`);
-  includes(block, system.expectedActivation, `${system.id} manual activation`);
-  includes(block, system.expectedSchedulerStatus, `${system.id} scheduler pending`);
+  includes(block, system.expectedActivation, `${system.id} activation`);
+  includes(block, system.expectedSchedulerStatus, `${system.id} scheduler status`);
   includes(block, "allowedWrites", `${system.id} write scope`);
   includes(block, system.proof, `${system.id} proof script`);
   includes(block, system.guard, `${system.id} guard script`);
@@ -369,13 +369,21 @@ for (const system of manualScopedSystems) {
     includes(block, "ownerApprovalRequired: false", `${system.id} bounded bootstrap no per-action approval`);
     includes(block, "gs://chillywood-installed-qa-testlab-results", `${system.id} exact bucket`);
     includes(block, "enable or link Google Cloud billing", `${system.id} billing enablement forbidden`);
+    const installedQaProofDocs = registryDoc + operatingModel + currentState + nextTask;
+    includes(installedQaProofDocs, "ff81956d-94e3-49e9-8c80-fae2c12b0dd8", `${system.id} timer proof row`);
+    includes(installedQaProofDocs, "1dc00369-b5ca-4289-92bc-daf5bae00222", `${system.id} timeout proof row`);
+    includes(installedQaProofDocs, "282fb154-101c-402b-9539-d3fb8080de51", `${system.id} duplicate-safe pending proof row`);
+    includes(installedQaProofDocs, "POLL_HTTP_FAILED", `${system.id} tracked pending matrix state`);
+    includes(installedQaProofDocs, "daily timer is enabled", `${system.id} active timer proof`);
   }
   for (const forbidden of system.forbidden) includes(block, forbidden, `${system.id} forbidden scope`);
   includes(packageJson, `"${system.proof}"`, `${system.id} package proof`);
   includes(packageJson, `"${system.guard}"`, `${system.id} package guard`);
   includes(read(system.functionPath), system.tokenNeedle, `${system.id} token gate`);
   includes(read(system.functionPath), "watch_once", `${system.id} watch_once`);
-  if (/chillywood-installed.*timer|systemd_timer/.test(block)) fail(`${system.id} claims scheduler/timer before device lab proof`);
+  if (system.id !== "installed_product_qa_operator" && /chillywood-installed.*timer|systemd_timer/.test(block)) {
+    fail(`${system.id} claims scheduler/timer before device lab proof`);
+  }
 }
 
 const adsBlockStart = registry.indexOf('id: "ads_sponsor_delivery_operator"');

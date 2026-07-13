@@ -1050,8 +1050,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     id: "installed_product_qa_operator",
     displayName: "Installed Product QA Operator",
     status: "scoped_write_capable_guarded",
-    activeActivationMode: "manual_cli",
-    schedulerStatus: "firebase_scheduler_service_completion_blocked",
+    activeActivationMode: "limited_scheduled_probe",
+    schedulerStatus: "chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped",
     activationModes: ["off", "manual_cli", "limited_scheduled_probe", "limited_scheduled_safe_recovery"],
     allowedSurfaces: [
       "installed_route_traversal",
@@ -1153,7 +1153,7 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
         proofScript: "proof:installed-product-qa-operator",
         guardScript: "guard:installed-product-qa-operator",
         rollbackBehavior: "mark readiness finding closed only after two-device or approved device-lab proof",
-        killSwitchOrFallback: "scheduler remains firebase_scheduler_service_completion_blocked until the bounded systemd Firebase smoke service exits cleanly and posts timer audit",
+        killSwitchOrFallback: "installed_product_qa_operator emergency stop blocks the daily Firebase smoke scheduler; pending matrix state prevents duplicate starts",
         ownerApprovalRequired: false,
       },
       {

@@ -48,8 +48,8 @@ const firebaseSystemdTimer = existsSync(path.join(root, "ops/installed-product-q
 for (const phrase of [
   "installed_product_qa_operator",
   "scoped_write_capable_guarded",
-  'activeActivationMode: "manual_cli"',
-  "firebase_scheduler_service_completion_blocked",
+  'activeActivationMode: "limited_scheduled_probe"',
+  "chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped",
   "installed_route_traversal",
   "installed_role_traversal",
   "premium_nonpremium_gates",
@@ -346,7 +346,10 @@ for (const phrase of [
   "autonomous system did not catch them before",
   "Premium fixture repair is provider-backed only",
   "two-device proof requires two Play-installed devices or approved device lab",
-  "schedulerStatus=firebase_scheduler_service_completion_blocked",
+  "schedulerStatus=chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped",
+  "matrix_timeout",
+  "matrix_pending",
+  "POLL_HTTP_FAILED",
 ]) requireText("runbook", runbook, phrase);
 for (const phrase of [
   "cost-capped cheap mode",
@@ -368,6 +371,6 @@ if (failures.length) {
 }
 
 console.log("proof:installed-product-qa-operator passed");
-console.log("- installed_product_qa_operator is registered as scoped_write_capable_guarded with Firebase scheduler service completion blocked.");
+console.log("- installed_product_qa_operator is registered as scoped_write_capable_guarded with daily cost-capped Firebase uploaded-artifact scheduler proof.");
 console.log("- current Codex-manual blockers are first-class QA findings.");
 console.log("- watch_once records unresolved installed proof coverage gaps and safe owner-command requests.");

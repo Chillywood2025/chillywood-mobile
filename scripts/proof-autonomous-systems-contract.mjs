@@ -162,14 +162,14 @@ const checks = [
     negative: () => !ownerCommandHelper.replaceAll('"money_flow_control"', '"removed_money_flow_control"').includes('"money_flow_control"'),
   },
   {
-    name: "installed product QA operator is scoped manual until device lab exists",
+    name: "installed product QA operator is scoped scheduled after device-lab timer proof",
     passes: () => {
       const blockStart = registry.indexOf('id: "installed_product_qa_operator"');
       const blockEnd = registry.indexOf("\n  },", blockStart);
       const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
       return block.includes("scoped_write_capable_guarded")
-        && block.includes('activeActivationMode: "manual_cli"')
-        && block.includes("firebase_scheduler_service_completion_blocked")
+        && block.includes('activeActivationMode: "limited_scheduled_probe"')
+        && block.includes("chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped")
         && block.includes("fake installed proof")
         && block.includes("manual Premium grant")
         && block.includes("claiming two-device proof without proof")

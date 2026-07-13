@@ -53,8 +53,8 @@ const registryBlock = registryBlockStart >= 0 && registryBlockEnd > registryBloc
 
 includes(registry, '| "installed_product_qa_operator"', "AutonomousSystemId");
 includes(registryBlock, 'status: "scoped_write_capable_guarded"', "registry status");
-includes(registryBlock, 'activeActivationMode: "manual_cli"', "registry activation");
-includes(registryBlock, 'schedulerStatus: "firebase_scheduler_service_completion_blocked"', "scheduler billing blocker truth");
+includes(registryBlock, 'activeActivationMode: "limited_scheduled_probe"', "registry activation");
+includes(registryBlock, 'schedulerStatus: "chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped"', "scheduler timer proof truth");
 includes(registryBlock, "silent pass on route mismatch", "route mismatch guard");
 includes(registryBlock, "fake installed proof", "fake proof ban");
 includes(registryBlock, "manual Premium grant", "manual Premium ban");
@@ -318,7 +318,10 @@ for (const phrase of [
   "current blockers are open QA findings",
   "Premium fixture repair is provider-backed only",
   "two-device proof requires two Play-installed devices or approved device lab",
-  "scheduler remains `firebase_scheduler_service_completion_blocked`",
+  "schedulerStatus=chillywood-installed-qa-firebase-smoke.timer_daily_cost_capped",
+  "matrix_timeout",
+  "matrix_pending",
+  "POLL_HTTP_FAILED",
   "Firebase Test Lab uses cost-capped cheap mode",
   "Firebase uploaded artifact is not Play-installed proof",
   "FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5",
@@ -334,7 +337,17 @@ for (const phrase of [
   "if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH)",
 ]) includes(admin, phrase, "moderator admin-search boundary");
 
-if (/schedulerStatus:\s*"chillywood-installed.*timer/i.test(registryBlock)) failures.push("scheduler claimed active without device-lab/timer proof");
+if (
+  /schedulerStatus:\s*"chillywood-installed.*timer/i.test(registryBlock)
+  && !(
+    runbook.includes("ff81956d-94e3-49e9-8c80-fae2c12b0dd8")
+    && runbook.includes("1dc00369-b5ca-4289-92bc-daf5bae00222")
+    && runbook.includes("282fb154-101c-402b-9539-d3fb8080de51")
+    && runbook.includes("matrix_pending")
+    && runbook.includes("POLL_HTTP_FAILED")
+    && runbook.includes("daily timer is enabled and active")
+  )
+) failures.push("scheduler claimed active without device-lab/timer proof");
 if (/result:\s*"pass"[\s\S]{0,200}second_device_required/.test(helper + edge)) failures.push("two-device blocker can pass");
 if (/fake_proof\s*:\s*true|fakeProof:\s*true/.test(edge + helper + reporting)) failures.push("fake proof true appears in QA source");
 if (/manualPremiumGrant|direct entitlement edit allowed|grantPremium/.test(edge + helper + registryBlock)) failures.push("manual Premium grant path appears");
