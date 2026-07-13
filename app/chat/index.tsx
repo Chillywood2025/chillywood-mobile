@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { readAccountAccessStatus, type AccountAccessStatusReadback } from "../../_lib/accountAccess";
 import { trackEvent } from "../../_lib/analytics";
 import { decodeVisiblePercentEscapes } from "../../_lib/displayText";
 import {
@@ -93,11 +94,12 @@ function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
 export default function ChillyChatInboxScreen() {
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
-  const { isLoading: authLoading, isSignedIn } = useSession();
+  const { isLoading: authLoading, isSignedIn, user } = useSession();
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<InboxErrorState | null>(null);
+  const [restrictedAccess, setRestrictedAccess] = useState<AccountAccessStatusReadback | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [searchPeopleLoading, setSearchPeopleLoading] = useState(false);
@@ -109,9 +111,10 @@ export default function ChillyChatInboxScreen() {
   const [areThreadsExpanded, setAreThreadsExpanded] = useState(false);
 
   const loadThreads = useCallback(async (refresh = false) => {
-    if (!isSignedIn) {
+    if (!isSignedIn || !user?.id) {
       setThreads([]);
       setError(null);
+      setRestrictedAccess(null);
       setActiveFriendUserIds([]);
       setLoading(false);
       setRefreshing(false);
@@ -125,6 +128,16 @@ export default function ChillyChatInboxScreen() {
     }
 
     try {
+      const accountStatus = await readAccountAccessStatus(user.id).catch(() => null);
+      if (accountStatus?.restricted) {
+        setRestrictedAccess(accountStatus);
+        setThreads([]);
+        setError(null);
+        setActiveFriendUserIds([]);
+        return;
+      }
+
+      setRestrictedAccess(null);
       const nextThreads = await listChatThreads();
       setThreads(nextThreads.filter((thread) => !getOfficialPlatformAccount(thread.otherMember?.userId)));
       setError(null);
@@ -144,7 +157,7 @@ export default function ChillyChatInboxScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isSignedIn]);
+  }, [isSignedIn, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -155,6 +168,7 @@ export default function ChillyChatInboxScreen() {
       if (!isSignedIn) {
         setThreads([]);
         setError(null);
+        setRestrictedAccess(null);
         setActiveFriendUserIds([]);
         setLoading(false);
         setRefreshing(false);
@@ -726,6 +740,34 @@ export default function ChillyChatInboxScreen() {
             onPress={() => router.push({ pathname: "/(auth)/login", params: { redirectTo: "/chat" } })}
           >
             <Text style={styles.quickActionAccentButtonText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (restrictedAccess) {
+    return (
+      <View
+        style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}
+        testID="chat-access-restricted-state"
+        accessibilityLabel="Chi'lly Chat account access restricted"
+      >
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Chat is not available for this account.</Text>
+          <Text style={styles.emptyBody}>
+            This account is restricted or suspended, so Chi'lly Chat inbox, direct threads, voice, and video are denied right now.
+          </Text>
+          <Text style={styles.emptyBody}>
+            Contact support or use the account appeal path if you believe this is a mistake.
+          </Text>
+          <TouchableOpacity
+            testID="chat-access-restricted-support-button"
+            style={[styles.quickActionButton, styles.quickActionAccentButton]}
+            activeOpacity={0.86}
+            onPress={() => router.push("/support" as Parameters<typeof router.push>[0])}
+          >
+            <Text style={styles.quickActionAccentButtonText}>Support</Text>
           </TouchableOpacity>
         </View>
       </View>
