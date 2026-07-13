@@ -27,6 +27,7 @@ const activeSystems = [
   "security_owner_operator",
   "moderation_safety_operator",
   "observability_runtime_operator",
+  "installed_product_qa_operator",
 ];
 
 const protectedSystems = [
@@ -108,6 +109,23 @@ const checks = [
       && packageJson.includes('"proof:owner-command-approval-gates"')
       && packageJson.includes('"guard:owner-command-operator"'),
     negative: () => !ownerCommandHelper.replaceAll('"money_flow_control"', '"removed_money_flow_control"').includes('"money_flow_control"'),
+  },
+  {
+    name: "installed product QA operator is scoped manual until device lab exists",
+    passes: () => {
+      const blockStart = registry.indexOf('id: "installed_product_qa_operator"');
+      const blockEnd = registry.indexOf("\n  },", blockStart);
+      const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
+      return block.includes("scoped_write_capable_guarded")
+        && block.includes('activeActivationMode: "manual_cli"')
+        && block.includes("device_lab_scheduler_pending")
+        && block.includes("fake installed proof")
+        && block.includes("manual Premium grant")
+        && block.includes("claiming two-device proof without proof")
+        && block.includes("safe_installed_qa_owner_command")
+        && packageJson.includes('"proof:installed-product-qa-operator"')
+        && packageJson.includes('"guard:installed-product-qa-operator"');
+    },
   },
   {
     name: "owner command cannot bypass approval gates",
@@ -311,7 +329,7 @@ console.log(JSON.stringify({
   ok: true,
   activeSystems,
   protectedSystems,
-  scopedWriteSystemsAdded: scopedSystems.map((system) => system.id),
+  scopedWriteSystemsAdded: [...scopedSystems.map((system) => system.id), "installed_product_qa_operator"],
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
   revenueCatReadbackReconciled: true,
   candidatePlaceholdersRemaining: 0,

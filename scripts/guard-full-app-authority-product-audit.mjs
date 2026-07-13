@@ -85,6 +85,7 @@ for (const phrase of [
   "\"security_owner_operator\"",
   "\"moderation_safety_operator\"",
   "\"observability_runtime_operator\"",
+  "\"installed_product_qa_operator\"",
   "\"owner_command_operator\"",
   "return input.approverRoles.includes(\"owner\") || input.approverRoles.includes(\"super_admin\")",
 ]) includes(approvalModel, phrase, "approval requester parity");

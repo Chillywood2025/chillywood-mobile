@@ -25,6 +25,7 @@ const ACTIVE_SYSTEMS = [
   "security_owner_operator",
   "moderation_safety_operator",
   "observability_runtime_operator",
+  "installed_product_qa_operator",
 ] as const;
 
 const SYSTEM_KEYWORDS: Record<string, readonly string[]> = {
@@ -36,6 +37,7 @@ const SYSTEM_KEYWORDS: Record<string, readonly string[]> = {
   security_owner_operator: ["security", "owner", "super_admin", "super admin", "admin", "rls", "auth", "secret scan", "rachi", "approval"],
   moderation_safety_operator: ["moderation", "safety", "user report", "safety report", "ban", "suspend", "restrict", "delete content", "case", "fraud hold"],
   observability_runtime_operator: ["observability", "crash", "crashlytics", "analytics", "performance", "anr", "runtime health", "error rate", "backend error"],
+  installed_product_qa_operator: ["installed qa", "installed product qa", "installed traversal", "device lab", "browserstack", "route marker", "chat-inbox-screen", "creator-monetization-setup", "premium active account", "proof account", "two-device proof", "installed proof"],
 };
 
 const LEVEL_FOUR_PATTERNS = [
@@ -173,6 +175,7 @@ const intentForSystems = (systems: readonly string[]) => {
   if (systemId === "security_owner_operator") return "security_owner_authority";
   if (systemId === "moderation_safety_operator") return "moderation_safety";
   if (systemId === "observability_runtime_operator") return "observability_runtime";
+  if (systemId === "installed_product_qa_operator") return "installed_product_qa";
   return "unknown";
 };
 
@@ -186,6 +189,7 @@ const systemForbiddenScope = (systemId: string) => {
     security_owner_operator: ["auth/RLS mutation without approval", "owner role mutation without approval", "Rachi/operator self-approval"],
     moderation_safety_operator: ["unapproved ban/suspend/restrict", "unapproved content deletion", "hidden enforcement"],
     observability_runtime_operator: ["crash evidence deletion", "crash reporting silence", "Remote Config mutation without approval"],
+    installed_product_qa_operator: ["fake installed proof", "manual Premium grant", "sideload/install/clear data", "two-device closure without two devices"],
   };
   return map[systemId] ?? ["unknown target system"];
 };

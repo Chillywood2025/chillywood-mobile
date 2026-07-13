@@ -27,6 +27,7 @@ const ALLOWED_SYSTEM_IDS = [
   "security_owner_operator",
   "moderation_safety_operator",
   "observability_runtime_operator",
+  "installed_product_qa_operator",
   "owner_command_operator",
 ] as const;
 

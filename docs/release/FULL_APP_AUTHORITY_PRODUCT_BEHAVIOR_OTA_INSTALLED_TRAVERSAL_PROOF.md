@@ -51,6 +51,12 @@ These gaps from the seeded traversal prevented a Closed installed-device verdict
 4. The account labelled `proof_premium_001` was not a valid Premium-active installed proof account during traversal: `/subscribe` displayed `Premium is not active.` No manual Premium grant was performed. Premium-active traversal remains pending until a provider-backed Premium active account is available or the account is renewed through the approved provider-backed sandbox path.
 5. Two-device realtime assertions remain `Two-device required` and were not claimed from this one-device proof.
 
+## Installed Product QA Operator Tracking
+
+Codex caught the current installed traversal blockers manually. The autonomous system did not catch them before because `installed_product_qa_operator` did not exist. That operator now records current blockers as open QA findings for route behavior, role behavior, account fixture health, device readiness, moderator boundary review, and manual-Codex-only gaps.
+
+Premium fixture repair is provider-backed only. two-device proof requires two Play-installed devices or approved device lab. scheduler pending until device-lab path exists. The operator may create Owner Command requests for safe source/proof/testID follow-up, but it cannot fake installed proof, manually grant Premium, sideload/install/clear data, move money, mutate roles/auth/RLS, enforce moderation, expose private evidence, or close two-device proof from one device.
+
 ## Focused Blocker Follow-Up
 
 The remaining installed blockers were rerun on 2026-07-13 without reopening the full traversal suite.

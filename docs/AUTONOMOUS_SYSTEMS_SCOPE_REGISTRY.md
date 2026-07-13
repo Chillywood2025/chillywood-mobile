@@ -1,6 +1,6 @@
 # Chi'llywood Autonomous Systems Scope Registry
 
-Last updated: 2026-07-12
+Last updated: 2026-07-13
 
 This registry is the protected top-level contract for Chi'llywood autonomous systems. The source registry lives in `_lib/autonomousSystemsRegistry.ts`; this document is the operator-facing mirror. Future autonomous scope must be added through explicit registry entries with approval level, read/write bounds, guard, proof, rollback, emergency-stop/fallback, and owner/admin approval requirements. In short, future scope can be added only through registry entries.
 
@@ -475,6 +475,59 @@ Forbidden:
 
 Crash/error, performance, analytics-delivery, release-diagnostics, and backend error-rate findings can be written as scoped status/review/audit rows only. Remote Config or feature flag mutation requires Level 3 owner/super-admin approval. Production OTA publish or rollback requires Level 4 owner/super-admin approval and fresh release preflight. Crash evidence deletion and crash-reporting suppression are forbidden.
 
+### `installed_product_qa_operator`
+
+Status: `scoped_write_capable_guarded`.
+
+Current activation: `manual_cli`.
+
+Scheduler status: `device_lab_scheduler_pending`. The scheduler is not active; scheduler pending until device-lab path exists.
+
+Allowed surfaces:
+- `installed_route_traversal`
+- `installed_role_traversal`
+- `installed_button_tap_contracts`
+- `premium_nonpremium_gates`
+- `admin_operator_moderator_visibility`
+- `account_fixture_health`
+- `device_availability`
+- `device_lab_readiness`
+- `two_device_realtime_proof`
+- `release_diagnostics_updateid_check`
+- `route_contract_marker_check`
+- `installed_proof_blocker_tracking`
+
+Allowed writes:
+- `installed_qa_operator_events`
+- `installed_traversal_runs`
+- `route_behavior_findings`
+- `role_behavior_findings`
+- `account_fixture_health_findings`
+- `device_availability_findings`
+- `qa_required_review_flags`
+- `qa_operator_learning_state`
+- owner-command requests
+- autonomous approval requests
+
+Forbidden:
+- fake installed proof
+- manual Premium grant
+- direct entitlement edit
+- role mutation
+- auth/RLS mutation
+- money movement
+- content/user enforcement
+- sideload/install/clear data without approval
+- private evidence exposure
+- claiming two-device proof without proof
+- silent pass on route mismatch
+- provider mutation
+- release mutation without approval
+- Premium bypass
+- broad app-control power
+
+`installed_product_qa_operator` records installed-app route, role, account-fixture, and device-readiness blockers proactively. Codex caught the current installed traversal blockers manually; this operator now turns that category into first-class QA findings and owner-command requests. Premium fixture repair is provider-backed only, and two-device proof requires two Play-installed devices or approved device lab.
+
 ## Expansion Contract
 
 Any new autonomous system, surface, action, scheduler, write path, or recovery action must add an explicit registry entry with:
@@ -537,5 +590,6 @@ Owner commands route through:
 - `security_owner_operator` for owner/admin authority, RLS/security, Rachi, and approval-integrity decisions
 - `moderation_safety_operator` for report/case/review/enforcement-request decisions
 - `observability_runtime_operator` for crash, performance, analytics, runtime, and backend error-rate decisions
+- `installed_product_qa_operator` for installed app QA, route markers, account fixtures, device lab readiness, and two-device proof blockers
 
 Forbidden owner-command bypasses include direct broad DB mutation, money movement without Level 4 plus external confirmation, manual Premium grants, Premium bypass, OTA publish/rollback without approval, auth/RLS/owner-role mutation without approval, ban/restrict/delete without approval, private/Premium/original media exposure, provider product/mode changes, LiveKit routing-policy changes, R2/media behavior changes, secret output, stale preflight, scope expansion, and emergency-stop bypass.

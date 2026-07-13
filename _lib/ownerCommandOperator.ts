@@ -30,6 +30,7 @@ export type OwnerCommandIntent =
   | "security_owner_authority"
   | "moderation_safety"
   | "observability_runtime"
+  | "installed_product_qa"
   | "multi_system"
   | "unknown";
 
@@ -86,6 +87,7 @@ const ACTIVE_SYSTEMS: readonly OwnerCommandTargetSystemId[] = [
   "security_owner_operator",
   "moderation_safety_operator",
   "observability_runtime_operator",
+  "installed_product_qa_operator",
 ];
 
 const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
@@ -178,6 +180,20 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "runtime health",
     "error rate",
     "backend error",
+  ],
+  installed_product_qa_operator: [
+    "installed qa",
+    "installed product qa",
+    "installed traversal",
+    "device lab",
+    "browserstack",
+    "route marker",
+    "chat-inbox-screen",
+    "creator-monetization-setup",
+    "premium active account",
+    "proof account",
+    "two-device proof",
+    "installed proof",
   ],
 };
 
@@ -277,6 +293,12 @@ const SYSTEM_FORBIDDEN_SCOPE: Record<OwnerCommandTargetSystemId, readonly string
     "crash reporting silence",
     "Remote Config mutation without approval",
   ],
+  installed_product_qa_operator: [
+    "fake installed proof",
+    "manual Premium grant",
+    "sideload/install/clear data",
+    "two-device closure without two devices",
+  ],
 };
 
 const normalizeCommandText = (commandText: unknown) => String(commandText ?? "").trim().replace(/\s+/g, " ");
@@ -327,6 +349,7 @@ export const classifyOwnerCommandIntent = (commandText: string): OwnerCommandInt
   if (systemId === "security_owner_operator") return "security_owner_authority";
   if (systemId === "moderation_safety_operator") return "moderation_safety";
   if (systemId === "observability_runtime_operator") return "observability_runtime";
+  if (systemId === "installed_product_qa_operator") return "installed_product_qa";
   return "unknown";
 };
 

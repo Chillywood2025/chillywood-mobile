@@ -1,6 +1,6 @@
 # Chi'llywood Autonomous App Operating Model
 
-Last updated: 2026-07-11
+Last updated: 2026-07-13
 
 Status: governing policy for future Codex/operator work. Chi'llywood should operate autonomously by default inside approved safety policy, with owner approval reserved for high-risk boundary changes.
 
@@ -26,10 +26,13 @@ Current approved systems:
 - `security_owner_operator`
 - `moderation_safety_operator`
 - `observability_runtime_operator`
+- `installed_product_qa_operator`
 
 `notification_delivery_operator`, `release_ota_operator`, `security_owner_operator`, and `moderation_safety_operator` are now scoped-write capable guarded systems with limited scheduled `watch_once` loops on `chillywood-prod-01`. Notification runs every five minutes in `limited_scheduled_safe_recovery` mode for strictly safe provider-evidenced cleanup; release runs every thirty minutes, security-owner every fifteen minutes, and moderation-safety every ten minutes in `limited_scheduled_probe` mode. They may write only safe status, review, finding, audit, duplicate-detection, learning, and autonomous approval-request records inside their registered tables. Every scheduled run includes `scheduler=systemd_timer`, the specific operator id, and a host source in audit metadata. They cannot publish releases, roll back releases, mutate owner roles, mutate auth/RLS, rotate secrets, send broad push campaigns, bypass notification preferences, ban/restrict users, delete content, change user rights, move money, grant Premium, or change provider products without the registered Level 3/4 approval path.
 
 `observability_runtime_operator` is a separate scoped-write capable guarded system for crash, native/JS error clusters, ANR-style runtime findings where available, startup/render/network performance regressions, analytics delivery health, Firebase Crashlytics/Analytics/Performance status, release diagnostics, OTA/runtime/updateId mismatches, embedded/emergency launch findings, backend/Edge Function error-rate summaries, and cross-system incident correlation. Its current activation is `limited_scheduled_probe` through `chillywood-observability-operator-watch-once.timer` every ten minutes. It may write only redacted health, finding, review, audit, learning, and autonomous approval-request records. It cannot delete crash evidence, silence crash reporting, collect extra PII, log secrets/tokens, publish or roll back OTA, mutate Remote Config/feature flags, mutate provider analytics config, hide emergency launch, fake installed proof, mutate auth/RLS, move money, grant Premium, change LiveKit routing, or change R2/media behavior without the registered approval path. Remote Config, feature flag, and provider analytics config mutation require Level 3 owner/super-admin approval; production release publish/rollback requires Level 4 approval and fresh release preflight.
+
+`installed_product_qa_operator` is a scoped-write capable guarded system for proactive installed-app route traversal, role/account UI checks, account fixture health, device/device-lab readiness, release diagnostics updateId checks, route-contract marker checks, Premium/non-Premium gate checks, moderator boundary findings, and two-device realtime proof prerequisites. Codex caught the current installed traversal blockers manually; the autonomous system did not catch them before because this operator did not exist. Its current activation is `manual_cli`, with `schedulerStatus=device_lab_scheduler_pending`; scheduler pending until device-lab path exists. It may write only sanitized installed QA events, traversal runs, route/role/account/device findings, required-review flags, learning state, Owner Command requests, and autonomous approval requests. It cannot fake installed proof, manually grant Premium, directly edit entitlements, mutate roles/auth/RLS, move money, enforce moderation, sideload/install/clear data, expose private evidence, claim two-device closure without two devices or approved device lab, or silently pass route mismatches.
 
 Future scope can be added only through registry entries that define system id, action/surface id, activation mode, allowed read scope, allowed write scope, forbidden scope, approval level, proof script, guard script, rollback/quarantine behavior, kill switch/fallback behavior, and owner/admin approval requirement for Level 3/4.
 

@@ -41,6 +41,7 @@ const requiredActiveSystems = [
   "security_owner_operator",
   "moderation_safety_operator",
   "observability_runtime_operator",
+  "installed_product_qa_operator",
 ];
 
 const protectedAutonomousSystems = [
@@ -186,6 +187,19 @@ const newlyScopedSystems = [
   },
 ];
 
+const manualScopedSystems = [
+  {
+    id: "installed_product_qa_operator",
+    proof: "proof:installed-product-qa-operator",
+    guard: "guard:installed-product-qa-operator",
+    functionPath: "supabase/functions/installed-product-qa-operator/index.ts",
+    expectedActivation: 'activeActivationMode: "manual_cli"',
+    expectedSchedulerStatus: "device_lab_scheduler_pending",
+    forbidden: ["fake installed proof", "manual Premium grant", "claiming two-device proof without proof", "silent pass on route mismatch"],
+    highRisk: "installed_qa_high_risk_fix_request",
+  },
+];
+
 const moneyScheduler = {
   servicePath: "ops/money-operator/systemd/chillywood-money-operator-watch-once.service",
   timerPath: "ops/money-operator/systemd/chillywood-money-operator-watch-once.timer",
@@ -253,6 +267,28 @@ for (const system of newlyScopedSystems) {
   notIncludes(service + "\n" + timer + "\n" + watchScript, "SERVICE_ROLE", `${system.id} timer artifacts`);
 }
 
+for (const system of manualScopedSystems) {
+  const blockStart = registry.indexOf(`id: "${system.id}"`);
+  const blockEnd = registry.indexOf("\n  },", blockStart);
+  const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
+  includes(block, "scoped_write_capable_guarded", `${system.id} active status`);
+  includes(block, system.expectedActivation, `${system.id} manual activation`);
+  includes(block, system.expectedSchedulerStatus, `${system.id} scheduler pending`);
+  includes(block, "allowedWrites", `${system.id} write scope`);
+  includes(block, system.proof, `${system.id} proof script`);
+  includes(block, system.guard, `${system.id} guard script`);
+  includes(block, "rollbackBehavior", `${system.id} rollback`);
+  includes(block, "killSwitchOrFallback", `${system.id} kill switch`);
+  includes(block, "ownerApprovalRequired: true", `${system.id} high-risk approval`);
+  includes(block, system.highRisk, `${system.id} high-risk surface`);
+  for (const forbidden of system.forbidden) includes(block, forbidden, `${system.id} forbidden scope`);
+  includes(packageJson, `"${system.proof}"`, `${system.id} package proof`);
+  includes(packageJson, `"${system.guard}"`, `${system.id} package guard`);
+  includes(read(system.functionPath), "INSTALLED_QA_OPERATOR_TOKEN_SHA256", `${system.id} token gate`);
+  includes(read(system.functionPath), "watch_once", `${system.id} watch_once`);
+  if (/chillywood-installed.*timer|systemd_timer/.test(block)) fail(`${system.id} claims scheduler/timer before device lab proof`);
+}
+
 const moneyBlockStart = registry.indexOf('id: "money_flow_control"');
 const moneyBlockEnd = registry.indexOf("\n  },", moneyBlockStart);
 const moneyBlock = moneyBlockStart >= 0 && moneyBlockEnd > moneyBlockStart ? registry.slice(moneyBlockStart, moneyBlockEnd) : "";
@@ -286,6 +322,7 @@ notIncludes(registry, 'id: "release_ota_operator",\n    displayName: "Release / 
 notIncludes(registry, 'id: "security_owner_operator",\n    displayName: "Security / Owner Authority Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registry, 'id: "moderation_safety_operator",\n    displayName: "Moderation / Safety Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registry, 'id: "observability_runtime_operator",\n    displayName: "Observability / Runtime Health Operator",\n    status: "candidate_foundation_only"', "active registry");
+notIncludes(registry, 'id: "installed_product_qa_operator",\n    displayName: "Installed Product QA Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registryDoc, "candidate_foundation_only", "registry docs");
 notIncludes(registryDoc, "Allowed writes: none", "registry docs");
 
@@ -305,6 +342,8 @@ for (const required of [
   "fake payable balance",
   "provider_access_broker",
   "provider_webhook_reliability_loop",
+  "fake installed proof",
+  "claiming two-device proof without proof",
 ]) {
   includes(registry, required, "existing active system protection");
 }

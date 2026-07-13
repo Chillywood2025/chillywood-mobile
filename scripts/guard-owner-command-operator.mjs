@@ -58,6 +58,7 @@ for (const systemId of [
   "security_owner_operator",
   "moderation_safety_operator",
   "observability_runtime_operator",
+  "installed_product_qa_operator",
 ]) {
   includes(helper, `"${systemId}"`, "owner command helper active system routing");
   includes(fn, `"${systemId}"`, "owner command function active system routing");

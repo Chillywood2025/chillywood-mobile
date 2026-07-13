@@ -25,6 +25,7 @@ This document is the current whole-app contract after the autonomous, media, Liv
 - `security_owner_operator`
 - `moderation_safety_operator`
 - `observability_runtime_operator`
+- `installed_product_qa_operator`
 - `owner_command_operator`
 
 ## Route Inventory
@@ -143,6 +144,7 @@ Current classification:
 | `notification-dispatch` | notification dispatch | trusted/session as coded | scoped/live | 2 | No broad campaigns. |
 | `notification-operator` | notification operator | narrow token | scheduled/live | 2 | DeviceNotRegistered cleanup only with evidence. |
 | `observability-operator` | observability operator | narrow token | scheduled/live | 2 | No crash evidence deletion or PII expansion. |
+| `installed-product-qa-operator` | installed product QA operator | narrow token | manual/device-lab pending | 2 | Findings/owner-command requests only; no fake proof, Premium grant, sideload, or app-control mutation. |
 | `owner-command-operator` | owner command routing | owner JWT or narrow trusted token | live and backed | 3 | Routes through target operators only. |
 | `payout-release-preflight` | payout preflight | owner/admin/provider policy | blocked/preflight only | 4 | No payout release. |
 | `premium-media-playback-token` | Premium media token | bearer/session + Premium readback | live and backed | 3 | Provider-backed Premium only. |
@@ -191,6 +193,7 @@ Current classification:
 | Security/owner/audit | live bounded | owner/security/audit guards | no auth/RLS/owner-role mutation. |
 | Moderation/safety | live scoped/finding/review | moderator/queue/content guards | enforcement actions remain approval-gated or absent. |
 | Observability | scheduled findings only | observability guard | no Remote Config mutation or crash evidence deletion. |
+| Installed Product QA | manual/device-lab pending | installed QA proof/guard | current blockers are open QA findings until account/device/provider prerequisites are proved. |
 
 ## Removed / Disabled / Blocked Classes
 
@@ -207,6 +210,8 @@ Current classification:
 ## Installed Proof Status
 
 Installed source/guard proof is closed. Installed Play-app proof is Partial and is recorded in `docs/release/FULL_APP_AUTHORITY_PRODUCT_BEHAVIOR_OTA_INSTALLED_TRAVERSAL_PROOF.md`.
+
+Installed Product QA Operator status: Codex caught the current installed traversal blockers manually, and the autonomous system did not catch them before because `installed_product_qa_operator` did not exist. The operator now records those categories as sanitized route, role, account-fixture, device-readiness, and required-review findings and can create Owner Command requests for safe source/proof/testID follow-up. Premium fixture repair is provider-backed only; two-device proof requires two Play-installed devices or approved device lab; scheduler pending until device-lab path exists.
 
 Current installed follow-up truth as of 2026-07-13:
 

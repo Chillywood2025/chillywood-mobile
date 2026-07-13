@@ -39,6 +39,7 @@ This is no god mode. It does not replace the owner, Rachi does not outrank owner
    - owner/security/RLS/approval integrity work -> `security_owner_operator`
    - moderation/safety work -> `moderation_safety_operator`
    - crash/performance/analytics/runtime work -> `observability_runtime_operator`
+   - installed app QA, route marker, account fixture, and device-lab readiness work -> `installed_product_qa_operator`
 4. The operator builds an execution plan with allowed scope, forbidden scope, preflight, rollback, proof, validation, target systems, and exact blockers.
 5. Level 0/1/2 safe commands may execute only as scoped audit/report work or target-operator-safe actions.
 6. Level 3/4 commands create `autonomous_approval_requests` and stop.

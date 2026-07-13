@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import { reportInstalledQaFromTraversalSummary } from "./installed-qa-reporting.mjs";
 
 const root = process.cwd();
 const PACKAGE_ID = "com.chillywood.mobile";
@@ -798,7 +799,28 @@ const summary = {
   sideloadUsed: false,
   destructiveDeviceActionUsed: false,
 };
+
+let installedQaReportingStatus;
+try {
+  installedQaReportingStatus = await reportInstalledQaFromTraversalSummary({
+    matrix,
+    summary,
+    updateId: process.env.INSTALLED_QA_UPDATE_ID,
+    runtimeVersion: process.env.INSTALLED_QA_RUNTIME_VERSION || "1.0.0",
+    channel: process.env.INSTALLED_QA_CHANNEL || "production",
+  });
+} catch (error) {
+  installedQaReportingStatus = {
+    configured: true,
+    failedClosed: true,
+    error: error instanceof Error ? error.message : "unknown_installed_qa_reporting_error",
+  };
+  failures.push(`installed_product_qa_operator reporting failed closed: ${installedQaReportingStatus.error}`);
+}
+summary.installedProductQaOperatorReporting = installedQaReportingStatus;
+
 writeJson("run-summary.json", summary);
+writeJson("installed-qa-operator-reporting-status.json", installedQaReportingStatus);
 
 const readme = `# Full Seeded One-Device Role Traversal Rerun
 

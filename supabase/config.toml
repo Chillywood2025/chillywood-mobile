@@ -127,6 +127,9 @@ verify_jwt = false
 [functions.observability-operator]
 verify_jwt = false
 
+[functions.installed-product-qa-operator]
+verify_jwt = false
+
 [functions.owner-command-operator]
 verify_jwt = false
 
