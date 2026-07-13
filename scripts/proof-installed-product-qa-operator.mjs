@@ -90,6 +90,9 @@ requireText("migration manual two-device seed", migration, "manual-two-device-re
 requireText("firebase migration source", firebaseMigration, "firebase_test_lab_uploaded_artifact");
 requireText("firebase migration route source check", firebaseMigration, "route_behavior_findings_source_check");
 requireText("firebase migration device source check", firebaseMigration, "device_availability_findings_source_check");
+requireText("firebase migration quota blocker", firebaseMigration, "firebase-free-quota-unknown");
+requireText("firebase migration quota risk", firebaseMigration, "firebase_free_quota_unknown");
+requireText("firebase migration zero cost", firebaseMigration, "'costEstimateUsd', 0");
 
 for (const phrase of [
   "x-installed-qa-operator-token",
