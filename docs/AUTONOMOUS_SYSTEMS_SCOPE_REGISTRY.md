@@ -492,6 +492,7 @@ Allowed surfaces:
 - `account_fixture_health`
 - `device_availability`
 - `device_lab_readiness`
+- `firebase_test_lab_zero_cost_readiness`
 - `two_device_realtime_proof`
 - `release_diagnostics_updateid_check`
 - `route_contract_marker_check`
@@ -527,6 +528,8 @@ Forbidden:
 - broad app-control power
 
 `installed_product_qa_operator` records installed-app route, role, account-fixture, and device-readiness blockers proactively. Codex caught the current installed traversal blockers manually; this operator now turns that category into first-class QA findings and owner-command requests. Live deployment is active as of 2026-07-13: `installed-product-qa-operator` is token-gated, current OTA `019f596f-1a87-76d8-abe3-14342c8d1cf6` was proved on Play-installed `R5CR120QCBF`, and `watch_once` recorded the current blockers with `source=play_installed` / `discovered_by=autonomous_operator`. Scheduler remains pending because the production host has no stable Play-installed device/device-lab path. Premium fixture repair is provider-backed only, and two-device proof requires two Play-installed devices or approved device lab.
+
+Firebase Test Lab is zero-cost-first as the first device-lab foundation path. The source runner records only `firebase_test_lab_uploaded_artifact` proof and must not call it Play-installed proof. It defaults to virtual-device-only, manual/on-demand, `FIREBASE_TEST_LAB_MAX_COST_USD=0`, and fails closed when billing risk or free-quota state is unknown. Current audit found Firebase/Test Lab CLI/catalog access and Android artifacts, but billing/free-quota readback was not guaranteed; no Firebase matrix was started, no scheduler was installed, and `schedulerStatus=device_lab_scheduler_pending` remains. No paid Firebase run without owner approval is allowed.
 
 ### `platform_recovery_operator`
 

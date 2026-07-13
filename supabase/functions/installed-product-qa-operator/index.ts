@@ -19,7 +19,13 @@ const JSON_HEADERS = {
   "Content-Type": "application/json",
 } as const;
 
-const PROOF_SOURCES = ["play_installed", "browserstack", "local_fixture", "manual_codex_proof"] as const;
+const PROOF_SOURCES = [
+  "play_installed",
+  "browserstack",
+  "firebase_test_lab_uploaded_artifact",
+  "local_fixture",
+  "manual_codex_proof",
+] as const;
 const DISCOVERED_BY = ["autonomous_operator", "codex_manual", "device_lab"] as const;
 const RESULTS = ["pass", "partial", "blocked", "failed", "human_review", "two_device_required"] as const;
 const BLOCKER_CLASSIFICATIONS = [

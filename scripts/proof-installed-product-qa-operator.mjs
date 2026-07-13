@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 
 const root = process.cwd();
@@ -19,13 +20,18 @@ const ownerCommand = read("_lib/ownerCommandOperator.ts");
 const ownerCommandFn = read("supabase/functions/owner-command-operator/index.ts");
 const approvalFn = read("supabase/functions/autonomous-approval-request/index.ts");
 const migration = read("supabase/migrations/20260713011606_installed_product_qa_operator.sql");
+const firebaseMigration = read("supabase/migrations/20260713033809_installed_qa_firebase_test_lab_source.sql");
 const edge = read("supabase/functions/installed-product-qa-operator/index.ts");
 const cli = read("scripts/installed-qa-operator-cli.mjs");
+const firebaseRunner = read("scripts/installed-qa-firebase-test-lab.mjs");
 const reporting = read("scripts/installed-qa-reporting.mjs");
 const traversal = read("scripts/local-run-full-seeded-one-device-role-traversal-rerun.mjs");
 const packageJson = read("package.json");
 const runbook = existsSync(path.join(root, "docs/INSTALLED_PRODUCT_QA_OPERATOR_RUNBOOK.md"))
   ? read("docs/INSTALLED_PRODUCT_QA_OPERATOR_RUNBOOK.md")
+  : "";
+const firebaseRunbook = existsSync(path.join(root, "qa/firebase-test-lab/README.md"))
+  ? read("qa/firebase-test-lab/README.md")
   : "";
 
 for (const phrase of [
@@ -81,12 +87,16 @@ requireText("migration manual creator marker seed", migration, "manual-creator-m
 requireText("migration manual premium seed", migration, "manual-premium-labelled-account-inactive");
 requireText("migration manual moderator seed", migration, "manual-moderator-boundary-pending");
 requireText("migration manual two-device seed", migration, "manual-two-device-realtime-pending");
+requireText("firebase migration source", firebaseMigration, "firebase_test_lab_uploaded_artifact");
+requireText("firebase migration route source check", firebaseMigration, "route_behavior_findings_source_check");
+requireText("firebase migration device source check", firebaseMigration, "device_availability_findings_source_check");
 
 for (const phrase of [
   "x-installed-qa-operator-token",
   "INSTALLED_QA_OPERATOR_TOKEN_SHA256",
   "constantTimeEqual",
   "record_traversal_run",
+  "firebase_test_lab_uploaded_artifact",
   "record_route_finding",
   "record_role_finding",
   "record_account_fixture_health",
@@ -130,6 +140,10 @@ for (const phrase of [
   "classifyRouteBehavior",
   "classifyAccountFixtureHealth",
   "classifyDeviceReadiness",
+  "classifyFirebaseTestLabReadiness",
+  "firebase_test_lab_uploaded_artifact",
+  "InstalledQaBillingRisk",
+  "InstalledQaQuotaMode",
   "buildInstalledTraversalPlan",
   "buildQaOwnerCommand",
   "sanitizeInstalledQaProof",
@@ -147,7 +161,36 @@ for (const phrase of [
   "installed-qa-operator:record-finding",
   "installed-qa-operator:device-readiness",
   "installed-qa-operator:account-fixtures",
+  "installed-qa-operator:firebase-test-lab:status",
+  "installed-qa-operator:firebase-test-lab:run",
+  "installed-qa-operator:firebase-test-lab:self-test",
 ]) requireText("CLI/package wiring", `${cli}\n${packageJson}`, phrase);
+
+for (const phrase of [
+  "FIREBASE_TEST_LAB_MAX_COST_USD",
+  "FIREBASE_TEST_LAB_MAX_COST_USD\", 0",
+  "firebase_free_quota_unknown",
+  "paid_usage_requires_owner_approval",
+  "firebase_physical_device_blocked_by_default",
+  "firebase_scheduled_run_blocked_by_default",
+  "firebase_test_lab_uploaded_artifact",
+  "notPlayInstalledProof: true",
+  "costEstimateUsd",
+  "billingRisk",
+  "quotaMode",
+  "FIREBASE_TEST_LAB_REMAINING_FREE_VIRTUAL_MINUTES",
+  "FIREBASE_TEST_LAB_ALLOW_PHYSICAL",
+  "FIREBASE_TEST_LAB_ALLOW_SCHEDULED",
+  "installed-qa-firebase-test-lab self-test passed",
+]) requireText("firebase runner", firebaseRunner, phrase);
+
+const firebaseSelfTest = spawnSync(process.execPath, ["scripts/installed-qa-firebase-test-lab.mjs", "self-test"], {
+  cwd: root,
+  encoding: "utf8",
+});
+if (firebaseSelfTest.status !== 0) {
+  failures.push(`Firebase Test Lab cost guard self-test failed: ${firebaseSelfTest.stderr || firebaseSelfTest.stdout}`);
+}
 
 requireText("traversal reporting import", traversal, "reportInstalledQaFromTraversalSummary");
 requireText("traversal reporting status", traversal, "installedProductQaOperatorReporting");
@@ -170,6 +213,15 @@ for (const phrase of [
   "two-device proof requires two Play-installed devices or approved device lab",
   "schedulerStatus=device_lab_scheduler_pending",
 ]) requireText("runbook", runbook, phrase);
+for (const phrase of [
+  "zero-cost-first",
+  "Default maximum cost: `FIREBASE_TEST_LAB_MAX_COST_USD=0`",
+  "virtual device only",
+  "not Play-installed proof",
+  "Google Play Billing",
+  "two-device LiveKit proof",
+  "No Firebase scheduler is active by default",
+]) requireText("firebase runbook", `${runbook}\n${firebaseRunbook}`, phrase);
 
 if (failures.length) {
   console.error("proof:installed-product-qa-operator failed");

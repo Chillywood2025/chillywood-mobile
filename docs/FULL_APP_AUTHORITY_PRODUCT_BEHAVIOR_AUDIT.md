@@ -2,9 +2,11 @@
 
 Status: source/guard sweep closed; installed role/device proof pending unless run separately.
 
-Last updated: 2026-07-12
+Last updated: 2026-07-13
 
 This document is the current whole-app contract after the autonomous, media, LiveKit, money, admin, and operator changes. It classifies every current app route and every Supabase Edge Function at source level. Runtime/device proof is not implied by this file.
+
+Installed Product QA has a zero-cost-first Firebase Test Lab foundation as of 2026-07-13. The source path can record `firebase_test_lab_uploaded_artifact` findings with `device_lab_provider=firebase_test_lab`, `costEstimateUsd`, `billingRisk`, and `quotaMode`, but Firebase uploaded artifact is not Play-installed proof. The current Firebase capability audit found Firebase/Test Lab CLI and catalog access plus Android artifacts, but billing/free-quota safety could not be guaranteed, so no Firebase matrix was started and scheduler remains `device_lab_scheduler_pending`. No paid Firebase run without owner approval is allowed. Firebase cannot close Premium/RevenueCat/Google Play Billing or two-device LiveKit proof unless those exact provider/device flows are separately and actually proved.
 
 ## Global Rules
 

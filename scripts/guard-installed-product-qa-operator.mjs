@@ -15,8 +15,10 @@ const notIncludes = (source, needle, label) => {
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 const helper = read("_lib/installedProductQaOperator.ts");
 const migration = read("supabase/migrations/20260713011606_installed_product_qa_operator.sql");
+const firebaseMigration = read("supabase/migrations/20260713033809_installed_qa_firebase_test_lab_source.sql");
 const edge = read("supabase/functions/installed-product-qa-operator/index.ts");
 const cli = read("scripts/installed-qa-operator-cli.mjs");
+const firebaseRunner = read("scripts/installed-qa-firebase-test-lab.mjs");
 const reporting = read("scripts/installed-qa-reporting.mjs");
 const traversal = read("scripts/local-run-full-seeded-one-device-role-traversal-rerun.mjs");
 const packageJson = read("package.json");
@@ -27,6 +29,9 @@ const ownerCommandFn = read("supabase/functions/owner-command-operator/index.ts"
 const auditDoc = read("docs/FULL_APP_AUTHORITY_PRODUCT_BEHAVIOR_AUDIT.md");
 const runbook = existsSync(path.join(root, "docs/INSTALLED_PRODUCT_QA_OPERATOR_RUNBOOK.md"))
   ? read("docs/INSTALLED_PRODUCT_QA_OPERATOR_RUNBOOK.md")
+  : "";
+const firebaseRunbook = existsSync(path.join(root, "qa/firebase-test-lab/README.md"))
+  ? read("qa/firebase-test-lab/README.md")
   : "";
 
 const registryBlockStart = registry.indexOf('id: "installed_product_qa_operator"');
@@ -78,6 +83,9 @@ includes(migration, "insert into public.device_availability_findings", "manual d
 includes(migration, "'codex_manual'", "seed discovered_by codex manual");
 includes(migration, "'manual_codex_proof'", "seed proof source manual");
 includes(migration, "'open'", "seed findings open");
+includes(firebaseMigration, "firebase_test_lab_uploaded_artifact", "Firebase Test Lab source check");
+includes(firebaseMigration, "installed_qa_operator_events_source_check", "Firebase event source constraint");
+includes(firebaseMigration, "device_availability_findings_source_check", "Firebase device source constraint");
 notIncludes(migration, "grant all on table", "broad table grant");
 notIncludes(migration, "to anon", "anon grant");
 notIncludes(migration, "to authenticated", "authenticated grant");
@@ -88,6 +96,7 @@ for (const phrase of [
   "installed_qa_user_rights_change_blocked",
   "installed_qa_high_risk_mutation_blocked",
   "HIGH_RISK_MUTATION_PATTERN",
+  "firebase_test_lab_uploaded_artifact",
   "recordRouteFinding",
   "recordRoleFinding",
   "recordAccountFixtureHealth",
@@ -129,9 +138,35 @@ for (const phrase of [
   "manual_codex_only_gap",
   "manual-two-device-realtime-pending",
   "second_device_required",
+  "classifyFirebaseTestLabReadiness",
+  "firebase_test_lab_uploaded_artifact",
   "sanitizeInstalledQaProof",
 ]) includes(helper, phrase, "helper classification");
 notIncludes(helper, "status: \"closed\"", "manual findings must not be pre-closed");
+
+for (const phrase of [
+  "FIREBASE_TEST_LAB_MAX_COST_USD",
+  "numberEnv(\"FIREBASE_TEST_LAB_MAX_COST_USD\", 0)",
+  "firebase_free_quota_unknown",
+  "paid_usage_requires_owner_approval",
+  "firebase_physical_device_blocked_by_default",
+  "firebase_scheduled_run_blocked_by_default",
+  "FIREBASE_TEST_LAB_ZERO_COST_CONFIRMED",
+  "FIREBASE_TEST_LAB_FREE_QUOTA_VERIFIED",
+  "FIREBASE_TEST_LAB_REMAINING_FREE_VIRTUAL_MINUTES",
+  "FIREBASE_TEST_LAB_ALLOW_PHYSICAL",
+  "FIREBASE_TEST_LAB_ALLOW_SCHEDULED",
+  "costEstimateUsd",
+  "billingRisk",
+  "quotaMode",
+  "notPlayInstalledProof: true",
+  "cannotProve",
+  "Google Play Billing or RevenueCat active Premium",
+  "two-device LiveKit realtime",
+]) includes(firebaseRunner, phrase, "Firebase Test Lab cost guard");
+notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_MAX_COST_USD\", 5", "Firebase paid default");
+notIncludes(firebaseRunner, "costEstimateUsd: 1", "Firebase nonzero cost estimate");
+notIncludes(firebaseRunner, "notPlayInstalledProof: false", "Firebase proof overclaim");
 
 includes(reporting, "postInstalledQaFinding", "traversal reporter");
 includes(reporting, "INSTALLED_QA_REPORT_REQUIRED", "report-required fail closed");
@@ -147,6 +182,9 @@ for (const script of [
   "installed-qa-operator:record-finding",
   "installed-qa-operator:device-readiness",
   "installed-qa-operator:account-fixtures",
+  "installed-qa-operator:firebase-test-lab:status",
+  "installed-qa-operator:firebase-test-lab:run",
+  "installed-qa-operator:firebase-test-lab:self-test",
   "proof:installed-product-qa-operator",
   "guard:installed-product-qa-operator",
 ]) includes(packageJson, `"${script}"`, "package wiring");
@@ -167,7 +205,10 @@ for (const phrase of [
   "Premium fixture repair is provider-backed only",
   "two-device proof requires two Play-installed devices or approved device lab",
   "scheduler pending until device-lab path exists",
-]) includes(runbook + auditDoc, phrase, "docs");
+  "Firebase Test Lab is zero-cost-first",
+  "Firebase uploaded artifact is not Play-installed proof",
+  "no paid Firebase run without owner approval",
+]) includes(runbook + auditDoc + firebaseRunbook, phrase, "docs");
 
 if (/schedulerStatus:\s*"chillywood-installed.*timer/i.test(registryBlock)) failures.push("scheduler claimed active without device-lab/timer proof");
 if (/result:\s*"pass"[\s\S]{0,200}second_device_required/.test(helper + edge)) failures.push("two-device blocker can pass");

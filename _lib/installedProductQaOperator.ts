@@ -2,9 +2,26 @@ export const INSTALLED_PRODUCT_QA_OPERATOR_ID = "installed_product_qa_operator" 
 
 export type InstalledQaProofSource =
   | "browserstack"
+  | "firebase_test_lab_uploaded_artifact"
   | "local_fixture"
   | "manual_codex_proof"
   | "play_installed";
+
+export type InstalledQaDeviceLabProvider =
+  | "browserstack"
+  | "firebase_test_lab"
+  | "local_physical_device"
+  | "none";
+
+export type InstalledQaBillingRisk =
+  | "none"
+  | "paid_approval_required"
+  | "unknown";
+
+export type InstalledQaQuotaMode =
+  | "free_quota"
+  | "paid_approval_required"
+  | "unknown";
 
 export type InstalledQaDiscoveredBy =
   | "autonomous_operator"
@@ -69,6 +86,18 @@ export type InstalledTraversalPlan = {
     requiredEvidence: readonly string[];
     forbiddenClaims: readonly string[];
   }[];
+};
+
+export type FirebaseTestLabReadiness = {
+  provider: "firebase_test_lab";
+  proofSource: "firebase_test_lab_uploaded_artifact";
+  canRun: boolean;
+  costEstimateUsd: 0;
+  billingRisk: InstalledQaBillingRisk;
+  quotaMode: InstalledQaQuotaMode;
+  deviceType: "physical" | "virtual";
+  blockerClassification: InstalledQaBlockerClassification;
+  reason: string;
 };
 
 const SECRET_KEY_PATTERN = /(secret|token|password|credential|authorization|service[_-]?role|participant[_-]?token|signed[_-]?url|api[_-]?key|private[_-]?key|db[_-]?url|database[_-]?url|webhook[_-]?secret|reporter|private[_-]?evidence|tax|bank)/i;
@@ -176,9 +205,102 @@ export const classifyDeviceReadiness = (input: {
   return "unknown_requires_review";
 };
 
+export const classifyFirebaseTestLabReadiness = (input: {
+  firebaseProjectConfigured?: boolean;
+  testLabApiAvailable?: boolean;
+  virtualDeviceRequested?: boolean;
+  physicalDeviceRequested?: boolean;
+  scheduledRequested?: boolean;
+  zeroCostConfirmed?: boolean;
+  quotaMode?: InstalledQaQuotaMode;
+  billingRisk?: InstalledQaBillingRisk;
+  ownerApprovedPhysical?: boolean;
+  ownerApprovedSchedule?: boolean;
+}): FirebaseTestLabReadiness => {
+  const quotaMode = input.quotaMode ?? "unknown";
+  const billingRisk = input.billingRisk ?? "unknown";
+  const deviceType = input.physicalDeviceRequested ? "physical" : "virtual";
+  if (!input.firebaseProjectConfigured) {
+    return {
+      provider: "firebase_test_lab",
+      proofSource: "firebase_test_lab_uploaded_artifact",
+      canRun: false,
+      costEstimateUsd: 0,
+      billingRisk: "unknown",
+      quotaMode,
+      deviceType,
+      blockerClassification: "device_unavailable",
+      reason: "firebase_project_missing",
+    };
+  }
+  if (!input.testLabApiAvailable) {
+    return {
+      provider: "firebase_test_lab",
+      proofSource: "firebase_test_lab_uploaded_artifact",
+      canRun: false,
+      costEstimateUsd: 0,
+      billingRisk: "unknown",
+      quotaMode,
+      deviceType,
+      blockerClassification: "device_unavailable",
+      reason: "firebase_test_lab_api_unavailable",
+    };
+  }
+  if (input.physicalDeviceRequested && !input.ownerApprovedPhysical) {
+    return {
+      provider: "firebase_test_lab",
+      proofSource: "firebase_test_lab_uploaded_artifact",
+      canRun: false,
+      costEstimateUsd: 0,
+      billingRisk: "paid_approval_required",
+      quotaMode,
+      deviceType,
+      blockerClassification: "unknown_requires_review",
+      reason: "firebase_physical_device_requires_owner_approval",
+    };
+  }
+  if (input.scheduledRequested && !input.ownerApprovedSchedule) {
+    return {
+      provider: "firebase_test_lab",
+      proofSource: "firebase_test_lab_uploaded_artifact",
+      canRun: false,
+      costEstimateUsd: 0,
+      billingRisk: "paid_approval_required",
+      quotaMode,
+      deviceType,
+      blockerClassification: "unknown_requires_review",
+      reason: "firebase_scheduled_run_requires_owner_approval",
+    };
+  }
+  if (!input.zeroCostConfirmed || quotaMode !== "free_quota" || billingRisk !== "none") {
+    return {
+      provider: "firebase_test_lab",
+      proofSource: "firebase_test_lab_uploaded_artifact",
+      canRun: false,
+      costEstimateUsd: 0,
+      billingRisk,
+      quotaMode,
+      deviceType,
+      blockerClassification: "device_unavailable",
+      reason: "firebase_free_quota_unknown",
+    };
+  }
+  return {
+    provider: "firebase_test_lab",
+    proofSource: "firebase_test_lab_uploaded_artifact",
+    canRun: true,
+    costEstimateUsd: 0,
+    billingRisk: "none",
+    quotaMode: "free_quota",
+    deviceType,
+    blockerClassification: "unknown_requires_review",
+    reason: "firebase_virtual_device_zero_cost_confirmed",
+  };
+};
+
 export const classifyProofSource = (source: InstalledQaProofSource): InstalledQaDiscoveredBy => {
   if (source === "manual_codex_proof" || source === "local_fixture") return "codex_manual";
-  if (source === "browserstack") return "device_lab";
+  if (source === "browserstack" || source === "firebase_test_lab_uploaded_artifact") return "device_lab";
   return "autonomous_operator";
 };
 

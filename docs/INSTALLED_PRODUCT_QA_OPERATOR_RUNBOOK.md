@@ -17,6 +17,9 @@ Codex caught the current installed traversal blockers manually during a directed
   - `installed-qa-operator:record-finding`
   - `installed-qa-operator:device-readiness`
   - `installed-qa-operator:account-fixtures`
+  - `installed-qa-operator:firebase-test-lab:status`
+  - `installed-qa-operator:firebase-test-lab:run`
+  - `installed-qa-operator:firebase-test-lab:self-test`
 
 ## Scope
 
@@ -59,6 +62,14 @@ two-device proof requires two Play-installed devices or approved device lab. One
 
 The scheduler is pending until device-lab path exists. Do not claim a scheduled installed QA loop active until a safe installed device automation path or approved device lab/timer proof exists.
 
+## Firebase Test Lab Path
+
+Firebase Test Lab is zero-cost-first for this operator. The first supported path is `scripts/installed-qa-firebase-test-lab.mjs` plus `qa/firebase-test-lab/README.md`; it defaults to `FIREBASE_TEST_LAB_MAX_COST_USD=0`, virtual-device-only, manual/on-demand execution. Unknown billing/quota state fails closed before any Firebase matrix starts. Physical devices require `FIREBASE_TEST_LAB_ALLOW_PHYSICAL=true` plus an owner-approved no-cost quota note, and scheduled Firebase runs require `FIREBASE_TEST_LAB_ALLOW_SCHEDULED=true` plus quota-safe owner proof. Policy: no paid Firebase run without owner approval.
+
+Firebase uploaded artifact is not Play-installed proof. Findings from this lane use `source=firebase_test_lab_uploaded_artifact`, `device_lab_provider=firebase_test_lab`, and `proofSource=firebase_test_lab_uploaded_artifact`; they may prove an uploaded APK/AAB launches, does not crash, and records route/marker findings when the lab reaches those markers. They must not claim Google Play installer delivery, RevenueCat/Google Play Billing Premium state, local user push behavior, or two-device LiveKit closure.
+
+The current zero-cost audit found Firebase config files, both `firebase` and `gcloud` CLIs, a configured Google Cloud/Firebase project, active gcloud credentials, Firebase/Test Lab API/catalog access, and Android APK/AAB artifacts. The billing/quota risk could not be guaranteed because billing status/free-quota readback was unavailable and Tool Results API was not confirmed enabled. No Firebase matrix was started, `costEstimateUsd=0` only describes the blocked/no-run state, `billingRisk=unknown`, and scheduler remains `device_lab_scheduler_pending`.
+
 ## Safety
 
 The operator must never store secrets, tokens, provider credentials, service-role keys, private evidence, reporter identity, signed media access values, LiveKit tokens, tax IDs, or bank details. It may store sanitized route names, test IDs, account role labels, result classes, update/runtime/channel diagnostics, blocker classifications, and next safe actions.
@@ -82,3 +93,4 @@ Required gates:
 - `npm run guard:route-contracts --if-present`
 - `npx tsc --noEmit`
 - `deno check supabase/functions/installed-product-qa-operator/index.ts`
+- `npm run installed-qa-operator:firebase-test-lab:self-test`
