@@ -25,6 +25,11 @@ const routingCases = [
   ["moderation_safety_operator", ["moderation", "ban", "user report"]],
   ["observability_runtime_operator", ["crash", "analytics", "performance"]],
   ["installed_product_qa_operator", ["installed qa", "installed traversal", "device lab"]],
+  ["platform_recovery_operator", ["platform recovery", "backup", "restore drill"]],
+  ["privacy_compliance_operator", ["privacy", "data export", "legal hold"]],
+  ["support_success_operator", ["support", "ticket", "refund request"]],
+  ["search_ranking_integrity_operator", ["search", "ranking", "visibility"]],
+  ["ads_sponsor_delivery_operator", ["ads", "sponsor", "ad revenue"]],
 ];
 
 for (const [systemId, keywords] of routingCases) {

@@ -26,6 +26,11 @@ This document is the current whole-app contract after the autonomous, media, Liv
 - `moderation_safety_operator`
 - `observability_runtime_operator`
 - `installed_product_qa_operator`
+- `platform_recovery_operator`
+- `privacy_compliance_operator`
+- `support_success_operator`
+- `search_ranking_integrity_operator`
+- `ads_sponsor_delivery_operator` foundation-only
 - `owner_command_operator`
 
 ## Route Inventory
@@ -146,6 +151,7 @@ Current classification:
 | `observability-operator` | observability operator | narrow token | scheduled/live | 2 | No crash evidence deletion or PII expansion. |
 | `installed-product-qa-operator` | installed product QA operator | narrow token | manual/device-lab pending | 2 | Findings/owner-command requests only; no fake proof, Premium grant, sideload, or app-control mutation. |
 | `owner-command-operator` | owner command routing | owner JWT or narrow trusted token | live and backed | 3 | Routes through target operators only. |
+| `platform-recovery-operator` | platform recovery operator | narrow token | manual/scheduler pending | 2 | Backup/restore readiness findings only; no production restore or destructive mutation. |
 | `payout-release-preflight` | payout preflight | owner/admin/provider policy | blocked/preflight only | 4 | No payout release. |
 | `premium-media-playback-token` | Premium media token | bearer/session + Premium readback | live and backed | 3 | Provider-backed Premium only. |
 | `provider-billing-import-preflight` | provider billing import preflight | owner/admin/provider policy | preflight only | 3 | No provider mutation. |
@@ -153,6 +159,9 @@ Current classification:
 | `provider-readiness` | provider readiness | shared secret/trusted | live and backed | 2 | Sanitized readiness audit. |
 | `provider-usage-import` | provider usage import | owner/admin JWT + backend | bounded/preflight | 3 | No fake provider usage. |
 | `public-creator-video-cards` | public creator cards | public-safe read | live and backed | 1 | Public-safe metadata only. |
+| `privacy-compliance-operator` | privacy compliance operator | narrow token | manual/scheduler pending | 2 | Planning/findings only; no raw export, deletion, legal-hold bypass, or PII output. |
+| `search-ranking-integrity-operator` | search/ranking integrity operator | narrow token | manual/scheduler pending | 2 | Search/ranking findings only; no hidden enforcement, ranking mutation, or exposure change. |
+| `support-success-operator` | support success operator | narrow token | manual/scheduler pending | 2 | Support findings/drafts only; no refund, Premium grant, auth mutation, or external commitment. |
 | `release-operator` | release operator | narrow token | scheduled/live | 2 | Findings only; no publish/rollback. |
 | `request-save-replay` | save replay request | session/backend | live and backed | 2 | Request path only. |
 | `revenue-source-import` | revenue source import | owner/admin/provider policy | preflight/foundation | 3 | No fake revenue. |
@@ -194,6 +203,11 @@ Current classification:
 | Moderation/safety | live scoped/finding/review | moderator/queue/content guards | enforcement actions remain approval-gated or absent. |
 | Observability | scheduled findings only | observability guard | no Remote Config mutation or crash evidence deletion. |
 | Installed Product QA | manual/device-lab pending | installed QA proof/guard | current blockers are open QA findings until account/device/provider prerequisites are proved. |
+| Platform Recovery | manual/scheduler pending | platform recovery proof/guard | no hardened host/token/timer proof; no production restore. |
+| Privacy Compliance | manual/scheduler pending | privacy compliance proof/guard | no legal fulfillment workflow scheduler; no real export/deletion. |
+| Support Success | manual/scheduler pending | support success proof/guard | no support-table/hardened-host scheduler proof; drafts only. |
+| Search/Ranking Integrity | manual/scheduler pending | search ranking proof/guard | no search-health scheduler proof; no ranking mutation. |
+| Ads/Sponsor Delivery | foundation-only/off | ads sponsor foundation proof/guard | no Edge Function, scheduler, live writes, ad serving, sponsor checkout, revenue claim, billing, or payout. |
 
 ## Removed / Disabled / Blocked Classes
 

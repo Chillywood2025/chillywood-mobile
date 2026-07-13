@@ -1,0 +1,48 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+
+Deno.serve(handleScopedOperatorRequest({
+  systemId: "support_success_operator",
+  tokenHeader: "x-support-success-operator-token",
+  tokenHashEnv: "SUPPORT_SUCCESS_OPERATOR_TOKEN_SHA256",
+  tokenError: "support_success_operator_token_required",
+  eventTable: "support_operator_events",
+  snapshotTable: "support_health_snapshots",
+  reviewTable: "support_required_review_flags",
+  defaultHealthState: "review",
+  allowedActions: [
+    "health_snapshot",
+    "support_inbox_health",
+    "stale_support_ticket_detection",
+    "user_issue_triage",
+    "account_access_support_flags",
+    "refund_request_classification",
+    "premium_support_readback",
+    "payment_support_readback",
+    "support_response_drafts",
+    "escalation_to_owner_admin",
+    "support_sla_findings",
+    "watch_once",
+    "status",
+    "report",
+  ],
+  approvalActions: [
+    "issue_refund",
+    "grant_premium",
+    "change_entitlement",
+    "auth_credential_reset",
+    "send_external_legal_or_payment_commitment",
+  ],
+  actionTables: {
+    support_inbox_health: "support_health_snapshots",
+    stale_support_ticket_detection: "support_ticket_findings",
+    user_issue_triage: "support_ticket_findings",
+    account_access_support_flags: "support_required_review_flags",
+    refund_request_classification: "support_required_review_flags",
+    premium_support_readback: "support_required_review_flags",
+    payment_support_readback: "support_required_review_flags",
+    support_response_drafts: "support_response_drafts",
+    escalation_to_owner_admin: "support_escalation_records",
+    support_sla_findings: "support_ticket_findings",
+  },
+}));

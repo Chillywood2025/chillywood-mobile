@@ -98,6 +98,11 @@ for (const systemId of [
   "moderation_safety_operator",
   "observability_runtime_operator",
   "installed_product_qa_operator",
+  "platform_recovery_operator",
+  "privacy_compliance_operator",
+  "support_success_operator",
+  "search_ranking_integrity_operator",
+  "ads_sponsor_delivery_operator",
   "owner_command_operator",
 ]) {
   requireText("autonomous registry", autonomousRegistry, `id: "${systemId}"`);

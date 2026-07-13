@@ -28,6 +28,10 @@ const ALLOWED_SYSTEM_IDS = [
   "moderation_safety_operator",
   "observability_runtime_operator",
   "installed_product_qa_operator",
+  "platform_recovery_operator",
+  "privacy_compliance_operator",
+  "support_success_operator",
+  "search_ranking_integrity_operator",
   "owner_command_operator",
 ] as const;
 

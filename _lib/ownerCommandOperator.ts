@@ -31,6 +31,11 @@ export type OwnerCommandIntent =
   | "moderation_safety"
   | "observability_runtime"
   | "installed_product_qa"
+  | "platform_recovery"
+  | "privacy_compliance"
+  | "support_success"
+  | "search_ranking_integrity"
+  | "ads_sponsor_delivery"
   | "multi_system"
   | "unknown";
 
@@ -88,6 +93,11 @@ const ACTIVE_SYSTEMS: readonly OwnerCommandTargetSystemId[] = [
   "moderation_safety_operator",
   "observability_runtime_operator",
   "installed_product_qa_operator",
+  "platform_recovery_operator",
+  "privacy_compliance_operator",
+  "support_success_operator",
+  "search_ranking_integrity_operator",
+  "ads_sponsor_delivery_operator",
 ];
 
 const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
@@ -195,6 +205,49 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "two-device proof",
     "installed proof",
   ],
+  platform_recovery_operator: [
+    "platform recovery",
+    "backup",
+    "restore drill",
+    "migration drift",
+    "function deployment",
+    "timer health",
+    "recovery readiness",
+  ],
+  privacy_compliance_operator: [
+    "privacy",
+    "data export",
+    "account deletion",
+    "legal hold",
+    "retention",
+    "pii",
+    "data rights",
+  ],
+  support_success_operator: [
+    "support",
+    "ticket",
+    "refund request",
+    "account help",
+    "support draft",
+    "support escalation",
+  ],
+  search_ranking_integrity_operator: [
+    "search",
+    "ranking",
+    "recommendation",
+    "visibility",
+    "discovery",
+    "index freshness",
+    "shadowban",
+  ],
+  ads_sponsor_delivery_operator: [
+    "ads",
+    "ad provider",
+    "sponsor",
+    "sponsor checkout",
+    "brand safety",
+    "ad revenue",
+  ],
 };
 
 const LEVEL_FOUR_PATTERNS = [
@@ -221,6 +274,18 @@ const LEVEL_THREE_PATTERNS = [
   /manual\s+premium/i,
   /bypass\s+premium/i,
   /rotate\s+secret/i,
+];
+
+const ADS_SPONSOR_ACTIVATION_PATTERNS = [
+  /turn\s+on\s+(ads?|sponsors?)/i,
+  /enable\s+(ads?|sponsors?)/i,
+  /activate\s+(ads?|sponsors?)/i,
+  /launch\s+(ads?|sponsors?)/i,
+  /serve\s+ads?/i,
+  /sponsor\s+checkout/i,
+  /ad\s+revenue/i,
+  /sponsor\s+payout/i,
+  /ad\s+impressions?/i,
 ];
 
 const SAFE_WRITE_PATTERNS = [
@@ -299,6 +364,36 @@ const SYSTEM_FORBIDDEN_SCOPE: Record<OwnerCommandTargetSystemId, readonly string
     "sideload/install/clear data",
     "two-device closure without two devices",
   ],
+  platform_recovery_operator: [
+    "production restore without approval",
+    "destructive DB mutation",
+    "secret rotation without approval",
+    "fake backup/restore success",
+  ],
+  privacy_compliance_operator: [
+    "hidden deletion",
+    "raw private data export",
+    "legal hold bypass",
+    "PII/secret exposure",
+  ],
+  support_success_operator: [
+    "refund execution",
+    "manual Premium grant",
+    "auth credential reset",
+    "external legal/payment commitment",
+  ],
+  search_ranking_integrity_operator: [
+    "hidden shadowban",
+    "secret demotion/boost",
+    "ranking algorithm mutation",
+    "moderation enforcement",
+  ],
+  ads_sponsor_delivery_operator: [
+    "serving ads",
+    "sponsor checkout",
+    "ad revenue claim",
+    "provider/billing mutation",
+  ],
 };
 
 const normalizeCommandText = (commandText: unknown) => String(commandText ?? "").trim().replace(/\s+/g, " ");
@@ -350,17 +445,24 @@ export const classifyOwnerCommandIntent = (commandText: string): OwnerCommandInt
   if (systemId === "moderation_safety_operator") return "moderation_safety";
   if (systemId === "observability_runtime_operator") return "observability_runtime";
   if (systemId === "installed_product_qa_operator") return "installed_product_qa";
+  if (systemId === "platform_recovery_operator") return "platform_recovery";
+  if (systemId === "privacy_compliance_operator") return "privacy_compliance";
+  if (systemId === "support_success_operator") return "support_success";
+  if (systemId === "search_ranking_integrity_operator") return "search_ranking_integrity";
+  if (systemId === "ads_sponsor_delivery_operator") return "ads_sponsor_delivery";
   return "unknown";
 };
 
 export const classifyOwnerCommandRisk = (commandText: string): OwnerCommandRiskLevel => {
   const text = normalizeCommandText(commandText);
   if (!text) return 3;
+  const mappedSystems = mapOwnerCommandToAutonomousSystems(text);
+  if (mappedSystems.includes("ads_sponsor_delivery_operator") && commandMatches(text, ADS_SPONSOR_ACTIVATION_PATTERNS)) return 4;
   if (commandMatches(text, LEVEL_FOUR_PATTERNS)) return 4;
   if (commandMatches(text, LEVEL_THREE_PATTERNS)) return 3;
   if (commandMatches(text, SAFE_WRITE_PATTERNS)) return 2;
   if (commandMatches(text, READ_ONLY_PATTERNS)) return 1;
-  return mapOwnerCommandToAutonomousSystems(text).length ? 2 : 3;
+  return mappedSystems.length ? 2 : 3;
 };
 
 export const classifyOwnerCommand = (commandText: string): OwnerCommandClassification => {

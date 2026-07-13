@@ -130,6 +130,18 @@ verify_jwt = false
 [functions.installed-product-qa-operator]
 verify_jwt = false
 
+[functions.platform-recovery-operator]
+verify_jwt = false
+
+[functions.privacy-compliance-operator]
+verify_jwt = false
+
+[functions.support-success-operator]
+verify_jwt = false
+
+[functions.search-ranking-integrity-operator]
+verify_jwt = false
+
 [functions.owner-command-operator]
 verify_jwt = false
 

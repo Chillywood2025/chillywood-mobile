@@ -86,9 +86,14 @@ for (const phrase of [
   "\"moderation_safety_operator\"",
   "\"observability_runtime_operator\"",
   "\"installed_product_qa_operator\"",
+  "\"platform_recovery_operator\"",
+  "\"privacy_compliance_operator\"",
+  "\"support_success_operator\"",
+  "\"search_ranking_integrity_operator\"",
   "\"owner_command_operator\"",
   "return input.approverRoles.includes(\"owner\") || input.approverRoles.includes(\"super_admin\")",
 ]) includes(approvalModel, phrase, "approval requester parity");
+notIncludes(approvalModel, "\"ads_sponsor_delivery_operator\"", "ads/sponsor foundation approval requester parity");
 
 for (const phrase of [
   "OwnerCommandTargetSystemId = Exclude<AutonomousSystemId, \"owner_command_operator\">",

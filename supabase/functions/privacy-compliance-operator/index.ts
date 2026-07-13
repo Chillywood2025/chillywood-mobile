@@ -1,0 +1,48 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+
+Deno.serve(handleScopedOperatorRequest({
+  systemId: "privacy_compliance_operator",
+  tokenHeader: "x-privacy-compliance-operator-token",
+  tokenHashEnv: "PRIVACY_COMPLIANCE_OPERATOR_TOKEN_SHA256",
+  tokenError: "privacy_compliance_operator_token_required",
+  eventTable: "privacy_operator_events",
+  snapshotTable: "privacy_request_findings",
+  reviewTable: "privacy_required_review_flags",
+  defaultHealthState: "review",
+  allowedActions: [
+    "health_snapshot",
+    "privacy_request_intake",
+    "account_data_export_planning",
+    "account_deletion_planning",
+    "legal_hold_readback",
+    "data_retention_policy_readback",
+    "pii_exposure_findings",
+    "data_safety_disclosure_findings",
+    "evidence_retention_status",
+    "privacy_request_status",
+    "redacted_export_package_planning",
+    "watch_once",
+    "status",
+    "report",
+  ],
+  approvalActions: [
+    "production_account_deletion",
+    "raw_private_data_export",
+    "legal_hold_override",
+    "audit_evidence_deletion",
+    "auth_rls_privacy_mutation",
+  ],
+  actionTables: {
+    privacy_request_intake: "privacy_request_findings",
+    privacy_request_status: "privacy_request_findings",
+    account_data_export_planning: "privacy_export_plans",
+    redacted_export_package_planning: "privacy_export_plans",
+    account_deletion_planning: "privacy_deletion_plans",
+    legal_hold_readback: "retention_hold_findings",
+    data_retention_policy_readback: "retention_hold_findings",
+    pii_exposure_findings: "pii_exposure_findings",
+    data_safety_disclosure_findings: "privacy_required_review_flags",
+    evidence_retention_status: "retention_hold_findings",
+  },
+}));

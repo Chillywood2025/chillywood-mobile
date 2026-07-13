@@ -42,9 +42,23 @@ const requiredActiveSystems = [
   "moderation_safety_operator",
   "observability_runtime_operator",
   "installed_product_qa_operator",
+  "platform_recovery_operator",
+  "privacy_compliance_operator",
+  "support_success_operator",
+  "search_ranking_integrity_operator",
+];
+
+const foundationOnlySystems = [
+  "ads_sponsor_delivery_operator",
 ];
 
 const protectedAutonomousSystems = [
+  ...requiredActiveSystems,
+  ...foundationOnlySystems,
+  "owner_command_operator",
+];
+
+const approvalRequesterSystems = [
   ...requiredActiveSystems,
   "owner_command_operator",
 ];
@@ -63,6 +77,10 @@ for (const required of [
 }
 
 for (const systemId of requiredActiveSystems) {
+  includes(ownerCommandHelper, `"${systemId}"`, "owner command helper routing");
+  includes(ownerCommandFunction, `"${systemId}"`, "owner command function routing");
+}
+for (const systemId of foundationOnlySystems) {
   includes(ownerCommandHelper, `"${systemId}"`, "owner command helper routing");
   includes(ownerCommandFunction, `"${systemId}"`, "owner command function routing");
 }
@@ -193,10 +211,55 @@ const manualScopedSystems = [
     proof: "proof:installed-product-qa-operator",
     guard: "guard:installed-product-qa-operator",
     functionPath: "supabase/functions/installed-product-qa-operator/index.ts",
+    tokenNeedle: "INSTALLED_QA_OPERATOR_TOKEN_SHA256",
     expectedActivation: 'activeActivationMode: "manual_cli"',
     expectedSchedulerStatus: "device_lab_scheduler_pending",
     forbidden: ["fake installed proof", "manual Premium grant", "claiming two-device proof without proof", "silent pass on route mismatch"],
     highRisk: "installed_qa_high_risk_fix_request",
+  },
+  {
+    id: "platform_recovery_operator",
+    proof: "proof:platform-recovery-operator",
+    guard: "guard:platform-recovery-operator",
+    functionPath: "supabase/functions/platform-recovery-operator/index.ts",
+    tokenNeedle: "PLATFORM_RECOVERY_OPERATOR_TOKEN_SHA256",
+    expectedActivation: 'activeActivationMode: "manual_cli"',
+    expectedSchedulerStatus: "scheduler_pending_no_hardened_host_token_path",
+    forbidden: ["production restore without approval", "destructive DB mutation", "secret rotation without approval", "fake backup/restore success"],
+    highRisk: "platform_recovery_high_risk_fix_request",
+  },
+  {
+    id: "privacy_compliance_operator",
+    proof: "proof:privacy-compliance-operator",
+    guard: "guard:privacy-compliance-operator",
+    functionPath: "supabase/functions/privacy-compliance-operator/index.ts",
+    tokenNeedle: "PRIVACY_COMPLIANCE_OPERATOR_TOKEN_SHA256",
+    expectedActivation: 'activeActivationMode: "manual_cli"',
+    expectedSchedulerStatus: "scheduler_pending_legal_workflow_and_hardened_host_path",
+    forbidden: ["deleting account/data without approved flow", "bypassing legal hold", "hidden deletion", "fake compliance closure"],
+    highRisk: "privacy_data_fulfillment_request",
+  },
+  {
+    id: "support_success_operator",
+    proof: "proof:support-success-operator",
+    guard: "guard:support-success-operator",
+    functionPath: "supabase/functions/support-success-operator/index.ts",
+    tokenNeedle: "SUPPORT_SUCCESS_OPERATOR_TOKEN_SHA256",
+    expectedActivation: 'activeActivationMode: "manual_cli"',
+    expectedSchedulerStatus: "scheduler_pending_support_table_and_hardened_host_path",
+    forbidden: ["issuing refunds", "granting Premium", "moving money", "sending legal/payment commitments"],
+    highRisk: "support_money_or_auth_action_request",
+  },
+  {
+    id: "search_ranking_integrity_operator",
+    proof: "proof:search-ranking-integrity-operator",
+    guard: "guard:search-ranking-integrity-operator",
+    functionPath: "supabase/functions/search-ranking-integrity-operator/index.ts",
+    tokenNeedle: "SEARCH_RANKING_INTEGRITY_OPERATOR_TOKEN_SHA256",
+    expectedActivation: 'activeActivationMode: "manual_cli"',
+    expectedSchedulerStatus: "scheduler_pending_search_health_path_and_hardened_host_path",
+    forbidden: ["hidden shadowban", "secret demotion/boost", "moderation enforcement", "changing ranking algorithm without approval"],
+    highRisk: "search_ranking_algorithm_or_visibility_change",
   },
 ];
 
@@ -209,8 +272,11 @@ const moneyScheduler = {
 for (const systemId of protectedAutonomousSystems) {
   includes(registry, `id: "${systemId}"`, "autonomous registry");
   includes(registryDoc, `\`${systemId}\``, "registry docs");
+}
+for (const systemId of approvalRequesterSystems) {
   includes(approvalFunction, systemId, "approval function system whitelist");
 }
+notIncludes(approvalFunction, "ads_sponsor_delivery_operator", "ads/sponsor foundation approval requester whitelist");
 
 const ownerCommandBlockStart = registry.indexOf('id: "owner_command_operator"');
 const ownerCommandBlockEnd = registry.indexOf("\n  },", ownerCommandBlockStart);
@@ -284,10 +350,23 @@ for (const system of manualScopedSystems) {
   for (const forbidden of system.forbidden) includes(block, forbidden, `${system.id} forbidden scope`);
   includes(packageJson, `"${system.proof}"`, `${system.id} package proof`);
   includes(packageJson, `"${system.guard}"`, `${system.id} package guard`);
-  includes(read(system.functionPath), "INSTALLED_QA_OPERATOR_TOKEN_SHA256", `${system.id} token gate`);
+  includes(read(system.functionPath), system.tokenNeedle, `${system.id} token gate`);
   includes(read(system.functionPath), "watch_once", `${system.id} watch_once`);
   if (/chillywood-installed.*timer|systemd_timer/.test(block)) fail(`${system.id} claims scheduler/timer before device lab proof`);
 }
+
+const adsBlockStart = registry.indexOf('id: "ads_sponsor_delivery_operator"');
+const adsBlockEnd = registry.indexOf("\n  },", adsBlockStart);
+const adsBlock = adsBlockStart >= 0 && adsBlockEnd > adsBlockStart ? registry.slice(adsBlockStart, adsBlockEnd) : "";
+includes(adsBlock, 'status: "foundation_only_guarded"', "ads/sponsor foundation status");
+includes(adsBlock, 'activeActivationMode: "off"', "ads/sponsor activation");
+includes(adsBlock, "no_scheduler_foundation_only", "ads/sponsor scheduler");
+includes(adsBlock, "no Edge Function required", "ads/sponsor no Edge Function");
+includes(adsBlock, "no live write tables", "ads/sponsor no live write tables");
+includes(packageJson, '"proof:ads-sponsor-delivery-foundation"', "ads/sponsor foundation proof script");
+includes(packageJson, '"guard:ads-sponsor-delivery-foundation"', "ads/sponsor foundation guard script");
+if (existsSync(path.join(root, "supabase/functions/ads-sponsor-delivery-operator/index.ts"))) fail("ads/sponsor foundation has a live Edge Function");
+notIncludes(packageJson, "ads-sponsor-delivery-operator:watch-once", "ads/sponsor foundation package watch script");
 
 const moneyBlockStart = registry.indexOf('id: "money_flow_control"');
 const moneyBlockEnd = registry.indexOf("\n  },", moneyBlockStart);
@@ -323,8 +402,11 @@ notIncludes(registry, 'id: "security_owner_operator",\n    displayName: "Securit
 notIncludes(registry, 'id: "moderation_safety_operator",\n    displayName: "Moderation / Safety Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registry, 'id: "observability_runtime_operator",\n    displayName: "Observability / Runtime Health Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registry, 'id: "installed_product_qa_operator",\n    displayName: "Installed Product QA Operator",\n    status: "candidate_foundation_only"', "active registry");
+notIncludes(registry, 'id: "platform_recovery_operator",\n    displayName: "Platform Recovery Operator",\n    status: "candidate_foundation_only"', "active registry");
+notIncludes(registry, 'id: "privacy_compliance_operator",\n    displayName: "Privacy Compliance Operator",\n    status: "candidate_foundation_only"', "active registry");
+notIncludes(registry, 'id: "support_success_operator",\n    displayName: "Support Success Operator",\n    status: "candidate_foundation_only"', "active registry");
+notIncludes(registry, 'id: "search_ranking_integrity_operator",\n    displayName: "Search / Ranking Integrity Operator",\n    status: "candidate_foundation_only"', "active registry");
 notIncludes(registryDoc, "candidate_foundation_only", "registry docs");
-notIncludes(registryDoc, "Allowed writes: none", "registry docs");
 
 for (const required of [
   "private/Premium/original public exposure",
@@ -370,6 +452,16 @@ for (const script of [
   "guard:money-flow-control",
   "proof:livekit-autonomous-operator",
   "proof:media-automation-cli",
+  "proof:platform-recovery-operator",
+  "guard:platform-recovery-operator",
+  "proof:privacy-compliance-operator",
+  "guard:privacy-compliance-operator",
+  "proof:support-success-operator",
+  "guard:support-success-operator",
+  "proof:search-ranking-integrity-operator",
+  "guard:search-ranking-integrity-operator",
+  "proof:ads-sponsor-delivery-foundation",
+  "guard:ads-sponsor-delivery-foundation",
 ]) {
   includes(packageJson, `"${script}"`, "package script wiring");
 }
@@ -407,6 +499,7 @@ includes(ownerAuthority, "canUserApproveAutonomousRequest", "owner authority hel
 includes(approvalFunction, "owner_or_super_admin_required", "approval function owner gate");
 includes(approvalFunction, "mark_preflight_result", "approval fresh preflight");
 includes(approvalFunction, "emergency_pause_system", "approval emergency controls");
+for (const systemId of approvalRequesterSystems) includes(approvalFunction, `"${systemId}"`, "approval requester system");
 notIncludes(approvalFunction, "rachi_can_approve", "approval function");
 
 notIncludes(currentState + nextTask, "dashboard valid TEST proof remains pending", "RevenueCat closure state");
@@ -435,7 +528,8 @@ console.log(JSON.stringify({
   ok: true,
   activeSystems: requiredActiveSystems,
   protectedSystems: protectedAutonomousSystems,
-  scopedWriteSystemsAdded: newlyScopedSystems.map((system) => system.id),
+  foundationOnlySystems,
+  scopedWriteSystemsAdded: [...newlyScopedSystems.map((system) => system.id), ...manualScopedSystems.map((system) => system.id)],
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
   candidatePlaceholdersRemaining: 0,
 }, null, 2));

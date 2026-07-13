@@ -528,6 +528,223 @@ Forbidden:
 
 `installed_product_qa_operator` records installed-app route, role, account-fixture, and device-readiness blockers proactively. Codex caught the current installed traversal blockers manually; this operator now turns that category into first-class QA findings and owner-command requests. Premium fixture repair is provider-backed only, and two-device proof requires two Play-installed devices or approved device lab.
 
+### `platform_recovery_operator`
+
+Status: `scoped_write_capable_guarded`.
+
+Current activation: `manual_cli`.
+
+Scheduler status: `scheduler_pending_no_hardened_host_token_path`. The scheduler is not active; scheduler remains pending until a hardened host/token/timer path is installed and proved.
+
+Allowed surfaces:
+- database backup freshness
+- restore drill freshness
+- critical table backup coverage
+- migration drift detection
+- Supabase function deployment drift
+- scheduled timer health
+- operator/provider secret presence by name only
+- R2 backup export health
+- audit log integrity
+- emergency state readback
+- cross-system recovery readiness
+
+Allowed writes:
+- `platform_recovery_operator_events`
+- `backup_health_snapshots`
+- `restore_drill_findings`
+- `migration_drift_findings`
+- `function_deployment_drift_findings`
+- `scheduled_timer_health_findings`
+- `recovery_required_review_flags`
+- `recovery_operator_learning_state`
+- owner-command requests
+- autonomous approval requests
+
+Forbidden:
+- production restore without approval
+- destructive DB mutation
+- secret rotation without approval
+- deleting backups
+- deleting production data
+- changing provider config
+- changing R2/media behavior
+- service-role key in scheduler
+- fake backup/restore success
+
+`platform_recovery_operator` writes recovery status and findings only. It can create an owner-command or approval request for high-risk recovery, but it cannot run production restore, destructive mutation, secret rotation, backup deletion, provider mutation, or fake recovery success.
+
+### `privacy_compliance_operator`
+
+Status: `scoped_write_capable_guarded`.
+
+Current activation: `manual_cli`.
+
+Scheduler status: `scheduler_pending_legal_workflow_and_hardened_host_path`. The scheduler is not active until legal workflow and hardened host proof exist.
+
+Allowed surfaces:
+- privacy request intake
+- account data export planning
+- account deletion planning
+- legal hold readback
+- data retention policy readback
+- PII exposure findings
+- data safety disclosure findings
+- evidence retention status
+- privacy request status
+- redacted export package planning
+
+Allowed writes:
+- `privacy_operator_events`
+- `privacy_request_findings`
+- `privacy_export_plans`
+- `privacy_deletion_plans`
+- `privacy_required_review_flags`
+- `pii_exposure_findings`
+- `retention_hold_findings`
+- `privacy_operator_learning_state`
+- owner-command requests
+- autonomous approval requests
+
+Forbidden:
+- deleting account/data without approved flow
+- exporting raw private data without owner/legal-approved flow
+- bypassing legal hold
+- deleting audit/evidence records
+- exposing PII/secrets
+- changing auth/RLS
+- changing billing/money
+- hidden deletion
+- fake compliance closure
+
+`privacy_compliance_operator` is planning/status only. It can record request findings, legal-hold/retention blockers, and redacted export/deletion plans. It cannot perform real export/deletion, bypass legal hold, expose PII, or claim compliance closure without approved fulfillment proof.
+
+### `support_success_operator`
+
+Status: `scoped_write_capable_guarded`.
+
+Current activation: `manual_cli`.
+
+Scheduler status: `scheduler_pending_support_table_and_hardened_host_path`. The scheduler is not active until support table/readback and hardened host proof exist.
+
+Allowed surfaces:
+- support inbox health
+- stale support ticket detection
+- user issue triage
+- account access support flags
+- refund request classification
+- Premium support readback
+- payment support readback
+- support response drafts
+- escalation to owner/admin
+- support SLA findings
+
+Allowed writes:
+- `support_operator_events`
+- `support_health_snapshots`
+- `support_ticket_findings`
+- `support_required_review_flags`
+- `support_response_drafts`
+- `support_escalation_records`
+- `support_operator_learning_state`
+- owner-command requests
+- autonomous approval requests
+
+Forbidden:
+- issuing refunds
+- granting Premium
+- changing entitlements
+- moving money
+- changing auth/RLS
+- resetting credentials without approved flow
+- banning/restricting users
+- sending legal/payment commitments
+- exposing private evidence
+- sending external messages without approval unless template-backed and safe
+
+`support_success_operator` records queue health, stale-ticket findings, draft responses, and owner/admin escalations. It cannot issue refunds, grant Premium, mutate auth/entitlements, reset credentials, send payment/legal commitments, or enforce account restrictions.
+
+### `search_ranking_integrity_operator`
+
+Status: `scoped_write_capable_guarded`.
+
+Current activation: `manual_cli`.
+
+Scheduler status: `scheduler_pending_search_health_path_and_hardened_host_path`. The scheduler is not active until safe search-health probing and hardened host proof exist.
+
+Allowed surfaces:
+- search health
+- ranking integrity findings
+- recommendation quality findings
+- creator visibility anomalies
+- content visibility anomalies
+- spam pattern findings
+- index freshness
+- search latency findings
+- ranking experiment readback
+- discovery safety findings
+
+Allowed writes:
+- `search_operator_events`
+- `search_health_snapshots`
+- `ranking_integrity_findings`
+- `recommendation_quality_findings`
+- `visibility_anomaly_findings`
+- `search_required_review_flags`
+- `search_operator_learning_state`
+- owner-command requests
+- autonomous approval requests
+
+Forbidden:
+- hidden shadowban
+- secret demotion/boost
+- moderation enforcement
+- changing ranking algorithm without approval
+- changing public/private exposure
+- manipulating creator visibility without audit
+- deleting content
+- mutating auth/RLS
+- moving money
+- exposing private data
+
+`search_ranking_integrity_operator` records search/ranking health and integrity findings only. It cannot mutate ranking behavior, run hidden enforcement, secretly boost/demote creators, change content exposure, delete content, or enforce moderation.
+
+### `ads_sponsor_delivery_operator`
+
+Status: `foundation_only_guarded`.
+
+Current activation: `off`.
+
+Scheduler status: `no_scheduler_foundation_only`.
+
+Allowed surfaces:
+- ad provider readiness
+- sponsor deal readiness
+- sponsor checkout readiness
+- ad inventory readiness
+- brand safety readiness
+- sponsor reporting readiness
+- ad revenue future scope
+- sponsor payout future scope
+
+Allowed writes: owner-command requests for future approval planning only. No live ad/sponsor write tables are active.
+
+Forbidden:
+- serving ads
+- initializing ad SDK live behavior
+- sponsor checkout
+- sponsor upload/approval
+- sponsor payout split
+- ad revenue claim
+- fake sponsor revenue
+- fake ad impressions
+- changing ad provider config
+- child/unsafe context ad serving
+- CTV inventory claim
+- live billing/payout
+
+`ads_sponsor_delivery_operator` is foundation-only. It has no Edge Function, no scheduler, no live writes, no ad serving, no sponsor checkout, no revenue claim, and no payout behavior. Future activation requires Owner Command, Level 3/4 approval where applicable, provider/business/billing readiness, and fresh proof.
+
 ## Expansion Contract
 
 Any new autonomous system, surface, action, scheduler, write path, or recovery action must add an explicit registry entry with:
@@ -591,5 +808,10 @@ Owner commands route through:
 - `moderation_safety_operator` for report/case/review/enforcement-request decisions
 - `observability_runtime_operator` for crash, performance, analytics, runtime, and backend error-rate decisions
 - `installed_product_qa_operator` for installed app QA, route markers, account fixtures, device lab readiness, and two-device proof blockers
+- `platform_recovery_operator` for backup/restore readiness, migration drift, function deployment drift, timer health, and recovery blockers
+- `privacy_compliance_operator` for privacy request intake, export/deletion planning, legal hold, retention, and PII exposure findings
+- `support_success_operator` for support queue health, stale tickets, account help, refund classification, drafts, and escalations
+- `search_ranking_integrity_operator` for search/ranking health, recommendation quality, visibility anomalies, spam patterns, and index freshness
+- `ads_sponsor_delivery_operator` for ads/sponsor foundation readiness planning only; it cannot execute ad/sponsor delivery
 
 Forbidden owner-command bypasses include direct broad DB mutation, money movement without Level 4 plus external confirmation, manual Premium grants, Premium bypass, OTA publish/rollback without approval, auth/RLS/owner-role mutation without approval, ban/restrict/delete without approval, private/Premium/original media exposure, provider product/mode changes, LiveKit routing-policy changes, R2/media behavior changes, secret output, stale preflight, scope expansion, and emergency-stop bypass.

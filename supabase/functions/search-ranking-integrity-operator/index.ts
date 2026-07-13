@@ -1,0 +1,48 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+
+Deno.serve(handleScopedOperatorRequest({
+  systemId: "search_ranking_integrity_operator",
+  tokenHeader: "x-search-ranking-integrity-operator-token",
+  tokenHashEnv: "SEARCH_RANKING_INTEGRITY_OPERATOR_TOKEN_SHA256",
+  tokenError: "search_ranking_integrity_operator_token_required",
+  eventTable: "search_operator_events",
+  snapshotTable: "search_health_snapshots",
+  reviewTable: "search_required_review_flags",
+  defaultHealthState: "review",
+  allowedActions: [
+    "health_snapshot",
+    "search_health",
+    "ranking_integrity_findings",
+    "recommendation_quality_findings",
+    "creator_visibility_anomalies",
+    "content_visibility_anomalies",
+    "spam_pattern_findings",
+    "index_freshness",
+    "search_latency_findings",
+    "ranking_experiment_readback",
+    "discovery_safety_findings",
+    "watch_once",
+    "status",
+    "report",
+  ],
+  approvalActions: [
+    "ranking_algorithm_change",
+    "visibility_mutation",
+    "creator_boost_or_demote",
+    "shadowban_or_hidden_enforcement",
+    "public_private_exposure_change",
+  ],
+  actionTables: {
+    search_health: "search_health_snapshots",
+    ranking_integrity_findings: "ranking_integrity_findings",
+    recommendation_quality_findings: "recommendation_quality_findings",
+    creator_visibility_anomalies: "visibility_anomaly_findings",
+    content_visibility_anomalies: "visibility_anomaly_findings",
+    spam_pattern_findings: "search_required_review_flags",
+    index_freshness: "search_required_review_flags",
+    search_latency_findings: "search_required_review_flags",
+    ranking_experiment_readback: "ranking_integrity_findings",
+    discovery_safety_findings: "search_required_review_flags",
+  },
+}));

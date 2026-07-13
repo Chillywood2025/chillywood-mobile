@@ -11311,12 +11311,24 @@ export default function AdminStudioScreen() {
       {
         id: "scoped_autonomous_operators",
         title: "Scoped Autonomous Operators",
-        summary: "Notification, release, security-owner, and moderation operators can write safe status/review/audit records only.",
-        meta: "Limited scheduled watch_once timers active; high-risk actions remain approval-gated.",
+        summary: "Installed QA, recovery, privacy, support, search, notification, release, security-owner, moderation, and observability operators can write safe status/review/audit records only.",
+        meta: "Previously proofed timers remain active where installed; final expansion operators stay manual until hardened host/token proof exists.",
         statusLabel: "Scoped writes",
         tone: "success",
         children: (
           <View style={{ gap: 12 }}>
+            <View testID="admin-installed-product-qa-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Installed Product QA Operator</Text>
+              <Text testID="installed-product-qa-operator-status" style={styles.ownerDetailText}>
+                System id: installed_product_qa_operator. Status: manual_cli with schedulerStatus=device_lab_scheduler_pending until a stable Play-installed device-lab path exists.
+              </Text>
+              <Text testID="installed-product-qa-operator-findings" style={styles.ownerDetailText}>
+                Findings: installed route, role, Premium fixture, moderator-boundary, and two-device blockers are recorded as QA findings instead of manual-only notes.
+              </Text>
+              <Text testID="installed-product-qa-operator-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: fake installed proof, manual Premium grant, sideload/install/clear-data, role mutation, private evidence exposure, and two-device closure without two devices.
+              </Text>
+            </View>
             <View testID="admin-notification-operator-section" style={{ gap: 8 }}>
               <Text style={styles.ownerSectionTitle}>Notification Operator</Text>
               <Text testID="each-section-required-review-list" style={styles.ownerDetailText}>
@@ -11389,8 +11401,83 @@ export default function AdminStudioScreen() {
                 Approval path: release actions are Level 4; Remote Config, feature flag, and provider analytics config changes are Level 3. All require owner/super-admin approval, fresh preflight, exact scope match, and emergency-state check.
               </Text>
             </View>
+            <View testID="admin-platform-recovery-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Platform Recovery Operator</Text>
+              <Text testID="platform-recovery-operator-status" style={styles.ownerDetailText}>
+                System id: platform_recovery_operator. Status: scoped-write capable, manual_cli; schedulerStatus=scheduler_pending_no_hardened_host_token_path.
+              </Text>
+              <Text testID="platform-recovery-operator-findings" style={styles.ownerDetailText}>
+                Findings: backup freshness, restore drill freshness, migration drift, function deployment drift, timer health, token/secret presence by name, audit integrity, and recovery readiness rows only.
+              </Text>
+              <Text testID="platform-recovery-operator-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: production restore, destructive DB mutation, backup deletion, secret rotation, provider config mutation, R2/media behavior change, and fake backup or restore success.
+              </Text>
+              <Text testID="platform-recovery-operator-approval-request" style={styles.ownerDetailText}>
+                Approval path: high-risk recovery creates Owner Command or Autonomous Approval requests and stops before execution.
+              </Text>
+            </View>
+            <View testID="admin-privacy-compliance-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Privacy Compliance Operator</Text>
+              <Text testID="privacy-compliance-operator-status" style={styles.ownerDetailText}>
+                System id: privacy_compliance_operator. Status: scoped-write capable, manual_cli; schedulerStatus=scheduler_pending_legal_workflow_and_hardened_host_path.
+              </Text>
+              <Text testID="privacy-compliance-operator-findings" style={styles.ownerDetailText}>
+                Findings: privacy request intake, export/deletion planning, legal hold readback, retention status, PII exposure review, and redacted package planning rows only.
+              </Text>
+              <Text testID="privacy-compliance-operator-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: raw private export, account/data deletion, legal hold bypass, audit/evidence deletion, auth/RLS mutation, billing mutation, and fake compliance closure.
+              </Text>
+              <Text testID="privacy-compliance-operator-approval-request" style={styles.ownerDetailText}>
+                Approval path: fulfillment remains owner/legal-approved and external-confirmed where policy requires it.
+              </Text>
+            </View>
+            <View testID="admin-support-success-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Support Success Operator</Text>
+              <Text testID="support-success-operator-status" style={styles.ownerDetailText}>
+                System id: support_success_operator. Status: scoped-write capable, manual_cli; schedulerStatus=scheduler_pending_support_table_and_hardened_host_path.
+              </Text>
+              <Text testID="support-success-operator-findings" style={styles.ownerDetailText}>
+                Findings: support inbox health, stale tickets, account help triage, refund request classification, Premium/payment readback labels, drafts, escalations, and SLA review rows only.
+              </Text>
+              <Text testID="support-success-operator-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: refund execution, Premium grant, entitlement changes, money movement, auth/RLS changes, credential reset, user restriction, and external legal/payment commitment.
+              </Text>
+              <Text testID="support-success-operator-approval-request" style={styles.ownerDetailText}>
+                Approval path: money/auth/support commitments route to Owner Command or the target operator approval path.
+              </Text>
+            </View>
+            <View testID="admin-search-ranking-integrity-operator-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Search / Ranking Integrity Operator</Text>
+              <Text testID="search-ranking-integrity-operator-status" style={styles.ownerDetailText}>
+                System id: search_ranking_integrity_operator. Status: scoped-write capable, manual_cli; schedulerStatus=scheduler_pending_search_health_path_and_hardened_host_path.
+              </Text>
+              <Text testID="search-ranking-integrity-operator-findings" style={styles.ownerDetailText}>
+                Findings: search health, ranking integrity, recommendation quality, creator/content visibility anomalies, spam patterns, index freshness, latency, and discovery safety rows only.
+              </Text>
+              <Text testID="search-ranking-integrity-operator-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: hidden shadowban, secret demotion/boost, moderation enforcement, ranking algorithm mutation, public/private exposure change, content deletion, auth/RLS mutation, and money movement.
+              </Text>
+              <Text testID="search-ranking-integrity-operator-approval-request" style={styles.ownerDetailText}>
+                Approval path: ranking or visibility changes require Owner Command or Autonomous Approval with audit and rollback plan.
+              </Text>
+            </View>
+            <View testID="admin-ads-sponsor-delivery-foundation-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>Ads / Sponsor Delivery Foundation</Text>
+              <Text testID="ads-sponsor-delivery-foundation-status" style={styles.ownerDetailText}>
+                System id: ads_sponsor_delivery_operator. Status: foundation_only_guarded, activeActivationMode=off, schedulerStatus=no_scheduler_foundation_only.
+              </Text>
+              <Text testID="ads-sponsor-delivery-foundation-findings" style={styles.ownerDetailText}>
+                Readiness scope: ad provider, sponsor deal, sponsor checkout, inventory, brand safety, sponsor reporting, and future revenue/payout planning only.
+              </Text>
+              <Text testID="ads-sponsor-delivery-foundation-blocked-actions" style={styles.ownerDetailText}>
+                Blocked actions: serving ads, live ad SDK behavior, sponsor checkout, sponsor upload/approval, payout split, ad revenue claim, fake impressions, provider config mutation, CTV inventory claim, and live billing/payout.
+              </Text>
+              <Text testID="ads-sponsor-delivery-foundation-approval-request" style={styles.ownerDetailText}>
+                Approval path: turning on ads or sponsors becomes a future Level 3/4 readiness request, not an executable action here.
+              </Text>
+            </View>
             <OwnerDisabledReason reason="These sections expose scoped status/review visibility only. They do not add push blasts, OTA publishing, rollback, owner-role mutation, auth/RLS mutation, bans, restrictions, content deletion, crash evidence deletion, or Remote Config mutation." />
-            <OwnerDisabledReason reason="Scheduled runs use hardened host systemd timers, narrow root-owned env tokens, scheduler/operator audit identity, and watch_once only. They do not expose token values or service-role keys." />
+            <OwnerDisabledReason reason="Scheduled runs use hardened host systemd timers only where separately proofed. Manual final-expansion operators cannot claim scheduling until host/token/timer proof exists, and ads/sponsor delivery has no scheduler." />
           </View>
         ),
       },
@@ -18296,7 +18383,7 @@ export default function AdminStudioScreen() {
                 Risk level: Level 0 read/report, Level 1 safe status, Level 2 bounded scoped writes, Level 3 owner approval, Level 4 owner approval plus external confirmation.
               </Text>
               <Text testID="owner-command-target-systems" style={styles.ownerDetailText}>
-                Target systems: media, LiveKit, money, notification, release, security-owner, moderation-safety, and observability-runtime operators.
+                Target systems: media, LiveKit, money, notification, release, security-owner, moderation-safety, observability-runtime, installed-product QA, platform recovery, privacy compliance, support success, search/ranking integrity, and ads/sponsor foundation planning.
               </Text>
               <Text testID="owner-command-blockers" style={styles.ownerDetailText}>
                 {ownerCommandResult?.classification?.blockers?.length

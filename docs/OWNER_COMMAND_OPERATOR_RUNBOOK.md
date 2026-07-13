@@ -40,6 +40,11 @@ This is no god mode. It does not replace the owner, Rachi does not outrank owner
    - moderation/safety work -> `moderation_safety_operator`
    - crash/performance/analytics/runtime work -> `observability_runtime_operator`
    - installed app QA, route marker, account fixture, and device-lab readiness work -> `installed_product_qa_operator`
+   - backup, restore readiness, migration drift, function deployment drift, timer health, and recovery work -> `platform_recovery_operator`
+   - privacy request, export/deletion planning, legal hold, retention, and PII exposure work -> `privacy_compliance_operator`
+   - support queue, stale ticket, account help, refund classification, response draft, and escalation work -> `support_success_operator`
+   - search health, ranking integrity, recommendation quality, visibility anomaly, spam pattern, and index freshness work -> `search_ranking_integrity_operator`
+   - ads/sponsor readiness planning -> `ads_sponsor_delivery_operator` foundation only; no ad serving, sponsor checkout, revenue claim, or billing/provider mutation
 4. The operator builds an execution plan with allowed scope, forbidden scope, preflight, rollback, proof, validation, target systems, and exact blockers.
 5. Level 0/1/2 safe commands may execute only as scoped audit/report work or target-operator-safe actions.
 6. Level 3/4 commands create `autonomous_approval_requests` and stop.
@@ -102,6 +107,8 @@ Blocked commands return exact blockers, not vague failure. Examples:
 The canonical `/admin` Owner Command Center shows command input, risk level, target systems, blockers, proof report, and event history. The client does not hold owner-command tokens and does not run direct domain mutation. Live execution goes through the `owner-command-operator` function and existing autonomous systems.
 
 `owner_command_operator` is protected in `_lib/autonomousSystemsRegistry.ts` as the scoped judgment-execution control plane. All active autonomous operators are request-capable actors through trusted paths, but only `owner` / `super_admin` can approve Level 3/4 autonomous requests. Owner Command cannot approve itself and cannot bypass target operators.
+
+Systems 1-5 of the final coverage expansion are routed systems: `installed_product_qa_operator`, `platform_recovery_operator`, `privacy_compliance_operator`, `support_success_operator`, and `search_ranking_integrity_operator`. `ads_sponsor_delivery_operator` is routed only for future readiness planning while foundation-only; it is not an autonomous approval requester and has no live operator execution path.
 
 ## Validation
 

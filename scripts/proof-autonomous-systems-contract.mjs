@@ -28,9 +28,28 @@ const activeSystems = [
   "moderation_safety_operator",
   "observability_runtime_operator",
   "installed_product_qa_operator",
+  "platform_recovery_operator",
+  "privacy_compliance_operator",
+  "support_success_operator",
+  "search_ranking_integrity_operator",
+];
+
+const foundationOnlySystems = [
+  "ads_sponsor_delivery_operator",
 ];
 
 const protectedSystems = [
+  ...activeSystems,
+  ...foundationOnlySystems,
+  "owner_command_operator",
+];
+
+const ownerRoutedSystems = [
+  ...activeSystems,
+  ...foundationOnlySystems,
+];
+
+const approvalRequesterSystems = [
   ...activeSystems,
   "owner_command_operator",
 ];
@@ -103,7 +122,7 @@ const checks = [
   },
   {
     name: "owner command operator routes through all active systems",
-    passes: () => activeSystems.every((systemId) => ownerCommandHelper.includes(`"${systemId}"`) && ownerCommandFunction.includes(`"${systemId}"`))
+    passes: () => ownerRoutedSystems.every((systemId) => ownerCommandHelper.includes(`"${systemId}"`) && ownerCommandFunction.includes(`"${systemId}"`))
       && packageJson.includes('"proof:owner-command-operator"')
       && packageJson.includes('"proof:owner-command-routing"')
       && packageJson.includes('"proof:owner-command-approval-gates"')
@@ -125,6 +144,41 @@ const checks = [
         && block.includes("safe_installed_qa_owner_command")
         && packageJson.includes('"proof:installed-product-qa-operator"')
         && packageJson.includes('"guard:installed-product-qa-operator"');
+    },
+  },
+  {
+    name: "final manual scoped-write operators are real token-gated systems",
+    passes: () => [
+      ["platform_recovery_operator", "proof:platform-recovery-operator", "guard:platform-recovery-operator", "scheduler_pending_no_hardened_host_token_path", "supabase/functions/platform-recovery-operator/index.ts"],
+      ["privacy_compliance_operator", "proof:privacy-compliance-operator", "guard:privacy-compliance-operator", "scheduler_pending_legal_workflow_and_hardened_host_path", "supabase/functions/privacy-compliance-operator/index.ts"],
+      ["support_success_operator", "proof:support-success-operator", "guard:support-success-operator", "scheduler_pending_support_table_and_hardened_host_path", "supabase/functions/support-success-operator/index.ts"],
+      ["search_ranking_integrity_operator", "proof:search-ranking-integrity-operator", "guard:search-ranking-integrity-operator", "scheduler_pending_search_health_path_and_hardened_host_path", "supabase/functions/search-ranking-integrity-operator/index.ts"],
+    ].every(([systemId, proof, guard, scheduler, functionPath]) => {
+      const blockStart = registry.indexOf(`id: "${systemId}"`);
+      const blockEnd = registry.indexOf("\n  },", blockStart);
+      const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
+      return block.includes("scoped_write_capable_guarded")
+        && block.includes('activeActivationMode: "manual_cli"')
+        && block.includes(scheduler)
+        && block.includes(proof)
+        && block.includes(guard)
+        && packageJson.includes(`"${proof}"`)
+        && packageJson.includes(`"${guard}"`)
+        && read(functionPath).includes("handleScopedOperatorRequest");
+    }),
+  },
+  {
+    name: "ads sponsor delivery remains foundation-only",
+    passes: () => {
+      const blockStart = registry.indexOf('id: "ads_sponsor_delivery_operator"');
+      const blockEnd = registry.indexOf("\n  },", blockStart);
+      const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
+      return block.includes('status: "foundation_only_guarded"')
+        && block.includes('activeActivationMode: "off"')
+        && block.includes("no_scheduler_foundation_only")
+        && block.includes("no Edge Function required")
+        && !existsSync(path.join(root, "supabase/functions/ads-sponsor-delivery-operator/index.ts"))
+        && !packageJson.includes("ads-sponsor-delivery-operator:watch-once");
     },
   },
   {
@@ -294,7 +348,8 @@ const checks = [
       && approvalModel.includes('"owner_command_operator"')
       && approvalFunction.includes("mark_preflight_result")
       && approvalFunction.includes("owner_or_super_admin_required")
-      && protectedSystems.every((systemId) => approvalFunction.includes(`"${systemId}"`))
+      && approvalRequesterSystems.every((systemId) => approvalFunction.includes(`"${systemId}"`))
+      && !approvalFunction.includes('"ads_sponsor_delivery_operator"')
     ),
   },
   {
@@ -329,7 +384,15 @@ console.log(JSON.stringify({
   ok: true,
   activeSystems,
   protectedSystems,
-  scopedWriteSystemsAdded: [...scopedSystems.map((system) => system.id), "installed_product_qa_operator"],
+  foundationOnlySystems,
+  scopedWriteSystemsAdded: [
+    ...scopedSystems.map((system) => system.id),
+    "installed_product_qa_operator",
+    "platform_recovery_operator",
+    "privacy_compliance_operator",
+    "support_success_operator",
+    "search_ranking_integrity_operator",
+  ],
   scheduledMoneyLoop: "chillywood-money-operator-watch-once.timer_every_10_minutes",
   revenueCatReadbackReconciled: true,
   candidatePlaceholdersRemaining: 0,

@@ -59,6 +59,11 @@ for (const systemId of [
   "moderation_safety_operator",
   "observability_runtime_operator",
   "installed_product_qa_operator",
+  "platform_recovery_operator",
+  "privacy_compliance_operator",
+  "support_success_operator",
+  "search_ranking_integrity_operator",
+  "ads_sponsor_delivery_operator",
 ]) {
   includes(helper, `"${systemId}"`, "owner command helper active system routing");
   includes(fn, `"${systemId}"`, "owner command function active system routing");
@@ -82,6 +87,11 @@ for (const phrase of [
   "preflight_passed_target_operator_execution_required",
   "requested_by_actor_type: \"owner_command_operator\"",
 ]) includes(fn, phrase, "approval/external gates");
+
+for (const source of [helper, fn]) {
+  includes(source, "ADS_SPONSOR_ACTIVATION_PATTERNS", "ads/sponsor activation high-risk pattern");
+  includes(source, "ads_sponsor_delivery_operator", "ads/sponsor foundation routing");
+}
 
 for (const phrase of [
   "direct_mutation_performed: false",

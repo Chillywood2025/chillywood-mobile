@@ -37,6 +37,34 @@ const configs = {
     urlEnv: "OBSERVABILITY_OPERATOR_FUNCTION_URL",
     header: "x-observability-operator-token",
   },
+  platformRecovery: {
+    systemId: "platform_recovery_operator",
+    functionName: "platform-recovery-operator",
+    tokenEnv: "PLATFORM_RECOVERY_OPERATOR_TOKEN",
+    urlEnv: "PLATFORM_RECOVERY_OPERATOR_FUNCTION_URL",
+    header: "x-platform-recovery-operator-token",
+  },
+  privacyCompliance: {
+    systemId: "privacy_compliance_operator",
+    functionName: "privacy-compliance-operator",
+    tokenEnv: "PRIVACY_COMPLIANCE_OPERATOR_TOKEN",
+    urlEnv: "PRIVACY_COMPLIANCE_OPERATOR_FUNCTION_URL",
+    header: "x-privacy-compliance-operator-token",
+  },
+  supportSuccess: {
+    systemId: "support_success_operator",
+    functionName: "support-success-operator",
+    tokenEnv: "SUPPORT_SUCCESS_OPERATOR_TOKEN",
+    urlEnv: "SUPPORT_SUCCESS_OPERATOR_FUNCTION_URL",
+    header: "x-support-success-operator-token",
+  },
+  searchRanking: {
+    systemId: "search_ranking_integrity_operator",
+    functionName: "search-ranking-integrity-operator",
+    tokenEnv: "SEARCH_RANKING_INTEGRITY_OPERATOR_TOKEN",
+    urlEnv: "SEARCH_RANKING_INTEGRITY_OPERATOR_FUNCTION_URL",
+    header: "x-search-ranking-integrity-operator-token",
+  },
 };
 
 const commandMap = {
@@ -84,7 +112,7 @@ if (!token || !url) {
     moneyMoved: false,
     userRightsChanged: false,
   }, null, 2));
-  process.exitCode = 0;
+  process.exitCode = 1;
   process.exit();
 }
 
