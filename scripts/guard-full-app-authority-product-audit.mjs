@@ -120,8 +120,14 @@ for (const phrase of [
   includes(currentState, phrase, "current state audit truth");
   includes(nextTask, phrase, "next task audit truth");
 }
-if (!/installed proof remains pending/i.test(currentState)) failures.push("current state audit truth missing: installed proof remains pending");
-if (!/installed proof remains pending/i.test(nextTask)) failures.push("next task audit truth missing: installed proof remains pending");
+const installedProofNotClosed = (source) => (
+  /installed proof remains pending/i.test(source)
+  || /installed role\/device traversal remains Partial/i.test(source)
+  || /Installed Play-app proof[\s\S]{0,160}Partial, not Closed/i.test(source)
+);
+
+if (!installedProofNotClosed(currentState)) failures.push("current state audit truth missing: installed proof is not Closed");
+if (!installedProofNotClosed(nextTask)) failures.push("next task audit truth missing: installed proof is not Closed");
 
 notIncludes(currentState + nextTask + doc, "installed proof passed for current commit", "installed proof overclaim");
 
@@ -139,5 +145,5 @@ console.log(JSON.stringify({
   appRouteFiles: appFiles.length,
   edgeFunctions: functionFiles.length,
   highRiskDirectActions: "blocked_or_approval_gated",
-  installedProofStatus: "pending_not_claimed",
+  installedProofStatus: "partial_or_pending_not_closed",
 }, null, 2));

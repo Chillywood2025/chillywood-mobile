@@ -143,5 +143,7 @@ console.log(JSON.stringify({
   ok: true,
   appRouteFiles: appFiles.length,
   edgeFunctions: functionFiles.length,
-  installedProofStatus: "pending_not_claimed",
+  installedProofStatus: /installed role\/device traversal remains Partial/i.test(nextTask)
+    ? "partial_not_closed"
+    : "pending_not_claimed",
 }, null, 2));
