@@ -70,6 +70,17 @@ requireText("migration no money", migration, "check (money_moved = false)");
 requireText("migration no rights", migration, "check (user_rights_changed = false)");
 requireText("migration no private evidence", migration, "check (private_evidence_stored = false)");
 requireText("migration owner command actor", migration, "'installed_product_qa_operator'");
+requireText("migration route seed rows", migration, "insert into public.route_behavior_findings");
+requireText("migration role seed rows", migration, "insert into public.role_behavior_findings");
+requireText("migration account fixture seed rows", migration, "insert into public.account_fixture_health_findings");
+requireText("migration review flag seed rows", migration, "insert into public.qa_required_review_flags");
+requireText("migration device seed rows", migration, "insert into public.device_availability_findings");
+requireText("migration manual normal chat seed", migration, "manual-normal-chat-stayed-home");
+requireText("migration manual restricted chat seed", migration, "manual-restricted-chat-showed-inbox");
+requireText("migration manual creator marker seed", migration, "manual-creator-monetization-marker-missing");
+requireText("migration manual premium seed", migration, "manual-premium-labelled-account-inactive");
+requireText("migration manual moderator seed", migration, "manual-moderator-boundary-pending");
+requireText("migration manual two-device seed", migration, "manual-two-device-realtime-pending");
 
 for (const phrase of [
   "x-installed-qa-operator-token",

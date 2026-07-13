@@ -70,6 +70,14 @@ includes(migration, "check (user_rights_changed = false)", "user rights DB invar
 includes(migration, "check (private_evidence_stored = false)", "private evidence DB invariant");
 includes(migration, "drop constraint if exists autonomous_approval_requests_requested_by_actor_type_check", "approval actor whitelist migration");
 includes(migration, "drop constraint if exists owner_command_events_actor_type_check", "owner command actor whitelist migration");
+includes(migration, "insert into public.route_behavior_findings", "manual route finding seed rows");
+includes(migration, "insert into public.role_behavior_findings", "manual role finding seed rows");
+includes(migration, "insert into public.account_fixture_health_findings", "manual account fixture seed rows");
+includes(migration, "insert into public.qa_required_review_flags", "manual review flag seed rows");
+includes(migration, "insert into public.device_availability_findings", "manual device finding seed rows");
+includes(migration, "'codex_manual'", "seed discovered_by codex manual");
+includes(migration, "'manual_codex_proof'", "seed proof source manual");
+includes(migration, "'open'", "seed findings open");
 notIncludes(migration, "grant all on table", "broad table grant");
 notIncludes(migration, "to anon", "anon grant");
 notIncludes(migration, "to authenticated", "authenticated grant");
