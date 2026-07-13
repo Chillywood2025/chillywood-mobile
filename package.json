@@ -63,6 +63,8 @@
     "installed-qa-operator:record-finding": "node ./scripts/installed-qa-operator-cli.mjs record-finding",
     "installed-qa-operator:device-readiness": "node ./scripts/installed-qa-operator-cli.mjs device-readiness",
     "installed-qa-operator:account-fixtures": "node ./scripts/installed-qa-operator-cli.mjs account-fixtures",
+    "installed-qa:firebase-test-plan": "node ./scripts/installed-qa-firebase-test-lab.mjs status",
+    "installed-qa:firebase-test-run": "node ./scripts/installed-qa-firebase-test-lab.mjs run --report-operator",
     "installed-qa-operator:firebase-test-lab:status": "node ./scripts/installed-qa-firebase-test-lab.mjs status",
     "installed-qa-operator:firebase-test-lab:run": "node ./scripts/installed-qa-firebase-test-lab.mjs run",
     "installed-qa-operator:firebase-test-lab:self-test": "node ./scripts/installed-qa-firebase-test-lab.mjs self-test",

@@ -1,0 +1,35 @@
+[Unit]
+Description=Chi'llywood installed_product_qa_operator Firebase virtual smoke
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/chillywood/installed-product-qa-operator.env
+Environment=FIREBASE_TEST_LAB_MODE=cost_capped
+Environment=FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5
+Environment=FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25
+Environment=FIREBASE_TEST_LAB_ALLOW_VIRTUAL=true
+Environment=FIREBASE_TEST_LAB_ALLOW_PHYSICAL=false
+Environment=FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY=1
+Environment=FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE=true
+Environment=FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL=false
+Environment=FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE=false
+Environment=FIREBASE_TEST_LAB_DEVICE_TYPE=virtual
+Environment=FIREBASE_TEST_LAB_QA_TIER=tier1
+Environment=FIREBASE_TEST_LAB_RUN_REASON=daily_scheduled
+Environment=FIREBASE_TEST_LAB_REPORT_TO_OPERATOR=true
+Environment=INSTALLED_QA_SCHEDULER=systemd_timer
+Environment=INSTALLED_QA_OPERATOR_ID=installed_product_qa_operator
+Environment=FIREBASE_TEST_LAB_BUDGET_LEDGER=/var/lib/chillywood/installed-qa/firebase-budget-ledger.jsonl
+ExecStart=/opt/chillywood/installed-product-qa-operator/installed-qa-firebase-smoke.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/chillywood/installed-qa
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=

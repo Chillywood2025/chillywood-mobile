@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chi'llywood installed_product_qa_operator Firebase virtual smoke daily
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+Persistent=true
+AccuracySec=60s
+RandomizedDelaySec=10min
+Unit=chillywood-installed-qa-firebase-smoke.service
+
+[Install]
+WantedBy=timers.target

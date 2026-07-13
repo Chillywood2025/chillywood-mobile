@@ -35,6 +35,15 @@ const runbook = existsSync(path.join(root, "docs/INSTALLED_PRODUCT_QA_OPERATOR_R
 const firebaseRunbook = existsSync(path.join(root, "qa/firebase-test-lab/README.md"))
   ? read("qa/firebase-test-lab/README.md")
   : "";
+const firebaseSystemdScript = existsSync(path.join(root, "ops/installed-product-qa-operator/systemd/installed-qa-firebase-smoke.sh"))
+  ? read("ops/installed-product-qa-operator/systemd/installed-qa-firebase-smoke.sh")
+  : "";
+const firebaseSystemdService = existsSync(path.join(root, "ops/installed-product-qa-operator/systemd/chillywood-installed-qa-firebase-smoke.service"))
+  ? read("ops/installed-product-qa-operator/systemd/chillywood-installed-qa-firebase-smoke.service")
+  : "";
+const firebaseSystemdTimer = existsSync(path.join(root, "ops/installed-product-qa-operator/systemd/chillywood-installed-qa-firebase-smoke.timer"))
+  ? read("ops/installed-product-qa-operator/systemd/chillywood-installed-qa-firebase-smoke.timer")
+  : "";
 
 const registryBlockStart = registry.indexOf('id: "installed_product_qa_operator"');
 const registryBlockEnd = registry.indexOf("\n  },", registryBlockStart);
@@ -192,6 +201,35 @@ notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE\", true", "Fireb
 notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY\", 30", "Firebase high-frequency schedule default");
 notIncludes(firebaseRunner, "notPlayInstalledProof: false", "Firebase proof overclaim");
 
+for (const phrase of [
+  "EnvironmentFile=/etc/chillywood/installed-product-qa-operator.env",
+  "FIREBASE_TEST_LAB_MODE=cost_capped",
+  "FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5",
+  "FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25",
+  "FIREBASE_TEST_LAB_ALLOW_VIRTUAL=true",
+  "FIREBASE_TEST_LAB_ALLOW_PHYSICAL=false",
+  "FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY=1",
+  "FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL=false",
+  "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE=false",
+  "FIREBASE_TEST_LAB_RUN_REASON=daily_scheduled",
+  "FIREBASE_TEST_LAB_REPORT_TO_OPERATOR=true",
+  "INSTALLED_QA_SCHEDULER=systemd_timer",
+  "NoNewPrivileges=true",
+  "ProtectSystem=strict",
+  "PrivateTmp=true",
+  "RestrictSUIDSGID=true",
+  "LockPersonality=true",
+  "CapabilityBoundingSet=",
+  "ReadWritePaths=/var/lib/chillywood/installed-qa",
+]) includes(`${firebaseSystemdScript}\n${firebaseSystemdService}`, phrase, "Firebase systemd scheduler policy");
+includes(firebaseSystemdTimer, "OnCalendar=*-*-* 03:17:00", "Firebase timer daily cadence");
+includes(firebaseSystemdTimer, "RandomizedDelaySec=10min", "Firebase timer jitter");
+notIncludes(`${firebaseSystemdScript}\n${firebaseSystemdService}\n${firebaseSystemdTimer}`, "SERVICE_ROLE", "systemd service-role key");
+notIncludes(`${firebaseSystemdScript}\n${firebaseSystemdService}`, "FIREBASE_TEST_LAB_ALLOW_PHYSICAL=true", "systemd physical Firebase device");
+notIncludes(`${firebaseSystemdScript}\n${firebaseSystemdService}`, "FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL=true", "systemd broad Firebase crawl");
+notIncludes(`${firebaseSystemdScript}\n${firebaseSystemdService}`, "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE=true", "systemd Firebase two-device overclaim");
+notIncludes(firebaseSystemdTimer, "30min", "systemd high-frequency Firebase schedule");
+
 includes(reporting, "postInstalledQaFinding", "traversal reporter");
 includes(reporting, "INSTALLED_QA_REPORT_REQUIRED", "report-required fail closed");
 includes(traversal, "reportInstalledQaFromTraversalSummary", "installed traversal integration");
@@ -206,6 +244,8 @@ for (const script of [
   "installed-qa-operator:record-finding",
   "installed-qa-operator:device-readiness",
   "installed-qa-operator:account-fixtures",
+  "installed-qa:firebase-test-plan",
+  "installed-qa:firebase-test-run",
   "installed-qa-operator:firebase-test-lab:status",
   "installed-qa-operator:firebase-test-lab:run",
   "installed-qa-operator:firebase-test-lab:self-test",

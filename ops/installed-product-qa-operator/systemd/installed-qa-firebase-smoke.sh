@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${CHILLYWOOD_REPO_DIR:?missing CHILLYWOOD_REPO_DIR}"
+: "${INSTALLED_QA_OPERATOR_TOKEN:?missing INSTALLED_QA_OPERATOR_TOKEN}"
+
+if [[ -z "${INSTALLED_QA_OPERATOR_FUNCTION_URL:-}" && -z "${SUPABASE_FUNCTIONS_URL:-}" ]]; then
+  printf 'installed-qa-firebase-smoke missing operator function URL\n' >&2
+  exit 1
+fi
+
+export FIREBASE_TEST_LAB_MODE="${FIREBASE_TEST_LAB_MODE:-cost_capped}"
+export FIREBASE_TEST_LAB_MONTHLY_CAP_USD="${FIREBASE_TEST_LAB_MONTHLY_CAP_USD:-5}"
+export FIREBASE_TEST_LAB_PER_RUN_CAP_USD="${FIREBASE_TEST_LAB_PER_RUN_CAP_USD:-0.25}"
+export FIREBASE_TEST_LAB_ALLOW_VIRTUAL="${FIREBASE_TEST_LAB_ALLOW_VIRTUAL:-true}"
+export FIREBASE_TEST_LAB_ALLOW_PHYSICAL="${FIREBASE_TEST_LAB_ALLOW_PHYSICAL:-false}"
+export FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY="${FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY:-1}"
+export FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE="${FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE:-true}"
+export FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL="${FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL:-false}"
+export FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE="${FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE:-false}"
+export FIREBASE_TEST_LAB_DEVICE_TYPE="${FIREBASE_TEST_LAB_DEVICE_TYPE:-virtual}"
+export FIREBASE_TEST_LAB_QA_TIER="${FIREBASE_TEST_LAB_QA_TIER:-tier1}"
+export FIREBASE_TEST_LAB_RUN_REASON="${FIREBASE_TEST_LAB_RUN_REASON:-daily_scheduled}"
+export FIREBASE_TEST_LAB_REPORT_TO_OPERATOR="${FIREBASE_TEST_LAB_REPORT_TO_OPERATOR:-true}"
+export INSTALLED_QA_SCHEDULER="${INSTALLED_QA_SCHEDULER:-systemd_timer}"
+export INSTALLED_QA_OPERATOR_ID="${INSTALLED_QA_OPERATOR_ID:-installed_product_qa_operator}"
+export FIREBASE_TEST_LAB_BUDGET_LEDGER="${FIREBASE_TEST_LAB_BUDGET_LEDGER:-/var/lib/chillywood/installed-qa/firebase-budget-ledger.jsonl}"
+
+install -d -m 0750 /var/lib/chillywood/installed-qa
+
+cd "${CHILLYWOOD_REPO_DIR}"
+
+npm run --silent installed-qa:firebase-test-plan
+npm run --silent installed-qa:firebase-test-run
+npm run --silent installed-qa-operator:report
