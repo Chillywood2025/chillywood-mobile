@@ -36,6 +36,7 @@ for (const action of [
   "canUseOwnerCommandCenter",
   "canExecuteOwnerCommand",
   "canEmergencyPauseSystem",
+  "canUseAdminSearch",
   "canMoveMoney",
   "canGrantPremium",
   "canPublishOrRollbackRelease",
@@ -71,7 +72,17 @@ for (const boundary of [
   "Money movement is never a direct UI action",
   "Production publish/rollback requires Level 4 approval",
   "Rachi can request/recommend but cannot approve itself",
+  "Admin Search requires owner/admin search scope and audited masked query readback.",
 ]) requireText("authority boundary", `${matrix}\n${registry}\n${admin}\n${ownerCommand}`, boundary);
+
+for (const searchGate of [
+  "const canUseAdminSearch = isSignedIn",
+  'hasPlatformRoleMembership(platformRoles, ["owner", "super_admin", "operator"])',
+  'hasPlatformStaffPermission(platformRoles, ["admin.user.search", "user_lookup"])',
+  "if (!canUseAdminSearch) return false;",
+  "if (!canUseAdminSearch) return null;",
+  "if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH)",
+]) requireText("admin search moderator boundary", admin, searchGate);
 
 for (const forbidden of [
   "manualPremiumGrant",

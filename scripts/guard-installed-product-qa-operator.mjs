@@ -22,6 +22,7 @@ const cli = read("scripts/installed-qa-operator-cli.mjs");
 const firebaseRunner = read("scripts/installed-qa-firebase-test-lab.mjs");
 const reporting = read("scripts/installed-qa-reporting.mjs");
 const traversal = read("scripts/local-run-full-seeded-one-device-role-traversal-rerun.mjs");
+const admin = read("app/admin.tsx");
 const packageJson = read("package.json");
 const autonomousApproval = read("_lib/autonomousApprovalRequests.ts");
 const approvalFn = read("supabase/functions/autonomous-approval-request/index.ts");
@@ -233,6 +234,15 @@ for (const phrase of [
   "FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5",
   "FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25",
 ]) includes(runbook + auditDoc + firebaseRunbook, phrase, "docs");
+
+for (const phrase of [
+  "const canUseAdminSearch = isSignedIn",
+  'hasPlatformRoleMembership(platformRoles, ["owner", "super_admin", "operator"])',
+  'hasPlatformStaffPermission(platformRoles, ["admin.user.search", "user_lookup"])',
+  "if (!canUseAdminSearch) return false;",
+  "if (!canUseAdminSearch) return null;",
+  "if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH)",
+]) includes(admin, phrase, "moderator admin-search boundary");
 
 if (/schedulerStatus:\s*"chillywood-installed.*timer/i.test(registryBlock)) failures.push("scheduler claimed active without device-lab/timer proof");
 if (/result:\s*"pass"[\s\S]{0,200}second_device_required/.test(helper + edge)) failures.push("two-device blocker can pass");

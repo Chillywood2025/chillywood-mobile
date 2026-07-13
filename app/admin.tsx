@@ -3757,6 +3757,13 @@ export default function AdminStudioScreen() {
   const canManageModeratorStaff = isSignedIn && isActive && platformRolesChecked && canManageModeratorRoleAssignments(platformRoles);
   const canViewStaffRoles = canManageAdminStaff || canManageModeratorStaff;
   const canManageStaffPermissions = isSignedIn && isActive && platformRolesChecked && hasPlatformRoleMembership(platformRoles, ["owner"]);
+  const canUseAdminSearch = isSignedIn
+    && isActive
+    && platformRolesChecked
+    && (
+      hasPlatformRoleMembership(platformRoles, ["owner", "super_admin", "operator"])
+      || hasPlatformStaffPermission(platformRoles, ["admin.user.search", "user_lookup"])
+    );
   const canAccessLiveOps = isSignedIn && isActive && platformRolesChecked && canAccessLiveOpsTools(platformRoles);
   const canAccessLegalEvidence = isSignedIn && isActive && platformRolesChecked && canAccessLegalEvidenceTools(platformRoles);
   const canAccessAuditExplorer = isSignedIn && isActive && platformRolesChecked && canAccessAuditExplorerTools(platformRoles);
@@ -8248,6 +8255,7 @@ export default function AdminStudioScreen() {
     [visibleOperatorTabKeys],
   );
   const adminSearchCanUseScope = useCallback((scope: AdminSearchScope) => {
+    if (!canUseAdminSearch) return false;
     if (scope === "all") return true;
     if (scope === "users") return canViewStaffRoles && canOpenOperatorTab("roles");
     if (scope === "reports") return canReviewSafetyReports && canOpenOperatorTab("reports");
@@ -8268,6 +8276,7 @@ export default function AdminStudioScreen() {
     canAccessLiveOps,
     canOpenOperatorTab,
     canReviewSafetyReports,
+    canUseAdminSearch,
     canViewStaffRoles,
   ]);
   const availableAdminSearchScopes = useMemo(
@@ -8278,7 +8287,7 @@ export default function AdminStudioScreen() {
   useEffect(() => {
     const queryText = adminSearchDebouncedQuery.trim();
     const wantsUserSearch = adminSearchScope === "all" || adminSearchScope === "users";
-    if (!canAccessAdmin || queryText.length < ADMIN_SEARCH_MIN_LENGTH || !wantsUserSearch || !adminSearchCanUseScope("users")) return;
+    if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH || !wantsUserSearch || !adminSearchCanUseScope("users")) return;
 
     const loadKey = `${adminSearchScope}:${queryText.toLowerCase()}`;
     if (lastAdminSearchUsersReadKeyRef.current === loadKey) return;
@@ -8288,7 +8297,7 @@ export default function AdminStudioScreen() {
     adminSearchCanUseScope,
     adminSearchDebouncedQuery,
     adminSearchScope,
-    canAccessAdmin,
+    canUseAdminSearch,
     loadAdminUsersReadModel,
   ]);
 
@@ -8312,7 +8321,7 @@ export default function AdminStudioScreen() {
   }, [adminSearchCanUseScope]);
   const adminSearchResults = useMemo<AdminSearchResult[]>(() => {
     const queryText = adminSearchDebouncedQuery.trim();
-    if (!canAccessAdmin || queryText.length < ADMIN_SEARCH_MIN_LENGTH) return [];
+    if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH) return [];
     const includeScope = (scope: AdminSearchScope) => (
       adminSearchScope === "all" || adminSearchScope === scope
     ) && adminSearchCanUseScope(scope);
@@ -8760,7 +8769,7 @@ export default function AdminStudioScreen() {
     adminSearchDebouncedQuery,
     adminSearchScope,
     adminUsersReadModel.items,
-    canAccessAdmin,
+    canUseAdminSearch,
     canOpenOperatorTab,
     dmcaCases,
     legalRequests,
@@ -8786,7 +8795,7 @@ export default function AdminStudioScreen() {
 
   useEffect(() => {
     const queryText = adminSearchDebouncedQuery.trim();
-    if (!canAccessAdmin || queryText.length < ADMIN_SEARCH_MIN_LENGTH) {
+    if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH) {
       lastAdminSearchAuditKeyRef.current = null;
       setAdminSearchAuditLoading(false);
       return;
@@ -8842,12 +8851,13 @@ export default function AdminStudioScreen() {
     adminSearchDebouncedQuery,
     adminSearchResults.length,
     adminSearchScope,
-    canAccessAdmin,
+    canUseAdminSearch,
     loadAdminImmutableAuditReadModel,
     rememberAdminSearch,
   ]);
 
   const openAdminSearchResult = useCallback((result: AdminSearchResult) => {
+    if (!canUseAdminSearch) return;
     const queryText = adminSearchDebouncedQuery.trim();
     if (queryText.length >= ADMIN_SEARCH_MIN_LENGTH) {
       void writeAdminSearchAudit({
@@ -8882,6 +8892,7 @@ export default function AdminStudioScreen() {
   }, [
     adminSearchDebouncedQuery,
     adminSearchResults.length,
+    canUseAdminSearch,
     loadAdminImmutableAuditReadModel,
   ]);
 
@@ -11906,7 +11917,7 @@ export default function AdminStudioScreen() {
   };
 
   const renderAdminSearchPanel = () => {
-    if (!canAccessAdmin) return null;
+    if (!canUseAdminSearch) return null;
     const queryReady = adminSearchDebouncedQuery.trim().length >= ADMIN_SEARCH_MIN_LENGTH;
     const hasResults = adminSearchResults.length > 0;
     const auditTitle = adminSearchAuditLoading
@@ -11955,6 +11966,7 @@ export default function AdminStudioScreen() {
             label={adminSearchAuditLoading ? "Searching..." : "Search"}
             loading={adminSearchAuditLoading}
             onPress={() => {
+              if (!canUseAdminSearch) return;
               setAdminSearchDebouncedQuery(adminSearchQuery);
               if (adminSearchScope === "users" || adminSearchScope === "all") void loadAdminUsersReadModel(adminSearchQuery.trim());
             }}

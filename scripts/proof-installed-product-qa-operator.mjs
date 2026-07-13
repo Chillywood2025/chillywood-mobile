@@ -27,6 +27,7 @@ const cli = read("scripts/installed-qa-operator-cli.mjs");
 const firebaseRunner = read("scripts/installed-qa-firebase-test-lab.mjs");
 const reporting = read("scripts/installed-qa-reporting.mjs");
 const traversal = read("scripts/local-run-full-seeded-one-device-role-traversal-rerun.mjs");
+const admin = read("app/admin.tsx");
 const packageJson = read("package.json");
 const runbook = existsSync(path.join(root, "docs/INSTALLED_PRODUCT_QA_OPERATOR_RUNBOOK.md"))
   ? read("docs/INSTALLED_PRODUCT_QA_OPERATOR_RUNBOOK.md")
@@ -228,6 +229,15 @@ requireText("reporting helper fail-closed required mode", reporting, "INSTALLED_
 for (const source of [approval, ownerCommand, ownerCommandFn, approvalFn]) {
   requireText("owner/approval integration", source, "installed_product_qa_operator");
 }
+
+for (const phrase of [
+  "const canUseAdminSearch = isSignedIn",
+  'hasPlatformRoleMembership(platformRoles, ["owner", "super_admin", "operator"])',
+  'hasPlatformStaffPermission(platformRoles, ["admin.user.search", "user_lookup"])',
+  "if (!canUseAdminSearch) return false;",
+  "if (!canUseAdminSearch) return null;",
+  "if (!canUseAdminSearch || queryText.length < ADMIN_SEARCH_MIN_LENGTH)",
+]) requireText("installed moderator admin-search boundary", admin, phrase);
 
 for (const phrase of [
   "Codex caught the current installed traversal blockers manually",
