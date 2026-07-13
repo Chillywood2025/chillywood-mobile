@@ -54,7 +54,7 @@ const registryBlock = registryBlockStart >= 0 && registryBlockEnd > registryBloc
 includes(registry, '| "installed_product_qa_operator"', "AutonomousSystemId");
 includes(registryBlock, 'status: "scoped_write_capable_guarded"', "registry status");
 includes(registryBlock, 'activeActivationMode: "manual_cli"', "registry activation");
-includes(registryBlock, 'schedulerStatus: "device_lab_scheduler_pending"', "scheduler pending truth");
+includes(registryBlock, 'schedulerStatus: "firebase_scheduler_service_completion_blocked"', "scheduler billing blocker truth");
 includes(registryBlock, "silent pass on route mismatch", "route mismatch guard");
 includes(registryBlock, "fake installed proof", "fake proof ban");
 includes(registryBlock, "manual Premium grant", "manual Premium ban");
@@ -62,6 +62,14 @@ includes(registryBlock, "two-device closure requires two devices or approved dev
 includes(registryBlock, "owner-command routing for source/proof/testID fixes", "owner command gate");
 includes(registryBlock, "Level 3/4 approval for high-risk fixes", "approval gate");
 includes(registryBlock, "scheduler cannot be claimed active without device-lab/timer proof", "scheduler overclaim guard");
+includes(registryBlock, "firebase_test_lab_results_bucket_bootstrap", "bounded Firebase results bucket bootstrap surface");
+includes(registryBlock, "gs://chillywood-installed-qa-testlab-results", "exact Firebase results bucket");
+includes(registryBlock, "installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com", "exact Firebase runner service account");
+includes(registryBlock, "enable or link Google Cloud billing", "billing enablement forbidden");
+includes(registryBlock, "create any bucket except gs://chillywood-installed-qa-testlab-results", "arbitrary bucket creation forbidden");
+includes(registryBlock, "grant Owner IAM", "Owner IAM forbidden");
+includes(registryBlock, "grant Editor IAM", "Editor IAM forbidden");
+includes(registryBlock, "grant project-wide Storage Admin", "Storage Admin forbidden");
 includes(registryBlock, "installed_qa_high_risk_fix_request", "high-risk approval surface");
 includes(registryBlock, "ownerApprovalRequired: true", "high-risk owner approval");
 
@@ -158,6 +166,12 @@ for (const phrase of [
   "manual-two-device-realtime-pending",
   "second_device_required",
   "classifyFirebaseTestLabReadiness",
+  "FIREBASE_TEST_LAB_RESULTS_BUCKET_BOOTSTRAP_POLICY",
+  "classifyFirebaseTestLabResultsBucketBootstrap",
+  "firebase_test_lab_results_bucket_bootstrap",
+  "chillywood-installed-qa-testlab-results",
+  "installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com",
+  "google_cloud_billing_required_for_dedicated_test_lab_bucket",
   "firebase_test_lab_uploaded_artifact",
   "sanitizeInstalledQaProof",
 ]) includes(helper, phrase, "helper classification");
@@ -175,6 +189,10 @@ for (const phrase of [
   "FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE",
   "FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL",
   "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE",
+  "DEFAULT_RESULTS_BUCKET",
+  "FIREBASE_TEST_LAB_RESULTS_BUCKET",
+  "--results-bucket",
+  "resultsBucket",
   "firebase_per_run_cap_exceeded",
   "firebase_monthly_cap_exceeded",
   "firebase_physical_device_blocked_by_default",
@@ -202,7 +220,7 @@ notIncludes(firebaseRunner, "FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY\", 30"
 notIncludes(firebaseRunner, "notPlayInstalledProof: false", "Firebase proof overclaim");
 
 for (const phrase of [
-  "PATH=\"/snap/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}\"",
+  "PATH=\"/usr/local/bin:/usr/bin:/bin:${PATH:-}\"",
   "EnvironmentFile=/etc/chillywood/installed-product-qa-operator.env",
   "FIREBASE_TEST_LAB_MODE=cost_capped",
   "FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5",
@@ -214,6 +232,7 @@ for (const phrase of [
   "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE=false",
   "FIREBASE_TEST_LAB_RUN_REASON=daily_scheduled",
   "FIREBASE_TEST_LAB_REPORT_TO_OPERATOR=true",
+  "FIREBASE_TEST_LAB_RESULTS_BUCKET=chillywood-installed-qa-testlab-results",
   "INSTALLED_QA_SCHEDULER=systemd_timer",
   "NoNewPrivileges=true",
   "ProtectSystem=strict",
@@ -269,7 +288,7 @@ for (const phrase of [
   "current blockers are open QA findings",
   "Premium fixture repair is provider-backed only",
   "two-device proof requires two Play-installed devices or approved device lab",
-  "scheduler pending until device-lab path exists",
+  "scheduler remains `firebase_scheduler_service_completion_blocked`",
   "Firebase Test Lab uses cost-capped cheap mode",
   "Firebase uploaded artifact is not Play-installed proof",
   "FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5",

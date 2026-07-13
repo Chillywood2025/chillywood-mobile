@@ -169,11 +169,18 @@ const checks = [
       const block = blockStart >= 0 && blockEnd > blockStart ? registry.slice(blockStart, blockEnd) : "";
       return block.includes("scoped_write_capable_guarded")
         && block.includes('activeActivationMode: "manual_cli"')
-        && block.includes("device_lab_scheduler_pending")
+        && block.includes("firebase_scheduler_service_completion_blocked")
         && block.includes("fake installed proof")
         && block.includes("manual Premium grant")
         && block.includes("claiming two-device proof without proof")
         && block.includes("safe_installed_qa_owner_command")
+        && block.includes("firebase_test_lab_results_bucket_bootstrap")
+        && block.includes("gs://chillywood-installed-qa-testlab-results")
+        && block.includes("installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com")
+        && block.includes("enable or link Google Cloud billing")
+        && block.includes("grant Owner IAM")
+        && block.includes("grant Editor IAM")
+        && block.includes("grant project-wide Storage Admin")
         && packageJson.includes('"proof:installed-product-qa-operator"')
         && packageJson.includes('"guard:installed-product-qa-operator"');
     },

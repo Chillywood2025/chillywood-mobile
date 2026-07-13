@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PATH="/snap/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
 : "${CHILLYWOOD_REPO_DIR:?missing CHILLYWOOD_REPO_DIR}"
 : "${INSTALLED_QA_OPERATOR_TOKEN:?missing INSTALLED_QA_OPERATOR_TOKEN}"
@@ -24,6 +24,7 @@ export FIREBASE_TEST_LAB_DEVICE_TYPE="${FIREBASE_TEST_LAB_DEVICE_TYPE:-virtual}"
 export FIREBASE_TEST_LAB_QA_TIER="${FIREBASE_TEST_LAB_QA_TIER:-tier1}"
 export FIREBASE_TEST_LAB_RUN_REASON="${FIREBASE_TEST_LAB_RUN_REASON:-daily_scheduled}"
 export FIREBASE_TEST_LAB_REPORT_TO_OPERATOR="${FIREBASE_TEST_LAB_REPORT_TO_OPERATOR:-true}"
+export FIREBASE_TEST_LAB_RESULTS_BUCKET="${FIREBASE_TEST_LAB_RESULTS_BUCKET:-chillywood-installed-qa-testlab-results}"
 export INSTALLED_QA_SCHEDULER="${INSTALLED_QA_SCHEDULER:-systemd_timer}"
 export INSTALLED_QA_OPERATOR_ID="${INSTALLED_QA_OPERATOR_ID:-installed_product_qa_operator}"
 export FIREBASE_TEST_LAB_BUDGET_LEDGER="${FIREBASE_TEST_LAB_BUDGET_LEDGER:-/var/lib/chillywood/installed-qa/firebase-budget-ledger.jsonl}"

@@ -97,7 +97,10 @@ export type InstalledQaFinding = {
 export type InstalledTraversalPlan = {
   systemId: typeof INSTALLED_PRODUCT_QA_OPERATOR_ID;
   activationMode: "manual_cli" | "limited_scheduled_probe";
-  schedulerStatus: "device_lab_scheduler_pending" | "device_lab_scheduler_available";
+  schedulerStatus:
+    | "device_lab_scheduler_available"
+    | "device_lab_scheduler_pending"
+    | "firebase_scheduler_service_completion_blocked";
   checks: readonly {
     id: string;
     routePath?: string;
@@ -129,8 +132,81 @@ export type FirebaseTestLabReadiness = {
   reason: string;
 };
 
+export type FirebaseTestLabResultsBucketBootstrapPolicy = {
+  systemId: typeof INSTALLED_PRODUCT_QA_OPERATOR_ID;
+  actionId: "firebase_test_lab_results_bucket_bootstrap";
+  approvalLevel: 2;
+  ownerApprovalRequired: false;
+  projectId: "chillywood-app";
+  bucketName: "chillywood-installed-qa-testlab-results";
+  bucketUri: "gs://chillywood-installed-qa-testlab-results";
+  serviceAccountEmail: "installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com";
+  lifecycleDeleteAfterDays: 7;
+  perRunCapUsd: 0.25;
+  monthlyCapUsd: 5;
+  allowedBucketRoles: readonly ["roles/storage.objectCreator", "roles/storage.objectViewer"];
+  allowedActions: readonly string[];
+  forbiddenActions: readonly string[];
+  rollbackPlan: readonly string[];
+  killSwitch: string;
+};
+
 const SECRET_KEY_PATTERN = /(secret|token|password|credential|authorization|service[_-]?role|participant[_-]?token|signed[_-]?url|api[_-]?key|private[_-]?key|db[_-]?url|database[_-]?url|webhook[_-]?secret|reporter|private[_-]?evidence|tax|bank)/i;
 const LONG_SECRET_LIKE_PATTERN = /[A-Za-z0-9._~+/=-]{48,}/;
+
+export const FIREBASE_TEST_LAB_RESULTS_BUCKET_BOOTSTRAP_POLICY: FirebaseTestLabResultsBucketBootstrapPolicy = {
+  systemId: INSTALLED_PRODUCT_QA_OPERATOR_ID,
+  actionId: "firebase_test_lab_results_bucket_bootstrap",
+  approvalLevel: 2,
+  ownerApprovalRequired: false,
+  projectId: "chillywood-app",
+  bucketName: "chillywood-installed-qa-testlab-results",
+  bucketUri: "gs://chillywood-installed-qa-testlab-results",
+  serviceAccountEmail: "installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com",
+  lifecycleDeleteAfterDays: 7,
+  perRunCapUsd: 0.25,
+  monthlyCapUsd: 5,
+  allowedBucketRoles: ["roles/storage.objectCreator", "roles/storage.objectViewer"],
+  allowedActions: [
+    "create exact bucket only when billing is already active/available",
+    "enable uniform bucket-level access",
+    "enable public access prevention",
+    "configure lifecycle delete after 7 days",
+    "grant bucket-level objectCreator to the dedicated installed QA runner",
+    "grant bucket-level objectViewer only if result readback requires it",
+    "configure Firebase Test Lab --results-bucket for the exact bucket",
+    "run one bounded virtual smoke only after cost guard passes",
+    "install daily cost-capped scheduler only after smoke and backend posting pass",
+    "write sanitized installed QA audit/finding rows",
+  ],
+  forbiddenActions: [
+    "enable or link Google Cloud billing",
+    "create arbitrary buckets",
+    "grant Owner IAM",
+    "grant Editor IAM",
+    "grant project-wide Storage Admin",
+    "mutate arbitrary IAM",
+    "run physical Firebase devices",
+    "run broad Firebase crawl",
+    "run over cost cap",
+    "claim Play-installed proof from Firebase uploaded artifact",
+    "claim Premium or Google Play Billing proof from Firebase",
+    "claim two-device LiveKit proof from one Firebase run",
+    "move money",
+    "manually grant Premium",
+    "mutate auth/RLS or owner roles",
+    "mutate provider products",
+    "change LiveKit routing or R2/media behavior",
+    "log or store secrets in docs/artifacts",
+  ],
+  rollbackPlan: [
+    "disable chillywood-installed-qa-firebase-smoke.timer",
+    "remove bucket-level runner IAM binding",
+    "keep installed QA audit rows",
+    "rely on 7-day lifecycle/delete test objects",
+  ],
+  killSwitch: "installed_product_qa_operator emergency stop blocks scheduler and Firebase runs",
+} as const;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ");
 
@@ -352,6 +428,52 @@ export const classifyFirebaseTestLabReadiness = (input: {
   };
 };
 
+export const classifyFirebaseTestLabResultsBucketBootstrap = (input: {
+  billingActiveOrAvailable?: boolean;
+  bucketName?: string | null;
+  projectId?: string | null;
+  requestedRole?: string | null;
+  serviceAccountEmail?: string | null;
+  perRunCapUsd?: number | null;
+  monthlyCapUsd?: number | null;
+  physicalDeviceRequested?: boolean;
+  broadCrawlRequested?: boolean;
+  twoDeviceRequested?: boolean;
+}) => {
+  const policy = FIREBASE_TEST_LAB_RESULTS_BUCKET_BOOTSTRAP_POLICY;
+  const failures: string[] = [];
+  if (input.projectId !== policy.projectId) failures.push("firebase_results_bucket_project_mismatch");
+  if (input.bucketName !== policy.bucketName && input.bucketName !== policy.bucketUri) failures.push("firebase_results_bucket_name_mismatch");
+  if (input.serviceAccountEmail !== policy.serviceAccountEmail) failures.push("firebase_results_bucket_service_account_mismatch");
+  if (input.requestedRole && !policy.allowedBucketRoles.includes(input.requestedRole as typeof policy.allowedBucketRoles[number])) {
+    failures.push("firebase_results_bucket_role_not_allowed");
+  }
+  if (input.billingActiveOrAvailable !== true) failures.push("google_cloud_billing_required_for_dedicated_test_lab_bucket");
+  if (Number(input.perRunCapUsd ?? policy.perRunCapUsd) > policy.perRunCapUsd) failures.push("firebase_results_bucket_per_run_cap_exceeded");
+  if (Number(input.monthlyCapUsd ?? policy.monthlyCapUsd) > policy.monthlyCapUsd) failures.push("firebase_results_bucket_monthly_cap_exceeded");
+  if (input.physicalDeviceRequested) failures.push("firebase_results_bucket_physical_device_forbidden");
+  if (input.broadCrawlRequested) failures.push("firebase_results_bucket_broad_crawl_forbidden");
+  if (input.twoDeviceRequested) failures.push("firebase_results_bucket_two_device_forbidden");
+  return {
+    ok: failures.length === 0,
+    systemId: policy.systemId,
+    actionId: policy.actionId,
+    approvalLevel: policy.approvalLevel,
+    ownerApprovalRequired: policy.ownerApprovalRequired,
+    projectId: policy.projectId,
+    bucketName: policy.bucketName,
+    bucketUri: policy.bucketUri,
+    serviceAccountEmail: policy.serviceAccountEmail,
+    allowedBucketRoles: policy.allowedBucketRoles,
+    billingEnablementOwnerOnly: true,
+    failures,
+    highRiskExecuted: false,
+    moneyMoved: false,
+    userRightsChanged: false,
+    fakeProof: false,
+  };
+};
+
 export const classifyProofSource = (source: InstalledQaProofSource): InstalledQaDiscoveredBy => {
   if (source === "manual_codex_proof" || source === "local_fixture") return "codex_manual";
   if (source === "browserstack" || source === "firebase_test_lab_uploaded_artifact") return "device_lab";
@@ -360,10 +482,11 @@ export const classifyProofSource = (source: InstalledQaProofSource): InstalledQa
 
 export const buildInstalledTraversalPlan = (input?: {
   deviceLabConfigured?: boolean;
+  schedulerStatus?: InstalledTraversalPlan["schedulerStatus"];
 }): InstalledTraversalPlan => ({
   systemId: INSTALLED_PRODUCT_QA_OPERATOR_ID,
   activationMode: "manual_cli",
-  schedulerStatus: input?.deviceLabConfigured ? "device_lab_scheduler_available" : "device_lab_scheduler_pending",
+  schedulerStatus: input?.schedulerStatus ?? (input?.deviceLabConfigured ? "device_lab_scheduler_available" : "device_lab_scheduler_pending"),
   checks: [
     {
       id: "normal_chat_route_marker",

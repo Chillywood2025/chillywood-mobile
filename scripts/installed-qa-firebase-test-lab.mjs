@@ -10,6 +10,9 @@ const PROOF_SOURCE = "firebase_test_lab_uploaded_artifact";
 const FUNCTION_NAME = "installed-product-qa-operator";
 const TOKEN_HEADER = "x-installed-qa-operator-token";
 const DEFAULT_LEDGER_PATH = "/tmp/chillywood-installed-qa-firebase-test-lab-budget-ledger.jsonl";
+const DEFAULT_PROJECT = "chillywood-app";
+const DEFAULT_RESULTS_BUCKET = "chillywood-installed-qa-testlab-results";
+const defaultResultsDir = () => `installed-qa-${new Date().toISOString().replace(/[-:]/g, "").replace(/\..+$/, "Z")}`;
 
 const args = process.argv.slice(2);
 const mode = args.find((arg) => !arg.startsWith("--")) || "status";
@@ -111,6 +114,7 @@ const auditFirebaseTestLab = () => {
   const gcloudCliPresent = commandExists("gcloud");
   const gcloudProject = readGcloudProjectConfigured();
   const project = textEnv("FIREBASE_TEST_LAB_PROJECT", gcloudProject.value);
+  const resultsBucket = textEnv("FIREBASE_TEST_LAB_RESULTS_BUCKET", DEFAULT_RESULTS_BUCKET).replace(/^gs:\/\//, "");
   const activeCredentialResult = gcloudCliPresent
     ? runQuiet("gcloud", ["auth", "list", "--filter=status:ACTIVE", "--format=value(status)"])
     : { status: 1, stdout: "" };
@@ -192,6 +196,7 @@ const auditFirebaseTestLab = () => {
     apkPresent: existsSync(apkPath),
     aabPath,
     aabPresent: existsSync(aabPath),
+    resultsBucket,
   };
 };
 
@@ -246,6 +251,7 @@ const buildInput = (audit) => {
     scheduledRunCountToday: Number.isFinite(scheduledRunCountFromEnv)
       ? scheduledRunCountFromEnv
       : scheduledRunCountFromLedger(ledgerEvents, currentDay),
+    resultsBucket: textEnv("FIREBASE_TEST_LAB_RESULTS_BUCKET", DEFAULT_RESULTS_BUCKET).replace(/^gs:\/\//, ""),
     ledgerPath,
     currentMonth,
     currentDay,
@@ -298,6 +304,7 @@ const evaluateCostGuard = (input) => {
     estimateBasis: estimate.estimateBasis,
     deviceType: input.deviceType,
     deviceCount: input.deviceCount,
+    resultsBucket: input.resultsBucket,
     timeout: input.timeout,
     plannedMinutes: Number.isFinite(input.plannedMinutes) ? input.plannedMinutes : null,
     scheduledRunCountToday: input.scheduledRunCountToday,
@@ -375,7 +382,7 @@ const evaluateCostGuard = (input) => {
 };
 
 const buildGcloudCommand = (audit) => {
-  const project = textEnv("FIREBASE_TEST_LAB_PROJECT", readGcloudProjectConfigured().value);
+  const project = textEnv("FIREBASE_TEST_LAB_PROJECT", readGcloudProjectConfigured().value || DEFAULT_PROJECT);
   const appPath = audit.apkPresent ? audit.apkPath : audit.aabPath;
   const command = [
     "firebase",
@@ -393,11 +400,11 @@ const buildGcloudCommand = (audit) => {
     "--project",
     project,
     "--results-dir",
-    textEnv("FIREBASE_TEST_LAB_RESULTS_DIR", `installed-qa-${new Date().toISOString().slice(0, 10)}`),
+    textEnv("FIREBASE_TEST_LAB_RESULTS_DIR", defaultResultsDir()),
     "--format",
     "json",
   ];
-  const resultsBucket = textEnv("FIREBASE_TEST_LAB_RESULTS_BUCKET");
+  const resultsBucket = textEnv("FIREBASE_TEST_LAB_RESULTS_BUCKET", DEFAULT_RESULTS_BUCKET);
   if (resultsBucket) command.push("--results-bucket", resultsBucket.replace(/^gs:\/\//, ""));
   return command;
 };
@@ -413,6 +420,7 @@ const buildOperatorPayload = (report) => {
     billingRisk: report.costGuard.billingRisk,
     quotaMode: report.costGuard.quotaMode,
     deviceType: report.costGuard.deviceType,
+    resultsBucket: report.costGuard.resultsBucket,
     runReason: report.costGuard.runReason,
     qaTier: report.costGuard.qaTier,
     blocker: report.costGuard.blocker,
@@ -421,7 +429,7 @@ const buildOperatorPayload = (report) => {
     moneyMoved: false,
     userRightsChanged: false,
     highRiskExecuted: false,
-    secretsLogged: false,
+    restrictedDataLogged: false,
   };
   if (report.firebaseRun?.started) {
     return {
@@ -493,6 +501,7 @@ const buildLedgerEvent = (eventType, report) => ({
   billingRisk: report.costGuard.billingRisk,
   quotaMode: report.costGuard.quotaMode,
   deviceType: report.costGuard.deviceType,
+  resultsBucket: report.costGuard.resultsBucket,
   canRun: report.costGuard.canRun,
   blocker: report.costGuard.blocker,
   matrixId: report.firebaseRun?.matrixId ?? null,
@@ -528,6 +537,7 @@ const runSelfTest = () => {
     monthlyBudgetUsd: 5,
     perRunCapUsd: 0.25,
     maxScheduledRunsPerDay: 1,
+    resultsBucket: DEFAULT_RESULTS_BUCKET,
     virtualCostPerHourUsd: 1,
     physicalCostPerHourUsd: 5,
     zeroCostConfirmed: false,
@@ -564,6 +574,9 @@ const runSelfTest = () => {
   });
   if (ledgerEvent.costEstimateUsd <= 0 || ledgerEvent.maxAllowedCostUsd !== 0.25 || ledgerEvent.monthlyBudgetUsd !== 5) {
     failures.push("budget ledger event must record estimate and caps");
+  }
+  if (ledgerEvent.resultsBucket !== DEFAULT_RESULTS_BUCKET) {
+    failures.push("budget ledger event must record the dedicated results bucket");
   }
   if (failures.length) {
     console.error("installed-qa-firebase-test-lab self-test failed");

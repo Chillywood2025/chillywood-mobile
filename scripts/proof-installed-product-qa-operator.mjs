@@ -49,12 +49,13 @@ for (const phrase of [
   "installed_product_qa_operator",
   "scoped_write_capable_guarded",
   'activeActivationMode: "manual_cli"',
-  "device_lab_scheduler_pending",
+  "firebase_scheduler_service_completion_blocked",
   "installed_route_traversal",
   "installed_role_traversal",
   "premium_nonpremium_gates",
   "account_fixture_health",
   "device_availability",
+  "firebase_test_lab_results_bucket_bootstrap",
   "two_device_realtime_proof",
   "installed_proof_blocker_tracking",
   "fake installed proof",
@@ -62,6 +63,13 @@ for (const phrase of [
   "claiming two-device proof without proof",
   "silent pass on route mismatch",
   "safe_installed_qa_owner_command",
+  "gs://chillywood-installed-qa-testlab-results",
+  "installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com",
+  "create gs://chillywood-installed-qa-testlab-results only if billing is already active/available",
+  "enable or link Google Cloud billing",
+  "grant Owner IAM",
+  "grant Editor IAM",
+  "grant project-wide Storage Admin",
   "installed_qa_high_risk_fix_request",
   "ownerApprovalRequired: true",
 ]) requireText("registry", registry, phrase);
@@ -160,6 +168,13 @@ for (const phrase of [
   "classifyAccountFixtureHealth",
   "classifyDeviceReadiness",
   "classifyFirebaseTestLabReadiness",
+  "FIREBASE_TEST_LAB_RESULTS_BUCKET_BOOTSTRAP_POLICY",
+  "classifyFirebaseTestLabResultsBucketBootstrap",
+  "firebase_test_lab_results_bucket_bootstrap",
+  "chillywood-installed-qa-testlab-results",
+  "installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com",
+  "google_cloud_billing_required_for_dedicated_test_lab_bucket",
+  "enable or link Google Cloud billing",
   "firebase_test_lab_uploaded_artifact",
   "InstalledQaBillingRisk",
   "InstalledQaQuotaMode",
@@ -197,6 +212,10 @@ for (const phrase of [
   "FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE",
   "FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL",
   "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE",
+  "FIREBASE_TEST_LAB_RESULTS_BUCKET",
+  "DEFAULT_RESULTS_BUCKET",
+  "--results-bucket",
+  "resultsBucket",
   "firebase_per_run_cap_exceeded",
   "firebase_monthly_cap_exceeded",
   "firebase_physical_device_blocked_by_default",
@@ -220,7 +239,7 @@ for (const phrase of [
 ]) requireText("firebase runner", firebaseRunner, phrase);
 
 for (const phrase of [
-  "PATH=\"/snap/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}\"",
+  "PATH=\"/usr/local/bin:/usr/bin:/bin:${PATH:-}\"",
   "CHILLYWOOD_REPO_DIR",
   "INSTALLED_QA_OPERATOR_TOKEN",
   "FIREBASE_TEST_LAB_MODE=cost_capped",
@@ -233,6 +252,7 @@ for (const phrase of [
   "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE=false",
   "FIREBASE_TEST_LAB_RUN_REASON=daily_scheduled",
   "FIREBASE_TEST_LAB_REPORT_TO_OPERATOR=true",
+  "FIREBASE_TEST_LAB_RESULTS_BUCKET=chillywood-installed-qa-testlab-results",
   "INSTALLED_QA_SCHEDULER=systemd_timer",
   "installed-qa:firebase-test-plan",
   "installed-qa:firebase-test-run",
@@ -296,7 +316,7 @@ for (const phrase of [
   "autonomous system did not catch them before",
   "Premium fixture repair is provider-backed only",
   "two-device proof requires two Play-installed devices or approved device lab",
-  "schedulerStatus=device_lab_scheduler_pending",
+  "schedulerStatus=firebase_scheduler_service_completion_blocked",
 ]) requireText("runbook", runbook, phrase);
 for (const phrase of [
   "cost-capped cheap mode",
@@ -318,6 +338,6 @@ if (failures.length) {
 }
 
 console.log("proof:installed-product-qa-operator passed");
-console.log("- installed_product_qa_operator is registered as scoped_write_capable_guarded with scheduler pending.");
+console.log("- installed_product_qa_operator is registered as scoped_write_capable_guarded with Firebase scheduler service completion blocked.");
 console.log("- current Codex-manual blockers are first-class QA findings.");
 console.log("- watch_once records unresolved installed proof coverage gaps and safe owner-command requests.");

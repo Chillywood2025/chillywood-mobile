@@ -19,6 +19,7 @@ Environment=FIREBASE_TEST_LAB_DEVICE_TYPE=virtual
 Environment=FIREBASE_TEST_LAB_QA_TIER=tier1
 Environment=FIREBASE_TEST_LAB_RUN_REASON=daily_scheduled
 Environment=FIREBASE_TEST_LAB_REPORT_TO_OPERATOR=true
+Environment=FIREBASE_TEST_LAB_RESULTS_BUCKET=chillywood-installed-qa-testlab-results
 Environment=INSTALLED_QA_SCHEDULER=systemd_timer
 Environment=INSTALLED_QA_OPERATOR_ID=installed_product_qa_operator
 Environment=FIREBASE_TEST_LAB_BUDGET_LEDGER=/var/lib/chillywood/installed-qa/firebase-budget-ledger.jsonl
@@ -27,9 +28,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/chillywood/installed-qa
+ReadWritePaths=/var/lib/chillywood/installed-qa /var/lib/chillywood/firebase-test-lab
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
 CapabilityBoundingSet=

@@ -7,6 +7,7 @@ Firebase Test Lab is the first device-lab path for `installed_product_qa_operato
 - Mode: `FIREBASE_TEST_LAB_MODE=cost_capped`.
 - Monthly cap: `FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5`.
 - Per-run cap: `FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25`.
+- Results bucket: `FIREBASE_TEST_LAB_RESULTS_BUCKET=chillywood-installed-qa-testlab-results`.
 - Device type: `FIREBASE_TEST_LAB_ALLOW_VIRTUAL=true`, `FIREBASE_TEST_LAB_ALLOW_PHYSICAL=false`.
 - Cadence: `FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY=1`.
 - On-change smoke: `FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE=true`.
@@ -14,6 +15,18 @@ Firebase Test Lab is the first device-lab path for `installed_product_qa_operato
 - Two-device Firebase runs: `FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE=false`.
 
 Physical devices, broad crawls, two-device Firebase runs, and paid over-cap runs require explicit owner approval. Unknown cost is allowed only when the runner can bound worst-case virtual-device cost under the per-run cap and monthly remaining budget.
+
+## Dedicated Results Bucket
+
+`installed_product_qa_operator` has a standing bounded Level 2 policy for exactly one Test Lab results bucket:
+
+- project: `chillywood-app`
+- bucket: `gs://chillywood-installed-qa-testlab-results`
+- runner: `installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com`
+- lifecycle cleanup: delete objects after 7 days
+- allowed bucket IAM: bucket-level `roles/storage.objectCreator`; bucket-level `roles/storage.objectViewer` only if result readback requires it
+
+This policy does not allow enabling/linking Google Cloud billing, arbitrary bucket creation, Owner/Editor roles, project-wide Storage Admin, arbitrary IAM changes, physical devices, broad crawls, over-cap runs, Play-installed proof claims, Premium/Billing proof claims, or two-device LiveKit proof claims.
 
 ## QA Tiers
 

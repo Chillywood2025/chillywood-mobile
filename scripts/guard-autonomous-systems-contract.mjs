@@ -273,8 +273,8 @@ const manualScopedSystems = [
     functionPath: "supabase/functions/installed-product-qa-operator/index.ts",
     tokenNeedle: "INSTALLED_QA_OPERATOR_TOKEN_SHA256",
     expectedActivation: 'activeActivationMode: "manual_cli"',
-    expectedSchedulerStatus: "device_lab_scheduler_pending",
-    forbidden: ["fake installed proof", "manual Premium grant", "claiming two-device proof without proof", "silent pass on route mismatch"],
+    expectedSchedulerStatus: "firebase_scheduler_service_completion_blocked",
+    forbidden: ["fake installed proof", "manual Premium grant", "claiming two-device proof without proof", "silent pass on route mismatch", "grant Owner IAM", "grant Editor IAM", "grant project-wide Storage Admin"],
     highRisk: "installed_qa_high_risk_fix_request",
   },
 ];
@@ -363,6 +363,13 @@ for (const system of manualScopedSystems) {
   includes(block, "killSwitchOrFallback", `${system.id} kill switch`);
   includes(block, "ownerApprovalRequired: true", `${system.id} high-risk approval`);
   includes(block, system.highRisk, `${system.id} high-risk surface`);
+  if (system.id === "installed_product_qa_operator") {
+    includes(block, "firebase_test_lab_results_bucket_bootstrap", `${system.id} bounded bucket bootstrap surface`);
+    includes(block, "approvalLevel: 2", `${system.id} bounded bootstrap stays Level 2`);
+    includes(block, "ownerApprovalRequired: false", `${system.id} bounded bootstrap no per-action approval`);
+    includes(block, "gs://chillywood-installed-qa-testlab-results", `${system.id} exact bucket`);
+    includes(block, "enable or link Google Cloud billing", `${system.id} billing enablement forbidden`);
+  }
   for (const forbidden of system.forbidden) includes(block, forbidden, `${system.id} forbidden scope`);
   includes(packageJson, `"${system.proof}"`, `${system.id} package proof`);
   includes(packageJson, `"${system.guard}"`, `${system.id} package guard`);
