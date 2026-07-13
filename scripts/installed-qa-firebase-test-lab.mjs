@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
 import process from "node:process";
@@ -10,9 +10,19 @@ const PROOF_SOURCE = "firebase_test_lab_uploaded_artifact";
 const FUNCTION_NAME = "installed-product-qa-operator";
 const TOKEN_HEADER = "x-installed-qa-operator-token";
 const DEFAULT_LEDGER_PATH = "/tmp/chillywood-installed-qa-firebase-test-lab-budget-ledger.jsonl";
+const DEFAULT_PENDING_MATRIX_PATH = "/tmp/chillywood-installed-qa-firebase-test-lab-pending-matrix.json";
 const DEFAULT_PROJECT = "chillywood-app";
 const DEFAULT_RESULTS_BUCKET = "chillywood-installed-qa-testlab-results";
 const defaultResultsDir = () => `installed-qa-${new Date().toISOString().replace(/[-:]/g, "").replace(/\..+$/, "Z")}`;
+const TERMINAL_MATRIX_STATES = new Set([
+  "CANCELLED",
+  "ERROR",
+  "FINISHED",
+  "INCOMPATIBLE_ARCHITECTURE",
+  "INCOMPATIBLE_ENVIRONMENT",
+  "INVALID",
+  "UNSUPPORTED_ENVIRONMENT",
+]);
 
 const args = process.argv.slice(2);
 const mode = args.find((arg) => !arg.startsWith("--")) || "status";
@@ -54,9 +64,10 @@ const commandExists = (command) => spawnSync("command", ["-v", command], {
   shell: true,
 }).status === 0;
 
-const runQuiet = (command, commandArgs) => spawnSync(command, commandArgs, {
+const runQuiet = (command, commandArgs, options = {}) => spawnSync(command, commandArgs, {
   encoding: "utf8",
   stdio: "pipe",
+  ...options,
 });
 
 const timeoutMinutes = (timeout) => {
@@ -94,13 +105,47 @@ const writeLedgerEvent = (ledgerPath, event) => {
   return true;
 };
 
+const readJsonFile = (filePath) => {
+  if (!filePath || !existsSync(filePath)) return null;
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+};
+
+const writeJsonFile = (filePath, value) => {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify(redact(value), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+};
+
+const clearFile = (filePath) => {
+  if (!filePath || !existsSync(filePath)) return false;
+  unlinkSync(filePath);
+  return true;
+};
+
 const monthlySpentFromLedger = (events, currentMonth) => events
   .filter((event) => event.month === currentMonth && event.countAgainstBudget !== false)
   .reduce((sum, event) => sum + Number(event.costEstimateUsd || 0), 0);
 
 const scheduledRunCountFromLedger = (events, currentDay) => events
-  .filter((event) => event.day === currentDay && event.runReason === "daily_scheduled" && event.eventType === "run_completed")
+  .filter((event) => event.day === currentDay && event.runReason === "daily_scheduled" && ["matrix_started", "run_completed"].includes(event.eventType))
   .length;
+
+const activeMatrixEventsFromLedger = (events) => {
+  const active = new Map();
+  for (const event of events) {
+    if (!event.matrixId) continue;
+    if (["matrix_started", "matrix_pending", "matrix_timeout"].includes(event.eventType)) {
+      active.set(event.matrixId, event);
+    }
+    if (["matrix_completed", "matrix_failed", "run_completed"].includes(event.eventType)) {
+      active.delete(event.matrixId);
+    }
+  }
+  return Array.from(active.values());
+};
 
 const readGcloudProjectConfigured = () => {
   if (!commandExists("gcloud")) return { configured: false, value: "" };
@@ -216,6 +261,9 @@ const buildInput = (audit) => {
   const deviceCount = boolEnv("FIREBASE_TEST_LAB_TWO_DEVICE") ? 2 : 1;
   const monthlySpentFromEnv = numberEnv("FIREBASE_TEST_LAB_MONTHLY_SPENT_ESTIMATE_USD", Number.NaN);
   const scheduledRunCountFromEnv = numberEnv("FIREBASE_TEST_LAB_SCHEDULED_RUN_COUNT_TODAY", Number.NaN);
+  const pendingMatrixPath = textEnv("FIREBASE_TEST_LAB_PENDING_MATRIX_FILE", DEFAULT_PENDING_MATRIX_PATH);
+  const pendingMatrix = readJsonFile(pendingMatrixPath);
+  const activeMatrixEvents = activeMatrixEventsFromLedger(ledgerEvents);
 
   return {
     action: mode,
@@ -253,6 +301,13 @@ const buildInput = (audit) => {
       : scheduledRunCountFromLedger(ledgerEvents, currentDay),
     resultsBucket: textEnv("FIREBASE_TEST_LAB_RESULTS_BUCKET", DEFAULT_RESULTS_BUCKET).replace(/^gs:\/\//, ""),
     ledgerPath,
+    pendingMatrixPath,
+    pendingMatrix,
+    activeMatrixEvents,
+    maxWaitSeconds: Math.max(30, numberEnv("FIREBASE_TEST_LAB_MAX_WAIT_SECONDS", 900)),
+    pollIntervalSeconds: Math.max(5, numberEnv("FIREBASE_TEST_LAB_POLL_INTERVAL_SECONDS", 30)),
+    allowPendingMatrix: boolEnv("FIREBASE_TEST_LAB_ALLOW_PENDING_MATRIX", true),
+    maxActiveMatrices: Math.max(1, numberEnv("FIREBASE_TEST_LAB_MAX_ACTIVE_MATRICES", 1)),
     currentMonth,
     currentDay,
   };
@@ -309,6 +364,12 @@ const evaluateCostGuard = (input) => {
     plannedMinutes: Number.isFinite(input.plannedMinutes) ? input.plannedMinutes : null,
     scheduledRunCountToday: input.scheduledRunCountToday,
     maxScheduledRunsPerDay: input.maxScheduledRunsPerDay,
+    maxWaitSeconds: input.maxWaitSeconds,
+    pollIntervalSeconds: input.pollIntervalSeconds,
+    allowPendingMatrix: input.allowPendingMatrix,
+    maxActiveMatrices: input.maxActiveMatrices,
+    pendingMatrixId: input.pendingMatrix?.matrixId ?? null,
+    activeMatrixCount: input.pendingMatrix?.matrixId ? 1 : (input.activeMatrixEvents?.length ?? 0),
     notPlayInstalledProof: true,
     premiumProofClosed: false,
     twoDeviceProofClosed: false,
@@ -381,7 +442,7 @@ const evaluateCostGuard = (input) => {
   };
 };
 
-const buildGcloudCommand = (audit) => {
+const buildGcloudCommand = (audit, options = {}) => {
   const project = textEnv("FIREBASE_TEST_LAB_PROJECT", readGcloudProjectConfigured().value || DEFAULT_PROJECT);
   const appPath = audit.apkPresent ? audit.apkPath : audit.aabPath;
   const command = [
@@ -404,9 +465,181 @@ const buildGcloudCommand = (audit) => {
     "--format",
     "json",
   ];
+  if (options.async) command.push("--async");
   const resultsBucket = textEnv("FIREBASE_TEST_LAB_RESULTS_BUCKET", DEFAULT_RESULTS_BUCKET);
   if (resultsBucket) command.push("--results-bucket", resultsBucket.replace(/^gs:\/\//, ""));
   return command;
+};
+
+const parseJsonObjects = (text) => {
+  const objects = [];
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return objects;
+  try {
+    objects.push(JSON.parse(trimmed));
+    return objects;
+  } catch {
+    // gcloud can mix progress text and JSON; fall through to line/object scan.
+  }
+  for (const line of trimmed.split(/\n/).map((entry) => entry.trim()).filter(Boolean)) {
+    if (!line.startsWith("{") && !line.startsWith("[")) continue;
+    try {
+      objects.push(JSON.parse(line));
+    } catch {
+      // Ignore non-JSON progress lines.
+    }
+  }
+  return objects;
+};
+
+const findMatrixId = (value) => {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const match = value.match(/(?:matrixId|testMatrixId|matrix id)[=:\s"]+([A-Za-z0-9_-]+)/i)
+      || value.match(/testMatrices\/([A-Za-z0-9_-]+)/i)
+      || value.match(/matrices\/([A-Za-z0-9_-]+)/i)
+      || value.match(/matrix-[A-Za-z0-9_-]*?([0-9]{8,})/i);
+    return match?.[1] ?? null;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = findMatrixId(entry);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof value === "object") {
+    for (const key of ["matrixId", "testMatrixId", "test_matrix_id", "id", "name"]) {
+      const found = findMatrixId(value[key]);
+      if (found) return found;
+    }
+    for (const entry of Object.values(value)) {
+      const found = findMatrixId(entry);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+const extractMatrixId = (output) => {
+  for (const object of parseJsonObjects(output)) {
+    const found = findMatrixId(object);
+    if (found) return found;
+  }
+  return findMatrixId(output);
+};
+
+const sleep = (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+
+const getAccessToken = () => {
+  const result = runQuiet("gcloud", ["auth", "print-access-token"], { timeout: 30_000 });
+  if (result.status !== 0) {
+    return { ok: false, status: result.status, message: "gcloud_auth_token_unavailable" };
+  }
+  const token = String(result.stdout || "").trim();
+  return token ? { ok: true, token } : { ok: false, status: result.status, message: "gcloud_auth_token_empty" };
+};
+
+const pollMatrixOnce = async ({ project, matrixId }) => {
+  const tokenResult = getAccessToken();
+  if (!tokenResult.ok) {
+    return {
+      ok: false,
+      matrixId,
+      state: "POLL_AUTH_FAILED",
+      terminal: false,
+      success: false,
+      message: tokenResult.message,
+    };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(
+      `https://testing.googleapis.com/v1/projects/${encodeURIComponent(project)}/testMatrices/${encodeURIComponent(matrixId)}`,
+      {
+        headers: { authorization: `Bearer ${tokenResult.token}` },
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) {
+      return {
+        ok: false,
+        matrixId,
+        state: "POLL_HTTP_FAILED",
+        terminal: false,
+        success: false,
+        status: response.status,
+      };
+    }
+    const body = await response.json();
+    const state = String(body.state || "UNKNOWN");
+    return {
+      ok: true,
+      matrixId,
+      state,
+      terminal: TERMINAL_MATRIX_STATES.has(state),
+      success: state === "FINISHED",
+      outcomeSummary: body.outcomeSummary ?? null,
+      testExecutionCount: Array.isArray(body.testExecutions) ? body.testExecutions.length : 0,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      matrixId,
+      state: "POLL_EXCEPTION",
+      terminal: false,
+      success: false,
+      message: error instanceof Error ? error.name : "unknown_poll_error",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const startMatrixAsync = (audit, input, costGuard) => {
+  const commandArgs = buildGcloudCommand(audit, { async: true });
+  const result = runQuiet("gcloud", commandArgs, { timeout: 120_000 });
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  const matrixId = extractMatrixId(output);
+  const project = textEnv("FIREBASE_TEST_LAB_PROJECT", readGcloudProjectConfigured().value || DEFAULT_PROJECT);
+  if (result.status !== 0 || !matrixId) {
+    return {
+      started: false,
+      status: result.status,
+      matrixId: matrixId ?? null,
+      lifecycleState: "matrix_failed",
+      state: "START_FAILED",
+      terminal: true,
+      success: false,
+      outputStoredInConsole: true,
+    };
+  }
+  const pendingState = {
+    matrixId,
+    project,
+    resultsBucket: input.resultsBucket,
+    runReason: input.runReason,
+    createdAt: new Date().toISOString(),
+    costEstimateUsd: costGuard.costEstimateUsd,
+  };
+  writeJsonFile(input.pendingMatrixPath, pendingState);
+  return {
+    started: true,
+    status: 0,
+    matrixId,
+    project,
+    lifecycleState: "matrix_started",
+    state: "STARTED",
+    terminal: false,
+    success: false,
+    outputStoredInConsole: true,
+  };
+};
+
+const classifyPollLifecycle = (pollResult) => {
+  if (!pollResult.terminal) return "matrix_pending";
+  return pollResult.success ? "matrix_completed" : "matrix_failed";
 };
 
 const buildOperatorPayload = (report) => {
@@ -425,6 +658,12 @@ const buildOperatorPayload = (report) => {
     qaTier: report.costGuard.qaTier,
     blocker: report.costGuard.blocker,
     matrixId: report.firebaseRun?.matrixId ?? null,
+    matrixLifecycle: report.firebaseRun?.lifecycleState ?? null,
+    matrixState: report.firebaseRun?.state ?? null,
+    matrixTerminal: report.firebaseRun?.terminal ?? false,
+    matrixPollOk: report.firebaseRun?.pollOk ?? null,
+    scheduler: textEnv("INSTALLED_QA_SCHEDULER", "manual_cli"),
+    operatorId: textEnv("INSTALLED_QA_OPERATOR_ID", SYSTEM_ID),
     fakeProof: false,
     moneyMoved: false,
     userRightsChanged: false,
@@ -432,18 +671,23 @@ const buildOperatorPayload = (report) => {
     restrictedDataLogged: false,
   };
   if (report.firebaseRun?.started) {
+    const lifecycleState = report.firebaseRun.lifecycleState ?? "matrix_pending";
+    const completed = lifecycleState === "matrix_completed";
+    const failed = lifecycleState === "matrix_failed";
     return {
       action: "record_traversal_run",
       source: PROOF_SOURCE,
       discovered_by: "device_lab",
-      run_label: "firebase_test_lab_cost_capped_virtual_smoke",
+      scheduler: textEnv("INSTALLED_QA_SCHEDULER", "manual_cli"),
+      operator_id: textEnv("INSTALLED_QA_OPERATOR_ID", SYSTEM_ID),
+      run_label: `firebase_test_lab_${lifecycleState}`,
       device_count: 1,
-      pass_count: report.firebaseRun.status === 0 ? 1 : 0,
-      failure_count: report.firebaseRun.status === 0 ? 0 : 1,
+      pass_count: completed ? 1 : 0,
+      failure_count: failed ? 1 : 0,
       blocked_count: 0,
       two_device_required_count: 0,
-      result: report.firebaseRun.status === 0 ? "partial" : "failed",
-      blocker_classification: report.firebaseRun.status === 0 ? "unknown_requires_review" : "device_unavailable",
+      result: failed ? "failed" : "partial",
+      blocker_classification: failed ? "device_unavailable" : "unknown_requires_review",
       metadata,
     };
   }
@@ -505,8 +749,12 @@ const buildLedgerEvent = (eventType, report) => ({
   canRun: report.costGuard.canRun,
   blocker: report.costGuard.blocker,
   matrixId: report.firebaseRun?.matrixId ?? null,
-  result: report.firebaseRun?.started ? (report.firebaseRun.status === 0 ? "completed" : "failed") : "blocked_or_status",
-  countAgainstBudget: Boolean(report.firebaseRun?.started),
+  matrixLifecycle: report.firebaseRun?.lifecycleState ?? null,
+  matrixState: report.firebaseRun?.state ?? null,
+  result: report.firebaseRun?.started
+    ? report.firebaseRun.lifecycleState ?? (report.firebaseRun.status === 0 ? "completed" : "failed")
+    : "blocked_or_status",
+  countAgainstBudget: ["matrix_started", "run_completed"].includes(eventType),
   fakeProof: false,
   moneyMoved: false,
   userRightsChanged: false,
@@ -545,7 +793,14 @@ const runSelfTest = () => {
     quotaModeInput: "unknown",
     monthlySpentEstimateUsd: 0,
     scheduledRunCountToday: 0,
+    maxWaitSeconds: 900,
+    pollIntervalSeconds: 30,
+    allowPendingMatrix: true,
+    maxActiveMatrices: 1,
+    pendingMatrix: null,
+    activeMatrixEvents: [],
     ledgerPath: DEFAULT_LEDGER_PATH,
+    pendingMatrixPath: DEFAULT_PENDING_MATRIX_PATH,
     currentMonth: monthKey(),
     currentDay: dayKey(),
   };
@@ -578,6 +833,17 @@ const runSelfTest = () => {
   if (ledgerEvent.resultsBucket !== DEFAULT_RESULTS_BUCKET) {
     failures.push("budget ledger event must record the dedicated results bucket");
   }
+  const startedLedgerEvent = buildLedgerEvent("matrix_started", {
+    costGuard: evaluateCostGuard(base),
+    firebaseRun: { started: true, status: 0, matrixId: "matrix-self-test", lifecycleState: "matrix_started", state: "STARTED" },
+  });
+  const pendingLedgerEvent = buildLedgerEvent("matrix_pending", {
+    costGuard: evaluateCostGuard(base),
+    firebaseRun: { started: true, status: 0, matrixId: "matrix-self-test", lifecycleState: "matrix_pending", state: "RUNNING" },
+  });
+  if (!startedLedgerEvent.countAgainstBudget || pendingLedgerEvent.countAgainstBudget) {
+    failures.push("only matrix_started should count against the Firebase monthly budget");
+  }
   if (failures.length) {
     console.error("installed-qa-firebase-test-lab self-test failed");
     for (const failure of failures) console.error(`- ${failure}`);
@@ -594,7 +860,8 @@ if (mode === "self-test") {
 const audit = auditFirebaseTestLab();
 const input = buildInput(audit);
 const costGuard = evaluateCostGuard(input);
-const commandArgs = buildGcloudCommand(audit);
+const usesAsyncStart = ["run", "run-bounded", "start"].includes(mode);
+const commandArgs = buildGcloudCommand(audit, { async: usesAsyncStart });
 const report = {
   ok: mode === "status" ? true : costGuard.canRun,
   failClosed: mode !== "status" && !costGuard.canRun,
@@ -625,33 +892,114 @@ const report = {
   secretsLogged: false,
 };
 
-if (mode === "run" && costGuard.canRun) {
-  const result = runQuiet("gcloud", commandArgs);
-  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
-  const matrixMatch = output.match(/matrix(?:Id| id)?[=:]\s*([A-Za-z0-9_-]+)/i)
-    || output.match(/matrices\/([0-9]+)/i);
-  report.firebaseRun = {
-    started: true,
-    status: result.status,
-    matrixId: matrixMatch?.[1] ?? null,
-    outputStoredInConsole: true,
-  };
-  report.ok = result.status === 0;
-  if (result.status !== 0) report.failClosed = true;
-}
+const shouldReportOperator = flags.has("--report-operator") || boolEnv("FIREBASE_TEST_LAB_REPORT_TO_OPERATOR");
 
-if (mode === "run") {
-  report.ledgerWritten = writeLedgerEvent(input.ledgerPath, buildLedgerEvent(
-    report.firebaseRun?.started ? "run_completed" : "run_blocked",
-    report,
-  ));
-}
-
-if (flags.has("--report-operator") || boolEnv("FIREBASE_TEST_LAB_REPORT_TO_OPERATOR")) {
+const postCurrentReport = async () => {
+  if (!shouldReportOperator) return;
   report.operatorReport = await reportToOperator(report);
   if (report.operatorReport.required && !report.operatorReport.reported) {
+    if (report.firebaseRun?.started) {
+      report.firebaseRun.lifecycleState = "matrix_posting_failed";
+      writeLedgerEvent(input.ledgerPath, buildLedgerEvent("matrix_posting_failed", report));
+    }
     console.log(JSON.stringify(redact(report), null, 2));
     process.exit(1);
+  }
+};
+
+const pendingMatrixState = () => {
+  if (input.pendingMatrix?.matrixId) return input.pendingMatrix;
+  const ledgerPending = input.activeMatrixEvents[0];
+  if (!ledgerPending?.matrixId) return null;
+  return {
+    matrixId: ledgerPending.matrixId,
+    project: textEnv("FIREBASE_TEST_LAB_PROJECT", readGcloudProjectConfigured().value || DEFAULT_PROJECT),
+    resultsBucket: ledgerPending.resultsBucket ?? input.resultsBucket,
+    runReason: ledgerPending.runReason ?? input.runReason,
+  };
+};
+
+const setFirebaseRunFromPoll = (pending, pollResult, lifecycleOverride = null) => {
+  const lifecycleState = lifecycleOverride ?? classifyPollLifecycle(pollResult);
+  report.firebaseRun = {
+    started: true,
+    status: pollResult.success ? 0 : pollResult.terminal ? 1 : 0,
+    matrixId: pending.matrixId,
+    project: pending.project,
+    lifecycleState,
+    state: pollResult.state,
+    terminal: pollResult.terminal,
+    success: pollResult.success,
+    pollOk: pollResult.ok,
+    outputStoredInConsole: true,
+  };
+  report.ok = !["matrix_failed", "matrix_posting_failed"].includes(lifecycleState);
+  report.failClosed = lifecycleState === "matrix_failed";
+  if (pollResult.terminal) clearFile(input.pendingMatrixPath);
+};
+
+const pollPendingOnce = async (pending) => {
+  const pollResult = await pollMatrixOnce({
+    project: pending.project || textEnv("FIREBASE_TEST_LAB_PROJECT", readGcloudProjectConfigured().value || DEFAULT_PROJECT),
+    matrixId: pending.matrixId,
+  });
+  setFirebaseRunFromPoll(pending, pollResult);
+  writeLedgerEvent(input.ledgerPath, buildLedgerEvent(report.firebaseRun.lifecycleState, report));
+  await postCurrentReport();
+};
+
+if (["poll", "start", "run", "run-bounded"].includes(mode)) {
+  const pending = pendingMatrixState();
+  if (pending?.matrixId) {
+    await pollPendingOnce(pending);
+  } else if (mode === "poll") {
+    report.ok = true;
+    report.firebaseRun = {
+      started: false,
+      status: 0,
+      matrixId: null,
+      lifecycleState: "matrix_pending",
+      state: "NO_PENDING_MATRIX",
+      terminal: false,
+      success: false,
+      outputStoredInConsole: true,
+    };
+    writeLedgerEvent(input.ledgerPath, buildLedgerEvent("matrix_pending", report));
+    await postCurrentReport();
+  } else if (costGuard.canRun) {
+    const started = startMatrixAsync(audit, input, costGuard);
+    report.firebaseRun = started;
+    report.ok = started.started;
+    report.failClosed = !started.started;
+    writeLedgerEvent(input.ledgerPath, buildLedgerEvent(started.lifecycleState, report));
+    await postCurrentReport();
+
+    if (started.started && mode !== "start") {
+      const deadline = Date.now() + input.maxWaitSeconds * 1000;
+      let finalPoll = null;
+      while (Date.now() < deadline) {
+        await sleep(input.pollIntervalSeconds);
+        finalPoll = await pollMatrixOnce({ project: started.project, matrixId: started.matrixId });
+        if (finalPoll.terminal) break;
+      }
+      if (finalPoll?.terminal) {
+        setFirebaseRunFromPoll(started, finalPoll);
+      } else {
+        const pendingResult = finalPoll ?? {
+          ok: false,
+          matrixId: started.matrixId,
+          state: "POLL_DEADLINE_REACHED",
+          terminal: false,
+          success: false,
+        };
+        setFirebaseRunFromPoll(started, pendingResult, input.allowPendingMatrix ? "matrix_timeout" : "matrix_failed");
+      }
+      writeLedgerEvent(input.ledgerPath, buildLedgerEvent(report.firebaseRun.lifecycleState, report));
+      await postCurrentReport();
+    }
+  } else {
+    report.ledgerWritten = writeLedgerEvent(input.ledgerPath, buildLedgerEvent("run_blocked", report));
+    await postCurrentReport();
   }
 }
 

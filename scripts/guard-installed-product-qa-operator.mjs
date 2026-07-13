@@ -64,6 +64,7 @@ includes(registryBlock, "Level 3/4 approval for high-risk fixes", "approval gate
 includes(registryBlock, "scheduler cannot be claimed active without device-lab/timer proof", "scheduler overclaim guard");
 includes(registryBlock, "firebase_test_lab_results_bucket_bootstrap", "bounded Firebase results bucket bootstrap surface");
 includes(registryBlock, "gs://chillywood-installed-qa-testlab-results", "exact Firebase results bucket");
+includes(registryBlock, "Firebase Test Lab scheduler uses bounded async matrix start/poll and cannot wait indefinitely", "bounded Firebase scheduler gate");
 includes(registryBlock, "installed-qa-testlab-runner@chillywood-app.iam.gserviceaccount.com", "exact Firebase runner service account");
 includes(registryBlock, "enable or link Google Cloud billing", "billing enablement forbidden");
 includes(registryBlock, "create any bucket except gs://chillywood-installed-qa-testlab-results", "arbitrary bucket creation forbidden");
@@ -190,8 +191,15 @@ for (const phrase of [
   "FIREBASE_TEST_LAB_ALLOW_BROAD_CRAWL",
   "FIREBASE_TEST_LAB_ALLOW_TWO_DEVICE",
   "DEFAULT_RESULTS_BUCKET",
+  "DEFAULT_PENDING_MATRIX_PATH",
   "FIREBASE_TEST_LAB_RESULTS_BUCKET",
+  "FIREBASE_TEST_LAB_MAX_WAIT_SECONDS",
+  "FIREBASE_TEST_LAB_POLL_INTERVAL_SECONDS",
+  "FIREBASE_TEST_LAB_ALLOW_PENDING_MATRIX",
+  "FIREBASE_TEST_LAB_MAX_ACTIVE_MATRICES",
+  "FIREBASE_TEST_LAB_PENDING_MATRIX_FILE",
   "--results-bucket",
+  "--async",
   "resultsBucket",
   "firebase_per_run_cap_exceeded",
   "firebase_monthly_cap_exceeded",
@@ -209,6 +217,16 @@ for (const phrase of [
   "billingRisk",
   "quotaMode",
   "notPlayInstalledProof: true",
+  "startMatrixAsync",
+  "pollMatrixOnce",
+  "run-bounded",
+  "matrix_started",
+  "matrix_pending",
+  "matrix_completed",
+  "matrix_failed",
+  "matrix_timeout",
+  "matrix_posting_failed",
+  "countAgainstBudget: [\"matrix_started\", \"run_completed\"].includes(eventType)",
   "cannotProve",
   "Google Play Billing or RevenueCat active Premium",
   "two-device LiveKit realtime",
@@ -233,6 +251,11 @@ for (const phrase of [
   "FIREBASE_TEST_LAB_RUN_REASON=daily_scheduled",
   "FIREBASE_TEST_LAB_REPORT_TO_OPERATOR=true",
   "FIREBASE_TEST_LAB_RESULTS_BUCKET=chillywood-installed-qa-testlab-results",
+  "FIREBASE_TEST_LAB_MAX_WAIT_SECONDS",
+  "FIREBASE_TEST_LAB_POLL_INTERVAL_SECONDS",
+  "FIREBASE_TEST_LAB_ALLOW_PENDING_MATRIX",
+  "FIREBASE_TEST_LAB_MAX_ACTIVE_MATRICES",
+  "FIREBASE_TEST_LAB_PENDING_MATRIX_FILE",
   "INSTALLED_QA_SCHEDULER=systemd_timer",
   "NoNewPrivileges=true",
   "ProtectSystem=strict",
@@ -240,6 +263,10 @@ for (const phrase of [
   "RestrictSUIDSGID=true",
   "LockPersonality=true",
   "CapabilityBoundingSet=",
+  "TimeoutStartSec=20min",
+  "RuntimeMaxSec=20min",
+  "KillMode=control-group",
+  "Restart=no",
   "ReadWritePaths=/var/lib/chillywood/installed-qa",
 ]) includes(`${firebaseSystemdScript}\n${firebaseSystemdService}`, phrase, "Firebase systemd scheduler policy");
 includes(firebaseSystemdTimer, "OnCalendar=*-*-* 03:17:00", "Firebase timer daily cadence");
@@ -267,7 +294,10 @@ for (const script of [
   "installed-qa:firebase-test-plan",
   "installed-qa:firebase-test-run",
   "installed-qa-operator:firebase-test-lab:status",
+  "installed-qa-operator:firebase-test-lab:start",
+  "installed-qa-operator:firebase-test-lab:poll",
   "installed-qa-operator:firebase-test-lab:run",
+  "installed-qa-operator:firebase-test-lab:run-bounded",
   "installed-qa-operator:firebase-test-lab:self-test",
   "proof:installed-product-qa-operator",
   "guard:installed-product-qa-operator",

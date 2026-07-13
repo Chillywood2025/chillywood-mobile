@@ -8,6 +8,10 @@ Firebase Test Lab is the first device-lab path for `installed_product_qa_operato
 - Monthly cap: `FIREBASE_TEST_LAB_MONTHLY_CAP_USD=5`.
 - Per-run cap: `FIREBASE_TEST_LAB_PER_RUN_CAP_USD=0.25`.
 - Results bucket: `FIREBASE_TEST_LAB_RESULTS_BUCKET=chillywood-installed-qa-testlab-results`.
+- Max wait: `FIREBASE_TEST_LAB_MAX_WAIT_SECONDS=900`.
+- Poll interval: `FIREBASE_TEST_LAB_POLL_INTERVAL_SECONDS=30`.
+- Pending matrix handling: `FIREBASE_TEST_LAB_ALLOW_PENDING_MATRIX=true`.
+- Active matrix cap: `FIREBASE_TEST_LAB_MAX_ACTIVE_MATRICES=1`.
 - Device type: `FIREBASE_TEST_LAB_ALLOW_VIRTUAL=true`, `FIREBASE_TEST_LAB_ALLOW_PHYSICAL=false`.
 - Cadence: `FIREBASE_TEST_LAB_MAX_SCHEDULED_RUNS_PER_DAY=1`.
 - On-change smoke: `FIREBASE_TEST_LAB_RUN_ON_OTA_CHANGE=true`.
@@ -40,10 +44,12 @@ This policy does not allow enabling/linking Google Cloud billing, arbitrary buck
 ```bash
 npm run installed-qa-operator:firebase-test-lab:status
 npm run installed-qa-operator:firebase-test-lab:self-test
+npm run installed-qa-operator:firebase-test-lab:start
+npm run installed-qa-operator:firebase-test-lab:poll
 npm run installed-qa-operator:firebase-test-lab:run
 ```
 
-`status` audits local capability and prints only credential presence by name, not credential values. `run` starts a Firebase matrix only when the cost guard passes.
+`status` audits local capability and prints only credential presence by name, not credential values. `run` is bounded: it starts the matrix asynchronously, captures the matrix id, polls until completion or max wait, records pending/running state when needed, and exits cleanly. `poll` checks an existing pending matrix without starting a second one.
 
 ## Budget Ledger
 
@@ -58,6 +64,7 @@ The runner records local JSONL budget events at `FIREBASE_TEST_LAB_BUDGET_LEDGER
 - `deviceType`
 - `runReason`
 - `matrixId` when a Firebase matrix starts
+- `matrixLifecycle` as `matrix_started`, `matrix_pending`, `matrix_completed`, `matrix_failed`, `matrix_timeout`, or `matrix_posting_failed`
 
 The ledger must not contain credentials, payment details, service-role keys, signed URLs, private evidence, or account passwords.
 
@@ -89,4 +96,4 @@ The run must not include Premium purchase, Premium activation, two-device realti
 
 ## Scheduler
 
-No every-30-minute Firebase device schedule is allowed. A daily virtual-device smoke can be installed only after the cost guard is active, the owner approves scheduling, the timer calls the guard first, and audit rows prove scheduled runs stay within the caps. If the guard blocks, the scheduler should record a blocked/no-run event and exit without starting a Firebase matrix.
+No every-30-minute Firebase device schedule is allowed. A daily virtual-device smoke can be installed only after the cost guard is active, the owner approves scheduling, the timer calls the guard first, and audit rows prove scheduled runs stay within the caps. The service uses bounded matrix start/poll behavior and systemd runtime limits so it cannot wait indefinitely in `gcloud firebase test android run`. If the guard blocks, or a matrix remains pending at max wait, the scheduler records a blocked/pending event and exits without starting a duplicate Firebase matrix.

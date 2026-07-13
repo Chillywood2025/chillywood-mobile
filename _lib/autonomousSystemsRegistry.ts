@@ -1101,6 +1101,7 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     requiredGates: [
       "Play-installed or approved device-lab proof source",
       "Firebase Test Lab per-run and monthly cost-cap guard before any matrix",
+      "Firebase Test Lab scheduler uses bounded async matrix start/poll and cannot wait indefinitely",
       "Firebase Test Lab dedicated results bucket bootstrap is bounded to gs://chillywood-installed-qa-testlab-results in chillywood-app",
       "Google Cloud billing enablement remains owner-only and is not part of the bucket bootstrap",
       "bucket IAM is limited to bucket-level objectCreator and objectViewer only when result readback requires it",
@@ -1152,7 +1153,7 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
         proofScript: "proof:installed-product-qa-operator",
         guardScript: "guard:installed-product-qa-operator",
         rollbackBehavior: "mark readiness finding closed only after two-device or approved device-lab proof",
-        killSwitchOrFallback: "scheduler remains firebase_scheduler_service_completion_blocked until the systemd Firebase smoke service exits cleanly and posts timer audit",
+        killSwitchOrFallback: "scheduler remains firebase_scheduler_service_completion_blocked until the bounded systemd Firebase smoke service exits cleanly and posts timer audit",
         ownerApprovalRequired: false,
       },
       {
