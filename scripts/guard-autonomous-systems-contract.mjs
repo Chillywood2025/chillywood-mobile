@@ -22,6 +22,9 @@ const ownerCommandHelper = read("_lib/ownerCommandOperator.ts");
 const ownerCommandFunction = read("supabase/functions/owner-command-operator/index.ts");
 const ownerCommandMigration = read("supabase/migrations/20260712180500_owner_command_operator.sql");
 const ownerCommandRunbook = read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md");
+const userReportMigration = read("supabase/migrations/20260714001704_user_report_router.sql");
+const userReportFunction = read("supabase/functions/user-report-intake/index.ts");
+const userReportRunbook = read("docs/USER_REPORT_ROUTER_RUNBOOK.md");
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -72,6 +75,11 @@ for (const required of [
   "owner-command:plan",
   "owner-command:dry-run",
   "owner-command:execute-approved",
+  "proof:user-report-router",
+  "proof:user-report-threshold-routing",
+  "proof:user-report-safety-privacy",
+  "guard:user-report-router",
+  "guard:user-report-threshold-routing",
 ]) {
   includes(packageJson, `"${required}"`, "owner command package wiring");
 }
@@ -524,6 +532,28 @@ includes(observabilityMigration, "pii_stored = false", "observability PII constr
 includes(observabilityMigration, "secrets_logged = false", "observability secret constraint");
 includes(sharedFn, "constantTimeEqual", "operator token gate");
 includes(sharedFn, "sanitizeOperatorMetadata", "operator redaction");
+
+for (const table of [
+  "user_report_intake_events",
+  "user_report_classifications",
+  "user_report_clusters",
+  "user_report_cluster_members",
+  "user_report_routing_actions",
+  "user_report_operator_findings",
+]) {
+  includes(userReportMigration, `public.${table}`, "user report router migration");
+  includes(userReportMigration, `alter table public.${table} enable row level security`, "user report router RLS");
+  includes(userReportMigration, `revoke all on table public.${table} from anon, authenticated`, "user report client write denial");
+}
+includes(userReportMigration, "user_report_cluster_members_unique_reporter", "user report unique reporter threshold");
+includes(userReportFunction, "authenticated_user_required", "user report auth requirement");
+includes(userReportFunction, "client_requested_routed_system_id_ignored", "user report client routing ignored");
+includes(userReportFunction, "owner_command_requests", "user report owner command routing");
+includes(userReportFunction, "autonomous_approval_requests", "user report approval path");
+includes(userReportFunction, "moneyMoved: false", "user report no money response");
+includes(userReportFunction, "userRightsChanged: false", "user report no rights response");
+includes(userReportFunction, "highRiskExecuted: false", "user report no high-risk response");
+includes(userReportRunbook, "User reports can never directly", "user report no direct execution doc");
 
 includes(approvalModel, "operatorSelfApprovalAllowed: false", "approval self-approval model");
 includes(ownerAuthority, "canUserApproveAutonomousRequest", "owner authority helper");

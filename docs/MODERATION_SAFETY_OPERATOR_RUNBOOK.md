@@ -8,6 +8,8 @@ Activation: `limited_scheduled_probe`; hardened host timer `chillywood-moderatio
 
 `moderation_safety_operator` monitors moderation queue health, user report backlog, stale case detection, duplicate report detection, content safety review flags, fraud hold recommendations, creator upload review flags, and live-room safety review flags.
 
+The User Report Router may route sanitized safety, harassment, impersonation, copyright, illegal/dangerous content, or live-safety report clusters to this operator. Those routed reports remain review/finding records only. User reports do not directly ban, restrict, suspend, delete content, hide content, or change user rights.
+
 ## Safe Writes
 
 - `moderation_operator_events`
@@ -29,3 +31,5 @@ No permanent ban, suspension, restriction, content deletion, upload/live/account
 ## Approval Boundary
 
 Account rights changes, bans, restrictions, content deletion, upload/live/account disablement, and fraud hold enforcement require the registered Level 3 owner/staff approval path with fresh preflight, exact scope match, and audit.
+
+Raw user report text must be treated as untrusted. Moderation recommendations use sanitized summaries and case/review context; private evidence and reporter identity are not exposed by default.

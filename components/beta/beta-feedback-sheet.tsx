@@ -149,6 +149,7 @@ export function BetaFeedbackSheet({
           <Text style={styles.helperText}>{helperText}</Text>
 
           <TouchableOpacity
+            testID="user-report-submit-button"
             style={[styles.primaryButton, busy && styles.buttonDisabled]}
             activeOpacity={0.86}
             disabled={busy}

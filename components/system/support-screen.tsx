@@ -16,6 +16,7 @@ import { getBetaAccessBlockCopy, submitBetaFeedback, useBetaProgram } from "../.
 import { getRuntimeLegalConfig, isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { useSession } from "../../_lib/session";
 import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
+import { submitUserReport } from "../../_lib/userReports";
 import { BetaFeedbackSheet } from "../beta/beta-feedback-sheet";
 
 const SKYLINE_SOURCE = require("../../assets/images/chicago-skyline.jpg");
@@ -56,6 +57,7 @@ export function SupportScreen() {
   const { accessState, isActive } = useBetaProgram();
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [reportMode, setReportMode] = useState<"bug" | "safety" | "help">("bug");
   const closedBeta = isClosedBetaEnvironment();
   const routePath = closedBeta ? "/beta-support" : "/support";
   const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
@@ -141,6 +143,39 @@ export function SupportScreen() {
     }
   };
 
+  const openReportSheet = (mode: "bug" | "safety" | "help") => {
+    setReportMode(mode);
+    setFeedbackVisible(true);
+  };
+
+  const feedbackDefaults = useMemo(() => {
+    if (reportMode === "safety") {
+      return {
+        defaultFeedbackType: "bug" as const,
+        defaultCategory: "moderation" as const,
+        defaultSeverity: "major" as const,
+        title: "Report a safety issue",
+        description: "Send a safety concern with screen context. This is reviewed for safety, but it is not an emergency channel.",
+      };
+    }
+    if (reportMode === "help") {
+      return {
+        defaultFeedbackType: "product_feedback" as const,
+        defaultCategory: "other" as const,
+        defaultSeverity: "insight" as const,
+        title: "Request help",
+        description: "Send an account, support, billing, or access issue. This does not create payment, legal, or account commitments.",
+      };
+    }
+    return {
+      defaultFeedbackType: "bug" as const,
+      defaultCategory: "other" as const,
+      defaultSeverity: "major" as const,
+      title: "Report a bug or broken feature",
+      description: "Log a broken flow, route, button, crash, playback issue, or confusing behavior so it can be clustered and routed.",
+    };
+  }, [reportMode]);
+
   const onPressPrivacyPolicy = async () => {
     if (legalConfig.privacyPolicyUrl) {
       await openExternalDestination(legalConfig.privacyPolicyUrl, "Privacy Policy");
@@ -214,22 +249,60 @@ export function SupportScreen() {
     setFeedbackBusy(true);
 
     try {
-      await submitBetaFeedback({
-        feedbackType: input.feedbackType,
-        category: input.category,
-        severity: input.severity,
+      const routedReportType = reportMode === "safety"
+        ? "safety_abuse"
+        : reportMode === "help"
+          ? (input.category === "auth" ? "account_access" : input.category === "monetization" ? "premium_or_billing" : "other_support")
+          : input.feedbackType === "bug"
+            ? "bug_broken_feature"
+            : "feature_request";
+      const routedSeverity = input.severity === "blocking"
+        ? "critical"
+        : input.severity === "major"
+          ? "major"
+          : input.severity === "polish"
+            ? "low"
+            : "review";
+
+      await submitUserReport({
+        reportType: routedReportType,
+        category: routedReportType,
+        severity: routedSeverity,
         summary: input.summary,
         details: input.details,
-        routePath,
-        sourceSurface: closedBeta ? "beta-support" : "support",
-        context: {
+        route: routePath,
+        surface: closedBeta ? "beta-support" : "support",
+        targetType: reportMode,
+        metadata: {
           betaAccessStatus: accessState.status,
           cohort: accessState.membership?.cohort ?? null,
           environment: closedBeta ? "closed-beta" : "public-v1",
+          betaFeedbackType: input.feedbackType,
+          betaFeedbackCategory: input.category,
+          reportMode,
         },
       });
+
+      try {
+        await submitBetaFeedback({
+          feedbackType: input.feedbackType,
+          category: input.category,
+          severity: input.severity,
+          summary: input.summary,
+          details: input.details,
+          routePath,
+          sourceSurface: closedBeta ? "beta-support" : "support",
+          context: {
+            betaAccessStatus: accessState.status,
+            cohort: accessState.membership?.cohort ?? null,
+            environment: closedBeta ? "closed-beta" : "public-v1",
+          },
+        });
+      } catch {
+        // User Report Router is the durable routed intake; beta feedback is retained as a best-effort legacy mirror.
+      }
       setFeedbackVisible(false);
-      Alert.alert("Feedback sent", "Thanks. This went into the Chi'llywood support queue.");
+      Alert.alert("Report sent", "Thanks. This went into Chi'llywood's routed support queue.");
     } catch (error) {
       Alert.alert("Unable to send feedback", getUserFacingErrorMessage(error, "Try again in a moment."));
     } finally {
@@ -308,9 +381,32 @@ export function SupportScreen() {
                   ? `You are active in the closed beta${accessState.membership?.cohort ? ` for cohort ${accessState.membership.cohort}` : ""}. Send structured bugs and product feedback from here so they land with your tester context.`
                   : "Report broken flows, confusing copy, playback issues, room reliability problems, or launch friction from here so the team can triage them with screen context attached."}
               </Text>
-              <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={() => setFeedbackVisible(true)}>
-                <Text style={styles.primaryButtonText}>Send Feedback</Text>
-              </TouchableOpacity>
+              <View style={styles.actionGrid}>
+                <TouchableOpacity
+                  testID="user-report-bug-button"
+                  style={styles.primaryButton}
+                  activeOpacity={0.86}
+                  onPress={() => openReportSheet("bug")}
+                >
+                  <Text style={styles.primaryButtonText}>Report a Bug</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="user-report-safety-button"
+                  style={styles.secondaryButton}
+                  activeOpacity={0.86}
+                  onPress={() => openReportSheet("safety")}
+                >
+                  <Text style={styles.secondaryButtonText}>Report Safety</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="user-report-help-button"
+                  style={styles.secondaryButton}
+                  activeOpacity={0.86}
+                  onPress={() => openReportSheet("help")}
+                >
+                  <Text style={styles.secondaryButtonText}>Request Help</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.card}>
@@ -422,9 +518,12 @@ export function SupportScreen() {
 
       <BetaFeedbackSheet
         visible={feedbackVisible}
-        title="Send support feedback"
-        description="Log a bug, onboarding issue, or product note so the team can triage it without losing the current screen context."
+        title={feedbackDefaults.title}
+        description={feedbackDefaults.description}
         busy={feedbackBusy}
+        defaultFeedbackType={feedbackDefaults.defaultFeedbackType}
+        defaultCategory={feedbackDefaults.defaultCategory}
+        defaultSeverity={feedbackDefaults.defaultSeverity}
         onSubmit={onSubmitFeedback}
         onClose={() => setFeedbackVisible(false)}
       />
@@ -540,6 +639,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   list: {
+    gap: 8,
+  },
+  actionGrid: {
     gap: 8,
   },
   listItem: {

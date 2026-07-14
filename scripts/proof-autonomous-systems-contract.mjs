@@ -17,6 +17,9 @@ const ownerCommandHelper = read("_lib/ownerCommandOperator.ts");
 const ownerCommandFunction = read("supabase/functions/owner-command-operator/index.ts");
 const ownerCommandMigration = read("supabase/migrations/20260712180500_owner_command_operator.sql");
 const ownerCommandRunbook = read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md");
+const userReportMigration = read("supabase/migrations/20260714001704_user_report_router.sql");
+const userReportFunction = read("supabase/functions/user-report-intake/index.ts");
+const userReportRunbook = read("docs/USER_REPORT_ROUTER_RUNBOOK.md");
 
 const activeSystems = [
   "media_automation",
@@ -205,6 +208,24 @@ const checks = [
         && packageJson.includes(`"${guard}"`)
         && read(functionPath).includes("handleScopedOperatorRequest");
     }),
+  },
+  {
+    name: "user report router is support-owned and cannot directly execute high-risk actions",
+    passes: () => (
+      registry.includes("user_report_router")
+      && registryDoc.includes("User Report Router")
+      && userReportRunbook.includes("three unique users")
+      && userReportMigration.includes("user_report_clusters")
+      && userReportMigration.includes("user_report_cluster_members_unique_reporter")
+      && userReportMigration.includes("high_risk_executed boolean not null default false check")
+      && userReportMigration.includes("revoke all on table public.user_report_clusters from anon, authenticated")
+      && userReportFunction.includes("authenticated_user_required")
+      && userReportFunction.includes("client_requested_routed_system_id_ignored")
+      && userReportFunction.includes("owner_command_requests")
+      && userReportFunction.includes("autonomous_approval_requests")
+      && packageJson.includes('"proof:user-report-router"')
+      && packageJson.includes('"guard:user-report-router"')
+    ),
   },
   {
     name: "ads sponsor delivery remains foundation-only",

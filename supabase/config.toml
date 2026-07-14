@@ -139,6 +139,9 @@ verify_jwt = false
 [functions.support-success-operator]
 verify_jwt = false
 
+[functions.user-report-intake]
+verify_jwt = false
+
 [functions.search-ranking-integrity-operator]
 verify_jwt = false
 

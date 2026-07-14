@@ -14,7 +14,9 @@ Scheduler proof: `chillywood-support-success-operator-watch-once.timer` is enabl
 
 ## Purpose
 
-`support_success_operator` tracks support inbox health, stale support tickets, user issue triage, account access support flags, refund request classification, Premium/payment readback labels, support response drafts, owner/admin escalations, and support SLA findings.
+`support_success_operator` tracks support inbox health, stale support tickets, user issue triage, account access support flags, refund request classification, Premium/payment readback labels, support response drafts, owner/admin escalations, support SLA findings, and the User Report Router loop.
+
+The User Report Router classifies authenticated bug/fix/support/safety/account/media/LiveKit/money/notification/release/security/privacy/search/ads reports, clusters repeated reports, dedupes same-user repeats, and routes sanitized findings or Owner Commands to the correct autonomous system. Three unique matching bug/fix reports within seven days can create a routed finding or Owner Command. Critical safety, security, privacy, payment, billing, payout, or provider reports can escalate immediately for review without executing the high-risk action.
 
 ## Safe Writes
 
@@ -25,6 +27,13 @@ Scheduler proof: `chillywood-support-success-operator-watch-once.timer` is enabl
 - `support_response_drafts`
 - `support_escalation_records`
 - `support_operator_learning_state`
+- `user_report_intake_events`
+- `user_report_classifications`
+- `user_report_clusters`
+- `user_report_cluster_members`
+- `user_report_routing_actions`
+- `user_report_operator_findings`
+- `user_report_router_learning_state`
 - Owner Command requests
 - Autonomous approval requests
 
@@ -41,8 +50,12 @@ Rows are health/finding/draft/escalation rows only with `highRiskExecuted=false`
 - no ban/restrict/enforcement
 - no external legal/payment commitment
 - no private evidence exposure
+- no raw user report text execution
+- no report-spam-triggered high-risk action
 
 Support responses are draft response only unless a future template-backed safe send path is approved and proved.
+
+User reports can never directly issue refunds, grant Premium, move money, mutate auth/RLS, ban/restrict users, delete content, mutate provider products, publish/rollback OTA, change LiveKit routing, change R2/media behavior, or activate ads/sponsors.
 
 ## Edge And CLI
 

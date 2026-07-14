@@ -204,6 +204,8 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "proof account",
     "two-device proof",
     "installed proof",
+    "report cluster route bug",
+    "user report route marker",
   ],
   platform_recovery_operator: [
     "platform recovery",
@@ -230,6 +232,10 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "account help",
     "support draft",
     "support escalation",
+    "user report router",
+    "report cluster",
+    "three unique reporters",
+    "threshold routing",
   ],
   search_ranking_integrity_operator: [
     "search",

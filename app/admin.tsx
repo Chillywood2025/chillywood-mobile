@@ -11457,6 +11457,21 @@ export default function AdminStudioScreen() {
                 Approval path: money/auth/support commitments route to Owner Command or the target operator approval path.
               </Text>
             </View>
+            <View testID="admin-user-report-router-section" style={{ gap: 8 }}>
+              <Text style={styles.ownerSectionTitle}>User Report Router</Text>
+              <Text testID="user-report-cluster-card" style={styles.ownerDetailText}>
+                Clusters: authenticated user reports are sanitized, fingerprinted, deduped by unique reporter, and grouped into bug/fix, support, safety, privacy, security, payment, media, LiveKit, notification, release, search, and ads/sponsor classes.
+              </Text>
+              <Text testID="user-report-routed-system" style={styles.ownerDetailText}>
+                Routed systems: safety reports go to moderation_safety_operator; account/support/payment labels go to support_success_operator with money_flow_control readback; route/button bugs go to installed_product_qa_operator; LiveKit, media, notifications, release, search, privacy, and security route to their owning operators.
+              </Text>
+              <Text testID="user-report-threshold-status" style={styles.ownerDetailText}>
+                Threshold: three unique users with the same sanitized fingerprint within seven days can create a routed finding or Owner Command. Critical safety, security, privacy, payment, and provider reports escalate immediately for review.
+              </Text>
+              <Text testID="user-report-owner-command-link" style={styles.ownerDetailText}>
+                Owner Command links: routed clusters create safe Owner Command or approval rows only. User reports cannot directly move money, grant Premium, mutate auth/RLS, enforce moderation, publish OTA, change LiveKit/R2 behavior, or activate ads/sponsors.
+              </Text>
+            </View>
             <View testID="admin-search-ranking-integrity-operator-section" style={{ gap: 8 }}>
               <Text style={styles.ownerSectionTitle}>Search / Ranking Integrity Operator</Text>
               <Text testID="search-ranking-integrity-operator-status" style={styles.ownerDetailText}>
