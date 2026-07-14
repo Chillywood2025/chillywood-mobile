@@ -217,6 +217,8 @@
     "legal-site:build": "node ./public-site/legal-site/build.mjs",
     "legal-site:serve": "node ./public-site/legal-site/serve.mjs",
     "validate:runtime": "node ./scripts/validate-runtime.mjs",
+    "guard:ios-config-policy": "node ./scripts/guard-ios-config-policy.mjs",
+    "proof:ios-config": "node ./scripts/proof-ios-config.mjs",
     "lint": "expo lint",
     "guard:refresh-policy": "node ./scripts/guard-refresh-policy.mjs",
     "guard:creator-monetization-policy": "node ./scripts/guard-creator-monetization-policy.mjs",

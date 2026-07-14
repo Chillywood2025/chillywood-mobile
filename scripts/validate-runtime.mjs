@@ -30,7 +30,9 @@ const loadDotEnvFile = (filename) => {
   }
 };
 
-loadDotEnvFile(".env.local");
+if (process.env.EXPO_NO_DOTENV !== "1") {
+  loadDotEnvFile(".env.local");
+}
 
 const readEnv = (name) => String(process.env[name] ?? "").trim();
 
@@ -41,10 +43,9 @@ const requiredEnv = [
   "EXPO_PUBLIC_BETA_ENVIRONMENT",
 ];
 
-const strictProductionEnv = [
+const strictProductionBaseEnv = [
   "EXPO_PUBLIC_LIVEKIT_URL",
   "EXPO_PUBLIC_LIVEKIT_TOKEN_ENDPOINT",
-  "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY",
   "EXPO_PUBLIC_PRIVACY_POLICY_URL",
   "EXPO_PUBLIC_TERMS_OF_SERVICE_URL",
   "EXPO_PUBLIC_ACCOUNT_DELETION_URL",
@@ -53,7 +54,20 @@ const strictProductionEnv = [
 ];
 
 const allowedEnvironments = new Set(["closed-beta", "public-v1"]);
+const allowedValidationPlatforms = new Set(["", "android", "ios"]);
 const requireStrictProductionEnv = readEnv("CHILLYWOOD_VALIDATE_PRODUCTION_ENV") === "1";
+const validationPlatform = readEnv("CHILLYWOOD_VALIDATE_PLATFORM").toLowerCase();
+const requireIosPurchases = readEnv("CHILLYWOOD_IOS_PURCHASES_REQUIRED") === "1";
+
+if (!allowedValidationPlatforms.has(validationPlatform)) {
+  console.error("CHILLYWOOD_VALIDATE_PLATFORM must be android or ios when set.");
+  process.exit(1);
+}
+
+if (requireIosPurchases && validationPlatform !== "ios") {
+  console.error("CHILLYWOOD_IOS_PURCHASES_REQUIRED=1 requires CHILLYWOOD_VALIDATE_PLATFORM=ios.");
+  process.exit(1);
+}
 
 const missing = requiredEnv.filter((name) => !readEnv(name));
 if (missing.length) {
@@ -62,6 +76,11 @@ if (missing.length) {
 }
 
 if (requireStrictProductionEnv) {
+  const strictProductionEnv = [
+    ...strictProductionBaseEnv,
+    ...(validationPlatform === "ios" ? [] : ["EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY"]),
+    ...(requireIosPurchases ? ["EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY"] : []),
+  ];
   const missingStrict = strictProductionEnv.filter((name) => !readEnv(name));
   if (missingStrict.length) {
     console.error(`Missing strict production runtime env vars: ${missingStrict.join(", ")}`);
@@ -142,6 +161,7 @@ const runtime = isPlainObject(config?.extra?.runtime) ? config.extra.runtime : {
 const legal = isPlainObject(runtime.legal) ? runtime.legal : {};
 const livekit = isPlainObject(runtime.livekit) ? runtime.livekit : {};
 const revenueCat = isPlainObject(runtime.revenueCat) ? runtime.revenueCat : {};
+const ios = isPlainObject(config?.ios) ? config.ios : {};
 
 const readConfigValue = (object, key) => String(object?.[key] ?? "").trim();
 const configPresenceIssues = [];
@@ -160,8 +180,80 @@ if (!readConfigValue(legal, "copyrightReportUrl")) configPresenceIssues.push("Ex
 if (!readConfigValue(legal, "supportEmail") && requireStrictProductionEnv) {
   configPresenceIssues.push("Expo public config missing runtime.legal.supportEmail.");
 }
-if (!readConfigValue(revenueCat, "androidPublicSdkKey") && requireStrictProductionEnv) {
+if (!readConfigValue(revenueCat, "androidPublicSdkKey") && requireStrictProductionEnv && validationPlatform !== "ios") {
   configPresenceIssues.push("Expo public config missing runtime.revenueCat.androidPublicSdkKey.");
+}
+if (!readConfigValue(revenueCat, "iosPublicSdkKey") && requireIosPurchases) {
+  configPresenceIssues.push(
+    "iOS purchases are explicitly required, but Expo public config is missing runtime.revenueCat.iosPublicSdkKey.",
+  );
+}
+
+const expectedIosBundleIdentifier = "com.chillywood.mobile";
+const expectedAppleTeamId = "CU7536UQK9";
+const requiredIosAssociatedDomain = "applinks:chillywoodstream.com";
+
+if (validationPlatform === "ios") {
+  if (readConfigValue(ios, "bundleIdentifier") !== expectedIosBundleIdentifier) {
+    configPresenceIssues.push(`Expo iOS bundleIdentifier must be ${expectedIosBundleIdentifier}.`);
+  }
+
+  const associatedDomains = Array.isArray(ios.associatedDomains) ? ios.associatedDomains : [];
+  if (!associatedDomains.includes(requiredIosAssociatedDomain)) {
+    configPresenceIssues.push(`Expo iOS associatedDomains must include ${requiredIosAssociatedDomain}.`);
+  }
+
+  const entitlements = isPlainObject(ios.entitlements) ? ios.entitlements : {};
+  const associatedDomainEntitlements = Array.isArray(entitlements["com.apple.developer.associated-domains"])
+    ? entitlements["com.apple.developer.associated-domains"]
+    : [];
+  if (!associatedDomainEntitlements.includes(requiredIosAssociatedDomain)) {
+    configPresenceIssues.push(
+      `Expo iOS associated-domain entitlement must include ${requiredIosAssociatedDomain}.`,
+    );
+  }
+
+  if (requireStrictProductionEnv && readConfigValue(ios, "appleTeamId") !== expectedAppleTeamId) {
+    configPresenceIssues.push(`Strict iOS production config requires Apple Team ID ${expectedAppleTeamId}.`);
+  }
+
+  const livekitServerUrl = readConfigValue(livekit, "serverUrl");
+  const livekitTokenEndpoint = readConfigValue(livekit, "tokenEndpoint");
+  if (!livekitServerUrl.startsWith("wss://")) {
+    configPresenceIssues.push("Expo iOS runtime.livekit.serverUrl must use wss://.");
+  }
+  if (!livekitTokenEndpoint.startsWith("https://")) {
+    configPresenceIssues.push("Expo iOS runtime.livekit.tokenEndpoint must use https://.");
+  }
+
+  for (const [key, label] of [
+    ["privacyPolicyUrl", "privacy policy"],
+    ["termsOfServiceUrl", "terms of service"],
+    ["accountDeletionUrl", "account deletion"],
+    ["copyrightReportUrl", "copyright report"],
+  ]) {
+    if (!readConfigValue(legal, key).startsWith("https://")) {
+      configPresenceIssues.push(`Expo iOS ${label} URL must use https://.`);
+    }
+  }
+
+  if (requireStrictProductionEnv) {
+    const googleServicesFile = readConfigValue(ios, "googleServicesFile");
+    if (!googleServicesFile) {
+      configPresenceIssues.push(
+        "Strict iOS production config requires ios.googleServicesFile. Set IOS_GOOGLE_SERVICES_FILE to an EAS file-variable path or provide an ignored local GoogleService-Info.plist.",
+      );
+    } else {
+      const absoluteGoogleServicesFile = path.isAbsolute(googleServicesFile)
+        ? googleServicesFile
+        : path.resolve(process.cwd(), googleServicesFile);
+      if (!existsSync(absoluteGoogleServicesFile)) {
+        configPresenceIssues.push(
+          "Strict iOS production config resolved ios.googleServicesFile, but the configured file path does not exist.",
+        );
+      }
+    }
+  }
 }
 
 if (configPresenceIssues.length) {
@@ -177,14 +269,18 @@ console.log(
       projectId,
       updatesUrl: actualUpdatesUrl,
       runtimeVersion: runtimePolicy === "appVersion" ? { policy: runtimePolicy } : runtimeString,
-      betaEnvironment: resolvedBetaEnvironment,
+      betaEnvironmentValid: true,
       productionEnvStrict: requireStrictProductionEnv,
       supabaseConfigured: true,
-      supabaseFunctionsUrl: readConfigValue(runtime, "supabaseFunctionsUrl"),
+      supabaseFunctionsConfigured: true,
       livekitConfigured: true,
       legalUrlsConfigured: true,
       supportEmailConfigured: !!readConfigValue(legal, "supportEmail"),
       revenueCatAndroidPublicKeyConfigured: !!readConfigValue(revenueCat, "androidPublicSdkKey"),
+      iosConfigured: validationPlatform === "ios",
+      iosFirebaseFileConfigured: validationPlatform === "ios" && !!readConfigValue(ios, "googleServicesFile"),
+      iosPurchasesRequired: requireIosPurchases,
+      revenueCatIosPublicKeyConfigured: !!readConfigValue(revenueCat, "iosPublicSdkKey"),
     },
     null,
     2,

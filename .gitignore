@@ -16,8 +16,13 @@ expo-env.d.ts
 *.jks
 *.p8
 *.p12
+*.pem
+*.cer
 *.key
 *.mobileprovision
+*.ipa
+*.xcarchive/
+GoogleService-Info.plist
 
 # Metro
 .metro-health-check*
@@ -30,10 +35,17 @@ yarn-error.*
 
 # macOS
 .DS_Store
-*.pem
 
 # local env files
 .env*.local
+app-store-connect.env
+app-store-connect.*.env
+!app-store-connect.example.env
+!app-store-connect.env.example
+
+# local proof and generated artifacts
+/artifacts/
+/supabase/.temp/
 
 # typescript
 *.tsbuildinfo

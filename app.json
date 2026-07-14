@@ -13,10 +13,22 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "appleTeamId": "CU7536UQK9",
+      "associatedDomains": [
+        "applinks:chillywoodstream.com"
+      ],
+      "buildNumber": "1",
+      "bundleIdentifier": "com.chillywood.mobile",
       "supportsTablet": true,
+      "entitlements": {
+        "com.apple.developer.associated-domains": [
+          "applinks:chillywoodstream.com"
+        ]
+      },
       "infoPlist": {
-        "NSCameraUsageDescription": "Chi'llywood uses your camera so you can join in-app communication rooms with live video.",
-        "NSMicrophoneUsageDescription": "Chi'llywood uses your microphone so you can speak in in-app communication rooms."
+        "NSCameraUsageDescription": "Chi'llywood uses your camera so you can make video calls and join live rooms.",
+        "NSMicrophoneUsageDescription": "Chi'llywood uses your microphone so you can speak in calls and live rooms.",
+        "NSPhotoLibraryUsageDescription": "Chi'llywood accesses photos you choose for your profile and social images."
       }
     },
     "android": {

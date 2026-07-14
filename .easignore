@@ -12,6 +12,8 @@ web-build/
 # Local proof and generated artifacts
 artifacts/
 supabase/.temp/
+*.ipa
+*.xcarchive/
 
 # Native build output, keep checked-in native source
 android/.gradle/
@@ -26,9 +28,16 @@ ios/build/
 
 # Local-only env files and signing material
 .env*.local
+app-store-connect.env
+app-store-connect.*.env
+!app-store-connect.example.env
+!app-store-connect.env.example
 *.keystore
 *.jks
 *.p8
 *.p12
+*.pem
+*.cer
 *.key
 *.mobileprovision
+GoogleService-Info.plist

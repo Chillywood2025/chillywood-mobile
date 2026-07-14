@@ -16,6 +16,8 @@ const DEPLOYED_TERMS_OF_SERVICE_URL = "https://chillywoodstream.com/terms";
 const DEPLOYED_ACCOUNT_DELETION_URL = "https://chillywoodstream.com/account-deletion";
 const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-report";
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
+const IOS_ASSOCIATED_DOMAIN = "applinks:chillywoodstream.com";
+const IOS_PHOTO_LIBRARY_USAGE_DESCRIPTION = "Chi'llywood accesses photos you choose for your profile and social images.";
 const ANDROID_APP_LINK_HOST = "chillywoodstream.com";
 const ANDROID_APP_LINK_EXACT_PATHS = [
   "/auth",
@@ -62,7 +64,7 @@ const CHILLY_CHAT_NOTIFICATION_SOUND_FILES = [
   "./assets/sounds/chilly-chat/classic_phone.wav",
 ] as const;
 
-const resolveExistingFile = (...candidates: Array<string | undefined>) => {
+const resolveExistingFile = (...candidates: (string | undefined)[]) => {
   for (const candidate of candidates) {
     const normalized = normalizeText(candidate);
     if (!normalized) continue;
@@ -131,6 +133,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ? base.ios
       : {}
   ) as NonNullable<ExpoConfig["ios"]>;
+  const existingIosInfoPlist = (
+    existingIos.infoPlist && typeof existingIos.infoPlist === "object" && !Array.isArray(existingIos.infoPlist)
+      ? existingIos.infoPlist
+      : {}
+  ) as Record<string, unknown>;
+  const existingIosEntitlements = (
+    existingIos.entitlements && typeof existingIos.entitlements === "object" && !Array.isArray(existingIos.entitlements)
+      ? existingIos.entitlements
+      : {}
+  ) as Record<string, unknown>;
   const existingRuntime = (
     existingExtra.runtime && typeof existingExtra.runtime === "object" && !Array.isArray(existingExtra.runtime)
       ? existingExtra.runtime
@@ -161,10 +173,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     "./google-services.json",
     "./android/app/google-services.json",
   );
-  const iosGoogleServicesFile = resolveExistingFile(
+  const configuredIosGoogleServicesFile = normalizeText(process.env.IOS_GOOGLE_SERVICES_FILE);
+  const iosGoogleServicesFile = configuredIosGoogleServicesFile || resolveExistingFile(
     typeof existingIos.googleServicesFile === "string" ? existingIos.googleServicesFile : undefined,
     "./GoogleService-Info.plist",
   );
+  const iosAssociatedDomains = [
+    ...(Array.isArray(existingIos.associatedDomains) ? existingIos.associatedDomains : []),
+    IOS_ASSOCIATED_DOMAIN,
+  ].filter((value, index, values) => values.indexOf(value) === index);
+  const existingAssociatedDomainEntitlements = Array.isArray(
+    existingIosEntitlements["com.apple.developer.associated-domains"],
+  )
+    ? existingIosEntitlements["com.apple.developer.associated-domains"] as string[]
+    : [];
 
   return {
     ...base,
@@ -184,6 +206,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ios: {
       ...base.ios,
       ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
+      associatedDomains: iosAssociatedDomains,
+      entitlements: {
+        ...existingIosEntitlements,
+        "com.apple.developer.associated-domains": [
+          ...existingAssociatedDomainEntitlements,
+          IOS_ASSOCIATED_DOMAIN,
+        ].filter((value, index, values) => values.indexOf(value) === index),
+      },
+      infoPlist: {
+        ...existingIosInfoPlist,
+        NSPhotoLibraryUsageDescription: normalizeText(
+          existingIosInfoPlist.NSPhotoLibraryUsageDescription || IOS_PHOTO_LIBRARY_USAGE_DESCRIPTION,
+        ),
+      },
     },
     plugins: mergePlugins(base.plugins, [
       "@livekit/react-native-expo-plugin",
