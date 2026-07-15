@@ -37,6 +37,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+
           target = Path("scripts/agent-ios-recovery-push-patch.mjs")
           source = target.read_text()
           anchor = 'import fs from "node:fs";\n'
@@ -45,7 +46,15 @@ jobs:
               if anchor not in source:
                   raise SystemExit("patch script import anchor missing")
               source = source.replace(anchor, replacement, 1)
-              target.write_text(source)
+
+          for value in (
+              "${platformLabel}",
+              "${provisionalLabel}",
+              '${Platform.OS === "ios" ? "iOS" : "Android"}',
+          ):
+              source = source.replace(value, "\\" + value)
+
+          target.write_text(source)
           PY
 
       - name: Apply platform-neutral push patch
