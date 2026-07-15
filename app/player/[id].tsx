@@ -6984,9 +6984,7 @@ export default function PlayerScreen() {
 
     setPaidVideoUnlockBusy(true);
     setPaidVideoUnlockMessage(
-      Platform.OS === "ios"
-        ? "Opening App Store checkout..."
-        : "Opening Google Play..."
+      `Opening ${Platform.OS === "ios" ? "App Store" : "Google Play"} checkout...`
     );
     try {
       debugLog("paid-video", "paid_video_checkout_start", {
