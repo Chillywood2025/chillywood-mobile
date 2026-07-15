@@ -1303,7 +1303,6 @@ export default function ChillyChatThreadScreen() {
     callBusy,
     clearVisibleIncomingCallState,
     currentUserId,
-    dismissPresentedChillyChatCallNotifications,
     handleDeclineIncomingCall,
     incomingCallInvite,
     loadThreadState,
@@ -1581,7 +1580,7 @@ export default function ChillyChatThreadScreen() {
     });
     setHeaderQuickActionsOpen(false);
     setReportVisible(true);
-  }, [officialAccount?.auditOwnerKey, threadId, officialAccount]);
+  }, [threadId, officialAccount]);
 
   const handleSubmitReport = useCallback(async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
     if (!threadId) return;
@@ -1611,8 +1610,6 @@ export default function ChillyChatThreadScreen() {
       setReportBusy(false);
     }
   }, [
-    officialAccount?.auditOwnerKey,
-    officialAccount?.platformRoleLabel,
     otherMember?.userId,
     thread?.activeCallType,
     threadId,
