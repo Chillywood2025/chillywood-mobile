@@ -23,6 +23,16 @@ const assertBefore = (source, firstNeedle, secondNeedle, label) => {
   if (firstIndex < 0 || secondIndex < 0 || firstIndex > secondIndex) fail(label);
 };
 
+const sliceBetween = (source, startNeedle, endNeedle, label) => {
+  const startIndex = source.indexOf(startNeedle);
+  const endIndex = source.indexOf(endNeedle, startIndex + startNeedle.length);
+  if (startIndex < 0 || endIndex < 0 || endIndex <= startIndex) {
+    fail(`${label} is missing.`);
+    return "";
+  }
+  return source.slice(startIndex, endIndex);
+};
+
 const assertStaticRole = ({ label, requestedRole, isHost, freshMembership, approved, muted, expectedRole, expectedCanPublish }) => {
   let participantRole = "viewer";
   let canPublish = false;
@@ -50,6 +60,18 @@ const watchPartyLiveKitGuard = readSource("scripts/guard-watch-party-livekit-cam
 const seatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
 const liveStagePresentation = readSource("_lib/watch-party/live-stage-presentation.ts");
 const watchParty = readSource("_lib/watchParty.ts");
+const liveStageLocalAudioGate = sliceBetween(
+  liveStage,
+  "const publishLocalStageAudio = stageLocalMediaIntent",
+  "const publishLocalStageCamera = stageLocalMediaIntent",
+  "Live Stage local audio publish gate boundary",
+);
+const liveStageLocalCameraGate = sliceBetween(
+  liveStage,
+  "const publishLocalStageCamera = stageLocalMediaIntent",
+  "const currentStageSeatActivating",
+  "Live Stage local camera publish gate boundary",
+);
 
 assertStaticRole({
   label: "host",
@@ -132,8 +154,15 @@ assertIncludes(liveStagePresentation, "canRenderParticipantSpecificLiveKitTrack"
 assertIncludes(liveStage, "currentTrackedParticipantState?.role === \"speaker\"", "Live Stage local speaker authority state");
 assertIncludes(liveStage, "currentStageMembership?.canSpeak", "Live Stage canSpeak membership authority");
 assertIncludes(liveStage, "currentStageMembership?.stageRole === \"speaker\"", "Live Stage stageRole membership authority");
-assertIncludes(liveStage, "const publishLocalStageAudio = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;", "Live Stage local audio publish gate");
-assertIncludes(liveStage, "const publishLocalStageCamera = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;", "Live Stage local camera publish gate");
+for (const [source, label] of [
+  [liveStageLocalAudioGate, "Live Stage local audio publish gate"],
+  [liveStageLocalCameraGate, "Live Stage local camera publish gate"],
+]) {
+  assertIncludes(source, "stageLocalMediaIntent", `${label} explicit intent`);
+  assertIncludes(source, 'mediaAppState === "active"', `${label} foreground state`);
+  assertIncludes(source, "liveKitContractAllowsStagePublish", `${label} server authority`);
+  assertIncludes(source, "!isCurrentStageParticipantMuted", `${label} mute state`);
+}
 assertIncludes(liveStage, "const staleRoleContract = !!liveKitJoinContract && liveKitJoinContract.participantRole !== desiredLiveKitAuthority.participantRole;", "Live Stage role mismatch contract refresh");
 assertIncludes(liveStage, "const stalePublishContract = !!liveKitJoinContract && existingCanPublish !== desiredCanPublish;", "Live Stage publish mismatch contract refresh");
 assertIncludes(liveStage, "liveKitContractMatchesDesiredAuthority(liveKitJoinContract, desiredLiveKitAuthority)", "Live Stage publish readiness must require matching contract authority");
