@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "../_lib/moderation";
 import { resolveInternalTesterSandboxPurchaseMode } from "../_lib/monetization";
@@ -79,6 +79,9 @@ const scopeForSandboxProduct = (product: SandboxProduct): MoneyScopeKey => {
   if (product.sourceType === "event") return "event_pass";
   return "paid_creator_video";
 };
+
+const STORE_PROVIDER_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
+const STORE_PROVIDER_PAIR = `${STORE_PROVIDER_NAME} / RevenueCat`;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -179,7 +182,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
         throw new Error(`RevenueCat product ${selectedProduct.providerProductId} is not available on this build/account.`);
       }
 
-      setStatus("Opening Google Play sandbox purchase...");
+      setStatus(`Opening ${STORE_PROVIDER_PAIR} sandbox purchase...`);
       const result = await purchaseRevenueCatStoreProduct(storeProduct);
       const intentId = normalizeText((intent as { id?: unknown } | null)?.id);
       const purchasedProductId = normalizeText(result.productIdentifier) || selectedProduct.providerProductId;
@@ -293,7 +296,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
             ["Payouts", "Off"],
             ["Production money", "Off"],
             ["Payable sandbox rows", "0 expected"],
-            ["Stripe Android digital checkout", "Absent"],
+            ["Stripe digital checkout", "Absent"],
           ].map(([label, value]) => (
             <View key={label} style={styles.controlRow}>
               <Text style={styles.controlLabel}>{label}</Text>
@@ -306,7 +309,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Premium</Text>
         <Text style={styles.body}>
-          Use the Premium screen for the Google Play / RevenueCat sandbox subscription test and restore path. Public/default
+          Use the Premium screen for the {STORE_PROVIDER_PAIR} sandbox subscription test and restore path. Public/default
           accounts still see Premium unavailable while the purchase shell is on hold.
         </Text>
         <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />

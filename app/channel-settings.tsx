@@ -1462,6 +1462,8 @@ export function ChannelStudioScreen() {
   );
   const hasPremiumCreatorToolAccess =
     premiumEntitlement?.isActive === true || premiumSnapshotActive || hasOwnerOperatorStudioAccess;
+  const storeProviderName = Platform.OS === "ios" ? "App Store" : "Google Play";
+  const storeProviderPair = `${storeProviderName} / RevenueCat`;
   const revenueCatReadiness = useMemo(() => getRevenueCatProductionReadiness(), []);
   const creatorMoneyAuditEvents = useMemo(() => buildCreatorMoneyAuditEvents({
     summary: creatorMonetizationSummary,
@@ -2144,7 +2146,7 @@ export function ChannelStudioScreen() {
       }
       setChannelSubscriptionNotice(
         enabled
-          ? "Channel Subscription saved in sandbox mode. Fans can subscribe only through verified Google Play / RevenueCat checkout."
+          ? `Channel Subscription saved in sandbox mode. Fans can subscribe only through verified ${storeProviderPair} checkout.`
           : "Channel Subscription paused. Fans cannot start a new subscription right now.",
       );
       await refreshChannelSubscriptions();
@@ -2188,7 +2190,7 @@ export function ChannelStudioScreen() {
       }
       setVipPassNotice(
         enabled
-          ? "VIP Pass saved in sandbox mode. Fans can get VIP only through verified Google Play / RevenueCat checkout."
+          ? `VIP Pass saved in sandbox mode. Fans can get VIP only through verified ${storeProviderPair} checkout.`
           : "VIP Pass paused. Fans cannot get VIP right now.",
       );
       await refreshVipPasses();
@@ -2247,7 +2249,7 @@ export function ChannelStudioScreen() {
       }).catch(() => null);
       completed.push("Tips");
     } catch {
-      blockers.push("Google Play sandbox tip setup still needs attention.");
+      blockers.push(`${storeProviderName} sandbox tip setup still needs attention.`);
     }
 
     const latestPublicVideo = creatorVideos
@@ -4605,7 +4607,7 @@ export function ChannelStudioScreen() {
         source_surface: "live_events",
       });
       await refreshPaidEvents();
-      setEventNotice("Paid Event saved in sandbox mode. Fans can buy an Event Pass only through verified Google Play / RevenueCat checkout.");
+      setEventNotice(`Paid Event saved in sandbox mode. Fans can buy an Event Pass only through verified ${storeProviderPair} checkout.`);
     } catch (error) {
       setEventNotice(formatCreatorSetupError(error, "Unable to save Paid Event settings right now."));
     } finally {
@@ -5661,7 +5663,7 @@ export function ChannelStudioScreen() {
                 keyboardType="decimal-pad"
               />
               <Text style={styles.noticeText}>
-                Paid Videos use Google Play / RevenueCat sandbox testing. This unlocks this creator video only and does not include Premium, subscriptions, VIP, live rooms, Watch-Party Seat Passes, or other creator content.
+                Paid Videos use {storeProviderPair} sandbox testing. This unlocks this creator video only and does not include Premium, subscriptions, VIP, live rooms, Watch-Party Seat Passes, or other creator content.
               </Text>
             </>
           ) : null}
@@ -7901,9 +7903,9 @@ export function ChannelStudioScreen() {
     ];
     const providerCards: readonly SummaryMetricCard[] = [
       {
-        label: "Google Play",
+        label: storeProviderName,
         value: storeStatus,
-        body: `${switchSetupBody("revenuecat_google_play_enabled", "Store setup needed before Android digital purchases can be active.")} ${summarizeProviderReadiness(googlePlayProductReadiness, "Store setup needed before Android digital purchases can be active.")}`,
+        body: `${switchSetupBody("revenuecat_google_play_enabled", "Store setup needed before digital purchases can be active.")} ${summarizeProviderReadiness(googlePlayProductReadiness, "Store setup needed before digital purchases can be active.")}`,
         tone: sectionTone(storeStatus) === "default" ? "default" : "unavailable",
       },
       {
@@ -7915,13 +7917,16 @@ export function ChannelStudioScreen() {
       {
         label: "Stripe Connect",
         value: stripeStatus,
-        body: "Stripe Connect is payout setup only. It does not charge Android users for digital goods.",
+        body: "Stripe Connect is payout setup only. It does not charge users for digital goods.",
         tone: sectionTone(stripeStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "Tips rail",
         value: providerStatusLabel(tipsProviderReadiness, tipFeatureStatus === "Setup mode" ? "Setup mode" : "Setup needed"),
-        body: summarizeProviderReadiness(tipsProviderReadiness, "Android tester tips use Google Play / RevenueCat sandbox. Stripe is reserved for physical merch and payout readiness."),
+        body: summarizeProviderReadiness(
+          tipsProviderReadiness,
+          `${storeProviderName} tester tips use ${storeProviderPair} sandbox. Stripe is reserved for physical merch and payout readiness.`,
+        ),
         tone: getProviderReadinessTone(tipsProviderReadiness),
       },
       {
@@ -7970,7 +7975,7 @@ export function ChannelStudioScreen() {
       {
         label: "Product",
         value: CREATOR_MONETIZATION_DOCTRINE.premiumProduct,
-        body: "Google Play product id is public setup metadata, not a credential.",
+        body: `${storeProviderName} product id is public setup metadata, not a credential.`,
       },
       {
         label: "Stripe Connect",
@@ -7987,7 +7992,7 @@ export function ChannelStudioScreen() {
       {
         label: "Payment rails",
         value: providerStatusLabel(policyReadiness, "Guarded"),
-        body: summarizeProviderReadiness(policyReadiness, "Premium remains Google Play plus RevenueCat; creator payouts remain separate."),
+        body: summarizeProviderReadiness(policyReadiness, `Premium remains ${storeProviderName} plus RevenueCat; creator payouts remain separate.`),
       },
       {
         label: "Webhook checks",
@@ -8781,7 +8786,7 @@ export function ChannelStudioScreen() {
       { label: "Channel subscriptions", value: creatorChannelSubscriptionOffers.length ? `${creatorChannelSubscriptionOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: channelSubscriptionPaidTransactions.length ? `${channelSubscriptionPaidTransactions.length} verified sandbox subscription transaction${channelSubscriptionPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(channelSubscriptionGrossCents, "usd")}. Channel subscriptions unlock only this creator's subscriber area.` : `Offer type: channel_subscription. Setup configs saved: ${sandboxConfigCount("channel_subscription")}. Separate from Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, and paid events.`, tone: creatorChannelSubscriptionOffers.length || sandboxConfigCount("channel_subscription") ? "default" : "unavailable" },
       { label: "VIP passes", value: creatorVipPassOffers.length ? `${creatorVipPassOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: vipPaidTransactions.length ? `${vipPaidTransactions.length} verified sandbox VIP purchase${vipPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(vipGrossCents, "usd")}. VIP unlocks only this creator channel VIP area.` : `Offer type: vip_pass. Setup configs saved: ${sandboxConfigCount("vip_pass")}. VIP stays separate from Chi'llywood Premium, paid videos, Watch-Party Seat Passes, paid events, channel subscriptions, and Tips.`, tone: creatorVipPassOffers.length || sandboxConfigCount("vip_pass") ? "default" : "unavailable" },
       { label: "Paid event passes", value: creatorPaidEventOffers.length ? `${creatorPaidEventOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: paidEventPaidTransactions.length ? `${paidEventPaidTransactions.length} verified sandbox event pass${paidEventPaidTransactions.length === 1 ? "" : "es"} totaling ${formatMonetizationCurrency(paidEventGrossCents, "usd")}. Event passes unlock only the linked creator event.` : `Offer type: paid_event. Setup configs saved: ${sandboxConfigCount("event")}. Event passes unlock only the linked creator event and stay separate from Premium, VIP, paid videos, and Watch-Party Seat Passes.`, tone: creatorPaidEventOffers.length || sandboxConfigCount("event") ? "default" : "unavailable" },
-      { label: "Physical merch", value: merchStatus, body: "Offer type: merch. Physical goods stay separate from Android digital access.", tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable" },
+      { label: "Physical merch", value: merchStatus, body: "Offer type: merch. Physical goods stay separate from digital access.", tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable" },
       { label: "Saved setup configs", value: `${creatorSandboxConfigs.length} saved`, body: "Saved creator configs are sandbox/not-payable. Production sales require owner/provider activation.", tone: creatorSandboxConfigs.length ? "default" : "unavailable" },
     ];
     const transactionFilters: readonly { id: MoneyTransactionFilter; label: string }[] = [
@@ -9624,16 +9629,16 @@ export function ChannelStudioScreen() {
                     <Text style={styles.summaryValue}>Off</Text>
                     <Text style={styles.summaryBody}>Provider details stay behind the advanced section.</Text>
                   </View>
-                  <View style={styles.summaryCard}>
+                <View style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>Payouts</Text>
                     <Text style={styles.summaryValue}>Off</Text>
                     <Text style={styles.summaryBody}>Cash-out, transfer, and payout release stay locked.</Text>
                   </View>
                   <View style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>Purchase provider</Text>
-                    <Text style={styles.summaryValue}>Google Play sandbox</Text>
+                    <Text style={styles.summaryValue}>{storeProviderName} sandbox</Text>
                     <Text style={styles.summaryBody}>
-                      Android digital tests use Google Play / RevenueCat. Merchandise stays in the separate Stripe lane.
+                      {`Digital tests use ${storeProviderPair}. Merchandise stays in the separate Stripe lane.`}
                     </Text>
                   </View>
                   <View style={styles.summaryCard}>
@@ -9998,7 +10003,7 @@ export function ChannelStudioScreen() {
     return (
       <BetaAccessScreen
         title="Premium required"
-        body="Platform Studio, Brand Studio, Clip Studio, and creator uploads require active Premium entitlement. Open Premium setup when RevenueCat/Google Play access is available, or use an Owner/Admin account for setup-only review."
+        body={`Platform Studio, Brand Studio, Clip Studio, and creator uploads require active Premium entitlement. Open Premium setup when RevenueCat/${storeProviderName} access is available, or use an Owner/Admin account for setup-only review.`}
         primaryActionLabel="Manage Premium"
         primaryActionRoute="/subscribe"
       />

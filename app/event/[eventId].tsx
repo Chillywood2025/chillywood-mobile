@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -229,7 +229,9 @@ export default function PaidCreatorEventRoute() {
                   {purchaseLoading ? (
                     <View style={styles.busyRow}>
                       <ActivityIndicator color="#fff" />
-                      <Text style={styles.primaryButtonText}>Opening Google Play</Text>
+                      <Text style={styles.primaryButtonText}>
+                        {`Opening ${Platform.OS === "ios" ? "App Store" : "Google Play"}`}
+                      </Text>
                     </View>
                   ) : (
                     <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : "Get Event Pass"}</Text>

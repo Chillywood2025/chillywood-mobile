@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
@@ -28,6 +28,8 @@ const PREMIUM_BODY =
 const PREMIUM_SANDBOX_NOTICE =
   "Sandbox test mode — no real money is charged.";
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
+const STORE_PROVIDER_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
+const STORE_PROVIDER_PAIR = `${STORE_PROVIDER_NAME} / RevenueCat`;
 
 const buildPurchaseReady = (snapshot: MonetizationSnapshot, purchaseMode: MonetizationPurchaseMode) => {
   const target = snapshot.targets.premium_subscription;
@@ -163,7 +165,7 @@ export default function SubscribeScreen() {
         enabled: false,
         mode: "public",
         label: current.label,
-        reason: "Sign in before starting a Google Play / RevenueCat sandbox Premium purchase.",
+        reason: `Sign in before starting a ${STORE_PROVIDER_PAIR} sandbox Premium purchase.`,
         allowedRoles: [],
         liveMoneyEnabled: false,
         payoutsEnabled: false,
@@ -224,7 +226,7 @@ export default function SubscribeScreen() {
       : !snapshot.configuration.shouldConfigure
         ? snapshot.configuration.reason ?? "RevenueCat is not configured for this build."
         : !snapshot.canMakePayments
-          ? "Google Play billing cannot make purchases on this device/account right now."
+          ? `${STORE_PROVIDER_NAME} billing cannot make purchases on this device/account right now.`
           : !premiumTarget.offeringAvailable
             ? "RevenueCat did not return the Premium offering for this account."
             : premiumTarget.packageCount <= 0
@@ -240,7 +242,7 @@ export default function SubscribeScreen() {
   const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
   const availabilitySummary = purchaseReady
     ? sandboxMode.enabled
-      ? "Google Play / RevenueCat sandbox purchase can open when billing and the Premium offering are available."
+      ? `${STORE_PROVIDER_PAIR} sandbox purchase can open when billing and the Premium offering are available.`
       : "A verified store subscription is ready for this account."
     : FRIENDLY_UNAVAILABLE_MESSAGE;
   const primaryActionLabel = hasPremium
@@ -487,7 +489,9 @@ export default function SubscribeScreen() {
             <StatusLine
               label="Sandbox availability"
               value={sandboxPurchaseAvailable ? "Ready" : "Not ready"}
-              body={sandboxPurchaseAvailable ? "Provider-backed Google Play / RevenueCat sandbox purchase is available. Internal tester role is not required for this path." : sandboxBlockedReason}
+              body={sandboxPurchaseAvailable
+                ? `Provider-backed ${STORE_PROVIDER_PAIR} sandbox purchase is available. Internal tester role is not required for this path.`
+                : sandboxBlockedReason}
               tone={sandboxPurchaseAvailable ? "default" : "muted"}
             />
             <StatusLine
@@ -497,7 +501,7 @@ export default function SubscribeScreen() {
               tone={snapshot.configuration.shouldConfigure ? "default" : "warning"}
             />
             <StatusLine
-              label="Google Play billing"
+              label={`${STORE_PROVIDER_NAME} billing`}
               value={snapshot.canMakePayments ? "Yes" : "No"}
               body={snapshot.canMakePayments ? "Purchases can be attempted on this device/account." : "Billing cannot make purchases on this device/account right now."}
               tone={snapshot.canMakePayments ? "default" : "warning"}
@@ -519,7 +523,7 @@ export default function SubscribeScreen() {
               value={sandboxMode.allowedRoles.length > 0 ? "Present" : "Not required"}
               body={sandboxMode.allowedRoles.length > 0
                 ? `Diagnostics: ${sandboxMode.allowedRoles.join(", ")}. Provider-backed sandbox purchase does not require this role.`
-                : "No owner/operator/internal-tester role is required when Google Play / RevenueCat sandbox purchase is available."}
+                : `No owner/operator/internal-tester role is required when ${STORE_PROVIDER_PAIR} sandbox purchase is available.`}
               tone="muted"
             />
             <StatusLine
