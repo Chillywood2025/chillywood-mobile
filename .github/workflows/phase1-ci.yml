@@ -1,4 +1,4 @@
-name: Phase 1 CI - Lint and Typecheck
+name: Phase 1 CI
 
 on:
   pull_request:
@@ -6,14 +6,44 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
-  lint-and-typecheck:
-    name: Phase 1 Checks / Lint and Typecheck
+  phase1-check:
+    name: Phase 1 / ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: lint
+            name: Repository Lint
+            command: npm run lint
+          - key: typescript
+            name: TypeScript
+            command: npx tsc --noEmit
+          - key: runtime
+            name: Runtime Validation
+            command: npm run validate:runtime
+          - key: routes
+            name: Route Contracts
+            command: npm run guard:route-contracts
+          - key: ios
+            name: iOS Configuration
+            command: npm run guard:ios-config-policy && npm run proof:ios-config
+          - key: android
+            name: Android Regression Guards
+            command: npm run guard:payment-rail-policy && npm run guard:notification-room-call-policy && npm run guard:watch-party-livekit && npm run guard:old-room-handling
+          - key: expo-doctor
+            name: Expo Doctor
+            command: npx expo-doctor
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -24,8 +54,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run lint
-        run: npm run lint
+      - name: Run runtime validation
+        if: matrix.key == 'runtime'
+        env:
+          CI: "1"
+          EXPO_NO_DOTENV: "1"
+          EXPO_NO_CLIENT_ENV_VARS: "1"
+          EXPO_PUBLIC_SUPABASE_URL: "https://ci.invalid"
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: "ci-placeholder-not-a-secret"
+          EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST: "ci@example.invalid"
+          EXPO_PUBLIC_BETA_ENVIRONMENT: "closed-beta"
+        run: npm run validate:runtime
 
-      - name: Run typecheck
-        run: npm run typecheck
+      - name: Run diagnostic
+        if: matrix.key != 'runtime'
+        run: ${{ matrix.command }}
