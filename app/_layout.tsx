@@ -745,8 +745,8 @@ function IncomingCallNotificationBridge() {
           testID="room-safe-incoming-call-banner"
           accessibilityLabel="Room-safe incoming Chi'lly Chat call"
         >
-          <Text style={styles.incomingCallEyebrow}>Chi'lly Chat</Text>
-          <Text style={styles.incomingCallTitle}>Incoming Chi'lly Chat call</Text>
+          <Text style={styles.incomingCallEyebrow}>Chi’lly Chat</Text>
+          <Text style={styles.incomingCallTitle}>Incoming Chi’lly Chat call</Text>
           <Text style={styles.incomingCallBody}>
             Answering will leave or pause your current room media session.
           </Text>
@@ -794,7 +794,7 @@ function IncomingCallNotificationBridge() {
             <Text style={styles.incomingCallAvatarText}>{callerInitial}</Text>
           </View>
         </View>
-        <Text style={styles.incomingCallModalKicker}>Chi'lly Chat</Text>
+        <Text style={styles.incomingCallModalKicker}>Chi’lly Chat</Text>
         <Text style={styles.incomingCallModalTitle}>{callerLabel} is calling...</Text>
         <Text style={styles.incomingCallModalBody}>Incoming {callKind} call</Text>
         <View style={styles.incomingCallModalActionRow}>

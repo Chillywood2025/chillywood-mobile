@@ -243,7 +243,7 @@ export default function SpectatorMetadataScreen() {
           <>
             <Text style={styles.centerTitle}>Spectator view unavailable</Text>
             <Text style={styles.centerBody}>
-              This item is private to the creator's Chi'lly Circle, protected, blocked, or unavailable.
+              This item is private to the creator’s Chi’lly Circle, protected, blocked, or unavailable.
             </Text>
           </>
         )}

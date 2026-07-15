@@ -250,7 +250,7 @@ export default function PaidCreatorEventRoute() {
               <View style={styles.stateBox}>
                 <Text style={styles.stateTitle}>Open Event</Text>
                 <Text style={styles.body}>
-                  This event is not currently configured as a paid Event Pass. Chi'llywood Premium is separate from creator event passes.
+                  This event is not currently configured as a paid Event Pass. Chi’llywood Premium is separate from creator event passes.
                 </Text>
               </View>
             )}

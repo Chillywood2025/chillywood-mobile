@@ -615,7 +615,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View testID="home-branded-hero" style={styles.homeHeroContent}>
-              <Text style={styles.homeHeroKicker}>Chi'llywood</Text>
+              <Text style={styles.homeHeroKicker}>Chi’llywood</Text>
               <Text style={styles.homeHeroTitle} numberOfLines={2}>Stream the city</Text>
               <Text style={styles.homeHeroMeta} numberOfLines={2}>
                 Official updates, Originals, and live moments appear here when they are ready.
@@ -942,7 +942,7 @@ export default function HomeScreen() {
                     <View style={styles.rachiNameRow}>
                       <AppText scale="subhead" style={styles.rachiName}>Rachi</AppText>
                       <View style={styles.rachiOfficialBadge}>
-                        <AppText scale="caption" style={styles.rachiOfficialBadgeText}>Official Chi'llywood</AppText>
+                        <AppText scale="caption" style={styles.rachiOfficialBadgeText}>Official Chi’llywood</AppText>
                       </View>
                     </View>
                     <AppText scale="caption" style={styles.rachiUpdateMeta}>{formatAddedDate(post.createdAt).replace("Added", "Posted")}</AppText>
@@ -973,7 +973,7 @@ export default function HomeScreen() {
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <AppText scale="title3" style={styles.errorTitle}>Home couldn't refresh</AppText>
+          <AppText scale="title3" style={styles.errorTitle}>Home couldn’t refresh</AppText>
           <AppText scale="body" style={styles.errorMsg}>{error}</AppText>
 
           <Pressable style={styles.retryBtn} onPress={onRefresh}>

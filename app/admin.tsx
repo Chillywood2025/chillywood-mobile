@@ -126,7 +126,6 @@ import {
 import { buildAutonomousApprovalFoundationSummary } from "../_lib/autonomousApprovalRequests";
 import {
   AUTONOMOUS_SYSTEMS_REGISTRY,
-  listAutonomousApprovalRequiredSurfaces,
 } from "../_lib/autonomousSystemsRegistry";
 import {
   ADMIN_ACTION_REGISTRY,
@@ -1629,7 +1628,6 @@ const defaultCapabilities: AdminCapabilities = {
 };
 
 const autonomousApprovalFoundationSummary = buildAutonomousApprovalFoundationSummary();
-const autonomousApprovalRequiredSurfaces = listAutonomousApprovalRequiredSurfaces();
 
 type AutonomousApprovalRequestReadModel = {
   id: string;
@@ -2147,18 +2145,9 @@ const ownerSecurityStatusLabel = (status: unknown) => {
   return formatModerationToken(text);
 };
 
-const ownerSecurityMetricValue = (value: unknown) => (
-  value === null || value === undefined || value === "" ? "Not Connected" : String(value)
-);
-
 const ownerSecurityCountTone = (value: unknown): OwnerControlTone => {
   if (value === null || value === undefined) return "locked";
   return Number(value) > 0 ? "manual" : "success";
-};
-
-const ownerSecurityRiskTone = (value: unknown): OwnerControlTone => {
-  if (value === null || value === undefined) return "locked";
-  return Number(value) > 0 ? "danger" : "success";
 };
 
 const formatOwnerSecurityActor = (event: OwnerSecurityAuditEvent) => (
@@ -3045,11 +3034,6 @@ const formatMoneyAuditCategory = (category: MoneyAuditCategory) => (
   ADMIN_MONEY_AUDIT_FILTERS.find((option) => option.id === category)?.label ?? formatModerationToken(category)
 );
 
-const formatImmutableAuditCount = (value: number | null, loading: boolean) => {
-  if (loading) return "Loading";
-  return formatAdminAuditFoundationCount(value);
-};
-
 const formatImmutableAuditActor = (entry: PlatformAdminAuditLogRow) => {
   if (entry.actorEmail) return maskOperatorIdentity(entry.actorEmail);
   if (entry.actorUserId) return `User ${formatCompactIdentifier(entry.actorUserId)}`;
@@ -3465,7 +3449,7 @@ export default function AdminStudioScreen() {
   const [roleAuditLoading, setRoleAuditLoading] = useState(false);
   const [roleAuditFilter, setRoleAuditFilter] = useState<RoleAuditFilterKey>("all");
   const [roleConfirm, setRoleConfirm] = useState<RoleConfirmState | null>(null);
-  const [adminAuditLog, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
+  const [, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
   const [adminAuditLogSummary, setAdminAuditLogSummary] =
     useState<AdminAuditLogReadModel["summary"] | null>(null);
   const [adminAuditLogLoading, setAdminAuditLogLoading] = useState(false);
@@ -8986,7 +8970,6 @@ export default function AdminStudioScreen() {
   );
   const ownerSecurityOpenAlerts = ownerSecurityOverview?.openSecurityAlertsCount;
   const ownerSecurityActiveGrantsCount = ownerSecurityStatus?.activeTemporaryGrantsCount ?? ownerSecurityOverview?.activeTemporaryGrantsCount;
-  const ownerSecurityHighRiskActions = ownerSecurityOverview?.recentHighRiskActionsCount;
   const ownerSecurityLastRefresh = ownerSecurityOverview?.lastSecurityRefreshAt ?? null;
   const ownerSecuritySourceStates = ownerSecurityStatus?.sourceStates ?? {};
   const ownerSecuritySourceStatus = useCallback((key: string) => {
@@ -11181,7 +11164,6 @@ export default function AdminStudioScreen() {
     const webhooksSwitch = getPlatformMoneyKillSwitch(moneySwitches, "provider_webhooks_enabled");
     const sponsorshipsSwitch = getPlatformMoneyKillSwitch(moneySwitches, "sponsorships_enabled");
     const adsRevenueSwitch = getPlatformMoneyKillSwitch(moneySwitches, "ads_revenue_enabled");
-    const stripeConnectSwitch = getPlatformMoneyKillSwitch(moneySwitches, "stripe_connect_enabled");
     const liveMoneyOff = liveMoneySwitch.state !== "on";
     const moneyFlowControlSummary = getMoneyFlowControlSummary();
     const providerWebhookHealthRows = moneyFlowControlSummary.providerWebhookHealthRows;
@@ -13735,9 +13717,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>RACHI / OFFICIAL ACCOUNT</Text>
-              <Text style={styles.configTitle}>Official Chi'llywood presence</Text>
+              <Text style={styles.configTitle}>Official Chi’llywood presence</Text>
               <Text style={styles.configBody}>
-                Manage Rachi as an official Platform voice for updates, tips, and Chi'llywood Originals. Rachi does not read private chats.
+                Manage Rachi as an official Platform voice for updates, tips, and Chi’llywood Originals. Rachi does not read private chats.
               </Text>
             </View>
           </View>
@@ -13790,7 +13772,7 @@ export default function AdminStudioScreen() {
                 <OwnerStatusPill label={rachiProfileImageSavedUrl ? "Custom" : "Default"} tone={rachiProfileImageSavedUrl ? "success" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Choose a picture from this device's photo gallery to update Rachi's official Profile and Platform picture. Saves and clears write admin audit.
+                Choose a picture from this device’s photo gallery to update Rachi’s official Profile and Platform picture. Saves and clears write admin audit.
               </Text>
               <View style={styles.rachiProfileImageRow}>
                 <View style={styles.rachiProfileImagePreview}>
@@ -13897,11 +13879,11 @@ export default function AdminStudioScreen() {
 
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
-                <Text style={styles.ownerSectionTitle}>Chi'llywood Originals</Text>
+                <Text style={styles.ownerSectionTitle}>Chi’llywood Originals</Text>
                 <OwnerStatusPill label={rachiOriginalsLoading ? "Loading" : `${rachiOriginals.length} public`} tone={rachiOriginals.length ? "info" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Home reads public-safe videos owned by Rachi for the Chi'llywood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
+                Home reads public-safe videos owned by Rachi for the Chi’llywood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
               </Text>
               {rachiOriginals.length ? (
                 <View style={styles.ownerControlList}>
@@ -13960,7 +13942,7 @@ export default function AdminStudioScreen() {
                   <Text style={styles.actionText}>Open Platform</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/chilly-circle")}>
-                  <Text style={styles.actionText}>Open Chi'lly Circle</Text>
+                  <Text style={styles.actionText}>Open Chi’lly Circle</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionBtn, styles.configSaveBtnDisabled]} disabled>
                   <Text style={styles.actionText}>Upload Original</Text>
@@ -16457,7 +16439,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>LIVE OPS FIX CENTER</Text>
               <Text style={styles.configTitle}>Owner/Admin Live remediation approvals</Text>
               <Text style={styles.configBody}>
-                Real incident cards for Live Stage, Watch-Party Live, and Chi'lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
+                Real incident cards for Live Stage, Watch-Party Live, and Chi’lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
               </Text>
             </View>
             <View style={[styles.badge, getLiveOpsRiskStyle(liveOpsHighestRisk)]}>

@@ -1572,7 +1572,7 @@ export default function ChillyChatThreadScreen() {
   if (!isSignedIn) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
-        <Text style={styles.stateText}>Sign in to open Chi'lly Chat.</Text>
+        <Text style={styles.stateText}>Sign in to open Chi’lly Chat.</Text>
         <TouchableOpacity
           style={[styles.secondaryBtn, styles.signInBtn]}
           activeOpacity={0.85}
@@ -1606,9 +1606,9 @@ export default function ChillyChatThreadScreen() {
   if (officialAccount) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28, paddingHorizontal: 24 }]}>
-        <Text style={styles.stateText}>Rachi now lives in Chi'lly Circle.</Text>
+        <Text style={styles.stateText}>Rachi now lives in Chi’lly Circle.</Text>
         <Text style={[styles.stateText, styles.centeredStateBody]}>
-          Rachi is your first official Chi'lly Circle connection. Chi'lly Chat is for direct threads with people.
+          Rachi is your first official Chi’lly Circle connection. Chi’lly Chat is for direct threads with people.
         </Text>
         <TouchableOpacity
           style={[styles.secondaryBtn, styles.signInBtn]}
@@ -1617,7 +1617,7 @@ export default function ChillyChatThreadScreen() {
             router.replace("/chilly-circle" as Parameters<typeof router.replace>[0]);
           }}
         >
-          <Text style={styles.secondaryBtnText}>Open Chi'lly Circle</Text>
+          <Text style={styles.secondaryBtnText}>Open Chi’lly Circle</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
           <Text style={styles.secondaryBtnText}>Back</Text>
@@ -1657,7 +1657,7 @@ export default function ChillyChatThreadScreen() {
           )}
         </TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={styles.kicker}>CHI'LLY CHAT</Text>
+          <Text style={styles.kicker}>CHI’LLY CHAT</Text>
           <Text style={styles.title}>{otherMemberDisplayName}</Text>
           {otherMemberHandle ? (
             <Text style={styles.handleText} testID="chat-thread-header-handle">
@@ -1677,7 +1677,7 @@ export default function ChillyChatThreadScreen() {
             )}
           </View>
           <Text style={styles.headerHint}>
-            Tap the avatar for profile, Chi'lly Circle, report, and call actions.
+            Tap the avatar for profile, Chi’lly Circle, report, and call actions.
           </Text>
         </View>
       </View>
@@ -1689,7 +1689,7 @@ export default function ChillyChatThreadScreen() {
             {otherMemberDisplayName}
           </Text>
           <Text style={styles.headerQuickActionBody}>
-            Open the profile, manage Chi'lly Circle, or keep voice/video entry in this same thread.
+            Open the profile, manage Chi’lly Circle, or keep voice/video entry in this same thread.
           </Text>
           <View style={styles.headerQuickActionRow}>
             <TouchableOpacity
@@ -1746,7 +1746,7 @@ export default function ChillyChatThreadScreen() {
           {otherMember?.userId && friendStatusSummary ? (
             <View style={styles.friendshipCard}>
               <View style={styles.friendshipHeader}>
-                <Text style={styles.friendshipKicker}>CHI'LLY CIRCLE</Text>
+                <Text style={styles.friendshipKicker}>CHI’LLY CIRCLE</Text>
                 <View style={styles.friendshipPill}>
                   <Text style={styles.friendshipPillText}>{friendStatusSummary.pill}</Text>
                 </View>
@@ -1867,7 +1867,7 @@ export default function ChillyChatThreadScreen() {
         <View style={styles.callBanner}>
           <Text style={styles.callBannerTitle}>{callTitle}</Text>
           <Text style={styles.callBannerBody}>
-            {otherMemberDisplayName} can join from this same thread. Open Chi'lly Chat to join.
+            {otherMemberDisplayName} can join from this same thread. Open Chi’lly Chat to join.
           </Text>
         </View>
       ) : null}
@@ -2101,7 +2101,7 @@ export default function ChillyChatThreadScreen() {
                 </View>
               )}
             </View>
-            <Text style={styles.incomingKicker}>CHI'LLY CHAT</Text>
+            <Text style={styles.incomingKicker}>CHI’LLY CHAT</Text>
             <Text style={styles.incomingTitle}>{otherMemberDisplayName} is calling...</Text>
             <Text style={styles.incomingBody}>
               Incoming {incomingCallInvite.callType === "video" ? "video" : "voice"} call

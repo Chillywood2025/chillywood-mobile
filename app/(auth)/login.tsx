@@ -100,7 +100,7 @@ export default function Login() {
         >
           <View style={styles.card}>
             <View style={styles.headerRow}>
-              <Text style={styles.kicker}>Chi'llywood</Text>
+              <Text style={styles.kicker}>Chi’llywood</Text>
               <AppStatusPill label={isClosedBetaEnvironment() ? "Closed Beta" : "Public V1"} tone="accent" />
             </View>
             <Text style={styles.title}>

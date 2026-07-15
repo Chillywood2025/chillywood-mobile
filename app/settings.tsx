@@ -1274,26 +1274,6 @@ export default function SettingsScreen() {
     openLocalLegalRoute(policy.path);
   }, [openLocalLegalRoute]);
 
-  const onPressPrivacyPolicy = useCallback(() => {
-    trackEvent("settings_legal_opened", {
-      source: "settings",
-      target: "privacy_policy",
-      destination: legalConfig.privacyPolicyUrl ? "external" : "local",
-    });
-
-    openLocalLegalRoute("/privacy");
-  }, [legalConfig.privacyPolicyUrl, openLocalLegalRoute]);
-
-  const onPressTerms = useCallback(() => {
-    trackEvent("settings_legal_opened", {
-      source: "settings",
-      target: "terms_of_use",
-      destination: legalConfig.termsOfServiceUrl ? "external" : "local",
-    });
-
-    openLocalLegalRoute("/terms");
-  }, [legalConfig.termsOfServiceUrl, openLocalLegalRoute]);
-
   const onPressAccountDeletion = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -1386,36 +1366,6 @@ export default function SettingsScreen() {
     );
   }, [isSignedIn]);
 
-  const onPressCommunityGuidelines = useCallback(() => {
-    trackEvent("settings_legal_opened", {
-      source: "settings",
-      target: "community_guidelines",
-      destination: "local",
-    });
-
-    openLocalLegalRoute("/community-guidelines");
-  }, [openLocalLegalRoute]);
-
-  const onPressCreatorRules = useCallback(() => {
-    trackEvent("settings_legal_opened", {
-      source: "settings",
-      target: "creator_rules",
-      destination: "local",
-    });
-
-    openLocalLegalRoute("/creator-rules");
-  }, [openLocalLegalRoute]);
-
-  const onPressCopyright = useCallback(() => {
-    trackEvent("settings_legal_opened", {
-      source: "settings",
-      target: "copyright_dmca",
-      destination: "local",
-    });
-
-    openLocalLegalRoute("/copyright");
-  }, [openLocalLegalRoute]);
-
   const onPressCopyrightReport = useCallback(() => {
     const hostedUrl = legalConfig.copyrightReportUrl;
     trackEvent("settings_legal_opened", {
@@ -1441,16 +1391,6 @@ export default function SettingsScreen() {
 
     router.push("/counter-notice" as Parameters<typeof router.push>[0]);
   }, [router]);
-
-  const onPressSupport = useCallback(() => {
-    trackEvent("settings_legal_opened", {
-      source: "settings",
-      target: "support",
-      destination: "local",
-    });
-
-    openLocalLegalRoute("/support-policy");
-  }, [openLocalLegalRoute]);
 
   const onPressSupportContact = useCallback(() => {
     trackEvent("settings_support_contact_opened", {

@@ -148,10 +148,7 @@ import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
-import {
-  LiveKitStageMediaSurface,
-  type LiveKitStageParticipantRosterEntry,
-} from "../../components/watch-party-live/livekit-stage-media-surface";
+import { LiveKitStageMediaSurface } from "../../components/watch-party-live/livekit-stage-media-surface";
 import {
     buildSafetyReportContext,
     submitSafetyReport,
@@ -172,7 +169,6 @@ import {
   classifyWatchPartyLiveMediaSource,
   closeWatchPartySeatRequestReview,
   createWatchPartySeatRequestVersion,
-  emptyWatchPartyLiveSeatRequestState,
   isWatchPartySeatRequestExpired,
   mergeWatchPartyLiveRoster,
   resolveDesiredWatchPartyLiveAuthority,
@@ -1098,7 +1094,7 @@ export default function PlayerScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [durationMillis, setDurationMillis] = useState(0);
   const [positionMillis, setPositionMillis] = useState(0);
-  const [resumeCueMillis, setResumeCueMillis] = useState(0);
+  const [, setResumeCueMillis] = useState(0);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [videoVolume, setVideoVolume] = useState(WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT);
   const [voiceVolume] = useState(WATCH_PARTY_LIVE_VOICE_VOLUME_DEFAULT);
@@ -1133,7 +1129,7 @@ export default function PlayerScreen() {
   const [sharedAndroidVideoRemountIndex, setSharedAndroidVideoRemountIndex] = useState(0);
   const [sharedAndroidVideoFallbackMode, setSharedAndroidVideoFallbackMode] = useState<"expo-video" | "expo-av">("expo-video");
   const [sharedAndroidVideoRenderFailure, setSharedAndroidVideoRenderFailure] = useState<string | null>(null);
-  const [sharedAndroidVideoWatchdogActive, setSharedAndroidVideoWatchdogActive] = useState(false);
+  const [, setSharedAndroidVideoWatchdogActive] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
   const [loadedVideoAspectRatio, setLoadedVideoAspectRatio] = useState<number | null>(null);
@@ -6025,13 +6021,6 @@ export default function PlayerScreen() {
     && watchPartyLiveKitJoinContract.participantRole !== "viewer";
   const publishWatchPartyLiveKitAudio = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
   const publishWatchPartyLiveKitVideo = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
-  const watchPartyLiveKitLocalParticipantFallback = (
-    Platform.OS !== "web"
-    && publishWatchPartyLiveKitVideo
-    && !!cameraPermission?.granted
-  ) ? (
-    <CameraView style={styles.participantAvatarImage} facing="front" mute mirror />
-  ) : null;
   const currentWatchPartyMembershipAuthoritySignature = useMemo(() => {
     const currentMembership = partyMembershipMapRef.current[trackedUserId];
     return [
@@ -9381,7 +9370,7 @@ export default function PlayerScreen() {
             <Text style={styles.playerAccessKicker}>WATCH-PARTY LIVE</Text>
             <Text style={styles.playerAccessTitle}>Checking watch-party access</Text>
             <Text style={styles.playerAccessBody}>
-              Chi'llywood is confirming room membership and access truth before Watch-Party Live opens.
+              Chi’llywood is confirming room membership and access truth before Watch-Party Live opens.
             </Text>
             <View style={styles.playerAccessActions}>
               <TouchableOpacity
@@ -9524,7 +9513,7 @@ export default function PlayerScreen() {
             <Text style={styles.playerAccessKicker}>PLAYER</Text>
             <Text style={styles.playerAccessTitle}>Title unavailable</Text>
             <Text style={styles.playerAccessBody}>
-              Chi'llywood could not find a playable platform title for this route.
+              Chi’llywood could not find a playable platform title for this route.
             </Text>
             <View style={styles.playerAccessActions}>
               <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Go back">
@@ -9966,7 +9955,7 @@ export default function PlayerScreen() {
                   ) : null}
                   {creatorVideoPaidContentLocked ? (
                     <Text style={styles.videoLoadingSubtext}>
-                      Unlocking this video does not include Chi'llywood Premium, subscriptions, VIP, rooms, events, or other creator videos.
+                      Unlocking this video does not include Chi’llywood Premium, subscriptions, VIP, rooms, events, or other creator videos.
                     </Text>
                   ) : null}
                   {isSpectatorPlaybackUnavailable ? (

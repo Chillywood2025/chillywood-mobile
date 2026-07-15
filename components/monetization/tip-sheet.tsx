@@ -79,8 +79,6 @@ export function TipSheet({
   const amountValid = Number.isInteger(amountCents) && amountCents >= minAmount && amountCents <= maxAmount;
   const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
   const canTipInSandbox = sandboxTester || tipStatus?.canTip === true;
-  const canSubmit = canTipInSandbox && !!user?.id && amountValid && !busy;
-
   const startCheckout = async () => {
     if (!user?.id) {
       Alert.alert("Sign in to tip", "Sign in before sending a creator tip.");

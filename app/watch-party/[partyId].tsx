@@ -3487,7 +3487,7 @@ export default function WatchPartyRoomScreen() {
           <TouchableOpacity onPress={returnToWatchPartyEntry} hitSlop={12} activeOpacity={0.75}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>Chi'llywood · Watch Party</Text>
+          <Text style={styles.kicker}>Chi’llywood · Watch Party</Text>
           <NotificationBellButton surface="watch-party-room" roomSafe />
           {/* Connection badge */}
           <View style={[styles.connBadge, { borderColor: connColor[connState] + "44" }]}>

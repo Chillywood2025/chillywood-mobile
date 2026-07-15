@@ -3287,7 +3287,7 @@ export default function ProfileScreen() {
             <AppText scale="caption" style={styles.sectionKicker}>PROFILE</AppText>
             <AppText scale="title3" style={styles.sectionTitle}>Profile unavailable</AppText>
             <AppText scale="body" style={styles.sectionBody}>
-              This profile is not available for public browsing. Use Chi'lly Chat search to find or start a direct thread through the normal app path.
+              This profile is not available for public browsing. Use Chi’lly Chat search to find or start a direct thread through the normal app path.
             </AppText>
             <View style={styles.profileUnavailableActionRow}>
               <TouchableOpacity
@@ -3297,7 +3297,7 @@ export default function ProfileScreen() {
                 activeOpacity={0.86}
                 onPress={() => router.push("/chat")}
               >
-                <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Open Chi'lly Chat</Text>
+                <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Open Chi’lly Chat</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionBtn, styles.actionBtnSecondary]}
