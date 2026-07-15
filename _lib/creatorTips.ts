@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 import { supabase } from "./supabase";
 import {
   purchaseRevenueCatStoreProduct,
@@ -337,7 +339,9 @@ export async function purchaseCreatorTipWithGooglePlay(input: {
       ok: false,
       intentId: toText(intent?.id) || null,
       productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
-      message: "Google Play sandbox tip product is not available on this device yet.",
+      message: Platform.OS === "ios"
+        ? "App Store sandbox tip product is not available on this device yet."
+        : "Google Play sandbox tip product is not available on this device yet.",
     };
   }
 
@@ -351,7 +355,9 @@ export async function purchaseCreatorTipWithGooglePlay(input: {
       productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
       message: isRevenueCatUserCancellation(error)
         ? "Tip canceled. Nothing changed."
-        : "Google Play tip could not be completed. Try again later.",
+        : Platform.OS === "ios"
+          ? "App Store tip could not be completed. Try again later."
+          : "Google Play tip could not be completed. Try again later.",
     };
   }
   return {

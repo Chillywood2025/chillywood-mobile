@@ -1,4 +1,5 @@
 import { Linking } from "react-native";
+import { Platform } from "react-native";
 
 import {
   purchaseRevenueCatStoreProduct,
@@ -273,7 +274,11 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
 }) {
   const tier = getCreatorSandboxTier(input.config.productKey);
   if (tier.providerRail !== "revenuecat_google_play") {
-    throw new Error("Digital sandbox purchases must use Google Play / RevenueCat.");
+    throw new Error(
+      Platform.OS === "ios"
+        ? "Digital sandbox purchases must use App Store / RevenueCat."
+        : "Digital sandbox purchases must use Google Play / RevenueCat.",
+    );
   }
   if (!isValidCreatorMonetizationSourceId(input.config.sourceId)) {
     throw new Error("The saved config source is not valid.");

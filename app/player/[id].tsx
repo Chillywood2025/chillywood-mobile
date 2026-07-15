@@ -6983,7 +6983,11 @@ export default function PlayerScreen() {
     }
 
     setPaidVideoUnlockBusy(true);
-    setPaidVideoUnlockMessage("Opening Google Play...");
+    setPaidVideoUnlockMessage(
+      Platform.OS === "ios"
+        ? "Opening App Store checkout..."
+        : "Opening Google Play..."
+    );
     try {
       debugLog("paid-video", "paid_video_checkout_start", {
         videoId: creatorVideo.id,

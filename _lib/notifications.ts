@@ -1687,7 +1687,7 @@ export async function readNativeCallAlertStatus(): Promise<NativeCallAlertStatus
       canOpenSettings: false,
       channelId: CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID,
       granted: null,
-      message: "Full-screen Chi'lly Chat call alerts are Android-only in this build.",
+      message: "Full-screen Chi'lly Chat call alerts are unavailable on this platform.",
     };
   }
 
