@@ -1219,6 +1219,7 @@ export default function ChillyChatThreadScreen() {
         || invite.threadId !== threadId
         || (invite.calleeUserId !== currentUserId && invite.callerUserId !== currentUserId)
         || ((action === "answer" || action === "decline") && invite.calleeUserId !== currentUserId)
+        || ((action === "answer" || action === "decline") && invite.callerUserId === currentUserId)
       ) {
         setCallDeliveryStatus("This Chi'lly Chat call is no longer available. Ask the caller to start a new call.");
         await dismissPresentedChillyChatCallNotifications({
