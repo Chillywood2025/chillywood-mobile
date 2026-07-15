@@ -59,6 +59,10 @@ export type CreatorMonetizationConfig = {
   metadata?: Record<string, unknown>;
 };
 
+const resolveProviderRail = () => (
+  Platform.OS === "ios" ? REVENUECAT_APP_STORE_PROVIDER : REVENUECAT_GOOGLE_PLAY_PROVIDER
+);
+
 export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
   {
     key: "paid_content_access_sandbox_099",
@@ -174,10 +178,6 @@ export const CREATOR_MONETIZATION_SETUP_POLICY = {
   liveKitPublishGrantedByPayment: false,
   hostApprovalBypassedBySeatPass: false,
 } as const;
-
-const resolveProviderRail = () => (
-  Platform.OS === "ios" ? REVENUECAT_APP_STORE_PROVIDER : REVENUECAT_GOOGLE_PLAY_PROVIDER
-);
 
 const STRIPE_MERCH_CHECKOUT_URL = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/stripe-merch-checkout`;
 
