@@ -10,6 +10,7 @@ type CommunicationControlBarProps = {
   minimumTouchTarget?: number;
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  onSwitchCamera?: () => void;
   onLeave: () => void;
   leaveLabel?: string;
 };
@@ -21,6 +22,7 @@ export function CommunicationControlBar({
   minimumTouchTarget = 48,
   onToggleCamera,
   onToggleMic,
+  onSwitchCamera,
   onLeave,
   leaveLabel = "Leave",
 }: CommunicationControlBarProps) {
@@ -62,6 +64,16 @@ export function CommunicationControlBar({
       >
         <Text style={styles.controlLabel}>{cameraLabel}</Text>
       </TouchableOpacity>
+      {cameraEnabled && onSwitchCamera ? (
+        <TouchableOpacity
+          accessibilityLabel="Switch between front and rear camera"
+          style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlOff]}
+          activeOpacity={0.86}
+          onPress={onSwitchCamera}
+        >
+          <Text style={styles.controlLabel}>Flip Camera</Text>
+        </TouchableOpacity>
+      ) : null}
       <TouchableOpacity
         style={[styles.control, { minHeight: minimumTouchTarget }, micEnabled ? styles.controlOn : styles.controlOff]}
         activeOpacity={0.86}

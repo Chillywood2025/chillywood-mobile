@@ -1,7 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
-import { useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ConnectionState, Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -28,6 +27,7 @@ import {
     useWindowDimensions,
     View,
     type ImageSourcePropType,
+    type AppStateStatus,
 } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useIsFocused } from "@react-navigation/native";
@@ -85,6 +85,7 @@ import {
 import { prepareLiveKitJoinBoundary } from "../../../_lib/livekit/join-boundary";
 import { enforceLiveKitParticipantState } from "../../../_lib/livekit/participant-permissions";
 import { debugLog, reportRuntimeError } from "../../../_lib/logger";
+import { registerActiveMediaSessionStopper } from "../../../_lib/mediaSessionLifecycle";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../../_lib/moderation";
 import { isLiveKitRuntimeConfigured } from "../../../_lib/runtimeConfig";
 import { useSession } from "../../../_lib/session";
@@ -544,7 +545,9 @@ function LiveKitHybridCommunityRoomHost({
   const tearingDownRoomsRef = useRef(new Set<Room>());
   const didConnectOnceRef = useRef(false);
   const disconnectFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shouldConnectRoomRef = useRef(false);
   const [didConnectOnce, setDidConnectOnce] = useState(false);
+  const [appState, setAppState] = useState<AppStateStatus>(() => AppState.currentState);
   const [mediaDeviceFailure, setMediaDeviceFailure] = useState<string | null>(null);
   const connectOptions = useMemo(() => ({ autoSubscribe: true }), []);
   const roomKey = `${joinContract.roomName}:${joinContract.participantToken}`;
@@ -558,6 +561,10 @@ function LiveKitHybridCommunityRoomHost({
     );
     return nextRoom;
   }, [roomKey]);
+  const shouldConnectRoom = appState === "active";
+  shouldConnectRoomRef.current = shouldConnectRoom;
+  const effectivePublishLocalAudio = shouldConnectRoom && publishLocalAudio;
+  const effectivePublishLocalCamera = shouldConnectRoom && publishLocalCamera;
 
   const clearDisconnectFallbackTimeout = useCallback(() => {
     if (!disconnectFallbackTimeoutRef.current) return;
@@ -628,16 +635,36 @@ function LiveKitHybridCommunityRoomHost({
   }, [clearDisconnectFallbackTimeout, disableHybridLocalMediaQuietly, room]);
 
   useEffect(() => {
-    if (!publishLocalAudio || joinContract.participantRole === "viewer") {
-      disableHybridLocalMediaQuietly("audio-authority-downgrade", { camera: false });
+    const subscription = AppState.addEventListener("change", setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => registerActiveMediaSessionStopper(async (reason) => {
+    disableHybridLocalMediaQuietly(reason);
+    if (reason !== "app_background") {
+      tearingDownRoomsRef.current.add(room);
+      clearDisconnectFallbackTimeout();
+      await room.disconnect().catch(() => undefined);
     }
-  }, [disableHybridLocalMediaQuietly, joinContract.participantRole, publishLocalAudio]);
+  }), [clearDisconnectFallbackTimeout, disableHybridLocalMediaQuietly, room]);
 
   useEffect(() => {
-    if (!publishLocalCamera || joinContract.participantRole === "viewer") {
+    if (shouldConnectRoom) return;
+    clearDisconnectFallbackTimeout();
+    disableHybridLocalMediaQuietly("app-not-interactive");
+  }, [clearDisconnectFallbackTimeout, disableHybridLocalMediaQuietly, shouldConnectRoom]);
+
+  useEffect(() => {
+    if (!effectivePublishLocalAudio || joinContract.participantRole === "viewer") {
+      disableHybridLocalMediaQuietly("audio-authority-downgrade", { camera: false });
+    }
+  }, [disableHybridLocalMediaQuietly, effectivePublishLocalAudio, joinContract.participantRole]);
+
+  useEffect(() => {
+    if (!effectivePublishLocalCamera || joinContract.participantRole === "viewer") {
       disableHybridLocalMediaQuietly("camera-authority-downgrade", { audio: false });
     }
-  }, [disableHybridLocalMediaQuietly, joinContract.participantRole, publishLocalCamera]);
+  }, [disableHybridLocalMediaQuietly, effectivePublishLocalCamera, joinContract.participantRole]);
 
   useEffect(() => {
     let cancelled = false;
@@ -645,8 +672,8 @@ function LiveKitHybridCommunityRoomHost({
       setCameraEnabled?: (enabled: boolean, options?: unknown) => Promise<unknown>;
       setMicrophoneEnabled?: (enabled: boolean) => Promise<unknown>;
     };
-    const shouldPublishCamera = publishLocalCamera && joinContract.participantRole !== "viewer";
-    const shouldPublishAudio = publishLocalAudio && joinContract.participantRole !== "viewer";
+    const shouldPublishCamera = effectivePublishLocalCamera && joinContract.participantRole !== "viewer";
+    const shouldPublishAudio = effectivePublishLocalAudio && joinContract.participantRole !== "viewer";
 
     localParticipant.setCameraEnabled?.(shouldPublishCamera, LIVE_VIDEO_CAPTURE_OPTIONS).catch((error) => {
       if (cancelled) return;
@@ -673,13 +700,17 @@ function LiveKitHybridCommunityRoomHost({
   }, [
     joinContract.participantRole,
     joinContract.roomName,
-    publishLocalAudio,
-    publishLocalCamera,
+    effectivePublishLocalAudio,
+    effectivePublishLocalCamera,
     room.localParticipant,
   ]);
 
   useEffect(() => {
     let active = true;
+
+    if (!shouldConnectRoom) return () => {
+      active = false;
+    };
 
     HybridLiveKitAudioSession.startAudioSession().catch((error) => {
       if (!active) return;
@@ -693,9 +724,10 @@ function LiveKitHybridCommunityRoomHost({
       active = false;
       HybridLiveKitAudioSession.stopAudioSession().catch(() => {});
     };
-  }, [joinContract.participantRole, joinContract.roomName]);
+  }, [joinContract.participantRole, joinContract.roomName, shouldConnectRoom]);
 
   useEffect(() => {
+    if (!shouldConnectRoom) return undefined;
     const timeout = setTimeout(() => {
       if (!didConnectOnce) {
         if (isHybridLiveKitConnectedishState(room.state)) {
@@ -716,7 +748,7 @@ function LiveKitHybridCommunityRoomHost({
     return () => {
       clearTimeout(timeout);
     };
-  }, [didConnectOnce, joinContract.participantRole, joinContract.roomName, room, triggerFallback]);
+  }, [didConnectOnce, joinContract.participantRole, joinContract.roomName, room, shouldConnectRoom, triggerFallback]);
 
   const handleConnected = useCallback(() => {
     clearDisconnectFallbackTimeout();
@@ -731,7 +763,7 @@ function LiveKitHybridCommunityRoomHost({
   }, [clearDisconnectFallbackTimeout, joinContract.participantRole, joinContract.roomName, publishLocalCamera, room]);
 
   const handleDisconnected = useCallback((reason?: unknown) => {
-    if (tearingDownRoomsRef.current.has(room) || isHybridLiveKitClientDisconnectReason(reason)) {
+    if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current || isHybridLiveKitClientDisconnectReason(reason)) {
       debugLog("livekit", "hybrid community room disconnected without fallback", {
         roomName: joinContract.roomName,
         participantRole: joinContract.participantRole,
@@ -743,7 +775,7 @@ function LiveKitHybridCommunityRoomHost({
     clearDisconnectFallbackTimeout();
     disconnectFallbackTimeoutRef.current = setTimeout(() => {
       disconnectFallbackTimeoutRef.current = null;
-      if (tearingDownRoomsRef.current.has(room) || isHybridLiveKitConnectedishState(room.state)) {
+      if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current || isHybridLiveKitConnectedishState(room.state)) {
         return;
       }
       triggerFallback(
@@ -769,11 +801,14 @@ function LiveKitHybridCommunityRoomHost({
   ]);
 
   const handleError = useCallback((error: Error) => {
-    if (tearingDownRoomsRef.current.has(room)) return;
+    if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current) return;
     triggerFallback("room_error", error);
   }, [room, triggerFallback]);
 
   const handleMediaDeviceFailure = useCallback((failure: unknown) => {
+    if (tearingDownRoomsRef.current.has(room) || !shouldConnectRoomRef.current) {
+      return;
+    }
     const normalizedFailure = String(failure ?? "unknown_failure");
     setMediaDeviceFailure(normalizedFailure);
     reportRuntimeError("livekit-hybrid-community-media-device", new Error(`LiveKit media-device failure: ${normalizedFailure}`), {
@@ -782,7 +817,7 @@ function LiveKitHybridCommunityRoomHost({
       publishLocalAudio,
       publishLocalCamera,
     });
-  }, [joinContract.participantRole, joinContract.roomName, publishLocalAudio, publishLocalCamera]);
+  }, [joinContract.participantRole, joinContract.roomName, publishLocalAudio, publishLocalCamera, room]);
 
   return (
     <HybridLiveKitRoom
@@ -790,9 +825,9 @@ function LiveKitHybridCommunityRoomHost({
       room={room}
       serverUrl={joinContract.serverUrl}
       token={joinContract.participantToken}
-      connect
-      audio={publishLocalAudio}
-      video={publishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}
+      connect={shouldConnectRoom}
+      audio={effectivePublishLocalAudio}
+      video={effectivePublishLocalCamera ? LIVE_VIDEO_CAPTURE_OPTIONS : false}
       connectOptions={connectOptions}
       onConnected={handleConnected}
       onDisconnected={handleDisconnected}
@@ -939,7 +974,7 @@ export default function WatchPartyLiveStageScreen({
   const [liveKitRenderableJoinContract, setLiveKitRenderableJoinContract] = useState<LiveKitTokenReady | null>(null);
   const [liveKitJoinUnavailable, setLiveKitJoinUnavailable] = useState<LiveKitTokenUnavailable | null>(null);
   const myCameraPreviewUrlRef = useRef<string>("");
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [mediaAppState, setMediaAppState] = useState<AppStateStatus>(() => AppState.currentState);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const roomRealtimeChannelRef = useRef<RealtimeChannel | null>(null);
@@ -1696,6 +1731,7 @@ export default function WatchPartyLiveStageScreen({
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
+      setMediaAppState(nextState);
       const currentUserId = String(myUserId || "").trim();
       if (!partyId || !currentUserId) return;
       const currentMembership = membershipMapRef.current[currentUserId];
@@ -1724,8 +1760,8 @@ export default function WatchPartyLiveStageScreen({
         role: currentIsHost ? "host" : currentMembership?.role ?? "viewer",
         stageRole: currentMembership?.stageRole ?? (currentIsHost ? "host" : undefined),
         canSpeak: currentMembership?.canSpeak ?? (currentIsHost ? true : undefined),
-        cameraEnabled: currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
-        micEnabled: currentCanPublishMedia,
+        cameraEnabled: false,
+        micEnabled: false,
         displayName: myUsername || "You",
         cameraPreviewUrl: myCameraPreviewUrlRef.current,
         membershipState: "reconnecting",
@@ -1785,12 +1821,18 @@ export default function WatchPartyLiveStageScreen({
     if (!shouldRenderLegacyStageRtc || !shouldAllowLegacyStageRtcModule) return undefined;
     return getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
   }, [shouldAllowLegacyStageRtcModule, shouldRenderLegacyStageRtc]);
+  const legacyStageCanPublishLocalMedia = isHost
+    || canStageMembershipPublishMedia(membershipMapRef.current[trackedUserId]);
   const {
     localStreamURL,
     participants: stageMediaParticipants,
   } = useCommunicationRoomSession({
     roomId: communicationRoomId,
     enabled: shouldRenderLegacyStageRtc && shouldAllowLegacyStageRtcModule,
+    initialMediaPreferences: {
+      cameraEnabled: legacyStageCanPublishLocalMedia,
+      micEnabled: legacyStageCanPublishLocalMedia,
+    },
     analyticsContext: {
       surface: "live-room",
       role: isHost ? "host" : "viewer",
@@ -2206,6 +2248,19 @@ export default function WatchPartyLiveStageScreen({
       .catch(() => {});
   }, []);
 
+  useEffect(() => registerActiveMediaSessionStopper(async (reason) => {
+    if (reason === "app_background" || reason === "sign_out" || reason === "teardown") {
+      const recording = micRecordingRef.current;
+      micRecordingRef.current = null;
+      if (recording) await recording.stopAndUnloadAsync().catch(() => undefined);
+      const currentUserId = String(myUserId || "").trim();
+      if (currentUserId && micSpeakingRef.current) {
+        micSpeakingRef.current = false;
+        emitParticipantSpeaking(currentUserId, false);
+      }
+    }
+  }), [emitParticipantSpeaking, myUserId]);
+
   const broadcastSeatRequest = useCallback((participantId: string, pending: boolean, requestVersion?: string) => {
     const channel = channelRef.current;
     if (!channel || !participantId) return;
@@ -2293,9 +2348,20 @@ export default function WatchPartyLiveStageScreen({
   ]);
 
   useEffect(() => {
-    if (!canOwnActiveStageSurface || shouldRenderLiveKitStage) return;
+    if (
+      !canOwnActiveStageSurface
+      || shouldRenderLiveKitStage
+      || liveSurface !== "stage"
+      || mediaAppState !== "active"
+    ) return;
     debugLiveStage("mic setup start");
     const currentUserId = String(myUserId || "").trim();
+    const currentMembership = membershipMapRef.current[currentUserId];
+    const currentStageState = participantStateById[currentUserId];
+    const mayPublishLegacyStageAudio = isHost
+      || canStageMembershipPublishMedia(currentMembership)
+      || currentStageState?.role === "speaker";
+    if (!currentUserId || !mayPublishLegacyStageAudio) return;
 
     let cancelled = false;
 
@@ -2412,15 +2478,16 @@ export default function WatchPartyLiveStageScreen({
         recording.stopAndUnloadAsync().catch(() => {});
       }
     };
-  }, [canOwnActiveStageSurface, shouldRenderLiveKitStage, myUserId, emitParticipantSpeaking]);
-
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    if (!myUserId) return;
-    if (cameraPermission?.granted) return;
-    if (cameraPermission && !cameraPermission.canAskAgain) return;
-    requestCameraPermission().catch(() => {});
-  }, [myUserId, cameraPermission, requestCameraPermission]);
+  }, [
+    canOwnActiveStageSurface,
+    emitParticipantSpeaking,
+    isHost,
+    liveSurface,
+    mediaAppState,
+    myUserId,
+    participantStateById,
+    shouldRenderLiveKitStage,
+  ]);
 
   const stageMediaParticipantsByUserId = useMemo(
     () => Object.fromEntries(stageMediaParticipants.map((participant) => [participant.userId, participant])),

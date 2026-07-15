@@ -25,11 +25,15 @@ type InRoomCommunicationPanelProps = {
   callType?: "voice" | "video" | null;
   cameraEnabled: boolean;
   micEnabled: boolean;
+  mediaPermissionMessage?: string | null;
+  canOpenMediaSettings?: boolean;
   showControls?: boolean;
   presentation?: "embedded" | "fullscreen";
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  onSwitchCamera?: () => void;
   onLeave: () => void;
+  onOpenMediaSettings?: () => void;
   onCloseSurface?: () => void;
 };
 
@@ -58,11 +62,15 @@ export function InRoomCommunicationPanel({
   callType = null,
   cameraEnabled,
   micEnabled,
+  mediaPermissionMessage,
+  canOpenMediaSettings = false,
   showControls = true,
   presentation = "embedded",
   onToggleCamera,
   onToggleMic,
+  onSwitchCamera,
   onLeave,
+  onOpenMediaSettings,
   onCloseSurface,
 }: InRoomCommunicationPanelProps) {
   const responsiveLayout = useResponsiveLayout();
@@ -151,6 +159,22 @@ export function InRoomCommunicationPanel({
         </View>
       </View>
 
+      {mediaPermissionMessage ? (
+        <View style={[styles.permissionCard, fullscreenContentStyle]}>
+          <Text style={styles.permissionText}>{mediaPermissionMessage}</Text>
+          {canOpenMediaSettings && onOpenMediaSettings ? (
+            <TouchableOpacity
+              accessibilityLabel="Open device settings for camera and microphone permissions"
+              activeOpacity={0.86}
+              onPress={onOpenMediaSettings}
+              style={styles.permissionButton}
+            >
+              <Text style={styles.permissionButtonText}>Open Settings</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
       {loading ? (
         <View style={[styles.stateCard, isFullscreen && styles.fullscreenStateCard, fullscreenContentStyle]}>
           <ActivityIndicator size="small" color="#DCE6FC" />
@@ -203,6 +227,7 @@ export function InRoomCommunicationPanel({
             leaveLabel={isHost ? "End Call" : "Leave"}
             onToggleCamera={onToggleCamera}
             onToggleMic={onToggleMic}
+            onSwitchCamera={onSwitchCamera}
             onLeave={onLeave}
           />
         </View>
@@ -301,6 +326,36 @@ const styles = StyleSheet.create({
     color: "#C6D0E5",
     fontSize: 11,
     fontWeight: "800",
+  },
+  permissionCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,190,92,0.34)",
+    backgroundColor: "rgba(255,190,92,0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 9,
+  },
+  permissionText: {
+    color: "#F3D6A1",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  permissionButton: {
+    alignSelf: "flex-start",
+    minHeight: 44,
+    justifyContent: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 14,
+  },
+  permissionButtonText: {
+    color: "#F7FAFF",
+    fontSize: 12,
+    fontWeight: "900",
   },
   participantStage: {
     gap: 12,

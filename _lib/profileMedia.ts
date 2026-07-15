@@ -3,6 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import type { ImagePickerAsset } from "expo-image-picker";
 
 import type { TablesUpdate } from "../supabase/database.types";
+import { normalizeImageUploadFile } from "./imageUploadNormalization";
 import {
   normalizeProfileAppearanceFitMode,
   normalizeProfileAppearanceNumber,
@@ -333,27 +334,35 @@ export async function uploadProfileMedia(
 ): Promise<UserProfile> {
   const userId = await getSignedInUserId();
   const existingProfile = await readUserProfile();
-  const { uri, mimeType, size } = await validateProfileMediaFile(kind, file);
-  const objectKey = buildProfileMediaObjectKey(userId, kind, mimeType);
-  const prepared = await prepareProfileMediaUploadUri({ ...file, uri }, kind, mimeType);
   const nextFitMode = normalizeProfileAppearanceFitMode(options.fitMode);
+  const normalized = await normalizeImageUploadFile(file);
+  const objectKey = await (async () => {
+    try {
+      const { uri, mimeType, size } = await validateProfileMediaFile(kind, normalized.file);
+      const nextObjectKey = buildProfileMediaObjectKey(userId, kind, mimeType);
+      const prepared = await prepareProfileMediaUploadUri({ ...normalized.file, uri }, kind, mimeType);
 
-  try {
-    const preparedSize = await getPreparedProfileMediaFileSize(prepared.uri, size);
-    await uploadProfileMediaFileToStorage({
-      objectKey,
-      uri: prepared.uri,
-      mimeType,
-    });
-    await assertProfileMediaUploadReadable(objectKey, preparedSize);
-  } catch (error) {
-    await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
-    throw new Error(error instanceof Error && error.message
-      ? error.message
-      : `Unable to upload this ${kind === "avatar" ? "photo" : "background"} right now.`);
-  } finally {
-    await prepared.cleanup();
-  }
+      try {
+        const preparedSize = await getPreparedProfileMediaFileSize(prepared.uri, size);
+        await uploadProfileMediaFileToStorage({
+          objectKey: nextObjectKey,
+          uri: prepared.uri,
+          mimeType,
+        });
+        await assertProfileMediaUploadReadable(nextObjectKey, preparedSize);
+        return nextObjectKey;
+      } catch (error) {
+        await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([nextObjectKey]).catch(() => undefined);
+        throw new Error(error instanceof Error && error.message
+          ? error.message
+          : `Unable to upload this ${kind === "avatar" ? "photo" : "background"} right now.`);
+      } finally {
+        await prepared.cleanup();
+      }
+    } finally {
+      await normalized.cleanup();
+    }
+  })();
 
   const publicUrl = toText(supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectKey).data.publicUrl);
   if (!publicUrl) {

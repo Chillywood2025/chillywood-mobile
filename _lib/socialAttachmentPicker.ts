@@ -45,6 +45,7 @@ export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScop
       exif: false,
       base64: false,
       defaultTab: "photos",
+      legacy: false,
     });
 
     if (result.canceled) return null;

@@ -475,6 +475,8 @@
     "local-run:two-client-installed-app-realtime-ui": "node ./scripts/local-run-two-client-installed-app-realtime-ui-proof.mjs",
     "livekit-operator:watch-once": "node ./scripts/livekit-operator-cli.mjs watch-once",
     "proof:livekit-render-telemetry": "node ./scripts/proof-livekit-render-telemetry.mjs",
+    "proof:ios-media-readiness": "node ./scripts/proof-ios-media-readiness.mjs",
+    "local-run:two-client-livekit-ios-readiness": "node ./scripts/local-run-two-client-livekit-ios-readiness.mjs",
     "proof:livekit-operator-recovery-loop": "node ./scripts/proof-livekit-operator-recovery-loop.mjs"
   },
   "dependencies": {
@@ -507,6 +509,7 @@
     "expo-font": "~14.0.12",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
+    "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "~17.0.11",
     "expo-keep-awake": "~15.0.8",
     "expo-linking": "~8.0.12",
