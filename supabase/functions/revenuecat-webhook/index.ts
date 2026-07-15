@@ -13,14 +13,42 @@ import {
   verifySharedWebhookSecret,
   writeProviderReadinessAudit,
 } from "../_shared/provider-readiness.ts";
+import {
+  IOS_NOTIFICATION_CATEGORIES,
+  buildPlatformExpoPushMessage,
+} from "../_shared/notification-payload.mjs";
+import {
+  appStoreSwitchAllowsEnvironment,
+  isSafeStoreMapping,
+  providerProductIdCandidatesForStore,
+  resolveRevenueCatStorePolicy,
+} from "./store-policy.mjs";
 
 const FUNCTION_NAME = "revenuecat-webhook";
 const PREMIUM_ENTITLEMENT_KEY = "premium";
 const PREMIUM_PRODUCT_ID = "premium_subscription";
+const APP_STORE_PREMIUM_PRODUCT_IDS = new Set([
+  "com.chillywood.premium.monthly",
+  "com.chillywood.premium.yearly",
+]);
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const ANDROID_NOTIFICATION_CHANNEL_ID = "default";
 
 type RevenueCatEvent = Record<string, unknown>;
+type RevenueCatProvider = "revenuecat" | "revenuecat_app_store" | "revenuecat_google_play";
+type RevenueCatStorePolicy = {
+  platform: "android" | "ios" | "unknown";
+  provider: RevenueCatProvider;
+  rawStore: string;
+  store: "app_store" | "google_play" | "unknown";
+  supportsGoogleBasePlans: boolean;
+};
+type StoreProductResolution = {
+  mapping: Record<string, unknown> | null;
+  product: Record<string, unknown> | null;
+  providerProductId: string;
+  storePolicy: RevenueCatStorePolicy;
+};
 type EntitlementWriteResult = {
   entitlementActive: boolean;
   status: "active" | "trialing" | "grace_period" | "pending" | "expired" | "canceled" | "revoked";
@@ -96,6 +124,7 @@ type NotificationPreference = {
 };
 type PushToken = {
   id: string;
+  platform: "android" | "ios";
   provider: string;
   token: string;
 };
@@ -117,17 +146,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
   !!value && typeof value === "object" && !Array.isArray(value)
 );
 
-const normalizeEventType = (value: unknown) => toText(value).toUpperCase();
+const isIosOrdinaryPushRolloutEnabled = () => (
+  toText(Deno.env.get("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED")).toLowerCase() === "true"
+);
 
-const providerProductIdCandidates = (productId: string) => {
-  const normalized = toText(productId);
-  const withoutBasePlan = normalized.includes(":") ? normalized.split(":")[0] : normalized;
-  return Array.from(new Set([
-    normalized,
-    withoutBasePlan,
-    `${withoutBasePlan}:monthly`,
-  ].map(toText).filter(Boolean)));
-};
+const normalizeEventType = (value: unknown) => toText(value).toUpperCase();
 
 const toStringArray = (value: unknown) => {
   if (Array.isArray(value)) return value.map(toText).filter(Boolean);
@@ -158,7 +181,9 @@ const resolveEntitlementIds = (event: RevenueCatEvent) => [
 const hasPremiumSignal = (event: RevenueCatEvent) => {
   const entitlementIds = resolveEntitlementIds(event);
   const productId = toText(event.product_id || event.product_identifier);
-  return entitlementIds.includes(PREMIUM_ENTITLEMENT_KEY) || productId === PREMIUM_PRODUCT_ID;
+  return entitlementIds.includes(PREMIUM_ENTITLEMENT_KEY)
+    || productId === PREMIUM_PRODUCT_ID
+    || APP_STORE_PREMIUM_PRODUCT_IDS.has(productId);
 };
 
 const resolveUserId = (event: RevenueCatEvent) => {
@@ -180,7 +205,9 @@ const resolveEntitlementStatus = (event: RevenueCatEvent): EntitlementWriteResul
 
   if (REVOKED_EVENT_TYPES.has(eventType)) return "revoked";
   if (EXPIRED_EVENT_TYPES.has(eventType)) return "expired";
-  if (CANCELED_EVENT_TYPES.has(eventType)) return "canceled";
+  // Store cancellation means auto-renew is off; verified access remains valid
+  // through the current paid period and expires on the later expiration event.
+  if (CANCELED_EVENT_TYPES.has(eventType)) return notExpired ? "active" : "canceled";
   if (eventType === "BILLING_ISSUE") return notExpired ? "grace_period" : "pending";
   if (ACTIVE_EVENT_TYPES.has(eventType)) return periodType === "TRIAL" ? "trialing" : "active";
   return "pending";
@@ -209,6 +236,84 @@ const resolveCurrency = (event: RevenueCatEvent) => {
 };
 
 const resolveProductId = (event: RevenueCatEvent) => toText(event.product_id || event.product_identifier) || null;
+
+const revenueCatStorePolicy = (event: RevenueCatEvent) => (
+  resolveRevenueCatStorePolicy(event.store) as RevenueCatStorePolicy
+);
+
+const readAppStorePurchaseSwitchState = async (adminClient: SupabaseClientLike) => {
+  const { data, error } = await adminClient
+    .from("platform_money_kill_switches")
+    .select("state")
+    .eq("key", "revenuecat_app_store_enabled")
+    .maybeSingle();
+  if (error) throw new Error(`App Store purchase switch lookup failed: ${error.message}`);
+  return toText(data?.state).toLowerCase() || "off";
+};
+
+const readStoreProductResolution = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    event: RevenueCatEvent;
+    productId: string;
+  },
+): Promise<StoreProductResolution> => {
+  const storePolicy = revenueCatStorePolicy(input.event);
+
+  if (storePolicy.provider === "revenuecat_app_store") {
+    const { data: mapping, error: mappingError } = await adminClient
+      .from("monetization_product_store_mappings")
+      .select("id, product_id, concept, platform, store, provider, provider_product_id, provider_base_plan_id, store_product_type, tier, environment, status, unlocks_digital_access, grants_livekit_authority, creates_payable_balance")
+      .eq("platform", "ios")
+      .eq("store", "app_store")
+      .eq("provider", "revenuecat_app_store")
+      .eq("provider_product_id", input.productId)
+      .is("provider_base_plan_id", null)
+      .limit(1)
+      .maybeSingle();
+    if (mappingError) throw new Error(`App Store product mapping lookup failed: ${mappingError.message}`);
+
+    if (!mapping?.product_id || !isSafeStoreMapping(mapping)) {
+      return {
+        mapping: (mapping ?? null) as Record<string, unknown> | null,
+        product: null,
+        providerProductId: input.productId,
+        storePolicy,
+      };
+    }
+
+    const { data: product, error: productError } = await adminClient
+      .from("monetization_products")
+      .select("id, product_key, product_type, provider, provider_product_id, environment, status, is_android_digital")
+      .eq("id", mapping.product_id)
+      .limit(1)
+      .maybeSingle();
+    if (productError) throw new Error(`App Store conceptual product lookup failed: ${productError.message}`);
+
+    return {
+      mapping: mapping as Record<string, unknown>,
+      product: (product ?? null) as Record<string, unknown> | null,
+      providerProductId: input.productId,
+      storePolicy,
+    };
+  }
+
+  const productIdCandidates = providerProductIdCandidatesForStore(input.productId, storePolicy);
+  const { data: product, error: productError } = await adminClient
+    .from("monetization_products")
+    .select("id, product_key, product_type, provider, provider_product_id, environment, status, is_android_digital")
+    .in("provider_product_id", productIdCandidates)
+    .limit(1)
+    .maybeSingle();
+  if (productError) throw new Error(`RevenueCat product lookup failed: ${productError.message}`);
+
+  return {
+    mapping: null,
+    product: (product ?? null) as Record<string, unknown> | null,
+    providerProductId: toText(product?.provider_product_id) || input.productId,
+    storePolicy,
+  };
+};
 
 const resolveGrantStatus = (
   status: EntitlementWriteResult["status"],
@@ -312,46 +417,78 @@ const mirrorRevenueCatPremiumMoneyAccess = async (
   const grantStatus = resolveGrantStatus(input.status, environment);
   const { payableState, ledgerStatus } = resolveLedgerState(input.eventType);
 
-  const { data: product, error: productError } = await adminClient
-    .from("monetization_products")
-    .select("id, product_key")
-    .eq("product_type", "premium_subscription")
-    .eq("provider_product_id", input.productId ?? PREMIUM_PRODUCT_ID)
-    .maybeSingle();
-  if (productError) throw new Error(`Money access product lookup failed: ${productError.message}`);
-  if (!product?.id) throw new Error("Money access Premium product mapping is missing.");
+  const productResolution = await readStoreProductResolution(adminClient, {
+    event: input.event,
+    productId: input.productId ?? PREMIUM_PRODUCT_ID,
+  });
+  const product = productResolution.product;
+  const mapping = productResolution.mapping;
+  const provider = productResolution.storePolicy.provider;
+  if (!product?.id || toText(product.product_type) !== "premium_subscription") {
+    throw new Error("Money access Premium product mapping is missing.");
+  }
+  if (
+    provider === "revenuecat_app_store"
+    && (
+      toText(mapping?.concept) !== "premium"
+      || toText(mapping?.provider_product_id) !== (input.productId ?? PREMIUM_PRODUCT_ID)
+      || (environment === "sandbox" && (toText(mapping?.environment) !== "sandbox" || toText(mapping?.status) !== "sandbox"))
+    )
+  ) {
+    throw new Error("App Store Premium mapping is not sandbox-enabled.");
+  }
 
-  const { data: providerEvent, error: providerError } = await adminClient
+  const compatibleProviders = provider === "revenuecat"
+    ? [provider]
+    : [provider, "revenuecat"];
+  const { data: compatibleProviderEvent, error: compatibleProviderError } = await adminClient
     .from("provider_events")
-    .upsert({
-      provider_event_id: input.eventId,
-      provider: "revenuecat",
-      product_id: product.id,
-      product_key: product.product_key,
-      user_id: input.userId,
-      app_user_id: input.userId,
-      environment,
-      event_type: input.eventType,
-      status: ledgerStatus === "refunded" ? "refunded" : ledgerStatus === "reversed" ? "reversed" : "processed",
-      occurred_at: occurredAt,
-      idempotency_key: idempotencyKey,
-      raw_payload_hash: input.rawEventHash,
-      metadata: {
-        provider_payload_stored: false,
-        product_id: input.productId,
-        entitlement_key: PREMIUM_ENTITLEMENT_KEY,
-        store: toText(input.event.store) || null,
-        period_type: toText(input.event.period_type) || null,
-        sandbox_only: environment === "sandbox",
-        live_money_action: false,
-        payout_ready: false,
-      },
-    }, { onConflict: "provider,idempotency_key" })
     .select("id")
-    .single();
-  if (providerError) throw new Error(`Money access provider event sync failed: ${providerError.message}`);
+    .in("provider", compatibleProviders)
+    .eq("idempotency_key", idempotencyKey)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (compatibleProviderError) throw new Error(`Money access provider event duplicate lookup failed: ${compatibleProviderError.message}`);
 
-  const { data: existingGrant, error: existingGrantError } = await adminClient
+  let providerEvent = compatibleProviderEvent;
+  if (!providerEvent?.id) {
+    const { data: insertedProviderEvent, error: providerError } = await adminClient
+      .from("provider_events")
+      .upsert({
+        provider_event_id: input.eventId,
+        provider,
+        product_id: product.id,
+        product_key: product.product_key,
+        user_id: input.userId,
+        app_user_id: input.userId,
+        environment,
+        event_type: input.eventType,
+        status: ledgerStatus === "refunded" ? "refunded" : ledgerStatus === "reversed" ? "reversed" : "processed",
+        occurred_at: occurredAt,
+        idempotency_key: idempotencyKey,
+        raw_payload_hash: input.rawEventHash,
+        metadata: {
+          provider_payload_stored: false,
+          product_id: input.productId,
+          entitlement_key: PREMIUM_ENTITLEMENT_KEY,
+          store: toText(input.event.store) || null,
+          platform: productResolution.storePolicy.platform,
+          store_mapping_id: toText(mapping?.id) || null,
+          period_type: toText(input.event.period_type) || null,
+          sandbox_only: environment === "sandbox",
+          live_money_action: false,
+          payout_ready: false,
+        },
+      }, { onConflict: "provider,idempotency_key" })
+      .select("id")
+      .single();
+    if (providerError) throw new Error(`Money access provider event sync failed: ${providerError.message}`);
+    providerEvent = insertedProviderEvent;
+  }
+  if (!providerEvent?.id) throw new Error("Money access provider event was not persisted.");
+
+  const { data: providerEventGrant, error: existingGrantError } = await adminClient
     .from("access_grants")
     .select("id")
     .eq("provider_event_id", providerEvent.id)
@@ -360,7 +497,47 @@ const mirrorRevenueCatPremiumMoneyAccess = async (
     .maybeSingle();
   if (existingGrantError) throw new Error(`Money access grant duplicate check failed: ${existingGrantError.message}`);
 
+  let existingGrant = providerEventGrant;
+  if (!existingGrant?.id && input.eventType !== "INITIAL_PURCHASE") {
+    const { data: lifecycleGrant, error: lifecycleGrantError } = await adminClient
+      .from("access_grants")
+      .select("id")
+      .eq("user_id", input.userId)
+      .eq("product_id", product.id)
+      .eq("grant_type", "premium")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lifecycleGrantError) throw new Error(`Money access lifecycle grant lookup failed: ${lifecycleGrantError.message}`);
+    existingGrant = lifecycleGrant ?? null;
+  }
+
   let accessGrantId = existingGrant?.id ?? null;
+  if (accessGrantId && input.eventType !== "INITIAL_PURCHASE") {
+    const { error: grantUpdateError } = await adminClient
+      .from("access_grants")
+      .update({
+        provider,
+        provider_event_id: providerEvent.id,
+        status: grantStatus,
+        starts_at: input.startsAt ?? occurredAt,
+        expires_at: input.expiresAt,
+        refunded_at: REVOKED_EVENT_TYPES.has(input.eventType) ? occurredAt : null,
+        revoked_at: grantStatus === "revoked" ? occurredAt : null,
+        revoke_reason: grantStatus === "revoked" ? `RevenueCat ${input.eventType.toLowerCase()} event.` : null,
+        metadata: {
+          entitlement_key: PREMIUM_ENTITLEMENT_KEY,
+          user_entitlements_remain_source_of_truth: true,
+          viewer_access_only: true,
+          authority_granted: false,
+          payout_access: false,
+          lifecycle_event_type: input.eventType,
+        },
+      })
+      .eq("id", accessGrantId)
+      .eq("user_id", input.userId);
+    if (grantUpdateError) throw new Error(`Money access lifecycle grant sync failed: ${grantUpdateError.message}`);
+  }
   if (!accessGrantId) {
     const { data: grant, error: grantError } = await adminClient
       .from("access_grants")
@@ -370,7 +547,7 @@ const mirrorRevenueCatPremiumMoneyAccess = async (
         source_type: "provider_event",
         source_id: providerEvent.id,
         product_id: product.id,
-        provider: "revenuecat",
+        provider,
         provider_event_id: providerEvent.id,
         environment,
         status: grantStatus,
@@ -433,7 +610,7 @@ const mirrorRevenueCatPremiumMoneyAccess = async (
   }
 
   return {
-    productKey: product.product_key,
+    productKey: toText(product.product_key) || null,
     providerEventId: providerEvent.id,
     accessGrantId,
     ledgerEventId,
@@ -482,17 +659,25 @@ const readMoneyNotificationPreference = async (
   return (data ?? null) as NotificationPreference | null;
 };
 
-const readAndroidPushTokens = async (adminClient: SupabaseClientLike, userId: string): Promise<PushToken[]> => {
-  const { data } = await adminClient
-    .from("user_push_tokens")
-    .select("id,provider,token")
-    .eq("user_id", userId)
-    .eq("platform", "android")
-    .eq("enabled", true)
-    .is("revoked_at", null)
-    .order("last_seen_at", { ascending: false })
-    .limit(5);
-  return (data ?? []) as PushToken[];
+const readPushTokens = async (adminClient: SupabaseClientLike, userId: string): Promise<PushToken[]> => {
+  const readPlatformTokens = async (platform: PushToken["platform"]) => {
+    const { data } = await adminClient
+      .from("user_push_tokens")
+      .select("id,platform,provider,token")
+      .eq("user_id", userId)
+      .eq("platform", platform)
+      .eq("provider", "expo")
+      .eq("enabled", true)
+      .is("revoked_at", null)
+      .order("last_seen_at", { ascending: false })
+      .limit(5);
+    return (data ?? []) as PushToken[];
+  };
+  const [androidTokens, iosTokens] = await Promise.all([
+    readPlatformTokens("android"),
+    readPlatformTokens("ios"),
+  ]);
+  return [...androidTokens, ...iosTokens];
 };
 
 const insertMoneyNotificationDeliveryAttempt = async (
@@ -777,10 +962,10 @@ const dispatchCreatorMoneyPushIfEligible = async (
     return;
   }
 
-  const tokens = await readAndroidPushTokens(adminClient, input.plan.recipientUserId);
+  const tokens = await readPushTokens(adminClient, input.plan.recipientUserId);
   if (!tokens.length) {
     await insertMoneyNotificationDeliveryAttempt(adminClient, {
-      errorCode: "no_enabled_android_token",
+      errorCode: "no_enabled_push_token",
       notificationId: input.notificationId,
       provider: "expo",
       recipientUserId: input.plan.recipientUserId,
@@ -789,11 +974,28 @@ const dispatchCreatorMoneyPushIfEligible = async (
     return;
   }
 
+  const iosRolloutEnabled = isIosOrdinaryPushRolloutEnabled();
+  const rolloutBlockedTokens = tokens.filter((token) => token.platform === "ios" && !iosRolloutEnabled);
+  for (const token of rolloutBlockedTokens) {
+    await insertMoneyNotificationDeliveryAttempt(adminClient, {
+      errorCode: "ios_push_rollout_disabled",
+      notificationId: input.notificationId,
+      provider: token.provider,
+      pushTokenId: token.id,
+      recipientUserId: input.plan.recipientUserId,
+      status: "skipped",
+    });
+  }
+  const deliverableTokens = tokens.filter((token) => token.platform === "android" || iosRolloutEnabled);
+  if (!deliverableTokens.length) return;
+
   let sentCount = 0;
-  for (const token of tokens) {
-    const pushResult = await sendCreatorMoneyExpoPush({
+  for (const token of deliverableTokens) {
+    const pushResult = await sendCreatorMoneyExpoPush(buildPlatformExpoPushMessage({
+      androidChannelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+      badge: 1,
       body: input.plan.body,
-      channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+      categoryId: IOS_NOTIFICATION_CATEGORIES.activity,
       data: {
         category: input.plan.category,
         deepLink: input.target.deepLink,
@@ -802,11 +1004,13 @@ const dispatchCreatorMoneyPushIfEligible = async (
         path: notificationRoutePath(input.target.deepLink),
         triggerType: input.plan.notificationType,
       },
+      interruptionLevel: "active",
+      platform: token.platform,
       priority: "high",
       sound: "default",
       title: input.plan.title,
       to: token.token,
-    });
+    }));
     const body = safeObject(pushResult.body);
     const ticketRaw = Array.isArray(body.data) ? body.data[0] : body.data;
     const ticket = safeObject(ticketRaw);
@@ -1018,7 +1222,7 @@ const syncChannelSubscriptionLifecycle = async (
     occurredAt: string;
   },
 ): Promise<DynamicMoneyAccessResult> => {
-  const productIdCandidates = providerProductIdCandidates(input.productId);
+  const productIdCandidates = providerProductIdCandidatesForStore(input.productId, input.event.store);
   const startsAt = toIsoFromMs(input.event.purchased_at_ms || input.event.event_timestamp_ms) || input.occurredAt;
   const expiresAt = toIsoFromMs(input.event.expiration_at_ms);
   const originalTransactionId = toText(input.event.original_transaction_id) || null;
@@ -1390,6 +1594,8 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   const occurredAt = toIsoFromMs(input.event.event_timestamp_ms || input.event.purchased_at_ms) || new Date().toISOString();
   const grantStatus = resolveGrantStatus(input.status, environment);
   const { payableState, ledgerStatus } = resolveLedgerState(input.eventType);
+  const storePolicy = revenueCatStorePolicy(input.event);
+  const provider = storePolicy.provider;
 
   if (!input.productId) {
     return {
@@ -1412,14 +1618,15 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   const { data: existingProviderEvent, error: existingProviderError } = await adminClient
     .from("provider_events")
     .select("id, product_key, environment, status")
-    .eq("provider", "revenuecat_google_play")
+    .in("provider", provider === "revenuecat" ? [provider] : [provider, "revenuecat"])
     .eq("idempotency_key", idempotencyKey)
     .maybeSingle();
   if (existingProviderError) throw new Error(`Dynamic provider event duplicate check failed: ${existingProviderError.message}`);
 
   if (existingProviderEvent?.id) {
     if (
-      existingProviderEvent.status === "ignored"
+      provider === "revenuecat_google_play"
+      && existingProviderEvent.status === "ignored"
       && toText(existingProviderEvent.product_key) === "channel_subscription_sandbox_monthly_499"
       && input.productId
     ) {
@@ -1478,22 +1685,22 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
     };
   }
 
-  const productIdCandidates = providerProductIdCandidates(input.productId);
-  const { data: product, error: productError } = await adminClient
-    .from("monetization_products")
-    .select("id, product_key, product_type, provider, provider_product_id, environment, status, is_android_digital")
-    .in("provider_product_id", productIdCandidates)
-    .neq("product_type", "premium_subscription")
-    .limit(1)
-    .maybeSingle();
-  if (productError) throw new Error(`Dynamic product lookup failed: ${productError.message}`);
+  const productResolution = await readStoreProductResolution(adminClient, {
+    event: input.event,
+    productId: input.productId,
+  });
+  const product = productResolution.product as Record<string, any> | null;
+  const mapping = productResolution.mapping as Record<string, any> | null;
+  if (product?.product_type === "premium_subscription") {
+    throw new Error("Premium products must use the Premium entitlement path.");
+  }
 
   const providerEventStatus = product?.id && environment === "sandbox" ? "received" : "ignored";
   const { data: providerEvent, error: providerError } = await adminClient
     .from("provider_events")
     .insert({
       provider_event_id: input.eventId,
-      provider: "revenuecat_google_play",
+      provider,
       product_id: product?.id ?? null,
       product_key: product?.product_key ?? null,
       user_id: input.userId,
@@ -1507,6 +1714,9 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
       metadata: {
         provider_payload_stored: false,
         provider_product_id: input.productId,
+        store: storePolicy.rawStore || null,
+        platform: storePolicy.platform,
+        store_mapping_id: toText(mapping?.id) || null,
         original_transaction_id: toText(input.event.original_transaction_id) || null,
         dynamic_product: true,
         sandbox_only: environment === "sandbox",
@@ -1556,7 +1766,16 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
 
   if (!product?.id) return ignored("product_mapping_missing");
   if (environment !== "sandbox") return ignored("production_or_setup_event_blocked");
-  if (product.environment !== "sandbox" || product.status !== "sandbox") return ignored("product_not_sandbox_enabled");
+  const sandboxMappingReady = mapping
+    ? mapping.environment === "sandbox" && mapping.status === "sandbox"
+    : product.environment === "sandbox" && product.status === "sandbox";
+  if (!sandboxMappingReady) return ignored("product_not_sandbox_enabled");
+  if (mapping?.concept === "creator_tip" && mapping.unlocks_digital_access === true) {
+    return ignored("creator_tip_cannot_unlock_digital_access");
+  }
+  if (mapping?.grants_livekit_authority === true || mapping?.creates_payable_balance === true) {
+    return ignored("store_mapping_authority_or_payable_balance_blocked");
+  }
   if (!ACTIVE_EVENT_TYPES.has(input.eventType) && !REVOKED_EVENT_TYPES.has(input.eventType) && !CANCELED_EVENT_TYPES.has(input.eventType) && !EXPIRED_EVENT_TYPES.has(input.eventType) && !BILLING_ISSUE_EVENT_TYPES.has(input.eventType)) {
     return ignored("unsupported_event_type");
   }
@@ -1578,17 +1797,29 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   }
 
   const nowIso = new Date().toISOString();
-  const { data: intent, error: intentError } = await adminClient
+  const isTerminalLifecycleEvent = REVOKED_EVENT_TYPES.has(input.eventType)
+    || CANCELED_EVENT_TYPES.has(input.eventType)
+    || EXPIRED_EVENT_TYPES.has(input.eventType)
+    || BILLING_ISSUE_EVENT_TYPES.has(input.eventType);
+  const intentLookup = adminClient
     .from("money_purchase_intents")
     .select("id, product_id, product_type, source_type, source_id, creator_id, platform_id, status, expires_at, metadata")
     .eq("user_id", input.userId)
     .eq("product_id", product.id)
-    .eq("provider_product_id", product.provider_product_id)
-    .eq("status", "pending")
-    .gt("expires_at", nowIso)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("provider", provider)
+    .eq("provider_product_id", productResolution.providerProductId);
+  const { data: intent, error: intentError } = isTerminalLifecycleEvent
+    ? await intentLookup
+      .in("status", ["consumed", "revoked"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    : await intentLookup
+      .eq("status", "pending")
+      .gt("expires_at", nowIso)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
   if (intentError) throw new Error(`Dynamic purchase intent lookup failed: ${intentError.message}`);
   if (!intent?.id) return ignored("purchase_intent_missing_or_expired");
 
@@ -1605,7 +1836,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
         source_type: "provider_event",
         source_id: intent.source_id,
         product_id: product.id,
-        provider: "revenuecat_google_play",
+        provider,
         provider_event_id: providerEvent.id,
         environment,
         status: grantStatus,
@@ -1688,20 +1919,37 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
     ledgerEventId = ledger.id;
   }
 
-  const { error: consumeError } = await adminClient
-    .from("money_purchase_intents")
-    .update({
-      status: "consumed",
-      consumed_at: new Date().toISOString(),
-      metadata: {
-        consumed_by_provider_event_id: providerEvent.id,
-        sandbox_only: true,
-        not_payable: true,
-      },
-    })
-    .eq("id", intent.id)
-    .eq("status", "pending");
-  if (consumeError) throw new Error(`Dynamic purchase intent consume failed: ${consumeError.message}`);
+  if (ACTIVE_EVENT_TYPES.has(input.eventType)) {
+    const { error: consumeError } = await adminClient
+      .from("money_purchase_intents")
+      .update({
+        status: "consumed",
+        consumed_at: new Date().toISOString(),
+        metadata: {
+          consumed_by_provider_event_id: providerEvent.id,
+          sandbox_only: true,
+          not_payable: true,
+        },
+      })
+      .eq("id", intent.id)
+      .eq("status", "pending");
+    if (consumeError) throw new Error(`Dynamic purchase intent consume failed: ${consumeError.message}`);
+  } else if (REVOKED_EVENT_TYPES.has(input.eventType)) {
+    const { error: revokeIntentError } = await adminClient
+      .from("money_purchase_intents")
+      .update({
+        status: "revoked",
+        revoked_at: occurredAt,
+        metadata: {
+          revoked_by_provider_event_id: providerEvent.id,
+          sandbox_only: true,
+          not_payable: true,
+        },
+      })
+      .eq("id", intent.id)
+      .in("status", ["consumed", "revoked"]);
+    if (revokeIntentError) throw new Error(`Dynamic purchase intent revoke failed: ${revokeIntentError.message}`);
+  }
 
   const { error: providerUpdateError } = await adminClient
     .from("provider_events")
@@ -1986,6 +2234,46 @@ Deno.serve(async (req) => {
       });
     }
 
+    const storePolicy = revenueCatStorePolicy(event);
+    if (storePolicy.provider === "revenuecat_app_store") {
+      const appStoreSwitchState = await readAppStorePurchaseSwitchState(adminConfig.client);
+      const eventEnvironment = normalizeMoneyAccessEnvironment(event.environment);
+      if (!appStoreSwitchAllowsEnvironment(appStoreSwitchState, eventEnvironment)) {
+        await writeProviderReadinessAudit(adminConfig.client, {
+          provider: "revenuecat",
+          capability: "app_store_purchase_sandbox",
+          action: "revenuecat_app_store_event_blocked_by_switch",
+          statusAfter: "blocked",
+          reason: "A verified App Store event was acknowledged without granting access because the independent Apple purchase switch is off.",
+          proofSource: FUNCTION_NAME,
+          metadata: {
+            revenuecat_event_hash: await hashText(rawBody),
+            revenuecat_event_type: normalizeEventType(event.type),
+            store: storePolicy.rawStore,
+            environment: eventEnvironment,
+            app_store_switch_state: appStoreSwitchState,
+            raw_provider_payload_stored: false,
+            premium_granted: false,
+            access_granted: false,
+            live_money_action: false,
+          },
+        });
+
+        return jsonResponse(200, {
+          status: "ignored",
+          provider: "revenuecat_app_store",
+          capability: "app_store_purchase_sandbox",
+          signatureVerified: true,
+          webhookProcessed: false,
+          premiumGranted: false,
+          accessGrantCreated: false,
+          liveMoneyAction: false,
+          reason: "app_store_purchase_switch_disabled",
+          message: "App Store event acknowledged without granting access because Apple purchases are disabled.",
+        });
+      }
+    }
+
     if (!hasPremiumSignal(event)) {
       const eventType = normalizeEventType(event.type);
       const eventId = await resolveEventId(event, rawBody);
@@ -2033,7 +2321,7 @@ Deno.serve(async (req) => {
 
       return jsonResponse(200, {
         status: dynamicWrite.status,
-        provider: "revenuecat",
+        provider: storePolicy.provider,
         capability: "digital_access_sandbox",
         signatureVerified: true,
         webhookProcessed: dynamicWrite.status === "processed",
@@ -2089,7 +2377,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse(200, {
       status: entitlementWrite.duplicateEvent ? "duplicate_ignored" : "processed",
-      provider: "revenuecat",
+      provider: storePolicy.provider,
       capability: "premium_entitlement",
       signatureVerified: true,
       webhookProcessed: true,
@@ -2106,15 +2394,19 @@ Deno.serve(async (req) => {
         : "RevenueCat webhook synced a non-active Premium entitlement status.",
     });
   } catch (error) {
-    return jsonResponse(200, {
-      status: "error",
+    const safeMessage = sanitizeErrorMessage(error);
+    const nonRetriablePayloadError = /invalid revenuecat webhook payload|event type is missing|app user id is missing or anonymous|event is not mapped to premium/i.test(safeMessage);
+    const responseStatus = nonRetriablePayloadError ? 200 : 500;
+    return jsonResponse(responseStatus, {
+      status: nonRetriablePayloadError ? "ignored" : "error",
       provider: "revenuecat",
       capability: "premium_entitlement",
-      signatureVerified: false,
+      signatureVerified: true,
       webhookProcessed: false,
       premiumGranted: false,
       liveMoneyAction: false,
-      message: sanitizeErrorMessage(error),
+      retryableFailure: !nonRetriablePayloadError,
+      message: safeMessage,
     });
   }
 });

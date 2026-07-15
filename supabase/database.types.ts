@@ -5205,6 +5205,95 @@ export type Database = {
         }
         Relationships: []
       }
+      monetization_product_store_mappings: {
+        Row: {
+          apple_subscription_group: string | null
+          concept: string
+          creates_payable_balance: boolean
+          created_at: string
+          environment: string
+          grants_livekit_authority: boolean
+          id: string
+          metadata: Json
+          platform: string
+          product_id: string
+          provider: string
+          provider_base_plan_id: string | null
+          provider_product_id: string
+          reference_currency: string
+          reference_price_minor: number
+          revenuecat_entitlement: string | null
+          revenuecat_offering: string | null
+          revenuecat_package: string | null
+          status: string
+          store: string
+          store_product_type: string
+          tier: string
+          unlocks_digital_access: boolean
+          updated_at: string
+        }
+        Insert: {
+          apple_subscription_group?: string | null
+          concept: string
+          creates_payable_balance?: boolean
+          created_at?: string
+          environment?: string
+          grants_livekit_authority?: boolean
+          id?: string
+          metadata?: Json
+          platform: string
+          product_id: string
+          provider: string
+          provider_base_plan_id?: string | null
+          provider_product_id: string
+          reference_currency?: string
+          reference_price_minor: number
+          revenuecat_entitlement?: string | null
+          revenuecat_offering?: string | null
+          revenuecat_package?: string | null
+          status?: string
+          store: string
+          store_product_type: string
+          tier: string
+          unlocks_digital_access?: boolean
+          updated_at?: string
+        }
+        Update: {
+          apple_subscription_group?: string | null
+          concept?: string
+          creates_payable_balance?: boolean
+          created_at?: string
+          environment?: string
+          grants_livekit_authority?: boolean
+          id?: string
+          metadata?: Json
+          platform?: string
+          product_id?: string
+          provider?: string
+          provider_base_plan_id?: string | null
+          provider_product_id?: string
+          reference_currency?: string
+          reference_price_minor?: number
+          revenuecat_entitlement?: string | null
+          revenuecat_offering?: string | null
+          revenuecat_package?: string | null
+          status?: string
+          store?: string
+          store_product_type?: string
+          tier?: string
+          unlocks_digital_access?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monetization_product_store_mappings_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "monetization_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monetization_products: {
         Row: {
           applies_to_id: string | null

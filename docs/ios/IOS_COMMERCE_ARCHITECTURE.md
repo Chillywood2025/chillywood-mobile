@@ -1,7 +1,10 @@
 # iOS Commerce Architecture
 
-Status: source architecture and permanent-ID manifest prepared; Apple purchase
-activation remains sandbox/internal-only and the App Store rail defaults off.
+Status: source architecture, App Store Connect records, permanent-ID manifest,
+local StoreKit configuration, and server mapping migration are prepared. Apple
+purchase activation remains sandbox/internal-only and the App Store rail defaults
+off. RevenueCat dashboard import remains blocked on the current dashboard user's
+app-configuration permission and must not be represented as complete.
 
 ## Governing rules
 
@@ -17,12 +20,20 @@ Authoritative references:
 - [Apple In-App Purchase information](https://developer.apple.com/help/app-store-connect/reference/in-app-purchases-and-subscriptions/in-app-purchase-information)
 - [RevenueCat Apple In-App Purchase key configuration](https://www.revenuecat.com/docs/service-credentials/itunesconnect-app-specific-shared-secret/in-app-purchase-key-configuration)
 - [RevenueCat webhook event fields](https://www.revenuecat.com/docs/integrations/webhooks/event-types-and-fields)
+- [RevenueCat restoring purchases](https://www.revenuecat.com/docs/getting-started/restoring-purchases)
+- [Apple StoreKit testing in Xcode](https://developer.apple.com/documentation/xcode/setting-up-storekit-testing-in-xcode/)
 
 ## Store and provider identity
 
 The conceptual product remains independent of its store representation. Store
 mappings identify platform, store, provider, provider product ID, product type,
 tier, environment, and lifecycle status.
+
+The server-owned `monetization_product_store_mappings` table is protected by RLS
+and has no `anon` or `authenticated` privileges. Edge Functions using the service
+role perform exact mapping after webhook verification; clients do not choose a
+provider mapping. `revenuecat_app_store_enabled` is a separate high-risk switch
+seeded `off`, independent of the existing Google Play switch.
 
 - Android keeps its existing Google Play and `revenuecat_google_play` values.
 - iOS uses App Store and `revenuecat_app_store` values.
@@ -81,6 +92,12 @@ The Apple kill switch, live-money switch, payouts, cash-out, and payable balance
 all default off. Sandbox purchases may prove access behavior but never create a
 payable creator balance.
 
+The webhook derives store identity from RevenueCat's `store` field. `APP_STORE`
+and `MAC_APP_STORE` resolve to `revenuecat_app_store`; `PLAY_STORE` resolves to
+`revenuecat_google_play`. Apple IDs are matched exactly. Only Google events may
+split a `product:base-plan` identifier. Provider plus event ID is the idempotency
+boundary, and the existing Android candidate matching remains unchanged.
+
 ## Lifecycle semantics
 
 Premium subscription lifecycle supports initial purchase, renewal, cancellation,
@@ -99,7 +116,9 @@ identity checks as initial purchases.
 
 ## Simulator and internal testing
 
-A local StoreKit configuration mirrors every manifest entry for Simulator tests.
+A local StoreKit configuration at `config/ios/Chillywood.storekit` mirrors every
+manifest entry for Simulator tests. Its local transactions never upload product
+data to App Store Connect and never constitute provider-backed receipt proof.
 Provider-backed tests remain sandbox/internal TestFlight only until the remaining
 physical-device matrix proves purchase, restore, renewal, cancellation, refund,
 and revocation. Public sale and automatic release remain prohibited.
