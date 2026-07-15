@@ -27,6 +27,18 @@ for (const [label, workflow] of [["preview", preview], ["production", production
   if (/\b(push|pull_request|schedule):/u.test(workflow)) fail(`${label} workflow gained an automatic trigger`);
   if (!/node-version:\s*20/u.test(workflow)) fail(`${label} workflow must use Node 20`);
   if (!/npm\s+run\s+guard:ios-config-policy/u.test(workflow)) fail(`${label} workflow is missing the iOS configuration guard`);
+  if (!/npm\s+ci\s+--prefix\s+ops\/alert-automation/u.test(workflow)) {
+    fail(`${label} workflow must install nested alert-automation dependencies before the root TypeScript check`);
+  }
+  if (!/EXPO_NO_DOTENV:\s*["']?1["']?/u.test(workflow) || !/EXPO_NO_CLIENT_ENV_VARS:\s*["']?1["']?/u.test(workflow)) {
+    fail(`${label} workflow validation must ignore local dotenv and client environment state`);
+  }
+  if (!/EXPO_PUBLIC_SUPABASE_URL:\s*["']https:\/\/ci\.invalid["']/u.test(workflow)) {
+    fail(`${label} workflow validation is missing the non-secret Supabase URL placeholder`);
+  }
+  if (!/EXPO_PUBLIC_SUPABASE_ANON_KEY:\s*["']ci-placeholder-not-a-secret["']/u.test(workflow)) {
+    fail(`${label} workflow validation is missing the non-secret Supabase key placeholder`);
+  }
   if (!/npm\s+run\s+guard:notification-room-call-policy/u.test(workflow)) {
     fail(`${label} workflow is missing the Android-sensitive notification/call guard`);
   }
