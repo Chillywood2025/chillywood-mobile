@@ -54,6 +54,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install alert-automation dependencies for TypeScript
+        if: matrix.key == 'typescript'
+        run: npm ci --prefix ops/alert-automation
+
       - name: Run runtime validation
         if: matrix.key == 'runtime'
         env:
