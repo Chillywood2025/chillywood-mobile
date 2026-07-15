@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "bundleIdentifier": "com.chillywood.mobile",
+  "defaultLocale": "en-US",
+  "currencyReference": "USD",
+  "liveMoneyEnabled": false,
+  "catalog": [
+    {
+      "concept": "premium",
+      "productId": "com.chillywood.premium.monthly",
+      "referenceName": "Chi'llywood Premium Monthly",
+      "type": "auto_renewable_subscription",
+      "subscriptionGroup": "chillywood_premium",
+      "duration": "P1M",
+      "referencePrice": "4.99",
+      "entitlement": "premium",
+      "offering": "default",
+      "package": "$rc_monthly",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "premium",
+      "productId": "com.chillywood.premium.yearly",
+      "referenceName": "Chi'llywood Premium Yearly",
+      "type": "auto_renewable_subscription",
+      "subscriptionGroup": "chillywood_premium",
+      "duration": "P1Y",
+      "referencePrice": "49.99",
+      "entitlement": "premium",
+      "offering": "default",
+      "package": "$rc_annual",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "creator_tip",
+      "productId": "com.chillywood.tip.tier1",
+      "referenceName": "Chi'llywood Creator Tip Tier 1",
+      "type": "consumable",
+      "referencePrice": "0.99",
+      "entitlement": null,
+      "offering": "creator_support",
+      "package": "tip_tier_1",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "creator_tip",
+      "productId": "com.chillywood.tip.tier2",
+      "referenceName": "Chi'llywood Creator Tip Tier 2",
+      "type": "consumable",
+      "referencePrice": "2.99",
+      "entitlement": null,
+      "offering": "creator_support",
+      "package": "tip_tier_2",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "creator_tip",
+      "productId": "com.chillywood.tip.tier3",
+      "referenceName": "Chi'llywood Creator Tip Tier 3",
+      "type": "consumable",
+      "referencePrice": "4.99",
+      "entitlement": null,
+      "offering": "creator_support",
+      "package": "tip_tier_3",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "creator_tip",
+      "productId": "com.chillywood.tip.tier4",
+      "referenceName": "Chi'llywood Creator Tip Tier 4",
+      "type": "consumable",
+      "referencePrice": "9.99",
+      "entitlement": null,
+      "offering": "creator_support",
+      "package": "tip_tier_4",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "seat_pass",
+      "productId": "com.chillywood.seatpass.tier1",
+      "referenceName": "Chi'llywood Seat Pass Tier 1",
+      "type": "consumable",
+      "referencePrice": "0.99",
+      "entitlement": null,
+      "offering": "seat_passes",
+      "package": "seat_pass_tier_1",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "seat_pass",
+      "productId": "com.chillywood.seatpass.tier2",
+      "referenceName": "Chi'llywood Seat Pass Tier 2",
+      "type": "consumable",
+      "referencePrice": "2.99",
+      "entitlement": null,
+      "offering": "seat_passes",
+      "package": "seat_pass_tier_2",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "seat_pass",
+      "productId": "com.chillywood.seatpass.tier3",
+      "referenceName": "Chi'llywood Seat Pass Tier 3",
+      "type": "consumable",
+      "referencePrice": "4.99",
+      "entitlement": null,
+      "offering": "seat_passes",
+      "package": "seat_pass_tier_3",
+      "status": "sandbox_only"
+    },
+    {
+      "concept": "seat_pass",
+      "productId": "com.chillywood.seatpass.tier4",
+      "referenceName": "Chi'llywood Seat Pass Tier 4",
+      "type": "consumable",
+      "referencePrice": "9.99",
+      "entitlement": null,
+      "offering": "seat_passes",
+      "package": "seat_pass_tier_4",
+      "status": "sandbox_only"
+    }
+  ],
+  "disabledDynamicConcepts": [
+    "paid_video",
+    "event_pass",
+    "vip_access",
+    "channel_subscription"
+  ]
+}

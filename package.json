@@ -217,6 +217,7 @@
     "legal-site:build": "node ./public-site/legal-site/build.mjs",
     "legal-site:serve": "node ./public-site/legal-site/serve.mjs",
     "guard:apple-app-site-association": "node ./scripts/guard-apple-app-site-association.mjs",
+    "guard:ios-commerce-catalog": "node ./scripts/guard-ios-commerce-catalog.mjs",
     "validate:runtime": "node ./scripts/validate-runtime.mjs",
     "guard:ios-config-policy": "node ./scripts/guard-ios-config-policy.mjs",
     "proof:ios-config": "node ./scripts/proof-ios-config.mjs",
