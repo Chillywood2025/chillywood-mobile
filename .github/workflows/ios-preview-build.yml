@@ -1,0 +1,90 @@
+name: iOS Preview Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type BUILD_IOS_PREVIEW to start a non-production internal build
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: inputs.confirmation == 'BUILD_IOS_PREVIEW'
+    name: iOS Preview / Validate
+    runs-on: ubuntu-latest
+    environment: ios-preview
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate repository and iOS policy
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm run validate:runtime
+          npm run guard:route-contracts
+          npm run guard:payment-rail-policy
+          npm run guard:notification-room-call-policy
+          npm run guard:watch-party-livekit
+          npm run guard:old-room-handling
+          npm run guard:ios-config-policy
+          npm run proof:ios-config
+          npm run guard:apple-app-site-association
+          npm run guard:ios-commerce-catalog
+          npm run guard:ios-commerce-policy
+          npm run proof:ios-commerce
+          npm run proof:ios-media-readiness
+          npm run proof:ios-push-platform
+          npm run guard:ios-native-call-policy
+          npm run proof:ios-voip-policy
+          npm run guard:ios-privacy-manifest
+          npm run guard:ios-release-workflows
+          npx expo-doctor
+
+  build:
+    needs: validate
+    name: iOS Preview / Build
+    runs-on: ubuntu-latest
+    environment: ios-preview
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build iOS preview artifact
+        run: eas build --platform ios --profile preview --non-interactive --wait
