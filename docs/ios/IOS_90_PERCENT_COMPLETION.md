@@ -22,7 +22,7 @@ Foundation verification:
    - Latest signed simulator artifact: `ddc48433-d29d-4a83-a847-0d8908e2da63`
 7. Production iOS archive builds: **No**
 8. Firebase iOS is configured: **Yes**
-9. AASA deployed and validates: **No** (source, guard, and build artifacts are prepared; publish verification is owner/dashboard/action-dependent.)
+9. AASA deployed and validates: **Yes** (`https://chillywoodstream.com/.well-known/apple-app-site-association`, `HTTP 200`, `application/json`, no redirect)
 10. Supabase auth redirect URLs configured: **No** (provider URL entries are prepared for update and verification in provider dashboards.)
 11. Ordinary iOS push client code complete: **Yes**
 12. Ordinary iOS push backend deployed: **No**
@@ -61,4 +61,4 @@ Foundation verification:
 
 - Complete deployment-only remaining flows: APNs, App Store Connect setup, RevenueCat Apple setup, internal TestFlight build/upload, and all pending provider proofs.
 - Resolve external deployment/dashboard and provider attestation gates (no additional repository lint or doctor remediation remains identified for this branch).
-- Execute and record the AASA deploy+validation and canonical route parser tests.
+- Execute and record the pending physical-device and provider-dashboard proof and canonical route parser tests for signed builds and Supabase redirect validation.
