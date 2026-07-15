@@ -12,6 +12,7 @@ web-build/
 # Local proof and generated artifacts
 artifacts/
 supabase/.temp/
+deno.lock
 *.ipa
 *.xcarchive/
 
