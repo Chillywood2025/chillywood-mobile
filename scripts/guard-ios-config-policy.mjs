@@ -86,6 +86,7 @@ assert(
 assert(
   liveKitIosCompatibilityPlugin.includes("livekit-react-native-webrtc")
     && liveKitIosCompatibilityPlugin.includes("CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES")
+    && liveKitIosCompatibilityPlugin.includes("-Wno-non-modular-include-in-framework-module")
     && liveKitIosCompatibilityPlugin.includes("withPodfile"),
   "LiveKit iOS compatibility must remain scoped to its generated CocoaPods target",
 );
