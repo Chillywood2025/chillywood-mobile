@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -12,8 +13,9 @@ import {
 } from "react-native";
 
 import { trackEvent } from "../../_lib/analytics";
+import { listIosFiniteAppStoreTiers } from "../../_lib/iosAppStoreCommerce";
 import {
-  purchaseCreatorTipWithGooglePlay,
+  purchaseCreatorTipWithStore,
   type CreatorTipPublicStatus,
 } from "../../_lib/creatorTips";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
@@ -33,6 +35,7 @@ type TipSheetProps = {
 };
 
 const DEFAULT_AMOUNTS = [100, 300, 500, 1000];
+const STORE_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
 
 export function TipSheet({
   visible,
@@ -52,15 +55,20 @@ export function TipSheet({
   const [notice, setNotice] = useState("");
 
   const amounts = useMemo(() => {
+    if (Platform.OS === "ios") {
+      return listIosFiniteAppStoreTiers("creator_tip").map((entry) => entry.referencePriceMinor);
+    }
     const values = tipStatus?.suggestedAmountsCents?.length ? tipStatus.suggestedAmountsCents : DEFAULT_AMOUNTS;
     return Array.from(new Set(values.filter((amount) => amount > 0))).slice(0, 6);
   }, [tipStatus?.suggestedAmountsCents]);
 
   useEffect(() => {
     if (!visible) return;
-    const defaultAmount = tipStatus?.defaultAmountCents && tipStatus.defaultAmountCents > 0
-      ? tipStatus.defaultAmountCents
-      : amounts[0] ?? 300;
+    const defaultAmount = Platform.OS === "ios"
+      ? amounts[0] ?? 99
+      : tipStatus?.defaultAmountCents && tipStatus.defaultAmountCents > 0
+        ? tipStatus.defaultAmountCents
+        : amounts[0] ?? 300;
     setSelectedAmount(defaultAmount);
     setCustomAmount("");
     setPrivateNote("");
@@ -74,12 +82,14 @@ export function TipSheet({
 
   const parsedCustomAmount = Math.round(Number(customAmount.replace(/[^0-9.]/g, "")) * 100);
   const amountCents = customAmount.trim() ? parsedCustomAmount : selectedAmount;
-  const minAmount = tipStatus?.minAmountCents ?? 100;
-  const maxAmount = tipStatus?.maxAmountCents ?? 50000;
-  const amountValid = Number.isInteger(amountCents) && amountCents >= minAmount && amountCents <= maxAmount;
+  const minAmount = Platform.OS === "ios" ? amounts[0] ?? 99 : tipStatus?.minAmountCents ?? 100;
+  const maxAmount = Platform.OS === "ios" ? amounts.at(-1) ?? 999 : tipStatus?.maxAmountCents ?? 50000;
+  const amountValid = Number.isInteger(amountCents)
+    && amountCents >= minAmount
+    && amountCents <= maxAmount
+    && (Platform.OS !== "ios" || amounts.includes(amountCents));
   const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
   const canTipInSandbox = sandboxTester || tipStatus?.canTip === true;
-  const canSubmit = canTipInSandbox && !!user?.id && amountValid && !busy;
 
   const startCheckout = async () => {
     if (!user?.id) {
@@ -109,7 +119,7 @@ export function TipSheet({
     });
 
     try {
-      const result = await purchaseCreatorTipWithGooglePlay({
+      const result = await purchaseCreatorTipWithStore({
         amountCents,
         creatorId,
         currency: tipStatus?.currency ?? "usd",
@@ -129,7 +139,7 @@ export function TipSheet({
           : result.message,
       );
     } catch {
-      setNotice("Google Play tip could not be started. Try again later.");
+      setNotice(`${STORE_NAME} tip could not be started. Try again later.`);
     } finally {
       setBusy(false);
     }
@@ -150,7 +160,7 @@ export function TipSheet({
             tone="premium"
           />
 
-          {showSandboxCopy ? <MoneyStatusChip label="Sandbox Test · Google Play" tone="warning" /> : null}
+          {showSandboxCopy ? <MoneyStatusChip label={`Sandbox Test · ${STORE_NAME}`} tone="warning" /> : null}
 
           <View style={styles.amountGrid}>
             {amounts.map((amount) => (
@@ -173,15 +183,17 @@ export function TipSheet({
             ))}
           </View>
 
-          <TextInput
-            value={customAmount}
-            onChangeText={setCustomAmount}
-            keyboardType="decimal-pad"
-            placeholder="Custom amount"
-            placeholderTextColor="#8791A3"
-            style={styles.input}
-            accessibilityLabel="Custom tip amount"
-          />
+          {Platform.OS !== "ios" ? (
+            <TextInput
+              value={customAmount}
+              onChangeText={setCustomAmount}
+              keyboardType="decimal-pad"
+              placeholder="Custom amount"
+              placeholderTextColor="#8791A3"
+              style={styles.input}
+              accessibilityLabel="Custom tip amount"
+            />
+          ) : null}
           <TextInput
             value={privateNote}
             onChangeText={(value) => setPrivateNote(value.slice(0, 280))}
@@ -213,7 +225,7 @@ export function TipSheet({
             {busy ? (
               <View style={styles.busyRow}>
                 <ActivityIndicator color="#fff" />
-                <Text style={styles.primaryButtonText}>Opening Google Play</Text>
+                <Text style={styles.primaryButtonText}>{`Opening ${STORE_NAME}`}</Text>
               </View>
             ) : (
               <Text style={styles.primaryButtonText}>{showSandboxCopy ? "Sandbox Test Tip" : "Continue to tip"}</Text>

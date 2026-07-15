@@ -1,3 +1,7 @@
+import { Platform } from "react-native";
+
+const DIGITAL_STORE_PROVIDER = Platform.OS === "ios" ? "App Store / RevenueCat" : "Google Play / RevenueCat";
+
 export type MonetizationFeatureKey =
   | "tips"
   | "paid_videos"
@@ -52,7 +56,7 @@ export const CREATOR_MONETIZATION_FEATURE_CATALOG: readonly MonetizationFeatureC
     fanActionLabel: "Unlock Video",
     creatorActionLabel: "Set up",
     status: "Not set up",
-    requiredSetup: ["Google Play / RevenueCat product", "content access resolver", "creator payout readiness"],
+    requiredSetup: [`${DIGITAL_STORE_PROVIDER} product`, "content access resolver", "creator payout readiness"],
     manageTarget: "offers",
     allowedSurfaces: ["video_upload", "video_edit", "video_card", "video_player_locked_state"],
   },
@@ -63,7 +67,7 @@ export const CREATOR_MONETIZATION_FEATURE_CATALOG: readonly MonetizationFeatureC
     fanActionLabel: "Get Seat",
     creatorActionLabel: "Set up",
     status: "Not set up",
-    requiredSetup: ["Seat Pass offer", "room entry gate", "Google Play / RevenueCat product"],
+    requiredSetup: ["Seat Pass offer", "room entry gate", `${DIGITAL_STORE_PROVIDER} product`],
     manageTarget: "offers",
     allowedSurfaces: ["watch_party_creation", "watch_party_invite", "party_waiting_room_gate"],
   },
@@ -85,7 +89,7 @@ export const CREATOR_MONETIZATION_FEATURE_CATALOG: readonly MonetizationFeatureC
     fanActionLabel: "Get VIP",
     creatorActionLabel: "Set up",
     status: "Not set up",
-    requiredSetup: ["VIP pass offer", "VIP access gate", "Google Play / RevenueCat sandbox product"],
+    requiredSetup: ["VIP pass offer", "VIP access gate", `${DIGITAL_STORE_PROVIDER} sandbox product`],
     manageTarget: "ways_to_earn",
     allowedSurfaces: ["creator_channel"],
   },

@@ -5,6 +5,8 @@ import {
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
 import { Platform } from "react-native";
+import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 
 export const VIP_PASS_SANDBOX_PRODUCT_KEY = "vip_pass_sandbox_499";
@@ -289,6 +291,20 @@ export async function purchaseCreatorVipPass(input: {
   }
   if (!access.requiresPurchase || !access.offer?.id) {
     return { ok: false, message: "VIP is not available for this creator right now.", access };
+  }
+
+  if (Platform.OS === "ios") {
+    const decision = resolvePaymentRailPolicy({
+      environment: "sandbox",
+      liveMoneyEnabled: false,
+      platform: "ios",
+      store: "app_store",
+      unlocksDigitalAccess: true,
+      useCase: "creator_paid_digital_content",
+    });
+    if (!decision.allowed) {
+      return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
+    }
   }
 
   const intent = await createCreatorVipPassPurchaseIntent(access.offer.id);

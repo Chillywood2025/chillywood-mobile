@@ -30,6 +30,7 @@ const loadPaymentPolicy = (relativeUrl) => {
 
 const appPaymentPolicy = loadPaymentPolicy("../_lib/paymentRailPolicy.ts");
 const edgePaymentPolicy = loadPaymentPolicy("../supabase/functions/_shared/payment-rail-policy.ts");
+const appStoreRuntimeCatalog = loadPaymentPolicy("../_lib/iosAppStoreCommerce.ts");
 const policyCases = [
   {
     useCase: "premium_subscription",
@@ -69,6 +70,24 @@ const policyCases = [
     providerReady: true,
     appStorePurchasesEnabled: true,
   },
+  {
+    useCase: "watch_party_seat_pass",
+    platform: "ios",
+    environment: "sandbox",
+    providerReady: true,
+    appStorePurchasesEnabled: true,
+    liveMoneyEnabled: false,
+    unlocksDigitalAccess: true,
+  },
+  {
+    useCase: "watch_party_seat_pass",
+    platform: "ios",
+    environment: "production",
+    providerReady: true,
+    appStorePurchasesEnabled: true,
+    liveMoneyEnabled: false,
+    unlocksDigitalAccess: true,
+  },
 ];
 for (const input of policyCases) {
   const appDecision = appPaymentPolicy.resolvePaymentRailPolicy(input);
@@ -87,6 +106,34 @@ assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[2]).provider,
 assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[2]).allowed, true);
 assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[3]).reason, "tips_cannot_unlock_digital_access");
 assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[4]).allowed, false);
+assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[5]).provider, "revenuecat_app_store");
+assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[5]).allowed, true);
+assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[5]).grantsLiveKitAuthority, false);
+assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[5]).createsPayableBalance, false);
+assert.equal(appPaymentPolicy.resolvePaymentRailPolicy(policyCases[6]).allowed, false);
+
+const runtimeTierIds = new Set(appStoreRuntimeCatalog.IOS_FINITE_APP_STORE_TIERS.map((entry) => entry.productId));
+const manifestFiniteTierIds = new Set(
+  manifest.catalog
+    .filter((entry) => entry.concept === "creator_tip" || entry.concept === "seat_pass")
+    .map((entry) => entry.productId),
+);
+assert.deepEqual(runtimeTierIds, manifestFiniteTierIds, "runtime finite-tier IDs must match the permanent manifest");
+assert.equal(
+  appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("creator_tip", 99)?.productId,
+  "com.chillywood.tip.tier1",
+);
+assert.equal(
+  appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("creator_tip", 300)?.productId,
+  "com.chillywood.tip.tier2",
+  "legacy round-dollar display amounts may resolve only to their corresponding fixed Apple tier",
+);
+assert.equal(
+  appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("seat_pass", 1000)?.productId,
+  "com.chillywood.seatpass.tier4",
+);
+assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("creator_tip", 250), null);
+assert.equal(appStoreRuntimeCatalog.resolveIosFiniteAppStoreTier("seat_pass", 0), null);
 
 const apple = resolveRevenueCatStorePolicy("APP_STORE");
 assert.equal(apple.platform, "ios");
@@ -149,3 +196,5 @@ console.log("- Apple product matching is exact; Google base-plan matching is pre
 console.log("- App Store switch defaults fail closed outside approved sandbox state");
 console.log("- tips grant no access; purchases grant no room authority or payable balance");
 console.log("- StoreKit configuration exactly mirrors the ten-product manifest");
+console.log("- runtime tips and Seat Passes resolve only to exact permanent Apple tiers");
+console.log("- unsupported dynamic iOS concepts remain policy-blocked before provider checkout");

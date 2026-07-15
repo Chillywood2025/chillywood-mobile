@@ -5,6 +5,7 @@ export type PaymentRailUseCase =
   | "premium_subscription"
   | "creator_paid_digital_content"
   | "creator_tip_support"
+  | "watch_party_seat_pass"
   | "creator_physical_product"
   | "creator_payout_cashout"
   | "creator_sponsor_payment";
@@ -156,6 +157,29 @@ export function resolvePaymentRailPolicy(input: PaymentRailPolicyInput): Payment
       requiresProviderProof: !providerReady(input),
       revenueCatAllowed: true,
       unlocksDigitalAccess: false,
+    });
+  }
+
+  if (input.useCase === "watch_party_seat_pass") {
+    if (platform === "ios") {
+      const appStoreReady = input.environment === "sandbox"
+        && input.providerReady === true
+        && input.appStorePurchasesEnabled === true
+        && input.liveMoneyEnabled !== true;
+      return blocked("revenuecat_app_store", "ios_seat_pass_uses_finite_app_store_catalog_sandbox_only", {
+        allowed: appStoreReady,
+        requiresProviderProof: !appStoreReady,
+        revenueCatAllowed: true,
+        unlocksDigitalAccess: true,
+        createsPayableBalance: false,
+      });
+    }
+
+    return blocked("revenuecat_google_play", "android_seat_pass_uses_existing_google_play_policy", {
+      allowed: providerReady(input),
+      requiresProviderProof: !providerReady(input),
+      revenueCatAllowed: true,
+      unlocksDigitalAccess: true,
     });
   }
 

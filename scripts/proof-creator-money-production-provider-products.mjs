@@ -555,10 +555,10 @@ const checks = [
   },
   {
     id: "premium_unchanged",
-    ok: switchboardText.includes('productId: "premium_subscription"')
+    ok: switchboardText.includes('productId: IOS_STORE ? "com.chillywood.premium.monthly" : "premium_subscription"')
       && has("_lib/monetization.ts", "PREMIUM_PURCHASE_SHELL_ON_HOLD = true")
       && runtimeFlagsText.includes("premiumPurchaseEnabled: false"),
-    detail: "Premium product and purchase hold remain unchanged.",
+    detail: "Android Premium keeps its existing product ID while the iOS finite product ID remains store-specific; the purchase hold is unchanged.",
   },
   {
     id: "provider_refunds_manual_external",

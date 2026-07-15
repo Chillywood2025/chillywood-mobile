@@ -148,6 +148,13 @@ export default function AdminMoneySandboxPurchasesScreen() {
 
   const runSandboxPurchase = useCallback(async () => {
     if (!allowed || busy) return;
+    if (Platform.OS === "ios") {
+      Alert.alert(
+        "Use a finite App Store checkout",
+        "This generic sandbox screen cannot open dynamic Apple products. Use the dedicated Tip or Watch-Party Seat Pass flow; nothing was charged.",
+      );
+      return;
+    }
     const safeSourceId = normalizeText(sourceId);
     if (!UUID_PATTERN.test(safeSourceId)) {
       Alert.alert("Source required", "Enter a real source UUID before starting a sandbox purchase.");

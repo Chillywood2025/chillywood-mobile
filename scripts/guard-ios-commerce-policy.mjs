@@ -20,12 +20,27 @@ const excludes = (source, needle, label) => assert(!source.includes(needle), `${
 const manifest = readJson("config/ios/app-store-products.json");
 const storeKit = readJson("config/ios/Chillywood.storekit");
 const migration = read("supabase/migrations/20260715151250_ios_app_store_mappings.sql");
+const purchaseIntentMigration = read("supabase/migrations/20260715174500_ios_app_store_purchase_intents.sql");
+const legacyAndroidPurchaseIntentMigration = read("supabase/migrations/20260616121739_require_sandbox_tester_for_purchase_intents.sql");
 const clientPolicy = read("_lib/paymentRailPolicy.ts");
 const serverPolicy = read("supabase/functions/_shared/payment-rail-policy.ts");
+const appStoreRuntimeCatalog = read("_lib/iosAppStoreCommerce.ts");
 const webhook = read("supabase/functions/revenuecat-webhook/index.ts");
 const storePolicy = read("supabase/functions/revenuecat-webhook/store-policy.mjs");
 const revenueCatClient = read("_lib/revenuecat.ts");
 const monetizationClient = read("_lib/monetization.ts");
+const creatorTips = read("_lib/creatorTips.ts");
+const seatPasses = read("_lib/paidWatchPartyTickets.ts");
+const creatorSetup = read("_lib/creatorMonetizationSetup.ts");
+const adminSandboxPurchases = read("app/admin-money-sandbox-purchases.tsx");
+const tipSheet = read("components/monetization/tip-sheet.tsx");
+const moneyScope = read("components/monetization/MoneyScopeInfoButton.tsx");
+const dynamicPurchaseSources = [
+  ["paid video", read("_lib/creatorPaidVideos.ts"), "purchasePaidVideoAccess", "createPaidVideoPurchaseIntent"],
+  ["paid event", read("_lib/paidCreatorEvents.ts"), "purchasePaidCreatorEventPass", "createPaidCreatorEventPassPurchaseIntent"],
+  ["VIP", read("_lib/creatorVipPasses.ts"), "purchaseCreatorVipPass", "createCreatorVipPassPurchaseIntent"],
+  ["channel subscription", read("_lib/channelSubscriptions.ts"), "purchaseChannelSubscription", "createChannelSubscriptionPurchaseIntent"],
+];
 
 assert(manifest.liveMoneyEnabled === false, "manifest must keep live money disabled");
 assert(manifest.bundleIdentifier === "com.chillywood.mobile", "manifest bundle identifier drifted");
@@ -66,6 +81,17 @@ for (const manifestEntry of manifest.catalog) {
 }
 
 for (const productId of manifestIds) includes(migration, `'${productId}'`, "Apple mapping migration");
+const finiteConsumableIds = manifest.catalog
+  .filter((entry) => entry.concept === "creator_tip" || entry.concept === "seat_pass")
+  .map((entry) => entry.productId)
+  .sort();
+const runtimeFiniteIds = Array.from(appStoreRuntimeCatalog.matchAll(/productId:\s*"([^"]+)"/gu))
+  .map((match) => match[1])
+  .sort();
+assert(
+  JSON.stringify(runtimeFiniteIds) === JSON.stringify(finiteConsumableIds),
+  "runtime finite-tier IDs must exactly match the manifest tip and Seat Pass IDs",
+);
 for (const productId of manifest.catalog.filter((entry) => entry.concept === "premium").map((entry) => entry.productId)) {
   includes(webhook, `"${productId}"`, "Premium webhook allowlist");
 }
@@ -89,10 +115,82 @@ for (const policy of [clientPolicy, serverPolicy]) {
   includes(policy, "APP_STORE_PURCHASES_DEFAULT_ENABLED = false", "App Store client/server default");
   includes(policy, "ios_dynamic_digital_content_not_in_finite_app_store_catalog", "finite-catalog policy");
   includes(policy, "creator_tips_use_revenuecat_app_store_sandbox_only", "iOS tip policy");
+  includes(policy, "ios_seat_pass_uses_finite_app_store_catalog_sandbox_only", "iOS Seat Pass policy");
   includes(policy, "tips_cannot_unlock_digital_access", "tip access block");
   includes(policy, "grantsLiveKitAuthority: false", "purchase authority block");
   includes(policy, "createsPayableBalance: false", "payable-balance block");
 }
+
+includes(purchaseIntentMigration, 'create or replace function public."create_ios_app_store_purchase_intent"', "Apple purchase-intent RPC");
+excludes(purchaseIntentMigration, 'create or replace function public."create_money_purchase_intent"', "Android purchase-intent preservation");
+includes(legacyAndroidPurchaseIntentMigration, 'create or replace function public."create_money_purchase_intent"', "existing Android purchase-intent RPC");
+for (const requiredPolicy of [
+  'mapping."platform" = \'ios\'',
+  'mapping."store" = \'app_store\'',
+  'mapping."provider" = \'revenuecat_app_store\'',
+  "v_app_store_switch_state <> 'sandbox_only'",
+  "v_webhook_switch_state <> 'sandbox_only'",
+  "v_live_money_switch_state <> 'off'",
+  "v_payouts_switch_state <> 'off'",
+  "v_mapping.\"concept\" not in ('creator_tip', 'seat_pass')",
+  'v_mapping."grants_livekit_authority" is true',
+  'v_mapping."creates_payable_balance" is true',
+  "ios_app_store_exact_tier_price_required",
+  "sandbox_monetization_tester_required",
+  "ios_app_store_purchase_intent_rate_limited",
+  "creator_cannot_tip_self",
+  "creator_tip_blocked_by_audience_policy",
+  "creator_cannot_buy_own_ticket",
+  'public."resolve_paid_watch_party_ticket_access"',
+]) {
+  includes(purchaseIntentMigration, requiredPolicy, "Apple purchase-intent policy");
+}
+includes(purchaseIntentMigration, "watch_party_ticket_store_catalog", "Seat Pass conceptual mapping correction");
+includes(purchaseIntentMigration, "'watch_party_live_ticket'", "Seat Pass Party Room access type");
+includes(purchaseIntentMigration, "coalesce(p_metadata, '{}'::jsonb) || jsonb_build_object(", "server-owned safety metadata precedence");
+
+for (const [label, source] of [["creator tip", creatorTips], ["Seat Pass", seatPasses]]) {
+  includes(source, "resolvePaymentRailPolicy({", `${label} runtime payment policy`);
+  includes(source, 'provider !== "revenuecat_app_store"', `${label} App Store provider assertion`);
+  includes(source, '"create_ios_app_store_purchase_intent"', `${label} Apple purchase-intent RPC`);
+  includes(source, "resolveIosFiniteAppStoreTier", `${label} finite product-tier resolution`);
+  const policyIndex = source.indexOf("resolvePaymentRailPolicy({");
+  const intentCallIndex = label === "Seat Pass"
+    ? source.indexOf("createIosPaidWatchPartyTicketPurchaseIntent(", policyIndex)
+    : source.indexOf("creatorTipsClient.rpc", policyIndex);
+  const productLookupIndex = source.indexOf("readRevenueCatNonSubscriptionProducts", intentCallIndex);
+  assert(policyIndex >= 0 && policyIndex < intentCallIndex, `${label} must apply policy before creating an Apple intent`);
+  assert(intentCallIndex >= 0 && productLookupIndex > intentCallIndex, `${label} must create the bounded intent before provider lookup`);
+}
+includes(creatorTips, '"creator_tip_support"', "creator tip policy use case");
+includes(seatPasses, '"watch_party_seat_pass"', "Seat Pass policy use case");
+
+for (const [label, source, purchaseFunction, intentFunction] of dynamicPurchaseSources) {
+  const purchaseIndex = source.indexOf(`export async function ${purchaseFunction}`);
+  const iosBlockIndex = source.indexOf('if (Platform.OS === "ios")', purchaseIndex);
+  const policyIndex = source.indexOf("resolvePaymentRailPolicy({", iosBlockIndex);
+  const intentIndex = source.indexOf(intentFunction, policyIndex);
+  assert(purchaseIndex >= 0, `${label} purchase function is missing`);
+  assert(iosBlockIndex > purchaseIndex, `${label} must have an iOS fail-closed branch`);
+  assert(policyIndex > iosBlockIndex, `${label} must invoke payment-rail policy on iOS`);
+  assert(intentIndex > policyIndex, `${label} iOS policy must run before intent/provider work`);
+  includes(source, "IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY", `${label} truthful iOS unavailable copy`);
+}
+
+const genericIosBlock = creatorSetup.indexOf('if (Platform.OS === "ios")', creatorSetup.indexOf("launchCreatorSandboxDigitalPurchase"));
+const genericProviderLookup = creatorSetup.indexOf("readRevenueCatNonSubscriptionProducts", genericIosBlock);
+assert(genericIosBlock >= 0 && genericProviderLookup > genericIosBlock, "generic creator setup must fail closed before iOS provider lookup");
+const adminIosBlock = adminSandboxPurchases.indexOf('if (Platform.OS === "ios")', adminSandboxPurchases.indexOf("runSandboxPurchase"));
+const adminProviderLookup = adminSandboxPurchases.indexOf("readRevenueCatNonSubscriptionProducts", adminIosBlock);
+assert(adminIosBlock >= 0 && adminProviderLookup > adminIosBlock, "generic admin sandbox purchase must fail closed before iOS provider lookup");
+
+for (const [label, source] of [["tip sheet", tipSheet], ["money scope", moneyScope]]) {
+  includes(source, 'Platform.OS === "ios"', `${label} platform-aware copy`);
+  includes(source, "App Store", `${label} App Store copy`);
+  includes(source, "Google Play", `${label} Android copy preservation`);
+}
+includes(tipSheet, 'listIosFiniteAppStoreTiers("creator_tip")', "iOS tip sheet finite tier list");
+includes(tipSheet, 'Platform.OS !== "ios" ? (', "iOS tip sheet custom-amount block");
 
 includes(webhook, "readStoreProductResolution", "store-aware webhook lookup");
 includes(webhook, 'storePolicy.provider === "revenuecat_app_store"', "App Store webhook split");

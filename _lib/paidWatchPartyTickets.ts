@@ -1,12 +1,16 @@
 import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
+  getRevenueCatProductionReadiness,
   purchaseRevenueCatStoreProduct,
   readRevenueCatCustomerInfo,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
+import { resolveIosFiniteAppStoreTier, type IosFiniteAppStoreTier } from "./iosAppStoreCommerce";
+import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { Platform } from "react-native";
 import { reportRuntimeError } from "./logger";
+import { getRuntimeConfig } from "./runtimeConfig";
 import { supabase } from "./supabase";
 
 export const PAID_WATCH_PARTY_TICKET_SANDBOX_PRODUCT_KEY = "watch_party_live_ticket_sandbox_099";
@@ -342,6 +346,35 @@ export async function createPaidWatchPartyTicketPurchaseIntent(offerId: string) 
   };
 }
 
+const createIosPaidWatchPartyTicketPurchaseIntent = async (
+  offerId: string,
+  tier: IosFiniteAppStoreTier,
+) => {
+  const { data, error } = await rpcClient.rpc("create_ios_app_store_purchase_intent", {
+    p_metadata: {
+      amount_minor: String(tier.referencePriceMinor),
+      currency: "usd",
+      no_live_payout: true,
+      not_payable: true,
+      sandbox_only: true,
+      source_surface: "watch_party_seat_pass",
+      viewer_only: true,
+    },
+    p_provider_product_id: tier.productId,
+    p_source_id: offerId,
+    p_source_type: "watch_party_live",
+  });
+  if (error) throw new Error("App Store Seat Pass checkout is not available right now.");
+  const row = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+  return {
+    id: toText(row.id),
+    providerProductId: tier.productId,
+    alreadyPurchased: row.alreadyPurchased === true,
+  };
+};
+
 export async function waitForPaidWatchPartyTicketAccess(partyId: string): Promise<PaidWatchPartyTicketAccess> {
   let latest = await resolvePaidWatchPartyTicketAccess(partyId);
   if (latest.allowed) return latest;
@@ -365,7 +398,41 @@ export async function purchasePaidWatchPartyTicket(input: {
     return { ok: false, message: "This Seat Pass is not available right now.", access };
   }
 
-  const intent = await createPaidWatchPartyTicketPurchaseIntent(access.offer.id);
+  const iosTier = Platform.OS === "ios"
+    ? resolveIosFiniteAppStoreTier("seat_pass", access.priceCents ?? access.offer.priceCents)
+    : null;
+  if (Platform.OS === "ios") {
+    if (!iosTier) {
+      return {
+        ok: false,
+        message: "This Seat Pass does not match an approved App Store tier. Nothing was charged.",
+        access,
+      };
+    }
+    const runtime = getRuntimeConfig();
+    const readiness = getRevenueCatProductionReadiness();
+    const decision = resolvePaymentRailPolicy({
+      appStorePurchasesEnabled: runtime.revenueCat.appStorePurchasesEnabled,
+      environment: "sandbox",
+      liveMoneyEnabled: false,
+      platform: "ios",
+      providerReady: readiness.iosPublicKeyConfigured,
+      store: "app_store",
+      unlocksDigitalAccess: true,
+      useCase: "watch_party_seat_pass",
+    });
+    if (!decision.allowed || decision.provider !== "revenuecat_app_store") {
+      return {
+        ok: false,
+        message: "App Store sandbox Seat Passes are disabled for this build. Nothing was charged.",
+        access,
+      };
+    }
+  }
+
+  const intent = Platform.OS === "ios" && iosTier
+    ? await createIosPaidWatchPartyTicketPurchaseIntent(access.offer.id, iosTier)
+    : await createPaidWatchPartyTicketPurchaseIntent(access.offer.id);
   if (intent.alreadyPurchased) {
     const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
     return {
@@ -376,7 +443,9 @@ export async function purchasePaidWatchPartyTicket(input: {
     };
   }
 
-  const productId = intent.providerProductId || access.providerProductId || PAID_WATCH_PARTY_TICKET_SANDBOX_PROVIDER_PRODUCT_ID;
+  const productId = intent.providerProductId
+    || (Platform.OS === "ios" ? iosTier?.productId : access.providerProductId)
+    || PAID_WATCH_PARTY_TICKET_SANDBOX_PROVIDER_PRODUCT_ID;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
   const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? products[0] ?? null;
   if (!product) {
@@ -430,7 +499,9 @@ export async function purchasePaidWatchPartyTicket(input: {
 
     return {
       ok: false,
-      message: "Seat Pass purchase did not finish. If Google Play shows it as pending, refresh this room in a moment.",
+      message: Platform.OS === "ios"
+        ? "Seat Pass purchase did not finish. If the App Store shows it as pending, refresh this room in a moment."
+        : "Seat Pass purchase did not finish. If Google Play shows it as pending, refresh this room in a moment.",
       access: verifiedAccess,
       intentId: intent.id,
       productId,

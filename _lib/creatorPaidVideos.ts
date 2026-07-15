@@ -5,6 +5,8 @@ import {
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
 import { Platform } from "react-native";
+import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 
 export const PAID_VIDEO_SANDBOX_PRODUCT_KEY = "paid_content_access_sandbox_099";
@@ -304,6 +306,20 @@ export async function purchasePaidVideoAccess(input: {
   }
   if (!access.creatorId || access.creatorId !== input.creatorId) {
     return { ok: false, message: "This paid video offer is not ready.", access };
+  }
+
+  if (Platform.OS === "ios") {
+    const decision = resolvePaymentRailPolicy({
+      environment: "sandbox",
+      liveMoneyEnabled: false,
+      platform: "ios",
+      store: "app_store",
+      unlocksDigitalAccess: true,
+      useCase: "creator_paid_digital_content",
+    });
+    if (!decision.allowed) {
+      return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
+    }
   }
 
   const intent = await createPaidVideoPurchaseIntent(input);

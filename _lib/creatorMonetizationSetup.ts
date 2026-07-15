@@ -1,14 +1,15 @@
-import { Linking } from "react-native";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 
 import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
   syncRevenueCatCustomerIdentity,
 } from "./revenuecat";
+import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
 import {
   REVENUECAT_APP_STORE_PROVIDER,
   REVENUECAT_GOOGLE_PLAY_PROVIDER,
+  resolvePaymentRailPolicy,
 } from "./paymentRailPolicy";
 import { SUPABASE_URL, supabase } from "./supabase";
 
@@ -281,12 +282,20 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
   userId: string;
 }) {
   const tier = getCreatorSandboxTier(input.config.productKey);
+  if (Platform.OS === "ios") {
+    const decision = resolvePaymentRailPolicy({
+      environment: "sandbox",
+      liveMoneyEnabled: false,
+      platform: "ios",
+      store: "app_store",
+      unlocksDigitalAccess: tier.sourceType !== "creator_tip",
+      useCase: tier.sourceType === "creator_tip" ? "creator_tip_support" : "creator_paid_digital_content",
+    });
+    if (!decision.allowed) throw new Error(IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY);
+    throw new Error("Use the dedicated finite-catalog App Store tip or Seat Pass checkout. Nothing was charged.");
+  }
   if (tier.providerRail !== REVENUECAT_GOOGLE_PLAY_PROVIDER && tier.providerRail !== REVENUECAT_APP_STORE_PROVIDER) {
-    throw new Error(
-      Platform.OS === "ios"
-        ? "Digital sandbox purchases must use App Store / RevenueCat."
-        : "Digital sandbox purchases must use Google Play / RevenueCat.",
-    );
+    throw new Error("Digital sandbox purchases must use Google Play / RevenueCat.");
   }
   if (!isValidCreatorMonetizationSourceId(input.config.sourceId)) {
     throw new Error("The saved config source is not valid.");

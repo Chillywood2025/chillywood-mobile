@@ -155,7 +155,8 @@ assertIncludes(monetization, "isPremiumPurchaseShellAvailable", "Premium purchas
 assertIncludes(premiumEntitlements, "entitlement_key", "backed entitlement helper");
 assertIncludes(premiumEntitlements, "revoked_at", "revoked entitlement blocking");
 
-assertIncludes(creatorTips, "purchaseCreatorTipWithGooglePlay", "Google Play creator tip helper");
+assertIncludes(creatorTips, "purchaseCreatorTipWithStore", "platform-neutral creator tip helper");
+assertIncludes(creatorTips, "purchaseCreatorTipWithGooglePlay = purchaseCreatorTipWithStore", "legacy Android creator tip alias");
 assertIncludes(creatorTips, "creator_tip_sandbox_099", "creator tip sandbox product key");
 assertIncludes(creatorTips, "cw_creator_tip_sandbox_099", "creator tip RevenueCat product");
 assertIncludes(channelSettings, "Sandbox Tester Experience", "Money Center sandbox tester setup section");
@@ -185,7 +186,8 @@ assertIncludes(channelSettings, "Physical merch", "Platform Studio merch copy");
 assertIncludes(channelSettings, "Stripe is reserved for physical merch", "Android digital Stripe block copy");
 assertIncludes(creatorSetupRoute, "/channel-studio?tab=monetization&focus=offers", "legacy creator setup redirects to Money Center");
 assertIncludes(channelSettings, "Set up sandbox offers", "Money Center creator setup action");
-assertIncludes(channelSettings, "Google Play / RevenueCat sandbox", "Money Center Android digital rail copy");
+assertIncludes(channelSettings, 'Platform.OS === "ios" ? "App Store" : "Google Play"', "Money Center platform-aware store copy");
+assertIncludes(channelSettings, "storeProviderPair", "Money Center platform-aware RevenueCat pair");
 assertIncludes(channelSettings, "tab=monetization&focus=payouts", "old payout deep link maps to Monetization");
 assertIncludes(revenueRoute, "focus=balance", "old revenue route maps to creator balance");
 assertNotIncludes(channelSettings, "{ id: \"payouts\", label: \"Payouts\" }", "separate Payouts tab");
