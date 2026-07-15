@@ -18,6 +18,13 @@ const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-re
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
 const IOS_ASSOCIATED_DOMAIN = "applinks:chillywoodstream.com";
 const IOS_PHOTO_LIBRARY_USAGE_DESCRIPTION = "Chi'llywood accesses photos you choose for your profile and social images.";
+const IOS_RNFIREBASE_STATIC_PODS = [
+  "RNFBAnalytics",
+  "RNFBApp",
+  "RNFBCrashlytics",
+  "RNFBPerf",
+  "RNFBRemoteConfig",
+] as const;
 const ANDROID_APP_LINK_HOST = "chillywoodstream.com";
 const ANDROID_APP_LINK_EXACT_PATHS = [
   "/auth",
@@ -239,6 +246,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         {
           ios: {
             useFrameworks: "static",
+            forceStaticLinking: [...IOS_RNFIREBASE_STATIC_PODS],
           },
         },
       ],

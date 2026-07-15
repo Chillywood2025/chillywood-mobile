@@ -9,6 +9,13 @@ const root = process.cwd();
 const expectedBundleIdentifier = "com.chillywood.mobile";
 const expectedAppleTeamId = "CU7536UQK9";
 const requiredAssociatedDomain = "applinks:chillywoodstream.com";
+const expectedRnFirebaseStaticPods = [
+  "RNFBAnalytics",
+  "RNFBApp",
+  "RNFBCrashlytics",
+  "RNFBPerf",
+  "RNFBRemoteConfig",
+];
 const firebasePathProbe = "./.ios-config-policy/GoogleService-Info.plist";
 const failures = [];
 
@@ -200,6 +207,9 @@ try {
 }
 
 if (resolvedConfig) {
+  const buildPropertiesPlugin = resolvedConfig.plugins?.find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === "expo-build-properties",
+  );
   assert(resolvedConfig.ios?.bundleIdentifier === expectedBundleIdentifier, "resolved iOS bundle identifier is incorrect");
   assert(resolvedConfig.ios?.appleTeamId === expectedAppleTeamId, "resolved Apple Team ID is incorrect");
   assert(resolvedConfig.ios?.googleServicesFile === firebasePathProbe, "IOS_GOOGLE_SERVICES_FILE must take priority in resolved Expo config");
@@ -210,6 +220,11 @@ if (resolvedConfig) {
   );
   assert(resolvedConfig.android?.package === expectedBundleIdentifier, "resolved Android package changed unexpectedly");
   assert(resolvedConfig.android?.googleServicesFile === "./google-services.json", "resolved Android Firebase configuration changed unexpectedly");
+  assertEqual(
+    buildPropertiesPlugin?.[1]?.ios?.forceStaticLinking,
+    expectedRnFirebaseStaticPods,
+    "every installed React Native Firebase iOS pod must remain force-statically linked",
+  );
 }
 
 if (failures.length) {
