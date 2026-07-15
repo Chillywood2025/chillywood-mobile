@@ -12,26 +12,25 @@ Foundation verification:
 
 ## Completion against required definition
 
-1. All required CI checks pass: **No**
-   - Baseline failures remain from existing mainline issues: repository lint and Expo Doctor.
-2. Repository lint is green: **No**
+1. All required CI checks pass: **Yes**
+   - PR #10 now reports seven required Phase 1 checks green on the integration branch.
+2. Repository lint is green: **Yes**
 3. TypeScript is green: **Yes**
-4. Expo Doctor is green or documented unavoidable incompatibility: **Partially**
-   - Current state: 17/18 pass with documented 10 patch-version mismatches.
+4. Expo Doctor is green or documented unavoidable incompatibility: **Yes**
 5. Android regression guards pass: **Yes**
 6. iOS simulator native build passes from final source: **Yes**
    - Latest signed simulator artifact: `ddc48433-d29d-4a83-a847-0d8908e2da63`
 7. Production iOS archive builds: **No**
 8. Firebase iOS is configured: **Yes**
-9. AASA deployed and validates: **In progress**
-10. Supabase auth redirect URLs configured: **In progress**
+9. AASA deployed and validates: **No** (source, guard, and build artifacts are prepared; publish verification is owner/dashboard/action-dependent.)
+10. Supabase auth redirect URLs configured: **No** (provider URL entries are prepared for update and verification in provider dashboards.)
 11. Ordinary iOS push client code complete: **Yes**
 12. Ordinary iOS push backend deployed: **No**
 13. APNs credentials configured: **No**
 14. CallKit/PushKit source compiles: **No**
 15. VoIP token and APNs dispatch backend deployed: **No**
 16. iOS native calls runtime-disabled pending proof: **Yes**
-17. RevenueCat Apple app configured: **In progress**
+17. RevenueCat Apple app configured: **No**
 18. App Store products exist: **No**
 19. Store mappings exist: **Yes** (`revenuecat_app_store` + `app_store` + mappings table scaffold)
 20. Store-aware webhook deployed: **No**
@@ -45,7 +44,7 @@ Foundation verification:
 28. Production App Store build succeeds: **No**
 29. Internal TestFlight upload succeeds: **No**
 30. No public release occurred: **Yes**
-31. `IOS_90_PERCENT_COMPLETION.md` evidence and remaining matrix exists: **In progress** (this file and device matrix are being maintained)
+31. `IOS_90_PERCENT_COMPLETION.md` evidence and remaining matrix exists: **Yes** (this file and device matrix are maintained)
 
 ## Practical completion summary
 
@@ -61,6 +60,5 @@ Foundation verification:
 ## Remaining work for 90% handoff
 
 - Complete deployment-only remaining flows: APNs, App Store Connect setup, RevenueCat Apple setup, internal TestFlight build/upload, and all pending provider proofs.
-- Resolve repository lint + Expo Doctor baselines on next dedicated remediation pass.
+- Resolve external deployment/dashboard and provider attestation gates (no additional repository lint or doctor remediation remains identified for this branch).
 - Execute and record the AASA deploy+validation and canonical route parser tests.
-

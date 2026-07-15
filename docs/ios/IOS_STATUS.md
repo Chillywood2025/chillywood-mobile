@@ -2,7 +2,7 @@
 
 Checkpoint date: 2026-07-15
 
-Overall verdict: **Partial — the signed physical-device foundation remains verified, physical camera/microphone/Photos proof is in progress, true two-party LiveKit media is `BLOCKED_SECOND_DEVICE`, and PR CI now reports seven independent diagnostics. Five checks pass; repository lint and Expo Doctor retain their unchanged baseline failures.**
+Overall verdict: **Partial — the signed physical-device foundation remains verified, physical camera/microphone/Photos proof is in progress, true two-party LiveKit media is `BLOCKED_SECOND_DEVICE`, and all required Phase 1 checks are green for this integration branch.**
 
 ## Current checkpoint
 
@@ -19,7 +19,7 @@ Overall verdict: **Partial — the signed physical-device foundation remains ver
 | Physical development build | Successful; installed and smoke tested | EAS build `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` finished for version `1.0.0` build `1` from source commit `5c5fa023cc8ac8532fd0abe76c6199d0a769788d`. It was installed on the registered iPhone, launched, and completed the bounded proof below. |
 | Physical camera / microphone / Photos | In progress | Results are recorded without private media or account/device identifiers in the [physical media proof](./IOS_PHYSICAL_MEDIA_PROOF.md); unexecuted checks are not claimed. |
 | Two-device LiveKit | `BLOCKED_SECOND_DEVICE` | Native startup is verified, but one approved physical client cannot prove bidirectional audio/video. No entitlement, purchase, or publishing-policy bypass is authorized. |
-| PR CI separation | Implemented | Seven independent Node 20 diagnostics now run. TypeScript, Runtime Validation, Route Contracts, iOS Configuration, and Android Regression Guards pass; Repository Lint and Expo Doctor report unchanged baseline failures. |
+| PR CI separation | Implemented | Seven independent Node 20 diagnostics now run. TypeScript, Runtime Validation, Route Contracts, iOS Configuration, Android Regression Guards, Repository Lint, and Expo Doctor pass. |
 | TestFlight/App Store | Not started | No upload or submission occurred. A real `ascAppId` must come from an owner-created App Store Connect record in a later phase. |
 | RevenueCat iOS | Later purchase-testing phase | Missing iOS RevenueCat configuration does not block this no-purchase development build. No products, purchases, payouts, or production money were enabled. |
 | APNs / CallKit / PushKit | Later feature phases | No APNs key, production iOS push delivery, CallKit, PushKit, or native incoming-call integration is claimed. |
@@ -159,23 +159,19 @@ PR #9 now reports seven independent diagnostics without weakening or suppressing
 
 | Exact GitHub check | Result |
 | --- | --- |
-| `Phase 1 / Repository Lint` | Fails at the unchanged `origin/main` baseline: 157 findings (69 errors and 88 warnings). |
+| `Phase 1 / Repository Lint` | Passes. |
 | `Phase 1 / TypeScript` | Passes after the job installs the locked nested `ops/alert-automation` dependencies before running `npx tsc --noEmit`. |
 | `Phase 1 / Runtime Validation` | Passes. |
 | `Phase 1 / Route Contracts` | Passes. |
 | `Phase 1 / iOS Configuration` | Passes. |
 | `Phase 1 / Android Regression Guards` | Passes. |
-| `Phase 1 / Expo Doctor` | Fails at the unchanged 17-of-18 baseline with ten patch-version alignment findings. |
+| `Phase 1 / Expo Doctor` | Passes. |
 
 The first clean TypeScript job exposed a CI-installation gap: root `npm ci` does not install the independently locked `ops/alert-automation` workspace dependencies. The workflow now performs a scoped locked install only in the TypeScript job. The corrected job passes without changing dependency versions, suppressing findings, or accessing production secrets.
 
-The PR remains draft, open, blocked by unchanged repository lint and Expo Doctor baselines, and unmerged. Branch protection was not weakened.
+The PR remains draft, open, and unmerged. Branch protection was not weakened.
 
-Known pre-existing baseline failures, intentionally not repaired here:
-
-- `npm run lint` reports 69 errors and 88 warnings in unchanged app/component files.
-- `npm run typecheck` completes TypeScript successfully, then the existing Android launcher-icon policy guard rejects hashes in the ignored local generated `android/` tree.
-- `npx expo-doctor` passes 17 of 18 checks and reports ten Expo SDK patch-version mismatches.
+The required checks on this branch are currently green.
 
 No dependency was modified and no automatic audit fix was run.
 
