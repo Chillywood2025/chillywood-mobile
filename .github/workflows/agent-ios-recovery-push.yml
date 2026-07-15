@@ -1,0 +1,86 @@
+name: Agent iOS Recovery Push Patch
+
+on:
+  push:
+    branches:
+      - agent/ios-integration-recovery
+    paths:
+      - .github/workflows/agent-ios-recovery-push.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-push-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout recovery branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/ios-integration-recovery
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Prepare one-time patch script literals
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          target = Path("scripts/agent-ios-recovery-push-patch.mjs")
+          source = target.read_text()
+          anchor = 'import fs from "node:fs";\n'
+          replacement = anchor + '\nconst path = "${path}";\nconst text = "${text}";\n'
+          if replacement not in source:
+              if anchor not in source:
+                  raise SystemExit("patch script import anchor missing")
+              source = source.replace(anchor, replacement, 1)
+              target.write_text(source)
+          PY
+
+      - name: Apply platform-neutral push patch
+        run: node scripts/agent-ios-recovery-push-patch.mjs
+
+      - name: Restore one-time patch script
+        run: git checkout -- scripts/agent-ios-recovery-push-patch.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate source
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm run validate:runtime
+          npm run guard:route-contracts
+          npm run guard:ios-config-policy
+          npm run proof:ios-config
+          npm run guard:ios-push-policy
+          npm run proof:ios-push-source
+          npm run guard:payment-rail-policy
+          npm run guard:notification-room-call-policy
+          npm run guard:watch-party-livekit
+          npm run guard:old-room-handling
+          git diff --check
+
+      - name: Commit validated push integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            _lib/notifications.ts \
+            app/_layout.tsx \
+            app/settings.tsx \
+            'app/chat/[threadId].tsx' \
+            supabase/functions/notification-dispatch/index.ts \
+            supabase/functions/chilly-chat-call-dispatch/index.ts \
+            supabase/functions/revenuecat-webhook/index.ts \
+            scripts/guard-ios-push-policy.mjs \
+            scripts/proof-ios-push-source.mjs \
+            package.json \
+            .github/workflows/phase1-ci.yml
+          git commit -m "Complete iOS push integration"
+          git push origin HEAD:agent/ios-integration-recovery
