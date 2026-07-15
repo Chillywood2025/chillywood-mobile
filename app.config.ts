@@ -223,6 +223,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     plugins: mergePlugins(base.plugins, [
       "@livekit/react-native-expo-plugin",
+      "./plugins/withLiveKitIosStaticFrameworkCompatibility",
       [
         "expo-notifications",
         {

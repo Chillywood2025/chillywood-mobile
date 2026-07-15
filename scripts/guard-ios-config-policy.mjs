@@ -25,6 +25,7 @@ const appJson = readJson("app.json");
 const easJson = readJson("eas.json");
 const packageJson = readJson("package.json");
 const appConfigSource = read("app.config.ts");
+const liveKitIosCompatibilityPlugin = read("plugins/withLiveKitIosStaticFrameworkCompatibility.js");
 const runtimeValidationSource = read("scripts/validate-runtime.mjs");
 const expo = appJson.expo ?? {};
 const ios = expo.ios ?? {};
@@ -78,6 +79,16 @@ assert(appConfigSource.includes('"./GoogleService-Info.plist"'), "app.config.ts 
 assert(appConfigSource.includes("existingIosInfoPlist"), "app.config.ts must merge existing ios.infoPlist values");
 assert(appConfigSource.includes("existingIosEntitlements"), "app.config.ts must merge existing iOS entitlements");
 assert(appConfigSource.includes('useFrameworks: "static"'), "iOS static-framework configuration must remain unchanged");
+assert(
+  appConfigSource.includes("./plugins/withLiveKitIosStaticFrameworkCompatibility"),
+  "app.config.ts must apply the target-scoped LiveKit iOS static-framework compatibility plugin",
+);
+assert(
+  liveKitIosCompatibilityPlugin.includes("livekit-react-native-webrtc")
+    && liveKitIosCompatibilityPlugin.includes("CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES")
+    && liveKitIosCompatibilityPlugin.includes("withPodfile"),
+  "LiveKit iOS compatibility must remain scoped to its generated CocoaPods target",
+);
 assert(runtimeValidationSource.includes("CHILLYWOOD_VALIDATE_PLATFORM"), "runtime validation must support an explicit platform mode");
 assert(runtimeValidationSource.includes("CHILLYWOOD_IOS_PURCHASES_REQUIRED"), "runtime validation must gate iOS RevenueCat requirements explicitly");
 
