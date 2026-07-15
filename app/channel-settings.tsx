@@ -165,6 +165,7 @@ import {
   approveChannelAudienceRequest,
   blockChannelAudienceMember,
   declineChannelAudienceRequest,
+  getChannelSubscriberRelationshipActionSupport,
   readChannelAudienceMembers,
   removeChannelFollower,
   unblockChannelAudienceMember,
@@ -183,6 +184,7 @@ import {
 } from "../_lib/monetization";
 import {
   hasPlatformRoleMembership,
+  hasPlatformStaffPermission,
   readMyPlatformRoleMemberships,
   type PlatformRoleMembership,
 } from "../_lib/moderation";
@@ -565,12 +567,24 @@ const formatChannelRoomAccessValue = (value?: ChannelAccessResolution["watchPart
   return "Public";
 };
 
+const formatRoomDefaultAccessLabel = (value: "open" | "party_pass" | "premium") => {
+  if (value === "party_pass") return "Seat Pass";
+  if (value === "premium") return "Premium";
+  return "Open";
+};
+
 const formatChannelRoleLabel = (value?: UserChannelRole | null) => {
   if (value === "creator") return "Creator";
   if (value === "host") return "Host";
   if (value === "viewer") return "Viewer";
   return "";
 };
+
+const formatJoinPolicyLabel = (value: "open" | "locked") => (value === "locked" ? "Locked" : "Open");
+const formatReactionsPolicyLabel = (value: "enabled" | "muted") => (value === "muted" ? "Muted" : "Enabled");
+const formatCapturePolicyLabel = (value: "best_effort" | "host_managed") => (
+  value === "host_managed" ? "Host Managed" : "Best Effort"
+);
 
 const parseDollarInputToCents = (value: string) => {
   const normalized = String(value ?? "").replace(/[^0-9.]/g, "");
@@ -711,6 +725,25 @@ const formatBrandThemeLabel = (value?: PlatformBrandThemePreset | null) => {
   return option?.label ?? "City Night";
 };
 
+const formatPlatformBrandAssetTypeLabel = (value?: PlatformBrandAssetType | null) => {
+  switch (value) {
+    case "background_image":
+      return "Background";
+    case "avatar":
+      return "Platform Avatar";
+    case "logo":
+      return "Logo Mark";
+    case "hero_video":
+      return "Hero Reel";
+    case "hero_poster":
+      return "Hero Poster";
+    case "watermark":
+      return "Watermark";
+    default:
+      return "Hero Image";
+  }
+};
+
 const getBrandAssetReviewCopy = (asset?: PlatformBrandAsset | null) => {
   if (!asset) return "No asset selected yet.";
   if (asset.scanStatus === "malware_detected" || asset.scanStatus === "scan_failed" || asset.scanStatus === "quarantined") {
@@ -776,6 +809,35 @@ const formatAudienceActionStatus = (value: ChannelAudienceActionStatus) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
 const formatReadModelStatusValue = (value: Exclude<ChannelReadModelFieldStatus, "available">) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
+
+const getCreatorFacingPayoutSetupBody = (summary: CreatorPayoutDashboardReadModel) => {
+  switch (summary.setupStatus) {
+    case "provider_not_configured":
+      return "Payout readiness/status flow is active. Provider setup is not configured, and payouts remain off.";
+    case "setup_required":
+      return "Connect a payout method when setup is available. Payouts are still not active.";
+    case "onboarding_in_progress":
+      return "Continue payout setup. Withdrawals remain inactive.";
+    case "action_required":
+      return "More payout setup information is needed before readiness can be reviewed.";
+    case "under_review":
+      return "Provider or platform review is pending. No payout action is available.";
+    case "provider_ready_payouts_not_active":
+      return "Payout setup is ready, but withdrawals are not active yet.";
+    case "on_hold":
+      return "A policy or review hold is active. No payout action is available.";
+    case "payouts_disabled":
+      return "Payouts are unavailable. No payout action is available.";
+    default:
+      return "Creator payouts are not active yet.";
+  }
+};
+
+const formatStudioSectionStatusLabel = (status: ChannelSettingsSectionStatus) => {
+  if (status === "current") return "CURRENT";
+  if (status === "near_term") return "STATUS PATH";
+  return "LATER STATUS";
+};
 
 const analyticsUnavailableMetricDefinitions: readonly {
   key: CreatorAnalyticsMetricKey;
@@ -1414,6 +1476,7 @@ export function ChannelStudioScreen() {
     providerReadinessSummary,
   ]);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Platform Studio");
+  const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
   const openStudioTab = (
     tab: StudioTabId,
     options?: { filter?: ContentStatusFilter; focus?: string; manage?: MonetizationFeatureKey },
@@ -2649,6 +2712,16 @@ export function ChannelStudioScreen() {
     setClipNotice(`${formatClipStudioTemplateLabel(templateConfig.preset)} template selected. Preview updated.`);
   };
 
+  const resetClipStudio = () => {
+    clipSaveInFlightRef.current = false;
+    setClipEditor(createEmptyClipStudioEditorState());
+    setSelectedClipVideoFile(null);
+    setSelectedClipCoverFile(null);
+    setClipSaveState("idle");
+    setClipSavedVideoId(null);
+    setClipNotice(null);
+  };
+
   const openClipStudioForNew = () => {
     const transferredFile = selectedVideoFile;
     setSelectedVideoFile(null);
@@ -3268,6 +3341,10 @@ export function ChannelStudioScreen() {
     });
   };
 
+  const onPickVideoFile = () => {
+    openUploadSourceChooser("legacy_video");
+  };
+
   const onPickClipVideoFile = () => {
     openUploadSourceChooser("clip_video");
   };
@@ -3494,6 +3571,27 @@ export function ChannelStudioScreen() {
     const bundle = await loadPlatformBranding();
     const readback = await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds);
     return { bundle, readback };
+  };
+
+  const publishBrandDraft = async () => {
+    if (brandProfileSaveInFlightRef.current) return;
+    brandProfileSaveInFlightRef.current = true;
+    setBrandSaving(true);
+    setBrandNotice(null);
+    const ownerUserId = String(user?.id ?? "").trim();
+    const selectedAssetIds = getBrandSelectedAssetIds(getCurrentBrandDraft());
+    try {
+      const { readback } = await persistBrandPublish();
+      setBrandNotice(getBrandPublishNotice(readback, true));
+    } catch {
+      const readback = ownerUserId
+        ? await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds).catch(() => null)
+        : null;
+      setBrandNotice(getBrandPublishFailureNotice(readback));
+    } finally {
+      brandProfileSaveInFlightRef.current = false;
+      setBrandSaving(false);
+    }
   };
 
   const saveBrandStudioDraftAndProfile = async () => {
@@ -4512,6 +4610,20 @@ export function ChannelStudioScreen() {
       setEventNotice(formatCreatorSetupError(error, "Unable to save Paid Event settings right now."));
     } finally {
       setPaidEventSavingId(null);
+    }
+  };
+
+  const onSave = async () => {
+    if (!profile) return;
+
+    try {
+      setSaving(true);
+      await saveCurrentProfileSettings();
+      setNotice("Platform Studio saved.");
+    } catch {
+      setNotice("Unable to save Platform Studio changes right now.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -6603,6 +6715,28 @@ export function ChannelStudioScreen() {
     >
       <Text style={styles.quickActionTitle}>{title}</Text>
       <Text style={styles.quickActionBody}>{body}</Text>
+    </TouchableOpacity>
+  );
+
+  const renderHomeActionCard = ({
+    title,
+    body,
+    onPress,
+    disabled = false,
+  }: {
+    title: string;
+    body?: string;
+    onPress?: () => void;
+    disabled?: boolean;
+  }) => (
+    <TouchableOpacity
+      style={[styles.homeActionCard, disabled && styles.homeActionCardDisabled]}
+      activeOpacity={0.86}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Text style={[styles.homeActionTitle, disabled && styles.homeActionTitleDisabled]}>{title}</Text>
+      {body ? <Text style={styles.homeActionBody} numberOfLines={2}>{body}</Text> : null}
     </TouchableOpacity>
   );
 

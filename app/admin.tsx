@@ -126,6 +126,7 @@ import {
 import { buildAutonomousApprovalFoundationSummary } from "../_lib/autonomousApprovalRequests";
 import {
   AUTONOMOUS_SYSTEMS_REGISTRY,
+  listAutonomousApprovalRequiredSurfaces,
 } from "../_lib/autonomousSystemsRegistry";
 import {
   ADMIN_ACTION_REGISTRY,
@@ -1628,6 +1629,7 @@ const defaultCapabilities: AdminCapabilities = {
 };
 
 const autonomousApprovalFoundationSummary = buildAutonomousApprovalFoundationSummary();
+const autonomousApprovalRequiredSurfaces = listAutonomousApprovalRequiredSurfaces();
 
 type AutonomousApprovalRequestReadModel = {
   id: string;
@@ -2145,9 +2147,18 @@ const ownerSecurityStatusLabel = (status: unknown) => {
   return formatModerationToken(text);
 };
 
+const ownerSecurityMetricValue = (value: unknown) => (
+  value === null || value === undefined || value === "" ? "Not Connected" : String(value)
+);
+
 const ownerSecurityCountTone = (value: unknown): OwnerControlTone => {
   if (value === null || value === undefined) return "locked";
   return Number(value) > 0 ? "manual" : "success";
+};
+
+const ownerSecurityRiskTone = (value: unknown): OwnerControlTone => {
+  if (value === null || value === undefined) return "locked";
+  return Number(value) > 0 ? "danger" : "success";
 };
 
 const formatOwnerSecurityActor = (event: OwnerSecurityAuditEvent) => (
@@ -3034,6 +3045,11 @@ const formatMoneyAuditCategory = (category: MoneyAuditCategory) => (
   ADMIN_MONEY_AUDIT_FILTERS.find((option) => option.id === category)?.label ?? formatModerationToken(category)
 );
 
+const formatImmutableAuditCount = (value: number | null, loading: boolean) => {
+  if (loading) return "Loading";
+  return formatAdminAuditFoundationCount(value);
+};
+
 const formatImmutableAuditActor = (entry: PlatformAdminAuditLogRow) => {
   if (entry.actorEmail) return maskOperatorIdentity(entry.actorEmail);
   if (entry.actorUserId) return `User ${formatCompactIdentifier(entry.actorUserId)}`;
@@ -3449,7 +3465,7 @@ export default function AdminStudioScreen() {
   const [roleAuditLoading, setRoleAuditLoading] = useState(false);
   const [roleAuditFilter, setRoleAuditFilter] = useState<RoleAuditFilterKey>("all");
   const [roleConfirm, setRoleConfirm] = useState<RoleConfirmState | null>(null);
-  const [, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
+  const [adminAuditLog, setAdminAuditLog] = useState<AdminAuditLogEntry[]>([]);
   const [adminAuditLogSummary, setAdminAuditLogSummary] =
     useState<AdminAuditLogReadModel["summary"] | null>(null);
   const [adminAuditLogLoading, setAdminAuditLogLoading] = useState(false);
@@ -8970,6 +8986,7 @@ export default function AdminStudioScreen() {
   );
   const ownerSecurityOpenAlerts = ownerSecurityOverview?.openSecurityAlertsCount;
   const ownerSecurityActiveGrantsCount = ownerSecurityStatus?.activeTemporaryGrantsCount ?? ownerSecurityOverview?.activeTemporaryGrantsCount;
+  const ownerSecurityHighRiskActions = ownerSecurityOverview?.recentHighRiskActionsCount;
   const ownerSecurityLastRefresh = ownerSecurityOverview?.lastSecurityRefreshAt ?? null;
   const ownerSecuritySourceStates = ownerSecurityStatus?.sourceStates ?? {};
   const ownerSecuritySourceStatus = useCallback((key: string) => {
@@ -11164,6 +11181,7 @@ export default function AdminStudioScreen() {
     const webhooksSwitch = getPlatformMoneyKillSwitch(moneySwitches, "provider_webhooks_enabled");
     const sponsorshipsSwitch = getPlatformMoneyKillSwitch(moneySwitches, "sponsorships_enabled");
     const adsRevenueSwitch = getPlatformMoneyKillSwitch(moneySwitches, "ads_revenue_enabled");
+    const stripeConnectSwitch = getPlatformMoneyKillSwitch(moneySwitches, "stripe_connect_enabled");
     const liveMoneyOff = liveMoneySwitch.state !== "on";
     const moneyFlowControlSummary = getMoneyFlowControlSummary();
     const providerWebhookHealthRows = moneyFlowControlSummary.providerWebhookHealthRows;
