@@ -4,6 +4,7 @@ import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
+import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
 export const VIP_PASS_SANDBOX_PRODUCT_KEY = "vip_pass_sandbox_499";
@@ -78,6 +79,7 @@ type RpcClient = {
 const rpcClient = supabase as unknown as RpcClient;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const resolveRevenueCatProvider = () => Platform.OS === "ios" ? "revenuecat_app_store" : "revenuecat_google_play";
 const toCents = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
@@ -118,7 +120,7 @@ const parseOffer = (row: Record<string, unknown>): CreatorVipPassOffer | null =>
     currency: toText(row.currency) || "usd",
     passType: "one_time",
     status: normalizeOfferStatus(row.status),
-    provider: toText(row.provider) || "revenuecat_google_play",
+    provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductKey: toText(row.providerProductKey) || null,
     providerProductId: toText(row.providerProductId) || null,
     vipCount: toCents(row.vipCount),
@@ -140,7 +142,7 @@ const parseTransaction = (row: Record<string, unknown>): CreatorVipTransaction |
     title: toText(row.title) || "VIP Pass",
     amountCents: toCents(row.amountCents),
     currency: toText(row.currency) || "usd",
-    provider: toText(row.provider) || "revenuecat_google_play",
+    provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductId: toText(row.providerProductId) || null,
     providerTransactionId: toText(row.providerTransactionId) || null,
     status: toText(row.status) || "pending",

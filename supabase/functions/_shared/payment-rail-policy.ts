@@ -56,6 +56,10 @@ export const REVENUECAT_GOOGLE_PLAY_PROVIDER = "revenuecat_google_play";
 export const REVENUECAT_APP_STORE_PROVIDER = "revenuecat_app_store";
 export const APP_STORE_PURCHASES_DEFAULT_ENABLED = false;
 
+export const resolveRevenueCatProviderByPlatform = (platform: PaymentRailPlatform = "unknown") => (
+  platform === "ios" ? REVENUECAT_APP_STORE_PROVIDER : REVENUECAT_GOOGLE_PLAY_PROVIDER
+);
+
 const blocked = (
   provider: PaymentRailProvider,
   reason: string,

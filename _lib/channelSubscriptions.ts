@@ -7,6 +7,7 @@ import {
   readRevenueCatSubscriptionProducts,
   type PurchasesPackage,
 } from "./revenuecat";
+import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
 export const CHANNEL_SUBSCRIPTION_SANDBOX_PRODUCT_KEY = "channel_subscription_sandbox_monthly_499";
@@ -97,6 +98,7 @@ type OfferingsWithPackages = {
 const rpcClient = supabase as unknown as RpcClient;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const resolveRevenueCatProvider = () => Platform.OS === "ios" ? "revenuecat_app_store" : "revenuecat_google_play";
 const toCents = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
@@ -137,7 +139,7 @@ const parseOffer = (row: Record<string, unknown>): ChannelSubscriptionOffer | nu
     currency: toText(row.currency) || "usd",
     interval: "monthly",
     status: normalizeOfferStatus(row.status),
-    provider: toText(row.provider) || "revenuecat_google_play",
+    provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductKey: toText(row.providerProductKey) || null,
     providerProductId: toText(row.providerProductId) || null,
     providerEntitlementId: toText(row.providerEntitlementId) || null,
@@ -161,7 +163,7 @@ const parseTransaction = (row: Record<string, unknown>): ChannelSubscriptionTran
     title: toText(row.title) || "Channel subscription",
     amountCents: toCents(row.amountCents),
     currency: toText(row.currency) || "usd",
-    provider: toText(row.provider) || "revenuecat_google_play",
+    provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductId: toText(row.providerProductId) || null,
     providerTransactionId: toText(row.providerTransactionId) || null,
     status: toText(row.status) || "pending",

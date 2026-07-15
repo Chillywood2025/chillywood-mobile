@@ -5,6 +5,7 @@ import {
   readRevenueCatCustomerInfo,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
+import { Platform } from "react-native";
 import { reportRuntimeError } from "./logger";
 import { supabase } from "./supabase";
 
@@ -94,6 +95,7 @@ type RpcClient = {
 const rpcClient = supabase as unknown as RpcClient;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const resolveRevenueCatProvider = () => Platform.OS === "ios" ? "revenuecat_app_store" : "revenuecat_google_play";
 const toCents = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
@@ -149,7 +151,7 @@ const parseOffer = (row: Record<string, unknown>): PaidWatchPartyOffer | null =>
     startsAt: toText(row.startsAt) || null,
     endsAt: toText(row.endsAt) || null,
     status: normalizeOfferStatus(row.status),
-    provider: toText(row.provider) || "revenuecat_google_play",
+    provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductKey: toText(row.providerProductKey) || null,
     providerProductId: toText(row.providerProductId) || null,
     createdAt: toText(row.createdAt),
@@ -171,7 +173,7 @@ const parseTransaction = (row: Record<string, unknown>): PaidWatchPartyTransacti
     creatorId,
     amountCents: toCents(row.amountCents),
     currency: toText(row.currency) || "usd",
-    provider: toText(row.provider) || "revenuecat_google_play",
+    provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductId: toText(row.providerProductId) || null,
     status: toText(row.status) || "pending",
     payoutStatus: toText(row.payoutStatus) || "not_payable",

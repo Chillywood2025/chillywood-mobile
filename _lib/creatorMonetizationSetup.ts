@@ -6,6 +6,10 @@ import {
   readRevenueCatNonSubscriptionProducts,
   syncRevenueCatCustomerIdentity,
 } from "./revenuecat";
+import {
+  REVENUECAT_APP_STORE_PROVIDER,
+  REVENUECAT_GOOGLE_PLAY_PROVIDER,
+} from "./paymentRailPolicy";
 import { SUPABASE_URL, supabase } from "./supabase";
 
 export type CreatorMonetizationSetupSourceType =
@@ -26,7 +30,7 @@ export type CreatorMonetizationSetupTier = {
   productType: string;
   providerProductId: string;
   priceLabel: string;
-  providerRail: "revenuecat_google_play" | "stripe_physical_goods";
+  providerRail: "revenuecat_google_play" | "revenuecat_app_store" | "stripe_physical_goods";
   unlocks: string;
   safety: string;
 };
@@ -63,7 +67,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "paid_content_access",
     providerProductId: "cw_paid_content_access_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Unlocks this content only when it remains public and safe.",
     safety: "Private, draft, deleted, admin-removed, malware, and blocked states still deny.",
   },
@@ -74,7 +78,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "watch_party_live_ticket",
     providerProductId: "cw_watch_party_live_ticket_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Allows viewer entry only when room policy allows.",
     safety: "Does not grant mic, camera, publish, host, speaker, moderator, or admin authority.",
   },
@@ -85,7 +89,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "live_watch_party_access_pass",
     providerProductId: "cw_live_watch_party_access_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Allows viewer/listener entry only.",
     safety: "No host, speaker, moderator, admin, or LiveKit publish authority is granted.",
   },
@@ -96,7 +100,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "live_watch_party_seat_pass",
     providerProductId: "cw_live_watch_party_seat_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Makes a viewer eligible to request or reserve a seat.",
     safety: "Host approval is still required before mic/camera/publish can turn on.",
   },
@@ -107,7 +111,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "creator_tip",
     providerProductId: "cw_creator_tip_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Records sandbox creator support activity only.",
     safety: "Tips do not create access grants, payable balance, payout, cash-out, withdrawal, or transfer.",
   },
@@ -118,7 +122,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "channel_subscription",
     providerProductId: "channel_subscription_sandbox_monthly_499",
     priceLabel: "$4.99/month sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Creates subscriber status for this creator channel only.",
     safety: "Does not unlock Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, LiveKit authority, or other creators.",
   },
@@ -129,7 +133,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "vip_pass",
     providerProductId: "cw_vip_pass_sandbox_499",
     priceLabel: "$4.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Creates VIP status for this creator channel only.",
     safety: "Does not unlock Premium, paid videos, event passes, channel subscriptions, Watch-Party Seat Passes, LiveKit authority, or other creators.",
   },
@@ -140,7 +144,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "event_pass",
     providerProductId: "cw_event_pass_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Allows viewing/entry only while the event remains active and allowed.",
     safety: "Canceled, ended, removed, disabled, unsafe, and blocked states still deny.",
   },
@@ -170,6 +174,10 @@ export const CREATOR_MONETIZATION_SETUP_POLICY = {
   liveKitPublishGrantedByPayment: false,
   hostApprovalBypassedBySeatPass: false,
 } as const;
+
+const resolveProviderRail = () => (
+  Platform.OS === "ios" ? REVENUECAT_APP_STORE_PROVIDER : REVENUECAT_GOOGLE_PLAY_PROVIDER
+);
 
 const STRIPE_MERCH_CHECKOUT_URL = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/stripe-merch-checkout`;
 
@@ -273,7 +281,7 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
   userId: string;
 }) {
   const tier = getCreatorSandboxTier(input.config.productKey);
-  if (tier.providerRail !== "revenuecat_google_play") {
+  if (tier.providerRail !== REVENUECAT_GOOGLE_PLAY_PROVIDER && tier.providerRail !== REVENUECAT_APP_STORE_PROVIDER) {
     throw new Error(
       Platform.OS === "ios"
         ? "Digital sandbox purchases must use App Store / RevenueCat."

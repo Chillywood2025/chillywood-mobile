@@ -1218,6 +1218,7 @@ const syncChannelSubscriptionLifecycle = async (
     status: EntitlementWriteResult["status"];
     rawEventHash: string;
     product: Record<string, unknown>;
+    provider: string;
     providerEventId: string;
     occurredAt: string;
   },
@@ -1458,7 +1459,7 @@ const syncChannelSubscriptionLifecycle = async (
     subscription_id: subscription.id,
     amount_cents: resolveAmountMinor(input.event) || offer.price_cents || 0,
     currency: resolveCurrency(input.event) || offer.currency || "usd",
-    provider: "revenuecat_google_play",
+    provider: input.provider,
     provider_product_id: providerProductId,
     provider_transaction_id: input.eventId,
     provider_original_transaction_id: originalTransactionForWrite,
@@ -1625,8 +1626,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
 
   if (existingProviderEvent?.id) {
     if (
-      provider === "revenuecat_google_play"
-      && existingProviderEvent.status === "ignored"
+      existingProviderEvent.status === "ignored"
       && toText(existingProviderEvent.product_key) === "channel_subscription_sandbox_monthly_499"
       && input.productId
     ) {
@@ -1648,6 +1648,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
           status: input.status,
           rawEventHash: input.rawEventHash,
           product: lifecycleProduct,
+          provider,
           providerEventId: existingProviderEvent.id,
           occurredAt,
         });
@@ -1791,6 +1792,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
       status: input.status,
       rawEventHash: input.rawEventHash,
       product,
+      provider,
       providerEventId: providerEvent.id,
       occurredAt,
     });
