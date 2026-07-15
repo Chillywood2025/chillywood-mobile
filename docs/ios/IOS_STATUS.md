@@ -179,7 +179,7 @@ Known pre-existing baseline failures, intentionally not repaired here:
 
 No dependency was modified and no automatic audit fix was run.
 
-This phase changes only pull-request CI reporting and sanitized documentation. It does not change application, Expo, EAS, native, Firebase, plugin, dependency, or Android behavior, so the existing signed physical build remains the correct application artifact and no rebuild was required.
+This phase includes a source push-policy correction (`no_enabled_push_token` replacing Android-only naming in Android/native call fallback paths), a guard update for the same, and new 90%-completion tracker docs. No application behavior for Android was changed, and no rebuild was required for already-issued physical artifacts.
 
 ## Owner interactions and next gates
 

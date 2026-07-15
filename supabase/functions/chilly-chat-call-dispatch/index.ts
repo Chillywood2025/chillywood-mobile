@@ -723,13 +723,13 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     }
     if (!fcmTokens.length) {
       await insertDeliveryAttempt(adminClient, {
-        errorCode: "no_enabled_native_fcm_token",
+        errorCode: "no_enabled_push_token",
         notificationId,
         provider: "fcm",
         recipientUserId: input.recipientUserId,
         status: "skipped",
       });
-      lastFailureReason = "no_enabled_native_fcm_token";
+      lastFailureReason = "no_enabled_push_token";
     }
 
     for (const token of fcmTokens) {

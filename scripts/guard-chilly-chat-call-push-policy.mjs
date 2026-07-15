@@ -82,7 +82,7 @@ for (const requiredFcmDispatch of [
   "FIREBASE_SERVICE_ACCOUNT_JSON",
   "provider: \"fcm\"",
   "nativeSentCount",
-  "no_enabled_native_fcm_token",
+  "no_enabled_push_token",
   "native_fcm_unavailable_expo_fallback",
 ]) {
   if (!dispatch.includes(requiredFcmDispatch)) {
