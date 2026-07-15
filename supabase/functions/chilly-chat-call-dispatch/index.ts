@@ -1,11 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 
 import {
   IOS_NOTIFICATION_CATEGORIES,
   buildPlatformExpoPushMessage,
 } from "../_shared/notification-payload.mjs";
+import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -59,12 +60,6 @@ type PushToken = {
   token_fingerprint: string;
 };
 
-type DeliveryAttempt = {
-  id: string;
-  provider_message_id: string | null;
-  push_token_id: string | null;
-};
-
 const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -77,7 +72,6 @@ const JSON_HEADERS = {
 } as const;
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
-const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1";
@@ -281,58 +275,6 @@ async function revokePushToken(adminClient: SupabaseClientLike, tokenId: string)
       updated_at: new Date().toISOString(),
     })
     .eq("id", tokenId);
-}
-
-async function reconcileRecentExpoReceipts(adminClient: SupabaseClientLike, userId: string) {
-  const { data } = await adminClient
-    .from("notification_delivery_attempts")
-    .select("id,provider_message_id,push_token_id")
-    .eq("recipient_user_id", userId)
-    .eq("provider", "expo")
-    .eq("status", "sent")
-    .not("provider_message_id", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  const attempts = ((data ?? []) as DeliveryAttempt[]).filter((attempt) => toText(attempt.provider_message_id));
-  if (!attempts.length) return;
-
-  const response = await fetch(EXPO_RECEIPTS_URL, {
-    body: JSON.stringify({ ids: attempts.map((attempt) => attempt.provider_message_id) }),
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
-  if (!response.ok) return;
-
-  const payload = await response.json().catch(() => ({}));
-  const receipts = payload && typeof payload === "object" && "data" in payload
-    ? (payload as { data?: Record<string, JsonObject> }).data ?? {}
-    : {};
-
-  for (const attempt of attempts) {
-    const providerMessageId = toText(attempt.provider_message_id);
-    const receipt = receipts[providerMessageId];
-    const receiptStatus = toText(receipt?.status).toLowerCase();
-    if (receiptStatus !== "error") continue;
-
-    const details = receipt?.details && typeof receipt.details === "object" ? receipt.details as JsonObject : {};
-    const errorCode = toText(details.error) || "expo_receipt_error";
-    await adminClient
-      .from("notification_delivery_attempts")
-      .update({
-        error_code: errorCode,
-        error_message: sanitizeErrorMessage(receipt?.message ?? errorCode),
-        status: "failed",
-      })
-      .eq("id", attempt.id);
-
-    if (errorCode === "DeviceNotRegistered" && attempt.push_token_id) {
-      await revokePushToken(adminClient, attempt.push_token_id);
-    }
-  }
 }
 
 async function insertDeliveryAttempt(adminClient: SupabaseClientLike, input: {
@@ -663,7 +605,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     };
   }
 
-  await reconcileRecentExpoReceipts(adminClient, input.recipientUserId);
+  await reconcileRecentExpoPushReceipts(adminClient, input.recipientUserId);
 
   const tokens = await readPushTokens(adminClient, input.recipientUserId);
   if (!tokens.length) {

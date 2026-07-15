@@ -17,11 +17,14 @@ import {
   IOS_NOTIFICATION_CATEGORIES,
   buildPlatformExpoPushMessage,
 } from "../_shared/notification-payload.mjs";
+import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
 import {
-  appStoreSwitchAllowsEnvironment,
+  canReconcileExistingProviderEventIntent,
   isSafeStoreMapping,
+  isValidPremiumStoreProductResolution,
   providerProductIdCandidatesForStore,
   resolveRevenueCatStorePolicy,
+  shouldProcessRevenueCatAppStoreEvent,
 } from "./store-policy.mjs";
 
 const FUNCTION_NAME = "revenuecat-webhook";
@@ -409,6 +412,7 @@ const mirrorRevenueCatPremiumMoneyAccess = async (
     expiresAt: string | null;
     startsAt: string | null;
     rawEventHash: string;
+    productResolution: StoreProductResolution;
   },
 ): Promise<MoneyAccessMirrorResult> => {
   const environment = normalizeMoneyAccessEnvironment(input.environment);
@@ -417,25 +421,17 @@ const mirrorRevenueCatPremiumMoneyAccess = async (
   const grantStatus = resolveGrantStatus(input.status, environment);
   const { payableState, ledgerStatus } = resolveLedgerState(input.eventType);
 
-  const productResolution = await readStoreProductResolution(adminClient, {
-    event: input.event,
-    productId: input.productId ?? PREMIUM_PRODUCT_ID,
-  });
+  const productResolution = input.productResolution;
   const product = productResolution.product;
   const mapping = productResolution.mapping;
   const provider = productResolution.storePolicy.provider;
-  if (!product?.id || toText(product.product_type) !== "premium_subscription") {
-    throw new Error("Money access Premium product mapping is missing.");
-  }
-  if (
-    provider === "revenuecat_app_store"
-    && (
-      toText(mapping?.concept) !== "premium"
-      || toText(mapping?.provider_product_id) !== (input.productId ?? PREMIUM_PRODUCT_ID)
-      || (environment === "sandbox" && (toText(mapping?.environment) !== "sandbox" || toText(mapping?.status) !== "sandbox"))
-    )
-  ) {
-    throw new Error("App Store Premium mapping is not sandbox-enabled.");
+  if (!isValidPremiumStoreProductResolution(
+    productResolution,
+    input.productId ?? PREMIUM_PRODUCT_ID,
+    environment,
+    input.eventType,
+  ) || !product?.id) {
+    throw new Error("RevenueCat Premium store/product mapping is invalid.");
   }
 
   const compatibleProviders = provider === "revenuecat"
@@ -962,6 +958,7 @@ const dispatchCreatorMoneyPushIfEligible = async (
     return;
   }
 
+  await reconcileRecentExpoPushReceipts(adminClient, input.plan.recipientUserId);
   const tokens = await readPushTokens(adminClient, input.plan.recipientUserId);
   if (!tokens.length) {
     await insertMoneyNotificationDeliveryAttempt(adminClient, {
@@ -1618,9 +1615,11 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
 
   const { data: existingProviderEvent, error: existingProviderError } = await adminClient
     .from("provider_events")
-    .select("id, product_key, environment, status")
+    .select("id, product_id, product_key, environment, status")
     .in("provider", provider === "revenuecat" ? [provider] : [provider, "revenuecat"])
     .eq("idempotency_key", idempotencyKey)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (existingProviderError) throw new Error(`Dynamic provider event duplicate check failed: ${existingProviderError.message}`);
 
@@ -1655,35 +1654,6 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
       }
     }
 
-    const { data: existingLedger, error: existingLedgerError } = await adminClient
-      .from("money_access_ledger_events")
-      .select("id")
-      .eq("provider_event_id", existingProviderEvent.id)
-      .maybeSingle();
-    if (existingLedgerError) throw new Error(`Dynamic ledger duplicate check failed: ${existingLedgerError.message}`);
-
-    const { data: existingGrant, error: existingGrantError } = await adminClient
-      .from("access_grants")
-      .select("id")
-      .eq("provider_event_id", existingProviderEvent.id)
-      .maybeSingle();
-    if (existingGrantError) throw new Error(`Dynamic access grant duplicate check failed: ${existingGrantError.message}`);
-
-    return {
-      status: "duplicate_ignored",
-      productKey: toText(existingProviderEvent.product_key) || null,
-      providerEventId: existingProviderEvent.id,
-      accessGrantId: existingGrant?.id ?? null,
-      ledgerEventId: existingLedger?.id ?? null,
-      purchaseIntentId: null,
-      environment,
-      payableState,
-      grantStatus,
-      reason: "duplicate_provider_event",
-      duplicateProviderEvent: true,
-      duplicateAccessGrant: !!existingGrant?.id,
-      duplicateLedgerEvent: !!existingLedger?.id,
-    };
   }
 
   const productResolution = await readStoreProductResolution(adminClient, {
@@ -1697,39 +1667,88 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   }
 
   const providerEventStatus = product?.id && environment === "sandbox" ? "received" : "ignored";
-  const { data: providerEvent, error: providerError } = await adminClient
-    .from("provider_events")
-    .insert({
-      provider_event_id: input.eventId,
-      provider,
-      product_id: product?.id ?? null,
-      product_key: product?.product_key ?? null,
-      user_id: input.userId,
-      app_user_id: input.userId,
-      environment,
-      event_type: input.eventType,
-      status: providerEventStatus,
-      occurred_at: occurredAt,
-      idempotency_key: idempotencyKey,
-      raw_payload_hash: input.rawEventHash,
-      metadata: {
-        provider_payload_stored: false,
-        provider_product_id: input.productId,
-        store: storePolicy.rawStore || null,
-        platform: storePolicy.platform,
-        store_mapping_id: toText(mapping?.id) || null,
-        original_transaction_id: toText(input.event.original_transaction_id) || null,
-        dynamic_product: true,
-        sandbox_only: environment === "sandbox",
-        live_money_action: false,
-        payout_ready: false,
-      },
-    })
-    .select("id")
-    .single();
-  if (providerError) throw new Error(`Dynamic provider event sync failed: ${providerError.message}`);
+  let providerEvent: { id: string } | null = existingProviderEvent?.id
+    ? { id: existingProviderEvent.id }
+    : null;
+  if (!providerEvent) {
+    const { data: insertedProviderEvent, error: providerError } = await adminClient
+      .from("provider_events")
+      .insert({
+        provider_event_id: input.eventId,
+        provider,
+        product_id: product?.id ?? null,
+        product_key: product?.product_key ?? null,
+        user_id: input.userId,
+        app_user_id: input.userId,
+        environment,
+        event_type: input.eventType,
+        status: providerEventStatus,
+        occurred_at: occurredAt,
+        idempotency_key: idempotencyKey,
+        raw_payload_hash: input.rawEventHash,
+        metadata: {
+          provider_payload_stored: false,
+          provider_product_id: input.productId,
+          store: storePolicy.rawStore || null,
+          platform: storePolicy.platform,
+          store_mapping_id: toText(mapping?.id) || null,
+          original_transaction_id: toText(input.event.original_transaction_id) || null,
+          dynamic_product: true,
+          sandbox_only: environment === "sandbox",
+          live_money_action: false,
+          payout_ready: false,
+        },
+      })
+      .select("id")
+      .single();
+    if (providerError || !insertedProviderEvent?.id) {
+      throw new Error(`Dynamic provider event sync failed: ${providerError?.message ?? "missing provider event"}`);
+    }
+    providerEvent = insertedProviderEvent;
+  }
+  const providerEventId = providerEvent.id;
 
   const ignored = async (reason: string): Promise<DynamicMoneyAccessResult> => {
+    if (
+      existingProviderEvent?.id
+      && ["processed", "refunded", "reversed"].includes(toText(existingProviderEvent.status))
+    ) {
+      const { data: existingLedger, error: existingLedgerError } = await adminClient
+        .from("money_access_ledger_events")
+        .select("id")
+        .eq("provider_event_id", providerEventId)
+        .maybeSingle();
+      if (existingLedgerError) throw new Error(`Dynamic ledger duplicate check failed: ${existingLedgerError.message}`);
+
+      const accessGrantType = accessGrantTypeForProductType(toText(product?.product_type));
+      const { data: existingGrant, error: existingGrantError } = accessGrantType
+        ? await adminClient
+          .from("access_grants")
+          .select("id")
+          .eq("provider_event_id", providerEventId)
+          .eq("user_id", input.userId)
+          .eq("grant_type", accessGrantType)
+          .maybeSingle()
+        : { data: null, error: null };
+      if (existingGrantError) throw new Error(`Dynamic access grant duplicate check failed: ${existingGrantError.message}`);
+
+      return {
+        status: "duplicate_ignored",
+        productKey: product?.product_key ?? (toText(existingProviderEvent.product_key) || null),
+        providerEventId,
+        accessGrantId: existingGrant?.id ?? null,
+        ledgerEventId: existingLedger?.id ?? null,
+        purchaseIntentId: null,
+        environment,
+        payableState,
+        grantStatus,
+        reason: "duplicate_provider_event_already_finalized",
+        duplicateProviderEvent: true,
+        duplicateAccessGrant: !!existingGrant?.id,
+        duplicateLedgerEvent: !!existingLedger?.id,
+      };
+    }
+
     await adminClient
       .from("provider_events")
       .update({
@@ -1746,12 +1765,12 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
           payout_ready: false,
         },
       })
-      .eq("id", providerEvent.id);
+      .eq("id", providerEventId);
 
     return {
       status: "ignored",
-      productKey: product?.product_key ?? null,
-      providerEventId: providerEvent.id,
+      productKey: product?.product_key ?? (toText(existingProviderEvent?.product_key) || null),
+      providerEventId,
       accessGrantId: null,
       ledgerEventId: null,
       purchaseIntentId: null,
@@ -1759,18 +1778,26 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
       payableState,
       grantStatus,
       reason,
-      duplicateProviderEvent: false,
+      duplicateProviderEvent: !!existingProviderEvent?.id,
       duplicateAccessGrant: false,
       duplicateLedgerEvent: false,
     };
   };
 
+  const isTerminalLifecycleEvent = REVOKED_EVENT_TYPES.has(input.eventType)
+    || CANCELED_EVENT_TYPES.has(input.eventType)
+    || EXPIRED_EVENT_TYPES.has(input.eventType)
+    || BILLING_ISSUE_EVENT_TYPES.has(input.eventType);
+  const isTerminalAppStoreEvent = provider === "revenuecat_app_store" && isTerminalLifecycleEvent;
+
   if (!product?.id) return ignored("product_mapping_missing");
-  if (environment !== "sandbox") return ignored("production_or_setup_event_blocked");
+  if (environment !== "sandbox" && !isTerminalAppStoreEvent) {
+    return ignored("production_or_setup_event_blocked");
+  }
   const sandboxMappingReady = mapping
     ? mapping.environment === "sandbox" && mapping.status === "sandbox"
     : product.environment === "sandbox" && product.status === "sandbox";
-  if (!sandboxMappingReady) return ignored("product_not_sandbox_enabled");
+  if (!sandboxMappingReady && !isTerminalAppStoreEvent) return ignored("product_not_sandbox_enabled");
   if (mapping?.concept === "creator_tip" && mapping.unlocks_digital_access === true) {
     return ignored("creator_tip_cannot_unlock_digital_access");
   }
@@ -1799,10 +1826,6 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   }
 
   const nowIso = new Date().toISOString();
-  const isTerminalLifecycleEvent = REVOKED_EVENT_TYPES.has(input.eventType)
-    || CANCELED_EVENT_TYPES.has(input.eventType)
-    || EXPIRED_EVENT_TYPES.has(input.eventType)
-    || BILLING_ISSUE_EVENT_TYPES.has(input.eventType);
   const intentLookup = adminClient
     .from("money_purchase_intents")
     .select("id, product_id, product_type, source_type, source_id, creator_id, platform_id, status, expires_at, metadata")
@@ -1810,9 +1833,15 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
     .eq("product_id", product.id)
     .eq("provider", provider)
     .eq("provider_product_id", productResolution.providerProductId);
-  const { data: intent, error: intentError } = isTerminalLifecycleEvent
+  const { data: intentCandidate, error: intentError } = isTerminalLifecycleEvent
     ? await intentLookup
       .in("status", ["consumed", "revoked"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    : existingProviderEvent?.id
+    ? await intentLookup
+      .in("status", ["pending", "consumed"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -1823,13 +1852,36 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
       .limit(1)
       .maybeSingle();
   if (intentError) throw new Error(`Dynamic purchase intent lookup failed: ${intentError.message}`);
+
+  let intent = intentCandidate;
+  if (
+    intent
+    && !isTerminalLifecycleEvent
+    && existingProviderEvent?.id
+    && !canReconcileExistingProviderEventIntent(intent, providerEventId, occurredAt)
+  ) {
+    intent = null;
+  }
   if (!intent?.id) return ignored("purchase_intent_missing_or_expired");
 
   const accessGrantType = accessGrantTypeForProductType(product.product_type);
-  let accessGrantId: string | null = null;
-  let duplicateAccessGrant = false;
+  const { data: existingProviderGrant, error: existingProviderGrantError } = accessGrantType
+    ? await adminClient
+      .from("access_grants")
+      .select("id")
+      .eq("provider_event_id", providerEventId)
+      .eq("user_id", input.userId)
+      .eq("grant_type", accessGrantType)
+      .maybeSingle()
+    : { data: null, error: null };
+  if (existingProviderGrantError) {
+    throw new Error(`Dynamic access grant duplicate check failed: ${existingProviderGrantError.message}`);
+  }
 
-  if (accessGrantType && ACTIVE_EVENT_TYPES.has(input.eventType)) {
+  let accessGrantId: string | null = existingProviderGrant?.id ?? null;
+  let duplicateAccessGrant = !!existingProviderGrant?.id;
+
+  if (accessGrantType && ACTIVE_EVENT_TYPES.has(input.eventType) && !accessGrantId) {
     const { data: grant, error: grantError } = await adminClient
       .from("access_grants")
       .insert({
@@ -1839,7 +1891,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
         source_id: intent.source_id,
         product_id: product.id,
         provider,
-        provider_event_id: providerEvent.id,
+        provider_event_id: providerEventId,
         environment,
         status: grantStatus,
         starts_at: occurredAt,
@@ -1878,12 +1930,13 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
       .maybeSingle();
     if (grantUpdateError) throw new Error(`Dynamic access revoke sync failed: ${grantUpdateError.message}`);
     accessGrantId = grant?.id ?? null;
+    duplicateAccessGrant = !!grant?.id;
   }
 
   const { data: existingLedger, error: existingLedgerError } = await adminClient
     .from("money_access_ledger_events")
     .select("id")
-    .eq("provider_event_id", providerEvent.id)
+    .eq("provider_event_id", providerEventId)
     .maybeSingle();
   if (existingLedgerError) throw new Error(`Dynamic ledger duplicate check failed: ${existingLedgerError.message}`);
 
@@ -1896,7 +1949,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
         creator_id: intent.creator_id ?? null,
         platform_id: intent.platform_id ?? null,
         product_id: product.id,
-        provider_event_id: providerEvent.id,
+        provider_event_id: providerEventId,
         event_type: input.eventType,
         amount_minor: resolveAmountMinor(input.event),
         currency: resolveCurrency(input.event),
@@ -1928,7 +1981,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
         status: "consumed",
         consumed_at: new Date().toISOString(),
         metadata: {
-          consumed_by_provider_event_id: providerEvent.id,
+          consumed_by_provider_event_id: providerEventId,
           sandbox_only: true,
           not_payable: true,
         },
@@ -1943,7 +1996,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
         status: "revoked",
         revoked_at: occurredAt,
         metadata: {
-          revoked_by_provider_event_id: providerEvent.id,
+          revoked_by_provider_event_id: providerEventId,
           sandbox_only: true,
           not_payable: true,
         },
@@ -1970,7 +2023,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
         payout_ready: false,
       },
     })
-    .eq("id", providerEvent.id);
+    .eq("id", providerEventId);
   if (providerUpdateError) throw new Error(`Dynamic provider event finalize failed: ${providerUpdateError.message}`);
 
   await createCreatorMoneyNotifications(adminClient, {
@@ -1981,7 +2034,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
     metadata: safeObject(intent.metadata),
     productKey: toText(product.product_key),
     productType: toText(product.product_type),
-    providerEventId: providerEvent.id,
+    providerEventId,
     sourceId: toText(intent.source_id) || null,
     sourceType: toText(intent.source_type) || null,
   });
@@ -1989,7 +2042,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   return {
     status: "processed",
     productKey: product.product_key,
-    providerEventId: providerEvent.id,
+    providerEventId,
     accessGrantId,
     ledgerEventId,
     purchaseIntentId: intent.id,
@@ -1997,7 +2050,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
     payableState,
     grantStatus,
     reason: accessGrantType ? "access_and_ledger_recorded" : "ledger_recorded_no_access_grant",
-    duplicateProviderEvent: false,
+    duplicateProviderEvent: !!existingProviderEvent?.id,
     duplicateAccessGrant,
     duplicateLedgerEvent: !!existingLedger?.id,
   };
@@ -2022,6 +2075,19 @@ const writePremiumEntitlementFromRevenueCatEvent = async (
   if (!eventType) throw new Error("RevenueCat webhook event type is missing.");
   if (!userId) throw new Error("RevenueCat webhook app user id is missing or anonymous.");
   if (!hasPremiumSignal(event)) throw new Error("RevenueCat webhook event is not mapped to Premium.");
+
+  const productResolution = await readStoreProductResolution(adminClient, {
+    event,
+    productId: productId ?? PREMIUM_PRODUCT_ID,
+  });
+  if (!isValidPremiumStoreProductResolution(
+    productResolution,
+    productId ?? PREMIUM_PRODUCT_ID,
+    normalizeMoneyAccessEnvironment(environment),
+    eventType,
+  )) {
+    throw new Error("RevenueCat Premium store/product mapping is invalid.");
+  }
 
   const { data: existingBillingEvent, error: duplicateCheckError } = await adminClient
     .from("billing_events")
@@ -2098,6 +2164,7 @@ const writePremiumEntitlementFromRevenueCatEvent = async (
     expiresAt,
     startsAt,
     rawEventHash,
+    productResolution,
   });
 
   return {
@@ -2240,7 +2307,8 @@ Deno.serve(async (req) => {
     if (storePolicy.provider === "revenuecat_app_store") {
       const appStoreSwitchState = await readAppStorePurchaseSwitchState(adminConfig.client);
       const eventEnvironment = normalizeMoneyAccessEnvironment(event.environment);
-      if (!appStoreSwitchAllowsEnvironment(appStoreSwitchState, eventEnvironment)) {
+      const eventType = normalizeEventType(event.type);
+      if (!shouldProcessRevenueCatAppStoreEvent(appStoreSwitchState, eventEnvironment, eventType)) {
         await writeProviderReadinessAudit(adminConfig.client, {
           provider: "revenuecat",
           capability: "app_store_purchase_sandbox",

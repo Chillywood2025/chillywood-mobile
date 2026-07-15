@@ -1,11 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 
 import {
   IOS_NOTIFICATION_CATEGORIES,
   buildPlatformExpoPushMessage,
 } from "../_shared/notification-payload.mjs";
+import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = ReturnType<typeof createClient<any>>;
@@ -595,6 +596,7 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
     };
   }
 
+  await reconcileRecentExpoPushReceipts(adminClient, input.recipient.id);
   const tokens = await readPushTokens(adminClient, input.recipient.id);
   if (!tokens.length) {
     await insertDeliveryAttempt(adminClient, {

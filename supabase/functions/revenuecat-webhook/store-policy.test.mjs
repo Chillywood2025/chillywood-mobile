@@ -1,0 +1,210 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import {
+  canReconcileExistingProviderEventIntent,
+  isTerminalRevenueCatLifecycleEvent,
+  isValidPremiumStoreProductResolution,
+  shouldProcessRevenueCatAppStoreEvent,
+} from "./store-policy.mjs";
+
+test("terminal App Store lifecycle events remain processable while new purchases are off", () => {
+  for (const eventType of [
+    "CANCELLATION",
+    "EXPIRATION",
+    "REFUND",
+    "REVOCATION",
+    "SUBSCRIPTION_PAUSED",
+  ]) {
+    assert.equal(isTerminalRevenueCatLifecycleEvent(eventType), true);
+    assert.equal(shouldProcessRevenueCatAppStoreEvent("off", "sandbox", eventType), true);
+    assert.equal(shouldProcessRevenueCatAppStoreEvent("off", "production", eventType), true);
+  }
+});
+
+test("new App Store purchase events still fail closed while the switch is off", () => {
+  for (const eventType of ["INITIAL_PURCHASE", "NON_RENEWING_PURCHASE", "RENEWAL", "PRODUCT_CHANGE"]) {
+    assert.equal(isTerminalRevenueCatLifecycleEvent(eventType), false);
+    assert.equal(shouldProcessRevenueCatAppStoreEvent("off", "sandbox", eventType), false);
+    assert.equal(shouldProcessRevenueCatAppStoreEvent("off", "production", eventType), false);
+  }
+});
+
+test("sandbox-only switch admits sandbox purchases but not production purchases", () => {
+  assert.equal(shouldProcessRevenueCatAppStoreEvent("sandbox_only", "sandbox", "INITIAL_PURCHASE"), true);
+  assert.equal(shouldProcessRevenueCatAppStoreEvent("sandbox_only", "production", "INITIAL_PURCHASE"), false);
+});
+
+test("partial provider-event retries only reuse the matching purchase intent", () => {
+  const providerEventId = "provider-event-1";
+  const eventOccurredAt = "2026-07-15T12:00:00.000Z";
+
+  assert.equal(canReconcileExistingProviderEventIntent({
+    status: "pending",
+    expires_at: "2026-07-15T12:05:00.000Z",
+    metadata: {},
+  }, providerEventId, eventOccurredAt), true);
+  assert.equal(canReconcileExistingProviderEventIntent({
+    status: "pending",
+    expires_at: "2026-07-15T11:55:00.000Z",
+    metadata: {},
+  }, providerEventId, eventOccurredAt), false);
+  assert.equal(canReconcileExistingProviderEventIntent({
+    status: "consumed",
+    expires_at: "2026-07-15T12:05:00.000Z",
+    metadata: { consumed_by_provider_event_id: providerEventId },
+  }, providerEventId, eventOccurredAt), true);
+  assert.equal(canReconcileExistingProviderEventIntent({
+    status: "consumed",
+    expires_at: "2026-07-15T12:05:00.000Z",
+    metadata: { consumed_by_provider_event_id: "different-event" },
+  }, providerEventId, eventOccurredAt), false);
+});
+
+test("Premium writes require an exact App Store product mapping", () => {
+  const exactResolution = {
+    product: { id: "premium-product", product_type: "premium_subscription" },
+    mapping: {
+      concept: "premium",
+      creates_payable_balance: false,
+      environment: "sandbox",
+      grants_livekit_authority: false,
+      platform: "ios",
+      provider: "revenuecat_app_store",
+      provider_product_id: "com.chillywood.premium.monthly",
+      status: "sandbox",
+      store: "app_store",
+      unlocks_digital_access: true,
+    },
+    storePolicy: { provider: "revenuecat_app_store" },
+  };
+
+  assert.equal(isValidPremiumStoreProductResolution(
+    exactResolution,
+    "com.chillywood.premium.monthly",
+    "sandbox",
+    "INITIAL_PURCHASE",
+  ), true);
+  assert.equal(isValidPremiumStoreProductResolution(
+    exactResolution,
+    "com.chillywood.premium.unexpected",
+    "sandbox",
+    "INITIAL_PURCHASE",
+  ), false);
+  assert.equal(isValidPremiumStoreProductResolution(
+    { ...exactResolution, mapping: { ...exactResolution.mapping, status: "off" } },
+    "com.chillywood.premium.monthly",
+    "sandbox",
+    "REFUND",
+  ), true);
+  assert.equal(isValidPremiumStoreProductResolution(
+    exactResolution,
+    "com.chillywood.premium.monthly",
+    "production",
+    "INITIAL_PURCHASE",
+  ), false, "a sandbox mapping must never grant a production purchase");
+  assert.equal(isValidPremiumStoreProductResolution(
+    {
+      ...exactResolution,
+      mapping: {
+        ...exactResolution.mapping,
+        environment: "production",
+        status: "active",
+      },
+    },
+    "com.chillywood.premium.monthly",
+    "production",
+    "INITIAL_PURCHASE",
+  ), true, "production purchases require the independently activated mapping state");
+  assert.equal(isValidPremiumStoreProductResolution(
+    exactResolution,
+    "com.chillywood.premium.monthly",
+    "setup",
+    "INITIAL_PURCHASE",
+  ), false, "setup/unknown environments must fail closed");
+});
+
+test("the existing non-App-Store Premium product path remains valid", () => {
+  assert.equal(isValidPremiumStoreProductResolution({
+    product: {
+      id: "google-premium",
+      product_type: "premium_subscription",
+      provider: "revenuecat_google_play",
+      provider_product_id: "premium_subscription",
+    },
+    mapping: null,
+    providerProductId: "premium_subscription",
+    storePolicy: { provider: "revenuecat_google_play", supportsGoogleBasePlans: true },
+  }, "premium_subscription:monthly", "sandbox", "INITIAL_PURCHASE"), true);
+});
+
+test("unknown stores cannot use a Premium entitlement signal to bypass provider mapping", () => {
+  assert.equal(isValidPremiumStoreProductResolution({
+    product: {
+      id: "google-premium",
+      product_type: "premium_subscription",
+      provider: "revenuecat_google_play",
+      provider_product_id: "premium_subscription",
+    },
+    mapping: null,
+    providerProductId: "premium_subscription",
+    storePolicy: { provider: "revenuecat" },
+  }, "premium_subscription", "sandbox", "INITIAL_PURCHASE"), false);
+});
+
+test("Premium store mapping validation runs before the entitlement mutation", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  const functionStart = source.indexOf("const writePremiumEntitlementFromRevenueCatEvent");
+  const functionEnd = source.indexOf("Deno.serve", functionStart);
+  const premiumWrite = source.slice(functionStart, functionEnd);
+  const validationIndex = premiumWrite.indexOf("isValidPremiumStoreProductResolution(");
+  const entitlementMutationIndex = premiumWrite.indexOf('.from("user_entitlements")');
+
+  assert.ok(functionStart >= 0);
+  assert.ok(validationIndex >= 0);
+  assert.ok(entitlementMutationIndex >= 0);
+  assert.ok(validationIndex < entitlementMutationIndex);
+});
+
+test("iOS store and VoIP migrations retain scoped constraints and cleanup indexing", () => {
+  const storeMigration = readFileSync(new URL(
+    "../../migrations/20260715151250_ios_app_store_mappings.sql",
+    import.meta.url,
+  ), "utf8");
+  const constraintStart = storeMigration.indexOf(
+    'constraint "monetization_store_mappings_subscription_shape_check"',
+  );
+  const constraintEnd = storeMigration.indexOf(
+    'constraint "monetization_store_mappings_active_proof_check"',
+    constraintStart,
+  );
+  const subscriptionConstraint = storeMigration.slice(constraintStart, constraintEnd);
+  assert.match(subscriptionConstraint, /"revenuecat_entitlement"/u);
+  assert.match(subscriptionConstraint, /"platform" <> 'ios'/u);
+  assert.match(subscriptionConstraint, /"store" <> 'app_store'/u);
+  assert.match(subscriptionConstraint, /"apple_subscription_group"/u);
+
+  const voipMigration = readFileSync(new URL(
+    "../../migrations/20260715150522_ios_voip_push_token_foundation.sql",
+    import.meta.url,
+  ), "utf8");
+  assert.match(
+    voipMigration,
+    /voip_push_delivery_attempts_token_idx[\s\S]*\("voip_push_token_id"\)[\s\S]*where "voip_push_token_id" is not null/u,
+  );
+});
+
+test("affected Edge Functions use the exact reviewed Supabase client version", () => {
+  for (const relativePath of [
+    "../_shared/provider-readiness.ts",
+    "../chilly-chat-call-dispatch/index.ts",
+    "../ios-voip-call-dispatch/index.ts",
+    "../ios-voip-push-tokens/index.ts",
+    "../notification-device-tokens/index.ts",
+    "../notification-dispatch/index.ts",
+  ]) {
+    const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+    assert.match(source, /npm:@supabase\/supabase-js@2\.110\.6/u, relativePath);
+  }
+});
