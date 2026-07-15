@@ -101,8 +101,10 @@ for (const source of [migration, clientPolicy, serverPolicy, webhook, storePolic
 }
 
 includes(migration, "'revenuecat_app_store_enabled',\n  'off'", "App Store kill switch default");
+includes(migration, 'add constraint "provider_events_provider_check"\n  check ("provider" in (\n    \'revenuecat_google_play\',\n    \'revenuecat_app_store\'', "provider event App Store constraint expansion");
+includes(migration, 'add constraint "money_purchase_intents_provider_check"\n  check ("provider" in (\n    \'revenuecat_google_play\',\n    \'revenuecat_app_store\'', "purchase-intent App Store constraint expansion");
 includes(migration, 'alter table public."monetization_product_store_mappings" enable row level security', "mapping RLS");
-includes(migration, 'revoke all on table public."monetization_product_store_mappings" from anon, authenticated', "mapping client privilege revocation");
+includes(migration, 'revoke all on table public."monetization_product_store_mappings" from public, anon, authenticated', "mapping client privilege revocation");
 includes(migration, '"grants_livekit_authority" = false', "mapping room-authority block");
 includes(migration, '"creates_payable_balance" = false', "mapping payable-balance block");
 includes(migration, '"concept" <> \'creator_tip\'', "tip access constraint");
@@ -205,6 +207,8 @@ includes(webhook, "retryableFailure: !nonRetriablePayloadError", "webhook retry 
 includes(webhook, "const responseStatus = nonRetriablePayloadError ? 200 : 500", "retriable webhook status");
 includes(storePolicy, "supportsGoogleBasePlans: false", "Apple exact-ID policy");
 includes(storePolicy, "supportsGoogleBasePlans: true", "Google base-plan policy");
+includes(storePolicy, 'if (environment === "production")', "App Store production mapping branch");
+includes(storePolicy, 'normalizeText(mapping.status) === "active"', "App Store production active-mapping requirement");
 
 includes(revenueCatClient, "appStorePurchasesEnabled", "iOS RevenueCat client gate");
 includes(revenueCatClient, "App Store purchases are disabled for this build.", "iOS RevenueCat fail-closed copy");

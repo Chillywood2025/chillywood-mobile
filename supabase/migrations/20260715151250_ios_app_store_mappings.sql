@@ -260,8 +260,12 @@ create table if not exists public."monetization_product_store_mappings" (
     check (
       "store_product_type" <> 'auto_renewable_subscription'
       or (
-        nullif(trim(coalesce("apple_subscription_group", '')), '') is not null
-        and nullif(trim(coalesce("revenuecat_entitlement", '')), '') is not null
+        nullif(trim(coalesce("revenuecat_entitlement", '')), '') is not null
+        and (
+          "platform" <> 'ios'
+          or "store" <> 'app_store'
+          or nullif(trim(coalesce("apple_subscription_group", '')), '') is not null
+        )
       )
     ),
   constraint "monetization_store_mappings_active_proof_check"
@@ -295,7 +299,7 @@ create trigger "touch_monetization_product_store_mappings_updated_at"
   for each row execute function public."touch_money_access_updated_at"();
 
 alter table public."monetization_product_store_mappings" enable row level security;
-revoke all on table public."monetization_product_store_mappings" from anon, authenticated;
+revoke all on table public."monetization_product_store_mappings" from public, anon, authenticated;
 grant all on table public."monetization_product_store_mappings" to service_role;
 
 comment on table public."monetization_product_store_mappings" is
