@@ -7,6 +7,9 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeRuntimeEnvironment = (value: unknown) => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
 );
+const normalizeBoolean = (value: unknown) => ["1", "true", "yes", "on"].includes(
+  normalizeText(value).toLowerCase(),
+);
 const CONFIG_DIR = process.cwd();
 const DEPLOYED_LIVEKIT_SERVER_URL = "wss://live.chillywoodstream.com";
 const DEPLOYED_SUPABASE_FUNCTIONS_URL = "https://network-proof.chillywoodstream.com";
@@ -17,6 +20,7 @@ const DEPLOYED_ACCOUNT_DELETION_URL = "https://chillywoodstream.com/account-dele
 const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-report";
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
 const IOS_ASSOCIATED_DOMAIN = "applinks:chillywoodstream.com";
+const IOS_PRIVACY_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "ios", "privacy-manifest.json");
 const IOS_PHOTO_LIBRARY_USAGE_DESCRIPTION = "Chi'llywood accesses photos you choose for your profile and social images.";
 const IOS_RNFIREBASE_STATIC_PODS = [
   "RNFBAnalytics",
@@ -194,6 +198,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   )
     ? existingIosEntitlements["com.apple.developer.associated-domains"] as string[]
     : [];
+  const iosPrivacyManifests = JSON.parse(
+    fs.readFileSync(IOS_PRIVACY_MANIFEST_PATH, "utf8"),
+  ) as NonNullable<NonNullable<ExpoConfig["ios"]>["privacyManifests"]>;
 
   return {
     ...base,
@@ -214,6 +221,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...base.ios,
       ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
       associatedDomains: iosAssociatedDomains,
+      privacyManifests: iosPrivacyManifests,
       entitlements: {
         ...existingIosEntitlements,
         "com.apple.developer.associated-domains": [
@@ -239,6 +247,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
       ],
       "./plugins/withChillyChatNativeCallNotifications",
+      "./plugins/withChillyChatIosNativeCalls",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "@react-native-firebase/perf",
@@ -297,6 +306,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
         communication: {
           ...existingCommunication,
+          iosNativeCallsEnabled: normalizeBoolean(
+            process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED || existingCommunication.iosNativeCallsEnabled,
+          ),
+          iosOrdinaryPushEnabled: normalizeBoolean(
+            process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED || existingCommunication.iosOrdinaryPushEnabled,
+          ),
           iceServers: normalizeText(
             process.env.EXPO_PUBLIC_COMMUNICATION_ICE_SERVERS || existingCommunication.iceServers,
           ),
@@ -323,6 +338,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           ),
           iosPublicSdkKey: normalizeText(
             process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY || existingRevenueCat.iosPublicSdkKey,
+          ),
+          appStorePurchasesEnabled: normalizeBoolean(
+            process.env.EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED || existingRevenueCat.appStorePurchasesEnabled,
           ),
         },
         livekit: {

@@ -2,6 +2,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+import {
+  IOS_NOTIFICATION_CATEGORIES,
+  buildPlatformExpoPushMessage,
+} from "../_shared/notification-payload.mjs";
+
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
 
@@ -48,6 +53,7 @@ type NotificationPreference = {
 
 type PushToken = {
   id: string;
+  platform: "android" | "ios";
   provider: string;
   token: string;
   token_fingerprint: string;
@@ -82,6 +88,9 @@ const TERMINAL_STATUSES = new Set(["accepted", "declined", "missed", "canceled",
 let cachedFcmAccessToken: { expiresAt: number; token: string } | null = null;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const isIosOrdinaryPushRolloutEnabled = () => (
+  toText(Deno.env.get("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED")).toLowerCase() === "true"
+);
 
 const jsonResponse = (status: number, payload: JsonObject) =>
   new Response(JSON.stringify(payload), { headers: JSON_HEADERS, status });
@@ -243,17 +252,24 @@ async function readPreferences(adminClient: SupabaseClientLike, userId: string) 
 }
 
 async function readPushTokens(adminClient: SupabaseClientLike, userId: string) {
-  const { data } = await adminClient
-    .from("user_push_tokens")
-    .select("id,provider,token,token_fingerprint")
-    .eq("user_id", userId)
-    .eq("platform", "android")
-    .eq("enabled", true)
-    .is("revoked_at", null)
-    .order("last_seen_at", { ascending: false })
-    .limit(5);
+  const readPlatformTokens = async (platform: PushToken["platform"]) => {
+    const { data } = await adminClient
+      .from("user_push_tokens")
+      .select("id,platform,provider,token,token_fingerprint")
+      .eq("user_id", userId)
+      .eq("platform", platform)
+      .eq("enabled", true)
+      .is("revoked_at", null)
+      .order("last_seen_at", { ascending: false })
+      .limit(5);
+    return (data ?? []) as PushToken[];
+  };
 
-  return (data ?? []) as PushToken[];
+  const [androidTokens, iosTokens] = await Promise.all([
+    readPlatformTokens("android"),
+    readPlatformTokens("ios"),
+  ]);
+  return [...androidTokens, ...iosTokens];
 }
 
 async function revokePushToken(adminClient: SupabaseClientLike, tokenId: string) {
@@ -652,7 +668,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   const tokens = await readPushTokens(adminClient, input.recipientUserId);
   if (!tokens.length) {
     await insertDeliveryAttempt(adminClient, {
-      errorCode: "no_enabled_android_token",
+      errorCode: "no_enabled_push_token",
       notificationId,
       provider: "expo",
       recipientUserId: input.recipientUserId,
@@ -662,33 +678,49 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
       notificationId,
       pushSent: false,
       recipientUserId: input.recipientUserId,
-      reason: "no_enabled_android_token",
+      reason: "no_enabled_push_token",
       status: inAppAllowed ? "created" : "skipped",
     };
   }
 
   const channelId = input.action === "missed" ? MISSED_CALL_CHANNEL_ID : CHAT_CALL_CHANNEL_ID;
-  const nativeCallData: Record<string, string> = {
+  const ordinaryCallData: Record<string, string> = {
     callInviteId: input.invite.id,
     callType: input.callType,
     callerName: input.callerName,
-    body: copy.body,
-    nativeCallStyle: input.action === "incoming" ? "android_callstyle" : "standard",
     notificationId: notificationId ?? "",
-    notificationChannelId: channelId,
     openCall: input.action === "incoming" ? "true" : "false",
     path: route,
     threadId: input.invite.thread_id,
-    title: copy.title,
     triggerType: notificationType,
   };
-  const fcmTokens = tokens.filter((token) => token.provider === "fcm");
-  const expoTokens = tokens.filter((token) => token.provider === "expo");
+  const nativeCallData: Record<string, string> = {
+    ...ordinaryCallData,
+    body: copy.body,
+    nativeCallStyle: input.action === "incoming" ? "android_callstyle" : "standard",
+    notificationChannelId: channelId,
+    title: copy.title,
+  };
+  const androidTokens = tokens.filter((token) => token.platform === "android");
+  const iosExpoTokens = tokens.filter((token) => token.platform === "ios" && token.provider === "expo");
+  const fcmTokens = androidTokens.filter((token) => token.provider === "fcm");
+  const expoTokens = androidTokens.filter((token) => token.provider === "expo");
+  const iosRolloutEnabled = isIosOrdinaryPushRolloutEnabled();
   let nativeSentCount = 0;
   let expoSentCount = 0;
   let lastFailureReason = "";
 
   if (input.action === "incoming") {
+    for (const token of iosExpoTokens) {
+      await insertDeliveryAttempt(adminClient, {
+        errorCode: "ios_native_calls_disabled",
+        notificationId,
+        provider: token.provider,
+        pushTokenId: token.id,
+        recipientUserId: input.recipientUserId,
+        status: "skipped",
+      });
+    }
     if (!fcmTokens.length) {
       await insertDeliveryAttempt(adminClient, {
         errorCode: "no_enabled_native_fcm_token",
@@ -726,19 +758,51 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     }
   }
 
+  if (input.action === "missed" && !iosRolloutEnabled) {
+    for (const token of iosExpoTokens) {
+      await insertDeliveryAttempt(adminClient, {
+        errorCode: "ios_push_rollout_disabled",
+        notificationId,
+        provider: token.provider,
+        pushTokenId: token.id,
+        recipientUserId: input.recipientUserId,
+        status: "skipped",
+      });
+    }
+  }
+
+  const ordinaryExpoTokens = input.action === "missed" && iosRolloutEnabled
+    ? [...expoTokens, ...iosExpoTokens]
+    : expoTokens;
   const shouldAttemptExpo = input.action === "missed" || nativeSentCount === 0;
-  for (const token of shouldAttemptExpo ? expoTokens : []) {
-    const pushMessage: JsonObject = {
+  for (const token of shouldAttemptExpo ? ordinaryExpoTokens : []) {
+    let pushMessage: JsonObject = {
       data: nativeCallData,
       priority: "high",
       to: token.token,
-      ttl: input.action === "incoming" ? 45 : 3600,
+      ttl: 45,
     };
     if (input.action === "missed") {
-      pushMessage.body = copy.body;
-      pushMessage.channelId = channelId;
-      pushMessage.sound = "default";
-      pushMessage.title = copy.title;
+      pushMessage = buildPlatformExpoPushMessage({
+        androidChannelId: channelId,
+        badge: 1,
+        body: copy.body,
+        categoryId: IOS_NOTIFICATION_CATEGORIES.missedCall,
+        data: token.platform === "ios" ? ordinaryCallData : nativeCallData,
+        interruptionLevel: "active",
+        platform: token.platform,
+        priority: "high",
+        sound: "default",
+        title: copy.title,
+        to: token.token,
+        ttl: 3600,
+      });
+      if (token.platform === "android") {
+        pushMessage.body = copy.body;
+        pushMessage.channelId = channelId;
+        pushMessage.sound = "default";
+        pushMessage.title = copy.title;
+      }
     }
     const pushResult = await sendExpoPush(pushMessage);
     const firstTicket = Array.isArray((pushResult.body as { data?: unknown }).data)

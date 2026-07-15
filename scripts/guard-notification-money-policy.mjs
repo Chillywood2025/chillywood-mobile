@@ -54,7 +54,7 @@ assertIncludes(packageJson, "proof:notification-center-money-activity", "activit
   "creator_money_sales_enabled",
   "push_enabled",
   "in_app_enabled",
-  "readAndroidPushTokens",
+  "readPushTokens",
   "notification_delivery_attempts",
 ].forEach((needle) => assertIncludes(revenuecatWebhook, needle, "notification preference/push gate"));
 

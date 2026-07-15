@@ -151,6 +151,12 @@ verify_jwt = false
 [functions.chilly-chat-call-dispatch]
 verify_jwt = false
 
+[functions.ios-voip-push-tokens]
+verify_jwt = false
+
+[functions.ios-voip-call-dispatch]
+verify_jwt = false
+
 [functions.admin-live-cost-guard-webhook]
 verify_jwt = false
 

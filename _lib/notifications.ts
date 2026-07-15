@@ -1402,6 +1402,8 @@ export type PushPermissionState =
   | "unsupported"
   | "undetermined"
   | "granted"
+  | "provisional"
+  | "ephemeral"
   | "denied"
   | "error";
 
@@ -1432,6 +1434,12 @@ export type ForegroundActivityNotification = {
 };
 
 const NOTIFICATION_INSTALL_ID_STORAGE_KEY = "chillywood.notification.install_id.v1";
+const IOS_ACTIVITY_NOTIFICATION_CATEGORY_ID = "chillywood_activity";
+const IOS_MISSED_CALL_NOTIFICATION_CATEGORY_ID = "chillywood_missed_call";
+const IOS_ORDINARY_PUSH_DELIVERY_ENABLED = String(
+  process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_DELIVERY_ENABLED ?? "",
+).trim().toLowerCase() === "true";
+const handledNotificationResponseKeys = new Set<string>();
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
   circleFriendLiveEnabled: true,
@@ -1574,15 +1582,36 @@ export async function updateNotificationPreferences(
   return parsePreferenceRow(data);
 }
 
+const resolvePushPermissionState = (
+  current: Notifications.NotificationPermissionsStatus,
+): PushPermissionState => {
+  if (Platform.OS === "ios") {
+    const iosStatus = current.ios?.status;
+    if (iosStatus === Notifications.IosAuthorizationStatus.PROVISIONAL) return "provisional";
+    if (iosStatus === Notifications.IosAuthorizationStatus.EPHEMERAL) return "ephemeral";
+    if (iosStatus === Notifications.IosAuthorizationStatus.AUTHORIZED || current.granted) return "granted";
+    if (iosStatus === Notifications.IosAuthorizationStatus.DENIED) return "denied";
+    if (iosStatus === Notifications.IosAuthorizationStatus.NOT_DETERMINED) return "undetermined";
+  }
+
+  if (current.granted) return "granted";
+  if (current.canAskAgain) return "undetermined";
+  return "denied";
+};
+
+const pushPermissionAllowsRegistration = (state: PushPermissionState) => (
+  state === "granted" || state === "provisional" || state === "ephemeral"
+);
+
+export const isIosOrdinaryPushDeliveryEnabled = () => IOS_ORDINARY_PUSH_DELIVERY_ENABLED;
+
 export async function readPushPermissionState(): Promise<PushPermissionState> {
   if (Platform.OS === "web") return "unsupported";
   if (!Device.isDevice) return "unsupported";
 
   try {
     const current = await Notifications.getPermissionsAsync();
-    if (current.granted) return "granted";
-    if (current.canAskAgain) return "undetermined";
-    return "denied";
+    return resolvePushPermissionState(current);
   } catch {
     return "error";
   }
@@ -1630,7 +1659,25 @@ export async function configureNotificationRuntime() {
       name: "Missed Chi'lly Chat calls",
       vibrationPattern: [0, 220, 180, 220],
     });
+    return;
   }
+
+  if (Platform.OS === "ios") {
+    const openAction: Notifications.NotificationAction = {
+      buttonTitle: "Open Chi'llywood",
+      identifier: "OPEN_CHILLYWOOD",
+      options: { opensAppToForeground: true },
+    };
+    await Promise.all([
+      Notifications.setNotificationCategoryAsync(IOS_ACTIVITY_NOTIFICATION_CATEGORY_ID, [openAction]),
+      Notifications.setNotificationCategoryAsync(IOS_MISSED_CALL_NOTIFICATION_CATEGORY_ID, [openAction]),
+    ]);
+  }
+}
+
+export async function clearApplicationNotificationBadge(): Promise<boolean> {
+  if (Platform.OS !== "ios") return false;
+  return Notifications.setBadgeCountAsync(0).catch(() => false);
 }
 
 export async function readNativeCallAlertStatus(): Promise<NativeCallAlertStatus> {
@@ -1723,16 +1770,12 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
     return buildUnsupportedPushRegistration("Push notifications require a physical mobile device.");
   }
 
-  if (Platform.OS !== "android") {
-    return buildUnsupportedPushRegistration("Android notifications are production-ready now. iOS/APNs remains later.");
-  }
-
   await configureNotificationRuntime();
   const permissionState = await readPushPermissionState();
 
   if (permissionState === "denied") {
     return {
-      message: "Device push notifications are off in Android settings. In-app Activity is tied to your account and still works in the app.",
+      message: "Device push notifications are off in system Settings. In-app Activity is tied to your account and still works in the app.",
       permissionState,
       provider: "expo",
       status: "denied",
@@ -1743,7 +1786,7 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
 
   if (permissionState === "error") {
     return {
-      message: "Unable to verify Android notification permission. In-app Activity is tied to your account and still works in the app.",
+      message: "Unable to verify this device's notification permission. In-app Activity is tied to your account and still works in the app.",
       permissionState,
       provider: "expo",
       status: "error",
@@ -1752,7 +1795,7 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
     };
   }
 
-  if (permissionState !== "granted") {
+  if (!pushPermissionAllowsRegistration(permissionState)) {
     return {
       message: "Device push registration is not set up yet. In-app Activity is tied to your account and still works in the app.",
       permissionState,
@@ -1771,7 +1814,7 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
       : Promise.resolve({ registered: false, status: "not_registered" as const, tokenFingerprint: null }),
   ]);
 
-  if (expoStatus.status === "error" && fcmStatus.status === "error") {
+  if (expoStatus.status === "error" && (Platform.OS !== "android" || fcmStatus.status === "error")) {
     return {
       message: "Unable to verify this device push registration. In-app Activity is tied to your account and still works in the app.",
       permissionState,
@@ -1785,10 +1828,15 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
   const isRegistered = expoStatus.registered || fcmStatus.registered;
 
   if (isRegistered) {
+    const iosMessage = IOS_ORDINARY_PUSH_DELIVERY_ENABLED
+      ? "This iPhone is registered for Chi'llywood ordinary push alerts. In-app Activity is tied to your account and still works in the app."
+      : "This iPhone is registered for ordinary push readiness. Delivery remains off until physical APNs proof is complete; in-app Activity still works.";
     return {
-      message: fcmStatus.registered
-        ? "This Android device is registered for Chi'llywood push alerts and native Chi'lly Chat call alerts. In-app Activity is tied to your account and still works in the app."
-        : "This Android device is registered for Chi'llywood push alerts. Native Chi'lly Chat call alerts will finish registering when Firebase device token readback is available.",
+      message: Platform.OS === "ios"
+        ? iosMessage
+        : fcmStatus.registered
+          ? "This Android device is registered for Chi'llywood push alerts and native Chi'lly Chat call alerts. In-app Activity is tied to your account and still works in the app."
+          : "This Android device is registered for Chi'llywood push alerts. Native Chi'lly Chat call alerts will finish registering when Firebase device token readback is available.",
       permissionState,
       provider: fcmStatus.registered ? "expo+fcm" : "expo",
       status: "registered",
@@ -1798,7 +1846,7 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
   }
 
   return {
-    message: "Notifications are allowed on this Android device, but this install is not registered for phone push alerts. In-app Activity is tied to your account and still works in the app.",
+    message: "Notifications are allowed on this device, but this install is not registered for phone push alerts. In-app Activity is tied to your account and still works in the app.",
     permissionState,
     provider: "expo",
     status: "not_registered",
@@ -1848,7 +1896,9 @@ async function registerPushTokenWithBackend(input: {
   return {
     message: input.provider === "fcm"
       ? "This Android device is registered for native Chi'lly Chat call alerts."
-      : "This Android device is registered for Chi'llywood notifications.",
+      : Platform.OS === "ios" && !IOS_ORDINARY_PUSH_DELIVERY_ENABLED
+        ? "This iPhone is registered for ordinary push readiness; live iOS delivery remains off pending physical proof."
+        : `This ${Platform.OS === "ios" ? "iPhone" : "Android device"} is registered for Chi'llywood notifications.`,
     permissionState: input.permissionStatus,
     provider: input.provider,
     status: "registered",
@@ -1897,7 +1947,7 @@ function mergeAndroidPushRegistrationResults(expoResult: PushRegistrationState, 
   return expoResult;
 }
 
-export async function requestAndroidPushPermissionAndRegister(): Promise<PushRegistrationState> {
+export async function requestPushPermissionAndRegister(): Promise<PushRegistrationState> {
   if (Platform.OS === "web" || !Device.isDevice) {
     return {
       message: "Push notifications require a physical mobile device.",
@@ -1908,26 +1958,27 @@ export async function requestAndroidPushPermissionAndRegister(): Promise<PushReg
     };
   }
 
-  if (Platform.OS !== "android") {
-    return {
-      message: "Android notifications are production-ready now. iOS/APNs remains later.",
-      permissionState: "unsupported",
-      provider: "expo",
-      status: "unsupported",
-      tokenFingerprint: null,
-    };
-  }
-
   await configureNotificationRuntime();
   const current = await Notifications.getPermissionsAsync();
-  const finalPermission = current.granted ? current : await Notifications.requestPermissionsAsync();
+  const currentPermissionState = resolvePushPermissionState(current);
+  const finalPermission = pushPermissionAllowsRegistration(currentPermissionState)
+    ? current
+    : await Notifications.requestPermissionsAsync({
+      android: {},
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+      },
+    });
+  const finalPermissionState = resolvePushPermissionState(finalPermission);
 
-  if (!finalPermission.granted) {
+  if (!pushPermissionAllowsRegistration(finalPermissionState)) {
     return {
-      message: "Notifications are off for this device. Chi'llywood still works; enable notifications in Android settings when you want alerts.",
-      permissionState: finalPermission.canAskAgain ? "undetermined" : "denied",
+      message: "Notifications are off for this device. Chi'llywood still works; enable notifications in system Settings when you want alerts.",
+      permissionState: finalPermissionState,
       provider: "expo",
-      status: "denied",
+      status: finalPermissionState === "denied" ? "denied" : "not_registered",
       tokenFingerprint: null,
     };
   }
@@ -1936,7 +1987,7 @@ export async function requestAndroidPushPermissionAndRegister(): Promise<PushReg
   if (!projectId) {
     return {
       message: "Expo project id is missing from this build, so push token registration cannot complete.",
-      permissionState: "granted",
+      permissionState: finalPermissionState,
       provider: "expo",
       status: "blocked",
       tokenFingerprint: null,
@@ -1947,13 +1998,13 @@ export async function requestAndroidPushPermissionAndRegister(): Promise<PushReg
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     const rawToken = normalizeText(token.data);
     if (!rawToken) throw new Error("Expo returned an empty push token.");
-    const expoResult = await registerPushTokenWithBackend({ permissionStatus: "granted", provider: "expo", token: rawToken });
-    const nativeResult = await registerAndroidNativeFcmToken("granted");
+    const expoResult = await registerPushTokenWithBackend({ permissionStatus: finalPermissionState, provider: "expo", token: rawToken });
+    const nativeResult = await registerAndroidNativeFcmToken(finalPermissionState);
     return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
   } catch {
     return {
-      message: "Unable to get a production push token for this Android build.",
-      permissionState: "granted",
+      message: `Unable to get a production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
+      permissionState: finalPermissionState,
       provider: "expo",
       status: "error",
       tokenFingerprint: null,
@@ -1962,7 +2013,7 @@ export async function requestAndroidPushPermissionAndRegister(): Promise<PushReg
   }
 }
 
-export async function refreshAndroidPushRegistrationIfGranted(): Promise<PushRegistrationState> {
+export async function refreshPushRegistrationIfGranted(): Promise<PushRegistrationState> {
   if (Platform.OS === "web" || !Device.isDevice) {
     return {
       message: "Push notifications require a physical mobile device.",
@@ -1973,24 +2024,15 @@ export async function refreshAndroidPushRegistrationIfGranted(): Promise<PushReg
     };
   }
 
-  if (Platform.OS !== "android") {
-    return {
-      message: "Android notifications are production-ready now. iOS/APNs remains later.",
-      permissionState: "unsupported",
-      provider: "expo",
-      status: "unsupported",
-      tokenFingerprint: null,
-    };
-  }
-
   await configureNotificationRuntime();
   const current = await Notifications.getPermissionsAsync();
-  if (!current.granted) {
+  const permissionState = resolvePushPermissionState(current);
+  if (!pushPermissionAllowsRegistration(permissionState)) {
     return {
       message: "Notifications are not enabled for this device.",
-      permissionState: current.canAskAgain ? "undetermined" : "denied",
+      permissionState,
       provider: "expo",
-      status: "denied",
+      status: permissionState === "denied" ? "denied" : "not_registered",
       tokenFingerprint: null,
     };
   }
@@ -1999,7 +2041,7 @@ export async function refreshAndroidPushRegistrationIfGranted(): Promise<PushReg
   if (!projectId) {
     return {
       message: "Expo project id is missing from this build, so push token registration cannot complete.",
-      permissionState: "granted",
+      permissionState,
       provider: "expo",
       status: "blocked",
       tokenFingerprint: null,
@@ -2010,19 +2052,29 @@ export async function refreshAndroidPushRegistrationIfGranted(): Promise<PushReg
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     const rawToken = normalizeText(token.data);
     if (!rawToken) throw new Error("Expo returned an empty push token.");
-    const expoResult = await registerPushTokenWithBackend({ permissionStatus: "granted", provider: "expo", token: rawToken });
-    const nativeResult = await registerAndroidNativeFcmToken("granted");
+    const expoResult = await registerPushTokenWithBackend({ permissionStatus: permissionState, provider: "expo", token: rawToken });
+    const nativeResult = await registerAndroidNativeFcmToken(permissionState);
     return mergeAndroidPushRegistrationResults(expoResult, nativeResult);
   } catch {
     return {
-      message: "Unable to refresh the production push token for this Android build.",
-      permissionState: "granted",
+      message: `Unable to refresh the production push token for this ${Platform.OS === "ios" ? "iOS" : "Android"} build.`,
+      permissionState,
       provider: "expo",
       status: "error",
       tokenFingerprint: null,
       nativeTokenFingerprint: null,
     };
   }
+}
+
+/** @deprecated Use requestPushPermissionAndRegister for platform-neutral registration. */
+export async function requestAndroidPushPermissionAndRegister(): Promise<PushRegistrationState> {
+  return requestPushPermissionAndRegister();
+}
+
+/** @deprecated Use refreshPushRegistrationIfGranted for platform-neutral refresh. */
+export async function refreshAndroidPushRegistrationIfGranted(): Promise<PushRegistrationState> {
+  return refreshPushRegistrationIfGranted();
 }
 
 export async function revokeCurrentPushInstall(): Promise<PushRegistrationState> {
@@ -2074,18 +2126,21 @@ const normalizeNotificationPath = (value: unknown) => resolveApplicationRoute(va
 export const resolveNotificationPath = (value: unknown) => normalizeNotificationPath(value);
 
 export function subscribeToNotificationResponses(onPath: (path: string) => void) {
-  const handledResponseKeys = new Set<string>();
   const handleResponse = (response: Notifications.NotificationResponse | null) => {
     if (!response) return;
     const requestIdentifier = normalizeText(response.notification.request.identifier);
     const actionIdentifier = normalizeText(response.actionIdentifier);
     const responseKey = `${requestIdentifier}:${actionIdentifier || "default"}`;
-    if (responseKey !== ":" && handledResponseKeys.has(responseKey)) return;
+    if (responseKey !== ":" && handledNotificationResponseKeys.has(responseKey)) return;
     const data = response.notification.request.content.data as Record<string, unknown>;
     const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
     if (!path) return;
-    if (responseKey !== ":") handledResponseKeys.add(responseKey);
+    if (responseKey !== ":") {
+      if (handledNotificationResponseKeys.size >= 128) handledNotificationResponseKeys.clear();
+      handledNotificationResponseKeys.add(responseKey);
+    }
     onPath(path);
+    void clearApplicationNotificationBadge();
     Notifications.clearLastNotificationResponseAsync().catch(() => null);
   };
 

@@ -31,6 +31,8 @@ import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import {
   readLatestRingingChillyChatCallInviteForCallee,
+  readChillyChatCallInvite,
+  subscribeToChillyChatCallInvite,
   subscribeToIncomingChillyChatCallInvites,
   updateChillyChatCallInviteStatus,
   type ChillyChatCallInvite,
@@ -42,11 +44,12 @@ import {
 } from "../_lib/chillyChatCallSoundAssets";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
 import {
+  clearApplicationNotificationBadge,
   configureNotificationRuntime,
   dismissChillyChatCallNotificationRows,
   dismissPresentedChillyChatCallNotifications,
   readNotificationPreferences,
-  refreshAndroidPushRegistrationIfGranted,
+  refreshPushRegistrationIfGranted,
   subscribeToForegroundActivityNotifications,
   subscribeToForegroundNotificationAlerts,
   subscribeToNotificationResponses,
@@ -57,6 +60,12 @@ import {
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
+import {
+  endIosNativeCall,
+  revokeIosVoipRegistration,
+  startIosNativeCallsReadiness,
+  type SanitizedNativeCallEvent,
+} from "../_lib/iosNativeCalls";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
 import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
@@ -151,6 +160,7 @@ function RouteAnalyticsBridge() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const router = useRouter();
+  const { isSignedIn, user } = useSession();
   const handledInitialUrlRef = useRef(false);
 
   useEffect(() => {
@@ -158,15 +168,30 @@ function RouteAnalyticsBridge() {
   }, [params, pathname]);
 
   useEffect(() => {
+    const refreshPushIfAllowed = async () => {
+      const userId = String(user?.id ?? "").trim();
+      if (!isSignedIn || !userId) return;
+      const preferences = await readNotificationPreferences(userId).catch(() => null);
+      if (preferences?.pushEnabled === false) return;
+      await refreshPushRegistrationIfGranted().catch(() => null);
+    };
+
     void configureNotificationRuntime();
-    void refreshAndroidPushRegistrationIfGranted();
+    void clearApplicationNotificationBadge();
+    void refreshPushIfAllowed();
     const subscription = subscribeToNotificationResponses((path) => {
       router.push(path as Parameters<typeof router.push>[0]);
     });
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") return;
+      void clearApplicationNotificationBadge();
+      void refreshPushIfAllowed();
+    });
     return () => {
       subscription.remove();
+      appStateSubscription.remove();
     };
-  }, [router]);
+  }, [isSignedIn, router, user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -823,6 +848,110 @@ function RevenueCatBootstrap() {
   return null;
 }
 
+function IosNativeCallsBridge() {
+  const router = useRouter();
+  const { isSignedIn, user } = useSession();
+  const inviteSubscriptionsRef = useRef(new Map<string, () => void>());
+
+  useEffect(() => {
+    let active = true;
+    const currentUserId = String(user?.id ?? "").trim();
+
+    const clearInviteSubscription = (inviteId: string) => {
+      inviteSubscriptionsRef.current.get(inviteId)?.();
+      inviteSubscriptionsRef.current.delete(inviteId);
+    };
+    const clearInviteSubscriptions = () => {
+      inviteSubscriptionsRef.current.forEach((unsubscribe) => unsubscribe());
+      inviteSubscriptionsRef.current.clear();
+    };
+
+    if (!isSignedIn || !currentUserId) {
+      clearInviteSubscriptions();
+      void revokeIosVoipRegistration();
+      return () => {
+        active = false;
+        clearInviteSubscriptions();
+      };
+    }
+
+    const watchInviteLifecycle = (event: SanitizedNativeCallEvent) => {
+      const inviteId = String(event.callInviteId ?? "").trim();
+      const callUuid = String(event.callUuid ?? "").trim();
+      if (!inviteId || !callUuid || inviteSubscriptionsRef.current.has(inviteId)) return;
+
+      const reconcileInvite = async () => {
+        const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
+        if (!active || !invite) return;
+        if (invite.status === "ringing" || invite.status === "accepted") return;
+        clearInviteSubscription(inviteId);
+        await endIosNativeCall(callUuid, `invite_${invite.status}`).catch(() => false);
+      };
+
+      inviteSubscriptionsRef.current.set(
+        inviteId,
+        subscribeToChillyChatCallInvite(inviteId, () => {
+          void reconcileInvite();
+        }),
+      );
+      void reconcileInvite();
+    };
+
+    const routeNativeAction = (event: SanitizedNativeCallEvent, action: "answer" | "decline") => {
+      const threadId = String(event.threadId ?? "").trim();
+      const callInviteId = String(event.callInviteId ?? "").trim();
+      if (!threadId || !callInviteId) return;
+      const params = new URLSearchParams({ callInviteId, nativeCallAction: action });
+      router.push(`/chat/${encodeURIComponent(threadId)}?${params.toString()}` as Parameters<typeof router.push>[0]);
+    };
+
+    const handleNativeCallEvent = (event: SanitizedNativeCallEvent) => {
+      if (!active) return;
+      if (event.type === "incoming") {
+        watchInviteLifecycle(event);
+        return;
+      }
+      if (event.type === "answered") {
+        routeNativeAction(event, "answer");
+        return;
+      }
+      if (event.type === "declined") {
+        routeNativeAction(event, "decline");
+        return;
+      }
+      if (event.type === "timeout") {
+        const inviteId = String(event.callInviteId ?? "").trim();
+        if (!inviteId) return;
+        void readChillyChatCallInvite(inviteId)
+          .then((invite) => {
+            if (!invite || invite.calleeUserId !== currentUserId || invite.status !== "ringing") return null;
+            return updateChillyChatCallInviteStatus({
+              actorUserId: currentUserId,
+              invite,
+              status: "missed",
+            });
+          })
+          .catch(() => null);
+        clearInviteSubscription(inviteId);
+        return;
+      }
+      if (event.type === "ended" || event.type === "reportFailed" || event.type === "providerReset") {
+        clearInviteSubscription(String(event.callInviteId ?? "").trim());
+      }
+    };
+
+    void startIosNativeCallsReadiness(handleNativeCallEvent);
+
+    return () => {
+      active = false;
+      clearInviteSubscriptions();
+      void revokeIosVoipRegistration();
+    };
+  }, [isSignedIn, router, user?.id]);
+
+  return null;
+}
+
 function DefaultOrientationLock() {
   useEffect(() => {
     void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch((error) => {
@@ -1073,6 +1202,7 @@ export default function RootLayout() {
       <RuntimeUpdateGate />
       <FirebaseRuntimeBridge />
       <RevenueCatBootstrap />
+      <IosNativeCallsBridge />
       <BetaProgramProvider>
         <RootErrorBoundary>
           <AuthRouteGate />

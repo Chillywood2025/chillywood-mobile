@@ -296,6 +296,18 @@ async function dispatchChillyChatCallPush(input: {
   return normalizeDispatchResponse(data);
 }
 
+const dispatchIosVoipCallIfEligible = async (inviteId: string) => {
+  const normalizedInviteId = toText(inviteId);
+  if (!normalizedInviteId) return;
+  // The server independently validates caller identity, membership, invite
+  // state, preferences, blocking, rate limits, and its rollout kill switch.
+  // Calling this from every platform lets an Android caller reach an eligible
+  // iOS callee once native calls are explicitly enabled after physical proof.
+  await supabase.functions.invoke("ios-voip-call-dispatch", {
+    body: { inviteId: normalizedInviteId },
+  });
+};
+
 export async function createChillyChatCallInvite(input: {
   threadId: string;
   communicationRoomId: string;
@@ -342,6 +354,7 @@ export async function createChillyChatCallInvite(input: {
     action: "incoming",
     inviteId: invite.id,
   });
+  void dispatchIosVoipCallIfEligible(invite.id).catch(() => null);
 
   return { delivery, invite };
 }

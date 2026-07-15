@@ -65,7 +65,8 @@ import {
   dismissChillyChatCallNotificationRows,
   dismissPresentedChillyChatCallNotifications,
   readNotificationPreferences,
-  requestAndroidPushPermissionAndRegister,
+  refreshPushRegistrationIfGranted,
+  requestPushPermissionAndRegister,
   type NotificationPreferenceSettings,
 } from "../../_lib/notifications";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
@@ -516,6 +517,10 @@ export default function ChillyChatThreadScreen() {
     participantCount,
     toggleCamera,
     toggleMic,
+    switchCamera,
+    mediaPermissionMessage,
+    canOpenMediaSettings,
+    openMediaSettings,
     leaveRoom,
   } = useCommunicationRoomSession({
     roomId: activeCallRoomId,
@@ -956,7 +961,9 @@ export default function ChillyChatThreadScreen() {
     try {
       setCallBusy(true);
       setCallDeliveryStatus(null);
-      void requestAndroidPushPermissionAndRegister();
+      void (Platform.OS === "android"
+        ? requestPushPermissionAndRegister()
+        : refreshPushRegistrationIfGranted());
       const result = await startChatThreadCall(threadId, mode);
       setThread(result.thread);
       setOutgoingCallInvite(result.invite);
@@ -2077,10 +2084,18 @@ export default function ChillyChatThreadScreen() {
             callType={thread?.activeCallType ?? null}
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}
+            mediaPermissionMessage={mediaPermissionMessage}
+            canOpenMediaSettings={canOpenMediaSettings}
             showControls={!!activeCallRoomId && !callError && !callLoading}
             presentation="fullscreen"
             onToggleCamera={toggleCamera}
             onToggleMic={toggleMic}
+            onSwitchCamera={() => {
+              void switchCamera();
+            }}
+            onOpenMediaSettings={() => {
+              void openMediaSettings();
+            }}
             onLeave={() => {
               void handleJoinOrCloseCall();
             }}

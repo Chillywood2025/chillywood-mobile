@@ -162,6 +162,10 @@ Deno.serve(async (req): Promise<Response> => {
     const platform = normalizePlatform(body.platform);
     const installId = toText(body.installId) || null;
 
+    if (platform === "ios" && provider !== "expo") {
+      return jsonResponse(400, { error: "invalid_provider_for_platform" });
+    }
+
     const supabaseUrl = readRequiredEnv("SUPABASE_URL");
     const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });

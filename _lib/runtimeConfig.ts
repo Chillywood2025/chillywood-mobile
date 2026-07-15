@@ -6,6 +6,12 @@ export type RevenueCatRuntimeConfig = {
   androidDebugPublicSdkKey: string;
   androidPublicSdkKey: string;
   iosPublicSdkKey: string;
+  appStorePurchasesEnabled: boolean;
+};
+
+export type CommunicationRuntimeConfig = {
+  iosNativeCallsEnabled: boolean;
+  iosOrdinaryPushEnabled: boolean;
 };
 
 export type LiveKitRuntimeConfig = {
@@ -28,6 +34,7 @@ export type RuntimeConfig = {
   betaOperatorAllowlist: string[];
   betaEnvironment: RuntimeEnvironment;
   legal: LegalRuntimeConfig;
+  communication: CommunicationRuntimeConfig;
   revenueCat: RevenueCatRuntimeConfig;
   livekit: LiveKitRuntimeConfig;
 };
@@ -40,6 +47,9 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 
 const normalizeRuntimeEnvironment = (value: unknown): RuntimeEnvironment => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
+);
+const normalizeBoolean = (value: unknown) => ["1", "true", "yes", "on"].includes(
+  normalizeText(value).toLowerCase(),
 );
 
 const normalizeAllowlist = (value: unknown) =>
@@ -70,6 +80,7 @@ export function getRuntimeConfig(): RuntimeConfig {
   const legalExtra = isPlainObject(runtimeExtra.legal) ? runtimeExtra.legal : {};
   const revenueCatExtra = isPlainObject(runtimeExtra.revenueCat) ? runtimeExtra.revenueCat : {};
   const liveKitExtra = isPlainObject(runtimeExtra.livekit) ? runtimeExtra.livekit : {};
+  const communicationExtra = isPlainObject(runtimeExtra.communication) ? runtimeExtra.communication : {};
 
   cachedConfig = {
     supabaseUrl: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_URL || runtimeExtra.supabaseUrl),
@@ -103,6 +114,14 @@ export function getRuntimeConfig(): RuntimeConfig {
         process.env.EXPO_PUBLIC_SUPPORT_EMAIL || legalExtra.supportEmail,
       ),
     },
+    communication: {
+      iosNativeCallsEnabled: normalizeBoolean(
+        process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED || communicationExtra.iosNativeCallsEnabled,
+      ),
+      iosOrdinaryPushEnabled: normalizeBoolean(
+        process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED || communicationExtra.iosOrdinaryPushEnabled,
+      ),
+    },
     revenueCat: {
       androidDebugPublicSdkKey: normalizeText(
         process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV || revenueCatExtra.androidDebugPublicSdkKey,
@@ -112,6 +131,9 @@ export function getRuntimeConfig(): RuntimeConfig {
       ),
       iosPublicSdkKey: normalizeText(
         process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY || revenueCatExtra.iosPublicSdkKey,
+      ),
+      appStorePurchasesEnabled: normalizeBoolean(
+        process.env.EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED || revenueCatExtra.appStorePurchasesEnabled,
       ),
     },
     livekit: {
