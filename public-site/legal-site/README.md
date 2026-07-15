@@ -33,6 +33,16 @@ Android App Links association:
 - Android App Links closure for `chillywoodstream.com` passed on July 6, 2026: the hosted URL returns HTTPS 200 JSON, Play Console Deep links for Google Play internal versionCode `80` showed `All links working`, and Android 16 Play-installed device verification reported `chillywoodstream.com: verified`.
 - Future App Links manifest changes require a new native Google Play Android build; OTA alone cannot close Play Console deep-link association warnings.
 
+iOS Universal Links association:
+
+- Canonical source: `public-site/legal-site/apple-app-site-association` (intentionally extensionless).
+- Deployable output: `public-site/legal-site/site/.well-known/apple-app-site-association`.
+- Hosted URL: `https://chillywoodstream.com/.well-known/apple-app-site-association`.
+- Cloudflare Pages headers source: `public-site/legal-site/_headers`; the build copies it to `site/_headers` and sets the exact association path to `Content-Type: application/json`.
+- Run `npm run legal-site:build` followed by `npm run guard:apple-app-site-association` before deployment. The guard requires Apple application identifier `CU7536UQK9.com.chillywood.mobile`, every approved auth/content route, scoped descendant matching only, byte-identical generated output, and no repository redirect rule for the association path.
+- Repository readiness does not prove production hosting. Production proof still requires the exact hosted path to return HTTPS 200 directly, without a redirect, with `application/json`, and with the deployed body matching the canonical source.
+- AASA or associated-domain entitlement changes require a new signed iOS build for installed-device verification; an OTA alone is not proof of Universal Links association.
+
 Preferred production mapping after DNS/hosting setup:
 
 - `https://chillywoodstream.com/terms`

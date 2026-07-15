@@ -4,6 +4,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, Linking, Modal, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
+import {
+  APPLICATION_LEGAL_PATHS,
+  isCreatorReplayApplicationLink,
+  parseApplicationLink,
+  resolveApplicationRouteByKind,
+} from "../_lib/appLinks";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
 import { REMOTE_CONFIG_KEYS } from "../_lib/featureFlags";
 import {
@@ -57,61 +63,16 @@ import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
 import InterstitialAdController from "../components/ads/InterstitialController";
 
-const PUBLIC_LEGAL_PATHS = new Set([
-  "/privacy",
-  "/terms",
-  "/account-deletion",
-  "/support",
-  "/community-guidelines",
-  "/creator-rules",
-  "/copyright",
-  "/support-policy",
-  "/premium-terms",
-  "/live-rules",
-  "/law-enforcement",
-  "/moderation-policy",
-  "/creator-monetization",
-  "/copyright-report",
-]);
+const PUBLIC_LEGAL_PATHS = new Set<string>(APPLICATION_LEGAL_PATHS);
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
 
-const normalizePublicLegalRoutePath = (value?: string | null) => {
-  const normalized = String(value ?? "").trim().toLowerCase().replace(/\/+$/u, "");
-  if (!normalized) return null;
-
-  const candidate = normalized.startsWith("/") ? normalized : `/${normalized}`;
-  return PUBLIC_LEGAL_PATHS.has(candidate) ? candidate : null;
-};
-
 const getPublicLegalRouteFromUrl = (url: string | null) => {
-  if (!url) return null;
-
-  try {
-    const parsedUrl = new URL(url);
-    const isAppLink = parsedUrl.protocol === "chillywoodmobile:";
-    const isWebLink = (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:")
-      && parsedUrl.hostname === "chillywoodstream.com";
-    if (!isAppLink && !isWebLink) return null;
-
-    const params = getUrlSearchParamsWithFragment(parsedUrl);
-    if (hasAuthLinkLikeParams(Object.fromEntries(params.entries()))) return null;
-
-    const hostRoute = isAppLink ? normalizePublicLegalRoutePath(parsedUrl.hostname) : null;
-    const pathRoute = normalizePublicLegalRoutePath(parsedUrl.pathname);
-
-    return hostRoute ?? pathRoute;
-  } catch {
-    return null;
-  }
+  const parsed = parseApplicationLink(url);
+  return parsed?.kind === "legal" ? parsed.pathname : null;
 };
 
-const isCreatorReplayPlayerDeepLink = (url?: string | null) => {
-  const normalized = String(url ?? "").trim().toLowerCase();
-  if (!normalized) return false;
-
-  return normalized.includes("://player/replay/") || normalized.includes(":///player/replay/");
-};
+const isCreatorReplayPlayerDeepLink = (url?: string | null) => isCreatorReplayApplicationLink(url);
 
 const hasAuthLinkLikeParams = (params: Record<string, unknown>) => {
   const type = String(params.type ?? "").trim().toLowerCase();
@@ -178,155 +139,13 @@ const sanitizeRouteAnalyticsParams = (pathname: string, params: Record<string, u
   return sanitized;
 };
 
-const getUrlSearchParamsWithFragment = (url: URL) => {
-  const params = new URLSearchParams(url.search);
-  const fragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+const getPasswordRecoveryRouteFromUrl = (url: string | null) => (
+  resolveApplicationRouteByKind(url, "password_reset")
+);
 
-  if (fragment) {
-    const hashParams = new URLSearchParams(fragment);
-    hashParams.forEach((value, key) => {
-      if (!params.has(key)) {
-        params.set(key, value);
-      }
-    });
-  }
-
-  return params;
-};
-
-const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
-  if (!url) return null;
-
-  try {
-    const parsedUrl = new URL(url);
-    const isSupabaseDeepLink = parsedUrl.protocol === "chillywoodmobile:"
-      || parsedUrl.protocol === "https:"
-      || parsedUrl.protocol === "http:";
-    if (!isSupabaseDeepLink) return null;
-
-    const normalizedHost = parsedUrl.hostname.toLowerCase();
-    const normalizedPath = parsedUrl.pathname.toLowerCase().replace(/\/+$/u, "");
-    const params = getUrlSearchParamsWithFragment(parsedUrl);
-
-    const type = String(params.get("type") ?? "").trim().toLowerCase();
-    const flow = String(params.get("flow") ?? "").trim().toLowerCase();
-    const hasRecoveryType = type === "recovery" || type === "recover" || flow === "recovery" || flow === "recover";
-    const isRecoveryPath = (
-      normalizedPath.includes("recovery")
-      || normalizedPath.includes("reset-password")
-      || normalizedPath.endsWith("/recovery")
-      || normalizedPath.endsWith("/auth/reset-password")
-      || normalizedHost === "reset-password"
-    );
-    const hasRecoveryTokens = params.has("access_token") && params.has("refresh_token");
-    const isResetPasswordPath = normalizedHost === "reset-password"
-      || (
-        normalizedHost === "chillywoodstream.com"
-        && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
-      )
-      || normalizedPath === "/reset-password"
-      || normalizedPath === "/auth/reset-password";
-
-    const appearsToBeRecoveryLink = hasRecoveryType
-      || isRecoveryPath
-      || hasRecoveryTokens;
-
-    if (!appearsToBeRecoveryLink && !isResetPasswordPath) return null;
-
-    const query = params.toString();
-    return query ? `/reset-password?${query}` : "/reset-password";
-  } catch {
-    return null;
-  }
-};
-
-const getAuthCallbackRouteFromUrl = (url: string | null) => {
-  if (!url) return null;
-
-  try {
-    const parsedUrl = new URL(url);
-    const isSupabaseDeepLink = parsedUrl.protocol === "chillywoodmobile:"
-      || parsedUrl.protocol === "https:"
-      || parsedUrl.protocol === "http:";
-    if (!isSupabaseDeepLink) return null;
-
-    const normalizedHost = parsedUrl.hostname.toLowerCase();
-    const normalizedPath = parsedUrl.pathname.toLowerCase().replace(/\/+$/u, "");
-    const params = getUrlSearchParamsWithFragment(parsedUrl);
-
-    const callbackType = String(params.get("type") ?? "").trim().toLowerCase();
-    const callbackFlow = String(params.get("flow") ?? "").trim().toLowerCase();
-    const hasAuthData = params.has("code")
-      || params.has("token")
-      || params.has("token_hash")
-      || (params.has("access_token") && params.has("refresh_token"));
-    if (
-      callbackType === "recovery"
-      || callbackType === "recover"
-      || callbackFlow === "recovery"
-      || callbackFlow === "recover"
-    ) {
-      return null;
-    }
-
-    const isResetPasswordPath = normalizedHost === "reset-password"
-      || (
-        normalizedHost === "chillywoodstream.com"
-        && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
-      )
-      || normalizedPath === "/reset-password"
-      || normalizedPath === "/auth/reset-password";
-    if (isResetPasswordPath) return null;
-
-    const hasKnownAuthType = [
-      "signup",
-      "email",
-      "email_change",
-      "invite",
-      "magiclink",
-      "reauthentication",
-    ].includes(callbackType);
-
-    const hasAuthCallbackParam = [
-      "code",
-      "token",
-      "type",
-      "error",
-      "error_code",
-      "error_description",
-      "access_token",
-      "refresh_token",
-      "token_hash",
-      "confirmation_token",
-      "recovery_token",
-    ].some((key) => params.has(key));
-
-    const hasConfirmPath =
-      normalizedPath === "/confirm"
-      || normalizedPath === "/verify"
-      || normalizedPath.endsWith("/verify")
-      || normalizedPath === "/v1/verify"
-      || normalizedPath.endsWith("/v1/verify")
-      || normalizedPath === "/auth"
-      || (normalizedHost === "auth" && (normalizedPath === "" || normalizedPath === "/" || normalizedPath === "/callback"))
-      || normalizedPath === "/callback"
-      || normalizedPath === "/auth-callback"
-      || normalizedHost === "auth-callback"
-      || normalizedHost === "callback"
-      || normalizedHost === "verify"
-      || normalizedPath === "/auth/verify"
-      || normalizedPath === "/auth/v1/verify";
-
-    const isLikelyAuthCallback = hasKnownAuthType || hasAuthCallbackParam || hasConfirmPath;
-    const appearsToBeAuthCallback = isLikelyAuthCallback || hasAuthData;
-    if (!appearsToBeAuthCallback) return null;
-
-    const query = params.toString();
-    return query ? `/auth-callback?${query}` : "/auth-callback";
-  } catch {
-    return null;
-  }
-};
+const getAuthCallbackRouteFromUrl = (url: string | null) => (
+  resolveApplicationRouteByKind(url, "auth_callback")
+);
 
 function RouteAnalyticsBridge() {
   const pathname = usePathname();

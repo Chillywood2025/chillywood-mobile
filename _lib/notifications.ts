@@ -27,6 +27,7 @@ import {
   CHILLY_CHAT_MISSED_CALL_CHANNEL_ID,
   CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID,
 } from "./chillyChatCallSoundAssets";
+import { resolveApplicationRoute } from "./appLinks";
 
 export const NOTIFICATIONS_TABLE = "notifications";
 export const EVENT_REMINDERS_TABLE = "event_reminders";
@@ -2068,31 +2069,7 @@ export async function revokeCurrentPushInstall(): Promise<PushRegistrationState>
   };
 }
 
-const normalizeNotificationPath = (value: unknown) => {
-  const raw = normalizeText(value);
-  if (!raw) return null;
-  const path = raw.startsWith("chillywoodmobile://")
-    ? raw.replace(/^chillywoodmobile:\/\//u, "/")
-    : raw;
-  if (
-    path === "/chat"
-    || path === "/settings"
-    || path === "/subscribe"
-    || path.startsWith("/channel-studio")
-    || path.startsWith("/spectate/")
-    || path.startsWith("/channel/")
-    || path.startsWith("/channel-subscription/")
-    || path.startsWith("/profile/")
-    || path.startsWith("/player/")
-    || path.startsWith("/watch-party/")
-    || path.startsWith("/vip-pass/")
-    || path.startsWith("/event/")
-    || path.startsWith("/chat/")
-  ) {
-    return path;
-  }
-  return null;
-};
+const normalizeNotificationPath = (value: unknown) => resolveApplicationRoute(value);
 
 export const resolveNotificationPath = (value: unknown) => normalizeNotificationPath(value);
 
