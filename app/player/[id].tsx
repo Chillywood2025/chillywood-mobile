@@ -2,7 +2,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
-import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
+import { Audio, ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -21,6 +21,7 @@ import {
     Keyboard,
     KeyboardAvoidingView,
     LayoutAnimation,
+    Linking,
     PanResponder,
     Platform,
     ScrollView,
@@ -1185,6 +1186,10 @@ export default function PlayerScreen() {
   const [partyCommentDraft, setPartyCommentDraft] = useState("");
   const [partyCommentSending, setPartyCommentSending] = useState(false);
   const [watchPartyCameraRequestError, setWatchPartyCameraRequestError] = useState("");
+  const [watchPartyLocalMediaIntent, setWatchPartyLocalMediaIntent] = useState(false);
+  const [watchPartyLocalMediaPermissionBusy, setWatchPartyLocalMediaPermissionBusy] = useState(false);
+  const [watchPartyCameraPermissionGranted, setWatchPartyCameraPermissionGranted] = useState(false);
+  const [watchPartyMicrophonePermissionGranted, setWatchPartyMicrophonePermissionGranted] = useState(false);
   const [watchPartySelfMuteBusy, setWatchPartySelfMuteBusy] = useState(false);
   const [watchPartySelfMuteError, setWatchPartySelfMuteError] = useState("");
   const [watchPartyMenuOpen, setWatchPartyMenuOpen] = useState(false);
@@ -1249,7 +1254,14 @@ export default function PlayerScreen() {
   const partyAvatarUrlRef = useRef("");
   const partyUserIdRef = useRef("");
   const partyMembershipMapRef = useRef<Record<string, WatchPartyRoomMembership>>({});
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [cameraPermission, requestCameraPermission, getCameraPermission] = useCameraPermissions();
+
+  useEffect(() => {
+    setWatchPartyLocalMediaIntent(false);
+    setWatchPartyLocalMediaPermissionBusy(false);
+    setWatchPartyCameraPermissionGranted(false);
+    setWatchPartyMicrophonePermissionGranted(false);
+  }, [partyId]);
 
   useEffect(() => {
     partyParticipantsRef.current = partyParticipants;
@@ -2243,6 +2255,10 @@ export default function PlayerScreen() {
       setPartyCommentDraft((current) => (current ? "" : current));
       setPartyCommentSending((current) => (current ? false : current));
       setWatchPartyCameraRequestError((current) => (current ? "" : current));
+      setWatchPartyLocalMediaIntent((current) => (current ? false : current));
+      setWatchPartyLocalMediaPermissionBusy((current) => (current ? false : current));
+      setWatchPartyCameraPermissionGranted((current) => (current ? false : current));
+      setWatchPartyMicrophonePermissionGranted((current) => (current ? false : current));
       setWatchPartySelfMuteBusy((current) => (current ? false : current));
       setWatchPartySelfMuteError((current) => (current ? "" : current));
       setPartyOverlayMessages((current) => (current.length === 0 ? current : []));
@@ -3184,16 +3200,6 @@ export default function PlayerScreen() {
       if (upNextIntervalRef.current) clearInterval(upNextIntervalRef.current);
     };
   }, []);
-
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    if (!inWatchParty) return;
-    const currentTrackedUserId = String(partyUserId || "").trim() || "anon";
-    if (!currentTrackedUserId || currentTrackedUserId === "anon") return;
-    if (cameraPermission?.granted) return;
-    if (cameraPermission && !cameraPermission.canAskAgain) return;
-    requestCameraPermission().catch(() => {});
-  }, [inWatchParty, partyUserId, cameraPermission, requestCameraPermission]);
 
   useEffect(() => {
     shouldAutoplayNextRef.current = false;
@@ -5733,6 +5739,110 @@ export default function PlayerScreen() {
   // Gate LiveKit/video only on real AppState backgrounding so camera bubbles
   // keep their room connection while users type comments or system UI appears.
   const playerMediaIsInteractive = playerAppState === "active";
+
+  const requestWatchPartyLocalMediaPermissions = useCallback(async () => {
+    if (Platform.OS === "web") {
+      setWatchPartyCameraRequestError("Camera and microphone publishing require the installed mobile app.");
+      return false;
+    }
+    if (watchPartyLocalMediaPermissionBusy) return false;
+
+    setWatchPartyLocalMediaPermissionBusy(true);
+    setWatchPartyCameraRequestError("");
+    try {
+      const currentCameraPermission = await getCameraPermission().catch(() => cameraPermission ?? null);
+      const cameraResult = currentCameraPermission?.granted
+        ? currentCameraPermission
+        : currentCameraPermission?.canAskAgain === false
+          ? currentCameraPermission
+          : await requestCameraPermission().catch(() => currentCameraPermission ?? null);
+
+      const currentMicrophonePermission = await Audio.getPermissionsAsync().catch(() => null);
+      const microphoneResult = currentMicrophonePermission?.granted
+        ? currentMicrophonePermission
+        : currentMicrophonePermission?.canAskAgain === false
+          ? currentMicrophonePermission
+          : await Audio.requestPermissionsAsync().catch(() => currentMicrophonePermission);
+
+      const cameraGranted = cameraResult?.granted === true;
+      const microphoneGranted = microphoneResult?.granted === true;
+      setWatchPartyCameraPermissionGranted(cameraGranted);
+      setWatchPartyMicrophonePermissionGranted(microphoneGranted);
+
+      if (cameraGranted && microphoneGranted) {
+        setWatchPartyLocalMediaIntent(true);
+        return true;
+      }
+
+      setWatchPartyLocalMediaIntent(false);
+      const needsSettings = cameraResult?.canAskAgain === false || microphoneResult?.canAskAgain === false;
+      const missingLabels = [
+        cameraGranted ? "" : "camera",
+        microphoneGranted ? "" : "microphone",
+      ].filter(Boolean).join(" and ");
+      setWatchPartyCameraRequestError(
+        needsSettings
+          ? `Enable ${missingLabels} access in Settings before starting room media.`
+          : `${missingLabels || "Camera and microphone"} permission is required before room media starts.`,
+      );
+      Alert.alert(
+        "Camera and microphone stay off",
+        needsSettings
+          ? `Open Settings to allow ${missingLabels} access, then return and tap Start Camera & Mic again.`
+          : `Chi'llywood only requests camera and microphone access after you choose Start Camera & Mic. Try again when ready.`,
+        needsSettings
+          ? [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open Settings", onPress: () => { void Linking.openSettings(); } },
+            ]
+          : [{ text: "OK" }],
+      );
+      return false;
+    } finally {
+      setWatchPartyLocalMediaPermissionBusy(false);
+    }
+  }, [
+    cameraPermission,
+    getCameraPermission,
+    requestCameraPermission,
+    watchPartyLocalMediaPermissionBusy,
+  ]);
+
+  const onToggleWatchPartyLocalMedia = useCallback(async () => {
+    if (watchPartyLocalMediaIntent) {
+      setWatchPartyLocalMediaIntent(false);
+      setWatchPartyCameraRequestError("");
+      showLivePresenceEvent("Camera and microphone stopped");
+      return false;
+    }
+    const enabled = await requestWatchPartyLocalMediaPermissions();
+    if (enabled) showLivePresenceEvent("Camera and microphone ready");
+    return enabled;
+  }, [requestWatchPartyLocalMediaPermissions, showLivePresenceEvent, watchPartyLocalMediaIntent]);
+
+  useEffect(() => {
+    if (!watchPartyLocalMediaIntent || playerAppState !== "active") return undefined;
+    let cancelled = false;
+
+    Promise.all([
+      getCameraPermission().catch(() => null),
+      Audio.getPermissionsAsync().catch(() => null),
+    ]).then(([nextCameraPermission, nextMicrophonePermission]) => {
+      if (cancelled) return;
+      const cameraGranted = nextCameraPermission?.granted === true;
+      const microphoneGranted = nextMicrophonePermission?.granted === true;
+      setWatchPartyCameraPermissionGranted(cameraGranted);
+      setWatchPartyMicrophonePermissionGranted(microphoneGranted);
+      if (!cameraGranted || !microphoneGranted) {
+        setWatchPartyLocalMediaIntent(false);
+        setWatchPartyCameraRequestError("Camera or microphone access changed. Tap Start Camera & Mic to review permissions.");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getCameraPermission, playerAppState, watchPartyLocalMediaIntent]);
   const watchPartyLiveKitJoinContractExpiryState = useMemo(
     () => watchPartyLiveKitJoinContract
       ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitJoinContract.participantToken)
@@ -5854,6 +5964,15 @@ export default function PlayerScreen() {
     && currentWatchPartyParticipant
     && currentWatchPartyParticipantCanSpeak
   );
+  const shouldRenderSharedPlayerLocalMediaControl = !!(
+    isSharedPartyPlayback
+    && currentWatchPartyParticipant
+    && (
+      watchPartyLocalMediaIntent
+      || currentWatchPartyHostAuthority.isHost
+      || currentWatchPartyParticipantCanSpeak
+    )
+  );
   const onPressSharedPlayerRequestCamera = useCallback(async (source: "dock" | "bubble" = "dock") => {
     if (!isSharedPartyPlayback) return;
     if (!currentWatchPartyParticipant) {
@@ -5874,6 +5993,8 @@ export default function PlayerScreen() {
     }
 
     try {
+      const mediaReady = await requestWatchPartyLocalMediaPermissions();
+      if (!mediaReady) return;
       await requestPartySeat(currentWatchPartyParticipant.id);
       setWatchPartyCameraRequestError("");
       showLivePresenceEvent("Camera request sent. Waiting for host.");
@@ -5901,6 +6022,7 @@ export default function PlayerScreen() {
     isSharedPartyPlayback,
     partyId,
     requestPartySeat,
+    requestWatchPartyLocalMediaPermissions,
     showLivePresenceEvent,
     trackedUserId,
   ]);
@@ -6023,12 +6145,20 @@ export default function PlayerScreen() {
   const watchPartyLiveKitCanPublish = watchPartyLiveKitContractMatchesDesired
     && !!watchPartyLiveKitJoinContract?.requestedGrants.canPublish
     && watchPartyLiveKitJoinContract.participantRole !== "viewer";
-  const publishWatchPartyLiveKitAudio = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
-  const publishWatchPartyLiveKitVideo = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
+  const publishWatchPartyLiveKitAudio = watchPartyLocalMediaIntent
+    && playerMediaIsInteractive
+    && watchPartyMicrophonePermissionGranted
+    && watchPartyLiveKitCanPublish
+    && !currentWatchPartyParticipantMuted;
+  const publishWatchPartyLiveKitVideo = watchPartyLocalMediaIntent
+    && playerMediaIsInteractive
+    && watchPartyCameraPermissionGranted
+    && watchPartyLiveKitCanPublish
+    && !currentWatchPartyParticipantMuted;
   const watchPartyLiveKitLocalParticipantFallback = (
     Platform.OS !== "web"
     && publishWatchPartyLiveKitVideo
-    && !!cameraPermission?.granted
+    && watchPartyCameraPermissionGranted
   ) ? (
     <CameraView style={styles.participantAvatarImage} facing="front" mute mirror />
   ) : null;
@@ -8109,8 +8239,9 @@ export default function PlayerScreen() {
     const showLocalCameraPreview = (
       Platform.OS !== "web"
       && isCurrentUser
-      && !!cameraPermission?.granted
       && playerMediaIsInteractive
+      && watchPartyLocalMediaIntent
+      && watchPartyCameraPermissionGranted
       && !shouldRenderWatchPartyLiveKit
     );
     const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
@@ -8661,14 +8792,43 @@ export default function PlayerScreen() {
                   activeOpacity={0.88}
                   testID={currentWatchPartyViewerRequestPending ? "shared-player-request-camera-pending" : "shared-player-request-camera-button"}
                   accessibilityRole="button"
-                  accessibilityLabel={currentWatchPartyViewerRequestPending ? "Camera request pending" : "Request camera"}
+                  accessibilityLabel={currentWatchPartyViewerRequestPending ? "Camera and microphone request pending" : "Request camera and microphone"}
                   accessibilityState={{ disabled: currentWatchPartyViewerRequestPending }}
                 >
                   <Text style={[
                     styles.watchPartyDockActionText,
                     currentWatchPartyViewerRequestPending && styles.watchPartyDockActionTextActive,
                   ]}>
-                    {currentWatchPartyViewerRequestPending ? "Request pending" : "Request Camera"}
+                    {currentWatchPartyViewerRequestPending ? "Request pending" : "Request Camera & Mic"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              {shouldRenderSharedPlayerLocalMediaControl ? (
+                <TouchableOpacity
+                  style={[
+                    styles.watchPartyDockActionBtn,
+                    watchPartyLocalMediaIntent && styles.watchPartyDockActionBtnActive,
+                    watchPartyLocalMediaPermissionBusy && styles.secondaryBtnDisabled,
+                  ]}
+                  onPress={() => {
+                    void onToggleWatchPartyLocalMedia();
+                  }}
+                  disabled={watchPartyLocalMediaPermissionBusy}
+                  activeOpacity={0.88}
+                  testID={watchPartyLocalMediaIntent ? "shared-player-stop-local-media" : "shared-player-start-local-media"}
+                  accessibilityRole="button"
+                  accessibilityLabel={watchPartyLocalMediaIntent ? "Stop camera and microphone" : "Start camera and microphone"}
+                  accessibilityState={{ selected: watchPartyLocalMediaIntent, disabled: watchPartyLocalMediaPermissionBusy }}
+                >
+                  <Text style={[
+                    styles.watchPartyDockActionText,
+                    watchPartyLocalMediaIntent && styles.watchPartyDockActionTextActive,
+                  ]}>
+                    {watchPartyLocalMediaPermissionBusy
+                      ? "Checking media..."
+                      : watchPartyLocalMediaIntent
+                        ? "Stop Camera & Mic"
+                        : "Start Camera & Mic"}
                   </Text>
                 </TouchableOpacity>
               ) : null}

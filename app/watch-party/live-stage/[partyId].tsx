@@ -1,6 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ConnectionState, Room, Track } from "livekit-client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -260,8 +259,6 @@ type StagePresenceEntry = {
 };
 
 const SIM_REACTIONS = ["👍", "🔥", "👏", "❤️", "✨", "😂"];
-const MIC_SPEAKING_THRESHOLD_DB = -52;
-const MIC_SPEAKING_RELEASE_MS = 420;
 const STAGE_HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
 const STAGE_OVERLAY_AUTO_HIDE_MILLIS = 10_000;
 const STAGE_CONTROL_HIT_SLOP = { top: 14, bottom: 14, left: 18, right: 18 } as const;
@@ -961,6 +958,7 @@ export default function WatchPartyLiveStageScreen({
   const [stageParticipantActionBusyId, setStageParticipantActionBusyId] = useState("");
   const [stageSelfMuteBusy, setStageSelfMuteBusy] = useState(false);
   const [stageSelfMuteError, setStageSelfMuteError] = useState("");
+  const [stageLocalMediaIntent, setStageLocalMediaIntent] = useState(false);
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
@@ -990,9 +988,7 @@ export default function WatchPartyLiveStageScreen({
   const stageOverlayLastInteractionAtRef = useRef(Date.now());
   const stageOverlayAutoHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageOverlayFinalizeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const micRecordingRef = useRef<Audio.Recording | null>(null);
-  const micSpeakingRef = useRef(false);
-  const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageLocalMediaIntentRef = useRef(false);
   const liveKitStageContractRefreshKeyRef = useRef("");
   const liveKitStageAuthorityRetryKeyRef = useRef("");
   const liveKitStageAuthorityRetryCountRef = useRef<Record<string, number>>({});
@@ -1018,6 +1014,10 @@ export default function WatchPartyLiveStageScreen({
       active = false;
     };
   }, [partyId]);
+
+  useEffect(() => {
+    stageLocalMediaIntentRef.current = stageLocalMediaIntent;
+  }, [stageLocalMediaIntent]);
 
   useEffect(() => {
     return () => {
@@ -1091,6 +1091,7 @@ export default function WatchPartyLiveStageScreen({
     setSeatRequestState(emptyLiveStageSeatRequestState());
     setStageSelfMuteBusy(false);
     setStageSelfMuteError("");
+    setStageLocalMediaIntent(false);
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -1475,8 +1476,8 @@ export default function WatchPartyLiveStageScreen({
           role: sessionIsHost ? "host" : sessionMembership?.role ?? "viewer",
           stageRole: sessionMembership?.stageRole ?? (sessionIsHost ? "host" : undefined),
           canSpeak: sessionMembership?.canSpeak ?? (sessionIsHost ? true : undefined),
-          cameraEnabled: sessionCanPublishMedia && !!profileCameraPreviewUrl,
-          micEnabled: sessionCanPublishMedia,
+          cameraEnabled: stageLocalMediaIntentRef.current && sessionCanPublishMedia && !!profileCameraPreviewUrl,
+          micEnabled: stageLocalMediaIntentRef.current && sessionCanPublishMedia,
           displayName: username,
           avatarUrl: profileAvatarUrl,
           cameraPreviewUrl: profileCameraPreviewUrl,
@@ -1641,8 +1642,8 @@ export default function WatchPartyLiveStageScreen({
             role: heartbeatIsHost ? "host" : heartbeatMembership?.role ?? "viewer",
             stageRole: heartbeatMembership?.stageRole ?? (heartbeatIsHost ? "host" : undefined),
             canSpeak: heartbeatMembership?.canSpeak ?? (heartbeatIsHost ? true : undefined),
-            cameraEnabled: heartbeatCanPublishMedia && !!profileCameraPreviewUrl,
-            micEnabled: heartbeatCanPublishMedia,
+            cameraEnabled: stageLocalMediaIntentRef.current && heartbeatCanPublishMedia && !!profileCameraPreviewUrl,
+            micEnabled: stageLocalMediaIntentRef.current && heartbeatCanPublishMedia,
             displayName: username,
             avatarUrl: profileAvatarUrl,
             cameraPreviewUrl: profileCameraPreviewUrl,
@@ -1745,8 +1746,8 @@ export default function WatchPartyLiveStageScreen({
           role: currentIsHost ? "host" : currentMembership?.role ?? "viewer",
           stageRole: currentMembership?.stageRole ?? (currentIsHost ? "host" : undefined),
           canSpeak: currentMembership?.canSpeak ?? (currentIsHost ? true : undefined),
-          cameraEnabled: currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
-          micEnabled: currentCanPublishMedia,
+          cameraEnabled: stageLocalMediaIntentRef.current && currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
+          micEnabled: stageLocalMediaIntentRef.current && currentCanPublishMedia,
           displayName: myUsername || "You",
           cameraPreviewUrl: myCameraPreviewUrlRef.current,
           membershipState: "active",
@@ -1821,8 +1822,9 @@ export default function WatchPartyLiveStageScreen({
     if (!shouldRenderLegacyStageRtc || !shouldAllowLegacyStageRtcModule) return undefined;
     return getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
   }, [shouldAllowLegacyStageRtcModule, shouldRenderLegacyStageRtc]);
-  const legacyStageCanPublishLocalMedia = isHost
-    || canStageMembershipPublishMedia(membershipMapRef.current[trackedUserId]);
+  const legacyStageCanPublishLocalMedia = stageLocalMediaIntent
+    && mediaAppState === "active"
+    && (isHost || canStageMembershipPublishMedia(membershipMapRef.current[trackedUserId]));
   const {
     localStreamURL,
     participants: stageMediaParticipants,
@@ -2240,27 +2242,6 @@ export default function WatchPartyLiveStageScreen({
     return true;
   }, [isHost, myUserId, partyId, refreshStageSnapshot]);
 
-  const emitParticipantSpeaking = useCallback((participantId: string, isSpeaking: boolean) => {
-    const channel = channelRef.current;
-    if (!channel || !participantId) return;
-    channel
-      .send({ type: "broadcast", event: "participant:speaking", payload: { participantId, isSpeaking } })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => registerActiveMediaSessionStopper(async (reason) => {
-    if (reason === "app_background" || reason === "sign_out" || reason === "teardown") {
-      const recording = micRecordingRef.current;
-      micRecordingRef.current = null;
-      if (recording) await recording.stopAndUnloadAsync().catch(() => undefined);
-      const currentUserId = String(myUserId || "").trim();
-      if (currentUserId && micSpeakingRef.current) {
-        micSpeakingRef.current = false;
-        emitParticipantSpeaking(currentUserId, false);
-      }
-    }
-  }), [emitParticipantSpeaking, myUserId]);
-
   const broadcastSeatRequest = useCallback((participantId: string, pending: boolean, requestVersion?: string) => {
     const channel = channelRef.current;
     if (!channel || !participantId) return;
@@ -2328,6 +2309,7 @@ export default function WatchPartyLiveStageScreen({
       }
     }
 
+    setStageLocalMediaIntent(true);
     revealStageOverlay();
     const requestVersion = createSeatRequestVersion();
     setSeatRequestState((prev) => applyLiveStageSeatRequestEvent(prev, {
@@ -2345,148 +2327,6 @@ export default function WatchPartyLiveStageScreen({
     revealStageOverlay,
     refreshStageSnapshot,
     seatRequestsById,
-  ]);
-
-  useEffect(() => {
-    if (
-      !canOwnActiveStageSurface
-      || shouldRenderLiveKitStage
-      || liveSurface !== "stage"
-      || mediaAppState !== "active"
-    ) return;
-    debugLiveStage("mic setup start");
-    const currentUserId = String(myUserId || "").trim();
-    const currentMembership = membershipMapRef.current[currentUserId];
-    const currentStageState = participantStateById[currentUserId];
-    const mayPublishLegacyStageAudio = isHost
-      || canStageMembershipPublishMedia(currentMembership)
-      || currentStageState?.role === "speaker";
-    if (!currentUserId || !mayPublishLegacyStageAudio) return;
-
-    let cancelled = false;
-
-    const startMicMetering = async () => {
-      try {
-        const permission = await Audio.requestPermissionsAsync();
-        debugLiveStage("mic permission", { granted: permission.granted, status: permission.status, canAskAgain: permission.canAskAgain });
-        if (!permission.granted || cancelled) return;
-
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-        });
-
-        debugLiveStage("mic recording created");
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync({
-          isMeteringEnabled: true,
-          android: {
-            extension: ".m4a",
-            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-            audioEncoder: Audio.AndroidAudioEncoder.AAC,
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 64000,
-          },
-          ios: {
-            extension: ".caf",
-            outputFormat: Audio.IOSOutputFormat.APPLELOSSLESS,
-            audioQuality: Audio.IOSAudioQuality.MEDIUM,
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 64000,
-            linearPCMBitDepth: 16,
-            linearPCMIsBigEndian: false,
-            linearPCMIsFloat: false,
-          },
-          web: {
-            mimeType: "audio/webm",
-            bitsPerSecond: 64000,
-          },
-        });
-        debugLiveStage("mic prepare complete");
-        debugLiveStage("mic start async");
-        await recording.startAsync();
-        debugLiveStage("mic recording started");
-        recording.setProgressUpdateInterval(220);
-        recording.setOnRecordingStatusUpdate((status) => {
-          debugLiveStage("mic meter", { isRecording: status.isRecording, metering: status.metering });
-          if (!status.isRecording || cancelled) return;
-          const metering = typeof status.metering === "number" ? status.metering : -160;
-          if (!currentUserId) return;
-          const speaking = metering > MIC_SPEAKING_THRESHOLD_DB;
-          if (speaking) {
-            if (micReleaseTimeoutRef.current) {
-              clearTimeout(micReleaseTimeoutRef.current);
-              micReleaseTimeoutRef.current = null;
-            }
-            if (micSpeakingRef.current) return;
-            debugLiveStage("speaking change", {
-              from: micSpeakingRef.current,
-              to: true,
-              metering,
-              threshold: MIC_SPEAKING_THRESHOLD_DB,
-            });
-            micSpeakingRef.current = true;
-            setIsSpeakingById((prev) => ({ ...prev, [currentUserId]: true }));
-            emitParticipantSpeaking(currentUserId, true);
-            return;
-          }
-          if (!micSpeakingRef.current || micReleaseTimeoutRef.current) return;
-          micReleaseTimeoutRef.current = setTimeout(() => {
-            micReleaseTimeoutRef.current = null;
-            if (!micSpeakingRef.current || cancelled) return;
-            debugLiveStage("speaking change", {
-              from: true,
-              to: false,
-              metering,
-              threshold: MIC_SPEAKING_THRESHOLD_DB,
-            });
-            micSpeakingRef.current = false;
-            setIsSpeakingById((prev) => ({ ...prev, [currentUserId]: false }));
-            emitParticipantSpeaking(currentUserId, false);
-          }, MIC_SPEAKING_RELEASE_MS);
-        });
-        if (cancelled) {
-          await recording.stopAndUnloadAsync().catch(() => {});
-          return;
-        }
-        micRecordingRef.current = recording;
-      } catch {
-      }
-    };
-
-    startMicMetering();
-
-    return () => {
-      cancelled = true;
-      if (micReleaseTimeoutRef.current) {
-        clearTimeout(micReleaseTimeoutRef.current);
-        micReleaseTimeoutRef.current = null;
-      }
-      const recording = micRecordingRef.current;
-      micRecordingRef.current = null;
-      if (micSpeakingRef.current && currentUserId) {
-        micSpeakingRef.current = false;
-        setIsSpeakingById((prev) => ({ ...prev, [currentUserId]: false }));
-        emitParticipantSpeaking(currentUserId, false);
-      }
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(() => {});
-      }
-    };
-  }, [
-    canOwnActiveStageSurface,
-    emitParticipantSpeaking,
-    isHost,
-    liveSurface,
-    mediaAppState,
-    myUserId,
-    participantStateById,
-    shouldRenderLiveKitStage,
   ]);
 
   const stageMediaParticipantsByUserId = useMemo(
@@ -2543,13 +2383,15 @@ export default function WatchPartyLiveStageScreen({
     && currentStageParticipantState.role === "listener"
     && !currentStageParticipantState.isRemoved;
   const stageSeatRequestHint = isHost
-    ? "Remote live feeds appear here. Tap a feed to focus it; host controls appear on the active member."
+    ? "Remote live feeds appear here. Your camera and microphone stay off until you tap Start Camera & Mic."
     : currentStageParticipantState.role === "speaker"
-      ? "Your camera seat is active. Your own preview stays out of this remote-feed grid."
+      ? stageLocalMediaIntent
+        ? "Your camera seat and local media are active. Your own preview stays out of this remote-feed grid."
+        : "Your camera seat is ready. Tap Start Camera & Mic when you want to publish."
       : currentStageSeatRequestPending
         ? "Camera request pending. The host can seat you when they review requests."
         : canRequestSeat(currentStageParticipantState)
-          ? "Watching is allowed here when the room is free or your account has the required access. Request camera when you want to join the visible feeds."
+          ? "Watching is allowed here when the room is free or your account has the required access. Request camera and microphone when you want to join the visible feeds."
           : "Watching is allowed here when the room is free or your account has the required access. Camera requests are unavailable for your current role.";
   const liveRoomRoleLabel = isHost ? "Host" : "Viewer";
   const liveRoomModeLabel = isLiveFirstMode ? "Live-First" : branding.watchPartyLabel;
@@ -2626,17 +2468,23 @@ export default function WatchPartyLiveStageScreen({
   const liveKitContractAllowsStagePublish = liveKitJoinContract
     ? currentLiveKitContractMatchesDesiredAuthority && liveKitJoinContract.requestedGrants.canPublish
     : false;
-  const publishLocalStageAudio = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;
-  const publishLocalStageCamera = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;
+  const publishLocalStageAudio = stageLocalMediaIntent
+    && mediaAppState === "active"
+    && liveKitContractAllowsStagePublish
+    && !isCurrentStageParticipantMuted;
+  const publishLocalStageCamera = stageLocalMediaIntent
+    && mediaAppState === "active"
+    && liveKitContractAllowsStagePublish
+    && !isCurrentStageParticipantMuted;
   const currentStageSeatActivating = currentStageParticipantState.role === "speaker"
     && !currentLiveKitContractMatchesDesiredAuthority;
   const stageSeatRequestButtonLabel = currentStageSeatActivating
     ? "Camera seat activating"
     : currentStageParticipantState.role === "speaker"
-      ? "Camera active"
+      ? stageLocalMediaIntent ? "Camera active" : "Camera seat ready"
       : currentStageSeatRequestPending
         ? "Request pending"
-        : "Request camera";
+        : "Request Camera & Mic";
   const stageSeatRequestButtonDisabled = currentStageParticipantState.role === "speaker"
     || currentStageSeatRequestPending
     || !canRequestSeat(currentStageParticipantState);
@@ -2645,6 +2493,15 @@ export default function WatchPartyLiveStageScreen({
     && currentStageParticipantState.role === "speaker"
     && !currentStageParticipantState.isRemoved
   );
+  const shouldRenderStageLocalMediaControl = !!(
+    !currentStageParticipantState.isRemoved
+    && (isHost || currentStageParticipantState.role === "speaker")
+  );
+  const onToggleStageLocalMedia = useCallback(() => {
+    setStageLocalMediaIntent((current) => !current);
+    setStageSelfMuteError("");
+    revealStageOverlay();
+  }, [revealStageOverlay]);
   const onPressStageSelfMute = useCallback(async () => {
     if (!shouldRenderStageSelfMuteControl || stageSelfMuteBusy) return;
     const nextMuted = !isCurrentStageParticipantMuted;
@@ -2768,7 +2625,12 @@ export default function WatchPartyLiveStageScreen({
   const heroMediaParticipant = heroParticipant ? stageMediaParticipantsByUserId[heroParticipant.userId] as CommunicationParticipantView | undefined : undefined;
   const heroParticipantIsCurrentUser = heroParticipant?.userId === currentUserParticipantId;
   const currentUserHasCameraSeat = currentStageParticipantState.role === "host" || currentStageParticipantState.role === "speaker";
-  const showHeroLocalRtcVideo = heroParticipantIsCurrentUser && currentUserHasCameraSeat && !!RTCView && !!localStreamURL;
+  const showHeroLocalRtcVideo = heroParticipantIsCurrentUser
+    && currentUserHasCameraSeat
+    && stageLocalMediaIntent
+    && mediaAppState === "active"
+    && !!RTCView
+    && !!localStreamURL;
   const showHeroRemoteVideo = !heroParticipantIsCurrentUser && !!RTCView && !!heroMediaParticipant?.streamURL;
   const heroParticipantPreviewUri = String(
     heroParticipantIsCurrentUser
@@ -2778,7 +2640,7 @@ export default function WatchPartyLiveStageScreen({
   const showHeroRemoteImage = !showHeroLocalRtcVideo && !showHeroRemoteVideo && !!heroParticipantPreviewUri;
   const heroOwnsLocalFeed = heroParticipantIsCurrentUser;
   const selfHeroFallbackBody = currentStageParticipantState.role === "speaker"
-    ? "Camera seat active"
+    ? stageLocalMediaIntent ? "Camera seat active" : "Camera and microphone off"
     : "Local self view";
   // Keep these concepts separate: actual visual hero controls tile filtering,
   // active/focus controls local emphasis, Featured is styling, and room
@@ -5277,6 +5139,8 @@ export default function WatchPartyLiveStageScreen({
                   requestStageSeat(currentUserParticipantId).catch(() => {});
                 }}
                 testID="live-stage-request-camera-button"
+                accessibilityRole="button"
+                accessibilityLabel="Request camera and microphone on Live Stage"
               >
                 <Text
                   style={[
@@ -5285,6 +5149,27 @@ export default function WatchPartyLiveStageScreen({
                   ]}
                 >
                   {stageSeatRequestButtonLabel}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            {shouldRenderStageLocalMediaControl ? (
+              <TouchableOpacity
+                style={[
+                  styles.stageCommunityRequestButton,
+                  stageLocalMediaIntent && styles.stageSelfHeroToggleActive,
+                ]}
+                activeOpacity={0.84}
+                onPress={onToggleStageLocalMedia}
+                testID={stageLocalMediaIntent ? "live-stage-stop-local-media" : "live-stage-start-local-media"}
+                accessibilityRole="button"
+                accessibilityLabel={stageLocalMediaIntent ? "Stop camera and microphone on Live Stage" : "Start camera and microphone on Live Stage"}
+                accessibilityState={{ selected: stageLocalMediaIntent }}
+              >
+                <Text style={[
+                  styles.stageCommunityRequestButtonText,
+                  stageLocalMediaIntent && styles.stageSelfHeroToggleTextActive,
+                ]}>
+                  {stageLocalMediaIntent ? "Stop Camera & Mic" : "Start Camera & Mic"}
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -5391,7 +5276,13 @@ export default function WatchPartyLiveStageScreen({
                       });
                       const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
                       const currentUserCanShowCameraTile = isHostBubble || isSpeakerRole;
-                      const showLocalRtcPreview = isCurrentUser && currentUserCanShowCameraTile && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
+                      const showLocalRtcPreview = isCurrentUser
+                        && currentUserCanShowCameraTile
+                        && stageLocalMediaIntent
+                        && mediaAppState === "active"
+                        && !!RTCView
+                        && !!localStreamURL
+                        && !heroOwnsLocalFeed;
                       const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL;
                       const shouldUseHybridLiveKitVideo = shouldRenderLiveKitStage && !!liveKitStageSurfaceContract;
                       const bubbleMediaUri = isCurrentUser

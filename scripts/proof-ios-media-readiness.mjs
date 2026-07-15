@@ -122,13 +122,61 @@ const communicationHook = read("hooks/use-communication-room-session.ts");
 const sessionProvider = read("_lib/session.tsx");
 includes(sessionProvider, 'stopActiveMediaSessions("sign_out")', "sign-out media teardown");
 
+const watchPartyRoomRoute = read("app/watch-party/[partyId].tsx");
+[
+  "partyRoomCameraPreviewIntent",
+  'partyRoomAppState === "active"',
+  "onTogglePartyRoomCameraPreview",
+  'testID={partyRoomCameraPreviewIntent ? "watch-party-stop-camera-preview" : "watch-party-start-camera-preview"}',
+  "Camera and mic publishing happen in the shared Player",
+  "cameraEnabled: false",
+  "micEnabled: false",
+].forEach((expected) => includes(watchPartyRoomRoute, expected, "watch-party room explicit media intent"));
+excludes(watchPartyRoomRoute, "Audio.requestPermissionsAsync", "watch-party room automatic microphone permission");
+excludes(watchPartyRoomRoute, "new Audio.Recording", "watch-party room automatic microphone recording");
+excludes(watchPartyRoomRoute, "requestCameraPermission().catch(() => {});", "watch-party room automatic camera permission");
+assert.ok(
+  watchPartyRoomRoute.indexOf("await requestCameraPermission()") > watchPartyRoomRoute.indexOf("const onTogglePartyRoomCameraPreview"),
+  "watch-party room camera permission must remain inside the explicit preview handler",
+);
+
+const sharedPlayerRoute = read("app/player/[id].tsx");
+[
+  "watchPartyLocalMediaIntent",
+  "watchPartyCameraPermissionGranted",
+  "watchPartyMicrophonePermissionGranted",
+  "requestWatchPartyLocalMediaPermissions",
+  "onToggleWatchPartyLocalMedia",
+  'playerAppState !== "active"',
+  'testID={watchPartyLocalMediaIntent ? "shared-player-stop-local-media" : "shared-player-start-local-media"}',
+  "publishWatchPartyLiveKitAudio = watchPartyLocalMediaIntent",
+  "publishWatchPartyLiveKitVideo = watchPartyLocalMediaIntent",
+].forEach((expected) => includes(sharedPlayerRoute, expected, "shared Player explicit LiveKit media intent"));
+excludes(sharedPlayerRoute, "requestCameraPermission().catch(() => {});", "shared Player automatic camera permission");
+const explicitSharedPlayerPermissionStart = sharedPlayerRoute.indexOf("const requestWatchPartyLocalMediaPermissions");
+const explicitSharedPlayerPermissionEnd = sharedPlayerRoute.indexOf("const onToggleWatchPartyLocalMedia", explicitSharedPlayerPermissionStart);
+const microphonePromptIndex = sharedPlayerRoute.indexOf("Audio.requestPermissionsAsync");
+const cameraPromptIndex = sharedPlayerRoute.indexOf("await requestCameraPermission()");
+assert.ok(
+  explicitSharedPlayerPermissionStart >= 0
+    && explicitSharedPlayerPermissionEnd > explicitSharedPlayerPermissionStart
+    && microphonePromptIndex > explicitSharedPlayerPermissionStart
+    && microphonePromptIndex < explicitSharedPlayerPermissionEnd
+    && cameraPromptIndex > explicitSharedPlayerPermissionStart
+    && cameraPromptIndex < explicitSharedPlayerPermissionEnd,
+  "shared Player permission prompts must remain inside the explicit local-media handler",
+);
+
 const stageRoute = read("app/watch-party/live-stage/[partyId].tsx");
 excludes(stageRoute, "useCameraPermissions", "live-stage explicit camera intent");
+excludes(stageRoute, "Audio.requestPermissionsAsync", "live-stage automatic microphone permission");
+excludes(stageRoute, "new Audio.Recording", "live-stage automatic microphone recording");
 [
   'liveSurface !== "stage"',
-  'mediaAppState !== "active"',
-  "mayPublishLegacyStageAudio",
   "legacyStageCanPublishLocalMedia",
+  "stageLocalMediaIntent",
+  'mediaAppState === "active"',
+  'testID={stageLocalMediaIntent ? "live-stage-stop-local-media" : "live-stage-start-local-media"}',
   "connect={shouldConnectRoom}",
   "effectivePublishLocalAudio",
   "effectivePublishLocalCamera",

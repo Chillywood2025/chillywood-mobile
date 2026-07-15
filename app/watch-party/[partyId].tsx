@@ -1,6 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
@@ -28,6 +27,7 @@ import {
     type ImageSourcePropType,
     KeyboardAvoidingView,
     LayoutAnimation,
+    Linking,
     Platform,
     Pressable,
     ScrollView,
@@ -37,7 +37,8 @@ import {
     TextInput,
     TouchableOpacity,
     UIManager,
-    View
+    View,
+    type AppStateStatus,
 } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -203,13 +204,6 @@ type LocalMsg = {
   attachments: SocialAttachment[];
 };
 
-const canRoomMembershipPublishMedia = (membership?: WatchPartyRoomMembership | null) => {
-  if (!membership) return false;
-  if (membership.membershipState === "removed" || membership.membershipState === "left") return false;
-  if (membership.isMuted) return false;
-  return membership.role === "host" || membership.stageRole === "host" || membership.stageRole === "speaker" || membership.canSpeak;
-};
-
 type RoomChatMessageRow = {
   id: string;
   party_id: string;
@@ -242,8 +236,6 @@ type FloatingReaction = {
   scale: Animated.Value;
 };
 
-const MIC_SPEAKING_THRESHOLD_DB = -52;
-const MIC_SPEAKING_RELEASE_MS = 420;
 const ROOM_HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
 const WATCH_PARTY_LIVE_FEED_COLUMNS = 5;
 const WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS = 2;
@@ -425,6 +417,8 @@ export default function WatchPartyRoomScreen() {
   const chatScrollRef = useRef<ScrollView>(null);
   const roomScrollRef = useRef<ScrollView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [partyRoomCameraPreviewIntent, setPartyRoomCameraPreviewIntent] = useState(false);
+  const [partyRoomAppState, setPartyRoomAppState] = useState<AppStateStatus>(() => AppState.currentState);
 
   useEffect(() => {
     if (!isFocused || Platform.OS === "web") return undefined;
@@ -474,9 +468,6 @@ export default function WatchPartyRoomScreen() {
   const myRoleRef = useRef<"host" | "viewer" | null>(null);
   const reactionCounterRef = useRef(0);
   const participantReactionTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const micRecordingRef = useRef<Audio.Recording | null>(null);
-  const micSpeakingRef = useRef(false);
-  const micReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapPulseTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const pinCoachTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchPartyLiveOpeningRef = useRef(false);
@@ -488,13 +479,6 @@ export default function WatchPartyRoomScreen() {
     const runtime = getAppMonetizationRuntimeFeatures();
     return runtime.liveMoneyEnabled && runtime.paidContentCheckoutEnabled;
   }, []);
-  const roomEntryConfirmed = !!room
-    && !loading
-    && !notFound
-    && !accessGate
-    && !blockedRoomAccess
-    && !paidTicketGate;
-
   useEffect(() => {
     if (Platform.OS === "android" && !isReactNativeNewArchitecture() && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -889,14 +873,13 @@ export default function WatchPartyRoomScreen() {
         if (exactTicketAllowsEntry) {
           roomAccessAllowed = true;
           const sessionIsHost = userId === snapshot.room.hostUserId;
-          const sessionCanPublishMedia = sessionIsHost || canRoomMembershipPublishMedia(currentMembership);
           const joinedMembership = await joinPartyRoomSession({
             partyId,
             userId,
             role: sessionIsHost ? "host" : "viewer",
             canSpeak: sessionIsHost,
-            cameraEnabled: sessionCanPublishMedia && !!profileCameraPreviewUrl,
-            micEnabled: sessionCanPublishMedia,
+            cameraEnabled: false,
+            micEnabled: false,
             displayName: myProfileUsernameRef.current,
             cameraPreviewUrl: profileCameraPreviewUrl,
           }).catch(() => null);
@@ -927,14 +910,13 @@ export default function WatchPartyRoomScreen() {
           if (access?.isAllowed) {
             roomAccessAllowed = true;
             const sessionIsHost = userId === snapshot.room.hostUserId;
-            const sessionCanPublishMedia = sessionIsHost || canRoomMembershipPublishMedia(currentMembership);
             const joinedMembership = await joinPartyRoomSession({
               partyId,
               userId,
               role: sessionIsHost ? "host" : "viewer",
               canSpeak: sessionIsHost,
-              cameraEnabled: sessionCanPublishMedia && !!profileCameraPreviewUrl,
-              micEnabled: sessionCanPublishMedia,
+              cameraEnabled: false,
+              micEnabled: false,
               displayName: myProfileUsernameRef.current,
               cameraPreviewUrl: profileCameraPreviewUrl,
             }).catch(() => null);
@@ -1024,15 +1006,14 @@ export default function WatchPartyRoomScreen() {
         if (roomAccessAllowed) {
           heartbeatRef.current = setInterval(() => {
             const heartbeatMembership = membershipMapRef.current[userId];
-            const heartbeatCanPublishMedia = myRoleRef.current === "host" || canRoomMembershipPublishMedia(heartbeatMembership);
             void touchPartyRoomSession({
               partyId,
               userId,
               role: myRoleRef.current === "host" ? "host" : "viewer",
               stageRole: heartbeatMembership?.stageRole ?? (myRoleRef.current === "host" ? "host" : undefined),
               canSpeak: heartbeatMembership?.canSpeak ?? (myRoleRef.current === "host"),
-              cameraEnabled: heartbeatCanPublishMedia && !!myCameraPreviewUrlRef.current,
-              micEnabled: heartbeatCanPublishMedia,
+              cameraEnabled: false,
+              micEnabled: false,
               displayName: myProfileUsernameRef.current,
               cameraPreviewUrl: myCameraPreviewUrlRef.current,
             }).then(() => refreshRoomSnapshot(userId));
@@ -1230,15 +1211,14 @@ export default function WatchPartyRoomScreen() {
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           setConnState("reconnecting");
           const reconnectMembership = membershipMapRef.current[trackedUserId];
-          const reconnectCanPublishMedia = role === "host" || canRoomMembershipPublishMedia(reconnectMembership);
           void touchPartyRoomSession({
             partyId,
             userId: trackedUserId,
             role: reconnectMembership?.role ?? role,
             stageRole: reconnectMembership?.stageRole ?? (role === "host" ? "host" : undefined),
             canSpeak: reconnectMembership?.canSpeak ?? (role === "host"),
-            cameraEnabled: reconnectCanPublishMedia && !!myCameraPreviewUrlRef.current,
-            micEnabled: reconnectCanPublishMedia,
+            cameraEnabled: false,
+            micEnabled: false,
             displayName: myProfileUsernameRef.current,
             cameraPreviewUrl: myCameraPreviewUrlRef.current,
             membershipState: "reconnecting",
@@ -1301,7 +1281,50 @@ export default function WatchPartyRoomScreen() {
 
   const myUserId = String(myUserIdRef.current ?? "").trim();
   const isNativeCameraPlatform = Platform.OS !== "web";
-  const allowLocalCameraPreview = isNativeCameraPlatform && isFocused && !partyRoomCameraPreviewSuppressed;
+  const allowLocalCameraPreview = isNativeCameraPlatform
+    && isFocused
+    && partyRoomAppState === "active"
+    && partyRoomCameraPreviewIntent
+    && !partyRoomCameraPreviewSuppressed;
+
+  const onTogglePartyRoomCameraPreview = useCallback(async () => {
+    if (partyRoomCameraPreviewIntent) {
+      setPartyRoomCameraPreviewIntent(false);
+      return;
+    }
+    if (!isNativeCameraPlatform) {
+      Alert.alert("Camera preview unavailable", "Camera preview requires the installed mobile app.");
+      return;
+    }
+
+    const permission = cameraPermission?.granted
+      ? cameraPermission
+      : cameraPermission?.canAskAgain === false
+        ? cameraPermission
+        : await requestCameraPermission().catch(() => null);
+    if (permission?.granted) {
+      setPartyRoomCameraPreviewIntent(true);
+      return;
+    }
+
+    const needsSettings = permission?.canAskAgain === false;
+    Alert.alert(
+      "Camera permission needed",
+      needsSettings
+        ? "Open Settings to allow camera access, then return and tap Preview Camera again."
+        : "Chi'llywood only opens your camera after you tap Preview Camera. You can try again when ready.",
+      needsSettings
+        ? [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => { void Linking.openSettings(); } },
+          ]
+        : [{ text: "OK" }],
+    );
+  }, [cameraPermission, isNativeCameraPlatform, partyRoomCameraPreviewIntent, requestCameraPermission]);
+
+  useEffect(() => {
+    setPartyRoomCameraPreviewIntent(false);
+  }, [partyId]);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -1421,10 +1444,10 @@ export default function WatchPartyRoomScreen() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
+      setPartyRoomAppState(nextState);
       const currentUserId = String(myUserIdRef.current ?? "").trim();
       if (!partyId || !currentUserId) return;
       const currentMembership = membershipMapRef.current[currentUserId];
-      const currentCanPublishMedia = myRoleRef.current === "host" || canRoomMembershipPublishMedia(currentMembership);
 
       if (nextState === "active") {
         setConnState((prev) => (prev === "reconnecting" ? "connecting" : prev));
@@ -1434,8 +1457,8 @@ export default function WatchPartyRoomScreen() {
           role: myRoleRef.current === "host" ? "host" : "viewer",
           stageRole: currentMembership?.stageRole ?? (myRoleRef.current === "host" ? "host" : undefined),
           canSpeak: currentMembership?.canSpeak ?? (myRoleRef.current === "host"),
-          cameraEnabled: currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
-          micEnabled: currentCanPublishMedia,
+          cameraEnabled: false,
+          micEnabled: false,
           displayName: myProfileUsernameRef.current,
           cameraPreviewUrl: myCameraPreviewUrlRef.current,
           membershipState: "active",
@@ -1454,8 +1477,8 @@ export default function WatchPartyRoomScreen() {
         role: myRoleRef.current === "host" ? "host" : "viewer",
         stageRole: currentMembership?.stageRole ?? (myRoleRef.current === "host" ? "host" : undefined),
         canSpeak: currentMembership?.canSpeak ?? (myRoleRef.current === "host"),
-        cameraEnabled: currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
-        micEnabled: currentCanPublishMedia,
+        cameraEnabled: false,
+        micEnabled: false,
         displayName: myProfileUsernameRef.current,
         cameraPreviewUrl: myCameraPreviewUrlRef.current,
         membershipState: "reconnecting",
@@ -1583,14 +1606,6 @@ export default function WatchPartyRoomScreen() {
     return true;
   }, [broadcastParticipantSeatState, partyId, refreshRoomSnapshot, room?.titleId]);
 
-  const emitParticipantSpeaking = useCallback((participantId: string, isSpeaking: boolean) => {
-    const channel = chatChannelRef.current;
-    if (!channel || !participantId) return;
-    channel
-      .send({ type: "broadcast", event: "participant:speaking", payload: { participantId, isSpeaking } })
-      .catch(() => {});
-  }, []);
-
   const requestVisibleSeat = useCallback(async (participantId: string) => {
     const currentUserId = String(myUserIdRef.current ?? "").trim();
     if (!partyId || !participantId || participantId !== currentUserId || myRoleRef.current === "host") return;
@@ -1618,135 +1633,6 @@ export default function WatchPartyRoomScreen() {
       participantId,
     });
   }, [broadcastParticipantSeatRequest, partyId, refreshRoomSnapshot]);
-
-  useEffect(() => {
-    if (!isNativeCameraPlatform) return;
-    if (!roomEntryConfirmed) return;
-    if (!myUserId) return;
-    if (cameraPermission?.granted) return;
-    if (cameraPermission && !cameraPermission.canAskAgain) return;
-    requestCameraPermission().catch(() => {});
-  }, [myUserId, cameraPermission, requestCameraPermission, isNativeCameraPlatform, roomEntryConfirmed]);
-
-  useEffect(() => {
-    if (!roomEntryConfirmed) return;
-    if (!myUserId || !isFocused) return;
-
-    let cancelled = false;
-
-    const startMicMetering = async () => {
-      try {
-        const permission = await Audio.requestPermissionsAsync();
-        debugLog("watch-party", "mic permission", { granted: permission.granted, status: permission.status, canAskAgain: permission.canAskAgain });
-        if (!permission.granted || cancelled) return;
-
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-        });
-
-        debugLog("watch-party", "mic recording created");
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync({
-          isMeteringEnabled: true,
-          android: {
-            extension: ".m4a",
-            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-            audioEncoder: Audio.AndroidAudioEncoder.AAC,
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 64000,
-          },
-          ios: {
-            extension: ".caf",
-            outputFormat: Audio.IOSOutputFormat.APPLELOSSLESS,
-            audioQuality: Audio.IOSAudioQuality.MEDIUM,
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 64000,
-            linearPCMBitDepth: 16,
-            linearPCMIsBigEndian: false,
-            linearPCMIsFloat: false,
-          },
-          web: {
-            mimeType: "audio/webm",
-            bitsPerSecond: 64000,
-          },
-        });
-        debugLog("watch-party", "mic prepare complete");
-        debugLog("watch-party", "mic start async");
-        await recording.startAsync();
-        debugLog("watch-party", "mic recording started");
-        recording.setProgressUpdateInterval(220);
-        recording.setOnRecordingStatusUpdate((status) => {
-          debugLog("watch-party", "mic meter", { isRecording: status.isRecording, metering: status.metering });
-          if (!status.isRecording || cancelled) return;
-          const metering = typeof status.metering === "number" ? status.metering : -160;
-          const speaking = metering > MIC_SPEAKING_THRESHOLD_DB;
-          if (speaking) {
-            if (micReleaseTimeoutRef.current) {
-              clearTimeout(micReleaseTimeoutRef.current);
-              micReleaseTimeoutRef.current = null;
-            }
-            if (micSpeakingRef.current) return;
-            debugLog("watch-party", "speaking change", {
-              from: micSpeakingRef.current,
-              to: true,
-              metering,
-              threshold: MIC_SPEAKING_THRESHOLD_DB,
-            });
-            micSpeakingRef.current = true;
-            setIsSpeakingById((prev) => ({ ...prev, [myUserId]: true }));
-            emitParticipantSpeaking(myUserId, true);
-            return;
-          }
-          if (!micSpeakingRef.current || micReleaseTimeoutRef.current) return;
-          micReleaseTimeoutRef.current = setTimeout(() => {
-            micReleaseTimeoutRef.current = null;
-            if (!micSpeakingRef.current || cancelled) return;
-            debugLog("watch-party", "speaking change", {
-              from: true,
-              to: false,
-              metering,
-              threshold: MIC_SPEAKING_THRESHOLD_DB,
-            });
-            micSpeakingRef.current = false;
-            setIsSpeakingById((prev) => ({ ...prev, [myUserId]: false }));
-            emitParticipantSpeaking(myUserId, false);
-          }, MIC_SPEAKING_RELEASE_MS);
-        });
-        if (cancelled) {
-          await recording.stopAndUnloadAsync().catch(() => {});
-          return;
-        }
-        micRecordingRef.current = recording;
-      } catch {
-      }
-    };
-
-    startMicMetering();
-
-    return () => {
-      cancelled = true;
-      if (micReleaseTimeoutRef.current) {
-        clearTimeout(micReleaseTimeoutRef.current);
-        micReleaseTimeoutRef.current = null;
-      }
-      const recording = micRecordingRef.current;
-      micRecordingRef.current = null;
-      if (micSpeakingRef.current) {
-        micSpeakingRef.current = false;
-        setIsSpeakingById((prev) => ({ ...prev, [myUserId]: false }));
-        emitParticipantSpeaking(myUserId, false);
-      }
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(() => {});
-      }
-    };
-  }, [isFocused, myUserId, emitParticipantSpeaking, roomEntryConfirmed]);
 
   // ── Share / invite ───────────────────────────────────────────────────────────
   const displayRoomCode = String(room?.roomCode ?? "").trim().toUpperCase() || roomCodeHint;
@@ -3509,6 +3395,31 @@ export default function WatchPartyRoomScreen() {
             </Text>
           </View>
         </View>
+
+        {isLiveRoom && isNativeCameraPlatform ? (
+          <View style={styles.syncStatusCard}>
+            <Text style={styles.syncStatusTitle}>Your camera stays off until you choose it.</Text>
+            <Text style={styles.syncStatusBody}>
+              This is a local preview only. Camera and microphone publishing starts from an explicit control in the shared Player.
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.liveBubbleActionBtn,
+                partyRoomCameraPreviewIntent && styles.liveBubbleActionBtnApprove,
+              ]}
+              activeOpacity={0.84}
+              onPress={() => { void onTogglePartyRoomCameraPreview(); }}
+              accessibilityRole="button"
+              accessibilityLabel={partyRoomCameraPreviewIntent ? "Stop local camera preview" : "Preview my camera"}
+              accessibilityState={{ selected: partyRoomCameraPreviewIntent }}
+              testID={partyRoomCameraPreviewIntent ? "watch-party-stop-camera-preview" : "watch-party-start-camera-preview"}
+            >
+              <Text style={styles.liveBubbleActionText}>
+                {partyRoomCameraPreviewIntent ? "Stop Camera Preview" : "Preview Camera"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {renderWatchPartyLiveDeck()}
         {renderPartyRoomActionDock()}
