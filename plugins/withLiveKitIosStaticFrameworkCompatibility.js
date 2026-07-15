@@ -9,9 +9,15 @@ const NON_MODULAR_HEADER_WARNING_FLAG = "-Wno-non-modular-include-in-framework-m
 const LIVEKIT_COMPATIBILITY_BLOCK = `${START_MARKER}
     # LiveKit WebRTC is a framework module when use_frameworks! is static, while
     # its React dependencies expose headers that are intentionally non-modular.
-    # Scope the compatibility setting to this pod instead of weakening the app.
+    # Module precompilation happens from both the WebRTC target and its LiveKit
+    # consumer, so scope the compatibility setting to those two pods only.
     installer.pods_project.targets.each do |target|
-      next unless ['livekit-react-native-webrtc', 'livekit_react_native_webrtc'].include?(target.name)
+      next unless [
+        'livekit-react-native-webrtc',
+        'livekit_react_native_webrtc',
+        'livekit-react-native',
+        'livekit_react_native'
+      ].include?(target.name)
 
       target.build_configurations.each do |build_configuration|
         build_configuration.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
