@@ -28,7 +28,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Chi'llywood uses your camera so you can make video calls and join live rooms.",
         "NSMicrophoneUsageDescription": "Chi'llywood uses your microphone so you can speak in calls and live rooms.",
-        "NSPhotoLibraryUsageDescription": "Chi'llywood accesses photos you choose for your profile and social images."
+        "NSPhotoLibraryUsageDescription": "Chi'llywood accesses photos you choose for your profile and social images.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

@@ -68,6 +68,10 @@ assert(
   !("NSPhotoLibraryAddUsageDescription" in (ios.infoPlist ?? {})),
   "NSPhotoLibraryAddUsageDescription must not be added unless the app writes to Photos",
 );
+assert(
+  ios.infoPlist?.ITSAppUsesNonExemptEncryption === false,
+  "iOS export compliance must declare standard/exempt encryption only",
+);
 
 assert(appConfigSource.includes("process.env.IOS_GOOGLE_SERVICES_FILE"), "app.config.ts must support IOS_GOOGLE_SERVICES_FILE");
 assert(appConfigSource.includes('"./GoogleService-Info.plist"'), "app.config.ts must support the ignored local Firebase plist fallback");

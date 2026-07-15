@@ -43,9 +43,9 @@ console.log(JSON.stringify({
     easBehaviorProtectedByGuard: true,
   },
   safety: {
-    buildStarted: false,
-    credentialsRequired: false,
-    secretsRead: false,
-    submissionStarted: false,
+    buildStartedByProof: false,
+    credentialsAccessedByProof: false,
+    secretsReadByProof: false,
+    submissionStartedByProof: false,
   },
 }, null, 2));
