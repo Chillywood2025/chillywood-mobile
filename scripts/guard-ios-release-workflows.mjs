@@ -3,8 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const workflowsDir = path.join(repoRoot, ".github/workflows");
 const previewPath = path.join(repoRoot, ".github/workflows/ios-preview-build.yml");
 const productionPath = path.join(repoRoot, ".github/workflows/ios-production-testflight.yml");
+const legacyPreviewPath = path.join(repoRoot, ".github/workflows/phase3a-manual-preview.yml");
 const easPath = path.join(repoRoot, "eas.json");
 
 const fail = (message) => {
@@ -19,7 +21,36 @@ const read = (filePath) => {
 
 const preview = read(previewPath);
 const production = read(productionPath);
+const legacyPreview = read(legacyPreviewPath);
 const eas = JSON.parse(read(easPath));
+
+const workflowSources = fs.readdirSync(workflowsDir)
+  .filter((name) => /\.ya?ml$/u.test(name))
+  .map((name) => [name, read(path.join(workflowsDir, name))]);
+
+for (const [name, workflow] of workflowSources) {
+  if (/\beas\s+update\b/u.test(workflow)) fail(`${name} must not publish an OTA update`);
+  if (/--auto-submit(?:-with-profile)?\b/u.test(workflow)) fail(`${name} must not auto-submit an EAS build`);
+
+  for (const line of workflow.split("\n")) {
+    if (/\beas\s+build\b/u.test(line)) {
+      if (/--(?:platform|profile)\s+\$\{\{/u.test(line)) {
+        fail(`${name} must not use dynamic EAS build platform or profile inputs`);
+      }
+      const platform = line.match(/--platform\s+(ios|android|all)\b/u)?.[1];
+      if ((platform === "ios" || platform === "all")
+        && name !== path.basename(previewPath)
+        && name !== path.basename(productionPath)) {
+        fail(`${name} exposes an iOS build outside the protected iOS workflows`);
+      }
+    }
+
+    if (/\beas\s+submit\b/u.test(line)) {
+      if (name !== path.basename(productionPath)) fail(`${name} exposes an unprotected EAS submit path`);
+      if (/--latest\b/u.test(line)) fail(`${name} must submit an exact reviewed build ID, never latest`);
+    }
+  }
+}
 
 for (const [label, workflow] of [["preview", preview], ["production", production]]) {
   if (!/^on:\n  workflow_dispatch:/mu.test(workflow)) fail(`${label} workflow must remain manual-dispatch only`);
@@ -42,6 +73,10 @@ for (const [label, workflow] of [["preview", preview], ["production", production
   if (!/npm\s+run\s+guard:notification-room-call-policy/u.test(workflow)) {
     fail(`${label} workflow is missing the Android-sensitive notification/call guard`);
   }
+  if (!/npm\s+run\s+proof:ios-voip-token-lifecycle/u.test(workflow)) {
+    fail(`${label} workflow is missing the VoIP token lifecycle proof`);
+  }
+  if (!/eas-version:\s*21\.0\.1/u.test(workflow)) fail(`${label} workflow must pin EAS CLI 21.0.1`);
 }
 
 if (!/environment:\s*ios-preview/u.test(preview)) fail("preview workflow must use the protected ios-preview environment");
@@ -57,7 +92,7 @@ if (!/environment:\s*ios-production/u.test(production)) {
 if (!/BUILD_IOS_PRODUCTION/u.test(production) || !/SUBMIT_INTERNAL_TESTFLIGHT/u.test(production)) {
   fail("production workflow is missing separate build and internal-TestFlight confirmations");
 }
-if (!/eas build --platform ios --profile production --non-interactive --wait/u.test(production)) {
+if (!/eas build --platform ios --profile production --non-interactive --wait --freeze-credentials/u.test(production)) {
   fail("production workflow must use only the production iOS build profile");
 }
 if (!/eas submit --platform ios --profile production --id "\$\{\{ inputs\.eas_build_id \}\}" --non-interactive --wait/u.test(production)) {
@@ -66,6 +101,13 @@ if (!/eas submit --platform ios --profile production --id "\$\{\{ inputs\.eas_bu
 if (/eas\s+submit[^\n]*--latest/u.test(production)) fail("implicit latest-build submission is forbidden");
 if (!/never enables external testing or public App Store release/u.test(production)) {
   fail("production workflow must preserve the internal-TestFlight-only boundary");
+}
+
+if (!/eas build --platform android --profile preview --non-interactive/u.test(legacyPreview)) {
+  fail("legacy Phase 3A workflow must preserve only the fixed Android preview path");
+}
+if (/--platform\s+(?:ios|all)\b/u.test(legacyPreview) || /inputs\.(?:platform|profile)/u.test(legacyPreview)) {
+  fail("legacy Phase 3A workflow must not expose iOS, all-platform, or dynamic EAS build inputs");
 }
 
 const productionProfile = eas.build?.production;

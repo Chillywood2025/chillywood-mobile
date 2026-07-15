@@ -1,22 +1,10 @@
-name: Phase 3A Manual Preview Build
+name: Phase 3A Manual Android Preview Build
 
 on:
   workflow_dispatch:
-    inputs:
-      platform:
-        description: Build platform
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - android
-          - ios
-      profile:
-        description: EAS build profile
-        required: true
-        default: preview
-        type: string
+
+permissions:
+  contents: read
 
 jobs:
   manual-preview-build:
@@ -26,11 +14,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -44,8 +35,8 @@ jobs:
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 21.0.1
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build preview
-        run: eas build --platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive
+      - name: Build Android preview
+        run: eas build --platform android --profile preview --non-interactive

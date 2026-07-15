@@ -81,6 +81,7 @@ jobs:
           npm run proof:ios-push-platform
           npm run guard:ios-native-call-policy
           npm run proof:ios-voip-policy
+          npm run proof:ios-voip-token-lifecycle
           npm run guard:ios-privacy-manifest
           npm run guard:ios-release-workflows
           npx expo-doctor
@@ -109,11 +110,11 @@ jobs:
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 21.0.1
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build production App Store archive
-        run: eas build --platform ios --profile production --non-interactive --wait
+        run: eas build --platform ios --profile production --non-interactive --wait --freeze-credentials
 
   submit-internal-testflight:
     if: inputs.action == 'submit-existing-build'
@@ -135,7 +136,7 @@ jobs:
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 21.0.1
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Upload exact build to App Store Connect
