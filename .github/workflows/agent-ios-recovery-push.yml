@@ -6,12 +6,19 @@ on:
       - agent/ios-integration-recovery
     paths:
       - .github/workflows/agent-ios-recovery-push.yml
+  pull_request:
+    branches:
+      - codex/ios-integration-90
+    paths:
+      - .github/workflows/agent-ios-recovery-push.yml
+      - scripts/agent-ios-recovery-push-patch.mjs
 
 permissions:
   contents: write
 
 jobs:
   apply-push-patch:
+    if: github.event_name == 'push' || github.head_ref == 'agent/ios-integration-recovery'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout recovery branch
