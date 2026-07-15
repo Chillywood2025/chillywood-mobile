@@ -2,7 +2,7 @@
 
 Checkpoint date: 2026-07-15
 
-Overall verdict: **Partial — Firebase and EAS configuration are ready, the Simulator proof remains complete, and an owner-authorized signed physical-device development build finished, installed, launched, authenticated, persisted its session, and completed a bounded navigation walkthrough. APNs, StoreKit, PushKit, CallKit, purchases/money, and two-party physical LiveKit media remain out of scope and unproven.**
+Overall verdict: **Partial — the signed physical-device foundation remains verified, physical camera/microphone/Photos proof is in progress, true two-party LiveKit media is `BLOCKED_SECOND_DEVICE`, and PR CI now reports seven independent diagnostics. Five checks pass; repository lint and Expo Doctor retain their unchanged baseline failures.**
 
 ## Current checkpoint
 
@@ -17,6 +17,9 @@ Overall verdict: **Partial — Firebase and EAS configuration are ready, the Sim
 | Development provisioning | Active for one device | EAS created an ad hoc development provisioning profile that includes the one owner-authorized physical iPhone and expires July 14, 2027. Credential files and device/profile identifiers are intentionally omitted. |
 | Simulator development build | Successful; installed and smoke tested | EAS build `ddc48433-d29d-4a83-a847-0d8908e2da63` finished for version `1.0.0` build `1` from source commit `2ea49f421b1e1abbcd0889b273b0908b04aea2a4`. It was installed with owner authorization on an iPhone 17 Pro Simulator running iOS 26.5, and the bounded matrix below passed. |
 | Physical development build | Successful; installed and smoke tested | EAS build `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` finished for version `1.0.0` build `1` from source commit `5c5fa023cc8ac8532fd0abe76c6199d0a769788d`. It was installed on the registered iPhone, launched, and completed the bounded proof below. |
+| Physical camera / microphone / Photos | In progress | Results are recorded without private media or account/device identifiers in the [physical media proof](./IOS_PHYSICAL_MEDIA_PROOF.md); unexecuted checks are not claimed. |
+| Two-device LiveKit | `BLOCKED_SECOND_DEVICE` | Native startup is verified, but one approved physical client cannot prove bidirectional audio/video. No entitlement, purchase, or publishing-policy bypass is authorized. |
+| PR CI separation | Implemented | Seven independent Node 20 diagnostics now run. TypeScript, Runtime Validation, Route Contracts, iOS Configuration, and Android Regression Guards pass; Repository Lint and Expo Doctor report unchanged baseline failures. |
 | TestFlight/App Store | Not started | No upload or submission occurred. A real `ascAppId` must come from an owner-created App Store Connect record in a later phase. |
 | RevenueCat iOS | Later purchase-testing phase | Missing iOS RevenueCat configuration does not block this no-purchase development build. No products, purchases, payouts, or production money were enabled. |
 | APNs / CallKit / PushKit | Later feature phases | No APNs key, production iOS push delivery, CallKit, PushKit, or native incoming-call integration is claimed. |
@@ -127,6 +130,14 @@ Sanitized launch-log classification: zero native/JavaScript fatal markers, zero 
 
 This physical-device proof is **not** APNs registration/delivery, StoreKit/RevenueCat purchase proof, PushKit, CallKit, camera/microphone/photo-picker proof, Universal Links verification, or two-party physical LiveKit media proof. It also does not authorize TestFlight, App Store, preview, or production work.
 
+## Physical media proof
+
+The bounded physical camera, microphone, Photos, and LiveKit matrix is maintained in [IOS_PHYSICAL_MEDIA_PROOF.md](./IOS_PHYSICAL_MEDIA_PROOF.md). Only directly observed results may be marked `PASS`.
+
+The installed signed build remains valid for this phase: its application source is `5c5fa023cc8ac8532fd0abe76c6199d0a769788d`, and subsequent branch changes are documentation and pull-request workflow changes only. No application/native/configuration change occurred, so no replacement EAS build was required.
+
+True two-party LiveKit media remains `BLOCKED_SECOND_DEVICE` while only one approved physical client is available. Native LiveKit startup or a local track must not be represented as bidirectional media proof.
+
 ## Validation
 
 Passed on Node 20:
@@ -144,17 +155,21 @@ Passed on Node 20:
 - static-library generation for every installed React Native Firebase pod; and
 - a complete unsigned local Xcode build of the generated `Chillywood` Simulator workspace before the successful EAS retry.
 
-PR #9 CI diagnostic, without weakening or suppressing the check:
+PR #9 now reports seven independent diagnostics without weakening or suppressing a check:
 
-| Diagnostic area | Result |
+| Exact GitHub check | Result |
 | --- | --- |
-| TypeScript | Standalone Node 20 `npx tsc --noEmit` passes. GitHub did not reach its composite typecheck step because the preceding lint step failed. |
-| iOS configuration | Local Node 20 `guard:ios-config-policy` and `proof:ios-config` pass. The current GitHub workflow does not run these checks. |
-| Android regression guards | The iOS guard/proof confirms the Android package and EAS behavior remain unchanged. The composite local typecheck still reaches the pre-existing generated Android launcher-icon policy failure described below. |
-| Repository lint baseline | The exact GitHub check `Phase 1 Checks / Lint and Typecheck` fails at lint with 69 errors and 88 warnings. The same 157-problem baseline is present on `origin/main`; this PR's post-build documentation-only change did not cause it. |
-| Expo Doctor baseline | Local Expo Doctor passes 17 of 18 checks and reports the existing Expo SDK patch-version alignment finding described below. The current GitHub workflow does not run Expo Doctor. |
+| `Phase 1 / Repository Lint` | Fails at the unchanged `origin/main` baseline: 157 findings (69 errors and 88 warnings). |
+| `Phase 1 / TypeScript` | Passes after the job installs the locked nested `ops/alert-automation` dependencies before running `npx tsc --noEmit`. |
+| `Phase 1 / Runtime Validation` | Passes. |
+| `Phase 1 / Route Contracts` | Passes. |
+| `Phase 1 / iOS Configuration` | Passes. |
+| `Phase 1 / Android Regression Guards` | Passes. |
+| `Phase 1 / Expo Doctor` | Fails at the unchanged 17-of-18 baseline with ten patch-version alignment findings. |
 
-The PR remains draft, open, blocked by that unchanged repository lint baseline, and unmerged. Required checks were not changed.
+The first clean TypeScript job exposed a CI-installation gap: root `npm ci` does not install the independently locked `ops/alert-automation` workspace dependencies. The workflow now performs a scoped locked install only in the TypeScript job. The corrected job passes without changing dependency versions, suppressing findings, or accessing production secrets.
+
+The PR remains draft, open, blocked by unchanged repository lint and Expo Doctor baselines, and unmerged. Branch protection was not weakened.
 
 Known pre-existing baseline failures, intentionally not repaired here:
 
@@ -164,7 +179,7 @@ Known pre-existing baseline failures, intentionally not repaired here:
 
 No dependency was modified and no automatic audit fix was run.
 
-The physical-device registration, signing, build, installation, and smoke proof required no application, Expo, EAS, Firebase, plugin, dependency, workflow, or Android source change. This status document is the only repository change from the physical-device phase.
+This phase changes only pull-request CI reporting and sanitized documentation. It does not change application, Expo, EAS, native, Firebase, plugin, dependency, or Android behavior, so the existing signed physical build remains the correct application artifact and no rebuild was required.
 
 ## Owner interactions and next gates
 
@@ -181,10 +196,11 @@ Completed owner interactions:
 
 Remaining gates:
 
-1. Separately prove camera, microphone, and photo-picker behavior when explicitly authorized.
-2. Use a second participant/device before claiming physical LiveKit audio/video proof.
-3. Verify the `apple-app-site-association` file for Universal Links.
-4. Schedule RevenueCat/StoreKit, APNs/push, CallKit/PushKit, App Privacy, screenshots, preview, TestFlight, and App Store work as separate phases.
+1. Complete and record the authorized physical camera, microphone, and Photos matrix.
+2. Connect an approved second physical client before claiming bidirectional LiveKit media.
+3. Remediate the unchanged repository lint and Expo Doctor baselines in separate, reviewable work; do not suppress them here.
+4. Verify the `apple-app-site-association` file for Universal Links.
+5. Schedule RevenueCat/StoreKit, APNs/push, CallKit/PushKit, App Privacy, screenshots, preview, TestFlight, and App Store work as separate phases.
 
 ## Rollback
 
@@ -210,4 +226,7 @@ At this checkpoint:
 - no provisioning profile or signed artifact URL was committed;
 - exactly one owner-authorized physical `development` build was started and installed; no preview or production build was started;
 - optional EAS push credential setup was explicitly declined, so no APNs credential was created in this phase;
+- no application rebuild was started because only CI and documentation changed;
+- true two-party LiveKit remains unclaimed while a second approved physical client is unavailable;
+- no physical screenshot, private media, account identifier, device identifier, room token, or private log was committed;
 - and no unrelated untracked file was staged.
