@@ -61,7 +61,7 @@ import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
 import {
-  endIosNativeCall,
+  reportIosNativeCallRemoteEnd,
   revokeIosVoipRegistration,
   startIosNativeCallsReadiness,
   type SanitizedNativeCallEvent,
@@ -852,6 +852,7 @@ function IosNativeCallsBridge() {
   const router = useRouter();
   const { isSignedIn, user } = useSession();
   const inviteSubscriptionsRef = useRef(new Map<string, () => void>());
+  const nativeCallDescriptorsRef = useRef(new Map<string, { callUuid: string; threadId: string }>());
 
   useEffect(() => {
     let active = true;
@@ -860,13 +861,18 @@ function IosNativeCallsBridge() {
     const clearInviteSubscription = (inviteId: string) => {
       inviteSubscriptionsRef.current.get(inviteId)?.();
       inviteSubscriptionsRef.current.delete(inviteId);
+      nativeCallDescriptorsRef.current.delete(inviteId);
     };
     const clearInviteSubscriptions = () => {
       inviteSubscriptionsRef.current.forEach((unsubscribe) => unsubscribe());
       inviteSubscriptionsRef.current.clear();
+      nativeCallDescriptorsRef.current.clear();
     };
 
     if (!isSignedIn || !currentUserId) {
+      nativeCallDescriptorsRef.current.forEach((descriptor) => {
+        void reportIosNativeCallRemoteEnd(descriptor.callUuid, "account_transition");
+      });
       clearInviteSubscriptions();
       void revokeIosVoipRegistration();
       return () => {
@@ -879,13 +885,17 @@ function IosNativeCallsBridge() {
       const inviteId = String(event.callInviteId ?? "").trim();
       const callUuid = String(event.callUuid ?? "").trim();
       if (!inviteId || !callUuid || inviteSubscriptionsRef.current.has(inviteId)) return;
+      nativeCallDescriptorsRef.current.set(inviteId, {
+        callUuid,
+        threadId: String(event.threadId ?? "").trim(),
+      });
 
       const reconcileInvite = async () => {
         const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
         if (!active || !invite) return;
         if (invite.status === "ringing" || invite.status === "accepted") return;
         clearInviteSubscription(inviteId);
-        await endIosNativeCall(callUuid, `invite_${invite.status}`).catch(() => false);
+        await reportIosNativeCallRemoteEnd(callUuid, `invite_${invite.status}`).catch(() => false);
       };
 
       inviteSubscriptionsRef.current.set(
@@ -897,26 +907,39 @@ function IosNativeCallsBridge() {
       void reconcileInvite();
     };
 
-    const routeNativeAction = (event: SanitizedNativeCallEvent, action: "answer" | "decline") => {
+    const routeNativeAction = (
+      event: SanitizedNativeCallEvent,
+      action: "answer" | "decline" | "end" | "mute" | "unmute",
+    ) => {
       const threadId = String(event.threadId ?? "").trim();
       const callInviteId = String(event.callInviteId ?? "").trim();
       if (!threadId || !callInviteId) return;
+      const callUuid = String(event.callUuid ?? "").trim();
       const params = new URLSearchParams({ callInviteId, nativeCallAction: action });
+      if (callUuid) params.set("nativeCallUuid", callUuid);
       router.push(`/chat/${encodeURIComponent(threadId)}?${params.toString()}` as Parameters<typeof router.push>[0]);
     };
 
     const handleNativeCallEvent = (event: SanitizedNativeCallEvent) => {
       if (!active) return;
-      if (event.type === "incoming") {
+      if (event.type === "incoming" || event.type === "recovered") {
         watchInviteLifecycle(event);
         return;
       }
-      if (event.type === "answered") {
+      if (event.type === "answerRequested") {
         routeNativeAction(event, "answer");
         return;
       }
       if (event.type === "declined") {
         routeNativeAction(event, "decline");
+        return;
+      }
+      if (event.type === "muted" || event.type === "unmuted") {
+        routeNativeAction(event, event.type === "muted" ? "mute" : "unmute");
+        return;
+      }
+      if (event.type === "audioInterruptionBegan") {
+        routeNativeAction(event, "mute");
         return;
       }
       if (event.type === "timeout") {
@@ -935,15 +958,38 @@ function IosNativeCallsBridge() {
         clearInviteSubscription(inviteId);
         return;
       }
-      if (event.type === "ended" || event.type === "reportFailed" || event.type === "providerReset") {
+      if (
+        event.type === "ended"
+        || event.type === "answerFailed"
+        || event.type === "audioSessionFailed"
+        || event.type === "providerReset"
+      ) {
+        routeNativeAction(event, "end");
+        clearInviteSubscription(String(event.callInviteId ?? "").trim());
+        return;
+      }
+      if (event.type === "remoteEnded" || event.type === "reportFailed") {
         clearInviteSubscription(String(event.callInviteId ?? "").trim());
       }
     };
 
     void startIosNativeCallsReadiness(handleNativeCallEvent);
+    const activationSubscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      nativeCallDescriptorsRef.current.forEach((descriptor, inviteId) => {
+        void readChillyChatCallInvite(inviteId)
+          .then((invite) => {
+            if (!invite || invite.status === "ringing" || invite.status === "accepted") return;
+            clearInviteSubscription(inviteId);
+            return reportIosNativeCallRemoteEnd(descriptor.callUuid, `activation_${invite.status}`);
+          })
+          .catch(() => null);
+      });
+    });
 
     return () => {
       active = false;
+      activationSubscription.remove();
       clearInviteSubscriptions();
       void revokeIosVoipRegistration();
     };

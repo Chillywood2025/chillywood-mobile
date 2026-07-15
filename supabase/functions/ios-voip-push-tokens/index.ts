@@ -1,10 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 import { normalizeApnsEnvironment } from "../_shared/ios-voip-policy.mjs";
 
 type JsonObject = Record<string, unknown>;
 type TokenAction = "register" | "rotate" | "status" | "revoke";
+type RegistrationAction = Extract<TokenAction, "register" | "rotate">;
 type SupabaseClientLike = any;
 
 type TokenPayload = {
@@ -84,7 +85,7 @@ const readAuthenticatedUserId = async (req: Request) => {
 const enforceTokenRateLimit = async (
   adminClient: SupabaseClientLike,
   userId: string,
-  action: TokenAction,
+  action: RegistrationAction,
   installId: string,
 ) => {
   const scopes = [
@@ -96,9 +97,9 @@ const enforceTokenRateLimit = async (
     },
     {
       action: `ios_voip_token_${action}`,
-      limit: action === "status" ? 60 : 12,
+      limit: 12,
       target: `install:${installId}`,
-      windowSeconds: action === "status" ? 600 : 600,
+      windowSeconds: 600,
     },
   ];
 
@@ -143,17 +144,9 @@ Deno.serve(async (req): Promise<Response> => {
       { auth: { persistSession: false } },
     );
 
-    const { data: accessRestricted, error: accessError } = await adminClient.rpc(
-      "is_account_access_restricted",
-      { p_user_id: userId },
-    );
-    if (accessError) return jsonResponse(503, { error: "account_status_unavailable" });
-    if (accessRestricted === true) return jsonResponse(403, { error: "account_access_restricted" });
-
-    if (!await enforceTokenRateLimit(adminClient, userId, action, installId)) {
-      return jsonResponse(429, { error: "rate_limited" });
-    }
-
+    // Status and revoke remain available to any authenticated account so a
+    // restricted user can inspect and disable an existing device binding.
+    // Both operations are install-scoped and idempotent.
     if (action === "status") {
       const { data, error } = await adminClient
         .from("user_voip_push_tokens")
@@ -190,6 +183,19 @@ Deno.serve(async (req): Promise<Response> => {
         .select("id");
       if (error) return jsonResponse(500, { error: "revoke_failed" });
       return jsonResponse(200, { revokedCount: data?.length ?? 0, status: "revoked" });
+    }
+
+    // Only registration/rotation creates delivery authority. Keep those
+    // actions behind account-status enforcement and abuse-rate limits.
+    const { data: accessRestricted, error: accessError } = await adminClient.rpc(
+      "is_account_access_restricted",
+      { p_user_id: userId },
+    );
+    if (accessError) return jsonResponse(503, { error: "account_status_unavailable" });
+    if (accessRestricted === true) return jsonResponse(403, { error: "account_access_restricted" });
+
+    if (!await enforceTokenRateLimit(adminClient, userId, action, installId)) {
+      return jsonResponse(429, { error: "rate_limited" });
     }
 
     const token = toText(body.token).toLowerCase();

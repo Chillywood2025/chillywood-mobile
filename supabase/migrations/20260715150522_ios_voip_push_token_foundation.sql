@@ -63,7 +63,9 @@ create table if not exists public."voip_push_delivery_attempts" (
   "provider_status_code" integer,
   "status" text not null,
   "error_code" text,
+  "attempt_count" integer default 1 not null,
   "created_at" timestamp with time zone default timezone('utc'::text, now()) not null,
+  "updated_at" timestamp with time zone default timezone('utc'::text, now()) not null,
   constraint "voip_push_delivery_attempts_pkey" primary key ("id"),
   constraint "voip_push_delivery_attempts_dispatch_key_check"
     check (length(btrim("dispatch_key")) between 16 and 160),
@@ -74,7 +76,9 @@ create table if not exists public."voip_push_delivery_attempts" (
   constraint "voip_push_delivery_attempts_provider_status_check"
     check ("provider_status_code" is null or "provider_status_code" between 100 and 599),
   constraint "voip_push_delivery_attempts_error_code_check"
-    check ("error_code" is null or length("error_code") <= 120)
+    check ("error_code" is null or length("error_code") <= 120),
+  constraint "voip_push_delivery_attempts_count_check"
+    check ("attempt_count" between 1 and 3)
 );
 
 create unique index if not exists "voip_push_delivery_attempts_dispatch_unique"
@@ -85,6 +89,15 @@ create index if not exists "voip_push_delivery_attempts_invite_idx"
 
 create index if not exists "voip_push_delivery_attempts_recipient_idx"
   on public."voip_push_delivery_attempts" using btree ("recipient_user_id", "created_at" desc);
+
+create index if not exists "voip_push_delivery_attempts_token_idx"
+  on public."voip_push_delivery_attempts" using btree ("voip_push_token_id")
+  where "voip_push_token_id" is not null;
+
+drop trigger if exists "voip_push_delivery_attempts_touch_updated_at" on public."voip_push_delivery_attempts";
+create trigger "voip_push_delivery_attempts_touch_updated_at"
+before update on public."voip_push_delivery_attempts"
+for each row execute function public."touch_notification_updated_at"();
 
 alter table public."user_voip_push_tokens" enable row level security;
 alter table public."voip_push_delivery_attempts" enable row level security;

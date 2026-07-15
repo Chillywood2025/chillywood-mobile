@@ -31,7 +31,9 @@ export const buildIosVoipTopic = (bundleIdentifier) => {
 export const buildIosVoipApnsPayload = (input) => {
   const callInviteId = toText(input.callInviteId);
   const threadId = toText(input.threadId);
+  const requestedAction = toText(input.action).toLowerCase();
   if (!callInviteId || !threadId) throw new Error("invalid_voip_payload_scope");
+  if (requestedAction && requestedAction !== "incoming") throw new Error("terminal_voip_payload_forbidden");
 
   const callerName = toText(input.callerName).slice(0, 80) || "Chi'llywood caller";
   const callType = normalizeIosVoipCallType(input.callType);

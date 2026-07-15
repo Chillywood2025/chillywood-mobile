@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 import {
   buildIosVoipApnsPayload,
   buildIosVoipTopic,
@@ -250,6 +250,7 @@ const sendVoipPush = async (input: {
       "Content-Type": "application/json",
     },
     method: "POST",
+    signal: AbortSignal.timeout(8_000),
   });
   const providerBody = await response.json().catch(() => ({})) as { reason?: unknown };
   return {
@@ -280,22 +281,23 @@ Deno.serve(async (req): Promise<Response> => {
     );
     const invite = await readInvite(adminClient, inviteId);
     if (!invite) return jsonResponse(404, { error: "invite_not_found" });
-    if (callerUserId !== toText(invite.caller_user_id)) {
+    const inviteCallerUserId = toText(invite.caller_user_id);
+    const calleeUserId = toText(invite.callee_user_id);
+    if (callerUserId !== inviteCallerUserId) {
       return jsonResponse(403, { error: "caller_required" });
     }
 
-    const calleeUserId = toText(invite.callee_user_id);
     const members = await readThreadMembers(adminClient, invite.thread_id);
     const memberIds = new Set(members.map((member) => toText(member.user_id)).filter(Boolean));
-    if (!memberIds.has(callerUserId) || !memberIds.has(calleeUserId)) {
+    if (!memberIds.has(inviteCallerUserId) || !memberIds.has(calleeUserId)) {
       return jsonResponse(403, { error: "thread_membership_required" });
     }
 
-    if (await hasAudienceBlock(adminClient, callerUserId, calleeUserId)) {
+    if (await hasAudienceBlock(adminClient, inviteCallerUserId, calleeUserId)) {
       return jsonResponse(200, { eligible: false, reason: "audience_block", status: "blocked" });
     }
     if (
-      await isAccountRestricted(adminClient, callerUserId)
+      await isAccountRestricted(adminClient, inviteCallerUserId)
       || await isAccountRestricted(adminClient, calleeUserId)
     ) {
       return jsonResponse(200, { eligible: false, reason: "account_access_restricted", status: "blocked" });
@@ -305,7 +307,8 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     const expiresAt = Date.parse(toText(invite.expires_at));
-    if (toText(invite.status).toLowerCase() !== "ringing") {
+    const inviteStatus = toText(invite.status).toLowerCase();
+    if (inviteStatus !== "ringing") {
       return jsonResponse(200, { eligible: false, reason: "invite_not_ringing", status: "blocked" });
     }
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
@@ -356,7 +359,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    const caller = members.find((member) => toText(member.user_id) === callerUserId);
+    const caller = members.find((member) => toText(member.user_id) === inviteCallerUserId);
     const payload = buildIosVoipApnsPayload({
       callInviteId: invite.id,
       callerName: toText(caller?.display_name) || "Chi'llywood caller",
@@ -364,14 +367,16 @@ Deno.serve(async (req): Promise<Response> => {
       expiresAt: invite.expires_at,
       threadId: invite.thread_id,
     }) as JsonObject;
-    const expiration = Math.max(Math.floor(Date.now() / 1000) + 1, Math.floor(expiresAt / 1000));
+    // A zero APNs expiration prevents stale incoming-call pushes from being
+    // stored and delivered after the caller has already stopped ringing.
+    const expiration = 0;
     let sentCount = 0;
     let failedCount = 0;
     let skippedCount = 0;
 
     for (const tokenRow of tokens) {
       const dispatchKey = await sha256Hex(`ios_voip:${invite.id}:${tokenRow.id}:incoming`);
-      const { data: attempt, error: attemptError } = await adminClient
+      let { data: attempt, error: attemptError } = await adminClient
         .from("voip_push_delivery_attempts")
         .insert({
           apns_environment: tokenRow.apns_environment,
@@ -381,11 +386,48 @@ Deno.serve(async (req): Promise<Response> => {
           status: "attempted",
           voip_push_token_id: tokenRow.id,
         })
-        .select("id")
+        .select("id,attempt_count")
         .maybeSingle();
       if (attemptError?.code === "23505") {
-        skippedCount += 1;
-        continue;
+        const { data: existingAttempt, error: existingAttemptError } = await adminClient
+          .from("voip_push_delivery_attempts")
+          .select("id,status,attempt_count,updated_at")
+          .eq("dispatch_key", dispatchKey)
+          .maybeSingle();
+        if (existingAttemptError || !existingAttempt?.id) {
+          failedCount += 1;
+          continue;
+        }
+
+        const attemptCount = Number(existingAttempt.attempt_count ?? 1);
+        const staleAttempted = existingAttempt.status === "attempted"
+          && Date.parse(toText(existingAttempt.updated_at)) <= Date.now() - 15_000;
+        const retryable = existingAttempt.status === "failed" || staleAttempted;
+        if (!retryable || !Number.isInteger(attemptCount) || attemptCount >= 3) {
+          skippedCount += 1;
+          continue;
+        }
+
+        const { data: retryAttempt, error: retryError } = await adminClient
+          .from("voip_push_delivery_attempts")
+          .update({
+            attempt_count: attemptCount + 1,
+            error_code: null,
+            provider_message_id: null,
+            provider_status_code: null,
+            status: "attempted",
+          })
+          .eq("id", existingAttempt.id)
+          .eq("attempt_count", attemptCount)
+          .eq("status", existingAttempt.status)
+          .select("id,attempt_count")
+          .maybeSingle();
+        if (retryError || !retryAttempt?.id) {
+          skippedCount += 1;
+          continue;
+        }
+        attempt = retryAttempt;
+        attemptError = null;
       }
       if (attemptError || !attempt) {
         failedCount += 1;

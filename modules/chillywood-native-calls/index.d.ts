@@ -17,6 +17,8 @@ export type NativeCallsModule = {
   getPendingEventsAsync(): Promise<NativeCallEvent[]>;
   reportIncomingCallAsync(payload: Record<string, unknown>): Promise<string>;
   endCallAsync(callUuid: string, reason?: string): Promise<void>;
+  reportRemoteEndAsync(callUuid: string, reason?: string): Promise<void>;
+  completeAnswerAsync(callUuid: string, connected: boolean): Promise<void>;
   setMutedAsync(callUuid: string, muted: boolean): Promise<void>;
   setAudioRouteAsync(route: "speaker" | "receiver" | "system"): Promise<void>;
   presentDebugIncomingCallAsync(payload?: Record<string, unknown>): Promise<string>;

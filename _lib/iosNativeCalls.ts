@@ -35,7 +35,10 @@ const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 
 let nativeSubscription: { remove(): void } | null = null;
 let eventListener: IosNativeCallEventListener | null = null;
-let tokenRegistrationInFlight: Promise<IosVoipRegistrationState> | null = null;
+let voipLifecycleGeneration = 0;
+let voipRegistrationActive = false;
+let voipTokenLifecycleQueue: Promise<void> = Promise.resolve();
+let voipTransitionQueue: Promise<void> = Promise.resolve();
 
 const toText = (value: unknown) => String(value ?? "").trim();
 const isExplicitlyEnabled = (value: unknown) => ENABLED_VALUES.has(toText(value).toLowerCase());
@@ -128,6 +131,24 @@ const sanitizeNativeEvent = (event: NativeCallEvent): SanitizedNativeCallEvent =
   return sanitized;
 };
 
+const enqueueVoipTokenLifecycle = (task: () => Promise<void>) => {
+  const queued = voipTokenLifecycleQueue
+    .catch(() => undefined)
+    .then(task);
+  voipTokenLifecycleQueue = queued.catch(() => undefined);
+  return queued;
+};
+
+const waitForVoipTokenLifecycle = () => voipTokenLifecycleQueue.catch(() => undefined);
+
+const runVoipTransition = <T>(task: () => Promise<T>) => {
+  const result = voipTransitionQueue
+    .catch(() => undefined)
+    .then(task);
+  voipTransitionQueue = result.then(() => undefined, () => undefined);
+  return result;
+};
+
 const registerVoipToken = async (token: string): Promise<IosVoipRegistrationState> => {
   const apnsEnvironment = readApnsEnvironment();
   const installId = await readInstallId();
@@ -166,20 +187,33 @@ const revokeBackendVoipRegistration = async (): Promise<IosVoipRegistrationState
   };
 };
 
-const handleNativeEvent = (event: NativeCallEvent) => {
+const enqueueVoipTokenRegistration = (token: string, generation: number) => {
+  const normalizedToken = toText(token);
+  if (!normalizedToken) return;
+
+  void enqueueVoipTokenLifecycle(async () => {
+    if (!voipRegistrationActive || generation !== voipLifecycleGeneration) return;
+    await registerVoipToken(normalizedToken);
+  });
+};
+
+const enqueueVoipTokenInvalidation = (generation: number) => {
+  void enqueueVoipTokenLifecycle(async () => {
+    if (!voipRegistrationActive || generation !== voipLifecycleGeneration) return;
+    await revokeBackendVoipRegistration();
+  });
+};
+
+const handleNativeEvent = (event: NativeCallEvent, generation: number) => {
+  if (!voipRegistrationActive || generation !== voipLifecycleGeneration) return;
+
   if (event.type === "voipTokenUpdated") {
-    const token = toText(event.token);
-    if (token && !tokenRegistrationInFlight) {
-      tokenRegistrationInFlight = registerVoipToken(token)
-        .finally(() => {
-          tokenRegistrationInFlight = null;
-        });
-    }
+    enqueueVoipTokenRegistration(event.token ?? "", generation);
   } else if (event.type === "voipTokenInvalidated") {
     // Keep PKPushRegistry active so Apple can deliver a rotated token. Logout
     // and account transitions use revokeIosVoipRegistration(), which also
     // stops native registration.
-    void revokeBackendVoipRegistration();
+    enqueueVoipTokenInvalidation(generation);
   }
 
   eventListener?.(sanitizeNativeEvent(event));
@@ -188,24 +222,45 @@ const handleNativeEvent = (event: NativeCallEvent) => {
 export async function startIosNativeCallsReadiness(
   listener?: IosNativeCallEventListener,
 ): Promise<IosVoipRegistrationState> {
-  const apnsEnvironment = readApnsEnvironment();
-  const readiness = await readIosNativeCallsReadiness();
-  if (!readiness.available || !NativeCallsModule) {
-    return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
-  }
+  return runVoipTransition(async () => {
+    const apnsEnvironment = readApnsEnvironment();
+    const readiness = await readIosNativeCallsReadiness();
+    const generation = ++voipLifecycleGeneration;
+    voipRegistrationActive = false;
+    nativeSubscription?.remove();
+    nativeSubscription = null;
+    eventListener = null;
 
-  eventListener = listener ?? null;
-  nativeSubscription?.remove();
-  nativeSubscription = NativeCallsModule.addListener("onNativeCallEvent", handleNativeEvent);
+    // Let any request from the previous lifecycle finish before a new native
+    // listener can enqueue work under the next authenticated account state.
+    await waitForVoipTokenLifecycle();
 
-  const pending = await NativeCallsModule.getPendingEventsAsync().catch(() => []);
-  pending.forEach(handleNativeEvent);
-  const started = await NativeCallsModule.startVoipRegistrationAsync().catch(() => false);
-  return {
-    apnsEnvironment,
-    status: started ? "started" : "error",
-    tokenFingerprint: null,
-  };
+    if (!readiness.available || !NativeCallsModule) {
+      return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
+    }
+
+    voipRegistrationActive = true;
+    eventListener = listener ?? null;
+    nativeSubscription = NativeCallsModule.addListener(
+      "onNativeCallEvent",
+      (event) => handleNativeEvent(event, generation),
+    );
+
+    const pending = await NativeCallsModule.getPendingEventsAsync().catch(() => []);
+    pending.forEach((event) => handleNativeEvent(event, generation));
+    const started = await NativeCallsModule.startVoipRegistrationAsync().catch(() => false);
+    if (!started && generation === voipLifecycleGeneration) {
+      voipRegistrationActive = false;
+      nativeSubscription?.remove();
+      nativeSubscription = null;
+      eventListener = null;
+    }
+    return {
+      apnsEnvironment,
+      status: started ? "started" : "error",
+      tokenFingerprint: null,
+    };
+  });
 }
 
 export async function readIosVoipRegistrationStatus(): Promise<IosVoipRegistrationState> {
@@ -227,14 +282,22 @@ export async function readIosVoipRegistrationStatus(): Promise<IosVoipRegistrati
 }
 
 export async function revokeIosVoipRegistration(): Promise<IosVoipRegistrationState> {
-  const apnsEnvironment = readApnsEnvironment();
-  if (Platform.OS !== "ios") return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
-  nativeSubscription?.remove();
-  nativeSubscription = null;
-  eventListener = null;
-  await NativeCallsModule?.stopVoipRegistrationAsync().catch(() => false);
+  return runVoipTransition(async () => {
+    const apnsEnvironment = readApnsEnvironment();
+    if (Platform.OS !== "ios") return { apnsEnvironment, status: "disabled", tokenFingerprint: null };
 
-  return revokeBackendVoipRegistration();
+    ++voipLifecycleGeneration;
+    voipRegistrationActive = false;
+    nativeSubscription?.remove();
+    nativeSubscription = null;
+    eventListener = null;
+    await NativeCallsModule?.stopVoipRegistrationAsync().catch(() => false);
+
+    // An already-issued request cannot be aborted reliably. Waiting before the
+    // final revoke guarantees that it cannot reactivate this install afterward.
+    await waitForVoipTokenLifecycle();
+    return revokeBackendVoipRegistration();
+  });
 }
 
 export async function dispatchIosVoipIncomingCall(inviteId: string) {
@@ -254,6 +317,16 @@ export async function dispatchIosVoipIncomingCall(inviteId: string) {
 export async function endIosNativeCall(callUuid: string, reason = "local_end") {
   if (!NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) return false;
   return NativeCallsModule.endCallAsync(callUuid, reason).then(() => true).catch(() => false);
+}
+
+export async function reportIosNativeCallRemoteEnd(callUuid: string, reason = "remote_end") {
+  if (!NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) return false;
+  return NativeCallsModule.reportRemoteEndAsync(callUuid, reason).then(() => true).catch(() => false);
+}
+
+export async function completeIosNativeCallAnswer(callUuid: string, connected: boolean) {
+  if (!NativeCallsModule || !isIosNativeCallsRuntimeEnabled()) return false;
+  return NativeCallsModule.completeAnswerAsync(callUuid, connected).then(() => true).catch(() => false);
 }
 
 export async function setIosNativeCallMuted(callUuid: string, muted: boolean) {

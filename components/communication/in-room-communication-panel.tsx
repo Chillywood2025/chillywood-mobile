@@ -25,12 +25,14 @@ type InRoomCommunicationPanelProps = {
   callType?: "voice" | "video" | null;
   cameraEnabled: boolean;
   micEnabled: boolean;
+  speakerEnabled?: boolean;
   mediaPermissionMessage?: string | null;
   canOpenMediaSettings?: boolean;
   showControls?: boolean;
   presentation?: "embedded" | "fullscreen";
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  onToggleAudioRoute?: () => void;
   onSwitchCamera?: () => void;
   onLeave: () => void;
   onOpenMediaSettings?: () => void;
@@ -62,12 +64,14 @@ export function InRoomCommunicationPanel({
   callType = null,
   cameraEnabled,
   micEnabled,
+  speakerEnabled = false,
   mediaPermissionMessage,
   canOpenMediaSettings = false,
   showControls = true,
   presentation = "embedded",
   onToggleCamera,
   onToggleMic,
+  onToggleAudioRoute,
   onSwitchCamera,
   onLeave,
   onOpenMediaSettings,
@@ -223,10 +227,12 @@ export function InRoomCommunicationPanel({
             cameraEnabled={cameraEnabled}
             cameraStatus={cameraStatus}
             micEnabled={micEnabled}
+            speakerEnabled={speakerEnabled}
             minimumTouchTarget={responsiveLayout.minimumTouchTarget}
             leaveLabel={isHost ? "End Call" : "Leave"}
             onToggleCamera={onToggleCamera}
             onToggleMic={onToggleMic}
+            onToggleAudioRoute={onToggleAudioRoute}
             onSwitchCamera={onSwitchCamera}
             onLeave={onLeave}
           />

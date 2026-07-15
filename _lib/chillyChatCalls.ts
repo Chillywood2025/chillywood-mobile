@@ -507,9 +507,12 @@ export async function updateChillyChatCallInviteStatus(input: {
     input.status === "accepted"
     || input.status === "declined"
     || input.status === "missed"
+    || input.status === "canceled"
     || input.status === "busy"
   ) {
     query = query.eq("status", "ringing");
+  } else if (input.status === "ended") {
+    query = query.eq("status", "accepted");
   }
 
   const { data, error } = await query

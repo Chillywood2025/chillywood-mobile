@@ -36,6 +36,12 @@ assert.equal(payload.callUuid, payload.callInviteId);
 assert.match(payload.path, /^\/chat\/thread%20with%20spaces\?callInviteId=/u);
 assert.equal("token" in payload, false, "APNs payload must never contain the raw destination token");
 assert.equal("camera" in payload, false, "incoming-call payload must never activate a camera");
+assert.throws(() => buildIosVoipApnsPayload({
+  action: "cancel",
+  callInviteId: payload.callInviteId,
+  callType: "video",
+  threadId: "thread with spaces",
+}), /terminal_voip_payload_forbidden/u, "terminal state must never use a second VoIP push");
 assert.throws(() => buildIosVoipApnsPayload({ callInviteId: "", threadId: "" }), /invalid_voip_payload_scope/u);
 
 for (const reason of ["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"]) {

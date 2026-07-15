@@ -60,6 +60,12 @@ import {
   type FriendRelationshipState,
 } from "../../_lib/friendGraph";
 import { reportRuntimeError } from "../../_lib/logger";
+import {
+  completeIosNativeCallAnswer,
+  endIosNativeCall,
+  setIosNativeCallAudioRoute,
+  setIosNativeCallMuted,
+} from "../../_lib/iosNativeCalls";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
   dismissChillyChatCallNotificationRows,
@@ -219,10 +225,12 @@ export default function ChillyChatThreadScreen() {
     openCall: openCallParam,
     callInviteId: callInviteIdParam,
     nativeCallAction: nativeCallActionParam,
+    nativeCallUuid: nativeCallUuidParam,
   } =
     useLocalSearchParams<{
       callInviteId?: string;
       nativeCallAction?: string;
+      nativeCallUuid?: string;
       openCall?: string;
       startCall?: string;
       threadId?: string;
@@ -234,6 +242,7 @@ export default function ChillyChatThreadScreen() {
   );
   const requestedCallInviteId = String(Array.isArray(callInviteIdParam) ? callInviteIdParam[0] : callInviteIdParam ?? "").trim();
   const requestedNativeCallAction = String(Array.isArray(nativeCallActionParam) ? nativeCallActionParam[0] : nativeCallActionParam ?? "").trim().toLowerCase();
+  const requestedNativeCallUuid = String(Array.isArray(nativeCallUuidParam) ? nativeCallUuidParam[0] : nativeCallUuidParam ?? "").trim();
 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -250,6 +259,7 @@ export default function ChillyChatThreadScreen() {
   const [messageReportTarget, setMessageReportTarget] = useState<ChatMessage | null>(null);
   const [messageReportBusy, setMessageReportBusy] = useState(false);
   const [callPanelOpen, setCallPanelOpen] = useState(false);
+  const [nativeSpeakerEnabled, setNativeSpeakerEnabled] = useState(false);
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
@@ -263,6 +273,8 @@ export default function ChillyChatThreadScreen() {
   const autoStartCallRef = useRef("");
   const autoOpenCallRef = useRef("");
   const nativeCallActionHandledRef = useRef("");
+  const nativeAnswerAcknowledgedRef = useRef("");
+  const activeCallInviteRef = useRef<ChillyChatCallInvite | null>(null);
   const lastReadReceiptWriteAtRef = useRef(0);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
@@ -544,12 +556,40 @@ export default function ChillyChatThreadScreen() {
           threadId,
         });
       }
+      const activeInvite = activeCallInviteRef.current;
+      if (activeInvite?.status === "accepted" && currentUserId) {
+        void updateChillyChatCallInviteStatus({
+          actorUserId: currentUserId,
+          invite: activeInvite,
+          status: "ended",
+        }).finally(() => {
+          activeCallInviteRef.current = null;
+        });
+      }
+      if (requestedNativeCallUuid) {
+        void endIosNativeCall(requestedNativeCallUuid, `room_${reason}`).catch(() => false);
+      }
       void clearEndedChatThreadCall(threadId).finally(() => {
         setCallPanelOpen(false);
         void loadThreadState();
       });
     },
   });
+
+  const handleToggleCallMic = useCallback(async () => {
+    const nextMuted = micEnabled;
+    await toggleMic();
+    if (requestedNativeCallUuid) {
+      await setIosNativeCallMuted(requestedNativeCallUuid, nextMuted).catch(() => false);
+    }
+  }, [micEnabled, requestedNativeCallUuid, toggleMic]);
+
+  const handleToggleNativeAudioRoute = useCallback(async () => {
+    if (Platform.OS !== "ios" || !requestedNativeCallUuid) return;
+    const nextSpeakerEnabled = !nativeSpeakerEnabled;
+    const updated = await setIosNativeCallAudioRoute(nextSpeakerEnabled ? "speaker" : "receiver");
+    if (updated) setNativeSpeakerEnabled(nextSpeakerEnabled);
+  }, [nativeSpeakerEnabled, requestedNativeCallUuid]);
 
   useEffect(() => {
     stopOutgoingRingback();
@@ -615,6 +655,7 @@ export default function ChillyChatThreadScreen() {
 
       setOutgoingCallInvite(invite);
       if (invite.status === "accepted") {
+        activeCallInviteRef.current = invite;
         stopOutgoingRingback();
         setOutgoingCallInvite(null);
         setCallDeliveryStatus("Receiver joined the call.");
@@ -966,6 +1007,7 @@ export default function ChillyChatThreadScreen() {
         : refreshPushRegistrationIfGranted());
       const result = await startChatThreadCall(threadId, mode);
       setThread(result.thread);
+      activeCallInviteRef.current = result.invite;
       setOutgoingCallInvite(result.invite);
       setCallPanelOpen(true);
       setCallDeliveryStatus(getCallDeliveryMessage(result.delivery));
@@ -1029,7 +1071,7 @@ export default function ChillyChatThreadScreen() {
   }, [clearVisibleIncomingCallState, currentUserId, threadId]);
 
   const acceptIncomingInvite = useCallback(async (invite: ChillyChatCallInvite) => {
-    if (!invite || callBusy || !currentUserId) return;
+    if (!invite || callBusy || !currentUserId) return false;
     Vibration.cancel();
     void stopChillyChatCallSound(incomingCallSoundRef.current);
     incomingCallSoundRef.current = null;
@@ -1040,7 +1082,7 @@ export default function ChillyChatThreadScreen() {
     setCallBusy(true);
     try {
       const currentInvite = await readAcceptableIncomingInvite(invite);
-      if (!currentInvite) return;
+      if (!currentInvite) return false;
       const acceptedInvite = await updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
         invite: currentInvite,
@@ -1050,6 +1092,7 @@ export default function ChillyChatThreadScreen() {
         throw new Error("Unable to accept this Chi'lly Chat call right now.");
       }
       rememberHandledIncomingInvite(acceptedInvite);
+      activeCallInviteRef.current = acceptedInvite;
       await dismissPresentedChillyChatCallNotifications({
         callInviteId: currentInvite.id,
         dismissAllPresentedNotificationsFallback: true,
@@ -1077,8 +1120,10 @@ export default function ChillyChatThreadScreen() {
         mode: currentInvite.callType,
       });
       await loadThreadState();
+      return true;
     } catch (acceptError) {
       setError(acceptError instanceof Error ? acceptError.message : "Unable to accept this Chi'lly Chat call.");
+      return false;
     } finally {
       setCallBusy(false);
     }
@@ -1137,10 +1182,12 @@ export default function ChillyChatThreadScreen() {
   }, [callBusy, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, rememberHandledIncomingInvite, threadId]);
 
   useEffect(() => {
-    const action = requestedNativeCallAction === "answer" || requestedNativeCallAction === "decline"
+    const action = ["answer", "decline", "end", "mute", "unmute"].includes(requestedNativeCallAction)
       ? requestedNativeCallAction
       : "";
-    const requestKey = action && requestedCallInviteId ? `${threadId}:${requestedCallInviteId}:${action}` : "";
+    const requestKey = action && requestedCallInviteId
+      ? `${threadId}:${requestedCallInviteId}:${requestedNativeCallUuid}:${action}`
+      : "";
     if (!requestKey) {
       nativeCallActionHandledRef.current = "";
       return;
@@ -1170,8 +1217,8 @@ export default function ChillyChatThreadScreen() {
       if (
         !invite
         || invite.threadId !== threadId
-        || invite.calleeUserId !== currentUserId
-        || invite.callerUserId === currentUserId
+        || (invite.calleeUserId !== currentUserId && invite.callerUserId !== currentUserId)
+        || ((action === "answer" || action === "decline") && invite.calleeUserId !== currentUserId)
       ) {
         setCallDeliveryStatus("This Chi'lly Chat call is no longer available. Ask the caller to start a new call.");
         await dismissPresentedChillyChatCallNotifications({
@@ -1180,11 +1227,42 @@ export default function ChillyChatThreadScreen() {
           dismissIncomingCallFallback: true,
           threadId,
         }).catch(() => 0);
+        if (action === "answer" && requestedNativeCallUuid) {
+          await completeIosNativeCallAnswer(requestedNativeCallUuid, false);
+        }
         return;
       }
 
       if (action === "answer") {
-        await acceptIncomingInvite(invite);
+        const accepted = await acceptIncomingInvite(invite);
+        if (!accepted && requestedNativeCallUuid) {
+          await completeIosNativeCallAnswer(requestedNativeCallUuid, false);
+        }
+        return;
+      }
+
+      if (action === "mute" || action === "unmute") {
+        const shouldMute = action === "mute";
+        if (invite.status === "accepted" && micEnabled === shouldMute) {
+          await toggleMic();
+        }
+        return;
+      }
+
+      if (action === "end") {
+        if (invite.status === "accepted") {
+          const isHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
+          await leaveRoom({ endRoomIfHost: isHost }).catch(() => undefined);
+          await updateChillyChatCallInviteStatus({
+            actorUserId: currentUserId,
+            invite,
+            status: "ended",
+          }).catch(() => null);
+        }
+        activeCallInviteRef.current = null;
+        await clearEndedChatThreadCall(threadId).catch(() => null);
+        setCallPanelOpen(false);
+        await loadThreadState();
         return;
       }
 
@@ -1232,8 +1310,43 @@ export default function ChillyChatThreadScreen() {
     rememberHandledIncomingInvite,
     requestedCallInviteId,
     requestedNativeCallAction,
+    requestedNativeCallUuid,
+    micEnabled,
+    toggleMic,
+    callRoom?.hostUserId,
+    leaveRoom,
     threadId,
   ]);
+
+  useEffect(() => {
+    if (
+      requestedNativeCallAction !== "answer"
+      || !requestedNativeCallUuid
+      || nativeAnswerAcknowledgedRef.current === requestedNativeCallUuid
+    ) {
+      return;
+    }
+    if (callChannelState !== "live" && callChannelState !== "error") return;
+
+    nativeAnswerAcknowledgedRef.current = requestedNativeCallUuid;
+    if (callChannelState === "live") {
+      void completeIosNativeCallAnswer(requestedNativeCallUuid, true);
+      return;
+    }
+
+    void completeIosNativeCallAnswer(requestedNativeCallUuid, false);
+    const activeInvite = activeCallInviteRef.current;
+    void leaveRoom({ endRoomIfHost: false }).catch(() => undefined);
+    if (activeInvite?.status === "accepted" && currentUserId) {
+      void updateChillyChatCallInviteStatus({
+        actorUserId: currentUserId,
+        invite: activeInvite,
+        status: "ended",
+      }).finally(() => {
+        activeCallInviteRef.current = null;
+      });
+    }
+  }, [callChannelState, currentUserId, leaveRoom, requestedNativeCallAction, requestedNativeCallUuid]);
 
   useEffect(() => {
     const nextMode: ChatCallType | null = requestedCallMode === "voice"
@@ -1354,11 +1467,24 @@ export default function ChillyChatThreadScreen() {
           status: "canceled",
         }).catch(() => null);
       }
+      const activeInvite = activeCallInviteRef.current;
+      if (activeInvite?.status === "accepted" && currentUserId) {
+        const endedInvite = await updateChillyChatCallInviteStatus({
+          actorUserId: currentUserId,
+          invite: activeInvite,
+          status: "ended",
+        }).catch(() => null);
+        activeCallInviteRef.current = endedInvite ?? null;
+      }
+      if (requestedNativeCallUuid) {
+        await endIosNativeCall(requestedNativeCallUuid, "in_app_leave").catch(() => false);
+      }
       if (isHost) {
         await clearEndedChatThreadCall(threadId);
       }
       stopOutgoingRingback();
       setOutgoingCallInvite(null);
+      activeCallInviteRef.current = null;
       setCallPanelOpen(false);
       setCallDeliveryStatus(isHost
         ? "The call ended and the receiver-visible call state was cleared."
@@ -1376,7 +1502,7 @@ export default function ChillyChatThreadScreen() {
         role: isHost ? "host" : "viewer",
       });
     }
-  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, readAcceptableIncomingInvite, requestedCallInviteId, stopOutgoingRingback, thread?.activeCallType, threadId]);
+  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, readAcceptableIncomingInvite, requestedCallInviteId, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";
@@ -2084,12 +2210,20 @@ export default function ChillyChatThreadScreen() {
             callType={thread?.activeCallType ?? null}
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}
+            speakerEnabled={nativeSpeakerEnabled}
             mediaPermissionMessage={mediaPermissionMessage}
             canOpenMediaSettings={canOpenMediaSettings}
             showControls={!!activeCallRoomId && !callError && !callLoading}
             presentation="fullscreen"
             onToggleCamera={toggleCamera}
-            onToggleMic={toggleMic}
+            onToggleMic={() => {
+              void handleToggleCallMic();
+            }}
+            onToggleAudioRoute={Platform.OS === "ios" && requestedNativeCallUuid
+              ? () => {
+                  void handleToggleNativeAudioRoute();
+                }
+              : undefined}
             onSwitchCamera={() => {
               void switchCamera();
             }}

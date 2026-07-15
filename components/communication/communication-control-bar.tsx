@@ -7,9 +7,11 @@ type CommunicationControlBarProps = {
   cameraEnabled: boolean;
   cameraStatus?: "off" | "connecting" | "on";
   micEnabled: boolean;
+  speakerEnabled?: boolean;
   minimumTouchTarget?: number;
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  onToggleAudioRoute?: () => void;
   onSwitchCamera?: () => void;
   onLeave: () => void;
   leaveLabel?: string;
@@ -19,9 +21,11 @@ export function CommunicationControlBar({
   cameraEnabled,
   cameraStatus,
   micEnabled,
+  speakerEnabled = false,
   minimumTouchTarget = 48,
   onToggleCamera,
   onToggleMic,
+  onToggleAudioRoute,
   onSwitchCamera,
   onLeave,
   leaveLabel = "Leave",
@@ -88,6 +92,16 @@ export function CommunicationControlBar({
       >
         <Text style={styles.controlLabel}>{micEnabled ? "Mic On" : "Mic Muted"}</Text>
       </TouchableOpacity>
+      {onToggleAudioRoute ? (
+        <TouchableOpacity
+          accessibilityLabel={speakerEnabled ? "Use phone receiver" : "Use speaker"}
+          style={[styles.control, { minHeight: minimumTouchTarget }, speakerEnabled ? styles.controlOn : styles.controlOff]}
+          activeOpacity={0.86}
+          onPress={onToggleAudioRoute}
+        >
+          <Text style={styles.controlLabel}>{speakerEnabled ? "Speaker On" : "Receiver"}</Text>
+        </TouchableOpacity>
+      ) : null}
       <TouchableOpacity
         style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlLeave]}
         activeOpacity={0.86}

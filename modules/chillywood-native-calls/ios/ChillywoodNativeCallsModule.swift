@@ -42,6 +42,14 @@ public final class ChillywoodNativeCallsModule: Module {
       try ChillywoodNativeCallCoordinator.shared.endCall(callUuid: callUuid, reason: reason ?? "local_end")
     }
 
+    AsyncFunction("reportRemoteEndAsync") { (callUuid: String, reason: String?) in
+      try ChillywoodNativeCallCoordinator.shared.reportRemoteEnd(callUuid: callUuid, reason: reason ?? "remote_end")
+    }
+
+    AsyncFunction("completeAnswerAsync") { (callUuid: String, connected: Bool) in
+      try ChillywoodNativeCallCoordinator.shared.completeAnswer(callUuid: callUuid, connected: connected)
+    }
+
     AsyncFunction("setMutedAsync") { (callUuid: String, muted: Bool) in
       try ChillywoodNativeCallCoordinator.shared.setMuted(callUuid: callUuid, muted: muted)
     }
