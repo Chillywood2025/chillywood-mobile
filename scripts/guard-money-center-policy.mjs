@@ -188,9 +188,10 @@ assertIncludes(channelSettings, "money-manager-watch-party-save-config-button", 
 assertIncludes(channelSettings, "watchPartySetupSavingId", "Watch-Party setup save busy state");
 assertIncludes(channelSettings, "canStartStripeSetup = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)", "safe payout setup readiness visibility");
 assertIncludes(channelSettings, "No verified tips yet.", "no fake earnings copy");
-assertIncludes(channelSettings, "It does not charge Android users for digital goods.", "Android digital Stripe block");
+assertIncludes(channelSettings, 'const storeProviderName = Platform.OS === "ios" ? "App Store" : "Google Play"', "platform-aware store provider naming");
+assertIncludes(channelSettings, "It does not charge users for digital goods.", "digital Stripe block");
 assertIncludes(channelSettings, "Stripe Connect is payout setup only.", "Stripe Connect payout boundary");
-assertIncludes(channelSettings, "Physical goods stay separate from Android digital access.", "merch separation copy");
+assertIncludes(channelSettings, "Physical goods stay separate from digital access.", "merch separation copy");
 assertIncludes(channelSettings, "Provider checks are the source of readiness truth.", "provider readiness visible source");
 assertIncludes(channelSettings, "readProviderReadinessSummary", "provider readiness integration");
 assertIncludes(providerReadiness, "readProviderReadinessSummary", "provider readiness helper");
@@ -231,7 +232,7 @@ assertIncludes(admin, "Inspect only", "Owner/Admin money detail action safety co
 assertIncludes(operatorTabsBlock, "{ key: \"money-center\", label: \"Money Center\" }", "Admin Money Center tab");
 assertIncludes(admin, "ADMIN_MONEY_LEGACY_TAB_SECTIONS", "legacy Admin money tab mapping");
 assertIncludes(admin, "useLocalSearchParams", "Admin Money Center deep-link query mapping");
-assertIncludes(admin, "Premium / RevenueCat / Google Play", "Admin Premium provider consolidation");
+assertIncludes(admin, 'title: `Premium / RevenueCat / ${storeProviderName}`', "Admin Premium provider consolidation");
 assertIncludes(admin, "Internal Sandbox Testing", "Admin internal sandbox testing controls");
 assertIncludes(admin, "Open Sandbox Tester Tools", "Admin sandbox tester tools link");
 assertIncludes(admin, "Payout readiness", "Admin sandbox payout readiness boundary");
@@ -255,7 +256,7 @@ assertIncludes(admin, "Duplicate webhook idempotency", "Owner/Admin idempotency 
 assertIncludes(admin, "Admin revoke", "Owner/Admin admin revoke proof row");
 assertIncludes(admin, "Failed/expired intent", "Owner/Admin failed expired intent proof row");
 assertIncludes(admin, "Event pass safety", "Owner/Admin event pass safety proof row");
-assertIncludes(admin, "Stripe Android digital checkout", "Owner/Admin Stripe Android digital checkout absence row");
+assertIncludes(admin, '{ label: "Stripe digital checkout", value: "Absent" }', "Owner/Admin Stripe digital checkout absence row");
 assertIncludes(moneyAuditEvents, "readAdminMoneyAuditSourceRows", "admin safe money source row reader");
 assertIncludes(moneyAuditEvents, "readCreatorMoneyAuditSourceRows", "creator scoped money source row reader");
 assertIncludes(moneyAuditEvents, "buildAdminMoneyAuditEvents", "admin normalized money event builder");
