@@ -95,8 +95,14 @@ if (!/BUILD_IOS_PRODUCTION/u.test(production) || !/SUBMIT_INTERNAL_TESTFLIGHT/u.
 if (!/eas build --platform ios --profile production --non-interactive --wait --freeze-credentials/u.test(production)) {
   fail("production workflow must use only the production iOS build profile");
 }
-if (!/eas submit --platform ios --profile production --id "\$\{\{ inputs\.eas_build_id \}\}" --groups "Chillywood Internal" --what-to-test "Internal validation only\. Push, native incoming calls, purchases, payouts, and live money remain disabled\." --non-interactive --wait/u.test(production)) {
+if (!/eas submit --platform ios --profile production --id "\$\{\{ inputs\.eas_build_id \}\}" --groups "Chillywood Internal" --non-interactive --wait/u.test(production)) {
   fail("internal-TestFlight upload must name an exact reviewed EAS build ID");
+}
+if (!production.includes("Internal validation only. Push, native incoming calls, purchases, payouts, and live money remain disabled.")) {
+  fail("production workflow must preserve the bounded internal-test scope note");
+}
+if (production.includes("--what-to-test")) {
+  fail("production workflow must not use the EAS Enterprise-only --what-to-test flag");
 }
 if (/eas\s+submit[^\n]*--latest/u.test(production)) fail("implicit latest-build submission is forbidden");
 if (!/never enables external testing or public App Store release/u.test(production)) {

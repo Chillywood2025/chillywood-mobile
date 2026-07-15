@@ -140,7 +140,17 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Upload exact build to App Store Connect
-        run: eas submit --platform ios --profile production --id "${{ inputs.eas_build_id }}" --groups "Chillywood Internal" --what-to-test "Internal validation only. Push, native incoming calls, purchases, payouts, and live money remain disabled." --non-interactive --wait
+        run: eas submit --platform ios --profile production --id "${{ inputs.eas_build_id }}" --groups "Chillywood Internal" --non-interactive --wait
+
+      - name: Record bounded internal-test scope
+        run: |
+          {
+            echo "### Internal TestFlight boundary"
+            echo
+            echo "Internal validation only. Push, native incoming calls, purchases, payouts, and live money remain disabled."
+            echo
+            echo "Set the same What to Test note in App Store Connect after processing. The EAS CLI flag is plan-gated and is intentionally not used here."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve release boundary
         run: |
