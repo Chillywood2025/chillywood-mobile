@@ -102,7 +102,7 @@ cash-out, and payable balances remain off.
 
 ### Atomic normalized-event application
 
-`revenuecat-webhook` v71 now verifies and normalizes provider input, validates the
+`revenuecat-webhook` v72 now verifies and normalizes provider input, validates the
 store/product policy, stores no raw provider payload, and calls service-only
 PostgreSQL transactions:
 

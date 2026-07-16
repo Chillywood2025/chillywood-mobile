@@ -84,16 +84,18 @@ Migrations:
 - `20260715150522_ios_voip_push_token_foundation`;
 - `20260715151250_ios_app_store_mappings`; and
 - `20260715174500_ios_app_store_purchase_intents`;
-- `20260718091500_fix_ios_app_store_premium_reference_prices` (remote version `20260716111111`);
-- `20260718103000_durable_chat_call_status_transition` (remote version `20260716111117`);
-- `20260718110000_revenuecat_atomic_event_transactions` (remote version `20260716111120`); and
-- `20260718111500_harden_chat_call_transition_delivery_access` (remote version `20260716111423`);
+- `20260718091500_fix_ios_app_store_premium_reference_prices`;
+- `20260718103000_durable_chat_call_status_transition`;
+- `20260718110000_revenuecat_atomic_event_transactions`; and
+- `20260718111500_harden_chat_call_transition_delivery_access`;
 - `20260718113000_durable_call_delivery_retry_and_storefront_prices`;
 - `20260718114500_enable_chat_call_transition_retry_scheduler`; and
 - `20260718120000_index_terminal_retry_and_revenuecat_intent_links`.
 
-Linked migration history is aligned for the four repaired versions and the three
-new QA migrations. The unrelated local-only
+Historical remote aliases `20260716111111`, `20260716111117`,
+`20260716111120`, and `20260716111423` were intentionally repaired to the four
+canonical local filenames above. Current linked history shows exact local/remote
+pairs for those four and the three new QA migrations. The unrelated local-only
 `20260714001704_user_report_router` intentionally has no deployed objects; there
 is no unintended remote-only migration or already-deployed SQL pending reapply.
 
@@ -101,12 +103,12 @@ Active Edge Functions:
 
 - `notification-device-tokens` v49;
 - `notification-dispatch` v49;
-- `chilly-chat-call-dispatch` v36;
-- `chilly-chat-call-transition` v2;
-- `chilly-chat-call-transition-retry` v1;
-- `revenuecat-webhook` v71;
+- `chilly-chat-call-dispatch` v37;
+- `chilly-chat-call-transition` v3;
+- `chilly-chat-call-transition-retry` v2;
+- `revenuecat-webhook` v72;
 - `ios-voip-push-tokens` v1; and
-- `ios-voip-call-dispatch` v4.
+- `ios-voip-call-dispatch` v5.
 
 Remote readback confirms monthly/yearly Premium mappings at `999`/`9999`, exact
 `ios` / `app_store` / `revenuecat_app_store` sandbox scope, unchanged Android

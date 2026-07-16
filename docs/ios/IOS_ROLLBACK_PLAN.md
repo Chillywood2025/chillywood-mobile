@@ -85,12 +85,12 @@ Affected functions include:
 
 - `notification-device-tokens` v49;
 - `notification-dispatch` v49;
-- `chilly-chat-call-dispatch` v36;
-- `chilly-chat-call-transition` v2;
-- `chilly-chat-call-transition-retry` v1;
+- `chilly-chat-call-dispatch` v37;
+- `chilly-chat-call-transition` v3;
+- `chilly-chat-call-transition-retry` v2;
 - `ios-voip-push-tokens` v1;
-- `ios-voip-call-dispatch` v4; and
-- `revenuecat-webhook` v71.
+- `ios-voip-call-dispatch` v5; and
+- `revenuecat-webhook` v72.
 
 For a faulty deployment:
 
