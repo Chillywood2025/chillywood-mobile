@@ -36,10 +36,10 @@ The major integration commits are intentionally separable:
 | Privacy and store materials | `9c54a412` | Revert only an incorrect manifest reason or document claim. Re-run the privacy guard and inspect the generated/archive manifest before another upload. |
 | Media readiness | `94d1d4c6`, `a5f23b06`, `8719ada3` | Revert permission/media lifecycle changes as one unit if they cause a regression. Confirm camera/microphone never activate without user intent and sign-out/leave still tears down tracks. |
 | Push and native calls | `db63e456`, `e8dd7e38`, `d3f1715a`, `b5bebb35` | Turn runtime/server flags off first, then revert client/native/backend source together as required. Preserve Android FCM and full-screen call behavior. |
-| Durable call orchestration | semantic correction commit (pending final hash) | Keep ordinary/VoIP rollout off. Revert client, dispatcher, transition function, and shared schema/policy together; retain delivery rows and apply only forward database fixes. |
+| Durable call orchestration | `e43f34ab41a7e936e6eeca9b0031faa3de557559` | Keep ordinary/VoIP rollout off. Revert client, dispatcher, transition function, and shared schema/policy together; retain delivery rows and apply only forward database fixes. |
 | Store-aware policy/schema/webhook | `95fdc2b7`, copy/provider commits through `8328f052`, `2be7d4cb`, `1e213378`, `e39a069d`, `c40287ee`, `4d0ed187` | Disable the Apple rail first. Revert Apple-specific selection/copy without removing Google provider values or weakening webhook verification/idempotency. |
-| Atomic RevenueCat application | semantic correction commit (pending final hash) | Keep the App Store rail and money switches off. Redeploy webhook v69 only with a reviewed forward compatibility plan; never delete provider events, entitlements, grants, ledger rows, or intents. |
-| Release workflows | `fa847965`, `19230653`, `63431991`, `b65ab225`, `f7af588d` | Disable/delete only the affected manual workflow or environment access. Preserve validation, protected approvals, exact-build submission, and no-auto-release controls. |
+| Atomic RevenueCat application | `e43f34ab41a7e936e6eeca9b0031faa3de557559` | Keep the App Store rail and money switches off. Redeploy webhook v69 only with a reviewed forward compatibility plan; never delete provider events, entitlements, grants, ledger rows, or intents. |
+| Release workflows / managed iOS upload boundary | `fa847965`, `19230653`, `63431991`, `b65ab225`, `f7af588d`, `d5a8db65edbdd19fec42ad37ca1162412f66a41e` | Disable/delete only the affected manual workflow or environment access. Preserve validation, protected approvals, exact-build submission, generated `/ios` exclusion, and no-auto-release controls. |
 | Store screenshot drafts | `a4ab1d49` | Remove only the draft assets if incorrect. Preserve source/build evidence and never replace them with private-account or private-media captures. |
 | Critical transitive dependency patch | `d6a95ed5` | Revert only if a verified incompatibility requires it and a separately reviewed safe dependency path exists. Never restore vulnerable `websocket-driver` 0.7.4 as a shortcut. |
 
@@ -152,11 +152,23 @@ For a faulty deployment:
   `a729aa9a-1a98-439c-8c81-48c381735d8d`, app `1.0.0 (6)`, from `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 - EAS submission: `ade71443-0a05-49c2-8aa4-c411d4cb3e28`, assigned only to
   `Chillywood Internal`.
+- Failed pre-fix Simulator build `a5f5ccfa-aa88-4026-91fc-2a9db2d79ea3`
+  produced no artifact; do not retry it. Its generated-iOS/Firebase-path cause is
+  prevented by `d5a8db65`.
+- Current Simulator build `b9bb006e-1a96-4817-8ee2-6f3647983d8b` and production
+  EAS build `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555` are from application source
+  `d5a8db65edbdd19fec42ad37ca1162412f66a41e`.
+- Current App Store Connect build is `1.0.0 (7)`, Apple build ID
+  `b5eaaad6-ef24-49c5-8e50-b10cf2807412`; EAS submission
+  `04b9bc95-eb1d-4fb3-95e0-dbf5de790fce` is assigned only to
+  `Chillywood Internal`.
 - Internal build `1.0.0 (3)` remains historical and is superseded by build 6; it
   was never external or public.
-- Build 6 is also superseded by the semantic call/backend correction and must not
-  be restored as the final physical-test candidate. The replacement build 7+
-  identifiers must be added here after successful creation and inspection.
+- Build 6 is superseded by the semantic call/backend correction and must not be
+  restored as the final physical-test candidate. If build 7 is faulty, remove it
+  from `Chillywood Internal`, keep every rollout/money switch off, revert the
+  coherent source unit with normal `git revert`, revalidate, and create a later
+  binary only under a separately approved build budget.
 - Cancel a queued build if safe or allow an in-flight immutable build to finish;
   do not submit it if validation failed.
 - Submit only an exact successful build ID. Never switch a workflow to implicit

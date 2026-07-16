@@ -2,11 +2,11 @@
 
 Checkpoint date: 2026-07-16
 
-Overall verdict: **The semantic call-orchestration and atomic RevenueCat source and
-backend corrections are complete and deployed, but the source closeout is not yet
-complete. Build 6 is superseded by these application/backend-contract changes. A
-new Simulator artifact and internal TestFlight build 7 or higher must be produced
-before the physical-device matrix begins.**
+Overall verdict: **The semantic call-orchestration and atomic RevenueCat source,
+deployment, and replacement-binary closeout is complete. Build 6 is superseded.
+The corrected source has a freshly smoked Simulator artifact and inspected internal
+TestFlight build 7, assigned only to `Chillywood Internal`. The physical-device
+matrix has not begun and remains the final unclaimed proof.**
 
 ## Repository and pull-request state
 
@@ -15,19 +15,21 @@ before the physical-device matrix begins.**
 | Integration branch | `codex/ios-integration-90` |
 | Provider-closeout starting head | `97cd97cd58b021d2f45021c3e121b8a35158cee8` |
 | Provider-closeout source hardening | `0ec109db` |
-| Previously tested application source | `97cd97cd58b021d2f45021c3e121b8a35158cee8`; superseded by the semantic correction working tree |
+| Previously tested application source | `97cd97cd58b021d2f45021c3e121b8a35158cee8`; superseded by `e43f34ab` / `d5a8db65` |
 | Screenshot-only follow-up | `a4ab1d49` |
 | Release-workflow portability fix | `f7af588d` |
 | Critical transitive advisory patch | `d6a95ed5` (`websocket-driver` 0.7.5 lockfile-only) |
+| Semantic call/RevenueCat correction | `e43f34ab41a7e936e6eeca9b0031faa3de557559` |
+| Final application/build source | `d5a8db65edbdd19fec42ad37ca1162412f66a41e` (adds the guarded managed-iOS EAS upload boundary) |
 | Stacked integration PR | [#10](https://github.com/Chillywood2025/chillywood-mobile/pull/10), open, draft, base `codex/ios-first-development-build` |
 | Foundation branch | `codex/ios-first-development-build` at `a85fa0f42cf9b1a20f761c8817b0713fe27e43bd` |
 | Foundation PR | [#9](https://github.com/Chillywood2025/chillywood-mobile/pull/9), open, draft, unmerged |
 | Superseded PR | [#8](https://github.com/Chillywood2025/chillywood-mobile/pull/8), verified empty and closed |
 | Unrelated local state | `deno.lock` remains untracked and is excluded from this work |
 
-No PR has been merged. The corrected working tree passes the full local Node 20
-suite and 76 database assertions. Remote checks and new build evidence remain
-pending until the correction commit is pushed.
+No PR has been merged. The corrected source passes the full local Node 20 suite,
+76 database assertions, and all seven remote PR checks. The documentation-only
+closeout commit after `d5a8db65` does not change the inspected binary.
 
 ## Current integration status
 
@@ -47,12 +49,12 @@ pending until the correction commit is pushed.
 | Commerce policy | Atomic schema deployed; Apple rail off | Premium and exact iOS consumable events now execute through service-only transactional RPCs. Apple/Google providers remain distinct, Google base-plan parsing is preserved, tips create no entitlement/access/payable balance, and Seat Passes grant viewer access only. |
 | RevenueCat Apple | **Configured; credentials valid** | Existing project `projc5629a24` and Apple app `app3a0ad1ba62` are configured for `com.chillywood.mobile`. Ten products, Premium entitlement, three offerings, package mappings, the sensitive EAS public-key variable, and the project-wide webhook all pass readback. A dedicated Apple In-App Purchase Key was generated once, stored outside Git with owner-only permissions and a Keychain record, uploaded directly to the Apple app, and remained `Valid credentials` after RevenueCat reload. The existing App Store Connect API credential also remains valid. |
 | Stripe physical merch / Connect | Verified test-mode and platform-neutral | Required Supabase secret names are present. Existing test-mode merch and Connect webhooks are active; platform charges and payouts remain disabled. iOS has no Stripe digital checkout, and no payout, transfer, cash-out, or payable balance was created. |
-| Privacy manifest | Source and generated prebuild pass | Canonical manifest is wired through Expo, tracking is false, and clean Android/prebuilt output contains the manifest. Current-source archive inspection is now available from the production build `a729aa9a-1a98-439c-8c81-48c381735d8d`. Local clean iOS prebuild requires a local `ios.googleServicesFile` path in this workspace and remains pending. |
+| Privacy manifest | Source, generated prebuild, and archive pass | Canonical manifest is wired through Expo, tracking is false, and build 7 archive inspection confirms `PrivacyInfo.xcprivacy` in the signed app. The protected Firebase file variable supplied clean managed prebuild without placing the plist in Git. |
 | Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
 | Release automation | Prepared and manually verified | `ios-preview` and `ios-production` protected environments exist. Workflows are manual, validate first, pin EAS CLI 21.0.1, freeze production credentials, require an exact build ID, and bind the verified internal group. |
 | Backend deployment | Verified, fail-closed | Seven additive integration migrations and seven active Edge Functions are deployed after restricted readback. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
-| Final-source Simulator | **Pending replacement** | Prior build `6d8e5193-ea75-490f-9451-759419a3e7b3` is historical and superseded. No physical matrix may begin until the corrected source has a freshly installed/smoked Simulator artifact. |
-| Production build / TestFlight | **Build 6 superseded** | Prior internal-only build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, remains historical in `Chillywood Internal`. A new build 7 or higher is required; external testing and public release remain disabled. |
+| Final-source Simulator | **Pass** | `b9bb006e-1a96-4817-8ee2-6f3647983d8b` from `d5a8db65` installed cleanly on the iPhone 17 Pro Simulator, launched, remained alive, and contained the Firebase and privacy manifests. This is not physical-device proof. |
+| Production build / TestFlight | **Pass; internal only** | EAS build `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555`, Apple build `b5eaaad6-ef24-49c5-8e50-b10cf2807412`, version `1.0.0 (7)`, is processed and assigned only to `Chillywood Internal`. No individual/external tester or public release was added. |
 
 ## Deployed backend inventory
 
@@ -67,7 +69,7 @@ Migrations:
 - `20260718091500_fix_ios_app_store_premium_reference_prices` (remote version `20260716111111`);
 - `20260718103000_durable_chat_call_status_transition` (remote version `20260716111117`);
 - `20260718110000_revenuecat_atomic_event_transactions` (remote version `20260716111120`); and
-- `20260718111500_harden_chat_call_transition_delivery_access`.
+- `20260718111500_harden_chat_call_transition_delivery_access` (remote version `20260716111423`).
 
 Active Edge Functions:
 
@@ -179,33 +181,40 @@ them, not for the current integration branch:
 | Build | Profile | Source | Result / scope |
 | --- | --- | --- | --- |
 | `ddc48433-d29d-4a83-a847-0d8908e2da63` | `development-simulator` | `2ea49f421b1e1abbcd0889b273b0908b04aea2a4` | Historical Simulator artifact and bounded smoke proof. |
-| `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `development` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | Historical signed physical build; install, launch, Firebase startup, authentication, persistence, navigation, and sign-out passed; source precedence for current branch is build `97cd97cd`. |
+| `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `development` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | Historical signed physical build; install, launch, Firebase startup, authentication, persistence, navigation, and sign-out passed for that source. |
 
-The integration branch now contains semantic application and backend-contract
-changes after those artifacts. Both build 6 artifacts are historical and cannot
-serve as the final candidate for the corrected source.
+The integration branch contains semantic application/backend-contract changes after
+the historical artifacts. Both build 6 artifacts are historical and cannot serve
+as the final candidate for the corrected source.
 
+| Build | Profile | Source | Result / scope |
+| --- | --- | --- | --- |
 | `98ad48a2-562b-4a66-bf79-2bdcbe875a3a` | `development-simulator` | `b65ab225` | Successful pre-advisory-refresh Simulator evidence, superseded by the final-source build below. |
 | `012edf86-b525-4dee-b9bc-ff23a8281c93` | `production` | `b65ab225` | Successful internal build `1.0.0 (3)`, superseded after the audit feed exposed a patchable transitive critical advisory. It was never external or public. |
 | `6d8e5193-ea75-490f-9451-759419a3e7b3` | `development-simulator` | `97cd97cd58b021d2f45021c3e121b8a35158cee8` | Historical build 6 Simulator evidence; superseded by call/backend semantic corrections. |
 | `a729aa9a-1a98-439c-8c81-48c381735d8d` | `production` | `97cd97cd58b021d2f45021c3e121b8a35158cee8` | Historical internal-only `1.0.0 (6)` archive; superseded and not eligible for the physical matrix. |
+| `a5f5ccfa-aa88-4026-91fc-2a9db2d79ea3` | `development-simulator` | `e43f34ab41a7e936e6eeca9b0031faa3de557559` | Failed before artifact creation because local generated `ios/` referenced an ignored Firebase plist. No release use. The guarded `/ios` EAS exclusion in `d5a8db65` prevents recurrence. |
+| `b9bb006e-1a96-4817-8ee2-6f3647983d8b` | `development-simulator` | `d5a8db65edbdd19fec42ad37ca1162412f66a41e` | Final-source managed-prebuild artifact; fresh install and launch smoke passed with Firebase/privacy manifests present. |
+| `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555` | `production` | `d5a8db65edbdd19fec42ad37ca1162412f66a41e` | Final internal `1.0.0 (7)` archive. SHA-256 `334fbd971a58dd0f50af2ea927fd661c34842995783eb79d9ac772c581b7f6db`; signed archive inspection passed. |
 
-Final internal TestFlight submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28`
-succeeded for that exact build. Apple reports processing state `VALID`, the build is
-assigned to `Chillywood Internal`, and the bounded testing note states that push,
-native incoming calls, purchases, payouts, and live money remain disabled. This is
-not external testing or public release.
+Final EAS submission `04b9bc95-eb1d-4fb3-95e0-dbf5de790fce` succeeded for exact
+build 7. App Store Connect reports `Ready to Submit`, Apple build ID
+`b5eaaad6-ef24-49c5-8e50-b10cf2807412`, and exactly one group:
+`Chillywood Internal` (`Internal`). The saved testing note states that push, native
+incoming calls, purchases, payouts, and live money remain disabled and that the
+physical matrix must not begin without separate authorization. No individual or
+external tester was added; this is not public release.
 
-Clean final-source iOS prebuild and CocoaPods generation pass. The EAS Simulator
-build supplies terminal native Swift/Pods compile evidence; a separate slow local
-Xcode compile was stopped and is not represented as a pass. Clean Android prebuild
-passed at `63431991`: package identity, Firebase, FCM service, adaptive icon, App
-Links, EAS sections, and provider behavior remained unchanged. Generated native
-folders remain uncommitted.
+Clean managed-iOS prebuild and CocoaPods generation pass in both replacement EAS
+builds. The Simulator build supplies terminal native Swift/Pods compile evidence;
+a separate slow local Xcode compile was stopped and is not represented as a pass.
+Clean Android prebuild passed at `63431991`: package identity, Firebase, FCM
+service, adaptive icon, App Links, EAS sections, and provider behavior remained
+unchanged. Generated native folders remain uncommitted.
 
 ## Validation
 
-Local Node 20 results on the semantic correction working tree:
+Local Node 20 results on final application/build source `d5a8db65`:
 
 | Diagnostic | Result |
 | --- | --- |
@@ -238,7 +247,8 @@ Exact required GitHub check names:
 - `Phase 1 / Android Regression Guards`
 - `Phase 1 / Expo Doctor`
 
-All seven passed remotely for `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
+All seven passed remotely for final application/build source
+`d5a8db65edbdd19fec42ad37ca1162412f66a41e`.
 
 Dependency audit status: the root mobile production graph contains 0 critical, 0
 high, 21 moderate, and 1 low advisory. The independently locked alert-automation
@@ -250,10 +260,11 @@ automatic or forced audit fix ran.
 ## Physical evidence and remaining proof
 
 The historical signed iPhone build proved native launch, Firebase, sign-in, session
-persistence, primary navigation, and sign-out for its exact source. It did not prove
-the new integration source. Camera, microphone, Photos upload, two-device LiveKit,
-APNs, Universal Links, PushKit/CallKit, StoreKit lifecycle, accessibility, and final
-device regression remain explicitly unclaimed. See
+persistence, primary navigation, and sign-out for its exact source. The replacement
+Simulator and build 7 prove compilation/archive readiness, not physical behavior.
+Camera, microphone, Photos upload, two-device LiveKit, APNs, Universal Links,
+PushKit/CallKit, StoreKit lifecycle, accessibility, and final device regression
+remain explicitly unclaimed. See
 `IOS_FINAL_DEVICE_TEST_MATRIX.md`.
 
 ## Remaining post-90 proof
@@ -269,7 +280,7 @@ At this checkpoint:
 
 - no merge occurred;
 - no public App Store release or external TestFlight distribution occurred;
-- historical build 6 remains only in `Chillywood Internal` and is superseded; no external tester or public release was enabled;
+- build 7 is assigned only to `Chillywood Internal`; build 6 is superseded, and no individual/external tester or public release was enabled;
 - no production OTA was published;
 - no live money, payable balance, payout, cash-out, withdrawal, or transfer was
   enabled;

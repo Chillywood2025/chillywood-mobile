@@ -2,10 +2,11 @@
 
 Checkpoint date: 2026-07-16
 
-Status: **Provider configuration and atomic backend correction complete; replacement
-binary pending.** RevenueCat's Apple catalog and credential remain valid,
-transactional RPCs are deployed, and the purchase rail remains disabled. Build 6
-is superseded; no physical StoreKit matrix may begin before internal build 7+.
+Status: **Provider configuration, atomic backend correction, and replacement binary
+complete.** RevenueCat's Apple catalog and credential remain valid, transactional
+RPCs are deployed, the purchase rail remains disabled, and build 7 is assigned only
+to the internal TestFlight group. Build 6 is superseded; the physical StoreKit
+matrix has not begun.
 
 This bounded closeout started from branch `codex/ios-integration-90` at
 `97cd97cd58b021d2f45021c3e121b8a35158cee8` in draft PR
@@ -227,8 +228,13 @@ complete requested local suite passed under Node `20.20.2`:
 - `git diff --check`.
 
 The external provider-generated StoreKit configuration also passed the dedicated
-Simulator harness 3/3. The semantic correction working tree passes the complete
-local Node 20 suite; seven remote checks await its replacement commit.
+Simulator harness 3/3. Semantic correction `e43f34ab` and final application/build
+source `d5a8db65` pass the complete local Node 20 suite, 76 database assertions,
+and all seven remote checks. Replacement Simulator
+`b9bb006e-1a96-4817-8ee2-6f3647983d8b` passed fresh install/launch smoke. Inspected
+EAS build `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555`, Apple build
+`b5eaaad6-ef24-49c5-8e50-b10cf2807412`, version `1.0.0 (7)`, is assigned only to
+`Chillywood Internal`; this is build readiness, not StoreKit transaction proof.
 
 ## Remaining bounded proof
 

@@ -49,9 +49,11 @@ source files. Enter them only into the official provider prompt.
 
 ## Physical-device actions in the final 10%
 
-Do not begin these actions yet. Build 6 is superseded. Wait for the corrected
-source commit, freshly installed Simulator smoke, inspected archive, and exact
-internal TestFlight build 7 or higher.
+Do not begin these actions yet. Build 6 is superseded, and the required replacement
+artifacts now exist, but this checkpoint explicitly stops before physical-device
+execution. Use only application source `d5a8db65edbdd19fec42ad37ca1162412f66a41e`,
+Simulator `b9bb006e-1a96-4817-8ee2-6f3647983d8b`, and internal TestFlight build
+`1.0.0 (7)` after a separate start instruction.
 
 Use the exact reviewed internal-TestFlight build and bounded test accounts. Keep
 private surroundings, conversation, contacts, media, device identifiers, and
@@ -135,16 +137,28 @@ The owner does not need to recreate these items:
   Functions, including durable call transition and atomic RevenueCat RPCs;
 - exact remote Premium mapping readback `999` monthly / `9999` yearly with the
   App Store rail, live money, and payouts still off;
+- semantic call/RevenueCat correction commit
+  `e43f34ab41a7e936e6eeca9b0031faa3de557559` and final application/build source
+  `d5a8db65edbdd19fec42ad37ca1162412f66a41e`;
 - historical Simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3`, app
   `1.0.0 (6)`, now superseded;
 - historical production build `a729aa9a-1a98-439c-8c81-48c381735d8d`, app
   `1.0.0 (6)`, now superseded;
-- internal TestFlight processing and assignment to `Chillywood Internal`; and
+- final Simulator `b9bb006e-1a96-4817-8ee2-6f3647983d8b`, inspected EAS build
+  `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555`, and Apple build
+  `b5eaaad6-ef24-49c5-8e50-b10cf2807412`, version `1.0.0 (7)`;
+- EAS submission `04b9bc95-eb1d-4fb3-95e0-dbf5de790fce`, processed and assigned
+  only to `Chillywood Internal`, with the bounded testing note saved and no
+  individual/external tester; and
 - public-safe standard, large, small, and tablet-format screenshot drafts.
 
 Do not revoke/recreate those credentials, products, app records, device
 registration, certificate, or provisioning profile unless a confirmed compromise
 or explicit rollback plan requires it.
+
+No additional EAS binary build is required for this checkpoint. A future OTA is a
+separate action and must retain the no-production-OTA boundary unless explicitly
+authorized at that time.
 
 ## Owner safety confirmation before final approval
 
