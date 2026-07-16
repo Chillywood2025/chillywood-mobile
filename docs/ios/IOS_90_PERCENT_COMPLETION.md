@@ -152,6 +152,6 @@ the EAS Simulator build provides terminal native Swift/Pods compile evidence.
 ## Post-90 final proof
 
 The provider credential gate is closed. All seven independent checks passed on the
-provider-closeout source head; the documentation-only closeout commit must retain
-that green result. The physical-device and owner-attestation matrix is the
-explicitly defined final 10% and remains unclaimed.
+provider-closeout source and credential-closeout documentation heads. The
+physical-device and owner-attestation matrix is the explicitly defined final 10%
+and remains unclaimed.

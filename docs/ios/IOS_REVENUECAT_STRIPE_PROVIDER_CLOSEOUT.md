@@ -185,8 +185,8 @@ complete requested local suite passed under Node `20.20.2`:
 - `git diff --check`.
 
 The external provider-generated StoreKit configuration also passed the dedicated
-Simulator harness 3/3. Final GitHub checks must still pass on the pushed
-documentation commit before this closeout is considered remotely green.
+Simulator harness 3/3. All seven independent GitHub checks passed on the pushed
+credential-closeout documentation head.
 
 ## Remaining bounded proof
 
