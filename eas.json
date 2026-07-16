@@ -31,6 +31,19 @@
         "buildType": "app-bundle"
       }
     },
+    "ios-qa": {
+      "extends": "production",
+      "channel": "ios-qa",
+      "distribution": "store",
+      "environment": "production",
+      "env": {
+        "IOS_NATIVE_CALLS_ENABLED": "true",
+        "IOS_QA_RUNTIME_VERSION": "1.0.0-iosqa1",
+        "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED": "true",
+        "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED": "true",
+        "EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED": "true"
+      }
+    },
     "production-apk": {
       "autoIncrement": true,
       "channel": "production",

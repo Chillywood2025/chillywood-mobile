@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { trackEvent } from "../../_lib/analytics";
+import { createBoundedVisibleReadGate } from "../../_lib/boundedVisibleReadGate";
 import {
   listIosStoreProductsForConcept,
   type IosStoreProductKey,
@@ -68,10 +69,24 @@ export function TipSheet({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
+  const providerReadGateRef = useRef(createBoundedVisibleReadGate());
+  const openingResetGateRef = useRef(createBoundedVisibleReadGate());
+
+  const iosTipCatalog = useMemo(() => {
+    if (Platform.OS !== "ios") return [] as Omit<IosTipOption, "priceLabel">[];
+    return listIosStoreProductsForConcept("creator_tip").map((entry) => ({
+      stableKey: entry.stableKey,
+      productId: entry.productId,
+      referencePriceMinor: entry.referencePriceMinor,
+    }));
+  }, []);
+  const iosProductIdSignature = useMemo(
+    () => iosTipCatalog.map((option) => option.productId).join("\u001f"),
+    [iosTipCatalog],
+  );
+
   const iosTipOptions = useMemo(() => {
-    if (Platform.OS !== "ios") return [] as IosTipOption[];
-    const catalogProducts = listIosStoreProductsForConcept("creator_tip");
-    return catalogProducts.map((entry) => ({
+    return iosTipCatalog.map((entry) => ({
       stableKey: entry.stableKey,
       productId: entry.productId,
       referencePriceMinor: entry.referencePriceMinor,
@@ -80,7 +95,7 @@ export function TipSheet({
         tipStatus?.currency ?? "usd",
       ),
     }));
-  }, [iosProductPriceLabels, tipStatus?.currency]);
+  }, [iosProductPriceLabels, iosTipCatalog, tipStatus?.currency]);
 
   const selectedIosProduct = iosTipOptions.find((option) => option.stableKey === selectedIosTipKey)
     ?? iosTipOptions[0]
@@ -95,15 +110,14 @@ export function TipSheet({
   }, [iosTipOptions, tipStatus?.suggestedAmountsCents]);
 
   useEffect(() => {
-    if (!visible) return;
-
-    if (Platform.OS === "ios" && iosTipOptions.length > 0) {
+    if (!providerReadGateRef.current.shouldRun(visible)) return;
+    const productIds = iosProductIdSignature.split("\u001f").filter(Boolean);
+    if (Platform.OS === "ios" && productIds.length > 0) {
+      let active = true;
       setIosPricesLoading(true);
       const run = async () => {
         try {
-          const products = await readRevenueCatNonSubscriptionProducts(
-            iosTipOptions.map((option) => option.productId),
-          );
+          const products = await readRevenueCatNonSubscriptionProducts(productIds);
           const next: Record<string, string> = {};
           for (const product of products) {
             const identifier = String((product as { identifier?: unknown }).identifier ?? "").trim();
@@ -115,22 +129,35 @@ export function TipSheet({
               next[identifier] = safePrice;
             }
           }
-          setIosProductPriceLabels(next);
+          if (active) {
+            setIosProductPriceLabels((current) => {
+              const nextEntries = Object.entries(next);
+              const unchanged = Object.keys(current).length === nextEntries.length
+                && nextEntries.every(([key, value]) => current[key] === value);
+              return unchanged ? current : next;
+            });
+          }
         } finally {
-          setIosPricesLoading(false);
+          if (active) setIosPricesLoading(false);
         }
       };
-      run();
+      void run();
+      return () => {
+        active = false;
+      };
     }
+  }, [iosProductIdSignature, visible]);
 
-    const iosDefault = iosTipOptions[0];
+  useEffect(() => {
+    if (!openingResetGateRef.current.shouldRun(visible)) return;
+    const iosDefault = iosTipCatalog[0];
     if (Platform.OS === "ios" && iosDefault) {
       setSelectedIosTipKey(iosDefault.stableKey);
       setSelectedAmount(iosDefault.referencePriceMinor);
     }
 
     const defaultAmount = Platform.OS === "ios"
-      ? amounts[0] ?? 99
+      ? iosTipCatalog[0]?.referencePriceMinor ?? 99
       : tipStatus?.defaultAmountCents && tipStatus.defaultAmountCents > 0
         ? tipStatus.defaultAmountCents
         : amounts[0] ?? 300;
@@ -143,7 +170,7 @@ export function TipSheet({
       route_name: "channel",
       source_surface: sourceSurface,
     });
-  }, [amounts, creatorId, iosTipOptions, sourceSurface, tipStatus?.defaultAmountCents, visible]);
+  }, [amounts, creatorId, iosTipCatalog, sourceSurface, tipStatus?.defaultAmountCents, visible]);
 
   const amountCents = Platform.OS === "ios"
     ? (selectedIosProduct?.referencePriceMinor ?? selectedAmount)

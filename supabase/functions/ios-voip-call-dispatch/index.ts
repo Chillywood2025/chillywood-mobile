@@ -15,6 +15,8 @@ type SupabaseClientLike = any;
 
 type DispatchPayload = {
   action?: unknown;
+  deliveryId?: unknown;
+  delivery_id?: unknown;
   inviteId?: unknown;
   invite_id?: unknown;
 };
@@ -298,21 +300,45 @@ Deno.serve(async (req): Promise<Response> => {
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
   try {
-    const callerUserId = await readAuthenticatedUserId(req);
-    if (!callerUserId) return jsonResponse(401, { error: "unauthenticated" });
-
     const body = await parseBody(req);
     if (!body) return jsonResponse(400, { error: "invalid_json_body" });
     const action = normalizeAction(body.action);
+    const deliveryId = toText(body.deliveryId ?? body.delivery_id);
     const inviteId = toText(body.inviteId ?? body.invite_id);
     if (!action) return jsonResponse(400, { error: "invalid_action" });
     if (!inviteId) return jsonResponse(400, { error: "missing_invite_id" });
 
+    const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const adminClient = createClient(
       readRequiredEnv("SUPABASE_URL"),
-      readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+      serviceRoleKey,
       { auth: { persistSession: false } },
     );
+    const requestAuthorization = req.headers.get("authorization") ?? "";
+    let callerUserId = "";
+    if (requestAuthorization === `Bearer ${serviceRoleKey}`) {
+      if (!deliveryId || !isTerminalAction(action)) {
+        return jsonResponse(401, { error: "invalid_internal_delivery_scope" });
+      }
+      const { data: internalDelivery, error: internalDeliveryError } = await adminClient
+        .from("chat_call_transition_deliveries")
+        .select("actor_user_id,call_invite_id,dispatch_action,delivery_status")
+        .eq("id", deliveryId)
+        .maybeSingle();
+      if (
+        internalDeliveryError
+        || !internalDelivery
+        || toText(internalDelivery.call_invite_id) !== inviteId
+        || toText(internalDelivery.dispatch_action) !== action
+        || toText(internalDelivery.delivery_status) !== "dispatching"
+      ) {
+        return jsonResponse(403, { error: "internal_delivery_scope_rejected" });
+      }
+      callerUserId = toText(internalDelivery.actor_user_id);
+    } else {
+      callerUserId = await readAuthenticatedUserId(req) ?? "";
+      if (!callerUserId) return jsonResponse(401, { error: "unauthenticated" });
+    }
     const invite = await readInvite(adminClient, inviteId);
     if (!invite) return jsonResponse(404, { error: "invite_not_found" });
     const inviteCallerUserId = toText(invite.caller_user_id);
@@ -342,7 +368,7 @@ Deno.serve(async (req): Promise<Response> => {
     ) {
       return jsonResponse(200, { eligible: false, reason: "account_access_restricted", status: "blocked" });
     }
-    if (!await readCallPreference(adminClient, recipientUserId)) {
+    if (!isTerminalAction(action) && !await readCallPreference(adminClient, recipientUserId)) {
       return jsonResponse(200, { eligible: false, reason: "call_preference_disabled", status: "blocked" });
     }
 

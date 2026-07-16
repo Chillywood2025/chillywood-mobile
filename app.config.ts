@@ -189,6 +189,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     typeof existingIos.googleServicesFile === "string" ? existingIos.googleServicesFile : undefined,
     "./GoogleService-Info.plist",
   );
+  const iosQaRuntimeVersion = normalizeText(process.env.IOS_QA_RUNTIME_VERSION);
   const iosAssociatedDomains = [
     ...(Array.isArray(existingIos.associatedDomains) ? existingIos.associatedDomains : []),
     IOS_ASSOCIATED_DOMAIN,
@@ -219,6 +220,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     ios: {
       ...base.ios,
+      ...(iosQaRuntimeVersion ? { runtimeVersion: iosQaRuntimeVersion } : {}),
       ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
       associatedDomains: iosAssociatedDomains,
       privacyManifests: iosPrivacyManifests,

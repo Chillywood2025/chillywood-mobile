@@ -23,6 +23,8 @@ type DispatchAction = "incoming" | "missed" | "cancel" | "declined" | "end" | "t
 
 type DispatchPayload = {
   action?: unknown;
+  deliveryId?: unknown;
+  delivery_id?: unknown;
   inviteId?: unknown;
   invite_id?: unknown;
 };
@@ -236,28 +238,6 @@ async function readInvite(adminClient: SupabaseClientLike, inviteId: string) {
     .maybeSingle();
 
   if (error || !data) return null;
-  return data as CallInvite;
-}
-
-async function markInviteMissed(adminClient: SupabaseClientLike, invite: CallInvite, actorUserId: string) {
-  const now = new Date().toISOString();
-  const { data, error } = await adminClient
-    .from("chat_call_invites")
-    .update({ status: "missed" })
-    .eq("id", invite.id)
-    .eq("status", "ringing")
-    .select("id,thread_id,communication_room_id,caller_user_id,callee_user_id,call_type,status,created_at,expires_at")
-    .maybeSingle();
-
-  if (error || !data) return null;
-  await adminClient.from("chat_call_events").insert({
-    actor_user_id: actorUserId,
-    call_invite_id: invite.id,
-    call_type: normalizeCallType(invite.call_type),
-    event_type: "missed",
-    thread_id: invite.thread_id,
-    created_at: now,
-  });
   return data as CallInvite;
 }
 
@@ -547,6 +527,7 @@ async function sendFcmDataMessage(input: {
 async function invokeIosVoipDispatch(input: {
   action: DispatchAction;
   authHeader: string;
+  deliveryId?: string;
   inviteId: string;
 }): Promise<ChillyCallChannelResult> {
   if (!shouldInvokeIosVoip(input.action)) {
@@ -554,7 +535,7 @@ async function invokeIosVoipDispatch(input: {
   }
   try {
     const response = await fetch(`${readRequiredEnv("SUPABASE_URL")}/functions/v1/ios-voip-call-dispatch`, {
-      body: JSON.stringify({ action: input.action, inviteId: input.inviteId }),
+      body: JSON.stringify({ action: input.action, deliveryId: input.deliveryId, inviteId: input.inviteId }),
       headers: {
         Authorization: input.authHeader,
         apikey: readRequiredEnv("SUPABASE_ANON_KEY"),
@@ -631,6 +612,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   invite: CallInvite;
   recipientUserId: string;
   authHeader: string;
+  deliveryId?: string;
 }) {
   const preference = await readPreferences(adminClient, input.recipientUserId);
   const preferencePolicy = resolveChillyChatCallPreferencePolicy({
@@ -639,7 +621,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     inAppEnabled: preference?.in_app_enabled,
     pushEnabled: preference?.push_enabled,
   });
-  const callAlertsEnabled = preferencePolicy.callEnabled;
+  const actionAllowed = preferencePolicy.actionAllowed;
   const pushAllowed = preferencePolicy.ordinaryPush;
   const presentationAction = isIncomingOrMissedAction(input.action);
   const inAppAllowed = preferencePolicy.inAppNotification;
@@ -647,7 +629,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   const route = buildRoute(input.invite.thread_id, input.invite.id, input.action);
   const copy = buildCopy(input.action, input.callType, input.callerName);
 
-  if (!callAlertsEnabled) {
+  if (!actionAllowed) {
     const blocked = channelResult({ reason: "chilly_chat_calls_disabled", status: "blocked" });
     return summarizeDispatch(false, {
       androidNative: { ...blocked },
@@ -662,6 +644,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   const iosVoipPromise = invokeIosVoipDispatch({
     action: input.action,
     authHeader: input.authHeader,
+    deliveryId: input.deliveryId,
     inviteId: input.invite.id,
   });
 
@@ -937,13 +920,11 @@ Deno.serve(async (req): Promise<Response> => {
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
   try {
-    const auth = await readAuthenticatedUser(req);
-    if (auth.error) return auth.error;
-
     const payload = await parseJsonPayload(req);
     if (payload.error) return payload.error;
     const body = payload.value ?? {};
     const action = normalizeAction(body.action);
+    const deliveryId = toText(body.deliveryId ?? body.delivery_id);
     const inviteId = toText(body.inviteId ?? body.invite_id);
     if (!action) return jsonResponse(400, { error: "invalid_action" });
     if (!inviteId) return jsonResponse(400, { error: "missing_invite_id" });
@@ -951,10 +932,37 @@ Deno.serve(async (req): Promise<Response> => {
     const supabaseUrl = readRequiredEnv("SUPABASE_URL");
     const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-    let invite = await readInvite(adminClient, inviteId);
+    const authorization = req.headers.get("authorization") ?? "";
+    let actorUserId = "";
+    let dispatchAuthorization = authorization;
+    if (authorization === `Bearer ${serviceRoleKey}`) {
+      if (!deliveryId || !isTerminalAction(action)) {
+        return jsonResponse(401, { error: "invalid_internal_delivery_scope" });
+      }
+      const { data: internalDelivery, error: internalDeliveryError } = await adminClient
+        .from("chat_call_transition_deliveries")
+        .select("id,actor_user_id,call_invite_id,dispatch_action,delivery_status")
+        .eq("id", deliveryId)
+        .maybeSingle();
+      if (
+        internalDeliveryError
+        || !internalDelivery
+        || toText(internalDelivery.call_invite_id) !== inviteId
+        || toText(internalDelivery.dispatch_action) !== action
+        || toText(internalDelivery.delivery_status) !== "dispatching"
+      ) {
+        return jsonResponse(403, { error: "internal_delivery_scope_rejected" });
+      }
+      actorUserId = toText(internalDelivery.actor_user_id);
+    } else {
+      const auth = await readAuthenticatedUser(req);
+      if (auth.error) return auth.error;
+      actorUserId = toText(auth.user.id);
+      dispatchAuthorization = auth.authorization;
+    }
+    const invite = await readInvite(adminClient, inviteId);
     if (!invite) return jsonResponse(404, { error: "invite_not_found" });
 
-    const actorUserId = toText(auth.user.id);
     const callerUserId = toText(invite.caller_user_id);
     const calleeUserId = toText(invite.callee_user_id);
     if (actorUserId !== callerUserId && actorUserId !== calleeUserId) {
@@ -992,13 +1000,7 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     if (action === "missed") {
-      if (status === "ringing" && Number.isFinite(expiresAt) && expiresAt <= now) {
-        const missedInvite = await markInviteMissed(adminClient, invite, actorUserId);
-        if (!missedInvite) {
-          return jsonResponse(200, blockedDispatch("missed_update_failed"));
-        }
-        invite = missedInvite;
-      } else if (status !== "missed") {
+      if (status !== "missed") {
         return jsonResponse(200, blockedDispatch(TERMINAL_STATUSES.has(status) ? `invite_${status}` : "invite_not_missed"));
       }
     }
@@ -1038,7 +1040,8 @@ Deno.serve(async (req): Promise<Response> => {
       callType: normalizeCallType(invite.call_type),
       invite,
       recipientUserId,
-      authHeader: auth.authorization,
+      authHeader: dispatchAuthorization,
+      deliveryId: deliveryId || undefined,
     });
 
     return jsonResponse(200, result);

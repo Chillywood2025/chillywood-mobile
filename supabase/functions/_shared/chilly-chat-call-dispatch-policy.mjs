@@ -75,12 +75,15 @@ export const buildBlockedChillyChatCallDispatch = (reason) => {
 export const resolveChillyChatCallPreferencePolicy = (input) => {
   const action = toText(input.action).toLowerCase();
   const callEnabled = input.chillyChatCallsEnabled !== false;
-  const ordinaryPush = callEnabled && input.pushEnabled !== false;
+  const terminalAction = isChillyChatTerminalAction(action);
+  const actionAllowed = terminalAction || callEnabled;
+  const ordinaryPush = terminalAction || (callEnabled && input.pushEnabled !== false);
   const presentationAction = action === "incoming" || action === "missed";
   return {
+    actionAllowed,
     callEnabled,
     inAppNotification: callEnabled && presentationAction && input.inAppEnabled !== false,
-    iosVoip: callEnabled && (action === "incoming" || isChillyChatTerminalAction(action)),
+    iosVoip: terminalAction || (callEnabled && action === "incoming"),
     ordinaryPush,
   };
 };

@@ -17,14 +17,19 @@ import {
 } from "../supabase/functions/_shared/ios-voip-policy.mjs";
 
 const root = new URL("../", import.meta.url);
-const schemaSource = await readFile(new URL("_lib/chillyChatCallDispatchSchema.ts", root), "utf8");
-const transpiledSchema = ts.transpileModule(schemaSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2022,
-    target: ts.ScriptTarget.ES2022,
-  },
-}).outputText;
-const schema = await import(`data:text/javascript;base64,${Buffer.from(transpiledSchema).toString("base64")}`);
+const importTranspiledTypeScript = async (relativePath) => {
+  const source = await readFile(new URL(relativePath, root), "utf8");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(output).toString("base64")}`);
+};
+const schema = await importTranspiledTypeScript("_lib/chillyChatCallDispatchSchema.ts");
+const deliveryCopy = await importTranspiledTypeScript("_lib/chillyChatCallDeliveryCopy.ts");
+const visibleReadGate = await importTranspiledTypeScript("_lib/boundedVisibleReadGate.ts");
 
 const emptyChannels = () => ({
   androidNative: createChillyChatCallChannelResult(),
@@ -121,6 +126,32 @@ assert.equal(resolveChillyChatCallPreferencePolicy({
   pushEnabled: true,
 }).iosVoip, false, "call preference blocks native calls");
 
+const terminalPreference = resolveChillyChatCallPreferencePolicy({
+  action: "cancel",
+  chillyChatCallsEnabled: false,
+  inAppEnabled: false,
+  pushEnabled: false,
+});
+assert.equal(terminalPreference.actionAllowed, true, "terminal cleanup remains eligible after new-call preference is disabled");
+assert.equal(terminalPreference.iosVoip, true, "terminal cleanup may close an existing iPhone native call");
+assert.equal(terminalPreference.ordinaryPush, true, "terminal cleanup may close an existing Android/Expo call");
+assert.equal(terminalPreference.inAppNotification, false, "terminal cleanup creates no new presentation");
+
+const missedPreference = resolveChillyChatCallPreferencePolicy({
+  action: "missed",
+  chillyChatCallsEnabled: true,
+  inAppEnabled: true,
+  pushEnabled: false,
+});
+assert.equal(missedPreference.actionAllowed, true);
+assert.equal(missedPreference.ordinaryPush, false, "missed ordinary alert respects ordinary-push preference");
+assert.equal(resolveChillyChatCallPreferencePolicy({
+  action: "missed",
+  chillyChatCallsEnabled: false,
+  inAppEnabled: true,
+  pushEnabled: true,
+}).actionAllowed, false, "missed alerts respect the new-call preference");
+
 const tokenFixtures = [
   ["voip_token_only", { iosVoip: sent() }, "iosVoip"],
   ["expo_token_only", { ordinaryPush: sent() }, "ordinaryPush"],
@@ -175,6 +206,14 @@ const nativeCoordinatorSource = await readFile(
   new URL("modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", root),
   "utf8",
 );
+const retryWorkerSource = await readFile(
+  new URL("supabase/functions/chilly-chat-call-transition-retry/index.ts", root),
+  "utf8",
+);
+const retryMigrationSource = await readFile(
+  new URL("supabase/migrations/20260718113000_durable_call_delivery_retry_and_storefront_prices.sql", root),
+  "utf8",
+);
 assert.ok(dispatchSource.indexOf("const iosVoipPromise = invokeIosVoipDispatch") < dispatchSource.indexOf("const tokens = pushAllowed"));
 assert.doesNotMatch(dispatchSource, /if \(!tokens\.length\)[\s\S]{0,220}return/u);
 assert.match(voipSource, /\.eq\("enabled", true\)[\s\S]*\.is\("revoked_at", null\)/u);
@@ -182,5 +221,57 @@ assert.match(voipSource, /return data\?\.chilly_chat_calls_enabled !== false/u);
 assert.doesNotMatch(voipSource, /data\?\.push_enabled !== false/u);
 assert.match(voipSource, /ios_voip:\$\{invite\.id\}:\$\{tokenRow\.id\}:\$\{action\}/u);
 assert.match(nativeCoordinatorSource, /if isTerminalInvite\(inviteId\)[\s\S]*completion\(\)/u);
+assert.match(retryWorkerSource, /claim_chilly_chat_call_transition_delivery_batch/u);
+assert.match(retryWorkerSource, /complete_chilly_chat_call_transition_delivery/u);
+assert.match(retryWorkerSource, /AbortSignal\.timeout\(12_000\)/u);
+assert.doesNotMatch(retryWorkerSource, /console\./u);
+assert.match(retryMigrationSource, /for update skip locked/u);
+assert.match(retryMigrationSource, /"attempt_count" < 10/u);
+assert.match(retryMigrationSource, /make_interval\(secs => least\(300/u);
 
-console.log("Chi'lly Chat call schema, channel, token, terminal-action, and idempotency fixtures passed.");
+assert.doesNotMatch(dispatchSource, /markInviteMissed/u, "dispatch endpoint cannot own call-state transitions");
+assert.doesNotMatch(
+  dispatchSource,
+  /\.from\("chat_call_invites"\)[\s\S]{0,180}\.update\(/u,
+  "dispatch endpoint cannot mutate chat_call_invites",
+);
+assert.match(
+  dispatchSource,
+  /if \(action === "missed"\) \{\s*if \(status !== "missed"\)/u,
+  "missed dispatch requires the durable transition to finish first",
+);
+
+const gate = visibleReadGate.createBoundedVisibleReadGate();
+assert.equal(gate.shouldRun(true), true, "first sheet opening may read the provider once");
+for (let index = 0; index < 25; index += 1) {
+  assert.equal(gate.shouldRun(true), false, "rerenders during one opening cannot repeat the provider read");
+}
+assert.equal(gate.shouldRun(false), false);
+assert.equal(gate.shouldRun(true), true, "a later sheet opening may perform one new provider read");
+const tipSheetSource = await readFile(new URL("components/monetization/tip-sheet.tsx", root), "utf8");
+assert.match(tipSheetSource, /\}, \[iosProductIdSignature, visible\]\);/u);
+assert.match(tipSheetSource, /setIosProductPriceLabels\(\(current\) =>/u);
+assert.doesNotMatch(tipSheetSource, /readRevenueCatNonSubscriptionProducts\([\s\S]{0,120}iosTipOptions/u);
+
+const copyChannel = (pushSent) => ({ ...createChillyChatCallChannelResult(), pushSent });
+const deliveryFixture = (channels) => ({
+  channels: {
+    androidNative: copyChannel(false),
+    iosVoip: copyChannel(false),
+    ordinaryPush: copyChannel(false),
+    inAppNotification: copyChannel(false),
+    ...channels,
+  },
+  notificationCreated: false,
+  pushSent: true,
+  status: "sent",
+});
+assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({ androidNative: copyChannel(true) })), "Android call alert sent.");
+assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({ iosVoip: copyChannel(true) })), "Native iPhone call alert sent.");
+assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({ ordinaryPush: copyChannel(true) })), "Push notification sent.");
+assert.equal(deliveryCopy.getChillyChatCallDeliveryMessage(deliveryFixture({
+  androidNative: copyChannel(true),
+  iosVoip: copyChannel(true),
+})), "Call alert sent through available device channels.");
+
+console.log("Chi'lly Chat schema, token, preference, terminal, delivery-copy, and bounded tip-read fixtures passed.");

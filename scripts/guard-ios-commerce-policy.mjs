@@ -23,6 +23,7 @@ const migration = read("supabase/migrations/20260715151250_ios_app_store_mapping
 const purchaseIntentMigration = read("supabase/migrations/20260715174500_ios_app_store_purchase_intents.sql");
 const premiumPriceMigration = read("supabase/migrations/20260718091500_fix_ios_app_store_premium_reference_prices.sql");
 const atomicTransactionMigration = read("supabase/migrations/20260718110000_revenuecat_atomic_event_transactions.sql");
+const storefrontTransactionMigration = read("supabase/migrations/20260718113000_durable_call_delivery_retry_and_storefront_prices.sql");
 const atomicTransactionTests = read("supabase/tests/revenuecat_atomic_transactions_test.sql");
 const legacyAndroidPurchaseIntentMigration = read("supabase/migrations/20260616121739_require_sandbox_tester_for_purchase_intents.sql");
 const clientPolicy = read("_lib/paymentRailPolicy.ts");
@@ -37,6 +38,7 @@ const seatPasses = read("_lib/paidWatchPartyTickets.ts");
 const creatorSetup = read("_lib/creatorMonetizationSetup.ts");
 const adminSandboxPurchases = read("app/admin-money-sandbox-purchases.tsx");
 const tipSheet = read("components/monetization/tip-sheet.tsx");
+const boundedVisibleReadGate = read("_lib/boundedVisibleReadGate.ts");
 const moneyScope = read("components/monetization/MoneyScopeInfoButton.tsx");
 const dynamicPurchaseSources = [
   ["paid video", read("_lib/creatorPaidVideos.ts"), "purchasePaidVideoAccess", "createPaidVideoPurchaseIntent"],
@@ -195,6 +197,20 @@ for (const stage of [
 ]) {
   includes(atomicTransactionTests, stage, "transaction rollback fixture");
 }
+for (const marker of [
+  "revenuecat_consumable_transaction_intents",
+  "ios_consumable_original_transaction_required",
+  "ios_consumable_original_purchase_intent_mismatch",
+  "provider_amount_minor",
+  "provider_currency",
+  "reference_price_minor",
+  "reference_currency",
+]) {
+  includes(storefrontTransactionMigration, marker, "storefront-safe atomic App Store migration");
+}
+excludes(storefrontTransactionMigration, "ios_consumable_exact_store_price_required", "localized App Store provider amount policy");
+includes(atomicTransactionTests, "localized non-USD App Store consumable", "localized storefront transaction fixture");
+includes(atomicTransactionTests, "localized provider amount is recorded", "localized provider amount fixture");
 for (const fixture of [
   "duplicate Premium delivery is retry safe",
   "Premium cancellation applies atomically",
@@ -250,6 +266,10 @@ for (const [label, source] of [["tip sheet", tipSheet], ["money scope", moneySco
 }
 includes(tipSheet, 'listIosStoreProductsForConcept("creator_tip")', "iOS tip sheet finite product list");
 includes(tipSheet, 'Platform.OS !== "ios" ? (', "iOS tip sheet custom-amount block");
+includes(tipSheet, "providerReadGateRef.current.shouldRun(visible)", "bounded RevenueCat tip-sheet provider read");
+includes(tipSheet, "[iosProductIdSignature, visible]", "stable tip product-ID fetch dependencies");
+includes(tipSheet, "setIosProductPriceLabels((current) =>", "no-op localized label state guard");
+includes(boundedVisibleReadGate, "if (open) return false", "one provider read per visible opening gate");
 
 includes(webhook, "readStoreProductResolution", "store-aware webhook lookup");
 includes(webhook, 'rpc("process_revenuecat_premium_event_atomic"', "atomic Premium webhook write");

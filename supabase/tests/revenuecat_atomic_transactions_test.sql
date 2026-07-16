@@ -1,5 +1,15 @@
 begin;
-select plan(58);
+select plan(62);
+
+insert into auth.users (id, is_sso_user, is_anonymous)
+values
+  ('44444444-4444-4444-4444-444444444444', false, false),
+  ('66666666-6666-6666-6666-666666666666', false, false),
+  ('77777777-7777-7777-7777-777777777777', false, false),
+  ('99999999-9999-9999-9999-999999999999', false, false),
+  ('aaaaaaaa-1111-1111-1111-111111111111', false, false),
+  ('bbbbbbbb-1111-1111-1111-111111111111', false, false)
+on conflict (id) do nothing;
 
 update public.platform_money_kill_switches
 set state = case
@@ -43,22 +53,43 @@ create function pg_temp.apply_consumable(
   p_event_type text,
   p_user_id uuid,
   p_provider_product_id text,
-  p_failpoint text default null
+  p_failpoint text default null,
+  p_amount_minor integer default null,
+  p_currency text default null,
+  p_original_transaction_id text default 'sandbox-original-transaction'
 )
 returns jsonb
-language sql
+language plpgsql
 volatile
 as $$
-  select public.process_revenuecat_consumable_event_atomic_internal(
-    p_event_id, p_event_type, p_user_id, mapping.provider_product_id,
-    'sandbox', timezone('utc'::text, now()), null,
-    mapping.reference_price_minor, mapping.reference_currency,
-    'sha256-normalized-consumable-test', 'sandbox-original-transaction', p_failpoint
-  )
-  from public.monetization_product_store_mappings mapping
-  where mapping.provider = 'revenuecat_app_store'
-    and mapping.provider_product_id = p_provider_product_id
-  limit 1;
+declare
+  v_result jsonb;
+begin
+  if p_failpoint is null then
+    select public.process_revenuecat_consumable_event_atomic(
+      p_event_id, p_event_type, p_user_id, mapping.provider_product_id,
+      'sandbox', timezone('utc'::text, now()), null,
+      coalesce(p_amount_minor, mapping.reference_price_minor), coalesce(p_currency, mapping.reference_currency),
+      'sha256-normalized-consumable-test', p_original_transaction_id
+    ) into v_result
+    from public.monetization_product_store_mappings mapping
+    where mapping.provider = 'revenuecat_app_store'
+      and mapping.provider_product_id = p_provider_product_id
+    limit 1;
+  else
+    select public.process_revenuecat_consumable_event_atomic_internal(
+      p_event_id, p_event_type, p_user_id, mapping.provider_product_id,
+      'sandbox', timezone('utc'::text, now()), null,
+      coalesce(p_amount_minor, mapping.reference_price_minor), coalesce(p_currency, mapping.reference_currency),
+      'sha256-normalized-consumable-test', p_original_transaction_id, p_failpoint
+    ) into v_result
+    from public.monetization_product_store_mappings mapping
+    where mapping.provider = 'revenuecat_app_store'
+      and mapping.provider_product_id = p_provider_product_id
+    limit 1;
+  end if;
+  return v_result;
+end;
 $$;
 
 create function pg_temp.premium_failure_rolled_back(p_stage text)
@@ -228,6 +259,45 @@ select lives_ok(
 );
 select is((select count(*)::integer from public.provider_events where provider_event_id = 'tip-initial-1'), 1, 'duplicate tip creates one provider event');
 select is((select count(*)::integer from public.money_access_ledger_events where user_id = '66666666-6666-6666-6666-666666666666'), 1, 'duplicate tip creates one ledger event');
+
+insert into public.money_purchase_intents (
+  id, user_id, product_id, product_key, product_type, provider, provider_product_id,
+  source_type, source_id, creator_id, environment, status, amount_minor, currency,
+  idempotency_key, expires_at, metadata
+)
+select
+  '61000000-0000-0000-0000-000000000001', 'bbbbbbbb-1111-1111-1111-111111111111',
+  mapping.product_id, product.product_key, product.product_type, mapping.provider,
+  mapping.provider_product_id, 'creator_tip', '65100000-0000-0000-0000-000000000001',
+  '65555555-5555-5555-5555-555555555555', 'sandbox', 'pending',
+  mapping.reference_price_minor, mapping.reference_currency, 'tip-intent-localized-storefront-test',
+  now() + interval '15 minutes', jsonb_build_object('sandbox_only', true, 'not_payable', true)
+from public.monetization_product_store_mappings mapping
+join public.monetization_products product on product.id = mapping.product_id
+where mapping.provider_product_id = 'com.chillywood.tip.tier1';
+
+select lives_ok(
+  $$select public.process_revenuecat_consumable_event_atomic(
+    'tip-localized-eur-1', 'INITIAL_PURCHASE', 'bbbbbbbb-1111-1111-1111-111111111111',
+    'com.chillywood.tip.tier1', 'sandbox', now(), null, 129, 'eur',
+    'sha256-localized-consumable-test', 'localized-eur-original-transaction'
+  )$$,
+  'localized non-USD App Store consumable is accepted by permanent product and exact intent identity'
+);
+select is(
+  (select amount_minor from public.money_access_ledger_events where user_id = 'bbbbbbbb-1111-1111-1111-111111111111'),
+  129,
+  'localized provider amount is recorded instead of the USD reference amount'
+);
+select is(
+  (select currency from public.money_access_ledger_events where user_id = 'bbbbbbbb-1111-1111-1111-111111111111'),
+  'eur',
+  'localized provider currency is recorded'
+);
+select ok(
+  (select (metadata->>'localized_storefront_price')::boolean from public.provider_events where provider_event_id = 'tip-localized-eur-1'),
+  'provider event retains explicit localized-versus-reference metadata'
+);
 
 insert into public.money_purchase_intents (
   id, user_id, product_id, product_key, product_type, provider, provider_product_id,

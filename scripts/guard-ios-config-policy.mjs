@@ -85,6 +85,7 @@ assert(appConfigSource.includes("process.env.IOS_GOOGLE_SERVICES_FILE"), "app.co
 assert(appConfigSource.includes('"./GoogleService-Info.plist"'), "app.config.ts must support the ignored local Firebase plist fallback");
 assert(appConfigSource.includes("existingIosInfoPlist"), "app.config.ts must merge existing ios.infoPlist values");
 assert(appConfigSource.includes("existingIosEntitlements"), "app.config.ts must merge existing iOS entitlements");
+assert(appConfigSource.includes("IOS_QA_RUNTIME_VERSION"), "app.config.ts must support an iOS-only QA runtime override");
 assert(appConfigSource.includes('useFrameworks: "static"'), "iOS static-framework configuration must remain unchanged");
 assert(
   appConfigSource.includes("./plugins/withLiveKitIosStaticFrameworkCompatibility"),
@@ -109,6 +110,20 @@ assert(easJson.build?.preview?.environment === "preview", "EAS preview must use 
 assert(easJson.build?.production?.environment === "production", "EAS production must use the production environment");
 assert(easJson.build?.["development-simulator"]?.extends === "development", "EAS iOS simulator profile must extend development");
 assert(easJson.build?.["development-simulator"]?.ios?.simulator === true, "EAS iOS simulator profile must set ios.simulator=true");
+const iosQaProfile = easJson.build?.["ios-qa"];
+assert(iosQaProfile?.extends === "production", "ios-qa must extend the production App Store profile");
+assert(iosQaProfile?.channel === "ios-qa", "ios-qa must use its isolated update channel");
+assert(iosQaProfile?.distribution === "store", "ios-qa must remain an App Store distribution build");
+assert(iosQaProfile?.environment === "production", "ios-qa must use production backend/provider configuration");
+assert(iosQaProfile?.env?.IOS_QA_RUNTIME_VERSION === "1.0.0-iosqa1", "ios-qa must use an isolated iOS runtime");
+for (const flag of [
+  "IOS_NATIVE_CALLS_ENABLED",
+  "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED",
+  "EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED",
+  "EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED",
+]) {
+  assert(iosQaProfile?.env?.[flag] === "true", `ios-qa must explicitly enable ${flag}`);
+}
 
 const ascAppIds = [];
 const collectAscAppIds = (value) => {

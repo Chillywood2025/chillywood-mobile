@@ -10,6 +10,33 @@ permissions:
   contents: read
 
 jobs:
+  supabase-database-integration:
+    name: Phase 1 / Supabase Database Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+
+      - name: Verify required database suites are present
+        run: test -f supabase/tests/chilly_chat_call_transitions_test.sql && test -f supabase/tests/revenuecat_atomic_transactions_test.sql
+
+      - name: Start local Supabase services
+        run: supabase start
+
+      - name: Reset local database from migrations
+        run: supabase db reset
+
+      - name: Run pgTAP database integration suites
+        run: supabase test db
+
   phase1-check:
     name: Phase 1 / ${{ matrix.name }}
     runs-on: ubuntu-latest

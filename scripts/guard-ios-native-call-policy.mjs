@@ -20,6 +20,8 @@ const easConfig = JSON.parse(read("eas.json"));
 const migration = read("supabase/migrations/20260715150522_ios_voip_push_token_foundation.sql");
 const tokenFunction = read("supabase/functions/ios-voip-push-tokens/index.ts");
 const dispatchFunction = read("supabase/functions/ios-voip-call-dispatch/index.ts");
+const retryFunction = read("supabase/functions/chilly-chat-call-transition-retry/index.ts");
+const retryMigration = read("supabase/migrations/20260718113000_durable_call_delivery_retry_and_storefront_prices.sql");
 const voipPolicy = read("supabase/functions/_shared/ios-voip-policy.mjs");
 const config = read("supabase/config.toml");
 const androidPlugin = read("plugins/withChillyChatNativeCallNotifications.js");
@@ -73,6 +75,15 @@ for (const profile of ["development", "preview", "production"]) {
     failures.push(`The ${profile} EAS build must load its matching protected environment.`);
   }
 }
+for (const flag of ["IOS_NATIVE_CALLS_ENABLED", "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED"]) {
+  if (easConfig.build?.["ios-qa"]?.env?.[flag] !== "true") {
+    failures.push(`The ios-qa profile must explicitly enable ${flag}.`);
+  }
+}
+if (easConfig.build?.["ios-qa"]?.channel !== "ios-qa"
+  || easConfig.build?.["ios-qa"]?.env?.IOS_QA_RUNTIME_VERSION !== "1.0.0-iosqa1") {
+  failures.push("The all-flags iOS QA binary must have an isolated channel and runtime.");
+}
 
 for (const table of ["user_voip_push_tokens", "voip_push_delivery_attempts"]) {
   requireText(migration, `alter table public.\"${table}\" enable row level security`, `${table} must have RLS enabled.`);
@@ -118,6 +129,28 @@ requireText(dispatchFunction, "api.sandbox.push.apple.com", "Development PushKit
 requireText(dispatchFunction, "api.push.apple.com", "Production PushKit tokens must use Apple's APNs production endpoint.");
 requireText(dispatchFunction, "isApnsInvalidVoipTokenReason", "Invalid APNs tokens must be revoked.");
 requireText(dispatchFunction, "provider_status_code", "APNs delivery attempts must record the provider HTTP status without response secrets.");
+requireText(dispatchFunction, "!isTerminalAction(action) && !await readCallPreference", "terminal VoIP cleanup must not be blocked by the new-call preference");
+
+for (const marker of [
+  "authorize_chilly_chat_call_transition_retry",
+  "claim_chilly_chat_call_transition_delivery_batch",
+  "complete_chilly_chat_call_transition_delivery",
+  "AbortSignal.timeout",
+]) {
+  requireText(retryFunction, marker, `terminal retry worker must include ${marker}`);
+}
+rejectText(retryFunction, "console.", "terminal retry worker must not log tokens, credentials, or provider payloads.");
+for (const marker of [
+  "for update skip locked",
+  "make_interval(secs => least(300",
+  '"attempt_count" < 10',
+  "chat_call_transition_delivery_failures",
+  'vault."create_secret"',
+  'cron."schedule"',
+]) {
+  requireText(retryMigration, marker, `terminal retry migration must include ${marker}`);
+}
+requireText(config, "[functions.chilly-chat-call-transition-retry]", "Supabase config must declare the custom-auth retry worker.");
 
 requireText(config, "[functions.ios-voip-push-tokens]", "Supabase config must declare the authenticated token lifecycle function.");
 requireText(config, "[functions.ios-voip-call-dispatch]", "Supabase config must declare the authenticated VoIP dispatch function.");

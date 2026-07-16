@@ -1,5 +1,5 @@
 begin;
-select plan(18);
+select plan(30);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -84,6 +84,69 @@ select throws_ok(
   'callee cannot cancel as caller'
 );
 select is((select count(*)::integer from public.chat_call_transition_deliveries where call_invite_id = '10000000-0000-0000-0000-000000000007'), 0, 'rejected transition creates no delivery record');
+
+update public.chat_call_transition_deliveries
+set delivery_status = 'skipped', completed_at = now()
+where call_invite_id <> '10000000-0000-0000-0000-000000000001';
+
+create temporary table retry_claims (payload jsonb);
+insert into retry_claims select * from public.claim_chilly_chat_call_transition_delivery_batch(1);
+select is((select count(*)::integer from retry_claims), 1, 'server worker claims one pending terminal delivery');
+select is(
+  (select delivery_status from public.chat_call_transition_deliveries where call_invite_id = '10000000-0000-0000-0000-000000000001'),
+  'dispatching',
+  'worker claim owns a bounded dispatch lease'
+);
+select is(
+  (select attempt_count from public.chat_call_transition_deliveries where call_invite_id = '10000000-0000-0000-0000-000000000001'),
+  1,
+  'first worker claim increments the attempt count'
+);
+select lives_ok(
+  $$select public.complete_chilly_chat_call_transition_delivery(
+    (select id from public.chat_call_transition_deliveries where call_invite_id = '10000000-0000-0000-0000-000000000001'),
+    'failed',
+    '{"result":{"reason":"provider_failed","status":"failed"},"channels":{}}'::jsonb
+  )$$,
+  'worker records a sanitized failed result'
+);
+select is(
+  (select severity from public.chat_call_transition_delivery_failures where call_invite_id = '10000000-0000-0000-0000-000000000001'),
+  'warning',
+  'retry failure is reported without credentials'
+);
+truncate retry_claims;
+insert into retry_claims select * from public.claim_chilly_chat_call_transition_delivery_batch(1);
+select is((select count(*)::integer from retry_claims), 0, 'failed delivery cannot bypass retry backoff');
+
+update public.chat_call_transition_deliveries
+set last_attempt_at = now() - interval '20 seconds'
+where call_invite_id = '10000000-0000-0000-0000-000000000001';
+insert into retry_claims select * from public.claim_chilly_chat_call_transition_delivery_batch(1);
+select is((select count(*)::integer from retry_claims), 1, 'failed delivery becomes claimable after backoff');
+select is(
+  (select attempt_count from public.chat_call_transition_deliveries where call_invite_id = '10000000-0000-0000-0000-000000000001'),
+  2,
+  'retry increments the durable attempt count'
+);
+select lives_ok(
+  $$select public.complete_chilly_chat_call_transition_delivery(
+    (select id from public.chat_call_transition_deliveries where call_invite_id = '10000000-0000-0000-0000-000000000001'),
+    'sent',
+    '{"result":{"reason":"sent","status":"sent"},"channels":{}}'::jsonb
+  )$$,
+  'successful autonomous retry completes the delivery'
+);
+select ok(
+  (select resolved_at is not null from public.chat_call_transition_delivery_failures where call_invite_id = '10000000-0000-0000-0000-000000000001'),
+  'successful retry resolves the failure report'
+);
+select is(public.authorize_chilly_chat_call_transition_retry('invalid'), false, 'retry worker fails closed before hosted configuration');
+select is(
+  has_function_privilege('authenticated', 'public.claim_chilly_chat_call_transition_delivery_batch(integer)', 'execute'),
+  false,
+  'authenticated clients cannot claim retry work'
+);
 
 select * from finish();
 rollback;
