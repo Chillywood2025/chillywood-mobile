@@ -1,6 +1,6 @@
 # Owner Final Actions
 
-Checkpoint date: 2026-07-15
+Checkpoint date: 2026-07-16
 
 This list contains only actions that require owner authority, dashboard permission,
 2FA/CAPTCHA, physical hardware, legal attestation, or final release approval. It
@@ -48,6 +48,10 @@ receipts, signed URLs, or provider credentials into chat, issues, PRs, docs, or
 source files. Enter them only into the official provider prompt.
 
 ## Physical-device actions in the final 10%
+
+Do not begin these actions yet. Build 6 is superseded. Wait for the corrected
+source commit, freshly installed Simulator smoke, inspected archive, and exact
+internal TestFlight build 7 or higher.
 
 Use the exact reviewed internal-TestFlight build and bounded test accounts. Keep
 private surroundings, conversation, contacts, media, device identifiers, and
@@ -127,10 +131,14 @@ The owner does not need to recreate these items:
 - GitHub protected iOS environments;
 - one registered iPhone and existing EAS-managed development credentials;
 - the historical foundation Simulator and physical development builds;
-- three deployed additive iOS migrations and six active fail-closed Edge
-  Functions;
-- final-source Simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3`, app `1.0.0 (6)`;
-- production build `a729aa9a-1a98-439c-8c81-48c381735d8d`, app `1.0.0 (6)`;
+- seven deployed additive integration migrations and seven active fail-closed Edge
+  Functions, including durable call transition and atomic RevenueCat RPCs;
+- exact remote Premium mapping readback `999` monthly / `9999` yearly with the
+  App Store rail, live money, and payouts still off;
+- historical Simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3`, app
+  `1.0.0 (6)`, now superseded;
+- historical production build `a729aa9a-1a98-439c-8c81-48c381735d8d`, app
+  `1.0.0 (6)`, now superseded;
 - internal TestFlight processing and assignment to `Chillywood Internal`; and
 - public-safe standard, large, small, and tablet-format screenshot drafts.
 

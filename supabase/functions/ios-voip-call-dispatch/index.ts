@@ -57,26 +57,31 @@ const JSON_HEADERS = {
 const encoder = new TextEncoder();
 const toText = (value: unknown) => String(value ?? "").trim();
 
-const normalizeAction = (value: unknown): DispatchAction => {
+const normalizeAction = (value: unknown): DispatchAction | null => {
   const normalized = toText(value).toLowerCase();
   if (normalized === "missed" || normalized === "dispatch_missed") return "missed";
   if (normalized === "cancel" || normalized === "dispatch_cancel") return "cancel";
   if (normalized === "declined" || normalized === "decline" || normalized === "dispatch_declined") return "declined";
   if (normalized === "end" || normalized === "ended" || normalized === "dispatch_end") return "end";
   if (normalized === "timeout" || normalized === "dispatch_timeout") return "timeout";
-  return "incoming";
+  if (normalized === "incoming" || normalized === "dispatch_incoming") return "incoming";
+  return null;
 };
 
 const isTerminalAction = (action: DispatchAction) => action !== "incoming" && action !== "missed";
-const isIncomingOrMissed = (action: DispatchAction) => action === "incoming" || action === "missed";
 
 const resolveRecipientUserId = (input: {
+  action: DispatchAction;
   actorUserId: string;
   calleeUserId: string;
   callerUserId: string;
-}) => (
-  input.actorUserId === input.callerUserId ? input.calleeUserId : input.callerUserId
-);
+}) => {
+  if (input.action === "declined") return input.callerUserId;
+  if (input.action === "end") {
+    return input.actorUserId === input.callerUserId ? input.calleeUserId : input.callerUserId;
+  }
+  return input.calleeUserId;
+};
 
 const jsonResponse = (status: number, body: JsonObject) => (
   new Response(JSON.stringify(body), { headers: JSON_HEADERS, status })
@@ -170,11 +175,13 @@ const isAccountRestricted = async (adminClient: SupabaseClientLike, userId: stri
 const readCallPreference = async (adminClient: SupabaseClientLike, userId: string) => {
   const { data, error } = await adminClient
     .from("notification_preferences")
-    .select("push_enabled,chilly_chat_calls_enabled")
+    .select("chilly_chat_calls_enabled")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error("call_preference_read_failed");
-  return data?.push_enabled !== false && data?.chilly_chat_calls_enabled !== false;
+  // PushKit is a dedicated native-call rail. The call preference is
+  // authoritative; the ordinary push preference does not disable VoIP.
+  return data?.chilly_chat_calls_enabled !== false;
 };
 
 const enforceDispatchRateLimit = async (
@@ -298,6 +305,7 @@ Deno.serve(async (req): Promise<Response> => {
     if (!body) return jsonResponse(400, { error: "invalid_json_body" });
     const action = normalizeAction(body.action);
     const inviteId = toText(body.inviteId ?? body.invite_id);
+    if (!action) return jsonResponse(400, { error: "invalid_action" });
     if (!inviteId) return jsonResponse(400, { error: "missing_invite_id" });
 
     const adminClient = createClient(
@@ -320,6 +328,7 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     const recipientUserId = resolveRecipientUserId({
+      action,
       actorUserId: callerUserId,
       calleeUserId,
       callerUserId: inviteCallerUserId,
@@ -353,36 +362,32 @@ Deno.serve(async (req): Promise<Response> => {
       if (callerUserId !== calleeUserId) {
         return jsonResponse(403, { error: "callee_required" });
       }
-      if (inviteStatus !== "ringing") {
+      if (inviteStatus !== "declined") {
         return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
       }
     } else if (action === "cancel") {
       if (callerUserId !== inviteCallerUserId) {
         return jsonResponse(403, { error: "caller_required" });
       }
-      if (inviteStatus !== "ringing" && inviteStatus !== "accepted") {
+      if (inviteStatus !== "canceled") {
         return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
       }
     } else if (action === "timeout") {
-      if (inviteStatus !== "ringing") {
+      if (inviteStatus !== "missed" && inviteStatus !== "busy") {
         return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
       }
       if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) {
         return jsonResponse(200, { eligible: false, reason: "invite_not_expired", status: "blocked" });
       }
     } else if (action === "end") {
-      if (inviteStatus !== "accepted" && inviteStatus !== "ringing") {
+      if (inviteStatus !== "ended") {
         return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
       }
     } else if (action === "missed") {
-      if (inviteStatus !== "ringing") {
+      if (inviteStatus !== "missed") {
         return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
       }
     }
-    if (!action) {
-      return jsonResponse(400, { error: "invalid_action" });
-    }
-
     if (!await enforceDispatchRateLimit(adminClient, callerUserId, inviteId)) {
       return jsonResponse(429, { eligible: false, reason: "rate_limited", status: "blocked" });
     }

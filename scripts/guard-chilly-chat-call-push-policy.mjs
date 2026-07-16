@@ -10,6 +10,10 @@ const fail = (message) => {
 };
 
 const dispatchPath = "supabase/functions/chilly-chat-call-dispatch/index.ts";
+const dispatchPolicyPath = "supabase/functions/_shared/chilly-chat-call-dispatch-policy.mjs";
+const expoReceiptsPath = "supabase/functions/_shared/expo-push-receipts.ts";
+const transitionPath = "supabase/functions/chilly-chat-call-transition/index.ts";
+const transitionMigrationPath = "supabase/migrations/20260718103000_durable_chat_call_status_transition.sql";
 const callsLibPath = "_lib/chillyChatCalls.ts";
 const soundAssetsPath = "_lib/chillyChatCallSoundAssets.ts";
 const chatThreadPath = "app/chat/[threadId].tsx";
@@ -18,11 +22,15 @@ const nativeCallPluginPath = "plugins/withChillyChatNativeCallNotifications.js";
 const configPath = "supabase/config.toml";
 const packagePath = "package.json";
 
-for (const filePath of [dispatchPath, callsLibPath, soundAssetsPath, chatThreadPath, notificationsPath, nativeCallPluginPath, configPath, packagePath]) {
+for (const filePath of [dispatchPath, dispatchPolicyPath, expoReceiptsPath, transitionPath, transitionMigrationPath, callsLibPath, soundAssetsPath, chatThreadPath, notificationsPath, nativeCallPluginPath, configPath, packagePath]) {
   if (!fs.existsSync(path.join(ROOT, filePath))) fail(`missing required file ${filePath}`);
 }
 
 const dispatch = read(dispatchPath);
+const dispatchPolicy = read(dispatchPolicyPath);
+const expoReceipts = read(expoReceiptsPath);
+const transition = read(transitionPath);
+const transitionMigration = read(transitionMigrationPath);
 const callsLib = read(callsLibPath);
 const soundAssets = read(soundAssetsPath);
 const chatThread = read(chatThreadPath);
@@ -68,33 +76,33 @@ if (!dispatch.includes('target_route: "/chat/[threadId]"') || !dispatch.includes
 }
 
 for (const requiredData of ["nativeCallStyle", "android_callstyle", "threadId", "callInviteId", "callerName"]) {
-  if (!dispatch.includes(requiredData)) {
+  if (!`${dispatch}\n${dispatchPolicy}`.includes(requiredData)) {
     fail(`incoming call push payload must include native CallStyle data: ${requiredData}`);
   }
 }
 
-if (!dispatch.includes("pushMessage.body = copy.body") || !dispatch.includes('if (input.action === "missed")')) {
-  fail("incoming call pushes must be data-only so native Android can render CallStyle while missed calls stay standard");
+if (!dispatch.includes('if (input.action === "missed" && copy)') || !dispatchPolicy.includes('if (action !== "incoming") return null')) {
+  fail("incoming and missed presentation copy must remain action-specific");
 }
 
 for (const requiredFcmDispatch of [
   "sendFcmDataMessage",
   "FIREBASE_SERVICE_ACCOUNT_JSON",
   "provider: \"fcm\"",
-  "nativeSentCount",
-  "no_enabled_push_token",
-  "native_fcm_unavailable_expo_fallback",
+  "androidSent",
+  "no_enabled_fcm_token",
+  "no_enabled_expo_token",
 ]) {
   if (!dispatch.includes(requiredFcmDispatch)) {
     fail(`active incoming CallStyle dispatch must prefer direct native FCM delivery: ${requiredFcmDispatch}`);
   }
 }
 
-if (!dispatch.includes('const shouldAttemptExpo = input.action === "missed" || nativeSentCount === 0')) {
+if (!dispatch.includes('&& (input.action === "missed" || androidSent === 0)')) {
   fail("Expo fallback must not be used for active incoming calls after direct FCM succeeds");
 }
 
-if (!dispatch.includes('pushMessage.sound = "default"') || dispatch.includes('sound: input.action === "incoming"')) {
+if (!dispatch.includes('sound: "default"') || dispatch.includes('sound: input.action === "incoming"')) {
   fail("incoming call pushes must stay data-only while missed calls use standard Expo sound");
 }
 
@@ -132,7 +140,7 @@ if (!dispatch.includes("DeviceNotRegistered") || !dispatch.includes("revoked_at"
   fail("dispatcher must revoke expired provider tokens");
 }
 
-if (!dispatch.includes("getReceipts") || !dispatch.includes("reconcileRecentExpoReceipts")) {
+if (!dispatch.includes("reconcileRecentExpoPushReceipts") || !expoReceipts.includes("getReceipts")) {
   fail("dispatcher must reconcile Expo receipts instead of relying only on accepted send tickets");
 }
 
@@ -140,8 +148,28 @@ if (!callsLib.includes('supabase.functions.invoke("chilly-chat-call-dispatch"'))
   fail("call invite client path must invoke server-side call dispatch");
 }
 
-if (!callsLib.includes('action: "incoming"') || !callsLib.includes('action: "missed"')) {
-  fail("call invite client path must dispatch incoming and missed call actions");
+if (!callsLib.includes('action: "incoming"') || !callsLib.includes('supabase.functions.invoke("chilly-chat-call-transition"')) {
+  fail("call client path must dispatch incoming calls and await server-owned status transitions");
+}
+
+if (callsLib.includes("void dispatchChillyChatCallPush")) {
+  fail("terminal call delivery must not use a fire-and-forget mobile dispatch");
+}
+
+for (const durableMarker of [
+  'transition_chilly_chat_call_invite',
+  'claim_chilly_chat_call_transition_delivery',
+  'for update',
+  'chat_call_transition_deliveries',
+]) {
+  if (!transitionMigration.toLowerCase().includes(durableMarker)) {
+    fail(`durable transition migration is missing ${durableMarker}`);
+  }
+}
+
+if (!transition.includes('await fetch(`${supabaseUrl}/functions/v1/chilly-chat-call-dispatch`')
+  || !transition.includes('.eq("delivery_status", "dispatching")')) {
+  fail("server-owned transition operation must await dispatch and durably record the result");
 }
 
 if (!chatThread.includes("incomingCallInvite") || !chatThread.includes("handleAcceptIncomingCall") || !chatThread.includes("handleDeclineIncomingCall")) {
@@ -173,7 +201,11 @@ if (!config.includes("[functions.chilly-chat-call-dispatch]")) {
   fail("Supabase config must declare chilly-chat-call-dispatch");
 }
 
-if (packageJson.scripts?.["guard:chilly-chat-call-push-policy"] !== "node ./scripts/guard-chilly-chat-call-push-policy.mjs") {
+if (!config.includes("[functions.chilly-chat-call-transition]")) {
+  fail("Supabase config must declare chilly-chat-call-transition");
+}
+
+if (!packageJson.scripts?.["guard:chilly-chat-call-push-policy"]?.includes("test-chilly-chat-call-semantics.mjs")) {
   fail("package.json must expose guard:chilly-chat-call-push-policy");
 }
 

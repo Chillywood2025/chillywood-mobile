@@ -21,6 +21,9 @@ const manifest = readJson("config/ios/app-store-products.json");
 const storeKit = readJson("config/ios/Chillywood.storekit");
 const migration = read("supabase/migrations/20260715151250_ios_app_store_mappings.sql");
 const purchaseIntentMigration = read("supabase/migrations/20260715174500_ios_app_store_purchase_intents.sql");
+const premiumPriceMigration = read("supabase/migrations/20260718091500_fix_ios_app_store_premium_reference_prices.sql");
+const atomicTransactionMigration = read("supabase/migrations/20260718110000_revenuecat_atomic_event_transactions.sql");
+const atomicTransactionTests = read("supabase/tests/revenuecat_atomic_transactions_test.sql");
 const legacyAndroidPurchaseIntentMigration = read("supabase/migrations/20260616121739_require_sandbox_tester_for_purchase_intents.sql");
 const clientPolicy = read("_lib/paymentRailPolicy.ts");
 const serverPolicy = read("supabase/functions/_shared/payment-rail-policy.ts");
@@ -160,6 +163,51 @@ includes(purchaseIntentMigration, "watch_party_ticket_store_catalog", "Seat Pass
 includes(purchaseIntentMigration, "'watch_party_live_ticket'", "Seat Pass Party Room access type");
 includes(purchaseIntentMigration, "coalesce(p_metadata, '{}'::jsonb) || jsonb_build_object(", "server-owned safety metadata precedence");
 
+includes(premiumPriceMigration, "when \"provider_product_id\" = 'com.chillywood.premium.monthly' then 999", "monthly Premium reference-price correction");
+includes(premiumPriceMigration, "when \"provider_product_id\" = 'com.chillywood.premium.yearly' then 9999", "yearly Premium reference-price correction");
+includes(premiumPriceMigration, '"platform" = \'ios\'', "Premium price platform scope");
+includes(premiumPriceMigration, '"store" = \'app_store\'', "Premium price store scope");
+includes(premiumPriceMigration, '"provider" = \'revenuecat_app_store\'', "Premium price provider scope");
+
+for (const rpcName of [
+  "process_revenuecat_premium_event_atomic",
+  "process_revenuecat_consumable_event_atomic",
+  "reconcile_revenuecat_partial_provider_events",
+]) {
+  includes(atomicTransactionMigration, rpcName, "atomic RevenueCat migration");
+}
+includes(atomicTransactionMigration, "perform pg_advisory_xact_lock", "atomic provider-event serialization");
+includes(atomicTransactionMigration, "for update", "atomic row locking");
+includes(atomicTransactionMigration, "to service_role", "atomic RPC service-role grant");
+includes(atomicTransactionMigration, "from public, anon, authenticated", "atomic RPC client-role revocation");
+includes(atomicTransactionMigration, "ledger_recorded_no_entitlement_or_access_grant", "creator-tip no-entitlement/no-access result");
+includes(atomicTransactionMigration, "'viewer_access_only', true", "Seat Pass viewer-only grant");
+includes(atomicTransactionMigration, "'authority_granted', false", "Seat Pass authority block");
+includes(atomicTransactionMigration, "'payableState', case when v_terminal then 'refunded' else 'not_payable' end", "consumable payable-state block");
+for (const stage of [
+  "after_provider_event",
+  "after_entitlement",
+  "after_billing_event",
+  "after_access_grant",
+  "after_ledger_event",
+  "after_intent_lock",
+  "after_intent_update",
+]) {
+  includes(atomicTransactionTests, stage, "transaction rollback fixture");
+}
+for (const fixture of [
+  "duplicate Premium delivery is retry safe",
+  "Premium cancellation applies atomically",
+  "Premium billing grace event applies atomically",
+  "Premium expiration applies atomically",
+  "Premium refund applies atomically",
+  "creator tip creates no entitlement",
+  "Seat Pass grant has viewer-only authority",
+  "missing purchase intent fails closed",
+]) {
+  includes(atomicTransactionTests, fixture, "atomic RevenueCat lifecycle fixture");
+}
+
 for (const [label, source] of [["creator tip", creatorTips], ["Seat Pass", seatPasses]]) {
   includes(source, "resolvePaymentRailPolicy({", `${label} runtime payment policy`);
   includes(source, 'provider !== "revenuecat_app_store"', `${label} App Store provider assertion`);
@@ -204,6 +252,12 @@ includes(tipSheet, 'listIosStoreProductsForConcept("creator_tip")', "iOS tip she
 includes(tipSheet, 'Platform.OS !== "ios" ? (', "iOS tip sheet custom-amount block");
 
 includes(webhook, "readStoreProductResolution", "store-aware webhook lookup");
+includes(webhook, 'rpc("process_revenuecat_premium_event_atomic"', "atomic Premium webhook write");
+includes(webhook, 'rpc("process_revenuecat_consumable_event_atomic"', "atomic App Store consumable webhook write");
+const premiumWriter = webhook.match(/const writePremiumEntitlementFromRevenueCatEvent[\s\S]*?\n\};\n\nDeno\.serve/u)?.[0] ?? "";
+excludes(premiumWriter, '.from("user_entitlements")', "Premium webhook independent entitlement write");
+excludes(premiumWriter, '.from("billing_events")', "Premium webhook independent billing write");
+excludes(premiumWriter, "mirrorRevenueCatPremiumMoneyAccess(adminClient", "Premium webhook independent money-access mirror");
 includes(webhook, 'storePolicy.provider === "revenuecat_app_store"', "App Store webhook split");
 includes(webhook, "app_store_purchase_switch_disabled", "App Store webhook fail-closed result");
 includes(webhook, '.eq("provider", provider)', "provider-aware webhook idempotency");

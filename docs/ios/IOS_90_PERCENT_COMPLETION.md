@@ -1,11 +1,12 @@
 # iOS 90% Completion Record
 
-Checkpoint date: 2026-07-15
+Checkpoint date: 2026-07-16
 
-Status: **90% integration checkpoint in-progress.** RevenueCat's Apple app,
-catalog, offerings, packages, EAS public key, webhook, dedicated Apple In-App
-Purchase Key, and App Store Connect API credential are configured and validate
-successfully.
+Status: **Semantic source/backend correction complete; replacement build pending.**
+Call orchestration is canonical and durable, RevenueCat normalized events are
+transactional, and the corrected Premium prices are deployed. Build 6 is
+superseded; this record must not be called source-closeout complete until the new
+Simulator and internal TestFlight candidate pass.
 This record deliberately separates committed source, provider configuration,
 deployment evidence, build evidence, and the remaining physical/owner proof.
 
@@ -15,7 +16,7 @@ deployment evidence, build evidence, and the remaining physical/owner proof.
 - Provider-closeout starting head:
   `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 - Provider-closeout source hardening: `0ec109db`.
-- Tested application source: `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
+- Previous tested application source: `97cd97cd58b021d2f45021c3e121b8a35158cee8`; superseded by the semantic correction.
 - Screenshot-only follow-up: `a4ab1d49`.
 - Release-workflow portability fix: `f7af588d`.
 - Critical transitive advisory patch: `d6a95ed5`.
@@ -28,8 +29,9 @@ deployment evidence, build evidence, and the remaining physical/owner proof.
   was verified to contain no unique changes and is closed.
 - Neither PR has been merged.
 
-All seven separated Phase 1 checks passed remotely at final application source
-`97cd97cd58b021d2f45021c3e121b8a35158cee8`.
+The corrected working tree passes the full local Node 20 suite and 76 database
+assertions. Seven remote checks and replacement build evidence are pending the new
+commit.
 
 ## Completion against the required definition
 
@@ -40,8 +42,8 @@ All seven separated Phase 1 checks passed remotely at final application source
 | 3 | TypeScript is green | **Local pass** | `npx tsc --noEmit` passes after the commerce provider declaration-order correction. |
 | 4 | Expo Doctor is green | **Pass** | `npx expo-doctor` reports 18/18 checks. |
 | 5 | Android regression guards pass | **Pass** | Android package, Firebase behavior, EAS profiles, Google provider values, and notification payload behavior are preserved by the guards. |
-| 6 | Final-source iOS Simulator native build passes | **Pass (installed + launch)** | Development-simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` was installed and launched successfully from `97cd97cd58b021d2f45021c3e121b8a35158cee8`. Route-level smoke proof remains pending for final-device matrix. |
-| 7 | Production iOS archive builds | **Pass** | Production archive build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, finished from `97cd97cd58b021d2f45021c3e121b8a35158cee8`. |
+| 6 | Final-source iOS Simulator native build passes | **Replacement pending** | Prior Simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` is superseded. A new corrected-source artifact must be installed and smoked before physical testing. |
+| 7 | Production iOS archive builds | **Replacement pending** | Prior archive `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, is superseded. Build 7 or higher is required. |
 | 8 | Firebase iOS is configured | **Pass** | Firebase Apple app exists for `com.chillywood.mobile`; the plist remains outside Git and `IOS_GOOGLE_SERVICES_FILE` is an EAS File secret in development, preview, and production. |
 | 9 | AASA is deployed and validates | **Pass** | `https://chillywoodstream.com/.well-known/apple-app-site-association` returns HTTP 200 directly with JSON content type and a body matching the canonical source. |
 | 10 | Supabase Auth redirect URLs are configured | **Pass** | The custom scheme and the required HTTPS authentication routes are configured. Physical signed-build link proof remains in the device matrix. |
@@ -49,12 +51,12 @@ All seven separated Phase 1 checks passed remotely at final application source
 | 12 | Ordinary iOS push backend is deployed | **Pass; rollout off** | Platform-aware registration/dispatch functions are active; Android keeps `channelId`, iOS omits it, and rollout defaults off. |
 | 13 | APNs credentials are configured | **Configured, unproven** | EAS has an APNs credential for ordinary notifications. A separate least-privilege VoIP APNs key is stored only as Supabase function secrets. No key material is in Git or this record. Physical delivery is unclaimed. |
 | 14 | CallKit/PushKit source compiles | **Pass; runtime off** | The Expo module, Swift CallKit/PushKit/AVAudioSession implementation, plugin, and source guards compiled in the final-source EAS Simulator build. |
-| 15 | VoIP token and APNs dispatch backend is deployed | **Pass; rollout off** | Additive schema plus authenticated register/status/rotate/revoke and APNs dispatch functions are deployed. Runtime and server rollout switches remain off. |
+| 15 | VoIP token and APNs dispatch backend is deployed | **Pass; rollout off** | VoIP dispatch v2 is independent of ordinary tokens and in-app insert success. The canonical dispatcher v34 and durable transition v1 are active; runtime and server rollout switches remain off. |
 | 16 | Native iOS calls remain runtime-disabled pending proof | **Pass** | Build capability can be included, while `EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED=false` and VoIP dispatch remains disabled. |
 | 17 | RevenueCat Apple app is configured | **Pass** | Existing project `projc5629a24` contains Apple app `app3a0ad1ba62` for `com.chillywood.mobile`; ten products, entitlement/offering/packages, EAS public-key configuration, and webhook readback pass. A dedicated Apple In-App Purchase Key was uploaded directly and remained `Valid credentials` after reload; the existing App Store Connect API credential also remains valid. No private credential value is in Git. |
 | 18 | App Store products exist | **Pass** | The permanent finite catalog exists in App Store Connect: 2 Premium subscriptions and 8 consumables, with required localizations, prices, and USA availability. |
 | 19 | Store mappings exist | **Pass, sandbox-only** | The additive mapping schema is deployed with ten App Store sandbox mappings and generated types. |
-| 20 | Store-aware webhook is deployed | **Pass; purchase rail off** | `revenuecat-webhook` v69 is active and preserves Google parsing/exact Apple matching. Existing project-wide webhook `whintgr38699522f7` covers production and sandbox. Its bounded TEST returned HTTP 200 with signature and processing verification true, no Premium grant, and no live-money action. |
+| 20 | Store-aware webhook is deployed | **Pass; purchase rail off** | `revenuecat-webhook` v70 calls service-only atomic Premium/consumable RPCs and preserves Google/base-plan parsing plus exact Apple matching. The App Store switch remains off. |
 | 21 | Apple purchase paths are sandbox/internal only | **Pass, disabled** | Catalog entries are sandbox-only and the App Store purchase switch defaults off. No payable transaction is enabled. |
 | 22 | Live money remains off | **Pass** | No live-money switch was enabled. |
 | 23 | Payouts and cash-out remain off | **Pass** | No payout, withdrawal, cash-out, transfer, or payable-balance path was enabled. |
@@ -63,7 +65,7 @@ All seven separated Phase 1 checks passed remotely at final application source
 | 26 | App Store metadata and screenshots are prepared | **Draft pass** | Metadata/review material and public-safe standard, large, small, and tablet-format screenshot drafts exist with provenance. Owner marketing/legal approval remains required. |
 | 27 | EAS iOS submit profile exists | **Pass** | `submit.production.ios.ascAppId` uses the real App Store Connect numeric app ID; Android submit configuration is unchanged. |
 | 28 | Production App Store build succeeds | **Pass** | Archive inspection passed bundle/team ID, arm64 signature, production APNs, Associated Domains, Firebase-file presence, privacy manifest, opaque icons, and expected background modes. Xcode logs record dSYM generation; EAS exposed no separate dSYM artifact. |
-| 29 | Internal TestFlight upload succeeds | **Pass: internal only** | Submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28` uploaded exact build `a729aa9a-1a98-439c-8c81-48c381735d8d`; Apple processing is `VALID`, group `Chillywood Internal` is assigned, and bounded testing notes are configured. Build 6 supersedes earlier internal candidates. |
+| 29 | Internal TestFlight upload succeeds | **Replacement pending** | Historical build 6 remains internal only but is superseded. A new exact build 7 or higher must be uploaded only to `Chillywood Internal`; no external/public distribution is authorized. |
 | 30 | No public release occurs | **Pass** | Public release and external TestFlight are not authorized and have not occurred. |
 | 31 | Exact evidence and remaining device matrix exist | **Pass as an interim record** | This document and `IOS_FINAL_DEVICE_TEST_MATRIX.md` preserve exact evidence without converting provider/device blockers into completion. |
 
@@ -80,10 +82,11 @@ All seven separated Phase 1 checks passed remotely at final application source
   release workflows require manual dispatch and protected-environment approval.
 - EAS environment secrets include the Firebase file variable; ordinary push,
   native calls, and App Store purchases remain runtime-disabled.
-- Three additive migrations and six Edge Functions are deployed after restricted
-  backup. Ten sandbox store mappings exist; rollout and money switches remain off.
-- Production build `a729aa9a-1a98-439c-8c81-48c381735d8d` is valid in internal
-TestFlight group `Chillywood Internal`; no external or public release exists.
+- Seven additive integration migrations and seven Edge Functions are active after
+  restricted readback. Premium prices are `999`/`9999`; the Android catalog digest
+  remains `4fb5d0565f6697269e2572a63d3bd678`; rollout and money switches remain off.
+- Historical build 6 remains valid but superseded in `Chillywood Internal`; no
+  external or public release exists.
 - RevenueCat project `projc5629a24` reuses its existing API v2 configuration key;
   the key has all required configuration read/write scopes and no new key was
   created. Apple app `app3a0ad1ba62` is configured without replacing the Android
@@ -124,6 +127,8 @@ Run with Node 20 and passing unless marked otherwise:
 - `npm run guard:route-contracts` — pass;
 - `npm run guard:payment-rail-policy` — pass;
 - `npm run guard:notification-room-call-policy` — pass;
+- `npm run guard:chilly-chat-call-push-policy` — pass with response-schema,
+  VoIP-only, terminal-action, and idempotency fixtures;
 - `npm run guard:watch-party-livekit` — pass;
 - `npm run guard:old-room-handling` — pass;
 - `npm run guard:ios-config-policy` — pass;
@@ -132,6 +137,9 @@ Run with Node 20 and passing unless marked otherwise:
   and release-workflow guards/proofs — pass;
 - `npx expo-doctor` — pass, 18/18;
 - `git diff --check` — pass; and
+- `npx supabase test db` — pass, 76 assertions including durable transitions,
+  duplicate/lifecycle/intent behavior, exact price readback, and every forced
+  transaction rollback stage; and
 - Expo public configuration resolution — pass without recording resolved secret
   values.
 
@@ -156,7 +164,7 @@ evidence.
 
 ## Post-90 final proof
 
-The provider credential gate is closed. All seven independent checks passed on the
-provider-closeout source and credential-closeout documentation heads. The
-physical-device and owner-attestation matrix is the explicitly defined final 10%
-and remains unclaimed.
+The provider credential gate and semantic backend corrections are closed. The
+replacement commit, seven remote checks, Simulator smoke, archive inspection, and
+internal build 7+ are still required before the physical-device matrix. The final
+10% remains unclaimed.

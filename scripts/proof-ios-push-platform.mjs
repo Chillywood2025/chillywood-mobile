@@ -85,8 +85,13 @@ for (const source of [activityDispatch, callDispatch, moneyDispatch]) {
   assert.ok(source.includes("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED"), "iOS delivery must default off behind the rollout flag");
 }
 assert.ok(activityDispatch.includes('errorCode: "no_enabled_push_token"'), "activity dispatch must use a platform-neutral missing-token result");
-assert.ok(callDispatch.includes('errorCode: "ios_native_calls_disabled"'), "ordinary push must not impersonate an iOS native incoming call");
-assert.ok(callDispatch.includes('input.action === "missed"'), "iOS call-related ordinary push must remain a missed-call fallback");
+assert.ok(
+  callDispatch.includes('const expoCandidates = input.action === "missed" && iosRolloutEnabled')
+    && callDispatch.includes('? [...androidExpoTokens, ...iosExpoTokens]')
+    && callDispatch.includes(': androidExpoTokens;'),
+  "ordinary iOS push candidates must be limited to the missed-call fallback",
+);
+assert.ok(callDispatch.includes('input.action === "missed" && copy'), "iOS call-related ordinary push must remain a missed-call presentation");
 assert.ok(moneyDispatch.includes('errorCode: "no_enabled_push_token"'), "creator-money dispatch must use a platform-neutral missing-token result");
 
 console.log(JSON.stringify({

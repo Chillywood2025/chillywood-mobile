@@ -1,6 +1,6 @@
 # iOS 90% Rollback Plan
 
-Checkpoint date: 2026-07-15
+Checkpoint date: 2026-07-16
 
 This plan reverses the smallest faulty subsystem while preserving Android,
 security policy, audit evidence, permanent App Store identifiers, and provider
@@ -36,7 +36,9 @@ The major integration commits are intentionally separable:
 | Privacy and store materials | `9c54a412` | Revert only an incorrect manifest reason or document claim. Re-run the privacy guard and inspect the generated/archive manifest before another upload. |
 | Media readiness | `94d1d4c6`, `a5f23b06`, `8719ada3` | Revert permission/media lifecycle changes as one unit if they cause a regression. Confirm camera/microphone never activate without user intent and sign-out/leave still tears down tracks. |
 | Push and native calls | `db63e456`, `e8dd7e38`, `d3f1715a`, `b5bebb35` | Turn runtime/server flags off first, then revert client/native/backend source together as required. Preserve Android FCM and full-screen call behavior. |
+| Durable call orchestration | semantic correction commit (pending final hash) | Keep ordinary/VoIP rollout off. Revert client, dispatcher, transition function, and shared schema/policy together; retain delivery rows and apply only forward database fixes. |
 | Store-aware policy/schema/webhook | `95fdc2b7`, copy/provider commits through `8328f052`, `2be7d4cb`, `1e213378`, `e39a069d`, `c40287ee`, `4d0ed187` | Disable the Apple rail first. Revert Apple-specific selection/copy without removing Google provider values or weakening webhook verification/idempotency. |
+| Atomic RevenueCat application | semantic correction commit (pending final hash) | Keep the App Store rail and money switches off. Redeploy webhook v69 only with a reviewed forward compatibility plan; never delete provider events, entitlements, grants, ledger rows, or intents. |
 | Release workflows | `fa847965`, `19230653`, `63431991`, `b65ab225`, `f7af588d` | Disable/delete only the affected manual workflow or environment access. Preserve validation, protected approvals, exact-build submission, and no-auto-release controls. |
 | Store screenshot drafts | `a4ab1d49` | Remove only the draft assets if incorrect. Preserve source/build evidence and never replace them with private-account or private-media captures. |
 | Critical transitive dependency patch | `d6a95ed5` | Revert only if a verified incompatibility requires it and a separately reviewed safe dependency path exists. Never restore vulnerable `websocket-driver` 0.7.4 as a shortcut. |
@@ -52,8 +54,12 @@ Integration migrations:
 - `20260715150522_ios_voip_push_token_foundation.sql`
 - `20260715151250_ios_app_store_mappings.sql`
 - `20260715174500_ios_app_store_purchase_intents.sql`
+- `20260718091500_fix_ios_app_store_premium_reference_prices.sql`
+- `20260718103000_durable_chat_call_status_transition.sql`
+- `20260718110000_revenuecat_atomic_event_transactions.sql`
+- `20260718111500_harden_chat_call_transition_delivery_access.sql`
 
-All three are deployed and additive. Roll back behavior with switches and a
+All seven are deployed and additive. Roll back behavior with switches and a
 reviewed forward fix; do not attempt a destructive down migration:
 
 1. Turn VoIP and App Store rollout switches off.
@@ -75,10 +81,11 @@ Affected functions include:
 
 - `notification-device-tokens` v49;
 - `notification-dispatch` v49;
-- `chilly-chat-call-dispatch` v33;
+- `chilly-chat-call-dispatch` v34 (previous v33);
+- `chilly-chat-call-transition` v1 (new);
 - `ios-voip-push-tokens` v1;
-- `ios-voip-call-dispatch` v1; and
-- `revenuecat-webhook` v69.
+- `ios-voip-call-dispatch` v2 (previous v1); and
+- `revenuecat-webhook` v70 (previous v69).
 
 For a faulty deployment:
 
@@ -90,6 +97,9 @@ For a faulty deployment:
    events to make dashboards appear green.
 5. Confirm Android notification payloads still include the established Android
    fields and Google webhook parsing remains unchanged.
+6. For call rollback, disable or remove client invocation of
+   `chilly-chat-call-transition` only in the same reviewed revert that restores a
+   compatible awaited server transition; do not restore mobile fire-and-forget.
 
 ## APNs and native-call rollback
 
@@ -117,6 +127,9 @@ For a faulty deployment:
 - Disable the RevenueCat offering/Apple app integration rather than deleting
   entitlements impulsively.
 - Redeploy the previous verified webhook while preserving event idempotency.
+- Treat the two reconciliation-listed historical Google event-pass rows as review
+  evidence; do not backfill or delete them during an emergency rollback without a
+  separate owner-approved money-data plan.
 - Never fall back to Google base-plan parsing for Apple product identifiers.
 - Ensure tips still grant no access and no rollback path enables payable balances,
   payouts, or media authority.
@@ -133,14 +146,17 @@ For a faulty deployment:
 
 ## EAS, App Store Connect, and TestFlight rollback
 
-- Final-source Simulator build:
+- Historical superseded Simulator build:
   `6d8e5193-ea75-490f-9451-759419a3e7b3`, app `1.0.0 (6)`, from `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
-- Reviewed production/Internal TestFlight build:
+- Historical superseded production/Internal TestFlight build:
   `a729aa9a-1a98-439c-8c81-48c381735d8d`, app `1.0.0 (6)`, from `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 - EAS submission: `ade71443-0a05-49c2-8aa4-c411d4cb3e28`, assigned only to
   `Chillywood Internal`.
 - Internal build `1.0.0 (3)` remains historical and is superseded by build 6; it
   was never external or public.
+- Build 6 is also superseded by the semantic call/backend correction and must not
+  be restored as the final physical-test candidate. The replacement build 7+
+  identifiers must be added here after successful creation and inspection.
 - Cancel a queued build if safe or allow an in-flight immutable build to finish;
   do not submit it if validation failed.
 - Submit only an exact successful build ID. Never switch a workflow to implicit

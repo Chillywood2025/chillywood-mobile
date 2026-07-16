@@ -1,11 +1,12 @@
 # Chi'llywood iOS Status
 
-Checkpoint date: 2026-07-15
+Checkpoint date: 2026-07-16
 
-Overall verdict: **The 90% repository, provider, build, and internal-TestFlight
-checkpoint is complete. RevenueCat's dedicated Apple In-App Purchase credential
-now validates alongside the existing App Store Connect API credential. The final
-physical-device and owner-attestation matrix remains intentionally unclaimed.**
+Overall verdict: **The semantic call-orchestration and atomic RevenueCat source and
+backend corrections are complete and deployed, but the source closeout is not yet
+complete. Build 6 is superseded by these application/backend-contract changes. A
+new Simulator artifact and internal TestFlight build 7 or higher must be produced
+before the physical-device matrix begins.**
 
 ## Repository and pull-request state
 
@@ -14,7 +15,7 @@ physical-device and owner-attestation matrix remains intentionally unclaimed.**
 | Integration branch | `codex/ios-integration-90` |
 | Provider-closeout starting head | `97cd97cd58b021d2f45021c3e121b8a35158cee8` |
 | Provider-closeout source hardening | `0ec109db` |
-| Tested application source | `97cd97cd58b021d2f45021c3e121b8a35158cee8` |
+| Previously tested application source | `97cd97cd58b021d2f45021c3e121b8a35158cee8`; superseded by the semantic correction working tree |
 | Screenshot-only follow-up | `a4ab1d49` |
 | Release-workflow portability fix | `f7af588d` |
 | Critical transitive advisory patch | `d6a95ed5` (`websocket-driver` 0.7.5 lockfile-only) |
@@ -24,8 +25,9 @@ physical-device and owner-attestation matrix remains intentionally unclaimed.**
 | Superseded PR | [#8](https://github.com/Chillywood2025/chillywood-mobile/pull/8), verified empty and closed |
 | Unrelated local state | `deno.lock` remains untracked and is excluded from this work |
 
-No PR has been merged. All seven separated Phase 1 checks passed at final
-application source `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
+No PR has been merged. The corrected working tree passes the full local Node 20
+suite and 76 database assertions. Remote checks and new build evidence remain
+pending until the correction commit is pushed.
 
 ## Current integration status
 
@@ -41,16 +43,16 @@ application source `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 | Universal Links | Source and hosted deployment pass | Associated Domains is present. Canonical AASA is deployed with HTTP 200, no redirect, JSON content type, and matching source. Android App Links are preserved. |
 | Supabase Auth redirects | Configured | The custom scheme and required HTTPS authentication routes are configured. Signed physical Universal Link proof remains pending. |
 | Ordinary iOS push | Source and backend deployed; rollout off | Client registration, permission states, categories, badge/response handling, and platform-aware payload source exist. Updated dispatch functions are active. Physical APNs delivery is not claimed. |
-| Native calls | Source compiles; backend deployed; rollout off | Swift CallKit/PushKit/AVAudioSession module, Expo plugin, JS bridge, VoIP token lifecycle, and APNs sender compile in the final-source EAS build. VoIP token/dispatch functions are active; runtime-visible calls and server dispatch remain disabled. |
-| Commerce policy | Source and additive schema deployed; Apple rail off | Apple/Google providers are distinct, ten sandbox mappings are deployed, Google base plans remain Google-only, and tips/purchases cannot grant media authority or payable value. |
+| Native calls | Semantic correction deployed; rollout off | The dispatcher returns one strict top-level channel schema, evaluates VoIP independently from ordinary tokens and in-app insertion, uses action-specific terminal payloads, and awaits an idempotent server-owned transition/delivery operation. Swift CallKit/PushKit idempotency remains in place. Physical delivery is unclaimed. |
+| Commerce policy | Atomic schema deployed; Apple rail off | Premium and exact iOS consumable events now execute through service-only transactional RPCs. Apple/Google providers remain distinct, Google base-plan parsing is preserved, tips create no entitlement/access/payable balance, and Seat Passes grant viewer access only. |
 | RevenueCat Apple | **Configured; credentials valid** | Existing project `projc5629a24` and Apple app `app3a0ad1ba62` are configured for `com.chillywood.mobile`. Ten products, Premium entitlement, three offerings, package mappings, the sensitive EAS public-key variable, and the project-wide webhook all pass readback. A dedicated Apple In-App Purchase Key was generated once, stored outside Git with owner-only permissions and a Keychain record, uploaded directly to the Apple app, and remained `Valid credentials` after RevenueCat reload. The existing App Store Connect API credential also remains valid. |
 | Stripe physical merch / Connect | Verified test-mode and platform-neutral | Required Supabase secret names are present. Existing test-mode merch and Connect webhooks are active; platform charges and payouts remain disabled. iOS has no Stripe digital checkout, and no payout, transfer, cash-out, or payable balance was created. |
 | Privacy manifest | Source and generated prebuild pass | Canonical manifest is wired through Expo, tracking is false, and clean Android/prebuilt output contains the manifest. Current-source archive inspection is now available from the production build `a729aa9a-1a98-439c-8c81-48c381735d8d`. Local clean iOS prebuild requires a local `ios.googleServicesFile` path in this workspace and remains pending. |
 | Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
 | Release automation | Prepared and manually verified | `ios-preview` and `ios-production` protected environments exist. Workflows are manual, validate first, pin EAS CLI 21.0.1, freeze production credentials, require an exact build ID, and bind the verified internal group. |
-| Backend deployment | Verified, fail-closed | Three additive migrations and six Edge Functions are deployed after restricted local backup. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
-| Final-source Simulator | In use | Development-simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` from `97cd97cd58b021d2f45021c3e121b8a35158cee8` was installed and launched successfully. |
-| Production build / TestFlight | Pass: internal only | Production build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, finished from `97cd97cd58b021d2f45021c3e121b8a35158cee8`. EAS submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28` uploaded it; Apple processing is `VALID`, the build is assigned only to `Chillywood Internal`, and bounded internal testing notes are configured. Build 6 supersedes prior build candidates. |
+| Backend deployment | Verified, fail-closed | Seven additive integration migrations and seven active Edge Functions are deployed after restricted readback. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
+| Final-source Simulator | **Pending replacement** | Prior build `6d8e5193-ea75-490f-9451-759419a3e7b3` is historical and superseded. No physical matrix may begin until the corrected source has a freshly installed/smoked Simulator artifact. |
+| Production build / TestFlight | **Build 6 superseded** | Prior internal-only build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, remains historical in `Chillywood Internal`. A new build 7 or higher is required; external testing and public release remain disabled. |
 
 ## Deployed backend inventory
 
@@ -61,19 +63,29 @@ Migrations:
 
 - `20260715150522_ios_voip_push_token_foundation`;
 - `20260715151250_ios_app_store_mappings`; and
-- `20260715174500_ios_app_store_purchase_intents`.
+- `20260715174500_ios_app_store_purchase_intents`;
+- `20260718091500_fix_ios_app_store_premium_reference_prices` (remote version `20260716111111`);
+- `20260718103000_durable_chat_call_status_transition` (remote version `20260716111117`);
+- `20260718110000_revenuecat_atomic_event_transactions` (remote version `20260716111120`); and
+- `20260718111500_harden_chat_call_transition_delivery_access`.
 
 Active Edge Functions:
 
 - `notification-device-tokens` v49;
 - `notification-dispatch` v49;
-- `chilly-chat-call-dispatch` v33;
-- `revenuecat-webhook` v69;
+- `chilly-chat-call-dispatch` v34;
+- `chilly-chat-call-transition` v1;
+- `revenuecat-webhook` v70;
 - `ios-voip-push-tokens` v1; and
-- `ios-voip-call-dispatch` v1.
+- `ios-voip-call-dispatch` v2.
 
-Ten App Store sandbox mappings exist. Ordinary push delivery, VoIP dispatch,
-RevenueCat App Store purchase access, live money, payouts, and cash-out remain off.
+Remote readback confirms monthly/yearly Premium mappings at `999`/`9999`, exact
+`ios` / `app_store` / `revenuecat_app_store` sandbox scope, unchanged Android
+catalog count/digest `15` / `4fb5d0565f6697269e2572a63d3bd678`, and service-only
+atomic RPC execution. Two historical Google event-pass provider events are listed
+by reconciliation as missing ledger effects; they were not mutated. Ordinary push,
+VoIP dispatch, App Store purchase access, live money, payouts, and cash-out remain
+off.
 
 ## Safety switches
 
@@ -126,6 +138,13 @@ switches.
   authentication, RLS, rate limits, hash/fingerprint metadata, and revocation.
 - CallKit/PushKit source handles answer, decline, end, cancel, timeout, missed call,
   cold-start transfer, audio session lifecycle, duplicate protection, and cleanup.
+- Incoming, missed, cancel, declined, end, and timeout are action-specific.
+  Terminal actions cannot create incoming-call copy/category or Android incoming
+  CallStyle payloads, and every native action includes action, call UUID/invite,
+  thread, expiry, and call type.
+- Terminal status changes atomically update the invite, insert one event, and
+  create a durable delivery row. The authenticated client awaits dispatch; retries
+  are idempotent and unauthorized transitions fail closed.
 - Actual APNs and two-iPhone call proof remain in the final device matrix.
 
 ### Commerce
@@ -146,6 +165,11 @@ switches.
   group truth now align with committed fixtures, and the provider configuration
   passed the local Simulator harness 3/3; physical TestFlight purchase, restore,
   refund, and revocation proof remains pending.
+- RPCs `process_revenuecat_premium_event_atomic` and
+  `process_revenuecat_consumable_event_atomic` apply normalized provider-event,
+  entitlement/intent, billing, access, ledger, and lifecycle effects in one
+  transaction. `reconcile_revenuecat_partial_provider_events` provides restricted
+  readback for historical partial events.
 
 ## Build evidence
 
@@ -157,15 +181,14 @@ them, not for the current integration branch:
 | `ddc48433-d29d-4a83-a847-0d8908e2da63` | `development-simulator` | `2ea49f421b1e1abbcd0889b273b0908b04aea2a4` | Historical Simulator artifact and bounded smoke proof. |
 | `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `development` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | Historical signed physical build; install, launch, Firebase startup, authentication, persistence, navigation, and sign-out passed; source precedence for current branch is build `97cd97cd`. |
 
-The integration branch contains application, native, Expo, dependency, plugin,
-workflow, and backend changes after those commits. The current final-source proof
-references installed simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` and
-production archive `a729aa9a-1a98-439c-8c81-48c381735d8d`.
+The integration branch now contains semantic application and backend-contract
+changes after those artifacts. Both build 6 artifacts are historical and cannot
+serve as the final candidate for the corrected source.
 
 | `98ad48a2-562b-4a66-bf79-2bdcbe875a3a` | `development-simulator` | `b65ab225` | Successful pre-advisory-refresh Simulator evidence, superseded by the final-source build below. |
 | `012edf86-b525-4dee-b9bc-ff23a8281c93` | `production` | `b65ab225` | Successful internal build `1.0.0 (3)`, superseded after the audit feed exposed a patchable transitive critical advisory. It was never external or public. |
-| `6d8e5193-ea75-490f-9451-759419a3e7b3` | `development-simulator` | `97cd97cd58b021d2f45021c3e121b8a35158cee8` | Development-simulator build installed and launched successfully; route-level smoke remains unobserved and is required in final device proof. |
-| `a729aa9a-1a98-439c-8c81-48c381735d8d` | `production` | `97cd97cd58b021d2f45021c3e121b8a35158cee8` | Final-source production archive version `1.0.0 (6)`. Archive metadata confirms build version/channel/commit and completed build fingerprint. |
+| `6d8e5193-ea75-490f-9451-759419a3e7b3` | `development-simulator` | `97cd97cd58b021d2f45021c3e121b8a35158cee8` | Historical build 6 Simulator evidence; superseded by call/backend semantic corrections. |
+| `a729aa9a-1a98-439c-8c81-48c381735d8d` | `production` | `97cd97cd58b021d2f45021c3e121b8a35158cee8` | Historical internal-only `1.0.0 (6)` archive; superseded and not eligible for the physical matrix. |
 
 Final internal TestFlight submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28`
 succeeded for that exact build. Apple reports processing state `VALID`, the build is
@@ -182,7 +205,7 @@ folders remain uncommitted.
 
 ## Validation
 
-Local Node 20 results at tested application source `97cd97cd58b021d2f45021c3e121b8a35158cee8`:
+Local Node 20 results on the semantic correction working tree:
 
 | Diagnostic | Result |
 | --- | --- |
@@ -194,6 +217,7 @@ Local Node 20 results at tested application source `97cd97cd58b021d2f45021c3e121
 | `npm run guard:route-contracts` | Pass |
 | `npm run guard:payment-rail-policy` | Pass |
 | `npm run guard:notification-room-call-policy` | Pass |
+| `npm run guard:chilly-chat-call-push-policy` | Pass: canonical schema, channel/token fixtures, terminal copy, idempotency |
 | `npm run guard:watch-party-livekit` | Pass |
 | `npm run guard:old-room-handling` | Pass |
 | `npm run guard:ios-config-policy` | Pass |
@@ -201,6 +225,7 @@ Local Node 20 results at tested application source `97cd97cd58b021d2f45021c3e121
 | AASA, commerce, media, push, native-call, VoIP, privacy, and release guards/proofs | Pass |
 | `npx expo-doctor` | Pass: 18/18 |
 | `git diff --check` | Pass |
+| `npx supabase test db` | Pass: 76 call-transition, lifecycle, duplicate, intent, price, and forced-rollback assertions |
 | Expo public config resolution | Pass; no resolved secret values recorded |
 
 Exact required GitHub check names:
@@ -244,7 +269,7 @@ At this checkpoint:
 
 - no merge occurred;
 - no public App Store release or external TestFlight distribution occurred;
-- one internal production build candidate was uploaded only to `Chillywood Internal` at `a729aa9a-1a98-439c-8c81-48c381735d8d`; `build 6` supersedes earlier candidates after the patch-only audit correction. No external tester or public release was enabled;
+- historical build 6 remains only in `Chillywood Internal` and is superseded; no external tester or public release was enabled;
 - no production OTA was published;
 - no live money, payable balance, payout, cash-out, withdrawal, or transfer was
   enabled;

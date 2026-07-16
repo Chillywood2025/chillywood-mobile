@@ -1,10 +1,11 @@
 # iOS RevenueCat and Stripe Provider Closeout
 
-Checkpoint date: 2026-07-15
+Checkpoint date: 2026-07-16
 
-Status: **Complete — RevenueCat's Apple catalog, dedicated Apple In-App Purchase
-credential, and Stripe platform-neutral lanes are configured and verified. The
-purchase rail remains disabled pending bounded physical TestFlight proof.**
+Status: **Provider configuration and atomic backend correction complete; replacement
+binary pending.** RevenueCat's Apple catalog and credential remain valid,
+transactional RPCs are deployed, and the purchase rail remains disabled. Build 6
+is superseded; no physical StoreKit matrix may begin before internal build 7+.
 
 This bounded closeout started from branch `codex/ios-integration-90` at
 `97cd97cd58b021d2f45021c3e121b8a35158cee8` in draft PR
@@ -98,6 +99,46 @@ This proves the shared authorization contract without recording or exposing the
 header value. The RevenueCat App Store rail, live money, payouts, transfers,
 cash-out, and payable balances remain off.
 
+### Atomic normalized-event application
+
+`revenuecat-webhook` v70 now verifies and normalizes provider input, validates the
+store/product policy, stores no raw provider payload, and calls service-only
+PostgreSQL transactions:
+
+- `process_revenuecat_premium_event_atomic` handles provider-event idempotency,
+  `user_entitlements`, `billing_events`, `access_grants`,
+  `money_access_ledger_events`, and lifecycle state in one transaction;
+- `process_revenuecat_consumable_event_atomic` requires the exact sandbox mapping
+  and purchase intent, creates no entitlement/access grant for tips, grants only
+  viewer access for Seat Passes, consumes/revokes the intent, and never creates a
+  payable balance or room authority; and
+- `reconcile_revenuecat_partial_provider_events` provides restricted readback for
+  older partial events.
+
+Forced failures after every provider, entitlement/billing, access, ledger, and
+intent boundary rolled back completely in local pgTAP tests. Duplicate delivery,
+initial purchase, renewal, cancellation-through-paid-period, expiration, billing
+grace, refund/revocation, creator tip, Seat Pass, and missing-intent cases passed.
+The deployed reconciliation readback lists two historical Google Play event-pass
+rows missing ledger effects. They were deliberately not mutated.
+
+The price correction migration was absent from remote history before deployment.
+Restricted predeployment readback recorded `499` monthly and `4999` yearly; remote
+postdeployment readback is exactly:
+
+- `com.chillywood.premium.monthly = 999`;
+- `com.chillywood.premium.yearly = 9999`;
+- `platform=ios`, `store=app_store`, `provider=revenuecat_app_store`;
+- `environment=sandbox`, `status=sandbox`; and
+- unchanged Android product count/digest `15` /
+  `4fb5d0565f6697269e2572a63d3bd678`.
+
+Deployed migration inventory additions are
+`20260718091500_fix_ios_app_store_premium_reference_prices`,
+`20260718110000_revenuecat_atomic_event_transactions`, and the server-only call
+transition/hardening migrations recorded in `IOS_STATUS.md`. The App Store switch
+remains `off`; live money and payouts remain `off`.
+
 ## Apple In-App Purchase Key completion
 
 An authorized App Store Connect owner session generated a dedicated Apple In-App
@@ -177,6 +218,7 @@ complete requested local suite passed under Node `20.20.2`:
   SDK key present while App Store purchases remain disabled;
 - route, payment-rail, notification/room/call, watch-party, old-room, and iOS
   configuration guards;
+- canonical call response/token/action fixtures and 76 local database assertions;
 - AASA, iOS commerce catalog/policy, media, push-platform, native-call, VoIP,
   privacy-manifest, and release-workflow guards/proofs;
 - Stripe Connect, refund/credit/payout-hold, and creator-monetization policy
@@ -185,8 +227,8 @@ complete requested local suite passed under Node `20.20.2`:
 - `git diff --check`.
 
 The external provider-generated StoreKit configuration also passed the dedicated
-Simulator harness 3/3. All seven independent GitHub checks passed on the pushed
-credential-closeout documentation head.
+Simulator harness 3/3. The semantic correction working tree passes the complete
+local Node 20 suite; seven remote checks await its replacement commit.
 
 ## Remaining bounded proof
 

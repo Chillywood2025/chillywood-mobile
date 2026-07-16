@@ -1,5 +1,11 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
+import type { Tables, TablesInsert } from "../supabase/database.types";
+
+import {
+  type ChillyChatCallDeliveryStatus,
+  type ChillyCallChannelResult,
+  normalizeChillyChatCallDispatchResponse,
+} from "./chillyChatCallDispatchSchema";
 
 import { supabase } from "./supabase";
 
@@ -38,14 +44,6 @@ export type ChillyChatCallInvite = {
   endedAt: string | null;
 };
 
-export type ChillyChatCallDeliveryStatus =
-  | "sent"
-  | "created"
-  | "skipped"
-  | "failed"
-  | "blocked"
-  | "unknown";
-
 export type ChillyChatCallInviteDelivery = {
   attempted: boolean;
   eligible: boolean | null;
@@ -54,33 +52,10 @@ export type ChillyChatCallInviteDelivery = {
   reason: string;
   status: ChillyChatCallDeliveryStatus;
   channels?: {
-    androidNative?: {
-      eligible?: boolean;
-      notificationCreated?: boolean;
-      pushSent?: boolean;
-      reason?: string;
-      status?: ChillyChatCallDeliveryStatus;
-    };
-    iosVoip?: {
-      eligible?: boolean;
-      sentCount?: number;
-      failedCount?: number;
-      skippedCount?: number;
-      reason?: string;
-      status?: ChillyChatCallDeliveryStatus;
-    };
-    ordinaryPush?: {
-      eligible?: boolean;
-      notificationCreated?: boolean;
-      pushSent?: boolean;
-      reason?: string;
-      status?: ChillyChatCallDeliveryStatus;
-    };
-    inAppNotification?: {
-      notificationCreated?: boolean;
-      status?: ChillyChatCallDeliveryStatus;
-      reason?: string;
-    };
+    androidNative: ChillyCallChannelResult;
+    iosVoip: ChillyCallChannelResult;
+    ordinaryPush: ChillyCallChannelResult;
+    inAppNotification: ChillyCallChannelResult;
   };
 };
 
@@ -102,7 +77,6 @@ export type ChillyChatCallEvent = {
 
 type CallInviteRow = Tables<"chat_call_invites">;
 type CallInviteInsert = TablesInsert<"chat_call_invites">;
-type CallInviteUpdate = TablesUpdate<"chat_call_invites">;
 type CallEventRow = Tables<"chat_call_events">;
 type CallEventInsert = TablesInsert<"chat_call_events">;
 
@@ -244,138 +218,7 @@ const DEFAULT_CALL_DELIVERY: ChillyChatCallInviteDelivery = {
   status: "unknown",
 };
 
-const normalizeDeliveryStatus = (value: unknown): ChillyChatCallDeliveryStatus => {
-  const normalized = toText(value).toLowerCase();
-  if (
-    normalized === "sent"
-    || normalized === "created"
-    || normalized === "skipped"
-    || normalized === "failed"
-    || normalized === "blocked"
-  ) {
-    return normalized;
-  }
-  return "unknown";
-};
-
-const normalizeDispatchResponse = (value: unknown): ChillyChatCallInviteDelivery => {
-  if (!value || typeof value !== "object") {
-    return {
-      ...DEFAULT_CALL_DELIVERY,
-      attempted: true,
-      reason: "empty_dispatch_response",
-      status: "unknown",
-    };
-  }
-
-  const payload = value as {
-    blockedReason?: unknown;
-    eligible?: unknown;
-    result?: {
-      notificationCreated?: unknown;
-      pushSent?: unknown;
-      reason?: unknown;
-      status?: unknown;
-    } | null;
-    channels?: {
-      androidNative?: unknown;
-      iosVoip?: unknown;
-      ordinaryPush?: unknown;
-      inAppNotification?: unknown;
-    } | null;
-  };
-  const result = payload.result ?? null;
-  const channels = payload.channels ?? null;
-  const blockedReason = toText(payload.blockedReason);
-  const reason = toText(result?.reason) || blockedReason || "unknown";
-  const status = blockedReason
-    ? "blocked"
-    : normalizeDeliveryStatus(result?.status);
-
-  const parseRecord = (input: unknown): Record<string, unknown> | null => {
-    if (!input || typeof input !== "object") return null;
-    const source = input as Record<string, unknown>;
-    if (!Object.keys(source).length) return null;
-    return source;
-  };
-  const parseCount = (value: unknown): number | undefined => {
-    const count = Number(value);
-    return Number.isFinite(count) && count >= 0 ? Math.floor(count) : undefined;
-  };
-  const normalizeChannelStatus = (value: unknown) => normalizeDeliveryStatus((value as { status?: unknown } | null)?.status);
-
-  return {
-    attempted: true,
-    eligible: typeof payload.eligible === "boolean" ? payload.eligible : null,
-    notificationCreated: result?.notificationCreated === true,
-    pushSent: result?.pushSent === true,
-    reason,
-    status,
-    channels: {
-      androidNative: (() => {
-        const source = parseRecord(channels?.androidNative);
-        if (!source) return undefined;
-        return {
-          eligible: typeof source.eligible === "boolean" ? source.eligible : undefined,
-          notificationCreated: source.notificationCreated === true,
-          pushSent: source.pushSent === true,
-          reason: toText(source.reason),
-          status: normalizeChannelStatus(source),
-        };
-      })(),
-      iosVoip: (() => {
-        const source = parseRecord(channels?.iosVoip);
-        if (!source) return undefined;
-        return {
-          eligible: typeof source.eligible === "boolean" ? source.eligible : undefined,
-          sentCount: parseCount(source.sentCount),
-          failedCount: parseCount(source.failedCount),
-          skippedCount: parseCount(source.skippedCount),
-          reason: toText(source.reason),
-          status: normalizeChannelStatus(source),
-        };
-      })(),
-      ordinaryPush: (() => {
-        const source = parseRecord(channels?.ordinaryPush);
-        if (!source) return undefined;
-        return {
-          eligible: typeof source.eligible === "boolean" ? source.eligible : undefined,
-          notificationCreated: source.notificationCreated === true,
-          pushSent: source.pushSent === true,
-          reason: toText(source.reason),
-          status: normalizeChannelStatus(source),
-        };
-      })(),
-      inAppNotification: (() => {
-        const source = parseRecord(channels?.inAppNotification);
-        if (!source) return undefined;
-        return {
-          notificationCreated: source.notificationCreated === true,
-          reason: toText(source.reason),
-          status: normalizeChannelStatus(source),
-        };
-      })(),
-    },
-  };
-};
-
 type CallDispatchAction = "incoming" | "missed" | "cancel" | "declined" | "end" | "timeout";
-
-type DispatchableStatus =
-  | "declined"
-  | "missed"
-  | "canceled"
-  | "busy"
-  | "ended";
-
-const mapStatusToDispatchAction = (status: ChillyChatCallStatus): CallDispatchAction | null => {
-  if (status === "declined") return "declined";
-  if (status === "missed") return "missed";
-  if (status === "canceled") return "cancel";
-  if (status === "busy") return "timeout";
-  if (status === "ended") return "end";
-  return null;
-};
 
 async function dispatchChillyChatCallPush(input: {
   action: CallDispatchAction;
@@ -404,7 +247,16 @@ async function dispatchChillyChatCallPush(input: {
       status: "failed",
     };
   }
-  return normalizeDispatchResponse(data);
+  const response = normalizeChillyChatCallDispatchResponse(data);
+  return {
+    attempted: true,
+    eligible: response.eligible,
+    notificationCreated: response.result.notificationCreated,
+    pushSent: response.result.pushSent,
+    reason: response.result.reason,
+    status: response.result.status,
+    channels: response.channels,
+  };
 }
 
 export async function createChillyChatCallInvite(input: {
@@ -589,65 +441,43 @@ export async function updateChillyChatCallInviteStatus(input: {
   status: Exclude<ChillyChatCallStatus, "ringing">;
   durationSeconds?: number | null;
 }): Promise<ChillyChatCallInvite | null> {
-  const now = new Date().toISOString();
-  const updates: CallInviteUpdate = {
-    status: input.status,
+  const actorUserId = toText(input.actorUserId);
+  const inviteId = toText(input.invite.id);
+  if (!actorUserId || !inviteId) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (toText(sessionData.session?.user?.id) !== actorUserId) return null;
+
+  const { data, error } = await supabase.functions.invoke("chilly-chat-call-transition", {
+    body: {
+      durationSeconds: input.durationSeconds ?? null,
+      inviteId,
+      status: input.status,
+    },
+  });
+  if (error || !data || typeof data !== "object") return null;
+  const snapshot = (data as { invite?: unknown }).invite;
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const row = snapshot as Record<string, unknown>;
+  const id = toText(row.id);
+  const threadId = toText(row.threadId);
+  const callerUserId = toText(row.callerUserId);
+  const calleeUserId = toText(row.calleeUserId);
+  const createdAt = toText(row.createdAt);
+  const expiresAt = toText(row.expiresAt);
+  if (!id || !threadId || !callerUserId || !calleeUserId || !createdAt || !expiresAt) return null;
+  return {
+    id,
+    threadId,
+    communicationRoomId: toText(row.communicationRoomId) || null,
+    callerUserId,
+    calleeUserId,
+    callType: normalizeCallType(row.callType),
+    status: normalizeStatus(row.status),
+    createdAt,
+    expiresAt,
+    acceptedAt: toText(row.acceptedAt) || null,
+    endedAt: toText(row.endedAt) || null,
   };
-  if (input.status === "accepted") updates.accepted_at = now;
-  if (input.status === "ended") updates.ended_at = now;
-
-  let query = supabase
-    .from(CHAT_CALL_INVITES_TABLE)
-    .update(updates)
-    .eq("id", input.invite.id);
-
-  if (
-    input.status === "accepted"
-    || input.status === "declined"
-    || input.status === "missed"
-    || input.status === "canceled"
-    || input.status === "busy"
-  ) {
-    query = query.eq("status", "ringing");
-  } else if (input.status === "ended") {
-    query = query.eq("status", "accepted");
-  }
-
-  const { data, error } = await query
-    .select(CALL_INVITE_SELECT)
-    .returns<CallInviteRow>()
-    .maybeSingle();
-
-  if (error) return null;
-  const updatedInvite = parseInvite(data ?? null);
-  if (!updatedInvite) return null;
-
-  await insertChillyChatCallEvent({
-    actorUserId: input.actorUserId,
-    callInviteId: input.invite.id,
-    callType: input.invite.callType,
-    durationSeconds: input.durationSeconds,
-    eventType: input.status === "accepted"
-      ? "accepted"
-      : input.status === "declined"
-        ? "declined"
-        : input.status === "missed"
-      ? "missed"
-      : input.status === "canceled"
-        ? "canceled"
-        : input.status === "busy"
-          ? "busy"
-          : "ended",
-    threadId: input.invite.threadId,
-  }).catch(() => null);
-  const dispatchAction = mapStatusToDispatchAction(input.status);
-  if (updatedInvite && dispatchAction) {
-    void dispatchChillyChatCallPush({
-      action: dispatchAction,
-      inviteId: updatedInvite.id,
-    }).catch(() => null);
-  }
-  return updatedInvite;
 }
 
 export async function insertChillyChatCallEvent(input: {

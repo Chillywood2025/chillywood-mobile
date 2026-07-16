@@ -7,6 +7,14 @@ import {
   buildPlatformExpoPushMessage,
 } from "../_shared/notification-payload.mjs";
 import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
+import {
+  buildBlockedChillyChatCallDispatch,
+  buildChillyChatCallPresentationCopy,
+  buildChillyChatNativeActionData,
+  createChillyChatCallChannelResult,
+  resolveChillyChatCallPreferencePolicy,
+  summarizeChillyChatCallDispatch,
+} from "../_shared/chilly-chat-call-dispatch-policy.mjs";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -60,41 +68,25 @@ type PushToken = {
   token_fingerprint: string;
 };
 
-type CallDispatchStatus = "sent" | "created" | "skipped" | "failed" | "blocked" | "unknown";
-type ActionChannelPayload = {
-  eligible?: boolean;
-  reason?: string;
-  status?: string;
-};
+type CallDispatchStatus = "sent" | "created" | "skipped" | "failed" | "blocked" | "disabled" | "unknown";
 
-type CallDispatchPayload = {
-  notificationCreated?: boolean;
-  pushSent?: boolean;
-  reason?: string;
-  status?: string;
-};
-
-type CallDispatchChannelResult = {
-  androidNative?: ActionChannelPayload;
-  iosVoip?: ActionChannelPayload & {
-    sentCount?: number;
-    failedCount?: number;
-    skippedCount?: number;
-  };
-  ordinaryPush?: ActionChannelPayload & {
-    sentCount?: number;
-    failedCount?: number;
-  };
-  inAppNotification?: ActionChannelPayload;
-};
-
-type ChillyDispatchResult = {
+type ChillyCallChannelResult = {
+  eligible: boolean;
+  attempted: boolean;
   notificationCreated: boolean;
   pushSent: boolean;
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
   reason: string;
-  status: string;
-  androidSentCount?: number;
-  expoSentCount?: number;
+  status: CallDispatchStatus;
+};
+
+type ChillyDispatchChannelResult = {
+  androidNative: ChillyCallChannelResult;
+  iosVoip: ChillyCallChannelResult;
+  ordinaryPush: ChillyCallChannelResult;
+  inAppNotification: ChillyCallChannelResult;
 };
 
 const CORS_HEADERS = {
@@ -122,12 +114,14 @@ const toText = (value: unknown) => String(value ?? "").trim();
 const isIosOrdinaryPushRolloutEnabled = () => (
   toText(Deno.env.get("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED")).toLowerCase() === "true"
 );
-const isIncomingAction = (action: DispatchAction) => action === "incoming";
-const isMissedAction = (action: DispatchAction) => action === "missed";
 const isTerminalAction = (action: DispatchAction) => (
   action === "cancel" || action === "declined" || action === "end" || action === "timeout"
 );
 const shouldInvokeIosVoip = (action: DispatchAction) => action === "incoming" || isTerminalAction(action);
+
+const isIncomingOrMissedAction = (action: DispatchAction) => (
+  action === "incoming" || action === "missed"
+);
 type IosVoipDispatchPayload = {
   action?: unknown;
   eligible?: unknown;
@@ -137,6 +131,18 @@ type IosVoipDispatchPayload = {
   skippedCount?: unknown;
   status?: unknown;
 };
+
+const channelResult = (
+  overrides: Partial<ChillyCallChannelResult> = {},
+): ChillyCallChannelResult => createChillyChatCallChannelResult(overrides) as ChillyCallChannelResult;
+
+const summarizeDispatch = (
+  eligible: boolean,
+  channels: ChillyDispatchChannelResult,
+  blockedReason = "",
+) => summarizeChillyChatCallDispatch(eligible, channels, blockedReason);
+
+const blockedDispatch = (reason: string) => buildBlockedChillyChatCallDispatch(reason);
 
 const jsonResponse = (status: number, payload: JsonObject) =>
   new Response(JSON.stringify(payload), { headers: JSON_HEADERS, status });
@@ -542,69 +548,71 @@ async function invokeIosVoipDispatch(input: {
   action: DispatchAction;
   authHeader: string;
   inviteId: string;
-}) {
+}): Promise<ChillyCallChannelResult> {
   if (!shouldInvokeIosVoip(input.action)) {
-    return {
-      channels: {
-        iosVoip: {
-          eligible: false,
-          reason: "not_required",
-          sentCount: 0,
-          skippedCount: 0,
-          status: "skipped",
-        },
-      },
-      iosVoipFallback: false,
-    };
+    return channelResult();
   }
-
-  const response = await fetch(`${readRequiredEnv("SUPABASE_URL")}/functions/v1/ios-voip-call-dispatch`, {
-    body: JSON.stringify({ action: input.action, inviteId: input.inviteId }),
-    headers: {
-      Authorization: input.authHeader,
-      apikey: readRequiredEnv("SUPABASE_ANON_KEY"),
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
-
-  const payload = await response.json().catch(() => ({})) as IosVoipDispatchPayload;
-  const eligible = typeof payload.eligible === "boolean" ? payload.eligible : response.ok;
-  const sentCount = Number(payload.sentCount ?? 0);
-  const failedCount = Number(payload.failedCount ?? 0);
-  const skippedCount = Number(payload.skippedCount ?? 0);
-  const reason = toText(payload.reason);
-  const status = response.ok
-    ? (toText(payload.status) || (reason ? "failed" : "sent"))
-    : "failed";
-
-  return {
-    channels: {
-      iosVoip: {
-        eligible,
-        failedCount: Number.isFinite(failedCount) ? failedCount : undefined,
-        reason: reason || undefined,
-        sentCount: Number.isFinite(sentCount) ? sentCount : undefined,
-        skippedCount: Number.isFinite(skippedCount) ? skippedCount : undefined,
-        status,
+  try {
+    const response = await fetch(`${readRequiredEnv("SUPABASE_URL")}/functions/v1/ios-voip-call-dispatch`, {
+      body: JSON.stringify({ action: input.action, inviteId: input.inviteId }),
+      headers: {
+        Authorization: input.authHeader,
+        apikey: readRequiredEnv("SUPABASE_ANON_KEY"),
+        "Content-Type": "application/json",
       },
-    },
-    iosVoipFallback: false,
-  };
+      method: "POST",
+    });
+
+    const payload = await response.json().catch(() => ({})) as IosVoipDispatchPayload;
+    const eligible = typeof payload.eligible === "boolean" ? payload.eligible : response.ok;
+    const safeCount = (value: unknown) => {
+      const parsed = Number(value ?? 0);
+      return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+    };
+    const sentCount = safeCount(payload.sentCount);
+    const failedCount = safeCount(payload.failedCount) + (!response.ok ? 1 : 0);
+    const skippedCount = safeCount(payload.skippedCount);
+    const rawStatus = toText(payload.status).toLowerCase();
+    const status: CallDispatchStatus = rawStatus === "sent"
+      || rawStatus === "created"
+      || rawStatus === "skipped"
+      || rawStatus === "failed"
+      || rawStatus === "blocked"
+      || rawStatus === "disabled"
+      ? rawStatus
+      : sentCount > 0
+        ? "sent"
+        : failedCount > 0
+          ? "failed"
+          : "skipped";
+    return channelResult({
+      eligible,
+      attempted: response.ok && status !== "blocked" && status !== "disabled" && status !== "skipped"
+        ? true
+        : failedCount > 0,
+      pushSent: sentCount > 0,
+      sentCount,
+      failedCount,
+      skippedCount,
+      reason: toText(payload.reason) || (response.ok ? status : `ios_voip_http_${response.status}`),
+      status,
+    });
+  } catch {
+    return channelResult({
+      eligible: true,
+      attempted: true,
+      failedCount: 1,
+      reason: "ios_voip_dispatch_unavailable",
+      status: "failed",
+    });
+  }
 }
 
 const buildCopy = (action: DispatchAction, callType: string, callerName: string) => {
-  const callLabel = callType === "voice" ? "voice" : "video";
-  if (action === "missed") {
-    return {
-      title: `Missed Chi'lly Chat ${callLabel} call`,
-      body: callerName ? `You missed a ${callLabel} call from ${callerName}.` : `You missed a Chi'lly Chat ${callLabel} call.`,
-    };
-  }
-  return {
-    title: `Incoming Chi'lly Chat ${callLabel} call`,
-    body: callerName ? `${callerName} is calling you on Chi'lly Chat.` : `Incoming Chi'lly Chat ${callLabel} call.`,
-  };
+  return buildChillyChatCallPresentationCopy({ action, callType, callerName }) as {
+    title: string;
+    body: string;
+  } | null;
 };
 
 function buildRoute(threadId: string, inviteId: string, action: DispatchAction) {
@@ -613,6 +621,7 @@ function buildRoute(threadId: string, inviteId: string, action: DispatchAction) 
   });
   return `/chat/${threadId}?${params.toString()}`;
 }
+
 
 async function dispatchCallNotification(adminClient: SupabaseClientLike, input: {
   action: DispatchAction;
@@ -624,180 +633,173 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   authHeader: string;
 }) {
   const preference = await readPreferences(adminClient, input.recipientUserId);
-  const callAlertsEnabled = preference?.chilly_chat_calls_enabled !== false;
-  const pushAllowed = preference?.push_enabled !== false && callAlertsEnabled;
-  const inAppAllowed = preference?.in_app_enabled !== false && callAlertsEnabled;
+  const preferencePolicy = resolveChillyChatCallPreferencePolicy({
+    action: input.action,
+    chillyChatCallsEnabled: preference?.chilly_chat_calls_enabled,
+    inAppEnabled: preference?.in_app_enabled,
+    pushEnabled: preference?.push_enabled,
+  });
+  const callAlertsEnabled = preferencePolicy.callEnabled;
+  const pushAllowed = preferencePolicy.ordinaryPush;
+  const presentationAction = isIncomingOrMissedAction(input.action);
+  const inAppAllowed = preferencePolicy.inAppNotification;
   const sourceType = "chat_call_invite";
-  const notificationType = input.action === "missed" ? "chilly_chat_missed_call" : "chilly_chat_call";
-  const category = notificationType;
   const route = buildRoute(input.invite.thread_id, input.invite.id, input.action);
   const copy = buildCopy(input.action, input.callType, input.callerName);
-  const dedupeKey = [
-    notificationType,
-    input.recipientUserId,
-    sourceType,
-    input.invite.id,
-    input.action === "missed" ? "missed" : "ringing",
-  ].join(":");
 
-  const { error: dedupeError } = await adminClient.from("notification_event_dedupes").insert({
-    dedupe_key: dedupeKey,
-    recipient_user_id: input.recipientUserId,
-    source_id: input.invite.id,
-    source_type: sourceType,
-    timing_key: input.action === "missed" ? "missed" : "ringing",
-    trigger_type: notificationType,
-  });
-  if (dedupeError) {
-    return {
-      notificationId: null,
-      pushSent: false,
-      recipientUserId: input.recipientUserId,
-      reason: "duplicate_prevented",
-      status: "skipped",
-    };
+  if (!callAlertsEnabled) {
+    const blocked = channelResult({ reason: "chilly_chat_calls_disabled", status: "blocked" });
+    return summarizeDispatch(false, {
+      androidNative: { ...blocked },
+      iosVoip: { ...blocked },
+      ordinaryPush: { ...blocked },
+      inAppNotification: { ...blocked },
+    }, "chilly_chat_calls_disabled");
   }
+
+  // PushKit is deliberately started before notification or ordinary-token
+  // work. A valid VoIP token is an independent incoming-call channel.
+  const iosVoipPromise = invokeIosVoipDispatch({
+    action: input.action,
+    authHeader: input.authHeader,
+    inviteId: input.invite.id,
+  });
 
   let notificationId: string | null = null;
-  if (inAppAllowed) {
-    const { data, error } = await adminClient
+  let presentationDuplicate = false;
+  let inAppNotification = channelResult({
+    eligible: inAppAllowed,
+    reason: inAppAllowed ? "not_attempted" : presentationAction ? "in_app_preference_disabled" : "terminal_action_no_presentation",
+  });
+
+  if (isTerminalAction(input.action)) {
+    const now = new Date().toISOString();
+    await adminClient
       .from("notifications")
-      .insert({
-        actor_user_id: input.actorUserId,
-        body: copy.body,
-        category,
-        deep_link: `chillywoodmobile://${route.replace(/^\//u, "")}`,
-        eligibility_reason: input.action === "missed" ? "chat_call_missed" : "chat_call_ringing",
-        notification_type: notificationType,
-        priority: input.action === "missed" ? 4 : 2,
-        source_id: input.invite.id,
-        source_type: sourceType,
-        status: "pending",
-        target_context: {
-          callInviteId: input.invite.id,
-          callType: input.callType,
-          notificationChannelId: input.action === "missed" ? MISSED_CALL_CHANNEL_ID : CHAT_CALL_CHANNEL_ID,
-          openCall: input.action === "incoming",
-        },
-        target_entity_id: input.invite.thread_id,
-        target_route: "/chat/[threadId]",
-        title: copy.title,
-        user_id: input.recipientUserId,
-      })
-      .select("id")
-      .maybeSingle();
+      .update({ dismissed_at: now, read_at: now, status: "dismissed", updated_at: now })
+      .eq("source_type", sourceType)
+      .eq("source_id", input.invite.id)
+      .eq("notification_type", "chilly_chat_call")
+      .in("status", ["pending", "sent"]);
+    inAppNotification = channelResult({ reason: "existing_call_notification_closed" });
+  } else if (copy) {
+    const notificationType = input.action === "missed" ? "chilly_chat_missed_call" : "chilly_chat_call";
+    const timingKey = input.action === "missed" ? "missed" : "ringing";
+    const dedupeKey = [notificationType, input.recipientUserId, sourceType, input.invite.id, timingKey].join(":");
+    const { error: dedupeError } = await adminClient.from("notification_event_dedupes").insert({
+      dedupe_key: dedupeKey,
+      recipient_user_id: input.recipientUserId,
+      source_id: input.invite.id,
+      source_type: sourceType,
+      timing_key: timingKey,
+      trigger_type: notificationType,
+    });
+    presentationDuplicate = !!dedupeError;
 
-    if (error || !data?.id) {
-      await adminClient.from("notification_event_dedupes").delete().eq("dedupe_key", dedupeKey);
-      return {
-        notificationId: null,
-        pushSent: false,
-        recipientUserId: input.recipientUserId,
-        reason: "notification_insert_failed",
-        status: "failed",
-      };
+    if (presentationDuplicate) {
+      inAppNotification = channelResult({
+        eligible: inAppAllowed,
+        skippedCount: 1,
+        reason: "duplicate_prevented",
+      });
+    } else if (inAppAllowed) {
+      const channelId = input.action === "missed" ? MISSED_CALL_CHANNEL_ID : CHAT_CALL_CHANNEL_ID;
+      const { data, error } = await adminClient
+        .from("notifications")
+        .insert({
+          actor_user_id: input.actorUserId,
+          body: copy.body,
+          category: notificationType,
+          deep_link: `chillywoodmobile://${route.replace(/^\//u, "")}`,
+          eligibility_reason: input.action === "missed" ? "chat_call_missed" : "chat_call_ringing",
+          notification_type: notificationType,
+          priority: input.action === "missed" ? 4 : 2,
+          source_id: input.invite.id,
+          source_type: sourceType,
+          status: "pending",
+          target_context: {
+            action: input.action,
+            callUuid: input.invite.id,
+            callInviteId: input.invite.id,
+            callType: input.callType,
+            expiresAt: input.invite.expires_at,
+            notificationChannelId: channelId,
+            openCall: input.action === "incoming",
+            threadId: input.invite.thread_id,
+          },
+          target_entity_id: input.invite.thread_id,
+          target_route: "/chat/[threadId]",
+          title: copy.title,
+          user_id: input.recipientUserId,
+        })
+        .select("id")
+        .maybeSingle();
+      if (error || !data?.id) {
+        await adminClient.from("notification_event_dedupes").delete().eq("dedupe_key", dedupeKey);
+        inAppNotification = channelResult({
+          eligible: true,
+          attempted: true,
+          failedCount: 1,
+          reason: "notification_insert_failed",
+          status: "failed",
+        });
+      } else {
+        notificationId = data.id;
+        await adminClient.from("notification_event_dedupes").update({ notification_id: notificationId }).eq("dedupe_key", dedupeKey);
+        inAppNotification = channelResult({
+          eligible: true,
+          attempted: true,
+          notificationCreated: true,
+          reason: "notification_created",
+          status: "created",
+        });
+      }
     }
-    notificationId = data.id;
-    await adminClient.from("notification_event_dedupes").update({ notification_id: notificationId }).eq("dedupe_key", dedupeKey);
   }
 
-  if (!pushAllowed) {
-    await insertDeliveryAttempt(adminClient, {
-      errorCode: "preference_disabled",
-      notificationId,
-      provider: "none",
-      recipientUserId: input.recipientUserId,
-      status: "skipped",
-    });
-    return {
-      notificationId,
-      pushSent: false,
-      recipientUserId: input.recipientUserId,
-      reason: "preference_disabled",
-      status: inAppAllowed ? "created" : "skipped",
-    };
+  if (pushAllowed) {
+    await reconcileRecentExpoPushReceipts(adminClient, input.recipientUserId).catch(() => null);
   }
-
-  await reconcileRecentExpoPushReceipts(adminClient, input.recipientUserId);
-
-  const tokens = await readPushTokens(adminClient, input.recipientUserId);
-  if (!tokens.length) {
-    await insertDeliveryAttempt(adminClient, {
-      errorCode: "no_enabled_push_token",
-      notificationId,
-      provider: "expo",
-      recipientUserId: input.recipientUserId,
-      status: "skipped",
-    });
-    return {
-      notificationId,
-      pushSent: false,
-      recipientUserId: input.recipientUserId,
-      reason: "no_enabled_push_token",
-      status: inAppAllowed ? "created" : "skipped",
-    };
-  }
-
+  const tokens = pushAllowed ? await readPushTokens(adminClient, input.recipientUserId) : [];
+  const androidTokens = tokens.filter((token) => token.platform === "android");
+  const fcmTokens = androidTokens.filter((token) => token.provider === "fcm");
+  const androidExpoTokens = androidTokens.filter((token) => token.provider === "expo");
+  const iosExpoTokens = tokens.filter((token) => token.platform === "ios" && token.provider === "expo");
+  const iosRolloutEnabled = isIosOrdinaryPushRolloutEnabled();
   const channelId = input.action === "missed" ? MISSED_CALL_CHANNEL_ID : CHAT_CALL_CHANNEL_ID;
-  const ordinaryCallData: Record<string, string> = {
+  const nativeActionData = buildChillyChatNativeActionData({
+    action: input.action,
     callInviteId: input.invite.id,
     callType: input.callType,
     callerName: input.callerName,
-    notificationId: notificationId ?? "",
-    openCall: input.action === "incoming" ? "true" : "false",
+    expiresAt: input.invite.expires_at,
+    notificationChannelId: channelId,
+    notificationId,
     path: route,
     threadId: input.invite.thread_id,
-    triggerType: notificationType,
-  };
-  const nativeCallData: Record<string, string> = {
-    ...ordinaryCallData,
-    body: copy.body,
-    nativeCallStyle: input.action === "incoming" ? "android_callstyle" : "standard",
-    notificationChannelId: channelId,
-    title: copy.title,
-  };
-  const androidTokens = tokens.filter((token) => token.platform === "android");
-  const iosExpoTokens = tokens.filter((token) => token.platform === "ios" && token.provider === "expo");
-  const fcmTokens = androidTokens.filter((token) => token.provider === "fcm");
-  const expoTokens = androidTokens.filter((token) => token.provider === "expo");
-  const iosRolloutEnabled = isIosOrdinaryPushRolloutEnabled();
-  let nativeSentCount = 0;
-  let expoSentCount = 0;
-  let lastFailureReason = "";
+  }) as Record<string, string>;
 
-  if (input.action === "incoming") {
-    for (const token of iosExpoTokens) {
-      await insertDeliveryAttempt(adminClient, {
-        errorCode: "ios_native_calls_disabled",
-        notificationId,
-        provider: token.provider,
-        pushTokenId: token.id,
-        recipientUserId: input.recipientUserId,
-        status: "skipped",
-      });
-    }
-    if (!fcmTokens.length) {
-      await insertDeliveryAttempt(adminClient, {
-        errorCode: "no_enabled_push_token",
-        notificationId,
-        provider: "fcm",
-        recipientUserId: input.recipientUserId,
-        status: "skipped",
-      });
-      lastFailureReason = "no_enabled_push_token";
-    }
-
+  let androidSent = 0;
+  let androidFailed = 0;
+  let androidSkipped = 0;
+  let androidReason = pushAllowed ? "no_enabled_fcm_token" : "ordinary_push_preference_disabled";
+  const fcmEligible = pushAllowed && (input.action === "incoming" || isTerminalAction(input.action));
+  if (presentationDuplicate && input.action === "incoming") {
+    androidSkipped = fcmTokens.length || 1;
+    androidReason = "duplicate_prevented";
+  } else if (fcmEligible) {
     for (const token of fcmTokens) {
       const pushResult = await sendFcmDataMessage({
-        data: nativeCallData,
+        data: nativeActionData,
         token: token.token,
-        ttlSeconds: 45,
+        ttlSeconds: input.action === "incoming" ? 45 : 300,
       });
       const sent = pushResult.ok;
-      if (sent) nativeSentCount += 1;
-      lastFailureReason = sent ? "" : pushResult.errorCode || "fcm_provider_failed";
+      if (sent) androidSent += 1;
+      else androidFailed += 1;
+      androidReason = sent ? "sent" : pushResult.errorCode || "fcm_provider_failed";
       await insertDeliveryAttempt(adminClient, {
-        errorCode: sent ? null : lastFailureReason,
+        errorCode: sent ? null : androidReason,
         errorMessage: sent ? null : sanitizeErrorMessage(pushResult.body),
         notificationId,
         provider: "fcm",
@@ -806,14 +808,23 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         recipientUserId: input.recipientUserId,
         status: sent ? "sent" : "failed",
       });
-
-      if (lastFailureReason === "UNREGISTERED" || lastFailureReason === "SENDER_ID_MISMATCH") {
+      if (androidReason === "UNREGISTERED" || androidReason === "SENDER_ID_MISMATCH") {
         await revokePushToken(adminClient, token.id);
       }
     }
   }
+  const androidNative = channelResult({
+    eligible: fcmEligible,
+    attempted: fcmTokens.length > 0 && !(presentationDuplicate && input.action === "incoming"),
+    pushSent: androidSent > 0,
+    sentCount: androidSent,
+    failedCount: androidFailed,
+    skippedCount: androidSkipped,
+    reason: androidReason,
+    status: androidSent > 0 ? "sent" : androidFailed > 0 ? "failed" : "skipped",
+  });
 
-  if (input.action === "missed" && !iosRolloutEnabled) {
+  if (!iosRolloutEnabled) {
     for (const token of iosExpoTokens) {
       await insertDeliveryAttempt(adminClient, {
         errorCode: "ios_push_rollout_disabled",
@@ -826,24 +837,30 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     }
   }
 
-  const ordinaryExpoTokens = input.action === "missed" && iosRolloutEnabled
-    ? [...expoTokens, ...iosExpoTokens]
-    : expoTokens;
-  const shouldAttemptExpo = input.action === "missed" || nativeSentCount === 0;
-  for (const token of shouldAttemptExpo ? ordinaryExpoTokens : []) {
+  const expoCandidates = input.action === "missed" && iosRolloutEnabled
+    ? [...androidExpoTokens, ...iosExpoTokens]
+    : androidExpoTokens;
+  const shouldAttemptExpo = pushAllowed
+    && !presentationDuplicate
+    && (input.action === "missed" || androidSent === 0);
+  let expoSent = 0;
+  let expoFailed = 0;
+  let expoSkipped = 0;
+  let expoReason = pushAllowed ? "no_enabled_expo_token" : "ordinary_push_preference_disabled";
+  for (const token of shouldAttemptExpo ? expoCandidates : []) {
     let pushMessage: JsonObject = {
-      data: nativeCallData,
+      data: nativeActionData,
       priority: "high",
       to: token.token,
-      ttl: 45,
+      ttl: input.action === "incoming" ? 45 : 300,
     };
-    if (input.action === "missed") {
+    if (input.action === "missed" && copy) {
       pushMessage = buildPlatformExpoPushMessage({
         androidChannelId: channelId,
         badge: 1,
         body: copy.body,
         categoryId: IOS_NOTIFICATION_CATEGORIES.missedCall,
-        data: token.platform === "ios" ? ordinaryCallData : nativeCallData,
+        data: nativeActionData,
         interruptionLevel: "active",
         platform: token.platform,
         priority: "high",
@@ -852,25 +869,20 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         to: token.token,
         ttl: 3600,
       });
-      if (token.platform === "android") {
-        pushMessage.body = copy.body;
-        pushMessage.channelId = channelId;
-        pushMessage.sound = "default";
-        pushMessage.title = copy.title;
-      }
     }
     const pushResult = await sendExpoPush(pushMessage);
     const firstTicket = Array.isArray((pushResult.body as { data?: unknown }).data)
       ? ((pushResult.body as { data: JsonObject[] }).data[0] ?? {})
       : ((pushResult.body as { data?: JsonObject }).data ?? {});
-    const status = toText(firstTicket.status || (pushResult.ok ? "sent" : "failed"));
+    const ticketStatus = toText(firstTicket.status || (pushResult.ok ? "sent" : "failed"));
     const providerMessageId = toText(firstTicket.id) || null;
     const errorCode = toText(firstTicket.details && typeof firstTicket.details === "object"
       ? (firstTicket.details as JsonObject).error
       : firstTicket.message) || null;
-    const sent = pushResult.ok && status === "ok";
-
-    if (sent) expoSentCount += 1;
+    const sent = pushResult.ok && ticketStatus === "ok";
+    if (sent) expoSent += 1;
+    else expoFailed += 1;
+    expoReason = sent ? "sent" : errorCode || "expo_provider_failed";
     await insertDeliveryAttempt(adminClient, {
       errorCode,
       errorMessage: sent ? null : toText(firstTicket.message) || `Expo push returned ${pushResult.status}`,
@@ -881,99 +893,43 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
       recipientUserId: input.recipientUserId,
       status: sent ? "sent" : "failed",
     });
-
-    if (errorCode === "DeviceNotRegistered") {
-      await revokePushToken(adminClient, token.id);
-    }
+    if (errorCode === "DeviceNotRegistered") await revokePushToken(adminClient, token.id);
   }
-
-  if (notificationId) {
-    const delivered = input.action === "incoming" ? nativeSentCount > 0 : expoSentCount > 0;
-    const update: JsonObject = delivered
-      ? { delivered_at: new Date().toISOString(), status: "sent" }
-      : input.action === "incoming" && inAppAllowed
-        ? { status: "pending" }
-        : { delivered_at: null, status: "failed" };
-    await adminClient.from("notifications").update(update).eq("id", notificationId);
+  if (pushAllowed && presentationDuplicate) {
+    expoSkipped = expoCandidates.length || 1;
+    expoReason = "duplicate_prevented";
+  } else if (androidSent > 0 && expoCandidates.length) {
+    expoSkipped = expoCandidates.length;
+    expoReason = "android_native_sent";
   }
-
-  const deliveredCount = input.action === "incoming" ? nativeSentCount : expoSentCount;
-  const expoFallbackOnly = input.action === "incoming" && nativeSentCount === 0 && expoSentCount > 0;
-  const result = {
-    notificationId,
-    pushSent: deliveredCount > 0,
-    recipientUserId: input.recipientUserId,
-    reason: deliveredCount > 0
-      ? "sent"
-      : expoFallbackOnly
-        ? "native_fcm_unavailable_expo_fallback"
-        : lastFailureReason || "provider_failed",
-    status: deliveredCount > 0 ? "sent" : inAppAllowed ? "created" : "failed",
-  };
-
-  const iosVoip = await invokeIosVoipDispatch({
-    action: input.action,
-    authHeader: input.authHeader,
-    inviteId: input.invite.id,
+  const ordinaryPush = channelResult({
+    eligible: pushAllowed && (input.action === "missed" || expoCandidates.length > 0),
+    attempted: shouldAttemptExpo && expoCandidates.length > 0,
+    pushSent: expoSent > 0,
+    sentCount: expoSent,
+    failedCount: expoFailed,
+    skippedCount: expoSkipped,
+    reason: expoReason,
+    status: expoSent > 0 ? "sent" : expoFailed > 0 ? "failed" : "skipped",
   });
 
-  const parseChannelStatus = (value: unknown) => {
-    const normalized = toText(value).toLowerCase();
-    if (
-      normalized === "sent"
-      || normalized === "created"
-      || normalized === "skipped"
-      || normalized === "failed"
-      || normalized === "blocked"
-    ) {
-      return normalized;
-    }
-    return "unknown";
-  };
-  const safeParse = (value: unknown) => (value !== null && value !== undefined ? value : undefined);
-  const parseSentCount = (value: unknown) => {
-    const count = Number(value);
-    return Number.isFinite(count) && count >= 0 ? count : undefined;
-  };
-  const inApp = inAppAllowed;
-  return {
-    ...result,
-    channels: {
-      ...iosVoip.channels,
-      androidNative: {
-        eligible: input.action === "incoming",
-        notificationCreated: false,
-        pushSent: result.pushSent,
-        reason: result.reason,
-        status: input.action === "incoming"
-          ? result.status
-          : parseChannelStatus(result.status),
-      },
-      iosVoip: {
-        eligible: safeParse((iosVoip.channels.iosVoip as { eligible?: unknown } | undefined)?.eligible) as
-          | boolean
-          | undefined,
-        sentCount: parseSentCount((iosVoip.channels.iosVoip as { sentCount?: unknown } | undefined)?.sentCount),
-        failedCount: parseSentCount((iosVoip.channels.iosVoip as { failedCount?: unknown } | undefined)?.failedCount),
-        skippedCount: parseSentCount((iosVoip.channels.iosVoip as { skippedCount?: unknown } | undefined)?.skippedCount),
-        reason: toText((iosVoip.channels.iosVoip as { reason?: unknown } | undefined)?.reason),
-        status: parseChannelStatus((iosVoip.channels.iosVoip as { status?: unknown } | undefined)?.status),
-      },
-      ordinaryPush: {
-        eligible: input.action === "incoming" ? (fcmTokens.length > 0 || expoTokens.length > 0 || iosExpoTokens.length > 0)
-          : shouldAttemptExpo,
-        notificationCreated: !!notificationId,
-        pushSent: expoSentCount > 0,
-        reason: result.reason,
-        status: expoSentCount > 0 ? "sent" : inAppAllowed ? "created" : "failed",
-      },
-      inAppNotification: {
-        notificationCreated: inApp,
-        reason: result.reason,
-        status: inApp ? "created" : result.status,
-      },
-    },
-    };
+  const iosVoip = await iosVoipPromise;
+  const remoteDelivered = androidNative.pushSent || ordinaryPush.pushSent || iosVoip.pushSent;
+  if (notificationId) {
+    await adminClient
+      .from("notifications")
+      .update(remoteDelivered
+        ? { delivered_at: new Date().toISOString(), status: "sent" }
+        : { delivered_at: null, status: "pending" })
+      .eq("id", notificationId);
+  }
+
+  return summarizeDispatch(true, {
+    androidNative,
+    iosVoip,
+    ordinaryPush,
+    inAppNotification,
+  });
 }
 
 Deno.serve(async (req): Promise<Response> => {
@@ -1012,22 +968,14 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     if (await hasAudienceBlock(adminClient, callerUserId, calleeUserId)) {
-      return jsonResponse(200, {
-        blockedReason: "audience_block",
-        eligible: false,
-        pushSent: false,
-      });
+      return jsonResponse(200, blockedDispatch("audience_block"));
     }
 
     if (
       await isAccountAccessRestricted(adminClient, callerUserId)
       || await isAccountAccessRestricted(adminClient, calleeUserId)
     ) {
-      return jsonResponse(200, {
-        blockedReason: "account_access_restricted",
-        eligible: false,
-        pushSent: false,
-      });
+      return jsonResponse(200, blockedDispatch("account_access_restricted"));
     }
 
     const status = toText(invite.status).toLowerCase();
@@ -1036,20 +984,10 @@ Deno.serve(async (req): Promise<Response> => {
     if (action === "incoming") {
       if (actorUserId !== callerUserId) return jsonResponse(403, { error: "caller_required" });
       if (status !== "ringing") {
-        return jsonResponse(200, {
-          blockedReason: "invite_not_ringing",
-          eligible: false,
-          pushSent: false,
-          status,
-        });
+        return jsonResponse(200, blockedDispatch("invite_not_ringing"));
       }
       if (Number.isFinite(expiresAt) && expiresAt <= now) {
-        return jsonResponse(200, {
-          blockedReason: "invite_expired",
-          eligible: false,
-          pushSent: false,
-          status,
-        });
+        return jsonResponse(200, blockedDispatch("invite_expired"));
       }
     }
 
@@ -1057,46 +995,53 @@ Deno.serve(async (req): Promise<Response> => {
       if (status === "ringing" && Number.isFinite(expiresAt) && expiresAt <= now) {
         const missedInvite = await markInviteMissed(adminClient, invite, actorUserId);
         if (!missedInvite) {
-          return jsonResponse(200, {
-            blockedReason: "missed_update_failed",
-            eligible: false,
-            pushSent: false,
-            status,
-          });
+          return jsonResponse(200, blockedDispatch("missed_update_failed"));
         }
         invite = missedInvite;
       } else if (status !== "missed") {
-        return jsonResponse(200, {
-          blockedReason: TERMINAL_STATUSES.has(status) ? `invite_${status}` : "invite_not_missed",
-          eligible: false,
-          pushSent: false,
-          status,
-        });
+        return jsonResponse(200, blockedDispatch(TERMINAL_STATUSES.has(status) ? `invite_${status}` : "invite_not_missed"));
+      }
+    }
+
+    if (action === "cancel" && (actorUserId !== callerUserId || status !== "canceled")) {
+      return actorUserId !== callerUserId
+        ? jsonResponse(403, { error: "caller_required" })
+        : jsonResponse(200, blockedDispatch(`invite_${status}`));
+    }
+    if (action === "declined" && (actorUserId !== calleeUserId || status !== "declined")) {
+      return actorUserId !== calleeUserId
+        ? jsonResponse(403, { error: "callee_required" })
+        : jsonResponse(200, blockedDispatch(`invite_${status}`));
+    }
+    if (action === "end" && status !== "ended") {
+      return jsonResponse(200, blockedDispatch(`invite_${status}`));
+    }
+    if (action === "timeout") {
+      if (status !== "missed" && status !== "busy") {
+        return jsonResponse(200, blockedDispatch(`invite_${status}`));
+      }
+      if (!Number.isFinite(expiresAt) || expiresAt > now) {
+        return jsonResponse(200, blockedDispatch("invite_not_expired"));
       }
     }
 
     const caller = members.find((member) => toText(member.user_id) === callerUserId);
+    const recipientUserId = action === "declined"
+      ? callerUserId
+      : action === "end"
+        ? (actorUserId === callerUserId ? calleeUserId : callerUserId)
+        : calleeUserId;
     const result = await dispatchCallNotification(adminClient, {
       action,
       actorUserId: callerUserId,
       callerName: toText(caller?.display_name) || "Someone",
       callType: normalizeCallType(invite.call_type),
       invite,
-      recipientUserId: calleeUserId,
+      recipientUserId,
       authHeader: auth.authorization,
     });
 
-    return jsonResponse(200, {
-      channelId: action === "missed" ? MISSED_CALL_CHANNEL_ID : CHAT_CALL_CHANNEL_ID,
-      eligible: true,
-      result: {
-        notificationCreated: !!result.notificationId,
-        pushSent: result.pushSent,
-        reason: result.reason,
-        status: result.status,
-        channels: result.channels,
-      },
-    });
+    return jsonResponse(200, result);
   } catch (error) {
     return jsonResponse(500, { error: "chilly_chat_call_dispatch_error", message: sanitizeErrorMessage(error) });
   }

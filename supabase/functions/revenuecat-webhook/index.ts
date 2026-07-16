@@ -2056,6 +2056,76 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   };
 };
 
+const writeIosConsumableFromRevenueCatEvent = async (
+  adminClient: SupabaseClientLike,
+  event: RevenueCatEvent,
+  rawBody: string,
+): Promise<DynamicMoneyAccessResult> => {
+  const eventType = normalizeEventType(event.type);
+  const eventId = await resolveEventId(event, rawBody);
+  const userId = resolveUserId(event);
+  const productId = resolveProductId(event);
+  if (!eventType) throw new Error("RevenueCat webhook event type is missing.");
+  if (!userId) throw new Error("RevenueCat webhook app user id is missing or anonymous.");
+  if (!productId) throw new Error("RevenueCat App Store consumable product id is missing.");
+
+  const { data, error } = await adminClient.rpc("process_revenuecat_consumable_event_atomic", {
+    p_amount_minor: resolveAmountMinor(event),
+    p_currency: resolveCurrency(event),
+    p_environment: normalizeMoneyAccessEnvironment(event.environment),
+    p_event_type: eventType,
+    p_expires_at: toIsoFromMs(event.expiration_at_ms),
+    p_occurred_at: toIsoFromMs(event.event_timestamp_ms || event.purchased_at_ms),
+    p_original_transaction_id: toText(event.original_transaction_id) || null,
+    p_provider_event_id: eventId,
+    p_provider_product_id: productId,
+    p_raw_payload_hash: await hashText(rawBody),
+    p_user_id: userId,
+  });
+  if (error) throw new Error(`RevenueCat atomic App Store consumable transaction failed: ${error.message}`);
+  const result = safeObject(data);
+  const purchaseIntentId = toText(result.purchaseIntentId) || null;
+  const ledgerEventId = toText(result.ledgerEventId) || null;
+  const providerEventId = toText(result.providerEventId) || null;
+  const resultStatus = toText(result.status) === "processed" ? "processed" : "ignored";
+
+  if (resultStatus === "processed" && purchaseIntentId && ledgerEventId && providerEventId) {
+    const { data: intent } = await adminClient
+      .from("money_purchase_intents")
+      .select("creator_id,metadata,source_id,source_type")
+      .eq("id", purchaseIntentId)
+      .maybeSingle();
+    await createCreatorMoneyNotifications(adminClient, {
+      buyerUserId: userId,
+      creatorId: toText(intent?.creator_id) || null,
+      eventType,
+      ledgerEventId,
+      metadata: safeObject(intent?.metadata),
+      productKey: toText(result.productKey),
+      productType: toText(result.productType),
+      providerEventId,
+      sourceId: toText(intent?.source_id) || null,
+      sourceType: toText(intent?.source_type) || null,
+    });
+  }
+
+  return {
+    status: resultStatus,
+    productKey: toText(result.productKey) || null,
+    providerEventId,
+    accessGrantId: toText(result.accessGrantId) || null,
+    ledgerEventId,
+    purchaseIntentId,
+    environment: normalizeMoneyAccessEnvironment(result.environment),
+    payableState: toText(result.payableState) as DynamicMoneyAccessResult["payableState"],
+    grantStatus: toText(result.grantStatus) as DynamicMoneyAccessResult["grantStatus"],
+    reason: toText(result.reason) || "atomic_consumable_transaction_complete",
+    duplicateProviderEvent: result.duplicateProviderEvent === true,
+    duplicateAccessGrant: result.duplicateAccessGrant === true,
+    duplicateLedgerEvent: result.duplicateLedgerEvent === true,
+  };
+};
+
 const writePremiumEntitlementFromRevenueCatEvent = async (
   adminClient: SupabaseClientLike,
   event: RevenueCatEvent,
@@ -2069,7 +2139,6 @@ const writePremiumEntitlementFromRevenueCatEvent = async (
   const expiresAt = toIsoFromMs(event.expiration_at_ms);
   const startsAt = toIsoFromMs(event.purchased_at_ms || event.event_timestamp_ms);
   const status = resolveEntitlementStatus(event);
-  const entitlementActive = isActiveEntitlementStatus(status);
   const rawEventHash = await hashText(rawBody);
 
   if (!eventType) throw new Error("RevenueCat webhook event type is missing.");
@@ -2088,84 +2157,45 @@ const writePremiumEntitlementFromRevenueCatEvent = async (
   )) {
     throw new Error("RevenueCat Premium store/product mapping is invalid.");
   }
+  const resolvedProductId = toText(productResolution.product?.id);
+  if (!resolvedProductId) throw new Error("RevenueCat Premium conceptual product is missing.");
 
-  const { data: existingBillingEvent, error: duplicateCheckError } = await adminClient
-    .from("billing_events")
-    .select("id")
-    .eq("provider", "revenuecat")
-    .eq("event_type", eventType)
-    .eq("metadata->>revenuecat_event_id", eventId)
-    .maybeSingle();
-  if (duplicateCheckError) {
-    throw new Error(`RevenueCat duplicate check failed: ${duplicateCheckError.message}`);
-  }
-
-  const duplicateEvent = !!existingBillingEvent;
-
-  const { error: entitlementError } = await adminClient
-    .from("user_entitlements")
-    .upsert({
-      user_id: userId,
-      entitlement_key: PREMIUM_ENTITLEMENT_KEY,
-      status,
-      source: "revenuecat",
-      starts_at: startsAt,
-      expires_at: expiresAt,
-      revoked_at: status === "revoked" ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-      metadata: {
-        revenuecat_event_id: eventId,
-        revenuecat_event_hash: rawEventHash,
-        revenuecat_event_type: eventType,
-        product_id: productId,
-        environment,
-        period_type: toText(event.period_type) || null,
-        store: toText(event.store) || null,
-        entitlement_ids: resolveEntitlementIds(event),
-        sandbox: environment?.toLowerCase() === "sandbox",
-        raw_provider_payload_stored: false,
-      },
-    }, { onConflict: "user_id,entitlement_key" });
-  if (entitlementError) {
-    throw new Error(`RevenueCat entitlement sync failed: ${entitlementError.message}`);
-  }
-
-  if (!duplicateEvent) {
-    const { error: billingEventError } = await adminClient.from("billing_events").insert({
-      user_id: userId,
-      event_type: eventType,
-      provider: "revenuecat",
-      entitlement_key: PREMIUM_ENTITLEMENT_KEY,
-      status,
-      metadata: {
-        revenuecat_event_id: eventId,
-        revenuecat_event_hash: rawEventHash,
-        product_id: productId,
-        environment,
-        duplicate_safe: true,
-        raw_provider_payload_stored: false,
-        premium_granted: entitlementActive,
-        live_money_action: false,
-      },
-    });
-    if (billingEventError) {
-      throw new Error(`RevenueCat billing event sync failed: ${billingEventError.message}`);
-    }
-  }
-
-  const moneyAccess = await mirrorRevenueCatPremiumMoneyAccess(adminClient, {
-    event,
-    eventType,
-    eventId,
-    userId,
-    productId,
-    environment,
-    status,
-    expiresAt,
-    startsAt,
-    rawEventHash,
-    productResolution,
+  const { data, error } = await adminClient.rpc("process_revenuecat_premium_event_atomic", {
+    p_amount_minor: resolveAmountMinor(event),
+    p_currency: resolveCurrency(event),
+    p_entitlement_status: status,
+    p_environment: normalizeMoneyAccessEnvironment(environment),
+    p_event_type: eventType,
+    p_expires_at: expiresAt,
+    p_occurred_at: toIsoFromMs(event.event_timestamp_ms || event.purchased_at_ms),
+    p_period_type: toText(event.period_type) || null,
+    p_platform: productResolution.storePolicy.platform,
+    p_product_id: resolvedProductId,
+    p_provider: productResolution.storePolicy.provider,
+    p_provider_base_plan_id: toText(productResolution.mapping?.provider_base_plan_id) || null,
+    p_provider_event_id: eventId,
+    p_provider_product_id: productResolution.providerProductId,
+    p_raw_payload_hash: rawEventHash,
+    p_starts_at: startsAt,
+    p_store: productResolution.storePolicy.store,
+    p_store_mapping_id: toText(productResolution.mapping?.id) || null,
+    p_user_id: userId,
   });
+  if (error) throw new Error(`RevenueCat atomic Premium transaction failed: ${error.message}`);
+  const result = safeObject(data);
+  const entitlementActive = result.entitlementActive === true;
+  const duplicateEvent = result.duplicateEvent === true;
+  const moneyAccess: MoneyAccessMirrorResult = {
+    productKey: toText(result.productKey) || null,
+    providerEventId: toText(result.providerEventId) || null,
+    accessGrantId: toText(result.accessGrantId) || null,
+    ledgerEventId: toText(result.ledgerEventId) || null,
+    environment: normalizeMoneyAccessEnvironment(result.environment),
+    payableState: toText(result.payableState) as MoneyAccessMirrorResult["payableState"],
+    grantStatus: toText(result.grantStatus) as MoneyAccessMirrorResult["grantStatus"],
+    duplicateAccessGrant: result.duplicateAccessGrant === true,
+    duplicateLedgerEvent: result.duplicateLedgerEvent === true,
+  };
 
   return {
     entitlementActive,
@@ -2352,16 +2382,18 @@ Deno.serve(async (req) => {
       if (!eventType) throw new Error("RevenueCat webhook event type is missing.");
       if (!userId) throw new Error("RevenueCat webhook app user id is missing or anonymous.");
 
-      const dynamicWrite = await mirrorRevenueCatDynamicMoneyAccess(adminConfig.client, {
-        event,
-        eventType,
-        eventId,
-        userId,
-        productId,
-        environment: toText(event.environment) || null,
-        status: resolveEntitlementStatus(event),
-        rawEventHash: await hashText(rawBody),
-      });
+      const dynamicWrite = storePolicy.provider === "revenuecat_app_store"
+        ? await writeIosConsumableFromRevenueCatEvent(adminConfig.client, event, rawBody)
+        : await mirrorRevenueCatDynamicMoneyAccess(adminConfig.client, {
+          event,
+          eventType,
+          eventId,
+          userId,
+          productId,
+          environment: toText(event.environment) || null,
+          status: resolveEntitlementStatus(event),
+          rawEventHash: await hashText(rawBody),
+        });
 
       await writeProviderReadinessAudit(adminConfig.client, {
         provider: "revenuecat",

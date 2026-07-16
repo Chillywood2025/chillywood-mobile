@@ -20,7 +20,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../../_lib/analytics";
 import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
 import {
-  insertChillyChatCallEvent,
   listChillyChatCallEvents,
   readChillyChatCallInvite,
   readLatestRingingChillyChatCallInvite,
@@ -542,27 +541,19 @@ export default function ChillyChatThreadScreen() {
       surface: "chat-thread",
       role: null,
     },
-    onRoomEnded: (reason) => {
+    onRoomEnded: async (reason) => {
       trackEvent("chat_call_ended", {
         surface: "chat-thread",
         threadId,
         reason,
       });
-      if (thread?.activeCallType && currentUserId) {
-        void insertChillyChatCallEvent({
-          actorUserId: currentUserId,
-          callType: thread.activeCallType,
-          eventType: "ended",
-          threadId,
-        });
-      }
       const activeInvite = activeCallInviteRef.current;
       if (activeInvite?.status === "accepted" && currentUserId) {
-        void updateChillyChatCallInviteStatus({
+        await updateChillyChatCallInviteStatus({
           actorUserId: currentUserId,
           invite: activeInvite,
           status: "ended",
-        }).finally(() => {
+        }).catch(() => null).finally(() => {
           activeCallInviteRef.current = null;
         });
       }
@@ -622,8 +613,8 @@ export default function ChillyChatThreadScreen() {
 
     const expiresAt = Date.parse(outgoingCallInvite.expiresAt);
     const timeoutMs = Math.max(1000, Number.isFinite(expiresAt) ? expiresAt - Date.now() : 45_000);
-    outgoingCallTimeoutRef.current = setTimeout(() => {
-      void updateChillyChatCallInviteStatus({
+    outgoingCallTimeoutRef.current = setTimeout(async () => {
+      await updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
         invite: outgoingCallInvite,
         status: "missed",
@@ -731,11 +722,11 @@ export default function ChillyChatThreadScreen() {
 
     const expiresAt = Date.parse(incomingCallInvite.expiresAt);
     const timeoutMs = Math.max(1000, Number.isFinite(expiresAt) ? expiresAt - Date.now() : 45_000);
-    incomingCallTimeoutRef.current = setTimeout(() => {
+    incomingCallTimeoutRef.current = setTimeout(async () => {
       Vibration.cancel();
       void stopChillyChatCallSound(incomingCallSoundRef.current);
       incomingCallSoundRef.current = null;
-      void updateChillyChatCallInviteStatus({
+      await updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
         invite: incomingCallInvite,
         status: "missed",
@@ -1336,16 +1327,18 @@ export default function ChillyChatThreadScreen() {
 
     void completeIosNativeCallAnswer(requestedNativeCallUuid, false);
     const activeInvite = activeCallInviteRef.current;
-    void leaveRoom({ endRoomIfHost: false }).catch(() => undefined);
-    if (activeInvite?.status === "accepted" && currentUserId) {
-      void updateChillyChatCallInviteStatus({
-        actorUserId: currentUserId,
-        invite: activeInvite,
-        status: "ended",
-      }).finally(() => {
+    const finishFailedAnswer = async () => {
+      await leaveRoom({ endRoomIfHost: false }).catch(() => undefined);
+      if (activeInvite?.status === "accepted" && currentUserId) {
+        await updateChillyChatCallInviteStatus({
+          actorUserId: currentUserId,
+          invite: activeInvite,
+          status: "ended",
+        }).catch(() => null);
         activeCallInviteRef.current = null;
-      });
-    }
+      }
+    };
+    void finishFailedAnswer();
   }, [callChannelState, currentUserId, leaveRoom, requestedNativeCallAction, requestedNativeCallUuid]);
 
   useEffect(() => {

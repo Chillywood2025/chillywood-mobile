@@ -920,7 +920,7 @@ function IosNativeCallsBridge() {
       router.push(`/chat/${encodeURIComponent(threadId)}?${params.toString()}` as Parameters<typeof router.push>[0]);
     };
 
-    const handleNativeCallEvent = (event: SanitizedNativeCallEvent) => {
+    const handleNativeCallEvent = async (event: SanitizedNativeCallEvent) => {
       if (!active) return;
       if (event.type === "incoming" || event.type === "recovered") {
         watchInviteLifecycle(event);
@@ -945,16 +945,14 @@ function IosNativeCallsBridge() {
       if (event.type === "timeout") {
         const inviteId = String(event.callInviteId ?? "").trim();
         if (!inviteId) return;
-        void readChillyChatCallInvite(inviteId)
-          .then((invite) => {
-            if (!invite || invite.calleeUserId !== currentUserId || invite.status !== "ringing") return null;
-            return updateChillyChatCallInviteStatus({
-              actorUserId: currentUserId,
-              invite,
-              status: "missed",
-            });
-          })
-          .catch(() => null);
+        const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
+        if (invite && invite.calleeUserId === currentUserId && invite.status === "ringing") {
+          await updateChillyChatCallInviteStatus({
+            actorUserId: currentUserId,
+            invite,
+            status: "missed",
+          }).catch(() => null);
+        }
         clearInviteSubscription(inviteId);
         return;
       }

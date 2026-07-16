@@ -151,6 +151,9 @@ verify_jwt = false
 [functions.chilly-chat-call-dispatch]
 verify_jwt = false
 
+[functions.chilly-chat-call-transition]
+verify_jwt = false
+
 [functions.ios-voip-push-tokens]
 verify_jwt = false
 
