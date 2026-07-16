@@ -2,14 +2,19 @@
 
 Checkpoint date: 2026-07-15
 
-Status: **Not yet 90% complete.** This record deliberately separates committed
-source, provider configuration, deployment evidence, build evidence, and physical
-proof. The branch must not be described as 90% complete until every item in the
-definition below is supported by terminal evidence.
+Status: **Not yet 90% complete.** RevenueCat's Apple app, catalog, offerings,
+packages, EAS public key, and webhook are now configured. The remaining provider
+gate is the separate Apple In-App Purchase Key required for RevenueCat transaction
+recording; the App Store Connect browser session expired before that credential
+could be created or uploaded. This record deliberately separates committed source,
+provider configuration, deployment evidence, build evidence, and physical proof.
 
 ## Branch and pull requests
 
 - Integration branch: `codex/ios-integration-90`.
+- Provider-closeout starting head:
+  `4414e28dca0c7c80ddd6a2b1438e1d18171fa97c`.
+- Provider-closeout source hardening: `0ec109db`.
 - Tested application source: `d6a95ed5`.
 - Screenshot-only follow-up: `a4ab1d49`.
 - Release-workflow portability fix: `f7af588d`.
@@ -46,10 +51,10 @@ All seven separated Phase 1 checks passed remotely at final application source
 | 14 | CallKit/PushKit source compiles | **Pass; runtime off** | The Expo module, Swift CallKit/PushKit/AVAudioSession implementation, plugin, and source guards compiled in the final-source EAS Simulator build. |
 | 15 | VoIP token and APNs dispatch backend is deployed | **Pass; rollout off** | Additive schema plus authenticated register/status/rotate/revoke and APNs dispatch functions are deployed. Runtime and server rollout switches remain off. |
 | 16 | Native iOS calls remain runtime-disabled pending proof | **Pass** | Build capability can be included, while `EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED=false` and VoIP dispatch remains disabled. |
-| 17 | RevenueCat Apple app is configured | **Blocked: provider permission** | The authenticated RevenueCat dashboard account cannot create app configurations. No Apple app, offering, entitlement mapping, or webhook completion is claimed. |
+| 17 | RevenueCat Apple app is configured | **Catalog pass; transaction credential pending** | Existing project `projc5629a24` now contains Apple app `app3a0ad1ba62` for `com.chillywood.mobile`; ten products, entitlement/offering/packages, EAS public-key configuration, and webhook readback pass. The separate Apple In-App Purchase Key remains an owner interaction, so transaction-recording completeness is not claimed. |
 | 18 | App Store products exist | **Pass** | The permanent finite catalog exists in App Store Connect: 2 Premium subscriptions and 8 consumables, with required localizations, prices, and USA availability. |
 | 19 | Store mappings exist | **Pass, sandbox-only** | The additive mapping schema is deployed with ten App Store sandbox mappings and generated types. |
-| 20 | Store-aware webhook is deployed | **Backend pass; provider connection blocked** | `revenuecat-webhook` v69 is active and preserves Google parsing/exact Apple matching. RevenueCat's external Apple app/webhook configuration remains blocked by account permission. |
+| 20 | Store-aware webhook is deployed | **Pass; purchase rail off** | `revenuecat-webhook` v69 is active and preserves Google parsing/exact Apple matching. Existing project-wide webhook `whintgr38699522f7` covers production and sandbox. Its bounded TEST returned HTTP 200 with signature and processing verification true, no Premium grant, and no live-money action. |
 | 21 | Apple purchase paths are sandbox/internal only | **Pass, disabled** | Catalog entries are sandbox-only and the App Store purchase switch defaults off. No payable transaction is enabled. |
 | 22 | Live money remains off | **Pass** | No live-money switch was enabled. |
 | 23 | Payouts and cash-out remain off | **Pass** | No payout, withdrawal, cash-out, transfer, or payable-balance path was enabled. |
@@ -79,7 +84,31 @@ All seven separated Phase 1 checks passed remotely at final application source
   backup. Ten sandbox store mappings exist; rollout and money switches remain off.
 - Production build `3a1b9d40-06b7-4e1f-99d0-5839e6154eab` is valid in internal
   TestFlight group `Chillywood Internal`; no external or public release exists.
-- RevenueCat Apple setup is the only known provider-dashboard permission blocker.
+- RevenueCat project `projc5629a24` reuses its existing API v2 configuration key;
+  the key has all required configuration read/write scopes and no new key was
+  created. Apple app `app3a0ad1ba62` is configured without replacing the Android
+  app or mappings.
+- The ten Apple product records comprise two subscriptions and eight consumables.
+  Entitlement `premium` attaches only the two subscriptions. Offerings `default`,
+  `creator_support`, and `seat_passes` contain their exact bounded packages; tips
+  and Seat Passes grant no media, administrative, or payable authority.
+- The public iOS SDK key is stored as the sensitive EAS variable
+  `EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY` in development, preview, and
+  production. Only the masked suffix `appl…gpDW` is recorded.
+- Existing project-wide webhook `whintgr38699522f7` was reused. Its bounded TEST
+  passed signature/processing verification without granting Premium or taking a
+  live-money action.
+- A provider-generated StoreKit configuration matches all product identifiers,
+  types, and durations and passes the Simulator harness 3/3. Its current prices
+  and group name differ from the repository reference, so the committed fixture
+  was not overwritten. `SKInternalErrorDomain Code 3` did not recur.
+- Stripe physical-merch and Connect lanes remain shared and platform-neutral in
+  test mode. Required secret names and active webhook endpoints are present;
+  charges, payouts, transfers, cash-out, and iOS digital Stripe checkout remain
+  disabled.
+- The separate Apple In-App Purchase Key is the only remaining RevenueCat
+  provider-credential blocker. The App Store Connect browser session must be
+  reauthenticated before it can be created/retrieved and uploaded directly.
 
 ## Local validation at this checkpoint
 
@@ -123,9 +152,10 @@ the EAS Simulator build provides terminal native Swift/Pods compile evidence.
 
 ## Gates before a 90% claim
 
-1. Obtain RevenueCat app-configuration permission and complete the Apple app,
-   product import, entitlements/offering, SDK key, and webhook.
-2. Obtain green CI on the final documentation/workflow-only head.
+1. Reauthenticate an authorized App Store Connect owner/admin session, create or
+   retrieve the separate Apple In-App Purchase Key, and upload it directly to the
+   existing RevenueCat Apple app without exposing it.
+2. Obtain green CI on the final provider-closeout head.
 
 The physical-device and owner-attestation matrix is the explicitly defined final
 10%; it remains after a valid 90% claim and is not hidden inside the provider gate.

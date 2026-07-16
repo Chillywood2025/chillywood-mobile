@@ -9,22 +9,29 @@ workflow, screenshot, or internal-TestFlight work back to the owner.
 
 ## Current blocking owner action
 
-### RevenueCat app-configuration permission
+### Apple In-App Purchase Key for RevenueCat
 
-The authenticated RevenueCat dashboard account can inspect the current project but
-cannot create app configurations. The owner must do one of the following:
+RevenueCat project configuration is complete: the existing Chi'llywood project now
+contains the Apple app, ten products, entitlement/offering/package mappings, EAS
+public SDK-key configuration, and a verified project-wide webhook. The existing
+least-privilege API v2 key had the required configuration read/write scopes, so no
+new RevenueCat key was created.
 
-1. grant the authenticated account permission to create/manage app configurations,
-   products, entitlements, offerings, app credentials, and webhooks for the existing
-   Chi'llywood RevenueCat project; or
-2. perform the same RevenueCat Apple setup while signed in as a project owner/admin,
-   with Codex guiding the exact bounded steps.
+One separate Apple credential remains. RevenueCat requires an Apple In-App Purchase
+Key for transaction recording. The App Store Connect browser session expired with
+an authentication failure before that key could be created or uploaded. An
+authorized owner/admin must:
 
-After permission is available, Codex can complete the Apple app, import the ten
-existing App Store products, map the Premium entitlement and offering, configure
-the public iOS SDK key in EAS, and configure the webhook. Do not send a RevenueCat
-secret key, webhook secret, Apple key, password, 2FA code, or session token through
-chat, GitHub, or a repository file.
+1. sign back in to App Store Connect in the official browser;
+2. create or retrieve the dedicated In-App Purchase Key permitted for this app;
+3. download it once and keep it in an owner-only credential location; and
+4. upload it directly to the existing RevenueCat Apple app
+   `app3a0ad1ba62` for `com.chillywood.mobile`.
+
+Do not send the key, RevenueCat secret, webhook authorization, password, 2FA code,
+or session token through chat, GitHub, or a repository file. This is the sole
+remaining RevenueCat provider-credential interaction; it does not authorize a real
+purchase or enable the App Store purchase rail.
 
 ### Rotate unrelated ambient credentials
 
@@ -40,7 +47,7 @@ verified. This is urgent security hygiene and is separate from Apple signing.
 The owner may need to act only when a provider presents an unavoidable interactive
 gate:
 
-- approve Apple, EAS, RevenueCat, Supabase, or GitHub authentication/2FA in the
+- approve Apple, EAS, Supabase, or GitHub authentication/2FA in the
   official UI;
 - approve the protected `ios-preview` or `ios-production` GitHub environment when
   the exact reviewed manual workflow is ready;
@@ -117,6 +124,14 @@ The owner does not need to recreate these items:
 - App Store Connect app record for `com.chillywood.mobile`;
 - numeric App Store app ID and EAS submit profile;
 - finite ten-product App Store catalog, localizations, prices, and USA availability;
+- RevenueCat Apple app `app3a0ad1ba62` in existing project `projc5629a24`;
+- ten RevenueCat Apple product records, Premium entitlement mapping, and the
+  `default`, `creator_support`, and `seat_passes` offerings/packages;
+- sensitive EAS public iOS SDK-key configuration in development, preview, and
+  production;
+- project-wide RevenueCat webhook `whintgr38699522f7` and its safe TEST proof;
+- provider-generated StoreKit comparison and 3/3 Simulator harness pass;
+- Stripe test-mode physical-merch and Connect provider readback;
 - ordinary EAS APNs credential and separately stored VoIP APNs secret material;
 - AASA deployment;
 - Supabase Auth redirect URL configuration;

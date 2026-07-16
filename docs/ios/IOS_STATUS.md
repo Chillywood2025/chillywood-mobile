@@ -4,15 +4,18 @@ Checkpoint date: 2026-07-15
 
 Overall verdict: **Partial — repository integration, backend deployment, Firebase,
 Apple provider setup, final-source Simulator and production builds, archive
-inspection, and internal TestFlight upload are verified. The 90% claim remains
-blocked only by RevenueCat Apple app-configuration permission and provider setup;
-the physical/owner-attestation matrix remains intentionally unclaimed.**
+inspection, internal TestFlight upload, and the RevenueCat Apple catalog are
+verified. The 90% claim remains blocked by the separate Apple In-App Purchase Key
+that RevenueCat requires for transaction recording; the physical/owner-attestation
+matrix remains intentionally unclaimed.**
 
 ## Repository and pull-request state
 
 | Item | Current state |
 | --- | --- |
 | Integration branch | `codex/ios-integration-90` |
+| Provider-closeout starting head | `4414e28dca0c7c80ddd6a2b1438e1d18171fa97c` |
+| Provider-closeout source hardening | `0ec109db` |
 | Tested application source | `d6a95ed5` |
 | Screenshot-only follow-up | `a4ab1d49` |
 | Release-workflow portability fix | `f7af588d` |
@@ -42,7 +45,8 @@ application source `d6a95ed5`.
 | Ordinary iOS push | Source and backend deployed; rollout off | Client registration, permission states, categories, badge/response handling, and platform-aware payload source exist. Updated dispatch functions are active. Physical APNs delivery is not claimed. |
 | Native calls | Source compiles; backend deployed; rollout off | Swift CallKit/PushKit/AVAudioSession module, Expo plugin, JS bridge, VoIP token lifecycle, and APNs sender compile in the final-source EAS build. VoIP token/dispatch functions are active; runtime-visible calls and server dispatch remain disabled. |
 | Commerce policy | Source and additive schema deployed; Apple rail off | Apple/Google providers are distinct, ten sandbox mappings are deployed, Google base plans remain Google-only, and tips/purchases cannot grant media authority or payable value. |
-| RevenueCat Apple | **Blocked by provider permission** | Current RevenueCat account cannot create app configurations. Apple app import, entitlements/offering, SDK key, and webhook are not claimed. |
+| RevenueCat Apple | **Catalog configured; Apple IAP key owner interaction remains** | Existing project `projc5629a24` and Apple app `app3a0ad1ba62` are configured for `com.chillywood.mobile`. Ten products, Premium entitlement, three offerings, package mappings, the sensitive EAS public-key variable, and the project-wide webhook all pass readback. A separate Apple In-App Purchase Key is still absent because the App Store Connect browser session expired; transaction-recording completeness is not claimed. |
+| Stripe physical merch / Connect | Verified test-mode and platform-neutral | Required Supabase secret names are present. Existing test-mode merch and Connect webhooks are active; platform charges and payouts remain disabled. iOS has no Stripe digital checkout, and no payout, transfer, cash-out, or payable balance was created. |
 | Privacy manifest | Source and generated prebuild pass | Canonical manifest is wired through Expo, tracking is false, and clean iOS output contains the manifest. Final archive inspection is pending. |
 | Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
 | Release automation | Prepared and manually verified | `ios-preview` and `ios-production` protected environments exist. Workflows are manual, validate first, pin EAS CLI 21.0.1, freeze production credentials, require an exact build ID, and bind the verified internal group. |
@@ -140,8 +144,13 @@ switches.
 - Tips never unlock access. Purchases never grant LiveKit host/publish/admin
   authority and never create a payable creator balance while money switches are
   off.
-- Local StoreKit configuration mirrors the ten-product manifest, but provider-backed
-  purchase, restore, refund, and revocation proof remains pending.
+- RevenueCat generated a StoreKit configuration whose identifiers, product types,
+  and subscription durations match the ten-product manifest. The provider prices
+  and subscription-group name differ from the repository reference, so the
+  committed fixture was intentionally not overwritten. The provider configuration
+  passed the local Simulator harness 3/3 and `SKInternalErrorDomain Code 3` did not
+  recur; physical TestFlight purchase, restore, refund, and revocation proof remains
+  pending.
 
 ## Build evidence
 
@@ -227,11 +236,13 @@ APNs, Universal Links, PushKit/CallKit, StoreKit lifecycle, accessibility, and f
 device regression remain explicitly unclaimed. See
 `IOS_FINAL_DEVICE_TEST_MATRIX.md`.
 
-## Remaining provider gate and post-90 proof
+## Remaining provider credential gate and post-90 proof
 
-1. Obtain RevenueCat app-configuration permission; then create/import the Apple
-   app/catalog, entitlement/offering, public iOS SDK key, and webhook.
-2. After the 90% provider gate closes, execute the separately defined final 10%
+1. Sign back in to App Store Connect with an authorized owner/admin session,
+   create or retrieve the separate Apple In-App Purchase Key, and upload it directly
+   to RevenueCat's existing Apple app. Do not paste or commit the key. This is the
+   only remaining RevenueCat provider-credential interaction.
+2. After that credential gate closes, execute the separately defined final 10%
    physical-device and owner-attestation matrix.
 
 ## Safety statement
@@ -246,13 +257,16 @@ At this checkpoint:
 - no production OTA was published;
 - no live money, payable balance, payout, cash-out, withdrawal, or transfer was
   enabled;
+- no Stripe path was created for iOS digital goods;
 - no production-visible native iOS call or push rollout was enabled;
 - no destructive migration was applied;
 - no Android provider value was removed and no Android release behavior was
   intentionally changed;
 - no Apple/Firebase/EAS/RevenueCat private credential, repository secret, plist
   content, profile, certificate, token, receipt, private media, or signed artifact
-  URL was committed or used. One OS process diagnostic exposed unrelated inherited
+  URL was committed, printed, or placed in client configuration. Provider
+  credentials were used only through approved secure local/provider stores. One OS
+  process diagnostic exposed unrelated inherited
   Brevo and Cloudflare credential values; they were not used or committed and must
   be rotated; and
 - no unrelated file, including `deno.lock` or `supabase/.temp`, was staged.
