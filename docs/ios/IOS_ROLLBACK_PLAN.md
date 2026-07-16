@@ -134,12 +134,12 @@ For a faulty deployment:
 ## EAS, App Store Connect, and TestFlight rollback
 
 - Final-source Simulator build:
-  `da3e6e33-fd7a-4ed2-88fb-881d2df6ef7c` from `d6a95ed5`.
+  `6d8e5193-ea75-490f-9451-759419a3e7b3`, app `1.0.0 (6)`, from `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
 - Reviewed production/Internal TestFlight build:
-  `3a1b9d40-06b7-4e1f-99d0-5839e6154eab`, app `1.0.0 (4)`, from `d6a95ed5`.
+  `a729aa9a-1a98-439c-8c81-48c381735d8d`, app `1.0.0 (6)`, from `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
 - EAS submission: `ade71443-0a05-49c2-8aa4-c411d4cb3e28`, assigned only to
   `Chillywood Internal`.
-- Internal build `1.0.0 (3)` remains historical and is superseded by build 4; it
+- Internal build `1.0.0 (3)` remains historical and is superseded by build 6; it
   was never external or public.
 - Cancel a queued build if safe or allow an in-flight immutable build to finish;
   do not submit it if validation failed.

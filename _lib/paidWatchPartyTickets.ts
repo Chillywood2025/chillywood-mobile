@@ -6,7 +6,11 @@ import {
   readRevenueCatCustomerInfo,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
-import { resolveIosFiniteAppStoreTier, type IosFiniteAppStoreTier } from "./iosAppStoreCommerce";
+import {
+  findIosStoreProductByProductId,
+  resolveIosFiniteAppStoreTier,
+  type IosStoreProductRecord,
+} from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { Platform } from "react-native";
 import { reportRuntimeError } from "./logger";
@@ -348,11 +352,11 @@ export async function createPaidWatchPartyTicketPurchaseIntent(offerId: string) 
 
 const createIosPaidWatchPartyTicketPurchaseIntent = async (
   offerId: string,
-  tier: IosFiniteAppStoreTier,
+  product: IosStoreProductRecord,
 ) => {
   const { data, error } = await rpcClient.rpc("create_ios_app_store_purchase_intent", {
     p_metadata: {
-      amount_minor: String(tier.referencePriceMinor),
+      amount_minor: String(product.referencePriceMinor),
       currency: "usd",
       no_live_payout: true,
       not_payable: true,
@@ -360,7 +364,7 @@ const createIosPaidWatchPartyTicketPurchaseIntent = async (
       source_surface: "watch_party_seat_pass",
       viewer_only: true,
     },
-    p_provider_product_id: tier.productId,
+    p_provider_product_id: product.productId,
     p_source_id: offerId,
     p_source_type: "watch_party_live",
   });
@@ -370,7 +374,7 @@ const createIosPaidWatchPartyTicketPurchaseIntent = async (
     : {};
   return {
     id: toText(row.id),
-    providerProductId: tier.productId,
+    providerProductId: product.productId,
     alreadyPurchased: row.alreadyPurchased === true,
   };
 };
@@ -398,11 +402,19 @@ export async function purchasePaidWatchPartyTicket(input: {
     return { ok: false, message: "This Seat Pass is not available right now.", access };
   }
 
-  const iosTier = Platform.OS === "ios"
+  const iosLegacyTier = Platform.OS === "ios"
     ? resolveIosFiniteAppStoreTier("seat_pass", access.priceCents ?? access.offer.priceCents)
     : null;
+  const iosLegacyProduct = iosLegacyTier
+    ? findIosStoreProductByProductId(iosLegacyTier.productId)
+    : null;
+  const iosProduct = Platform.OS === "ios"
+    ? (access.offer?.providerProductId
+      ? findIosStoreProductByProductId(access.offer.providerProductId)
+      : null) ?? iosLegacyProduct
+    : null;
   if (Platform.OS === "ios") {
-    if (!iosTier) {
+    if (!iosProduct || iosProduct.concept !== "seat_pass") {
       return {
         ok: false,
         message: "This Seat Pass does not match an approved App Store tier. Nothing was charged.",
@@ -430,8 +442,8 @@ export async function purchasePaidWatchPartyTicket(input: {
     }
   }
 
-  const intent = Platform.OS === "ios" && iosTier
-    ? await createIosPaidWatchPartyTicketPurchaseIntent(access.offer.id, iosTier)
+  const intent = Platform.OS === "ios" && iosProduct
+    ? await createIosPaidWatchPartyTicketPurchaseIntent(access.offer.id, iosProduct)
     : await createPaidWatchPartyTicketPurchaseIntent(access.offer.id);
   if (intent.alreadyPurchased) {
     const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
@@ -444,7 +456,7 @@ export async function purchasePaidWatchPartyTicket(input: {
   }
 
   const productId = intent.providerProductId
-    || (Platform.OS === "ios" ? iosTier?.productId : access.providerProductId)
+    || (Platform.OS === "ios" ? iosProduct?.productId : access.providerProductId)
     || PAID_WATCH_PARTY_TICKET_SANDBOX_PROVIDER_PRODUCT_ID;
   const products = await readRevenueCatNonSubscriptionProducts([productId]);
   const product = products.find((entry) => String(entry.identifier ?? "").trim() === productId) ?? products[0] ?? null;

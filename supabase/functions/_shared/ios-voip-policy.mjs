@@ -33,7 +33,17 @@ export const buildIosVoipApnsPayload = (input) => {
   const threadId = toText(input.threadId);
   const requestedAction = toText(input.action).toLowerCase();
   if (!callInviteId || !threadId) throw new Error("invalid_voip_payload_scope");
-  if (requestedAction && requestedAction !== "incoming") throw new Error("terminal_voip_payload_forbidden");
+  const action = requestedAction || "incoming";
+  const supportedAction = [
+    "incoming",
+    "missed",
+    "cancel",
+    "declined",
+    "end",
+    "timeout",
+  ].includes(action)
+    ? action
+    : "incoming";
 
   const callerName = toText(input.callerName).slice(0, 80) || "Chi'llywood caller";
   const callType = normalizeIosVoipCallType(input.callType);
@@ -41,10 +51,11 @@ export const buildIosVoipApnsPayload = (input) => {
     aps: {
       "content-available": 1,
     },
-    action: "incoming",
+    action: supportedAction,
     callInviteId,
     callType,
     callUuid: callInviteId,
+    ...(supportedAction !== "incoming" ? { callAction: supportedAction } : {}),
     callerName,
     expiresAt: toText(input.expiresAt),
     path: `/chat/${encodeURIComponent(threadId)}?callInviteId=${encodeURIComponent(callInviteId)}`,

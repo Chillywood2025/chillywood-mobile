@@ -11,7 +11,7 @@ import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.t
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
 
-type DispatchAction = "incoming" | "missed";
+type DispatchAction = "incoming" | "missed" | "cancel" | "declined" | "end" | "timeout";
 
 type DispatchPayload = {
   action?: unknown;
@@ -26,7 +26,7 @@ type AuthenticatedUser = {
 
 type AuthResult =
   | { error: Response; user?: never }
-  | { error?: never; user: AuthenticatedUser };
+  | { error?: never; authorization: string; user: AuthenticatedUser };
 
 type CallInvite = {
   id: string;
@@ -60,6 +60,43 @@ type PushToken = {
   token_fingerprint: string;
 };
 
+type CallDispatchStatus = "sent" | "created" | "skipped" | "failed" | "blocked" | "unknown";
+type ActionChannelPayload = {
+  eligible?: boolean;
+  reason?: string;
+  status?: string;
+};
+
+type CallDispatchPayload = {
+  notificationCreated?: boolean;
+  pushSent?: boolean;
+  reason?: string;
+  status?: string;
+};
+
+type CallDispatchChannelResult = {
+  androidNative?: ActionChannelPayload;
+  iosVoip?: ActionChannelPayload & {
+    sentCount?: number;
+    failedCount?: number;
+    skippedCount?: number;
+  };
+  ordinaryPush?: ActionChannelPayload & {
+    sentCount?: number;
+    failedCount?: number;
+  };
+  inAppNotification?: ActionChannelPayload;
+};
+
+type ChillyDispatchResult = {
+  notificationCreated: boolean;
+  pushSent: boolean;
+  reason: string;
+  status: string;
+  androidSentCount?: number;
+  expoSentCount?: number;
+};
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -85,6 +122,21 @@ const toText = (value: unknown) => String(value ?? "").trim();
 const isIosOrdinaryPushRolloutEnabled = () => (
   toText(Deno.env.get("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED")).toLowerCase() === "true"
 );
+const isIncomingAction = (action: DispatchAction) => action === "incoming";
+const isMissedAction = (action: DispatchAction) => action === "missed";
+const isTerminalAction = (action: DispatchAction) => (
+  action === "cancel" || action === "declined" || action === "end" || action === "timeout"
+);
+const shouldInvokeIosVoip = (action: DispatchAction) => action === "incoming" || isTerminalAction(action);
+type IosVoipDispatchPayload = {
+  action?: unknown;
+  eligible?: unknown;
+  failedCount?: unknown;
+  reason?: unknown;
+  sentCount?: unknown;
+  skippedCount?: unknown;
+  status?: unknown;
+};
 
 const jsonResponse = (status: number, payload: JsonObject) =>
   new Response(JSON.stringify(payload), { headers: JSON_HEADERS, status });
@@ -118,6 +170,10 @@ const normalizeAction = (value: unknown): DispatchAction | null => {
   const normalized = toText(value).toLowerCase();
   if (normalized === "incoming" || normalized === "dispatch_incoming") return "incoming";
   if (normalized === "missed" || normalized === "dispatch_missed") return "missed";
+  if (normalized === "cancel" || normalized === "dispatch_cancel") return "cancel";
+  if (normalized === "declined" || normalized === "decline" || normalized === "dispatch_declined") return "declined";
+  if (normalized === "end" || normalized === "ended" || normalized === "dispatch_end") return "end";
+  if (normalized === "timeout" || normalized === "dispatch_timeout") return "timeout";
   return null;
 };
 
@@ -162,6 +218,7 @@ async function readAuthenticatedUser(req: Request): Promise<AuthResult> {
       email: data.user?.email ?? null,
       id: userId,
     } satisfies AuthenticatedUser,
+    authorization: authHeader,
   };
 }
 
@@ -481,6 +538,61 @@ async function sendFcmDataMessage(input: {
   };
 }
 
+async function invokeIosVoipDispatch(input: {
+  action: DispatchAction;
+  authHeader: string;
+  inviteId: string;
+}) {
+  if (!shouldInvokeIosVoip(input.action)) {
+    return {
+      channels: {
+        iosVoip: {
+          eligible: false,
+          reason: "not_required",
+          sentCount: 0,
+          skippedCount: 0,
+          status: "skipped",
+        },
+      },
+      iosVoipFallback: false,
+    };
+  }
+
+  const response = await fetch(`${readRequiredEnv("SUPABASE_URL")}/functions/v1/ios-voip-call-dispatch`, {
+    body: JSON.stringify({ action: input.action, inviteId: input.inviteId }),
+    headers: {
+      Authorization: input.authHeader,
+      apikey: readRequiredEnv("SUPABASE_ANON_KEY"),
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  const payload = await response.json().catch(() => ({})) as IosVoipDispatchPayload;
+  const eligible = typeof payload.eligible === "boolean" ? payload.eligible : response.ok;
+  const sentCount = Number(payload.sentCount ?? 0);
+  const failedCount = Number(payload.failedCount ?? 0);
+  const skippedCount = Number(payload.skippedCount ?? 0);
+  const reason = toText(payload.reason);
+  const status = response.ok
+    ? (toText(payload.status) || (reason ? "failed" : "sent"))
+    : "failed";
+
+  return {
+    channels: {
+      iosVoip: {
+        eligible,
+        failedCount: Number.isFinite(failedCount) ? failedCount : undefined,
+        reason: reason || undefined,
+        sentCount: Number.isFinite(sentCount) ? sentCount : undefined,
+        skippedCount: Number.isFinite(skippedCount) ? skippedCount : undefined,
+        status,
+      },
+    },
+    iosVoipFallback: false,
+  };
+}
+
 const buildCopy = (action: DispatchAction, callType: string, callerName: string) => {
   const callLabel = callType === "voice" ? "voice" : "video";
   if (action === "missed") {
@@ -509,6 +621,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   callerName: string;
   invite: CallInvite;
   recipientUserId: string;
+  authHeader: string;
 }) {
   const preference = await readPreferences(adminClient, input.recipientUserId);
   const callAlertsEnabled = preference?.chilly_chat_calls_enabled !== false;
@@ -786,7 +899,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
 
   const deliveredCount = input.action === "incoming" ? nativeSentCount : expoSentCount;
   const expoFallbackOnly = input.action === "incoming" && nativeSentCount === 0 && expoSentCount > 0;
-  return {
+  const result = {
     notificationId,
     pushSent: deliveredCount > 0,
     recipientUserId: input.recipientUserId,
@@ -797,6 +910,70 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         : lastFailureReason || "provider_failed",
     status: deliveredCount > 0 ? "sent" : inAppAllowed ? "created" : "failed",
   };
+
+  const iosVoip = await invokeIosVoipDispatch({
+    action: input.action,
+    authHeader: input.authHeader,
+    inviteId: input.invite.id,
+  });
+
+  const parseChannelStatus = (value: unknown) => {
+    const normalized = toText(value).toLowerCase();
+    if (
+      normalized === "sent"
+      || normalized === "created"
+      || normalized === "skipped"
+      || normalized === "failed"
+      || normalized === "blocked"
+    ) {
+      return normalized;
+    }
+    return "unknown";
+  };
+  const safeParse = (value: unknown) => (value !== null && value !== undefined ? value : undefined);
+  const parseSentCount = (value: unknown) => {
+    const count = Number(value);
+    return Number.isFinite(count) && count >= 0 ? count : undefined;
+  };
+  const inApp = inAppAllowed;
+  return {
+    ...result,
+    channels: {
+      ...iosVoip.channels,
+      androidNative: {
+        eligible: input.action === "incoming",
+        notificationCreated: false,
+        pushSent: result.pushSent,
+        reason: result.reason,
+        status: input.action === "incoming"
+          ? result.status
+          : parseChannelStatus(result.status),
+      },
+      iosVoip: {
+        eligible: safeParse((iosVoip.channels.iosVoip as { eligible?: unknown } | undefined)?.eligible) as
+          | boolean
+          | undefined,
+        sentCount: parseSentCount((iosVoip.channels.iosVoip as { sentCount?: unknown } | undefined)?.sentCount),
+        failedCount: parseSentCount((iosVoip.channels.iosVoip as { failedCount?: unknown } | undefined)?.failedCount),
+        skippedCount: parseSentCount((iosVoip.channels.iosVoip as { skippedCount?: unknown } | undefined)?.skippedCount),
+        reason: toText((iosVoip.channels.iosVoip as { reason?: unknown } | undefined)?.reason),
+        status: parseChannelStatus((iosVoip.channels.iosVoip as { status?: unknown } | undefined)?.status),
+      },
+      ordinaryPush: {
+        eligible: input.action === "incoming" ? (fcmTokens.length > 0 || expoTokens.length > 0 || iosExpoTokens.length > 0)
+          : shouldAttemptExpo,
+        notificationCreated: !!notificationId,
+        pushSent: expoSentCount > 0,
+        reason: result.reason,
+        status: expoSentCount > 0 ? "sent" : inAppAllowed ? "created" : "failed",
+      },
+      inAppNotification: {
+        notificationCreated: inApp,
+        reason: result.reason,
+        status: inApp ? "created" : result.status,
+      },
+    },
+    };
 }
 
 Deno.serve(async (req): Promise<Response> => {
@@ -906,6 +1083,7 @@ Deno.serve(async (req): Promise<Response> => {
       callType: normalizeCallType(invite.call_type),
       invite,
       recipientUserId: calleeUserId,
+      authHeader: auth.authorization,
     });
 
     return jsonResponse(200, {
@@ -916,6 +1094,7 @@ Deno.serve(async (req): Promise<Response> => {
         pushSent: result.pushSent,
         reason: result.reason,
         status: result.status,
+        channels: result.channels,
       },
     });
   } catch (error) {

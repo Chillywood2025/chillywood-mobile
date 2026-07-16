@@ -53,6 +53,35 @@ export type ChillyChatCallInviteDelivery = {
   pushSent: boolean;
   reason: string;
   status: ChillyChatCallDeliveryStatus;
+  channels?: {
+    androidNative?: {
+      eligible?: boolean;
+      notificationCreated?: boolean;
+      pushSent?: boolean;
+      reason?: string;
+      status?: ChillyChatCallDeliveryStatus;
+    };
+    iosVoip?: {
+      eligible?: boolean;
+      sentCount?: number;
+      failedCount?: number;
+      skippedCount?: number;
+      reason?: string;
+      status?: ChillyChatCallDeliveryStatus;
+    };
+    ordinaryPush?: {
+      eligible?: boolean;
+      notificationCreated?: boolean;
+      pushSent?: boolean;
+      reason?: string;
+      status?: ChillyChatCallDeliveryStatus;
+    };
+    inAppNotification?: {
+      notificationCreated?: boolean;
+      status?: ChillyChatCallDeliveryStatus;
+      reason?: string;
+    };
+  };
 };
 
 export type CreatedChillyChatCallInvite = {
@@ -248,13 +277,32 @@ const normalizeDispatchResponse = (value: unknown): ChillyChatCallInviteDelivery
       reason?: unknown;
       status?: unknown;
     } | null;
+    channels?: {
+      androidNative?: unknown;
+      iosVoip?: unknown;
+      ordinaryPush?: unknown;
+      inAppNotification?: unknown;
+    } | null;
   };
   const result = payload.result ?? null;
+  const channels = payload.channels ?? null;
   const blockedReason = toText(payload.blockedReason);
   const reason = toText(result?.reason) || blockedReason || "unknown";
   const status = blockedReason
     ? "blocked"
     : normalizeDeliveryStatus(result?.status);
+
+  const parseRecord = (input: unknown): Record<string, unknown> | null => {
+    if (!input || typeof input !== "object") return null;
+    const source = input as Record<string, unknown>;
+    if (!Object.keys(source).length) return null;
+    return source;
+  };
+  const parseCount = (value: unknown): number | undefined => {
+    const count = Number(value);
+    return Number.isFinite(count) && count >= 0 ? Math.floor(count) : undefined;
+  };
+  const normalizeChannelStatus = (value: unknown) => normalizeDeliveryStatus((value as { status?: unknown } | null)?.status);
 
   return {
     attempted: true,
@@ -263,11 +311,74 @@ const normalizeDispatchResponse = (value: unknown): ChillyChatCallInviteDelivery
     pushSent: result?.pushSent === true,
     reason,
     status,
+    channels: {
+      androidNative: (() => {
+        const source = parseRecord(channels?.androidNative);
+        if (!source) return undefined;
+        return {
+          eligible: typeof source.eligible === "boolean" ? source.eligible : undefined,
+          notificationCreated: source.notificationCreated === true,
+          pushSent: source.pushSent === true,
+          reason: toText(source.reason),
+          status: normalizeChannelStatus(source),
+        };
+      })(),
+      iosVoip: (() => {
+        const source = parseRecord(channels?.iosVoip);
+        if (!source) return undefined;
+        return {
+          eligible: typeof source.eligible === "boolean" ? source.eligible : undefined,
+          sentCount: parseCount(source.sentCount),
+          failedCount: parseCount(source.failedCount),
+          skippedCount: parseCount(source.skippedCount),
+          reason: toText(source.reason),
+          status: normalizeChannelStatus(source),
+        };
+      })(),
+      ordinaryPush: (() => {
+        const source = parseRecord(channels?.ordinaryPush);
+        if (!source) return undefined;
+        return {
+          eligible: typeof source.eligible === "boolean" ? source.eligible : undefined,
+          notificationCreated: source.notificationCreated === true,
+          pushSent: source.pushSent === true,
+          reason: toText(source.reason),
+          status: normalizeChannelStatus(source),
+        };
+      })(),
+      inAppNotification: (() => {
+        const source = parseRecord(channels?.inAppNotification);
+        if (!source) return undefined;
+        return {
+          notificationCreated: source.notificationCreated === true,
+          reason: toText(source.reason),
+          status: normalizeChannelStatus(source),
+        };
+      })(),
+    },
   };
 };
 
+type CallDispatchAction = "incoming" | "missed" | "cancel" | "declined" | "end" | "timeout";
+
+type DispatchableStatus =
+  | "declined"
+  | "missed"
+  | "canceled"
+  | "busy"
+  | "ended";
+
+const mapStatusToDispatchAction = (status: ChillyChatCallStatus): CallDispatchAction | null => {
+  if (status === "declined") return "declined";
+  if (status === "missed") return "missed";
+  if (status === "canceled") return "cancel";
+  if (status === "busy") return "timeout";
+  if (status === "ended") return "end";
+  return null;
+};
+
 async function dispatchChillyChatCallPush(input: {
-  action: "incoming" | "missed";
+  action: CallDispatchAction;
   inviteId: string;
 }): Promise<ChillyChatCallInviteDelivery> {
   const inviteId = toText(input.inviteId);
@@ -295,18 +406,6 @@ async function dispatchChillyChatCallPush(input: {
   }
   return normalizeDispatchResponse(data);
 }
-
-const dispatchIosVoipCallIfEligible = async (inviteId: string) => {
-  const normalizedInviteId = toText(inviteId);
-  if (!normalizedInviteId) return;
-  // The server independently validates caller identity, membership, invite
-  // state, preferences, blocking, rate limits, and its rollout kill switch.
-  // Calling this from every platform lets an Android caller reach an eligible
-  // iOS callee once native calls are explicitly enabled after physical proof.
-  await supabase.functions.invoke("ios-voip-call-dispatch", {
-    body: { inviteId: normalizedInviteId },
-  });
-};
 
 export async function createChillyChatCallInvite(input: {
   threadId: string;
@@ -354,7 +453,6 @@ export async function createChillyChatCallInvite(input: {
     action: "incoming",
     inviteId: invite.id,
   });
-  void dispatchIosVoipCallIfEligible(invite.id).catch(() => null);
 
   return { delivery, invite };
 }
@@ -534,17 +632,18 @@ export async function updateChillyChatCallInviteStatus(input: {
       : input.status === "declined"
         ? "declined"
         : input.status === "missed"
-          ? "missed"
-          : input.status === "canceled"
-            ? "canceled"
-            : input.status === "busy"
-              ? "busy"
-              : "ended",
+      ? "missed"
+      : input.status === "canceled"
+        ? "canceled"
+        : input.status === "busy"
+          ? "busy"
+          : "ended",
     threadId: input.invite.threadId,
   }).catch(() => null);
-  if (updatedInvite && input.status === "missed") {
+  const dispatchAction = mapStatusToDispatchAction(input.status);
+  if (updatedInvite && dispatchAction) {
     void dispatchChillyChatCallPush({
-      action: "missed",
+      action: dispatchAction,
       inviteId: updatedInvite.id,
     }).catch(() => null);
   }

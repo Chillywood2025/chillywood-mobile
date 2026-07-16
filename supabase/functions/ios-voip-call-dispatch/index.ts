@@ -14,9 +14,12 @@ type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
 
 type DispatchPayload = {
+  action?: unknown;
   inviteId?: unknown;
   invite_id?: unknown;
 };
+
+type DispatchAction = "incoming" | "missed" | "cancel" | "declined" | "end" | "timeout";
 
 type CallInvite = {
   id: string;
@@ -53,6 +56,28 @@ const JSON_HEADERS = {
 
 const encoder = new TextEncoder();
 const toText = (value: unknown) => String(value ?? "").trim();
+
+const normalizeAction = (value: unknown): DispatchAction => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "missed" || normalized === "dispatch_missed") return "missed";
+  if (normalized === "cancel" || normalized === "dispatch_cancel") return "cancel";
+  if (normalized === "declined" || normalized === "decline" || normalized === "dispatch_declined") return "declined";
+  if (normalized === "end" || normalized === "ended" || normalized === "dispatch_end") return "end";
+  if (normalized === "timeout" || normalized === "dispatch_timeout") return "timeout";
+  return "incoming";
+};
+
+const isTerminalAction = (action: DispatchAction) => action !== "incoming" && action !== "missed";
+const isIncomingOrMissed = (action: DispatchAction) => action === "incoming" || action === "missed";
+
+const resolveRecipientUserId = (input: {
+  actorUserId: string;
+  calleeUserId: string;
+  callerUserId: string;
+}) => (
+  input.actorUserId === input.callerUserId ? input.calleeUserId : input.callerUserId
+);
+
 const jsonResponse = (status: number, body: JsonObject) => (
   new Response(JSON.stringify(body), { headers: JSON_HEADERS, status })
 );
@@ -271,6 +296,7 @@ Deno.serve(async (req): Promise<Response> => {
 
     const body = await parseBody(req);
     if (!body) return jsonResponse(400, { error: "invalid_json_body" });
+    const action = normalizeAction(body.action);
     const inviteId = toText(body.inviteId ?? body.invite_id);
     if (!inviteId) return jsonResponse(400, { error: "missing_invite_id" });
 
@@ -283,8 +309,8 @@ Deno.serve(async (req): Promise<Response> => {
     if (!invite) return jsonResponse(404, { error: "invite_not_found" });
     const inviteCallerUserId = toText(invite.caller_user_id);
     const calleeUserId = toText(invite.callee_user_id);
-    if (callerUserId !== inviteCallerUserId) {
-      return jsonResponse(403, { error: "caller_required" });
+    if (callerUserId !== inviteCallerUserId && callerUserId !== calleeUserId) {
+      return jsonResponse(403, { error: "not_call_participant" });
     }
 
     const members = await readThreadMembers(adminClient, invite.thread_id);
@@ -293,6 +319,11 @@ Deno.serve(async (req): Promise<Response> => {
       return jsonResponse(403, { error: "thread_membership_required" });
     }
 
+    const recipientUserId = resolveRecipientUserId({
+      actorUserId: callerUserId,
+      calleeUserId,
+      callerUserId: inviteCallerUserId,
+    });
     if (await hasAudienceBlock(adminClient, inviteCallerUserId, calleeUserId)) {
       return jsonResponse(200, { eligible: false, reason: "audience_block", status: "blocked" });
     }
@@ -302,18 +333,56 @@ Deno.serve(async (req): Promise<Response> => {
     ) {
       return jsonResponse(200, { eligible: false, reason: "account_access_restricted", status: "blocked" });
     }
-    if (!await readCallPreference(adminClient, calleeUserId)) {
+    if (!await readCallPreference(adminClient, recipientUserId)) {
       return jsonResponse(200, { eligible: false, reason: "call_preference_disabled", status: "blocked" });
     }
 
-    const expiresAt = Date.parse(toText(invite.expires_at));
     const inviteStatus = toText(invite.status).toLowerCase();
-    if (inviteStatus !== "ringing") {
-      return jsonResponse(200, { eligible: false, reason: "invite_not_ringing", status: "blocked" });
+    const expiresAt = Date.parse(toText(invite.expires_at));
+    if (action === "incoming") {
+      if (callerUserId !== inviteCallerUserId) {
+        return jsonResponse(403, { error: "caller_required" });
+      }
+      if (inviteStatus !== "ringing") {
+        return jsonResponse(200, { eligible: false, reason: "invite_not_ringing", status: "blocked" });
+      }
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        return jsonResponse(200, { eligible: false, reason: "invite_expired", status: "blocked" });
+      }
+    } else if (action === "declined") {
+      if (callerUserId !== calleeUserId) {
+        return jsonResponse(403, { error: "callee_required" });
+      }
+      if (inviteStatus !== "ringing") {
+        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
+      }
+    } else if (action === "cancel") {
+      if (callerUserId !== inviteCallerUserId) {
+        return jsonResponse(403, { error: "caller_required" });
+      }
+      if (inviteStatus !== "ringing" && inviteStatus !== "accepted") {
+        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
+      }
+    } else if (action === "timeout") {
+      if (inviteStatus !== "ringing") {
+        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
+      }
+      if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) {
+        return jsonResponse(200, { eligible: false, reason: "invite_not_expired", status: "blocked" });
+      }
+    } else if (action === "end") {
+      if (inviteStatus !== "accepted" && inviteStatus !== "ringing") {
+        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
+      }
+    } else if (action === "missed") {
+      if (inviteStatus !== "ringing") {
+        return jsonResponse(200, { eligible: false, reason: `invite_${inviteStatus}`, status: "blocked" });
+      }
     }
-    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-      return jsonResponse(200, { eligible: false, reason: "invite_expired", status: "blocked" });
+    if (!action) {
+      return jsonResponse(400, { error: "invalid_action" });
     }
+
     if (!await enforceDispatchRateLimit(adminClient, callerUserId, inviteId)) {
       return jsonResponse(429, { eligible: false, reason: "rate_limited", status: "blocked" });
     }
@@ -341,7 +410,7 @@ Deno.serve(async (req): Promise<Response> => {
     const { data: tokenRows, error: tokenError } = await adminClient
       .from("user_voip_push_tokens")
       .select("id,token,token_fingerprint,apns_environment")
-      .eq("user_id", calleeUserId)
+      .eq("user_id", recipientUserId)
       .eq("enabled", true)
       .is("revoked_at", null)
       .order("last_seen_at", { ascending: false })
@@ -361,6 +430,7 @@ Deno.serve(async (req): Promise<Response> => {
 
     const caller = members.find((member) => toText(member.user_id) === inviteCallerUserId);
     const payload = buildIosVoipApnsPayload({
+      action,
       callInviteId: invite.id,
       callerName: toText(caller?.display_name) || "Chi'llywood caller",
       callType: invite.call_type,
@@ -375,14 +445,14 @@ Deno.serve(async (req): Promise<Response> => {
     let skippedCount = 0;
 
     for (const tokenRow of tokens) {
-      const dispatchKey = await sha256Hex(`ios_voip:${invite.id}:${tokenRow.id}:incoming`);
+      const dispatchKey = await sha256Hex(`ios_voip:${invite.id}:${tokenRow.id}:${action}`);
       let { data: attempt, error: attemptError } = await adminClient
         .from("voip_push_delivery_attempts")
         .insert({
           apns_environment: tokenRow.apns_environment,
           call_invite_id: invite.id,
           dispatch_key: dispatchKey,
-          recipient_user_id: calleeUserId,
+          recipient_user_id: recipientUserId,
           status: "attempted",
           voip_push_token_id: tokenRow.id,
         })

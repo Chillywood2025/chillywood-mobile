@@ -13,7 +13,11 @@ import {
 } from "react-native";
 
 import { trackEvent } from "../../_lib/analytics";
-import { listIosFiniteAppStoreTiers } from "../../_lib/iosAppStoreCommerce";
+import {
+  listIosStoreProductsForConcept,
+  type IosStoreProductKey,
+} from "../../_lib/iosAppStoreCommerce";
+import { readRevenueCatNonSubscriptionProducts } from "../../_lib/revenuecat";
 import {
   purchaseCreatorTipWithStore,
   type CreatorTipPublicStatus,
@@ -37,6 +41,13 @@ type TipSheetProps = {
 const DEFAULT_AMOUNTS = [100, 300, 500, 1000];
 const STORE_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
 
+type IosTipOption = {
+  stableKey: IosStoreProductKey;
+  productId: string;
+  referencePriceMinor: number;
+  priceLabel: string;
+};
+
 export function TipSheet({
   visible,
   creatorId,
@@ -51,19 +62,73 @@ export function TipSheet({
   const [selectedAmount, setSelectedAmount] = useState(300);
   const [customAmount, setCustomAmount] = useState("");
   const [privateNote, setPrivateNote] = useState("");
+  const [selectedIosTipKey, setSelectedIosTipKey] = useState<IosStoreProductKey>("tip_tier_1");
+  const [iosProductPriceLabels, setIosProductPriceLabels] = useState<Record<string, string>>({});
+  const [iosPricesLoading, setIosPricesLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
+  const iosTipOptions = useMemo(() => {
+    if (Platform.OS !== "ios") return [] as IosTipOption[];
+    const catalogProducts = listIosStoreProductsForConcept("creator_tip");
+    return catalogProducts.map((entry) => ({
+      stableKey: entry.stableKey,
+      productId: entry.productId,
+      referencePriceMinor: entry.referencePriceMinor,
+      priceLabel: iosProductPriceLabels[entry.productId] ?? formatMonetizationCurrency(
+        entry.referencePriceMinor,
+        tipStatus?.currency ?? "usd",
+      ),
+    }));
+  }, [iosProductPriceLabels, tipStatus?.currency]);
+
+  const selectedIosProduct = iosTipOptions.find((option) => option.stableKey === selectedIosTipKey)
+    ?? iosTipOptions[0]
+    ?? null;
+
   const amounts = useMemo(() => {
     if (Platform.OS === "ios") {
-      return listIosFiniteAppStoreTiers("creator_tip").map((entry) => entry.referencePriceMinor);
+      return iosTipOptions.map((entry) => entry.referencePriceMinor);
     }
     const values = tipStatus?.suggestedAmountsCents?.length ? tipStatus.suggestedAmountsCents : DEFAULT_AMOUNTS;
     return Array.from(new Set(values.filter((amount) => amount > 0))).slice(0, 6);
-  }, [tipStatus?.suggestedAmountsCents]);
+  }, [iosTipOptions, tipStatus?.suggestedAmountsCents]);
 
   useEffect(() => {
     if (!visible) return;
+
+    if (Platform.OS === "ios" && iosTipOptions.length > 0) {
+      setIosPricesLoading(true);
+      const run = async () => {
+        try {
+          const products = await readRevenueCatNonSubscriptionProducts(
+            iosTipOptions.map((option) => option.productId),
+          );
+          const next: Record<string, string> = {};
+          for (const product of products) {
+            const identifier = String((product as { identifier?: unknown }).identifier ?? "").trim();
+            if (!identifier) continue;
+            const safePrice = typeof (product as { priceString?: unknown }).priceString === "string"
+              ? String((product as { priceString?: unknown }).priceString).trim()
+              : "";
+            if (safePrice) {
+              next[identifier] = safePrice;
+            }
+          }
+          setIosProductPriceLabels(next);
+        } finally {
+          setIosPricesLoading(false);
+        }
+      };
+      run();
+    }
+
+    const iosDefault = iosTipOptions[0];
+    if (Platform.OS === "ios" && iosDefault) {
+      setSelectedIosTipKey(iosDefault.stableKey);
+      setSelectedAmount(iosDefault.referencePriceMinor);
+    }
+
     const defaultAmount = Platform.OS === "ios"
       ? amounts[0] ?? 99
       : tipStatus?.defaultAmountCents && tipStatus.defaultAmountCents > 0
@@ -78,16 +143,20 @@ export function TipSheet({
       route_name: "channel",
       source_surface: sourceSurface,
     });
-  }, [amounts, creatorId, sourceSurface, tipStatus?.defaultAmountCents, visible]);
+  }, [amounts, creatorId, iosTipOptions, sourceSurface, tipStatus?.defaultAmountCents, visible]);
 
-  const parsedCustomAmount = Math.round(Number(customAmount.replace(/[^0-9.]/g, "")) * 100);
-  const amountCents = customAmount.trim() ? parsedCustomAmount : selectedAmount;
+  const amountCents = Platform.OS === "ios"
+    ? (selectedIosProduct?.referencePriceMinor ?? selectedAmount)
+    : Math.round(Number(customAmount.replace(/[^0-9.]/g, "")) * 100) || selectedAmount;
   const minAmount = Platform.OS === "ios" ? amounts[0] ?? 99 : tipStatus?.minAmountCents ?? 100;
   const maxAmount = Platform.OS === "ios" ? amounts.at(-1) ?? 999 : tipStatus?.maxAmountCents ?? 50000;
-  const amountValid = Number.isInteger(amountCents)
-    && amountCents >= minAmount
-    && amountCents <= maxAmount
-    && (Platform.OS !== "ios" || amounts.includes(amountCents));
+  const amountValid = Platform.OS === "ios"
+    ? selectedIosProduct != null
+      && Number.isInteger(amountCents)
+      && amountCents > 0
+    : Number.isInteger(amountCents)
+      && amountCents >= minAmount
+      && amountCents <= maxAmount;
   const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
   const canTipInSandbox = sandboxTester || tipStatus?.canTip === true;
 
@@ -123,6 +192,7 @@ export function TipSheet({
         amountCents,
         creatorId,
         currency: tipStatus?.currency ?? "usd",
+        iosStoreProductKey: Platform.OS === "ios" ? selectedIosProduct?.stableKey : undefined,
         privateNote: privateNote.trim() ? privateNote.trim() : null,
         sourceSurface,
         userId: String(user.id),
@@ -163,24 +233,49 @@ export function TipSheet({
           {showSandboxCopy ? <MoneyStatusChip label={`Sandbox Test · ${STORE_NAME}`} tone="warning" /> : null}
 
           <View style={styles.amountGrid}>
-            {amounts.map((amount) => (
-              <TouchableOpacity
-                key={amount}
-                testID="tip-amount-option"
-                activeOpacity={0.86}
-                style={[styles.amountButton, !customAmount.trim() && selectedAmount === amount && styles.amountButtonActive]}
-                accessibilityRole="button"
-                accessibilityLabel={`Choose ${formatMonetizationCurrency(amount, tipStatus?.currency ?? "usd")} tip amount`}
-                onPress={() => {
-                  setCustomAmount("");
-                  setSelectedAmount(amount);
-                }}
-              >
-                <Text style={[styles.amountText, !customAmount.trim() && selectedAmount === amount && styles.amountTextActive]}>
-                  {formatMonetizationCurrency(amount, tipStatus?.currency ?? "usd")}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {Platform.OS === "ios" ? (
+              iosTipOptions.map((option) => {
+                const isSelected = option.stableKey === selectedIosTipKey;
+                return (
+                  <TouchableOpacity
+                    key={option.stableKey}
+                    testID="tip-amount-option"
+                    activeOpacity={0.86}
+                    style={[styles.amountButton, isSelected && styles.amountButtonActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose ${option.priceLabel} App Store tip amount`}
+                    onPress={() => {
+                      setCustomAmount("");
+                      setSelectedAmount(option.referencePriceMinor);
+                      setSelectedIosTipKey(option.stableKey);
+                    }}
+                  >
+                    <Text style={[styles.amountText, isSelected && styles.amountTextActive]}>
+                      {iosPricesLoading ? option.priceLabel : option.priceLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              amounts.map((amount) => (
+                <TouchableOpacity
+                  key={amount}
+                  testID="tip-amount-option"
+                  activeOpacity={0.86}
+                  style={[styles.amountButton, !customAmount.trim() && selectedAmount === amount && styles.amountButtonActive]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Choose ${formatMonetizationCurrency(amount, tipStatus?.currency ?? "usd")} tip amount`}
+                  onPress={() => {
+                    setCustomAmount("");
+                    setSelectedAmount(amount);
+                  }}
+                >
+                  <Text style={[styles.amountText, !customAmount.trim() && selectedAmount === amount && styles.amountTextActive]}>
+                    {formatMonetizationCurrency(amount, tipStatus?.currency ?? "usd")}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
 
           {Platform.OS !== "ios" ? (

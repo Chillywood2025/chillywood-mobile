@@ -7,7 +7,11 @@ import {
   readRevenueCatNonSubscriptionProducts,
   syncRevenueCatCustomerIdentity,
 } from "./revenuecat";
-import { resolveIosFiniteAppStoreTier } from "./iosAppStoreCommerce";
+import {
+  findIosStoreProductByStableKey,
+  findIosStoreProductByProductId,
+  resolveIosFiniteAppStoreTier,
+} from "./iosAppStoreCommerce";
 import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { getRuntimeConfig } from "./runtimeConfig";
 
@@ -314,15 +318,21 @@ export async function purchaseCreatorTipWithStore(input: {
   userId: string;
   amountCents: number;
   currency?: string;
+  iosStoreProductKey?: string;
   privateNote?: string | null;
   sourceSurface?: string;
 }): Promise<CreatorTipStorePurchaseResult> {
   const creatorId = toText(input.creatorId);
   const userId = toText(input.userId);
-  const iosTier = Platform.OS === "ios"
+  const legacyIosTipProduct = Platform.OS === "ios"
     ? resolveIosFiniteAppStoreTier("creator_tip", input.amountCents)
     : null;
-  const productId = iosTier?.productId ?? CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID;
+  const legacyIosProductId = legacyIosTipProduct?.productId ?? null;
+  const iosTipProduct = Platform.OS === "ios"
+    ? findIosStoreProductByStableKey(input.iosStoreProductKey) ??
+      (legacyIosProductId ? findIosStoreProductByProductId(legacyIosProductId) : null)
+    : null;
+  const productId = iosTipProduct?.productId ?? legacyIosProductId ?? CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID;
   if (!creatorId || !userId) {
     return {
       ok: false,
@@ -333,7 +343,7 @@ export async function purchaseCreatorTipWithStore(input: {
   }
 
   if (Platform.OS === "ios") {
-    if (!iosTier) {
+    if (!iosTipProduct || iosTipProduct.concept !== "creator_tip") {
       return {
         ok: false,
         intentId: null,
@@ -371,7 +381,7 @@ export async function purchaseCreatorTipWithStore(input: {
   const intentArgs = Platform.OS === "ios"
     ? {
         p_metadata: {
-          amount_minor: String(iosTier?.referencePriceMinor ?? 0),
+          amount_minor: String(iosTipProduct?.referencePriceMinor ?? 0),
           creator_id: creatorId,
           currency: "usd",
           no_access_grant: true,

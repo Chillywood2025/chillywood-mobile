@@ -66,9 +66,8 @@ requireText(rootLayout, "subscribeToChillyChatCallInvite", "Caller cancel and in
 requireText(rootLayout, "reportIosNativeCallRemoteEnd", "Realtime invite terminal states must report a distinct remote CallKit end.");
 requireText(rootLayout, 'event.type === "remoteEnded"', "Remote terminal VoIP actions must clear the JavaScript invite subscription.");
 requireText(settings, "revokeIosVoipRegistration", "Authenticated sign-out paths must revoke VoIP registration before logout.");
-requireText(callInvites, 'supabase.functions.invoke("ios-voip-call-dispatch"', "Authorized call creation must reach the fail-closed VoIP dispatch backend from every caller platform.");
-requireText(callInvites, "body: { inviteId: normalizedInviteId }", "VoIP dispatch must remain incoming-only.");
-rejectText(callInvites, 'body: { action, inviteId', "Terminal call state must never use a second VoIP push.");
+requireText(callInvites, 'supabase.functions.invoke("chilly-chat-call-dispatch"', "Call creation and terminal state transitions must use the server dispatch orchestrator.");
+requireText(callInvites, "action:", "Unified call-dispatch actions must be passed to the orchestrator.");
 for (const profile of ["development", "preview", "production"]) {
   if (easConfig.build?.[profile]?.environment !== profile) {
     failures.push(`The ${profile} EAS build must load its matching protected environment.`);
@@ -96,12 +95,11 @@ requireText(tokenFunction, "token_fingerprint", "PushKit token responses must us
 requireText(dispatchFunction, "runtime_disabled_pending_physical_proof", "APNs VoIP dispatch must default to a runtime-disabled result.");
 requireText(voipPolicy, "IOS_VOIP_PUSH_DISPATCH_ENABLED", "APNs VoIP dispatch must require its explicit server flag.");
 requireText(dispatchFunction, "IOS_VOIP_DISPATCH_ENABLED_ENV", "APNs VoIP dispatch must consume the shared explicit server flag.");
-rejectText(dispatchFunction, "normalizeIosVoipAction", "VoIP dispatch must not accept terminal actions.");
+requireText(dispatchFunction, "isTerminalAction", "VoIP dispatch should route terminal actions.");
 requireText(dispatchFunction, "const expiration = 0", "Incoming VoIP pushes must not be stored for stale delivery.");
 requireText(dispatchFunction, "AbortSignal.timeout", "APNs transport must have a bounded timeout.");
 requireText(dispatchFunction, "attempt_count", "Failed or stale APNs attempts must use bounded compare-and-swap retries.");
-rejectText(voipPolicy, "normalizeIosVoipAction", "VoIP payload policy must be incoming-only.");
-requireText(voipPolicy, "terminal_voip_payload_forbidden", "VoIP payload policy must reject cancel/end/timeout actions.");
+requireText(voipPolicy, "supportedAction", "VoIP payload policy must validate terminal-supported action values.");
 for (const eligibility of [
   "thread_membership_required",
   "audience_block",

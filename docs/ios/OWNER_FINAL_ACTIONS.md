@@ -129,8 +129,8 @@ The owner does not need to recreate these items:
 - the historical foundation Simulator and physical development builds;
 - three deployed additive iOS migrations and six active fail-closed Edge
   Functions;
-- final-source Simulator build `da3e6e33-fd7a-4ed2-88fb-881d2df6ef7c`;
-- production build `3a1b9d40-06b7-4e1f-99d0-5839e6154eab`, app `1.0.0 (4)`;
+- final-source Simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3`, app `1.0.0 (6)`;
+- production build `a729aa9a-1a98-439c-8c81-48c381735d8d`, app `1.0.0 (6)`;
 - internal TestFlight processing and assignment to `Chillywood Internal`; and
 - public-safe standard, large, small, and tablet-format screenshot drafts.
 

@@ -7,7 +7,7 @@ credential, and Stripe platform-neutral lanes are configured and verified. The
 purchase rail remains disabled pending bounded physical TestFlight proof.**
 
 This bounded closeout started from branch `codex/ios-integration-90` at
-`4414e28dca0c7c80ddd6a2b1438e1d18171fa97c` in draft PR
+`a9d6041922e41a6e722e430f9ecb144ea7e8e175` in draft PR
 [#10](https://github.com/Chillywood2025/chillywood-mobile/pull/10). It reuses the
 existing Chi'llywood RevenueCat project and Stripe account. It does not create a
 second provider account, enable a purchase rail, or authorize public release.
@@ -127,8 +127,8 @@ match the repository manifest. The comparison found provider-catalog differences
 | Field | Provider-generated configuration | Repository reference |
 | --- | --- | --- |
 | Eight consumable prices | All `0.99` | Tiered `0.99`, `2.99`, `4.99`, `9.99` |
-| Premium monthly | `9.99`, one month | `4.99`, one month |
-| Premium yearly | `79.99`, one year | `49.99`, one year |
+| Premium monthly | `9.99`, one month | `9.99`, one month |
+| Premium yearly | `99.99`, one year | `99.99`, one year |
 | Subscription group | `premium` | `chillywood_premium` |
 
 Because provider catalog truth and the repository reference differ, the committed

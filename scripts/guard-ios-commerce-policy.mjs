@@ -85,11 +85,20 @@ const finiteConsumableIds = manifest.catalog
   .filter((entry) => entry.concept === "creator_tip" || entry.concept === "seat_pass")
   .map((entry) => entry.productId)
   .sort();
-const runtimeFiniteIds = Array.from(appStoreRuntimeCatalog.matchAll(/productId:\s*"([^"]+)"/gu))
-  .map((match) => match[1])
-  .sort();
+const runtimeCatalogBlock = appStoreRuntimeCatalog.match(/export const IOS_APP_STORE_PRODUCTS\s*=\s*\[(?<catalog>[\s\S]*?)\];/);
+const runtimeCatalogText = runtimeCatalogBlock?.groups?.catalog ?? appStoreRuntimeCatalog;
+const runtimeAllProductIds = Array.from(
+  String(runtimeCatalogText).matchAll(/productId\s*:\s*"([^"]+)"/gu),
+).map((match) => match[1]).filter((productId) => productId.length > 0);
+const runtimeFiniteIds = runtimeAllProductIds.filter(
+  (productId) => !["com.chillywood.premium.monthly", "com.chillywood.premium.yearly"].includes(productId),
+);
+
+const runtimeFiniteIdsUnique = Array.from(new Set(runtimeFiniteIds)).sort();
+const manifestFiniteIdsUnique = Array.from(new Set(finiteConsumableIds)).sort();
 assert(
-  JSON.stringify(runtimeFiniteIds) === JSON.stringify(finiteConsumableIds),
+  runtimeFiniteIdsUnique.length === manifestFiniteIdsUnique.length &&
+    JSON.stringify(runtimeFiniteIdsUnique) === JSON.stringify(manifestFiniteIdsUnique),
   "runtime finite-tier IDs must exactly match the manifest tip and Seat Pass IDs",
 );
 for (const productId of manifest.catalog.filter((entry) => entry.concept === "premium").map((entry) => entry.productId)) {
@@ -191,7 +200,7 @@ for (const [label, source] of [["tip sheet", tipSheet], ["money scope", moneySco
   includes(source, "App Store", `${label} App Store copy`);
   includes(source, "Google Play", `${label} Android copy preservation`);
 }
-includes(tipSheet, 'listIosFiniteAppStoreTiers("creator_tip")', "iOS tip sheet finite tier list");
+includes(tipSheet, 'listIosStoreProductsForConcept("creator_tip")', "iOS tip sheet finite product list");
 includes(tipSheet, 'Platform.OS !== "ios" ? (', "iOS tip sheet custom-amount block");
 
 includes(webhook, "readStoreProductResolution", "store-aware webhook lookup");

@@ -190,6 +190,11 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
     return ISO8601DateFormatter().date(from: text)
   }
 
+  private func toText(_ value: Any?) -> String {
+    guard let text = value as? String else { return "" }
+    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
   private func reportIncomingCallOnMain(
     payload: [String: Any],
     completion: ((Error?) -> Void)? = nil
@@ -260,6 +265,106 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
       completion?(nil)
     }
     return callUuid
+  }
+
+  private func normalizedCallAction(_ payload: [String: Any]) -> String {
+    let action = toText(payload["action"]).lowercased()
+    let terminalAction = toText(payload["callAction"]).lowercased()
+    if [
+      "incoming",
+      "cancel",
+      "declined",
+      "end",
+      "timeout",
+      "missed",
+    ].contains(terminalAction) {
+      return terminalAction
+    }
+    if ["cancel", "declined", "end", "timeout", "missed"].contains(action) {
+      return action
+    }
+    return "incoming"
+  }
+
+  private func callActionLabel(_ payload: [String: Any]) -> String {
+    switch normalizedCallAction(payload) {
+    case "cancel":
+      return "cancel"
+    case "declined":
+      return "declined"
+    case "end":
+      return "end"
+    case "timeout":
+      return "timeout"
+    case "missed":
+      return "missed"
+    default:
+      return "incoming"
+    }
+  }
+
+  private func findActiveCall(
+    input: [String: Any]
+  ) -> ActiveNativeCall? {
+    if
+      let callUuidText = input["callUuid"] as? String,
+      let callUuid = UUID(uuidString: callUuidText),
+      let call = activeCalls[callUuid]
+    {
+      return call
+    }
+    guard let inviteId = input["callInviteId"] as? String, !inviteId.isEmpty else { return nil }
+    return activeCalls.values.first(where: { $0.inviteId == inviteId })
+  }
+
+  private func resolveCallUuid(
+    input: [String: Any],
+    fallbackInviteId: String?
+  ) -> UUID? {
+    if
+      let callUuidText = input["callUuid"] as? String,
+      let callUuid = UUID(uuidString: callUuidText)
+    {
+      return callUuid
+    }
+    guard let inviteId = fallbackInviteId ?? (input["callInviteId"] as? String),
+          !inviteId.isEmpty else { return nil }
+    return activeCalls.values.first(where: { $0.inviteId == inviteId })?.uuid
+  }
+
+  private func handleTerminalVoipAction(
+    input: [String: Any],
+    action: String,
+    completion: @escaping () -> Void,
+  ) {
+    let inviteId = toText(input["callInviteId"])
+    let threadId = toText(input["threadId"])
+    if inviteId.isEmpty || threadId.isEmpty {
+      markTerminalInvite(inviteId)
+      completion()
+      return
+    }
+    if isTerminalInvite(inviteId) {
+      completion()
+      return
+    }
+    guard
+      let callUuid = resolveCallUuid(input: input, fallbackInviteId: inviteId),
+      let call = activeCalls[callUuid]
+    else {
+      markTerminalInvite(inviteId)
+      completion()
+      return
+    }
+    failPendingAnswer(callUuid)
+    let eventType = action == "declined" || action == "timeout" || action == "missed"
+      ? action == "declined" ? "declined" : action
+      : "ended"
+    provider?.reportCall(with: callUuid, endedAt: Date(), reason: .remoteEnded)
+    _ = removeCall(callUuid)
+    markTerminalInvite(call.inviteId)
+    emit(type: eventType, call: call, reason: action)
+    completion()
   }
 
   public func endCall(callUuid: String, reason: String) throws {
@@ -573,14 +678,18 @@ public final class ChillywoodNativeCallCoordinator: NSObject, CXProviderDelegate
         guard let key = entry.key as? String else { return }
         result[key] = entry.value
       }
-      let action = (normalizedPayload["action"] as? String)?.lowercased() ?? "incoming"
-      guard action == "incoming" else {
-        reportInvalidVoipPushOnMain(completion: completion)
+      let action = callActionLabel(normalizedPayload)
+      if action == "incoming" {
+        _ = try reportIncomingCallOnMain(payload: normalizedPayload) { _ in
+          completion()
+        }
         return
       }
-      _ = try reportIncomingCallOnMain(payload: normalizedPayload) { _ in
-        completion()
-      }
+      handleTerminalVoipAction(
+        input: normalizedPayload,
+        action: action,
+        completion: completion,
+      )
     } catch {
       reportInvalidVoipPushOnMain(completion: completion)
     }

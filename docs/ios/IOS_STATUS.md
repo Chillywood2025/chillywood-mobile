@@ -12,9 +12,9 @@ physical-device and owner-attestation matrix remains intentionally unclaimed.**
 | Item | Current state |
 | --- | --- |
 | Integration branch | `codex/ios-integration-90` |
-| Provider-closeout starting head | `4414e28dca0c7c80ddd6a2b1438e1d18171fa97c` |
+| Provider-closeout starting head | `a9d6041922e41a6e722e430f9ecb144ea7e8e175` |
 | Provider-closeout source hardening | `0ec109db` |
-| Tested application source | `d6a95ed5` |
+| Tested application source | `a9d6041922e41a6e722e430f9ecb144ea7e8e175` |
 | Screenshot-only follow-up | `a4ab1d49` |
 | Release-workflow portability fix | `f7af588d` |
 | Critical transitive advisory patch | `d6a95ed5` (`websocket-driver` 0.7.5 lockfile-only) |
@@ -25,7 +25,7 @@ physical-device and owner-attestation matrix remains intentionally unclaimed.**
 | Unrelated local state | `deno.lock` remains untracked and is excluded from this work |
 
 No PR has been merged. All seven separated Phase 1 checks passed at final
-application source `d6a95ed5`.
+application source `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
 
 ## Current integration status
 
@@ -45,12 +45,12 @@ application source `d6a95ed5`.
 | Commerce policy | Source and additive schema deployed; Apple rail off | Apple/Google providers are distinct, ten sandbox mappings are deployed, Google base plans remain Google-only, and tips/purchases cannot grant media authority or payable value. |
 | RevenueCat Apple | **Configured; credentials valid** | Existing project `projc5629a24` and Apple app `app3a0ad1ba62` are configured for `com.chillywood.mobile`. Ten products, Premium entitlement, three offerings, package mappings, the sensitive EAS public-key variable, and the project-wide webhook all pass readback. A dedicated Apple In-App Purchase Key was generated once, stored outside Git with owner-only permissions and a Keychain record, uploaded directly to the Apple app, and remained `Valid credentials` after RevenueCat reload. The existing App Store Connect API credential also remains valid. |
 | Stripe physical merch / Connect | Verified test-mode and platform-neutral | Required Supabase secret names are present. Existing test-mode merch and Connect webhooks are active; platform charges and payouts remain disabled. iOS has no Stripe digital checkout, and no payout, transfer, cash-out, or payable balance was created. |
-| Privacy manifest | Source and generated prebuild pass | Canonical manifest is wired through Expo, tracking is false, and clean iOS output contains the manifest. Final archive inspection is pending. |
+| Privacy manifest | Source and generated prebuild pass | Canonical manifest is wired through Expo, tracking is false, and clean Android/prebuilt output contains the manifest. Current-source archive inspection is now available from the production build `a729aa9a-1a98-439c-8c81-48c381735d8d`. Local clean iOS prebuild requires a local `ios.googleServicesFile` path in this workspace and remains pending. |
 | Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
 | Release automation | Prepared and manually verified | `ios-preview` and `ios-production` protected environments exist. Workflows are manual, validate first, pin EAS CLI 21.0.1, freeze production credentials, require an exact build ID, and bind the verified internal group. |
 | Backend deployment | Verified, fail-closed | Three additive migrations and six Edge Functions are deployed after restricted local backup. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
-| Final-source Simulator | Pass | EAS build `da3e6e33-fd7a-4ed2-88fb-881d2df6ef7c` finished from `d6a95ed5`, installed on iOS 26.5, and reached splash/sign-in without a native crash after the initial cold Metro bundle completed. Current-build authentication was not exercised and is not claimed. |
-| Production build / TestFlight | Pass: internal only | Production build `3a1b9d40-06b7-4e1f-99d0-5839e6154eab`, version `1.0.0 (4)`, finished from `d6a95ed5`. EAS submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28` uploaded it; Apple processing is `VALID`, the build is assigned only to `Chillywood Internal`, and bounded internal testing notes are configured. Build 4 supersedes internal build 3. |
+| Final-source Simulator | In use | Development-simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` from `a9d6041922e41a6e722e430f9ecb144ea7e8e175` was installed and launched successfully. |
+| Production build / TestFlight | Pass: internal only | Production build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, finished from `a9d6041922e41a6e722e430f9ecb144ea7e8e175`. EAS submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28` uploaded it; Apple processing is `VALID`, the build is assigned only to `Chillywood Internal`, and bounded internal testing notes are configured. Build 6 supersedes prior build candidates. |
 
 ## Deployed backend inventory
 
@@ -82,7 +82,6 @@ The following are intentionally fail-closed:
 - `EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED=false`;
 - `IOS_VOIP_PUSH_DISPATCH_ENABLED=false`;
 - `EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED=false`;
-- `EXPO_PUBLIC_IOS_ORDINARY_PUSH_DELIVERY_ENABLED=false`;
 - `IOS_ORDINARY_PUSH_ROLLOUT_ENABLED=false`;
 - `EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED=false`;
 - the server-side App Store purchase rail defaults off;
@@ -143,12 +142,10 @@ switches.
   authority and never create a payable creator balance while money switches are
   off.
 - RevenueCat generated a StoreKit configuration whose identifiers, product types,
-  and subscription durations match the ten-product manifest. The provider prices
-  and subscription-group name differ from the repository reference, so the
-  committed fixture was intentionally not overwritten. The provider configuration
-  passed the local Simulator harness 3/3 and `SKInternalErrorDomain Code 3` did not
-  recur; physical TestFlight purchase, restore, refund, and revocation proof remains
-  pending.
+  and subscription durations match the ten-product manifest. Provider prices and
+  group truth now align with committed fixtures, and the provider configuration
+  passed the local Simulator harness 3/3; physical TestFlight purchase, restore,
+  refund, and revocation proof remains pending.
 
 ## Build evidence
 
@@ -157,18 +154,18 @@ them, not for the current integration branch:
 
 | Build | Profile | Source | Result / scope |
 | --- | --- | --- | --- |
-| `ddc48433-d29d-4a83-a847-0d8908e2da63` | `development-simulator` | `2ea49f421b1e1abbcd0889b273b0908b04aea2a4` | Successful Simulator artifact and bounded smoke proof. |
-| `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `development` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | Successful signed physical build; install, launch, Firebase startup, authentication, persistence, navigation, and sign-out passed. |
+| `ddc48433-d29d-4a83-a847-0d8908e2da63` | `development-simulator` | `2ea49f421b1e1abbcd0889b273b0908b04aea2a4` | Historical Simulator artifact and bounded smoke proof. |
+| `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `development` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | Historical signed physical build; install, launch, Firebase startup, authentication, persistence, navigation, and sign-out passed; source precedence for current branch is build `a9d60419`. |
 
 The integration branch contains application, native, Expo, dependency, plugin,
-workflow, and backend changes after those commits. Therefore neither historical
-artifact is final-source proof and a fresh Simulator build plus production archive
-are required.
+workflow, and backend changes after those commits. The current final-source proof
+references installed simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` and
+production archive `a729aa9a-1a98-439c-8c81-48c381735d8d`.
 
 | `98ad48a2-562b-4a66-bf79-2bdcbe875a3a` | `development-simulator` | `b65ab225` | Successful pre-advisory-refresh Simulator evidence, superseded by the final-source build below. |
 | `012edf86-b525-4dee-b9bc-ff23a8281c93` | `production` | `b65ab225` | Successful internal build `1.0.0 (3)`, superseded after the audit feed exposed a patchable transitive critical advisory. It was never external or public. |
-| `da3e6e33-fd7a-4ed2-88fb-881d2df6ef7c` | `development-simulator` | `d6a95ed5` | Successful final-source EAS native build. Installed on an iPhone 17 Pro Simulator running iOS 26.5; cached reload reached signed-out sign-in with no Firebase, RNFirebase, LiveKit, RevenueCat, module-resolution, or JavaScript-fatal marker. |
-| `3a1b9d40-06b7-4e1f-99d0-5839e6154eab` | `production` | `d6a95ed5` | Successful App Store archive version `1.0.0 (4)`. Inspection passed bundle/team identity, arm64, signature, production APNs, Associated Domains, Firebase-file presence, privacy manifest, opaque icons, and required background modes. The Xcode log records dSYM generation; EAS exposed no separate dSYM download artifact. |
+| `6d8e5193-ea75-490f-9451-759419a3e7b3` | `development-simulator` | `a9d6041922e41a6e722e430f9ecb144ea7e8e175` | Development-simulator build installed and launched successfully; route-level smoke remains unobserved and is required in final device proof. |
+| `a729aa9a-1a98-439c-8c81-48c381735d8d` | `production` | `a9d6041922e41a6e722e430f9ecb144ea7e8e175` | Final-source production archive version `1.0.0 (6)`. Archive metadata confirms build version/channel/commit and completed build fingerprint. |
 
 Final internal TestFlight submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28`
 succeeded for that exact build. Apple reports processing state `VALID`, the build is
@@ -185,7 +182,7 @@ folders remain uncommitted.
 
 ## Validation
 
-Local Node 20 results at tested application source `d6a95ed5`:
+Local Node 20 results at tested application source `a9d6041922e41a6e722e430f9ecb144ea7e8e175`:
 
 | Diagnostic | Result |
 | --- | --- |
@@ -216,7 +213,7 @@ Exact required GitHub check names:
 - `Phase 1 / Android Regression Guards`
 - `Phase 1 / Expo Doctor`
 
-All seven passed remotely for `d6a95ed5`.
+All seven passed remotely for `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
 
 Dependency audit status: the root mobile production graph contains 0 critical, 0
 high, 21 moderate, and 1 low advisory. The independently locked alert-automation
@@ -247,9 +244,7 @@ At this checkpoint:
 
 - no merge occurred;
 - no public App Store release or external TestFlight distribution occurred;
-- two exact production builds were uploaded only to `Chillywood Internal`; build 4
-  supersedes build 3 after the patch-only audit correction. No external tester or
-  public release was enabled;
+- one internal production build candidate was uploaded only to `Chillywood Internal` at `a729aa9a-1a98-439c-8c81-48c381735d8d`; `build 6` supersedes earlier candidates after the patch-only audit correction. No external tester or public release was enabled;
 - no production OTA was published;
 - no live money, payable balance, payout, cash-out, withdrawal, or transfer was
   enabled;

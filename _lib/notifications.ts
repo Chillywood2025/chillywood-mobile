@@ -1436,8 +1436,8 @@ export type ForegroundActivityNotification = {
 const NOTIFICATION_INSTALL_ID_STORAGE_KEY = "chillywood.notification.install_id.v1";
 const IOS_ACTIVITY_NOTIFICATION_CATEGORY_ID = "chillywood_activity";
 const IOS_MISSED_CALL_NOTIFICATION_CATEGORY_ID = "chillywood_missed_call";
-const IOS_ORDINARY_PUSH_DELIVERY_ENABLED = String(
-  process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_DELIVERY_ENABLED ?? "",
+const IOS_ORDINARY_PUSH_ENABLED = String(
+  process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED ?? "",
 ).trim().toLowerCase() === "true";
 const handledNotificationResponseKeys = new Set<string>();
 
@@ -1603,7 +1603,7 @@ const pushPermissionAllowsRegistration = (state: PushPermissionState) => (
   state === "granted" || state === "provisional" || state === "ephemeral"
 );
 
-export const isIosOrdinaryPushDeliveryEnabled = () => IOS_ORDINARY_PUSH_DELIVERY_ENABLED;
+export const isIosOrdinaryPushEnabled = () => IOS_ORDINARY_PUSH_ENABLED;
 
 export async function readPushPermissionState(): Promise<PushPermissionState> {
   if (Platform.OS === "web") return "unsupported";
@@ -1828,7 +1828,7 @@ export async function readCurrentPushRegistration(): Promise<PushRegistrationSta
   const isRegistered = expoStatus.registered || fcmStatus.registered;
 
   if (isRegistered) {
-    const iosMessage = IOS_ORDINARY_PUSH_DELIVERY_ENABLED
+    const iosMessage = IOS_ORDINARY_PUSH_ENABLED
       ? "This iPhone is registered for Chi'llywood ordinary push alerts. In-app Activity is tied to your account and still works in the app."
       : "This iPhone is registered for ordinary push readiness. Delivery remains off until physical APNs proof is complete; in-app Activity still works.";
     return {
@@ -1896,7 +1896,7 @@ async function registerPushTokenWithBackend(input: {
   return {
     message: input.provider === "fcm"
       ? "This Android device is registered for native Chi'lly Chat call alerts."
-      : Platform.OS === "ios" && !IOS_ORDINARY_PUSH_DELIVERY_ENABLED
+      : Platform.OS === "ios" && !IOS_ORDINARY_PUSH_ENABLED
         ? "This iPhone is registered for ordinary push readiness; live iOS delivery remains off pending physical proof."
         : `This ${Platform.OS === "ios" ? "iPhone" : "Android device"} is registered for Chi'llywood notifications.`,
     permissionState: input.permissionStatus,
