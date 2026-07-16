@@ -8,6 +8,7 @@ const previewPath = path.join(repoRoot, ".github/workflows/ios-preview-build.yml
 const productionPath = path.join(repoRoot, ".github/workflows/ios-production-testflight.yml");
 const legacyPreviewPath = path.join(repoRoot, ".github/workflows/phase3a-manual-preview.yml");
 const easPath = path.join(repoRoot, "eas.json");
+const easIgnorePath = path.join(repoRoot, ".easignore");
 
 const fail = (message) => {
   console.error(`iOS release workflow guard failed: ${message}`);
@@ -23,6 +24,13 @@ const preview = read(previewPath);
 const production = read(productionPath);
 const legacyPreview = read(legacyPreviewPath);
 const eas = JSON.parse(read(easPath));
+const easIgnore = read(easIgnorePath);
+
+for (const pattern of ["/ios", "GoogleService-Info.plist"]) {
+  if (!easIgnore.split("\n").includes(pattern)) {
+    fail(`.easignore must exclude ${pattern} from EAS build uploads`);
+  }
+}
 
 const workflowSources = fs.readdirSync(workflowsDir)
   .filter((name) => /\.ya?ml$/u.test(name))
