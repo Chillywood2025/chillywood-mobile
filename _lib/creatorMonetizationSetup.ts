@@ -175,6 +175,7 @@ export const CREATOR_MONETIZATION_SETUP_POLICY = {
   withdrawalEnabled: false,
   transferEnabled: false,
   stripeAndroidDigitalCheckoutEnabled: false,
+  stripeIosDigitalCheckoutEnabled: false,
   payoutExecutionReadOnly: true,
   liveKitPublishGrantedByPayment: false,
   hostApprovalBypassedBySeatPass: false,

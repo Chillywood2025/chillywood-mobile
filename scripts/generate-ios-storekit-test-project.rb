@@ -12,9 +12,16 @@ canonical_configuration_path = File.join(
   repository_root,
   "config/ios/Chillywood.storekit"
 )
+selected_configuration_path = File.expand_path(
+  ENV.fetch("CHILLYWOOD_STOREKIT_CONFIG", canonical_configuration_path)
+)
+
+unless File.file?(selected_configuration_path) && File.readable?(selected_configuration_path)
+  abort("The selected StoreKit configuration is missing or unreadable")
+end
 
 FileUtils.mkdir_p(output_dir)
-FileUtils.cp(canonical_configuration_path, generated_configuration_path)
+FileUtils.cp(selected_configuration_path, generated_configuration_path)
 project = Xcodeproj::Project.new(project_path)
 
 host_target = project.new_target(
@@ -86,7 +93,7 @@ test_reference = sources.new_reference(
   )
 )
 configuration_reference = sources.new_reference(
-  File.join(repository_root, "config/ios/Chillywood.storekit")
+  selected_configuration_path
 )
 
 host_target.source_build_phase.add_file_reference(host_reference)
@@ -114,7 +121,7 @@ scheme.add_test_target(test_target)
 scheme.set_launch_target(host_target)
 scheme.save_as(project_path, "ChillywoodStoreKitHarness", true)
 
-# Keep the canonical StoreKit file active in the Run action, matching Apple's
+# Keep the selected StoreKit file active in the Run action, matching Apple's
 # documented Xcode setup. SKTestSession still receives the file directly, but
 # the scheme reference is required for end-to-end Product API testing and lets
 # Xcode synchronize the local StoreKit environment when the IDE/runtime works.

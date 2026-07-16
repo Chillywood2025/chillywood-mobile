@@ -67,7 +67,7 @@ assertIncludes(policy, "Refund eligible before room entry/use", "ticket refund b
 assertIncludes(policy, "buyer has not entered/attended before cutoff", "event refund before attendance");
 assertIncludes(policy, "Seat pass grants eligibility only; host approval and LiveKit token rules still win.", "seat pass host approval rule");
 assertIncludes(policy, "Refund/return to original payment method", "merch original payment/return policy");
-assertIncludes(policy, "Stripe/merch provider is separate from Android digital goods.", "merch provider separation");
+assertIncludes(policy, "Stripe/merch provider is separate from in-app digital goods billing.", "merch provider separation");
 assertIncludes(policy, "No cash-out, withdrawal, payable balance, or real payout is active.", "payout readiness setup only");
 
 assertIncludes(migration, '"cash_equivalent" = false and "transferable" = false and "withdrawable" = false and "payable" = false', "credits non-cash/non-transferable/non-withdrawable");

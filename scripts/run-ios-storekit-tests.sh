@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-STOREKIT_CONFIG="$ROOT_DIR/config/ios/Chillywood.storekit"
+STOREKIT_CONFIG="${CHILLYWOOD_STOREKIT_CONFIG:-$ROOT_DIR/config/ios/Chillywood.storekit}"
 
-if [[ ! -f "$STOREKIT_CONFIG" ]]; then
-  echo "Missing canonical StoreKit configuration"
+if [[ ! -f "$STOREKIT_CONFIG" || ! -r "$STOREKIT_CONFIG" ]]; then
+  echo "The selected StoreKit configuration is missing or unreadable"
   exit 1
 fi
 
@@ -42,7 +42,7 @@ GENERATED_SCHEME="$GENERATED_PROJECT/xcshareddata/xcschemes/ChillywoodStoreKitHa
 GENERATED_CONFIG="$DERIVED_DATA/project/Chillywood.storekit"
 
 if ! cmp -s "$STOREKIT_CONFIG" "$GENERATED_CONFIG"; then
-  echo "Generated StoreKit configuration does not match the canonical catalog"
+  echo "Generated StoreKit configuration does not match the selected catalog"
   exit 1
 fi
 

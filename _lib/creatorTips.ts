@@ -263,6 +263,22 @@ export async function createCreatorTipCheckout(input: {
   returnUrl: string;
   cancelUrl: string;
 }): Promise<CreatorTipCheckoutResult> {
+  if (Platform.OS === "ios") {
+    return {
+      status: "ios_app_store_required",
+      provider: "revenuecat",
+      providerKey: "revenuecat_app_store",
+      mode: "test",
+      checkoutCreated: false,
+      liveMoneyAction: false,
+      noAccessGranted: true,
+      pureContributionOnly: true,
+      tipId: null,
+      url: null,
+      message: "Use the finite App Store tip flow on iOS. No Stripe checkout was created.",
+    };
+  }
+
   const { data, error } = await creatorTipsClient.functions.invoke("create-creator-tip-checkout", {
     body: {
       amount_cents: input.amountCents,

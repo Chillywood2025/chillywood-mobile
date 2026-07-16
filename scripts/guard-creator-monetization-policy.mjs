@@ -78,6 +78,7 @@ assertNotIncludes(creatorMonetization, "499", "no $4.99 cap in creator monetizat
 assertIncludes(creatorMonetizationSetup, "APPROVED_CREATOR_SANDBOX_TIERS", "approved creator sandbox tiers");
 assertIncludes(creatorMonetizationSetup, "arbitraryAndroidPricesAllowed: false", "no arbitrary Android prices");
 assertIncludes(creatorMonetizationSetup, "stripeAndroidDigitalCheckoutEnabled: false", "no Stripe Android digital checkout");
+assertIncludes(creatorMonetizationSetup, "stripeIosDigitalCheckoutEnabled: false", "no Stripe iOS digital checkout");
 assertIncludes(creatorMonetizationSetup, "payoutExecutionReadOnly: true", "payout readiness read-only");
 assertIncludes(creatorMonetizationSetup, "liveKitPublishGrantedByPayment: false", "payment cannot grant LiveKit publish");
 assertIncludes(creatorMonetizationSetup, "hostApprovalBypassedBySeatPass: false", "seat pass cannot bypass host approval");

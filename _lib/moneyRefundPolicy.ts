@@ -257,7 +257,7 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
     creditFirst: false,
     userCopy: "Merch is a physical product only and unlocks no digital access.",
     creatorCopy: "Creator settlement is held until fulfillment and return/refund windows clear.",
-    adminCopy: "Stripe/merch provider is separate from Android digital goods.",
+    adminCopy: "Stripe/merch provider is separate from in-app digital goods billing.",
   },
   payout_readiness: {
     key: "payout_readiness",
