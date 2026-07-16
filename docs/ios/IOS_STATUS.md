@@ -2,227 +2,257 @@
 
 Checkpoint date: 2026-07-15
 
-Overall verdict: **Partial — the signed physical-device foundation remains verified, physical camera/microphone/Photos proof is in progress, true two-party LiveKit media is `BLOCKED_SECOND_DEVICE`, and all required Phase 1 checks are green for this integration branch.**
+Overall verdict: **Partial — repository integration, backend deployment, Firebase,
+Apple provider setup, final-source Simulator and production builds, archive
+inspection, and internal TestFlight upload are verified. The 90% claim remains
+blocked only by RevenueCat Apple app-configuration permission and provider setup;
+the physical/owner-attestation matrix remains intentionally unclaimed.**
 
-## Current checkpoint
+## Repository and pull-request state
 
-| Area | Status | Evidence / next gate |
+| Item | Current state |
+| --- | --- |
+| Integration branch | `codex/ios-integration-90` |
+| Tested application source | `d6a95ed5` |
+| Screenshot-only follow-up | `a4ab1d49` |
+| Release-workflow portability fix | `f7af588d` |
+| Critical transitive advisory patch | `d6a95ed5` (`websocket-driver` 0.7.5 lockfile-only) |
+| Stacked integration PR | [#10](https://github.com/Chillywood2025/chillywood-mobile/pull/10), open, draft, base `codex/ios-first-development-build` |
+| Foundation branch | `codex/ios-first-development-build` at `a85fa0f42cf9b1a20f761c8817b0713fe27e43bd` |
+| Foundation PR | [#9](https://github.com/Chillywood2025/chillywood-mobile/pull/9), open, draft, unmerged |
+| Superseded PR | [#8](https://github.com/Chillywood2025/chillywood-mobile/pull/8), verified empty and closed |
+| Unrelated local state | `deno.lock` remains untracked and is excluded from this work |
+
+No PR has been merged. All seven separated Phase 1 checks passed at final
+application source `d6a95ed5`.
+
+## Current integration status
+
+| Area | Status | Evidence / boundary |
 | --- | --- | --- |
-| Mac toolchain | Verified | Xcode 26.5, iOS 26.5 simulators, CocoaPods 1.17.0, Node 20, EAS CLI, and the Expo project link are working. One physical iPhone is paired over USB with Developer Mode enabled; its name and identifiers are intentionally omitted. |
-| Stable iOS identity | Configured | The resolved iOS bundle identifier is `com.chillywood.mobile`; the Apple Team contract is configured without inventing an App Store Connect numeric app ID. |
-| Firebase iOS app | Registered | One Apple/iOS app exists in the existing Chi'llywood Firebase project for the exact bundle identifier. The downloaded plist is owner-local, outside Git, and restricted to the owner account. Android Firebase configuration was not changed. |
-| EAS Firebase file variable | Configured | `IOS_GOOGLE_SERVICES_FILE` is a secret EAS File variable assigned to development, preview, and production. Only the development environment is authorized for this checkpoint. No plist contents or file download URL are recorded. |
-| Apple App ID | Registered by EAS | The explicit App ID exists for the bundle identifier. Associated Domains and Push Notifications capabilities were synchronized, but website association and working production push are not claimed. |
-| Signing certificate | EAS-managed | One Apple Distribution certificate exists and expires July 14, 2027. No private key or certificate material was downloaded, printed, or committed. |
-| Development provisioning | Active for one device | EAS created an ad hoc development provisioning profile that includes the one owner-authorized physical iPhone and expires July 14, 2027. Credential files and device/profile identifiers are intentionally omitted. |
-| Simulator development build | Successful; installed and smoke tested | EAS build `ddc48433-d29d-4a83-a847-0d8908e2da63` finished for version `1.0.0` build `1` from source commit `2ea49f421b1e1abbcd0889b273b0908b04aea2a4`. It was installed with owner authorization on an iPhone 17 Pro Simulator running iOS 26.5, and the bounded matrix below passed. |
-| Physical development build | Successful; installed and smoke tested | EAS build `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` finished for version `1.0.0` build `1` from source commit `5c5fa023cc8ac8532fd0abe76c6199d0a769788d`. It was installed on the registered iPhone, launched, and completed the bounded proof below. |
-| Physical camera / microphone / Photos | In progress | Results are recorded without private media or account/device identifiers in the [physical media proof](./IOS_PHYSICAL_MEDIA_PROOF.md); unexecuted checks are not claimed. |
-| Two-device LiveKit | `BLOCKED_SECOND_DEVICE` | Native startup is verified, but one approved physical client cannot prove bidirectional audio/video. No entitlement, purchase, or publishing-policy bypass is authorized. |
-| PR CI separation | Implemented | Seven independent Node 20 diagnostics now run. TypeScript, Runtime Validation, Route Contracts, iOS Configuration, Android Regression Guards, Repository Lint, and Expo Doctor pass. |
-| TestFlight/App Store | Not started | No upload or submission occurred. A real `ascAppId` must come from an owner-created App Store Connect record in a later phase. |
-| RevenueCat iOS | Later purchase-testing phase | Missing iOS RevenueCat configuration does not block this no-purchase development build. No products, purchases, payouts, or production money were enabled. |
-| APNs / CallKit / PushKit | Later feature phases | No APNs key, production iOS push delivery, CallKit, PushKit, or native incoming-call integration is claimed. |
-| App Privacy / screenshots | Later submission phases | App Privacy answers, screenshots, and store metadata remain pending. |
-| Android regression protection | Passed | Android package remains `com.chillywood.mobile`; Android Firebase, EAS production app-bundle, and submit behavior remain unchanged and are protected by `guard:ios-config-policy`. |
+| iOS identity | Configured | Bundle ID `com.chillywood.mobile`, Team ID `CU7536UQK9`, version `1.0.0`, tablet support and existing orientation/new-architecture/static-framework behavior preserved. |
+| Firebase | Configured | Firebase Apple app exists for the exact bundle ID. `IOS_GOOGLE_SERVICES_FILE` is an EAS File secret in development, preview, and production. The plist is not in Git and was never printed. |
+| App Store Connect app | Created | Chi'llywood app record exists with numeric app ID `6791217176`. No public release has been configured. |
+| Apple product catalog | Created, sandbox/internal only | 2 Premium subscriptions and 8 consumables exist with localization, price, and USA availability. The App Store purchase switch remains off. |
+| EAS signing | Configured | Development and App Store credentials are EAS-managed. The distribution certificate is valid through July 14, 2027, and the active App Store profile was regenerated without exporting credential material. One owner-authorized iPhone remains registered. |
+| EAS submit | Configured and verified | Production iOS submit profile uses the real numeric app ID. Exact build submission succeeded; no `--latest`, auto-submit, external group, or public release path was used. |
+| APNs credentials | Configured, delivery unproven | EAS has an ordinary APNs credential. A separate VoIP APNs key is stored only as Supabase secrets. Both ordinary iOS rollout and VoIP dispatch remain off. |
+| Universal Links | Source and hosted deployment pass | Associated Domains is present. Canonical AASA is deployed with HTTP 200, no redirect, JSON content type, and matching source. Android App Links are preserved. |
+| Supabase Auth redirects | Configured | The custom scheme and required HTTPS authentication routes are configured. Signed physical Universal Link proof remains pending. |
+| Ordinary iOS push | Source and backend deployed; rollout off | Client registration, permission states, categories, badge/response handling, and platform-aware payload source exist. Updated dispatch functions are active. Physical APNs delivery is not claimed. |
+| Native calls | Source compiles; backend deployed; rollout off | Swift CallKit/PushKit/AVAudioSession module, Expo plugin, JS bridge, VoIP token lifecycle, and APNs sender compile in the final-source EAS build. VoIP token/dispatch functions are active; runtime-visible calls and server dispatch remain disabled. |
+| Commerce policy | Source and additive schema deployed; Apple rail off | Apple/Google providers are distinct, ten sandbox mappings are deployed, Google base plans remain Google-only, and tips/purchases cannot grant media authority or payable value. |
+| RevenueCat Apple | **Blocked by provider permission** | Current RevenueCat account cannot create app configurations. Apple app import, entitlements/offering, SDK key, and webhook are not claimed. |
+| Privacy manifest | Source and generated prebuild pass | Canonical manifest is wired through Expo, tracking is false, and clean iOS output contains the manifest. Final archive inspection is pending. |
+| Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
+| Release automation | Prepared and manually verified | `ios-preview` and `ios-production` protected environments exist. Workflows are manual, validate first, pin EAS CLI 21.0.1, freeze production credentials, require an exact build ID, and bind the verified internal group. |
+| Backend deployment | Verified, fail-closed | Three additive migrations and six Edge Functions are deployed after restricted local backup. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
+| Final-source Simulator | Pass | EAS build `da3e6e33-fd7a-4ed2-88fb-881d2df6ef7c` finished from `d6a95ed5`, installed on iOS 26.5, and reached splash/sign-in without a native crash after the initial cold Metro bundle completed. Current-build authentication was not exercised and is not claimed. |
+| Production build / TestFlight | Pass: internal only | Production build `3a1b9d40-06b7-4e1f-99d0-5839e6154eab`, version `1.0.0 (4)`, finished from `d6a95ed5`. EAS submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28` uploaded it; Apple processing is `VALID`, the build is assigned only to `Chillywood Internal`, and bounded internal testing notes are configured. Build 4 supersedes internal build 3. |
 
-## Development build history
+## Deployed backend inventory
 
-| Build | Source commit | Result | Sanitized root cause |
+Restricted backups exist outside Git under the owner-only Chi'llywood configuration
+directory. All database changes were additive and backward-compatible.
+
+Migrations:
+
+- `20260715150522_ios_voip_push_token_foundation`;
+- `20260715151250_ios_app_store_mappings`; and
+- `20260715174500_ios_app_store_purchase_intents`.
+
+Active Edge Functions:
+
+- `notification-device-tokens` v49;
+- `notification-dispatch` v49;
+- `chilly-chat-call-dispatch` v33;
+- `revenuecat-webhook` v69;
+- `ios-voip-push-tokens` v1; and
+- `ios-voip-call-dispatch` v1.
+
+Ten App Store sandbox mappings exist. Ordinary push delivery, VoIP dispatch,
+RevenueCat App Store purchase access, live money, payouts, and cash-out remain off.
+
+## Safety switches
+
+The following are intentionally fail-closed:
+
+- `EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED=false`;
+- `IOS_VOIP_PUSH_DISPATCH_ENABLED=false`;
+- `EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED=false`;
+- `EXPO_PUBLIC_IOS_ORDINARY_PUSH_DELIVERY_ENABLED=false`;
+- `IOS_ORDINARY_PUSH_ROLLOUT_ENABLED=false`;
+- `EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED=false`;
+- the server-side App Store purchase rail defaults off;
+- live money is off;
+- payouts, cash-out, withdrawals, transfers, and payable balances are off; and
+- no production-visible iOS native call control is enabled.
+
+`IOS_NATIVE_CALLS_ENABLED` may include the native capability in an internal build;
+that build-time capability does not override the runtime and server rollout
+switches.
+
+## Implemented source and infrastructure
+
+### Media readiness
+
+- Camera, microphone, and Photos permission states cover undetermined, granted,
+  denied, restricted where exposed, and Settings recovery.
+- The picker is item-scoped; cancellation is non-error behavior and no Photos
+  write usage description was added.
+- HEIC/HEIF selection is normalized for upload without committing private media.
+- Local media teardown covers room leave, unmount, app lifecycle, and sign-out.
+- LiveKit audio route/reconnect behavior and a bounded two-client harness exist.
+- These are source/simulator readiness claims, not physical proof.
+
+### Links and routing
+
+- One canonical parser handles HTTPS Universal Links, the custom scheme, and
+  notification routes.
+- AASA routes cover authentication, profile/channel, title/player, spectate, and
+  watch-party paths without an unrestricted wildcard.
+- Hosted AASA verification passes and Android App Links remain unchanged.
+
+### Notifications and native calls
+
+- Platform-neutral push APIs keep deprecated Android aliases temporarily.
+- iOS ordinary tokens are registered as `platform=ios`, `provider=expo`, never as
+  FCM tokens.
+- Android payloads retain `channelId`; iOS payloads omit Android-only fields.
+- Token dedupe, preferences, delivery attempts, receipt handling, and invalid-token
+  revocation remain in policy.
+- VoIP tokens are separate from ordinary tokens and use server-owned storage,
+  authentication, RLS, rate limits, hash/fingerprint metadata, and revocation.
+- CallKit/PushKit source handles answer, decline, end, cancel, timeout, missed call,
+  cold-start transfer, audio session lifecycle, duplicate protection, and cleanup.
+- Actual APNs and two-iPhone call proof remain in the final device matrix.
+
+### Commerce
+
+- Providers are explicit: `revenuecat_google_play` and
+  `revenuecat_app_store`.
+- Existing Android/Google values and parsing are preserved.
+- Apple mapping uses exact product IDs; Google base-plan parsing is not applied to
+  Apple events.
+- The finite catalog supports Premium, four tip tiers, and four bounded Seat Pass
+  tiers. Dynamic paid videos, general event passes, VIP, and channel subscriptions
+  remain disabled on iOS rather than creating arbitrary permanent IDs.
+- Tips never unlock access. Purchases never grant LiveKit host/publish/admin
+  authority and never create a payable creator balance while money switches are
+  off.
+- Local StoreKit configuration mirrors the ten-product manifest, but provider-backed
+  purchase, restore, refund, and revocation proof remains pending.
+
+## Build evidence
+
+Historical foundation artifacts remain valid evidence for the source that created
+them, not for the current integration branch:
+
+| Build | Profile | Source | Result / scope |
 | --- | --- | --- | --- |
-| `499fa422-585d-4e4d-bc6e-4f1ffd4de68f` | `4a35854d4add574e31a6d4f481d92b30b3f43aa0` | Failed; no artifact | LiveKit WebRTC non-modular React headers were promoted to framework-module compiler errors under static frameworks. |
-| `19098726-3354-4926-97fd-52ad1a1edafe` | `52988bf73a87a11b8355ad36cdd9e60ba92e620b` | Failed; no artifact | The first target-scoped CocoaPods compatibility setting did not suppress the Clang diagnostic. |
-| `8e3c458f-5a73-45ba-a506-03555ad07123` | `6ee796982aa5d618c7c8c008dec6344d9249d1e0` | Failed; no artifact | WebRTC compiled, but its framework module was later precompiled by the `livekit-react-native` consumer without the same target-scoped diagnostic suppression. |
-| `fbf58035-e5d1-481c-83bc-23e161612780` | `2753b3227744ad75edbeef3f35ff94ac3f7b7228` | Failed; no artifact | LiveKit compiled, then `RNFBApp` hit the same prebuilt-Core/static-framework module boundary. |
-| `ddc48433-d29d-4a83-a847-0d8908e2da63` | `2ea49f421b1e1abbcd0889b273b0908b04aea2a4` | **Finished; artifact available** | All installed React Native Firebase modules use the Expo 54 `forceStaticLinking` contract; the complete remote Simulator build passed. |
-| `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | **Finished; artifact available** | The owner-registered physical iPhone was included in a fresh ad hoc profile and the `development` build completed. Push credential setup was declined. |
+| `ddc48433-d29d-4a83-a847-0d8908e2da63` | `development-simulator` | `2ea49f421b1e1abbcd0889b273b0908b04aea2a4` | Successful Simulator artifact and bounded smoke proof. |
+| `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `development` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | Successful signed physical build; install, launch, Firebase startup, authentication, persistence, navigation, and sign-out passed. |
 
-Simulator history used the `development-simulator` profile; the owner-authorized physical proof used only the `development` profile. No preview, production, submission, or OTA command was run.
+The integration branch contains application, native, Expo, dependency, plugin,
+workflow, and backend changes after those commits. Therefore neither historical
+artifact is final-source proof and a fresh Simulator build plus production archive
+are required.
 
-## Simulator installation and smoke proof
+| `98ad48a2-562b-4a66-bf79-2bdcbe875a3a` | `development-simulator` | `b65ab225` | Successful pre-advisory-refresh Simulator evidence, superseded by the final-source build below. |
+| `012edf86-b525-4dee-b9bc-ff23a8281c93` | `production` | `b65ab225` | Successful internal build `1.0.0 (3)`, superseded after the audit feed exposed a patchable transitive critical advisory. It was never external or public. |
+| `da3e6e33-fd7a-4ed2-88fb-881d2df6ef7c` | `development-simulator` | `d6a95ed5` | Successful final-source EAS native build. Installed on an iPhone 17 Pro Simulator running iOS 26.5; cached reload reached signed-out sign-in with no Firebase, RNFirebase, LiveKit, RevenueCat, module-resolution, or JavaScript-fatal marker. |
+| `3a1b9d40-06b7-4e1f-99d0-5839e6154eab` | `production` | `d6a95ed5` | Successful App Store archive version `1.0.0 (4)`. Inspection passed bundle/team identity, arm64, signature, production APNs, Associated Domains, Firebase-file presence, privacy manifest, opaque icons, and required background modes. The Xcode log records dSYM generation; EAS exposed no separate dSYM download artifact. |
 
-The installed application/native source is commit `2ea49f421b1e1abbcd0889b273b0908b04aea2a4`. Before installation, the exact comparison from that source to the then-current branch HEAD `4ba1fa93ce8e08e5bb52670f52f5803e03afd8ff` contained only this documentation file (13 changed lines); no application, Expo, EAS, native, Firebase, dependency, plugin, or workflow file changed. A rebuild was therefore not required.
+Final internal TestFlight submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28`
+succeeded for that exact build. Apple reports processing state `VALID`, the build is
+assigned to `Chillywood Internal`, and the bounded testing note states that push,
+native incoming calls, purchases, payouts, and live money remain disabled. This is
+not external testing or public release.
 
-The owner-approved `eas build:run --platform ios --id ddc48433-d29d-4a83-a847-0d8908e2da63` download completed, but its macOS System Events process check timed out before installation. The same approved artifact was then installed with `simctl` after verifying only its bundle identifier and version metadata. No private artifact URL was printed or recorded.
-
-Test target:
-
-- device: iPhone 17 Pro Simulator;
-- runtime: iOS 26.5;
-- application: `1.0.0` build `1`;
-- bundle identifier: `com.chillywood.mobile`;
-- EAS build: `ddc48433-d29d-4a83-a847-0d8908e2da63`; and
-- application source: `2ea49f421b1e1abbcd0889b273b0908b04aea2a4`.
-
-| # | Smoke check | Result | Sanitized evidence |
-| ---: | --- | --- | --- |
-| 1 | Application installs | Pass | `simctl` reported a successful install of the approved EAS artifact. |
-| 2 | Application launches without a native crash | Pass | Bundle launch succeeded; the process stayed alive throughout the bounded matrix. |
-| 3 | Splash screen resolves | Pass | The development bundle loaded and reached the sign-in UI. |
-| 4 | Firebase default app initializes | Pass | Native Firebase activity was present; no default-app/configuration error appeared in sanitized simulator logs. |
-| 5 | RNFirebase modules are present | Pass | No missing RNFirebase or native-module error appeared during launch or navigation. |
-| 6 | LiveKit native foundation loads | Pass | The startup bootstrap ran without a `livekit-bootstrap`, missing-module, or initialization error. This is not physical LiveKit media proof. |
-| 7 | Unconfigured RevenueCat does not crash | Pass | Launch and navigation remained stable; Premium purchase status stayed unavailable and no RevenueCat crash marker appeared. |
-| 8 | Unsupported iOS push does not loop or crash | Pass | Settings reported push as unsupported/physical-device-only; no repeated-failure or crash marker appeared. |
-| 9 | Sign-in screen opens | Pass | Email, password, and submit controls rendered. |
-| 10 | Bounded test account signs in | Pass | The dedicated normal test account reached authenticated Home; no credential value is recorded here. |
-| 11 | Session persists after relaunch | Pass | Terminate/relaunch without clearing application data returned to authenticated Home. |
-| 12 | Sign-out works | Pass | Settings logout returned to the sign-in controls. |
-| 13 | Home opens | Pass | Authenticated Home rendered. |
-| 14 | Explore opens | Pass | Explore search rendered. |
-| 15 | Live opens | Pass | Live and its informational control rendered without a native initialization failure. |
-| 16 | Saved / Library opens | Pass | My Library rendered. |
-| 17 | Profile opens | Pass | The dedicated tester profile rendered. |
-| 18 | Settings opens | Pass | Account, notification, and Premium status surfaces rendered. |
-| 19 | Chat list opens | Pass | Chat inbox and search rendered. |
-| 20 | Normal title/player route opens | Pass | A known valid player route rendered without title-not-found or load-failure state. |
-| 21 | Public profile / channel opens | Pass | The public Platform surface and handle rendered from the profile preview action. |
-| 22 | Privacy / legal opens | Pass | Privacy Policy and Account Deletion and Data Deletion Policy rendered. |
-| 23 | Support opens | Pass | Bug, safety, and help entry controls rendered; none was submitted. |
-| 24 | Account deletion controls are visible | Pass | Delete Account and logout controls rendered; deletion was not executed. |
-| 25 | Android full-screen call controls are not offered as working iOS controls | Pass | The status identified the capability as Android-only and no Android call-settings action was exposed. |
-| 26 | iOS push remains honestly unavailable | Pass | The UI states that push requires a physical mobile device. |
-| 27 | Native iOS calls remain disabled | Pass | No CallKit/PushKit or native iOS call control was enabled or claimed. |
-| 28 | Purchases remain disabled / fail closed | Pass | Premium is not active and Purchase status is `Temporarily unavailable`; no purchase was attempted. |
-| 29 | No Google Play-only wording is presented as an applicable iOS purchase action | Pass | The inspected iOS Premium status surface contained no Google Play purchase wording or active purchase CTA. Android-only call copy was explicitly labeled as Android-only. |
-
-Sanitized final log classification: zero native-crash markers, zero JavaScript-fatal markers, zero Firebase default-app errors, zero missing-native-module errors, zero LiveKit bootstrap errors, zero RevenueCat crash markers, and zero push-loop markers. The macOS automation timeout above was an installer-driver issue, not an application failure.
-
-This simulator proof is **not** APNs delivery, StoreKit, PushKit, CallKit, physical-device signing, camera/microphone, or physical LiveKit media proof. Those require a registered physical iPhone or iPad and separately authorized phases.
-
-## Physical-device installation and smoke proof
-
-The owner registered and authorized one physical iPhone, trusted this Mac, and enabled Developer Mode. EAS then created the minimum ad hoc profile needed for the device and completed the `development` build. EAS offered optional push-notification credential setup and it was explicitly declined.
-
-Sanitized test target:
-
-- device: registered physical iPhone; model, name, and UDID omitted;
-- runtime: iOS 26.5.2;
-- application: `1.0.0` build `1`;
-- bundle identifier: `com.chillywood.mobile`;
-- EAS build: `343b3b6a-53d3-49b2-bed0-57b6f25c23fa`;
-- application source: `5c5fa023cc8ac8532fd0abe76c6199d0a769788d`; and
-- provisioning: one enabled development device included.
-
-The signed artifact was downloaded without exposing its private URL, installed over the trusted wired connection, and launched as an Expo development client through a local Metro tunnel. The owner entered sign-in credentials only on the phone and supplied the UI observations below; credentials and account identifiers were not captured.
-
-| Smoke check | Result | Sanitized evidence |
-| --- | --- | --- |
-| Application installs | Pass | The wired device installer reported success for the expected bundle identifier and version. |
-| Native launch and splash resolution | Pass | Launch succeeded, the development bundle completed, and the sign-in screen rendered without a native crash. |
-| Firebase default app | Pass, bounded | No default-app or Firebase configuration error appeared in the sanitized launch logs. This does not expose or independently parse the plist. |
-| RNFirebase native modules | Pass, bounded | No missing-native-module error appeared during launch or the walkthrough. |
-| LiveKit native foundation | Pass, startup only | Startup completed without a LiveKit bootstrap or initialization crash. No two-party audio/video session was attempted. |
-| RevenueCat absent/unconfigured | Pass, fail-closed | Launch, authentication, and navigation did not crash. No purchase was attempted or enabled. |
-| Unsupported iOS push | Pass, fail-closed | No registration loop or launch crash appeared. APNs registration and delivery were not enabled or tested. |
-| Sign-in | Pass | The owner privately entered the existing bounded test credentials and authenticated Home rendered. |
-| Session persistence | Pass | After remote terminate/relaunch without clearing data, the app returned to Home without another sign-in; the owner explicitly confirmed this result. |
-| Sign-out | Pass | As the final session action, the owner signed out and confirmed that the sign-in screen returned. No account data was deleted. |
-| Primary navigation | Pass, owner-observed | The owner confirmed Home, Explore, Live, Saved/My Library, Profile, Settings, and the chat list all opened. |
-| Content navigation | Pass, owner-observed | The owner confirmed a normal title/player route and a public profile/channel route opened. This proves route rendering, not every backend/media operation. |
-| Legal and support | Pass, owner-observed | The owner confirmed privacy/legal, support, and other requested navigation surfaces opened. |
-| Account-deletion surface | Not independently re-verified; not executed | The physical walkthrough covered Settings, but visibility of the deletion control was not separately recorded. The earlier Simulator proof remains the visibility evidence; deletion was not invoked. |
-| Native iOS calls | Disabled | No CallKit, PushKit, or working native incoming-call control was enabled or claimed. |
-| Purchases and money | Disabled / fail-closed | RevenueCat purchases, Premium, payouts, cash-out, and live money remained disabled; no transaction action was attempted. |
-| Platform-specific wording | Existing proof retained | The earlier Simulator UI proof and iOS policy guard found no active Google Play purchase action presented as applicable to iOS; wording was not separately re-audited on the physical device. |
-
-Sanitized launch-log classification: zero native/JavaScript fatal markers, zero Firebase default-app errors, zero missing-native-module errors, zero LiveKit bootstrap errors, zero RevenueCat crash markers, zero push-loop markers, and zero bundler errors during the bounded observation window.
-
-This physical-device proof is **not** APNs registration/delivery, StoreKit/RevenueCat purchase proof, PushKit, CallKit, camera/microphone/photo-picker proof, Universal Links verification, or two-party physical LiveKit media proof. It also does not authorize TestFlight, App Store, preview, or production work.
-
-## Physical media proof
-
-The bounded physical camera, microphone, Photos, and LiveKit matrix is maintained in [IOS_PHYSICAL_MEDIA_PROOF.md](./IOS_PHYSICAL_MEDIA_PROOF.md). Only directly observed results may be marked `PASS`.
-
-The installed signed build remains valid for this phase: its application source is `5c5fa023cc8ac8532fd0abe76c6199d0a769788d`, and subsequent branch changes are documentation and pull-request workflow changes only. No application/native/configuration change occurred, so no replacement EAS build was required.
-
-True two-party LiveKit media remains `BLOCKED_SECOND_DEVICE` while only one approved physical client is available. Native LiveKit startup or a local track must not be represented as bidirectional media proof.
+Clean final-source iOS prebuild and CocoaPods generation pass. The EAS Simulator
+build supplies terminal native Swift/Pods compile evidence; a separate slow local
+Xcode compile was stopped and is not represented as a pass. Clean Android prebuild
+passed at `63431991`: package identity, Firebase, FCM service, adaptive icon, App
+Links, EAS sections, and provider behavior remained unchanged. Generated native
+folders remain uncommitted.
 
 ## Validation
 
-Passed on Node 20:
+Local Node 20 results at tested application source `d6a95ed5`:
 
-- `npm ci`;
-- standalone `npx tsc --noEmit`;
-- `npm run validate:runtime`;
-- `npm run guard:route-contracts`;
-- `npm run guard:ios-config-policy`;
-- `npm run proof:ios-config`;
-- targeted lint for the iOS config, guard, and compatibility plugin;
-- Expo public-configuration resolution without printing the resolved configuration;
-- generated Podfile Ruby syntax and idempotence checks; and
-- local Xcode iOS Simulator compiles of the LiveKit WebRTC and LiveKit consumer pods with compatibility settings scoped to those targets;
-- static-library generation for every installed React Native Firebase pod; and
-- a complete unsigned local Xcode build of the generated `Chillywood` Simulator workspace before the successful EAS retry.
-
-PR #9 now reports seven independent diagnostics without weakening or suppressing a check:
-
-| Exact GitHub check | Result |
+| Diagnostic | Result |
 | --- | --- |
-| `Phase 1 / Repository Lint` | Passes. |
-| `Phase 1 / TypeScript` | Passes after the job installs the locked nested `ops/alert-automation` dependencies before running `npx tsc --noEmit`. |
-| `Phase 1 / Runtime Validation` | Passes. |
-| `Phase 1 / Route Contracts` | Passes. |
-| `Phase 1 / iOS Configuration` | Passes. |
-| `Phase 1 / Android Regression Guards` | Passes. |
-| `Phase 1 / Expo Doctor` | Passes. |
+| `npm ci` | Pass |
+| `npm run lint` | Pass: 0 errors, 87 warnings; warnings remain visible |
+| `npx tsc --noEmit` | Pass |
+| `npm run validate:runtime` | Pass |
+| Strict iOS runtime validation | Pass using only the secure file path; no plist value read or printed |
+| `npm run guard:route-contracts` | Pass |
+| `npm run guard:payment-rail-policy` | Pass |
+| `npm run guard:notification-room-call-policy` | Pass |
+| `npm run guard:watch-party-livekit` | Pass |
+| `npm run guard:old-room-handling` | Pass |
+| `npm run guard:ios-config-policy` | Pass |
+| `npm run proof:ios-config` | Pass |
+| AASA, commerce, media, push, native-call, VoIP, privacy, and release guards/proofs | Pass |
+| `npx expo-doctor` | Pass: 18/18 |
+| `git diff --check` | Pass |
+| Expo public config resolution | Pass; no resolved secret values recorded |
 
-The first clean TypeScript job exposed a CI-installation gap: root `npm ci` does not install the independently locked `ops/alert-automation` workspace dependencies. The workflow now performs a scoped locked install only in the TypeScript job. The corrected job passes without changing dependency versions, suppressing findings, or accessing production secrets.
+Exact required GitHub check names:
 
-The PR remains draft, open, and unmerged. Branch protection was not weakened.
+- `Phase 1 / Repository Lint`
+- `Phase 1 / TypeScript`
+- `Phase 1 / Runtime Validation`
+- `Phase 1 / Route Contracts`
+- `Phase 1 / iOS Configuration`
+- `Phase 1 / Android Regression Guards`
+- `Phase 1 / Expo Doctor`
 
-The required checks on this branch are currently green.
+All seven passed remotely for `d6a95ed5`.
 
-No dependency was modified and no automatic audit fix was run.
+Dependency audit status: the root mobile production graph contains 0 critical, 0
+high, 21 moderate, and 1 low advisory. The independently locked alert-automation
+package has a direct Nodemailer high advisory requiring a separate major-version
+remediation PR. A newly surfaced critical `websocket-driver` advisory was resolved
+with the supported 0.7.5 patch in the lockfile before the final builds. No
+automatic or forced audit fix ran.
 
-This phase includes a source push-policy correction (`no_enabled_push_token` replacing Android-only naming in Android/native call fallback paths), a guard update for the same, and new 90%-completion tracker docs. No application behavior for Android was changed, and no rebuild was required for already-issued physical artifacts.
+## Physical evidence and remaining proof
 
-## Owner interactions and next gates
+The historical signed iPhone build proved native launch, Firebase, sign-in, session
+persistence, primary navigation, and sign-out for its exact source. It did not prove
+the new integration source. Camera, microphone, Photos upload, two-device LiveKit,
+APNs, Universal Links, PushKit/CallKit, StoreKit lifecycle, accessibility, and final
+device regression remain explicitly unclaimed. See
+`IOS_FINAL_DEVICE_TEST_MATRIX.md`.
 
-Completed owner interactions:
+## Remaining provider gate and post-90 proof
 
-1. Authenticated Firebase CLI access to the existing Firebase project.
-2. Authenticated the EAS/Expo project session.
-3. Authenticated the Apple Developer credential workflow.
-4. Authorized the earlier iOS Simulator build and smoke proof.
-5. Authorized installation of the exact successful Simulator build and the bounded smoke proof documented above.
-6. Registered and trusted one physical iPhone, enabled Developer Mode, and completed the Apple device/profile interaction without sharing credentials.
-7. Authorized exactly one physical-device `development` build and its wired installation.
-8. Entered the bounded test account credentials privately on the phone and manually confirmed authentication, persistence, and navigation results.
-
-Remaining gates:
-
-1. Complete and record the authorized physical camera, microphone, and Photos matrix.
-2. Connect an approved second physical client before claiming bidirectional LiveKit media.
-3. Remediate the unchanged repository lint and Expo Doctor baselines in separate, reviewable work; do not suppress them here.
-4. Verify the `apple-app-site-association` file for Universal Links.
-5. Schedule RevenueCat/StoreKit, APNs/push, CallKit/PushKit, App Privacy, screenshots, preview, TestFlight, and App Store work as separate phases.
-
-## Rollback
-
-- Remove only the installed simulator copy with `xcrun simctl uninstall booted com.chillywood.mobile`; this does not revoke provider credentials or alter the repository.
-- Remove the installed physical-device app from the iPhone if the owner no longer wants the development client; do not revoke its device registration, certificate, or provisioning profile without explicit approval.
-- Stop the temporary local Metro tunnel after the bounded physical smoke session.
-- Revert the iOS foundation and LiveKit compatibility commits on this branch; do not rewrite `main`.
-- Delete the EAS `IOS_GOOGLE_SERVICES_FILE` variable only after confirming that no active build profile depends on it.
-- Revoke or delete Apple/Firebase/EAS credentials only through their provider dashboards and only with explicit owner approval.
-- Delete the owner-local Firebase plist if local Firebase configuration is no longer needed.
+1. Obtain RevenueCat app-configuration permission; then create/import the Apple
+   app/catalog, entitlement/offering, public iOS SDK key, and webhook.
+2. After the 90% provider gate closes, execute the separately defined final 10%
+   physical-device and owner-attestation matrix.
 
 ## Safety statement
 
 At this checkpoint:
 
-- no TestFlight or App Store submission occurred;
-- no preview or production EAS build occurred;
-- no EAS Update was published;
-- no Supabase migration or function was deployed;
-- no live money or purchases were enabled;
-- no native iOS calling feature was enabled;
-- no private credential value or Firebase plist content was printed or committed;
-- no provisioning profile or signed artifact URL was committed;
-- exactly one owner-authorized physical `development` build was started and installed; no preview or production build was started;
-- optional EAS push credential setup was explicitly declined, so no APNs credential was created in this phase;
-- no application rebuild was started because only CI and documentation changed;
-- true two-party LiveKit remains unclaimed while a second approved physical client is unavailable;
-- no physical screenshot, private media, account identifier, device identifier, room token, or private log was committed;
-- and no unrelated untracked file was staged.
+- no merge occurred;
+- no public App Store release or external TestFlight distribution occurred;
+- two exact production builds were uploaded only to `Chillywood Internal`; build 4
+  supersedes build 3 after the patch-only audit correction. No external tester or
+  public release was enabled;
+- no production OTA was published;
+- no live money, payable balance, payout, cash-out, withdrawal, or transfer was
+  enabled;
+- no production-visible native iOS call or push rollout was enabled;
+- no destructive migration was applied;
+- no Android provider value was removed and no Android release behavior was
+  intentionally changed;
+- no Apple/Firebase/EAS/RevenueCat private credential, repository secret, plist
+  content, profile, certificate, token, receipt, private media, or signed artifact
+  URL was committed or used. One OS process diagnostic exposed unrelated inherited
+  Brevo and Cloudflare credential values; they were not used or committed and must
+  be rotated; and
+- no unrelated file, including `deno.lock` or `supabase/.temp`, was staged.

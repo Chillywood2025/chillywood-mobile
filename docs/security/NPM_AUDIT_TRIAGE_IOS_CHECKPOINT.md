@@ -17,6 +17,16 @@ The Expo SDK 54 patch alignment and supported lockfile refresh removed every cri
 and high production advisory without a major framework upgrade or an automatic
 audit fix.
 
+The final audit refresh briefly reported one new critical transitive advisory and
+it was remediated before the replacement final builds:
+
+| Package | Relationship | Path | Affected version | Fixed version | Non-breaking update | Remediation |
+| --- | --- | --- | --- | --- | --- | --- |
+| `websocket-driver` | Transitive | Production path through `@react-native-firebase/app` → `firebase` → `@firebase/database` → `faye-websocket` | `0.7.4`; affected below `0.7.5` | `0.7.5` | Yes, patch-only and within the parent's declared range | Lockfile-only update in `d6a95ed5`; fresh Simulator and production/TestFlight artifacts are required from that source. No separate major remediation PR is needed. |
+
+After that exact update, both `npm audit --omit=dev --json` and the full root audit
+report 0 critical, 0 high, 21 moderate, and 1 low. No dependency manifest changed.
+
 ## Nested alert automation package
 
 The independently locked `ops/alert-automation` production package reports one
