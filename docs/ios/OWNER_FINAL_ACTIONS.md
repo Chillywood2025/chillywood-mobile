@@ -7,31 +7,18 @@ This list contains only actions that require owner authority, dashboard permissi
 does not transfer automatable repository, provider, build, deployment, product,
 workflow, screenshot, or internal-TestFlight work back to the owner.
 
-## Current blocking owner action
+## Current provider credential state
 
-### Apple In-App Purchase Key for RevenueCat
+No RevenueCat provider-credential action remains. The dedicated Apple In-App
+Purchase Key was generated once, downloaded once, removed from Downloads, stored
+outside Git with owner-only permissions, recorded in macOS Keychain, and uploaded
+directly to the existing RevenueCat Apple app `app3a0ad1ba62`. RevenueCat retained
+`Valid credentials` after reload, and the existing App Store Connect API credential
+also remains valid.
 
-RevenueCat project configuration is complete: the existing Chi'llywood project now
-contains the Apple app, ten products, entitlement/offering/package mappings, EAS
-public SDK-key configuration, and a verified project-wide webhook. The existing
-least-privilege API v2 key had the required configuration read/write scopes, so no
-new RevenueCat key was created.
-
-One separate Apple credential remains. RevenueCat requires an Apple In-App Purchase
-Key for transaction recording. The App Store Connect browser session expired with
-an authentication failure before that key could be created or uploaded. An
-authorized owner/admin must:
-
-1. sign back in to App Store Connect in the official browser;
-2. create or retrieve the dedicated In-App Purchase Key permitted for this app;
-3. download it once and keep it in an owner-only credential location; and
-4. upload it directly to the existing RevenueCat Apple app
-   `app3a0ad1ba62` for `com.chillywood.mobile`.
-
-Do not send the key, RevenueCat secret, webhook authorization, password, 2FA code,
-or session token through chat, GitHub, or a repository file. This is the sole
-remaining RevenueCat provider-credential interaction; it does not authorize a real
-purchase or enable the App Store purchase rail.
+Do not send, move into Git, or paste the key, RevenueCat secret, webhook
+authorization, password, 2FA code, or session token. This completed credential
+setup does not authorize a real purchase or enable the App Store purchase rail.
 
 ### Rotate unrelated ambient credentials
 
@@ -130,6 +117,8 @@ The owner does not need to recreate these items:
 - sensitive EAS public iOS SDK-key configuration in development, preview, and
   production;
 - project-wide RevenueCat webhook `whintgr38699522f7` and its safe TEST proof;
+- dedicated Apple In-App Purchase credential, securely retained outside Git and
+  validated by RevenueCat alongside the existing App Store Connect API credential;
 - provider-generated StoreKit comparison and 3/3 Simulator harness pass;
 - Stripe test-mode physical-merch and Connect provider readback;
 - ordinary EAS APNs credential and separately stored VoIP APNs secret material;

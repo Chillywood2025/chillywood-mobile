@@ -2,10 +2,9 @@
 
 Checkpoint date: 2026-07-15
 
-Status: **Partial — RevenueCat's Apple catalog and Stripe platform-neutral lanes
-are configured and verified. A separate Apple In-App Purchase Key still requires
-an authenticated App Store Connect owner/admin interaction before RevenueCat
-transaction-recording completeness can be claimed.**
+Status: **Complete — RevenueCat's Apple catalog, dedicated Apple In-App Purchase
+credential, and Stripe platform-neutral lanes are configured and verified. The
+purchase rail remains disabled pending bounded physical TestFlight proof.**
 
 This bounded closeout started from branch `codex/ios-integration-90` at
 `4414e28dca0c7c80ddd6a2b1438e1d18171fa97c` in draft PR
@@ -99,20 +98,25 @@ This proves the shared authorization contract without recording or exposing the
 header value. The RevenueCat App Store rail, live money, payouts, transfers,
 cash-out, and payable balances remain off.
 
-## Apple In-App Purchase Key blocker
+## Apple In-App Purchase Key completion
 
-The existing App Store Connect API credentials are valid in RevenueCat, but
-RevenueCat also requires Apple's separate In-App Purchase Key for transaction
-recording. That key is not configured. The available App Store Connect browser
-session expired with `authResult=FAILED`, so creating/retrieving and uploading the
-key requires one owner/admin browser interaction.
+An authorized App Store Connect owner session generated a dedicated Apple In-App
+Purchase Key. It was downloaded exactly once, removed from Downloads, stored in an
+owner-only local Apple credential directory with mode `600`, and also recorded as
+a macOS Keychain generic-password item. The private key contents were never read,
+printed, parsed, or placed in Git.
+
+The key was uploaded directly to RevenueCat Apple app `app3a0ad1ba62` with its
+matching Issuer ID. RevenueCat reported `Valid credentials`; that result persisted
+after a full page reload and a second validation. The existing App Store Connect
+API credential also remained `Valid credentials`.
 
 RevenueCat documents this as mandatory for StoreKit 2 transaction recording in
 its [In-App Purchase Key configuration guide](https://www.revenuecat.com/docs/service-credentials/itunesconnect-app-specific-shared-secret/in-app-purchase-key-configuration).
 
-Until that credential is uploaded directly to Apple app `app3a0ad1ba62`, this
-record does not claim complete RevenueCat transaction recording, a real purchase,
-restore, renewal, cancellation, refund, or revocation proof.
+Credential configuration is complete. This record still does not claim a real
+purchase, restore, renewal, cancellation, refund, or revocation proof; those remain
+bounded physical TestFlight tests with the App Store purchase rail otherwise off.
 
 ## Provider-generated StoreKit comparison
 
@@ -186,11 +190,9 @@ documentation commit before this closeout is considered remotely green.
 
 ## Remaining bounded proof
 
-1. Reauthenticate App Store Connect with an authorized owner/admin session and
-   upload the separate Apple In-App Purchase Key directly to RevenueCat.
-2. Keep the App Store rail off until a bounded internal-TestFlight purchase is
+1. Keep the App Store rail off until a bounded internal-TestFlight purchase is
    explicitly approved.
-3. Complete physical TestFlight purchase, Restore Purchases, renewal,
+2. Complete physical TestFlight purchase, Restore Purchases, renewal,
    cancellation, refund, and revocation testing in the final device matrix.
 
 No public release, external TestFlight distribution, production OTA, live money,

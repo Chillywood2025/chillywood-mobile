@@ -2,12 +2,10 @@
 
 Checkpoint date: 2026-07-15
 
-Overall verdict: **Partial — repository integration, backend deployment, Firebase,
-Apple provider setup, final-source Simulator and production builds, archive
-inspection, internal TestFlight upload, and the RevenueCat Apple catalog are
-verified. The 90% claim remains blocked by the separate Apple In-App Purchase Key
-that RevenueCat requires for transaction recording; the physical/owner-attestation
-matrix remains intentionally unclaimed.**
+Overall verdict: **The 90% repository, provider, build, and internal-TestFlight
+checkpoint is complete. RevenueCat's dedicated Apple In-App Purchase credential
+now validates alongside the existing App Store Connect API credential. The final
+physical-device and owner-attestation matrix remains intentionally unclaimed.**
 
 ## Repository and pull-request state
 
@@ -45,7 +43,7 @@ application source `d6a95ed5`.
 | Ordinary iOS push | Source and backend deployed; rollout off | Client registration, permission states, categories, badge/response handling, and platform-aware payload source exist. Updated dispatch functions are active. Physical APNs delivery is not claimed. |
 | Native calls | Source compiles; backend deployed; rollout off | Swift CallKit/PushKit/AVAudioSession module, Expo plugin, JS bridge, VoIP token lifecycle, and APNs sender compile in the final-source EAS build. VoIP token/dispatch functions are active; runtime-visible calls and server dispatch remain disabled. |
 | Commerce policy | Source and additive schema deployed; Apple rail off | Apple/Google providers are distinct, ten sandbox mappings are deployed, Google base plans remain Google-only, and tips/purchases cannot grant media authority or payable value. |
-| RevenueCat Apple | **Catalog configured; Apple IAP key owner interaction remains** | Existing project `projc5629a24` and Apple app `app3a0ad1ba62` are configured for `com.chillywood.mobile`. Ten products, Premium entitlement, three offerings, package mappings, the sensitive EAS public-key variable, and the project-wide webhook all pass readback. A separate Apple In-App Purchase Key is still absent because the App Store Connect browser session expired; transaction-recording completeness is not claimed. |
+| RevenueCat Apple | **Configured; credentials valid** | Existing project `projc5629a24` and Apple app `app3a0ad1ba62` are configured for `com.chillywood.mobile`. Ten products, Premium entitlement, three offerings, package mappings, the sensitive EAS public-key variable, and the project-wide webhook all pass readback. A dedicated Apple In-App Purchase Key was generated once, stored outside Git with owner-only permissions and a Keychain record, uploaded directly to the Apple app, and remained `Valid credentials` after RevenueCat reload. The existing App Store Connect API credential also remains valid. |
 | Stripe physical merch / Connect | Verified test-mode and platform-neutral | Required Supabase secret names are present. Existing test-mode merch and Connect webhooks are active; platform charges and payouts remain disabled. iOS has no Stripe digital checkout, and no payout, transfer, cash-out, or payable balance was created. |
 | Privacy manifest | Source and generated prebuild pass | Canonical manifest is wired through Expo, tracking is false, and clean iOS output contains the manifest. Final archive inspection is pending. |
 | Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
@@ -236,14 +234,12 @@ APNs, Universal Links, PushKit/CallKit, StoreKit lifecycle, accessibility, and f
 device regression remain explicitly unclaimed. See
 `IOS_FINAL_DEVICE_TEST_MATRIX.md`.
 
-## Remaining provider credential gate and post-90 proof
+## Remaining post-90 proof
 
-1. Sign back in to App Store Connect with an authorized owner/admin session,
-   create or retrieve the separate Apple In-App Purchase Key, and upload it directly
-   to RevenueCat's existing Apple app. Do not paste or commit the key. This is the
-   only remaining RevenueCat provider-credential interaction.
-2. After that credential gate closes, execute the separately defined final 10%
-   physical-device and owner-attestation matrix.
+No RevenueCat provider-credential gate remains. Execute the separately defined
+final 10% physical-device and owner-attestation matrix while keeping the App Store
+purchase rail, live money, payouts, and cash-out disabled except for explicitly
+approved bounded sandbox/internal testing.
 
 ## Safety statement
 
