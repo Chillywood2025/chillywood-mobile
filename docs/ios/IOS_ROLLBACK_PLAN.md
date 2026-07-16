@@ -21,7 +21,7 @@ destructive database rollback.
 3. Remove a faulty build from internal tester availability if necessary; do not
    delete the App Store record or permanent product IDs.
 4. Preserve sanitized provider/function/build logs and the exact source/build IDs.
-5. Revert only the faulty subsystem and rerun all seven Phase 1 checks plus its
+5. Revert only the faulty subsystem and rerun all eight Phase 1 checks plus its
    dedicated guards before rebuilding.
 
 ## Repository rollback by subsystem
@@ -37,6 +37,7 @@ The major integration commits are intentionally separable:
 | Media readiness | `94d1d4c6`, `a5f23b06`, `8719ada3` | Revert permission/media lifecycle changes as one unit if they cause a regression. Confirm camera/microphone never activate without user intent and sign-out/leave still tears down tracks. |
 | Push and native calls | `db63e456`, `e8dd7e38`, `d3f1715a`, `b5bebb35` | Turn runtime/server flags off first, then revert client/native/backend source together as required. Preserve Android FCM and full-screen call behavior. |
 | Durable call orchestration | `e43f34ab41a7e936e6eeca9b0031faa3de557559` | Keep ordinary/VoIP rollout off. Revert client, dispatcher, transition function, and shared schema/policy together; retain delivery rows and apply only forward database fixes. |
+| Final QA call/storefront/retry closeout | `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae` | Keep all private rollout and money switches off. Revert the tip-sheet, call dispatch/transition/retry, storefront webhook, CI, and `ios-qa` profile only as a reviewed coherent unit; retain delivery/provider history and use forward database fixes. |
 | Store-aware policy/schema/webhook | `95fdc2b7`, copy/provider commits through `8328f052`, `2be7d4cb`, `1e213378`, `e39a069d`, `c40287ee`, `4d0ed187` | Disable the Apple rail first. Revert Apple-specific selection/copy without removing Google provider values or weakening webhook verification/idempotency. |
 | Atomic RevenueCat application | `e43f34ab41a7e936e6eeca9b0031faa3de557559` | Keep the App Store rail and money switches off. Redeploy webhook v69 only with a reviewed forward compatibility plan; never delete provider events, entitlements, grants, ledger rows, or intents. |
 | Release workflows / managed iOS upload boundary | `fa847965`, `19230653`, `63431991`, `b65ab225`, `f7af588d`, `d5a8db65edbdd19fec42ad37ca1162412f66a41e` | Disable/delete only the affected manual workflow or environment access. Preserve validation, protected approvals, exact-build submission, generated `/ios` exclusion, and no-auto-release controls. |
@@ -58,8 +59,11 @@ Integration migrations:
 - `20260718103000_durable_chat_call_status_transition.sql`
 - `20260718110000_revenuecat_atomic_event_transactions.sql`
 - `20260718111500_harden_chat_call_transition_delivery_access.sql`
+- `20260718113000_durable_call_delivery_retry_and_storefront_prices.sql`
+- `20260718114500_enable_chat_call_transition_retry_scheduler.sql`
+- `20260718120000_index_terminal_retry_and_revenuecat_intent_links.sql`
 
-All seven are deployed and additive. Roll back behavior with switches and a
+All ten are deployed and additive. Roll back behavior with switches and a
 reviewed forward fix; do not attempt a destructive down migration:
 
 1. Turn VoIP and App Store rollout switches off.
@@ -81,11 +85,12 @@ Affected functions include:
 
 - `notification-device-tokens` v49;
 - `notification-dispatch` v49;
-- `chilly-chat-call-dispatch` v34 (previous v33);
-- `chilly-chat-call-transition` v1 (new);
+- `chilly-chat-call-dispatch` v36;
+- `chilly-chat-call-transition` v2;
+- `chilly-chat-call-transition-retry` v1;
 - `ios-voip-push-tokens` v1;
-- `ios-voip-call-dispatch` v2 (previous v1); and
-- `revenuecat-webhook` v70 (previous v69).
+- `ios-voip-call-dispatch` v4; and
+- `revenuecat-webhook` v71.
 
 For a faulty deployment:
 
@@ -146,6 +151,23 @@ For a faulty deployment:
 
 ## EAS, App Store Connect, and TestFlight rollback
 
+- Build-7 iOS OTA group `896eea68-859a-4cfe-9697-725299be45bf` targets channel
+  `production`, runtime `1.0.0`, and keeps native calls false. Its previous
+  compatible group is `8e158980-75d1-47ef-bd26-f3f9e564fdab`.
+- If the build-7 OTA is faulty, run `eas update:rollback`, select the recorded
+  previous group or embedded build-7 update, publish iOS only, and verify no
+  Android update exists. Keep all server rollout switches off throughout.
+- Local build 8 is isolated on channel `ios-qa`, runtime `1.0.0-iosqa1`, source
+  `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, with local IPA SHA-256
+  `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`,
+  submission `e0b894e3-5dfc-44c5-9da2-e36c3b85bd5b`, and Apple build
+  `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`.
+- If build 8 is faulty, remove only build 8 from `Chillywood Internal`, keep build
+  7/its rollback target as historical evidence, disable the affected server
+  switch, use a normal `git revert`, and create a later isolated binary only after
+  validation. Never send an `ios-qa` update to runtime `1.0.0` or the production
+  channel.
+
 - Historical superseded Simulator build:
   `6d8e5193-ea75-490f-9451-759419a3e7b3`, app `1.0.0 (6)`, from `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 - Historical superseded production/Internal TestFlight build:
@@ -164,11 +186,8 @@ For a faulty deployment:
   `Chillywood Internal`.
 - Internal build `1.0.0 (3)` remains historical and is superseded by build 6; it
   was never external or public.
-- Build 6 is superseded by the semantic call/backend correction and must not be
-  restored as the final physical-test candidate. If build 7 is faulty, remove it
-  from `Chillywood Internal`, keep every rollout/money switch off, revert the
-  coherent source unit with normal `git revert`, revalidate, and create a later
-  binary only under a separately approved build budget.
+- Builds 6 and 7 are not the all-flags physical-test candidate. Build 7 may remain
+  as the native-disabled JavaScript OTA lane; build 8 is the exact native QA lane.
 - Cancel a queued build if safe or allow an in-flight immutable build to finish;
   do not submit it if validation failed.
 - Submit only an exact successful build ID. Never switch a workflow to implicit
@@ -190,9 +209,16 @@ For a faulty deployment:
 - Keep Firebase plist, provider env files, certificates, profiles, and private keys
   outside the repository.
 
+Two Apple distribution P12 payloads appeared only in the private tool transcript
+during local-builder diagnosis. Both affected certificates and dependent profiles
+were revoked immediately. Do not restore them. The final replacement credential
+remained contained and signed build 8; rotate it only for a confirmed compromise
+or an explicitly approved credential rollover.
+
 ## Exit criteria after rollback
 
-- Seven required PR checks pass independently.
+- Eight required PR checks pass independently, including Supabase Database
+  Integration.
 - Android package, Firebase, EAS production/submit, FCM payloads, provider values,
   and release behavior match the known-good baseline.
 - Affected iOS guard/proof and clean native generation pass.

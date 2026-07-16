@@ -2,11 +2,25 @@
 
 Checkpoint date: 2026-07-16
 
-Overall verdict: **The semantic call-orchestration and atomic RevenueCat source,
-deployment, and replacement-binary closeout is complete. Build 6 is superseded.
-The corrected source has a freshly smoked Simulator artifact and inspected internal
-TestFlight build 7, assigned only to `Chillywood Internal`. The physical-device
-matrix has not begun and remains the final unclaimed proof.**
+Overall verdict: **The remaining iOS QA source and backend gaps are closed at
+`bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`. Build 7 remains the production-runtime
+JavaScript OTA lane and cannot run native calls because its embedded native runtime
+default is false. A local, production-signed build 8 was created without an EAS
+cloud build for the isolated `ios-qa` / `1.0.0-iosqa1` all-flags lane. The full
+physical-device matrix has not begun and remains the final unclaimed proof.**
+
+## Final QA lane separation
+
+| Lane | Source / update | Client capabilities | Purpose and boundary |
+| --- | --- | --- | --- |
+| Build 7 embedded binary | `d5a8db65edbdd19fec42ad37ca1162412f66a41e`, `1.0.0 (7)`, production channel/runtime `1.0.0` | Native build capability present, but `ChillywoodNativeCallsRuntimeDefaultEnabled=false` | Historical internal binary. An OTA cannot change its native runtime key, Info.plist, entitlements, Swift, PushKit capability, or background modes. |
+| Build-7 iOS OTA | group `896eea68-859a-4cfe-9697-725299be45bf`, update `019f6b56-1bb5-7164-a6b2-4fb08ef4f6d8`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, production channel/runtime `1.0.0` | Native calls false; ordinary push registration true; RevenueCat App Store surfaces true | iOS-only JavaScript/provider QA. No Android update was published. Running-update verification on build 7 remains pending because the paired phone currently has an older development build. |
+| Local build 8 | local IPA SHA-256 `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, `ios-qa` channel/runtime `1.0.0-iosqa1` | `IOS_NATIVE_CALLS_ENABLED=true`, native runtime default true, ordinary push true, RevenueCat App Store surfaces true | Exact all-flags physical QA candidate. The private ordinary-push, VoIP, purchase, and money rollout switches remain off by default. |
+
+The recorded build-7 OTA rollback target is group
+`8e158980-75d1-47ef-bd26-f3f9e564fdab`. Roll back with
+`eas update:rollback` to that verified group or the embedded build-7 update; never
+publish an Android rollback update.
 
 ## Repository and pull-request state
 
@@ -21,15 +35,18 @@ matrix has not begun and remains the final unclaimed proof.**
 | Critical transitive advisory patch | `d6a95ed5` (`websocket-driver` 0.7.5 lockfile-only) |
 | Semantic call/RevenueCat correction | `e43f34ab41a7e936e6eeca9b0031faa3de557559` |
 | Final application/build source | `d5a8db65edbdd19fec42ad37ca1162412f66a41e` (adds the guarded managed-iOS EAS upload boundary) |
+| Final iOS QA source and local build-8 source | `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae` |
 | Stacked integration PR | [#10](https://github.com/Chillywood2025/chillywood-mobile/pull/10), open, draft, base `codex/ios-first-development-build` |
 | Foundation branch | `codex/ios-first-development-build` at `a85fa0f42cf9b1a20f761c8817b0713fe27e43bd` |
 | Foundation PR | [#9](https://github.com/Chillywood2025/chillywood-mobile/pull/9), open, draft, unmerged |
 | Superseded PR | [#8](https://github.com/Chillywood2025/chillywood-mobile/pull/8), verified empty and closed |
+| Superseded recovery PRs | [#11](https://github.com/Chillywood2025/chillywood-mobile/pull/11) and [#13](https://github.com/Chillywood2025/chillywood-mobile/pull/13), verified to contain no unique product work and closed without merge |
 | Unrelated local state | `deno.lock` remains untracked and is excluded from this work |
 
 No PR has been merged. The corrected source passes the full local Node 20 suite,
-76 database assertions, and all seven remote PR checks. The documentation-only
-closeout commit after `d5a8db65` does not change the inspected binary.
+92 database assertions, and all eight remote PR checks, including the independent
+`Phase 1 / Supabase Database Integration` job. The documentation-only closeout
+commit after `bbb9d6db` does not change the inspected binary.
 
 ## Current integration status
 
@@ -45,16 +62,17 @@ closeout commit after `d5a8db65` does not change the inspected binary.
 | Universal Links | Source and hosted deployment pass | Associated Domains is present. Canonical AASA is deployed with HTTP 200, no redirect, JSON content type, and matching source. Android App Links are preserved. |
 | Supabase Auth redirects | Configured | The custom scheme and required HTTPS authentication routes are configured. Signed physical Universal Link proof remains pending. |
 | Ordinary iOS push | Source and backend deployed; rollout off | Client registration, permission states, categories, badge/response handling, and platform-aware payload source exist. Updated dispatch functions are active. Physical APNs delivery is not claimed. |
-| Native calls | Semantic correction deployed; rollout off | The dispatcher returns one strict top-level channel schema, evaluates VoIP independently from ordinary tokens and in-app insertion, uses action-specific terminal payloads, and awaits an idempotent server-owned transition/delivery operation. Swift CallKit/PushKit idempotency remains in place. Physical delivery is unclaimed. |
+| Native calls | Semantic correction and autonomous retry deployed; rollout off | The dispatcher never mutates invite state, terminal cleanup is independent of new-call preference, and a bounded scheduled retry worker claims durable delivery rows without a living client. Build 7 cannot enable native calls by OTA; local build 8 has the native/client gates enabled for bounded QA. Physical delivery is unclaimed. |
 | Commerce policy | Atomic schema deployed; Apple rail off | Premium and exact iOS consumable events now execute through service-only transactional RPCs. Apple/Google providers remain distinct, Google base-plan parsing is preserved, tips create no entitlement/access/payable balance, and Seat Passes grant viewer access only. |
 | RevenueCat Apple | **Configured; credentials valid** | Existing project `projc5629a24` and Apple app `app3a0ad1ba62` are configured for `com.chillywood.mobile`. Ten products, Premium entitlement, three offerings, package mappings, the sensitive EAS public-key variable, and the project-wide webhook all pass readback. A dedicated Apple In-App Purchase Key was generated once, stored outside Git with owner-only permissions and a Keychain record, uploaded directly to the Apple app, and remained `Valid credentials` after RevenueCat reload. The existing App Store Connect API credential also remains valid. |
 | Stripe physical merch / Connect | Verified test-mode and platform-neutral | Required Supabase secret names are present. Existing test-mode merch and Connect webhooks are active; platform charges and payouts remain disabled. iOS has no Stripe digital checkout, and no payout, transfer, cash-out, or payable balance was created. |
 | Privacy manifest | Source, generated prebuild, and archive pass | Canonical manifest is wired through Expo, tracking is false, and build 7 archive inspection confirms `PrivacyInfo.xcprivacy` in the signed app. The protected Firebase file variable supplied clean managed prebuild without placing the plist in Git. |
 | Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
 | Release automation | Prepared and manually verified | `ios-preview` and `ios-production` protected environments exist. Workflows are manual, validate first, pin EAS CLI 21.0.1, freeze production credentials, require an exact build ID, and bind the verified internal group. |
-| Backend deployment | Verified, fail-closed | Seven additive integration migrations and seven active Edge Functions are deployed after restricted readback. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
+| Backend deployment | Verified, fail-closed | Ten additive integration migrations and eight active Edge Functions are deployed after restricted readback. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
 | Final-source Simulator | **Pass** | `b9bb006e-1a96-4817-8ee2-6f3647983d8b` from `d5a8db65` installed cleanly on the iPhone 17 Pro Simulator, launched, remained alive, and contained the Firebase and privacy manifests. This is not physical-device proof. |
 | Production build / TestFlight | **Pass; internal only** | EAS build `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555`, Apple build `b5eaaad6-ef24-49c5-8e50-b10cf2807412`, version `1.0.0 (7)`, is processed and assigned only to `Chillywood Internal`. No individual/external tester or public release was added. |
+| Local all-flags QA archive | **Pass; internal only** | Local-only App Store IPA `1.0.0 (8)` was built with EAS CLI 21.0.1, not EAS cloud build. Inspection passed bundle/team/signature, arm64, production APNs, Associated Domains, Firebase, privacy manifests, opaque icons, matching dSYM, native module, all four client gates, `ios-qa`, and runtime `1.0.0-iosqa1`. Submission `e0b894e3-5dfc-44c5-9da2-e36c3b85bd5b` produced Apple build `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`, `Ready to Submit`, assigned only to `Chillywood Internal`; individual testers are 0 and no external group exists. |
 
 ## Deployed backend inventory
 
@@ -69,17 +87,26 @@ Migrations:
 - `20260718091500_fix_ios_app_store_premium_reference_prices` (remote version `20260716111111`);
 - `20260718103000_durable_chat_call_status_transition` (remote version `20260716111117`);
 - `20260718110000_revenuecat_atomic_event_transactions` (remote version `20260716111120`); and
-- `20260718111500_harden_chat_call_transition_delivery_access` (remote version `20260716111423`).
+- `20260718111500_harden_chat_call_transition_delivery_access` (remote version `20260716111423`);
+- `20260718113000_durable_call_delivery_retry_and_storefront_prices`;
+- `20260718114500_enable_chat_call_transition_retry_scheduler`; and
+- `20260718120000_index_terminal_retry_and_revenuecat_intent_links`.
+
+Linked migration history is aligned for the four repaired versions and the three
+new QA migrations. The unrelated local-only
+`20260714001704_user_report_router` intentionally has no deployed objects; there
+is no unintended remote-only migration or already-deployed SQL pending reapply.
 
 Active Edge Functions:
 
 - `notification-device-tokens` v49;
 - `notification-dispatch` v49;
-- `chilly-chat-call-dispatch` v34;
-- `chilly-chat-call-transition` v1;
-- `revenuecat-webhook` v70;
+- `chilly-chat-call-dispatch` v36;
+- `chilly-chat-call-transition` v2;
+- `chilly-chat-call-transition-retry` v1;
+- `revenuecat-webhook` v71;
 - `ios-voip-push-tokens` v1; and
-- `ios-voip-call-dispatch` v2.
+- `ios-voip-call-dispatch` v4.
 
 Remote readback confirms monthly/yearly Premium mappings at `999`/`9999`, exact
 `ios` / `app_store` / `revenuecat_app_store` sandbox scope, unchanged Android
@@ -91,21 +118,21 @@ off.
 
 ## Safety switches
 
-The following are intentionally fail-closed:
+The following server controls are intentionally fail-closed even though build 8
+contains QA client capability:
 
-- `EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED=false`;
 - `IOS_VOIP_PUSH_DISPATCH_ENABLED=false`;
-- `EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED=false`;
 - `IOS_ORDINARY_PUSH_ROLLOUT_ENABLED=false`;
-- `EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED=false`;
-- the server-side App Store purchase rail defaults off;
+- `revenuecat_app_store_enabled=off`;
+- `provider_webhooks_enabled=sandbox_only` (safe existing state);
 - live money is off;
 - payouts, cash-out, withdrawals, transfers, and payable balances are off; and
-- no production-visible iOS native call control is enabled.
+- no production-visible iOS native call or commerce rollout is enabled.
 
-`IOS_NATIVE_CALLS_ENABLED` may include the native capability in an internal build;
-that build-time capability does not override the runtime and server rollout
-switches.
+Build 8 intentionally sets all four client QA flags true. Those flags do not
+override the private server controls above. Build 7's OTA intentionally keeps the
+native-call JavaScript flag false because its immutable native runtime default is
+false.
 
 ## Implemented source and infrastructure
 
@@ -196,6 +223,7 @@ as the final candidate for the corrected source.
 | `a5f5ccfa-aa88-4026-91fc-2a9db2d79ea3` | `development-simulator` | `e43f34ab41a7e936e6eeca9b0031faa3de557559` | Failed before artifact creation because local generated `ios/` referenced an ignored Firebase plist. No release use. The guarded `/ios` EAS exclusion in `d5a8db65` prevents recurrence. |
 | `b9bb006e-1a96-4817-8ee2-6f3647983d8b` | `development-simulator` | `d5a8db65edbdd19fec42ad37ca1162412f66a41e` | Final-source managed-prebuild artifact; fresh install and launch smoke passed with Firebase/privacy manifests present. |
 | `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555` | `production` | `d5a8db65edbdd19fec42ad37ca1162412f66a41e` | Final internal `1.0.0 (7)` archive. SHA-256 `334fbd971a58dd0f50af2ea927fd661c34842995783eb79d9ac772c581b7f6db`; signed archive inspection passed. |
+| Local IPA SHA-256 `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8` | `ios-qa` local App Store build | `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae` | All-flags `1.0.0 (8)` QA archive built with `eas build --local`; no cloud-build usage. Channel/runtime are `ios-qa` / `1.0.0-iosqa1`, and signed-archive inspection passed. |
 
 Final EAS submission `04b9bc95-eb1d-4fb3-95e0-dbf5de790fce` succeeded for exact
 build 7. App Store Connect reports `Ready to Submit`, Apple build ID
@@ -204,6 +232,12 @@ build 7. App Store Connect reports `Ready to Submit`, Apple build ID
 incoming calls, purchases, payouts, and live money remain disabled and that the
 physical matrix must not begin without separate authorization. No individual or
 external tester was added; this is not public release.
+
+Local build-8 submission `e0b894e3-5dfc-44c5-9da2-e36c3b85bd5b` produced Apple
+build `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`, version `1.0.0 (8)`. App Store
+Connect reports `Ready to Submit`, exactly one internal group
+`Chillywood Internal`, zero individual testers, and no external group. This is
+the physical-matrix target; no test has begun.
 
 Clean managed-iOS prebuild and CocoaPods generation pass in both replacement EAS
 builds. The Simulator build supplies terminal native Swift/Pods compile evidence;
@@ -214,7 +248,7 @@ unchanged. Generated native folders remain uncommitted.
 
 ## Validation
 
-Local Node 20 results on final application/build source `d5a8db65`:
+Local Node 20 results on final QA/build source `bbb9d6db`:
 
 | Diagnostic | Result |
 | --- | --- |
@@ -234,7 +268,7 @@ Local Node 20 results on final application/build source `d5a8db65`:
 | AASA, commerce, media, push, native-call, VoIP, privacy, and release guards/proofs | Pass |
 | `npx expo-doctor` | Pass: 18/18 |
 | `git diff --check` | Pass |
-| `npx supabase test db` | Pass: 76 call-transition, lifecycle, duplicate, intent, price, and forced-rollback assertions |
+| `npx supabase test db` | Pass: 92 call-transition, retry, lifecycle, localized storefront, duplicate, intent, price, and forced-rollback assertions |
 | Expo public config resolution | Pass; no resolved secret values recorded |
 
 Exact required GitHub check names:
@@ -246,9 +280,10 @@ Exact required GitHub check names:
 - `Phase 1 / iOS Configuration`
 - `Phase 1 / Android Regression Guards`
 - `Phase 1 / Expo Doctor`
+- `Phase 1 / Supabase Database Integration`
 
-All seven passed remotely for final application/build source
-`d5a8db65edbdd19fec42ad37ca1162412f66a41e`.
+All eight passed remotely for final QA/build source
+`bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`.
 
 Dependency audit status: the root mobile production graph contains 0 critical, 0
 high, 21 moderate, and 1 low advisory. The independently locked alert-automation
@@ -261,7 +296,8 @@ automatic or forced audit fix ran.
 
 The historical signed iPhone build proved native launch, Firebase, sign-in, session
 persistence, primary navigation, and sign-out for its exact source. The replacement
-Simulator and build 7 prove compilation/archive readiness, not physical behavior.
+Simulator, build 7, and local build 8 prove compilation/archive readiness, not
+physical behavior. Build 8 remains the only eligible all-flags target.
 Camera, microphone, Photos upload, two-device LiveKit, APNs, Universal Links,
 PushKit/CallKit, StoreKit lifecycle, accessibility, and final device regression
 remain explicitly unclaimed. See
@@ -280,8 +316,10 @@ At this checkpoint:
 
 - no merge occurred;
 - no public App Store release or external TestFlight distribution occurred;
-- build 7 is assigned only to `Chillywood Internal`; build 6 is superseded, and no individual/external tester or public release was enabled;
-- no production OTA was published;
+- builds 7 and 8 are assigned only to `Chillywood Internal`; build 6 is superseded,
+  and no individual/external tester or public release was enabled;
+- one iOS-only build-7 QA OTA was published to production/runtime `1.0.0`; no
+  Android OTA or public release was published;
 - no live money, payable balance, payout, cash-out, withdrawal, or transfer was
   enabled;
 - no Stripe path was created for iOS digital goods;
@@ -291,9 +329,11 @@ At this checkpoint:
   intentionally changed;
 - no Apple/Firebase/EAS/RevenueCat private credential, repository secret, plist
   content, profile, certificate, token, receipt, private media, or signed artifact
-  URL was committed, printed, or placed in client configuration. Provider
-  credentials were used only through approved secure local/provider stores. One OS
-  process diagnostic exposed unrelated inherited
-  Brevo and Cloudflare credential values; they were not used or committed and must
-  be rotated; and
+  URL was committed, pushed, placed in PR/CI, or placed in client configuration.
+  During local signing remediation, two Apple distribution P12 payloads appeared
+  only in the private tool transcript; both affected certificates and dependent
+  profiles were immediately revoked, and the final replacement signing credential
+  remained contained. A prior OS diagnostic also exposed inherited Brevo and
+  Cloudflare values; they were not used or committed and still require rotation;
+  and
 - no unrelated file, including `deno.lock` or `supabase/.temp`, was staged.

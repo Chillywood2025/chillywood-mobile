@@ -17,10 +17,12 @@ not satisfy this final-current-build matrix.
 
 ## Exact remaining 10%
 
-**Do not begin this matrix yet.** Build 6 is superseded. Replacement Simulator
-`b9bb006e-1a96-4817-8ee2-6f3647983d8b` and internal TestFlight build 7 are now
-recorded, but the current instruction is to stop before physical-device execution.
-The readiness statuses below do not authorize a test or a feature-switch change.
+**Build 8 is processed and available in `Chillywood Internal`; the matrix is
+ready but has not begun.** Build 7 cannot serve as the native-call candidate because
+`ChillywoodNativeCallsRuntimeDefaultEnabled=false`; its JavaScript OTA cannot
+change that native key. Local build 8 is the exact all-flags QA target, isolated on
+channel `ios-qa` and runtime `1.0.0-iosqa1`. The readiness statuses below do not
+authorize a test or a feature-switch change.
 
 | # | Required proof | Status | Completion evidence required |
 | ---: | --- | --- | --- |
@@ -44,13 +46,14 @@ The readiness statuses below do not authorize a test or a feature-switch change.
 
 ## Test prerequisites
 
-- Use only application source `d5a8db65edbdd19fec42ad37ca1162412f66a41e`,
-  Simulator `b9bb006e-1a96-4817-8ee2-6f3647983d8b`, and exact internal TestFlight
-  EAS build `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555` / Apple build
-  `b5eaaad6-ef24-49c5-8e50-b10cf2807412`, version `1.0.0 (7)`. Build 6 and source
-  `97cd97cd58b021d2f45021c3e121b8a35158cee8` are not eligible.
-- Keep ordinary push, native calls, and App Store purchase switches off except for
-  one bounded test capability at a time after backend/provider verification.
+- Use only application source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`
+  and exact local/TestFlight build `1.0.0 (8)`, Apple build
+  `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`. Its inspected channel is `ios-qa`,
+  runtime is `1.0.0-iosqa1`, and all four client QA capabilities are true.
+  Builds 6 and 7 are not eligible for the complete native-call matrix.
+- Enable only one private server rollout switch for one bounded test, capture
+  sanitized evidence, then restore it to off. Client capability in build 8 is not
+  server rollout authorization.
 - Use bounded test accounts with no owner/admin/payout authority.
 - Use non-private media and approved test rooms only.
 - Do not bypass room membership, account status, block, moderation, entitlement,
@@ -69,6 +72,9 @@ Record only:
 - app version/build, bundle identifier, exact source commit, and EAS build ID;
 - pass/fail state and a sanitized root cause; and
 - whether each feature switch was restored to off after bounded testing.
+
+After every bounded test, confirm no payable balance, payout, transfer,
+withdrawal, or cash-out was created.
 
 Never record a UDID, Apple ID, raw email, password, access token, push/VoIP token,
 token fingerprint, room JWT, receipt, Firebase plist, private media, signed artifact
