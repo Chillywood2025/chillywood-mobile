@@ -13,9 +13,9 @@ deployment evidence, build evidence, and the remaining physical/owner proof.
 
 - Integration branch: `codex/ios-integration-90`.
 - Provider-closeout starting head:
-  `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
+  `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 - Provider-closeout source hardening: `0ec109db`.
-- Tested application source: `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
+- Tested application source: `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 - Screenshot-only follow-up: `a4ab1d49`.
 - Release-workflow portability fix: `f7af588d`.
 - Critical transitive advisory patch: `d6a95ed5`.
@@ -29,19 +29,19 @@ deployment evidence, build evidence, and the remaining physical/owner proof.
 - Neither PR has been merged.
 
 All seven separated Phase 1 checks passed remotely at final application source
-`a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
+`97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 
 ## Completion against the required definition
 
 | # | Requirement | Status | Evidence / remaining gate |
 | ---: | --- | --- | --- |
-| 1 | All required CI checks pass | **Pass** | All seven independent checks passed at final application source `a9d6041922e41a6e722e430f9ecb144ea7e8e175`. |
+| 1 | All required CI checks pass | **Pass** | All seven independent checks passed at final application source `97cd97cd58b021d2f45021c3e121b8a35158cee8`. |
 | 2 | Repository lint is green | **Pass** | `npm run lint` exits zero with 0 errors and 87 warnings. Warnings remain visible and are not suppressed. |
 | 3 | TypeScript is green | **Local pass** | `npx tsc --noEmit` passes after the commerce provider declaration-order correction. |
 | 4 | Expo Doctor is green | **Pass** | `npx expo-doctor` reports 18/18 checks. |
 | 5 | Android regression guards pass | **Pass** | Android package, Firebase behavior, EAS profiles, Google provider values, and notification payload behavior are preserved by the guards. |
-| 6 | Final-source iOS Simulator native build passes | **Pass (installed + launch)** | Development-simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` was installed and launched successfully from `a9d6041922e41a6e722e430f9ecb144ea7e8e175`. Route-level smoke proof remains pending for final-device matrix. |
-| 7 | Production iOS archive builds | **Pass** | Production archive build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, finished from `a9d6041922e41a6e722e430f9ecb144ea7e8e175`. |
+| 6 | Final-source iOS Simulator native build passes | **Pass (installed + launch)** | Development-simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` was installed and launched successfully from `97cd97cd58b021d2f45021c3e121b8a35158cee8`. Route-level smoke proof remains pending for final-device matrix. |
+| 7 | Production iOS archive builds | **Pass** | Production archive build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, finished from `97cd97cd58b021d2f45021c3e121b8a35158cee8`. |
 | 8 | Firebase iOS is configured | **Pass** | Firebase Apple app exists for `com.chillywood.mobile`; the plist remains outside Git and `IOS_GOOGLE_SERVICES_FILE` is an EAS File secret in development, preview, and production. |
 | 9 | AASA is deployed and validates | **Pass** | `https://chillywoodstream.com/.well-known/apple-app-site-association` returns HTTP 200 directly with JSON content type and a body matching the canonical source. |
 | 10 | Supabase Auth redirect URLs are configured | **Pass** | The custom scheme and the required HTTPS authentication routes are configured. Physical signed-build link proof remains in the device matrix. |

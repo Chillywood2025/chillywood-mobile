@@ -12,9 +12,9 @@ physical-device and owner-attestation matrix remains intentionally unclaimed.**
 | Item | Current state |
 | --- | --- |
 | Integration branch | `codex/ios-integration-90` |
-| Provider-closeout starting head | `a9d6041922e41a6e722e430f9ecb144ea7e8e175` |
+| Provider-closeout starting head | `97cd97cd58b021d2f45021c3e121b8a35158cee8` |
 | Provider-closeout source hardening | `0ec109db` |
-| Tested application source | `a9d6041922e41a6e722e430f9ecb144ea7e8e175` |
+| Tested application source | `97cd97cd58b021d2f45021c3e121b8a35158cee8` |
 | Screenshot-only follow-up | `a4ab1d49` |
 | Release-workflow portability fix | `f7af588d` |
 | Critical transitive advisory patch | `d6a95ed5` (`websocket-driver` 0.7.5 lockfile-only) |
@@ -25,7 +25,7 @@ physical-device and owner-attestation matrix remains intentionally unclaimed.**
 | Unrelated local state | `deno.lock` remains untracked and is excluded from this work |
 
 No PR has been merged. All seven separated Phase 1 checks passed at final
-application source `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
+application source `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 
 ## Current integration status
 
@@ -49,8 +49,8 @@ application source `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
 | Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
 | Release automation | Prepared and manually verified | `ios-preview` and `ios-production` protected environments exist. Workflows are manual, validate first, pin EAS CLI 21.0.1, freeze production credentials, require an exact build ID, and bind the verified internal group. |
 | Backend deployment | Verified, fail-closed | Three additive migrations and six Edge Functions are deployed after restricted local backup. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
-| Final-source Simulator | In use | Development-simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` from `a9d6041922e41a6e722e430f9ecb144ea7e8e175` was installed and launched successfully. |
-| Production build / TestFlight | Pass: internal only | Production build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, finished from `a9d6041922e41a6e722e430f9ecb144ea7e8e175`. EAS submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28` uploaded it; Apple processing is `VALID`, the build is assigned only to `Chillywood Internal`, and bounded internal testing notes are configured. Build 6 supersedes prior build candidates. |
+| Final-source Simulator | In use | Development-simulator build `6d8e5193-ea75-490f-9451-759419a3e7b3` from `97cd97cd58b021d2f45021c3e121b8a35158cee8` was installed and launched successfully. |
+| Production build / TestFlight | Pass: internal only | Production build `a729aa9a-1a98-439c-8c81-48c381735d8d`, version `1.0.0 (6)`, finished from `97cd97cd58b021d2f45021c3e121b8a35158cee8`. EAS submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28` uploaded it; Apple processing is `VALID`, the build is assigned only to `Chillywood Internal`, and bounded internal testing notes are configured. Build 6 supersedes prior build candidates. |
 
 ## Deployed backend inventory
 
@@ -155,7 +155,7 @@ them, not for the current integration branch:
 | Build | Profile | Source | Result / scope |
 | --- | --- | --- | --- |
 | `ddc48433-d29d-4a83-a847-0d8908e2da63` | `development-simulator` | `2ea49f421b1e1abbcd0889b273b0908b04aea2a4` | Historical Simulator artifact and bounded smoke proof. |
-| `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `development` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | Historical signed physical build; install, launch, Firebase startup, authentication, persistence, navigation, and sign-out passed; source precedence for current branch is build `a9d60419`. |
+| `343b3b6a-53d3-49b2-bed0-57b6f25c23fa` | `development` | `5c5fa023cc8ac8532fd0abe76c6199d0a769788d` | Historical signed physical build; install, launch, Firebase startup, authentication, persistence, navigation, and sign-out passed; source precedence for current branch is build `97cd97cd`. |
 
 The integration branch contains application, native, Expo, dependency, plugin,
 workflow, and backend changes after those commits. The current final-source proof
@@ -164,8 +164,8 @@ production archive `a729aa9a-1a98-439c-8c81-48c381735d8d`.
 
 | `98ad48a2-562b-4a66-bf79-2bdcbe875a3a` | `development-simulator` | `b65ab225` | Successful pre-advisory-refresh Simulator evidence, superseded by the final-source build below. |
 | `012edf86-b525-4dee-b9bc-ff23a8281c93` | `production` | `b65ab225` | Successful internal build `1.0.0 (3)`, superseded after the audit feed exposed a patchable transitive critical advisory. It was never external or public. |
-| `6d8e5193-ea75-490f-9451-759419a3e7b3` | `development-simulator` | `a9d6041922e41a6e722e430f9ecb144ea7e8e175` | Development-simulator build installed and launched successfully; route-level smoke remains unobserved and is required in final device proof. |
-| `a729aa9a-1a98-439c-8c81-48c381735d8d` | `production` | `a9d6041922e41a6e722e430f9ecb144ea7e8e175` | Final-source production archive version `1.0.0 (6)`. Archive metadata confirms build version/channel/commit and completed build fingerprint. |
+| `6d8e5193-ea75-490f-9451-759419a3e7b3` | `development-simulator` | `97cd97cd58b021d2f45021c3e121b8a35158cee8` | Development-simulator build installed and launched successfully; route-level smoke remains unobserved and is required in final device proof. |
+| `a729aa9a-1a98-439c-8c81-48c381735d8d` | `production` | `97cd97cd58b021d2f45021c3e121b8a35158cee8` | Final-source production archive version `1.0.0 (6)`. Archive metadata confirms build version/channel/commit and completed build fingerprint. |
 
 Final internal TestFlight submission `ade71443-0a05-49c2-8aa4-c411d4cb3e28`
 succeeded for that exact build. Apple reports processing state `VALID`, the build is
@@ -182,7 +182,7 @@ folders remain uncommitted.
 
 ## Validation
 
-Local Node 20 results at tested application source `a9d6041922e41a6e722e430f9ecb144ea7e8e175`:
+Local Node 20 results at tested application source `97cd97cd58b021d2f45021c3e121b8a35158cee8`:
 
 | Diagnostic | Result |
 | --- | --- |
@@ -213,7 +213,7 @@ Exact required GitHub check names:
 - `Phase 1 / Android Regression Guards`
 - `Phase 1 / Expo Doctor`
 
-All seven passed remotely for `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
+All seven passed remotely for `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 
 Dependency audit status: the root mobile production graph contains 0 critical, 0
 high, 21 moderate, and 1 low advisory. The independently locked alert-automation

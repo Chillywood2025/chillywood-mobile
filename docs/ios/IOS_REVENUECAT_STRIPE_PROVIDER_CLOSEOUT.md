@@ -7,7 +7,7 @@ credential, and Stripe platform-neutral lanes are configured and verified. The
 purchase rail remains disabled pending bounded physical TestFlight proof.**
 
 This bounded closeout started from branch `codex/ios-integration-90` at
-`a9d6041922e41a6e722e430f9ecb144ea7e8e175` in draft PR
+`97cd97cd58b021d2f45021c3e121b8a35158cee8` in draft PR
 [#10](https://github.com/Chillywood2025/chillywood-mobile/pull/10). It reuses the
 existing Chi'llywood RevenueCat project and Stripe account. It does not create a
 second provider account, enable a purchase rail, or authorize public release.

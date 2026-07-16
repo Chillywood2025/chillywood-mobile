@@ -39,7 +39,7 @@ not satisfy this final-current-build matrix.
 
 ## Test prerequisites
 
-- Use source `a9d6041922e41a6e722e430f9ecb144ea7e8e175`, EAS development-simulator
+- Use source `97cd97cd58b021d2f45021c3e121b8a35158cee8`, EAS development-simulator
   build `6d8e5193-ea75-490f-9451-759419a3e7b3`, app `1.0.0 (6)`, and record only the
   sanitized device class and iOS version.
 - Keep ordinary push, native calls, and App Store purchase switches off except for

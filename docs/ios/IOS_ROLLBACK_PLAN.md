@@ -134,9 +134,9 @@ For a faulty deployment:
 ## EAS, App Store Connect, and TestFlight rollback
 
 - Final-source Simulator build:
-  `6d8e5193-ea75-490f-9451-759419a3e7b3`, app `1.0.0 (6)`, from `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
+  `6d8e5193-ea75-490f-9451-759419a3e7b3`, app `1.0.0 (6)`, from `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 - Reviewed production/Internal TestFlight build:
-  `a729aa9a-1a98-439c-8c81-48c381735d8d`, app `1.0.0 (6)`, from `a9d6041922e41a6e722e430f9ecb144ea7e8e175`.
+  `a729aa9a-1a98-439c-8c81-48c381735d8d`, app `1.0.0 (6)`, from `97cd97cd58b021d2f45021c3e121b8a35158cee8`.
 - EAS submission: `ade71443-0a05-49c2-8aa4-c411d4cb3e28`, assigned only to
   `Chillywood Internal`.
 - Internal build `1.0.0 (3)` remains historical and is superseded by build 6; it
