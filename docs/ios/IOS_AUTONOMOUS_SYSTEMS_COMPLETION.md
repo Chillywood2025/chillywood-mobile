@@ -36,7 +36,7 @@ Local database reset and pgTAP pass with 3 files and 131 assertions. The iOS aut
 
 ## Deployment and sanitized live readback
 
-The updated functions are active: `notification-operator` v16, `release-operator` v16, `observability-operator` v15, `installed-product-qa-operator` v9, `livekit-operator` v43, `money-operator` v28, `security-owner-operator` v15, `platform-recovery-operator` v8, `privacy-compliance-operator` v8, `support-success-operator` v8, and `owner-command-operator` v11. The existing terminal worker remains `chilly-chat-call-transition-retry` v2.
+The updated functions are active: `notification-operator` v17, `release-operator` v17, `observability-operator` v15, `installed-product-qa-operator` v9, `livekit-operator` v43, `money-operator` v28, `security-owner-operator` v16, `platform-recovery-operator` v9, `privacy-compliance-operator` v9, `support-success-operator` v9, `moderation-safety-operator` v16, `search-ranking-integrity-operator` v8, and `owner-command-operator` v11. The existing terminal worker remains `chilly-chat-call-transition-retry` v2.
 
 The registered host timers remain enabled at their existing cadence: notification and LiveKit every 5 minutes; observability and money every 10 minutes; security every 15 minutes; release, recovery, and support every 30 minutes; privacy every 6 hours; installed QA daily. No cadence was increased and no broad scheduler was added. Release and observability timers record `host_provider_adapter_required` from the hardened systemd sandbox instead of manufacturing provider health; owner-host adapters perform separate bounded provider reads.
 

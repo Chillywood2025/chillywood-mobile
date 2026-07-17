@@ -33,9 +33,10 @@ recovery/support state are therefore explicitly blocked or unknown—not healthy
 No physical proof was created. See `IOS_AUTONOMOUS_SYSTEMS_COMPLETION.md` and
 `IOS_AUTONOMOUS_OPERATOR_MATRIX.md`.
 
-The active autonomous function versions are notification v16, release v16,
-observability v15, installed QA v9, LiveKit v43, money v28, security v15,
-recovery/privacy/support v8, owner command v11, and terminal retry v2. Existing
+The active autonomous function versions are notification v17, release v17,
+observability v15, installed QA v9, LiveKit v43, money v28, security v16,
+recovery/privacy/support v9, moderation v16, search v8, owner command v11, and
+terminal retry v2. Existing
 timer cadences are unchanged. The new required CI job is
 `Phase 1 / Autonomous Systems iOS Contract`. All nine required jobs, including
 the autonomous iOS contract and Supabase database integration jobs, passed on the
