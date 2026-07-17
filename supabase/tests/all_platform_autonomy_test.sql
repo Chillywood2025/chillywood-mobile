@@ -1,5 +1,5 @@
 begin;
-select plan(49);
+select plan(89);
 
 select has_table('public', 'release_binary_attestations', 'local/cloud binary attestations exist');
 select has_table('public', 'autonomous_current_findings', 'current finding lifecycle exists');
@@ -17,12 +17,19 @@ select has_column('public', 'device_availability_findings', 'testflight_internal
 select has_column('public', 'device_availability_findings', 'ios_second_device_available', 'installed QA records second iOS device separately');
 select has_index('public', 'release_binary_attestations', 'release_binary_attestations_identity_idx', 'binary identity index exists');
 select has_index('public', 'user_report_clusters', 'user_report_clusters_status_idx', 'platform report status index exists');
+select has_index('public', 'device_availability_findings', 'device_availability_one_open_condition_uidx', 'device availability has one-open-condition index');
+select has_index('public', 'qa_required_review_flags', 'qa_review_one_open_condition_uidx', 'installed QA review flags have one-open-condition index');
 select ok((select relrowsecurity from pg_class where oid = 'public.release_binary_attestations'::regclass), 'binary attestations have RLS');
 select ok((select relrowsecurity from pg_class where oid = 'public.user_report_intake_events'::regclass), 'report intake has RLS');
 select ok(not has_table_privilege('anon', 'public.release_binary_attestations', 'INSERT'), 'anon cannot write attestations');
 select ok(not has_table_privilege('authenticated', 'public.user_report_intake_events', 'INSERT'), 'authenticated clients cannot bypass report intake function');
 select ok(not has_table_privilege('authenticated', 'public.autonomous_provider_readback_current', 'INSERT'), 'authenticated clients cannot write current provider state');
 select ok(has_table_privilege('service_role', 'public.user_report_clusters', 'INSERT'), 'service role can write governed clusters');
+select has_function('public', 'upsert_user_report_cluster_membership', array['uuid','text'], 'atomic report clustering RPC exists');
+select ok(not has_function_privilege('anon', 'public.upsert_user_report_cluster_membership(uuid,text)', 'EXECUTE'), 'anonymous clients cannot execute atomic report clustering');
+select has_function('public', 'route_user_report_cluster', array['uuid'], 'atomic report routing RPC exists');
+select ok(not has_function_privilege('anon', 'public.route_user_report_cluster(uuid)', 'EXECUTE'), 'anonymous clients cannot execute atomic report routing');
+select ok(has_function_privilege('service_role', 'public.route_user_report_cluster(uuid)', 'EXECUTE'), 'service role can execute atomic report routing');
 
 select lives_ok($$insert into public.owner_command_requests
   (command_text, normalized_intent, target_systems, approval_level, status, platform)
@@ -68,6 +75,15 @@ select is((select count(*)::integer from public.autonomous_current_findings wher
 select is(public.resolve_autonomous_findings('release_ota_operator','ios','{}'), 1, 'recovery resolves open finding');
 select is((select current_status from public.autonomous_current_findings where system_id='release_ota_operator' and platform='ios'), 'resolved', 'current finding is resolved');
 select is((select count(*)::integer from public.autonomous_finding_lifecycle_events where system_id='release_ota_operator' and platform='ios'), 3, 'open, repeat, and resolution audit events are retained');
+select is((select count(*)::integer from pg_indexes where schemaname='public' and indexname like 'observability_open_%_uidx'), 7, 'all typed observability finding tables prevent duplicate open conditions');
+select lives_ok($$insert into public.observability_required_review_flags
+  (system_id,flag_type,severity,target_type,target_id,review_status,platform)
+  values ('observability_runtime_operator','dedupe_fixture','warning','ios_runtime','fixture-build','open','ios')$$,
+  'first typed observability condition opens');
+select throws_ok($$insert into public.observability_required_review_flags
+  (system_id,flag_type,severity,target_type,target_id,review_status,platform)
+  values ('observability_runtime_operator','dedupe_fixture','warning','ios_runtime','fixture-build','open','ios')$$,
+  '23505', null, 'duplicate open typed observability condition is rejected');
 
 select lives_ok($$insert into public.autonomous_provider_readback_capabilities
   (system_id,platform,provider,capability,capability_state,missing_capability,readback_complete,data_source)
@@ -89,6 +105,117 @@ select lives_ok($$insert into public.user_report_clusters
          ('android','same-safe-fingerprint','notification_delivery','notification_delivery','review','notification_delivery_operator','threshold_pending')$$,
   'platform-specific clusters remain separate');
 select is((select count(*)::integer from public.user_report_clusters where normalized_fingerprint='same-safe-fingerprint'), 2, 'iOS and Android report clusters do not merge');
+
+select lives_ok($$
+  insert into public.user_report_intake_events
+    (report_type, category, severity, platform, normalized_fingerprint, text_summary_redacted, report_status)
+  values
+    ('notification_delivery','notification_delivery','review','ios','atomic-safe-fingerprint','First sanitized report','classified'),
+    ('notification_delivery','notification_delivery','review','ios','atomic-safe-fingerprint','Second sanitized report','classified');
+  insert into public.user_report_classifications
+    (report_id, platform, report_type, category, severity, routed_system_id, escalation_policy, confidence)
+  select id, platform, report_type, category, severity, 'notification_delivery_operator', 'threshold', 0.8
+  from public.user_report_intake_events where normalized_fingerprint='atomic-safe-fingerprint';
+$$, 'atomic clustering fixtures are valid');
+select lives_ok($$select public.upsert_user_report_cluster_membership(
+  (select id from public.user_report_intake_events where normalized_fingerprint='atomic-safe-fingerprint' order by created_at, id limit 1),
+  repeat('b',64))$$, 'first report clusters atomically');
+select is((select unique_reporter_count from public.user_report_clusters where platform='ios' and normalized_fingerprint='atomic-safe-fingerprint'), 1, 'first atomic report records one reporter');
+select is((select report_count from public.user_report_clusters where platform='ios' and normalized_fingerprint='atomic-safe-fingerprint'), 1, 'unprocessed classified report is not counted early');
+select lives_ok($$select public.upsert_user_report_cluster_membership(
+  (select id from public.user_report_intake_events where normalized_fingerprint='atomic-safe-fingerprint' order by created_at, id offset 1 limit 1),
+  repeat('b',64))$$, 'duplicate reporter clusters without a unique-race failure');
+select is((select unique_reporter_count from public.user_report_clusters where platform='ios' and normalized_fingerprint='atomic-safe-fingerprint'), 1, 'duplicate reporter does not inflate threshold');
+select is((select report_count from public.user_report_clusters where platform='ios' and normalized_fingerprint='atomic-safe-fingerprint'), 2, 'second report increments cluster count once');
+select is((select duplicate_flag from public.user_report_intake_events where normalized_fingerprint='atomic-safe-fingerprint' order by created_at, id offset 1 limit 1), true, 'duplicate reporter is marked truthfully');
+select lives_ok($$select public.upsert_user_report_cluster_membership(
+  (select id from public.user_report_intake_events where normalized_fingerprint='atomic-safe-fingerprint' order by created_at, id offset 1 limit 1),
+  repeat('b',64))$$, 'atomic clustering is safe to retry');
+select is((select report_count from public.user_report_clusters where platform='ios' and normalized_fingerprint='atomic-safe-fingerprint'), 2, 'retry does not double count the report');
+
+select lives_ok($$insert into public.user_report_clusters
+  (platform, normalized_fingerprint, report_type, category, severity, routed_system_id,
+   unique_reporter_count, report_count, text_summary_redacted, action_status)
+  values ('ios','atomic-route-fingerprint','privacy_data','privacy_data','critical',
+    'privacy_compliance_operator',1,1,'Sanitized privacy review','threshold_pending')$$,
+  'atomic routing fixture is valid');
+select lives_ok($$select public.route_user_report_cluster(
+  (select id from public.user_report_clusters where normalized_fingerprint='atomic-route-fingerprint'))$$,
+  'qualified report cluster routes in one transaction');
+select is((select count(*)::integer from public.user_report_routing_actions action
+  join public.user_report_clusters cluster on cluster.id=action.cluster_id
+  where cluster.normalized_fingerprint='atomic-route-fingerprint'), 1,
+  'one routing action is created');
+select is((select count(*)::integer from public.owner_command_requests command
+  where command.metadata->>'normalized_fingerprint'='atomic-route-fingerprint'), 1,
+  'one owner command is created');
+select is((select count(*)::integer from public.autonomous_approval_requests request
+  join public.user_report_clusters cluster on request.metadata->>'cluster_id'=cluster.id::text
+  where cluster.normalized_fingerprint='atomic-route-fingerprint'), 1,
+  'one platform-scoped approval request is created');
+select is((select count(*)::integer from public.owner_command_events event
+  join public.owner_command_requests command on command.id=event.command_id
+  where command.metadata->>'normalized_fingerprint'='atomic-route-fingerprint'), 1,
+  'owner command creation retains an audit event');
+select is((select count(*)::integer from public.autonomous_approval_request_events event
+  join public.autonomous_approval_requests request on request.id=event.request_id
+  join public.user_report_clusters cluster on request.metadata->>'cluster_id'=cluster.id::text
+  where cluster.normalized_fingerprint='atomic-route-fingerprint'), 1,
+  'approval creation retains an audit event');
+select is((select platform from public.owner_command_requests
+  where metadata->>'normalized_fingerprint'='atomic-route-fingerprint'), 'ios',
+  'routed owner command preserves iOS scope');
+select is((select request.platform from public.autonomous_approval_requests request
+  join public.user_report_clusters cluster on request.metadata->>'cluster_id'=cluster.id::text
+  where cluster.normalized_fingerprint='atomic-route-fingerprint'), 'ios',
+  'routed approval preserves iOS scope');
+select lives_ok($$select public.route_user_report_cluster(
+  (select id from public.user_report_clusters where normalized_fingerprint='atomic-route-fingerprint'))$$,
+  'atomic routing is idempotent on retry');
+select is((select count(*)::integer from public.user_report_routing_actions action
+  join public.user_report_clusters cluster on cluster.id=action.cluster_id
+  where cluster.normalized_fingerprint='atomic-route-fingerprint'), 1,
+  'routing retry does not duplicate the action');
+select is((select count(*)::integer from public.owner_command_requests command
+  where command.metadata->>'normalized_fingerprint'='atomic-route-fingerprint'), 1,
+  'routing retry does not duplicate the owner command');
+select is((select count(*)::integer from public.autonomous_approval_requests request
+  join public.user_report_clusters cluster on request.metadata->>'cluster_id'=cluster.id::text
+  where cluster.normalized_fingerprint='atomic-route-fingerprint'), 1,
+  'routing retry does not duplicate the approval');
+select is((select count(*)::integer from public.user_report_operator_findings finding
+  join public.user_report_clusters cluster on cluster.id=finding.cluster_id
+  where cluster.normalized_fingerprint='atomic-route-fingerprint'), 1,
+  'routing retry does not duplicate the operator finding');
+
+select is((select count(*)::integer from (
+  select system_id, platform, device_requirement, blocker_classification
+  from public.device_availability_findings where finding_status='open'
+  group by system_id, platform, device_requirement, blocker_classification
+  having count(*) > 1
+) duplicate_open), 0, 'existing device availability history has no duplicate open conditions');
+select lives_ok($$insert into public.device_availability_findings
+  (source,device_requirement,result,blocker_classification,next_safe_action,platform)
+  values ('physical_ios','dedupe fixture device','blocked','ios_physical_proof_required','retain physical gate','ios')$$,
+  'first device availability condition opens');
+select throws_ok($$insert into public.device_availability_findings
+  (source,device_requirement,result,blocker_classification,next_safe_action,platform)
+  values ('physical_ios','dedupe fixture device','blocked','ios_physical_proof_required','retain physical gate','ios')$$,
+  '23505', null, 'duplicate open device availability condition is rejected');
+select is((select count(*)::integer from (
+  select system_id, platform, flag_type, coalesce(target_type,''), coalesce(target_id,'')
+  from public.qa_required_review_flags where review_status='open'
+  group by system_id, platform, flag_type, coalesce(target_type,''), coalesce(target_id,'')
+  having count(*) > 1
+) duplicate_open), 0, 'existing installed QA review history has no duplicate open conditions');
+select lives_ok($$insert into public.qa_required_review_flags
+  (source,flag_type,severity,result,blocker_classification,next_safe_action,platform)
+  values ('manual_codex_proof','dedupe_fixture','review','human_review','ios_physical_proof_required','retain physical gate','ios')$$,
+  'first installed QA review condition opens');
+select throws_ok($$insert into public.qa_required_review_flags
+  (source,flag_type,severity,result,blocker_classification,next_safe_action,platform)
+  values ('manual_codex_proof','dedupe_fixture','review','human_review','ios_physical_proof_required','retain physical gate','ios')$$,
+  '23505', null, 'duplicate open installed QA review condition is rejected');
 
 select throws_ok($$insert into public.user_report_intake_events
   (report_type, category, severity, platform, normalized_fingerprint, text_summary_redacted)

@@ -9,6 +9,7 @@ import {
   classifyIosReleaseAutonomy,
   classifyNotificationAutonomy,
   IOS_QA_RELEASE_EXPECTATION,
+  matchesIosBinaryAttestation,
   sanitizeAutonomousReadback,
 } from "../supabase/functions/_shared/ios-autonomous-operator-policy.mjs";
 import { isApnsInvalidVoipTokenReason } from "../supabase/functions/_shared/ios-voip-policy.mjs";
@@ -114,6 +115,11 @@ const runAllPlatform = async () => {
   check(reports.fingerprintUserReport(iosReport, iosClass) !== reports.fingerprintUserReport(androidReport, androidClass), "platform-specific report clusters must remain separated");
   const callClass = reports.classifyUserReport({ summary: "PushKit CallKit native incoming call did not close", devicePlatform: "ios" });
   check(callClass.routedSystemId === "notification_delivery_operator", "PushKit/CallKit reports must route to notification delivery");
+  const sharedSafety = reports.classifyUserReport({ summary: "This user is harassing me", devicePlatform: "ios" });
+  check(sharedSafety.platform === "shared", "genuinely shared safety reports must cluster across platforms");
+  const iosPrivacy = reports.classifyUserReport({ summary: "App Privacy screen is wrong on iPhone", devicePlatform: "ios" });
+  const androidPrivacy = reports.classifyUserReport({ summary: "Data Safety screen is wrong on Android", devicePlatform: "android" });
+  check(iosPrivacy.platform === "ios" && androidPrivacy.platform === "android", "platform-specific privacy surfaces must not be merged into a shared cluster");
 
   const money = read("supabase/functions/money-operator/index.ts");
   for (const rail of ['platform: "shared"', 'platform: "ios"', 'platform: "android"', 'provider: "revenuecat_app_store"', 'provider: "revenuecat_google_play"']) check(money.includes(rail), `money autonomy missing ${rail}`);
@@ -122,14 +128,57 @@ const runAllPlatform = async () => {
   const releaseProbe = read("supabase/functions/release-operator/probe.ts");
   check(releaseProbe.includes("release_binary_attestations") && releaseProbe.includes("app_store_connect_readback+reviewed_local_binary_manifest"), "local iOS build attestation must require App Store readback");
   check(releaseProbe.includes("const observed = (complete") && !releaseProbe.includes("observedIdentity = IOS_QA_RELEASE_MANIFEST"), "expected identity must never become observed identity");
+  const validAttestation = {
+    platform: "ios", bundle_identifier: IOS_QA_RELEASE_EXPECTATION.bundleIdentifier, app_version: IOS_QA_RELEASE_EXPECTATION.appVersion,
+    native_build: IOS_QA_RELEASE_EXPECTATION.nativeBuild, runtime_version: IOS_QA_RELEASE_EXPECTATION.runtimeVersion,
+    channel: IOS_QA_RELEASE_EXPECTATION.channel, distribution_source: IOS_QA_RELEASE_EXPECTATION.distributionSource,
+    source_commit: IOS_QA_RELEASE_EXPECTATION.sourceCommit, binary_sha256: IOS_QA_RELEASE_EXPECTATION.binarySha256,
+    app_store_connect_build_id: IOS_QA_RELEASE_EXPECTATION.appStoreConnectBuildId,
+  };
+  const validAsc = {
+    readbackComplete: true,
+    bundleIdentifier: IOS_QA_RELEASE_EXPECTATION.bundleIdentifier,
+    appVersion: IOS_QA_RELEASE_EXPECTATION.appVersion,
+    latestNativeBuild: IOS_QA_RELEASE_EXPECTATION.nativeBuild,
+    latestBuildId: IOS_QA_RELEASE_EXPECTATION.appStoreConnectBuildId,
+    attestedAppVersion: IOS_QA_RELEASE_EXPECTATION.appVersion,
+    attestedNativeBuild: IOS_QA_RELEASE_EXPECTATION.nativeBuild,
+    attestedBuildId: IOS_QA_RELEASE_EXPECTATION.appStoreConnectBuildId,
+  };
+  check(matchesIosBinaryAttestation(validAttestation, validAsc), "reviewed local binary must match every App Store and manifest identity field");
+  check(!matchesIosBinaryAttestation(validAttestation, { ...validAsc, attestedAppVersion: "9.9.9" }), "App Store version mismatch must block local binary verification");
+  check(matchesIosBinaryAttestation(validAttestation, { ...validAsc, latestNativeBuild: "9", latestBuildId: "later-build" }), "a later build must not erase exact attested-binary verification");
+  check(releaseProbe.includes("newer_app_store_build_observed") && releaseProbe.includes("latestAppStoreBuild !== IOS_QA_RELEASE_MANIFEST.nativeBuild"), "a later App Store build must create release drift without corrupting exact attestation identity");
+  const releaseAdapter = read("scripts/ios-release-provider-readback.mjs");
+  check(releaseAdapter.includes("include=preReleaseVersion") && releaseAdapter.includes("attestedAppVersion: attestedPreReleaseVersion") && releaseAdapter.includes("attestedBuildId: attestedBuild"), "App Store readback must separate latest drift from exact attested build identity");
   check(read("scripts/ios-release-provider-readback.mjs").includes("local_ios_build_absent_from_eas_cloud_build_history"), "local binary absence from EAS cloud history must be truthful");
+
+  const iosSourceProbes = read("supabase/functions/_shared/ios-source-operator-probes.ts");
+  const allPlatformSourceProbes = read("supabase/functions/_shared/all-platform-source-operator-probes.ts");
+  const observabilityProbe = read("supabase/functions/observability-operator/probe.ts");
+  const observabilityDedupeMigration = read("supabase/migrations/20260718142000_dedupe_open_observability_findings.sql");
+  const installedQa = read("supabase/functions/installed-product-qa-operator/index.ts");
+  const deviceDedupeMigration = read("supabase/migrations/20260718143000_dedupe_device_availability_findings.sql");
+  check(iosSourceProbes.includes("release?.readback_complete === true") && iosSourceProbes.includes("release?.runtime_version === IOS_QA_RELEASE_EXPECTATION.runtimeVersion"), "iOS recovery cannot treat expected values in an incomplete row as observed identity");
+  for (const reason of ["signing_certificate_status_unavailable", "ios_release_or_retry_recovery_readback_blocked", "ios_release_identity_readback_unavailable"]) {
+    check(iosSourceProbes.includes(reason), `iOS source probe must expose lifecycle reason: ${reason}`);
+  }
+  check(!iosSourceProbes.includes('from("privacy_request_findings").insert') && !allPlatformSourceProbes.includes('from("privacy_request_findings").insert'), "scheduled privacy probes must use lifecycle findings instead of inserting duplicate current findings");
+  check(observabilityProbe.includes('eq("review_status", "open")') && observabilityProbe.includes('review_status: "reviewed"') && observabilityProbe.includes("reasons: classification.findings"), "typed observability findings must dedupe, resolve, and feed the canonical lifecycle");
+  check(observabilityProbe.includes('error?.code === "23505"') && observabilityDedupeMigration.includes("review_status = 'superseded'") && observabilityDedupeMigration.includes("create unique index if not exists"), "typed observability dedupe must be concurrency-safe and retain superseded audit history");
+  check(installedQa.includes('error?.code === "23505"') && installedQa.includes('result === "pass" ? "reviewed" : "open"') && deviceDedupeMigration.includes("finding_status = 'superseded'") && deviceDedupeMigration.includes("device_availability_one_open_condition_uidx"), "installed QA device findings must update one current condition and retain superseded history");
+  check(deviceDedupeMigration.includes("review_status = 'superseded'") && deviceDedupeMigration.includes("qa_review_one_open_condition_uidx") && installedQa.includes('from("qa_required_review_flags").update(row)'), "installed QA review flags must update one current condition and retain superseded history");
 
   const controlMigration = read("supabase/migrations/20260718133000_all_platform_autonomous_control_plane.sql");
   check(controlMigration.includes("assert_autonomous_approval_platform_scope") && controlMigration.includes("request.platform = p_platform"), "approval platform mismatch must be rejected in the database");
   check(controlMigration.includes("occurrence_count") && controlMigration.includes("resolved_at") && controlMigration.includes("record_autonomous_finding") && controlMigration.includes("resolve_autonomous_findings"), "finding lifecycle must dedupe and resolve");
+  check(read("supabase/functions/_shared/scoped-operator.ts").includes('platform: normalizeOperatorPlatform(payload.platform)'), "approval creation audit must retain the request platform");
   const reportMigration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
+  const atomicReportMigration = read("supabase/migrations/20260718141500_atomic_user_report_clustering.sql");
   check(reportMigration.includes("unique (platform, normalized_fingerprint)"), "report clusters must be platform separated");
   check(reportMigration.includes("revoke all on table") && reportMigration.includes("service_role"), "report router must deny direct client writes");
+  check(atomicReportMigration.includes("upsert_user_report_cluster_membership") && atomicReportMigration.includes("for update") && atomicReportMigration.includes("on conflict (platform, normalized_fingerprint)"), "report clustering must be atomic and retry-safe");
+  check(read("supabase/functions/user-report-intake/index.ts").includes("upsert_user_report_cluster_membership"), "report intake must use the atomic cluster transition");
 
   const sourceCorpus = [controlMigration, reportMigration, notificationProbe, releaseProbe, money, read("config/autonomy/autonomous-components.json")].join("\n");
   check(!/(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)/.test(sourceCorpus), "no credential material may appear in autonomy sources");

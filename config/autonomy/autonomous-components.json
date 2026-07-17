@@ -203,7 +203,7 @@
       "guard": "guard:scheduled-provider-adapters",
       "killSwitch": "disable companion service",
       "rollback": "restore previous service unit",
-      "deploymentState": "source_pending_deploy",
+      "deploymentState": "deployed",
       "physicalProofRequired": false
     },
     {
@@ -247,7 +247,7 @@
       "owningSystem": "observability_runtime_operator",
       "componentType": "top_level_system",
       "supportedPlatforms": ["shared", "ios", "android", "web"],
-      "paths": ["supabase/functions/observability-operator/index.ts", "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.service", "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer"],
+      "paths": ["supabase/functions/observability-operator/index.ts", "supabase/functions/observability-operator/probe.ts", "supabase/migrations/20260718142000_dedupe_open_observability_findings.sql", "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.service", "ops/observability-operator/systemd/chillywood-observability-operator-watch-once.timer"],
       "schedulerCadence": "ten minutes",
       "allowedReads": ["sanitized provider, backend, release and LiveKit telemetry"],
       "allowedWrites": ["platform health and lifecycle findings"],
@@ -275,7 +275,7 @@
       "guard": "guard:scheduled-provider-adapters",
       "killSwitch": "disable companion service",
       "rollback": "restore previous service unit",
-      "deploymentState": "source_pending_deploy",
+      "deploymentState": "deployed",
       "physicalProofRequired": false
     },
     {
@@ -319,7 +319,7 @@
       "owningSystem": "installed_product_qa_operator",
       "componentType": "registered_surface",
       "supportedPlatforms": ["ios"],
-      "paths": ["ops/installed-product-qa-operator/systemd/chillywood-installed-qa-ios-readiness.service", "ops/installed-product-qa-operator/systemd/chillywood-installed-qa-ios-readiness.timer"],
+      "paths": ["supabase/functions/installed-product-qa-operator/index.ts", "supabase/migrations/20260718143000_dedupe_device_availability_findings.sql", "ops/installed-product-qa-operator/systemd/chillywood-installed-qa-ios-readiness.service", "ops/installed-product-qa-operator/systemd/chillywood-installed-qa-ios-readiness.timer"],
       "schedulerCadence": "daily source/provider readiness only",
       "allowedReads": ["iOS manifest, binary attestation and release snapshot"],
       "allowedWrites": ["provider/internal-build readiness and physical blockers"],
@@ -329,7 +329,7 @@
       "guard": "guard:ios-installed-qa-autonomy",
       "killSwitch": "disable iOS readiness timer",
       "rollback": "retain blocker history",
-      "deploymentState": "source_pending_deploy",
+      "deploymentState": "deployed",
       "physicalProofRequired": true
     },
     {
@@ -391,7 +391,7 @@
       "owningSystem": "support_success_operator",
       "componentType": "registered_surface",
       "supportedPlatforms": ["shared", "ios", "android", "web", "unknown"],
-      "paths": ["supabase/functions/user-report-intake/index.ts", "_lib/userReportRouter.ts", "supabase/migrations-isolated/20260714001704_user_report_router.sql", "supabase/migrations/20260718134500_governed_user_report_router.sql"],
+      "paths": ["supabase/functions/user-report-intake/index.ts", "_lib/userReportRouter.ts", "supabase/migrations-isolated/20260714001704_user_report_router.sql", "supabase/migrations/20260718134500_governed_user_report_router.sql", "supabase/migrations/20260718141500_atomic_user_report_clustering.sql", "supabase/migrations/20260718142500_atomic_user_report_routing.sql"],
       "schedulerCadence": "event-driven intake plus support thirty-minute status composition",
       "allowedReads": ["sanitized authenticated report and deduplicated cluster state"],
       "allowedWrites": ["intake, classification, cluster, finding, routing and approval-request rows"],
@@ -401,7 +401,7 @@
       "guard": "guard:user-report-router",
       "killSwitch": "disable intake function or support surface while retaining reports",
       "rollback": "forward-only SQL; retain immutable intake/audit history",
-      "deploymentState": "isolated_history_pending_forward_migration",
+      "deploymentState": "deployed",
       "physicalProofRequired": false
     },
     {

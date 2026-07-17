@@ -113,16 +113,14 @@ export const runAndroidRecoveryProbe: ScopedOperatorHandler = async ({ client })
 
 export const runSharedPrivacyProbe: ScopedOperatorHandler = async ({ client }) => {
   const window = nowWindow();
-  const requests = await countRows(client, "privacy_request_findings");
+  const requests = await countRows(client, "privacy_request_findings", (query) => query.eq("flag_type", "privacy_request_status"));
   const holds = await countRows(client, "retention_hold_findings");
   const complete = requests.complete && holds.complete;
-  const { error } = await client.from("privacy_request_findings").insert({
-    system_id: "privacy_compliance_operator", platform: "shared", health_state: complete ? "healthy" : "unknown",
-    environment_mode: "production", flag_type: "shared_privacy_request_retention_readback", severity: complete ? "info" : "review",
+  const { error } = await client.from("privacy_operator_events").insert({
+    system_id: "privacy_compliance_operator", actor_type: "operator", actor_id: "privacy_compliance_operator",
+    action_id: "watch_once", result: complete ? "healthy" : "unknown", environment_mode: "production", platform: "shared",
     user_rights_changed: false, money_moved: false, high_risk_executed: false,
-    data_source: "privacy_request_findings+retention_hold_findings", readback_complete: complete,
-    window_start: window.start, window_end: window.end,
-    metadata: sanitizeAutonomousReadback({ privacyRequestFindingCount: requests.count, retentionHoldFindingCount: holds.count, legalHoldChanged: false, rawExportCreated: false }),
+    metadata: sanitizeAutonomousReadback({ source: "privacy_request_findings+retention_hold_findings", readbackComplete: complete, privacyRequestFindingCount: requests.count, retentionHoldFindingCount: holds.count, legalHoldChanged: false, rawExportCreated: false }),
   });
   if (error) throw error;
   return { readbackComplete: complete, platform: "shared", source: "privacy_request_findings+retention_hold_findings", dataWindow: window, healthState: complete ? "healthy" : "unknown", reasons: complete ? [] : ["shared_privacy_readback_unavailable"], moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
@@ -131,12 +129,11 @@ export const runSharedPrivacyProbe: ScopedOperatorHandler = async ({ client }) =
 export const runAndroidPrivacyProbe: ScopedOperatorHandler = async ({ client }) => {
   const window = nowWindow();
   const sourceContract = { dataSafetySourceReviewed: true, permissionsSourceReviewed: true, ownerAttestationPending: true };
-  const { error } = await client.from("privacy_request_findings").insert({
-    system_id: "privacy_compliance_operator", platform: "android", health_state: "blocked",
-    environment_mode: "production", flag_type: "android_data_safety_permissions_readiness", severity: "review",
+  const { error } = await client.from("privacy_operator_events").insert({
+    system_id: "privacy_compliance_operator", actor_type: "operator", actor_id: "privacy_compliance_operator",
+    action_id: "watch_once", result: "owner_attestation_pending", environment_mode: "production", platform: "android",
     user_rights_changed: false, money_moved: false, high_risk_executed: false,
-    data_source: "compiled_android_privacy_contract+owner_attestation_registry", readback_complete: false,
-    window_start: window.start, window_end: window.end, metadata: sanitizeAutonomousReadback(sourceContract),
+    metadata: sanitizeAutonomousReadback({ source: "compiled_android_privacy_contract+owner_attestation_registry", readbackComplete: false, ...sourceContract }),
   });
   if (error) throw error;
   return { readbackComplete: false, platform: "android", source: "compiled_android_privacy_contract+owner_attestation_registry", dataWindow: window, healthState: "blocked", reasons: ["owner_attestation_pending"], moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };

@@ -2,7 +2,7 @@ import {
   ANDROID_PRODUCTION_RELEASE_MANIFEST,
   IOS_QA_RELEASE_MANIFEST,
 } from "../_shared/release-manifest-contract.generated.mjs";
-import { classifyIosReleaseAutonomy, sanitizeAutonomousReadback } from "../_shared/ios-autonomous-operator-policy.mjs";
+import { classifyIosReleaseAutonomy, matchesIosBinaryAttestation, sanitizeAutonomousReadback } from "../_shared/ios-autonomous-operator-policy.mjs";
 import type { ScopedOperatorHandler } from "../_shared/scoped-operator.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -53,9 +53,8 @@ export const runIosReleaseAutonomyProbe: ScopedOperatorHandler = async ({ client
     .select("id,platform,bundle_identifier,app_version,native_build,runtime_version,channel,distribution_source,source_commit,binary_sha256,app_store_connect_build_id,attestation_status,verified_at")
     .eq("platform", "ios").eq("binary_sha256", IOS_QA_RELEASE_MANIFEST.binarySha256).limit(1).maybeSingle();
   if (attestationError) throw attestationError;
-  const ascBuildId = text(asc.latestBuildId);
   const attestationId = text(attestation?.id);
-  const attestationMatchesAsc = ascComplete && Boolean(attestationId) && ascBuildId === text(attestation?.app_store_connect_build_id);
+  const attestationMatchesAsc = Boolean(attestationId) && matchesIosBinaryAttestation(attestation, asc, IOS_QA_RELEASE_MANIFEST);
   if (attestationMatchesAsc && attestation?.attestation_status !== "verified") {
     const { error } = await client.from("release_binary_attestations").update({
       attestation_status: "verified", verified_at: windowEnd, verification_source: "app_store_connect_readback+reviewed_local_binary_manifest",
@@ -90,6 +89,11 @@ export const runIosReleaseAutonomyProbe: ScopedOperatorHandler = async ({ client
     release,
   }, IOS_QA_RELEASE_MANIFEST);
   if (!binaryIdentityComplete && !classification.reasons.includes("local_binary_attestation_unverified")) classification.reasons.push("local_binary_attestation_unverified");
+  const latestAppStoreBuild = text(asc.latestNativeBuild);
+  if (ascComplete && latestAppStoreBuild && latestAppStoreBuild !== IOS_QA_RELEASE_MANIFEST.nativeBuild) {
+    if (!classification.reasons.includes("newer_app_store_build_observed")) classification.reasons.push("newer_app_store_build_observed");
+    if (classification.healthState === "healthy") classification.healthState = "blocked";
+  }
 
   for (const capability of [
     { provider: "eas", complete: easChannelComplete, name: "channel_update_readback", reason: eas.reason },

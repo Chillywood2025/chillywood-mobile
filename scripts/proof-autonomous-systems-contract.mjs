@@ -18,6 +18,7 @@ const ownerCommandFunction = read("supabase/functions/owner-command-operator/ind
 const ownerCommandMigration = read("supabase/migrations/20260712180500_owner_command_operator.sql");
 const ownerCommandRunbook = read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md");
 const userReportMigration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
+const userReportRoutingMigration = read("supabase/migrations/20260718142500_atomic_user_report_routing.sql");
 const userReportFunction = read("supabase/functions/user-report-intake/index.ts");
 const userReportRunbook = read("docs/USER_REPORT_ROUTER_RUNBOOK.md");
 
@@ -221,8 +222,9 @@ const checks = [
       && userReportMigration.includes("revoke all on table public.user_report_clusters from anon, authenticated")
       && userReportFunction.includes("authenticated_user_required")
       && userReportFunction.includes("client_requested_routed_system_id_ignored")
-      && userReportFunction.includes("owner_command_requests")
-      && userReportFunction.includes("autonomous_approval_requests")
+      && userReportFunction.includes("route_user_report_cluster")
+      && userReportRoutingMigration.includes("insert into public.owner_command_requests")
+      && userReportRoutingMigration.includes("insert into public.autonomous_approval_requests")
       && packageJson.includes('"proof:user-report-router"')
       && packageJson.includes('"guard:user-report-router"')
     ),

@@ -13,6 +13,15 @@ const platformProviderReadback = (payload: JsonObject, platform: "ios" | "androi
   const nested = objectValue(root[platform]);
   return Object.keys(nested).length ? nested : root;
 };
+const IOS_TYPED_FINDING_TABLES = [
+  "crash_cluster_findings",
+  "js_error_findings",
+  "performance_regression_findings",
+  "analytics_delivery_findings",
+  "release_health_findings",
+  "backend_error_rate_findings",
+  "observability_required_review_flags",
+] as const;
 
 export const runIosObservabilityProbe: ScopedOperatorHandler = async ({ client, payload, metadata }) => {
   const providerReadback = platformProviderReadback(payload, "ios");
@@ -127,8 +136,12 @@ export const runIosObservabilityProbe: ScopedOperatorHandler = async ({ client, 
     if (["runtime_channel_update_mismatch", "embedded_launch", "emergency_launch"].includes(finding)) return "release_health_findings";
     return "observability_required_review_flags";
   };
+  const activeFindingsByTable = new Map<string, Set<string>>();
   for (const finding of classification.findings) {
     const table = tableForFinding(finding);
+    const activeForTable = activeFindingsByTable.get(table) ?? new Set<string>();
+    activeForTable.add(finding);
+    activeFindingsByTable.set(table, activeForTable);
     const row: JsonObject = {
       system_id: "observability_runtime_operator",
       flag_type: finding,
@@ -157,8 +170,52 @@ export const runIosObservabilityProbe: ScopedOperatorHandler = async ({ client, 
       row.embedded_launch = releaseSnapshot?.embedded_launch === true;
       row.emergency_launch = releaseSnapshot?.emergency_launch === true;
     }
-    const { error } = await client.from(table).insert(row);
-    if (error) throw error;
+    const { data: existing, error: existingError } = await client.from(table)
+      .select("id")
+      .eq("system_id", "observability_runtime_operator")
+      .eq("platform", "ios")
+      .eq("flag_type", finding)
+      .eq("target_id", "com.chillywood.mobile:1.0.0:8")
+      .eq("review_status", "open")
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing?.id) {
+      const { error } = await client.from(table).update({ severity: row.severity, metadata: row.metadata, updated_at: windowEnd }).eq("id", existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await client.from(table).insert(row);
+      if (error?.code === "23505") {
+        const { data: raced, error: racedError } = await client.from(table)
+          .select("id")
+          .eq("system_id", "observability_runtime_operator")
+          .eq("platform", "ios")
+          .eq("flag_type", finding)
+          .eq("target_id", "com.chillywood.mobile:1.0.0:8")
+          .eq("review_status", "open")
+          .limit(1)
+          .maybeSingle();
+        if (racedError || !raced?.id) throw racedError ?? error;
+        const { error: updateError } = await client.from(table).update({ severity: row.severity, metadata: row.metadata, updated_at: windowEnd }).eq("id", raced.id);
+        if (updateError) throw updateError;
+      } else if (error) throw error;
+    }
+  }
+  if (classification.readbackComplete) {
+    for (const table of IOS_TYPED_FINDING_TABLES) {
+      const { data: openRows, error: openRowsError } = await client.from(table)
+        .select("id,flag_type")
+        .eq("system_id", "observability_runtime_operator")
+        .eq("platform", "ios")
+        .eq("review_status", "open");
+      if (openRowsError) throw openRowsError;
+      const active = activeFindingsByTable.get(table) ?? new Set<string>();
+      const resolvedIds = (openRows ?? []).filter((entry: JsonObject) => !active.has(String(entry.flag_type ?? ""))).map((entry: JsonObject) => entry.id);
+      if (resolvedIds.length) {
+        const { error: resolveError } = await client.from(table).update({ review_status: "reviewed", updated_at: windowEnd }).in("id", resolvedIds);
+        if (resolveError) throw resolveError;
+      }
+    }
   }
 
   return {
@@ -167,6 +224,7 @@ export const runIosObservabilityProbe: ScopedOperatorHandler = async ({ client, 
     source: identity.data_source,
     dataWindow: { start: windowStart, end: windowEnd },
     healthState: classification.healthState,
+    reasons: classification.findings,
     findings: classification.findings,
     missingCapabilities: classification.missingCapabilities,
     moneyMoved: false,

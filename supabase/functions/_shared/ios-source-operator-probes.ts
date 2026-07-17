@@ -64,7 +64,7 @@ export const runIosSecuritySourceProbe: ScopedOperatorHandler = async ({ client 
     metadata: sanitizeAutonomousReadback({ presence, signingCertificateStatus: "provider_readback_unavailable", provisioningProfileStatus: "provider_readback_unavailable", bundleTeamMismatch: "unknown", credentialMutated: false }),
   });
   if (error) throw error;
-  return { readbackComplete: false, platform: "ios", source: "credential_presence_names+release_identity", dataWindow: window, healthState: "unknown", missingCapabilities: ["signing_certificate_status", "provisioning_profile_status"], moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
+  return { readbackComplete: false, platform: "ios", source: "credential_presence_names+release_identity", dataWindow: window, healthState: "unknown", reasons: ["signing_certificate_status_unavailable", "provisioning_profile_status_unavailable"], missingCapabilities: ["signing_certificate_status", "provisioning_profile_status"], moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
 };
 
 export const runIosPrivacySourceProbe: ScopedOperatorHandler = async ({ client }) => {
@@ -91,15 +91,14 @@ export const runIosPrivacySourceProbe: ScopedOperatorHandler = async ({ client }
     capability_state: "blocked", readback_complete: false, missing_capability: "owner_attestation_pending", data_source: "owner_attestation_registry", ...identity,
     window_start: window.start, window_end: window.end, metadata: { legalAnswersSubmitted: false },
   });
-  const { error } = await client.from("privacy_request_findings").insert({
-    system_id: "privacy_compliance_operator", health_state: "blocked", environment_mode: "production", flag_type: "ios_privacy_source_readiness",
-    severity: "review", target_type: "ios_bundle", target_id: IOS_QA_RELEASE_EXPECTATION.bundleIdentifier,
+  const { error } = await client.from("privacy_operator_events").insert({
+    system_id: "privacy_compliance_operator", actor_type: "operator", actor_id: "privacy_compliance_operator",
+    action_id: "watch_once", result: "owner_attestation_pending", environment_mode: "production", platform: "ios",
     user_rights_changed: false, money_moved: false, high_risk_executed: false,
-    ...identity, data_source: "compiled_repository_privacy_contract+owner_attestation_registry", readback_complete: false,
-    window_start: window.start, window_end: window.end, metadata: sanitizeAutonomousReadback(sourceContract),
+    metadata: sanitizeAutonomousReadback({ source: "compiled_repository_privacy_contract+owner_attestation_registry", readbackComplete: false, sourceContractReady: true }),
   });
   if (error) throw error;
-  return { readbackComplete: false, platform: "ios", source: "compiled_repository_privacy_contract+owner_attestation_registry", dataWindow: window, healthState: "blocked", sourceContractReady: true, ownerAttestationPending: true, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
+  return { readbackComplete: false, platform: "ios", source: "compiled_repository_privacy_contract+owner_attestation_registry", dataWindow: window, healthState: "blocked", reasons: ["owner_attestation_pending"], sourceContractReady: true, ownerAttestationPending: true, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
 };
 
 export const runIosRecoverySourceProbe: ScopedOperatorHandler = async ({ client }) => {
@@ -108,7 +107,9 @@ export const runIosRecoverySourceProbe: ScopedOperatorHandler = async ({ client 
   const { data: recovery, error: recoveryError } = await client.rpc("get_ios_autonomous_recovery_readback");
   if (recoveryError) throw recoveryError;
   const readback = recovery && typeof recovery === "object" ? recovery as Record<string, unknown> : {};
-  const expectedIdentity = release?.runtime_version === IOS_QA_RELEASE_EXPECTATION.runtimeVersion && release?.channel === IOS_QA_RELEASE_EXPECTATION.channel;
+  const expectedIdentity = release?.readback_complete === true
+    && release?.runtime_version === IOS_QA_RELEASE_EXPECTATION.runtimeVersion
+    && release?.channel === IOS_QA_RELEASE_EXPECTATION.channel;
   const complete = readback.readbackComplete === true && expectedIdentity;
   const identity = safeIdentity(release);
   const { error } = await client.from("backup_health_snapshots").insert({
@@ -120,7 +121,7 @@ export const runIosRecoverySourceProbe: ScopedOperatorHandler = async ({ client 
     metadata: sanitizeAutonomousReadback({ ...readback, expectedIdentity: IOS_QA_RELEASE_EXPECTATION, releaseIdentityMatches: expectedIdentity, variablePresence: { eas: present("EXPO_TOKEN"), apns: present("APNS_KEY_ID") || present("APNS_PRIVATE_KEY"), revenueCatPublicKey: present("EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY") }, valuesReturned: false, restoreExecuted: false, secretRotated: false }),
   });
   if (error) throw error;
-  return { readbackComplete: complete, platform: "ios", source: "database_migration_function_retry_and_release_readback", dataWindow: window, healthState: complete ? "healthy" : "blocked", readback: sanitizeAutonomousReadback(readback), restoreExecuted: false, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
+  return { readbackComplete: complete, platform: "ios", source: "database_migration_function_retry_and_release_readback", dataWindow: window, healthState: complete ? "healthy" : "blocked", reasons: complete ? [] : ["ios_release_or_retry_recovery_readback_blocked"], readback: sanitizeAutonomousReadback(readback), restoreExecuted: false, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
 };
 
 export const runIosSupportSourceProbe: ScopedOperatorHandler = async ({ client }) => {
@@ -139,5 +140,5 @@ export const runIosSupportSourceProbe: ScopedOperatorHandler = async ({ client }
     metadata: sanitizeAutonomousReadback({ iosFindingCount: Number(count ?? 0), refundIssued: false, grantCreated: false, accountChanged: false, legalCommitmentMade: false }),
   });
   if (error) throw error;
-  return { readbackComplete: complete, platform: "ios", source: "release_identity+sanitized_support_findings", dataWindow: window, healthState: complete ? "healthy" : "unknown", iosFindingCount: Number(count ?? 0), moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
+  return { readbackComplete: complete, platform: "ios", source: "release_identity+sanitized_support_findings", dataWindow: window, healthState: complete ? "healthy" : "unknown", reasons: complete ? [] : ["ios_release_identity_readback_unavailable"], iosFindingCount: Number(count ?? 0), moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
 };

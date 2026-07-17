@@ -124,7 +124,7 @@ const readAppStoreConnect = async () => {
   };
   const [app, builds, versions] = await Promise.all([
     asc(`/v1/apps/${IOS_QA_RELEASE_EXPECTATION.appId}?fields[apps]=bundleId,name`),
-    asc(`/v1/builds?filter[app]=${IOS_QA_RELEASE_EXPECTATION.appId}&sort=-uploadedDate&limit=20&fields[builds]=version,processingState,uploadedDate,expired`),
+    asc(`/v1/builds?filter[app]=${IOS_QA_RELEASE_EXPECTATION.appId}&sort=-uploadedDate&limit=20&fields[builds]=version,processingState,uploadedDate,expired&include=preReleaseVersion&fields[preReleaseVersions]=version,platform`),
     asc(`/v1/apps/${IOS_QA_RELEASE_EXPECTATION.appId}/appStoreVersions?filter[platform]=IOS&limit=50&fields[appStoreVersions]=versionString,appStoreState`),
   ]);
   if (![app, builds, versions].every((result) => result.ok)) {
@@ -135,35 +135,47 @@ const readAppStoreConnect = async () => {
   const submissionStates = new Set(["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "PROCESSING_FOR_APP_STORE"]);
   const publicSubmissionPresent = versionRows.some((row) => submissionStates.has(row?.attributes?.appStoreState));
   const publicReleasePresent = versionRows.some((row) => row?.attributes?.appStoreState === "READY_FOR_SALE");
-  const latest = buildRows.find((row) => String(row?.attributes?.version ?? "") === IOS_QA_RELEASE_EXPECTATION.nativeBuild) ?? buildRows[0] ?? null;
-  if (!latest?.id) {
+  const latest = buildRows[0] ?? null;
+  const attestedBuild = buildRows.find((row) => String(row?.attributes?.version ?? "") === IOS_QA_RELEASE_EXPECTATION.nativeBuild) ?? null;
+  if (!attestedBuild?.id) {
     return {
       readbackComplete: false,
       capability: "app_store_connect_api",
       reason: "expected_ios_build_not_found",
       appId: IOS_QA_RELEASE_EXPECTATION.appId,
       bundleIdentifier: app.data?.data?.attributes?.bundleId ?? null,
+      latestBuildId: latest?.id ?? null,
+      latestNativeBuild: latest?.attributes?.version ?? null,
       publicSubmissionPresent,
       publicReleasePresent,
     };
   }
   const [groups, individualTesters, betaDetail] = await Promise.all([
-    asc(`/v1/builds/${latest.id}/betaGroups?limit=200&fields[betaGroups]=name,isInternalGroup,publicLinkEnabled`),
-    asc(`/v1/builds/${latest.id}/individualTesters?limit=200`),
-    asc(`/v1/builds/${latest.id}/buildBetaDetail?fields[buildBetaDetails]=internalBuildState,externalBuildState`),
+    asc(`/v1/builds/${attestedBuild.id}/betaGroups?limit=200&fields[betaGroups]=name,isInternalGroup,publicLinkEnabled`),
+    asc(`/v1/builds/${attestedBuild.id}/individualTesters?limit=200`),
+    asc(`/v1/builds/${attestedBuild.id}/buildBetaDetail?fields[buildBetaDetails]=internalBuildState,externalBuildState`),
   ]);
   if (![groups, individualTesters, betaDetail].every((result) => result.ok)) {
     return { readbackComplete: false, capability: "app_store_connect_build_assignment_api", reason: "provider_query_failed" };
   }
   const groupRows = groups.data?.data ?? [];
+  const preReleaseVersionId = latest?.relationships?.preReleaseVersion?.data?.id ?? null;
+  const preReleaseVersion = (builds.data?.included ?? []).find((row) => row?.type === "preReleaseVersions" && row?.id === preReleaseVersionId) ?? null;
+  const attestedPreReleaseVersionId = attestedBuild?.relationships?.preReleaseVersion?.data?.id ?? null;
+  const attestedPreReleaseVersion = (builds.data?.included ?? []).find((row) => row?.type === "preReleaseVersions" && row?.id === attestedPreReleaseVersionId) ?? null;
   return {
     readbackComplete: true,
     capability: "app_store_connect_api",
     appId: IOS_QA_RELEASE_EXPECTATION.appId,
     bundleIdentifier: app.data?.data?.attributes?.bundleId ?? null,
     latestBuildId: latest?.id ?? null,
+    appVersion: preReleaseVersion?.attributes?.version ?? null,
     latestNativeBuild: latest?.attributes?.version ?? null,
-    processingState: latest?.attributes?.processingState ?? null,
+    latestProcessingState: latest?.attributes?.processingState ?? null,
+    attestedBuildId: attestedBuild?.id ?? null,
+    attestedAppVersion: attestedPreReleaseVersion?.attributes?.version ?? null,
+    attestedNativeBuild: attestedBuild?.attributes?.version ?? null,
+    processingState: attestedBuild?.attributes?.processingState ?? null,
     internalGroupAssigned: groupRows.some((row) => row?.attributes?.isInternalGroup === true && row?.attributes?.name === "Chillywood Internal"),
     externalGroupCount: groupRows.filter((row) => row?.attributes?.isInternalGroup !== true).length,
     individualTesterCount: Array.isArray(individualTesters.data?.data) ? individualTesters.data.data.length : 0,

@@ -86,7 +86,7 @@ const runRelease = () => {
   check(adapter.includes("build:list") && adapter.includes("channel:view"), "release adapter must independently read EAS");
   check(adapter.includes("api.appstoreconnect.apple.com"), "release adapter must independently read App Store Connect");
   check(adapter.includes("local_ios_build_absent_from_eas_cloud_build_history"), "local build must not be invented in EAS cloud history");
-  check(adapter.includes(`/builds/\${latest.id}/betaGroups`) && adapter.includes(`/builds/\${latest.id}/individualTesters`), "App Store readback must inspect exact build assignments");
+  check(adapter.includes(`/builds/\${attestedBuild.id}/betaGroups`) && adapter.includes(`/builds/\${attestedBuild.id}/individualTesters`), "App Store readback must inspect exact attested-build assignments");
   check(!adapter.includes("build?.channel ?? IOS_QA_RELEASE_EXPECTATION.channel"), "missing EAS channel must not default to expected");
   check(!adapter.includes("build?.runtimeVersion ?? IOS_QA_RELEASE_EXPECTATION.runtimeVersion"), "missing EAS runtime must not default to expected");
   check(!adapter.includes("artifact.url"), "release adapter must not output signed artifact URL");

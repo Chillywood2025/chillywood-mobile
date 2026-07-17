@@ -17,6 +17,16 @@ const validTypes = new Set([
   "non_autonomous_utility",
   "foundation_only_off",
 ]);
+const validDeploymentStates = new Set([
+  "source_complete",
+  "template_disabled",
+  "deployed_protected_worker",
+  "deployed",
+  "foundation_only_off",
+  "existing_protected_service",
+  "non_autonomous",
+  "manual_only",
+]);
 const requiredFields = [
   "id", "owningSystem", "componentType", "supportedPlatforms", "paths",
   "schedulerCadence", "allowedReads", "allowedWrites", "forbiddenScope",
@@ -34,6 +44,7 @@ for (const component of components) {
   if (ids.has(component.id)) fail(`${component.id}:duplicate_component_id`);
   ids.add(component.id);
   if (!validTypes.has(component.componentType)) fail(`${component.id}:invalid_component_type`);
+  if (!validDeploymentStates.has(component.deploymentState)) fail(`${component.id}:invalid_or_stale_deployment_state:${component.deploymentState}`);
   if (!Array.isArray(component.supportedPlatforms) || !component.supportedPlatforms.length) fail(`${component.id}:supported_platforms_missing`);
   if (!component.supportedPlatforms.every((platform) => ["shared", "ios", "android", "web", "unknown"].includes(platform))) fail(`${component.id}:invalid_platform`);
   if (!Array.isArray(component.paths) || !component.paths.length) fail(`${component.id}:paths_missing`);
@@ -41,6 +52,16 @@ for (const component of components) {
     coveredPaths.add(relative);
     if (!fs.existsSync(path.join(root, relative))) fail(`${component.id}:missing_path:${relative}`);
   }
+}
+
+for (const deployedComponent of [
+  "release_provider_readback_adapters",
+  "observability_provider_readback_adapter",
+  "ios_installed_qa_readiness",
+  "user_report_router",
+]) {
+  const component = components.find((entry) => entry.id === deployedComponent);
+  if (component?.deploymentState !== "deployed") fail(`${deployedComponent}:deployed_component_not_recorded_as_deployed`);
 }
 
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

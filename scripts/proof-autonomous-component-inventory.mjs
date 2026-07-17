@@ -16,6 +16,11 @@ const required = [
 for (const id of required) {
   if (!components.some((component) => component.id === id)) throw new Error(`missing required component ${id}`);
 }
+for (const id of ["release_provider_readback_adapters", "observability_provider_readback_adapter", "ios_installed_qa_readiness", "user_report_router"]) {
+  if (!components.some((component) => component.id === id && component.deploymentState === "deployed")) {
+    throw new Error(`deployed component has stale inventory state: ${id}`);
+  }
+}
 if (!components.some((component) => component.componentType === "non_autonomous_utility")) throw new Error("non-autonomous utility classification missing");
 if (!components.some((component) => component.componentType === "foundation_only_off")) throw new Error("foundation-only classification missing");
 process.stdout.write(`${JSON.stringify({ ok: true, componentCount: components.length, byType, platforms })}\n`);

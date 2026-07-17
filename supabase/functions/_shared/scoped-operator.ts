@@ -544,7 +544,11 @@ const createApprovalRequest = async (
     event_summary: `${config.systemId} requested approval for ${actionId}`,
     metadata: { created_by: config.systemId },
   });
-  await insertEvent(client, config, "create_approval_request", "approval_request_created", { approval_request_id: data.id, action_id: actionId });
+  await insertEvent(client, config, "create_approval_request", "approval_request_created", {
+    approval_request_id: data.id,
+    action_id: actionId,
+    platform: normalizeOperatorPlatform(payload.platform),
+  });
   return data;
 };
 

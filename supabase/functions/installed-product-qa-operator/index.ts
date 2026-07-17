@@ -301,6 +301,7 @@ const recordAccountFixtureHealth = async (client: SupabaseClientLike, payload: J
 };
 
 const recordDeviceAvailability = async (client: SupabaseClientLike, payload: JsonObject) => {
+  const result = toText(payload.result ?? "blocked");
   const row = {
     ...baseRow(payload),
     device_requirement: toText(payload.device_requirement ?? payload.deviceRequirement),
@@ -318,12 +319,37 @@ const recordDeviceAvailability = async (client: SupabaseClientLike, payload: Jso
     apns_proof_available: Boolean(payload.apns_proof_available ?? payload.apnsProofAvailable ?? false),
     voip_proof_available: Boolean(payload.voip_proof_available ?? payload.voipProofAvailable ?? false),
     storekit_proof_available: Boolean(payload.storekit_proof_available ?? payload.storekitProofAvailable ?? false),
-    finding_status: "open",
+    result,
+    finding_status: result === "pass" ? "reviewed" : "open",
     next_safe_action: toText(payload.next_safe_action ?? payload.nextSafeAction ?? "Keep installed realtime proof pending until device/device-lab readiness exists."),
   };
   if (!row.device_requirement) throw new Error("device_requirement_required");
-  const { error } = await client.from("device_availability_findings").insert(row);
-  if (error) throw error;
+  const findOpen = () => client.from("device_availability_findings")
+    .select("id")
+    .eq("system_id", row.system_id)
+    .eq("platform", row.platform)
+    .eq("device_requirement", row.device_requirement)
+    .eq("blocker_classification", row.blocker_classification)
+    .eq("finding_status", "open")
+    .limit(1)
+    .maybeSingle();
+  const { data: existing, error: findError } = await findOpen();
+  if (findError) throw findError;
+  if (existing?.id) {
+    const { error } = await client.from("device_availability_findings").update(row).eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await client.from("device_availability_findings").insert(row);
+    if (error?.code === "23505") {
+      const { data: raced, error: raceFindError } = await findOpen();
+      if (raceFindError) throw raceFindError;
+      if (!raced?.id) throw error;
+      const { error: raceUpdateError } = await client.from("device_availability_findings").update(row).eq("id", raced.id);
+      if (raceUpdateError) throw raceUpdateError;
+    } else if (error) {
+      throw error;
+    }
+  }
   await insertEvent(client, "record_device_availability", "device_availability_finding_recorded", payload);
 };
 
@@ -337,8 +363,36 @@ const recordManualCodexGap = async (client: SupabaseClientLike, payload: JsonObj
     review_status: "open",
     next_safe_action: toText(payload.next_safe_action ?? payload.nextSafeAction ?? "Run proactive installed QA watch_once/device-lab proof; do not wait for manual Codex prompt."),
   };
-  const { error } = await client.from("qa_required_review_flags").insert(row);
-  if (error) throw error;
+  const targetType = row.target_type ?? null;
+  const targetId = row.target_id ?? null;
+  const findOpen = () => {
+    let query = client.from("qa_required_review_flags")
+      .select("id")
+      .eq("system_id", row.system_id)
+      .eq("platform", row.platform)
+      .eq("flag_type", row.flag_type)
+      .eq("review_status", "open");
+    query = targetType === null ? query.is("target_type", null) : query.eq("target_type", targetType);
+    query = targetId === null ? query.is("target_id", null) : query.eq("target_id", targetId);
+    return query.limit(1).maybeSingle();
+  };
+  const { data: existing, error: findError } = await findOpen();
+  if (findError) throw findError;
+  if (existing?.id) {
+    const { error } = await client.from("qa_required_review_flags").update(row).eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await client.from("qa_required_review_flags").insert(row);
+    if (error?.code === "23505") {
+      const { data: raced, error: raceFindError } = await findOpen();
+      if (raceFindError) throw raceFindError;
+      if (!raced?.id) throw error;
+      const { error: raceUpdateError } = await client.from("qa_required_review_flags").update(row).eq("id", raced.id);
+      if (raceUpdateError) throw raceUpdateError;
+    } else if (error) {
+      throw error;
+    }
+  }
   await insertEvent(client, "record_manual_codex_gap", "manual_codex_gap_recorded", payload);
 };
 

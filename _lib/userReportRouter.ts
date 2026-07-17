@@ -111,7 +111,7 @@ const CATEGORY_HINTS: Array<[UserReportClass, RegExp]> = [
   ["search_discovery_visibility", /\b(search|discover|ranking|recommendation|visibility|not showing|shadowban|boost|demote)\b/i],
   ["ads_sponsor", /\b(ad|ads|sponsor|sponsorship|paid placement|brand deal|promotion)\b/i],
   ["safety_abuse", /\b(abuse|unsafe|threat|violence|self harm|minor safety|sexual exploitation|report abuse)\b/i],
-  ["harassment", /\b(harass|bully|hate|slur|stalking)\b/i],
+  ["harassment", /\b(harass(?:ment|ed|ing)?|bully|hate|slur|stalking)\b/i],
   ["impersonation", /\b(impersonat|fake account|pretending to be)\b/i],
   ["copyright", /\b(copyright|dmca|takedown|stolen video|unauthorized media)\b/i],
   ["illegal_or_dangerous_content", /\b(illegal|dangerous|weapon|explosive|drug sale|trafficking)\b/i],
@@ -144,9 +144,13 @@ const inferPlatformFromText = (input: UserReportInput): UserReportPlatform => {
   return "unknown";
 };
 
+const PLATFORM_SPECIFIC_REPORT_SIGNAL = /\b(ios|iphone|ipad|testflight|app store|storekit|iap|apple subscription|app privacy|privacyinfo|privacy manifest|apns|pushkit|callkit|voip|android|google play|play billing|data safety|fcm|apk|aab|versioncode|firebase test lab|web|browser|pwa|permission screen|account deletion (?:screen|button|route)|sign[ -]?in screen|login screen|route|screen|button)\b/i;
+
 const platformForClassification = (reportType: UserReportClass, input: UserReportInput): UserReportPlatform => {
-  if (["safety_abuse", "harassment", "impersonation", "copyright", "illegal_or_dangerous_content", "privacy_data", "account_access"].includes(reportType)) return "shared";
-  return inferPlatformFromText(input);
+  const inferred = inferPlatformFromText(input);
+  if (!["safety_abuse", "harassment", "impersonation", "copyright", "illegal_or_dangerous_content", "privacy_data", "account_access"].includes(reportType)) return inferred;
+  const issueText = `${input.surface ?? ""} ${input.route ?? ""} ${input.summary ?? ""} ${input.details ?? ""}`;
+  return inferred !== "unknown" && PLATFORM_SPECIFIC_REPORT_SIGNAL.test(issueText) ? inferred : "shared";
 };
 
 const normalizeKeywordText = (value: string) => value

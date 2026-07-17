@@ -40,6 +40,26 @@ export const containsForbiddenAutonomousEvidence = (value) => {
   return typeof value === "string" && LONG_CREDENTIAL_TEST.test(value);
 };
 
+export const matchesIosBinaryAttestation = (attestation, appStoreConnect, expected = IOS_QA_RELEASE_EXPECTATION) => {
+  if (appStoreConnect?.readbackComplete !== true || !attestation) return false;
+  return [
+    [attestation.platform, expected.platform],
+    [attestation.bundle_identifier, expected.bundleIdentifier],
+    [attestation.app_version, expected.appVersion],
+    [attestation.native_build, expected.nativeBuild],
+    [attestation.runtime_version, expected.runtimeVersion],
+    [attestation.channel, expected.channel],
+    [attestation.distribution_source, expected.distributionSource],
+    [attestation.source_commit, expected.sourceCommit],
+    [attestation.binary_sha256, expected.binarySha256],
+    [attestation.app_store_connect_build_id, expected.appStoreConnectBuildId],
+    [appStoreConnect.bundleIdentifier, attestation.bundle_identifier],
+    [appStoreConnect.attestedAppVersion, attestation.app_version],
+    [appStoreConnect.attestedNativeBuild, attestation.native_build],
+    [appStoreConnect.attestedBuildId, attestation.app_store_connect_build_id],
+  ].every(([actual, required]) => String(actual ?? "") === String(required ?? ""));
+};
+
 const asCount = (value) => Math.max(0, Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0);
 
 export const classifyNotificationAutonomy = (input) => {
