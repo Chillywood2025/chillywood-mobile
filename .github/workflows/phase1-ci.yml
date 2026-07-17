@@ -71,20 +71,20 @@ jobs:
 
       - name: Check modified autonomous Edge Functions
         run: |
-          deno check supabase/functions/_shared/scoped-operator.ts
-          deno check supabase/functions/_shared/all-platform-source-operator-probes.ts
-          deno check supabase/functions/notification-operator/index.ts
-          deno check supabase/functions/release-operator/index.ts
-          deno check supabase/functions/observability-operator/index.ts
-          deno check supabase/functions/installed-product-qa-operator/index.ts
-          deno check supabase/functions/money-operator/index.ts
-          deno check supabase/functions/security-owner-operator/index.ts
-          deno check supabase/functions/platform-recovery-operator/index.ts
-          deno check supabase/functions/privacy-compliance-operator/index.ts
-          deno check supabase/functions/support-success-operator/index.ts
-          deno check supabase/functions/owner-command-operator/index.ts
-          deno check supabase/functions/autonomous-approval-request/index.ts
-          deno check supabase/functions/user-report-intake/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/_shared/scoped-operator.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/_shared/all-platform-source-operator-probes.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/notification-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/release-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/observability-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/installed-product-qa-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/money-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/security-owner-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/platform-recovery-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/privacy-compliance-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/support-success-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/owner-command-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/autonomous-approval-request/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/user-report-intake/index.ts
 
   autonomous-systems-ios-contract:
     name: Phase 1 / Autonomous Systems iOS Contract
