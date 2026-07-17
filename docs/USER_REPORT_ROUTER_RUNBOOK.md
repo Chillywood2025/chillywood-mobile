@@ -4,6 +4,8 @@ Status: scoped-write capable under `support_success_operator`.
 
 Owner system: `support_success_operator`
 
+Component classification: `registered_surface`. The historical `supabase/migrations-isolated/20260714001704_user_report_router.sql` remains isolated. The reviewed forward migration is `supabase/migrations/20260718134500_governed_user_report_router.sql`; it creates current objects with normalized platform constraints, RLS, service-only writes, and platform-aware indexes.
+
 ## Purpose
 
 The User Report Router receives authenticated user reports, sanitizes report text, classifies the report, clusters duplicate reports, counts unique reporters, and routes safe findings or Owner Commands to the correct autonomous system.
@@ -24,6 +26,10 @@ It closes the prior gap where safety reports and beta feedback existed, but prod
 - Privacy/data requests route to `privacy_compliance_operator`.
 - Security/access/admin reports route to `security_owner_operator`.
 - Ads/sponsor reports route to `ads_sponsor_delivery_operator` as foundation-only readiness/review; reports cannot activate ads or sponsors.
+
+Platform-specific vocabulary participates in routing and clustering. iOS terms include App Store, StoreKit, IAP, In-App Purchase, TestFlight, APNs, PushKit, CallKit, VoIP, Restore Purchases, Apple subscription, iPhone, iPad, Seat Pass, and tip tier. Android terms include Google Play, Play Billing, FCM, APK, AAB, versionCode, and Firebase Test Lab. StoreKit/RevenueCat purchase reports route to money/support; APNs and PushKit/CallKit delivery route to notifications; LiveKit media routes to LiveKit; TestFlight/runtime/build routes to release; installed UI/route reports route to installed QA; and crash/performance routes to observability.
+
+The normalized platform values are `shared`, `ios`, `android`, `web`, and `unknown`. Platform is part of the fingerprint for installed UI/routes, notifications, release/runtime/update, crashes/performance, native calls, platform billing, and platform media. A shared safety/privacy/account report may cluster across platforms only when its classification is genuinely shared.
 
 ## Threshold
 
@@ -74,3 +80,5 @@ Clients can submit reports and read their own report status through `user-report
 - `npm run proof:user-report-safety-privacy`
 - `npm run guard:user-report-router`
 - `npm run guard:user-report-threshold-routing`
+- `npm run test:all-platform-autonomy`
+- `supabase test db`

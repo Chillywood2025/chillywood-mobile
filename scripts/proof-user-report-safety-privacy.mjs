@@ -7,7 +7,7 @@ const assert = (condition, message) => {
 
 const helper = read("_lib/userReportRouter.ts");
 const edge = read("supabase/functions/user-report-intake/index.ts");
-const migration = read("supabase/migrations-isolated/20260714001704_user_report_router.sql");
+const migration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
 const admin = read("app/admin.tsx");
 
 for (const redaction of ["EMAIL_PATTERN", "PHONE_PATTERN", "IPV4_PATTERN", "SECRET_KEY_PATTERN", "LONG_SECRET_LIKE_PATTERN"]) {

@@ -32,6 +32,8 @@ leave release/observability/TestFlight readiness blocked where EAS, App Store
 Connect, or Firebase read-only truth is unavailable. No device row or
 second-device row was fabricated.
 
+The all-platform autonomy parity closeout does not change this gate. It adds truthful shared/Android/iOS source and provider readiness, local-binary attestation, scheduled adapters, report routing, and deduplicated blockers only. It cannot promote any physical row below to a pass.
+
 | # | Required proof | Status | Completion evidence required |
 | ---: | --- | --- | --- |
 | 1 | Physical iPhone camera permission and preview | `READY_NOT_STARTED` | Prompt state, allow flow, real preview, camera off/on, lifecycle, and truthful denied/restricted recovery without private imagery. |

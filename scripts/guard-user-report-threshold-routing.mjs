@@ -7,7 +7,7 @@ const assert = (condition, message) => {
 
 const helper = read("_lib/userReportRouter.ts");
 const edge = read("supabase/functions/user-report-intake/index.ts");
-const migration = read("supabase/migrations-isolated/20260714001704_user_report_router.sql");
+const migration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 
 assert(helper.includes("USER_REPORT_THRESHOLD_UNIQUE_USERS = 3"), "normal bug routing threshold must remain 3 unique users");

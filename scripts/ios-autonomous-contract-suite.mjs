@@ -43,11 +43,11 @@ const runCallRetry = () => {
 };
 
 const runNotification = () => {
-  const healthyExpo = classifyNotificationAutonomy({ readbackComplete: true, attemptCount: 10, failedAttemptCount: 0 });
-  check(healthyExpo.healthState === "healthy", "healthy iOS Expo fixture");
+  const healthyExpo = classifyNotificationAutonomy({ readbackComplete: true, providerConfigured: true, rolloutEnabled: true, activeTokenCount: 1, attemptCount: 10, successfulAttemptCount: 10, failedAttemptCount: 0 });
+  check(healthyExpo.healthState === "delivery_evidence_healthy", "healthy iOS Expo fixture");
   check(classifyNotificationAutonomy({ readbackComplete: true, attemptCount: 10, failedAttemptCount: 3 }).healthState === "degraded", "degraded Expo receipts fixture");
   check(classifyNotificationAutonomy({ readbackComplete: true, attemptCount: 1, invalidTokenCount: 1 }).finding === "invalid_token_evidence", "invalid iOS token fixture");
-  check(classifyNotificationAutonomy({ readbackComplete: true, attemptCount: 1 }).healthState === "healthy", "healthy APNs VoIP fixture");
+  check(classifyNotificationAutonomy({ readbackComplete: true, providerConfigured: true, rolloutEnabled: true, activeTokenCount: 1, attemptCount: 1, successfulAttemptCount: 1 }).healthState === "delivery_evidence_healthy", "healthy APNs VoIP fixture");
   check(classifyNotificationAutonomy({ readbackComplete: true, attemptCount: 1, failedAttemptCount: 1 }).healthState === "degraded", "failed APNs VoIP fixture");
   check(classifyNotificationAutonomy({ readbackComplete: true, retryBacklog: 2 }).finding === "delivery_recovery_pending", "terminal retry backlog fixture");
   check(classifyNotificationAutonomy({ readbackComplete: true, cappedAttemptCount: 1 }).healthState === "critical", "capped retry fixture");
@@ -85,7 +85,7 @@ const runRelease = () => {
   const probe = read("supabase/functions/release-operator/probe.ts");
   check(adapter.includes("build:list") && adapter.includes("channel:view"), "release adapter must independently read EAS");
   check(adapter.includes("api.appstoreconnect.apple.com"), "release adapter must independently read App Store Connect");
-  check(adapter.includes("expected_ios_build_not_found"), "successful provider query without build 8 must remain incomplete");
+  check(adapter.includes("local_ios_build_absent_from_eas_cloud_build_history"), "local build must not be invented in EAS cloud history");
   check(adapter.includes(`/builds/\${latest.id}/betaGroups`) && adapter.includes(`/builds/\${latest.id}/individualTesters`), "App Store readback must inspect exact build assignments");
   check(!adapter.includes("build?.channel ?? IOS_QA_RELEASE_EXPECTATION.channel"), "missing EAS channel must not default to expected");
   check(!adapter.includes("build?.runtimeVersion ?? IOS_QA_RELEASE_EXPECTATION.runtimeVersion"), "missing EAS runtime must not default to expected");
@@ -134,7 +134,7 @@ const runInstalled = () => {
   check(classifyIosInstalledQaReadiness(readyInstalled({ channel: "production" })).blockers.includes("ios_channel_mismatch"), "wrong channel fixture");
   check(classifyIosInstalledQaReadiness(readyInstalled({ sourceCommit: "wrong" })).blockers.includes("ios_source_commit_mismatch"), "wrong source fixture");
   check(classifyIosInstalledQaReadiness(readyInstalled({ internalBuildAvailable: false })).blockers.includes("ios_testflight_build_unavailable"), "no TestFlight build fixture");
-  check(classifyIosInstalledQaReadiness(readyInstalled({ externalGroupCount: 1 })).blockers.includes("ios_provider_readback_missing"), "external TestFlight fixture");
+  check(classifyIosInstalledQaReadiness(readyInstalled({ externalGroupCount: 1 })).blockers.includes("ios_provider_readback_blocked"), "external TestFlight fixture");
   check(current.blockers.includes("ios_physical_proof_required"), "physical proof missing fixture");
   check(current.blockers.includes("ios_second_device_required"), "second device missing fixture");
   check(current.fakePhysicalProof === false, "operator never fabricates device proof");
@@ -165,7 +165,7 @@ const runCoverage = () => {
   check(shared.includes("watchOnceHandler?") && shared.includes("readbackComplete"), "shared custom handler envelope missing");
   check(shared.includes('health_state: "unknown"'), "generic missing readback cannot become healthy");
   check(read("supabase/functions/notification-operator/index.ts").includes("runNotificationAutonomyProbe"), "notification custom readback missing");
-  check(read("supabase/functions/release-operator/index.ts").includes("runReleaseAutonomyProbe"), "release custom readback missing");
+  check(read("supabase/functions/release-operator/index.ts").includes("runSharedReleaseProbe") && read("supabase/functions/release-operator/index.ts").includes("runAndroidReleaseAutonomyProbe") && read("supabase/functions/release-operator/index.ts").includes("runIosReleaseAutonomyProbe"), "composed release readback missing");
   check(read("supabase/functions/observability-operator/index.ts").includes("runIosObservabilityProbe"), "observability custom readback missing");
   check(read("supabase/functions/installed-product-qa-operator/index.ts").includes("classifyIosInstalledQaReadiness"), "installed iOS adapter missing");
   check(read("supabase/functions/livekit-operator/index.ts").includes("authenticated_client_render_telemetry"), "LiveKit platform telemetry missing");

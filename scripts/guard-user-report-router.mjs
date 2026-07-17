@@ -7,7 +7,7 @@ const assert = (condition, message) => {
 
 const helper = read("_lib/userReportRouter.ts");
 const edge = read("supabase/functions/user-report-intake/index.ts");
-const migration = read("supabase/migrations-isolated/20260714001704_user_report_router.sql");
+const migration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
 const supportScreen = read("components/system/support-screen.tsx");
 
 assert(!edge.includes("Deno.env.get(\"STRIPE") && !edge.includes("stripe.") && !edge.includes("grant_premium"), "report router must not access money/provider grant paths");

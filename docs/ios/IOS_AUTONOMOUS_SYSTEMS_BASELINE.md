@@ -6,6 +6,8 @@ Repository truth: `codex/ios-integration-90` at `3ad78fb65445b7851403b72b69923f4
 
 This is the pre-change inventory required before autonomous iOS integration. It records what the operators actually did at the baseline; it does not claim physical-device proof.
 
+This historical iOS-only baseline is preserved as evidence of the earlier checkpoint. The later repository-wide baseline is `IOS_AUTONOMOUS_PARITY_BASELINE.md`, and the completed component/control-plane result is `ALL_PLATFORM_AUTONOMY_PARITY_REPORT.md`.
+
 ## Release and control-plane baseline
 
 - iOS QA contract: `com.chillywood.mobile`, version `1.0.0`, native build `8`, channel `ios-qa`, runtime `1.0.0-iosqa1`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, internal TestFlight distribution.

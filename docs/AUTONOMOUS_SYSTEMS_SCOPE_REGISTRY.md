@@ -12,6 +12,10 @@ The explicit iOS adapters are notification delivery and terminal retry, EAS/App 
 
 The canonical operator matrix, including source, scheduler, read/write boundary, guard, proof, kill switch, approval boundary, and physical-proof state, is [IOS_AUTONOMOUS_OPERATOR_MATRIX.md](ios/IOS_AUTONOMOUS_OPERATOR_MATRIX.md). Missing provider readback must be `unknown` or `blocked`; no generic `watch_once` may default to healthy.
 
+The canonical component inventory is `config/autonomy/autonomous-components.json`. It classifies every discovered operator, worker, monitor, database scheduler, host timer, scheduled workflow, protected control plane, and non-autonomous utility. The all-platform closeout contains 29 components: 14 top-level systems, 9 registered surfaces, 2 protected control planes, 3 non-autonomous utilities, and 1 foundation-only/off system. The production malware-scanner queue worker is a `media_automation` surface; the LiveKit heartbeat and disabled Cloudflare/GitHub scheduler templates remain owned by `livekit_operator`; terminal retry remains a notification surface; Android Firebase Test Lab and iOS readiness remain separate installed-QA surfaces; and User Report Router is a support-owned surface. See [ALL_PLATFORM_AUTONOMY_PARITY_REPORT.md](ios/ALL_PLATFORM_AUTONOMY_PARITY_REPORT.md).
+
+Shared, Android, and iOS probes are compositional. Expected release manifests never populate observed fields. Provider capability observations are append-only; current capability state and current findings are deduplicated with separate append-only lifecycle audit. Platform scope is inherited through command, approval, execution-step, blocker, provider-repair, report-routing, and audit rows.
+
 ## Current Systems
 
 ### `media_automation`

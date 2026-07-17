@@ -58,6 +58,7 @@ Configure these on `main`:
     - `Phase 1 / Expo Doctor`
     - `Phase 1 / Supabase Database Integration`
     - `Phase 1 / Autonomous Systems iOS Contract`
+    - `Phase 1 / Autonomous Systems All-Platform Contract`
 - Require branches to be up to date before merging.
 - Restrict force pushes.
 - Restrict direct pushes to `main`.

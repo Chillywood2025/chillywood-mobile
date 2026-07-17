@@ -11,36 +11,43 @@ physical-device matrix has not begun and remains the final unclaimed proof.**
 
 ## Autonomous iOS source/backend checkpoint
 
+The later all-platform parity closeout is additive to this iOS checkpoint. It registers 29 repository components, including the previously omitted malware-scanner worker and disabled LiveKit scheduler templates; composes shared/Android/iOS probes; schedules real release/observability adapters at unchanged cadence; models local iOS binary attestation separately from EAS cloud history; prevents expected-as-observed fallback; separates notification, installed-QA, and money semantics by platform/provider; propagates platform through command and approval control planes; deploys User Report Router through a reviewed forward migration; and deduplicates current findings/provider capabilities while retaining append-only history. See `ALL_PLATFORM_AUTONOMY_PARITY_REPORT.md`.
+
 The autonomous control plane is now explicitly platform-aware. Every active
 system declares `shared`, `ios`, `android`, `web`, or `unknown` support; the
 platform-sensitive systems include iOS adapters, while media, moderation, and
 ranking remain truthfully shared. The terminal call retry worker is a formal
 `notification_delivery_operator` surface.
 
-Three forward-only migrations are deployed:
+Six forward-only migrations are deployed:
 `20260718123000_ios_autonomous_platform_contract`,
 `20260718124500_fix_ios_autonomous_probe_identity_columns`, and
-`20260718130000_complete_ios_observability_review_identity`. Linked history shows
-exact local/remote pairs. Local reset and pgTAP pass 3 files / 131 assertions.
+`20260718130000_complete_ios_observability_review_identity`, followed by
+`20260718133000_all_platform_autonomous_control_plane`,
+`20260718134500_governed_user_report_router`, and
+`20260718140000_resolve_unobserved_release_findings`. Linked history shows exact
+local/remote pairs. Local reset and pgTAP pass 4 files / 180 assertions.
 
-Sanitized live probes pass the backend iOS notification rails, the one-minute
+Sanitized live probes complete the backend iOS notification rail readback without
+calling idle or rollout-disabled rails delivery-healthy, and pass the one-minute
 terminal retry scheduler with zero backlog, the App Store/RevenueCat catalog and
 non-payable policy, and the shared LiveKit router. EAS could not prove locally
-built build 8 or an `ios-qa` update-channel record; App Store Connect and Firebase
-metric APIs were unavailable to the owner-host adapters. Release, observability,
+produced build 8 or an `ios-qa` update-channel record because EAS/Expo and App
+Store Connect read-only host access was unavailable; Firebase metric APIs were
+also unavailable. The scheduled adapters executed and recorded the blockers.
+Release, observability,
 installed-product provider readiness, signing status, and dependent
 recovery/support state are therefore explicitly blocked or unknown—not healthy.
 No physical proof was created. See `IOS_AUTONOMOUS_SYSTEMS_COMPLETION.md` and
 `IOS_AUTONOMOUS_OPERATOR_MATRIX.md`.
 
-The active autonomous function versions are notification v17, release v17,
-observability v15, installed QA v9, LiveKit v43, money v28, security v16,
-recovery/privacy/support v9, moderation v16, search v8, owner command v11, and
-terminal retry v2. Existing
+The active autonomous function versions are notification v19, release v19,
+observability v16, installed QA v11, LiveKit v43, money v29, security v17,
+recovery/privacy/support v10, moderation v16, search v8, owner command v12,
+autonomous approval v33, User Report Intake v1, and terminal retry v2. Existing
 timer cadences are unchanged. The new required CI job is
-`Phase 1 / Autonomous Systems iOS Contract`. All nine required jobs, including
-the autonomous iOS contract and Supabase database integration jobs, passed on the
-completed autonomous integration branch.
+`Phase 1 / Autonomous Systems All-Platform Contract`; the existing iOS contract
+job remains required alongside it.
 
 ## Final QA lane separation
 
@@ -78,10 +85,10 @@ publish an Android rollback update.
 
 No PR has been merged. The build-8 source passed the original full Node 20 suite,
 92 database assertions, and all eight then-required remote PR checks. The current
-autonomous source extension passes 131 database assertions locally and adds the
-independent `Phase 1 / Autonomous Systems iOS Contract` job as the ninth required
-check. The documentation-only closeout after `bbb9d6db` does not change the
-inspected binary.
+autonomous source extension passes 180 database assertions locally and retains the
+independent `Phase 1 / Autonomous Systems iOS Contract` job while adding the
+all-platform contract job. The source/backend closeout after `bbb9d6db` does not
+change the inspected binary.
 
 ## Current integration status
 

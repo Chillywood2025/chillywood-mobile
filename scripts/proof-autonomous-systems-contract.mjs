@@ -17,7 +17,7 @@ const ownerCommandHelper = read("_lib/ownerCommandOperator.ts");
 const ownerCommandFunction = read("supabase/functions/owner-command-operator/index.ts");
 const ownerCommandMigration = read("supabase/migrations/20260712180500_owner_command_operator.sql");
 const ownerCommandRunbook = read("docs/OWNER_COMMAND_OPERATOR_RUNBOOK.md");
-const userReportMigration = read("supabase/migrations-isolated/20260714001704_user_report_router.sql");
+const userReportMigration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
 const userReportFunction = read("supabase/functions/user-report-intake/index.ts");
 const userReportRunbook = read("docs/USER_REPORT_ROUTER_RUNBOOK.md");
 

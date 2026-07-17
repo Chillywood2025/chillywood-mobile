@@ -10,6 +10,82 @@ permissions:
   contents: read
 
 jobs:
+  autonomous-systems-all-platform-contract:
+    name: Phase 1 / Autonomous Systems All-Platform Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate all-platform autonomous contracts
+        run: |
+          npm run guard:autonomous-component-inventory
+          npm run proof:autonomous-component-inventory
+          npm run guard:autonomous-systems-contract
+          npm run proof:autonomous-systems-contract
+          npm run guard:autonomous-operating-model
+          npm run guard:scheduled-provider-adapters
+          npm run proof:scheduled-provider-adapters
+          npm run test:scheduled-provider-adapters
+          npm run guard:all-platform-autonomy
+          npm run proof:all-platform-autonomy
+          npm run test:all-platform-autonomy
+          npm run guard:user-report-router
+          npm run guard:user-report-threshold-routing
+          npm run proof:user-report-router
+          npm run proof:user-report-threshold-routing
+          npm run proof:user-report-safety-privacy
+          npm run proof:notification-delivery-operator
+          npm run proof:release-ota-operator
+          npm run proof:security-owner-operator
+          npm run proof:moderation-safety-operator
+          npm run proof:observability-runtime-operator
+          npm run proof:installed-product-qa-operator
+          npm run proof:platform-recovery-operator
+          npm run proof:privacy-compliance-operator
+          npm run proof:support-success-operator
+          npm run proof:search-ranking-integrity-operator
+          npm run proof:money-flow-control
+          npm run proof:money-operator-write-scope
+          npm run proof:livekit-autonomous-operator
+          npm run proof:owner-command-operator
+          npm run proof:owner-command-routing
+          npm run proof:owner-command-approval-gates
+
+      - name: Check modified autonomous Edge Functions
+        run: |
+          deno check supabase/functions/_shared/scoped-operator.ts
+          deno check supabase/functions/_shared/all-platform-source-operator-probes.ts
+          deno check supabase/functions/notification-operator/index.ts
+          deno check supabase/functions/release-operator/index.ts
+          deno check supabase/functions/observability-operator/index.ts
+          deno check supabase/functions/installed-product-qa-operator/index.ts
+          deno check supabase/functions/money-operator/index.ts
+          deno check supabase/functions/security-owner-operator/index.ts
+          deno check supabase/functions/platform-recovery-operator/index.ts
+          deno check supabase/functions/privacy-compliance-operator/index.ts
+          deno check supabase/functions/support-success-operator/index.ts
+          deno check supabase/functions/owner-command-operator/index.ts
+          deno check supabase/functions/autonomous-approval-request/index.ts
+          deno check supabase/functions/user-report-intake/index.ts
+
   autonomous-systems-ios-contract:
     name: Phase 1 / Autonomous Systems iOS Contract
     runs-on: ubuntu-latest
@@ -67,7 +143,7 @@ jobs:
           version: 2.109.1
 
       - name: Verify required database suites are present
-        run: test -f supabase/tests/chilly_chat_call_transitions_test.sql && test -f supabase/tests/revenuecat_atomic_transactions_test.sql && test -f supabase/tests/ios_autonomous_systems_test.sql
+        run: test -f supabase/tests/chilly_chat_call_transitions_test.sql && test -f supabase/tests/revenuecat_atomic_transactions_test.sql && test -f supabase/tests/ios_autonomous_systems_test.sql && test -f supabase/tests/all_platform_autonomy_test.sql
 
       - name: Start local Supabase services
         run: supabase start
