@@ -60,6 +60,7 @@ job remains required alongside it.
 | Build 7 embedded binary | `d5a8db65edbdd19fec42ad37ca1162412f66a41e`, `1.0.0 (7)`, production channel/runtime `1.0.0` | Native build capability present, but `ChillywoodNativeCallsRuntimeDefaultEnabled=false` | Historical internal binary. An OTA cannot change its native runtime key, Info.plist, entitlements, Swift, PushKit capability, or background modes. |
 | Build-7 iOS OTA | group `896eea68-859a-4cfe-9697-725299be45bf`, update `019f6b56-1bb5-7164-a6b2-4fb08ef4f6d8`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, production channel/runtime `1.0.0` | Native calls false; ordinary push registration true; RevenueCat App Store surfaces true | iOS-only JavaScript/provider QA. No Android update was published. Running-update verification on build 7 remains pending because the paired phone currently has an older development build. |
 | Local build 8 | local IPA SHA-256 `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, `ios-qa` channel/runtime `1.0.0-iosqa1` | `IOS_NATIVE_CALLS_ENABLED=true`, native runtime default true, ordinary push true, RevenueCat App Store surfaces true | Exact all-flags physical QA candidate. The App Store rail is bounded to `sandbox_only`; ordinary push and VoIP rollout remain off, and all live-money/payout controls remain off. |
+| Build-8 iOS OTA | group `9b320d78-8def-4235-a909-1f82908eb53e`, update `019f722b-d1e8-77c3-940f-1ec2a67bca23`, source `d0222db2ce5d15d4dd9ffb7a87b2f249139511b5`, `ios-qa` / `1.0.0-iosqa1` | Native-call JavaScript, ordinary push registration, and RevenueCat App Store surfaces true in this isolated update | Fixes the actionable Premium CTA, verified server-rail readback, and provider package readiness. Published to iOS only after all ten PR checks passed. The previous compatible update list was empty, so the embedded build-8 update is the rollback target. |
 
 The recorded build-7 OTA rollback target is group
 `8e158980-75d1-47ef-bd26-f3f9e564fdab`. Roll back with
@@ -188,7 +189,10 @@ contains QA client capability:
 Build 8 intentionally sets all four client QA flags true. Those flags do not
 override the private server controls above. Build 7's OTA intentionally keeps the
 native-call JavaScript flag false because its immutable native runtime default is
-false.
+false. The shared EAS production environment was restored after the isolated
+build-8 OTA: `EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED=false` and the temporary
+`IOS_QA_RUNTIME_VERSION` entry is absent; ordinary push and RevenueCat App Store
+client flags remain true.
 
 ## Implemented source and infrastructure
 

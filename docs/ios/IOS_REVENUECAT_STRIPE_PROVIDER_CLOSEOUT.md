@@ -248,6 +248,13 @@ off. The default RevenueCat `premium` offering now includes the exact App Store
 monthly and annual packages without changing product identifiers, prices, or the
 existing Android monthly package.
 
+The JavaScript fix is published only to the isolated build-8 lane as update group
+`9b320d78-8def-4235-a909-1f82908eb53e`, iOS update
+`019f722b-d1e8-77c3-940f-1ec2a67bca23`, runtime `1.0.0-iosqa1`, from source
+`d0222db2ce5d15d4dd9ffb7a87b2f249139511b5`. No prior compatible `ios-qa`
+update existed, so rollback is to build 8's embedded update. No Android or
+production-channel update was published.
+
 ## Remaining bounded proof
 
 1. Keep the App Store rail bounded to `sandbox_only`; never promote it to a live
