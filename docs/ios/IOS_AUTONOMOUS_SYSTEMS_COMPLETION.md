@@ -32,7 +32,7 @@ All three appear as exact local/remote pairs in linked migration history. They p
 
 The independent CI job is `Phase 1 / Autonomous Systems iOS Contract`. It runs all autonomy guards, proofs, and synthetic fixture suites. `Phase 1 / Supabase Database Integration` also runs `ios_autonomous_systems_test.sql` alongside the durable-call and atomic-RevenueCat suites with no production credential.
 
-Local database reset and pgTAP pass with 3 files and 131 assertions. The iOS autonomy suites cover 12 retry, 17 notification, 21 release, 13 observability, 17 installed-QA, and 53 coverage assertions. CI status is recorded after the final branch push; source documentation does not pre-claim a remote check.
+Local database reset and pgTAP pass with 3 files and 131 assertions. The iOS autonomy suites cover 12 retry, 17 notification, 21 release, 13 observability, 17 installed-QA, and 53 coverage assertions. All nine required PR jobs pass, including `Phase 1 / Autonomous Systems iOS Contract` and `Phase 1 / Supabase Database Integration`.
 
 ## Deployment and sanitized live readback
 

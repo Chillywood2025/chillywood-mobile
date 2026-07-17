@@ -37,8 +37,9 @@ The active autonomous function versions are notification v16, release v16,
 observability v15, installed QA v9, LiveKit v43, money v28, security v15,
 recovery/privacy/support v8, owner command v11, and terminal retry v2. Existing
 timer cadences are unchanged. The new required CI job is
-`Phase 1 / Autonomous Systems iOS Contract`; its final remote status is recorded
-after the branch push.
+`Phase 1 / Autonomous Systems iOS Contract`. All nine required jobs, including
+the autonomous iOS contract and Supabase database integration jobs, passed on the
+completed autonomous integration branch.
 
 ## Final QA lane separation
 
@@ -324,7 +325,7 @@ Exact required GitHub check names:
 
 The original eight passed remotely for final QA/build source
 `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`. The ninth job applies to the
-source/backend autonomy extension and must pass on its final PR head.
+source/backend autonomy extension; all nine passed on its completed PR head.
 
 Dependency audit status: the root mobile production graph contains 0 critical, 0
 high, 21 moderate, and 1 low advisory. The independently locked alert-automation
