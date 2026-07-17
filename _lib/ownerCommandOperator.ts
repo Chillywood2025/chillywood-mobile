@@ -137,6 +137,17 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "premium",
     "webhook",
     "provider",
+    "storekit",
+    "iap",
+    "in-app purchase",
+    "app store purchase",
+    "apple subscription",
+    "restore purchases",
+    "revenuecat apple",
+    "tip tier",
+    "seat pass",
+    "refund",
+    "revocation",
   ],
   notification_delivery_operator: [
     "notification",
@@ -145,6 +156,12 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "device token",
     "delivery",
     "alert",
+    "apns",
+    "pushkit",
+    "callkit",
+    "voip",
+    "native incoming call",
+    "terminal call cleanup",
   ],
   release_ota_operator: [
     "release",
@@ -169,6 +186,11 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "secret scan",
     "rachi",
     "approval",
+    "ios signing",
+    "apple certificate",
+    "provisioning profile",
+    "apns key",
+    "app store connect key",
   ],
   moderation_safety_operator: [
     "moderation",
@@ -208,6 +230,13 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "installed proof",
     "report cluster route bug",
     "user report route marker",
+    "testflight",
+    "ios simulator",
+    "internal ios build",
+    "iphone",
+    "ipad",
+    "build number",
+    "ios-qa",
   ],
   platform_recovery_operator: [
     "platform recovery",
@@ -435,9 +464,13 @@ const commandMatches = (text: string, patterns: readonly RegExp[]) => patterns.s
 
 export const classifyOwnerCommandPlatform = (commandText: string): AutonomousPlatform => {
   const text = normalizeCommandText(commandText).toLowerCase();
-  if (/\b(ios|iphone|ipad|testflight|app store|apns|pushkit|callkit|storekit)\b/.test(text)) return "ios";
-  if (/\b(android|google play|play store|fcm|apk|aab)\b/.test(text)) return "android";
-  if (/\b(web|browser|pwa|website)\b/.test(text)) return "web";
+  const matches = [
+    /\b(ios|iphone|ipad|testflight|app store|apns|pushkit|callkit|storekit)\b/.test(text) ? "ios" : null,
+    /\b(android|google play|play store|play billing|fcm|apk|aab|firebase test lab)\b/.test(text) ? "android" : null,
+    /\b(web|browser|pwa|website)\b/.test(text) ? "web" : null,
+  ].filter(Boolean) as AutonomousPlatform[];
+  if (matches.length > 1) return "unknown";
+  if (matches[0]) return matches[0];
   return "shared";
 };
 
@@ -490,6 +523,7 @@ export const classifyOwnerCommand = (commandText: string): OwnerCommandClassific
   if (!normalized) blockers.push("command_text_required");
   if (includesSecretLikeValue(normalized)) blockers.push("secret_like_command_payload_blocked");
   if (!targetSystems.length) blockers.push("target_system_not_identified");
+  if (classifyOwnerCommandPlatform(normalized) === "unknown") blockers.push("multiple_platform_scopes_require_separate_approval_requests");
 
   return {
     platformScope: classifyOwnerCommandPlatform(normalized),
@@ -602,6 +636,7 @@ export const buildOwnerCommandApprovalRequest = (plan: OwnerCommandExecutionPlan
   if (plan.approvalLevel < 3) return null;
   return {
     systemId: plan.targetSystems[0] ?? "security_owner_operator",
+    platform: plan.platformScope,
     actionId: "owner_command_high_risk_execution",
     approvalLevel: plan.approvalLevel as Extract<AutonomousApprovalLevel, 3 | 4>,
     title: `Owner command approval: ${plan.normalizedIntent}`,

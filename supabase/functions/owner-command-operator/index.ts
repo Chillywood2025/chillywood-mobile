@@ -36,13 +36,13 @@ const ACTIVE_SYSTEMS = [
 const SYSTEM_KEYWORDS: Record<string, readonly string[]> = {
   media_automation: ["media", "r2", "hls", "transcode", "rendition", "video", "storage", "cdn", "scan", "quarantine"],
   livekit_operator: ["livekit", "live room", "watch party", "party room", "heartbeat", "token", "router", "camera"],
-  money_flow_control: ["money", "revenuecat", "google play", "stripe", "billing", "payout", "cashout", "ledger", "premium", "webhook", "provider"],
-  notification_delivery_operator: ["notification", "push", "expo", "device token", "delivery", "alert"],
+  money_flow_control: ["money", "revenuecat", "google play", "stripe", "billing", "payout", "cashout", "ledger", "premium", "webhook", "provider", "storekit", "iap", "in-app purchase", "app store purchase", "apple subscription", "restore purchases", "revenuecat apple", "tip tier", "seat pass", "refund", "revocation"],
+  notification_delivery_operator: ["notification", "push", "expo", "device token", "delivery", "alert", "apns", "pushkit", "callkit", "voip", "native incoming call", "terminal call cleanup"],
   release_ota_operator: ["release", "ota", "eas", "updateid", "runtime", "channel", "rollback", "publish", "play store", "app store"],
-  security_owner_operator: ["security", "owner", "super_admin", "super admin", "admin", "rls", "auth", "secret scan", "rachi", "approval"],
+  security_owner_operator: ["security", "owner", "super_admin", "super admin", "admin", "rls", "auth", "secret scan", "rachi", "approval", "ios signing", "apple certificate", "provisioning profile", "apns key", "app store connect key"],
   moderation_safety_operator: ["moderation", "safety", "user report", "safety report", "ban", "suspend", "restrict", "delete content", "case", "fraud hold"],
   observability_runtime_operator: ["observability", "crash", "crashlytics", "analytics", "performance", "anr", "runtime health", "error rate", "backend error"],
-  installed_product_qa_operator: ["installed qa", "installed product qa", "installed traversal", "device lab", "browserstack", "route marker", "chat-inbox-screen", "creator-monetization-setup", "premium active account", "proof account", "two-device proof", "installed proof"],
+  installed_product_qa_operator: ["installed qa", "installed product qa", "installed traversal", "device lab", "browserstack", "route marker", "chat-inbox-screen", "creator-monetization-setup", "premium active account", "proof account", "two-device proof", "installed proof", "testflight", "ios simulator", "internal ios build", "iphone", "ipad", "build number", "ios-qa"],
   platform_recovery_operator: ["platform recovery", "backup", "restore drill", "migration drift", "function deployment", "timer health", "recovery readiness"],
   privacy_compliance_operator: ["privacy", "data export", "account deletion", "legal hold", "retention", "pii", "data rights"],
   support_success_operator: ["support", "ticket", "refund request", "account help", "support draft", "support escalation"],
@@ -172,9 +172,13 @@ const safeStringArray = (value: unknown) => (
 const commandMatches = (text: string, patterns: readonly RegExp[]) => patterns.some((pattern) => pattern.test(text));
 const classifyPlatform = (commandText: string) => {
   const text = normalizeText(commandText).toLowerCase();
-  if (/\b(ios|iphone|ipad|testflight|app store|apns|pushkit|callkit|storekit)\b/.test(text)) return "ios";
-  if (/\b(android|google play|play store|fcm|apk|aab)\b/.test(text)) return "android";
-  if (/\b(web|browser|pwa|website)\b/.test(text)) return "web";
+  const scopes = [
+    /\b(ios|iphone|ipad|testflight|app store|apns|pushkit|callkit|storekit)\b/.test(text) ? "ios" : null,
+    /\b(android|google play|play store|play billing|fcm|apk|aab|firebase test lab)\b/.test(text) ? "android" : null,
+    /\b(web|browser|pwa|website)\b/.test(text) ? "web" : null,
+  ].filter(Boolean);
+  if (scopes.length > 1) return "unknown";
+  if (scopes[0]) return scopes[0];
   return "shared";
 };
 
@@ -243,6 +247,7 @@ const buildPlan = (commandText: string) => {
   if (!command) blockers.push("command_text_required");
   if (containsSecretLikeValue(command)) blockers.push("secret_like_command_payload_blocked");
   if (!systems.length) blockers.push("target_system_not_identified");
+  if (classifyPlatform(command) === "unknown") blockers.push("multiple_platform_scopes_require_separate_approval_requests");
 
   const commonPreflight = [
     "verify owner/super_admin authority",
@@ -384,6 +389,7 @@ const createApprovalRequestForCommand = async (client: SupabaseClientLike, comma
     .from("autonomous_approval_requests")
     .insert({
       action_id: "owner_command_high_risk_execution",
+      platform: toText(plan.platformScope) || "shared",
       allowed_write_scope: safeStringArray(plan.allowedScope),
       approval_level: approvalLevel,
       expires_at: expiresAt,
@@ -415,6 +421,7 @@ const createApprovalRequestForCommand = async (client: SupabaseClientLike, comma
     event_type: "requested",
     metadata: { command_id: commandId, created_by: "owner_command_operator" },
     request_id: data.id,
+    platform: toText(plan.platformScope) || "shared",
   });
 
   await client.from("owner_command_requests").update({
@@ -617,11 +624,14 @@ Deno.serve(async (request) => {
     if (approvalLevel >= 3) {
       const { data: approval } = await client
         .from("autonomous_approval_requests")
-        .select("id,status,expires_at,approval_level,system_id,action_id")
+        .select("id,status,expires_at,approval_level,system_id,action_id,platform")
         .eq("id", command.approval_request_id)
         .maybeSingle();
       if (!approval || approval.status !== "approved") blockers.push("owner_approval_required");
       if (approval && Date.parse(toText(approval.expires_at)) <= Date.now()) blockers.push("approval_expired");
+      if (approval && toText(approval.platform) !== toText(command.platform)) blockers.push("approval_platform_scope_mismatch");
+      if (approval && !((command.target_systems as unknown[]) ?? []).map(String).includes(toText(approval.system_id))) blockers.push("approval_target_system_scope_mismatch");
+      if (approval && toText(approval.action_id) !== "owner_command_high_risk_execution") blockers.push("approval_action_scope_mismatch");
     }
     if (command.external_confirmation_required && body.external_confirmation_status !== "provided_production") {
       blockers.push("external_confirmation_required");

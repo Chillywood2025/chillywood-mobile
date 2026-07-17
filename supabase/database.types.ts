@@ -996,6 +996,7 @@ export type Database = {
           event_type: string
           id: string
           metadata: Json
+          platform: string
           request_id: string
         }
         Insert: {
@@ -1006,6 +1007,7 @@ export type Database = {
           event_type: string
           id?: string
           metadata?: Json
+          platform?: string
           request_id: string
         }
         Update: {
@@ -1016,6 +1018,7 @@ export type Database = {
           event_type?: string
           id?: string
           metadata?: Json
+          platform?: string
           request_id?: string
         }
         Relationships: [
@@ -1045,6 +1048,7 @@ export type Database = {
           id: string
           kill_switch_plan: string
           metadata: Json
+          platform: string
           proof_plan: string
           proposed_action: string
           reason: string
@@ -1074,6 +1078,7 @@ export type Database = {
           id?: string
           kill_switch_plan: string
           metadata?: Json
+          platform?: string
           proof_plan: string
           proposed_action: string
           reason: string
@@ -1103,6 +1108,7 @@ export type Database = {
           id?: string
           kill_switch_plan?: string
           metadata?: Json
+          platform?: string
           proof_plan?: string
           proposed_action?: string
           reason?: string
@@ -1115,6 +1121,105 @@ export type Database = {
           title?: string
           updated_at?: string
           validation_plan?: string
+        }
+        Relationships: []
+      }
+      autonomous_current_findings: {
+        Row: {
+          created_at: string
+          current_status: string
+          finding_key: string
+          finding_type: string
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          platform: string
+          provider: string
+          resolved_at: string | null
+          severity: string
+          system_id: string
+          target_surface: string
+          updated_at: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          current_status?: string
+          finding_key: string
+          finding_type: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          platform: string
+          provider?: string
+          resolved_at?: string | null
+          severity?: string
+          system_id: string
+          target_surface?: string
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          current_status?: string
+          finding_key?: string
+          finding_type?: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          platform?: string
+          provider?: string
+          resolved_at?: string | null
+          severity?: string
+          system_id?: string
+          target_surface?: string
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      autonomous_finding_lifecycle_events: {
+        Row: {
+          created_at: string
+          event_summary: string
+          event_type: string
+          finding_key: string
+          id: string
+          metadata: Json
+          platform: string
+          system_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_summary: string
+          event_type: string
+          finding_key: string
+          id?: string
+          metadata?: Json
+          platform: string
+          system_id: string
+        }
+        Update: {
+          created_at?: string
+          event_summary?: string
+          event_type?: string
+          finding_key?: string
+          id?: string
+          metadata?: Json
+          platform?: string
+          system_id?: string
         }
         Relationships: []
       }
@@ -1196,6 +1301,93 @@ export type Database = {
           user_rights_changed?: boolean
           window_end?: string | null
           window_start?: string | null
+        }
+        Relationships: []
+      }
+      autonomous_provider_readback_current: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          capability: string
+          capability_state: string
+          channel: string | null
+          current_status: string
+          data_source: string
+          distribution_source: string | null
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_seen_at: string
+          metadata: Json
+          missing_capability: string | null
+          money_moved: boolean
+          native_build: string | null
+          occurrence_count: number
+          platform: string
+          provider: string
+          provider_environment: string | null
+          readback_complete: boolean
+          resolved_at: string | null
+          runtime_version: string | null
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          capability: string
+          capability_state: string
+          channel?: string | null
+          current_status: string
+          data_source: string
+          distribution_source?: string | null
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          missing_capability?: string | null
+          money_moved?: boolean
+          native_build?: string | null
+          occurrence_count?: number
+          platform: string
+          provider: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          resolved_at?: string | null
+          runtime_version?: string | null
+          system_id: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          capability?: string
+          capability_state?: string
+          channel?: string | null
+          current_status?: string
+          data_source?: string
+          distribution_source?: string | null
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          missing_capability?: string | null
+          money_moved?: boolean
+          native_build?: string | null
+          occurrence_count?: number
+          platform?: string
+          provider?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          resolved_at?: string | null
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
         }
         Relationships: []
       }
@@ -5524,6 +5716,7 @@ export type Database = {
       device_availability_findings: {
         Row: {
           account_role: string | null
+          apns_proof_available: boolean
           app_version: string | null
           available_device_count: number
           blocker_classification: string
@@ -5539,11 +5732,15 @@ export type Database = {
           finding_status: string
           high_risk_executed: boolean
           id: string
+          ios_physical_device_count: number
+          ios_second_device_available: boolean
+          ios_simulator_available: boolean
           metadata: Json
           money_moved: boolean
           native_build: string | null
           next_safe_action: string
           owner_command_request_id: string | null
+          physical_proof_available: boolean
           platform: string
           play_installed_device_available: boolean
           private_evidence_stored: boolean
@@ -5553,16 +5750,22 @@ export type Database = {
           result: string
           runtime_version: string | null
           secrets_logged: boolean
+          signed_ios_build_available: boolean
           source: string
+          storekit_proof_available: boolean
           system_id: string
+          testflight_internal_build_available: boolean
+          universal_link_proof_available: boolean
           update_id: string | null
           updated_at: string
           user_rights_changed: boolean
+          voip_proof_available: boolean
           window_end: string | null
           window_start: string | null
         }
         Insert: {
           account_role?: string | null
+          apns_proof_available?: boolean
           app_version?: string | null
           available_device_count?: number
           blocker_classification: string
@@ -5578,11 +5781,15 @@ export type Database = {
           finding_status?: string
           high_risk_executed?: boolean
           id?: string
+          ios_physical_device_count?: number
+          ios_second_device_available?: boolean
+          ios_simulator_available?: boolean
           metadata?: Json
           money_moved?: boolean
           native_build?: string | null
           next_safe_action: string
           owner_command_request_id?: string | null
+          physical_proof_available?: boolean
           platform?: string
           play_installed_device_available?: boolean
           private_evidence_stored?: boolean
@@ -5592,16 +5799,22 @@ export type Database = {
           result?: string
           runtime_version?: string | null
           secrets_logged?: boolean
+          signed_ios_build_available?: boolean
           source: string
+          storekit_proof_available?: boolean
           system_id?: string
+          testflight_internal_build_available?: boolean
+          universal_link_proof_available?: boolean
           update_id?: string | null
           updated_at?: string
           user_rights_changed?: boolean
+          voip_proof_available?: boolean
           window_end?: string | null
           window_start?: string | null
         }
         Update: {
           account_role?: string | null
+          apns_proof_available?: boolean
           app_version?: string | null
           available_device_count?: number
           blocker_classification?: string
@@ -5617,11 +5830,15 @@ export type Database = {
           finding_status?: string
           high_risk_executed?: boolean
           id?: string
+          ios_physical_device_count?: number
+          ios_second_device_available?: boolean
+          ios_simulator_available?: boolean
           metadata?: Json
           money_moved?: boolean
           native_build?: string | null
           next_safe_action?: string
           owner_command_request_id?: string | null
+          physical_proof_available?: boolean
           platform?: string
           play_installed_device_available?: boolean
           private_evidence_stored?: boolean
@@ -5631,11 +5848,16 @@ export type Database = {
           result?: string
           runtime_version?: string | null
           secrets_logged?: boolean
+          signed_ios_build_available?: boolean
           source?: string
+          storekit_proof_available?: boolean
           system_id?: string
+          testflight_internal_build_available?: boolean
+          universal_link_proof_available?: boolean
           update_id?: string | null
           updated_at?: string
           user_rights_changed?: boolean
+          voip_proof_available?: boolean
           window_end?: string | null
           window_start?: string | null
         }
@@ -11581,6 +11803,7 @@ export type Database = {
           id: string
           metadata: Json
           next_action: string
+          platform: string
           resolved_at: string | null
         }
         Insert: {
@@ -11591,6 +11814,7 @@ export type Database = {
           id?: string
           metadata?: Json
           next_action: string
+          platform?: string
           resolved_at?: string | null
         }
         Update: {
@@ -11601,6 +11825,7 @@ export type Database = {
           id?: string
           metadata?: Json
           next_action?: string
+          platform?: string
           resolved_at?: string | null
         }
         Relationships: [
@@ -11670,6 +11895,7 @@ export type Database = {
           execution_status: string
           id: string
           metadata: Json
+          platform: string
           preflight_status: string
           proof: Json
           result_summary: string | null
@@ -11687,6 +11913,7 @@ export type Database = {
           execution_status?: string
           id?: string
           metadata?: Json
+          platform?: string
           preflight_status?: string
           proof?: Json
           result_summary?: string | null
@@ -11704,6 +11931,7 @@ export type Database = {
           execution_status?: string
           id?: string
           metadata?: Json
+          platform?: string
           preflight_status?: string
           proof?: Json
           result_summary?: string | null
@@ -14321,6 +14549,7 @@ export type Database = {
           metadata: Json
           money_moved: boolean
           old_value_redacted: string | null
+          platform: string
           proof_plan: string
           proposed_value_redacted: string | null
           provider: string
@@ -14340,6 +14569,7 @@ export type Database = {
           metadata?: Json
           money_moved?: boolean
           old_value_redacted?: string | null
+          platform?: string
           proof_plan: string
           proposed_value_redacted?: string | null
           provider: string
@@ -14359,6 +14589,7 @@ export type Database = {
           metadata?: Json
           money_moved?: boolean
           old_value_redacted?: string | null
+          platform?: string
           proof_plan?: string
           proposed_value_redacted?: string | null
           provider?: string
@@ -15120,6 +15351,81 @@ export type Database = {
           user_rights_changed?: boolean
           window_end?: string | null
           window_start?: string | null
+        }
+        Relationships: []
+      }
+      release_binary_attestations: {
+        Row: {
+          app_store_connect_build_id: string | null
+          app_version: string
+          attestation_status: string
+          binary_sha256: string
+          bundle_identifier: string
+          channel: string | null
+          created_at: string
+          distribution_source: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string
+          platform: string
+          play_build_identifier: string | null
+          release_action_executed: boolean
+          runtime_version: string | null
+          signing_identity_summary: string | null
+          source_commit: string
+          submission_identifier_hash: string | null
+          updated_at: string
+          verification_source: string
+          verified_at: string | null
+        }
+        Insert: {
+          app_store_connect_build_id?: string | null
+          app_version: string
+          attestation_status?: string
+          binary_sha256: string
+          bundle_identifier: string
+          channel?: string | null
+          created_at?: string
+          distribution_source: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build: string
+          platform: string
+          play_build_identifier?: string | null
+          release_action_executed?: boolean
+          runtime_version?: string | null
+          signing_identity_summary?: string | null
+          source_commit: string
+          submission_identifier_hash?: string | null
+          updated_at?: string
+          verification_source: string
+          verified_at?: string | null
+        }
+        Update: {
+          app_store_connect_build_id?: string | null
+          app_version?: string
+          attestation_status?: string
+          binary_sha256?: string
+          bundle_identifier?: string
+          channel?: string | null
+          created_at?: string
+          distribution_source?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string
+          platform?: string
+          play_build_identifier?: string | null
+          release_action_executed?: boolean
+          runtime_version?: string | null
+          signing_identity_summary?: string | null
+          source_commit?: string
+          submission_identifier_hash?: string | null
+          updated_at?: string
+          verification_source?: string
+          verified_at?: string | null
         }
         Relationships: []
       }
@@ -19004,6 +19310,562 @@ export type Database = {
         }
         Relationships: []
       }
+      user_report_classifications: {
+        Row: {
+          blocker_classification: string | null
+          category: string
+          confidence: number
+          created_at: string
+          escalation_policy: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          prompt_injection_flag: boolean
+          report_id: string
+          report_type: string
+          routed_system_id: string
+          severity: string
+          spam_flag: boolean
+          user_rights_changed: boolean
+        }
+        Insert: {
+          blocker_classification?: string | null
+          category: string
+          confidence?: number
+          created_at?: string
+          escalation_policy?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          prompt_injection_flag?: boolean
+          report_id: string
+          report_type: string
+          routed_system_id: string
+          severity: string
+          spam_flag?: boolean
+          user_rights_changed?: boolean
+        }
+        Update: {
+          blocker_classification?: string | null
+          category?: string
+          confidence?: number
+          created_at?: string
+          escalation_policy?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          prompt_injection_flag?: boolean
+          report_id?: string
+          report_type?: string
+          routed_system_id?: string
+          severity?: string
+          spam_flag?: boolean
+          user_rights_changed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_report_classifications_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "user_report_intake_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_report_cluster_members: {
+        Row: {
+          cluster_id: string
+          duplicate_flag: boolean
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          metadata: Json
+          report_count: number
+          report_id: string
+          reporter_hash: string
+          reporter_user_id: string | null
+        }
+        Insert: {
+          cluster_id: string
+          duplicate_flag?: boolean
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          report_count?: number
+          report_id: string
+          reporter_hash: string
+          reporter_user_id?: string | null
+        }
+        Update: {
+          cluster_id?: string
+          duplicate_flag?: boolean
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          report_count?: number
+          report_id?: string
+          reporter_hash?: string
+          reporter_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_report_cluster_members_cluster_id_fkey"
+            columns: ["cluster_id"]
+            isOneToOne: false
+            referencedRelation: "user_report_clusters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_report_cluster_members_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "user_report_intake_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_report_clusters: {
+        Row: {
+          action_status: string
+          approval_request_id: string | null
+          category: string
+          cluster_status: string
+          created_at: string
+          false_positive: boolean
+          finding_key: string | null
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          normalized_fingerprint: string
+          occurrence_count: number
+          owner_command_id: string | null
+          platform: string
+          report_count: number
+          report_type: string
+          resolved_at: string | null
+          route: string | null
+          routed_system_id: string
+          severity: string
+          spam_flag: boolean
+          surface: string | null
+          target_id_hash: string | null
+          target_type: string | null
+          text_summary_redacted: string
+          threshold_unique_reporters: number
+          unique_reporter_count: number
+          updated_at: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_status?: string
+          approval_request_id?: string | null
+          category: string
+          cluster_status?: string
+          created_at?: string
+          false_positive?: boolean
+          finding_key?: string | null
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          normalized_fingerprint: string
+          occurrence_count?: number
+          owner_command_id?: string | null
+          platform?: string
+          report_count?: number
+          report_type: string
+          resolved_at?: string | null
+          route?: string | null
+          routed_system_id: string
+          severity: string
+          spam_flag?: boolean
+          surface?: string | null
+          target_id_hash?: string | null
+          target_type?: string | null
+          text_summary_redacted?: string
+          threshold_unique_reporters?: number
+          unique_reporter_count?: number
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_status?: string
+          approval_request_id?: string | null
+          category?: string
+          cluster_status?: string
+          created_at?: string
+          false_positive?: boolean
+          finding_key?: string | null
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          normalized_fingerprint?: string
+          occurrence_count?: number
+          owner_command_id?: string | null
+          platform?: string
+          report_count?: number
+          report_type?: string
+          resolved_at?: string | null
+          route?: string | null
+          routed_system_id?: string
+          severity?: string
+          spam_flag?: boolean
+          surface?: string | null
+          target_id_hash?: string | null
+          target_type?: string | null
+          text_summary_redacted?: string
+          threshold_unique_reporters?: number
+          unique_reporter_count?: number
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_report_clusters_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_approval_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_report_clusters_owner_command_id_fkey"
+            columns: ["owner_command_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_report_intake_events: {
+        Row: {
+          app_version: string | null
+          category: string
+          channel: string | null
+          created_at: string
+          duplicate_flag: boolean
+          false_positive: boolean
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          normalized_fingerprint: string
+          platform: string
+          raw_text_redacted: string | null
+          report_status: string
+          report_type: string
+          reporter_user_id: string | null
+          route: string | null
+          runtime_version: string | null
+          severity: string
+          source: string
+          spam_flag: boolean
+          surface: string | null
+          target_id_hash: string | null
+          target_type: string | null
+          text_summary_redacted: string
+          update_id: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          app_version?: string | null
+          category: string
+          channel?: string | null
+          created_at?: string
+          duplicate_flag?: boolean
+          false_positive?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          normalized_fingerprint: string
+          platform?: string
+          raw_text_redacted?: string | null
+          report_status?: string
+          report_type: string
+          reporter_user_id?: string | null
+          route?: string | null
+          runtime_version?: string | null
+          severity?: string
+          source?: string
+          spam_flag?: boolean
+          surface?: string | null
+          target_id_hash?: string | null
+          target_type?: string | null
+          text_summary_redacted?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          app_version?: string | null
+          category?: string
+          channel?: string | null
+          created_at?: string
+          duplicate_flag?: boolean
+          false_positive?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          normalized_fingerprint?: string
+          platform?: string
+          raw_text_redacted?: string | null
+          report_status?: string
+          report_type?: string
+          reporter_user_id?: string | null
+          route?: string | null
+          runtime_version?: string | null
+          severity?: string
+          source?: string
+          spam_flag?: boolean
+          surface?: string | null
+          target_id_hash?: string | null
+          target_type?: string | null
+          text_summary_redacted?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      user_report_operator_findings: {
+        Row: {
+          approval_request_id: string | null
+          cluster_id: string
+          created_at: string
+          finding_key: string | null
+          finding_status: string
+          finding_type: string
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          owner_command_id: string | null
+          platform: string
+          report_count: number
+          resolved_at: string | null
+          routed_system_id: string
+          severity: string
+          system_id: string
+          text_summary_redacted: string
+          unique_reporter_count: number
+          user_rights_changed: boolean
+        }
+        Insert: {
+          approval_request_id?: string | null
+          cluster_id: string
+          created_at?: string
+          finding_key?: string | null
+          finding_status?: string
+          finding_type: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          owner_command_id?: string | null
+          platform?: string
+          report_count?: number
+          resolved_at?: string | null
+          routed_system_id: string
+          severity: string
+          system_id: string
+          text_summary_redacted?: string
+          unique_reporter_count?: number
+          user_rights_changed?: boolean
+        }
+        Update: {
+          approval_request_id?: string | null
+          cluster_id?: string
+          created_at?: string
+          finding_key?: string | null
+          finding_status?: string
+          finding_type?: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          owner_command_id?: string | null
+          platform?: string
+          report_count?: number
+          resolved_at?: string | null
+          routed_system_id?: string
+          severity?: string
+          system_id?: string
+          text_summary_redacted?: string
+          unique_reporter_count?: number
+          user_rights_changed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_report_operator_findings_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_approval_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_report_operator_findings_cluster_id_fkey"
+            columns: ["cluster_id"]
+            isOneToOne: false
+            referencedRelation: "user_report_clusters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_report_operator_findings_owner_command_id_fkey"
+            columns: ["owner_command_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_report_router_learning_state: {
+        Row: {
+          created_at: string
+          high_risk_executed: boolean
+          id: string
+          learning_key: string
+          learning_state: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          system_id: string
+          updated_at: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          learning_key: string
+          learning_state?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          system_id?: string
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          learning_key?: string
+          learning_state?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          system_id?: string
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      user_report_routing_actions: {
+        Row: {
+          action_status: string
+          action_type: string
+          approval_request_id: string | null
+          cluster_id: string
+          created_at: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          owner_command_id: string | null
+          platform: string
+          reason: string
+          report_count: number
+          routed_system_id: string
+          unique_reporter_count: number
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_status?: string
+          action_type: string
+          approval_request_id?: string | null
+          cluster_id: string
+          created_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          owner_command_id?: string | null
+          platform?: string
+          reason: string
+          report_count?: number
+          routed_system_id: string
+          unique_reporter_count?: number
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_status?: string
+          action_type?: string
+          approval_request_id?: string | null
+          cluster_id?: string
+          created_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          owner_command_id?: string | null
+          platform?: string
+          reason?: string
+          report_count?: number
+          routed_system_id?: string
+          unique_reporter_count?: number
+          user_rights_changed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_report_routing_actions_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_approval_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_report_routing_actions_cluster_id_fkey"
+            columns: ["cluster_id"]
+            isOneToOne: false
+            referencedRelation: "user_report_clusters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_report_routing_actions_owner_command_id_fkey"
+            columns: ["owner_command_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_subscriptions: {
         Row: {
           tier: string
@@ -20295,6 +21157,7 @@ export type Database = {
           id: string
           kill_switch_plan: string
           metadata: Json
+          platform: string
           proof_plan: string
           proposed_action: string
           reason: string
@@ -20318,6 +21181,15 @@ export type Database = {
       assert_account_private_feature_allowed: {
         Args: { p_feature?: string; p_user_id: string }
         Returns: undefined
+      }
+      assert_autonomous_approval_platform_scope: {
+        Args: {
+          p_action_id: string
+          p_platform: string
+          p_request_id: string
+          p_system_id: string
+        }
+        Returns: boolean
       }
       assert_money_feature_allowed: {
         Args: { p_key: string; p_require_live_money?: boolean }
@@ -20442,6 +21314,7 @@ export type Database = {
           id: string
           kill_switch_plan: string
           metadata: Json
+          platform: string
           proof_plan: string
           proposed_action: string
           reason: string
@@ -20633,6 +21506,7 @@ export type Database = {
           id: string
           kill_switch_plan: string
           metadata: Json
+          platform: string
           proof_plan: string
           proposed_action: string
           reason: string
@@ -20811,6 +21685,7 @@ export type Database = {
           id: string
           kill_switch_plan: string
           metadata: Json
+          platform: string
           proof_plan: string
           proposed_action: string
           reason: string
@@ -21332,6 +22207,7 @@ export type Database = {
           id: string
           kill_switch_plan: string
           metadata: Json
+          platform: string
           proof_plan: string
           proposed_action: string
           reason: string
@@ -21376,6 +22252,7 @@ export type Database = {
           id: string
           kill_switch_plan: string
           metadata: Json
+          platform: string
           proof_plan: string
           proposed_action: string
           reason: string
@@ -21777,6 +22654,18 @@ export type Database = {
           status: string
         }[]
       }
+      record_autonomous_finding: {
+        Args: {
+          p_finding_type: string
+          p_metadata?: Json
+          p_platform: string
+          p_provider?: string
+          p_severity?: string
+          p_system_id: string
+          p_target_surface: string
+        }
+        Returns: string
+      }
       record_content_rights_disclosure: {
         Args: {
           p_contains_third_party_content?: boolean
@@ -21821,6 +22710,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      resolve_autonomous_findings: {
+        Args: {
+          p_active_finding_keys?: string[]
+          p_platform: string
+          p_system_id: string
+        }
+        Returns: number
       }
       resolve_creator_channel_subscription_access: {
         Args: { p_creator_id: string }

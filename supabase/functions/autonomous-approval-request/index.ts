@@ -46,6 +46,10 @@ const ALLOWED_REQUESTER_ACTOR_TYPES = [
 ] as const;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const normalizePlatform = (value: unknown) => {
+  const platform = toText(value).toLowerCase();
+  return ["shared", "ios", "android", "web", "unknown"].includes(platform) ? platform : "unknown";
+};
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const toUuidOrNull = (value: unknown) => {
   const text = toText(value);
@@ -226,7 +230,7 @@ const authorizeOwnerOrSuperAdmin = async (request: Request, client: SupabaseClie
 const readRequests = async (client: SupabaseClientLike, status = "pending", requestId?: string) => {
   let query = client
     .from("autonomous_approval_requests")
-    .select("id,system_id,action_id,requested_by_actor_type,requested_by_actor_id,approval_level,status,title,reason,risk_summary,proposed_action,allowed_write_scope,forbidden_scope,rollback_plan,kill_switch_plan,proof_plan,validation_plan,expires_at,approved_by,approved_at,denied_by,denied_at,denial_reason,execution_result,metadata,created_at,updated_at")
+    .select("id,system_id,action_id,platform,requested_by_actor_type,requested_by_actor_id,approval_level,status,title,reason,risk_summary,proposed_action,allowed_write_scope,forbidden_scope,rollback_plan,kill_switch_plan,proof_plan,validation_plan,expires_at,approved_by,approved_at,denied_by,denied_at,denial_reason,execution_result,metadata,created_at,updated_at")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -287,6 +291,7 @@ Deno.serve(async (request) => {
 
     const insertPayload = {
       action_id: toText(payload.action_id),
+      platform: normalizePlatform(payload.platform),
       allowed_write_scope: safeStringArray(payload.allowed_write_scope),
       approval_level: Number(payload.approval_level ?? payload.approvalLevel),
       expires_at: toText(payload.expires_at),
@@ -484,8 +489,12 @@ Deno.serve(async (request) => {
     if (trustedFailure) return trustedFailure;
     const requestId = toText(body.request_id);
     if (!requestId) return jsonResponse(400, { error: "request_id_required" });
+    const requests = await readRequests(client, "", requestId);
+    const approval = requests[0] as JsonObject | undefined;
+    if (!approval) return jsonResponse(404, { error: "request_not_found" });
+    if (normalizePlatform(body.platform) !== normalizePlatform(approval.platform)) return jsonResponse(409, { error: "approval_platform_scope_mismatch" });
     const { data, error } = await client.rpc("mark_autonomous_approval_preflight_result", {
-      p_metadata: safeMetadata(body.metadata),
+      p_metadata: safeMetadata({ ...((body.metadata as JsonObject) ?? {}), platform: normalizePlatform(body.platform) }),
       p_passed: body.passed === true,
       p_request_id: requestId,
       p_summary: redactText(body.summary || (body.passed === true ? "Fresh preflight passed." : "Fresh preflight failed.")),
@@ -499,10 +508,15 @@ Deno.serve(async (request) => {
     if (trustedFailure) return trustedFailure;
     const requestId = toText(body.request_id);
     if (!requestId) return jsonResponse(400, { error: "request_id_required" });
+    const requests = await readRequests(client, "", requestId);
+    const approval = requests[0] as JsonObject | undefined;
+    if (!approval) return jsonResponse(404, { error: "request_not_found" });
+    if (toText(body.system_id) !== toText(approval.system_id) || toText(body.action_id) !== toText(approval.action_id)) return jsonResponse(409, { error: "approval_scope_mismatch" });
+    if (normalizePlatform(body.platform) !== normalizePlatform(approval.platform)) return jsonResponse(409, { error: "approval_platform_scope_mismatch" });
     const { data, error } = await client.rpc("mark_autonomous_approval_request_executed", {
       p_action_id: toText(body.action_id),
       p_execution_result: redactText(body.execution_result || "Approved autonomous action completed."),
-      p_metadata: safeMetadata(body.metadata),
+      p_metadata: safeMetadata({ ...((body.metadata as JsonObject) ?? {}), platform: normalizePlatform(body.platform) }),
       p_request_id: requestId,
       p_system_id: toText(body.system_id),
     });

@@ -46,6 +46,7 @@ const REPORT_TYPES = [
 
 type ReportType = typeof REPORT_TYPES[number];
 type Severity = "low" | "review" | "major" | "critical";
+type Platform = "shared" | "ios" | "android" | "web" | "unknown";
 type RoutedSystem =
   | "media_automation"
   | "livekit_operator"
@@ -72,14 +73,14 @@ const ROUTES_TO_INSTALLED_QA = /^\/?(admin|chat|creator-monetization-setup|subsc
 
 const CATEGORY_HINTS: Array<[ReportType, RegExp]> = [
   ["security_access", /\b(security|hacked|unauthorized|admin access|permission|access control|account takeover|2fa|mfa|session hijack|leak)\b/i],
-  ["premium_or_billing", /\b(premium|subscription|billing|charged|charge|google play|revenuecat|store|purchase|restore)\b/i],
+  ["premium_or_billing", /\b(premium|subscription|billing|charged|charge|google play|play billing|revenuecat|storekit|iap|in-app purchase|app store purchase|apple subscription|restore purchases|seat pass|tip tier|store|purchase|restore|refund|revocation)\b/i],
   ["payout_or_money", /\b(payout|cashout|transfer|stripe|bank|tax|refund|money|invoice|checkout)\b/i],
   ["privacy_data", /\b(privacy|delete my data|export my data|personal data|doxx|reporter|private evidence|gdpr|ccpa)\b/i],
-  ["livekit_live_watchparty", /\b(watch party|party room|livekit|camera|microphone|mic|live stage|viewer request|host approve|call)\b/i],
+  ["livekit_live_watchparty", /\b(watch party|party room|livekit|camera|microphone|mic|live stage|viewer request|host approve|call media)\b/i],
   ["media_playback", /\b(playback|video|audio|buffer|caption|subtitle|player|stream|stuck loading)\b/i],
   ["upload_or_transcode", /\b(upload|transcode|processing|thumbnail|media job|draft video|creator upload)\b/i],
-  ["notification_delivery", /\b(push|notification|expo|device token|alert did not arrive|reminder)\b/i],
-  ["release_update_version", /\b(update|version|ota|runtime|stale app|release|rollback|channel)\b/i],
+  ["notification_delivery", /\b(push|notification|expo|device token|alert did not arrive|reminder|apns|pushkit|callkit|voip|native incoming call|terminal call cleanup|fcm)\b/i],
+  ["release_update_version", /\b(update|version|ota|runtime|stale app|release|rollback|channel|testflight|ios-qa|apk|aab|versioncode)\b/i],
   ["search_discovery_visibility", /\b(search|discover|ranking|recommendation|visibility|not showing|shadowban|boost|demote)\b/i],
   ["ads_sponsor", /\b(ad|ads|sponsor|sponsorship|paid placement|brand deal|promotion)\b/i],
   ["safety_abuse", /\b(abuse|unsafe|threat|violence|self harm|minor safety|sexual exploitation|report abuse)\b/i],
@@ -99,6 +100,26 @@ const jsonResponse = (status: number, payload: JsonObject) => new Response(JSON.
 });
 
 const toText = (value: unknown) => String(value ?? "").trim();
+
+const normalizePlatform = (value: unknown): Platform => {
+  const platform = toText(value).toLowerCase();
+  if (["ios", "iphone", "ipad", "testflight", "app_store"].includes(platform)) return "ios";
+  if (["android", "google_play", "play_store", "firebase_test_lab"].includes(platform)) return "android";
+  if (["web", "browser", "pwa"].includes(platform)) return "web";
+  if (platform === "shared") return "shared";
+  return "unknown";
+};
+
+const classifyPlatform = (payload: JsonObject, reportType: ReportType): Platform => {
+  if (["safety_abuse", "harassment", "impersonation", "copyright", "illegal_or_dangerous_content", "privacy_data", "account_access"].includes(reportType)) return "shared";
+  const explicit = normalizePlatform(payload.platform ?? payload.devicePlatform ?? payload.device_platform);
+  if (explicit !== "unknown") return explicit;
+  const text = `${payload.surface ?? ""} ${payload.route ?? ""} ${payload.summary ?? ""} ${payload.details ?? ""}`;
+  if (/\b(ios|iphone|ipad|testflight|app store|storekit|iap|apple subscription|apns|pushkit|callkit|voip)\b/i.test(text)) return "ios";
+  if (/\b(android|google play|play billing|fcm|apk|aab|versioncode|firebase test lab)\b/i.test(text)) return "android";
+  if (/\b(web|browser|pwa|website)\b/i.test(text)) return "web";
+  return "unknown";
+};
 
 const readRequiredEnv = (key: string) => {
   const value = toText(Deno.env.get(key));
@@ -172,7 +193,7 @@ const routeSystem = (reportType: ReportType, payload: JsonObject): RoutedSystem 
   if (["safety_abuse", "harassment", "impersonation", "copyright", "illegal_or_dangerous_content"].includes(reportType)) {
     return "moderation_safety_operator";
   }
-  if (reportType === "premium_or_billing" || reportType === "payout_or_money") return "support_success_operator";
+  if (reportType === "premium_or_billing" || reportType === "payout_or_money") return "money_flow_control";
   if (reportType === "security_access") return "security_owner_operator";
   if (reportType === "privacy_data") return "privacy_compliance_operator";
   if (reportType === "livekit_live_watchparty") return "livekit_operator";
@@ -181,11 +202,13 @@ const routeSystem = (reportType: ReportType, payload: JsonObject): RoutedSystem 
   if (reportType === "release_update_version") return "release_ota_operator";
   if (reportType === "search_discovery_visibility") return "search_ranking_integrity_operator";
   if (reportType === "ads_sponsor") return "ads_sponsor_delivery_operator";
-  if (reportType === "chat_or_call" && /\b(camera|microphone|mic|call|live|watch party)\b/i.test(text)) return "livekit_operator";
+  if (reportType === "chat_or_call" && /\b(apns|pushkit|callkit|voip|native incoming call|terminal call cleanup)\b/i.test(text)) return "notification_delivery_operator";
+  if (reportType === "chat_or_call" && /\b(camera|microphone|mic|call media|livekit|live|watch party)\b/i.test(text)) return "livekit_operator";
+  if (reportType === "bug_broken_feature" && /\b(crash|fatal|slow|performance|timeout|anr|startup failure|backend error)\b/i.test(text)) return "observability_runtime_operator";
   if (reportType === "bug_broken_feature" && (ROUTES_TO_INSTALLED_QA.test(route) || /\b(route|screen|button|marker|testid|navigation|stuck on home)\b/i.test(text))) {
     return "installed_product_qa_operator";
   }
-  if (reportType === "bug_broken_feature" && /\b(crash|error|slow|performance|timeout|api|backend)\b/i.test(text)) {
+  if (reportType === "bug_broken_feature" && /\b(error|api|backend)\b/i.test(text)) {
     return "observability_runtime_operator";
   }
   return "support_success_operator";
@@ -198,6 +221,7 @@ const isImmediate = (reportType: ReportType, severity: Severity) => (
 
 const classifyPayload = (payload: JsonObject) => {
   const reportType = inferReportType(payload);
+  const platform = classifyPlatform(payload, reportType);
   const combinedText = `${payload.summary ?? ""} ${payload.details ?? ""}`;
   const severity = inferSeverity(payload, combinedText);
   const routedSystemId = routeSystem(reportType, payload);
@@ -205,6 +229,7 @@ const classifyPayload = (payload: JsonObject) => {
   const spamFlag = SPAM_PATTERN.test(combinedText) || toText(payload.summary).length > 180;
   const immediate = isImmediate(reportType, severity);
   return {
+    platform,
     reportType,
     category: reportType,
     severity,
@@ -227,6 +252,7 @@ const fingerprintPayload = (payload: JsonObject, classification: ReturnType<type
     .slice(0, 14)
     .join(" ");
   return [
+    classification.platform,
     classification.reportType,
     classification.routedSystemId,
     normalizedSurface || "surface_unknown",
@@ -249,7 +275,10 @@ const buildOwnerCommandPayload = (cluster: JsonObject, approvalLevel: number) =>
   owner_user_id: null,
   command_text: `User report cluster requires safe operator review: ${cluster.report_type} with ${cluster.unique_reporter_count} unique reporters routed to ${cluster.routed_system_id}.`,
   normalized_intent: "user_report_cluster_routing",
-  target_systems: [cluster.routed_system_id],
+  platform: normalizePlatform(cluster.platform),
+  target_systems: cluster.routed_system_id === "money_flow_control"
+    ? [cluster.routed_system_id, "support_success_operator"]
+    : [cluster.routed_system_id],
   approval_level: approvalLevel,
   status: approvalLevel >= 3 ? "approval_required" : "planned",
   allowed_scope: [
@@ -296,6 +325,7 @@ const createApprovalRequest = async (
     .insert({
       system_id: String(cluster.routed_system_id ?? SYSTEM_ID),
       action_id: "user_report_cluster_review",
+      platform: normalizePlatform(cluster.platform),
       requested_by_actor_type: SYSTEM_ID,
       requested_by_actor_id: null,
       approval_level: approvalLevel,
@@ -323,6 +353,7 @@ const createApprovalRequest = async (
 
   await client.from("autonomous_approval_request_events").insert({
     request_id: data.id,
+    platform: normalizePlatform(cluster.platform),
     event_type: "created",
     actor_type: SYSTEM_ID,
     actor_id: null,
@@ -368,6 +399,7 @@ const routeClusterIfNeeded = async (client: SupabaseClientLike, cluster: JsonObj
     .from("user_report_routing_actions")
     .insert({
       cluster_id: cluster.id,
+      platform: normalizePlatform(cluster.platform),
       action_type: actionType,
       routed_system_id: cluster.routed_system_id,
       owner_command_id: command.id,
@@ -384,6 +416,7 @@ const routeClusterIfNeeded = async (client: SupabaseClientLike, cluster: JsonObj
 
   await client.from("user_report_operator_findings").insert({
     cluster_id: cluster.id,
+    platform: normalizePlatform(cluster.platform),
     system_id: SYSTEM_ID,
     finding_type: cluster.report_type,
     severity: cluster.severity,
@@ -432,6 +465,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
       report_type: classification.reportType,
       category: classification.category,
       severity: classification.severity,
+      platform: classification.platform,
       surface: toText(payload.surface) || null,
       route: toText(payload.route) || null,
       target_type: toText(payload.targetType ?? payload.target_type) || null,
@@ -439,7 +473,8 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
       app_version: toText(payload.appVersion ?? payload.app_version) || null,
       update_id: toText(payload.updateId ?? payload.update_id) || null,
       runtime_version: toText(payload.runtimeVersion ?? payload.runtime_version) || null,
-      device_platform: toText(payload.devicePlatform ?? payload.device_platform) || null,
+      native_build: toText(payload.nativeBuild ?? payload.native_build) || null,
+      channel: toText(payload.channel) || null,
       normalized_fingerprint: normalizedFingerprint,
       text_summary_redacted: summary || details.slice(0, 220),
       raw_text_redacted: details || null,
@@ -457,6 +492,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
 
   await client.from("user_report_classifications").insert({
     report_id: report.id,
+    platform: classification.platform,
     report_type: classification.reportType,
     category: classification.category,
     severity: classification.severity,
@@ -472,6 +508,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
   let { data: cluster, error: clusterReadError } = await client
     .from("user_report_clusters")
     .select("*")
+    .eq("platform", classification.platform)
     .eq("normalized_fingerprint", normalizedFingerprint)
     .maybeSingle();
   if (clusterReadError) throw clusterReadError;
@@ -480,6 +517,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
     const { data: insertedCluster, error: insertClusterError } = await client
       .from("user_report_clusters")
       .insert({
+        platform: classification.platform,
         normalized_fingerprint: normalizedFingerprint,
         report_type: classification.reportType,
         category: classification.category,
@@ -539,6 +577,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
   const { count: reportCount } = await client
     .from("user_report_intake_events")
     .select("id", { count: "exact", head: true })
+    .eq("platform", classification.platform)
     .eq("normalized_fingerprint", normalizedFingerprint);
 
   const updatedClusterPayload = {
@@ -567,6 +606,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
     reportId: report.id,
     clusterId: updatedCluster.id,
     classification: {
+      platform: classification.platform,
       reportType: classification.reportType,
       severity: classification.severity,
       routedSystemId: classification.routedSystemId,
