@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+import { runIosRecoverySourceProbe } from "../_shared/ios-source-operator-probes.ts";
 
 Deno.serve(handleScopedOperatorRequest({
   systemId: "platform_recovery_operator",
@@ -50,4 +51,5 @@ Deno.serve(handleScopedOperatorRequest({
     emergency_state_readback: "recovery_required_review_flags",
     cross_system_recovery_readiness: "recovery_required_review_flags",
   },
+  watchOnceHandler: runIosRecoverySourceProbe,
 }));

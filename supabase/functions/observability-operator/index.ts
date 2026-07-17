@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+import { runIosObservabilityProbe } from "./probe.ts";
 
 Deno.serve(handleScopedOperatorRequest({
   systemId: "observability_runtime_operator",
@@ -42,4 +43,5 @@ Deno.serve(handleScopedOperatorRequest({
     record_release_anomaly: "release_health_findings",
     backend_error_rate_report: "backend_error_rate_findings",
   },
+  watchOnceHandler: runIosObservabilityProbe,
 }));

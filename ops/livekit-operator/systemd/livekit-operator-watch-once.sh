@@ -16,7 +16,7 @@ HTTP_STATUS="$(
     --request POST "${LIVEKIT_OPERATOR_FUNCTION_URL}" \
     --header "Content-Type: application/json" \
     --header "x-livekit-operator-token: ${LIVEKIT_OPERATOR_TOKEN}" \
-    --data '{"action":"watch_once","enable_safe_recovery":'"${ENABLE_SAFE_RECOVERY}"',"scheduler":"systemd_timer","source":"'"${SOURCE}"'"}'
+    --data '{"action":"watch_once","platform":"shared","enable_safe_recovery":'"${ENABLE_SAFE_RECOVERY}"',"scheduler":"systemd_timer","source":"'"${SOURCE}"'"}'
 )"
 
 REDACTED_RESPONSE="$(

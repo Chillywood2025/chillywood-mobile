@@ -12,7 +12,28 @@ export type ScopedOperatorConfig = {
   approvalActions: readonly string[];
   actionTables: Record<string, string>;
   defaultHealthState: string;
+  watchOnceHandler?: ScopedOperatorHandler;
+  statusHandler?: ScopedOperatorHandler;
+  reportHandler?: ScopedOperatorHandler;
 };
+
+export type ScopedOperatorHandlerContext = {
+  client: SupabaseClient;
+  config: ScopedOperatorConfig;
+  payload: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+};
+
+export type ScopedOperatorHandlerResult = Record<string, unknown> & {
+  readbackComplete: boolean;
+  platform: string;
+  source: string;
+  dataWindow: { start: string | null; end: string | null };
+};
+
+export type ScopedOperatorHandler = (
+  context: ScopedOperatorHandlerContext,
+) => Promise<ScopedOperatorHandlerResult>;
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -21,6 +42,13 @@ const jsonHeaders = {
 };
 
 const secretKeyPattern = /(secret|token|password|credential|authorization|api[_-]?key|service[_-]?role|private[_-]?key|signed[_-]?url)/i;
+const longCredentialPattern = /[A-Za-z0-9._~+/=-]{48,}/g;
+const supportedPlatforms = ["shared", "ios", "android", "web", "unknown"] as const;
+
+export const normalizeOperatorPlatform = (value: unknown) => {
+  const platform = String(value ?? "unknown").trim().toLowerCase();
+  return (supportedPlatforms as readonly string[]).includes(platform) ? platform : "unknown";
+};
 
 export const scopedOperatorCorsHeaders = (tokenHeader: string) => ({
   ...jsonHeaders,
@@ -35,7 +63,10 @@ export const scopedJsonResponse = (tokenHeader: string, status: number, body: Re
 export const sanitizeOperatorMetadata = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map((entry) => sanitizeOperatorMetadata(entry));
   if (!value || typeof value !== "object") {
-    if (typeof value === "string" && value.length > 160) return `${value.slice(0, 20)}...[redacted:${value.length}]`;
+    if (typeof value === "string") {
+      const redacted = value.replace(longCredentialPattern, "[redacted]");
+      return redacted.length > 160 ? `${redacted.slice(0, 120)}...[redacted:${redacted.length}]` : redacted;
+    }
     return value;
   }
 
@@ -43,6 +74,16 @@ export const sanitizeOperatorMetadata = (value: unknown): unknown => {
     key,
     secretKeyPattern.test(key) ? "[redacted]" : sanitizeOperatorMetadata(entry),
   ]));
+};
+
+const safeOperatorErrorMessage = (error: unknown) => {
+  const candidate = error instanceof Error
+    ? error.message
+    : error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  const sanitized = sanitizeOperatorMetadata(candidate);
+  return typeof sanitized === "string" && sanitized.trim() ? sanitized : "unknown_error";
 };
 
 const sha256Hex = async (value: string): Promise<string> => {
@@ -90,6 +131,7 @@ const insertEvent = async (
     action_id: actionId,
     result,
     environment_mode: String(metadata.environment_mode ?? "production"),
+    platform: normalizeOperatorPlatform(metadata.platform),
     user_rights_changed: false,
     money_moved: false,
     metadata: sanitizeOperatorMetadata(metadata),
@@ -107,6 +149,7 @@ const insertSnapshot = async (
     system_id: config.systemId,
     health_state: String(metadata.health_state ?? config.defaultHealthState),
     environment_mode: String(metadata.environment_mode ?? "production"),
+    platform: normalizeOperatorPlatform(metadata.platform),
     user_rights_changed: false,
     money_moved: false,
     metadata: sanitizeOperatorMetadata(metadata),
@@ -115,6 +158,20 @@ const insertSnapshot = async (
     row.provider = String(metadata.provider ?? "expo");
     row.retry_backlog = Number(metadata.retry_backlog ?? 0);
     row.failed_attempt_count = Number(metadata.failed_attempt_count ?? 0);
+    row.invalid_token_count = Number(metadata.invalid_token_count ?? 0);
+    row.provider_response_class = metadata.provider_response_class ?? null;
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
+    row.runtime_version = metadata.runtime_version ?? null;
+    row.channel = metadata.channel ?? null;
+    row.update_id = metadata.update_id ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
   }
   if (config.systemId === "release_ota_operator") {
     row.channel = metadata.channel ?? null;
@@ -122,6 +179,15 @@ const insertSnapshot = async (
     row.update_id = metadata.update_id ?? null;
     row.embedded_launch = typeof metadata.embedded_launch === "boolean" ? metadata.embedded_launch : null;
     row.emergency_launch = typeof metadata.emergency_launch === "boolean" ? metadata.emergency_launch : null;
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
   }
   if (config.systemId === "security_owner_operator") {
     row.critical_finding_count = Number(metadata.critical_finding_count ?? 0);
@@ -141,6 +207,29 @@ const insertSnapshot = async (
     row.update_id = metadata.update_id ?? null;
     row.embedded_launch = typeof metadata.embedded_launch === "boolean" ? metadata.embedded_launch : null;
     row.emergency_launch = typeof metadata.emergency_launch === "boolean" ? metadata.emergency_launch : null;
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
+  }
+  if (["security_owner_operator", "platform_recovery_operator", "privacy_compliance_operator", "support_success_operator"].includes(config.systemId)) {
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? (metadata.platform === "ios" ? "com.chillywood.mobile" : null);
+    row.runtime_version = metadata.runtime_version ?? null;
+    row.channel = metadata.channel ?? null;
+    row.update_id = metadata.update_id ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
   }
   const { error } = await client.from(config.snapshotTable).insert(row);
   if (error) throw error;
@@ -255,6 +344,21 @@ const insertReview = async (
       row.error_rate_percent = typeof metadata.error_rate_percent === "number" ? metadata.error_rate_percent : null;
     }
   }
+  if (["security_owner_operator", "platform_recovery_operator", "privacy_compliance_operator", "support_success_operator"].includes(config.systemId)) {
+    row.platform = normalizeOperatorPlatform(metadata.platform);
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? (metadata.platform === "ios" ? "com.chillywood.mobile" : null);
+    row.runtime_version = metadata.runtime_version ?? null;
+    row.channel = metadata.channel ?? null;
+    row.update_id = metadata.update_id ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
+  }
 
   const { error } = await client.from(targetTable).insert(row);
   if (error) throw error;
@@ -315,6 +419,21 @@ const withAuditIdentity = (config: ScopedOperatorConfig, payload: Record<string,
   scheduler: String(payload.scheduler ?? "direct_token_call"),
   operator_id: String(payload.operator_id ?? config.systemId),
   source: String(payload.source ?? `direct_token_call:${config.systemId}`),
+  platform: normalizeOperatorPlatform(payload.platform),
+});
+
+const responseEnvelope = (metadata: Record<string, unknown>, overrides: Record<string, unknown> = {}) => ({
+  readbackComplete: metadata.readback_complete === true,
+  platform: normalizeOperatorPlatform(metadata.platform),
+  source: String(metadata.source ?? "unknown"),
+  dataWindow: {
+    start: typeof metadata.window_start === "string" ? metadata.window_start : null,
+    end: typeof metadata.window_end === "string" ? metadata.window_end : null,
+  },
+  moneyMoved: false,
+  userRightsChanged: false,
+  highRiskExecuted: false,
+  ...overrides,
 });
 
 export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => async (request: Request) => {
@@ -343,7 +462,7 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
 
   try {
     const client = adminClient();
-    const metadata = (sanitizeOperatorMetadata(withAuditIdentity(config, { ...payload, action })) ?? {}) as Record<string, unknown>;
+    let metadata = (sanitizeOperatorMetadata(withAuditIdentity(config, { ...payload, action })) ?? {}) as Record<string, unknown>;
 
     if (action === "create_approval_request" || config.approvalActions.includes(action)) {
       const requestRow = await createApprovalRequest(client, config, { ...payload, action_id: payload.action_id ?? action });
@@ -353,12 +472,21 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
         action,
         approvalRequest: requestRow,
         executedHighRiskAction: false,
-        moneyMoved: false,
-        userRightsChanged: false,
+        ...responseEnvelope(metadata),
       });
     }
 
     if (action === "report") {
+      if (config.reportHandler) {
+        const customReport = await config.reportHandler({ client, config, payload, metadata });
+        return scopedJsonResponse(config.tokenHeader, 200, {
+          ok: true,
+          systemId: config.systemId,
+          action,
+          result: "report_read",
+          ...responseEnvelope(metadata, sanitizeOperatorMetadata(customReport) as Record<string, unknown>),
+        });
+      }
       const report = await readReport(client, config);
       return scopedJsonResponse(config.tokenHeader, 200, {
         ok: true,
@@ -366,13 +494,41 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
         action,
         result: "report_read",
         ...report,
-        moneyMoved: false,
-        userRightsChanged: false,
-        highRiskExecuted: false,
+        ...responseEnvelope(metadata),
+      });
+    }
+
+    if (action === "watch_once" && config.watchOnceHandler) {
+      const customResult = await config.watchOnceHandler({ client, config, payload, metadata });
+      return scopedJsonResponse(config.tokenHeader, 200, {
+        ok: true,
+        systemId: config.systemId,
+        action,
+        result: "substantive_readback_recorded",
+        ...responseEnvelope(metadata, sanitizeOperatorMetadata(customResult) as Record<string, unknown>),
+      });
+    }
+
+    if (action === "status" && config.statusHandler) {
+      const customResult = await config.statusHandler({ client, config, payload, metadata });
+      return scopedJsonResponse(config.tokenHeader, 200, {
+        ok: true,
+        systemId: config.systemId,
+        action,
+        result: "status_read",
+        ...responseEnvelope(metadata, sanitizeOperatorMetadata(customResult) as Record<string, unknown>),
       });
     }
 
     if (["health_snapshot", "watch_once", "status"].includes(action)) {
+      if (action === "watch_once") {
+        metadata = {
+          ...metadata,
+          health_state: "unknown",
+          readback_complete: false,
+          data_source: "generic_operator_no_custom_readback",
+        };
+      }
       await insertSnapshot(client, config, action, metadata);
     } else {
       if (config.systemId === "notification_delivery_operator" && action === "mark_token_provider_revoked" && metadata.provider_evidence !== "DeviceNotRegistered") {
@@ -395,18 +551,19 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
         operatorId: metadata.operator_id,
         source: metadata.source,
       },
-      moneyMoved: false,
-      userRightsChanged: false,
-      highRiskExecuted: false,
+      ...responseEnvelope(metadata),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown_error";
+    const message = safeOperatorErrorMessage(error);
     return scopedJsonResponse(config.tokenHeader, 500, {
       error: "operator_action_failed",
       message,
       systemId: config.systemId,
-      moneyMoved: false,
-      userRightsChanged: false,
+      ...responseEnvelope({
+        platform: payload?.platform,
+        source: payload?.source ?? `direct_token_call:${config.systemId}`,
+        readback_complete: false,
+      }),
     });
   }
 };

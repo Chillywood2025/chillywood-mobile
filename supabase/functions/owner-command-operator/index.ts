@@ -170,6 +170,13 @@ const safeStringArray = (value: unknown) => (
 );
 
 const commandMatches = (text: string, patterns: readonly RegExp[]) => patterns.some((pattern) => pattern.test(text));
+const classifyPlatform = (commandText: string) => {
+  const text = normalizeText(commandText).toLowerCase();
+  if (/\b(ios|iphone|ipad|testflight|app store|apns|pushkit|callkit|storekit)\b/.test(text)) return "ios";
+  if (/\b(android|google play|play store|fcm|apk|aab)\b/.test(text)) return "android";
+  if (/\b(web|browser|pwa|website)\b/.test(text)) return "web";
+  return "shared";
+};
 
 const mapSystems = (commandText: string) => {
   const text = commandText.toLowerCase();
@@ -268,6 +275,7 @@ const buildPlan = (commandText: string) => {
   return {
     status: blockers.length ? "blocked" : approvalLevel >= 3 ? "approval_required" : "planned",
     commandText: redactText(command),
+    platformScope: classifyPlatform(command),
     normalizedIntent: intentForSystems(systems),
     approvalLevel,
     targetSystems: systems,
@@ -442,6 +450,7 @@ const createCommand = async (client: SupabaseClientLike, owner: { role: string; 
       external_confirmation_status: plan.externalConfirmationRequired ? "required" : "not_required",
       forbidden_scope: plan.forbiddenScope,
       metadata: safeMetadata(metadata),
+      platform: plan.platformScope,
       normalized_intent: plan.normalizedIntent,
       owner_user_id: owner.userId,
       preflight_plan: plan.preflightPlan,

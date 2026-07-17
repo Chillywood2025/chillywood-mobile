@@ -1,4 +1,4 @@
-import type { AutonomousApprovalLevel, AutonomousSystemId } from "./autonomousSystemsRegistry";
+import type { AutonomousApprovalLevel, AutonomousPlatform, AutonomousSystemId } from "./autonomousSystemsRegistry";
 
 export type OwnerCommandTargetSystemId = Exclude<AutonomousSystemId, "owner_command_operator">;
 
@@ -40,6 +40,7 @@ export type OwnerCommandIntent =
   | "unknown";
 
 export type OwnerCommandClassification = {
+  platformScope: AutonomousPlatform;
   normalizedIntent: OwnerCommandIntent;
   riskLevel: OwnerCommandRiskLevel;
   approvalRequired: boolean;
@@ -65,6 +66,7 @@ export type OwnerCommandExecutionStep = {
 export type OwnerCommandExecutionPlan = {
   status: OwnerCommandStatus;
   commandText: string;
+  platformScope: AutonomousPlatform;
   normalizedIntent: OwnerCommandIntent;
   approvalLevel: OwnerCommandRiskLevel;
   targetSystems: OwnerCommandTargetSystemId[];
@@ -431,6 +433,14 @@ export const sanitizeOwnerCommandProof = (value: unknown): unknown => {
 
 const commandMatches = (text: string, patterns: readonly RegExp[]) => patterns.some((pattern) => pattern.test(text));
 
+export const classifyOwnerCommandPlatform = (commandText: string): AutonomousPlatform => {
+  const text = normalizeCommandText(commandText).toLowerCase();
+  if (/\b(ios|iphone|ipad|testflight|app store|apns|pushkit|callkit|storekit)\b/.test(text)) return "ios";
+  if (/\b(android|google play|play store|fcm|apk|aab)\b/.test(text)) return "android";
+  if (/\b(web|browser|pwa|website)\b/.test(text)) return "web";
+  return "shared";
+};
+
 export const mapOwnerCommandToAutonomousSystems = (commandText: string): OwnerCommandTargetSystemId[] => {
   const text = normalizeCommandText(commandText).toLowerCase();
   const systems = ACTIVE_SYSTEMS.filter((systemId) => SYSTEM_KEYWORDS[systemId].some((keyword) => text.includes(keyword)));
@@ -482,6 +492,7 @@ export const classifyOwnerCommand = (commandText: string): OwnerCommandClassific
   if (!targetSystems.length) blockers.push("target_system_not_identified");
 
   return {
+    platformScope: classifyOwnerCommandPlatform(normalized),
     normalizedIntent: classifyOwnerCommandIntent(normalized),
     riskLevel,
     approvalRequired: riskLevel >= 3,
@@ -532,6 +543,7 @@ export const buildOwnerCommandExecutionPlan = (commandText: string): OwnerComman
   return {
     status: classification.blockers.length ? "blocked" : classification.approvalRequired ? "approval_required" : "planned",
     commandText: redactText(command),
+    platformScope: classification.platformScope,
     normalizedIntent: classification.normalizedIntent,
     approvalLevel: classification.riskLevel,
     targetSystems,

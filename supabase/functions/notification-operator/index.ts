@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+import { runNotificationAutonomyProbe } from "./probe.ts";
 
 Deno.serve(handleScopedOperatorRequest({
   systemId: "notification_delivery_operator",
@@ -10,6 +11,7 @@ Deno.serve(handleScopedOperatorRequest({
   snapshotTable: "notification_delivery_health_snapshots",
   reviewTable: "notification_required_review_flags",
   defaultHealthState: "healthy",
+  watchOnceHandler: runNotificationAutonomyProbe,
   allowedActions: [
     "health_snapshot",
     "delivery_provider_health",

@@ -15,7 +15,7 @@ HTTP_STATUS="$(
     --request POST "${SUPABASE_FUNCTIONS_URL%/}/notification-operator" \
     --header "Content-Type: application/json" \
     --header "x-notification-operator-token: ${NOTIFICATION_OPERATOR_TOKEN}" \
-    --data '{"action":"watch_once","scheduler":"systemd_timer","operator_id":"notification_delivery_operator","source":"'"${SOURCE}"'","enable_safe_recovery":true}'
+    --data '{"action":"watch_once","platform":"shared","scheduler":"systemd_timer","operator_id":"notification_delivery_operator","source":"'"${SOURCE}"'","enable_safe_recovery":true}'
 )"
 
 REDACTED_RESPONSE="$(

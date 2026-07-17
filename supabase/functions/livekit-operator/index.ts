@@ -262,6 +262,9 @@ const writeHealthSnapshot = async (adminClient: SupabaseClientLike, health: Json
   adminClient,
   "livekit_surface_health_snapshots",
   {
+    platform: "shared",
+    data_source: "livekit_router_and_token_audit",
+    readback_complete: true,
     eligible_server_count: typeof health.eligibleServerCount === "number" ? health.eligibleServerCount : null,
     heartbeat_age_seconds: null,
     health_state: toText(health.healthState) || "unknown_requires_review",
@@ -400,6 +403,9 @@ Deno.serve(async (request: Request) => {
 
       const renderEvent = body.render_event && typeof body.render_event === "object" ? body.render_event as JsonObject : {};
       const classification = classifyRenderEvent(renderEvent);
+      const platform = ["ios", "android", "web"].includes(safeLabel(renderEvent.platform))
+        ? safeLabel(renderEvent.platform)
+        : "unknown";
       const userHash = await sha256Hex(appUser.id);
       const sinceIso = new Date(Date.now() - 60_000).toISOString();
       const recent = await adminClient
@@ -417,6 +423,16 @@ Deno.serve(async (request: Request) => {
         action_planned: planned.action,
         confidence: classification.confidence,
         health_state: classification.healthState,
+        platform,
+        app_version: safeLabel(renderEvent.appVersion ?? renderEvent.app_version) || null,
+        native_build: safeLabel(renderEvent.nativeBuild ?? renderEvent.native_build) || null,
+        bundle_identifier: safeLabel(renderEvent.bundleIdentifier ?? renderEvent.bundle_identifier) || null,
+        runtime_version: safeLabel(renderEvent.runtimeVersion ?? renderEvent.runtime_version) || null,
+        channel: safeLabel(renderEvent.channel) || null,
+        update_id: safeLabel(renderEvent.updateId ?? renderEvent.update_id) || null,
+        distribution_source: safeLabel(renderEvent.distributionSource ?? renderEvent.distribution_source) || null,
+        data_source: "authenticated_client_render_telemetry",
+        readback_complete: true,
         metadata: safeMetadata({
           ...renderEvent,
           user_hash: userHash,
@@ -526,11 +542,20 @@ Deno.serve(async (request: Request) => {
       }
 
       if (action === "watch_once") {
+        await writeHealthSnapshot(adminClient, routerHealth, {
+          action,
+          scheduler: body.scheduler,
+          source: body.source,
+          client_physical_proof_claimed: false,
+        });
         await safeInsert(adminClient, "livekit_operator_events", {
           action_planned: plan.action,
           action_taken: toText(execution.status) === "executed" ? plan.action : null,
           confidence: routerHealth.healthState === "healthy" ? 0.99 : 0.9,
           health_state: routerHealth.healthState,
+          platform: "shared",
+          data_source: "livekit_router_and_token_audit",
+          readback_complete: true,
           metadata: safeMetadata({
             action,
             enable_safe_recovery: body.enable_safe_recovery === true,
@@ -545,7 +570,20 @@ Deno.serve(async (request: Request) => {
         });
       }
 
-      return jsonResponse(200, { execution, ok: true, plan, routerHealth });
+      return jsonResponse(200, {
+        execution,
+        ok: true,
+        plan,
+        routerHealth,
+        readbackComplete: true,
+        platform: "shared",
+        source: "livekit_router_and_token_audit",
+        dataWindow: { start: null, end: new Date().toISOString() },
+        moneyMoved: false,
+        userRightsChanged: false,
+        highRiskExecuted: false,
+        physicalProofClaimed: false,
+      });
     }
 
     if (action === "pause_surface") {

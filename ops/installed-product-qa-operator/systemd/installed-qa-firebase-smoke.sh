@@ -41,3 +41,21 @@ cd "${CHILLYWOOD_REPO_DIR}"
 npm run --silent installed-qa:firebase-test-plan
 npm run --silent installed-qa:firebase-test-run
 npm run --silent installed-qa-operator:report
+
+# The same bounded daily schedule also derives iOS source/provider readiness.
+# It never starts a device matrix and the Edge Function records physical proof
+# as required rather than passed.
+INSTALLED_QA_FUNCTION_URL="${INSTALLED_QA_OPERATOR_FUNCTION_URL:-${SUPABASE_FUNCTIONS_URL%/}/installed-product-qa-operator}"
+HTTP_STATUS="$(
+  curl --silent --show-error --max-time 25 --retry 2 --retry-delay 2 \
+    --output /dev/null \
+    --write-out "%{http_code}" \
+    --request POST "${INSTALLED_QA_FUNCTION_URL}" \
+    --header "Content-Type: application/json" \
+    --header "x-installed-qa-operator-token: ${INSTALLED_QA_OPERATOR_TOKEN}" \
+    --data '{"action":"watch_once","platform":"ios","source":"testflight_internal","scheduler":"systemd_timer","operator_id":"installed_product_qa_operator","fakeProof":false,"moneyMoved":false,"userRightsChanged":false}'
+)"
+case "${HTTP_STATUS}" in
+  2*) ;;
+  *) printf 'installed iOS readiness watch_once failed status=%s\n' "${HTTP_STATUS}" >&2; exit 1 ;;
+esac
