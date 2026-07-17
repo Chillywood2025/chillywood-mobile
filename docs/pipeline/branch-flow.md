@@ -49,7 +49,15 @@ Configure these on `main`:
 - Require a pull request before merging.
 - Require status checks to pass before merging.
   - Required checks:
-    - `Lint and Typecheck`
+    - `Phase 1 / Repository Lint`
+    - `Phase 1 / TypeScript`
+    - `Phase 1 / Runtime Validation`
+    - `Phase 1 / Route Contracts`
+    - `Phase 1 / iOS Configuration`
+    - `Phase 1 / Android Regression Guards`
+    - `Phase 1 / Expo Doctor`
+    - `Phase 1 / Supabase Database Integration`
+    - `Phase 1 / Autonomous Systems iOS Contract`
 - Require branches to be up to date before merging.
 - Restrict force pushes.
 - Restrict direct pushes to `main`.

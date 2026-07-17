@@ -1,6 +1,6 @@
 # Chi'llywood Autonomous App Operating Model
 
-Last updated: 2026-07-13
+Last updated: 2026-07-16
 
 Status: governing policy for future Codex/operator work. Chi'llywood should operate autonomously by default inside approved safety policy, with owner approval reserved for high-risk boundary changes.
 
@@ -219,6 +219,18 @@ Owner Command Operator turns owner judgment into executable, audited command pla
 The owner command layer is not a god panel and does not bypass the registry. It cannot directly move money, manually grant Premium, bypass Premium, publish or rollback OTA, mutate Remote Config, mutate auth/RLS or owner roles, ban/restrict users, delete content, expose private/Premium/original media, change provider products, change LiveKit routing, change R2/media behavior, print secrets, skip fresh preflight, exceed exact scope, or execute while emergency stop is active.
 
 Rachi may recommend/request but cannot approve. Autonomous operators cannot approve their own requests. Level 3/4 commands still use the live owner/super-admin approval path and the target operator's proof/rollback/emergency-state gates.
+
+## 12B. Platform and iOS Readback Policy
+
+Autonomous state uses the normalized platform values `shared`, `ios`, `android`, `web`, and `unknown`. Shared backend policy stays shared. Client, release, provider, notification, runtime, installed-QA, and support evidence must include a platform when platform changes its interpretation. App version, native build, bundle identifier, runtime, channel, update, distribution source, and provider environment are recorded only where meaningful.
+
+Notification, release, and observability operators require substantive readback. Empty caller metadata is not evidence. A missing provider, query, metric, or credential capability is `unknown` or `blocked`; it cannot become healthy merely because no failure was returned. Provider adapters are read-only and recursively sanitize token-, credential-, receipt-, cookie-, private-key-, and signed-URL-like data.
+
+iOS installed-QA readiness distinguishes source, provider, internal-build, physical, and second-device states. Repository/config proof may establish `source_ready`; EAS/App Store readback may establish `provider_ready` or `internal_build_ready`. It may not establish physical APNs, PushKit/CallKit, StoreKit, signed Universal Link, camera/microphone/Photos, accessibility/audio-route, or two-device LiveKit behavior. Those stay `physical_proof_required` or `second_device_required` until direct evidence exists.
+
+The terminal call-delivery retry worker is a bounded notification surface. Its one-minute database schedule, batch and attempt caps, exponential backoff, stale lease, idempotent delivery key, sanitized result, failure rows, config kill switch, and token-hash gate are mandatory. The retry surface cannot create a new incoming call, read/output raw tokens, send a broad push, bypass new-call preferences, mutate call membership, or hide/delete failure evidence.
+
+No platform adapter may publish or roll back OTA, change TestFlight/App Review state, mutate provider products, move money, grant Premium, change auth/RLS/roles, execute moderation enforcement, or self-approve.
 
 ## 13. Codex Behavior Rule
 

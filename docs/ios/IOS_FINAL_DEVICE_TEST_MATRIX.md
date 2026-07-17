@@ -24,6 +24,14 @@ change that native key. Local build 8 is the exact all-flags QA target, isolated
 channel `ios-qa` and runtime `1.0.0-iosqa1`. The readiness statuses below do not
 authorize a test or a feature-switch change.
 
+Autonomous source/backend readiness is complete separately from this matrix.
+Backend probes can validate delivery tables, retry scheduling, catalog/provider
+policy, release capability availability, and shared LiveKit router health, but
+they cannot convert any row below to a physical pass. Current provider adapters
+leave release/observability/TestFlight readiness blocked where EAS, App Store
+Connect, or Firebase read-only truth is unavailable. No device row or
+second-device row was fabricated.
+
 | # | Required proof | Status | Completion evidence required |
 | ---: | --- | --- | --- |
 | 1 | Physical iPhone camera permission and preview | `READY_NOT_STARTED` | Prompt state, allow flow, real preview, camera off/on, lifecycle, and truthful denied/restricted recovery without private imagery. |

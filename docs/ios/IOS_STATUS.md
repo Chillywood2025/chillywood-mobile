@@ -9,6 +9,37 @@ default is false. A local, production-signed build 8 was created without an EAS
 cloud build for the isolated `ios-qa` / `1.0.0-iosqa1` all-flags lane. The full
 physical-device matrix has not begun and remains the final unclaimed proof.**
 
+## Autonomous iOS source/backend checkpoint
+
+The autonomous control plane is now explicitly platform-aware. Every active
+system declares `shared`, `ios`, `android`, `web`, or `unknown` support; the
+platform-sensitive systems include iOS adapters, while media, moderation, and
+ranking remain truthfully shared. The terminal call retry worker is a formal
+`notification_delivery_operator` surface.
+
+Three forward-only migrations are deployed:
+`20260718123000_ios_autonomous_platform_contract`,
+`20260718124500_fix_ios_autonomous_probe_identity_columns`, and
+`20260718130000_complete_ios_observability_review_identity`. Linked history shows
+exact local/remote pairs. Local reset and pgTAP pass 3 files / 131 assertions.
+
+Sanitized live probes pass the backend iOS notification rails, the one-minute
+terminal retry scheduler with zero backlog, the App Store/RevenueCat catalog and
+non-payable policy, and the shared LiveKit router. EAS could not prove locally
+built build 8 or an `ios-qa` update-channel record; App Store Connect and Firebase
+metric APIs were unavailable to the owner-host adapters. Release, observability,
+installed-product provider readiness, signing status, and dependent
+recovery/support state are therefore explicitly blocked or unknown—not healthy.
+No physical proof was created. See `IOS_AUTONOMOUS_SYSTEMS_COMPLETION.md` and
+`IOS_AUTONOMOUS_OPERATOR_MATRIX.md`.
+
+The active autonomous function versions are notification v16, release v16,
+observability v15, installed QA v9, LiveKit v43, money v28, security v15,
+recovery/privacy/support v8, owner command v11, and terminal retry v2. Existing
+timer cadences are unchanged. The new required CI job is
+`Phase 1 / Autonomous Systems iOS Contract`; its final remote status is recorded
+after the branch push.
+
 ## Final QA lane separation
 
 | Lane | Source / update | Client capabilities | Purpose and boundary |
@@ -43,10 +74,12 @@ publish an Android rollback update.
 | Superseded recovery PRs | [#11](https://github.com/Chillywood2025/chillywood-mobile/pull/11) and [#13](https://github.com/Chillywood2025/chillywood-mobile/pull/13), verified to contain no unique product work and closed without merge |
 | Unrelated local state | `deno.lock` remains untracked and is excluded from this work |
 
-No PR has been merged. The corrected source passes the full local Node 20 suite,
-92 database assertions, and all eight remote PR checks, including the independent
-`Phase 1 / Supabase Database Integration` job. The documentation-only closeout
-commit after `bbb9d6db` does not change the inspected binary.
+No PR has been merged. The build-8 source passed the original full Node 20 suite,
+92 database assertions, and all eight then-required remote PR checks. The current
+autonomous source extension passes 131 database assertions locally and adds the
+independent `Phase 1 / Autonomous Systems iOS Contract` job as the ninth required
+check. The documentation-only closeout after `bbb9d6db` does not change the
+inspected binary.
 
 ## Current integration status
 
@@ -69,7 +102,7 @@ commit after `bbb9d6db` does not change the inspected binary.
 | Privacy manifest | Source, generated prebuild, and archive pass | Canonical manifest is wired through Expo, tracking is false, and build 7 archive inspection confirms `PrivacyInfo.xcprivacy` in the signed app. The protected Firebase file variable supplied clean managed prebuild without placing the plist in Git. |
 | Store materials | Drafts prepared | Metadata, privacy worksheet, review notes, release checklist, and public-safe iPhone/iPad screenshot drafts exist. Owner marketing/legal approval is not attested. |
 | Release automation | Prepared and manually verified | `ios-preview` and `ios-production` protected environments exist. Workflows are manual, validate first, pin EAS CLI 21.0.1, freeze production credentials, require an exact build ID, and bind the verified internal group. |
-| Backend deployment | Verified, fail-closed | Ten additive integration migrations and eight active Edge Functions are deployed after restricted readback. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out remain off. |
+| Backend deployment | Verified, fail-closed | The integration migrations plus three additive autonomous-platform migrations are deployed after restricted readback. Product delivery functions and the eleven enhanced autonomous functions are active. Ordinary push, VoIP, Apple commerce, live money, payouts, and cash-out retain their fail-closed states. |
 | Final-source Simulator | **Pass** | `b9bb006e-1a96-4817-8ee2-6f3647983d8b` from `d5a8db65` installed cleanly on the iPhone 17 Pro Simulator, launched, remained alive, and contained the Firebase and privacy manifests. This is not physical-device proof. |
 | Production build / TestFlight | **Pass; internal only** | EAS build `8bfbd8cf-aa1b-4ba0-bebf-413ae0f60555`, Apple build `b5eaaad6-ef24-49c5-8e50-b10cf2807412`, version `1.0.0 (7)`, is processed and assigned only to `Chillywood Internal`. No individual/external tester or public release was added. |
 | Local all-flags QA archive | **Pass; internal only** | Local-only App Store IPA `1.0.0 (8)` was built with EAS CLI 21.0.1, not EAS cloud build. Inspection passed bundle/team/signature, arm64, production APNs, Associated Domains, Firebase, privacy manifests, opaque icons, matching dSYM, native module, all four client gates, `ios-qa`, and runtime `1.0.0-iosqa1`. Submission `e0b894e3-5dfc-44c5-9da2-e36c3b85bd5b` produced Apple build `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`, `Ready to Submit`, assigned only to `Chillywood Internal`; individual testers are 0 and no external group exists. |
@@ -90,7 +123,10 @@ Migrations:
 - `20260718111500_harden_chat_call_transition_delivery_access`;
 - `20260718113000_durable_call_delivery_retry_and_storefront_prices`;
 - `20260718114500_enable_chat_call_transition_retry_scheduler`; and
-- `20260718120000_index_terminal_retry_and_revenuecat_intent_links`.
+- `20260718120000_index_terminal_retry_and_revenuecat_intent_links`;
+- `20260718123000_ios_autonomous_platform_contract`;
+- `20260718124500_fix_ios_autonomous_probe_identity_columns`; and
+- `20260718130000_complete_ios_observability_review_identity`.
 
 Historical remote aliases `20260716111111`, `20260716111117`,
 `20260716111120`, and `20260716111423` were intentionally repaired to the four
@@ -114,9 +150,10 @@ Remote readback confirms monthly/yearly Premium mappings at `999`/`9999`, exact
 `ios` / `app_store` / `revenuecat_app_store` sandbox scope, unchanged Android
 catalog count/digest `15` / `4fb5d0565f6697269e2572a63d3bd678`, and service-only
 atomic RPC execution. Two historical Google event-pass provider events are listed
-by reconciliation as missing ledger effects; they were not mutated. Ordinary push,
-VoIP dispatch, App Store purchase access, live money, payouts, and cash-out remain
-off.
+by reconciliation as missing ledger effects; they were not mutated. Autonomous
+readback confirms ordinary iOS push and VoIP rollout are false. App Store purchase
+access and live-money/payout controls retain their pre-task states; no switch was
+changed by the autonomy work.
 
 ## Safety switches
 
@@ -270,7 +307,7 @@ Local Node 20 results on final QA/build source `bbb9d6db`:
 | AASA, commerce, media, push, native-call, VoIP, privacy, and release guards/proofs | Pass |
 | `npx expo-doctor` | Pass: 18/18 |
 | `git diff --check` | Pass |
-| `npx supabase test db` | Pass: 92 call-transition, retry, lifecycle, localized storefront, duplicate, intent, price, and forced-rollback assertions |
+| `npx supabase test db` | Pass: 131 assertions across call-transition/retry, autonomous iOS contract, lifecycle, localized storefront, duplicate, intent, price, and forced rollback |
 | Expo public config resolution | Pass; no resolved secret values recorded |
 
 Exact required GitHub check names:
@@ -283,9 +320,11 @@ Exact required GitHub check names:
 - `Phase 1 / Android Regression Guards`
 - `Phase 1 / Expo Doctor`
 - `Phase 1 / Supabase Database Integration`
+- `Phase 1 / Autonomous Systems iOS Contract`
 
-All eight passed remotely for final QA/build source
-`bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`.
+The original eight passed remotely for final QA/build source
+`bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`. The ninth job applies to the
+source/backend autonomy extension and must pass on its final PR head.
 
 Dependency audit status: the root mobile production graph contains 0 critical, 0
 high, 21 moderate, and 1 low advisory. The independently locked alert-automation

@@ -10,6 +10,47 @@ permissions:
   contents: read
 
 jobs:
+  autonomous-systems-ios-contract:
+    name: Phase 1 / Autonomous Systems iOS Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate autonomous iOS contracts
+        run: |
+          npm run guard:autonomous-systems-contract
+          npm run proof:autonomous-systems-contract
+          npm run guard:autonomous-operating-model
+          npm run guard:ios-autonomous-call-retry
+          npm run proof:ios-autonomous-call-retry
+          npm run guard:ios-notification-autonomy
+          npm run proof:ios-notification-autonomy
+          npm run test:ios-notification-autonomy
+          npm run guard:ios-release-autonomy
+          npm run proof:ios-release-autonomy
+          npm run test:ios-release-autonomy
+          npm run guard:ios-observability-autonomy
+          npm run proof:ios-observability-autonomy
+          npm run test:ios-observability-autonomy
+          npm run guard:ios-installed-qa-autonomy
+          npm run proof:ios-installed-qa-autonomy
+          npm run test:ios-installed-qa-autonomy
+          npm run guard:ios-autonomous-system-coverage
+          npm run proof:ios-autonomous-system-coverage
+
   supabase-database-integration:
     name: Phase 1 / Supabase Database Integration
     runs-on: ubuntu-latest
@@ -26,7 +67,7 @@ jobs:
           version: 2.109.1
 
       - name: Verify required database suites are present
-        run: test -f supabase/tests/chilly_chat_call_transitions_test.sql && test -f supabase/tests/revenuecat_atomic_transactions_test.sql
+        run: test -f supabase/tests/chilly_chat_call_transitions_test.sql && test -f supabase/tests/revenuecat_atomic_transactions_test.sql && test -f supabase/tests/ios_autonomous_systems_test.sql
 
       - name: Start local Supabase services
         run: supabase start

@@ -1,8 +1,16 @@
 # Chi'llywood Autonomous Systems Scope Registry
 
-Last updated: 2026-07-13
+Last updated: 2026-07-16
 
 This registry is the protected top-level contract for Chi'llywood autonomous systems. The source registry lives in `_lib/autonomousSystemsRegistry.ts`; this document is the operator-facing mirror. Future autonomous scope must be added through explicit registry entries with approval level, read/write bounds, guard, proof, rollback, emergency-stop/fallback, and owner/admin approval requirements. In short, future scope can be added only through registry entries.
+
+## Platform contract
+
+Every system declares `supportedPlatforms` using only `shared`, `ios`, `android`, `web`, and `unknown`. `shared` means backend policy or control-plane state; it is not a substitute for a known client platform. Unknown historical client/provider rows remain `unknown` rather than being guessed.
+
+The explicit iOS adapters are notification delivery and terminal retry, EAS/App Store release readback, runtime observability, installed TestFlight QA readiness, LiveKit client telemetry, RevenueCat App Store provider readiness, signing/security, recovery, privacy, support, and owner-command routing. Media, moderation, and search remain shared backends with optional origin-platform telemetry. Ads/sponsor delivery remains foundation-only and off.
+
+The canonical operator matrix, including source, scheduler, read/write boundary, guard, proof, kill switch, approval boundary, and physical-proof state, is [IOS_AUTONOMOUS_OPERATOR_MATRIX.md](ios/IOS_AUTONOMOUS_OPERATOR_MATRIX.md). Missing provider readback must be `unknown` or `blocked`; no generic `watch_once` may default to healthy.
 
 ## Current Systems
 

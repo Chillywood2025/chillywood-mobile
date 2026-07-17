@@ -29,7 +29,7 @@ This is no god mode. It does not replace the owner, Rachi does not outrank owner
 ## Command Flow
 
 1. Owner submits a command through owner-authorized UI, CLI, or backend call.
-2. The command is sanitized and classified.
+2. The command is sanitized and classified. Platform scope is normalized to `shared`, `ios`, `android`, or `web`; a platform label supplies routing/audit context but no new authority.
 3. The command maps to one or more active autonomous systems:
    - media work -> `media_automation`
    - LiveKit/realtime work -> `livekit_operator`
@@ -50,6 +50,8 @@ This is no god mode. It does not replace the owner, Rachi does not outrank owner
 6. Level 3/4 commands create `autonomous_approval_requests` and stop.
 7. Approved Level 3/4 commands require fresh preflight, exact scope match, active emergency state, and audit before execution.
 8. Level 4 still needs external confirmation where applicable.
+
+iOS commands route to the existing notification/APNs/terminal-retry, EAS/App Store release, observability, installed TestFlight readiness, LiveKit telemetry, RevenueCat App Store readiness, signing/security, recovery, privacy, and support surfaces. The route cannot directly execute an OTA, public release, provider mutation, purchase, push campaign, entitlement, role change, moderation enforcement, or physical-proof claim.
 
 ## Risk Levels
 
