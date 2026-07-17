@@ -285,7 +285,7 @@ export default function SubscribeScreen() {
       return;
     }
 
-    let requestedPurchaseMode = activePurchaseMode;
+    let requestedPurchaseMode: MonetizationPurchaseMode = activePurchaseMode;
     let requestedPackageId = premiumTarget.recommendedPackageId;
 
     if (!canPurchase) {
