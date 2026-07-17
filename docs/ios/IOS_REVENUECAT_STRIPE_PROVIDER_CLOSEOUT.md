@@ -240,14 +240,18 @@ Local all-flags build 8 uses source `bbb9d6db`, channel/runtime
 `ios-qa` / `1.0.0-iosqa1`, and submission
 `e0b894e3-5dfc-44c5-9da2-e36c3b85bd5b` / Apple build
 `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`, assigned only to
-`Chillywood Internal`. Its RevenueCat client surface is enabled,
-but `revenuecat_app_store_enabled` and every money switch remain off until one
-separately approved sandbox test.
+`Chillywood Internal`. Its RevenueCat client surface is enabled. The owner-approved
+internal QA rail is now `revenuecat_app_store_enabled=sandbox_only`; provider
+webhooks, tips, and watch-party tickets remain `sandbox_only`, while live money,
+payouts, transfers, withdrawals, cash-out, and payable creator balances remain
+off. The default RevenueCat `premium` offering now includes the exact App Store
+monthly and annual packages without changing product identifiers, prices, or the
+existing Android monthly package.
 
 ## Remaining bounded proof
 
-1. Keep the App Store rail off until a bounded internal-TestFlight purchase is
-   explicitly approved.
+1. Keep the App Store rail bounded to `sandbox_only`; never promote it to a live
+   or public purchase state without separate approval.
 2. Complete physical TestFlight purchase, Restore Purchases, renewal,
    cancellation, refund, and revocation testing in the final device matrix.
 

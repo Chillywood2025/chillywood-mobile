@@ -77,6 +77,7 @@ jobs:
           npm run guard:ios-commerce-catalog
           npm run guard:ios-commerce-policy
           npm run proof:ios-commerce
+          npm run test:premium-purchase-readiness
           npm run proof:ios-media-readiness
           npm run proof:ios-push-platform
           npm run guard:ios-native-call-policy

@@ -59,7 +59,7 @@ job remains required alongside it.
 | --- | --- | --- | --- |
 | Build 7 embedded binary | `d5a8db65edbdd19fec42ad37ca1162412f66a41e`, `1.0.0 (7)`, production channel/runtime `1.0.0` | Native build capability present, but `ChillywoodNativeCallsRuntimeDefaultEnabled=false` | Historical internal binary. An OTA cannot change its native runtime key, Info.plist, entitlements, Swift, PushKit capability, or background modes. |
 | Build-7 iOS OTA | group `896eea68-859a-4cfe-9697-725299be45bf`, update `019f6b56-1bb5-7164-a6b2-4fb08ef4f6d8`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, production channel/runtime `1.0.0` | Native calls false; ordinary push registration true; RevenueCat App Store surfaces true | iOS-only JavaScript/provider QA. No Android update was published. Running-update verification on build 7 remains pending because the paired phone currently has an older development build. |
-| Local build 8 | local IPA SHA-256 `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, `ios-qa` channel/runtime `1.0.0-iosqa1` | `IOS_NATIVE_CALLS_ENABLED=true`, native runtime default true, ordinary push true, RevenueCat App Store surfaces true | Exact all-flags physical QA candidate. The private ordinary-push, VoIP, purchase, and money rollout switches remain off by default. |
+| Local build 8 | local IPA SHA-256 `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, `ios-qa` channel/runtime `1.0.0-iosqa1` | `IOS_NATIVE_CALLS_ENABLED=true`, native runtime default true, ordinary push true, RevenueCat App Store surfaces true | Exact all-flags physical QA candidate. The App Store rail is bounded to `sandbox_only`; ordinary push and VoIP rollout remain off, and all live-money/payout controls remain off. |
 
 The recorded build-7 OTA rollback target is group
 `8e158980-75d1-47ef-bd26-f3f9e564fdab`. Roll back with
@@ -101,7 +101,7 @@ change the inspected binary.
 | iOS identity | Configured | Bundle ID `com.chillywood.mobile`, Team ID `CU7536UQK9`, version `1.0.0`, tablet support and existing orientation/new-architecture/static-framework behavior preserved. |
 | Firebase | Configured | Firebase Apple app exists for the exact bundle ID. `IOS_GOOGLE_SERVICES_FILE` is an EAS File secret in development, preview, and production. The plist is not in Git and was never printed. |
 | App Store Connect app | Created | Chi'llywood app record exists with numeric app ID `6791217176`. No public release has been configured. |
-| Apple product catalog | Created, sandbox/internal only | 2 Premium subscriptions and 8 consumables exist with localization, price, and USA availability. The App Store purchase switch remains off. |
+| Apple product catalog | Created, sandbox/internal only | 2 Premium subscriptions and 8 consumables exist with localization, price, and USA availability. The default RevenueCat `premium` offering maps `$rc_monthly` to `com.chillywood.premium.monthly` and `$rc_annual` to `com.chillywood.premium.yearly`. |
 | EAS signing | Configured | Development and App Store credentials are EAS-managed. The distribution certificate is valid through July 14, 2027, and the active App Store profile was regenerated without exporting credential material. One owner-authorized iPhone remains registered. |
 | EAS submit | Configured and verified | Production iOS submit profile uses the real numeric app ID. Exact build submission succeeded; no `--latest`, auto-submit, external group, or public release path was used. |
 | APNs credentials | Configured, delivery unproven | EAS has an ordinary APNs credential. A separate VoIP APNs key is stored only as Supabase secrets. Both ordinary iOS rollout and VoIP dispatch remain off. |
@@ -109,7 +109,7 @@ change the inspected binary.
 | Supabase Auth redirects | Configured | The custom scheme and required HTTPS authentication routes are configured. Signed physical Universal Link proof remains pending. |
 | Ordinary iOS push | Source and backend deployed; rollout off | Client registration, permission states, categories, badge/response handling, and platform-aware payload source exist. Updated dispatch functions are active. Physical APNs delivery is not claimed. |
 | Native calls | Semantic correction and autonomous retry deployed; rollout off | The dispatcher never mutates invite state, terminal cleanup is independent of new-call preference, and a bounded scheduled retry worker claims durable delivery rows without a living client. Build 7 cannot enable native calls by OTA; local build 8 has the native/client gates enabled for bounded QA. Physical delivery is unclaimed. |
-| Commerce policy | Atomic schema deployed; Apple rail off | Premium and exact iOS consumable events now execute through service-only transactional RPCs. Apple/Google providers remain distinct, Google base-plan parsing is preserved, tips create no entitlement/access/payable balance, and Seat Passes grant viewer access only. |
+| Commerce policy | Atomic schema deployed; Apple rail sandbox-only | Premium and exact iOS consumable events now execute through service-only transactional RPCs. The audited switch setter recognizes the complete constrained switch catalog through migration `20260718143500`; Apple/Google providers remain distinct, Google base-plan parsing is preserved, tips create no entitlement/access/payable balance, and Seat Passes grant viewer access only. |
 | RevenueCat Apple | **Configured; credentials valid** | Existing project `projc5629a24` and Apple app `app3a0ad1ba62` are configured for `com.chillywood.mobile`. Ten products, Premium entitlement, three offerings, package mappings, the sensitive EAS public-key variable, and the project-wide webhook all pass readback. A dedicated Apple In-App Purchase Key was generated once, stored outside Git with owner-only permissions and a Keychain record, uploaded directly to the Apple app, and remained `Valid credentials` after RevenueCat reload. The existing App Store Connect API credential also remains valid. |
 | Stripe physical merch / Connect | Verified test-mode and platform-neutral | Required Supabase secret names are present. Existing test-mode merch and Connect webhooks are active; platform charges and payouts remain disabled. iOS has no Stripe digital checkout, and no payout, transfer, cash-out, or payable balance was created. |
 | Privacy manifest | Source, generated prebuild, and archive pass | Canonical manifest is wired through Expo, tracking is false, and build 7 archive inspection confirms `PrivacyInfo.xcprivacy` in the signed app. The protected Firebase file variable supplied clean managed prebuild without placing the plist in Git. |
@@ -165,8 +165,11 @@ catalog count/digest `15` / `4fb5d0565f6697269e2572a63d3bd678`, and service-only
 atomic RPC execution. Two historical Google event-pass provider events are listed
 by reconciliation as missing ledger effects; they were not mutated. Autonomous
 readback confirms ordinary iOS push and VoIP rollout are false. App Store purchase
-access and live-money/payout controls retain their pre-task states; no switch was
-changed by the autonomy work.
+access is now explicitly bounded to `sandbox_only` for internal TestFlight QA;
+live-money and payout controls remain off. Migration
+`20260718143500_allow_app_store_sandbox_switch_control` aligns the owner/operator
+RPC with the constrained switch catalog, denies anonymous execution, and preserves
+the audited rollback path. Local reset and pgTAP pass 230 assertions.
 
 ## Safety switches
 
@@ -175,11 +178,12 @@ contains QA client capability:
 
 - `IOS_VOIP_PUSH_DISPATCH_ENABLED=false`;
 - `IOS_ORDINARY_PUSH_ROLLOUT_ENABLED=false`;
-- `revenuecat_app_store_enabled=off`;
+- `revenuecat_app_store_enabled=sandbox_only` (internal TestFlight QA only);
 - `provider_webhooks_enabled=sandbox_only` (safe existing state);
+- `tips_enabled=sandbox_only` and `watch_party_tickets_enabled=sandbox_only`;
 - live money is off;
 - payouts, cash-out, withdrawals, transfers, and payable balances are off; and
-- no production-visible iOS native call or commerce rollout is enabled.
+- no production-visible iOS native call or live commerce rollout is enabled.
 
 Build 8 intentionally sets all four client QA flags true. Those flags do not
 override the private server controls above. Build 7's OTA intentionally keeps the

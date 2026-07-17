@@ -137,6 +137,7 @@
     "proof:room-safe-notification-and-call-behavior": "node ./scripts/proof-room-safe-notification-and-call-behavior.mjs",
     "proof:premium-first-activation": "node ./scripts/proof-premium-first-activation.mjs",
     "proof:premium-sandbox-live-tab-flow": "node ./scripts/proof-premium-sandbox-live-tab-flow.mjs",
+    "test:premium-purchase-readiness": "node ./scripts/test-premium-purchase-readiness.mjs",
     "proof:owner-admin-command-center-ui": "node ./scripts/proof-owner-admin-command-center-ui.mjs",
     "proof:reporting-moderation-workflow": "node ./scripts/proof-reporting-moderation-workflow.mjs",
     "proof:report-affordances-event-chat-message": "node ./scripts/proof-report-affordances-event-chat-message.mjs",

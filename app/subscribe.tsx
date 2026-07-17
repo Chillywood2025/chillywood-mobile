@@ -19,6 +19,7 @@ import {
   type MonetizationPurchaseMode,
 } from "../_lib/monetization";
 import { useOptionalBetaProgram } from "../_lib/betaProgram";
+import { resolvePremiumPurchaseReadiness } from "../_lib/premiumPurchaseReadiness.mjs";
 import { useSession } from "../_lib/session";
 
 const FRIENDLY_UNAVAILABLE_MESSAGE =
@@ -31,13 +32,28 @@ const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-brande
 const STORE_PROVIDER_NAME = Platform.OS === "ios" ? "App Store" : "Google Play";
 const STORE_PROVIDER_PAIR = `${STORE_PROVIDER_NAME} / RevenueCat`;
 
-const buildPurchaseReady = (snapshot: MonetizationSnapshot, purchaseMode: MonetizationPurchaseMode) => {
+const buildPurchaseReadiness = (
+  snapshot: MonetizationSnapshot,
+  purchaseMode: MonetizationPurchaseMode,
+  sandboxMode: InternalTesterSandboxPurchaseModeState,
+  isSignedIn: boolean,
+) => {
   const target = snapshot.targets.premium_subscription;
-  return isPremiumPurchaseShellAvailableForMode(purchaseMode)
-    && snapshot.configuration.shouldConfigure
-    && snapshot.canMakePayments
-    && target.offeringAvailable
-    && target.packageCount > 0;
+  return resolvePremiumPurchaseReadiness({
+    isSignedIn,
+    hasPremium: target.hasEntitlement,
+    purchaseMode,
+    purchaseShellAvailable: isPremiumPurchaseShellAvailableForMode(purchaseMode),
+    sandboxModeReason: sandboxMode.reason,
+    storeName: STORE_PROVIDER_NAME,
+    storePurchaseRailReadbackComplete: sandboxMode.storePurchaseRailReadbackComplete,
+    storePurchaseRailState: sandboxMode.storePurchaseRailState,
+    revenueCatConfigured: snapshot.configuration.shouldConfigure,
+    configurationReason: snapshot.configuration.reason,
+    canMakePayments: snapshot.canMakePayments,
+    offeringAvailable: target.offeringAvailable,
+    packageCount: target.packageCount,
+  });
 };
 
 function PremiumAccordion({
@@ -127,6 +143,8 @@ export default function SubscribeScreen() {
     payoutsEnabled: false,
     cashoutEnabled: false,
     providerSandboxCandidate: false,
+    storePurchaseRailState: "off",
+    storePurchaseRailReadbackComplete: false,
   });
   const [loading, setLoading] = useState(false);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
@@ -171,6 +189,8 @@ export default function SubscribeScreen() {
         payoutsEnabled: false,
         cashoutEnabled: false,
         providerSandboxCandidate: false,
+        storePurchaseRailState: "off",
+        storePurchaseRailReadbackComplete: false,
       } : current);
       return;
     }
@@ -198,6 +218,8 @@ export default function SubscribeScreen() {
           payoutsEnabled: false,
           cashoutEnabled: false,
           providerSandboxCandidate: false,
+          storePurchaseRailState: "off",
+          storePurchaseRailReadbackComplete: false,
         });
       });
 
@@ -217,21 +239,10 @@ export default function SubscribeScreen() {
 
   const premiumTarget = snapshot.targets.premium_subscription;
   const hasPremium = !!premiumTarget.hasEntitlement;
-  const purchaseReady = buildPurchaseReady(snapshot, activePurchaseMode);
+  const purchaseReadiness = buildPurchaseReadiness(snapshot, activePurchaseMode, sandboxMode, isSignedIn);
+  const purchaseReady = purchaseReadiness.ready;
   const sandboxPurchaseAvailable = sandboxMode.enabled && purchaseReady && !hasPremium;
-  const sandboxBlockedReason = hasPremium
-    ? "Premium is already active."
-    : !sandboxMode.enabled
-      ? sandboxMode.reason
-      : !snapshot.configuration.shouldConfigure
-        ? snapshot.configuration.reason ?? "RevenueCat is not configured for this build."
-        : !snapshot.canMakePayments
-          ? `${STORE_PROVIDER_NAME} billing cannot make purchases on this device/account right now.`
-          : !premiumTarget.offeringAvailable
-            ? "RevenueCat did not return the Premium offering for this account."
-            : premiumTarget.packageCount <= 0
-              ? "RevenueCat returned the Premium offering without purchasable packages."
-              : "Provider-backed sandbox purchase is ready.";
+  const sandboxBlockedReason = purchaseReadiness.message;
   const canPurchase = isSignedIn && purchaseReady && !hasPremium;
   const canRestore = isSignedIn && snapshot.configuration.shouldConfigure;
   const canManage = isSignedIn && snapshot.configuration.shouldConfigure;
@@ -247,7 +258,9 @@ export default function SubscribeScreen() {
     : FRIENDLY_UNAVAILABLE_MESSAGE;
   const primaryActionLabel = hasPremium
     ? "Manage subscription"
-    : sandboxMode.enabled ? "Start Sandbox Premium Test" : "Start Premium";
+    : purchaseReady
+      ? sandboxMode.enabled ? "Start Sandbox Premium Test" : "Start Premium"
+      : "Check Sandbox Purchase Setup";
   const primaryActionBusy = hasPremium ? manageBusy : purchaseBusy;
 
   const onSignIn = useCallback(() => {
@@ -272,9 +285,42 @@ export default function SubscribeScreen() {
       return;
     }
 
+    let requestedPurchaseMode = activePurchaseMode;
+    let requestedPackageId = premiumTarget.recommendedPackageId;
+
     if (!canPurchase) {
-      setNotice(FRIENDLY_UNAVAILABLE_MESSAGE);
-      return;
+      setNotice(`Checking ${STORE_PROVIDER_NAME} sandbox purchase availability...`);
+      setExpanded((current) => ({ ...current, "testing-details": true }));
+
+      try {
+        const nextSandboxMode = await resolveInternalTesterSandboxPurchaseMode({
+          userId: user?.id ?? null,
+          email: user?.email ?? null,
+          betaAccessActive: betaProgram?.isActive === true,
+        });
+        requestedPurchaseMode = nextSandboxMode.enabled
+          ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
+          : "public";
+        setSandboxMode(nextSandboxMode);
+
+        const nextSnapshot = await refreshSnapshot(true, requestedPurchaseMode);
+        setSnapshot(nextSnapshot);
+        requestedPackageId = nextSnapshot.targets.premium_subscription.recommendedPackageId;
+        const nextReadiness = buildPurchaseReadiness(
+          nextSnapshot,
+          requestedPurchaseMode,
+          nextSandboxMode,
+          true,
+        );
+
+        if (!nextReadiness.ready) {
+          setNotice(nextReadiness.message);
+          return;
+        }
+      } catch {
+        setNotice(`Unable to verify ${STORE_PROVIDER_NAME} sandbox purchase availability right now. Try again.`);
+        return;
+      }
     }
 
     setPurchaseBusy(true);
@@ -282,14 +328,15 @@ export default function SubscribeScreen() {
     trackEvent("premium_subscribe_purchase_requested", {
       source: "subscribe",
       snapshotStatus: snapshot.status,
-      packageId: premiumTarget.recommendedPackageId ?? "recommended",
+      packageId: requestedPackageId ?? "recommended",
+      purchaseMode: requestedPurchaseMode,
     });
 
     try {
       const result = await purchaseMonetizationTarget("premium_subscription", {
         userId: user?.id ?? null,
-        packageId: premiumTarget.recommendedPackageId,
-        purchaseMode: activePurchaseMode,
+        packageId: requestedPackageId,
+        purchaseMode: requestedPurchaseMode,
       });
       setNotice(result.ok ? result.message : FRIENDLY_UNAVAILABLE_MESSAGE);
       setSnapshot(result.snapshot);
@@ -298,7 +345,18 @@ export default function SubscribeScreen() {
     } finally {
       setPurchaseBusy(false);
     }
-  }, [activePurchaseMode, canPurchase, isSignedIn, onSignIn, premiumTarget.recommendedPackageId, snapshot.status, user?.id]);
+  }, [
+    activePurchaseMode,
+    betaProgram?.isActive,
+    canPurchase,
+    isSignedIn,
+    onSignIn,
+    premiumTarget.recommendedPackageId,
+    refreshSnapshot,
+    snapshot.status,
+    user?.email,
+    user?.id,
+  ]);
 
   const onRestore = useCallback(async () => {
     if (!isSignedIn) {
@@ -415,13 +473,17 @@ export default function SubscribeScreen() {
             ) : null}
 
             <TouchableOpacity
-              style={[styles.primaryButton, (busy || (!hasPremium && !canPurchase)) && styles.primaryButtonDisabled]}
+              style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
               activeOpacity={0.88}
-              disabled={busy || (!hasPremium && !canPurchase)}
+              disabled={busy}
               onPress={hasPremium ? onManage : onPurchase}
               testID="premium-purchase-button"
               accessibilityRole="button"
               accessibilityLabel={hasPremium ? "Manage Chi'llywood Premium subscription" : "Start Chi'llywood Premium purchase"}
+              accessibilityHint={!hasPremium && !purchaseReady
+                ? "Checks purchase availability and explains any remaining setup issue."
+                : undefined}
+              accessibilityState={{ disabled: busy }}
             >
               {primaryActionBusy ? (
                 <ActivityIndicator color="#fff" />
@@ -429,6 +491,16 @@ export default function SubscribeScreen() {
                 <Text style={styles.primaryButtonText}>{primaryActionLabel}</Text>
               )}
             </TouchableOpacity>
+
+            {!hasPremium && !purchaseReady ? (
+              <Text
+                style={styles.purchaseBlockedReason}
+                testID="premium-purchase-blocked-reason"
+                accessibilityLiveRegion="polite"
+              >
+                {purchaseReadiness.message}
+              </Text>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.secondaryButton, busy && styles.secondaryButtonDisabled]}
@@ -493,6 +565,20 @@ export default function SubscribeScreen() {
                 ? `Provider-backed ${STORE_PROVIDER_PAIR} sandbox purchase is available. Internal tester role is not required for this path.`
                 : sandboxBlockedReason}
               tone={sandboxPurchaseAvailable ? "default" : "muted"}
+            />
+            <StatusLine
+              label={`${STORE_PROVIDER_NAME} server rail`}
+              value={sandboxMode.storePurchaseRailReadbackComplete
+                ? sandboxMode.storePurchaseRailState === "sandbox_only" ? "Sandbox only" : "Off"
+                : "Unavailable"}
+              body={sandboxMode.storePurchaseRailReadbackComplete
+                ? sandboxMode.storePurchaseRailState === "sandbox_only"
+                  ? "The bounded sandbox server rail is enabled; live money remains separate and off."
+                  : "The sandbox server rail is not enabled, so StoreKit will not open."
+                : "The server rail could not be verified. Purchases fail closed until readback succeeds."}
+              tone={sandboxMode.storePurchaseRailReadbackComplete && sandboxMode.storePurchaseRailState === "sandbox_only"
+                ? "default"
+                : "warning"}
             />
             <StatusLine
               label="RevenueCat configured"
@@ -767,6 +853,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "900",
+  },
+  purchaseBlockedReason: {
+    color: "#FFE0A8",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "700",
+    textAlign: "center",
   },
   secondaryButton: {
     flex: 1,

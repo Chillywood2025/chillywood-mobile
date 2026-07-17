@@ -22,6 +22,7 @@ const assertNotIncludes = (source, needle, label) => {
 const monetization = read("_lib/monetization.ts");
 const accessSheet = read("components/monetization/access-sheet.tsx");
 const subscribe = read("app/subscribe.tsx");
+const premiumPurchaseReadiness = read("_lib/premiumPurchaseReadiness.mjs");
 const liveTab = read("app/(tabs)/live.tsx");
 const premiumAccess = read("_lib/premiumWatchPartyAccess.ts");
 const guard = read("scripts/guard-premium-sandbox-policy.mjs");
@@ -46,10 +47,21 @@ const checks = [
     id: "offering_package_billing_required",
     ok: subscribe.includes("snapshot.configuration.shouldConfigure")
       && subscribe.includes("snapshot.canMakePayments")
-      && subscribe.includes("premiumTarget.offeringAvailable")
-      && subscribe.includes("premiumTarget.packageCount <= 0")
+      && subscribe.includes("target.offeringAvailable")
+      && subscribe.includes("target.packageCount")
+      && premiumPurchaseReadiness.includes("premium_offering_missing")
+      && premiumPurchaseReadiness.includes("premium_packages_missing")
       && subscribe.includes("sandboxPurchaseAvailable"),
     detail: "Subscribe diagnostics require RevenueCat config, billing, offering, and package readiness.",
+  },
+  {
+    id: "server_rail_and_actionable_blocker_required",
+    ok: monetization.includes("readMoneyFeatureFlagSummaryWithStatus")
+      && monetization.includes("storePurchaseRailState !== \"sandbox_only\"")
+      && subscribe.includes("premium-purchase-blocked-reason")
+      && subscribe.includes("disabled={busy}")
+      && !subscribe.includes("disabled={busy || (!hasPremium && !canPurchase)}"),
+    detail: "Sandbox StoreKit opens only after verified server-rail readback, while a blocked CTA remains pressable and explains the exact issue.",
   },
   {
     id: "access_sheet_direct_sandbox_purchase",

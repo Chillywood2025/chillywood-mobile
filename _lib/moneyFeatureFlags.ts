@@ -34,6 +34,11 @@ export type MoneyFeatureFlagSummaryRow = {
   publicSafe: boolean;
 };
 
+export type MoneyFeatureFlagSummaryReadback = {
+  rows: MoneyFeatureFlagSummaryRow[];
+  readbackComplete: boolean;
+};
+
 export type PlatformMoneyKillSwitchRow = {
   key: MoneyFeatureFlagKey;
   state: MoneyFeatureFlagState;
@@ -309,7 +314,7 @@ export const getPlatformMoneyKillSwitchFallbackRows = (): PlatformMoneyKillSwitc
   })
 );
 
-export async function readMoneyFeatureFlagSummary(): Promise<MoneyFeatureFlagSummaryRow[]> {
+export async function readMoneyFeatureFlagSummaryWithStatus(): Promise<MoneyFeatureFlagSummaryReadback> {
   try {
     const { data, error } = await moneyFlagClient.rpc<MoneyFeatureFlagDbRow[]>(
       "get_money_feature_flags_summary",
@@ -319,10 +324,17 @@ export async function readMoneyFeatureFlagSummary(): Promise<MoneyFeatureFlagSum
       .map(toSummaryRow)
       .filter((row): row is MoneyFeatureFlagSummaryRow => !!row)
       .filter((row) => row.publicSafe);
-    return rows.length ? rows : getMoneyFeatureFlagFallbackSummary();
+    return rows.length
+      ? { rows, readbackComplete: true }
+      : { rows: getMoneyFeatureFlagFallbackSummary(), readbackComplete: false };
   } catch {
-    return getMoneyFeatureFlagFallbackSummary();
+    return { rows: getMoneyFeatureFlagFallbackSummary(), readbackComplete: false };
   }
+}
+
+export async function readMoneyFeatureFlagSummary(): Promise<MoneyFeatureFlagSummaryRow[]> {
+  const readback = await readMoneyFeatureFlagSummaryWithStatus();
+  return readback.rows;
 }
 
 export async function readPlatformMoneyKillSwitches(): Promise<PlatformMoneyKillSwitchRow[]> {

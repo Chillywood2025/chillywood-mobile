@@ -47,7 +47,7 @@ The all-platform autonomy parity closeout does not change this gate. It adds tru
 | 9 | Two-iPhone PushKit/CallKit incoming call | `BLOCKED_SECOND_IPHONE_DEVICE_PROOF` | Real VoIP push presents native incoming-call UI on a second signed iPhone without exposing the token. Production-visible rollout remains deliberately off. |
 | 10 | Call answer/decline/cancel/timeout/lock-screen proof | `BLOCKED_SECOND_IPHONE_DEVICE_PROOF` | Every native lifecycle state reaches React Native/LiveKit correctly, duplicate/cold-start recovery works, and cleanup is complete. |
 | 11 | Bluetooth/AirPods and interruption testing | `PENDING_HARDWARE` | Speaker/receiver/Bluetooth routing, interruption, background/return, and AVAudioSession cleanup pass on the final build. |
-| 12 | TestFlight StoreKit purchase | `AWAITING_BOUNDED_SANDBOX_APPROVAL` | After a separately approved bounded sandbox window, an approved account completes only a non-payable internal transaction for each supported product type. |
+| 12 | TestFlight StoreKit purchase | `READY_NOT_STARTED_SANDBOX_ONLY` | The owner-approved rail is bounded to `sandbox_only`; an approved internal account must still complete and record the non-payable physical StoreKit transaction proof. |
 | 13 | Restore Purchases | `NOT_STARTED_DEPENDS_ON_12` | Premium restore reconciles the authenticated account; tips are not incorrectly restorable and Seat Pass access comes from the verified server ledger. |
 | 14 | Renewal/cancellation/refund/revocation | `NOT_STARTED_DEPENDS_ON_12` | RevenueCat/App Store events preserve idempotency and update access according to verified lifecycle state without creating payable value. |
 | 15 | VoiceOver/Dynamic Type/final device regression | `READY_NOT_STARTED` | Representative small/large text, VoiceOver, reduced motion, orientation, iPad, authentication, media, legal, moderation, and account-deletion paths pass. |
@@ -61,9 +61,9 @@ The all-platform autonomy parity closeout does not change this gate. It adds tru
   `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`. Its inspected channel is `ios-qa`,
   runtime is `1.0.0-iosqa1`, and all four client QA capabilities are true.
   Builds 6 and 7 are not eligible for the complete native-call matrix.
-- Enable only one private server rollout switch for one bounded test, capture
-  sanitized evidence, then restore it to off. Client capability in build 8 is not
-  server rollout authorization.
+- Ordinary-push and VoIP rollout remain off unless separately authorized. The App
+  Store purchase rail may remain `sandbox_only` for the approved internal lane;
+  this does not authorize live money, public purchase rollout, or public release.
 - Use bounded test accounts with no owner/admin/payout authority.
 - Use non-private media and approved test rooms only.
 - Do not bypass room membership, account status, block, moderation, entitlement,
