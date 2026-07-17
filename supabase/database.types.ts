@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.1"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -39,6 +34,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      abuse_rate_limit_events: {
+        Row: {
+          action_key: string
+          actor_user_id: string
+          created_at: string
+          id: string
+          metadata: Json
+          target_key: string
+        }
+        Insert: {
+          action_key: string
+          actor_user_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          target_key: string
+        }
+        Update: {
+          action_key?: string
+          actor_user_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          target_key?: string
+        }
+        Relationships: []
+      }
       access_grants: {
         Row: {
           audit_id: string | null
@@ -165,6 +187,280 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      account_fixture_health_findings: {
+        Row: {
+          account_label: string
+          account_role: string
+          actual_state: string
+          app_version: string | null
+          blocker_classification: string
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          discovered_by: string
+          distribution_source: string | null
+          expected_state: string
+          fake_proof: boolean
+          finding_status: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          next_safe_action: string
+          owner_command_request_id: string | null
+          platform: string
+          private_evidence_stored: boolean
+          provider_backed: boolean
+          provider_environment: string | null
+          readback_complete: boolean
+          result: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          source: string
+          system_id: string
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          account_label: string
+          account_role: string
+          actual_state: string
+          app_version?: string | null
+          blocker_classification: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          expected_state: string
+          fake_proof?: boolean
+          finding_status?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action: string
+          owner_command_request_id?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_backed?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          account_label?: string
+          account_role?: string
+          actual_state?: string
+          app_version?: string | null
+          blocker_classification?: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          expected_state?: string
+          fake_proof?: boolean
+          finding_status?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action?: string
+          owner_command_request_id?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_backed?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source?: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_fixture_health_findings_owner_command_request_id_fkey"
+            columns: ["owner_command_request_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_purge_batch_runs: {
+        Row: {
+          actor_user_id: string | null
+          completed_at: string | null
+          eligible_count: number
+          failed_count: number
+          failure_reason: string | null
+          id: string
+          manual_review_count: number
+          max_batch_size: number
+          metadata: Json
+          mode: string
+          processed_count: number
+          result_summary: Json
+          skipped_count: number
+          started_at: string
+          status: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          completed_at?: string | null
+          eligible_count?: number
+          failed_count?: number
+          failure_reason?: string | null
+          id?: string
+          manual_review_count?: number
+          max_batch_size?: number
+          metadata?: Json
+          mode: string
+          processed_count?: number
+          result_summary?: Json
+          skipped_count?: number
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          completed_at?: string | null
+          eligible_count?: number
+          failed_count?: number
+          failure_reason?: string | null
+          id?: string
+          manual_review_count?: number
+          max_batch_size?: number
+          metadata?: Json
+          mode?: string
+          processed_count?: number
+          result_summary?: Json
+          skipped_count?: number
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      account_purge_manual_review_items: {
+        Row: {
+          audit_log_id: string | null
+          batch_run_id: string | null
+          category: string
+          created_at: string
+          id: string
+          metadata: Json
+          reason: string
+          resolution: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_id: string | null
+          source_type: string
+          status: string
+          target_user_id: string
+        }
+        Insert: {
+          audit_log_id?: string | null
+          batch_run_id?: string | null
+          category: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason: string
+          resolution?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_id?: string | null
+          source_type: string
+          status?: string
+          target_user_id: string
+        }
+        Update: {
+          audit_log_id?: string | null
+          batch_run_id?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string
+          resolution?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_purge_manual_review_items_batch_run_id_fkey"
+            columns: ["batch_run_id"]
+            isOneToOne: false
+            referencedRelation: "account_purge_batch_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_purge_runtime_config: {
+        Row: {
+          batch_enabled: boolean
+          emergency_stop: boolean
+          id: boolean
+          max_batch_size: number
+          note: string | null
+          proof_batch_enabled: boolean
+          single_user_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          batch_enabled?: boolean
+          emergency_stop?: boolean
+          id?: boolean
+          max_batch_size?: number
+          note?: string | null
+          proof_batch_enabled?: boolean
+          single_user_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          batch_enabled?: boolean
+          emergency_stop?: boolean
+          id?: boolean
+          max_batch_size?: number
+          note?: string | null
+          proof_batch_enabled?: boolean
+          single_user_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -529,6 +825,108 @@ export type Database = {
         }
         Relationships: []
       }
+      analytics_delivery_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          capability: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          pii_stored: boolean
+          platform: string
+          provider: string | null
+          provider_environment: string | null
+          readback_complete: boolean
+          release_action_executed: boolean
+          review_status: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          capability?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider?: string | null
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          capability?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider?: string | null
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       app_configurations: {
         Row: {
           config: Json
@@ -547,6 +945,575 @@ export type Database = {
           config_key?: string
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      approval_integrity_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          finding_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          review_status: string
+          severity: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          finding_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          severity?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          finding_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          severity?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      autonomous_approval_request_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          event_summary: string
+          event_type: string
+          id: string
+          metadata: Json
+          request_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: string
+          created_at?: string
+          event_summary: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          request_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          event_summary?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autonomous_approval_request_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_approval_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      autonomous_approval_requests: {
+        Row: {
+          action_id: string
+          allowed_write_scope: Json
+          approval_level: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          denial_reason: string | null
+          denied_at: string | null
+          denied_by: string | null
+          execution_result: string | null
+          expires_at: string
+          forbidden_scope: Json
+          id: string
+          kill_switch_plan: string
+          metadata: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id: string | null
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status: string
+          system_id: string
+          title: string
+          updated_at: string
+          validation_plan: string
+        }
+        Insert: {
+          action_id: string
+          allowed_write_scope?: Json
+          approval_level: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          denial_reason?: string | null
+          denied_at?: string | null
+          denied_by?: string | null
+          execution_result?: string | null
+          expires_at: string
+          forbidden_scope?: Json
+          id?: string
+          kill_switch_plan: string
+          metadata?: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id?: string | null
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status?: string
+          system_id: string
+          title: string
+          updated_at?: string
+          validation_plan: string
+        }
+        Update: {
+          action_id?: string
+          allowed_write_scope?: Json
+          approval_level?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          denial_reason?: string | null
+          denied_at?: string | null
+          denied_by?: string | null
+          execution_result?: string | null
+          expires_at?: string
+          forbidden_scope?: Json
+          id?: string
+          kill_switch_plan?: string
+          metadata?: Json
+          proof_plan?: string
+          proposed_action?: string
+          reason?: string
+          requested_by_actor_id?: string | null
+          requested_by_actor_type?: string
+          risk_summary?: string
+          rollback_plan?: string
+          status?: string
+          system_id?: string
+          title?: string
+          updated_at?: string
+          validation_plan?: string
+        }
+        Relationships: []
+      }
+      autonomous_provider_readback_capabilities: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          capability: string
+          capability_state: string
+          channel: string | null
+          created_at: string
+          data_source: string
+          distribution_source: string | null
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          missing_capability: string | null
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          capability: string
+          capability_state: string
+          channel?: string | null
+          created_at?: string
+          data_source: string
+          distribution_source?: string | null
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          missing_capability?: string | null
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          capability?: string
+          capability_state?: string
+          channel?: string | null
+          created_at?: string
+          data_source?: string
+          distribution_source?: string | null
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          missing_capability?: string | null
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      autonomous_scheduler_health_snapshots: {
+        Row: {
+          capped_attempt_count: number
+          created_at: string
+          data_source: string
+          enabled: boolean | null
+          failed_attempt_count: number
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          last_run_at: string | null
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          readback_complete: boolean
+          retry_backlog: number
+          schedule: string | null
+          scheduler: string
+          surface_id: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          capped_attempt_count?: number
+          created_at?: string
+          data_source: string
+          enabled?: boolean | null
+          failed_attempt_count?: number
+          health_state: string
+          high_risk_executed?: boolean
+          id?: string
+          last_run_at?: string | null
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          readback_complete?: boolean
+          retry_backlog?: number
+          schedule?: string | null
+          scheduler: string
+          surface_id: string
+          system_id: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          capped_attempt_count?: number
+          created_at?: string
+          data_source?: string
+          enabled?: boolean | null
+          failed_attempt_count?: number
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_run_at?: string | null
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          readback_complete?: boolean
+          retry_backlog?: number
+          schedule?: string | null
+          scheduler?: string
+          surface_id?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      autonomous_system_control_events: {
+        Row: {
+          actor_id: string | null
+          actor_role: string
+          created_at: string
+          event_summary: string
+          event_type: string
+          id: string
+          metadata: Json
+          system_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_role?: string
+          created_at?: string
+          event_summary: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          system_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_role?: string
+          created_at?: string
+          event_summary?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          system_id?: string
+        }
+        Relationships: []
+      }
+      autonomous_system_emergency_states: {
+        Row: {
+          metadata: Json
+          reason: string | null
+          status: string
+          system_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          metadata?: Json
+          reason?: string | null
+          status?: string
+          system_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          metadata?: Json
+          reason?: string | null
+          status?: string
+          system_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      backend_error_rate_findings: {
+        Row: {
+          app_version: string | null
+          backend_surface: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          error_rate_percent: number | null
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          pii_stored: boolean
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          release_action_executed: boolean
+          review_status: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          backend_surface?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          error_rate_percent?: number | null
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          backend_surface?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          error_rate_percent?: number | null
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      backup_health_snapshots: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
         }
         Relationships: []
       }
@@ -802,41 +1769,6 @@ export type Database = {
         }
         Relationships: []
       }
-      chat_messages: {
-        Row: {
-          body: string
-          created_at: string
-          id: string
-          message_type: string
-          sender_user_id: string
-          thread_id: string
-        }
-        Insert: {
-          body: string
-          created_at?: string
-          id?: string
-          message_type?: string
-          sender_user_id: string
-          thread_id: string
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          id?: string
-          message_type?: string
-          sender_user_id?: string
-          thread_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chat_messages_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "chat_threads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       chat_call_events: {
         Row: {
           actor_user_id: string
@@ -888,8 +1820,8 @@ export type Database = {
       chat_call_invites: {
         Row: {
           accepted_at: string | null
-          callee_user_id: string
           call_type: string
+          callee_user_id: string
           caller_user_id: string
           communication_room_id: string | null
           created_at: string
@@ -901,8 +1833,8 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
-          callee_user_id: string
           call_type: string
+          callee_user_id: string
           caller_user_id: string
           communication_room_id?: string | null
           created_at?: string
@@ -914,8 +1846,8 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
-          callee_user_id?: string
           call_type?: string
+          callee_user_id?: string
           caller_user_id?: string
           communication_room_id?: string | null
           created_at?: string
@@ -935,6 +1867,197 @@ export type Database = {
           },
           {
             foreignKeyName: "chat_call_invites_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "chat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_call_transition_deliveries: {
+        Row: {
+          actor_user_id: string
+          attempt_count: number
+          call_invite_id: string
+          completed_at: string | null
+          created_at: string
+          delivery_result: Json
+          delivery_status: string
+          dispatch_action: string | null
+          id: string
+          last_attempt_at: string | null
+          target_status: string
+          transition_key: string
+          updated_at: string
+        }
+        Insert: {
+          actor_user_id: string
+          attempt_count?: number
+          call_invite_id: string
+          completed_at?: string | null
+          created_at?: string
+          delivery_result?: Json
+          delivery_status?: string
+          dispatch_action?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          target_status: string
+          transition_key: string
+          updated_at?: string
+        }
+        Update: {
+          actor_user_id?: string
+          attempt_count?: number
+          call_invite_id?: string
+          completed_at?: string | null
+          created_at?: string
+          delivery_result?: Json
+          delivery_status?: string
+          dispatch_action?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          target_status?: string
+          transition_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_call_transition_deliveries_call_invite_id_fkey"
+            columns: ["call_invite_id"]
+            isOneToOne: false
+            referencedRelation: "chat_call_invites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_call_transition_delivery_failures: {
+        Row: {
+          attempt_count: number
+          call_invite_id: string
+          delivery_id: string
+          dispatch_action: string
+          first_reported_at: string
+          last_reason: string
+          last_reported_at: string
+          resolved_at: string | null
+          severity: string
+        }
+        Insert: {
+          attempt_count: number
+          call_invite_id: string
+          delivery_id: string
+          dispatch_action: string
+          first_reported_at?: string
+          last_reason: string
+          last_reported_at?: string
+          resolved_at?: string | null
+          severity?: string
+        }
+        Update: {
+          attempt_count?: number
+          call_invite_id?: string
+          delivery_id?: string
+          dispatch_action?: string
+          first_reported_at?: string
+          last_reason?: string
+          last_reported_at?: string
+          resolved_at?: string | null
+          severity?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_call_transition_delivery_failures_call_invite_id_fkey"
+            columns: ["call_invite_id"]
+            isOneToOne: false
+            referencedRelation: "chat_call_invites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_call_transition_delivery_failures_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: true
+            referencedRelation: "chat_call_transition_deliveries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_call_transition_retry_config: {
+        Row: {
+          configured_at: string
+          enabled: boolean
+          singleton: boolean
+          token_sha256: string
+          updated_at: string
+          worker_url: string | null
+        }
+        Insert: {
+          configured_at?: string
+          enabled?: boolean
+          singleton?: boolean
+          token_sha256: string
+          updated_at?: string
+          worker_url?: string | null
+        }
+        Update: {
+          configured_at?: string
+          enabled?: boolean
+          singleton?: boolean
+          token_sha256?: string
+          updated_at?: string
+          worker_url?: string | null
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          message_type: string
+          moderation_actioned_at: string | null
+          moderation_actioned_by: string | null
+          moderation_reason: string | null
+          moderation_report_id: number | null
+          moderation_status: string
+          sender_user_id: string
+          thread_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          message_type?: string
+          moderation_actioned_at?: string | null
+          moderation_actioned_by?: string | null
+          moderation_reason?: string | null
+          moderation_report_id?: number | null
+          moderation_status?: string
+          sender_user_id: string
+          thread_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          message_type?: string
+          moderation_actioned_at?: string | null
+          moderation_actioned_by?: string | null
+          moderation_reason?: string | null
+          moderation_report_id?: number | null
+          moderation_status?: string
+          sender_user_id?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_moderation_report_id_fkey"
+            columns: ["moderation_report_id"]
+            isOneToOne: false
+            referencedRelation: "safety_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "chat_threads"
@@ -1030,6 +2153,147 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "communication_rooms"
             referencedColumns: ["room_id"]
+          },
+        ]
+      }
+      circle_spectator_feed_items: {
+        Row: {
+          access_type: string
+          allow_live_reaction_rooms: boolean
+          allow_replay_watch_party: boolean
+          allow_spectator_view: boolean
+          allow_watch_party_from_spectator: boolean
+          broadcast_session_id: string | null
+          category_key: string | null
+          channel_user_id: string | null
+          created_at: string
+          creator_user_id: string
+          ended_at: string | null
+          event_id: string | null
+          host_user_id: string | null
+          id: string
+          is_spectator_enabled: boolean
+          is_spectator_playback_enabled: boolean
+          item_type: string
+          live_state: string
+          metadata: Json
+          moderation_status: string
+          playback_record_id: string | null
+          published_at: string
+          ranking_reason: string | null
+          ranking_score: number
+          requires_premium_to_join: boolean
+          requires_subscription_to_watch: boolean
+          requires_ticket_to_watch: boolean
+          rights_status: string
+          room_id: string | null
+          source_id: string | null
+          source_room_id: string | null
+          source_type: string
+          starts_at: string | null
+          status: string
+          subtitle: string | null
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          access_type?: string
+          allow_live_reaction_rooms?: boolean
+          allow_replay_watch_party?: boolean
+          allow_spectator_view?: boolean
+          allow_watch_party_from_spectator?: boolean
+          broadcast_session_id?: string | null
+          category_key?: string | null
+          channel_user_id?: string | null
+          created_at?: string
+          creator_user_id: string
+          ended_at?: string | null
+          event_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          is_spectator_enabled?: boolean
+          is_spectator_playback_enabled?: boolean
+          item_type: string
+          live_state?: string
+          metadata?: Json
+          moderation_status?: string
+          playback_record_id?: string | null
+          published_at?: string
+          ranking_reason?: string | null
+          ranking_score?: number
+          requires_premium_to_join?: boolean
+          requires_subscription_to_watch?: boolean
+          requires_ticket_to_watch?: boolean
+          rights_status?: string
+          room_id?: string | null
+          source_id?: string | null
+          source_room_id?: string | null
+          source_type: string
+          starts_at?: string | null
+          status?: string
+          subtitle?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          access_type?: string
+          allow_live_reaction_rooms?: boolean
+          allow_replay_watch_party?: boolean
+          allow_spectator_view?: boolean
+          allow_watch_party_from_spectator?: boolean
+          broadcast_session_id?: string | null
+          category_key?: string | null
+          channel_user_id?: string | null
+          created_at?: string
+          creator_user_id?: string
+          ended_at?: string | null
+          event_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          is_spectator_enabled?: boolean
+          is_spectator_playback_enabled?: boolean
+          item_type?: string
+          live_state?: string
+          metadata?: Json
+          moderation_status?: string
+          playback_record_id?: string | null
+          published_at?: string
+          ranking_reason?: string | null
+          ranking_score?: number
+          requires_premium_to_join?: boolean
+          requires_subscription_to_watch?: boolean
+          requires_ticket_to_watch?: boolean
+          rights_status?: string
+          room_id?: string | null
+          source_id?: string | null
+          source_room_id?: string | null
+          source_type?: string
+          starts_at?: string | null
+          status?: string
+          subtitle?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_spectator_feed_items_broadcast_session_fkey"
+            columns: ["broadcast_session_id"]
+            isOneToOne: false
+            referencedRelation: "room_broadcast_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_spectator_feed_items_playback_record_fkey"
+            columns: ["playback_record_id"]
+            isOneToOne: false
+            referencedRelation: "spectator_hls_playback_records"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1234,6 +2498,396 @@ export type Database = {
           },
         ]
       }
+      crash_cluster_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          pii_stored: boolean
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          release_action_executed: boolean
+          review_status: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          severity: string
+          signature_hash: string | null
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          signature_hash?: string | null
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          signature_hash?: string | null
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      creator_channel_subscription_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          offer_id: string | null
+          subscription_id: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          offer_id?: string | null
+          subscription_id?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          offer_id?: string | null
+          subscription_id?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_channel_subscription_events_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "creator_channel_subscription_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_channel_subscription_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "creator_channel_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_channel_subscription_events_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "creator_channel_subscription_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_channel_subscription_offers: {
+        Row: {
+          created_at: string
+          creator_id: string
+          currency: string
+          description: string | null
+          id: string
+          interval: string
+          metadata: Json
+          price_cents: number
+          provider: string
+          provider_entitlement_id: string | null
+          provider_product_id: string | null
+          provider_product_key: string | null
+          status: string
+          subscriber_count: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          currency?: string
+          description?: string | null
+          id?: string
+          interval?: string
+          metadata?: Json
+          price_cents?: number
+          provider?: string
+          provider_entitlement_id?: string | null
+          provider_product_id?: string | null
+          provider_product_key?: string | null
+          status?: string
+          subscriber_count?: number
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          interval?: string
+          metadata?: Json
+          price_cents?: number
+          provider?: string
+          provider_entitlement_id?: string | null
+          provider_product_id?: string | null
+          provider_product_key?: string | null
+          status?: string
+          subscriber_count?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      creator_channel_subscription_transactions: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          creator_id: string
+          creator_net_cents: number | null
+          currency: string
+          id: string
+          ledger_event_id: string | null
+          metadata: Json
+          offer_id: string
+          paid_at: string | null
+          payout_status: string
+          platform_fee_cents: number
+          provider: string
+          provider_event_id: string | null
+          provider_fee_cents: number | null
+          provider_original_transaction_id: string | null
+          provider_product_id: string | null
+          provider_transaction_id: string | null
+          status: string
+          subscriber_id: string
+          subscription_id: string | null
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          creator_id: string
+          creator_net_cents?: number | null
+          currency?: string
+          id?: string
+          ledger_event_id?: string | null
+          metadata?: Json
+          offer_id: string
+          paid_at?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_cents?: number | null
+          provider_original_transaction_id?: string | null
+          provider_product_id?: string | null
+          provider_transaction_id?: string | null
+          status?: string
+          subscriber_id: string
+          subscription_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          creator_id?: string
+          creator_net_cents?: number | null
+          currency?: string
+          id?: string
+          ledger_event_id?: string | null
+          metadata?: Json
+          offer_id?: string
+          paid_at?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_cents?: number | null
+          provider_original_transaction_id?: string | null
+          provider_product_id?: string | null
+          provider_transaction_id?: string | null
+          status?: string
+          subscriber_id?: string
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_channel_subscription_transaction_provider_event_id_fkey"
+            columns: ["provider_event_id"]
+            isOneToOne: false
+            referencedRelation: "provider_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_channel_subscription_transactions_ledger_event_id_fkey"
+            columns: ["ledger_event_id"]
+            isOneToOne: false
+            referencedRelation: "money_access_ledger_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_channel_subscription_transactions_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "creator_channel_subscription_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_channel_subscription_transactions_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "creator_channel_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_channel_subscriptions: {
+        Row: {
+          access_grant_id: string | null
+          canceled_at: string | null
+          created_at: string
+          creator_id: string
+          current_period_end: string | null
+          current_period_start: string | null
+          expired_at: string | null
+          id: string
+          metadata: Json
+          offer_id: string
+          provider: string
+          provider_customer_id: string | null
+          provider_latest_transaction_id: string | null
+          provider_original_transaction_id: string | null
+          revoked_at: string | null
+          status: string
+          subscriber_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_grant_id?: string | null
+          canceled_at?: string | null
+          created_at?: string
+          creator_id: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          expired_at?: string | null
+          id?: string
+          metadata?: Json
+          offer_id: string
+          provider?: string
+          provider_customer_id?: string | null
+          provider_latest_transaction_id?: string | null
+          provider_original_transaction_id?: string | null
+          revoked_at?: string | null
+          status?: string
+          subscriber_id: string
+          updated_at?: string
+        }
+        Update: {
+          access_grant_id?: string | null
+          canceled_at?: string | null
+          created_at?: string
+          creator_id?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          expired_at?: string | null
+          id?: string
+          metadata?: Json
+          offer_id?: string
+          provider?: string
+          provider_customer_id?: string | null
+          provider_latest_transaction_id?: string | null
+          provider_original_transaction_id?: string | null
+          revoked_at?: string | null
+          status?: string
+          subscriber_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_channel_subscriptions_access_grant_id_fkey"
+            columns: ["access_grant_id"]
+            isOneToOne: false
+            referencedRelation: "access_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_channel_subscriptions_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "creator_channel_subscription_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_clip_edits: {
         Row: {
           brand_asset_id: string | null
@@ -1321,7 +2975,11 @@ export type Database = {
           currency: string
           id: string
           is_paid: boolean
+          metadata: Json
           price_cents: number
+          provider: string
+          provider_product_id: string | null
+          provider_product_key: string | null
           status: string
           updated_at: string
         }
@@ -1333,7 +2991,11 @@ export type Database = {
           currency?: string
           id?: string
           is_paid?: boolean
+          metadata?: Json
           price_cents?: number
+          provider?: string
+          provider_product_id?: string | null
+          provider_product_key?: string | null
           status?: string
           updated_at?: string
         }
@@ -1345,7 +3007,11 @@ export type Database = {
           currency?: string
           id?: string
           is_paid?: boolean
+          metadata?: Json
           price_cents?: number
+          provider?: string
+          provider_product_id?: string | null
+          provider_product_key?: string | null
           status?: string
           updated_at?: string
         }
@@ -1401,6 +3067,107 @@ export type Database = {
           tax_cents?: number
         }
         Relationships: []
+      }
+      creator_event_transactions: {
+        Row: {
+          amount_cents: number
+          buyer_id: string
+          created_at: string
+          creator_event_id: string
+          creator_id: string
+          creator_net_cents: number | null
+          currency: string
+          event_id: string
+          id: string
+          ledger_event_id: string | null
+          metadata: Json
+          paid_at: string | null
+          payout_status: string
+          platform_fee_cents: number
+          provider: string
+          provider_event_id: string | null
+          provider_fee_cents: number | null
+          provider_product_id: string | null
+          provider_transaction_id: string | null
+          refunded_at: string | null
+          status: string
+        }
+        Insert: {
+          amount_cents?: number
+          buyer_id: string
+          created_at?: string
+          creator_event_id: string
+          creator_id: string
+          creator_net_cents?: number | null
+          currency?: string
+          event_id: string
+          id?: string
+          ledger_event_id?: string | null
+          metadata?: Json
+          paid_at?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_cents?: number | null
+          provider_product_id?: string | null
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          status?: string
+        }
+        Update: {
+          amount_cents?: number
+          buyer_id?: string
+          created_at?: string
+          creator_event_id?: string
+          creator_id?: string
+          creator_net_cents?: number | null
+          currency?: string
+          event_id?: string
+          id?: string
+          ledger_event_id?: string | null
+          metadata?: Json
+          paid_at?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_cents?: number | null
+          provider_product_id?: string | null
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_event_transactions_creator_event_id_fkey"
+            columns: ["creator_event_id"]
+            isOneToOne: false
+            referencedRelation: "creator_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_event_transactions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "paid_creator_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_event_transactions_ledger_event_id_fkey"
+            columns: ["ledger_event_id"]
+            isOneToOne: false
+            referencedRelation: "money_access_ledger_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_event_transactions_provider_event_id_fkey"
+            columns: ["provider_event_id"]
+            isOneToOne: false
+            referencedRelation: "provider_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       creator_events: {
         Row: {
@@ -1641,6 +3408,68 @@ export type Database = {
             columns: ["connect_account_id"]
             isOneToOne: false
             referencedRelation: "creator_payout_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_obligation_review_records: {
+        Row: {
+          buyer_user_id: string | null
+          created_at: string
+          creator_user_id: string
+          environment: string
+          id: string
+          metadata: Json
+          obligation_state: string
+          policy_key: string
+          refund_review_id: string | null
+          review_reason: string
+          safe_admin_summary: string
+          safe_creator_summary: string
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          buyer_user_id?: string | null
+          created_at?: string
+          creator_user_id: string
+          environment?: string
+          id?: string
+          metadata?: Json
+          obligation_state?: string
+          policy_key: string
+          refund_review_id?: string | null
+          review_reason?: string
+          safe_admin_summary?: string
+          safe_creator_summary?: string
+          source_id?: string | null
+          source_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          buyer_user_id?: string | null
+          created_at?: string
+          creator_user_id?: string
+          environment?: string
+          id?: string
+          metadata?: Json
+          obligation_state?: string
+          policy_key?: string
+          refund_review_id?: string | null
+          review_reason?: string
+          safe_admin_summary?: string
+          safe_creator_summary?: string
+          source_id?: string | null
+          source_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_obligation_review_records_refund_review_id_fkey"
+            columns: ["refund_review_id"]
+            isOneToOne: false
+            referencedRelation: "money_refund_review_records"
             referencedColumns: ["id"]
           },
         ]
@@ -2026,6 +3855,84 @@ export type Database = {
             columns: ["payout_account_id"]
             isOneToOne: false
             referencedRelation: "creator_payout_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_payout_hold_records: {
+        Row: {
+          created_at: string
+          creator_user_id: string
+          environment: string
+          existing_creator_payout_hold_id: string | null
+          held_until: string | null
+          hold_reason: string
+          hold_state: string
+          id: string
+          live_money_enabled_at_release: boolean
+          metadata: Json
+          obligation_review_id: string | null
+          payouts_enabled_at_release: boolean
+          policy_key: string
+          provider_release_evidence_id: string | null
+          refund_review_id: string | null
+          safe_admin_summary: string
+          safe_creator_summary: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_user_id: string
+          environment?: string
+          existing_creator_payout_hold_id?: string | null
+          held_until?: string | null
+          hold_reason?: string
+          hold_state?: string
+          id?: string
+          live_money_enabled_at_release?: boolean
+          metadata?: Json
+          obligation_review_id?: string | null
+          payouts_enabled_at_release?: boolean
+          policy_key: string
+          provider_release_evidence_id?: string | null
+          refund_review_id?: string | null
+          safe_admin_summary?: string
+          safe_creator_summary?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_user_id?: string
+          environment?: string
+          existing_creator_payout_hold_id?: string | null
+          held_until?: string | null
+          hold_reason?: string
+          hold_state?: string
+          id?: string
+          live_money_enabled_at_release?: boolean
+          metadata?: Json
+          obligation_review_id?: string | null
+          payouts_enabled_at_release?: boolean
+          policy_key?: string
+          provider_release_evidence_id?: string | null
+          refund_review_id?: string | null
+          safe_admin_summary?: string
+          safe_creator_summary?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payout_hold_records_obligation_review_id_fkey"
+            columns: ["obligation_review_id"]
+            isOneToOne: false
+            referencedRelation: "creator_obligation_review_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_hold_records_refund_review_id_fkey"
+            columns: ["refund_review_id"]
+            isOneToOne: false
+            referencedRelation: "money_refund_review_records"
             referencedColumns: ["id"]
           },
         ]
@@ -2705,6 +4612,90 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_replay_library_items: {
+        Row: {
+          broadcast_session_id: string | null
+          created_at: string
+          description: string | null
+          duration_seconds: number | null
+          error_code: string | null
+          id: string
+          metadata: Json
+          moderation_status: string
+          money_status: string
+          owner_user_id: string
+          party_id: string | null
+          playback_record_id: string | null
+          rights_status: string
+          save_status: string
+          source_room_id: string | null
+          source_type: string
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          broadcast_session_id?: string | null
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number | null
+          error_code?: string | null
+          id?: string
+          metadata?: Json
+          moderation_status?: string
+          money_status?: string
+          owner_user_id: string
+          party_id?: string | null
+          playback_record_id?: string | null
+          rights_status?: string
+          save_status?: string
+          source_room_id?: string | null
+          source_type: string
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          broadcast_session_id?: string | null
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number | null
+          error_code?: string | null
+          id?: string
+          metadata?: Json
+          moderation_status?: string
+          money_status?: string
+          owner_user_id?: string
+          party_id?: string | null
+          playback_record_id?: string | null
+          rights_status?: string
+          save_status?: string
+          source_room_id?: string | null
+          source_type?: string
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_replay_library_items_broadcast_session_fkey"
+            columns: ["broadcast_session_id"]
+            isOneToOne: false
+            referencedRelation: "room_broadcast_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_replay_library_items_playback_record_fkey"
+            columns: ["playback_record_id"]
+            isOneToOne: false
+            referencedRelation: "spectator_hls_playback_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_revenue_share_ledger_entries: {
         Row: {
           channel_user_id: string | null
@@ -2898,51 +4889,303 @@ export type Database = {
         }
         Relationships: []
       }
-      creator_tip_transactions: {
+      creator_room_ticket_transactions: {
+        Row: {
+          amount_cents: number
+          buyer_id: string
+          created_at: string
+          creator_id: string
+          creator_net_cents: number | null
+          currency: string
+          host_id: string
+          id: string
+          ledger_event_id: string | null
+          metadata: Json
+          offer_id: string
+          paid_at: string | null
+          party_id: string | null
+          payout_status: string
+          platform_fee_cents: number
+          provider: string
+          provider_event_id: string | null
+          provider_fee_cents: number | null
+          provider_product_id: string | null
+          provider_transaction_id: string | null
+          refunded_at: string | null
+          status: string
+        }
+        Insert: {
+          amount_cents?: number
+          buyer_id: string
+          created_at?: string
+          creator_id: string
+          creator_net_cents?: number | null
+          currency?: string
+          host_id: string
+          id?: string
+          ledger_event_id?: string | null
+          metadata?: Json
+          offer_id: string
+          paid_at?: string | null
+          party_id?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_cents?: number | null
+          provider_product_id?: string | null
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          status?: string
+        }
+        Update: {
+          amount_cents?: number
+          buyer_id?: string
+          created_at?: string
+          creator_id?: string
+          creator_net_cents?: number | null
+          currency?: string
+          host_id?: string
+          id?: string
+          ledger_event_id?: string | null
+          metadata?: Json
+          offer_id?: string
+          paid_at?: string | null
+          party_id?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_cents?: number | null
+          provider_product_id?: string | null
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_room_ticket_transactions_ledger_event_id_fkey"
+            columns: ["ledger_event_id"]
+            isOneToOne: false
+            referencedRelation: "money_access_ledger_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_room_ticket_transactions_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "paid_watch_party_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_room_ticket_transactions_provider_event_id_fkey"
+            columns: ["provider_event_id"]
+            isOneToOne: false
+            referencedRelation: "provider_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_tip_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          provider: string
+          provider_environment: string
+          provider_event_id: string | null
+          tip_transaction_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_environment?: string
+          provider_event_id?: string | null
+          tip_transaction_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_environment?: string
+          provider_event_id?: string | null
+          tip_transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_tip_events_tip_transaction_id_fkey"
+            columns: ["tip_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "creator_tip_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_tip_settings: {
         Row: {
           created_at: string
           creator_id: string
           currency: string
+          default_amount_cents: number | null
           id: string
-          payment_status: string
-          payout_status: string
+          last_provider_sync_at: string | null
+          max_amount_cents: number
+          metadata: Json
+          min_amount_cents: number
           provider: string
-          provider_fee_cents: number
-          provider_payment_id: string | null
-          sender_id: string
-          service_fee_cents: number
-          tip_amount_cents: number
-          total_paid_cents: number
+          provider_account_id: string | null
+          provider_charges_enabled: boolean
+          provider_environment: string
+          provider_onboarding_status: string
+          provider_payouts_enabled: boolean
+          status: string
+          suggested_amounts_cents: number[]
+          tips_enabled: boolean
           updated_at: string
         }
         Insert: {
           created_at?: string
           creator_id: string
           currency?: string
+          default_amount_cents?: number | null
           id?: string
-          payment_status?: string
-          payout_status?: string
+          last_provider_sync_at?: string | null
+          max_amount_cents?: number
+          metadata?: Json
+          min_amount_cents?: number
           provider?: string
-          provider_fee_cents?: number
-          provider_payment_id?: string | null
-          sender_id: string
-          service_fee_cents?: number
-          tip_amount_cents: number
-          total_paid_cents: number
+          provider_account_id?: string | null
+          provider_charges_enabled?: boolean
+          provider_environment?: string
+          provider_onboarding_status?: string
+          provider_payouts_enabled?: boolean
+          status?: string
+          suggested_amounts_cents?: number[]
+          tips_enabled?: boolean
           updated_at?: string
         }
         Update: {
           created_at?: string
           creator_id?: string
           currency?: string
+          default_amount_cents?: number | null
           id?: string
+          last_provider_sync_at?: string | null
+          max_amount_cents?: number
+          metadata?: Json
+          min_amount_cents?: number
+          provider?: string
+          provider_account_id?: string | null
+          provider_charges_enabled?: boolean
+          provider_environment?: string
+          provider_onboarding_status?: string
+          provider_payouts_enabled?: boolean
+          status?: string
+          suggested_amounts_cents?: number[]
+          tips_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      creator_tip_transactions: {
+        Row: {
+          checkout_started_at: string | null
+          created_at: string
+          creator_id: string
+          creator_net_cents: number | null
+          currency: string
+          disputed_at: string | null
+          failed_at: string | null
+          id: string
+          idempotency_key: string | null
+          message_private: string | null
+          metadata: Json
+          paid_at: string | null
+          payment_status: string
+          payout_status: string
+          platform_fee_cents: number
+          provider: string
+          provider_account_id: string | null
+          provider_checkout_session_id: string | null
+          provider_environment: string
+          provider_fee_cents: number
+          provider_payment_id: string | null
+          provider_payment_intent_id: string | null
+          refunded_at: string | null
+          sender_id: string
+          service_fee_cents: number
+          status: string
+          tip_amount_cents: number
+          total_paid_cents: number
+          updated_at: string
+        }
+        Insert: {
+          checkout_started_at?: string | null
+          created_at?: string
+          creator_id: string
+          creator_net_cents?: number | null
+          currency?: string
+          disputed_at?: string | null
+          failed_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          message_private?: string | null
+          metadata?: Json
+          paid_at?: string | null
           payment_status?: string
           payout_status?: string
+          platform_fee_cents?: number
           provider?: string
+          provider_account_id?: string | null
+          provider_checkout_session_id?: string | null
+          provider_environment?: string
           provider_fee_cents?: number
           provider_payment_id?: string | null
+          provider_payment_intent_id?: string | null
+          refunded_at?: string | null
+          sender_id: string
+          service_fee_cents?: number
+          status?: string
+          tip_amount_cents: number
+          total_paid_cents: number
+          updated_at?: string
+        }
+        Update: {
+          checkout_started_at?: string | null
+          created_at?: string
+          creator_id?: string
+          creator_net_cents?: number | null
+          currency?: string
+          disputed_at?: string | null
+          failed_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          message_private?: string | null
+          metadata?: Json
+          paid_at?: string | null
+          payment_status?: string
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_account_id?: string | null
+          provider_checkout_session_id?: string | null
+          provider_environment?: string
+          provider_fee_cents?: number
+          provider_payment_id?: string | null
+          provider_payment_intent_id?: string | null
+          refunded_at?: string | null
           sender_id?: string
           service_fee_cents?: number
+          status?: string
           tip_amount_cents?: number
           total_paid_cents?: number
           updated_at?: string
@@ -3009,143 +5252,399 @@ export type Database = {
           },
         ]
       }
-      circle_spectator_feed_items: {
+      creator_vip_events: {
         Row: {
-          access_type: string
-          allow_live_reaction_rooms: boolean
-          allow_replay_watch_party: boolean
-          allow_spectator_view: boolean
-          allow_watch_party_from_spectator: boolean
-          broadcast_session_id: string | null
-          category_key: string | null
-          channel_user_id: string | null
+          actor_id: string | null
           created_at: string
-          creator_user_id: string
-          ended_at: string | null
-          event_id: string | null
-          host_user_id: string | null
+          event_type: string
           id: string
-          is_spectator_enabled: boolean
-          is_spectator_playback_enabled: boolean
-          item_type: string
-          live_state: string
           metadata: Json
-          moderation_status: string
-          playback_record_id: string | null
-          published_at: string
-          ranking_reason: string | null
-          ranking_score: number
-          requires_premium_to_join: boolean
-          requires_subscription_to_watch: boolean
-          requires_ticket_to_watch: boolean
-          rights_status: string
-          room_id: string | null
-          source_id: string | null
-          source_room_id: string | null
-          source_type: string
-          starts_at: string | null
-          status: string
-          subtitle: string | null
-          thumbnail_url: string | null
-          title: string | null
-          updated_at: string
-          visibility: string
+          offer_id: string | null
+          transaction_id: string | null
+          vip_pass_id: string | null
         }
         Insert: {
-          access_type?: string
-          allow_live_reaction_rooms?: boolean
-          allow_replay_watch_party?: boolean
-          allow_spectator_view?: boolean
-          allow_watch_party_from_spectator?: boolean
-          broadcast_session_id?: string | null
-          category_key?: string | null
-          channel_user_id?: string | null
+          actor_id?: string | null
           created_at?: string
-          creator_user_id: string
-          ended_at?: string | null
-          event_id?: string | null
-          host_user_id?: string | null
+          event_type: string
           id?: string
-          is_spectator_enabled?: boolean
-          is_spectator_playback_enabled?: boolean
-          item_type: string
-          live_state?: string
           metadata?: Json
-          moderation_status?: string
-          playback_record_id?: string | null
-          published_at?: string
-          ranking_reason?: string | null
-          ranking_score?: number
-          requires_premium_to_join?: boolean
-          requires_subscription_to_watch?: boolean
-          requires_ticket_to_watch?: boolean
-          rights_status?: string
-          room_id?: string | null
-          source_id?: string | null
-          source_room_id?: string | null
-          source_type: string
-          starts_at?: string | null
-          status?: string
-          subtitle?: string | null
-          thumbnail_url?: string | null
-          title?: string | null
-          updated_at?: string
-          visibility?: string
+          offer_id?: string | null
+          transaction_id?: string | null
+          vip_pass_id?: string | null
         }
         Update: {
-          access_type?: string
-          allow_live_reaction_rooms?: boolean
-          allow_replay_watch_party?: boolean
-          allow_spectator_view?: boolean
-          allow_watch_party_from_spectator?: boolean
-          broadcast_session_id?: string | null
-          category_key?: string | null
-          channel_user_id?: string | null
+          actor_id?: string | null
           created_at?: string
-          creator_user_id?: string
-          ended_at?: string | null
-          event_id?: string | null
-          host_user_id?: string | null
+          event_type?: string
           id?: string
-          is_spectator_enabled?: boolean
-          is_spectator_playback_enabled?: boolean
-          item_type?: string
-          live_state?: string
           metadata?: Json
-          moderation_status?: string
-          playback_record_id?: string | null
-          published_at?: string
-          ranking_reason?: string | null
-          ranking_score?: number
-          requires_premium_to_join?: boolean
-          requires_subscription_to_watch?: boolean
-          requires_ticket_to_watch?: boolean
-          rights_status?: string
-          room_id?: string | null
-          source_id?: string | null
-          source_room_id?: string | null
-          source_type?: string
-          starts_at?: string | null
-          status?: string
-          subtitle?: string | null
-          thumbnail_url?: string | null
-          title?: string | null
-          updated_at?: string
-          visibility?: string
+          offer_id?: string | null
+          transaction_id?: string | null
+          vip_pass_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "circle_spectator_feed_items_broadcast_session_fkey"
-            columns: ["broadcast_session_id"]
+            foreignKeyName: "creator_vip_events_offer_id_fkey"
+            columns: ["offer_id"]
             isOneToOne: false
-            referencedRelation: "room_broadcast_sessions"
+            referencedRelation: "creator_vip_pass_offers"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "circle_spectator_feed_items_playback_record_fkey"
-            columns: ["playback_record_id"]
+            foreignKeyName: "creator_vip_events_transaction_id_fkey"
+            columns: ["transaction_id"]
             isOneToOne: false
-            referencedRelation: "spectator_hls_playback_records"
+            referencedRelation: "creator_vip_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_vip_events_vip_pass_id_fkey"
+            columns: ["vip_pass_id"]
+            isOneToOne: false
+            referencedRelation: "creator_vip_passes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_vip_pass_offers: {
+        Row: {
+          created_at: string
+          creator_id: string
+          currency: string
+          description: string | null
+          id: string
+          metadata: Json
+          pass_type: string
+          price_cents: number
+          provider: string
+          provider_product_id: string | null
+          provider_product_key: string | null
+          status: string
+          title: string
+          updated_at: string
+          vip_count: number
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          currency?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          pass_type?: string
+          price_cents?: number
+          provider?: string
+          provider_product_id?: string | null
+          provider_product_key?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          vip_count?: number
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          pass_type?: string
+          price_cents?: number
+          provider?: string
+          provider_product_id?: string | null
+          provider_product_key?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          vip_count?: number
+        }
+        Relationships: []
+      }
+      creator_vip_passes: {
+        Row: {
+          access_grant_id: string | null
+          activated_at: string | null
+          created_at: string
+          creator_id: string
+          expires_at: string | null
+          fan_id: string
+          id: string
+          metadata: Json
+          offer_id: string
+          provider: string
+          provider_transaction_id: string | null
+          refunded_at: string | null
+          revoked_at: string | null
+          source_transaction_id: string | null
+          status: string
+        }
+        Insert: {
+          access_grant_id?: string | null
+          activated_at?: string | null
+          created_at?: string
+          creator_id: string
+          expires_at?: string | null
+          fan_id: string
+          id?: string
+          metadata?: Json
+          offer_id: string
+          provider?: string
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          revoked_at?: string | null
+          source_transaction_id?: string | null
+          status?: string
+        }
+        Update: {
+          access_grant_id?: string | null
+          activated_at?: string | null
+          created_at?: string
+          creator_id?: string
+          expires_at?: string | null
+          fan_id?: string
+          id?: string
+          metadata?: Json
+          offer_id?: string
+          provider?: string
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          revoked_at?: string | null
+          source_transaction_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_vip_passes_access_grant_id_fkey"
+            columns: ["access_grant_id"]
+            isOneToOne: false
+            referencedRelation: "access_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_vip_passes_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "creator_vip_pass_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_vip_transactions: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          creator_id: string
+          creator_net_cents: number | null
+          currency: string
+          fan_id: string
+          id: string
+          ledger_event_id: string | null
+          metadata: Json
+          offer_id: string
+          paid_at: string | null
+          payout_status: string
+          platform_fee_cents: number
+          provider: string
+          provider_event_id: string | null
+          provider_fee_cents: number | null
+          provider_product_id: string | null
+          provider_transaction_id: string | null
+          refunded_at: string | null
+          status: string
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          creator_id: string
+          creator_net_cents?: number | null
+          currency?: string
+          fan_id: string
+          id?: string
+          ledger_event_id?: string | null
+          metadata?: Json
+          offer_id: string
+          paid_at?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_cents?: number | null
+          provider_product_id?: string | null
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          status?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          creator_id?: string
+          creator_net_cents?: number | null
+          currency?: string
+          fan_id?: string
+          id?: string
+          ledger_event_id?: string | null
+          metadata?: Json
+          offer_id?: string
+          paid_at?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          provider?: string
+          provider_event_id?: string | null
+          provider_fee_cents?: number | null
+          provider_product_id?: string | null
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_vip_transactions_ledger_event_id_fkey"
+            columns: ["ledger_event_id"]
+            isOneToOne: false
+            referencedRelation: "money_access_ledger_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_vip_transactions_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "creator_vip_pass_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_vip_transactions_provider_event_id_fkey"
+            columns: ["provider_event_id"]
+            isOneToOne: false
+            referencedRelation: "provider_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_availability_findings: {
+        Row: {
+          account_role: string | null
+          app_version: string | null
+          available_device_count: number
+          blocker_classification: string
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          device_lab_configured: boolean
+          device_requirement: string
+          discovered_by: string
+          distribution_source: string | null
+          fake_proof: boolean
+          finding_status: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          next_safe_action: string
+          owner_command_request_id: string | null
+          platform: string
+          play_installed_device_available: boolean
+          private_evidence_stored: boolean
+          provider_environment: string | null
+          readback_complete: boolean
+          required_device_count: number
+          result: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          source: string
+          system_id: string
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          account_role?: string | null
+          app_version?: string | null
+          available_device_count?: number
+          blocker_classification: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          device_lab_configured?: boolean
+          device_requirement: string
+          discovered_by?: string
+          distribution_source?: string | null
+          fake_proof?: boolean
+          finding_status?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action: string
+          owner_command_request_id?: string | null
+          platform?: string
+          play_installed_device_available?: boolean
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          required_device_count?: number
+          result?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          account_role?: string | null
+          app_version?: string | null
+          available_device_count?: number
+          blocker_classification?: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          device_lab_configured?: boolean
+          device_requirement?: string
+          discovered_by?: string
+          distribution_source?: string | null
+          fake_proof?: boolean
+          finding_status?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action?: string
+          owner_command_request_id?: string | null
+          platform?: string
+          play_installed_device_available?: boolean
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          required_device_count?: number
+          result?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source?: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_availability_findings_owner_command_request_id_fkey"
+            columns: ["owner_command_request_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -4189,6 +6688,408 @@ export type Database = {
           },
         ]
       }
+      function_deployment_drift_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      installed_qa_operator_events: {
+        Row: {
+          account_role: string | null
+          action_id: string
+          app_version: string | null
+          blocker_classification: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          discovered_by: string
+          distribution_source: string | null
+          fake_proof: boolean
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          private_evidence_stored: boolean
+          provider_environment: string | null
+          readback_complete: boolean
+          result: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          source: string
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          account_role?: string | null
+          action_id: string
+          app_version?: string | null
+          blocker_classification?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source?: string
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          account_role?: string | null
+          action_id?: string
+          app_version?: string | null
+          blocker_classification?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source?: string
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      installed_traversal_runs: {
+        Row: {
+          app_version: string | null
+          blocked_count: number
+          blocker_classification: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          device_count: number
+          discovered_by: string
+          distribution_source: string | null
+          failure_count: number
+          fake_proof: boolean
+          high_risk_executed: boolean
+          human_review_count: number
+          id: string
+          installed_package: string | null
+          installer_package: string | null
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          native_version: string | null
+          pass_count: number
+          platform: string
+          private_evidence_stored: boolean
+          provider_environment: string | null
+          readback_complete: boolean
+          result: string
+          run_label: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          source: string
+          system_id: string
+          two_device_required_count: number
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          blocked_count?: number
+          blocker_classification?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          device_count?: number
+          discovered_by?: string
+          distribution_source?: string | null
+          failure_count?: number
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          human_review_count?: number
+          id?: string
+          installed_package?: string | null
+          installer_package?: string | null
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          native_version?: string | null
+          pass_count?: number
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result: string
+          run_label: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source: string
+          system_id?: string
+          two_device_required_count?: number
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          blocked_count?: number
+          blocker_classification?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          device_count?: number
+          discovered_by?: string
+          distribution_source?: string | null
+          failure_count?: number
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          human_review_count?: number
+          id?: string
+          installed_package?: string | null
+          installer_package?: string | null
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          native_version?: string | null
+          pass_count?: number
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          run_label?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source?: string
+          system_id?: string
+          two_device_required_count?: number
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      js_error_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          pii_stored: boolean
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          release_action_executed: boolean
+          review_status: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          severity: string
+          signature_hash: string | null
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          signature_hash?: string | null
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          signature_hash?: string | null
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       legal_evidence_audit_log: {
         Row: {
           action: string
@@ -4492,6 +7393,219 @@ export type Database = {
         }
         Relationships: []
       }
+      livekit_operator_events: {
+        Row: {
+          action_planned: string | null
+          action_taken: string | null
+          after_health: Json
+          app_version: string | null
+          before_health: Json
+          bundle_identifier: string | null
+          channel: string | null
+          confidence: number
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          first_seen_at: string
+          health_state: string
+          id: string
+          last_seen_at: string
+          metadata: Json
+          native_build: string | null
+          occurrence_count: number
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          reason: string
+          recovery_duration_ms: number | null
+          result: string | null
+          rollback_available: boolean
+          runtime_version: string | null
+          severity: string
+          surface: string
+          update_id: string | null
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          action_planned?: string | null
+          action_taken?: string | null
+          after_health?: Json
+          app_version?: string | null
+          before_health?: Json
+          bundle_identifier?: string | null
+          channel?: string | null
+          confidence?: number
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          first_seen_at?: string
+          health_state: string
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          native_build?: string | null
+          occurrence_count?: number
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          reason: string
+          recovery_duration_ms?: number | null
+          result?: string | null
+          rollback_available?: boolean
+          runtime_version?: string | null
+          severity?: string
+          surface: string
+          update_id?: string | null
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          action_planned?: string | null
+          action_taken?: string | null
+          after_health?: Json
+          app_version?: string | null
+          before_health?: Json
+          bundle_identifier?: string | null
+          channel?: string | null
+          confidence?: number
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          first_seen_at?: string
+          health_state?: string
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          native_build?: string | null
+          occurrence_count?: number
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          reason?: string
+          recovery_duration_ms?: number | null
+          result?: string | null
+          rollback_available?: boolean
+          runtime_version?: string | null
+          severity?: string
+          surface?: string
+          update_id?: string | null
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      livekit_operator_learning_state: {
+        Row: {
+          confidence: number
+          failure_count: number
+          health_state: string
+          id: string
+          last_recovery_duration_ms: number | null
+          last_result: string | null
+          metadata: Json
+          occurrence_count: number
+          preferred_action: string
+          reason: string
+          success_count: number
+          surface: string
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number
+          failure_count?: number
+          health_state: string
+          id?: string
+          last_recovery_duration_ms?: number | null
+          last_result?: string | null
+          metadata?: Json
+          occurrence_count?: number
+          preferred_action: string
+          reason: string
+          success_count?: number
+          surface: string
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          failure_count?: number
+          health_state?: string
+          id?: string
+          last_recovery_duration_ms?: number | null
+          last_result?: string | null
+          metadata?: Json
+          occurrence_count?: number
+          preferred_action?: string
+          reason?: string
+          success_count?: number
+          surface?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      livekit_operator_recovery_actions: {
+        Row: {
+          action_planned: string
+          action_taken: string | null
+          after_health: Json
+          auto_executable: boolean
+          before_health: Json
+          created_at: string
+          health_state: string
+          id: string
+          metadata: Json
+          owner_approval_required: boolean
+          platform: string
+          reason: string
+          recovery_duration_ms: number | null
+          recovery_level: number
+          result: string
+          rollback_available: boolean
+          severity: string
+          surface: string
+        }
+        Insert: {
+          action_planned: string
+          action_taken?: string | null
+          after_health?: Json
+          auto_executable?: boolean
+          before_health?: Json
+          created_at?: string
+          health_state: string
+          id?: string
+          metadata?: Json
+          owner_approval_required?: boolean
+          platform?: string
+          reason: string
+          recovery_duration_ms?: number | null
+          recovery_level?: number
+          result?: string
+          rollback_available?: boolean
+          severity?: string
+          surface: string
+        }
+        Update: {
+          action_planned?: string
+          action_taken?: string | null
+          after_health?: Json
+          auto_executable?: boolean
+          before_health?: Json
+          created_at?: string
+          health_state?: string
+          id?: string
+          metadata?: Json
+          owner_approval_required?: boolean
+          platform?: string
+          reason?: string
+          recovery_duration_ms?: number | null
+          recovery_level?: number
+          result?: string
+          rollback_available?: boolean
+          severity?: string
+          surface?: string
+        }
+        Relationships: []
+      }
       livekit_room_assignments: {
         Row: {
           app_room_id: string
@@ -4604,11 +7718,20 @@ export type Database = {
           bandwidth_out_mbps: number | null
           cpu_percent: number | null
           disconnect_rate: number | null
+          disk_usage_percent: number | null
           heartbeat_at: string
           id: string
+          livekit_node_status: string | null
+          memory_total_mb: number | null
+          memory_used_mb: number | null
+          metrics_collected_at: string | null
+          metrics_source: string | null
+          network_rx_bps: number | null
+          network_tx_bps: number | null
           packet_loss_percent: number | null
           ram_percent: number | null
           server_id: string
+          turn_status: string | null
         }
         Insert: {
           active_participants?: number
@@ -4618,11 +7741,20 @@ export type Database = {
           bandwidth_out_mbps?: number | null
           cpu_percent?: number | null
           disconnect_rate?: number | null
+          disk_usage_percent?: number | null
           heartbeat_at?: string
           id?: string
+          livekit_node_status?: string | null
+          memory_total_mb?: number | null
+          memory_used_mb?: number | null
+          metrics_collected_at?: string | null
+          metrics_source?: string | null
+          network_rx_bps?: number | null
+          network_tx_bps?: number | null
           packet_loss_percent?: number | null
           ram_percent?: number | null
           server_id: string
+          turn_status?: string | null
         }
         Update: {
           active_participants?: number
@@ -4632,11 +7764,20 @@ export type Database = {
           bandwidth_out_mbps?: number | null
           cpu_percent?: number | null
           disconnect_rate?: number | null
+          disk_usage_percent?: number | null
           heartbeat_at?: string
           id?: string
+          livekit_node_status?: string | null
+          memory_total_mb?: number | null
+          memory_used_mb?: number | null
+          metrics_collected_at?: string | null
+          metrics_source?: string | null
+          network_rx_bps?: number | null
+          network_tx_bps?: number | null
           packet_loss_percent?: number | null
           ram_percent?: number | null
           server_id?: string
+          turn_status?: string | null
         }
         Relationships: [
           {
@@ -4658,6 +7799,7 @@ export type Database = {
           current_publishers: number
           current_rooms: number
           disconnect_rate: number | null
+          disk_usage_percent: number | null
           display_name: string
           drain_reason: string | null
           drain_started_at: string | null
@@ -4665,11 +7807,18 @@ export type Database = {
           internal_api_url: string | null
           last_assignment_at: string | null
           last_heartbeat_at: string | null
+          livekit_node_status: string | null
           max_egress_mbps: number | null
           max_participants: number
           max_publishers: number | null
           max_rooms: number
+          memory_total_mb: number | null
+          memory_used_mb: number | null
           metadata: Json
+          metrics_collected_at: string | null
+          metrics_source: string | null
+          network_rx_bps: number | null
+          network_tx_bps: number | null
           packet_loss_percent: number | null
           provider: string
           public_ws_url: string
@@ -4677,6 +7826,7 @@ export type Database = {
           region: string
           server_id: string
           status: string
+          turn_status: string | null
           updated_at: string
           weight: number
         }
@@ -4689,6 +7839,7 @@ export type Database = {
           current_publishers?: number
           current_rooms?: number
           disconnect_rate?: number | null
+          disk_usage_percent?: number | null
           display_name: string
           drain_reason?: string | null
           drain_started_at?: string | null
@@ -4696,11 +7847,18 @@ export type Database = {
           internal_api_url?: string | null
           last_assignment_at?: string | null
           last_heartbeat_at?: string | null
+          livekit_node_status?: string | null
           max_egress_mbps?: number | null
           max_participants?: number
           max_publishers?: number | null
           max_rooms?: number
+          memory_total_mb?: number | null
+          memory_used_mb?: number | null
           metadata?: Json
+          metrics_collected_at?: string | null
+          metrics_source?: string | null
+          network_rx_bps?: number | null
+          network_tx_bps?: number | null
           packet_loss_percent?: number | null
           provider?: string
           public_ws_url: string
@@ -4708,6 +7866,7 @@ export type Database = {
           region: string
           server_id: string
           status?: string
+          turn_status?: string | null
           updated_at?: string
           weight?: number
         }
@@ -4720,6 +7879,7 @@ export type Database = {
           current_publishers?: number
           current_rooms?: number
           disconnect_rate?: number | null
+          disk_usage_percent?: number | null
           display_name?: string
           drain_reason?: string | null
           drain_started_at?: string | null
@@ -4727,11 +7887,18 @@ export type Database = {
           internal_api_url?: string | null
           last_assignment_at?: string | null
           last_heartbeat_at?: string | null
+          livekit_node_status?: string | null
           max_egress_mbps?: number | null
           max_participants?: number
           max_publishers?: number | null
           max_rooms?: number
+          memory_total_mb?: number | null
+          memory_used_mb?: number | null
           metadata?: Json
+          metrics_collected_at?: string | null
+          metrics_source?: string | null
+          network_rx_bps?: number | null
+          network_tx_bps?: number | null
           packet_loss_percent?: number | null
           provider?: string
           public_ws_url?: string
@@ -4739,8 +7906,93 @@ export type Database = {
           region?: string
           server_id?: string
           status?: string
+          turn_status?: string | null
           updated_at?: string
           weight?: number
+        }
+        Relationships: []
+      }
+      livekit_surface_health_snapshots: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          eligible_server_count: number | null
+          health_state: string
+          heartbeat_age_seconds: number | null
+          id: string
+          metadata: Json
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          reason: string
+          render_health: Json
+          router_health: Json
+          runtime_version: string | null
+          severity: string
+          surface: string
+          token_probe_status: string | null
+          update_id: string | null
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          eligible_server_count?: number | null
+          health_state: string
+          heartbeat_age_seconds?: number | null
+          id?: string
+          metadata?: Json
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          reason: string
+          render_health?: Json
+          router_health?: Json
+          runtime_version?: string | null
+          severity?: string
+          surface: string
+          token_probe_status?: string | null
+          update_id?: string | null
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          eligible_server_count?: number | null
+          health_state?: string
+          heartbeat_age_seconds?: number | null
+          id?: string
+          metadata?: Json
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          reason?: string
+          render_health?: Json
+          router_health?: Json
+          runtime_version?: string | null
+          severity?: string
+          surface?: string
+          token_probe_status?: string | null
+          update_id?: string | null
+          window_end?: string | null
+          window_start?: string | null
         }
         Relationships: []
       }
@@ -4814,6 +8066,138 @@ export type Database = {
             columns: ["security_context_id"]
             isOneToOne: false
             referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_renditions: {
+        Row: {
+          bitrate: number | null
+          bucket_role: string
+          cache_policy: string | null
+          codec: string | null
+          created_at: string
+          creator_id: string | null
+          delivery_format: string
+          delivery_provider: string
+          duration_ms: number | null
+          file_size_bytes: number | null
+          height: number | null
+          id: string
+          is_original: boolean
+          is_protected_playback_safe: boolean
+          is_public_playback_safe: boolean
+          is_ready: boolean
+          job_id: string | null
+          manifest_path: string | null
+          media_id: string
+          moderation_status: string
+          protected_playback_path: string | null
+          public_playback_path: string | null
+          rendition_label: string
+          scan_status: string
+          source_hash: string | null
+          source_id: string
+          source_type: string
+          storage_bucket: string | null
+          storage_path: string | null
+          storage_provider: string
+          updated_at: string
+          variant_playlist_path: string | null
+          video_id: string | null
+          visibility: string
+          width: number | null
+          worker_version: string | null
+        }
+        Insert: {
+          bitrate?: number | null
+          bucket_role: string
+          cache_policy?: string | null
+          codec?: string | null
+          created_at?: string
+          creator_id?: string | null
+          delivery_format: string
+          delivery_provider: string
+          duration_ms?: number | null
+          file_size_bytes?: number | null
+          height?: number | null
+          id?: string
+          is_original?: boolean
+          is_protected_playback_safe?: boolean
+          is_public_playback_safe?: boolean
+          is_ready?: boolean
+          job_id?: string | null
+          manifest_path?: string | null
+          media_id: string
+          moderation_status?: string
+          protected_playback_path?: string | null
+          public_playback_path?: string | null
+          rendition_label: string
+          scan_status?: string
+          source_hash?: string | null
+          source_id: string
+          source_type: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          storage_provider: string
+          updated_at?: string
+          variant_playlist_path?: string | null
+          video_id?: string | null
+          visibility?: string
+          width?: number | null
+          worker_version?: string | null
+        }
+        Update: {
+          bitrate?: number | null
+          bucket_role?: string
+          cache_policy?: string | null
+          codec?: string | null
+          created_at?: string
+          creator_id?: string | null
+          delivery_format?: string
+          delivery_provider?: string
+          duration_ms?: number | null
+          file_size_bytes?: number | null
+          height?: number | null
+          id?: string
+          is_original?: boolean
+          is_protected_playback_safe?: boolean
+          is_public_playback_safe?: boolean
+          is_ready?: boolean
+          job_id?: string | null
+          manifest_path?: string | null
+          media_id?: string
+          moderation_status?: string
+          protected_playback_path?: string | null
+          public_playback_path?: string | null
+          rendition_label?: string
+          scan_status?: string
+          source_hash?: string | null
+          source_id?: string
+          source_type?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          storage_provider?: string
+          updated_at?: string
+          variant_playlist_path?: string | null
+          video_id?: string | null
+          visibility?: string
+          width?: number | null
+          worker_version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_renditions_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "media_transcode_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_renditions_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "videos"
             referencedColumns: ["id"]
           },
         ]
@@ -4954,6 +8338,102 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      media_transcode_jobs: {
+        Row: {
+          completed_at: string | null
+          completed_renditions: Json
+          created_at: string
+          creator_id: string | null
+          duration_ms: number | null
+          error_code: string | null
+          error_message: string | null
+          id: string
+          input_bucket: string | null
+          input_bucket_role: string
+          input_path: string
+          input_provider: string
+          output_bucket: string | null
+          output_bucket_role: string
+          output_prefix: string
+          output_provider: string
+          proof_mode: boolean
+          requested_by: string | null
+          requested_renditions: Json
+          source_codec: string | null
+          source_hash: string | null
+          source_height: number | null
+          source_id: string
+          source_type: string
+          source_width: number | null
+          started_at: string | null
+          status: string
+          updated_at: string
+          worker_version: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_renditions?: Json
+          created_at?: string
+          creator_id?: string | null
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          input_bucket?: string | null
+          input_bucket_role?: string
+          input_path: string
+          input_provider: string
+          output_bucket?: string | null
+          output_bucket_role?: string
+          output_prefix: string
+          output_provider: string
+          proof_mode?: boolean
+          requested_by?: string | null
+          requested_renditions?: Json
+          source_codec?: string | null
+          source_hash?: string | null
+          source_height?: number | null
+          source_id: string
+          source_type: string
+          source_width?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          worker_version?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          completed_renditions?: Json
+          created_at?: string
+          creator_id?: string | null
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          input_bucket?: string | null
+          input_bucket_role?: string
+          input_path?: string
+          input_provider?: string
+          output_bucket?: string | null
+          output_bucket_role?: string
+          output_prefix?: string
+          output_provider?: string
+          proof_mode?: boolean
+          requested_by?: string | null
+          requested_renditions?: Json
+          source_codec?: string | null
+          source_hash?: string | null
+          source_height?: number | null
+          source_id?: string
+          source_type?: string
+          source_width?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          worker_version?: string | null
+        }
+        Relationships: []
       }
       merch_order_items: {
         Row: {
@@ -5175,6 +8655,381 @@ export type Database = {
           },
         ]
       }
+      migration_drift_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      moderation_case_priority_flags: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          priority: string
+          review_status: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          priority?: string
+          review_status?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          priority?: string
+          review_status?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      moderation_duplicate_report_detections: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          report_count: number
+          review_status: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          report_count?: number
+          review_status?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          report_count?: number
+          review_status?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      moderation_health_snapshots: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          health_state: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          stale_case_count: number
+          system_id: string
+          urgent_review_count: number
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          health_state: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          stale_case_count?: number
+          system_id?: string
+          urgent_review_count?: number
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          health_state?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          stale_case_count?: number
+          system_id?: string
+          urgent_review_count?: number
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      moderation_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      moderation_operator_learning_state: {
+        Row: {
+          confidence: number
+          first_seen_at: string
+          id: string
+          incident_key: string
+          last_recommended_action: string | null
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key?: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      moderation_required_review_flags: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          review_status: string
+          severity: string
+          system_id: string
+          updated_at: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          severity?: string
+          system_id?: string
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          severity?: string
+          system_id?: string
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      moderation_stale_case_findings: {
+        Row: {
+          case_type: string
+          created_at: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          review_status: string
+          stale_age_seconds: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          case_type: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          stale_age_seconds?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          case_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          stale_age_seconds?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
       monetization_audit_log: {
         Row: {
           action: string
@@ -5209,8 +9064,8 @@ export type Database = {
         Row: {
           apple_subscription_group: string | null
           concept: string
-          creates_payable_balance: boolean
           created_at: string
+          creates_payable_balance: boolean
           environment: string
           grants_livekit_authority: boolean
           id: string
@@ -5235,8 +9090,8 @@ export type Database = {
         Insert: {
           apple_subscription_group?: string | null
           concept: string
-          creates_payable_balance?: boolean
           created_at?: string
+          creates_payable_balance?: boolean
           environment?: string
           grants_livekit_authority?: boolean
           id?: string
@@ -5261,8 +9116,8 @@ export type Database = {
         Update: {
           apple_subscription_group?: string | null
           concept?: string
-          creates_payable_balance?: boolean
           created_at?: string
+          creates_payable_balance?: boolean
           environment?: string
           grants_livekit_authority?: boolean
           id?: string
@@ -5537,6 +9392,407 @@ export type Database = {
           },
         ]
       }
+      money_credit_ledger_entries: {
+        Row: {
+          amount_cents: number
+          cash_equivalent: boolean
+          created_at: string
+          credit_status: string
+          credit_type: string
+          currency: string
+          environment: string
+          id: string
+          live_money_enabled_at_approval: boolean
+          metadata: Json
+          payable: boolean
+          policy_key: string
+          provider_refund_evidence_id: string | null
+          refund_review_id: string | null
+          safe_user_summary: string
+          spendable: boolean
+          transferable: boolean
+          updated_at: string
+          user_id: string
+          withdrawable: boolean
+        }
+        Insert: {
+          amount_cents?: number
+          cash_equivalent?: boolean
+          created_at?: string
+          credit_status?: string
+          credit_type?: string
+          currency?: string
+          environment?: string
+          id?: string
+          live_money_enabled_at_approval?: boolean
+          metadata?: Json
+          payable?: boolean
+          policy_key: string
+          provider_refund_evidence_id?: string | null
+          refund_review_id?: string | null
+          safe_user_summary?: string
+          spendable?: boolean
+          transferable?: boolean
+          updated_at?: string
+          user_id: string
+          withdrawable?: boolean
+        }
+        Update: {
+          amount_cents?: number
+          cash_equivalent?: boolean
+          created_at?: string
+          credit_status?: string
+          credit_type?: string
+          currency?: string
+          environment?: string
+          id?: string
+          live_money_enabled_at_approval?: boolean
+          metadata?: Json
+          payable?: boolean
+          policy_key?: string
+          provider_refund_evidence_id?: string | null
+          refund_review_id?: string | null
+          safe_user_summary?: string
+          spendable?: boolean
+          transferable?: boolean
+          updated_at?: string
+          user_id?: string
+          withdrawable?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_credit_ledger_entries_refund_review_id_fkey"
+            columns: ["refund_review_id"]
+            isOneToOne: false
+            referencedRelation: "money_refund_review_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_duplicate_event_detections: {
+        Row: {
+          created_at: string
+          created_by: string
+          detection_status: string
+          environment_mode: string
+          event_id_hash: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          provider: string
+          source_row_id: string | null
+          source_table: string | null
+          system_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          detection_status?: string
+          environment_mode?: string
+          event_id_hash: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          provider: string
+          source_row_id?: string | null
+          source_table?: string | null
+          system_id?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          detection_status?: string
+          environment_mode?: string
+          event_id_hash?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          provider?: string
+          source_row_id?: string | null
+          source_table?: string | null
+          system_id?: string
+        }
+        Relationships: []
+      }
+      money_flow_health_snapshots: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          created_by: string
+          data_source: string | null
+          distribution_source: string | null
+          eligible_for_safe_writes: boolean
+          environment_mode: string
+          health_state: string
+          id: string
+          latest_operator_action: string | null
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          system_id: string
+          update_id: string | null
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          created_by?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          eligible_for_safe_writes?: boolean
+          environment_mode?: string
+          health_state: string
+          id?: string
+          latest_operator_action?: string | null
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          created_by?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          eligible_for_safe_writes?: boolean
+          environment_mode?: string
+          health_state?: string
+          id?: string
+          latest_operator_action?: string | null
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      money_operator_events: {
+        Row: {
+          action_id: string | null
+          blocked_reason: string | null
+          created_at: string
+          created_by: string
+          environment_mode: string
+          event_type: string
+          external_confirmation_required: boolean
+          external_confirmation_status: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          severity: string
+          surface: string | null
+          system_id: string
+        }
+        Insert: {
+          action_id?: string | null
+          blocked_reason?: string | null
+          created_at?: string
+          created_by?: string
+          environment_mode?: string
+          event_type: string
+          external_confirmation_required?: boolean
+          external_confirmation_status?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          severity?: string
+          surface?: string | null
+          system_id?: string
+        }
+        Update: {
+          action_id?: string | null
+          blocked_reason?: string | null
+          created_at?: string
+          created_by?: string
+          environment_mode?: string
+          event_type?: string
+          external_confirmation_required?: boolean
+          external_confirmation_status?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          severity?: string
+          surface?: string | null
+          system_id?: string
+        }
+        Relationships: []
+      }
+      money_operator_learning_state: {
+        Row: {
+          confidence: number
+          environment_mode: string
+          first_seen_at: string
+          id: string
+          incident_key: string
+          last_recovery_action: string | null
+          last_recovery_result: string | null
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          reason: string
+          recommended_next_action: string | null
+          surface: string | null
+          system_id: string
+        }
+        Insert: {
+          confidence?: number
+          environment_mode?: string
+          first_seen_at?: string
+          id?: string
+          incident_key: string
+          last_recovery_action?: string | null
+          last_recovery_result?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          reason: string
+          recommended_next_action?: string | null
+          surface?: string | null
+          system_id?: string
+        }
+        Update: {
+          confidence?: number
+          environment_mode?: string
+          first_seen_at?: string
+          id?: string
+          incident_key?: string
+          last_recovery_action?: string | null
+          last_recovery_result?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          reason?: string
+          recommended_next_action?: string | null
+          surface?: string | null
+          system_id?: string
+        }
+        Relationships: []
+      }
+      money_provider_sync_status: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          capability: string
+          channel: string | null
+          created_at: string
+          created_by: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          failure_reason: string | null
+          id: string
+          last_checked_at: string
+          last_success_at: string | null
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          sync_status: string
+          system_id: string
+          update_id: string | null
+          updated_at: string
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          capability: string
+          channel?: string | null
+          created_at?: string
+          created_by?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          failure_reason?: string | null
+          id?: string
+          last_checked_at?: string
+          last_success_at?: string | null
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          sync_status: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          capability?: string
+          channel?: string | null
+          created_at?: string
+          created_by?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          failure_reason?: string | null
+          id?: string
+          last_checked_at?: string
+          last_success_at?: string | null
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          sync_status?: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       money_purchase_intents: {
         Row: {
           amount_minor: number | null
@@ -5619,6 +9875,348 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      money_reconciliation_findings: {
+        Row: {
+          created_at: string
+          created_by: string
+          entity_id: string | null
+          entity_table: string | null
+          environment_mode: string
+          external_confirmation_required: boolean
+          external_confirmation_status: string
+          finding_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          run_id: string | null
+          severity: string
+          status: string
+          surface: string | null
+          system_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          entity_id?: string | null
+          entity_table?: string | null
+          environment_mode?: string
+          external_confirmation_required?: boolean
+          external_confirmation_status?: string
+          finding_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          run_id?: string | null
+          severity?: string
+          status?: string
+          surface?: string | null
+          system_id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          entity_id?: string | null
+          entity_table?: string | null
+          environment_mode?: string
+          external_confirmation_required?: boolean
+          external_confirmation_status?: string
+          finding_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          run_id?: string | null
+          severity?: string
+          status?: string
+          surface?: string | null
+          system_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_reconciliation_findings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "money_reconciliation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_reconciliation_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          environment_mode: string
+          id: string
+          money_moved: boolean
+          platform: string
+          run_type: string
+          started_at: string
+          status: string
+          summary: Json
+          system_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          environment_mode?: string
+          id?: string
+          money_moved?: boolean
+          platform?: string
+          run_type?: string
+          started_at?: string
+          status?: string
+          summary?: Json
+          system_id?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          environment_mode?: string
+          id?: string
+          money_moved?: boolean
+          platform?: string
+          run_type?: string
+          started_at?: string
+          status?: string
+          summary?: Json
+          system_id?: string
+        }
+        Relationships: []
+      }
+      money_refund_policy_rules: {
+        Row: {
+          cash_refund_allowed_later: boolean
+          created_at: string
+          creator_obligation_required: boolean
+          credit_allowed_later: boolean
+          default_remedy: string
+          display_name: string
+          eligible_consumption_states: string[]
+          foundation_only: boolean
+          id: string
+          ineligible_consumption_states: string[]
+          metadata: Json
+          payout_hold_required: boolean
+          policy_key: string
+          provider_action_required: boolean
+          standard_refund_policy: string
+          updated_at: string
+        }
+        Insert: {
+          cash_refund_allowed_later?: boolean
+          created_at?: string
+          creator_obligation_required?: boolean
+          credit_allowed_later?: boolean
+          default_remedy?: string
+          display_name: string
+          eligible_consumption_states?: string[]
+          foundation_only?: boolean
+          id?: string
+          ineligible_consumption_states?: string[]
+          metadata?: Json
+          payout_hold_required?: boolean
+          policy_key: string
+          provider_action_required?: boolean
+          standard_refund_policy: string
+          updated_at?: string
+        }
+        Update: {
+          cash_refund_allowed_later?: boolean
+          created_at?: string
+          creator_obligation_required?: boolean
+          credit_allowed_later?: boolean
+          default_remedy?: string
+          display_name?: string
+          eligible_consumption_states?: string[]
+          foundation_only?: boolean
+          id?: string
+          ineligible_consumption_states?: string[]
+          metadata?: Json
+          payout_hold_required?: boolean
+          policy_key?: string
+          provider_action_required?: boolean
+          standard_refund_policy?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      money_refund_review_records: {
+        Row: {
+          access_grant_id: string | null
+          amount_cents: number
+          buyer_user_id: string | null
+          consumption_state: string
+          created_at: string
+          creator_obligation_state: string
+          creator_user_id: string | null
+          credit_review_record_id: string | null
+          currency: string
+          environment: string
+          id: string
+          metadata: Json
+          payout_hold_record_id: string | null
+          policy_key: string
+          provider: string | null
+          provider_event_id: string | null
+          provider_refund_evidence_id: string | null
+          provider_refund_status: string
+          purchase_intent_id: string | null
+          refund_remedy: string
+          requester_user_id: string | null
+          review_status: string
+          safe_admin_summary: string
+          safe_creator_summary: string
+          safe_reason_code: string
+          safe_user_summary: string
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_grant_id?: string | null
+          amount_cents?: number
+          buyer_user_id?: string | null
+          consumption_state?: string
+          created_at?: string
+          creator_obligation_state?: string
+          creator_user_id?: string | null
+          credit_review_record_id?: string | null
+          currency?: string
+          environment?: string
+          id?: string
+          metadata?: Json
+          payout_hold_record_id?: string | null
+          policy_key: string
+          provider?: string | null
+          provider_event_id?: string | null
+          provider_refund_evidence_id?: string | null
+          provider_refund_status?: string
+          purchase_intent_id?: string | null
+          refund_remedy?: string
+          requester_user_id?: string | null
+          review_status?: string
+          safe_admin_summary?: string
+          safe_creator_summary?: string
+          safe_reason_code?: string
+          safe_user_summary?: string
+          source_id?: string | null
+          source_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_grant_id?: string | null
+          amount_cents?: number
+          buyer_user_id?: string | null
+          consumption_state?: string
+          created_at?: string
+          creator_obligation_state?: string
+          creator_user_id?: string | null
+          credit_review_record_id?: string | null
+          currency?: string
+          environment?: string
+          id?: string
+          metadata?: Json
+          payout_hold_record_id?: string | null
+          policy_key?: string
+          provider?: string | null
+          provider_event_id?: string | null
+          provider_refund_evidence_id?: string | null
+          provider_refund_status?: string
+          purchase_intent_id?: string | null
+          refund_remedy?: string
+          requester_user_id?: string | null
+          review_status?: string
+          safe_admin_summary?: string
+          safe_creator_summary?: string
+          safe_reason_code?: string
+          safe_user_summary?: string
+          source_id?: string | null
+          source_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_refund_review_records_access_grant_id_fkey"
+            columns: ["access_grant_id"]
+            isOneToOne: false
+            referencedRelation: "access_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_refund_review_records_provider_event_id_fkey"
+            columns: ["provider_event_id"]
+            isOneToOne: false
+            referencedRelation: "provider_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_refund_review_records_purchase_intent_id_fkey"
+            columns: ["purchase_intent_id"]
+            isOneToOne: false
+            referencedRelation: "money_purchase_intents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_required_review_flags: {
+        Row: {
+          created_at: string
+          created_by: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          review_reason: string
+          severity: string
+          status: string
+          subject_id: string
+          subject_type: string
+          system_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          review_reason: string
+          severity?: string
+          status?: string
+          subject_id: string
+          subject_type: string
+          system_id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          review_reason?: string
+          severity?: string
+          status?: string
+          subject_id?: string
+          subject_type?: string
+          system_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       network_account_plan_assignments: {
         Row: {
@@ -6130,6 +10728,129 @@ export type Database = {
           },
         ]
       }
+      notification_delivery_health_snapshots: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          failed_attempt_count: number
+          health_state: string
+          id: string
+          invalid_token_count: number
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider: string | null
+          provider_environment: string | null
+          provider_response_class: string | null
+          readback_complete: boolean
+          retry_backlog: number
+          runtime_version: string | null
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          failed_attempt_count?: number
+          health_state: string
+          id?: string
+          invalid_token_count?: number
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider?: string | null
+          provider_environment?: string | null
+          provider_response_class?: string | null
+          readback_complete?: boolean
+          retry_backlog?: number
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          failed_attempt_count?: number
+          health_state?: string
+          id?: string
+          invalid_token_count?: number
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider?: string | null
+          provider_environment?: string | null
+          provider_response_class?: string | null
+          readback_complete?: boolean
+          retry_backlog?: number
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      notification_duplicate_dedupe_records: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          duplicate_count: number
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          duplicate_count?: number
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          duplicate_count?: number
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
       notification_event_dedupes: {
         Row: {
           created_at: string
@@ -6170,6 +10891,93 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notification_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      notification_operator_learning_state: {
+        Row: {
+          confidence: number
+          first_seen_at: string
+          id: string
+          incident_key: string
+          last_recommended_action: string | null
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key?: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
       }
       notification_preferences: {
         Row: {
@@ -6225,6 +11033,102 @@ export type Database = {
           replay_later_enabled?: boolean
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      notification_provider_sync_status: {
+        Row: {
+          capability: string
+          created_at: string
+          environment_mode: string
+          id: string
+          last_checked_at: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          provider: string
+          sync_status: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          capability: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          last_checked_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          provider: string
+          sync_status: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          capability?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          last_checked_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          provider?: string
+          sync_status?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      notification_required_review_flags: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          review_status: string
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          updated_at: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          review_status?: string
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          review_status?: string
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
         }
         Relationships: []
       }
@@ -6303,6 +11207,216 @@ export type Database = {
         }
         Relationships: []
       }
+      observability_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          channel: string | null
+          created_at: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          pii_stored: boolean
+          platform: string
+          release_action_executed: boolean
+          result: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          channel?: string | null
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          pii_stored?: boolean
+          platform?: string
+          release_action_executed?: boolean
+          result: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          channel?: string | null
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          pii_stored?: boolean
+          platform?: string
+          release_action_executed?: boolean
+          result?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      observability_operator_learning_state: {
+        Row: {
+          confidence: number
+          first_seen_at: string
+          id: string
+          incident_key: string
+          last_recommended_action: string | null
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          pii_stored: boolean
+          release_action_executed: boolean
+          secrets_logged: boolean
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          pii_stored?: boolean
+          release_action_executed?: boolean
+          secrets_logged?: boolean
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key?: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          pii_stored?: boolean
+          release_action_executed?: boolean
+          secrets_logged?: boolean
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      observability_required_review_flags: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          pii_stored: boolean
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          release_action_executed: boolean
+          review_status: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       official_rachi_original_videos: {
         Row: {
           created_at: string
@@ -6340,6 +11454,353 @@ export type Database = {
             columns: ["video_id"]
             isOneToOne: true
             referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ota_diagnostics_readback_records: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          embedded_launch: boolean | null
+          emergency_launch: boolean | null
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          embedded_launch?: boolean | null
+          emergency_launch?: boolean | null
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          embedded_launch?: boolean | null
+          emergency_launch?: boolean | null
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      owner_authority_integrity_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          finding_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          review_status: string
+          severity: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          finding_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          severity?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          finding_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          severity?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      owner_command_blockers: {
+        Row: {
+          blocker_code: string
+          blocker_summary: string
+          command_id: string
+          created_at: string
+          id: string
+          metadata: Json
+          next_action: string
+          resolved_at: string | null
+        }
+        Insert: {
+          blocker_code: string
+          blocker_summary: string
+          command_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          next_action: string
+          resolved_at?: string | null
+        }
+        Update: {
+          blocker_code?: string
+          blocker_summary?: string
+          command_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          next_action?: string
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_command_blockers_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      owner_command_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: string
+          command_id: string
+          created_at: string
+          event_summary: string
+          event_type: string
+          id: string
+          metadata: Json
+          platform: string
+          status: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: string
+          command_id: string
+          created_at?: string
+          event_summary: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          platform?: string
+          status: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string
+          command_id?: string
+          created_at?: string
+          event_summary?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          platform?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_command_events_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      owner_command_execution_steps: {
+        Row: {
+          action_id: string
+          allowed_scope: Json
+          approval_level: number
+          command_id: string
+          created_at: string
+          execution_status: string
+          id: string
+          metadata: Json
+          preflight_status: string
+          proof: Json
+          result_summary: string | null
+          status: string
+          step_index: number
+          target_system: string
+          updated_at: string
+        }
+        Insert: {
+          action_id: string
+          allowed_scope?: Json
+          approval_level: number
+          command_id: string
+          created_at?: string
+          execution_status?: string
+          id?: string
+          metadata?: Json
+          preflight_status?: string
+          proof?: Json
+          result_summary?: string | null
+          status?: string
+          step_index: number
+          target_system: string
+          updated_at?: string
+        }
+        Update: {
+          action_id?: string
+          allowed_scope?: Json
+          approval_level?: number
+          command_id?: string
+          created_at?: string
+          execution_status?: string
+          id?: string
+          metadata?: Json
+          preflight_status?: string
+          proof?: Json
+          result_summary?: string | null
+          status?: string
+          step_index?: number
+          target_system?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_command_execution_steps_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      owner_command_requests: {
+        Row: {
+          allowed_scope: Json
+          approval_level: number
+          approval_request_id: string | null
+          command_text: string
+          created_at: string
+          execution_plan: Json
+          external_confirmation_required: boolean
+          external_confirmation_status: string
+          forbidden_scope: Json
+          id: string
+          metadata: Json
+          normalized_intent: string
+          owner_user_id: string | null
+          platform: string
+          preflight_plan: Json
+          proof_plan: Json
+          result_summary: string | null
+          rollback_plan: Json
+          status: string
+          target_systems: string[]
+          updated_at: string
+          validation_plan: Json
+        }
+        Insert: {
+          allowed_scope?: Json
+          approval_level: number
+          approval_request_id?: string | null
+          command_text: string
+          created_at?: string
+          execution_plan?: Json
+          external_confirmation_required?: boolean
+          external_confirmation_status?: string
+          forbidden_scope?: Json
+          id?: string
+          metadata?: Json
+          normalized_intent: string
+          owner_user_id?: string | null
+          platform?: string
+          preflight_plan?: Json
+          proof_plan?: Json
+          result_summary?: string | null
+          rollback_plan?: Json
+          status?: string
+          target_systems?: string[]
+          updated_at?: string
+          validation_plan?: Json
+        }
+        Update: {
+          allowed_scope?: Json
+          approval_level?: number
+          approval_request_id?: string | null
+          command_text?: string
+          created_at?: string
+          execution_plan?: Json
+          external_confirmation_required?: boolean
+          external_confirmation_status?: string
+          forbidden_scope?: Json
+          id?: string
+          metadata?: Json
+          normalized_intent?: string
+          owner_user_id?: string | null
+          platform?: string
+          preflight_plan?: Json
+          proof_plan?: Json
+          result_summary?: string | null
+          rollback_plan?: Json
+          status?: string
+          target_systems?: string[]
+          updated_at?: string
+          validation_plan?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_command_requests_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_approval_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -6463,6 +11924,517 @@ export type Database = {
           provider_payment_id?: string | null
           refunded_at?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      paid_creator_event_passes: {
+        Row: {
+          access_grant_id: string | null
+          buyer_id: string
+          created_at: string
+          creator_event_id: string
+          creator_id: string
+          event_id: string
+          expires_at: string | null
+          id: string
+          metadata: Json
+          provider: string
+          provider_transaction_id: string | null
+          refunded_at: string | null
+          revoked_at: string | null
+          source_transaction_id: string | null
+          status: string
+          used_at: string | null
+        }
+        Insert: {
+          access_grant_id?: string | null
+          buyer_id: string
+          created_at?: string
+          creator_event_id: string
+          creator_id: string
+          event_id: string
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          revoked_at?: string | null
+          source_transaction_id?: string | null
+          status?: string
+          used_at?: string | null
+        }
+        Update: {
+          access_grant_id?: string | null
+          buyer_id?: string
+          created_at?: string
+          creator_event_id?: string
+          creator_id?: string
+          event_id?: string
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          revoked_at?: string | null
+          source_transaction_id?: string | null
+          status?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_creator_event_passes_access_grant_id_fkey"
+            columns: ["access_grant_id"]
+            isOneToOne: false
+            referencedRelation: "access_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_creator_event_passes_creator_event_id_fkey"
+            columns: ["creator_event_id"]
+            isOneToOne: false
+            referencedRelation: "creator_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_creator_event_passes_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "paid_creator_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_creator_events: {
+        Row: {
+          capacity_limit: number | null
+          created_at: string
+          creator_event_id: string
+          creator_id: string
+          currency: string
+          description: string | null
+          ends_at: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          passes_sold: number
+          price_cents: number
+          provider: string
+          provider_product_id: string | null
+          provider_product_key: string | null
+          starts_at: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_limit?: number | null
+          created_at?: string
+          creator_event_id: string
+          creator_id: string
+          currency?: string
+          description?: string | null
+          ends_at?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          passes_sold?: number
+          price_cents?: number
+          provider?: string
+          provider_product_id?: string | null
+          provider_product_key?: string | null
+          starts_at?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_limit?: number | null
+          created_at?: string
+          creator_event_id?: string
+          creator_id?: string
+          currency?: string
+          description?: string | null
+          ends_at?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          passes_sold?: number
+          price_cents?: number
+          provider?: string
+          provider_product_id?: string | null
+          provider_product_key?: string | null
+          starts_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_creator_events_creator_event_id_fkey"
+            columns: ["creator_event_id"]
+            isOneToOne: false
+            referencedRelation: "creator_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_event_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_id: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          pass_id: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_id?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          pass_id?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_id?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          pass_id?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_event_events_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "paid_creator_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_event_events_pass_id_fkey"
+            columns: ["pass_id"]
+            isOneToOne: false
+            referencedRelation: "paid_creator_event_passes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_event_events_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "creator_event_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_watch_party_offers: {
+        Row: {
+          created_at: string
+          creator_id: string
+          currency: string
+          description: string | null
+          ends_at: string | null
+          host_id: string
+          id: string
+          metadata: Json
+          party_id: string | null
+          price_cents: number
+          provider: string
+          provider_product_id: string | null
+          provider_product_key: string | null
+          seat_limit: number | null
+          seats_sold: number
+          starts_at: string | null
+          status: string
+          title: string
+          title_id: string | null
+          updated_at: string
+          video_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          currency?: string
+          description?: string | null
+          ends_at?: string | null
+          host_id: string
+          id?: string
+          metadata?: Json
+          party_id?: string | null
+          price_cents?: number
+          provider?: string
+          provider_product_id?: string | null
+          provider_product_key?: string | null
+          seat_limit?: number | null
+          seats_sold?: number
+          starts_at?: string | null
+          status?: string
+          title?: string
+          title_id?: string | null
+          updated_at?: string
+          video_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          description?: string | null
+          ends_at?: string | null
+          host_id?: string
+          id?: string
+          metadata?: Json
+          party_id?: string | null
+          price_cents?: number
+          provider?: string
+          provider_product_id?: string | null
+          provider_product_key?: string | null
+          seat_limit?: number | null
+          seats_sold?: number
+          starts_at?: string | null
+          status?: string
+          title?: string
+          title_id?: string | null
+          updated_at?: string
+          video_id?: string | null
+        }
+        Relationships: []
+      }
+      paid_watch_party_tickets: {
+        Row: {
+          access_grant_id: string | null
+          buyer_id: string
+          created_at: string
+          creator_id: string
+          expires_at: string | null
+          host_id: string
+          id: string
+          metadata: Json
+          offer_id: string
+          party_id: string | null
+          provider: string
+          provider_transaction_id: string | null
+          refunded_at: string | null
+          revoked_at: string | null
+          source_transaction_id: string | null
+          status: string
+          used_at: string | null
+        }
+        Insert: {
+          access_grant_id?: string | null
+          buyer_id: string
+          created_at?: string
+          creator_id: string
+          expires_at?: string | null
+          host_id: string
+          id?: string
+          metadata?: Json
+          offer_id: string
+          party_id?: string | null
+          provider?: string
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          revoked_at?: string | null
+          source_transaction_id?: string | null
+          status?: string
+          used_at?: string | null
+        }
+        Update: {
+          access_grant_id?: string | null
+          buyer_id?: string
+          created_at?: string
+          creator_id?: string
+          expires_at?: string | null
+          host_id?: string
+          id?: string
+          metadata?: Json
+          offer_id?: string
+          party_id?: string | null
+          provider?: string
+          provider_transaction_id?: string | null
+          refunded_at?: string | null
+          revoked_at?: string | null
+          source_transaction_id?: string | null
+          status?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_watch_party_tickets_access_grant_id_fkey"
+            columns: ["access_grant_id"]
+            isOneToOne: false
+            referencedRelation: "access_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_watch_party_tickets_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "paid_watch_party_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      performance_regression_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          metric_name: string | null
+          metric_value: number | null
+          money_moved: boolean
+          native_build: string | null
+          pii_stored: boolean
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          release_action_executed: boolean
+          review_status: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          metric_name?: string | null
+          metric_value?: number | null
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          metric_name?: string | null
+          metric_value?: number | null
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      pii_exposure_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
         }
         Relationships: []
       }
@@ -6960,6 +12932,104 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_first_owner_authority: {
+        Row: {
+          established_at: string
+          established_by: string
+          established_reason: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          owner_email: string | null
+          owner_membership_id: number
+          owner_user_id: string | null
+          retired_at: string | null
+          retired_by: string | null
+          retired_reason: string | null
+        }
+        Insert: {
+          established_at?: string
+          established_by?: string
+          established_reason: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          owner_email?: string | null
+          owner_membership_id: number
+          owner_user_id?: string | null
+          retired_at?: string | null
+          retired_by?: string | null
+          retired_reason?: string | null
+        }
+        Update: {
+          established_at?: string
+          established_by?: string
+          established_reason?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          owner_email?: string | null
+          owner_membership_id?: number
+          owner_user_id?: string | null
+          retired_at?: string | null
+          retired_by?: string | null
+          retired_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_first_owner_authority_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "platform_role_memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_first_owner_authority_audit: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          reason: string | null
+          result: string
+          target_email: string | null
+          target_membership_id: number | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          result: string
+          target_email?: string | null
+          target_membership_id?: number | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          result?: string
+          target_email?: string | null
+          target_membership_id?: number | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       platform_fraud_holds: {
         Row: {
           created_at: string
@@ -7095,6 +13165,141 @@ export type Database = {
           state?: string
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      platform_owner_succession_challenges: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_user_id: string
+          attempt_count: number
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          last_attempt_at: string | null
+          max_attempts: number
+          metadata: Json
+          passcode_hash: string
+          passcode_salt: string
+          reason: string
+          status: string
+          successor_email: string | null
+          successor_owner_membership_id: number
+          successor_user_id: string | null
+          target_owner_membership_id: number
+          typed_confirmation_required: string
+        }
+        Insert: {
+          action?: string
+          actor_email?: string | null
+          actor_user_id: string
+          attempt_count?: number
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          last_attempt_at?: string | null
+          max_attempts?: number
+          metadata?: Json
+          passcode_hash: string
+          passcode_salt: string
+          reason: string
+          status?: string
+          successor_email?: string | null
+          successor_owner_membership_id: number
+          successor_user_id?: string | null
+          target_owner_membership_id: number
+          typed_confirmation_required?: string
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_user_id?: string
+          attempt_count?: number
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          max_attempts?: number
+          metadata?: Json
+          passcode_hash?: string
+          passcode_salt?: string
+          reason?: string
+          status?: string
+          successor_email?: string | null
+          successor_owner_membership_id?: number
+          successor_user_id?: string | null
+          target_owner_membership_id?: number
+          typed_confirmation_required?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_owner_succession_cha_successor_owner_membership_i_fkey"
+            columns: ["successor_owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "platform_role_memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_owner_succession_chall_target_owner_membership_id_fkey"
+            columns: ["target_owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "platform_role_memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_recovery_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          system_id?: string
+          user_rights_changed?: boolean
         }
         Relationships: []
       }
@@ -7375,6 +13580,387 @@ export type Database = {
         }
         Relationships: []
       }
+      privacy_deletion_plans: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      privacy_export_plans: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      privacy_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      privacy_operator_learning_state: {
+        Row: {
+          confidence: number
+          fake_proof: boolean
+          finding_key: string
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_result: string
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key?: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      privacy_request_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      privacy_required_review_flags: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       profile_post_comments: {
         Row: {
           body: string
@@ -7524,6 +14110,124 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_access_audit_events: {
+        Row: {
+          access_mode: string
+          approval_request_id: string | null
+          capability: string
+          created_at: string
+          environment_mode: string
+          event_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          provider: string
+          provider_dashboard_mutated: boolean
+          result: string
+          system_id: string
+        }
+        Insert: {
+          access_mode?: string
+          approval_request_id?: string | null
+          capability: string
+          created_at?: string
+          environment_mode?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          provider: string
+          provider_dashboard_mutated?: boolean
+          result?: string
+          system_id?: string
+        }
+        Update: {
+          access_mode?: string
+          approval_request_id?: string | null
+          capability?: string
+          created_at?: string
+          environment_mode?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          provider?: string
+          provider_dashboard_mutated?: boolean
+          result?: string
+          system_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_access_audit_events_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_approval_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_access_capabilities: {
+        Row: {
+          access_mode: string
+          approval_request_id: string | null
+          available: boolean
+          capability: string
+          created_at: string
+          forbidden_scope: Json
+          id: string
+          last_checked_at: string
+          metadata: Json
+          provider: string
+          required_secret_names: string[]
+          requires_owner_approval: boolean
+          status: string
+          system_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_mode?: string
+          approval_request_id?: string | null
+          available?: boolean
+          capability: string
+          created_at?: string
+          forbidden_scope?: Json
+          id?: string
+          last_checked_at?: string
+          metadata?: Json
+          provider: string
+          required_secret_names?: string[]
+          requires_owner_approval?: boolean
+          status?: string
+          system_id?: string
+          updated_at?: string
+        }
+        Update: {
+          access_mode?: string
+          approval_request_id?: string | null
+          available?: boolean
+          capability?: string
+          created_at?: string
+          forbidden_scope?: Json
+          id?: string
+          last_checked_at?: string
+          metadata?: Json
+          provider?: string
+          required_secret_names?: string[]
+          requires_owner_approval?: boolean
+          status?: string
+          system_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_access_capabilities_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_approval_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       provider_accounts: {
         Row: {
           account_reference: string | null
@@ -7603,6 +14307,74 @@ export type Database = {
             columns: ["provider_account_id"]
             isOneToOne: false
             referencedRelation: "provider_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_dashboard_repair_requests: {
+        Row: {
+          approval_level: number
+          approval_request_id: string | null
+          capability: string
+          created_at: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          old_value_redacted: string | null
+          proof_plan: string
+          proposed_value_redacted: string | null
+          provider: string
+          provider_dashboard_mutated: boolean
+          repair_status: string
+          risk_summary: string
+          rollback_plan: string
+          system_id: string
+          updated_at: string
+        }
+        Insert: {
+          approval_level?: number
+          approval_request_id?: string | null
+          capability: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          old_value_redacted?: string | null
+          proof_plan: string
+          proposed_value_redacted?: string | null
+          provider: string
+          provider_dashboard_mutated?: boolean
+          repair_status?: string
+          risk_summary: string
+          rollback_plan: string
+          system_id?: string
+          updated_at?: string
+        }
+        Update: {
+          approval_level?: number
+          approval_request_id?: string | null
+          capability?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          old_value_redacted?: string | null
+          proof_plan?: string
+          proposed_value_redacted?: string | null
+          provider?: string
+          provider_dashboard_mutated?: boolean
+          repair_status?: string
+          risk_summary?: string
+          rollback_plan?: string
+          system_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_dashboard_repair_requests_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_approval_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -7935,6 +14707,1160 @@ export type Database = {
         }
         Relationships: []
       }
+      qa_operator_learning_state: {
+        Row: {
+          confidence: number
+          fake_proof: boolean
+          finding_key: string
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_blocker_classification: string
+          last_recommended_action: string | null
+          last_result: string
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          private_evidence_stored: boolean
+          secrets_logged: boolean
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_blocker_classification: string
+          last_recommended_action?: string | null
+          last_result: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          private_evidence_stored?: boolean
+          secrets_logged?: boolean
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key?: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_blocker_classification?: string
+          last_recommended_action?: string | null
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          private_evidence_stored?: boolean
+          secrets_logged?: boolean
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      qa_required_review_flags: {
+        Row: {
+          account_role: string | null
+          app_version: string | null
+          blocker_classification: string
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          discovered_by: string
+          distribution_source: string | null
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          next_safe_action: string
+          owner_command_request_id: string | null
+          platform: string
+          private_evidence_stored: boolean
+          provider_environment: string | null
+          readback_complete: boolean
+          result: string
+          review_status: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          severity: string
+          source: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          account_role?: string | null
+          app_version?: string | null
+          blocker_classification: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          fake_proof?: boolean
+          flag_type: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action: string
+          owner_command_request_id?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          source: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          account_role?: string | null
+          app_version?: string | null
+          blocker_classification?: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action?: string
+          owner_command_request_id?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          source?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qa_required_review_flags_owner_command_request_id_fkey"
+            columns: ["owner_command_request_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ranking_integrity_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      recommendation_quality_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      recovery_operator_learning_state: {
+        Row: {
+          confidence: number
+          fake_proof: boolean
+          finding_key: string
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_result: string
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key?: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      recovery_required_review_flags: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      release_health_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          embedded_launch: boolean | null
+          emergency_launch: boolean | null
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          pii_stored: boolean
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          release_action_executed: boolean
+          review_status: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          embedded_launch?: boolean | null
+          emergency_launch?: boolean | null
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          embedded_launch?: boolean | null
+          emergency_launch?: boolean | null
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      release_health_snapshots: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          embedded_launch: boolean | null
+          emergency_launch: boolean | null
+          environment_mode: string
+          health_state: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          embedded_launch?: boolean | null
+          emergency_launch?: boolean | null
+          environment_mode?: string
+          health_state: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          embedded_launch?: boolean | null
+          emergency_launch?: boolean | null
+          environment_mode?: string
+          health_state?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      release_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      release_operator_learning_state: {
+        Row: {
+          confidence: number
+          first_seen_at: string
+          id: string
+          incident_key: string
+          last_recommended_action: string | null
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key?: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      release_required_review_flags: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          review_status: string
+          severity: string
+          system_id: string
+          updated_at: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          review_status?: string
+          severity?: string
+          system_id?: string
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          review_status?: string
+          severity?: string
+          system_id?: string
+          updated_at?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      restore_drill_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      retention_hold_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      revenuecat_consumable_transaction_intents: {
+        Row: {
+          created_at: string
+          original_transaction_id: string
+          product_id: string
+          provider: string
+          provider_event_id: string
+          purchase_intent_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          original_transaction_id: string
+          product_id: string
+          provider?: string
+          provider_event_id: string
+          purchase_intent_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          original_transaction_id?: string
+          product_id?: string
+          provider?: string
+          provider_event_id?: string
+          purchase_intent_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenuecat_consumable_transaction_inten_purchase_intent_id_fkey"
+            columns: ["purchase_intent_id"]
+            isOneToOne: false
+            referencedRelation: "money_purchase_intents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenuecat_consumable_transaction_intent_provider_event_id_fkey"
+            columns: ["provider_event_id"]
+            isOneToOne: false
+            referencedRelation: "provider_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenuecat_consumable_transaction_intents_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "monetization_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_behavior_findings: {
+        Row: {
+          account_role: string
+          actual_behavior: string
+          app_version: string | null
+          blocker_classification: string
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          discovered_by: string
+          distribution_source: string | null
+          expected_behavior: string
+          fake_proof: boolean
+          finding_status: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          next_safe_action: string
+          owner_command_request_id: string | null
+          platform: string
+          private_evidence_stored: boolean
+          provider_environment: string | null
+          readback_complete: boolean
+          result: string
+          route_path: string | null
+          runtime_version: string | null
+          secrets_logged: boolean
+          source: string
+          system_id: string
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          account_role: string
+          actual_behavior: string
+          app_version?: string | null
+          blocker_classification: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          expected_behavior: string
+          fake_proof?: boolean
+          finding_status?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action: string
+          owner_command_request_id?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          route_path?: string | null
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          account_role?: string
+          actual_behavior?: string
+          app_version?: string | null
+          blocker_classification?: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          expected_behavior?: string
+          fake_proof?: boolean
+          finding_status?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action?: string
+          owner_command_request_id?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          route_path?: string | null
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source?: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_behavior_findings_owner_command_request_id_fkey"
+            columns: ["owner_command_request_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rollback_readiness_records: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          readiness_state: string
+          rollback_available: boolean
+          runtime_version: string | null
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          readiness_state?: string
+          rollback_available?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          readiness_state?: string
+          rollback_available?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      rollout_anomaly_findings: {
+        Row: {
+          anomaly_type: string
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          review_status: string
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          anomaly_type: string
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          anomaly_type?: string
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       room_broadcast_sessions: {
         Row: {
           access_type: string
@@ -8034,6 +15960,288 @@ export type Database = {
         }
         Relationships: []
       }
+      room_ticket_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          offer_id: string | null
+          ticket_id: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          offer_id?: string | null
+          ticket_id?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          offer_id?: string | null
+          ticket_id?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_ticket_events_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "paid_watch_party_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_ticket_events_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "paid_watch_party_tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_ticket_events_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "creator_room_ticket_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_behavior_findings: {
+        Row: {
+          account_role: string | null
+          actual_behavior: string | null
+          actual_marker: string | null
+          app_version: string | null
+          blocker_classification: string
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          discovered_by: string
+          distribution_source: string | null
+          expected_behavior: string | null
+          expected_marker: string | null
+          fake_proof: boolean
+          finding_status: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          next_safe_action: string
+          owner_command_request_id: string | null
+          platform: string
+          private_evidence_stored: boolean
+          provider_environment: string | null
+          readback_complete: boolean
+          result: string
+          route_path: string
+          runtime_version: string | null
+          secrets_logged: boolean
+          source: string
+          system_id: string
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          account_role?: string | null
+          actual_behavior?: string | null
+          actual_marker?: string | null
+          app_version?: string | null
+          blocker_classification: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          expected_behavior?: string | null
+          expected_marker?: string | null
+          fake_proof?: boolean
+          finding_status?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action: string
+          owner_command_request_id?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          route_path: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          account_role?: string | null
+          actual_behavior?: string | null
+          actual_marker?: string | null
+          app_version?: string | null
+          blocker_classification?: string
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          discovered_by?: string
+          distribution_source?: string | null
+          expected_behavior?: string | null
+          expected_marker?: string | null
+          fake_proof?: boolean
+          finding_status?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          next_safe_action?: string
+          owner_command_request_id?: string | null
+          platform?: string
+          private_evidence_stored?: boolean
+          provider_environment?: string | null
+          readback_complete?: boolean
+          result?: string
+          route_path?: string
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          source?: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_behavior_findings_owner_command_request_id_fkey"
+            columns: ["owner_command_request_id"]
+            isOneToOne: false
+            referencedRelation: "owner_command_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      runtime_health_snapshots: {
+        Row: {
+          app_version: string | null
+          backend_error_rate_percent: number | null
+          bundle_identifier: string | null
+          channel: string | null
+          crash_cluster_count: number
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          embedded_launch: boolean | null
+          emergency_launch: boolean | null
+          environment_mode: string
+          health_state: string
+          id: string
+          js_error_count: number
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          performance_regression_count: number
+          pii_stored: boolean
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          release_action_executed: boolean
+          runtime_version: string | null
+          secrets_logged: boolean
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          backend_error_rate_percent?: number | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          crash_cluster_count?: number
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          embedded_launch?: boolean | null
+          emergency_launch?: boolean | null
+          environment_mode?: string
+          health_state: string
+          id?: string
+          js_error_count?: number
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          performance_regression_count?: number
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          backend_error_rate_percent?: number | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          crash_cluster_count?: number
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          embedded_launch?: boolean | null
+          emergency_launch?: boolean | null
+          environment_mode?: string
+          health_state?: string
+          id?: string
+          js_error_count?: number
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          performance_regression_count?: number
+          pii_stored?: boolean
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          release_action_executed?: boolean
+          runtime_version?: string | null
+          secrets_logged?: boolean
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       safety_reports: {
         Row: {
           actioned_at: string | null
@@ -8111,6 +16319,411 @@ export type Database = {
           },
         ]
       }
+      safety_review_recommendations: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          recommendation_type: string
+          review_status: string
+          severity: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          recommendation_type: string
+          review_status?: string
+          severity?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          recommendation_type?: string
+          review_status?: string
+          severity?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      sandbox_monetization_testers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string | null
+          expires_at: string | null
+          id: string
+          note: string | null
+          revoked_at: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          expires_at?: string | null
+          id?: string
+          note?: string | null
+          revoked_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          expires_at?: string | null
+          id?: string
+          note?: string | null
+          revoked_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      scheduled_timer_health_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      search_health_snapshots: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      search_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      search_operator_learning_state: {
+        Row: {
+          confidence: number
+          fake_proof: boolean
+          finding_key: string
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_result: string
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key?: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      search_required_review_flags: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      secret_scan_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          finding_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          review_status: string
+          severity: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          finding_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          severity?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          finding_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          review_status?: string
+          severity?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
       security_audit_events: {
         Row: {
           actor_email: string | null
@@ -8163,6 +16776,171 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      security_health_snapshots: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          critical_finding_count: number
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          health_state: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          system_id: string
+          update_id: string | null
+          user_rights_changed: boolean
+          warning_count: number
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          critical_finding_count?: number
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          health_state: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          warning_count?: number
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          critical_finding_count?: number
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          health_state?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          system_id?: string
+          update_id?: string | null
+          user_rights_changed?: boolean
+          warning_count?: number
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      security_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          environment_mode: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      security_operator_learning_state: {
+        Row: {
+          confidence: number
+          first_seen_at: string
+          id: string
+          incident_key: string
+          last_recommended_action: string | null
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          first_seen_at?: string
+          id?: string
+          incident_key?: string
+          last_recommended_action?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
       }
       security_request_context: {
         Row: {
@@ -8239,6 +17017,87 @@ export type Database = {
           trusted_header_source?: string | null
           user_agent_hash?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      security_required_review_flags: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          flag_type: string
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          review_status: string
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          update_id: string | null
+          updated_at: string
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          flag_type?: string
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          review_status?: string
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          update_id?: string | null
+          updated_at?: string
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
         }
         Relationships: []
       }
@@ -8428,13 +17287,6 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "watch_party_rooms"
             referencedColumns: ["party_id"]
-          },
-          {
-            foreignKeyName: "spectator_child_room_sources_source_item_id_fkey"
-            columns: ["source_item_id"]
-            isOneToOne: false
-            referencedRelation: "discovery_feed_items"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "spectator_child_room_sources_source_public_playback_id_fkey"
@@ -9103,6 +17955,465 @@ export type Database = {
           },
         ]
       }
+      support_escalation_records: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      support_health_snapshots: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          health_state: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          health_state?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      support_operator_events: {
+        Row: {
+          action_id: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          platform: string
+          result: string
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          action_id: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          action_id?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          platform?: string
+          result?: string
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      support_operator_learning_state: {
+        Row: {
+          confidence: number
+          fake_proof: boolean
+          finding_key: string
+          first_seen_at: string
+          high_risk_executed: boolean
+          id: string
+          last_result: string
+          last_seen_at: string
+          metadata: Json
+          money_moved: boolean
+          occurrence_count: number
+          system_id: string
+          user_rights_changed: boolean
+        }
+        Insert: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Update: {
+          confidence?: number
+          fake_proof?: boolean
+          finding_key?: string
+          first_seen_at?: string
+          high_risk_executed?: boolean
+          id?: string
+          last_result?: string
+          last_seen_at?: string
+          metadata?: Json
+          money_moved?: boolean
+          occurrence_count?: number
+          system_id?: string
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      support_required_review_flags: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      support_response_drafts: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      support_ticket_findings: {
+        Row: {
+          app_version: string | null
+          bundle_identifier: string | null
+          channel: string | null
+          created_at: string
+          data_source: string | null
+          distribution_source: string | null
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          native_build: string | null
+          platform: string
+          provider_environment: string | null
+          readback_complete: boolean
+          runtime_version: string | null
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          update_id: string | null
+          user_rights_changed: boolean
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bundle_identifier?: string | null
+          channel?: string | null
+          created_at?: string
+          data_source?: string | null
+          distribution_source?: string | null
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          native_build?: string | null
+          platform?: string
+          provider_environment?: string | null
+          readback_complete?: boolean
+          runtime_version?: string | null
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          update_id?: string | null
+          user_rights_changed?: boolean
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       titles: {
         Row: {
           ads_enabled: boolean
@@ -9501,6 +18812,8 @@ export type Database = {
           display_name: string | null
           follower_surface_enabled: boolean
           likes_visibility: string
+          platform_access_visibility: string
+          profile_access_visibility: string
           profile_avatar_fit_mode: string
           profile_avatar_focal_x: number
           profile_avatar_focal_y: number
@@ -9523,8 +18836,6 @@ export type Database = {
           profile_background_scan_status: string
           profile_background_scanned_at: string | null
           profile_background_url: string | null
-          platform_access_visibility: string
-          profile_access_visibility: string
           profile_media_updated_at: string | null
           profile_visibility: string
           public_activity_visibility: string
@@ -9549,6 +18860,8 @@ export type Database = {
           display_name?: string | null
           follower_surface_enabled?: boolean
           likes_visibility?: string
+          platform_access_visibility?: string
+          profile_access_visibility?: string
           profile_avatar_fit_mode?: string
           profile_avatar_focal_x?: number
           profile_avatar_focal_y?: number
@@ -9571,8 +18884,6 @@ export type Database = {
           profile_background_scan_status?: string
           profile_background_scanned_at?: string | null
           profile_background_url?: string | null
-          platform_access_visibility?: string
-          profile_access_visibility?: string
           profile_media_updated_at?: string | null
           profile_visibility?: string
           public_activity_visibility?: string
@@ -9597,6 +18908,8 @@ export type Database = {
           display_name?: string | null
           follower_surface_enabled?: boolean
           likes_visibility?: string
+          platform_access_visibility?: string
+          profile_access_visibility?: string
           profile_avatar_fit_mode?: string
           profile_avatar_focal_x?: number
           profile_avatar_focal_y?: number
@@ -9619,8 +18932,6 @@ export type Database = {
           profile_background_scan_status?: string
           profile_background_scanned_at?: string | null
           profile_background_url?: string | null
-          platform_access_visibility?: string
-          profile_access_visibility?: string
           profile_media_updated_at?: string | null
           profile_visibility?: string
           public_activity_visibility?: string
@@ -9706,6 +19017,57 @@ export type Database = {
         }
         Update: {
           tier?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_voip_push_tokens: {
+        Row: {
+          apns_environment: string
+          app_version: string | null
+          build_version: string | null
+          created_at: string
+          enabled: boolean
+          id: string
+          install_id: string
+          last_seen_at: string
+          revoked_at: string | null
+          token: string
+          token_fingerprint: string
+          token_hash: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          apns_environment: string
+          app_version?: string | null
+          build_version?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          install_id: string
+          last_seen_at?: string
+          revoked_at?: string | null
+          token: string
+          token_fingerprint: string
+          token_hash: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          apns_environment?: string
+          app_version?: string | null
+          build_version?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          install_id?: string
+          last_seen_at?: string
+          revoked_at?: string | null
+          token?: string
+          token_fingerprint?: string
+          token_hash?: string
           updated_at?: string
           user_id?: string
         }
@@ -9943,6 +19305,117 @@ export type Database = {
           visibility?: string
         }
         Relationships: []
+      }
+      visibility_anomaly_findings: {
+        Row: {
+          created_at: string
+          environment_mode: string
+          fake_proof: boolean
+          flag_type: string
+          high_risk_executed: boolean
+          id: string
+          metadata: Json
+          money_moved: boolean
+          severity: string
+          system_id: string
+          target_id: string | null
+          target_type: string | null
+          user_rights_changed: boolean
+        }
+        Insert: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Update: {
+          created_at?: string
+          environment_mode?: string
+          fake_proof?: boolean
+          flag_type?: string
+          high_risk_executed?: boolean
+          id?: string
+          metadata?: Json
+          money_moved?: boolean
+          severity?: string
+          system_id?: string
+          target_id?: string | null
+          target_type?: string | null
+          user_rights_changed?: boolean
+        }
+        Relationships: []
+      }
+      voip_push_delivery_attempts: {
+        Row: {
+          apns_environment: string
+          attempt_count: number
+          call_invite_id: string
+          created_at: string
+          dispatch_key: string
+          error_code: string | null
+          id: string
+          provider_message_id: string | null
+          provider_status_code: number | null
+          recipient_user_id: string
+          status: string
+          updated_at: string
+          voip_push_token_id: string | null
+        }
+        Insert: {
+          apns_environment: string
+          attempt_count?: number
+          call_invite_id: string
+          created_at?: string
+          dispatch_key: string
+          error_code?: string | null
+          id?: string
+          provider_message_id?: string | null
+          provider_status_code?: number | null
+          recipient_user_id: string
+          status: string
+          updated_at?: string
+          voip_push_token_id?: string | null
+        }
+        Update: {
+          apns_environment?: string
+          attempt_count?: number
+          call_invite_id?: string
+          created_at?: string
+          dispatch_key?: string
+          error_code?: string | null
+          id?: string
+          provider_message_id?: string | null
+          provider_status_code?: number | null
+          recipient_user_id?: string
+          status?: string
+          updated_at?: string
+          voip_push_token_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voip_push_delivery_attempts_call_invite_id_fkey"
+            columns: ["call_invite_id"]
+            isOneToOne: false
+            referencedRelation: "chat_call_invites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voip_push_delivery_attempts_voip_push_token_id_fkey"
+            columns: ["voip_push_token_id"]
+            isOneToOne: false
+            referencedRelation: "user_voip_push_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       watch_history: {
         Row: {
@@ -10193,8 +19666,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_access_status_readback: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      account_deletion_public_hidden_reason: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      account_purge_deidentification_counts: {
+        Args: { p_target_user_id: string }
+        Returns: Json
+      }
+      account_purge_is_proof_account: {
+        Args: { p_target_user_id: string }
+        Returns: boolean
+      }
       acknowledge_beta_onboarding: { Args: never; Returns: Json }
       activate_beta_membership: { Args: never; Returns: Json }
+      admin_account_purge_runtime_status: { Args: never; Returns: Json }
       admin_content_assert_operator: { Args: never; Returns: string }
       admin_content_title_patch_allowed: {
         Args: { p_patch: Json }
@@ -10216,6 +19706,23 @@ export type Database = {
       }
       admin_create_official_rachi_post: {
         Args: { p_body: string; p_reason?: string; p_visibility?: string }
+        Returns: Json
+      }
+      admin_deidentify_deleted_account: {
+        Args: {
+          p_dry_run?: boolean
+          p_reason?: string
+          p_target_user_id: string
+        }
+        Returns: Json
+      }
+      admin_deidentify_deleted_account_for_proof: {
+        Args: {
+          p_dry_run?: boolean
+          p_proof_override?: boolean
+          p_reason?: string
+          p_target_user_id: string
+        }
         Returns: Json
       }
       admin_dmca_add_strike: {
@@ -10597,6 +20104,7 @@ export type Database = {
         Args: { p_intent_id: string }
         Returns: Json
       }
+      admin_get_refund_readiness_summary: { Args: never; Returns: Json }
       admin_grant_platform_role_by_email: {
         Args: { p_reason?: string; p_role: string; p_target_email: string }
         Returns: Json
@@ -10640,6 +20148,10 @@ export type Database = {
       admin_read_models_can_read_users: { Args: never; Returns: boolean }
       admin_reports_actor_can_review: { Args: never; Returns: boolean }
       admin_reports_actor_can_target_action: { Args: never; Returns: boolean }
+      admin_reports_actor_can_target_action_scope: {
+        Args: { p_action_type: string }
+        Returns: boolean
+      }
       admin_reports_assert_reviewer: { Args: never; Returns: undefined }
       admin_reports_assert_target_operator: { Args: never; Returns: undefined }
       admin_reports_classify_severity: {
@@ -10668,6 +20180,10 @@ export type Database = {
         }
         Returns: string
       }
+      admin_restore_account_for_support: {
+        Args: { p_reason?: string; p_target_user_id: string }
+        Returns: Json
+      }
       admin_revoke_money_access_grant_for_proof: {
         Args: { p_grant_id: string; p_reason?: string }
         Returns: Json
@@ -10684,8 +20200,24 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_run_account_purge_batch: {
+        Args: { p_dry_run?: boolean; p_enable?: boolean; p_limit?: number }
+        Returns: Json
+      }
       admin_search_mask_query: { Args: { p_query: string }; Returns: string }
       admin_search_query_type: { Args: { p_query: string }; Returns: string }
+      admin_suspend_account_for_support: {
+        Args: {
+          p_duration_minutes?: number
+          p_reason?: string
+          p_target_user_id: string
+        }
+        Returns: Json
+      }
+      admin_update_account_purge_manual_review_item_status: {
+        Args: { p_item_id: string; p_resolution?: string; p_status: string }
+        Returns: Json
+      }
       admin_update_official_rachi_profile_image: {
         Args: { p_avatar_url?: string; p_reason?: string }
         Returns: Json
@@ -10745,9 +20277,78 @@ export type Database = {
         }
         Returns: Json
       }
+      approve_autonomous_approval_request: {
+        Args: { p_metadata?: Json; p_request_id: string }
+        Returns: {
+          action_id: string
+          allowed_write_scope: Json
+          approval_level: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          denial_reason: string | null
+          denied_at: string | null
+          denied_by: string | null
+          execution_result: string | null
+          expires_at: string
+          forbidden_scope: Json
+          id: string
+          kill_switch_plan: string
+          metadata: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id: string | null
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status: string
+          system_id: string
+          title: string
+          updated_at: string
+          validation_plan: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_approval_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      assert_account_private_feature_allowed: {
+        Args: { p_feature?: string; p_user_id: string }
+        Returns: undefined
+      }
       assert_money_feature_allowed: {
         Args: { p_key: string; p_require_live_money?: boolean }
         Returns: undefined
+      }
+      authorize_chilly_chat_call_transition_retry: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
+      autonomous_actor_authority_role: {
+        Args: { p_actor_email?: string; p_actor_user_id: string }
+        Returns: string
+      }
+      autonomous_actor_has_owner_authority: {
+        Args: { p_actor_email?: string; p_actor_user_id: string }
+        Returns: boolean
+      }
+      autonomous_approval_payload_has_secret: {
+        Args: { p_value: Json }
+        Returns: boolean
+      }
+      autonomous_write_request_event: {
+        Args: {
+          p_actor_id: string
+          p_actor_type: string
+          p_event_summary: string
+          p_event_type: string
+          p_metadata?: Json
+          p_request_id: string
+        }
+        Returns: string
       }
       build_safe_username_seed: {
         Args: { p_user_id: string; p_username: string }
@@ -10769,9 +20370,103 @@ export type Database = {
         Args: { target_thread_id: string }
         Returns: boolean
       }
+      can_read_circle_spectator_feed_item: {
+        Args: { p_item_id: string; p_viewer_user_id?: string }
+        Returns: boolean
+      }
+      can_read_circle_spectator_playback_record: {
+        Args: { p_record_id: string; p_viewer_user_id?: string }
+        Returns: boolean
+      }
+      can_read_creator_feed_item: {
+        Args: {
+          p_creator_user_id: string
+          p_source_id: string
+          p_source_type: string
+          p_status: string
+          p_target_scope: string
+          p_viewer_user_id?: string
+          p_visibility: string
+        }
+        Returns: boolean
+      }
+      can_read_creator_replay_library_item: {
+        Args: { p_replay_id: string; p_viewer_user_id?: string }
+        Returns: boolean
+      }
+      can_read_creator_video_row:
+        | {
+            Args: {
+              p_moderation_status: string
+              p_owner_user_id: string
+              p_playback_url: string
+              p_scan_status: string
+              p_storage_object_key: string
+              p_storage_path: string
+              p_viewer_user_id?: string
+              p_visibility: string
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              p_moderation_status: string
+              p_owner_user_id: string
+              p_playback_url: string
+              p_storage_object_key: string
+              p_storage_path: string
+              p_viewer_user_id?: string
+              p_visibility: string
+            }
+            Returns: boolean
+          }
       can_view_profile_content: {
         Args: { profile_user_id: string }
         Returns: boolean
+      }
+      cancel_autonomous_approval_request: {
+        Args: { p_reason?: string; p_request_id: string }
+        Returns: {
+          action_id: string
+          allowed_write_scope: Json
+          approval_level: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          denial_reason: string | null
+          denied_at: string | null
+          denied_by: string | null
+          execution_result: string | null
+          expires_at: string
+          forbidden_scope: Json
+          id: string
+          kill_switch_plan: string
+          metadata: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id: string | null
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status: string
+          system_id: string
+          title: string
+          updated_at: string
+          validation_plan: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_approval_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      channel_subscription_offer_safe_row: {
+        Args: {
+          offer_row: Database["public"]["Tables"]["creator_channel_subscription_offers"]["Row"]
+        }
+        Returns: Json
       }
       chat_thread_has_platform_owner: {
         Args: { target_thread_id: string }
@@ -10780,6 +20475,14 @@ export type Database = {
       check_username_availability: {
         Args: { p_username: string }
         Returns: Json
+      }
+      claim_chilly_chat_call_transition_delivery: {
+        Args: { p_delivery_id: string }
+        Returns: Json
+      }
+      claim_chilly_chat_call_transition_delivery_batch: {
+        Args: { p_limit?: number }
+        Returns: Json[]
       }
       claim_media_scan_jobs: {
         Args: { p_max_jobs?: number; p_worker_id?: string }
@@ -10802,6 +20505,10 @@ export type Database = {
         Args: { joining_user_id: string; target_room_id: string }
         Returns: boolean
       }
+      complete_chilly_chat_call_transition_delivery: {
+        Args: { p_delivery_id: string; p_result: Json; p_status: string }
+        Returns: Json
+      }
       complete_media_scan_job: {
         Args: {
           p_duration_ms?: number
@@ -10815,6 +20522,22 @@ export type Database = {
         }
         Returns: Json
       }
+      configure_chilly_chat_call_transition_retry: {
+        Args: { p_project_url: string }
+        Returns: Json
+      }
+      create_account_purge_manual_review_items: {
+        Args: {
+          p_batch_run_id: string
+          p_counts: Json
+          p_target_user_id: string
+        }
+        Returns: Json
+      }
+      create_creator_channel_subscription_purchase_intent: {
+        Args: { p_offer_id: string }
+        Returns: Json
+      }
       create_creator_product_listing: {
         Args: {
           p_currency?: string
@@ -10825,12 +20548,46 @@ export type Database = {
         }
         Returns: Json
       }
+      create_creator_vip_pass_purchase_intent: {
+        Args: { p_offer_id: string }
+        Returns: Json
+      }
+      create_ios_app_store_purchase_intent: {
+        Args: {
+          p_metadata?: Json
+          p_provider_product_id: string
+          p_source_id: string
+          p_source_type: string
+        }
+        Returns: Json
+      }
       create_money_purchase_intent: {
         Args: {
           p_metadata?: Json
           p_product_key: string
           p_source_id?: string
           p_source_type: string
+        }
+        Returns: Json
+      }
+      create_paid_creator_event_pass_purchase_intent: {
+        Args: { p_event_id: string }
+        Returns: Json
+      }
+      create_paid_watch_party_ticket_purchase_intent: {
+        Args: { p_offer_id: string }
+        Returns: Json
+      }
+      create_refund_review_dry_run: {
+        Args: {
+          amount_cents?: number
+          consumption_state?: string
+          creator_obligation_state?: string
+          creator_user_id?: string
+          currency?: string
+          policy_key: string
+          source_id?: string
+          source_type?: string
         }
         Returns: Json
       }
@@ -10851,6 +20608,54 @@ export type Database = {
       creator_monetization_expected_source_type: {
         Args: { p_product_type: string }
         Returns: string
+      }
+      creator_vip_pass_offer_safe_row: {
+        Args: {
+          offer_row: Database["public"]["Tables"]["creator_vip_pass_offers"]["Row"]
+        }
+        Returns: Json
+      }
+      deny_autonomous_approval_request: {
+        Args: { p_denial_reason: string; p_request_id: string }
+        Returns: {
+          action_id: string
+          allowed_write_scope: Json
+          approval_level: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          denial_reason: string | null
+          denied_at: string | null
+          denied_by: string | null
+          execution_result: string | null
+          expires_at: string
+          forbidden_scope: Json
+          id: string
+          kill_switch_plan: string
+          metadata: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id: string | null
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status: string
+          system_id: string
+          title: string
+          updated_at: string
+          validation_plan: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_approval_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      disable_chilly_chat_call_transition_retry: {
+        Args: never
+        Returns: boolean
       }
       discovery_feed_item_blocked_for_current_user: {
         Args: { target_feed_item_id: string }
@@ -10890,6 +20695,17 @@ export type Database = {
         }
         Returns: string
       }
+      enforce_abuse_rate_limit: {
+        Args: {
+          p_action_key: string
+          p_actor_user_id: string
+          p_limit: number
+          p_metadata?: Json
+          p_target_key: string
+          p_window_seconds: number
+        }
+        Returns: undefined
+      }
       enqueue_media_scan_job: {
         Args: {
           p_metadata?: Json
@@ -10906,7 +20722,57 @@ export type Database = {
         }
         Returns: string
       }
+      expire_autonomous_approval_requests: { Args: never; Returns: number }
       expire_money_purchase_intents: { Args: never; Returns: number }
+      first_owner_active_marker: {
+        Args: never
+        Returns: {
+          established_at: string
+          id: string
+          owner_email: string
+          owner_membership_id: number
+          owner_user_id: string
+        }[]
+      }
+      first_owner_authority_status: { Args: never; Returns: Json }
+      first_owner_complete_self_step_down: {
+        Args: {
+          p_challenge_id: string
+          p_passcode_hash: string
+          p_reason: string
+          p_typed_confirmation: string
+        }
+        Returns: Json
+      }
+      first_owner_create_self_step_down_challenge: {
+        Args: {
+          p_expires_at?: string
+          p_passcode_hash: string
+          p_passcode_salt: string
+          p_reason: string
+          p_successor_owner_email: string
+        }
+        Returns: Json
+      }
+      first_owner_grant_owner_by_email: {
+        Args: { p_reason: string; p_target_email: string }
+        Returns: Json
+      }
+      first_owner_hash_passcode: {
+        Args: {
+          p_action: string
+          p_actor_user_id: string
+          p_passcode: string
+          p_salt: string
+          p_successor_owner_membership_id: number
+          p_target_owner_membership_id: number
+        }
+        Returns: string
+      }
+      first_owner_revoke_owner_by_email: {
+        Args: { p_reason: string; p_target_email: string }
+        Returns: Json
+      }
       get_admin_content_config: { Args: never; Returns: Json }
       get_admin_media_scan_read_model: {
         Args: { p_limit?: number; p_status?: string }
@@ -10927,6 +20793,50 @@ export type Database = {
         Args: { p_limit?: number; p_query?: string }
         Returns: Json
       }
+      get_autonomous_approval_request: {
+        Args: { p_request_id: string }
+        Returns: {
+          action_id: string
+          allowed_write_scope: Json
+          approval_level: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          denial_reason: string | null
+          denied_at: string | null
+          denied_by: string | null
+          execution_result: string | null
+          expires_at: string
+          forbidden_scope: Json
+          id: string
+          kill_switch_plan: string
+          metadata: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id: string | null
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status: string
+          system_id: string
+          title: string
+          updated_at: string
+          validation_plan: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_approval_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_creator_tip_public_status: {
+        Args: { p_creator_id: string }
+        Returns: Json
+      }
+      get_ios_autonomous_call_retry_readback: { Args: never; Returns: Json }
+      get_ios_autonomous_recovery_readback: { Args: never; Returns: Json }
       get_money_feature_flags_summary: {
         Args: never
         Returns: {
@@ -10939,9 +20849,55 @@ export type Database = {
         }[]
       }
       get_my_account_deletion_status: { Args: never; Returns: Json }
+      get_my_creator_tip_settings: {
+        Args: never
+        Returns: {
+          created_at: string
+          creator_id: string
+          currency: string
+          default_amount_cents: number | null
+          id: string
+          last_provider_sync_at: string | null
+          max_amount_cents: number
+          metadata: Json
+          min_amount_cents: number
+          provider: string
+          provider_account_id: string | null
+          provider_charges_enabled: boolean
+          provider_environment: string
+          provider_onboarding_status: string
+          provider_payouts_enabled: boolean
+          status: string
+          suggested_amounts_cents: number[]
+          tips_enabled: boolean
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "creator_tip_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_my_money_purchase_intent: {
         Args: { p_intent_id: string }
         Returns: Json
+      }
+      get_my_refund_credit_summary: { Args: never; Returns: Json }
+      get_my_tip_transaction_status: {
+        Args: { p_tip_transaction_id: string }
+        Returns: Json
+      }
+      get_or_create_direct_chat_thread: {
+        Args: {
+          p_target_avatar_url?: string
+          p_target_display_name?: string
+          p_target_tagline?: string
+          p_target_user_id: string
+        }
+        Returns: {
+          thread_id: string
+        }[]
       }
       get_platform_money_kill_switches: {
         Args: never
@@ -10977,6 +20933,15 @@ export type Database = {
         Args: { p_context_id: string }
         Returns: Json
       }
+      grant_sandbox_monetization_tester: {
+        Args: {
+          p_email?: string
+          p_expires_at?: string
+          p_note?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       has_access_grant: {
         Args: { p_grant_type: string; p_source_id: string; p_user_id?: string }
         Returns: Json
@@ -10984,6 +20949,10 @@ export type Database = {
       has_active_beta_access: { Args: never; Returns: boolean }
       has_active_premium_creator_tool_access: {
         Args: { target_user_id?: string }
+        Returns: boolean
+      }
+      has_channel_audience_block_between: {
+        Args: { p_user_a: string; p_user_b: string }
         Returns: boolean
       }
       has_event_pass_access: {
@@ -11015,11 +20984,55 @@ export type Database = {
         Args: { p_party_id: string; p_user_id: string }
         Returns: Json
       }
+      hide_chat_thread_from_inbox: {
+        Args: { p_thread_id: string }
+        Returns: Json
+      }
+      is_account_access_restricted: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      is_account_deletion_publicly_hidden: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       is_account_deletion_scheduled: {
         Args: { p_user_id: string }
         Returns: boolean
       }
+      is_active_chilly_circle_member: {
+        Args: { p_creator_user_id: string; p_member_user_id?: string }
+        Returns: boolean
+      }
+      is_circle_spectator_viewer_blocked: {
+        Args: { p_creator_user_id: string; p_viewer_user_id: string }
+        Returns: boolean
+      }
+      is_creator_feed_viewer_blocked: {
+        Args: { p_creator_user_id: string; p_viewer_user_id?: string }
+        Returns: boolean
+      }
+      is_creator_replay_viewer_blocked: {
+        Args: { p_owner_user_id: string; p_viewer_user_id?: string }
+        Returns: boolean
+      }
+      is_creator_video_playable_source: {
+        Args: {
+          p_playback_url: string
+          p_storage_object_key: string
+          p_storage_path: string
+        }
+        Returns: boolean
+      }
+      is_creator_video_viewer_blocked: {
+        Args: { p_owner_user_id: string; p_viewer_user_id?: string }
+        Returns: boolean
+      }
       is_current_platform_owner: { Args: never; Returns: boolean }
+      is_first_owner: {
+        Args: { p_actor_email?: string; p_actor_user_id?: string }
+        Returns: boolean
+      }
       is_money_feature_allowed: {
         Args: { p_key: string; p_require_live_money?: boolean }
         Returns: boolean
@@ -11045,6 +21058,18 @@ export type Database = {
         Returns: boolean
       }
       is_username_reserved: { Args: { p_username: string }; Returns: boolean }
+      list_account_purge_action_audit: {
+        Args: { p_limit?: number; p_target_user_id: string }
+        Returns: Json
+      }
+      list_account_purge_manual_review_items: {
+        Args: { p_limit?: number; p_target_user_id?: string }
+        Returns: Json
+      }
+      list_account_support_action_audit: {
+        Args: { p_limit?: number; p_target_user_id: string }
+        Returns: Json
+      }
       list_admin_content_audit_events: {
         Args: { p_limit?: number }
         Returns: {
@@ -11163,8 +21188,93 @@ export type Database = {
           target_user_id: string
         }[]
       }
+      list_autonomous_approval_requests: {
+        Args: { p_status?: string }
+        Returns: {
+          action_id: string
+          allowed_write_scope: Json
+          approval_level: number
+          approved_at: string
+          approved_by: string
+          created_at: string
+          denial_reason: string
+          denied_at: string
+          denied_by: string
+          execution_result: string
+          expires_at: string
+          forbidden_scope: Json
+          id: string
+          kill_switch_plan: string
+          metadata: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id: string
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status: string
+          system_id: string
+          title: string
+          updated_at: string
+          validation_plan: string
+        }[]
+      }
+      list_my_creator_channel_subscription_offers: {
+        Args: never
+        Returns: Json
+      }
+      list_my_creator_channel_subscription_transactions: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       list_my_creator_sandbox_monetization_configs: {
         Args: never
+        Returns: Json
+      }
+      list_my_creator_tip_transactions: {
+        Args: { p_limit?: number }
+        Returns: {
+          created_at: string
+          creator_id: string
+          creator_net_cents: number
+          currency: string
+          failed_at: string
+          id: string
+          message_private: string
+          paid_at: string
+          payment_status: string
+          payout_status: string
+          platform_fee_cents: number
+          provider: string
+          provider_checkout_session_id: string
+          provider_environment: string
+          provider_fee_cents: number
+          provider_payment_intent_id: string
+          refunded_at: string
+          sender_id: string
+          status: string
+          tip_amount_cents: number
+        }[]
+      }
+      list_my_creator_vip_pass_offers: { Args: never; Returns: Json }
+      list_my_creator_vip_transactions: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      list_my_paid_creator_event_offers: { Args: never; Returns: Json }
+      list_my_paid_creator_event_transactions: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      list_my_paid_video_offers: { Args: never; Returns: Json }
+      list_my_paid_video_transactions: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      list_my_paid_watch_party_offers: { Args: never; Returns: Json }
+      list_my_paid_watch_party_transactions: {
+        Args: { p_limit?: number }
         Returns: Json
       }
       list_platform_money_kill_switch_audit: {
@@ -11180,9 +21290,127 @@ export type Database = {
           switch_key: string
         }[]
       }
+      list_sandbox_monetization_testers: {
+        Args: never
+        Returns: {
+          createdAt: string
+          createdBy: string
+          email: string
+          expiresAt: string
+          id: string
+          note: string
+          revokedAt: string
+          status: string
+          updatedAt: string
+          userId: string
+        }[]
+      }
       list_staff_scoped_permissions_by_email: {
         Args: { p_target_email: string }
         Returns: string[]
+      }
+      mark_autonomous_approval_preflight_result: {
+        Args: {
+          p_metadata?: Json
+          p_passed: boolean
+          p_request_id: string
+          p_summary: string
+        }
+        Returns: {
+          action_id: string
+          allowed_write_scope: Json
+          approval_level: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          denial_reason: string | null
+          denied_at: string | null
+          denied_by: string | null
+          execution_result: string | null
+          expires_at: string
+          forbidden_scope: Json
+          id: string
+          kill_switch_plan: string
+          metadata: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id: string | null
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status: string
+          system_id: string
+          title: string
+          updated_at: string
+          validation_plan: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_approval_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      mark_autonomous_approval_request_executed: {
+        Args: {
+          p_action_id: string
+          p_execution_result: string
+          p_metadata?: Json
+          p_request_id: string
+          p_system_id: string
+        }
+        Returns: {
+          action_id: string
+          allowed_write_scope: Json
+          approval_level: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          denial_reason: string | null
+          denied_at: string | null
+          denied_by: string | null
+          execution_result: string | null
+          expires_at: string
+          forbidden_scope: Json
+          id: string
+          kill_switch_plan: string
+          metadata: Json
+          proof_plan: string
+          proposed_action: string
+          reason: string
+          requested_by_actor_id: string | null
+          requested_by_actor_type: string
+          risk_summary: string
+          rollback_plan: string
+          status: string
+          system_id: string
+          title: string
+          updated_at: string
+          validation_plan: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_approval_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      media_object_storage_migrate_verified_rows: {
+        Args: { p_batch_id: string; p_updates: Json }
+        Returns: Json
+      }
+      media_object_storage_reference_resolution_summary: {
+        Args: never
+        Returns: Json
+      }
+      media_object_storage_reference_resolutions_backup: {
+        Args: never
+        Returns: Json
+      }
+      media_object_storage_resolve_scan_job_refs: {
+        Args: { p_batch_id: string; p_resolutions: Json }
+        Returns: Json
       }
       media_scan_object_key_from_public_url: {
         Args: { bucket_name: string; media_url: string }
@@ -11221,11 +21449,32 @@ export type Database = {
         }
         Returns: Json
       }
+      normalize_tip_settings_status: {
+        Args: {
+          p_charges_enabled: boolean
+          p_onboarding_status: string
+          p_payouts_enabled: boolean
+          p_tips_enabled: boolean
+        }
+        Returns: string
+      }
       normalize_username_handle: {
         Args: { p_username: string }
         Returns: string
       }
       owner_security_center_table_status: { Args: never; Returns: Json }
+      paid_creator_event_safe_row: {
+        Args: {
+          event_row: Database["public"]["Tables"]["paid_creator_events"]["Row"]
+        }
+        Returns: Json
+      }
+      paid_watch_party_offer_safe_row: {
+        Args: {
+          offer_row: Database["public"]["Tables"]["paid_watch_party_offers"]["Row"]
+        }
+        Returns: Json
+      }
       platform_actor_should_write_app_audit: {
         Args: {
           p_actor_email: string
@@ -11233,6 +21482,10 @@ export type Database = {
           p_actor_user_id: string
         }
         Returns: boolean
+      }
+      platform_admin_scope_legacy_aliases: {
+        Args: { p_permission_key: string }
+        Returns: string[]
       }
       platform_brand_asset_cleanup_candidates: {
         Args: { p_limit?: number; p_retention_days?: number }
@@ -11261,6 +21514,25 @@ export type Database = {
       platform_current_break_glass_session_id: {
         Args: { p_actor_email?: string; p_actor_user_id?: string }
         Returns: string
+      }
+      platform_first_owner_only_break_glass: {
+        Args: { p_actor_email?: string; p_actor_user_id?: string }
+        Returns: boolean
+      }
+      platform_first_owner_write_audit: {
+        Args: {
+          p_action: string
+          p_actor_email: string
+          p_actor_role: string
+          p_actor_user_id: string
+          p_metadata?: Json
+          p_reason: string
+          p_result: string
+          p_target_email: string
+          p_target_membership_id: number
+          p_target_user_id: string
+        }
+        Returns: undefined
       }
       platform_staff_actor_role: { Args: never; Returns: string }
       platform_staff_normalize_email: {
@@ -11306,9 +21578,112 @@ export type Database = {
         }
         Returns: undefined
       }
+      process_revenuecat_consumable_event_atomic: {
+        Args: {
+          p_amount_minor: number
+          p_currency: string
+          p_environment: string
+          p_event_type: string
+          p_expires_at: string
+          p_occurred_at: string
+          p_original_transaction_id: string
+          p_provider_event_id: string
+          p_provider_product_id: string
+          p_raw_payload_hash: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      process_revenuecat_consumable_event_atomic_internal: {
+        Args: {
+          p_amount_minor: number
+          p_currency: string
+          p_environment: string
+          p_event_type: string
+          p_expires_at: string
+          p_failpoint?: string
+          p_occurred_at: string
+          p_original_transaction_id: string
+          p_provider_event_id: string
+          p_provider_product_id: string
+          p_raw_payload_hash: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      process_revenuecat_premium_event_atomic: {
+        Args: {
+          p_amount_minor: number
+          p_currency: string
+          p_entitlement_status: string
+          p_environment: string
+          p_event_type: string
+          p_expires_at: string
+          p_occurred_at: string
+          p_period_type: string
+          p_platform: string
+          p_product_id: string
+          p_provider: string
+          p_provider_base_plan_id: string
+          p_provider_event_id: string
+          p_provider_product_id: string
+          p_raw_payload_hash: string
+          p_starts_at: string
+          p_store: string
+          p_store_mapping_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      process_revenuecat_premium_event_atomic_internal: {
+        Args: {
+          p_amount_minor: number
+          p_currency: string
+          p_entitlement_status: string
+          p_environment: string
+          p_event_type: string
+          p_expires_at: string
+          p_failpoint?: string
+          p_occurred_at: string
+          p_period_type: string
+          p_platform: string
+          p_product_id: string
+          p_provider: string
+          p_provider_base_plan_id: string
+          p_provider_event_id: string
+          p_provider_product_id: string
+          p_raw_payload_hash: string
+          p_starts_at: string
+          p_store: string
+          p_store_mapping_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       public_people_search_is_internal_account_candidate: {
         Args: { p_display_name: string; p_user_id: string; p_username: string }
         Returns: boolean
+      }
+      publish_platform_brand_profile_assets: {
+        Args: { p_asset_ids: string[]; p_reason?: string }
+        Returns: Json
+      }
+      read_autonomous_system_emergency_states: {
+        Args: never
+        Returns: {
+          metadata: Json
+          reason: string | null
+          status: string
+          system_id: string
+          updated_at: string
+          updated_by: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_system_emergency_states"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       read_my_dmca_counter_notice_case: {
         Args: { p_case_id: string }
@@ -11387,6 +21762,21 @@ export type Database = {
           watermark_asset_id: string
         }[]
       }
+      reconcile_revenuecat_partial_provider_events: {
+        Args: { p_limit?: number }
+        Returns: {
+          event_type: string
+          missing_access_grant: boolean
+          missing_billing_event: boolean
+          missing_entitlement: boolean
+          missing_ledger_event: boolean
+          missing_purchase_intent_link: boolean
+          product_key: string
+          provider: string
+          provider_event_id: string
+          status: string
+        }[]
+      }
       record_content_rights_disclosure: {
         Args: {
           p_contains_third_party_content?: boolean
@@ -11432,8 +21822,31 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_creator_channel_subscription_access: {
+        Args: { p_creator_id: string }
+        Returns: Json
+      }
       resolve_creator_content_access: {
         Args: { p_content_id: string; p_content_type: string }
+        Returns: Json
+      }
+      resolve_creator_payout_hold_policy: {
+        Args: {
+          chargeback_window_cleared?: boolean
+          creator_obligation_state?: string
+          live_money_enabled?: boolean
+          payouts_enabled?: boolean
+          policy_key: string
+          refund_window_cleared?: boolean
+        }
+        Returns: Json
+      }
+      resolve_creator_video_visibility_access: {
+        Args: { p_video_id: string; p_viewer_user_id?: string }
+        Returns: Json
+      }
+      resolve_creator_vip_pass_access: {
+        Args: { p_creator_id: string }
         Returns: Json
       }
       resolve_money_access_room_entry: {
@@ -11443,6 +21856,44 @@ export type Database = {
           p_user_id: string
         }
         Returns: Json
+      }
+      resolve_money_refund_policy: {
+        Args: {
+          consumption_state?: string
+          creator_obligation_state?: string
+          platform_fault?: boolean
+          policy_key: string
+          provider_or_legal_required?: boolean
+        }
+        Returns: Json
+      }
+      resolve_paid_creator_event_pass_access: {
+        Args: { p_creator_event_id: string }
+        Returns: Json
+      }
+      resolve_paid_watch_party_ticket_access: {
+        Args: { p_party_id: string }
+        Returns: Json
+      }
+      resolve_platform_visibility_access: {
+        Args: { platform_owner_id: string; viewer_id?: string }
+        Returns: Json
+      }
+      resolve_profile_platform_visibility_access: {
+        Args: {
+          p_owner_user_id: string
+          p_surface: string
+          p_viewer_user_id?: string
+        }
+        Returns: Json
+      }
+      resolve_profile_visibility_access: {
+        Args: { profile_owner_id: string; viewer_id?: string }
+        Returns: Json
+      }
+      resolve_sandbox_monetization_tester: {
+        Args: { p_email?: string; p_user_id?: string }
+        Returns: boolean
       }
       resolve_signup_profile_username: {
         Args: { p_metadata: Json; p_user_id: string }
@@ -11474,6 +21925,10 @@ export type Database = {
       restore_scheduled_account_deletion: { Args: never; Returns: Json }
       review_platform_brand_asset: {
         Args: { p_action: string; p_asset_id: string; p_reason?: string }
+        Returns: Json
+      }
+      revoke_sandbox_monetization_tester: {
+        Args: { p_email?: string; p_id?: string; p_user_id?: string }
         Returns: Json
       }
       rollup_creator_video_upload_usage_daily: {
@@ -11524,6 +21979,32 @@ export type Database = {
         Args: { p_metadata: Json }
         Returns: string
       }
+      set_autonomous_system_emergency_state: {
+        Args: {
+          p_metadata?: Json
+          p_reason: string
+          p_status: string
+          p_system_id: string
+        }
+        Returns: {
+          metadata: Json
+          reason: string | null
+          status: string
+          system_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_system_emergency_states"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_creator_channel_subscription_offer: {
+        Args: { p_description?: string; p_status?: string; p_title?: string }
+        Returns: Json
+      }
       set_creator_content_price: {
         Args: {
           p_content_id: string
@@ -11531,6 +22012,30 @@ export type Database = {
           p_currency?: string
           p_is_paid: boolean
           p_price_cents: number
+        }
+        Returns: Json
+      }
+      set_creator_vip_pass_offer: {
+        Args: { p_description?: string; p_status?: string; p_title?: string }
+        Returns: Json
+      }
+      set_paid_creator_event_offer: {
+        Args: {
+          p_capacity_limit?: number
+          p_creator_event_id: string
+          p_description?: string
+          p_price_cents?: number
+          p_status?: string
+        }
+        Returns: Json
+      }
+      set_paid_watch_party_offer: {
+        Args: {
+          p_party_id: string
+          p_price_cents?: number
+          p_seat_limit?: number
+          p_status?: string
+          p_title?: string
         }
         Returns: Json
       }
@@ -11621,6 +22126,23 @@ export type Database = {
           status: string
         }[]
       }
+      sync_creator_video_feed_items: {
+        Args: { p_video_id: string }
+        Returns: Json
+      }
+      transition_chilly_chat_call_invite: {
+        Args: {
+          p_actor_user_id: string
+          p_duration_seconds?: number
+          p_invite_id: string
+          p_target_status: string
+        }
+        Returns: Json
+      }
+      unhide_chat_thread_for_me: {
+        Args: { p_thread_id: string }
+        Returns: Json
+      }
       update_admin_report_status: {
         Args: { p_reason: string; p_report_id: number; p_status_action: string }
         Returns: {
@@ -11653,8 +22175,49 @@ export type Database = {
         }
       }
       update_my_username: { Args: { p_username: string }; Returns: Json }
+      upsert_my_creator_tip_settings: {
+        Args: {
+          p_currency?: string
+          p_default_amount_cents?: number
+          p_max_amount_cents?: number
+          p_min_amount_cents?: number
+          p_suggested_amounts_cents?: number[]
+          p_tips_enabled: boolean
+        }
+        Returns: {
+          created_at: string
+          creator_id: string
+          currency: string
+          default_amount_cents: number | null
+          id: string
+          last_provider_sync_at: string | null
+          max_amount_cents: number
+          metadata: Json
+          min_amount_cents: number
+          provider: string
+          provider_account_id: string | null
+          provider_charges_enabled: boolean
+          provider_environment: string
+          provider_onboarding_status: string
+          provider_payouts_enabled: boolean
+          status: string
+          suggested_amounts_cents: number[]
+          tips_enabled: boolean
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "creator_tip_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       user_has_active_entitlement: {
         Args: { required_entitlement_keys: string[]; target_user_id: string }
+        Returns: boolean
+      }
+      watch_party_room_actor_blocked_by_host: {
+        Args: { p_actor_user_id: string; p_party_id: string }
         Returns: boolean
       }
       write_admin_search_audit: {
