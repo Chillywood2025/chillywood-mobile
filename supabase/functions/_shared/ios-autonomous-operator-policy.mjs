@@ -1,24 +1,10 @@
-export const AUTONOMOUS_PLATFORMS = Object.freeze(["shared", "ios", "android", "web", "unknown"]);
+import { IOS_QA_RELEASE_MANIFEST } from "./release-manifest-contract.generated.mjs";
 
-export const IOS_QA_RELEASE_EXPECTATION = Object.freeze({
-  platform: "ios",
-  appId: "6791217176",
-  bundleIdentifier: "com.chillywood.mobile",
-  appVersion: "1.0.0",
-  nativeBuild: "8",
-  channel: "ios-qa",
-  runtimeVersion: "1.0.0-iosqa1",
-  distributionSource: "testflight_internal",
-  sourceCommit: "bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae",
-  clientCapabilities: Object.freeze({
-    nativeCallsBuildEnabled: true,
-    nativeCallsRuntimeEnabled: true,
-    ordinaryPushEnabled: true,
-    revenueCatAppStoreEnabled: true,
-  }),
-});
+export const AUTONOMOUS_PLATFORMS = Object.freeze(["shared", "ios", "android", "web", "unknown"]);
+export const IOS_QA_RELEASE_EXPECTATION = IOS_QA_RELEASE_MANIFEST;
 
 const SECRET_KEY = /(secret|token|password|credential|authorization|api[_-]?key|service[_-]?role|private[_-]?key|signed[_-]?url|receipt|session[_-]?cookie|p12|p8)/i;
+const SAFE_AGGREGATE_KEY = /^(activeTokenCount|revokedTokenCount|invalidTokenCount)$/;
 const LONG_CREDENTIAL = /[A-Za-z0-9._~+/=-]{48,}/g;
 const LONG_CREDENTIAL_TEST = /[A-Za-z0-9._~+/=-]{48,}/;
 
@@ -33,7 +19,7 @@ export const sanitizeAutonomousReadback = (value, depth = 0) => {
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value)
-        .filter(([key]) => !SECRET_KEY.test(key))
+        .filter(([key]) => !SECRET_KEY.test(key) || SAFE_AGGREGATE_KEY.test(key))
         .slice(0, 200)
         .map(([key, entry]) => [key, sanitizeAutonomousReadback(entry, depth + 1)]),
     );
@@ -47,7 +33,9 @@ export const sanitizeAutonomousReadback = (value, depth = 0) => {
 export const containsForbiddenAutonomousEvidence = (value) => {
   if (Array.isArray(value)) return value.some(containsForbiddenAutonomousEvidence);
   if (value && typeof value === "object") {
-    return Object.entries(value).some(([key, entry]) => SECRET_KEY.test(key) || containsForbiddenAutonomousEvidence(entry));
+    return Object.entries(value).some(([key, entry]) => (
+      (SECRET_KEY.test(key) && !SAFE_AGGREGATE_KEY.test(key)) || containsForbiddenAutonomousEvidence(entry)
+    ));
   }
   return typeof value === "string" && LONG_CREDENTIAL_TEST.test(value);
 };
@@ -56,7 +44,13 @@ const asCount = (value) => Math.max(0, Number.isFinite(Number(value)) ? Math.tru
 
 export const classifyNotificationAutonomy = (input) => {
   const readbackComplete = input?.readbackComplete === true;
+  const deliveryRail = input?.deliveryRail !== false;
+  const providerConfigured = input?.providerConfigured === true;
+  const rolloutEnabled = input?.rolloutEnabled === true;
+  const activeTokens = asCount(input?.activeTokenCount);
+  const revokedTokens = asCount(input?.revokedTokenCount);
   const attempts = asCount(input?.attemptCount);
+  const successes = asCount(input?.successfulAttemptCount);
   const failures = asCount(input?.failedAttemptCount);
   const invalidTokens = asCount(input?.invalidTokenCount);
   const retryBacklog = asCount(input?.retryBacklog);
@@ -64,7 +58,7 @@ export const classifyNotificationAutonomy = (input) => {
   const unresolvedCritical = asCount(input?.unresolvedCriticalCount);
   const failureRate = attempts > 0 ? failures / attempts : 0;
 
-  let healthState = "healthy";
+  let healthState = "backend_readback_complete";
   let finding = null;
   if (!readbackComplete) {
     healthState = "unknown";
@@ -78,13 +72,36 @@ export const classifyNotificationAutonomy = (input) => {
   } else if (invalidTokens > 0 || failures > 0 || retryBacklog > 0) {
     healthState = "degraded";
     finding = invalidTokens > 0 ? "invalid_token_evidence" : "delivery_recovery_pending";
+  } else if (deliveryRail && !providerConfigured) {
+    healthState = "unknown";
+    finding = "provider_configuration_unavailable";
+  } else if (deliveryRail && !rolloutEnabled) {
+    healthState = "rollout_disabled";
+  } else if (deliveryRail && activeTokens === 0) {
+    healthState = "no_active_install";
+  } else if (deliveryRail && attempts === 0) {
+    healthState = "idle_no_delivery_evidence";
+  } else if (deliveryRail && successes > 0 && failures === 0) {
+    healthState = "delivery_evidence_healthy";
+  } else if (deliveryRail && providerConfigured) {
+    healthState = "configured_ready";
+  } else if (!deliveryRail) {
+    healthState = "healthy";
   }
 
   return {
     healthState,
     finding,
     readbackComplete,
+    backendState: readbackComplete ? "backend_readback_complete" : "unknown",
+    configurationState: !readbackComplete ? "unknown" : providerConfigured ? "configured_ready" : "unknown",
+    deliveryEvidenceState: !deliveryRail ? "not_applicable" : successes > 0 && failures === 0 ? "delivery_evidence_healthy" : attempts === 0 ? "idle_no_delivery_evidence" : failures > 0 ? "degraded" : "configured_ready",
+    rolloutEnabled,
+    providerConfigured,
+    activeTokenCount: activeTokens,
+    revokedTokenCount: revokedTokens,
     attemptCount: attempts,
+    successfulAttemptCount: successes,
     failedAttemptCount: failures,
     invalidTokenCount: invalidTokens,
     retryBacklog,
@@ -99,20 +116,29 @@ export const classifyNotificationAutonomy = (input) => {
 export const classifyIosReleaseAutonomy = (input, expected = IOS_QA_RELEASE_EXPECTATION) => {
   const easAvailable = input?.eas?.readbackComplete === true;
   const ascAvailable = input?.appStoreConnect?.readbackComplete === true;
+  const binaryIdentityComplete = input?.binaryIdentityComplete === undefined
+    ? ascAvailable
+    : input.binaryIdentityComplete === true;
+  const channelReadbackComplete = input?.channelReadbackComplete === undefined
+    ? easAvailable
+    : input.channelReadbackComplete === true;
   const reasons = [];
   if (!easAvailable) reasons.push("eas_provider_readback_unavailable");
   if (!ascAvailable) reasons.push("app_store_connect_provider_readback_unavailable");
 
   const actual = input?.release ?? {};
   const mismatchFields = [
-    ["platform", expected.platform],
-    ["bundleIdentifier", expected.bundleIdentifier],
-    ["appVersion", expected.appVersion],
-    ["nativeBuild", expected.nativeBuild],
-    ["channel", expected.channel],
-    ["runtimeVersion", expected.runtimeVersion],
-    ["distributionSource", expected.distributionSource],
-    ["sourceCommit", expected.sourceCommit],
+    ...(binaryIdentityComplete ? [
+      ["bundleIdentifier", expected.bundleIdentifier],
+      ["appVersion", expected.appVersion],
+      ["nativeBuild", expected.nativeBuild],
+      ["distributionSource", expected.distributionSource],
+      ["sourceCommit", expected.sourceCommit],
+    ] : []),
+    ...(channelReadbackComplete ? [
+      ["channel", expected.channel],
+      ["runtimeVersion", expected.runtimeVersion],
+    ] : []),
   ].filter(([field, expectedValue]) => String(actual?.[field] ?? "") !== String(expectedValue));
   reasons.push(...mismatchFields.map(([field]) => `${field}_mismatch`));
 
@@ -121,8 +147,8 @@ export const classifyIosReleaseAutonomy = (input, expected = IOS_QA_RELEASE_EXPE
   if (input?.appStoreConnect?.publicReleasePresent === true) reasons.push("public_release_present");
   if (input?.release?.emergencyLaunch === true) reasons.push("emergency_launch");
   if (input?.release?.embeddedLaunch === true) reasons.push("embedded_launch");
-  if (!input?.release?.rollbackTargetAvailable) reasons.push("rollback_target_missing");
-  if (input?.release?.sourceChangedAfterBuild === true) reasons.push("source_changed_after_build");
+  if (channelReadbackComplete && !input?.release?.rollbackTargetAvailable) reasons.push("rollback_target_missing");
+  if (binaryIdentityComplete && input?.release?.sourceChangedAfterBuild === true) reasons.push("source_changed_after_build");
 
   const providerBlocked = !easAvailable || !ascAvailable;
   const critical = reasons.some((reason) => ["external_testflight_enabled", "public_submission_present", "public_release_present"].includes(reason));
@@ -189,13 +215,17 @@ export const IOS_PHYSICAL_PROOF_BLOCKERS = Object.freeze([
 export const classifyIosInstalledQaReadiness = (input, expected = IOS_QA_RELEASE_EXPECTATION) => {
   const release = input?.release ?? {};
   const blockers = [];
-  if (input?.providerReadbackComplete !== true) blockers.push("ios_provider_readback_missing");
-  if (release?.internalBuildAvailable !== true) blockers.push("ios_testflight_build_unavailable");
-  if (String(release?.runtimeVersion ?? "") !== expected.runtimeVersion) blockers.push("ios_runtime_mismatch");
-  if (String(release?.channel ?? "") !== expected.channel) blockers.push("ios_channel_mismatch");
-  if (String(release?.sourceCommit ?? "") !== expected.sourceCommit) blockers.push("ios_source_commit_mismatch");
-  if (String(release?.bundleIdentifier ?? "") !== expected.bundleIdentifier || String(release?.nativeBuild ?? "") !== expected.nativeBuild) blockers.push("ios_native_capability_missing");
-  if (release?.externalGroupCount > 0 || release?.publicSubmissionPresent === true) blockers.push("ios_provider_readback_missing");
+  const providerReadbackComplete = input?.providerReadbackComplete === true;
+  if (!providerReadbackComplete) {
+    blockers.push("ios_provider_readback_blocked");
+  } else {
+    if (release?.internalBuildAvailable !== true) blockers.push("ios_testflight_build_unavailable");
+    if (String(release?.runtimeVersion ?? "") !== expected.runtimeVersion) blockers.push("ios_runtime_mismatch");
+    if (String(release?.channel ?? "") !== expected.channel) blockers.push("ios_channel_mismatch");
+    if (String(release?.sourceCommit ?? "") !== expected.sourceCommit) blockers.push("ios_source_commit_mismatch");
+    if (String(release?.bundleIdentifier ?? "") !== expected.bundleIdentifier || String(release?.nativeBuild ?? "") !== expected.nativeBuild) blockers.push("ios_native_capability_missing");
+    if (release?.externalGroupCount > 0 || release?.publicSubmissionPresent === true) blockers.push("ios_provider_readback_blocked");
+  }
 
   const flags = input?.clientCapabilities ?? {};
   if (!["nativeCallsBuildEnabled", "nativeCallsRuntimeEnabled", "ordinaryPushEnabled", "revenueCatAppStoreEnabled"].every((key) => flags[key] === true)) {
@@ -209,7 +239,7 @@ export const classifyIosInstalledQaReadiness = (input, expected = IOS_QA_RELEASE
   let readinessState = "source_ready";
   if (uniqueBlockers.includes("ios_testflight_build_unavailable")) readinessState = "blocked";
   else if (uniqueBlockers.some((blocker) => ["ios_runtime_mismatch", "ios_channel_mismatch", "ios_source_commit_mismatch", "ios_native_capability_missing"].includes(blocker))) readinessState = "failed";
-  else if (uniqueBlockers.includes("ios_provider_readback_missing")) readinessState = "provider_ready";
+  else if (uniqueBlockers.includes("ios_provider_readback_blocked")) readinessState = "blocked";
   else if (uniqueBlockers.includes("ios_physical_proof_required")) readinessState = "physical_proof_required";
   else if (uniqueBlockers.includes("ios_second_device_required")) readinessState = "second_device_required";
   else if (release?.internalBuildAvailable === true) readinessState = "internal_build_ready";

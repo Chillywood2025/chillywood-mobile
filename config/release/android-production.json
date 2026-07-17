@@ -1,0 +1,11 @@
+{
+  "manifestVersion": 1,
+  "platform": "android",
+  "packageIdentifier": "com.chillywood.mobile",
+  "appVersion": "1.0.0",
+  "runtimeVersion": "1.0.0",
+  "channel": "production",
+  "distributionSource": "google_play_internal",
+  "nativeBuildSource": "provider_readback_required",
+  "expectedBinarySourceCommit": null
+}

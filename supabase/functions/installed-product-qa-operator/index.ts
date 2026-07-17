@@ -39,7 +39,7 @@ const PROOF_SOURCES = [
 const DISCOVERED_BY = ["autonomous_operator", "codex_manual", "device_lab"] as const;
 const RESULTS = [
   "pass", "partial", "blocked", "failed", "human_review", "two_device_required",
-  "source_ready", "provider_ready", "internal_build_ready", "physical_proof_required", "second_device_required",
+  "source_ready", "provider_ready", "provider_readback_blocked", "internal_build_ready", "physical_proof_required", "second_device_required",
 ] as const;
 const BLOCKER_CLASSIFICATIONS = [
   "source_bug",
@@ -59,7 +59,7 @@ const BLOCKER_CLASSIFICATIONS = [
   "ios_runtime_mismatch",
   "ios_channel_mismatch",
   "ios_source_commit_mismatch",
-  "ios_provider_readback_missing",
+  "ios_provider_readback_blocked",
   "ios_physical_proof_required",
   "ios_second_device_required",
   "ios_native_capability_missing",
@@ -74,6 +74,9 @@ const LONG_SECRET_PATTERN = /[A-Za-z0-9._~+/=-]{48,}/;
 const HIGH_RISK_MUTATION_PATTERN = /(manual[_\s-]?premium|grant\s+premium|entitlement\s+(edit|insert|grant)|service[_\s-]?role|auth\/rls|owner[_\s-]?role|ban\s+user|suspend\s+user|restrict\s+user|delete\s+content|move\s+money|payout|cashout|provider\s+product|publish\s+ota|rollback\s+ota|adb\s+install|sideload|clear\s+app\s+data)/i;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const normalizePlatform = (value: unknown) => ["shared", "ios", "android", "web", "unknown"].includes(toText(value).toLowerCase())
+  ? toText(value).toLowerCase()
+  : "unknown";
 const isOneOf = <T extends readonly string[]>(value: unknown, values: T): value is T[number] => (
   (values as readonly string[]).includes(toText(value))
 );
@@ -305,6 +308,16 @@ const recordDeviceAvailability = async (client: SupabaseClientLike, payload: Jso
     required_device_count: Number(payload.required_device_count ?? payload.requiredDeviceCount ?? 1),
     play_installed_device_available: Boolean(payload.play_installed_device_available ?? payload.playInstalledDeviceAvailable ?? false),
     device_lab_configured: Boolean(payload.device_lab_configured ?? payload.deviceLabConfigured ?? false),
+    testflight_internal_build_available: Boolean(payload.testflight_internal_build_available ?? payload.testflightInternalBuildAvailable ?? false),
+    signed_ios_build_available: Boolean(payload.signed_ios_build_available ?? payload.signedIosBuildAvailable ?? false),
+    ios_physical_device_count: Number(payload.ios_physical_device_count ?? payload.iosPhysicalDeviceCount ?? 0),
+    ios_second_device_available: Boolean(payload.ios_second_device_available ?? payload.iosSecondDeviceAvailable ?? false),
+    ios_simulator_available: Boolean(payload.ios_simulator_available ?? payload.iosSimulatorAvailable ?? false),
+    physical_proof_available: Boolean(payload.physical_proof_available ?? payload.physicalProofAvailable ?? false),
+    universal_link_proof_available: Boolean(payload.universal_link_proof_available ?? payload.universalLinkProofAvailable ?? false),
+    apns_proof_available: Boolean(payload.apns_proof_available ?? payload.apnsProofAvailable ?? false),
+    voip_proof_available: Boolean(payload.voip_proof_available ?? payload.voipProofAvailable ?? false),
+    storekit_proof_available: Boolean(payload.storekit_proof_available ?? payload.storekitProofAvailable ?? false),
     finding_status: "open",
     next_safe_action: toText(payload.next_safe_action ?? payload.nextSafeAction ?? "Keep installed realtime proof pending until device/device-lab readiness exists."),
   };
@@ -360,6 +373,7 @@ const createOwnerCommand = async (client: SupabaseClientLike, payload: JsonObjec
   const insertPayload = {
     command_text: commandText,
     normalized_intent: "installed_product_qa",
+    platform: normalizePlatform(payload.platform),
     target_systems: [SYSTEM_ID],
     approval_level: 2,
     status: "planned",
@@ -400,6 +414,7 @@ const createApprovalRequest = async (client: SupabaseClientLike, payload: JsonOb
   const insertPayload = {
     system_id: SYSTEM_ID,
     action_id: actionId,
+    platform: normalizePlatform(payload.platform),
     requested_by_actor_type: SYSTEM_ID,
     requested_by_actor_id: null,
     approval_level: approvalLevel,
@@ -425,6 +440,7 @@ const createApprovalRequest = async (client: SupabaseClientLike, payload: JsonOb
   if (error) throw error;
   await client.from("autonomous_approval_request_events").insert({
     request_id: data.id,
+    platform: normalizePlatform(payload.platform),
     event_type: "created",
     actor_type: SYSTEM_ID,
     actor_id: null,
@@ -444,29 +460,40 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
     .limit(1)
     .maybeSingle();
   if (releaseError) throw releaseError;
-  const releaseMetadata = releaseSnapshot?.metadata && typeof releaseSnapshot.metadata === "object" ? releaseSnapshot.metadata : {};
+  const { data: attestation, error: attestationError } = await client
+    .from("release_binary_attestations")
+    .select("attestation_status,verified_at,source_commit,binary_sha256,app_store_connect_build_id")
+    .eq("platform", "ios")
+    .eq("binary_sha256", IOS_QA_RELEASE_EXPECTATION.binarySha256)
+    .limit(1)
+    .maybeSingle();
+  if (attestationError) throw attestationError;
+  const releaseMetadata = releaseSnapshot?.metadata && typeof releaseSnapshot.metadata === "object" ? releaseSnapshot.metadata as JsonObject : {};
+  const observedReleaseMetadata = releaseMetadata.observedIdentity && typeof releaseMetadata.observedIdentity === "object" ? releaseMetadata.observedIdentity as JsonObject : {};
+  const providerReadbackComplete = releaseSnapshot?.readback_complete === true && attestation?.attestation_status === "verified";
   const release = {
-    internalBuildAvailable: releaseSnapshot?.distribution_source === "testflight_internal"
+    internalBuildAvailable: providerReadbackComplete
+      && releaseSnapshot?.distribution_source === "testflight_internal"
       && releaseSnapshot?.native_build === IOS_QA_RELEASE_EXPECTATION.nativeBuild,
-    appVersion: releaseSnapshot?.app_version,
-    nativeBuild: releaseSnapshot?.native_build,
-    bundleIdentifier: releaseSnapshot?.bundle_identifier,
-    runtimeVersion: releaseSnapshot?.runtime_version,
-    channel: releaseSnapshot?.channel,
-    updateId: releaseSnapshot?.update_id,
-    distributionSource: releaseSnapshot?.distribution_source,
-    sourceCommit: releaseMetadata.sourceCommit,
-    externalGroupCount: releaseMetadata.externalGroupCount,
-    publicSubmissionPresent: releaseMetadata.publicSubmissionPresent,
+    appVersion: providerReadbackComplete ? releaseSnapshot?.app_version : null,
+    nativeBuild: providerReadbackComplete ? releaseSnapshot?.native_build : null,
+    bundleIdentifier: providerReadbackComplete ? releaseSnapshot?.bundle_identifier : null,
+    runtimeVersion: providerReadbackComplete ? releaseSnapshot?.runtime_version : null,
+    channel: providerReadbackComplete ? releaseSnapshot?.channel : null,
+    updateId: providerReadbackComplete ? releaseSnapshot?.update_id : null,
+    distributionSource: providerReadbackComplete ? releaseSnapshot?.distribution_source : null,
+    sourceCommit: providerReadbackComplete ? observedReleaseMetadata.sourceCommit ?? attestation?.source_commit ?? null : null,
+    externalGroupCount: providerReadbackComplete ? releaseMetadata.externalGroupCount : null,
+    publicSubmissionPresent: providerReadbackComplete ? releaseMetadata.publicSubmissionPresent : null,
   };
   const classification = classifyIosInstalledQaReadiness({
-    providerReadbackComplete: releaseSnapshot?.readback_complete === true,
+    providerReadbackComplete,
     release,
     clientCapabilities: IOS_QA_RELEASE_EXPECTATION.clientCapabilities,
     physicalEvidenceAvailable: false,
     availablePhysicalDeviceCount: 0,
   });
-  const source = release.internalBuildAvailable ? "testflight_internal" : "eas_internal_ios";
+  const source = release.internalBuildAvailable ? "testflight_internal" : attestation?.binary_sha256 ? "local_fixture" : "manual_codex_proof";
   const discoveredBy = "autonomous_operator";
   const base = {
     platform: "ios",
@@ -480,7 +507,7 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
     bundle_identifier: release.bundleIdentifier ?? null,
     distribution_source: release.distributionSource ?? null,
     data_source: "latest_release_operator_snapshot+compiled_ios_qa_contract",
-    readback_complete: releaseSnapshot?.readback_complete === true,
+    readback_complete: providerReadbackComplete,
     metadata: {
       watchOnce: true,
       scheduler: payload.scheduler ?? "manual_cli",
@@ -488,6 +515,7 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
       source,
       discoveredBy,
       releaseSnapshotCreatedAt: releaseSnapshot?.created_at ?? null,
+      binaryAttestationVerified: attestation?.attestation_status === "verified",
       clientCapabilities: IOS_QA_RELEASE_EXPECTATION.clientCapabilities,
       physicalProofClaimed: false,
       blockers: classification.blockers,
@@ -509,28 +537,39 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
     required_device_count: 2,
     play_installed_device_available: false,
     device_lab_configured: false,
+    testflight_internal_build_available: release.internalBuildAvailable,
+    signed_ios_build_available: Boolean(attestation?.binary_sha256) && attestation?.attestation_status !== "revoked",
+    ios_physical_device_count: 0,
+    ios_second_device_available: false,
+    ios_simulator_available: false,
+    physical_proof_available: false,
+    universal_link_proof_available: false,
+    apns_proof_available: false,
+    voip_proof_available: false,
+    storekit_proof_available: false,
     result: "second_device_required",
     blocker_classification: "ios_second_device_required",
     next_safe_action: "Keep APNs, PushKit, CallKit, StoreKit, camera, and two-device LiveKit as physical proof requirements; do not synthesize a pass.",
   });
+  const activeFindingKeys: string[] = [];
   for (const blocker of classification.blockers) {
-    await recordManualCodexGap(client, {
-      ...base,
-      flag_type: blocker,
-      severity: blocker.includes("mismatch") || blocker.includes("unavailable") ? "warning" : "review",
-      target_type: "ios_build_readiness",
-      target_id: "com.chillywood.mobile:1.0.0:8",
-      result: blocker === "ios_second_device_required" ? "second_device_required" : blocker === "ios_physical_proof_required" ? "physical_proof_required" : classification.readinessState,
-      blocker_classification: blocker,
-      next_safe_action: "Retain the truthful readiness blocker until provider or signed-device evidence is recorded; never create fake physical proof.",
+    const { data: findingKey, error } = await client.rpc("record_autonomous_finding", {
+      p_system_id: SYSTEM_ID, p_platform: "ios", p_finding_type: blocker,
+      p_target_surface: "ios_build_readiness", p_provider: "app_store_connect+eas",
+      p_severity: blocker.includes("mismatch") || blocker.includes("unavailable") ? "warning" : "review",
+      p_metadata: { readback_complete: providerReadbackComplete, physical_proof_claimed: false },
     });
+    if (error) throw error;
+    if (typeof findingKey === "string") activeFindingKeys.push(findingKey);
   }
+  const { error: resolveError } = await client.rpc("resolve_autonomous_findings", { p_system_id: SYSTEM_ID, p_platform: "ios", p_active_finding_keys: activeFindingKeys });
+  if (resolveError) throw resolveError;
   await insertEvent(client, "watch_once", "installed_qa_gaps_recorded", {
     ...base,
     blocker_classification: classification.blockers[0] ?? "ios_physical_proof_required",
   });
   return {
-    readbackComplete: releaseSnapshot?.readback_complete === true,
+    readbackComplete: providerReadbackComplete,
     platform: "ios",
     source: "latest_release_operator_snapshot+compiled_ios_qa_contract",
     dataWindow: { start: releaseSnapshot?.created_at ?? null, end: new Date().toISOString() },
@@ -542,6 +581,41 @@ const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => 
     userRightsChanged: false,
     highRiskExecuted: false,
   };
+};
+
+const runAndroidWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => {
+  const { data: release, error } = await client.from("release_health_snapshots")
+    .select("app_version,native_build,bundle_identifier,runtime_version,channel,update_id,distribution_source,readback_complete,created_at")
+    .eq("platform", "android").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  const complete = release?.readback_complete === true;
+  const base = {
+    platform: "android", source: "play_installed", discovered_by: "autonomous_operator",
+    update_id: complete ? release?.update_id ?? null : null,
+    runtime_version: complete ? release?.runtime_version ?? null : null,
+    channel: complete ? release?.channel ?? null : null,
+    app_version: complete ? release?.app_version ?? null : null,
+    native_build: complete ? release?.native_build ?? null : null,
+    bundle_identifier: complete ? release?.bundle_identifier ?? null : null,
+    distribution_source: complete ? release?.distribution_source ?? null : null,
+    data_source: "android_release_snapshot+independent_firebase_test_lab_state", readback_complete: complete,
+    metadata: { firebaseTestLabRequiredForIos: false, scheduler: payload.scheduler ?? "manual_cli", physicalProofClaimed: false },
+  };
+  await insertEvent(client, "watch_once", complete ? "android_provider_readiness_recorded" : "android_provider_readback_blocked", base);
+  const activeKeys: string[] = [];
+  if (!complete) {
+    const { data, error: findingError } = await client.rpc("record_autonomous_finding", {
+      p_system_id: SYSTEM_ID, p_platform: "android", p_finding_type: "android_provider_readback_blocked",
+      p_target_surface: "android_installed_readiness", p_provider: "eas+google_play",
+      p_severity: "review", p_metadata: { readback_complete: false, firebase_test_lab_independent: true },
+    });
+    if (findingError) throw findingError;
+    if (typeof data === "string") activeKeys.push(data);
+  } else {
+    const { error: resolveError } = await client.rpc("resolve_autonomous_findings", { p_system_id: SYSTEM_ID, p_platform: "android", p_active_finding_keys: activeKeys });
+    if (resolveError) throw resolveError;
+  }
+  return { readbackComplete: complete, platform: "android", source: "android_release_snapshot+independent_firebase_test_lab_state", dataWindow: { start: release?.created_at ?? null, end: new Date().toISOString() }, readinessState: complete ? "provider_ready" : "provider_readback_blocked", blockers: complete ? [] : ["android_provider_readback_blocked"], fakePhysicalProof: false, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
 };
 
 const readReport = async (client: SupabaseClientLike) => {
@@ -615,7 +689,9 @@ Deno.serve(async (request) => {
     } else if (action === "create_approval_request") {
       details = { approvalRequest: await createApprovalRequest(client, payload) };
     } else if (action === "watch_once") {
-      details = await runWatchOnce(client, payload) as JsonObject;
+      details = payload.platform === "android"
+        ? await runAndroidWatchOnce(client, payload) as JsonObject
+        : await runWatchOnce(client, payload) as JsonObject;
     } else {
       await insertEvent(client, action, action === "status" ? "status_recorded" : "health_snapshot_recorded", payload);
     }

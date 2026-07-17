@@ -53,12 +53,23 @@ const readEas = () => {
     : Array.isArray(channel.data?.updates) ? channel.data.updates : [];
   const compatible = updateRows.filter((row) => String(row?.runtimeVersion ?? "") === IOS_QA_RELEASE_EXPECTATION.runtimeVersion);
   if (!build) {
+    const observedChannel = toText(channel.data?.name ?? channel.data?.channel?.name) || null;
     return {
       readbackComplete: false,
       capability: "eas_build_and_channel_readback",
-      reason: "expected_ios_build_not_found",
+      reason: "local_ios_build_absent_from_eas_cloud_build_history",
+      cloudBuildReadbackComplete: true,
+      expectedCloudBuildPresent: false,
       channelReadbackComplete: true,
-      expectedChannelPresent: toText(channel.data?.name ?? channel.data?.channel?.name) === IOS_QA_RELEASE_EXPECTATION.channel,
+      channel: observedChannel,
+      runtimeVersion: compatible[0]?.runtimeVersion ?? null,
+      updateId: compatible[0]?.id ?? null,
+      updateGroup: compatible[0]?.group ?? compatible[0]?.groupId ?? null,
+      latestCompatibleUpdate: compatible[0]?.id ?? null,
+      rollbackTargetAvailable: compatible.length > 1,
+      rollbackTargetKind: compatible.length > 1 ? "previous_compatible_update" : null,
+      embeddedLaunchAvailable: false,
+      emergencyLaunch: false,
       compatibleUpdateCount: compatible.length,
     };
   }

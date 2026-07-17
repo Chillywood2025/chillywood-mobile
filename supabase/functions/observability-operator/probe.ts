@@ -8,9 +8,14 @@ import type { ScopedOperatorHandler } from "../_shared/scoped-operator.ts";
 type JsonObject = Record<string, unknown>;
 const objectValue = (value: unknown): JsonObject => value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
 const numberValue = (value: unknown) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+const platformProviderReadback = (payload: JsonObject, platform: "ios" | "android" | "shared") => {
+  const root = objectValue(payload.provider_readback ?? payload.providerReadback);
+  const nested = objectValue(root[platform]);
+  return Object.keys(nested).length ? nested : root;
+};
 
 export const runIosObservabilityProbe: ScopedOperatorHandler = async ({ client, payload, metadata }) => {
-  const providerReadback = objectValue(payload.provider_readback ?? payload.providerReadback);
+  const providerReadback = platformProviderReadback(payload, "ios");
   const firebase = objectValue(providerReadback.firebase);
   const edge = objectValue(providerReadback.supabaseEdgeFunctions);
   const now = new Date();
@@ -51,23 +56,24 @@ export const runIosObservabilityProbe: ScopedOperatorHandler = async ({ client, 
     performanceRegressionCount: numberValue(firebase.performanceRegressionCount),
     analyticsDeliveryFailureCount: numberValue(firebase.analyticsDeliveryFailureCount),
     backendErrorRatePercent: numberValue(edge.errorRatePercent),
-    runtimeMismatch: Boolean(releaseSnapshot && releaseSnapshot.runtime_version !== IOS_QA_RELEASE_EXPECTATION.runtimeVersion),
-    channelMismatch: Boolean(releaseSnapshot && releaseSnapshot.channel !== IOS_QA_RELEASE_EXPECTATION.channel),
+    runtimeMismatch: Boolean(releaseSnapshot?.readback_complete === true && releaseSnapshot.runtime_version !== IOS_QA_RELEASE_EXPECTATION.runtimeVersion),
+    channelMismatch: Boolean(releaseSnapshot?.readback_complete === true && releaseSnapshot.channel !== IOS_QA_RELEASE_EXPECTATION.channel),
     updateMismatch: false,
     embeddedLaunch: releaseSnapshot?.embedded_launch === true,
     emergencyLaunch: releaseSnapshot?.emergency_launch === true,
   });
 
+  const observedReleaseComplete = releaseSnapshot?.readback_complete === true;
   const identity = {
     platform: "ios",
-    bundle_identifier: releaseSnapshot?.bundle_identifier ?? IOS_QA_RELEASE_EXPECTATION.bundleIdentifier,
-    app_version: releaseSnapshot?.app_version ?? IOS_QA_RELEASE_EXPECTATION.appVersion,
-    native_build: releaseSnapshot?.native_build ?? IOS_QA_RELEASE_EXPECTATION.nativeBuild,
-    runtime_version: releaseSnapshot?.runtime_version ?? null,
-    channel: releaseSnapshot?.channel ?? null,
-    update_id: releaseSnapshot?.update_id ?? null,
-    distribution_source: releaseSnapshot?.distribution_source ?? "unknown",
-    provider_environment: "production",
+    bundle_identifier: observedReleaseComplete ? releaseSnapshot?.bundle_identifier ?? null : null,
+    app_version: observedReleaseComplete ? releaseSnapshot?.app_version ?? null : null,
+    native_build: observedReleaseComplete ? releaseSnapshot?.native_build ?? null : null,
+    runtime_version: observedReleaseComplete ? releaseSnapshot?.runtime_version ?? null : null,
+    channel: observedReleaseComplete ? releaseSnapshot?.channel ?? null : null,
+    update_id: observedReleaseComplete ? releaseSnapshot?.update_id ?? null : null,
+    distribution_source: observedReleaseComplete ? releaseSnapshot?.distribution_source ?? null : null,
+    provider_environment: null,
     data_source: "firebase_host_adapter+supabase_readback+release_snapshot+livekit_snapshot",
     readback_complete: classification.readbackComplete,
     window_start: windowStart,
@@ -167,4 +173,69 @@ export const runIosObservabilityProbe: ScopedOperatorHandler = async ({ client, 
     userRightsChanged: false,
     highRiskExecuted: false,
   };
+};
+
+export const runSharedObservabilityProbe: ScopedOperatorHandler = async ({ client, payload }) => {
+  const providerReadback = platformProviderReadback(payload, "shared");
+  const edge = objectValue(providerReadback.supabaseEdgeFunctions);
+  const end = new Date();
+  const start = new Date(end.getTime() - 10 * 60 * 1000);
+  const complete = edge.readbackComplete === true;
+  const errorRate = complete ? numberValue(edge.errorRatePercent) : null;
+  const healthState = !complete ? "unknown" : Number(errorRate ?? 0) >= 5 ? "degraded" : "healthy";
+  const { error } = await client.from("runtime_health_snapshots").insert({
+    system_id: "observability_runtime_operator", platform: "shared", health_state: healthState,
+    crash_cluster_count: 0, js_error_count: 0, performance_regression_count: 0,
+    backend_error_rate_percent: errorRate, environment_mode: "production", pii_stored: false,
+    secrets_logged: false, release_action_executed: false, user_rights_changed: false, money_moved: false,
+    data_source: "sanitized_supabase_edge_backend_export", readback_complete: complete,
+    window_start: start.toISOString(), window_end: end.toISOString(),
+    metadata: sanitizeAutonomousReadback({ providerUnavailable: !complete, zeroEventsTreatedAsHealthy: false }),
+  });
+  if (error) throw error;
+  return { readbackComplete: complete, platform: "shared", source: "sanitized_supabase_edge_backend_export", dataWindow: { start: start.toISOString(), end: end.toISOString() }, healthState, reasons: complete ? [] : ["supabase_edge_export_unavailable"], moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
+};
+
+export const runAndroidObservabilityProbe: ScopedOperatorHandler = async ({ client, payload }) => {
+  const providerReadback = platformProviderReadback(payload, "android");
+  const firebase = objectValue(providerReadback.firebase);
+  const edge = objectValue(providerReadback.supabaseEdgeFunctions);
+  const now = new Date();
+  const start = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+  const end = now.toISOString();
+  const { data: release, error: releaseError } = await client.from("release_health_snapshots")
+    .select("bundle_identifier,app_version,native_build,runtime_version,channel,update_id,distribution_source,readback_complete")
+    .eq("platform", "android").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (releaseError) throw releaseError;
+  const providers = {
+    crashlytics: firebase.crashlyticsReadbackComplete === true,
+    firebasePerformance: firebase.performanceReadbackComplete === true,
+    firebaseAnalytics: firebase.analyticsReadbackComplete === true,
+    supabaseEdgeFunctions: edge.readbackComplete === true,
+    releaseDiagnostics: release?.readback_complete === true,
+  };
+  const complete = Object.values(providers).every(Boolean);
+  const findings = Object.entries(providers).filter(([, available]) => !available).map(([name]) => `${name}_provider_unavailable`);
+  const critical = numberValue(firebase.nativeCrashCount) > 0 || numberValue(firebase.startupFailureCount) > 0;
+  const healthState = critical ? "critical" : complete ? "healthy" : Object.values(providers).some(Boolean) ? "degraded" : "unknown";
+  const observedReleaseComplete = release?.readback_complete === true;
+  const { error } = await client.from("runtime_health_snapshots").insert({
+    system_id: "observability_runtime_operator", platform: "android", health_state: healthState,
+    crash_cluster_count: numberValue(firebase.nativeCrashCount), js_error_count: numberValue(firebase.jsFatalCount),
+    performance_regression_count: numberValue(firebase.performanceRegressionCount),
+    backend_error_rate_percent: edge.readbackComplete === true ? numberValue(edge.errorRatePercent) : null,
+    bundle_identifier: observedReleaseComplete ? release?.bundle_identifier ?? null : null,
+    app_version: observedReleaseComplete ? release?.app_version ?? null : null,
+    native_build: observedReleaseComplete ? release?.native_build ?? null : null,
+    runtime_version: observedReleaseComplete ? release?.runtime_version ?? null : null,
+    channel: observedReleaseComplete ? release?.channel ?? null : null,
+    update_id: observedReleaseComplete ? release?.update_id ?? null : null,
+    distribution_source: observedReleaseComplete ? release?.distribution_source ?? null : null,
+    provider_environment: null, environment_mode: "production", pii_stored: false, secrets_logged: false,
+    release_action_executed: false, user_rights_changed: false, money_moved: false,
+    data_source: "firebase_host_adapter+supabase_readback+android_release_snapshot", readback_complete: complete,
+    window_start: start, window_end: end, metadata: sanitizeAutonomousReadback({ findings, expectedIdentity: { packageIdentifier: "com.chillywood.mobile", runtimeVersion: "1.0.0", channel: "production" } }),
+  });
+  if (error) throw error;
+  return { readbackComplete: complete, platform: "android", source: "firebase_host_adapter+supabase_readback+android_release_snapshot", dataWindow: { start, end }, healthState, reasons: findings, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
 };

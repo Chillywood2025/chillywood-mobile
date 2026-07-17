@@ -6,7 +6,7 @@ OnBootSec=120s
 OnUnitActiveSec=30min
 AccuracySec=60s
 RandomizedDelaySec=60s
-Unit=chillywood-release-operator-watch-once.service
+Unit=chillywood-release-provider-readback.service
 
 [Install]
 WantedBy=timers.target

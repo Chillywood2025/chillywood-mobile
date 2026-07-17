@@ -3,6 +3,7 @@ import {
   sanitizeAutonomousReadback,
 } from "../_shared/ios-autonomous-operator-policy.mjs";
 import type { ScopedOperatorHandler } from "../_shared/scoped-operator.ts";
+import { isApnsInvalidVoipTokenReason } from "../_shared/ios-voip-policy.mjs";
 
 type JsonObject = Record<string, unknown>;
 type QueryResult = { data: JsonObject[]; complete: boolean; errorCode: string | null };
@@ -17,7 +18,12 @@ const queryRows = async (promise: PromiseLike<{ data: unknown; error: { code?: s
 };
 
 const toText = (value: unknown) => String(value ?? "").trim();
-const isInvalidTokenError = (value: unknown) => /DeviceNotRegistered|Unregistered/i.test(toText(value));
+export const isInvalidDeliveryTokenError = (value: unknown, provider: string) => {
+  const reason = toText(value);
+  if (provider === "voip_apns") return isApnsInvalidVoipTokenReason(reason);
+  if (provider === "fcm") return /DeviceNotRegistered|Unregistered|UNREGISTERED|SENDER_ID_MISMATCH/i.test(reason);
+  return /DeviceNotRegistered|Unregistered/i.test(reason);
+};
 const providerResponseClass = (statusCode: unknown) => {
   const value = Number(statusCode);
   if (!Number.isFinite(value)) return "none";
@@ -28,6 +34,7 @@ const providerResponseClass = (statusCode: unknown) => {
 };
 
 const rolloutEnabled = (key: string) => toText(Deno.env.get(key)).toLowerCase() === "true";
+const configured = (...keys: string[]) => keys.some((key) => Boolean(toText(Deno.env.get(key))));
 
 const insertCapability = async (
   client: any,
@@ -58,10 +65,14 @@ const insertCapability = async (
 export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ client, metadata }) => {
   const windowEnd = new Date();
   const windowStart = new Date(windowEnd.getTime() - 24 * 60 * 60 * 1000);
-  const [tokenResult, attemptResult, voipResult, retryResult] = await Promise.all([
+  const [tokenResult, voipTokenResult, attemptResult, voipResult, retryResult] = await Promise.all([
     queryRows(client
       .from("user_push_tokens")
       .select("id,platform,provider,enabled,revoked_at,app_version,build_version")
+      .limit(5000)),
+    queryRows(client
+      .from("user_voip_push_tokens")
+      .select("id,enabled,revoked_at,app_version,build_version,apns_environment")
       .limit(5000)),
     queryRows(client
       .from("notification_delivery_attempts")
@@ -90,11 +101,24 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
       return token?.platform === platform && attempt.provider === provider;
     });
     const failed = attempts.filter((attempt) => attempt.status === "failed").length;
-    const invalid = attempts.filter((attempt) => isInvalidTokenError(attempt.error_code)).length;
+    const invalid = attempts.filter((attempt) => isInvalidDeliveryTokenError(attempt.error_code, provider)).length;
+    const activeTokenCount = tokens.filter((token) => token.enabled === true && !token.revoked_at).length;
+    const revokedTokenCount = tokens.filter((token) => token.enabled !== true || Boolean(token.revoked_at)).length;
+    const railRolloutEnabled = platform === "ios" ? rolloutEnabled("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED") : true;
+    // Expo's endpoint is a configured rail even when enhanced push security is
+    // not enabled and no optional Expo access token is required.
+    const providerConfigured = provider === "fcm"
+      ? configured("FIREBASE_SERVICE_ACCOUNT_PATH", "GOOGLE_APPLICATION_CREDENTIALS", "FIREBASE_SERVICE_ACCOUNT_JSON")
+      : true;
     const latestToken = tokens.sort((left, right) => toText(right.build_version).localeCompare(toText(left.build_version)))[0];
     const classified = classifyNotificationAutonomy({
       readbackComplete: tokenResult.complete && attemptResult.complete,
+      providerConfigured,
+      rolloutEnabled: railRolloutEnabled,
+      activeTokenCount,
+      revokedTokenCount,
       attemptCount: attempts.length,
+      successfulAttemptCount: attempts.filter((attempt) => attempt.status === "sent").length,
       failedAttemptCount: failed,
       invalidTokenCount: invalid,
       retryBacklog: 0,
@@ -111,7 +135,7 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
       provider_response_class: "expo_ticket_receipt",
       app_version: latestToken?.app_version ?? null,
       native_build: latestToken?.build_version ?? null,
-      bundle_identifier: platform === "ios" ? "com.chillywood.mobile" : null,
+      bundle_identifier: null,
       provider_environment: "production",
       data_source: "user_push_tokens+notification_delivery_attempts",
       readback_complete: classified.readbackComplete,
@@ -119,21 +143,35 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
       window_end: windowEnd.toISOString(),
       error_code: tokenResult.errorCode ?? attemptResult.errorCode,
       metadata: {
-        activeTokenCount: tokens.filter((token) => token.enabled === true && !token.revoked_at).length,
-        revokedTokenCount: tokens.filter((token) => token.enabled !== true || Boolean(token.revoked_at)).length,
+        activeTokenCount,
+        revokedTokenCount,
         attemptCount: attempts.length,
-        sentCount: attempts.filter((attempt) => attempt.status === "sent").length,
-        rolloutEnabled: platform === "ios" ? rolloutEnabled("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED") : null,
+        successfulAttemptCount: attempts.filter((attempt) => attempt.status === "sent").length,
+        rolloutEnabled: railRolloutEnabled,
+        providerConfigured,
+        backendState: classified.backendState,
+        configurationState: classified.configurationState,
+        deliveryEvidenceState: classified.deliveryEvidenceState,
+        expectedBundleIdentifier: platform === "ios" ? "com.chillywood.mobile" : null,
       },
     };
   });
 
   const voipFailed = voipResult.data.filter((attempt) => attempt.status === "failed").length;
-  const voipInvalid = voipResult.data.filter((attempt) => isInvalidTokenError(attempt.error_code)).length;
+  const voipInvalid = voipResult.data.filter((attempt) => isInvalidDeliveryTokenError(attempt.error_code, "voip_apns")).length;
+  const voipActiveTokens = voipTokenResult.data.filter((token) => token.enabled === true && !token.revoked_at).length;
+  const voipRevokedTokens = voipTokenResult.data.filter((token) => token.enabled !== true || Boolean(token.revoked_at)).length;
+  const voipProviderConfigured = configured("APNS_KEY_ID", "APNS_PRIVATE_KEY", "APNS_KEY_PATH");
+  const voipRolloutEnabled = rolloutEnabled("IOS_VOIP_PUSH_DISPATCH_ENABLED");
   const voipResponseClasses = [...new Set(voipResult.data.map((attempt) => providerResponseClass(attempt.provider_status_code)))];
   const voipClassified = classifyNotificationAutonomy({
-    readbackComplete: voipResult.complete,
+    readbackComplete: voipResult.complete && voipTokenResult.complete,
+    providerConfigured: voipProviderConfigured,
+    rolloutEnabled: voipRolloutEnabled,
+    activeTokenCount: voipActiveTokens,
+    revokedTokenCount: voipRevokedTokens,
     attemptCount: voipResult.data.length,
+    successfulAttemptCount: voipResult.data.filter((attempt) => attempt.status === "sent").length,
     failedAttemptCount: voipFailed,
     invalidTokenCount: voipInvalid,
   });
@@ -146,7 +184,7 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
     failed_attempt_count: voipFailed,
     invalid_token_count: voipInvalid,
     provider_response_class: voipResponseClasses.join(",") || "none",
-    bundle_identifier: "com.chillywood.mobile",
+    bundle_identifier: null,
     provider_environment: "production",
     data_source: "voip_push_delivery_attempts",
     readback_complete: voipClassified.readbackComplete,
@@ -154,9 +192,16 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
     window_end: windowEnd.toISOString(),
     error_code: voipResult.errorCode,
     metadata: {
+      activeTokenCount: voipActiveTokens,
+      revokedTokenCount: voipRevokedTokens,
       attemptCount: voipResult.data.length,
-      sentCount: voipResult.data.filter((attempt) => attempt.status === "sent").length,
-      rolloutEnabled: rolloutEnabled("IOS_VOIP_PUSH_DISPATCH_ENABLED"),
+      successfulAttemptCount: voipResult.data.filter((attempt) => attempt.status === "sent").length,
+      rolloutEnabled: voipRolloutEnabled,
+      providerConfigured: voipProviderConfigured,
+      backendState: voipClassified.backendState,
+      configurationState: voipClassified.configurationState,
+      deliveryEvidenceState: voipClassified.deliveryEvidenceState,
+      expectedBundleIdentifier: "com.chillywood.mobile",
     },
   });
 
@@ -164,6 +209,8 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
   const retryBacklog = Number(retry.pendingCount ?? 0) + Number(retry.failedCount ?? 0) + Number(retry.staleDispatchingCount ?? 0);
   const retryClassified = classifyNotificationAutonomy({
     readbackComplete: !retryResult.error && retry.readbackComplete === true,
+    deliveryRail: false,
+    providerConfigured: true,
     retryBacklog,
     failedAttemptCount: Number(retry.failedCount ?? 0),
     cappedAttemptCount: Number(retry.cappedCount ?? 0),
@@ -194,6 +241,7 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
     },
   });
 
+  const findingKeysByPlatform = new Map<string, string[]>();
   for (const rail of railRows) {
     const { error: snapshotError } = await client.from("notification_delivery_health_snapshots").insert({
       system_id: "notification_delivery_operator",
@@ -225,19 +273,31 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
     await insertCapability(client, rail);
     if (rail.finding) {
       const severity = rail.health_state === "critical" ? "critical" : rail.health_state === "degraded" ? "warning" : "review";
-      const { error: reviewError } = await client.from("notification_required_review_flags").insert({
-        system_id: "notification_delivery_operator",
-        flag_type: rail.finding,
-        severity,
-        target_type: "delivery_rail",
-        target_id: `${rail.platform}/${rail.provider}`,
-        environment_mode: "production",
-        platform: rail.platform,
-        user_rights_changed: false,
-        money_moved: false,
-        metadata: sanitizeAutonomousReadback({ dataSource: rail.data_source, readbackComplete: rail.readback_complete }),
+      const { data: findingKey, error: reviewError } = await client.rpc("record_autonomous_finding", {
+        p_system_id: "notification_delivery_operator",
+        p_platform: rail.platform,
+        p_finding_type: rail.finding,
+        p_target_surface: `${rail.platform}/${rail.provider}`,
+        p_provider: rail.provider,
+        p_severity: severity,
+        p_metadata: sanitizeAutonomousReadback({ data_source: rail.data_source, readback_complete: rail.readback_complete }),
       });
       if (reviewError) throw reviewError;
+      const railPlatform = toText(rail.platform);
+      if (typeof findingKey === "string" && railPlatform) {
+        findingKeysByPlatform.set(railPlatform, [...(findingKeysByPlatform.get(railPlatform) ?? []), findingKey]);
+      }
+    }
+  }
+
+  for (const platform of ["ios", "android", "shared"]) {
+    if (railRows.filter((rail) => rail.platform === platform).every((rail) => rail.readback_complete === true)) {
+      const { error } = await client.rpc("resolve_autonomous_findings", {
+        p_system_id: "notification_delivery_operator",
+        p_platform: platform,
+        p_active_finding_keys: findingKeysByPlatform.get(platform) ?? [],
+      });
+      if (error) throw error;
     }
   }
 
@@ -302,5 +362,6 @@ export const runNotificationAutonomyProbe: ScopedOperatorHandler = async ({ clie
     userRightsChanged: false,
     highRiskExecuted: false,
     broadPushSent: false,
+    lifecycleManaged: true,
   };
 };

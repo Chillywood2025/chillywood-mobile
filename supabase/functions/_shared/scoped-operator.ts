@@ -13,6 +13,8 @@ export type ScopedOperatorConfig = {
   actionTables: Record<string, string>;
   defaultHealthState: string;
   watchOnceHandler?: ScopedOperatorHandler;
+  watchOnceHandlers?: readonly ScopedOperatorHandler[];
+  requiredWatchPlatforms?: readonly string[];
   statusHandler?: ScopedOperatorHandler;
   reportHandler?: ScopedOperatorHandler;
 };
@@ -34,6 +36,97 @@ export type ScopedOperatorHandlerResult = Record<string, unknown> & {
 export type ScopedOperatorHandler = (
   context: ScopedOperatorHandlerContext,
 ) => Promise<ScopedOperatorHandlerResult>;
+
+const healthRank: Record<string, number> = {
+  healthy: 0,
+  configured_ready: 0,
+  delivery_evidence_healthy: 0,
+  source_ready: 0,
+  internal_build_ready: 0,
+  degraded: 1,
+  idle_no_delivery_evidence: 1,
+  rollout_disabled: 1,
+  no_active_install: 1,
+  unknown: 2,
+  blocked: 3,
+  critical: 4,
+  failed: 4,
+};
+
+export const runComposedOperatorHandlers = async (
+  handlers: readonly ScopedOperatorHandler[],
+  context: ScopedOperatorHandlerContext,
+  requiredPlatforms: readonly string[] = [],
+) => {
+  const platformResults: ScopedOperatorHandlerResult[] = [];
+  for (const handler of handlers) {
+    try {
+      const result = await handler(context);
+      platformResults.push({
+        ...result,
+        platform: normalizeOperatorPlatform(result.platform),
+        readbackComplete: result.readbackComplete === true,
+        healthState: String(result.healthState ?? (result.readbackComplete === true ? "healthy" : "unknown")),
+        source: String(result.source ?? "unknown"),
+        dataWindow: result.dataWindow ?? { start: null, end: null },
+        reasons: Array.isArray(result.reasons) ? result.reasons : [],
+        moneyMoved: false,
+        userRightsChanged: false,
+        highRiskExecuted: false,
+      });
+    } catch (error) {
+      platformResults.push({
+        readbackComplete: false,
+        platform: "unknown",
+        healthState: "unknown",
+        source: "handler_failure",
+        dataWindow: { start: null, end: new Date().toISOString() },
+        reasons: [safeOperatorErrorMessage(error)],
+        moneyMoved: false,
+        userRightsChanged: false,
+        highRiskExecuted: false,
+      });
+    }
+  }
+  const observedPlatforms = new Set(platformResults.map((result) => result.platform));
+  const missingPlatforms = requiredPlatforms
+    .map(normalizeOperatorPlatform)
+    .filter((platform) => !observedPlatforms.has(platform));
+  for (const platform of missingPlatforms) {
+    platformResults.push({
+      readbackComplete: false,
+      platform,
+      healthState: "blocked",
+      source: "required_platform_handler_missing",
+      dataWindow: { start: null, end: new Date().toISOString() },
+      reasons: ["required_platform_handler_missing"],
+      moneyMoved: false,
+      userRightsChanged: false,
+      highRiskExecuted: false,
+    });
+  }
+  const readbackComplete = platformResults.length > 0 && platformResults.every((result) => result.readbackComplete === true);
+  const healthState = platformResults.reduce((worst, result) => (
+    (healthRank[String(result.healthState ?? "unknown")] ?? 2) > (healthRank[worst] ?? 2)
+      ? String(result.healthState ?? "unknown")
+      : worst
+  ), "healthy");
+  return {
+    readbackComplete,
+    platform: "shared",
+    healthState,
+    source: "composed_platform_handlers",
+    dataWindow: {
+      start: platformResults.map((result) => result.dataWindow?.start).filter((value): value is string => typeof value === "string").sort()[0] ?? null,
+      end: platformResults.map((result) => result.dataWindow?.end).filter((value): value is string => typeof value === "string").sort().at(-1) ?? null,
+    },
+    platformResults,
+    reasons: platformResults.flatMap((result) => Array.isArray(result.reasons) ? result.reasons : []),
+    moneyMoved: false,
+    userRightsChanged: false,
+    highRiskExecuted: false,
+  } satisfies ScopedOperatorHandlerResult;
+};
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -84,6 +177,45 @@ const safeOperatorErrorMessage = (error: unknown) => {
       : "";
   const sanitized = sanitizeOperatorMetadata(candidate);
   return typeof sanitized === "string" && sanitized.trim() ? sanitized : "unknown_error";
+};
+
+const persistOperatorFindingLifecycle = async (
+  client: SupabaseClient,
+  systemId: string,
+  result: ScopedOperatorHandlerResult,
+) => {
+  if (result.lifecycleManaged === true) return;
+  const results = Array.isArray(result.platformResults)
+    ? result.platformResults as ScopedOperatorHandlerResult[]
+    : [result];
+  for (const platformResult of results) {
+    const platform = normalizeOperatorPlatform(platformResult.platform);
+    const reasons = Array.isArray(platformResult.reasons)
+      ? platformResult.reasons.map((reason) => String(reason).slice(0, 160)).filter(Boolean)
+      : [];
+    const activeKeys: string[] = [];
+    for (const reason of reasons) {
+      const { data, error } = await client.rpc("record_autonomous_finding", {
+        p_finding_type: reason,
+        p_metadata: { source: String(platformResult.source ?? "unknown"), readback_complete: platformResult.readbackComplete === true },
+        p_platform: platform,
+        p_provider: String(platformResult.provider ?? "none").slice(0, 80),
+        p_severity: ["critical", "failed"].includes(String(platformResult.healthState)) ? "critical" : platformResult.readbackComplete === true ? "warning" : "review",
+        p_system_id: systemId,
+        p_target_surface: String(platformResult.surface ?? "watch_once").slice(0, 120),
+      });
+      if (error) throw error;
+      if (typeof data === "string") activeKeys.push(data);
+    }
+    if (platformResult.readbackComplete === true) {
+      const { error } = await client.rpc("resolve_autonomous_findings", {
+        p_active_finding_keys: activeKeys,
+        p_platform: platform,
+        p_system_id: systemId,
+      });
+      if (error) throw error;
+    }
+  }
 };
 
 const sha256Hex = async (value: string): Promise<string> => {
@@ -220,7 +352,7 @@ const insertSnapshot = async (
   if (["security_owner_operator", "platform_recovery_operator", "privacy_compliance_operator", "support_success_operator"].includes(config.systemId)) {
     row.app_version = metadata.app_version ?? null;
     row.native_build = metadata.native_build ?? null;
-    row.bundle_identifier = metadata.bundle_identifier ?? (metadata.platform === "ios" ? "com.chillywood.mobile" : null);
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
     row.runtime_version = metadata.runtime_version ?? null;
     row.channel = metadata.channel ?? null;
     row.update_id = metadata.update_id ?? null;
@@ -348,7 +480,7 @@ const insertReview = async (
     row.platform = normalizeOperatorPlatform(metadata.platform);
     row.app_version = metadata.app_version ?? null;
     row.native_build = metadata.native_build ?? null;
-    row.bundle_identifier = metadata.bundle_identifier ?? (metadata.platform === "ios" ? "com.chillywood.mobile" : null);
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
     row.runtime_version = metadata.runtime_version ?? null;
     row.channel = metadata.channel ?? null;
     row.update_id = metadata.update_id ?? null;
@@ -377,6 +509,7 @@ const createApprovalRequest = async (
   const insertPayload = {
     system_id: config.systemId,
     action_id: actionId,
+    platform: normalizeOperatorPlatform(payload.platform),
     requested_by_actor_type: config.systemId,
     requested_by_actor_id: payload.requested_by_actor_id ?? null,
     approval_level: approvalLevel,
@@ -404,6 +537,7 @@ const createApprovalRequest = async (
 
   await client.from("autonomous_approval_request_events").insert({
     request_id: data.id,
+    platform: normalizeOperatorPlatform(payload.platform),
     event_type: "created",
     actor_type: config.systemId,
     actor_id: null,
@@ -498,8 +632,12 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
       });
     }
 
-    if (action === "watch_once" && config.watchOnceHandler) {
-      const customResult = await config.watchOnceHandler({ client, config, payload, metadata });
+    if (action === "watch_once" && (config.watchOnceHandlers?.length || config.watchOnceHandler)) {
+      const context = { client, config, payload, metadata };
+      const customResult = config.watchOnceHandlers?.length
+        ? await runComposedOperatorHandlers(config.watchOnceHandlers, context, config.requiredWatchPlatforms)
+        : await config.watchOnceHandler!(context);
+      await persistOperatorFindingLifecycle(client, config.systemId, customResult);
       return scopedJsonResponse(config.tokenHeader, 200, {
         ok: true,
         systemId: config.systemId,

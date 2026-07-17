@@ -12,7 +12,9 @@ const runJson = (command, args) => {
   }
 };
 
-const firebaseApps = runJson("firebase", ["apps:list", "IOS", "--json"]);
+const requestedPlatform = process.argv.includes("--android") ? "android" : "ios";
+const firebasePlatform = requestedPlatform === "android" ? "ANDROID" : "IOS";
+const firebaseApps = runJson("firebase", ["apps:list", firebasePlatform, "--json"]);
 const firebaseProjectAvailable = firebaseApps.ok && JSON.stringify(firebaseApps.value).includes("com.chillywood.mobile");
 const readback = {
   firebase: {
@@ -44,7 +46,7 @@ const response = await fetch(endpoint, {
   headers: { "content-type": "application/json", "x-observability-operator-token": operatorToken },
   body: JSON.stringify({
     action: "watch_once",
-    platform: "ios",
+    platform: requestedPlatform,
     source: "systemd_read_only_provider_adapter",
     scheduler: process.env.OBSERVABILITY_OPERATOR_SCHEDULER ?? "observability-operator.timer",
     provider_readback: readback,
