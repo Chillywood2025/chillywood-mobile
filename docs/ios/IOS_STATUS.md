@@ -1,6 +1,6 @@
 # Chi'llywood iOS Status
 
-Checkpoint date: 2026-07-16
+Checkpoint date: 2026-07-17
 
 Overall verdict: **The remaining iOS QA source and backend gaps are closed at
 `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`. Build 7 remains the production-runtime
@@ -19,14 +19,18 @@ platform-sensitive systems include iOS adapters, while media, moderation, and
 ranking remain truthfully shared. The terminal call retry worker is a formal
 `notification_delivery_operator` surface.
 
-Six forward-only migrations are deployed:
+Ten forward-only autonomous migrations are deployed:
 `20260718123000_ios_autonomous_platform_contract`,
 `20260718124500_fix_ios_autonomous_probe_identity_columns`, and
 `20260718130000_complete_ios_observability_review_identity`, followed by
 `20260718133000_all_platform_autonomous_control_plane`,
-`20260718134500_governed_user_report_router`, and
-`20260718140000_resolve_unobserved_release_findings`. Linked history shows exact
-local/remote pairs. Local reset and pgTAP pass 4 files / 180 assertions.
+`20260718134500_governed_user_report_router`,
+`20260718140000_resolve_unobserved_release_findings`,
+`20260718141500_atomic_user_report_clustering`,
+`20260718142000_dedupe_open_observability_findings`,
+`20260718142500_atomic_user_report_routing`, and
+`20260718143000_dedupe_device_availability_findings`. Linked history shows exact
+local/remote pairs. Local reset and pgTAP pass 4 files / 216 assertions.
 
 Sanitized live probes complete the backend iOS notification rail readback without
 calling idle or rollout-disabled rails delivery-healthy, and pass the one-minute
@@ -41,10 +45,10 @@ recovery/support state are therefore explicitly blocked or unknown—not healthy
 No physical proof was created. See `IOS_AUTONOMOUS_SYSTEMS_COMPLETION.md` and
 `IOS_AUTONOMOUS_OPERATOR_MATRIX.md`.
 
-The active autonomous function versions are notification v19, release v19,
-observability v16, installed QA v11, LiveKit v43, money v29, security v17,
-recovery/privacy/support v10, moderation v16, search v8, owner command v12,
-autonomous approval v33, User Report Intake v1, and terminal retry v2. Existing
+The active autonomous function versions include notification v20, release v21,
+observability v18, installed QA v12, LiveKit v43, money v29, security v19,
+recovery v12, privacy v11, support v12, owner command v12,
+User Report Intake v3, and terminal retry v2. Existing
 timer cadences are unchanged. The new required CI job is
 `Phase 1 / Autonomous Systems All-Platform Contract`; the existing iOS contract
 job remains required alongside it.
@@ -85,7 +89,7 @@ publish an Android rollback update.
 
 No PR has been merged. The build-8 source passed the original full Node 20 suite,
 92 database assertions, and all eight then-required remote PR checks. The current
-autonomous source extension passes 180 database assertions locally and retains the
+autonomous source extension passes 216 database assertions locally and retains the
 independent `Phase 1 / Autonomous Systems iOS Contract` job while adding the
 all-platform contract job. The source/backend closeout after `bbb9d6db` does not
 change the inspected binary.

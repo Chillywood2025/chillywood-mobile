@@ -1,6 +1,6 @@
 # iOS Autonomous Systems Completion
 
-Checkpoint: 2026-07-16
+Checkpoint: 2026-07-17
 
 ## Source result
 
@@ -30,15 +30,15 @@ The original iOS additive migrations were:
 - `20260718124500_fix_ios_autonomous_probe_identity_columns` — forward-only completion of recovery snapshot identity fields; and
 - `20260718130000_complete_ios_observability_review_identity` — forward-only completion of observability review identity fields found by the first live probe.
 
-The all-platform closeout adds `20260718133000_all_platform_autonomous_control_plane`, `20260718134500_governed_user_report_router`, and `20260718140000_resolve_unobserved_release_findings`. The last migration resolves only legacy release mismatch/rollback findings whose own metadata proves provider readback was incomplete; it retains capability blockers, genuine observed mismatches, and append-only lifecycle evidence. The isolated historical router SQL is not deployed; only the reviewed forward migration is eligible. These additions preserve RLS, deny client writes, retain Android values, separate current state from append-only audit, and add exact platform inheritance.
+The all-platform closeout adds `20260718133000_all_platform_autonomous_control_plane`, `20260718134500_governed_user_report_router`, `20260718140000_resolve_unobserved_release_findings`, `20260718141500_atomic_user_report_clustering`, `20260718142000_dedupe_open_observability_findings`, `20260718142500_atomic_user_report_routing`, and `20260718143000_dedupe_device_availability_findings`. The isolated historical router SQL is not deployed. The two router RPCs make clustering and downstream command/approval routing transactional and retry-safe. Dedupe migrations retain older evidence as `superseded` and constrain one mutable open row per condition. These additions preserve RLS, deny client writes, retain Android values, separate current state from append-only audit, and add exact platform inheritance.
 
 CI retains `Phase 1 / Autonomous Systems iOS Contract` and adds `Phase 1 / Autonomous Systems All-Platform Contract`. Database integration runs `all_platform_autonomy_test.sql`, `ios_autonomous_systems_test.sql`, the durable-call suite, and the atomic-RevenueCat suite with local Supabase and no production credential.
 
-Local database reset and pgTAP pass with 4 files and 180 assertions, including 49 all-platform assertions. The iOS autonomy suites still cover 12 retry, 17 notification, 21 release, 13 observability, 17 installed-QA, and 53 coverage assertions. The all-platform behavioral suite executes 58 assertions, including 13 scheduled-adapter assertions.
+Local database reset and pgTAP pass with 4 files and 216 assertions, including 89 all-platform assertions. The iOS autonomy suites still cover retry, notification, release, observability, installed-QA, and coverage contracts. The all-platform behavioral suite executes 77 assertions, including scheduled-adapter, expected-versus-observed identity, exact-attested-versus-latest App Store identity, atomic routing, and retained-history dedupe coverage.
 
 ## Deployment and sanitized live readback
 
-The updated functions are active: `notification-operator` v19, `release-operator` v19, `observability-operator` v16, `installed-product-qa-operator` v11, `livekit-operator` v43, `money-operator` v29, `security-owner-operator` v17, `platform-recovery-operator` v10, `privacy-compliance-operator` v10, `support-success-operator` v10, `moderation-safety-operator` v16, `search-ranking-integrity-operator` v8, `owner-command-operator` v12, `autonomous-approval-request` v33, and `user-report-intake` v1. The existing terminal worker remains `chilly-chat-call-transition-retry` v2.
+The final active readback includes `notification-operator` v20, `release-operator` v21, `observability-operator` v18, `installed-product-qa-operator` v12, `livekit-operator` v43, `money-operator` v29, `security-owner-operator` v19, `platform-recovery-operator` v12, `privacy-compliance-operator` v11, `support-success-operator` v12, `owner-command-operator` v12, `user-report-intake` v3, and `chilly-chat-call-transition-retry` v2.
 
 The registered host timers remain enabled at their existing cadence: notification and LiveKit every 5 minutes; observability and money every 10 minutes; security every 15 minutes; release, recovery, and support every 30 minutes; privacy every 6 hours; installed QA daily. No cadence was increased and no broad scheduler was added. The release and observability timers now invoke hardened companion oneshot services that run the all-platform host adapters. Missing optional provider credentials produce explicit unavailable capability results; they do not prevent the scheduled operator request and do not manufacture provider health.
 

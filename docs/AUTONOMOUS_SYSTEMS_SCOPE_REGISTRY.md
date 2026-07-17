@@ -696,7 +696,7 @@ Forbidden:
 - executing raw user report text
 - allowing report spam to trigger high-risk action
 
-`support_success_operator` records queue health, stale-ticket findings, draft responses, owner/admin escalations, and the User Report Router loop. User reports are sanitized, classified, clustered, and routed to target autonomous systems. Three unique matching bug/fix reports within seven days can create a routed finding or Owner Command. Critical safety, security, privacy, payment, or provider reports can escalate immediately to the correct operator for review. User reports cannot directly issue refunds, grant Premium, mutate auth/entitlements, reset credentials, send payment/legal commitments, enforce account restrictions, activate ads/sponsors, or execute raw report text.
+`support_success_operator` records queue health, stale-ticket findings, draft responses, owner/admin escalations, and the User Report Router loop. User reports are sanitized, classified, clustered, and routed to target autonomous systems. Unique-reporter clustering and downstream command/approval routing use separate service-only transactional RPCs, so concurrent threshold crossings remain retry-idempotent. Three unique matching bug/fix reports within seven days can create one routed finding or Owner Command. Critical safety, security, privacy, payment, or provider reports can escalate immediately to the correct operator for review. User reports cannot directly issue refunds, grant Premium, mutate auth/entitlements, reset credentials, send payment/legal commitments, enforce account restrictions, activate ads/sponsors, or execute raw report text.
 
 ### `search_ranking_integrity_operator`
 

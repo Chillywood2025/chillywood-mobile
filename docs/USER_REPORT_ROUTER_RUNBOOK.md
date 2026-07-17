@@ -4,7 +4,7 @@ Status: scoped-write capable under `support_success_operator`.
 
 Owner system: `support_success_operator`
 
-Component classification: `registered_surface`. The historical `supabase/migrations-isolated/20260714001704_user_report_router.sql` remains isolated. The reviewed forward migration is `supabase/migrations/20260718134500_governed_user_report_router.sql`; it creates current objects with normalized platform constraints, RLS, service-only writes, and platform-aware indexes.
+Component classification: `registered_surface`. The historical `supabase/migrations-isolated/20260714001704_user_report_router.sql` remains isolated. The reviewed forward migrations are `supabase/migrations/20260718134500_governed_user_report_router.sql`, `supabase/migrations/20260718141500_atomic_user_report_clustering.sql`, and `supabase/migrations/20260718142500_atomic_user_report_routing.sql`; they create current objects with normalized platform constraints, RLS, service-only writes, platform-aware indexes, and retry-safe transactions.
 
 ## Purpose
 
@@ -34,6 +34,8 @@ The normalized platform values are `shared`, `ios`, `android`, `web`, and `unkno
 ## Threshold
 
 Default bug/fix threshold is three unique users with the same normalized fingerprint within seven days. Repeated reports from the same user are deduped and do not satisfy the threshold.
+
+`upsert_user_report_cluster_membership` locks the intake row and atomically updates the cluster/member counts. Once a cluster qualifies, `route_user_report_cluster` locks the cluster and creates the owner command, optional approval request, routing action, operator finding, child audit events, and final cluster state in the same transaction. Retrying the RPC returns `already_routed`; it cannot create a second command or approval.
 
 Critical safety, security, privacy, payment, billing, payout, or provider reports can escalate immediately to a routed finding, Owner Command, or approval request. Escalation still does not execute the high-risk action.
 

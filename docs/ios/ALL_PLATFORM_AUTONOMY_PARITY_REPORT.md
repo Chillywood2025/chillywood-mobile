@@ -1,6 +1,6 @@
 # All-Platform Autonomy Parity Report
 
-Checkpoint: 2026-07-16
+Checkpoint: 2026-07-17
 
 This is the closeout record for shared, Android, iOS, and web autonomous-system parity. It covers source, database, provider readback, schedulers, control planes, audit, guards, proofs, and CI. It does not claim physical iPhone behavior, publish an update, change a rollout, move money, or perform a release action.
 
@@ -45,23 +45,25 @@ Platform scope is constrained and inherited through autonomous approval requests
 
 Current findings are keyed deterministically by system, platform, finding type, target surface, and provider. Repeated observations increment one open row; successful readback resolves it; append-only lifecycle events retain open/repeat/resolution history. Provider capability observations remain append-only while a trigger-maintained current-state table deduplicates capability state.
 
+The closeout audit also corrected two legacy current-state exceptions. Typed observability tables now retain older duplicate rows as `superseded` while partial unique indexes enforce one open platform/condition. Installed-QA device and review rows use the same retained-history model and update the current row under retry races. Sanitized post-deployment readback found zero duplicate open groups in those tables; it retained 408 superseded observability rows, 11 superseded device-readiness rows, and 27 superseded installed-QA review rows as historical evidence.
+
 ## Governed User Report Router
 
-`user_report_router` is a registered `support_success_operator` surface, not a new top-level operator. The historical `20260714001704_user_report_router` SQL remains isolated. The reviewed forward migration `20260718134500_governed_user_report_router` creates the current platform-aware objects with RLS and direct-client-write denial.
+`user_report_router` is a registered `support_success_operator` surface, not a new top-level operator. The historical `20260714001704_user_report_router` SQL remains isolated. The reviewed forward migration `20260718134500_governed_user_report_router` creates the current platform-aware objects with RLS and direct-client-write denial. `upsert_user_report_cluster_membership` atomically counts unique reporters, and `route_user_report_cluster` locks the qualified cluster and creates its owner command, approval request, routing action, finding, audit events, and cluster state in one retry-safe transaction. Concurrent threshold crossings cannot create duplicate control-plane side effects.
 
 Platform-specific reports include platform in their fingerprint, so StoreKit/TestFlight/APNs/PushKit/CallKit reports cannot merge with Play Billing/FCM/APK/AAB reports. Shared safety, privacy, and account issues may cluster across platforms only when classification proves they are shared. Three-unique-reporter protection, duplicate-reporter protection, immediate high-risk review, prompt-injection blocking, recursive redaction, and no raw-text execution remain in force.
 
 ## Validation and boundaries
 
-The local database reset passes four pgTAP files with 180 assertions, including 49 all-platform assertions. The synthetic all-platform suite executes the real composition, notification, installed-QA, owner-command, and report-routing helpers. CI retains the iOS contract job and adds `Phase 1 / Autonomous Systems All-Platform Contract`; database CI uses local Supabase only.
+The local database reset passes four pgTAP files with 216 assertions, including 89 all-platform assertions. The synthetic all-platform suite executes 77 behavioral assertions against the real composition, notification, installed-QA, owner-command, report-routing, exact-versus-latest release identity, and dedupe helpers. CI retains the iOS contract job and adds `Phase 1 / Autonomous Systems All-Platform Contract`; database CI uses local Supabase only.
 
 Physical proof remains required for camera, microphone, Photos/HEIC, signed Universal Links, APNs delivery, PushKit/CallKit, StoreKit purchase lifecycle, two-device LiveKit, audio routes/interruption recovery, accessibility, and iPad/orientation. No source/provider/backend row converts those requirements into a pass.
 
 ## Deployment and live readback
 
-Remote migration history is aligned through `20260718140000_resolve_unobserved_release_findings`, and a linked dry run reports the database is up to date. The three all-platform migrations are additive: control-plane/platform inheritance, governed User Report Router, and forward-only resolution of legacy unobserved release mismatch findings. The last migration retains all append-only evidence.
+Remote migration history is aligned through `20260718143000_dedupe_device_availability_findings`, and a linked dry run reports the database is up to date. The second-pass forward migrations are `20260718141500_atomic_user_report_clustering`, `20260718142000_dedupe_open_observability_findings`, `20260718142500_atomic_user_report_routing`, and `20260718143000_dedupe_device_availability_findings`. They retain intake, audit, finding, and readiness history; no row was deleted.
 
-Active changed functions are notification v19, release v19, observability v16, installed QA v11, money v29, security v17, recovery/privacy/support v10, Owner Command v12, autonomous approval v33, and User Report Intake v1. Existing LiveKit v43, moderation v16, search v8, and terminal retry v2 remain active.
+Active functions at the final readback are notification v20, release v21, observability v18, installed QA v12, money v29, security v19, recovery v12, privacy v11, support v12, Owner Command v12, and User Report Intake v3. Existing LiveKit v43 and terminal retry v2 remain active.
 
 The hardened release and observability companion services ran successfully on the production operator host. Their optional EAS/Expo, App Store Connect, and Firebase provider credentials/capabilities were unavailable, so all provider-dependent results remained blocked or unknown and observed release identity stayed null. The local build-8 attestation remains pending provider verification. Notification readback was complete but truthful: iOS Expo and APNs VoIP were `rollout_disabled`, Android Expo was `idle_no_delivery_evidence`, Android FCM was `unknown` without provider configuration, and shared terminal retry had zero backlog. Money readback remained separated into healthy shared and iOS sandbox/control rows plus a blocked Android provider row. User Report Router objects were present with zero open live clusters, routing actions, or findings. No synthetic user report was submitted.
 
