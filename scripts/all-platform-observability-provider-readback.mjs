@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { sanitizeAutonomousReadback } from "../supabase/functions/_shared/ios-autonomous-operator-policy.mjs";
+import { normalizeSanitizedObservabilityExport } from "./observability-sanitized-readback.mjs";
 
 const run = (args) => {
   const result = spawnSync(process.execPath, ["scripts/ios-observability-provider-readback.mjs", ...args], { cwd: process.cwd(), encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"], timeout: 90_000 });
@@ -10,7 +12,16 @@ const run = (args) => {
 };
 const ios = run([]);
 const android = run(["--android"]);
-const providerReadback = sanitizeAutonomousReadback({ ios, android, shared: { supabaseEdgeFunctions: ios.supabaseEdgeFunctions ?? { readbackComplete: false, reason: "sanitized_edge_log_export_not_configured" } } });
+const sharedEdgePath = String(process.env.SUPABASE_SHARED_EDGE_OBSERVABILITY_READBACK_PATH ?? "").trim();
+let sharedEdge = { readbackComplete: false, reason: "sanitized_edge_log_export_not_configured" };
+if (sharedEdgePath && existsSync(sharedEdgePath)) {
+  try {
+    sharedEdge = normalizeSanitizedObservabilityExport(JSON.parse(readFileSync(sharedEdgePath, "utf8")), "shared");
+  } catch {
+    sharedEdge = { readbackComplete: false, reason: "sanitized_export_invalid" };
+  }
+}
+const providerReadback = sanitizeAutonomousReadback({ ios, android, shared: { supabaseEdgeFunctions: sharedEdge } });
 if (!process.argv.includes("--post")) {
   process.stdout.write(`${JSON.stringify(providerReadback)}\n`);
   process.exit(0);

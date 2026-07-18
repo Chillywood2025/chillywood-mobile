@@ -6,6 +6,7 @@ import {
   IOS_QA_RELEASE_EXPECTATION,
   sanitizeAutonomousReadback,
 } from "../_shared/ios-autonomous-operator-policy.mjs";
+import { normalizeInstalledQaPlatform } from "../_shared/installed-qa-platform-policy.mjs";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -166,7 +167,7 @@ const assertSafePayload = (payload: JsonObject) => {
 
 const baseRow = (payload: JsonObject) => ({
   system_id: SYSTEM_ID,
-  platform: payload.platform === "ios" || payload.platform === "android" || payload.platform === "web" || payload.platform === "shared" ? payload.platform : "unknown",
+  platform: normalizeInstalledQaPlatform(payload.platform, payload.source),
   source: isOneOf(payload.source, PROOF_SOURCES) ? payload.source : "manual_codex_proof",
   update_id: payload.update_id ?? payload.updateId ?? null,
   runtime_version: payload.runtime_version ?? payload.runtimeVersion ?? null,
@@ -197,7 +198,7 @@ const baseRow = (payload: JsonObject) => ({
 const insertEvent = async (client: SupabaseClientLike, actionId: string, result: string, payload: JsonObject) => {
   const row = {
     system_id: SYSTEM_ID,
-    platform: payload.platform === "ios" || payload.platform === "android" || payload.platform === "web" || payload.platform === "shared" ? payload.platform : "unknown",
+    platform: normalizeInstalledQaPlatform(payload.platform, payload.source),
     source: isOneOf(payload.source, PROOF_SOURCES) ? payload.source : "manual_codex_proof",
     action_id: actionId,
     result,

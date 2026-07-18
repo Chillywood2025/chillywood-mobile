@@ -1,6 +1,6 @@
 # iOS Autonomous Systems Completion
 
-Checkpoint: 2026-07-17
+Checkpoint: 2026-07-18
 
 ## Source result
 
@@ -34,17 +34,19 @@ The all-platform closeout adds `20260718133000_all_platform_autonomous_control_p
 
 CI retains `Phase 1 / Autonomous Systems iOS Contract` and adds `Phase 1 / Autonomous Systems All-Platform Contract`. Database integration runs `all_platform_autonomy_test.sql`, `ios_autonomous_systems_test.sql`, the durable-call suite, and the atomic-RevenueCat suite with local Supabase and no production credential.
 
-Local database reset and pgTAP pass with 4 files and 216 assertions, including 89 all-platform assertions. The iOS autonomy suites still cover retry, notification, release, observability, installed-QA, and coverage contracts. The all-platform behavioral suite executes 77 assertions, including scheduled-adapter, expected-versus-observed identity, exact-attested-versus-latest App Store identity, atomic routing, and retained-history dedupe coverage.
+Local database reset and pgTAP pass with 5 files and 254 assertions, including 113 all-platform assertions. The iOS autonomy suites still cover retry, notification, release, observability, installed-QA, and coverage contracts. The all-platform behavioral suite executes 91 assertions, including scheduled adapters, expected-versus-observed identity, platform-isolated observability exports, Android Firebase Test Lab attribution, bounded media recovery, atomic routing, and retained-history dedupe coverage. A forced target-trigger failure additionally proves that malware-scan queue completion remains durable, records only a sanitized propagation blocker, and leaves the target fail-closed.
 
 ## Deployment and sanitized live readback
 
-The final active readback includes `notification-operator` v20, `release-operator` v21, `observability-operator` v18, `installed-product-qa-operator` v12, `livekit-operator` v43, `money-operator` v29, `security-owner-operator` v19, `platform-recovery-operator` v12, `privacy-compliance-operator` v11, `support-success-operator` v12, `owner-command-operator` v12, `user-report-intake` v3, and `chilly-chat-call-transition-retry` v2.
+The final active readback includes `notification-operator` v21, `release-operator` v22, `observability-operator` v20, `installed-product-qa-operator` v14, `livekit-operator` v44, `livekit-registry` v48, `money-operator` v30, and `chilly-chat-call-transition-retry` v4. Other governed operator versions remain deployed as recorded in the all-platform parity report.
 
 The registered host timers remain enabled at their existing cadence: notification and LiveKit every 5 minutes; observability and money every 10 minutes; security every 15 minutes; release, recovery, and support every 30 minutes; privacy every 6 hours; installed QA daily. No cadence was increased and no broad scheduler was added. The release and observability timers now invoke hardened companion oneshot services that run the all-platform host adapters. Missing optional provider credentials produce explicit unavailable capability results; they do not prevent the scheduled operator request and do not manufacture provider health.
 
+The operator-host audit also caught a failed legacy LiveKit registry heartbeat: the function inventory showed `livekit-registry` active, while its gateway route returned function-not-found. Redeploying the unchanged, Deno-checked function as v48 restored the route and preserved its existing secret. The scheduled heartbeat and the bounded LiveKit operator watch then passed. Sanitized readback reports one active, healthy server with a fresh heartbeat and zero current rooms/participants/publishers; no server ID or credential was recorded in the evidence.
+
 Sanitized manual `watch_once` readback produced:
 
-- notification: backend readback is complete for iOS Expo, iOS APNs VoIP, Android Expo, Android FCM, and shared terminal retry, but only actual delivery evidence can be `delivery_evidence_healthy`. The live rail states were Android Expo `idle_no_delivery_evidence`, Android FCM `unknown` because provider configuration was unavailable, iOS Expo `rollout_disabled`, iOS VoIP `rollout_disabled`, and shared retry healthy with zero backlog. Both iOS rollout booleans read false. No delivery was sent;
+- notification: backend readback is complete for iOS Expo, iOS APNs VoIP, Android Expo, Android FCM, and shared terminal retry, but only actual delivery evidence can be `delivery_evidence_healthy`. The live rail states are Android Expo `idle_no_delivery_evidence` with rollout/configuration true, Android FCM `unknown` with rollout true but provider configuration unavailable, iOS Expo `rollout_disabled`, iOS VoIP `delivery_evidence_healthy` with rollout/configuration true, and shared retry healthy with zero backlog. No delivery was sent by this repair;
 - terminal retry: enabled one-minute cron, attempt and batch caps 10, no pending/failed/stale/capped backlog, and no unresolved warning/critical failure;
 - release: `PROVIDER_READBACK_BLOCKED`. The scheduled host adapter executed successfully, but EAS/Expo and App Store Connect read-only credentials were unavailable on the host. The local build-8 attestation remains `pending_provider_verification`; observed identity fields remain null. The stored platform results are blocked/incomplete, not healthy, and the legacy expected-as-observed mismatch findings were resolved without deleting history;
 - observability: `PROVIDER_READBACK_BLOCKED`. The scheduled host adapter executed successfully, while Crashlytics, Performance, Analytics, sanitized Edge log export, release diagnostics, and iOS LiveKit client telemetry remain explicitly unavailable. Counts remain context only and are not interpreted as zero-failure proof;
@@ -56,7 +58,9 @@ Sanitized manual `watch_once` readback produced:
 - recovery: migrations, required functions, and retry scheduler pass; release identity/rollback provider truth is blocked with the release adapter; and
 - support: iOS-scoped finding count is zero, but release identity readback is incomplete, so health is unknown rather than healthy.
 
-The post-deployment safety query found zero `money_moved=true` rows, zero `user_rights_changed=true` rows, zero unsafe secret-like provider-capability metadata rows, and zero fake iOS physical-pass rows. Database switches remained `revenuecat_app_store_enabled=off`, `provider_webhooks_enabled=sandbox_only`, `tips_enabled=sandbox_only`, `watch_party_tickets_enabled=sandbox_only`, `live_money_enabled=off`, and `payouts_enabled=off`; notification readback confirmed ordinary iOS and VoIP rollout booleans remained false.
+The post-deployment safety query found zero unsafe recent health rows, zero fake physical-pass rows, and no money or user-rights mutation. Database switches read `revenuecat_app_store_enabled=sandbox_only`, `provider_webhooks_enabled=sandbox_only`, `tips_enabled=sandbox_only`, `watch_party_tickets_enabled=sandbox_only`, `revenuecat_google_play_enabled=sandbox_only`, `live_money_enabled=off`, and `payouts_enabled=off`. Notification readback confirmed ordinary iOS push remains off, iOS VoIP remains enabled, Android Expo remains enabled, and Android FCM remains unconfigured; this repair changed none of those switches.
+
+The final forward repair migrations are `20260718211422_fix_android_installed_qa_platform_attribution`, `20260718211432_harden_media_scan_retry_recovery`, `20260718213052_fix_runtime_sql_type_resolution`, `20260718214102_decouple_media_scan_audit_completion`, and `20260718214900_lock_media_scan_target_propagation_behind_wrapper`. They correct ten historical Firebase Test Lab rows to Android, protect future attribution, recover stale/capped malware-scan jobs without deleting evidence, eliminate two runtime SQL type-resolution failures, prevent target-table policy failures from stranding malware-scan leases, and revoke direct access to the legacy propagation helper so service callers cannot bypass the durable wrapper. The scanner host and observability companion adapter were updated at unchanged cadence. Live sanitized scanner readback reports 31 clean rows, 37 retained manual-review rows, no scanning or capped-retryable backlog, and two sanitized target-propagation blockers; no object path or raw database error was retained in those markers.
 
 ## Truthful completion states
 

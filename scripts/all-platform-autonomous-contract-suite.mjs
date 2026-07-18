@@ -13,6 +13,8 @@ import {
   sanitizeAutonomousReadback,
 } from "../supabase/functions/_shared/ios-autonomous-operator-policy.mjs";
 import { isApnsInvalidVoipTokenReason } from "../supabase/functions/_shared/ios-voip-policy.mjs";
+import { normalizeInstalledQaPlatform } from "../supabase/functions/_shared/installed-qa-platform-policy.mjs";
+import { normalizeSanitizedObservabilityExport } from "./observability-sanitized-readback.mjs";
 
 const root = process.cwd();
 const read = (file) => readFileSync(path.join(root, file), "utf8");
@@ -96,8 +98,21 @@ const runAllPlatform = async () => {
   const missingRelease = classifyIosReleaseAutonomy({ eas: { readbackComplete: false }, appStoreConnect: { readbackComplete: false }, binaryIdentityComplete: false, channelReadbackComplete: false, release: {} });
   check(!missingRelease.reasons.some((reason) => reason.endsWith("_mismatch") || reason === "rollback_target_missing"), "missing release-provider evidence must not be relabeled as an observed identity mismatch");
   const installedSource = read("supabase/functions/installed-product-qa-operator/index.ts");
+  const firebaseInstalledAdapter = read("scripts/installed-qa-firebase-test-lab.mjs");
   check(installedSource.includes("runAndroidWatchOnce") && installedSource.includes("runWatchOnce"), "installed QA must retain independent Android and iOS handlers");
   check(installedSource.includes("signed_ios_build_available") && installedSource.includes("testflight_internal_build_available"), "iOS readiness fields must be first class");
+  check(normalizeInstalledQaPlatform(undefined, "firebase_test_lab_uploaded_artifact") === "android", "Firebase Test Lab source must infer Android when an older adapter omits platform");
+  check(normalizeInstalledQaPlatform("ios", "firebase_test_lab_uploaded_artifact") === "ios", "an explicit valid platform must remain authoritative");
+  check(firebaseInstalledAdapter.includes("platform,") && firebaseInstalledAdapter.includes('normalizeInstalledQaPlatform("android", PROOF_SOURCE)'), "Firebase Test Lab adapter must submit an explicit Android platform");
+
+  const mediaRecoveryMigration = read("supabase/migrations/20260718211432_harden_media_scan_retry_recovery.sql");
+  const malwareWorker = read("ops/malware-scanner-worker/worker.mjs");
+  check(mediaRecoveryMigration.includes("recover_media_scan_jobs") && mediaRecoveryMigration.includes("for update skip locked"), "media recovery must be bounded and concurrency safe");
+  check(mediaRecoveryMigration.includes("scan_attempt_cap_reached") && mediaRecoveryMigration.includes("'manual_review'"), "capped media scans must fail closed into manual review");
+  check(malwareWorker.includes('rpc("recover_media_scan_jobs"') && malwareWorker.includes("SCAN_RECOVERY_INTERVAL_MS"), "malware worker must periodically recover stale and capped jobs");
+  check(malwareWorker.includes("p_stale_after_minutes: 20") && malwareWorker.includes("p_max_jobs: 25"), "media recovery must preserve lease and batch caps");
+  check(malwareWorker.includes("AbortSignal.timeout(NETWORK_REQUEST_TIMEOUT_MS)") && malwareWorker.includes("AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)"), "media provider requests must be time bounded");
+  check(malwareWorker.includes('child.kill("SIGKILL")') && malwareWorker.includes('timedOut ? "command_timeout"'), "ClamAV subprocesses must fail closed after a bounded timeout");
 
   const owner = loadTypeScriptModule("_lib/ownerCommandOperator.ts");
   const routed = owner.mapOwnerCommandToAutonomousSystems("Audit StoreKit purchase, APNs CallKit delivery, TestFlight runtime, and Crashlytics on iPhone");
@@ -156,6 +171,7 @@ const runAllPlatform = async () => {
   const iosSourceProbes = read("supabase/functions/_shared/ios-source-operator-probes.ts");
   const allPlatformSourceProbes = read("supabase/functions/_shared/all-platform-source-operator-probes.ts");
   const observabilityProbe = read("supabase/functions/observability-operator/probe.ts");
+  const observabilityAdapter = read("scripts/ios-observability-provider-readback.mjs");
   const observabilityDedupeMigration = read("supabase/migrations/20260718142000_dedupe_open_observability_findings.sql");
   const installedQa = read("supabase/functions/installed-product-qa-operator/index.ts");
   const deviceDedupeMigration = read("supabase/migrations/20260718143000_dedupe_device_availability_findings.sql");
@@ -166,6 +182,13 @@ const runAllPlatform = async () => {
   check(!iosSourceProbes.includes('from("privacy_request_findings").insert') && !allPlatformSourceProbes.includes('from("privacy_request_findings").insert'), "scheduled privacy probes must use lifecycle findings instead of inserting duplicate current findings");
   check(observabilityProbe.includes('eq("review_status", "open")') && observabilityProbe.includes('review_status: "reviewed"') && observabilityProbe.includes("reasons: classification.findings"), "typed observability findings must dedupe, resolve, and feed the canonical lifecycle");
   check(observabilityProbe.includes('error?.code === "23505"') && observabilityDedupeMigration.includes("review_status = 'superseded'") && observabilityDedupeMigration.includes("create unique index if not exists"), "typed observability dedupe must be concurrency-safe and retain superseded audit history");
+  check(observabilityProbe.includes('capability: "android_health_readback"'), "Android observability must record provider capability state like iOS");
+  const allPlatformObservabilityAdapter = read("scripts/all-platform-observability-provider-readback.mjs");
+  check(observabilityAdapter.includes("FIREBASE_ANDROID_OBSERVABILITY_READBACK_PATH") && observabilityAdapter.includes("FIREBASE_IOS_OBSERVABILITY_READBACK_PATH"), "scheduled observability adapter must accept sanitized official Firebase exports for both platforms");
+  check(observabilityAdapter.includes("SUPABASE_ANDROID_EDGE_OBSERVABILITY_READBACK_PATH") && observabilityAdapter.includes("SUPABASE_IOS_EDGE_OBSERVABILITY_READBACK_PATH") && allPlatformObservabilityAdapter.includes("SUPABASE_SHARED_EDGE_OBSERVABILITY_READBACK_PATH"), "scheduled observability adapter must keep shared, Android, and iOS Edge exports separate");
+  const normalizedTelemetry = normalizeSanitizedObservabilityExport({ platform: "android", readbackComplete: true, nativeCrashCount: 2, crashlyticsReadbackComplete: true }, "android");
+  check(normalizedTelemetry.readbackComplete === true && normalizedTelemetry.nativeCrashCount === 2, "sanitized provider export must retain bounded Android metrics");
+  check(normalizeSanitizedObservabilityExport({ platform: "ios", readbackComplete: true }, "android").readbackComplete === false, "cross-platform observability exports must fail closed");
   check(installedQa.includes('error?.code === "23505"') && installedQa.includes('result === "pass" ? "reviewed" : "open"') && deviceDedupeMigration.includes("finding_status = 'superseded'") && deviceDedupeMigration.includes("device_availability_one_open_condition_uidx"), "installed QA device findings must update one current condition and retain superseded history");
   check(deviceDedupeMigration.includes("review_status = 'superseded'") && deviceDedupeMigration.includes("qa_review_one_open_condition_uidx") && installedQa.includes('from("qa_required_review_flags").update(row)'), "installed QA review flags must update one current condition and retain superseded history");
 

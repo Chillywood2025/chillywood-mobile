@@ -277,6 +277,24 @@ export const runAndroidObservabilityProbe: ScopedOperatorHandler = async ({ clie
   const critical = numberValue(firebase.nativeCrashCount) > 0 || numberValue(firebase.startupFailureCount) > 0;
   const healthState = critical ? "critical" : complete ? "healthy" : Object.values(providers).some(Boolean) ? "degraded" : "unknown";
   const observedReleaseComplete = release?.readback_complete === true;
+  for (const [provider, available] of Object.entries(providers)) {
+    const { error: capabilityError } = await client.from("autonomous_provider_readback_capabilities").insert({
+      system_id: "observability_runtime_operator",
+      platform: "android",
+      provider,
+      capability: "android_health_readback",
+      capability_state: available ? "available" : "unavailable",
+      missing_capability: available ? null : `${provider}_provider_unavailable`,
+      readback_complete: available,
+      data_source: provider === "releaseDiagnostics" ? "supabase_sanitized_snapshot" : "host_read_only_provider_adapter",
+      provider_environment: null,
+      money_moved: false,
+      user_rights_changed: false,
+      high_risk_executed: false,
+      metadata: sanitizeAutonomousReadback({ status: available ? "readback_complete" : "provider_unavailable" }),
+    });
+    if (capabilityError) throw capabilityError;
+  }
   const { error } = await client.from("runtime_health_snapshots").insert({
     system_id: "observability_runtime_operator", platform: "android", health_state: healthState,
     crash_cluster_count: numberValue(firebase.nativeCrashCount), js_error_count: numberValue(firebase.jsFatalCount),

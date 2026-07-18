@@ -1,5 +1,5 @@
 begin;
-select plan(89);
+select plan(113);
 
 select has_table('public', 'release_binary_attestations', 'local/cloud binary attestations exist');
 select has_table('public', 'autonomous_current_findings', 'current finding lifecycle exists');
@@ -25,11 +25,73 @@ select ok(not has_table_privilege('anon', 'public.release_binary_attestations', 
 select ok(not has_table_privilege('authenticated', 'public.user_report_intake_events', 'INSERT'), 'authenticated clients cannot bypass report intake function');
 select ok(not has_table_privilege('authenticated', 'public.autonomous_provider_readback_current', 'INSERT'), 'authenticated clients cannot write current provider state');
 select ok(has_table_privilege('service_role', 'public.user_report_clusters', 'INSERT'), 'service role can write governed clusters');
+select has_index('public', 'media_scan_jobs', 'media_scan_jobs_recovery_idx', 'media scan recovery uses a partial queue index');
+select has_function('public', 'recover_media_scan_jobs', array['integer','integer'], 'bounded media scan recovery RPC exists');
+select ok(not has_function_privilege('anon', 'public.recover_media_scan_jobs(integer,integer)', 'EXECUTE'), 'anonymous clients cannot recover media scan jobs');
+select ok(not has_function_privilege('authenticated', 'public.recover_media_scan_jobs(integer,integer)', 'EXECUTE'), 'authenticated clients cannot recover media scan jobs');
+select ok(has_function_privilege('service_role', 'public.recover_media_scan_jobs(integer,integer)', 'EXECUTE'), 'service role may run bounded media recovery');
+select has_function('public', 'complete_media_scan_job_with_target_propagation', array['uuid','text','text','text','text','text','text','integer'], 'target-propagating media completion is isolated behind the durable wrapper');
+select ok(not has_function_privilege('anon', 'public.complete_media_scan_job_with_target_propagation(uuid,text,text,text,text,text,text,integer)', 'EXECUTE'), 'anonymous clients cannot bypass durable media completion');
+select ok(not has_function_privilege('service_role', 'public.complete_media_scan_job_with_target_propagation(uuid,text,text,text,text,text,text,integer)', 'EXECUTE'), 'service role cannot bypass the durable media completion wrapper');
+select has_function('public', 'can_read_creator_video_row', array['text','text','text','text','text','text','text','text'], 'scan-aware creator video authorization exists');
+select hasnt_function('public', 'can_read_creator_video_row', array['text','text','text','text','text','text','text'], 'ambiguous legacy creator video authorization overload is removed');
+select ok(pg_get_functiondef('public.can_read_creator_feed_item(text,text,text,text,text,text,text)'::regprocedure) like '%v_video."scan_status"%', 'creator feed authorization passes explicit scan status');
+select ok(pg_get_functiondef('public.create_ios_app_store_purchase_intent(text,text,uuid,jsonb)'::regprocedure) not like '%v_room."host_user_id" = v_user_id::text%', 'iOS purchase intent compares UUID host identity without an invalid text cast');
 select has_function('public', 'upsert_user_report_cluster_membership', array['uuid','text'], 'atomic report clustering RPC exists');
 select ok(not has_function_privilege('anon', 'public.upsert_user_report_cluster_membership(uuid,text)', 'EXECUTE'), 'anonymous clients cannot execute atomic report clustering');
 select has_function('public', 'route_user_report_cluster', array['uuid'], 'atomic report routing RPC exists');
 select ok(not has_function_privilege('anon', 'public.route_user_report_cluster(uuid)', 'EXECUTE'), 'anonymous clients cannot execute atomic report routing');
 select ok(has_function_privilege('service_role', 'public.route_user_report_cluster(uuid)', 'EXECUTE'), 'service role can execute atomic report routing');
+
+select throws_ok($$insert into public.installed_traversal_runs
+  (system_id,source,run_label,platform,result,blocker_classification,discovered_by,metadata)
+  values ('installed_product_qa_operator','firebase_test_lab_uploaded_artifact','invalid-platform','unknown','partial','unknown_requires_review','device_lab','{}')$$,
+  '23514', null, 'Firebase Test Lab traversal cannot be stored with unknown platform');
+select lives_ok($$insert into public.installed_traversal_runs
+  (system_id,source,run_label,platform,result,blocker_classification,discovered_by,metadata)
+  values ('installed_product_qa_operator','firebase_test_lab_uploaded_artifact','android-platform','android','partial','unknown_requires_review','device_lab','{}')$$,
+  'Firebase Test Lab traversal accepts explicit Android platform');
+
+insert into public.media_scan_jobs
+  (id,target_table,target_column,target_id,storage_provider,storage_bucket,storage_object_key,status,attempt_count,max_attempts,claimed_by,claimed_at)
+values
+  ('10000000-0000-0000-0000-000000000001','videos','video_url','stale','supabase','fixture-private','stale-object','scanning',1,3,'stale-worker',now()-interval '1 hour'),
+  ('10000000-0000-0000-0000-000000000002','videos','video_url','capped','supabase','fixture-private','capped-object','scan_failed',3,3,null,null);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select lives_ok($$select public.recover_media_scan_jobs(20,25)$$, 'service role can execute bounded media recovery');
+select is((select status from public.media_scan_jobs where id='10000000-0000-0000-0000-000000000001'), 'scan_failed', 'stale scanning lease is requeued as retryable failure');
+select is((select claimed_by from public.media_scan_jobs where id='10000000-0000-0000-0000-000000000001'), null, 'stale scanning lease clears worker ownership');
+select is((select status from public.media_scan_jobs where id='10000000-0000-0000-0000-000000000002'), 'manual_review', 'capped scan failure becomes manual review');
+select ok((select completed_at is not null from public.media_scan_jobs where id='10000000-0000-0000-0000-000000000002'), 'capped scan recovery records completion time');
+select ok(public.recover_media_scan_jobs(20,25)::text !~* '(token|secret|credential|authorization)', 'media recovery returns sanitized aggregate state only');
+
+update public.videos
+set storage_object_key = 'pgtap-target-propagation-object'
+where id = (select id from public.videos order by created_at limit 1);
+delete from public.media_scan_jobs where storage_object_key = 'pgtap-target-propagation-object';
+insert into public.media_scan_jobs
+  (id,target_table,target_column,target_id,storage_provider,storage_bucket,storage_object_key,status,attempt_count,max_attempts,claimed_by,claimed_at)
+select
+  '10000000-0000-0000-0000-000000000003','videos','video_url',id::text,'supabase','fixture-private',
+  'pgtap-target-propagation-object','scanning',3,3,'pgtap-worker',now()
+from public.videos
+order by created_at
+limit 1;
+create function pg_temp.block_media_target_propagation()
+returns trigger language plpgsql as $$begin raise exception 'pgtap_target_update_blocked'; end$$;
+create trigger pgtap_block_media_target_propagation
+  before update on public.videos
+  for each row
+  when (new.scan_provider = 'pgtap_block')
+  execute function pg_temp.block_media_target_propagation();
+select lives_ok($$select public.complete_media_scan_job(
+  '10000000-0000-0000-0000-000000000003','manual_review','pgtap_block','fixture',null,null,
+  'scan_attempt_cap_reached',0)$$, 'target trigger failure cannot roll back durable media scan completion');
+select is((select status from public.media_scan_jobs where id='10000000-0000-0000-0000-000000000003'), 'manual_review', 'blocked target propagation leaves the queue in a bounded terminal state');
+select is((select metadata->>'targetPropagationComplete' from public.media_scan_jobs where id='10000000-0000-0000-0000-000000000003'), 'false', 'blocked target propagation is recorded truthfully');
+select ok((select metadata::text !~* '(pgtap_target_update_blocked|token|secret|credential|authorization)' from public.media_scan_jobs where id='10000000-0000-0000-0000-000000000003'), 'target propagation failure metadata is sanitized');
+drop trigger pgtap_block_media_target_propagation on public.videos;
+select set_config('request.jwt.claims', '{}', true);
 
 select lives_ok($$insert into public.owner_command_requests
   (command_text, normalized_intent, target_systems, approval_level, status, platform)

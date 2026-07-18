@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import { normalizeSanitizedObservabilityExport } from "./observability-sanitized-readback.mjs";
 
 const runJson = (command, args) => {
   const result = spawnSync(command, args, { encoding: "utf8", env: process.env, maxBuffer: 2 * 1024 * 1024 });
@@ -16,17 +18,40 @@ const requestedPlatform = process.argv.includes("--android") ? "android" : "ios"
 const firebasePlatform = requestedPlatform === "android" ? "ANDROID" : "IOS";
 const firebaseApps = runJson("firebase", ["apps:list", firebasePlatform, "--json"]);
 const firebaseProjectAvailable = firebaseApps.ok && JSON.stringify(firebaseApps.value).includes("com.chillywood.mobile");
+const firstPresent = (...names) => names.map((name) => String(process.env[name] ?? "").trim()).find(Boolean) ?? "";
+const readSanitizedExport = (path, platform) => {
+  if (!path || !fs.existsSync(path)) return { readbackComplete: false, reason: "sanitized_export_unavailable" };
+  try {
+    return normalizeSanitizedObservabilityExport(JSON.parse(fs.readFileSync(path, "utf8")), platform);
+  } catch {
+    return { readbackComplete: false, reason: "sanitized_export_invalid" };
+  }
+};
+const firebaseExportPath = requestedPlatform === "android"
+  ? firstPresent("FIREBASE_ANDROID_OBSERVABILITY_READBACK_PATH", "FIREBASE_OBSERVABILITY_READBACK_PATH")
+  : firstPresent("FIREBASE_IOS_OBSERVABILITY_READBACK_PATH", "FIREBASE_OBSERVABILITY_READBACK_PATH");
+const firebaseExport = readSanitizedExport(firebaseExportPath, requestedPlatform);
+const edgeExportPath = requestedPlatform === "android"
+  ? firstPresent("SUPABASE_ANDROID_EDGE_OBSERVABILITY_READBACK_PATH")
+  : firstPresent("SUPABASE_IOS_EDGE_OBSERVABILITY_READBACK_PATH");
+const edgeExport = readSanitizedExport(edgeExportPath, requestedPlatform);
 const readback = {
   firebase: {
     projectReadbackComplete: firebaseProjectAvailable,
-    crashlyticsReadbackComplete: false,
-    performanceReadbackComplete: false,
-    analyticsReadbackComplete: false,
-    reason: firebaseProjectAvailable ? "metric_api_adapter_not_configured" : firebaseApps.reason ?? "firebase_provider_unavailable",
+    crashlyticsReadbackComplete: firebaseExport.crashlyticsReadbackComplete === true,
+    performanceReadbackComplete: firebaseExport.performanceReadbackComplete === true,
+    analyticsReadbackComplete: firebaseExport.analyticsReadbackComplete === true,
+    nativeCrashCount: firebaseExport.nativeCrashCount ?? 0,
+    jsFatalCount: firebaseExport.jsFatalCount ?? 0,
+    startupFailureCount: firebaseExport.startupFailureCount ?? 0,
+    performanceRegressionCount: firebaseExport.performanceRegressionCount ?? 0,
+    analyticsDeliveryFailureCount: firebaseExport.analyticsDeliveryFailureCount ?? 0,
+    reason: !firebaseProjectAvailable ? firebaseApps.reason ?? "firebase_provider_unavailable" : firebaseExport.reason ?? null,
   },
   supabaseEdgeFunctions: {
-    readbackComplete: false,
-    reason: "sanitized_edge_log_export_not_configured",
+    readbackComplete: edgeExport.readbackComplete === true,
+    errorRatePercent: edgeExport.errorRatePercent ?? null,
+    reason: edgeExport.reason ?? null,
   },
 };
 
