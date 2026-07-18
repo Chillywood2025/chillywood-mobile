@@ -34,6 +34,10 @@ import {
 } from "../_lib/communication";
 import { reportRuntimeError } from "../_lib/logger";
 import {
+  canAttemptNativeCallBackgroundAudio,
+  shouldPreserveNativeCallBackgroundAudio,
+} from "../_lib/communicationCallMediaPolicy.mjs";
+import {
   getMediaPermissionRecoveryMessage,
   resolveMediaPermission,
   UNDETERMINED_MEDIA_PERMISSION,
@@ -51,6 +55,8 @@ type UseCommunicationRoomSessionOptions = {
   initialMediaPreferences?: Partial<CommunicationMediaPreferences>;
   onRoomEnded?: (reason: "host-left" | "ended" | "room-full") => void;
   enabled?: boolean;
+  allowBackgroundAudio?: boolean;
+  mediaActivationSerial?: number;
   analyticsContext?: {
     surface?: "party-room" | "live-room" | "communication-room" | "chat-thread";
     role?: "host" | "viewer" | null;
@@ -320,6 +326,8 @@ export function useCommunicationRoomSession({
   initialMediaPreferences,
   onRoomEnded,
   enabled = true,
+  allowBackgroundAudio = false,
+  mediaActivationSerial = 0,
   analyticsContext,
 }: UseCommunicationRoomSessionOptions) {
   const [cameraPermission, requestCameraPermission, getCameraPermission] = useCameraPermissions();
@@ -337,6 +345,7 @@ export function useCommunicationRoomSession({
   const [localVideoStreamURL, setLocalVideoStreamURL] = useState("");
   const [remoteStreamsByUserId, setRemoteStreamsByUserId] = useState<Record<string, MediaStream>>({});
   const [connectionStateByUserId, setConnectionStateByUserId] = useState<Record<string, PeerConnectionState>>({});
+  const [mediaRecoverySerial, setMediaRecoverySerial] = useState(0);
 
   const localJoinedAtRef = useRef(new Date().toISOString());
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -361,6 +370,7 @@ export function useCommunicationRoomSession({
   const reconnectTrackedRef = useRef(false);
   const cameraFacingRef = useRef<"front" | "environment">("front");
   const appStateRef = useRef(AppState.currentState);
+  const allowBackgroundAudioRef = useRef(allowBackgroundAudio);
 
   const cameraPermissionSnapshot = resolveMediaPermission(cameraPermission);
   const cameraPermissionState = cameraPermissionSnapshot.state;
@@ -395,6 +405,10 @@ export function useCommunicationRoomSession({
   useEffect(() => {
     channelStateRef.current = channelState;
   }, [channelState]);
+
+  useEffect(() => {
+    allowBackgroundAudioRef.current = allowBackgroundAudio;
+  }, [allowBackgroundAudio]);
 
   useEffect(() => {
     if (typeof initialMediaPreferences?.cameraEnabled === "boolean") {
@@ -500,6 +514,20 @@ export function useCommunicationRoomSession({
     auxiliaryStreamsRef.current = [];
   }, []);
 
+  const hasUsableLocalTrack = useCallback((kind: "audio" | "video") => {
+    const streams = [
+      ...(localStreamRef.current ? [localStreamRef.current] : []),
+      ...auxiliaryStreamsRef.current,
+    ];
+    return streams.some((stream) => {
+      const tracks = kind === "audio" ? stream.getAudioTracks() : stream.getVideoTracks();
+      return tracks.some((track) => (
+        track.enabled !== false
+        && String(track.readyState ?? "").trim().toLowerCase() !== "ended"
+      ));
+    });
+  }, []);
+
   const stopLocalMediaKind = useCallback((kind: "audio" | "video") => {
     const streams = new Set<MediaStream>([
       ...(localStreamRef.current ? [localStreamRef.current] : []),
@@ -550,12 +578,16 @@ export function useCommunicationRoomSession({
     if (!enabled) return undefined;
     return registerActiveMediaSessionStopper((reason) => {
       if (reason === "app_background") {
+        if (allowBackgroundAudioRef.current) {
+          stopLocalMediaKind("video");
+          return;
+        }
         pauseLocalMediaCapture();
         return;
       }
       cleanupSessionMedia();
     });
-  }, [cleanupSessionMedia, enabled, pauseLocalMediaCapture]);
+  }, [cleanupSessionMedia, enabled, pauseLocalMediaCapture, stopLocalMediaKind]);
 
   const cleanupChannel = useCallback(async () => {
     const channel = channelRef.current;
@@ -727,31 +759,39 @@ export function useCommunicationRoomSession({
 
   const ensureInitialLocalStream = useCallback(async (requestMissingPermissions = true) => {
     if (localStreamRef.current) return localStreamRef.current;
-    if (appStateRef.current !== "active") return null;
+    const appIsActive = appStateRef.current === "active";
+    const backgroundAudioAllowed = canAttemptNativeCallBackgroundAudio({
+      appState: appStateRef.current,
+      allowBackgroundAudio: allowBackgroundAudioRef.current,
+      micRequested: micEnabledRef.current,
+    });
+    if (!appIsActive && !backgroundAudioAllowed) return null;
 
-    const wantsCamera = cameraEnabledRef.current;
-    const wantsMic = micEnabledRef.current;
+    const requestedCamera = cameraEnabledRef.current;
+    const requestedMic = micEnabledRef.current;
+    const wantsCamera = appIsActive && requestedCamera;
+    const wantsMic = requestedMic && (appIsActive || backgroundAudioAllowed);
     logChatRtc("local_stream_start", {
       roomId,
       wantsCamera,
       wantsMic,
     });
     const canUseCamera = wantsCamera
-      ? requestMissingPermissions
+      ? requestMissingPermissions && appIsActive
         ? await ensureCameraPermission()
         : cameraPermissionSnapshotRef.current.state === "granted"
       : false;
     const canUseMic = wantsMic
-      ? requestMissingPermissions
+      ? requestMissingPermissions && appIsActive
         ? await ensureMicrophonePermission()
         : microphonePermissionRef.current.state === "granted"
       : false;
 
-    if (wantsCamera && !canUseCamera) {
+    if (appIsActive && requestedCamera && !canUseCamera) {
       cameraEnabledRef.current = false;
       setCameraEnabled(false);
     }
-    if (wantsMic && !canUseMic) {
+    if (appIsActive && requestedMic && !canUseMic) {
       micEnabledRef.current = false;
       setMicEnabled(false);
     }
@@ -781,8 +821,8 @@ export function useCommunicationRoomSession({
       return null;
     }
 
-    setCommunicationTrackEnabled(stream, "video", wantsCamera && canUseCamera);
-    setCommunicationTrackEnabled(stream, "audio", wantsMic && canUseMic);
+    setCommunicationTrackEnabled(stream, "video", canUseCamera);
+    setCommunicationTrackEnabled(stream, "audio", canUseMic);
 
     localStreamRef.current = stream;
     setLocalStreamURL(getCommunicationStreamURL(stream));
@@ -1714,14 +1754,16 @@ export function useCommunicationRoomSession({
         userId: identity.userId,
         membershipState: channelState === "reconnecting" ? "reconnecting" : "active",
         cameraEnabled: appStateRef.current === "active" && cameraEnabledRef.current,
-        micEnabled: appStateRef.current === "active" && micEnabledRef.current,
+        micEnabled: (appStateRef.current === "active" || allowBackgroundAudioRef.current)
+          && micEnabledRef.current
+          && hasUsableLocalTrack("audio"),
         displayName: identity.displayName,
         avatarUrl: identity.avatarUrl,
       }).then(() => refreshSnapshot(room.roomId));
     }, HEARTBEAT_INTERVAL_MILLIS);
 
     return () => clearInterval(interval);
-  }, [channelState, enabled, identity, loading, refreshSnapshot, room]);
+  }, [channelState, enabled, hasUsableLocalTrack, identity, loading, refreshSnapshot, room]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -1797,6 +1839,13 @@ export function useCommunicationRoomSession({
       setMicrophonePermission(snapshot);
     }
 
+    if (cameraEnabledRef.current && cameraPermissionSnapshotRef.current.state === "undetermined") {
+      await ensureCameraPermission();
+    }
+    if (micEnabledRef.current && microphonePermissionRef.current.state === "undetermined") {
+      await ensureMicrophonePermission();
+    }
+
     const nextCameraEnabled = cameraEnabledRef.current
       && cameraPermissionSnapshotRef.current.state === "granted";
     const nextMicEnabled = micEnabledRef.current
@@ -1822,7 +1871,71 @@ export function useCommunicationRoomSession({
     }
 
     await updatePresence(nextCameraEnabled, nextMicEnabled);
-  }, [attachMissingLocalTracks, ensureInitialLocalStream, getCameraPermission, renegotiateAllPeers, updatePresence]);
+  }, [attachMissingLocalTracks, ensureCameraPermission, ensureInitialLocalStream, ensureMicrophonePermission, getCameraPermission, renegotiateAllPeers, updatePresence]);
+
+  useEffect(() => {
+    if (!enabled || loading || channelState !== "live" || !roomRef.current || !identityRef.current) return;
+    if (!mediaActivationSerial && AppState.currentState !== "active") return;
+
+    let cancelled = false;
+    const reconcileNativeAnswerMedia = async () => {
+      const currentAppState = AppState.currentState;
+      appStateRef.current = currentAppState;
+      if (currentAppState === "active") {
+        await restoreLocalMediaAfterForeground();
+        if (!cancelled && channelRef.current) {
+          channelStateRef.current = "live";
+          setChannelState("live");
+          setError(null);
+        }
+        return;
+      }
+
+      if (!allowBackgroundAudioRef.current || !micEnabledRef.current) return;
+      const permission = await Audio.getPermissionsAsync().catch(() => null);
+      if (permission) {
+        const snapshot = resolveMediaPermission(permission);
+        microphonePermissionRef.current = snapshot;
+        setMicrophonePermission(snapshot);
+      }
+      if (microphonePermissionRef.current.state !== "granted") return;
+
+      const stream = await ensureInitialLocalStream(false);
+      if (!stream || cancelled) return;
+      await Promise.all(
+        Object.values(peerConnectionsRef.current).map((peerConnection) => (
+          attachMissingLocalTracks(peerConnection, false)
+        )),
+      );
+      await renegotiateAllPeers();
+      if (cancelled) return;
+      channelStateRef.current = "live";
+      setChannelState("live");
+      setError(null);
+      await updatePresence(false, hasUsableLocalTrack("audio"));
+    };
+
+    void reconcileNativeAnswerMedia().catch((mediaError) => {
+      reportRuntimeError("communication-native-answer-media", mediaError, { roomId });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    attachMissingLocalTracks,
+    channelState,
+    enabled,
+    ensureInitialLocalStream,
+    hasUsableLocalTrack,
+    identity?.userId,
+    loading,
+    mediaActivationSerial,
+    renegotiateAllPeers,
+    restoreLocalMediaAfterForeground,
+    room?.roomId,
+    roomId,
+    updatePresence,
+  ]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -1845,8 +1958,18 @@ export function useCommunicationRoomSession({
             reason: "app_foreground",
           });
         }
-        setChannelState((prev) => (prev === "reconnecting" ? "connecting" : prev));
+        if (channelRef.current) {
+          channelStateRef.current = "live";
+          setChannelState("live");
+          setError(null);
+        } else {
+          channelStateRef.current = "connecting";
+          setChannelState("connecting");
+        }
         void restoreLocalMediaAfterForeground()
+          .then(() => {
+            setMediaRecoverySerial((current) => current + 1);
+          })
           .then(() => touchCommunicationRoomSession({
             roomId: currentRoom.roomId,
             userId: currentIdentity.userId,
@@ -1865,7 +1988,35 @@ export function useCommunicationRoomSession({
         return;
       }
 
+      const preserveNativeCallAudio = shouldPreserveNativeCallBackgroundAudio({
+        appState: nextState,
+        allowBackgroundAudio: allowBackgroundAudioRef.current,
+        micRequested: micEnabledRef.current,
+        hasUsableAudioTrack: hasUsableLocalTrack("audio"),
+      });
+      if (preserveNativeCallAudio) {
+        stopLocalMediaKind("video");
+        channelStateRef.current = "live";
+        setChannelState("live");
+        setError(null);
+        void touchCommunicationRoomSession({
+          roomId: currentRoom.roomId,
+          userId: currentIdentity.userId,
+          membershipState: "active",
+          cameraEnabled: false,
+          micEnabled: true,
+          displayName: currentIdentity.displayName,
+          avatarUrl: currentIdentity.avatarUrl,
+        }).catch((error) => {
+          reportRuntimeError("communication-appstate-background-audio", error, {
+            roomId: currentRoom.roomId,
+          });
+        });
+        return;
+      }
+
       pauseLocalMediaCapture();
+      channelStateRef.current = "reconnecting";
       setChannelState("reconnecting");
       if (!reconnectTrackedRef.current) {
         reconnectTrackedRef.current = true;
@@ -1892,7 +2043,7 @@ export function useCommunicationRoomSession({
     });
 
     return () => subscription.remove();
-  }, [analyticsRole, analyticsSurface, enabled, pauseLocalMediaCapture, refreshSnapshot, restoreLocalMediaAfterForeground]);
+  }, [analyticsRole, analyticsSurface, enabled, hasUsableLocalTrack, pauseLocalMediaCapture, refreshSnapshot, restoreLocalMediaAfterForeground, stopLocalMediaKind]);
 
   const ensureTrackKind = useCallback(async (kind: "audio" | "video") => {
     const currentStream = localStreamRef.current;
@@ -1986,6 +2137,8 @@ export function useCommunicationRoomSession({
     enabled,
     ensureTrackKind,
     loading,
+    mediaActivationSerial,
+    mediaRecoverySerial,
     micEnabled,
     pauseLocalMediaCapture,
     roomId,

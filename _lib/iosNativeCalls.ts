@@ -35,6 +35,7 @@ const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 
 let nativeSubscription: { remove(): void } | null = null;
 let eventListener: IosNativeCallEventListener | null = null;
+const nativeEventSubscribers = new Set<IosNativeCallEventListener>();
 let voipLifecycleGeneration = 0;
 let voipRegistrationActive = false;
 let voipTokenLifecycleQueue: Promise<void> = Promise.resolve();
@@ -216,8 +217,23 @@ const handleNativeEvent = (event: NativeCallEvent, generation: number) => {
     enqueueVoipTokenInvalidation(generation);
   }
 
-  eventListener?.(sanitizeNativeEvent(event));
+  const sanitizedEvent = sanitizeNativeEvent(event);
+  eventListener?.(sanitizedEvent);
+  nativeEventSubscribers.forEach((subscriber) => {
+    try {
+      subscriber(sanitizedEvent);
+    } catch {
+      // A diagnostic/consumer listener cannot interrupt the native lifecycle.
+    }
+  });
 };
+
+export function subscribeToIosNativeCallEvents(listener: IosNativeCallEventListener) {
+  nativeEventSubscribers.add(listener);
+  return () => {
+    nativeEventSubscribers.delete(listener);
+  };
+}
 
 export async function startIosNativeCallsReadiness(
   listener?: IosNativeCallEventListener,

@@ -917,7 +917,12 @@ function IosNativeCallsBridge() {
       const callUuid = String(event.callUuid ?? "").trim();
       const params = new URLSearchParams({ callInviteId, nativeCallAction: action });
       if (callUuid) params.set("nativeCallUuid", callUuid);
-      router.push(`/chat/${encodeURIComponent(threadId)}?${params.toString()}` as Parameters<typeof router.push>[0]);
+      const destination = `/chat/${encodeURIComponent(threadId)}?${params.toString()}`;
+      if (action === "answer") {
+        router.replace(destination as Parameters<typeof router.replace>[0]);
+        return;
+      }
+      router.push(destination as Parameters<typeof router.push>[0]);
     };
 
     const handleNativeCallEvent = async (event: SanitizedNativeCallEvent) => {

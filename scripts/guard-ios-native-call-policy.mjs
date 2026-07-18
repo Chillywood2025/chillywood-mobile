@@ -14,6 +14,9 @@ const coordinator = read("modules/chillywood-native-calls/ios/ChillywoodNativeCa
 const moduleSource = read("modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift");
 const facade = read("_lib/iosNativeCalls.ts");
 const rootLayout = read("app/_layout.tsx");
+const chatThread = read("app/chat/[threadId].tsx");
+const communicationSession = read("hooks/use-communication-room-session.ts");
+const nativeMediaPolicy = read("_lib/communicationCallMediaPolicy.mjs");
 const settings = read("app/settings.tsx");
 const callInvites = read("_lib/chillyChatCalls.ts");
 const easConfig = JSON.parse(read("eas.json"));
@@ -61,12 +64,23 @@ requireText(facade, "if (!readiness.available", "PushKit registration must fail 
 requireText(facade, "revokeIosVoipRegistration", "The JS facade must revoke on logout/account transition.");
 requireText(facade, "dispatchIosVoipIncomingCall", "The JS facade must expose incoming-only PushKit dispatch.");
 requireText(facade, "const { token: _token", "Native events exposed to application listeners must omit raw tokens.");
+requireText(facade, "subscribeToIosNativeCallEvents", "CallKit media consumers must receive sanitized audio-session and application-state events.");
 rejectText(facade, "console.", "The native-call facade must never log PushKit tokens or provider responses.");
 requireText(rootLayout, "startIosNativeCallsReadiness", "Authenticated runtime must wire the native-call bridge.");
 requireText(rootLayout, "nativeCallAction: action", "Sanitized CallKit answer and decline events must use the existing authorized chat route.");
+requireText(rootLayout, 'if (action === "answer")', "CallKit Answer must use a single clean chat route instead of stacking duplicate call screens.");
+requireText(rootLayout, "router.replace(destination", "CallKit Answer must replace the current route for deterministic cold-start recovery.");
 requireText(rootLayout, "subscribeToChillyChatCallInvite", "Caller cancel and invite terminal states must stop active CallKit UI.");
 requireText(rootLayout, "reportIosNativeCallRemoteEnd", "Realtime invite terminal states must report a distinct remote CallKit end.");
 requireText(rootLayout, 'event.type === "remoteEnded"', "Remote terminal VoIP actions must clear the JavaScript invite subscription.");
+requireText(chatThread, "subscribeToIosNativeCallEvents", "The chat call screen must reconcile media after native audio-session activation.");
+requireText(chatThread, 'event.type === "audioSessionActivated"', "The chat call screen must react to CallKit AVAudioSession activation.");
+requireText(chatThread, 'event.type === "applicationActive"', "The chat call screen must restore foreground video after a native answer.");
+requireText(chatThread, 'requestedNativeCallAction === "answer"', "Background audio permission must be scoped to a native Answer action.");
+requireText(communicationSession, "shouldPreserveNativeCallBackgroundAudio", "CallKit background audio must survive transient inactive/background AppState changes.");
+requireText(communicationSession, 'channelStateRef.current = "live"', "An existing subscribed call channel must recover to live after foregrounding.");
+requireText(communicationSession, "restoreLocalMediaAfterForeground", "Foreground recovery must restore the requested microphone and camera tracks.");
+requireText(nativeMediaPolicy, "canAttemptNativeCallBackgroundAudio", "Native background-audio behavior must have an executable policy fixture.");
 requireText(settings, "revokeIosVoipRegistration", "Authenticated sign-out paths must revoke VoIP registration before logout.");
 requireText(callInvites, 'supabase.functions.invoke("chilly-chat-call-dispatch"', "Call creation and terminal state transitions must use the server dispatch orchestrator.");
 requireText(callInvites, "action:", "Unified call-dispatch actions must be passed to the orchestrator.");
@@ -162,4 +176,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("iOS native-call policy guard passed (source/backend ready; runtime dispatch remains disabled)." );
+console.log("iOS native-call policy guard passed (source/backend ready; dispatch remains controlled by the server rollout switch)." );

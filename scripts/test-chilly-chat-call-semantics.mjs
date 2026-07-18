@@ -15,6 +15,10 @@ import {
   buildIosVoipApnsPayload,
   isApnsInvalidVoipTokenReason,
 } from "../supabase/functions/_shared/ios-voip-policy.mjs";
+import {
+  canAttemptNativeCallBackgroundAudio,
+  shouldPreserveNativeCallBackgroundAudio,
+} from "../_lib/communicationCallMediaPolicy.mjs";
 
 const root = new URL("../", import.meta.url);
 const importTranspiledTypeScript = async (relativePath) => {
@@ -168,6 +172,29 @@ for (const [name, overrides, expectedSentChannel] of tokenFixtures) {
 assert.equal(isApnsInvalidVoipTokenReason("BadDeviceToken"), true);
 assert.equal(isApnsInvalidVoipTokenReason("DeviceTokenNotForTopic"), true);
 assert.equal(isApnsInvalidVoipTokenReason("Unregistered"), true);
+
+assert.equal(canAttemptNativeCallBackgroundAudio({
+  appState: "background",
+  allowBackgroundAudio: true,
+  micRequested: true,
+}), true, "an answered native iOS call may bootstrap audio while the app stays backgrounded");
+assert.equal(shouldPreserveNativeCallBackgroundAudio({
+  appState: "inactive",
+  allowBackgroundAudio: true,
+  micRequested: true,
+  hasUsableAudioTrack: true,
+}), true, "a transient CallKit overlay must not tear down an active native-call microphone");
+assert.equal(shouldPreserveNativeCallBackgroundAudio({
+  appState: "background",
+  allowBackgroundAudio: false,
+  micRequested: true,
+  hasUsableAudioTrack: true,
+}), false, "ordinary communication rooms retain the existing background media shutdown policy");
+assert.equal(canAttemptNativeCallBackgroundAudio({
+  appState: "background",
+  allowBackgroundAudio: true,
+  micRequested: false,
+}), false, "muted calls do not restart background audio");
 
 const actionScope = {
   callInviteId: "11111111-1111-4111-8111-111111111111",

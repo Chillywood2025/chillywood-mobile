@@ -64,6 +64,7 @@ import {
   endIosNativeCall,
   setIosNativeCallAudioRoute,
   setIosNativeCallMuted,
+  subscribeToIosNativeCallEvents,
 } from "../../_lib/iosNativeCalls";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
@@ -234,6 +235,7 @@ export default function ChillyChatThreadScreen() {
   const [messageReportBusy, setMessageReportBusy] = useState(false);
   const [callPanelOpen, setCallPanelOpen] = useState(false);
   const [nativeSpeakerEnabled, setNativeSpeakerEnabled] = useState(false);
+  const [nativeMediaActivationSerial, setNativeMediaActivationSerial] = useState(0);
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
@@ -511,6 +513,10 @@ export default function ChillyChatThreadScreen() {
   } = useCommunicationRoomSession({
     roomId: activeCallRoomId,
     enabled: callPanelOpen && !!activeCallRoomId,
+    allowBackgroundAudio: Platform.OS === "ios"
+      && requestedNativeCallAction === "answer"
+      && !!requestedNativeCallUuid,
+    mediaActivationSerial: nativeMediaActivationSerial,
     initialMediaPreferences: initialCallMediaPreferences,
     analyticsContext: {
       surface: "chat-thread",
@@ -1333,6 +1339,21 @@ export default function ChillyChatThreadScreen() {
     autoStartCallRef.current = requestKey;
     void handleStartCall(nextMode);
   }, [activeCallRoomId, callBusy, handleStartCall, loading, officialAccount, requestedCallMode, thread, threadId]);
+
+  useEffect(() => {
+    if (Platform.OS !== "ios" || !requestedNativeCallUuid) return undefined;
+    return subscribeToIosNativeCallEvents((event) => {
+      const eventCallUuid = String(event.callUuid ?? "").trim();
+      const appliesToActiveCall = !eventCallUuid || eventCallUuid === requestedNativeCallUuid;
+      if (!appliesToActiveCall) return;
+      if (
+        event.type === "audioSessionActivated"
+        || event.type === "applicationActive"
+      ) {
+        setNativeMediaActivationSerial((current) => current + 1);
+      }
+    });
+  }, [requestedNativeCallUuid]);
 
   const handleJoinOrCloseCall = useCallback(async () => {
     logChatCall("handle_join_or_close", {

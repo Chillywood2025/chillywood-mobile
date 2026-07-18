@@ -58,12 +58,10 @@ const packageJson = read("package.json");
   "No secrets/tokens/private data were committed or artifacted.",
 ].forEach((needle) => requireText("sweep doc", doc, needle));
 
-[
-  "delayedAudioFirstBind",
-  "cameraOn: isSelf ? participant.cameraOn : participant.cameraOn || !!remoteStreamURL",
-].forEach((needle) => requireText("communication room session hook", sessionHook, needle));
+requireText("communication room session hook", sessionHook, "delayedAudioFirstBind");
 
 [
+  "const hasVideoStream = isVideoCall && !!participant.streamURL && (!participant.isSelf || cameraRequested);",
   'const videoObjectFit = "cover";',
   "objectFit={videoObjectFit}",
   "responsiveLayout.videoTileGap",
