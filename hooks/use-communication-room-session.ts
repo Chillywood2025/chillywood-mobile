@@ -35,6 +35,7 @@ import {
 import { reportRuntimeError } from "../_lib/logger";
 import {
   canAttemptNativeCallBackgroundAudio,
+  setActiveCommunicationTracksEnabled,
   shouldPreserveNativeCallBackgroundAudio,
 } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
@@ -558,6 +559,21 @@ export function useCommunicationRoomSession({
       setLocalStreamURL(getCommunicationStreamURL(localStreamRef.current));
     }
     if (kind === "video") setLocalVideoStreamURL("");
+  }, []);
+
+  const setLocalMediaKindEnabled = useCallback((kind: "audio" | "video", enabled: boolean) => {
+    const streams = new Set<MediaStream>([
+      ...(localStreamRef.current ? [localStreamRef.current] : []),
+      ...auxiliaryStreamsRef.current,
+    ]);
+    let updated = false;
+
+    streams.forEach((stream) => {
+      const tracks = kind === "audio" ? stream.getAudioTracks() : stream.getVideoTracks();
+      if (setActiveCommunicationTracksEnabled(tracks, enabled) > 0) updated = true;
+    });
+
+    return updated;
   }, []);
 
   const cleanupSessionMedia = useCallback(() => {
@@ -2121,7 +2137,10 @@ export function useCommunicationRoomSession({
           setMicEnabled(false);
         }
       } else {
-        stopLocalMediaKind("audio");
+        // Muting must preserve the negotiated sender and WebRTC session. Stopping
+        // and removing the audio track forces a renegotiation and can tear down a
+        // cross-platform call when CallKit mirrors the same mute action.
+        setLocalMediaKindEnabled("audio", false);
       }
       if (!cancelled) await updatePresence(cameraEnabledRef.current, micEnabledRef.current);
     };
@@ -2142,6 +2161,7 @@ export function useCommunicationRoomSession({
     micEnabled,
     pauseLocalMediaCapture,
     roomId,
+    setLocalMediaKindEnabled,
     stopLocalMediaKind,
     updatePresence,
   ]);
@@ -2179,19 +2199,23 @@ export function useCommunicationRoomSession({
     }
   }, [ensureTrackKind, refreshSnapshot, sendBroadcast, stopLocalMediaKind, updatePresence]);
 
-  const toggleMic = useCallback(async () => {
-    const nextEnabled = !micEnabledRef.current;
+  const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
+    if (nextEnabled === micEnabledRef.current) {
+      const updatedExistingTrack = setLocalMediaKindEnabled("audio", nextEnabled);
+      if (!nextEnabled || updatedExistingTrack) return true;
+    }
+
     if (nextEnabled) {
       const track = await ensureTrackKind("audio");
       if (!track) {
         setMicEnabled(false);
         micEnabledRef.current = false;
         await updatePresence(cameraEnabledRef.current, false);
-        return;
+        return false;
       }
       track.enabled = true;
     } else {
-      stopLocalMediaKind("audio");
+      setLocalMediaKindEnabled("audio", false);
     }
 
     micEnabledRef.current = nextEnabled;
@@ -2205,7 +2229,12 @@ export function useCommunicationRoomSession({
     if (roomRef.current && identityRef.current) {
       await refreshSnapshot(roomRef.current.roomId);
     }
-  }, [ensureTrackKind, refreshSnapshot, sendBroadcast, stopLocalMediaKind, updatePresence]);
+    return true;
+  }, [ensureTrackKind, refreshSnapshot, sendBroadcast, setLocalMediaKindEnabled, updatePresence]);
+
+  const toggleMic = useCallback(async () => {
+    await setMicrophoneEnabled(!micEnabledRef.current);
+  }, [setMicrophoneEnabled]);
 
   const switchCamera = useCallback(async () => {
     const videoTrack = getCommunicationTrack(localStreamRef.current, "video")
@@ -2358,6 +2387,7 @@ export function useCommunicationRoomSession({
     localStreamURL,
     toggleCamera,
     toggleMic,
+    setMicrophoneEnabled,
     switchCamera,
     openMediaSettings,
     leaveRoom,

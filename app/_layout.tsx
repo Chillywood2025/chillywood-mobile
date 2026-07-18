@@ -909,7 +909,7 @@ function IosNativeCallsBridge() {
 
     const routeNativeAction = (
       event: SanitizedNativeCallEvent,
-      action: "answer" | "decline" | "end" | "mute" | "unmute",
+      action: "answer" | "decline" | "end",
     ) => {
       const threadId = String(event.threadId ?? "").trim();
       const callInviteId = String(event.callInviteId ?? "").trim();
@@ -940,11 +940,14 @@ function IosNativeCallsBridge() {
         return;
       }
       if (event.type === "muted" || event.type === "unmuted") {
-        routeNativeAction(event, event.type === "muted" ? "mute" : "unmute");
+        // CallKit mute state is consumed by the already-mounted call screen.
+        // Navigating here would stack a second chat route and tear down the
+        // active WebRTC peer connection during the first screen's cleanup.
         return;
       }
       if (event.type === "audioInterruptionBegan") {
-        routeNativeAction(event, "mute");
+        // AVAudioSession owns interruption behavior. Do not navigate or turn a
+        // transient system interruption into a call-screen replacement.
         return;
       }
       if (event.type === "timeout") {

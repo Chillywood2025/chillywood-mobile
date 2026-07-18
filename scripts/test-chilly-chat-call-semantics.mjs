@@ -17,6 +17,9 @@ import {
 } from "../supabase/functions/_shared/ios-voip-policy.mjs";
 import {
   canAttemptNativeCallBackgroundAudio,
+  resolveIncomingCallRoomJoinAction,
+  resolveIosChatCallAudioRoute,
+  setActiveCommunicationTracksEnabled,
   shouldPreserveNativeCallBackgroundAudio,
 } from "../_lib/communicationCallMediaPolicy.mjs";
 
@@ -196,6 +199,32 @@ assert.equal(canAttemptNativeCallBackgroundAudio({
   micRequested: false,
 }), false, "muted calls do not restart background audio");
 
+const liveAudioTrack = { enabled: true, readyState: "live" };
+const endedAudioTrack = { enabled: true, readyState: "ended" };
+assert.equal(setActiveCommunicationTracksEnabled([liveAudioTrack, endedAudioTrack], false), 1);
+assert.equal(liveAudioTrack.enabled, false, "mute disables the live track without stopping it");
+assert.equal(endedAudioTrack.enabled, true, "mute does not mutate an ended sender track");
+assert.equal(setActiveCommunicationTracksEnabled([liveAudioTrack], true), 1);
+assert.equal(liveAudioTrack.enabled, true, "unmute re-enables the negotiated track in place");
+
+assert.equal(resolveIncomingCallRoomJoinAction({
+  currentUserIsRoomHost: false,
+  inviteBelongsToCurrentCallee: true,
+  inviteStatus: "ringing",
+}), "accept", "a callee must accept before joining media");
+assert.equal(resolveIncomingCallRoomJoinAction({
+  currentUserIsRoomHost: false,
+  inviteBelongsToCurrentCallee: true,
+  inviteStatus: "accepted",
+}), "resume", "an accepted callee may resume media");
+assert.equal(resolveIncomingCallRoomJoinAction({
+  currentUserIsRoomHost: false,
+  inviteBelongsToCurrentCallee: false,
+  inviteStatus: "ringing",
+}), "blocked", "missing or mismatched invite evidence cannot open callee media");
+assert.equal(resolveIosChatCallAudioRoute("video"), "speaker", "iOS video calls default to speaker");
+assert.equal(resolveIosChatCallAudioRoute("voice"), "receiver", "iOS voice calls default to receiver");
+
 const actionScope = {
   callInviteId: "11111111-1111-4111-8111-111111111111",
   callType: "video",
@@ -233,6 +262,9 @@ const nativeCoordinatorSource = await readFile(
   new URL("modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift", root),
   "utf8",
 );
+const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root), "utf8");
+const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
+const communicationSessionSource = await readFile(new URL("hooks/use-communication-room-session.ts", root), "utf8");
 const retryWorkerSource = await readFile(
   new URL("supabase/functions/chilly-chat-call-transition-retry/index.ts", root),
   "utf8",
@@ -262,6 +294,15 @@ assert.doesNotMatch(
   /\.from\("chat_call_invites"\)[\s\S]{0,180}\.update\(/u,
   "dispatch endpoint cannot mutate chat_call_invites",
 );
+assert.match(chatThreadSource, /readLatestChillyChatCallInviteForRoom/u, "callee join must reconcile the invite by room");
+assert.match(chatThreadSource, /subscribeToChillyChatCallInvite\(visibleInvite\.id/u, "incoming presentation must follow authoritative invite state");
+assert.match(chatThreadSource, /setIosNativeCallAudioRoute\(route\)/u, "iOS chat calls must apply the call-type audio route");
+assert.doesNotMatch(
+  rootLayoutSource,
+  /event\.type === "muted" \|\| event\.type === "unmuted"\)[\s\S]{0,260}routeNativeAction/u,
+  "CallKit mute must not navigate to a duplicate chat screen",
+);
+assert.match(communicationSessionSource, /setLocalMediaKindEnabled\("audio", false\)/u, "mute must preserve the negotiated audio sender");
 assert.match(
   dispatchSource,
   /if \(action === "missed"\) \{\s*if \(status !== "missed"\)/u,

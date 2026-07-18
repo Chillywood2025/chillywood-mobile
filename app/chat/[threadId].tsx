@@ -22,6 +22,7 @@ import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
 import {
   listChillyChatCallEvents,
   readChillyChatCallInvite,
+  readLatestChillyChatCallInviteForRoom,
   readLatestRingingChillyChatCallInvite,
   subscribeToChillyChatCallInvite,
   updateChillyChatCallInviteStatus,
@@ -48,6 +49,10 @@ import {
   type ChatThreadSummary,
 } from "../../_lib/chat";
 import { getCommunicationRoomSnapshot } from "../../_lib/communication";
+import {
+  resolveIncomingCallRoomJoinAction,
+  resolveIosChatCallAudioRoute,
+} from "../../_lib/communicationCallMediaPolicy.mjs";
 import { decodeVisiblePercentEscapes } from "../../_lib/displayText";
 import {
   acceptChillyCircleRequest,
@@ -504,7 +509,7 @@ export default function ChillyChatThreadScreen() {
     participants,
     participantCount,
     toggleCamera,
-    toggleMic,
+    setMicrophoneEnabled,
     switchCamera,
     mediaPermissionMessage,
     canOpenMediaSettings,
@@ -549,19 +554,30 @@ export default function ChillyChatThreadScreen() {
   });
 
   const handleToggleCallMic = useCallback(async () => {
-    const nextMuted = micEnabled;
-    await toggleMic();
+    const nextEnabled = !micEnabled;
+    const updated = await setMicrophoneEnabled(nextEnabled);
+    if (!updated) return;
     if (requestedNativeCallUuid) {
-      await setIosNativeCallMuted(requestedNativeCallUuid, nextMuted).catch(() => false);
+      await setIosNativeCallMuted(requestedNativeCallUuid, !nextEnabled).catch(() => false);
     }
-  }, [micEnabled, requestedNativeCallUuid, toggleMic]);
+  }, [micEnabled, requestedNativeCallUuid, setMicrophoneEnabled]);
 
   const handleToggleNativeAudioRoute = useCallback(async () => {
-    if (Platform.OS !== "ios" || !requestedNativeCallUuid) return;
+    if (Platform.OS !== "ios") return;
     const nextSpeakerEnabled = !nativeSpeakerEnabled;
     const updated = await setIosNativeCallAudioRoute(nextSpeakerEnabled ? "speaker" : "receiver");
     if (updated) setNativeSpeakerEnabled(nextSpeakerEnabled);
-  }, [nativeSpeakerEnabled, requestedNativeCallUuid]);
+  }, [nativeSpeakerEnabled]);
+
+  useEffect(() => {
+    if (Platform.OS !== "ios" || !callPanelOpen || !activeCallRoomId || callChannelState !== "live") return;
+    const route = resolveIosChatCallAudioRoute(thread?.activeCallType);
+    const shouldUseSpeaker = route === "speaker";
+    void setIosNativeCallAudioRoute(route)
+      .then((updated) => {
+        if (updated) setNativeSpeakerEnabled(shouldUseSpeaker);
+      });
+  }, [activeCallRoomId, callChannelState, callPanelOpen, nativeMediaActivationSerial, thread?.activeCallType]);
 
   useEffect(() => {
     stopOutgoingRingback();
@@ -673,10 +689,6 @@ export default function ChillyChatThreadScreen() {
     Vibration.cancel();
     void stopChillyChatCallSound(incomingCallSoundRef.current);
     incomingCallSoundRef.current = null;
-    if (incomingCallTimeoutRef.current) {
-      clearTimeout(incomingCallTimeoutRef.current);
-      incomingCallTimeoutRef.current = null;
-    }
 
     if (!incomingCallInvite || callPanelOpen || callPreferences?.chillyChatCallsEnabled === false) {
       return () => {
@@ -701,34 +713,85 @@ export default function ChillyChatThreadScreen() {
       })
       .catch(() => null);
 
-    const expiresAt = Date.parse(incomingCallInvite.expiresAt);
-    const timeoutMs = Math.max(1000, Number.isFinite(expiresAt) ? expiresAt - Date.now() : 45_000);
-    incomingCallTimeoutRef.current = setTimeout(async () => {
-      Vibration.cancel();
-      void stopChillyChatCallSound(incomingCallSoundRef.current);
-      incomingCallSoundRef.current = null;
-      await updateChillyChatCallInviteStatus({
-        actorUserId: currentUserId,
-        invite: incomingCallInvite,
-        status: "missed",
-      }).finally(() => {
-        void clearEndedChatThreadCall(threadId);
-        clearVisibleIncomingCallState(incomingCallInvite);
-        void loadThreadState();
-      });
-    }, timeoutMs);
-
     return () => {
       soundActive = false;
       Vibration.cancel();
       void stopChillyChatCallSound(incomingCallSoundRef.current);
       incomingCallSoundRef.current = null;
+    };
+  }, [callPanelOpen, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, incomingCallInvite]);
+
+  useEffect(() => {
+    if (incomingCallTimeoutRef.current) {
+      clearTimeout(incomingCallTimeoutRef.current);
+      incomingCallTimeoutRef.current = null;
+    }
+    if (!incomingCallInvite || !currentUserId) return undefined;
+
+    const expiresAt = Date.parse(incomingCallInvite.expiresAt);
+    const timeoutMs = Math.max(0, Number.isFinite(expiresAt) ? expiresAt - Date.now() : 45_000);
+    incomingCallTimeoutRef.current = setTimeout(async () => {
+      const latestInvite = await readChillyChatCallInvite(incomingCallInvite.id).catch(() => null);
+      if (!latestInvite || latestInvite.status !== "ringing") return;
+      await updateChillyChatCallInviteStatus({
+        actorUserId: currentUserId,
+        invite: latestInvite,
+        status: "missed",
+      }).finally(() => {
+        void clearEndedChatThreadCall(threadId);
+        clearVisibleIncomingCallState(latestInvite);
+        void loadThreadState();
+      });
+    }, timeoutMs);
+
+    return () => {
       if (incomingCallTimeoutRef.current) {
         clearTimeout(incomingCallTimeoutRef.current);
         incomingCallTimeoutRef.current = null;
       }
     };
-  }, [callPanelOpen, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, threadId]);
+  }, [clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, threadId]);
+
+  useEffect(() => {
+    if (!incomingCallInvite?.id) return undefined;
+    const visibleInvite = incomingCallInvite;
+    let active = true;
+
+    const reconcileInvitePresentation = async () => {
+      const latestInvite = await readChillyChatCallInvite(visibleInvite.id).catch(() => null);
+      if (!active || !latestInvite || latestInvite.status === "ringing") return;
+
+      rememberHandledIncomingInvite(latestInvite, {
+        clearRoom: latestInvite.status !== "accepted",
+      });
+      setIncomingCallInvite((current) => current?.id === latestInvite.id ? null : current);
+      if (latestInvite.status === "accepted") {
+        activeCallInviteRef.current = latestInvite;
+        setThread((current) => {
+          if (!current || current.threadId !== threadId) return current;
+          return {
+            ...current,
+            activeCommunicationRoomId: latestInvite.communicationRoomId ?? current.activeCommunicationRoomId,
+            activeCallType: latestInvite.callType,
+          };
+        });
+        setError(null);
+        setCallPanelOpen(true);
+        return;
+      }
+
+      clearVisibleIncomingCallState(latestInvite);
+    };
+
+    void reconcileInvitePresentation();
+    const unsubscribe = subscribeToChillyChatCallInvite(visibleInvite.id, () => {
+      void reconcileInvitePresentation();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [clearVisibleIncomingCallState, incomingCallInvite, rememberHandledIncomingInvite, threadId]);
 
   const otherMember = thread?.otherMember;
   const officialAccount = getOfficialPlatformAccount(otherMember?.userId);
@@ -1085,6 +1148,7 @@ export default function ChillyChatThreadScreen() {
         };
       });
       setCallPanelOpen(true);
+      setError(null);
       setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
       trackEvent("chat_call_accepted", {
         surface: "chat-thread",
@@ -1216,8 +1280,8 @@ export default function ChillyChatThreadScreen() {
 
       if (action === "mute" || action === "unmute") {
         const shouldMute = action === "mute";
-        if (invite.status === "accepted" && micEnabled === shouldMute) {
-          await toggleMic();
+        if (invite.status === "accepted") {
+          await setMicrophoneEnabled(!shouldMute);
         }
         return;
       }
@@ -1283,8 +1347,7 @@ export default function ChillyChatThreadScreen() {
     requestedCallInviteId,
     requestedNativeCallAction,
     requestedNativeCallUuid,
-    micEnabled,
-    toggleMic,
+    setMicrophoneEnabled,
     callRoom?.hostUserId,
     leaveRoom,
     threadId,
@@ -1346,6 +1409,10 @@ export default function ChillyChatThreadScreen() {
       const eventCallUuid = String(event.callUuid ?? "").trim();
       const appliesToActiveCall = !eventCallUuid || eventCallUuid === requestedNativeCallUuid;
       if (!appliesToActiveCall) return;
+      if (event.type === "muted" || event.type === "unmuted") {
+        void setMicrophoneEnabled(event.type === "unmuted");
+        return;
+      }
       if (
         event.type === "audioSessionActivated"
         || event.type === "applicationActive"
@@ -1353,7 +1420,7 @@ export default function ChillyChatThreadScreen() {
         setNativeMediaActivationSerial((current) => current + 1);
       }
     });
-  }, [requestedNativeCallUuid]);
+  }, [requestedNativeCallUuid, setMicrophoneEnabled]);
 
   const handleJoinOrCloseCall = useCallback(async () => {
     logChatCall("handle_join_or_close", {
@@ -1393,37 +1460,45 @@ export default function ChillyChatThreadScreen() {
         return;
       }
 
-      if (
-        incomingCallInvite
-        && (!requestedCallInviteId || incomingCallInvite.id === requestedCallInviteId)
-        && currentUserId
-        && incomingCallInvite.calleeUserId === currentUserId
-        && incomingCallInvite.callerUserId !== currentUserId
-      ) {
-        if (incomingCallTimeoutRef.current) {
-          clearTimeout(incomingCallTimeoutRef.current);
-          incomingCallTimeoutRef.current = null;
+      const currentUserIsRoomHost = snapshot.room.hostUserId === currentUserId;
+      if (!currentUserIsRoomHost) {
+        let joinInvite = incomingCallInvite?.communicationRoomId === activeCallRoomId
+          ? incomingCallInvite
+          : null;
+        if (!joinInvite && requestedCallInviteId) {
+          const requestedInvite = await readChillyChatCallInvite(requestedCallInviteId).catch(() => null);
+          if (requestedInvite?.communicationRoomId === activeCallRoomId) joinInvite = requestedInvite;
         }
-        Vibration.cancel();
-        void stopChillyChatCallSound(incomingCallSoundRef.current);
-        incomingCallSoundRef.current = null;
-        const currentInvite = await readAcceptableIncomingInvite(incomingCallInvite);
-        if (!currentInvite) return;
-        const acceptedInvite = await updateChillyChatCallInviteStatus({
-          actorUserId: currentUserId,
-          invite: currentInvite,
-          status: "accepted",
+        for (let attempt = 0; !joinInvite && attempt < 6; attempt += 1) {
+          joinInvite = await readLatestChillyChatCallInviteForRoom(activeCallRoomId).catch(() => null);
+          if (!joinInvite && attempt < 5) {
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+        }
+
+        const inviteBelongsToCurrentCallee = !!joinInvite
+          && joinInvite.threadId === threadId
+          && joinInvite.calleeUserId === currentUserId
+          && joinInvite.callerUserId !== currentUserId;
+        const joinAction = resolveIncomingCallRoomJoinAction({
+          currentUserIsRoomHost,
+          inviteBelongsToCurrentCallee,
+          inviteStatus: joinInvite?.status,
         });
-        if (!acceptedInvite) {
-          setError("Unable to accept this Chi'lly Chat call right now.");
-          setCallDeliveryStatus("Incoming call could not be accepted. Ask the caller to start a new call.");
+        if (joinAction === "accept" && joinInvite) {
+          const accepted = await acceptIncomingInvite(joinInvite);
+          if (!accepted) {
+            setCallDeliveryStatus("Incoming call could not be accepted. Ask the caller to start a new call.");
+          }
           return;
         }
-        await dismissChillyChatCallNotificationRows({
-          callInviteId: currentInvite.id,
-          threadId,
-        }).catch(() => 0);
-        setIncomingCallInvite(null);
+        if (joinAction !== "resume" || !joinInvite) {
+          setCallPanelOpen(false);
+          setCallDeliveryStatus("This call is not accepted or is no longer available. Ask the caller to start a new call.");
+          await loadThreadState();
+          return;
+        }
+        activeCallInviteRef.current = joinInvite;
       }
 
       trackEvent("chat_call_join_requested", {
@@ -1491,7 +1566,7 @@ export default function ChillyChatThreadScreen() {
         role: isHost ? "host" : "viewer",
       });
     }
-  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, readAcceptableIncomingInvite, requestedCallInviteId, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
+  }, [acceptIncomingInvite, activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, requestedCallInviteId, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";
@@ -2206,7 +2281,7 @@ export default function ChillyChatThreadScreen() {
             onToggleMic={() => {
               void handleToggleCallMic();
             }}
-            onToggleAudioRoute={Platform.OS === "ios" && requestedNativeCallUuid
+            onToggleAudioRoute={Platform.OS === "ios"
               ? () => {
                   void handleToggleNativeAudioRoute();
                 }

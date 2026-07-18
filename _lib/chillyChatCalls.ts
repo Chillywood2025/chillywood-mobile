@@ -377,6 +377,22 @@ export async function readChillyChatCallInvite(inviteId: string): Promise<Chilly
   return parseInvite(data);
 }
 
+export async function readLatestChillyChatCallInviteForRoom(roomId: string): Promise<ChillyChatCallInvite | null> {
+  const normalizedRoomId = toText(roomId);
+  if (!normalizedRoomId) return null;
+
+  const { data, error } = await supabase
+    .from(CHAT_CALL_INVITES_TABLE)
+    .select(CALL_INVITE_SELECT)
+    .eq("communication_room_id", normalizedRoomId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .returns<CallInviteRow[]>();
+
+  if (error || !data?.length) return null;
+  return parseInvite(data[0]);
+}
+
 export function subscribeToIncomingChillyChatCallInvites(
   calleeUserId: string,
   onChange: () => void,
