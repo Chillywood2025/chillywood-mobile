@@ -46,7 +46,7 @@ type VoipToken = {
 };
 
 const CORS_HEADERS = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-chillywood-retry-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Origin": "*",
 } as const;
@@ -315,8 +315,35 @@ Deno.serve(async (req): Promise<Response> => {
       { auth: { persistSession: false } },
     );
     const requestAuthorization = req.headers.get("authorization") ?? "";
+    const retryToken = toText(req.headers.get("x-chillywood-retry-token"));
     let callerUserId = "";
-    if (requestAuthorization === `Bearer ${serviceRoleKey}`) {
+    if (retryToken) {
+      if (!deliveryId || !isTerminalAction(action)) {
+        return jsonResponse(401, { error: "invalid_internal_delivery_scope" });
+      }
+      const { data: authorized, error: authorizationError } = await adminClient.rpc(
+        "authorize_chilly_chat_call_transition_retry",
+        { p_token: retryToken },
+      );
+      if (authorizationError || authorized !== true) {
+        return jsonResponse(401, { error: "invalid_retry_authorization" });
+      }
+      const { data: internalDelivery, error: internalDeliveryError } = await adminClient
+        .from("chat_call_transition_deliveries")
+        .select("actor_user_id,call_invite_id,dispatch_action,delivery_status")
+        .eq("id", deliveryId)
+        .maybeSingle();
+      if (
+        internalDeliveryError
+        || !internalDelivery
+        || toText(internalDelivery.call_invite_id) !== inviteId
+        || toText(internalDelivery.dispatch_action) !== action
+        || toText(internalDelivery.delivery_status) !== "dispatching"
+      ) {
+        return jsonResponse(403, { error: "internal_delivery_scope_rejected" });
+      }
+      callerUserId = toText(internalDelivery.actor_user_id);
+    } else if (requestAuthorization === `Bearer ${serviceRoleKey}`) {
       if (!deliveryId || !isTerminalAction(action)) {
         return jsonResponse(401, { error: "invalid_internal_delivery_scope" });
       }

@@ -269,6 +269,10 @@ const retryWorkerSource = await readFile(
   new URL("supabase/functions/chilly-chat-call-transition-retry/index.ts", root),
   "utf8",
 );
+const iosVoipDispatchSource = await readFile(
+  new URL("supabase/functions/ios-voip-call-dispatch/index.ts", root),
+  "utf8",
+);
 const retryMigrationSource = await readFile(
   new URL("supabase/migrations/20260718113000_durable_call_delivery_retry_and_storefront_prices.sql", root),
   "utf8",
@@ -303,6 +307,14 @@ assert.doesNotMatch(
   "CallKit mute must not navigate to a duplicate chat screen",
 );
 assert.match(communicationSessionSource, /setLocalMediaKindEnabled\("audio", false\)/u, "mute must preserve the negotiated audio sender");
+assert.match(retryWorkerSource, /"x-chillywood-retry-token": retryToken/u, "retry worker must use the dedicated Vault-held token across functions");
+assert.doesNotMatch(
+  retryWorkerSource,
+  /Authorization: `Bearer \$\{serviceRoleKey\}`/u,
+  "retry worker must not use the database service-role key as a cross-function bearer token",
+);
+assert.match(dispatchSource, /authorize_chilly_chat_call_transition_retry/u, "dispatcher must verify retry authorization before terminal delivery");
+assert.match(iosVoipDispatchSource, /authorize_chilly_chat_call_transition_retry/u, "VoIP dispatcher must verify retry authorization before terminal cleanup");
 assert.match(
   dispatchSource,
   /if \(action === "missed"\) \{\s*if \(status !== "missed"\)/u,

@@ -92,7 +92,7 @@ type ChillyDispatchChannelResult = {
 };
 
 const CORS_HEADERS = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-chillywood-retry-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Origin": "*",
 } as const;
@@ -529,6 +529,7 @@ async function invokeIosVoipDispatch(input: {
   authHeader: string;
   deliveryId?: string;
   inviteId: string;
+  retryToken?: string;
 }): Promise<ChillyCallChannelResult> {
   if (!shouldInvokeIosVoip(input.action)) {
     return channelResult();
@@ -540,6 +541,7 @@ async function invokeIosVoipDispatch(input: {
         Authorization: input.authHeader,
         apikey: readRequiredEnv("SUPABASE_ANON_KEY"),
         "Content-Type": "application/json",
+        ...(input.retryToken ? { "x-chillywood-retry-token": input.retryToken } : {}),
       },
       method: "POST",
     });
@@ -613,6 +615,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   recipientUserId: string;
   authHeader: string;
   deliveryId?: string;
+  retryToken?: string;
 }) {
   const preference = await readPreferences(adminClient, input.recipientUserId);
   const preferencePolicy = resolveChillyChatCallPreferencePolicy({
@@ -646,6 +649,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
     authHeader: input.authHeader,
     deliveryId: input.deliveryId,
     inviteId: input.invite.id,
+    retryToken: input.retryToken,
   });
 
   let notificationId: string | null = null;
@@ -933,9 +937,37 @@ Deno.serve(async (req): Promise<Response> => {
     const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const authorization = req.headers.get("authorization") ?? "";
+    const retryToken = toText(req.headers.get("x-chillywood-retry-token"));
     let actorUserId = "";
     let dispatchAuthorization = authorization;
-    if (authorization === `Bearer ${serviceRoleKey}`) {
+    if (retryToken) {
+      if (!deliveryId || !isTerminalAction(action)) {
+        return jsonResponse(401, { error: "invalid_internal_delivery_scope" });
+      }
+      const { data: authorized, error: authorizationError } = await adminClient.rpc(
+        "authorize_chilly_chat_call_transition_retry",
+        { p_token: retryToken },
+      );
+      if (authorizationError || authorized !== true) {
+        return jsonResponse(401, { error: "invalid_retry_authorization" });
+      }
+      const { data: internalDelivery, error: internalDeliveryError } = await adminClient
+        .from("chat_call_transition_deliveries")
+        .select("id,actor_user_id,call_invite_id,dispatch_action,delivery_status")
+        .eq("id", deliveryId)
+        .maybeSingle();
+      if (
+        internalDeliveryError
+        || !internalDelivery
+        || toText(internalDelivery.call_invite_id) !== inviteId
+        || toText(internalDelivery.dispatch_action) !== action
+        || toText(internalDelivery.delivery_status) !== "dispatching"
+      ) {
+        return jsonResponse(403, { error: "internal_delivery_scope_rejected" });
+      }
+      actorUserId = toText(internalDelivery.actor_user_id);
+      dispatchAuthorization = `Bearer ${readRequiredEnv("SUPABASE_ANON_KEY")}`;
+    } else if (authorization === `Bearer ${serviceRoleKey}`) {
       if (!deliveryId || !isTerminalAction(action)) {
         return jsonResponse(401, { error: "invalid_internal_delivery_scope" });
       }
@@ -1042,6 +1074,7 @@ Deno.serve(async (req): Promise<Response> => {
       recipientUserId,
       authHeader: dispatchAuthorization,
       deliveryId: deliveryId || undefined,
+      retryToken: retryToken || undefined,
     });
 
     return jsonResponse(200, result);

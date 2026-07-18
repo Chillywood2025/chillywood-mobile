@@ -110,9 +110,14 @@ Deno.serve(async (req): Promise<Response> => {
         const response = await fetch(`${supabaseUrl}/functions/v1/chilly-chat-call-dispatch`, {
           body: JSON.stringify({ action, deliveryId, inviteId }),
           headers: {
-            Authorization: `Bearer ${serviceRoleKey}`,
+            // The Vault-held retry token is the dedicated cross-function
+            // credential. Do not use the database service-role key as an HTTP
+            // bearer token; opaque service keys are not user JWTs and may be
+            // rejected before the scoped delivery check can run.
+            Authorization: `Bearer ${anonKey}`,
             apikey: anonKey,
             "Content-Type": "application/json",
+            "x-chillywood-retry-token": retryToken,
           },
           method: "POST",
           signal: AbortSignal.timeout(12_000),
