@@ -35,6 +35,7 @@ type InRoomCommunicationPanelProps = {
   onToggleAudioRoute?: () => void;
   onSwitchCamera?: () => void;
   onLeave: () => void;
+  leaveLabel?: string;
   onOpenMediaSettings?: () => void;
   onCloseSurface?: () => void;
 };
@@ -74,6 +75,7 @@ export function InRoomCommunicationPanel({
   onToggleAudioRoute,
   onSwitchCamera,
   onLeave,
+  leaveLabel,
   onOpenMediaSettings,
   onCloseSurface,
 }: InRoomCommunicationPanelProps) {
@@ -229,7 +231,7 @@ export function InRoomCommunicationPanel({
             micEnabled={micEnabled}
             speakerEnabled={speakerEnabled}
             minimumTouchTarget={responsiveLayout.minimumTouchTarget}
-            leaveLabel={isHost ? "End Call" : "Leave"}
+            leaveLabel={leaveLabel ?? (isHost ? "End Call" : "Leave")}
             onToggleCamera={onToggleCamera}
             onToggleMic={onToggleMic}
             onToggleAudioRoute={onToggleAudioRoute}

@@ -207,6 +207,14 @@ assert.equal(endedAudioTrack.enabled, true, "mute does not mutate an ended sende
 assert.equal(setActiveCommunicationTracksEnabled([liveAudioTrack], true), 1);
 assert.equal(liveAudioTrack.enabled, true, "unmute re-enables the negotiated track in place");
 
+const liveVideoTrack = { enabled: true, readyState: "live" };
+const endedVideoTrack = { enabled: true, readyState: "ended" };
+assert.equal(setActiveCommunicationTracksEnabled([liveVideoTrack, endedVideoTrack], false), 1);
+assert.equal(liveVideoTrack.enabled, false, "camera off disables the live track without stopping it");
+assert.equal(endedVideoTrack.enabled, true, "camera off does not mutate an ended sender track");
+assert.equal(setActiveCommunicationTracksEnabled([liveVideoTrack], true), 1);
+assert.equal(liveVideoTrack.enabled, true, "camera on re-enables the negotiated track in place");
+
 assert.equal(resolveIncomingCallRoomJoinAction({
   currentUserIsRoomHost: false,
   inviteBelongsToCurrentCallee: true,
@@ -265,6 +273,10 @@ const nativeCoordinatorSource = await readFile(
 const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root), "utf8");
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
 const communicationSessionSource = await readFile(new URL("hooks/use-communication-room-session.ts", root), "utf8");
+const inRoomPanelSource = await readFile(
+  new URL("components/communication/in-room-communication-panel.tsx", root),
+  "utf8",
+);
 const retryWorkerSource = await readFile(
   new URL("supabase/functions/chilly-chat-call-transition-retry/index.ts", root),
   "utf8",
@@ -307,6 +319,43 @@ assert.doesNotMatch(
   "CallKit mute must not navigate to a duplicate chat screen",
 );
 assert.match(communicationSessionSource, /setLocalMediaKindEnabled\("audio", false\)/u, "mute must preserve the negotiated audio sender");
+assert.match(communicationSessionSource, /setLocalMediaKindEnabled\("video", false\)/u, "camera off must preserve the negotiated video sender");
+const cameraControlSource = communicationSessionSource.slice(
+  communicationSessionSource.indexOf("const setCameraCaptureEnabled"),
+  communicationSessionSource.indexOf("const toggleCamera"),
+);
+assert.doesNotMatch(cameraControlSource, /stopLocalMediaKind/u, "camera controls must not stop a negotiated sender");
+assert.doesNotMatch(
+  communicationSessionSource,
+  /!cameraEnabled && !micEnabled[\s\S]{0,120}pauseLocalMediaCapture/u,
+  "muting a voice call while its camera is off must not tear down the media session",
+);
+assert.match(
+  chatThreadSource,
+  /enabled: !!activeCallRoomId && \([\s\S]{0,220}activeCallInvite\?\.status === "accepted"/u,
+  "Back to Thread must keep an accepted call session alive",
+);
+const activeInviteReconciliationSource = chatThreadSource.slice(
+  chatThreadSource.indexOf("const reconcileActiveInvite"),
+  chatThreadSource.indexOf("const otherMember ="),
+);
+assert.match(
+  activeInviteReconciliationSource,
+  /subscribeToChillyChatCallInvite\(inviteId/u,
+  "both call participants must subscribe to terminal invite state",
+);
+assert.match(
+  activeInviteReconciliationSource,
+  /reportIosNativeCallRemoteEnd/u,
+  "remote terminal invite state must close native and media state",
+);
+assert.match(chatThreadSource, /leaveLabel="End Call"/u, "both participants in a direct call must receive an End Call control");
+assert.match(inRoomPanelSource, /leaveLabel \?\? \(isHost \? "End Call" : "Leave"\)/u, "room surfaces retain their host/participant label policy");
+assert.match(
+  chatThreadSource,
+  /Call is still connected\. Tap Open Call to return\./u,
+  "Back to Thread must truthfully tell the user that the call remains connected",
+);
 assert.match(retryWorkerSource, /"x-chillywood-retry-token": retryToken/u, "retry worker must use the dedicated Vault-held token across functions");
 assert.doesNotMatch(
   retryWorkerSource,

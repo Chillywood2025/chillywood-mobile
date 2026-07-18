@@ -2114,11 +2114,6 @@ export function useCommunicationRoomSession({
     if (!enabled || loading || appStateRef.current !== "active") return;
     if (!roomRef.current || !identityRef.current) return;
 
-    if (!cameraEnabled && !micEnabled) {
-      pauseLocalMediaCapture();
-      return;
-    }
-
     let cancelled = false;
     const applyRequestedMedia = async () => {
       if (cameraEnabled) {
@@ -2126,9 +2121,20 @@ export function useCommunicationRoomSession({
         if (!track) {
           cameraEnabledRef.current = false;
           setCameraEnabled(false);
+        } else {
+          track.enabled = true;
+          setLocalVideoStreamURL(
+            getRenderableVideoStreamURL(localStreamRef.current)
+            || auxiliaryStreamsRef.current.map(getRenderableVideoStreamURL).find(Boolean)
+            || "",
+          );
         }
       } else {
-        stopLocalMediaKind("video");
+        // Camera toggles inside an active call must preserve the negotiated
+        // sender exactly like microphone mute. Removing the video track forces
+        // an offer/answer cycle and can destabilize a cross-platform call.
+        setLocalMediaKindEnabled("video", false);
+        setLocalVideoStreamURL("");
       }
       if (micEnabled) {
         const track = await ensureTrackKind("audio");
@@ -2159,22 +2165,24 @@ export function useCommunicationRoomSession({
     mediaActivationSerial,
     mediaRecoverySerial,
     micEnabled,
-    pauseLocalMediaCapture,
     roomId,
     setLocalMediaKindEnabled,
-    stopLocalMediaKind,
     updatePresence,
   ]);
 
-  const toggleCamera = useCallback(async () => {
-    const nextEnabled = !cameraEnabledRef.current;
+  const setCameraCaptureEnabled = useCallback(async (nextEnabled: boolean) => {
+    if (nextEnabled === cameraEnabledRef.current) {
+      const updatedExistingTrack = setLocalMediaKindEnabled("video", nextEnabled);
+      if (!nextEnabled || updatedExistingTrack) return true;
+    }
+
     if (nextEnabled) {
       const track = await ensureTrackKind("video");
       if (!track) {
         setCameraEnabled(false);
         cameraEnabledRef.current = false;
         await updatePresence(false, micEnabledRef.current);
-        return;
+        return false;
       }
       track.enabled = true;
       setLocalVideoStreamURL(
@@ -2183,7 +2191,8 @@ export function useCommunicationRoomSession({
         || "",
       );
     } else {
-      stopLocalMediaKind("video");
+      setLocalMediaKindEnabled("video", false);
+      setLocalVideoStreamURL("");
     }
 
     cameraEnabledRef.current = nextEnabled;
@@ -2197,7 +2206,12 @@ export function useCommunicationRoomSession({
     if (roomRef.current && identityRef.current) {
       await refreshSnapshot(roomRef.current.roomId);
     }
-  }, [ensureTrackKind, refreshSnapshot, sendBroadcast, stopLocalMediaKind, updatePresence]);
+    return true;
+  }, [ensureTrackKind, refreshSnapshot, sendBroadcast, setLocalMediaKindEnabled, updatePresence]);
+
+  const toggleCamera = useCallback(async () => {
+    await setCameraCaptureEnabled(!cameraEnabledRef.current);
+  }, [setCameraCaptureEnabled]);
 
   const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
     if (nextEnabled === micEnabledRef.current) {

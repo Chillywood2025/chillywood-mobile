@@ -67,6 +67,7 @@ import { reportRuntimeError } from "../../_lib/logger";
 import {
   completeIosNativeCallAnswer,
   endIosNativeCall,
+  reportIosNativeCallRemoteEnd,
   setIosNativeCallAudioRoute,
   setIosNativeCallMuted,
   subscribeToIosNativeCallEvents,
@@ -140,6 +141,14 @@ const formatCallEventTitle = (event: ChillyChatCallEvent, currentUserId: string)
       return `${callLabel} started`;
   }
 };
+
+const TERMINAL_CHAT_CALL_INVITE_STATUSES = new Set<string>([
+  "declined",
+  "missed",
+  "canceled",
+  "ended",
+  "busy",
+]);
 
 const getThreadStatusLabel = (thread: ChatThreadSummary | null) => {
   if (thread?.activeCommunicationRoomId && thread.activeCallType) {
@@ -244,6 +253,7 @@ export default function ChillyChatThreadScreen() {
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
+  const [activeCallInvite, setActiveCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [callDeliveryStatus, setCallDeliveryStatus] = useState<string | null>(null);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
@@ -256,6 +266,7 @@ export default function ChillyChatThreadScreen() {
   const nativeCallActionHandledRef = useRef("");
   const nativeAnswerAcknowledgedRef = useRef("");
   const activeCallInviteRef = useRef<ChillyChatCallInvite | null>(null);
+  const handledActiveTerminalInviteIdsRef = useRef<Set<string>>(new Set());
   const lastReadReceiptWriteAtRef = useRef(0);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
@@ -517,7 +528,11 @@ export default function ChillyChatThreadScreen() {
     leaveRoom,
   } = useCommunicationRoomSession({
     roomId: activeCallRoomId,
-    enabled: callPanelOpen && !!activeCallRoomId,
+    enabled: !!activeCallRoomId && (
+      callPanelOpen
+      || activeCallInvite?.status === "accepted"
+      || outgoingCallInvite?.status === "ringing"
+    ),
     allowBackgroundAudio: Platform.OS === "ios"
       && requestedNativeCallAction === "answer"
       && !!requestedNativeCallUuid,
@@ -541,6 +556,7 @@ export default function ChillyChatThreadScreen() {
           status: "ended",
         }).catch(() => null).finally(() => {
           activeCallInviteRef.current = null;
+          setActiveCallInvite(null);
         });
       }
       if (requestedNativeCallUuid) {
@@ -570,14 +586,19 @@ export default function ChillyChatThreadScreen() {
   }, [nativeSpeakerEnabled]);
 
   useEffect(() => {
-    if (Platform.OS !== "ios" || !callPanelOpen || !activeCallRoomId || callChannelState !== "live") return;
+    if (
+      Platform.OS !== "ios"
+      || !activeCallRoomId
+      || activeCallInvite?.status !== "accepted"
+      || callChannelState !== "live"
+    ) return;
     const route = resolveIosChatCallAudioRoute(thread?.activeCallType);
     const shouldUseSpeaker = route === "speaker";
     void setIosNativeCallAudioRoute(route)
       .then((updated) => {
         if (updated) setNativeSpeakerEnabled(shouldUseSpeaker);
       });
-  }, [activeCallRoomId, callChannelState, callPanelOpen, nativeMediaActivationSerial, thread?.activeCallType]);
+  }, [activeCallInvite?.status, activeCallRoomId, callChannelState, nativeMediaActivationSerial, thread?.activeCallType]);
 
   useEffect(() => {
     stopOutgoingRingback();
@@ -586,7 +607,6 @@ export default function ChillyChatThreadScreen() {
       !outgoingCallInvite
       || outgoingCallInvite.status !== "ringing"
       || !currentUserId
-      || !callPanelOpen
       || participantCount > 1
     ) {
       return () => stopOutgoingRingback();
@@ -619,6 +639,8 @@ export default function ChillyChatThreadScreen() {
         stopOutgoingRingback();
         void leaveRoom({ endRoomIfHost: true }).catch(() => null);
         void clearEndedChatThreadCall(threadId).finally(() => {
+          activeCallInviteRef.current = null;
+          setActiveCallInvite(null);
           setOutgoingCallInvite(null);
           setCallPanelOpen(false);
           setCallDeliveryStatus("No answer. The call expired and active call state was cleared.");
@@ -631,7 +653,7 @@ export default function ChillyChatThreadScreen() {
       soundActive = false;
       stopOutgoingRingback();
     };
-  }, [callPanelOpen, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, currentUserId, leaveRoom, loadThreadState, outgoingCallInvite, participantCount, stopOutgoingRingback, threadId]);
+  }, [callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, currentUserId, leaveRoom, loadThreadState, outgoingCallInvite, participantCount, stopOutgoingRingback, threadId]);
 
   useEffect(() => {
     if (!outgoingCallInvite?.id) return () => {};
@@ -644,6 +666,7 @@ export default function ChillyChatThreadScreen() {
       setOutgoingCallInvite(invite);
       if (invite.status === "accepted") {
         activeCallInviteRef.current = invite;
+        setActiveCallInvite(invite);
         stopOutgoingRingback();
         setOutgoingCallInvite(null);
         setCallDeliveryStatus("Receiver joined the call.");
@@ -661,6 +684,8 @@ export default function ChillyChatThreadScreen() {
         await leaveRoom({ endRoomIfHost: true }).catch(() => null);
         await clearEndedChatThreadCall(threadId).catch(() => null);
         if (!active) return;
+        activeCallInviteRef.current = null;
+        setActiveCallInvite(null);
         setOutgoingCallInvite(null);
         setCallPanelOpen(false);
         setCallDeliveryStatus(
@@ -767,6 +792,7 @@ export default function ChillyChatThreadScreen() {
       setIncomingCallInvite((current) => current?.id === latestInvite.id ? null : current);
       if (latestInvite.status === "accepted") {
         activeCallInviteRef.current = latestInvite;
+        setActiveCallInvite(latestInvite);
         setThread((current) => {
           if (!current || current.threadId !== threadId) return current;
           return {
@@ -793,21 +819,80 @@ export default function ChillyChatThreadScreen() {
     };
   }, [clearVisibleIncomingCallState, incomingCallInvite, rememberHandledIncomingInvite, threadId]);
 
+  useEffect(() => {
+    if (!activeCallInvite?.id || activeCallInvite.status !== "accepted" || !currentUserId) {
+      return undefined;
+    }
+
+    const inviteId = activeCallInvite.id;
+    let subscribed = true;
+    let terminalCleanupInFlight = false;
+    const reconcileActiveInvite = async () => {
+      const latestInvite = await readChillyChatCallInvite(inviteId).catch(() => null);
+      if (!subscribed || !latestInvite || latestInvite.status === "accepted") return;
+      if (!TERMINAL_CHAT_CALL_INVITE_STATUSES.has(latestInvite.status)) return;
+      if (
+        terminalCleanupInFlight
+        || handledActiveTerminalInviteIdsRef.current.has(latestInvite.id)
+      ) return;
+
+      terminalCleanupInFlight = true;
+      handledActiveTerminalInviteIdsRef.current.add(latestInvite.id);
+      const isHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
+      await leaveRoom({ endRoomIfHost: isHost }).catch(() => undefined);
+      if (requestedNativeCallUuid) {
+        await reportIosNativeCallRemoteEnd(
+          requestedNativeCallUuid,
+          `invite_${latestInvite.status}`,
+        ).catch(() => false);
+      }
+      await clearEndedChatThreadCall(threadId).catch(() => null);
+
+      stopOutgoingRingback();
+      activeCallInviteRef.current = null;
+      setActiveCallInvite(null);
+      setOutgoingCallInvite(null);
+      setIncomingCallInvite(null);
+      setCallPanelOpen(false);
+      setError(null);
+      setCallDeliveryStatus("The call ended. Active call state was cleared on both devices.");
+      await loadThreadState();
+    };
+
+    void reconcileActiveInvite();
+    const unsubscribe = subscribeToChillyChatCallInvite(inviteId, () => {
+      void reconcileActiveInvite();
+    });
+    return () => {
+      subscribed = false;
+      unsubscribe();
+    };
+  }, [
+    activeCallInvite?.id,
+    activeCallInvite?.status,
+    callRoom?.hostUserId,
+    currentUserId,
+    leaveRoom,
+    loadThreadState,
+    requestedNativeCallUuid,
+    stopOutgoingRingback,
+    threadId,
+  ]);
+
   const otherMember = thread?.otherMember;
   const officialAccount = getOfficialPlatformAccount(otherMember?.userId);
   const otherMemberAvatarUrl = officialAccount ? undefined : otherMember?.avatarUrl;
   const otherMemberDisplayName = officialAccount?.displayName ?? otherMember?.displayName ?? "Direct Thread";
   const otherMemberHandle = officialAccount?.handle ?? formatUsernameHandle(otherMember?.username);
   const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;
-  const outgoingCallRinging = callPanelOpen
-    && !!outgoingCallInvite
+  const outgoingCallRinging = !!outgoingCallInvite
     && outgoingCallInvite.status === "ringing"
     && participantCount < 2;
   const callTitle = outgoingCallRinging
     ? (thread?.activeCallType === "video" ? "Video call ringing" : "Voice call ringing")
     : (thread?.activeCallType === "video" ? "Video call active" : "Voice call active");
   const callBody = outgoingCallRinging
-    ? `${otherMemberDisplayName} is being notified. Keep this open while Chi'lly Chat rings their phone.`
+    ? `${otherMemberDisplayName} is being notified. You can return to the thread while Chi'lly Chat keeps ringing.`
     : thread?.activeCallType === "video"
       ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
       : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
@@ -816,10 +901,16 @@ export default function ChillyChatThreadScreen() {
     : !activeCallRoomId
       ? "No Active Call"
       : callPanelOpen
-        ? "Close Call Surface"
-        : thread?.activeCallType === "video"
-          ? "Join Video Call"
-          : "Join Voice Call";
+        ? "Call Open"
+        : outgoingCallRinging
+          ? "Open Ringing Call"
+          : activeCallInvite?.status === "accepted"
+            ? thread?.activeCallType === "video"
+              ? "Open Video Call"
+              : "Open Voice Call"
+            : thread?.activeCallType === "video"
+              ? "Join Video Call"
+              : "Join Voice Call";
 
   const renderedMessages = useMemo(
     () => messages.map((message) => ({
@@ -1043,6 +1134,7 @@ export default function ChillyChatThreadScreen() {
       const result = await startChatThreadCall(threadId, mode);
       setThread(result.thread);
       activeCallInviteRef.current = result.invite;
+      setActiveCallInvite(result.invite);
       setOutgoingCallInvite(result.invite);
       setCallPanelOpen(true);
       setCallDeliveryStatus(getChillyChatCallDeliveryMessage(result.delivery));
@@ -1128,6 +1220,7 @@ export default function ChillyChatThreadScreen() {
       }
       rememberHandledIncomingInvite(acceptedInvite);
       activeCallInviteRef.current = acceptedInvite;
+      setActiveCallInvite(acceptedInvite);
       await dismissPresentedChillyChatCallNotifications({
         callInviteId: currentInvite.id,
         dismissAllPresentedNotificationsFallback: true,
@@ -1289,14 +1382,20 @@ export default function ChillyChatThreadScreen() {
       if (action === "end") {
         if (invite.status === "accepted") {
           const isHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
-          await leaveRoom({ endRoomIfHost: isHost }).catch(() => undefined);
-          await updateChillyChatCallInviteStatus({
+          const endedInvite = await updateChillyChatCallInviteStatus({
             actorUserId: currentUserId,
             invite,
             status: "ended",
           }).catch(() => null);
+          if (!endedInvite) {
+            setError("Unable to confirm that the call ended for both participants. Reopen the call and try End Call again.");
+            return;
+          }
+          handledActiveTerminalInviteIdsRef.current.add(invite.id);
+          await leaveRoom({ endRoomIfHost: isHost }).catch(() => undefined);
         }
         activeCallInviteRef.current = null;
+        setActiveCallInvite(null);
         await clearEndedChatThreadCall(threadId).catch(() => null);
         setCallPanelOpen(false);
         await loadThreadState();
@@ -1380,6 +1479,7 @@ export default function ChillyChatThreadScreen() {
           status: "ended",
         }).catch(() => null);
         activeCallInviteRef.current = null;
+        setActiveCallInvite(null);
       }
     };
     void finishFailedAnswer();
@@ -1462,9 +1562,11 @@ export default function ChillyChatThreadScreen() {
 
       const currentUserIsRoomHost = snapshot.room.hostUserId === currentUserId;
       if (!currentUserIsRoomHost) {
-        let joinInvite = incomingCallInvite?.communicationRoomId === activeCallRoomId
-          ? incomingCallInvite
-          : null;
+        let joinInvite = activeCallInvite?.communicationRoomId === activeCallRoomId
+          ? activeCallInvite
+          : incomingCallInvite?.communicationRoomId === activeCallRoomId
+            ? incomingCallInvite
+            : null;
         if (!joinInvite && requestedCallInviteId) {
           const requestedInvite = await readChillyChatCallInvite(requestedCallInviteId).catch(() => null);
           if (requestedInvite?.communicationRoomId === activeCallRoomId) joinInvite = requestedInvite;
@@ -1499,6 +1601,7 @@ export default function ChillyChatThreadScreen() {
           return;
         }
         activeCallInviteRef.current = joinInvite;
+        setActiveCallInvite(joinInvite);
       }
 
       trackEvent("chat_call_join_requested", {
@@ -1520,53 +1623,73 @@ export default function ChillyChatThreadScreen() {
     try {
       logChatCall("handle_join_or_close_decision", {
         threadId,
-        decision: isHost ? "end_call_as_host" : "leave_call",
+        decision: isHost ? "end_call_as_host" : "end_call_as_participant",
         roomId: activeCallRoomId,
       });
-      await leaveRoom({ endRoomIfHost: isHost });
-      if (isHost && outgoingCallInvite?.status === "ringing" && currentUserId) {
-        await updateChillyChatCallInviteStatus({
+      const terminalInvite = activeCallInviteRef.current
+        ?? outgoingCallInvite
+        ?? await readLatestChillyChatCallInviteForRoom(activeCallRoomId).catch(() => null);
+      const inviteBelongsToParticipant = !!terminalInvite
+        && terminalInvite.threadId === threadId
+        && (terminalInvite.callerUserId === currentUserId || terminalInvite.calleeUserId === currentUserId);
+      if (!inviteBelongsToParticipant || !terminalInvite) {
+        throw new Error("Unable to find the active call record. The call was left connected so it can be ended safely.");
+      }
+      if (terminalInvite.status === "ringing" && isHost && currentUserId) {
+        const canceledInvite = await updateChillyChatCallInviteStatus({
           actorUserId: currentUserId,
-          invite: outgoingCallInvite,
+          invite: terminalInvite,
           status: "canceled",
         }).catch(() => null);
-      }
-      const activeInvite = activeCallInviteRef.current;
-      if (activeInvite?.status === "accepted" && currentUserId) {
+        if (!canceledInvite) {
+          throw new Error("Unable to cancel the ringing call for the receiver. The call was left connected so you can try again.");
+        }
+        handledActiveTerminalInviteIdsRef.current.add(terminalInvite.id);
+      } else if (terminalInvite.status === "accepted" && currentUserId) {
         const endedInvite = await updateChillyChatCallInviteStatus({
           actorUserId: currentUserId,
-          invite: activeInvite,
+          invite: terminalInvite,
           status: "ended",
         }).catch(() => null);
-        activeCallInviteRef.current = endedInvite ?? null;
+        if (!endedInvite) {
+          throw new Error("Unable to end the call for both participants. The call was left connected so you can try again.");
+        }
+        handledActiveTerminalInviteIdsRef.current.add(terminalInvite.id);
+        activeCallInviteRef.current = endedInvite;
+        setActiveCallInvite(endedInvite);
+      } else if (!TERMINAL_CHAT_CALL_INVITE_STATUSES.has(terminalInvite.status)) {
+        throw new Error("The active call is changing state. Wait a moment and try End Call again.");
       }
+      await leaveRoom({ endRoomIfHost: isHost });
       if (requestedNativeCallUuid) {
         await endIosNativeCall(requestedNativeCallUuid, "in_app_leave").catch(() => false);
       }
-      if (isHost) {
-        await clearEndedChatThreadCall(threadId);
-      }
+      await clearEndedChatThreadCall(threadId);
       stopOutgoingRingback();
       setOutgoingCallInvite(null);
       activeCallInviteRef.current = null;
+      setActiveCallInvite(null);
       setCallPanelOpen(false);
-      setCallDeliveryStatus(isHost
-        ? "The call ended and the receiver-visible call state was cleared."
-        : "You left the call. The call may stay open for the other participant.");
+      setCallDeliveryStatus("The call ended and both participants' active call state was cleared.");
       await loadThreadState();
     } catch (leaveError) {
+      const leaveMessage = leaveError instanceof Error
+        ? leaveError.message
+        : "Unable to end this Chi'lly Chat call safely.";
+      setError(leaveMessage);
+      setCallDeliveryStatus(leaveMessage);
       logChatCall("handle_join_or_close_failed", {
         threadId,
         roomId: activeCallRoomId,
         role: isHost ? "host" : "viewer",
-        message: leaveError instanceof Error ? leaveError.message : "unknown_error",
+        message: leaveMessage,
       });
       reportRuntimeError("chat-thread-close-call", leaveError, {
         threadId,
         role: isHost ? "host" : "viewer",
       });
     }
-  }, [acceptIncomingInvite, activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, requestedCallInviteId, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
+  }, [acceptIncomingInvite, activeCallInvite, activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, requestedCallInviteId, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";
@@ -2062,7 +2185,11 @@ export default function ChillyChatThreadScreen() {
         <View style={styles.callBanner}>
           <Text style={styles.callBannerTitle}>{callTitle}</Text>
           <Text style={styles.callBannerBody}>
-            {otherMemberDisplayName} can join from this same thread. Open Chi’lly Chat to join.
+            {outgoingCallRinging
+              ? `${otherMemberDisplayName} is still being notified. Tap Open Ringing Call to return.`
+              : activeCallInvite?.status === "accepted"
+                ? "Your call is still connected. Tap Open Call to return to the controls."
+                : `${otherMemberDisplayName} can join from this same thread. Open Chi’lly Chat to join.`}
           </Text>
         </View>
       ) : null}
@@ -2273,6 +2400,7 @@ export default function ChillyChatThreadScreen() {
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}
             speakerEnabled={nativeSpeakerEnabled}
+            leaveLabel="End Call"
             mediaPermissionMessage={mediaPermissionMessage}
             canOpenMediaSettings={canOpenMediaSettings}
             showControls={!!activeCallRoomId && !callError && !callLoading}
@@ -2295,7 +2423,10 @@ export default function ChillyChatThreadScreen() {
             onLeave={() => {
               void handleJoinOrCloseCall();
             }}
-            onCloseSurface={() => setCallPanelOpen(false)}
+            onCloseSurface={() => {
+              setCallPanelOpen(false);
+              setCallDeliveryStatus("Call is still connected. Tap Open Call to return.");
+            }}
           />
         </View>
       ) : null}
