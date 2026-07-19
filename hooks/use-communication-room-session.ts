@@ -346,7 +346,7 @@ export function useCommunicationRoomSession({
   const [localVideoStreamURL, setLocalVideoStreamURL] = useState("");
   const [remoteStreamsByUserId, setRemoteStreamsByUserId] = useState<Record<string, MediaStream>>({});
   const [connectionStateByUserId, setConnectionStateByUserId] = useState<Record<string, PeerConnectionState>>({});
-  const [mediaRecoverySerial, setMediaRecoverySerial] = useState(0);
+  const [mediaControlsBusy, setMediaControlsBusy] = useState(false);
 
   const localJoinedAtRef = useRef(new Date().toISOString());
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -367,6 +367,8 @@ export function useCommunicationRoomSession({
   const peerConnectionsRef = useRef<Record<string, any>>({});
   const offerRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const lastOfferSentAtRef = useRef<Record<string, number>>({});
+  const mediaControlTailRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingMediaControlCountRef = useRef(0);
   const endingRef = useRef(false);
   const reconnectTrackedRef = useRef(false);
   const cameraFacingRef = useRef<"front" | "environment">("front");
@@ -609,13 +611,16 @@ export function useCommunicationRoomSession({
     const channel = channelRef.current;
     if (!channel) return;
 
+    // Clear the shared ref before awaiting untrack. A stale cleanup from the
+    // previous room generation must never null a newly subscribed channel.
+    if (channelRef.current === channel) channelRef.current = null;
+
     try {
       await waitForRealtimeOperation(channel.untrack());
     } catch {
       // noop
     }
     supabase.removeChannel(channel);
-    channelRef.current = null;
   }, []);
 
   const cleanupSnapshotChannel = useCallback(() => {
@@ -771,6 +776,17 @@ export function useCommunicationRoomSession({
         joinedAt: localJoinedAtRef.current,
       }),
     ).catch(() => {});
+  }, []);
+
+  const runSerializedMediaControl = useCallback(<T,>(task: () => Promise<T>) => {
+    pendingMediaControlCountRef.current += 1;
+    setMediaControlsBusy(true);
+    const result = mediaControlTailRef.current.then(task, task);
+    mediaControlTailRef.current = result.then(() => undefined, () => undefined);
+    return result.finally(() => {
+      pendingMediaControlCountRef.current = Math.max(0, pendingMediaControlCountRef.current - 1);
+      if (pendingMediaControlCountRef.current === 0) setMediaControlsBusy(false);
+    });
   }, []);
 
   const ensureInitialLocalStream = useCallback(async (requestMissingPermissions = true) => {
@@ -1826,12 +1842,6 @@ export function useCommunicationRoomSession({
     return clearWarmup;
   }, [enabled, identity?.userId, loading, refreshSnapshot, room?.roomId]);
 
-  useEffect(() => {
-    if (!enabled) return;
-    if (!channelRef.current || !roomRef.current || !identityRef.current || loading) return;
-    void updatePresence(cameraEnabled, micEnabled);
-  }, [cameraEnabled, enabled, loading, micEnabled, updatePresence]);
-
   const renegotiateAllPeers = useCallback(async () => {
     const remoteUserIds = Object.keys(peerConnectionsRef.current);
     for (const remoteUserId of remoteUserIds) {
@@ -1983,9 +1993,6 @@ export function useCommunicationRoomSession({
           setChannelState("connecting");
         }
         void restoreLocalMediaAfterForeground()
-          .then(() => {
-            setMediaRecoverySerial((current) => current + 1);
-          })
           .then(() => touchCommunicationRoomSession({
             roomId: currentRoom.roomId,
             userId: currentIdentity.userId,
@@ -2110,67 +2117,7 @@ export function useCommunicationRoomSession({
     return track;
   }, [ensureCameraPermission, ensureMicrophonePermission, renegotiateAllPeers]);
 
-  useEffect(() => {
-    if (!enabled || loading || appStateRef.current !== "active") return;
-    if (!roomRef.current || !identityRef.current) return;
-
-    let cancelled = false;
-    const applyRequestedMedia = async () => {
-      if (cameraEnabled) {
-        const track = await ensureTrackKind("video");
-        if (!track) {
-          cameraEnabledRef.current = false;
-          setCameraEnabled(false);
-        } else {
-          track.enabled = true;
-          setLocalVideoStreamURL(
-            getRenderableVideoStreamURL(localStreamRef.current)
-            || auxiliaryStreamsRef.current.map(getRenderableVideoStreamURL).find(Boolean)
-            || "",
-          );
-        }
-      } else {
-        // Camera toggles inside an active call must preserve the negotiated
-        // sender exactly like microphone mute. Removing the video track forces
-        // an offer/answer cycle and can destabilize a cross-platform call.
-        setLocalMediaKindEnabled("video", false);
-        setLocalVideoStreamURL("");
-      }
-      if (micEnabled) {
-        const track = await ensureTrackKind("audio");
-        if (!track) {
-          micEnabledRef.current = false;
-          setMicEnabled(false);
-        }
-      } else {
-        // Muting must preserve the negotiated sender and WebRTC session. Stopping
-        // and removing the audio track forces a renegotiation and can tear down a
-        // cross-platform call when CallKit mirrors the same mute action.
-        setLocalMediaKindEnabled("audio", false);
-      }
-      if (!cancelled) await updatePresence(cameraEnabledRef.current, micEnabledRef.current);
-    };
-
-    void applyRequestedMedia().catch((mediaError) => {
-      reportRuntimeError("communication-apply-requested-media", mediaError, { roomId });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    cameraEnabled,
-    enabled,
-    ensureTrackKind,
-    loading,
-    mediaActivationSerial,
-    mediaRecoverySerial,
-    micEnabled,
-    roomId,
-    setLocalMediaKindEnabled,
-    updatePresence,
-  ]);
-
-  const setCameraCaptureEnabled = useCallback(async (nextEnabled: boolean) => {
+  const setCameraCaptureEnabled = useCallback((nextEnabled: boolean) => runSerializedMediaControl(async () => {
     if (nextEnabled === cameraEnabledRef.current) {
       const updatedExistingTrack = setLocalMediaKindEnabled("video", nextEnabled);
       if (!nextEnabled || updatedExistingTrack) return true;
@@ -2197,23 +2144,22 @@ export function useCommunicationRoomSession({
 
     cameraEnabledRef.current = nextEnabled;
     setCameraEnabled(nextEnabled);
-    await updatePresence(nextEnabled, micEnabledRef.current);
-    await sendBroadcast("media:update", {
-      fromUserId: identityRef.current?.userId ?? "",
-      cameraOn: nextEnabled,
-      micOn: micEnabledRef.current,
-    });
-    if (roomRef.current && identityRef.current) {
-      await refreshSnapshot(roomRef.current.roomId);
-    }
+    await Promise.all([
+      updatePresence(nextEnabled, micEnabledRef.current),
+      sendBroadcast("media:update", {
+        fromUserId: identityRef.current?.userId ?? "",
+        cameraOn: nextEnabled,
+        micOn: micEnabledRef.current,
+      }),
+    ]);
     return true;
-  }, [ensureTrackKind, refreshSnapshot, sendBroadcast, setLocalMediaKindEnabled, updatePresence]);
+  }), [ensureTrackKind, runSerializedMediaControl, sendBroadcast, setLocalMediaKindEnabled, updatePresence]);
 
   const toggleCamera = useCallback(async () => {
     await setCameraCaptureEnabled(!cameraEnabledRef.current);
   }, [setCameraCaptureEnabled]);
 
-  const setMicrophoneEnabled = useCallback(async (nextEnabled: boolean) => {
+  const setMicrophoneEnabled = useCallback((nextEnabled: boolean) => runSerializedMediaControl(async () => {
     if (nextEnabled === micEnabledRef.current) {
       const updatedExistingTrack = setLocalMediaKindEnabled("audio", nextEnabled);
       if (!nextEnabled || updatedExistingTrack) return true;
@@ -2234,17 +2180,16 @@ export function useCommunicationRoomSession({
 
     micEnabledRef.current = nextEnabled;
     setMicEnabled(nextEnabled);
-    await updatePresence(cameraEnabledRef.current, nextEnabled);
-    await sendBroadcast("media:update", {
-      fromUserId: identityRef.current?.userId ?? "",
-      cameraOn: cameraEnabledRef.current,
-      micOn: nextEnabled,
-    });
-    if (roomRef.current && identityRef.current) {
-      await refreshSnapshot(roomRef.current.roomId);
-    }
+    await Promise.all([
+      updatePresence(cameraEnabledRef.current, nextEnabled),
+      sendBroadcast("media:update", {
+        fromUserId: identityRef.current?.userId ?? "",
+        cameraOn: cameraEnabledRef.current,
+        micOn: nextEnabled,
+      }),
+    ]);
     return true;
-  }, [ensureTrackKind, refreshSnapshot, sendBroadcast, setLocalMediaKindEnabled, updatePresence]);
+  }), [ensureTrackKind, runSerializedMediaControl, sendBroadcast, setLocalMediaKindEnabled, updatePresence]);
 
   const toggleMic = useCallback(async () => {
     await setMicrophoneEnabled(!micEnabledRef.current);
@@ -2392,6 +2337,7 @@ export function useCommunicationRoomSession({
     isRtcAvailable,
     cameraEnabled,
     micEnabled,
+    mediaControlsBusy,
     cameraPermissionState,
     microphonePermissionState,
     mediaPermissionMessage,

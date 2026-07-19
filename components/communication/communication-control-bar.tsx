@@ -7,6 +7,7 @@ type CommunicationControlBarProps = {
   cameraEnabled: boolean;
   cameraStatus?: "off" | "connecting" | "on";
   micEnabled: boolean;
+  disabled?: boolean;
   speakerEnabled?: boolean;
   minimumTouchTarget?: number;
   onToggleCamera: () => void;
@@ -21,6 +22,7 @@ export function CommunicationControlBar({
   cameraEnabled,
   cameraStatus,
   micEnabled,
+  disabled = false,
   speakerEnabled = false,
   minimumTouchTarget = 48,
   onToggleCamera,
@@ -55,8 +57,10 @@ export function CommunicationControlBar({
           styles.control,
           { minHeight: minimumTouchTarget },
           resolvedCameraStatus === "on" ? styles.controlOn : resolvedCameraStatus === "connecting" ? styles.controlPending : styles.controlOff,
+          disabled && styles.controlDisabled,
         ]}
         activeOpacity={0.86}
+        disabled={disabled}
         onPress={() => {
           if (__DEV__) {
             logCallDebug("[CH_CALL]", "toggle_camera_pressed", {
@@ -71,16 +75,18 @@ export function CommunicationControlBar({
       {cameraEnabled && onSwitchCamera ? (
         <TouchableOpacity
           accessibilityLabel="Switch between front and rear camera"
-          style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlOff]}
+          style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlOff, disabled && styles.controlDisabled]}
           activeOpacity={0.86}
           onPress={onSwitchCamera}
+          disabled={disabled}
         >
           <Text style={styles.controlLabel}>Flip Camera</Text>
         </TouchableOpacity>
       ) : null}
       <TouchableOpacity
-        style={[styles.control, { minHeight: minimumTouchTarget }, micEnabled ? styles.controlOn : styles.controlOff]}
+        style={[styles.control, { minHeight: minimumTouchTarget }, micEnabled ? styles.controlOn : styles.controlOff, disabled && styles.controlDisabled]}
         activeOpacity={0.86}
+        disabled={disabled}
         onPress={() => {
           if (__DEV__) {
             logCallDebug("[CH_CALL]", "toggle_mic_pressed", {
@@ -95,9 +101,10 @@ export function CommunicationControlBar({
       {onToggleAudioRoute ? (
         <TouchableOpacity
           accessibilityLabel={speakerEnabled ? "Use phone receiver" : "Use speaker"}
-          style={[styles.control, { minHeight: minimumTouchTarget }, speakerEnabled ? styles.controlOn : styles.controlOff]}
+          style={[styles.control, { minHeight: minimumTouchTarget }, speakerEnabled ? styles.controlOn : styles.controlOff, disabled && styles.controlDisabled]}
           activeOpacity={0.86}
           onPress={onToggleAudioRoute}
+          disabled={disabled}
         >
           <Text style={styles.controlLabel}>{speakerEnabled ? "Speaker On" : "Receiver"}</Text>
         </TouchableOpacity>
@@ -148,6 +155,9 @@ const styles = StyleSheet.create({
   controlLeave: {
     borderColor: "rgba(220,20,60,0.36)",
     backgroundColor: "rgba(76,18,29,0.94)",
+  },
+  controlDisabled: {
+    opacity: 0.58,
   },
   controlLabel: {
     color: "#F2F5FB",

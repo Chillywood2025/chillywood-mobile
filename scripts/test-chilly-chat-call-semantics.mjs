@@ -20,6 +20,7 @@ import {
   resolveIncomingCallRoomJoinAction,
   resolveIosChatCallAudioRoute,
   setActiveCommunicationTracksEnabled,
+  shouldActivateAcceptedChatCallMedia,
   shouldPreserveNativeCallBackgroundAudio,
 } from "../_lib/communicationCallMediaPolicy.mjs";
 
@@ -232,6 +233,18 @@ assert.equal(resolveIncomingCallRoomJoinAction({
 }), "blocked", "missing or mismatched invite evidence cannot open callee media");
 assert.equal(resolveIosChatCallAudioRoute("video"), "speaker", "iOS video calls default to speaker");
 assert.equal(resolveIosChatCallAudioRoute("voice"), "receiver", "iOS voice calls default to receiver");
+assert.equal(shouldActivateAcceptedChatCallMedia({
+  roomId: "CALLROOM",
+  inviteStatus: "ringing",
+}), false, "the caller must not start camera, microphone, or signaling while the receiver is still ringing");
+assert.equal(shouldActivateAcceptedChatCallMedia({
+  roomId: "CALLROOM",
+  inviteStatus: "accepted",
+}), true, "both participants may activate media only after the durable accept transition");
+assert.equal(shouldActivateAcceptedChatCallMedia({
+  roomId: "",
+  inviteStatus: "accepted",
+}), false, "accepted state without an exact room cannot activate media");
 
 const actionScope = {
   callInviteId: "11111111-1111-4111-8111-111111111111",
@@ -289,6 +302,10 @@ const retryMigrationSource = await readFile(
   new URL("supabase/migrations/20260718113000_durable_call_delivery_retry_and_storefront_prices.sql", root),
   "utf8",
 );
+const expiryMigrationSource = await readFile(
+  new URL("supabase/migrations/20260719213953_expire_stale_chilly_chat_calls.sql", root),
+  "utf8",
+);
 assert.ok(dispatchSource.indexOf("const iosVoipPromise = invokeIosVoipDispatch") < dispatchSource.indexOf("const tokens = pushAllowed"));
 assert.doesNotMatch(dispatchSource, /if \(!tokens\.length\)[\s\S]{0,220}return/u);
 assert.match(voipSource, /\.eq\("enabled", true\)[\s\S]*\.is\("revoked_at", null\)/u);
@@ -298,11 +315,15 @@ assert.match(voipSource, /ios_voip:\$\{invite\.id\}:\$\{tokenRow\.id\}:\$\{actio
 assert.match(nativeCoordinatorSource, /if isTerminalInvite\(inviteId\)[\s\S]*completion\(\)/u);
 assert.match(retryWorkerSource, /claim_chilly_chat_call_transition_delivery_batch/u);
 assert.match(retryWorkerSource, /complete_chilly_chat_call_transition_delivery/u);
+assert.match(retryWorkerSource, /expire_stale_chilly_chat_call_invites/u, "the one-minute worker owns expired ringing-call cleanup");
 assert.match(retryWorkerSource, /AbortSignal\.timeout\(12_000\)/u);
 assert.doesNotMatch(retryWorkerSource, /console\./u);
 assert.match(retryMigrationSource, /for update skip locked/u);
 assert.match(retryMigrationSource, /"attempt_count" < 10/u);
 assert.match(retryMigrationSource, /make_interval\(secs => least\(300/u);
+assert.match(expiryMigrationSource, /for update skip locked/u, "timeout expiry claims a bounded non-overlapping batch");
+assert.match(expiryMigrationSource, /transition_chilly_chat_call_invite/u, "timeout expiry uses the durable transition operation");
+assert.match(expiryMigrationSource, /"status" = 'ended'/u, "timeout expiry closes the stale media room");
 
 assert.doesNotMatch(dispatchSource, /markInviteMissed/u, "dispatch endpoint cannot own call-state transitions");
 assert.doesNotMatch(
@@ -324,7 +345,25 @@ const cameraControlSource = communicationSessionSource.slice(
   communicationSessionSource.indexOf("const setCameraCaptureEnabled"),
   communicationSessionSource.indexOf("const toggleCamera"),
 );
+const microphoneControlSource = communicationSessionSource.slice(
+  communicationSessionSource.indexOf("const setMicrophoneEnabled"),
+  communicationSessionSource.indexOf("const toggleMic"),
+);
 assert.doesNotMatch(cameraControlSource, /stopLocalMediaKind/u, "camera controls must not stop a negotiated sender");
+assert.equal(
+  (cameraControlSource.match(/updatePresence\(/gu) ?? []).length,
+  2,
+  "camera control has one mutually exclusive presence write for success and permission failure",
+);
+assert.equal(
+  (microphoneControlSource.match(/updatePresence\(/gu) ?? []).length,
+  2,
+  "microphone control has one mutually exclusive presence write for success and permission failure",
+);
+assert.doesNotMatch(cameraControlSource, /refreshSnapshot/u, "camera toggles do not create an extra snapshot/read loop");
+assert.doesNotMatch(microphoneControlSource, /refreshSnapshot/u, "microphone toggles do not create an extra snapshot/read loop");
+assert.match(cameraControlSource, /runSerializedMediaControl/u, "camera changes are serialized");
+assert.match(microphoneControlSource, /runSerializedMediaControl/u, "microphone changes are serialized");
 assert.doesNotMatch(
   communicationSessionSource,
   /!cameraEnabled && !micEnabled[\s\S]{0,120}pauseLocalMediaCapture/u,
@@ -332,8 +371,21 @@ assert.doesNotMatch(
 );
 assert.match(
   chatThreadSource,
-  /enabled: !!activeCallRoomId && \([\s\S]{0,220}activeCallInvite\?\.status === "accepted"/u,
-  "Back to Thread must keep an accepted call session alive",
+  /enabled: shouldActivateAcceptedChatCallMedia\(\{[\s\S]{0,140}inviteStatus: activeCallInvite\?\.status/u,
+  "media activation must use the durable accepted-invite gate",
+);
+assert.doesNotMatch(
+  chatThreadSource.slice(
+    chatThreadSource.indexOf("useCommunicationRoomSession({"),
+    chatThreadSource.indexOf("analyticsContext:", chatThreadSource.indexOf("useCommunicationRoomSession({")),
+  ),
+  /outgoingCallInvite\?\.status === "ringing"/u,
+  "ringing state must never activate camera, microphone, or WebRTC signaling",
+);
+assert.match(
+  chatThreadSource,
+  /showControls=\{activeCallInvite\?\.status === "accepted"/u,
+  "mic and camera controls stay hidden until the receiver accepts",
 );
 const activeInviteReconciliationSource = chatThreadSource.slice(
   chatThreadSource.indexOf("const reconcileActiveInvite"),

@@ -30,3 +30,8 @@ export function resolveIncomingCallRoomJoinAction(input) {
 export function resolveIosChatCallAudioRoute(callType) {
   return callType === "video" ? "speaker" : "receiver";
 }
+
+export function shouldActivateAcceptedChatCallMedia(input) {
+  return String(input?.roomId ?? "").trim().length > 0
+    && input?.inviteStatus === "accepted";
+}

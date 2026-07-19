@@ -88,6 +88,12 @@ Deno.serve(async (req): Promise<Response> => {
 
     const body = await req.json().catch(() => ({})) as JsonObject;
     const batchSize = Math.min(Math.max(safeCount(body.batchSize) || 10, 1), 10);
+    const { data: expiryResult, error: expiryError } = await adminClient.rpc(
+      "expire_stale_chilly_chat_call_invites",
+      { p_limit: batchSize },
+    );
+    if (expiryError) throw new Error(`stale_call_expiry_failed:${expiryError.message}`);
+    const expiredCalls = safeCount((expiryResult as JsonObject | null)?.expiredCount);
     const { data, error: claimError } = await adminClient.rpc(
       "claim_chilly_chat_call_transition_delivery_batch",
       { p_limit: batchSize },
@@ -147,6 +153,7 @@ Deno.serve(async (req): Promise<Response> => {
     return jsonResponse(200, {
       capped,
       claimed: deliveries.length,
+      expiredCalls,
       failed,
       status: failed > 0 ? "retry_pending" : "ok",
       succeeded,

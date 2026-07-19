@@ -25,6 +25,7 @@ type InRoomCommunicationPanelProps = {
   callType?: "voice" | "video" | null;
   cameraEnabled: boolean;
   micEnabled: boolean;
+  mediaControlsBusy?: boolean;
   speakerEnabled?: boolean;
   mediaPermissionMessage?: string | null;
   canOpenMediaSettings?: boolean;
@@ -65,6 +66,7 @@ export function InRoomCommunicationPanel({
   callType = null,
   cameraEnabled,
   micEnabled,
+  mediaControlsBusy = false,
   speakerEnabled = false,
   mediaPermissionMessage,
   canOpenMediaSettings = false,
@@ -229,6 +231,7 @@ export function InRoomCommunicationPanel({
             cameraEnabled={cameraEnabled}
             cameraStatus={cameraStatus}
             micEnabled={micEnabled}
+            disabled={mediaControlsBusy}
             speakerEnabled={speakerEnabled}
             minimumTouchTarget={responsiveLayout.minimumTouchTarget}
             leaveLabel={leaveLabel ?? (isHost ? "End Call" : "Leave")}

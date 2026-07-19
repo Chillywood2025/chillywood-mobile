@@ -52,6 +52,7 @@ import { getCommunicationRoomSnapshot } from "../../_lib/communication";
 import {
   resolveIncomingCallRoomJoinAction,
   resolveIosChatCallAudioRoute,
+  shouldActivateAcceptedChatCallMedia,
 } from "../../_lib/communicationCallMediaPolicy.mjs";
 import { decodeVisiblePercentEscapes } from "../../_lib/displayText";
 import {
@@ -517,6 +518,7 @@ export default function ChillyChatThreadScreen() {
     channelState: callChannelState,
     cameraEnabled,
     micEnabled,
+    mediaControlsBusy,
     participants,
     participantCount,
     toggleCamera,
@@ -528,11 +530,10 @@ export default function ChillyChatThreadScreen() {
     leaveRoom,
   } = useCommunicationRoomSession({
     roomId: activeCallRoomId,
-    enabled: !!activeCallRoomId && (
-      callPanelOpen
-      || activeCallInvite?.status === "accepted"
-      || outgoingCallInvite?.status === "ringing"
-    ),
+    enabled: shouldActivateAcceptedChatCallMedia({
+      roomId: activeCallRoomId,
+      inviteStatus: activeCallInvite?.status,
+    }),
     allowBackgroundAudio: Platform.OS === "ios"
       && requestedNativeCallAction === "answer"
       && !!requestedNativeCallUuid,
@@ -571,12 +572,31 @@ export default function ChillyChatThreadScreen() {
 
   const handleToggleCallMic = useCallback(async () => {
     const nextEnabled = !micEnabled;
-    const updated = await setMicrophoneEnabled(nextEnabled);
-    if (!updated) return;
-    if (requestedNativeCallUuid) {
-      await setIosNativeCallMuted(requestedNativeCallUuid, !nextEnabled).catch(() => false);
+    try {
+      const updated = await setMicrophoneEnabled(nextEnabled);
+      if (!updated) {
+        setError("Microphone access is unavailable. The call remains connected.");
+        return;
+      }
+      setError(null);
+      if (requestedNativeCallUuid) {
+        await setIosNativeCallMuted(requestedNativeCallUuid, !nextEnabled).catch(() => false);
+      }
+    } catch (mediaError) {
+      setError("The microphone could not be changed. The call remains connected.");
+      reportRuntimeError("chat-call-toggle-microphone", mediaError, { threadId });
     }
-  }, [micEnabled, requestedNativeCallUuid, setMicrophoneEnabled]);
+  }, [micEnabled, requestedNativeCallUuid, setMicrophoneEnabled, threadId]);
+
+  const handleToggleCallCamera = useCallback(async () => {
+    try {
+      await toggleCamera();
+      setError(null);
+    } catch (mediaError) {
+      setError("The camera could not be changed. The call remains connected.");
+      reportRuntimeError("chat-call-toggle-camera", mediaError, { threadId });
+    }
+  }, [threadId, toggleCamera]);
 
   const handleToggleNativeAudioRoute = useCallback(async () => {
     if (Platform.OS !== "ios") return;
@@ -2388,24 +2408,27 @@ export default function ChillyChatThreadScreen() {
             emptyStateText={outgoingCallRinging
               ? "Ringing. Waiting for the other participant to answer this Chi'lly Chat call."
               : "Waiting for the other participant to join this Chi'lly Chat call."}
-            roomCode={callRoom?.roomCode}
-            participantCount={participantCount}
-            isHost={!!callRoom?.hostUserId && callRoom.hostUserId === currentUserId}
+            roomCode={callRoom?.roomCode ?? activeCallRoomId}
+            participantCount={outgoingCallRinging ? 1 : participantCount}
+            isHost={outgoingCallRinging || (!!callRoom?.hostUserId && callRoom.hostUserId === currentUserId)}
             channelState={callChannelState}
-            loading={callLoading}
-            statusMessage={callError}
+            loading={outgoingCallRinging ? false : callLoading}
+            statusMessage={outgoingCallRinging ? null : callError}
             statusLabelOverride={outgoingCallRinging ? "Ringing" : null}
             participants={participants}
             callType={thread?.activeCallType ?? null}
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}
+            mediaControlsBusy={mediaControlsBusy}
             speakerEnabled={nativeSpeakerEnabled}
             leaveLabel="End Call"
             mediaPermissionMessage={mediaPermissionMessage}
             canOpenMediaSettings={canOpenMediaSettings}
-            showControls={!!activeCallRoomId && !callError && !callLoading}
+            showControls={activeCallInvite?.status === "accepted" && !callError && !callLoading}
             presentation="fullscreen"
-            onToggleCamera={toggleCamera}
+            onToggleCamera={() => {
+              void handleToggleCallCamera();
+            }}
             onToggleMic={() => {
               void handleToggleCallMic();
             }}
