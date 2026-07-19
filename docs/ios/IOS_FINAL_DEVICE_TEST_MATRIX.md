@@ -1,6 +1,6 @@
 # iOS Final Device-Test Matrix (Remaining 10%)
 
-Checkpoint date: 2026-07-16
+Checkpoint date: 2026-07-19
 
 This matrix contains only work that inherently requires repeated physical Apple
 device access or owner legal/release attestation. Repository coding, provider
@@ -45,7 +45,7 @@ The all-platform autonomy parity closeout does not change this gate. It adds tru
 | 7 | APNs terminated-app delivery | `READY_NOT_STARTED` | Terminated launch opens the intended bounded route exactly once. |
 | 8 | Universal Link verification on a signed physical build | `READY_NOT_STARTED` | Cold, warm, and already-running app tests cover authentication and content routes while Android App Links remain unchanged. |
 | 9 | Two-iPhone PushKit/CallKit incoming call | `BLOCKED_SECOND_IPHONE_DEVICE_PROOF` | Real VoIP push presents native incoming-call UI on a second signed iPhone without exposing the token. Production-visible rollout remains deliberately off. |
-| 10 | Call answer/decline/cancel/timeout/lock-screen proof | `RETEST_REQUIRED_AFTER_IOS_QA_OTA` | The Android-caller/iPhone-receiver incident reached APNs `200`, accepted the invite, and joined the communication room, but the receiver remained `reconnecting` with camera/microphone off. Update `019f763e-f713-75e8-8662-d0e9bcfd213f` repairs the CallKit-to-direct-WebRTC handoff. Retest foreground/background/locked Answer, background audio, foreground video restoration, duplicate/cold-start recovery, and cleanup; source/backend evidence alone is not a pass. |
+| 10 | Call answer/decline/cancel/timeout/lock-screen proof | `RETEST_REQUIRED_AFTER_ACCEPTED_MEDIA_CONTROL_OTA` | Sanitized production-QA readback proved a later Android-caller attempt started direct WebRTC while its invite was still `ringing`, had no acceptance timestamp, and had no receiver membership; mic/camera interaction then reached `reconnecting`. iOS update `019f7c68-4ae1-73e4-aa50-5c1774c3562a` and Android update `019f7c6a-92b3-7cbe-9c63-f5b6310691dd` gate media on acceptance and serialize controls. Retest both directions, repeated mic/camera toggles, foreground/background/locked Answer, speaker routing, cancel/decline/end/timeout cleanup, and cold-start recovery; source/backend evidence alone is not a pass. |
 | 11 | Bluetooth/AirPods and interruption testing | `PENDING_HARDWARE` | Speaker/receiver/Bluetooth routing, interruption, background/return, and AVAudioSession cleanup pass on the final build. |
 | 12 | TestFlight StoreKit purchase | `READY_NOT_STARTED_SANDBOX_ONLY` | The owner-approved rail is bounded to `sandbox_only`; an approved internal account must still complete and record the non-payable physical StoreKit transaction proof. |
 | 13 | Restore Purchases | `NOT_STARTED_DEPENDS_ON_12` | Premium restore reconciles the authenticated account; tips are not incorrectly restorable and Seat Pass access comes from the verified server ledger. |
@@ -62,10 +62,10 @@ The all-platform autonomy parity closeout does not change this gate. It adds tru
   runtime is `1.0.0-iosqa1`, and all four client QA capabilities are true.
   Builds 6 and 7 are not eligible for the complete native-call matrix.
 - Before StoreKit or native-call proof, confirm build 8 has loaded iOS update
-  `019f763e-f713-75e8-8662-d0e9bcfd213f` from group
-  `3a571903-85b8-4e12-be19-171ecc9298bd`, source `7e0eae77790d7a9843429def37ab7b69adfe44a1`.
+  `019f7c68-4ae1-73e4-aa50-5c1774c3562a` from group
+  `e83cdc3e-d6d6-4f75-8116-decb3c36bed8`, source `1334221b1dfbf418fba3fcaaae8757e7f5295df9`.
   Fully close and relaunch after the update downloads. The preceding compatible
-  rollback target is group `9b320d78-8def-4235-a909-1f82908eb53e`.
+  rollback target is group `05a795c8-50da-44f2-b158-9512e22db1ad`.
 - Ordinary-push and VoIP rollout remain off unless separately authorized. The App
   Store purchase rail may remain `sandbox_only` for the approved internal lane;
   this does not authorize live money, public purchase rollout, or public release.

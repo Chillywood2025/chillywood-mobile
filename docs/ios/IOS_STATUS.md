@@ -1,6 +1,6 @@
 # Chi'llywood iOS Status
 
-Checkpoint date: 2026-07-17
+Checkpoint date: 2026-07-19
 
 Overall verdict: **The remaining iOS QA source and backend gaps are closed at
 `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`. Build 7 remains the production-runtime
@@ -8,6 +8,28 @@ JavaScript OTA lane and cannot run native calls because its embedded native runt
 default is false. A local, production-signed build 8 was created without an EAS
 cloud build for the isolated `ios-qa` / `1.0.0-iosqa1` all-flags lane. The full
 physical-device matrix has not begun and remains the final unclaimed proof.**
+
+## Cross-platform chat-call media-control correction
+
+The reported Android caller failure was traced to direct WebRTC media starting
+while the invite was still `ringing`, before the receiver accepted, followed by
+duplicate microphone/camera presence and snapshot paths that could replace the
+Supabase Realtime signaling channel. Source
+`1334221b1dfbf418fba3fcaaae8757e7f5295df9` gates media on an accepted matching
+invite, serializes track mutations, removes the duplicate snapshot loop, and
+protects a newly subscribed channel from stale cleanup. The same JavaScript fix
+was published to iOS `ios-qa` group
+`e83cdc3e-d6d6-4f75-8116-decb3c36bed8` / update
+`019f7c68-4ae1-73e4-aa50-5c1774c3562a` and Android `production` group
+`069307c0-4f92-4ebc-acc6-d4f83410e900` / update
+`019f7c6a-92b3-7cbe-9c63-f5b6310691dd`.
+
+Migration `20260719213953_expire_stale_chilly_chat_calls` is deployed. Terminal
+retry worker v5 expires stale ringing invites through the durable transition path
+at the existing one-minute cadence, with a batch cap of 10. Sanitized final
+readback is zero expired ringing invites and zero pending, failed,
+stale-dispatching, or capped retries. All 10 PR checks and local 6-file/270-test
+pgTAP passed. Device retest remains required; no physical success is inferred.
 
 ## Autonomous iOS source/backend checkpoint
 
@@ -62,6 +84,7 @@ job remains required alongside it.
 | Local build 8 | local IPA SHA-256 `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`, source `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae`, `ios-qa` channel/runtime `1.0.0-iosqa1` | `IOS_NATIVE_CALLS_ENABLED=true`, native runtime default true, ordinary push true, RevenueCat App Store surfaces true | Exact all-flags physical QA candidate. The App Store rail is bounded to `sandbox_only`; ordinary push and VoIP rollout remain off, and all live-money/payout controls remain off. |
 | Build-8 iOS OTA | group `9b320d78-8def-4235-a909-1f82908eb53e`, update `019f722b-d1e8-77c3-940f-1ec2a67bca23`, source `d0222db2ce5d15d4dd9ffb7a87b2f249139511b5`, `ios-qa` / `1.0.0-iosqa1` | Native-call JavaScript, ordinary push registration, and RevenueCat App Store surfaces true in this isolated update | Fixes the actionable Premium CTA, verified server-rail readback, and provider package readiness. Published to iOS only after all ten PR checks passed. The previous compatible update list was empty, so the embedded build-8 update is the rollback target. |
 | Build-8 iOS call-handoff OTA | group `3a571903-85b8-4e12-be19-171ecc9298bd`, update `019f763e-f713-75e8-8662-d0e9bcfd213f`, source `7e0eae77790d7a9843429def37ab7b69adfe44a1`, `ios-qa` / `1.0.0-iosqa1` | Preserves the four build-8 QA client capabilities and changes JavaScript only | Fixes the observed Android-caller to iPhone-receiver CallKit answer handoff: a native Answer now uses one clean route, preserves allowed background call audio, reacts to native AVAudioSession/application activation, restores foreground video, and returns an existing subscribed Realtime channel to `live`. Published to iOS only after all ten PR checks passed. The preceding group `9b320d78-8def-4235-a909-1f82908eb53e` is the compatible rollback target. Physical retest remains required. |
+| Build-8 accepted-media-control OTA | group `e83cdc3e-d6d6-4f75-8116-decb3c36bed8`, update `019f7c68-4ae1-73e4-aa50-5c1774c3562a`, source `1334221b1dfbf418fba3fcaaae8757e7f5295df9`, `ios-qa` / `1.0.0-iosqa1` | Preserves all four build-8 QA client capabilities; JavaScript only | Starts direct WebRTC media only after durable acceptance and serializes mic/camera control changes. Android received the same source on its separate production-runtime OTA. The previous compatible iOS rollback group is `05a795c8-50da-44f2-b158-9512e22db1ad`. Physical two-phone retest remains required. |
 
 The recorded build-7 OTA rollback target is group
 `8e158980-75d1-47ef-bd26-f3f9e564fdab`. Roll back with

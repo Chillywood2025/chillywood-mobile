@@ -1,6 +1,6 @@
 # iOS 90% Rollback Plan
 
-Checkpoint date: 2026-07-16
+Checkpoint date: 2026-07-19
 
 This plan reverses the smallest faulty subsystem while preserving Android,
 security policy, audit evidence, permanent App Store identifiers, and provider
@@ -38,6 +38,7 @@ The major integration commits are intentionally separable:
 | Push and native calls | `db63e456`, `e8dd7e38`, `d3f1715a`, `b5bebb35` | Turn runtime/server flags off first, then revert client/native/backend source together as required. Preserve Android FCM and full-screen call behavior. |
 | Durable call orchestration | `e43f34ab41a7e936e6eeca9b0031faa3de557559` | Keep ordinary/VoIP rollout off. Revert client, dispatcher, transition function, and shared schema/policy together; retain delivery rows and apply only forward database fixes. |
 | Final QA call/storefront/retry closeout | `bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae` | Keep all private rollout and money switches off. Revert the tip-sheet, call dispatch/transition/retry, storefront webhook, CI, and `ios-qa` profile only as a reviewed coherent unit; retain delivery/provider history and use forward database fixes. |
+| Accepted-media controls and stale ringing expiry | `1334221b1dfbf418fba3fcaaae8757e7f5295df9` | Roll back the affected platform OTA to its recorded compatible group if device retest regresses. Revert the accepted-only media gate, serialized control queue, and retry worker together only after reproducing the regression. Retain call events/deliveries and correct migration behavior with a forward-only migration. |
 | Store-aware policy/schema/webhook | `95fdc2b7`, copy/provider commits through `8328f052`, `2be7d4cb`, `1e213378`, `e39a069d`, `c40287ee`, `4d0ed187` | Disable the Apple rail first. Revert Apple-specific selection/copy without removing Google provider values or weakening webhook verification/idempotency. |
 | Atomic RevenueCat application | `e43f34ab41a7e936e6eeca9b0031faa3de557559` | Keep the App Store rail and money switches off. Redeploy webhook v69 only with a reviewed forward compatibility plan; never delete provider events, entitlements, grants, ledger rows, or intents. |
 | Release workflows / managed iOS upload boundary | `fa847965`, `19230653`, `63431991`, `b65ab225`, `f7af588d`, `d5a8db65edbdd19fec42ad37ca1162412f66a41e` | Disable/delete only the affected manual workflow or environment access. Preserve validation, protected approvals, exact-build submission, generated `/ios` exclusion, and no-auto-release controls. |
@@ -62,8 +63,9 @@ Integration migrations:
 - `20260718113000_durable_call_delivery_retry_and_storefront_prices.sql`
 - `20260718114500_enable_chat_call_transition_retry_scheduler.sql`
 - `20260718120000_index_terminal_retry_and_revenuecat_intent_links.sql`
+- `20260719213953_expire_stale_chilly_chat_calls.sql`
 
-All ten are deployed and additive. Roll back behavior with switches and a
+All eleven are deployed and additive. Roll back behavior with switches and a
 reviewed forward fix; do not attempt a destructive down migration:
 
 1. Turn VoIP and App Store rollout switches off.
@@ -87,7 +89,7 @@ Affected functions include:
 - `notification-dispatch` v49;
 - `chilly-chat-call-dispatch` v37;
 - `chilly-chat-call-transition` v3;
-- `chilly-chat-call-transition-retry` v2;
+- `chilly-chat-call-transition-retry` v5;
 - `ios-voip-push-tokens` v1;
 - `ios-voip-call-dispatch` v5; and
 - `revenuecat-webhook` v72.
@@ -162,6 +164,18 @@ For a faulty deployment:
   `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`,
   submission `e0b894e3-5dfc-44c5-9da2-e36c3b85bd5b`, and Apple build
   `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`.
+- Current iOS accepted-media-control OTA is group
+  `e83cdc3e-d6d6-4f75-8116-decb3c36bed8`, update
+  `019f7c68-4ae1-73e4-aa50-5c1774c3562a`, source
+  `1334221b1dfbf418fba3fcaaae8757e7f5295df9`, on `ios-qa` / `1.0.0-iosqa1`.
+  Its compatible rollback target is group
+  `05a795c8-50da-44f2-b158-9512e22db1ad`.
+- Current Android accepted-media-control OTA is group
+  `069307c0-4f92-4ebc-acc6-d4f83410e900`, update
+  `019f7c6a-92b3-7cbe-9c63-f5b6310691dd`, source
+  `1334221b1dfbf418fba3fcaaae8757e7f5295df9`, on `production` / `1.0.0`.
+  Its compatible rollback target is group
+  `e03823f6-ec5a-436b-b10d-57cbf3f644c7`.
 - If build 8 is faulty, remove only build 8 from `Chillywood Internal`, keep build
   7/its rollback target as historical evidence, disable the affected server
   switch, use a normal `git revert`, and create a later isolated binary only after
