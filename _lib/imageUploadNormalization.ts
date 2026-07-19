@@ -1,5 +1,4 @@
 import * as FileSystem from "expo-file-system/legacy";
-import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
 import { isHeicOrHeifImage, type ImageUploadFile } from "./imageUploadPolicy";
 
@@ -14,6 +13,32 @@ export type NormalizedImageUploadFile<TFile extends ImageUploadFile> = {
 
 const HEIC_FILE_EXTENSION_PATTERN = /\.(?:heic|heif)$/iu;
 const IMAGE_NORMALIZATION_TIMEOUT_MS = 30_000;
+
+type ImageManipulatorRenderResult = {
+  release: () => void;
+  saveAsync: (options: { compress: number; format: string }) => Promise<{ uri: string }>;
+};
+
+type ImageManipulatorContext = {
+  release: () => void;
+  renderAsync: () => Promise<ImageManipulatorRenderResult>;
+};
+
+type ImageManipulatorRuntime = {
+  ImageManipulator: {
+    manipulate: (sourceUri: string) => ImageManipulatorContext;
+  };
+  SaveFormat: {
+    JPEG: string;
+  };
+};
+
+const loadImageManipulator = async (): Promise<ImageManipulatorRuntime> => {
+  // Android production build 80 predates this native module. Keep the import
+  // behind the HEIC-only branch so ordinary startup and JPG/PNG uploads remain
+  // compatible with that binary. A future binary can use the native path.
+  return await import("expo-image-manipulator") as unknown as ImageManipulatorRuntime;
+};
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -64,10 +89,12 @@ export async function normalizeImageUploadFile<TFile extends ImageUploadFile>(
   const sourceUri = toText(file.uri);
   if (!sourceUri) throw new Error("Choose a photo before uploading.");
 
-  const context = ImageManipulator.manipulate(sourceUri);
-  let renderedImage: Awaited<ReturnType<typeof context.renderAsync>> | null = null;
+  let context: ImageManipulatorContext | null = null;
+  let renderedImage: ImageManipulatorRenderResult | null = null;
 
   try {
+    const { ImageManipulator, SaveFormat } = await loadImageManipulator();
+    context = ImageManipulator.manipulate(sourceUri);
     renderedImage = await withTimeout(context.renderAsync(), IMAGE_NORMALIZATION_TIMEOUT_MS);
     const result = await withTimeout(
       renderedImage.saveAsync({
@@ -98,6 +125,6 @@ export async function normalizeImageUploadFile<TFile extends ImageUploadFile>(
     throw new Error("This HEIC or HEIF photo could not be prepared. Choose another photo or try again.");
   } finally {
     renderedImage?.release();
-    context.release();
+    context?.release();
   }
 }

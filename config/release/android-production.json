@@ -6,6 +6,16 @@
   "runtimeVersion": "1.0.0",
   "channel": "production",
   "distributionSource": "google_play_internal",
-  "nativeBuildSource": "provider_readback_required",
-  "expectedBinarySourceCommit": null
+  "nativeBuildSource": "eas_provider_readback",
+  "expectedBinarySourceCommit": "08fd60e29a5040672c9f9dc91befc9142861d82e",
+  "nativeBuildId": "4c27d4a2-1b54-48d0-93a2-266c3c430dae",
+  "otaNativeCompatibility": {
+    "optionalDeferredPackages": [
+      {
+        "package": "expo-image-manipulator",
+        "source": "_lib/imageUploadNormalization.ts",
+        "unsupportedBehavior": "HEIC/HEIF conversion fails closed with user-facing retry guidance"
+      }
+    ]
+  }
 }
