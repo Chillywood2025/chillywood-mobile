@@ -103,6 +103,7 @@
     "owner-command:report": "node ./scripts/owner-command-cli.mjs report",
     "proof:watch-party-live-fallback-smoothing": "node ./scripts/proof-watch-party-live-fallback-smoothing.mjs",
     "proof:release-diagnostics": "node ./scripts/proof-release-diagnostics.mjs",
+    "test:runtime-update-activation": "node ./scripts/test-runtime-update-activation.mjs",
     "proof:livekit-server-metrics": "node ./scripts/proof-livekit-server-metrics.mjs",
     "proof:livekit-passive-viewer-load": "node ./scripts/proof-livekit-passive-viewer-load.mjs",
     "check:livekit-routing-health": "node ./scripts/check-livekit-routing-health.mjs",

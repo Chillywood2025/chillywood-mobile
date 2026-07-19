@@ -1,34 +1,31 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Updates from "expo-updates";
 import React, { useEffect, useRef } from "react";
-import { AppState, InteractionManager, Platform, type AppStateStatus } from "react-native";
+import { AppState, Platform, type AppStateStatus } from "react-native";
 
 import { trackEvent } from "./analytics";
 import { debugLog, reportRuntimeError } from "./logger";
 import { recordReleaseUpdateCheckResult } from "./releaseDiagnostics";
+import {
+  resolveFetchedRuntimeUpdateActivationKey,
+  resolvePendingRuntimeUpdateActivationKey,
+} from "./runtimeUpdateActivationPolicy.mjs";
 
 const LAST_CHECK_AT_KEY = "chillywood.runtimeUpdate.lastCheckAt";
-const LAST_RELOAD_FINGERPRINT_KEY = "chillywood.runtimeUpdate.lastReloadFingerprint";
 const RESUME_CHECK_INTERVAL_MS = 2 * 60 * 1000;
 const STARTUP_CHECK_DELAY_MS = 1800;
+const RELOAD_DELAY_MS = 250;
 
 type RuntimeUpdateReason = "startup" | "resume";
 
 const shouldUseRuntimeUpdates = () => !__DEV__ && Platform.OS !== "web" && Updates.isEnabled;
 
-const getManifestFingerprint = (manifest: unknown) => {
+const getManifestUpdateId = (manifest: unknown) => {
   if (!manifest || typeof manifest !== "object") return null;
 
   const record = manifest as Record<string, unknown>;
-  const candidates = [
-    record.id,
-    record.updateId,
-    record.createdAt,
-    record.commitTime,
-    record.runtimeVersion,
-  ].map((value) => String(value ?? "").trim()).filter(Boolean);
-
-  return candidates.length > 0 ? candidates.join(":") : null;
+  const updateId = String(record.id ?? record.updateId ?? "").trim();
+  return updateId || null;
 };
 
 const getLastCheckAt = async () => {
@@ -37,37 +34,67 @@ const getLastCheckAt = async () => {
   return Number.isFinite(value) ? value : 0;
 };
 
-const reloadIntoFetchedUpdate = async (fingerprint: string, reason: RuntimeUpdateReason) => {
-  const lastReloadFingerprint = String(await AsyncStorage.getItem(LAST_RELOAD_FINGERPRINT_KEY) ?? "").trim();
-  if (lastReloadFingerprint === fingerprint) {
-    debugLog("runtime-updates", "Skipping already-applied update reload", {
-      fingerprint,
-      reason,
-    });
-    return;
-  }
-
-  await AsyncStorage.setItem(LAST_RELOAD_FINGERPRINT_KEY, fingerprint);
+const reloadIntoFetchedUpdate = (
+  activationKey: string,
+  reason: RuntimeUpdateReason | "pending",
+  reloadRequestedRef: React.MutableRefObject<string | null>,
+) => {
+  if (reloadRequestedRef.current === activationKey) return;
+  reloadRequestedRef.current = activationKey;
   trackEvent("runtime_update_reload_ready", {
     reason,
     channel: Updates.channel,
     runtimeVersion: Updates.runtimeVersion,
   });
 
-  InteractionManager.runAfterInteractions(() => {
-    setTimeout(() => {
-      void Updates.reloadAsync().catch((error) => {
-        reportRuntimeError("runtime-update-reload", error, {
-          reason,
-          channel: Updates.channel,
-          runtimeVersion: Updates.runtimeVersion,
-        });
+  setTimeout(() => {
+    void Updates.reloadAsync().catch((error) => {
+      if (reloadRequestedRef.current === activationKey) {
+        reloadRequestedRef.current = null;
+      }
+      recordReleaseUpdateCheckResult({
+        reason,
+        status: "error",
       });
-    }, 350);
-  });
+      reportRuntimeError("runtime-update-reload", error, {
+        reason,
+        channel: Updates.channel,
+        runtimeVersion: Updates.runtimeVersion,
+      });
+    });
+  }, RELOAD_DELAY_MS);
 };
 
-const checkForRuntimeUpdate = async (reason: RuntimeUpdateReason, force = false) => {
+const activatePendingNativeUpdate = (
+  pendingState: {
+    downloadedUpdateId?: string;
+    isRollbackToEmbedded: boolean;
+    isUpdatePending: boolean;
+  },
+  reloadRequestedRef: React.MutableRefObject<string | null>,
+) => {
+  const activationKey = resolvePendingRuntimeUpdateActivationKey({
+    currentUpdateId: Updates.updateId,
+    downloadedUpdateId: pendingState.downloadedUpdateId,
+    inFlightActivationKey: reloadRequestedRef.current,
+    isEmbeddedLaunch: Updates.isEmbeddedLaunch,
+    isRollbackToEmbedded: pendingState.isRollbackToEmbedded,
+    isUpdatePending: pendingState.isUpdatePending,
+  });
+
+  if (!activationKey) return;
+  recordReleaseUpdateCheckResult({
+    reason: "pending",
+    status: "downloaded",
+  });
+  reloadIntoFetchedUpdate(activationKey, "pending", reloadRequestedRef);
+};
+
+const checkForRuntimeUpdate = async (
+  reason: RuntimeUpdateReason,
+  reloadRequestedRef: React.MutableRefObject<string | null>,
+  force = false,
+) => {
   if (!shouldUseRuntimeUpdates()) return;
 
   const now = Date.now();
@@ -107,15 +134,39 @@ const checkForRuntimeUpdate = async (reason: RuntimeUpdateReason, force = false)
     status: "downloaded",
   });
 
-  const fingerprint = getManifestFingerprint(fetchResult.manifest)
-    ?? (fetchResult.isRollBackToEmbedded ? "rollback-to-embedded" : null);
-  if (!fingerprint) return;
+  const activationKey = resolveFetchedRuntimeUpdateActivationKey({
+    currentUpdateId: Updates.updateId,
+    fetchedUpdateId: getManifestUpdateId(fetchResult.manifest),
+    inFlightActivationKey: reloadRequestedRef.current,
+    isEmbeddedLaunch: Updates.isEmbeddedLaunch,
+    isRollbackToEmbedded: fetchResult.isRollBackToEmbedded,
+  });
+  if (!activationKey) return;
 
-  await reloadIntoFetchedUpdate(fingerprint, reason);
+  reloadIntoFetchedUpdate(activationKey, reason, reloadRequestedRef);
 };
 
 export function RuntimeUpdateGate() {
   const checkInFlightRef = useRef(false);
+  const reloadRequestedRef = useRef<string | null>(null);
+  const updatesState = Updates.useUpdates();
+  const downloadedUpdateId = updatesState.downloadedUpdate?.updateId;
+  const isRollbackToEmbedded = Boolean(
+    updatesState.downloadedUpdate && !downloadedUpdateId,
+  );
+
+  useEffect(() => {
+    if (!shouldUseRuntimeUpdates()) return;
+    activatePendingNativeUpdate({
+      downloadedUpdateId,
+      isRollbackToEmbedded,
+      isUpdatePending: updatesState.isUpdatePending,
+    }, reloadRequestedRef);
+  }, [
+    downloadedUpdateId,
+    isRollbackToEmbedded,
+    updatesState.isUpdatePending,
+  ]);
 
   useEffect(() => {
     if (!shouldUseRuntimeUpdates()) return undefined;
@@ -124,7 +175,7 @@ export function RuntimeUpdateGate() {
       if (checkInFlightRef.current) return;
       checkInFlightRef.current = true;
 
-      checkForRuntimeUpdate(reason, force)
+      checkForRuntimeUpdate(reason, reloadRequestedRef, force)
         .catch((error) => {
           recordReleaseUpdateCheckResult({
             reason,
