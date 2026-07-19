@@ -31,6 +31,20 @@ readback is zero expired ringing invites and zero pending, failed,
 stale-dispatching, or capped retries. All 10 PR checks and local 6-file/270-test
 pgTAP passed. Device retest remains required; no physical success is inferred.
 
+## Exact OTA identity and native boundary
+
+Runtime is a compatibility boundary, not a unique OTA identifier. The active
+bundle must be verified by `updateId`. Source
+`3f3b6695cd2daa8653d14ab110c4222913a94d89` makes downloaded-update activation
+retry-safe and defers the HEIC-only `expo-image-manipulator` import because the
+provider-observed Android build 80 source
+`08fd60e29a5040672c9f9dc91befc9142861d82e` predates that native module. The
+native boundary is now guarded in CI. Both connected Android devices were
+verified on final update `019f7ca6-9b70-75b8-9777-18dbc328fcca`, production
+channel/runtime `1.0.0`, with clean relaunch error logs. The final iOS provider
+record is update `019f7ca4-55c4-793c-8702-20af64a8efc5` on `ios-qa` /
+`1.0.0-iosqa1`; physical iOS uptake is still pending.
+
 ## Autonomous iOS source/backend checkpoint
 
 The later all-platform parity closeout is additive to this iOS checkpoint. It registers 29 repository components, including the previously omitted malware-scanner worker and disabled LiveKit scheduler templates; composes shared/Android/iOS probes; schedules real release/observability adapters at unchanged cadence; models local iOS binary attestation separately from EAS cloud history; prevents expected-as-observed fallback; separates notification, installed-QA, and money semantics by platform/provider; propagates platform through command and approval control planes; deploys User Report Router through a reviewed forward migration; and deduplicates current findings/provider capabilities while retaining append-only history. See `ALL_PLATFORM_AUTONOMY_PARITY_REPORT.md`.
@@ -85,6 +99,7 @@ job remains required alongside it.
 | Build-8 iOS OTA | group `9b320d78-8def-4235-a909-1f82908eb53e`, update `019f722b-d1e8-77c3-940f-1ec2a67bca23`, source `d0222db2ce5d15d4dd9ffb7a87b2f249139511b5`, `ios-qa` / `1.0.0-iosqa1` | Native-call JavaScript, ordinary push registration, and RevenueCat App Store surfaces true in this isolated update | Fixes the actionable Premium CTA, verified server-rail readback, and provider package readiness. Published to iOS only after all ten PR checks passed. The previous compatible update list was empty, so the embedded build-8 update is the rollback target. |
 | Build-8 iOS call-handoff OTA | group `3a571903-85b8-4e12-be19-171ecc9298bd`, update `019f763e-f713-75e8-8662-d0e9bcfd213f`, source `7e0eae77790d7a9843429def37ab7b69adfe44a1`, `ios-qa` / `1.0.0-iosqa1` | Preserves the four build-8 QA client capabilities and changes JavaScript only | Fixes the observed Android-caller to iPhone-receiver CallKit answer handoff: a native Answer now uses one clean route, preserves allowed background call audio, reacts to native AVAudioSession/application activation, restores foreground video, and returns an existing subscribed Realtime channel to `live`. Published to iOS only after all ten PR checks passed. The preceding group `9b320d78-8def-4235-a909-1f82908eb53e` is the compatible rollback target. Physical retest remains required. |
 | Build-8 accepted-media-control OTA | group `e83cdc3e-d6d6-4f75-8116-decb3c36bed8`, update `019f7c68-4ae1-73e4-aa50-5c1774c3562a`, source `1334221b1dfbf418fba3fcaaae8757e7f5295df9`, `ios-qa` / `1.0.0-iosqa1` | Preserves all four build-8 QA client capabilities; JavaScript only | Starts direct WebRTC media only after durable acceptance and serializes mic/camera control changes. Android received the same source on its separate production-runtime OTA. The previous compatible iOS rollback group is `05a795c8-50da-44f2-b158-9512e22db1ad`. Physical two-phone retest remains required. |
+| Build-8 retry-safe activation OTA | group `38ee9039-e53d-462f-b396-6bb49e639839`, update `019f7ca4-55c4-793c-8702-20af64a8efc5`, source `3f3b6695cd2daa8653d14ab110c4222913a94d89`, `ios-qa` / `1.0.0-iosqa1` | Preserves all four build-8 QA client capabilities; JavaScript only | Activates a native-downloaded update even after an earlier reload was interrupted and keeps image normalization compatible with the different Android build-80 native boundary. Provider publication is proven; physical iOS uptake and call retest remain required. |
 
 The recorded build-7 OTA rollback target is group
 `8e158980-75d1-47ef-bd26-f3f9e564fdab`. Roll back with

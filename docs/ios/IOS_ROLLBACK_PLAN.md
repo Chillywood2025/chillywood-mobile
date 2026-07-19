@@ -164,18 +164,21 @@ For a faulty deployment:
   `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`,
   submission `e0b894e3-5dfc-44c5-9da2-e36c3b85bd5b`, and Apple build
   `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`.
-- Current iOS accepted-media-control OTA is group
-  `e83cdc3e-d6d6-4f75-8116-decb3c36bed8`, update
-  `019f7c68-4ae1-73e4-aa50-5c1774c3562a`, source
-  `1334221b1dfbf418fba3fcaaae8757e7f5295df9`, on `ios-qa` / `1.0.0-iosqa1`.
+- Current iOS retry-safe activation OTA is group
+  `38ee9039-e53d-462f-b396-6bb49e639839`, update
+  `019f7ca4-55c4-793c-8702-20af64a8efc5`, source
+  `3f3b6695cd2daa8653d14ab110c4222913a94d89`, on `ios-qa` / `1.0.0-iosqa1`.
   Its compatible rollback target is group
-  `05a795c8-50da-44f2-b158-9512e22db1ad`.
-- Current Android accepted-media-control OTA is group
-  `069307c0-4f92-4ebc-acc6-d4f83410e900`, update
-  `019f7c6a-92b3-7cbe-9c63-f5b6310691dd`, source
-  `1334221b1dfbf418fba3fcaaae8757e7f5295df9`, on `production` / `1.0.0`.
-  Its compatible rollback target is group
-  `e03823f6-ec5a-436b-b10d-57cbf3f644c7`.
+  `e39980d0-090a-4204-a910-7882395a8f0c`.
+- Current Android retry-safe/native-compatible OTA is group
+  `f4172575-e0bf-4909-b534-9e5e9a11cc93`, update
+  `019f7ca6-9b70-75b8-9777-18dbc328fcca`, source
+  `3f3b6695cd2daa8653d14ab110c4222913a94d89`, on `production` / `1.0.0`.
+  Its safe rollback target is group
+  `52940abe-e1d4-4764-a579-b6718364c7d0`. Do not select superseded groups
+  `bfce1629-6ef1-4f48-b827-4f9e8f364246` or
+  `7d4e8224-73c4-48dc-9d7a-bbd861a7112d`; both contain an eager native import
+  that is incompatible with Android build 80.
 - If build 8 is faulty, remove only build 8 from `Chillywood Internal`, keep build
   7/its rollback target as historical evidence, disable the affected server
   switch, use a normal `git revert`, and create a later isolated binary only after
