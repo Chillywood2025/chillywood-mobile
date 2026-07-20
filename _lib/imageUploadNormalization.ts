@@ -4,7 +4,9 @@ import { requireOptionalNativeModule } from "expo";
 import {
   IMAGE_MANIPULATOR_NATIVE_MODULE_NAME,
   IMAGE_MANIPULATOR_UNAVAILABLE_MESSAGE,
-  resolveImageManipulatorRuntime,
+  createIdempotentCleanup,
+  createImageManipulatorRuntimeLoader,
+  runImageManipulatorConversion,
 } from "./imageManipulatorNativeBoundary.mjs";
 import { isHeicOrHeifImage, type ImageUploadFile } from "./imageUploadPolicy";
 import { reportRuntimeError } from "./logger";
@@ -62,19 +64,21 @@ const reportImageManipulatorFailure = (reason: string) => {
   });
 };
 
-const loadImageManipulator = async (): Promise<ImageManipulatorRuntime> => {
+const resolveImageManipulator = createImageManipulatorRuntimeLoader({
   // Android production build 80 predates this native module. Probe Expo's native
   // registry before evaluating the package because the package calls
   // requireNativeModule("ExpoImageManipulator") at module scope.
-  const resolution = await resolveImageManipulatorRuntime({
-    nativeModuleAvailable: requireOptionalNativeModule(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME) != null,
-    loadRuntime: async () => await import("expo-image-manipulator") as unknown as ImageManipulatorRuntime,
-    validateRuntime: (runtime: unknown) => {
-      const candidate = runtime as Partial<ImageManipulatorRuntime> | null;
-      return typeof candidate?.ImageManipulator?.manipulate === "function"
-        && typeof candidate?.SaveFormat?.JPEG === "string";
-    },
-  });
+  isNativeModuleAvailable: () => requireOptionalNativeModule(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME) != null,
+  loadRuntime: async () => await import("expo-image-manipulator") as unknown as ImageManipulatorRuntime,
+  validateRuntime: (runtime: unknown) => {
+    const candidate = runtime as Partial<ImageManipulatorRuntime> | null;
+    return typeof candidate?.ImageManipulator?.manipulate === "function"
+      && typeof candidate?.SaveFormat?.JPEG === "string";
+  },
+});
+
+const loadImageManipulator = async (): Promise<ImageManipulatorRuntime> => {
+  const resolution = await resolveImageManipulator();
   if (!resolution.available) {
     reportImageManipulatorFailure(resolution.reason);
     throw new ImageManipulatorCapabilityError(resolution.reason);
@@ -131,29 +135,21 @@ export async function normalizeImageUploadFile<TFile extends ImageUploadFile>(
   const sourceUri = toText(file.uri);
   if (!sourceUri) throw new Error("Choose a photo before uploading.");
 
-  let context: ImageManipulatorContext | null = null;
-  let renderedImage: ImageManipulatorRenderResult | null = null;
-
   try {
     const { ImageManipulator, SaveFormat } = await loadImageManipulator();
-    context = ImageManipulator.manipulate(sourceUri);
-    renderedImage = await withTimeout(context.renderAsync(), IMAGE_NORMALIZATION_TIMEOUT_MS);
-    const result = await withTimeout(
-      renderedImage.saveAsync({
-        compress: 0.92,
-        format: SaveFormat.JPEG,
-      }),
-      IMAGE_NORMALIZATION_TIMEOUT_MS,
-    );
+    const result = await runImageManipulatorConversion({
+      runtime: { ImageManipulator },
+      sourceUri,
+      compress: 0.92,
+      format: SaveFormat.JPEG,
+      withTimeout: <T>(promise: Promise<T>) => withTimeout(promise, IMAGE_NORMALIZATION_TIMEOUT_MS),
+    });
     const size = await readFileSize(result.uri);
-    let cleaned = false;
 
     return {
-      cleanup: async () => {
-        if (cleaned) return;
-        cleaned = true;
+      cleanup: createIdempotentCleanup(async () => {
         await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => undefined);
-      },
+      }),
       convertedFromHeic: true,
       file: {
         ...file,
@@ -167,8 +163,5 @@ export async function normalizeImageUploadFile<TFile extends ImageUploadFile>(
     if (error instanceof ImageManipulatorCapabilityError) throw error;
     reportImageManipulatorFailure("image_conversion_failed");
     throw new Error("This HEIC or HEIF photo could not be prepared. Choose another photo or try again.");
-  } finally {
-    renderedImage?.release();
-    context?.release();
   }
 }

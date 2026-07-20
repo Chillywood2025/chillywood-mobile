@@ -21,6 +21,7 @@ const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-re
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
 const IOS_ASSOCIATED_DOMAIN = "applinks:chillywoodstream.com";
 const IOS_PRIVACY_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "ios", "privacy-manifest.json");
+const ANDROID_RELEASE_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "release", "android-production.json");
 const IOS_PHOTO_LIBRARY_USAGE_DESCRIPTION = "Chi'llywood accesses photos you choose for your profile and social images.";
 const IOS_RNFIREBASE_STATIC_PODS = [
   "RNFBAnalytics",
@@ -190,6 +191,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     "./GoogleService-Info.plist",
   );
   const iosQaRuntimeVersion = normalizeText(process.env.IOS_QA_RUNTIME_VERSION);
+  const androidReleaseManifest = JSON.parse(
+    fs.readFileSync(ANDROID_RELEASE_MANIFEST_PATH, "utf8"),
+  ) as { packageIdentifier?: unknown; runtimeVersion?: unknown };
+  const androidRuntimeVersion = normalizeText(androidReleaseManifest.runtimeVersion);
+  if (normalizeText(androidReleaseManifest.packageIdentifier) !== normalizeText(existingAndroid.package)) {
+    throw new Error("Android release manifest packageIdentifier does not match app.json.");
+  }
+  if (!androidRuntimeVersion || androidRuntimeVersion === normalizeText(base.runtimeVersion)) {
+    throw new Error("Android release manifest must define a dedicated native runtime different from the shared legacy runtime.");
+  }
   const iosAssociatedDomains = [
     ...(Array.isArray(existingIos.associatedDomains) ? existingIos.associatedDomains : []),
     IOS_ASSOCIATED_DOMAIN,
@@ -212,6 +223,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: {
       ...base.android,
+      runtimeVersion: androidRuntimeVersion,
       ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
       intentFilters: [
         ...(Array.isArray(existingAndroid.intentFilters) ? existingAndroid.intentFilters : []),

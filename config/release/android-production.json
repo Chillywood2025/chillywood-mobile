@@ -1,14 +1,52 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "platform": "android",
   "packageIdentifier": "com.chillywood.mobile",
   "appVersion": "1.0.0",
-  "runtimeVersion": "1.0.0",
+  "nativeBuild": null,
+  "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
   "channel": "production",
   "distributionSource": "google_play_internal",
-  "nativeBuildSource": "eas_provider_readback",
-  "expectedBinarySourceCommit": "08fd60e29a5040672c9f9dc91befc9142861d82e",
-  "nativeBuildId": "4c27d4a2-1b54-48d0-93a2-266c3c430dae",
+  "buildProfile": "production",
+  "nativeBuildSource": "local_eas_build_pending",
+  "expectedBinarySourceCommit": null,
+  "nativeBuildId": null,
+  "releaseStatus": "build_pending",
+  "expoSdkVersion": "54.0.36",
+  "expoImageManipulatorVersion": "14.0.8",
+  "legacyBuild": {
+    "nativeBuild": "80",
+    "runtimeVersion": "1.0.0",
+    "nativeModuleAvailable": false,
+    "installationSourceObserved": "google_play",
+    "protectionState": "pending_update_history_readback"
+  },
+  "nativeCompatibility": {
+    "schemaVersion": 1,
+    "digest": "238817fcb911495627987853ddcb532d01cffe9aaceda9320a50fff16fa745de",
+    "runtimeBindings": [
+      {
+        "runtimeVersion": "1.0.0",
+        "digest": null,
+        "status": "historical_pre_manifest_build"
+      },
+      {
+        "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
+        "digest": "238817fcb911495627987853ddcb532d01cffe9aaceda9320a50fff16fa745de",
+        "status": "reviewed_replacement_candidate"
+      }
+    ],
+    "requiredModules": {
+      "expo-image-manipulator": "14.0.8"
+    }
+  },
+  "artifactEvidence": {
+    "productionAabSha256": null,
+    "qaInstallArtifactSha256": null,
+    "signingCertificateSha256": null,
+    "modulePackagingProved": false,
+    "runtimeModuleProved": false
+  },
   "otaNativeCompatibility": {
     "optionalDeferredPackages": [
       {

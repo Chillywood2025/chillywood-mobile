@@ -45,7 +45,7 @@
       }
     },
     "production-apk": {
-      "autoIncrement": true,
+      "autoIncrement": false,
       "channel": "production",
       "distribution": "internal",
       "environment": "production",

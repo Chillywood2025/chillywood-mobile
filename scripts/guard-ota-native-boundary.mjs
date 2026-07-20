@@ -7,9 +7,14 @@ const normalization = read("_lib/imageUploadNormalization.ts");
 const nativeBoundary = read("_lib/imageManipulatorNativeBoundary.mjs");
 
 assert.equal(manifest.platform, "android");
-assert.equal(manifest.nativeBuildSource, "eas_provider_readback");
-assert.match(manifest.expectedBinarySourceCommit, /^[a-f0-9]{40}$/u);
-assert.match(manifest.nativeBuildId, /^[a-f0-9-]{36}$/u);
+assert.equal(manifest.legacyBuild?.nativeBuild, "80");
+assert.equal(manifest.legacyBuild?.runtimeVersion, "1.0.0");
+assert.equal(manifest.legacyBuild?.nativeModuleAvailable, false);
+assert.notEqual(manifest.runtimeVersion, manifest.legacyBuild.runtimeVersion);
+if (manifest.releaseStatus !== "build_pending") {
+  assert.match(manifest.expectedBinarySourceCommit, /^[a-f0-9]{40}$/u);
+  assert.ok(Number(manifest.nativeBuild) > 80);
+}
 
 const deferred = manifest.otaNativeCompatibility?.optionalDeferredPackages ?? [];
 const imageManipulator = deferred.find((entry) => entry.package === "expo-image-manipulator");
@@ -28,7 +33,7 @@ assert.match(
 );
 assert.match(
   normalization,
-  /requireOptionalNativeModule\(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME\)/u,
+  /isNativeModuleAvailable:\s*\(\)\s*=>\s*requireOptionalNativeModule\(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME\)/u,
   "Android build 80 must probe native availability without throwing",
 );
 assert.match(nativeBoundary, /native_module_unavailable/u);

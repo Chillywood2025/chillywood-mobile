@@ -2336,6 +2336,11 @@ export default function SettingsScreen() {
             <ReleaseDiagnosticItem label="Created at" value={releaseDiagnostics.createdAt} />
             <ReleaseDiagnosticItem label="Embedded launch" value={releaseDiagnostics.isEmbeddedLaunch} testID="release-diagnostics-embedded-launch" />
             <ReleaseDiagnosticItem label="Emergency launch" value={releaseDiagnostics.isEmergencyLaunch} testID="release-diagnostics-emergency-launch" />
+            <ReleaseDiagnosticItem
+              label="HEIC native module"
+              value={releaseDiagnostics.imageManipulatorNativeModuleAvailable ? "Available" : "Missing"}
+              testID="release-diagnostics-image-manipulator-module"
+            />
             <ReleaseDiagnosticItem label="Auto check" value={releaseDiagnostics.checkAutomatically} />
             <ReleaseDiagnosticItem
               label="Last update check"

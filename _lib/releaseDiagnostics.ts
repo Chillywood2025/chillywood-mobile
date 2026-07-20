@@ -1,7 +1,9 @@
 import * as Application from "expo-application";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
+import { requireOptionalNativeModule } from "expo";
 import { Platform } from "react-native";
+import { IMAGE_MANIPULATOR_NATIVE_MODULE_NAME } from "./imageManipulatorNativeBoundary.mjs";
 
 export type ReleaseUpdateCheckStatus =
   | "available"
@@ -26,6 +28,7 @@ export type ReleaseDiagnostics = {
   createdAt: string | null;
   isEmbeddedLaunch: boolean | null;
   isEmergencyLaunch: boolean | null;
+  imageManipulatorNativeModuleAvailable: boolean;
   latestKnownUpdateCheckResult: ReleaseUpdateCheckResult | null;
   nativeApplicationVersion: string | null;
   nativeBuildVersion: string | null;
@@ -74,6 +77,7 @@ export function readReleaseDiagnostics(): ReleaseDiagnostics {
     createdAt: normalizeDate(Updates.createdAt),
     isEmbeddedLaunch: typeof Updates.isEmbeddedLaunch === "boolean" ? Updates.isEmbeddedLaunch : null,
     isEmergencyLaunch: typeof Updates.isEmergencyLaunch === "boolean" ? Updates.isEmergencyLaunch : null,
+    imageManipulatorNativeModuleAvailable: requireOptionalNativeModule(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME) != null,
     latestKnownUpdateCheckResult,
     nativeApplicationVersion: normalizeText(Application.nativeApplicationVersion),
     nativeBuildVersion: normalizeText(Application.nativeBuildVersion),
@@ -96,6 +100,7 @@ export function sanitizeReleaseDiagnosticsForDisplay(
     createdAt: normalizeDate(diagnostics.createdAt),
     isEmbeddedLaunch: typeof diagnostics.isEmbeddedLaunch === "boolean" ? diagnostics.isEmbeddedLaunch : null,
     isEmergencyLaunch: typeof diagnostics.isEmergencyLaunch === "boolean" ? diagnostics.isEmergencyLaunch : null,
+    imageManipulatorNativeModuleAvailable: diagnostics.imageManipulatorNativeModuleAvailable === true,
     latestKnownUpdateCheckResult: diagnostics.latestKnownUpdateCheckResult
       ? {
         checkedAt: normalizeDate(diagnostics.latestKnownUpdateCheckResult.checkedAt) ?? new Date(0).toISOString(),
@@ -128,6 +133,7 @@ export function formatReleaseDiagnosticsSummary(diagnostics: ReleaseDiagnosticsD
     `Created at: ${formatNullable(diagnostics.createdAt)}`,
     `Embedded launch: ${formatBoolean(diagnostics.isEmbeddedLaunch)}`,
     `Emergency launch: ${formatBoolean(diagnostics.isEmergencyLaunch)}`,
+    `ExpoImageManipulator native module: ${diagnostics.imageManipulatorNativeModuleAvailable ? "available" : "missing"}`,
     `Check automatically: ${formatNullable(diagnostics.checkAutomatically)}`,
     `App ownership: ${formatNullable(diagnostics.appOwnership)}`,
     `Latest update check: ${updateCheck ? `${updateCheck.status} (${updateCheck.reason}) at ${updateCheck.checkedAt}` : "null"}`,

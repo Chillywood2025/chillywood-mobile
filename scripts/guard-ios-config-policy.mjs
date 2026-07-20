@@ -184,7 +184,7 @@ assertEqual(withoutIos(easJson.build?.production), {
   android: { buildType: "app-bundle" },
 }, "EAS production Android behavior changed from the protected baseline");
 assertEqual(withoutIos(easJson.build?.["production-apk"]), {
-  autoIncrement: true,
+  autoIncrement: false,
   channel: "production",
   distribution: "internal",
   environment: "production",

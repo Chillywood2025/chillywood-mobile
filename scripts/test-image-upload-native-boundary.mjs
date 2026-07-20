@@ -8,7 +8,10 @@ import ts from "typescript";
 import {
   IMAGE_MANIPULATOR_NATIVE_MODULE_NAME,
   IMAGE_MANIPULATOR_UNAVAILABLE_MESSAGE,
+  createIdempotentCleanup,
+  createImageManipulatorRuntimeLoader,
   resolveImageManipulatorRuntime,
+  runImageManipulatorConversion,
 } from "../_lib/imageManipulatorNativeBoundary.mjs";
 
 const repoRoot = process.cwd();
@@ -45,6 +48,67 @@ const availableResolution = await resolveImageManipulatorRuntime({
 assert.equal(availableResolution.available, true);
 assert.equal(availableResolution.runtime, fakeRuntime);
 assert.equal(availableLoaderCalls, 1);
+
+let memoizedLoaderCalls = 0;
+const memoizedLoader = createImageManipulatorRuntimeLoader({
+  isNativeModuleAvailable: () => true,
+  loadRuntime: async () => {
+    memoizedLoaderCalls += 1;
+    return fakeRuntime;
+  },
+  validateRuntime: (runtime) => typeof runtime?.ImageManipulator?.manipulate === "function",
+});
+const [memoizedFirst, memoizedSecond] = await Promise.all([memoizedLoader(), memoizedLoader()]);
+assert.equal(memoizedFirst.available, true);
+assert.equal(memoizedSecond.runtime, fakeRuntime);
+assert.equal(memoizedLoaderCalls, 1, "a present native package must be evaluated exactly once");
+
+let contextReleaseCount = 0;
+let renderReleaseCount = 0;
+const conversionRuntime = {
+  ImageManipulator: {
+    manipulate: () => ({
+      release: () => { contextReleaseCount += 1; },
+      renderAsync: async () => ({
+        release: () => { renderReleaseCount += 1; },
+        saveAsync: async () => ({ uri: "cache://normalized.jpg" }),
+      }),
+    }),
+  },
+};
+const converted = await runImageManipulatorConversion({
+  runtime: conversionRuntime,
+  sourceUri: "fixture://photo.heic",
+  compress: 0.92,
+  format: "jpeg",
+  withTimeout: async (promise) => await promise,
+});
+assert.equal(converted.uri, "cache://normalized.jpg");
+assert.equal(contextReleaseCount, 1, "native context must release after success");
+assert.equal(renderReleaseCount, 1, "render result must release after success");
+
+let errorContextReleaseCount = 0;
+await assert.rejects(runImageManipulatorConversion({
+  runtime: {
+    ImageManipulator: {
+      manipulate: () => ({
+        release: () => { errorContextReleaseCount += 1; },
+        renderAsync: async () => { throw new Error("fixture_decode_failed"); },
+      }),
+    },
+  },
+  sourceUri: "fixture://corrupt.heic",
+  compress: 0.92,
+  format: "jpeg",
+  withTimeout: async (promise) => await promise,
+}), /fixture_decode_failed/u);
+assert.equal(errorContextReleaseCount, 1, "native context must release after conversion error");
+
+let cleanupCalls = 0;
+const cleanup = createIdempotentCleanup(async () => { cleanupCalls += 1; });
+await cleanup();
+await cleanup();
+assert.equal(cleanupCalls, 1, "temporary output cleanup must be idempotent");
 
 const rejectedResolution = await resolveImageManipulatorRuntime({
   nativeModuleAvailable: true,
@@ -91,6 +155,8 @@ const normalization = read("_lib/imageUploadNormalization.ts");
 assert.doesNotMatch(normalization, /^import\s+[^;]+from\s+["']expo-image-manipulator["'];/mu);
 assert.match(normalization, /requireOptionalNativeModule\(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME\)/u);
 assert.match(normalization, /await import\(["']expo-image-manipulator["']\)/u);
+assert.match(normalization, /createImageManipulatorRuntimeLoader/u);
+assert.match(normalization, /createIdempotentCleanup/u);
 assert.match(normalization, /reportRuntimeError\(["']image-upload-normalization-capability["']/u);
 assert.match(normalization, /if \(!isHeicOrHeifImage\(file\)\)/u);
 assert.ok(
@@ -101,8 +167,12 @@ assert.ok(
 
 const profileMedia = read("_lib/profileMedia.ts");
 const socialAttachments = read("_lib/socialAttachments.ts");
+const profilePicker = read("_lib/profileMedia.ts");
+const socialPicker = read("_lib/socialAttachmentPicker.ts");
 assert.match(profileMedia, /normalizeImageUploadFile\(file\)/u);
 assert.match(socialAttachments, /normalizeImageUploadFile\(input\.file\)/u);
+assert.match(profilePicker, /if \(result\.canceled\) return null/u, "profile picker cancellation must not start normalization or upload");
+assert.match(socialPicker, /if \(result\.canceled\) return null/u, "social picker cancellation must not start normalization or upload");
 for (const pathName of [
   "_lib/chat.ts",
   "_lib/profilePosts.ts",
