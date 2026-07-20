@@ -45,4 +45,7 @@ app-store-connect.*.env
 *.cer
 *.key
 *.mobileprovision
+credentials.json
+*.signing-password
+*.keystore-password
 GoogleService-Info.plist

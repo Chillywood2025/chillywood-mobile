@@ -31,6 +31,13 @@
         "buildType": "app-bundle"
       }
     },
+    "android-production-local-recovery": {
+      "extends": "production",
+      "android": {
+        "buildType": "app-bundle",
+        "credentialsSource": "local"
+      }
+    },
     "ios-qa": {
       "extends": "production",
       "channel": "ios-qa",

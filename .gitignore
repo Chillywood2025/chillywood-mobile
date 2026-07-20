@@ -20,6 +20,9 @@ expo-env.d.ts
 *.cer
 *.key
 *.mobileprovision
+credentials.json
+*.signing-password
+*.keystore-password
 *.ipa
 *.xcarchive/
 GoogleService-Info.plist

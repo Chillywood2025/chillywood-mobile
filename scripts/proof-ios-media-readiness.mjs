@@ -71,11 +71,25 @@ unregisterFailingStopper();
 const imageNormalization = read("_lib/imageUploadNormalization.ts");
 [
   "isHeicOrHeifImage",
-  "ImageManipulator.manipulate",
+  "requireOptionalNativeModule(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME)",
+  'await import("expo-image-manipulator")',
+  "runImageManipulatorConversion",
   "SaveFormat.JPEG",
   'mimeType: "image/jpeg"',
   "FileSystem.deleteAsync",
 ].forEach((expected) => includes(imageNormalization, expected, "HEIC/HEIF normalization"));
+excludes(
+  imageNormalization,
+  'import { ImageManipulator, SaveFormat } from "expo-image-manipulator"',
+  "HEIC/HEIF eager native-package evaluation",
+);
+const imageManipulatorBoundary = read("_lib/imageManipulatorNativeBoundary.mjs");
+[
+  "native_module_unavailable",
+  "package_runtime_invalid",
+  "renderedImage?.release()",
+  "context?.release()",
+].forEach((expected) => includes(imageManipulatorBoundary, expected, "HEIC/HEIF native boundary"));
 
 const imagePolicyJavaScript = ts.transpileModule(read("_lib/imageUploadPolicy.ts"), {
   compilerOptions: {
