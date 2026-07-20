@@ -23036,6 +23036,14 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_chilly_chat_call: {
+        Args: {
+          p_call_type: string
+          p_communication_room_id: string
+          p_thread_id: string
+        }
+        Returns: Json
+      }
       unhide_chat_thread_for_me: {
         Args: { p_thread_id: string }
         Returns: Json

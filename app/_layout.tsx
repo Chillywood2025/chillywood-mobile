@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Linking, Modal, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Linking, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import {
@@ -43,6 +43,7 @@ import {
   type ChillyChatPlayingSound,
 } from "../_lib/chillyChatCallSoundAssets";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
+import { resolveIncomingCallPresentation } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
   clearApplicationNotificationBadge,
   configureNotificationRuntime,
@@ -268,6 +269,16 @@ type IncomingCallAlert = ForegroundNotificationAlert & {
   invite?: ChillyChatCallInvite | null;
 };
 
+const buildIncomingCallAnswerPath = (alert: IncomingCallAlert) => {
+  const [routePath, query = ""] = String(alert.path ?? "").trim().split("?");
+  const params = new URLSearchParams(query);
+  const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
+  if (inviteId) params.set("callInviteId", inviteId);
+  params.set("nativeCallAction", "answer");
+  params.set("openCall", "1");
+  return `${routePath || "/chat"}?${params.toString()}`;
+};
+
 const ROOM_SAFE_CALL_PATH_PREFIXES = [
   "/watch-party",
   "/watch-party/",
@@ -296,10 +307,6 @@ const getIncomingCallerLabel = (alert: IncomingCallAlert) => {
   return String(match?.[1] ?? "").trim() || "Someone";
 };
 
-const getIncomingCallerInitial = (callerLabel: string) => (
-  String(callerLabel ?? "").trim().charAt(0).toUpperCase() || "C"
-);
-
 const normalizeRoutePathOnly = (value?: string | null) => {
   const normalized = String(value ?? "").trim().split("?")[0]?.replace(/\/+$/u, "") ?? "";
   return normalized || "/";
@@ -326,6 +333,7 @@ function IncomingCallNotificationBridge() {
   const pathname = usePathname();
   const { isSignedIn, user } = useSession();
   const [alert, setAlert] = useState<IncomingCallAlert | null>(null);
+  const [appState, setAppState] = useState(AppState.currentState);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
@@ -339,6 +347,9 @@ function IncomingCallNotificationBridge() {
 
   const showAlert = (nextAlert: IncomingCallAlert) => {
     if (nextAlert.inviteId && latestInviteAlertIdRef.current === nextAlert.inviteId) {
+      if (nextAlert.invite) {
+        setAlert((current) => current?.invite ? current : current ? { ...current, ...nextAlert } : nextAlert);
+      }
       return;
     }
     if (nextAlert.inviteId) latestInviteAlertIdRef.current = nextAlert.inviteId;
@@ -406,6 +417,7 @@ function IncomingCallNotificationBridge() {
       }
     }, 3000);
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      setAppState(nextState);
       if (nextState === "active") {
         void refreshIncomingInvite();
       }
@@ -430,7 +442,8 @@ function IncomingCallNotificationBridge() {
     const alertPath = normalizeRoutePathOnly(alert.path);
     const alreadyOnSameThread = currentPath.startsWith("/chat/") && alertPath && currentPath === alertPath;
     if (
-      alreadyOnSameThread
+      appState !== "active"
+      || alreadyOnSameThread
       || callPreferences?.chillyChatCallsEnabled === false
       || callPreferences?.inAppEnabled === false
     ) {
@@ -458,19 +471,19 @@ function IncomingCallNotificationBridge() {
       soundActive = false;
       stopIncomingCallAttention();
     };
-  }, [alert?.inviteId, alert?.path, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, callPreferences?.inAppEnabled, pathname]);
+  }, [alert, appState, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, callPreferences?.inAppEnabled, pathname]);
 
   if (!alert) return null;
 
   const currentPath = normalizeRoutePathOnly(pathname);
   const alertPath = normalizeRoutePathOnly(alert.path);
   const alreadyOnSameThread = currentPath.startsWith("/chat/") && !!alertPath && currentPath === alertPath;
-  if (alreadyOnSameThread) return null;
+  const presentation = resolveIncomingCallPresentation({ appState, alreadyOnSameThread });
+  if (presentation === "native_background" || presentation === "thread_banner") return null;
 
   const roomSafeCall = isRoomSafeIncomingCallPath(pathname);
   const callKind = getIncomingCallKind(alert);
   const callerLabel = getIncomingCallerLabel(alert);
-  const callerInitial = getIncomingCallerInitial(callerLabel);
 
   const clearAlert = () => {
     stopIncomingCallAttention();
@@ -506,7 +519,7 @@ function IncomingCallNotificationBridge() {
   };
 
   const openCall = () => {
-    const path = alert.path;
+    const path = buildIncomingCallAnswerPath(alert);
     cleanupChillyChatCallNotifications({
       callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       path,
@@ -578,7 +591,7 @@ function IncomingCallNotificationBridge() {
   const overlay = (
     <View
       pointerEvents="box-none"
-      style={roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay}
+      style={styles.incomingCallBannerOverlay}
       testID="app-wide-incoming-call-overlay"
       accessibilityLabel="Incoming Chi'lly Chat call overlay"
     >
@@ -629,70 +642,50 @@ function IncomingCallNotificationBridge() {
       </View>
       ) : (
       <View
-        style={styles.incomingCallModalSheet}
-        testID="app-wide-incoming-call-modal"
+        style={styles.incomingCallBannerCard}
+        testID="app-wide-incoming-call-banner"
         accessibilityLabel={`Incoming Chi'lly Chat ${callKind} call from ${callerLabel}`}
       >
-        <View style={styles.incomingCallRingGlow}>
-          <View style={styles.incomingCallAvatar}>
-            <Text style={styles.incomingCallAvatarText}>{callerInitial}</Text>
-          </View>
-        </View>
-        <Text style={styles.incomingCallModalKicker}>Chi’lly Chat</Text>
-        <Text style={styles.incomingCallModalTitle}>{callerLabel} is calling...</Text>
-        <Text style={styles.incomingCallModalBody}>Incoming {callKind} call</Text>
-        <View style={styles.incomingCallModalActionRow}>
+        <Text style={styles.incomingCallEyebrow}>Incoming {callKind} call</Text>
+        <Text style={styles.incomingCallTitle}>{callerLabel} is calling…</Text>
+        <Text style={styles.incomingCallBody}>Answer, decline, or reply without leaving your current screen.</Text>
+        <View style={styles.incomingCallActions}>
           <TouchableOpacity
             activeOpacity={0.86}
             onPress={() => {
               void decline();
             }}
-            style={[styles.incomingCallModalButton, styles.incomingCallModalDeclineButton]}
+            style={[styles.incomingCallButton, styles.incomingCallDeclineButton]}
             testID="app-wide-incoming-call-decline"
             accessibilityLabel="Decline incoming Chi'lly Chat call"
           >
-            <Text style={styles.incomingCallModalButtonText}>Decline</Text>
+            <Text style={styles.incomingCallDeclineText}>Decline</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.82}
+            onPress={replyInChat}
+            style={[styles.incomingCallButton, styles.incomingCallSecondaryButton]}
+            testID="app-wide-incoming-call-reply-chat"
+            accessibilityLabel="Reply in Chi'lly Chat without answering"
+          >
+            <Text style={styles.incomingCallSecondaryText}>Reply</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.88}
             onPress={openCall}
-            style={[styles.incomingCallModalButton, styles.incomingCallModalAcceptButton]}
+            style={[styles.incomingCallButton, styles.incomingCallPrimaryButton]}
             testID="app-wide-incoming-call-answer"
             accessibilityLabel="Answer incoming Chi'lly Chat call"
           >
-            <Text style={styles.incomingCallModalButtonText}>Answer</Text>
+            <Text style={styles.incomingCallPrimaryText}>Answer</Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          activeOpacity={0.82}
-          onPress={replyInChat}
-          style={styles.incomingCallModalReplyButton}
-          testID="app-wide-incoming-call-reply-chat"
-          accessibilityLabel="Reply in Chi'lly Chat without answering"
-        >
-          <Text style={styles.incomingCallModalReplyText}>Reply in Chat</Text>
-        </TouchableOpacity>
-        <Text style={styles.incomingCallModalFootnote}>
-          Rings for about 45 seconds, then becomes a missed call.
-        </Text>
       </View>
       )}
     </View>
   );
 
-  if (roomSafeCall) return overlay;
-
-  return (
-    <Modal
-      animationType="fade"
-      onRequestClose={() => {}}
-      statusBarTranslucent
-      transparent
-      visible
-    >
-      {overlay}
-    </Modal>
-  );
+  return overlay;
 }
 
 function RoomSafeActivityNotificationBridge() {
@@ -1288,14 +1281,6 @@ const styles = StyleSheet.create({
     right: 14,
     zIndex: 40,
   },
-  incomingCallModalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 22,
-    backgroundColor: "rgba(0,0,0,0.58)",
-  },
   incomingCallBannerCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -1307,109 +1292,6 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
-  },
-  incomingCallModalSheet: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(10,12,21,0.96)",
-    padding: 24,
-    alignItems: "center",
-    gap: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.34,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 12,
-  },
-  incomingCallRingGlow: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(243,75,116,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(243,75,116,0.42)",
-  },
-  incomingCallAvatar: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  incomingCallAvatarText: {
-    color: "#FFF5F8",
-    fontSize: 28,
-    fontWeight: "900",
-  },
-  incomingCallModalKicker: {
-    color: "#FFB4C6",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.15,
-    textTransform: "uppercase",
-  },
-  incomingCallModalTitle: {
-    color: "#FFFFFF",
-    fontSize: 23,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  incomingCallModalBody: {
-    color: "#C9D4E8",
-    fontSize: 14,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  incomingCallModalActionRow: {
-    flexDirection: "row",
-    gap: 12,
-    width: "100%",
-    marginTop: 8,
-  },
-  incomingCallModalButton: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  incomingCallModalDeclineButton: {
-    backgroundColor: "#B91C1C",
-  },
-  incomingCallModalAcceptButton: {
-    backgroundColor: "#16A34A",
-  },
-  incomingCallModalButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  incomingCallModalReplyButton: {
-    minHeight: 42,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  incomingCallModalReplyText: {
-    color: "#D7E4EA",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  incomingCallModalFootnote: {
-    color: "#8E9AB0",
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
   },
   incomingCallOpenAction: {
     gap: 4,
@@ -1454,6 +1336,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: "#A9F6D2",
   },
+  incomingCallDeclineButton: {
+    backgroundColor: "#B91C1C",
+  },
   incomingCallSecondaryText: {
     color: "#D7E4EA",
     fontSize: 12,
@@ -1461,6 +1346,11 @@ const styles = StyleSheet.create({
   },
   incomingCallPrimaryText: {
     color: "#071014",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  incomingCallDeclineText: {
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "900",
   },

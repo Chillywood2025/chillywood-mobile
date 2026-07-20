@@ -53,6 +53,7 @@ import {
   resolveIncomingCallRoomJoinAction,
   resolveIosChatCallAudioRoute,
   shouldActivateAcceptedChatCallMedia,
+  shouldShowOutgoingRingingPanel,
 } from "../../_lib/communicationCallMediaPolicy.mjs";
 import { decodeVisiblePercentEscapes } from "../../_lib/displayText";
 import {
@@ -433,7 +434,10 @@ export default function ChillyChatThreadScreen() {
       setMessages(nextMessages);
       setCallEvents(nextCallEvents);
       setCallPreferences(nextCallPreferences);
-      setIncomingCallInvite(latestInviteForCurrentUser && !latestInviteWasHandled ? latestInviteForCurrentUser : null);
+      const visibleIncomingInvite = latestInviteForCurrentUser && !latestInviteWasHandled
+        ? latestInviteForCurrentUser
+        : null;
+      setIncomingCallInvite(visibleIncomingInvite);
       setError(null);
       setLoading(false);
       if (!visibleThread.activeCommunicationRoomId) {
@@ -448,7 +452,15 @@ export default function ChillyChatThreadScreen() {
 
       await markThreadReadWithThrottle();
 
-      setCallPanelOpen((wasOpen) => (wasOpen ? !!visibleThread.activeCommunicationRoomId : false));
+      if (visibleIncomingInvite) {
+        stopOutgoingRingback();
+        activeCallInviteRef.current = null;
+        setActiveCallInvite(null);
+        setOutgoingCallInvite(null);
+        setCallPanelOpen(false);
+      } else {
+        setCallPanelOpen((wasOpen) => (wasOpen ? !!visibleThread.activeCommunicationRoomId : false));
+      }
     } catch (loadError: any) {
       logChatThread("load_state_failed", {
         threadId,
@@ -457,7 +469,7 @@ export default function ChillyChatThreadScreen() {
       setError(loadError?.message ?? "Unable to load this Chi'lly Chat thread.");
       setLoading(false);
     }
-  }, [currentUserId, isSignedIn, markThreadReadWithThrottle, reconcileEndedCallState, threadId]);
+  }, [currentUserId, isSignedIn, markThreadReadWithThrottle, reconcileEndedCallState, stopOutgoingRingback, threadId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -906,7 +918,12 @@ export default function ChillyChatThreadScreen() {
   const otherMemberHandle = officialAccount?.handle ?? formatUsernameHandle(otherMember?.username);
   const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;
   const outgoingCallRinging = !!outgoingCallInvite
-    && outgoingCallInvite.status === "ringing"
+    && shouldShowOutgoingRingingPanel({
+      currentUserId,
+      callerUserId: outgoingCallInvite.callerUserId,
+      calleeUserId: outgoingCallInvite.calleeUserId,
+      inviteStatus: outgoingCallInvite.status,
+    })
     && participantCount < 2;
   const callTitle = outgoingCallRinging
     ? (thread?.activeCallType === "video" ? "Video call ringing" : "Voice call ringing")
@@ -1153,9 +1170,20 @@ export default function ChillyChatThreadScreen() {
         : refreshPushRegistrationIfGranted());
       const result = await startChatThreadCall(threadId, mode);
       setThread(result.thread);
+      if (result.role === "callee" && result.invite?.status === "ringing") {
+        stopOutgoingRingback();
+        activeCallInviteRef.current = null;
+        setActiveCallInvite(null);
+        setOutgoingCallInvite(null);
+        setIncomingCallInvite(result.invite);
+        setCallPanelOpen(false);
+        setCallDeliveryStatus("You both called at the same time. The other call won; answer or decline it here.");
+        return;
+      }
       activeCallInviteRef.current = result.invite;
       setActiveCallInvite(result.invite);
       setOutgoingCallInvite(result.invite);
+      setIncomingCallInvite(null);
       setCallPanelOpen(true);
       setCallDeliveryStatus(getChillyChatCallDeliveryMessage(result.delivery));
       logChatCall("handle_start_call_success", {
@@ -1189,7 +1217,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setCallBusy(false);
     }
-  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, callBusy, officialAccount, threadId]);
+  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, callBusy, officialAccount, stopOutgoingRingback, threadId]);
 
   const readAcceptableIncomingInvite = useCallback(async (
     invite: ChillyChatCallInvite,
@@ -2455,22 +2483,16 @@ export default function ChillyChatThreadScreen() {
       ) : null}
 
       {incomingCallInvite && !callPanelOpen ? (
-        <View style={styles.incomingCallOverlay} pointerEvents="box-none">
-          <View style={styles.incomingCallSheet}>
-            <View style={styles.incomingRingGlow}>
-              {otherMemberAvatarUrl ? (
-                <Image source={{ uri: otherMemberAvatarUrl }} style={styles.incomingAvatarImage} />
-              ) : (
-                <View style={styles.incomingAvatar}>
-                  <Text style={styles.incomingAvatarText}>{otherMemberDisplayName.slice(0, 1).toUpperCase()}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.incomingKicker}>CHI’LLY CHAT</Text>
-            <Text style={styles.incomingTitle}>{otherMemberDisplayName} is calling...</Text>
-            <Text style={styles.incomingBody}>
-              Incoming {incomingCallInvite.callType === "video" ? "video" : "voice"} call
-            </Text>
+        <View
+          style={[styles.incomingCallBannerOverlay, { top: Math.max(safeAreaInsets.top, 10) + 8 }]}
+          pointerEvents="box-none"
+          testID="chat-thread-incoming-call-banner"
+          accessibilityLabel={`Incoming Chi'lly Chat ${incomingCallInvite.callType} call from ${otherMemberDisplayName}`}
+        >
+          <View style={styles.incomingCallBannerCard}>
+            <Text style={styles.incomingKicker}>INCOMING {incomingCallInvite.callType.toUpperCase()} CALL</Text>
+            <Text style={styles.incomingTitle}>{otherMemberDisplayName} is calling…</Text>
+            <Text style={styles.incomingBody}>Answer or decline without leaving this thread.</Text>
             <View style={styles.incomingActionRow}>
               <TouchableOpacity
                 style={[styles.incomingButton, styles.incomingDeclineButton]}
@@ -2479,6 +2501,7 @@ export default function ChillyChatThreadScreen() {
                 onPress={() => {
                   void handleDeclineIncomingCall();
                 }}
+                testID="chat-thread-incoming-call-decline"
               >
                 <Text style={styles.incomingButtonText}>Decline</Text>
               </TouchableOpacity>
@@ -2489,11 +2512,11 @@ export default function ChillyChatThreadScreen() {
                 onPress={() => {
                   void handleAcceptIncomingCall();
                 }}
+                testID="chat-thread-incoming-call-answer"
               >
-                <Text style={styles.incomingButtonText}>Accept</Text>
+                <Text style={styles.incomingButtonText}>Answer</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.incomingFootnote}>Rings for about 45 seconds, then becomes a missed call.</Text>
           </View>
         </View>
       ) : null}
@@ -2967,85 +2990,51 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 20,
   },
-  incomingCallOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  incomingCallBannerOverlay: {
+    position: "absolute",
+    left: 14,
+    right: 14,
     zIndex: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 22,
-    backgroundColor: "rgba(0,0,0,0.58)",
   },
-  incomingCallSheet: {
+  incomingCallBannerCard: {
     width: "100%",
-    maxWidth: 420,
-    borderRadius: 28,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(10,12,21,0.96)",
-    padding: 24,
-    alignItems: "center",
-    gap: 12,
+    borderColor: "rgba(169,246,210,0.34)",
+    backgroundColor: "rgba(7,16,20,0.98)",
+    padding: 12,
+    gap: 4,
     shadowColor: "#000",
-    shadowOpacity: 0.34,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 14 },
-  },
-  incomingRingGlow: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(243,75,116,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(243,75,116,0.42)",
-  },
-  incomingAvatar: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  incomingAvatarImage: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  incomingAvatarText: {
-    color: "#FFF5F8",
-    fontSize: 28,
-    fontWeight: "900",
+    shadowOpacity: 0.26,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
   incomingKicker: {
-    color: "#FFB4C6",
+    color: "#A9F6D2",
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.15,
   },
   incomingTitle: {
     color: "#FFFFFF",
-    fontSize: 23,
+    fontSize: 16,
     fontWeight: "900",
-    textAlign: "center",
   },
   incomingBody: {
     color: "#C9D4E8",
-    fontSize: 14,
-    fontWeight: "800",
-    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "700",
   },
   incomingActionRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
     width: "100%",
     marginTop: 8,
   },
   incomingButton: {
     flex: 1,
-    minHeight: 52,
+    minHeight: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
@@ -3058,14 +3047,8 @@ const styles = StyleSheet.create({
   },
   incomingButtonText: {
     color: "#FFFFFF",
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: "900",
-  },
-  incomingFootnote: {
-    color: "#8E9AB0",
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
   },
   messages: {
     flex: 1,

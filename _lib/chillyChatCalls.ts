@@ -64,6 +64,12 @@ export type CreatedChillyChatCallInvite = {
   invite: ChillyChatCallInvite;
 };
 
+export type BegunChillyChatCall = {
+  created: boolean;
+  invite: ChillyChatCallInvite;
+  role: "caller" | "callee";
+};
+
 export type ChillyChatCallEvent = {
   id: string;
   threadId: string;
@@ -220,7 +226,7 @@ const DEFAULT_CALL_DELIVERY: ChillyChatCallInviteDelivery = {
 
 type CallDispatchAction = "incoming" | "missed" | "cancel" | "declined" | "end" | "timeout";
 
-async function dispatchChillyChatCallPush(input: {
+export async function dispatchChillyChatCallPush(input: {
   action: CallDispatchAction;
   inviteId: string;
 }): Promise<ChillyChatCallInviteDelivery> {
@@ -256,6 +262,47 @@ async function dispatchChillyChatCallPush(input: {
     reason: response.result.reason,
     status: response.result.status,
     channels: response.channels,
+  };
+}
+
+export async function beginChillyChatCall(input: {
+  threadId: string;
+  communicationRoomId: string;
+  callType: ChillyChatCallType;
+}): Promise<BegunChillyChatCall> {
+  const { data, error } = await supabase.rpc("begin_chilly_chat_call", {
+    p_call_type: input.callType,
+    p_communication_room_id: input.communicationRoomId,
+    p_thread_id: input.threadId,
+  });
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    throw error ?? new Error("Unable to reserve this Chi'lly Chat call.");
+  }
+
+  const payload = data as Record<string, unknown>;
+  const invitePayload = payload.invite;
+  if (!invitePayload || typeof invitePayload !== "object" || Array.isArray(invitePayload)) {
+    throw new Error("Unable to read the reserved Chi'lly Chat call.");
+  }
+  const invite = parseInvite(invitePayload as CallInviteRow);
+  if (!invite) {
+    throw new Error("Unable to read the reserved Chi'lly Chat call.");
+  }
+  const session = await supabase.auth.getSession();
+  const currentUserId = toText(session.data.session?.user?.id);
+  const role = invite.callerUserId === currentUserId
+    ? "caller"
+    : invite.calleeUserId === currentUserId
+      ? "callee"
+      : null;
+  if (!role) {
+    throw new Error("The reserved Chi'lly Chat call does not belong to this account.");
+  }
+
+  return {
+    created: payload.created === true,
+    invite,
+    role,
   };
 }
 

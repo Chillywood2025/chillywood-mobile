@@ -17,11 +17,14 @@ import {
 } from "../supabase/functions/_shared/ios-voip-policy.mjs";
 import {
   canAttemptNativeCallBackgroundAudio,
+  resolveChillyChatCallParticipantRole,
+  resolveIncomingCallPresentation,
   resolveIncomingCallRoomJoinAction,
   resolveIosChatCallAudioRoute,
   setActiveCommunicationTracksEnabled,
   shouldActivateAcceptedChatCallMedia,
   shouldPreserveNativeCallBackgroundAudio,
+  shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -246,6 +249,38 @@ assert.equal(shouldActivateAcceptedChatCallMedia({
   inviteStatus: "accepted",
 }), false, "accepted state without an exact room cannot activate media");
 
+assert.equal(resolveChillyChatCallParticipantRole({
+  currentUserId: "caller",
+  callerUserId: "caller",
+  calleeUserId: "callee",
+}), "caller");
+assert.equal(resolveChillyChatCallParticipantRole({
+  currentUserId: "callee",
+  callerUserId: "caller",
+  calleeUserId: "callee",
+}), "callee");
+assert.equal(resolveChillyChatCallParticipantRole({
+  currentUserId: "other",
+  callerUserId: "caller",
+  calleeUserId: "callee",
+}), "none");
+assert.equal(shouldShowOutgoingRingingPanel({
+  currentUserId: "callee",
+  callerUserId: "caller",
+  calleeUserId: "callee",
+  inviteStatus: "ringing",
+}), false, "a callee can never receive the caller waiting panel");
+assert.equal(shouldShowOutgoingRingingPanel({
+  currentUserId: "caller",
+  callerUserId: "caller",
+  calleeUserId: "callee",
+  inviteStatus: "ringing",
+}), true, "only the durable caller receives the outgoing ringing panel");
+assert.equal(resolveIncomingCallPresentation({ appState: "active", alreadyOnSameThread: false }), "app_banner");
+assert.equal(resolveIncomingCallPresentation({ appState: "active", alreadyOnSameThread: true }), "thread_banner");
+assert.equal(resolveIncomingCallPresentation({ appState: "background", alreadyOnSameThread: false }), "native_background");
+assert.equal(resolveIncomingCallPresentation({ appState: "inactive", alreadyOnSameThread: true }), "native_background");
+
 const actionScope = {
   callInviteId: "11111111-1111-4111-8111-111111111111",
   callType: "video",
@@ -306,6 +341,10 @@ const expiryMigrationSource = await readFile(
   new URL("supabase/migrations/20260719213953_expire_stale_chilly_chat_calls.sql", root),
   "utf8",
 );
+const atomicCallBeginMigrationSource = await readFile(
+  new URL("supabase/migrations/20260719220000_atomic_chilly_chat_call_begin.sql", root),
+  "utf8",
+);
 assert.ok(dispatchSource.indexOf("const iosVoipPromise = invokeIosVoipDispatch") < dispatchSource.indexOf("const tokens = pushAllowed"));
 assert.doesNotMatch(dispatchSource, /if \(!tokens\.length\)[\s\S]{0,220}return/u);
 assert.match(voipSource, /\.eq\("enabled", true\)[\s\S]*\.is\("revoked_at", null\)/u);
@@ -324,6 +363,10 @@ assert.match(retryMigrationSource, /make_interval\(secs => least\(300/u);
 assert.match(expiryMigrationSource, /for update skip locked/u, "timeout expiry claims a bounded non-overlapping batch");
 assert.match(expiryMigrationSource, /transition_chilly_chat_call_invite/u, "timeout expiry uses the durable transition operation");
 assert.match(expiryMigrationSource, /"status" = 'ended'/u, "timeout expiry closes the stale media room");
+assert.match(atomicCallBeginMigrationSource, /pg_advisory_xact_lock/u, "call starts serialize per direct thread");
+assert.match(atomicCallBeginMigrationSource, /invite\."status" in \('ringing', 'accepted'\)/u, "a concurrent start reuses the winning invite");
+assert.match(atomicCallBeginMigrationSource, /'role', case[\s\S]*'callee'/u, "the losing simultaneous caller becomes the callee");
+assert.match(atomicCallBeginMigrationSource, /"room_id" is distinct from v_existing\."communication_room_id"/u, "only the losing candidate room is closed");
 
 assert.doesNotMatch(dispatchSource, /markInviteMissed/u, "dispatch endpoint cannot own call-state transitions");
 assert.doesNotMatch(
@@ -332,6 +375,16 @@ assert.doesNotMatch(
   "dispatch endpoint cannot mutate chat_call_invites",
 );
 assert.match(chatThreadSource, /readLatestChillyChatCallInviteForRoom/u, "callee join must reconcile the invite by room");
+assert.match(chatThreadSource, /result\.role === "callee"/u, "a simultaneous reverse start must switch the losing device to incoming-call controls");
+assert.match(chatThreadSource, /setCallPanelOpen\(false\)[\s\S]{0,180}answer or decline/u, "the collision loser cannot stay on the caller waiting panel");
+assert.match(chatThreadSource, /testID="chat-thread-incoming-call-banner"/u, "same-thread foreground calls use a compact answer banner");
+assert.doesNotMatch(chatThreadSource, /styles\.incomingCallSheet/u, "same-thread foreground calls cannot use the large blocking modal");
+assert.match(rootLayoutSource, /testID="app-wide-incoming-call-banner"/u, "foreground calls outside the thread use the compact top banner");
+assert.doesNotMatch(rootLayoutSource, /app-wide-incoming-call-modal/u, "foreground calls cannot use the large app-wide modal");
+assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
+assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
+assert.match(rootLayoutSource, /params\.set\("nativeCallAction", "answer"\)/u, "foreground Answer uses the durable callee accept route");
+assert.match(rootLayoutSource, /current\?\.invite \? current : current \? \{ \.\.\.current, \.\.\.nextAlert \} : nextAlert/u, "database readback must hydrate a notification-first banner before Decline");
 assert.match(chatThreadSource, /subscribeToChillyChatCallInvite\(visibleInvite\.id/u, "incoming presentation must follow authoritative invite state");
 assert.match(chatThreadSource, /setIosNativeCallAudioRoute\(route\)/u, "iOS chat calls must apply the call-type audio route");
 assert.doesNotMatch(

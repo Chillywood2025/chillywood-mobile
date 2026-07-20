@@ -27,6 +27,27 @@ export function resolveIncomingCallRoomJoinAction(input) {
   return "blocked";
 }
 
+export function resolveChillyChatCallParticipantRole(input) {
+  const currentUserId = String(input?.currentUserId ?? "").trim();
+  const callerUserId = String(input?.callerUserId ?? "").trim();
+  const calleeUserId = String(input?.calleeUserId ?? "").trim();
+  if (!currentUserId || !callerUserId || !calleeUserId || callerUserId === calleeUserId) return "none";
+  if (currentUserId === callerUserId) return "caller";
+  if (currentUserId === calleeUserId) return "callee";
+  return "none";
+}
+
+export function resolveIncomingCallPresentation(input) {
+  const appState = String(input?.appState ?? "").trim().toLowerCase();
+  if (appState !== "active") return "native_background";
+  return input?.alreadyOnSameThread === true ? "thread_banner" : "app_banner";
+}
+
+export function shouldShowOutgoingRingingPanel(input) {
+  return input?.inviteStatus === "ringing"
+    && resolveChillyChatCallParticipantRole(input) === "caller";
+}
+
 export function resolveIosChatCallAudioRoute(callType) {
   return callType === "video" ? "speaker" : "receiver";
 }

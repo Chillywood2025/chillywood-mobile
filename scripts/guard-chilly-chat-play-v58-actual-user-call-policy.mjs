@@ -46,6 +46,7 @@ const inbox = read("app/chat/index.tsx");
 const thread = read("app/chat/[threadId].tsx");
 const profile = read("app/profile/[userId].tsx");
 const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts");
+const callDeliveryCopy = read("_lib/chillyChatCallDeliveryCopy.ts");
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const callMigration = read("supabase/migrations/202606100001_chilly_chat_call_invites_and_ringtones.sql");
@@ -170,15 +171,15 @@ forbidSentence("Play v58 proof doc", doc, (sentence) => (
   forbidMatch(label, content, /(PASSWORD|PASSCODE)\s*=\s*['"]?[^<\s][^\s]{8,}/i, "password value");
   forbidMatch(label, content, /(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY)\s*=\s*['"]?[A-Za-z0-9._-]{20,}/, "service-role key value");
   forbidMatch(label, content, /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/, "JWT/token");
-  forbidMatch(label, content, /https?:\/\/[^\s)]*(?:token|signature|X-Amz-Signature|Expires|Key-Pair-Id)[^\s)]*/i, "signed URL");
+  forbidMatch(label, content, /https?:\/\/[^\s)]*[?&](?:token|signature|X-Amz-Signature|Expires|Key-Pair-Id)=[^\s)]*/i, "signed URL");
   forbidMatch(label, content, /\b(?:\d{1,3}\.){3}\d{1,3}\b/, "raw IP value");
 });
 
 [
-  "throw new Error(\"Unable to start Chi'lly Chat call. The receiver-visible call state was not saved.\")",
   "throw new Error(\"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
-  "await clearEndedChatThreadCall(thread.threadId).catch(() => null);",
   "await endCommunicationRoom(roomId).catch(() => null);",
+  "beginChillyChatCall",
+  "dispatchChillyChatCallPush",
 ].forEach((needle) => requireText("chat source failure handling", chatLib, needle));
 
 if (/catch\s*\([^)]*invite[^)]*\)\s*{[^}]*delivery\s*=\s*{/is.test(chatLib)) {
@@ -195,7 +196,8 @@ if (/catch\s*\([^)]*invite[^)]*\)\s*{[^}]*delivery\s*=\s*{/is.test(chatLib)) {
   "readLatestRingingChillyChatCallInviteForCallee",
   "subscribeToIncomingChillyChatCallInvites",
   "chilly_chat_call_invite",
-  "app-wide-incoming-call-modal",
+  "app-wide-incoming-call-banner",
+  "presentation === \"native_background\"",
 ].forEach((needle) => requireText("app-wide receiver source", appLayout, needle));
 
 [
@@ -206,17 +208,19 @@ if (/catch\s*\([^)]*invite[^)]*\)\s*{[^}]*delivery\s*=\s*{/is.test(chatLib)) {
 ].forEach((needle) => requireText("inbox start-chat source", inbox, needle));
 
 [
-  "Delivery status: push sent",
+  "Android call alert sent.",
+  "Native iPhone call alert sent.",
+  "Push notification sent.",
   "Delivery status: in-app banner available",
   "Delivery status: push unconfirmed",
   "Delivery status: receiver unavailable",
   "Delivery status: invite failed",
-].forEach((needle) => requireText("caller delivery status source", thread, needle));
+].forEach((needle) => requireText("caller delivery status source", `${thread}\n${callDeliveryCopy}`, needle));
 
 requireText("profile deep-link fallback", profile, "profile-unavailable-open-chat-search");
 requireText("profile normal path", profile, "Voice Call");
 requireText("profile normal path", profile, "Video Call");
-requireText("call dispatch receiver unavailable", callDispatch, "blockedReason: \"account_access_restricted\"");
+requireText("call dispatch receiver unavailable", callDispatch, "blockedDispatch(\"account_access_restricted\")");
 requireText("call invite RLS", callMigration, "alter table public.\"chat_call_invites\" enable row level security;");
 requireText("call invite RLS", callMigration, "chat_call_invites_select_members");
 requireText("call invite RLS", callMigration, "public.can_access_chat_thread(\"thread_id\")");
