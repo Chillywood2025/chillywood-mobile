@@ -14,7 +14,7 @@
       {
         "package": "expo-image-manipulator",
         "source": "_lib/imageUploadNormalization.ts",
-        "unsupportedBehavior": "HEIC/HEIF conversion fails closed with user-facing retry guidance"
+        "unsupportedBehavior": "Native availability is checked before package evaluation; HEIC/HEIF conversion fails closed with a sanitized non-fatal and user-facing JPEG/PNG guidance"
       }
     ]
   }

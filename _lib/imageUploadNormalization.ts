@@ -1,6 +1,13 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { requireOptionalNativeModule } from "expo";
 
+import {
+  IMAGE_MANIPULATOR_NATIVE_MODULE_NAME,
+  IMAGE_MANIPULATOR_UNAVAILABLE_MESSAGE,
+  resolveImageManipulatorRuntime,
+} from "./imageManipulatorNativeBoundary.mjs";
 import { isHeicOrHeifImage, type ImageUploadFile } from "./imageUploadPolicy";
+import { reportRuntimeError } from "./logger";
 
 export { isHeicOrHeifImage } from "./imageUploadPolicy";
 export type { ImageUploadFile } from "./imageUploadPolicy";
@@ -33,11 +40,46 @@ type ImageManipulatorRuntime = {
   };
 };
 
+class ImageManipulatorCapabilityError extends Error {
+  readonly code: string;
+
+  constructor(code: string) {
+    super(IMAGE_MANIPULATOR_UNAVAILABLE_MESSAGE);
+    this.name = "ImageManipulatorCapabilityError";
+    this.code = code;
+  }
+}
+
+const reportedCapabilityFailures = new Set<string>();
+
+const reportImageManipulatorFailure = (reason: string) => {
+  if (reportedCapabilityFailures.has(reason)) return;
+  reportedCapabilityFailures.add(reason);
+  reportRuntimeError("image-upload-normalization-capability", new Error(reason), {
+    capability: "heic_to_jpeg",
+    moduleName: IMAGE_MANIPULATOR_NATIVE_MODULE_NAME,
+    reason,
+  });
+};
+
 const loadImageManipulator = async (): Promise<ImageManipulatorRuntime> => {
-  // Android production build 80 predates this native module. Keep the import
-  // behind the HEIC-only branch so ordinary startup and JPG/PNG uploads remain
-  // compatible with that binary. A future binary can use the native path.
-  return await import("expo-image-manipulator") as unknown as ImageManipulatorRuntime;
+  // Android production build 80 predates this native module. Probe Expo's native
+  // registry before evaluating the package because the package calls
+  // requireNativeModule("ExpoImageManipulator") at module scope.
+  const resolution = await resolveImageManipulatorRuntime({
+    nativeModuleAvailable: requireOptionalNativeModule(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME) != null,
+    loadRuntime: async () => await import("expo-image-manipulator") as unknown as ImageManipulatorRuntime,
+    validateRuntime: (runtime: unknown) => {
+      const candidate = runtime as Partial<ImageManipulatorRuntime> | null;
+      return typeof candidate?.ImageManipulator?.manipulate === "function"
+        && typeof candidate?.SaveFormat?.JPEG === "string";
+    },
+  });
+  if (!resolution.available) {
+    reportImageManipulatorFailure(resolution.reason);
+    throw new ImageManipulatorCapabilityError(resolution.reason);
+  }
+  return resolution.runtime as ImageManipulatorRuntime;
 };
 
 const toText = (value: unknown) => String(value ?? "").trim();
@@ -121,7 +163,9 @@ export async function normalizeImageUploadFile<TFile extends ImageUploadFile>(
         size,
       },
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof ImageManipulatorCapabilityError) throw error;
+    reportImageManipulatorFailure("image_conversion_failed");
     throw new Error("This HEIC or HEIF photo could not be prepared. Choose another photo or try again.");
   } finally {
     renderedImage?.release();

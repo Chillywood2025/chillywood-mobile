@@ -105,6 +105,7 @@
     "proof:release-diagnostics": "node ./scripts/proof-release-diagnostics.mjs",
     "test:runtime-update-activation": "node ./scripts/test-runtime-update-activation.mjs",
     "guard:ota-native-boundary": "node ./scripts/guard-ota-native-boundary.mjs",
+    "test:image-upload-native-boundary": "node ./scripts/test-image-upload-native-boundary.mjs",
     "proof:livekit-server-metrics": "node ./scripts/proof-livekit-server-metrics.mjs",
     "proof:livekit-passive-viewer-load": "node ./scripts/proof-livekit-passive-viewer-load.mjs",
     "check:livekit-routing-health": "node ./scripts/check-livekit-routing-health.mjs",

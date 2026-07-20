@@ -1,5 +1,17 @@
 # ROADMAP
 
+## Android Image Manipulator Native-Boundary Closeout
+
+Source crash prevention is complete. Android build 80 predates
+`expo-image-manipulator`; later JavaScript in the same runtime namespace caused
+`requireNativeModule("ExpoImageManipulator")` to throw during bundle evaluation.
+The package is now deferred behind an optional-native preflight and HEIC/HEIF
+fails closed without affecting startup, JPEG/PNG, navigation, or unrelated media.
+CI behaviorally enforces the boundary. Deployment remains two staged actions:
+Android-only OTA for existing-build crash prevention, then a replacement Android
+binary for working HEIC/HEIF conversion and physical media regression. See
+`ANDROID_CRASH_REPORT.md`. Source completion is not installed-app proof.
+
 ## Current Play-Internal Two-Phone Chat/Live Proof
 
 Local-source notifications and Money Center proof is Partial/mostly-Closed for local web and installed-app proof remains Pending. Android emulator/dev-client proof remained blocked because the available emulator app did not request Metro/local source, so local web fallback was used before any Play build. Money Center human-tap proof passed for Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout / Payout readiness. Settings Activity and bell tray read real records; Home, Explore, Live, Saved, and Platform Studio show the icon-only bell with real unread count; Watch-Party Waiting Room shows a room-safe bell and no full normal header. Source-specific player/watch-party/event content proof remains fixture-limited without safe ids, and actual room tray-open behavior, LiveKit camera/mic preservation, Android push/device behavior, and two-device incoming Chi'lly Chat call behavior remain physical/Play proof items. No EAS build, Play build, sideload, physical-device adb install, physical-device clear data, physical-device logout, live money, payout, cashout, provider mutation, auth/RLS weakening, or Premium bypass happened.

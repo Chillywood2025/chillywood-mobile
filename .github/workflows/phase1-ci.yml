@@ -169,7 +169,7 @@ jobs:
             command: npx tsc --noEmit
           - key: runtime
             name: Runtime Validation
-            command: npm run validate:runtime && npm run test:runtime-update-activation && npm run guard:ota-native-boundary
+            command: npm run validate:runtime && npm run test:runtime-update-activation && npm run guard:ota-native-boundary && npm run test:image-upload-native-boundary
           - key: routes
             name: Route Contracts
             command: npm run guard:route-contracts
@@ -212,7 +212,7 @@ jobs:
           EXPO_PUBLIC_SUPABASE_ANON_KEY: "ci-placeholder-not-a-secret"
           EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST: "ci@example.invalid"
           EXPO_PUBLIC_BETA_ENVIRONMENT: "closed-beta"
-        run: npm run validate:runtime && npm run test:runtime-update-activation && npm run guard:ota-native-boundary
+        run: npm run validate:runtime && npm run test:runtime-update-activation && npm run guard:ota-native-boundary && npm run test:image-upload-native-boundary
 
       - name: Run diagnostic
         if: matrix.key != 'runtime'

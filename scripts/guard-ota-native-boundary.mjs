@@ -4,6 +4,7 @@ import fs from "node:fs";
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const manifest = JSON.parse(read("config/release/android-production.json"));
 const normalization = read("_lib/imageUploadNormalization.ts");
+const nativeBoundary = read("_lib/imageManipulatorNativeBoundary.mjs");
 
 assert.equal(manifest.platform, "android");
 assert.equal(manifest.nativeBuildSource, "eas_provider_readback");
@@ -25,10 +26,21 @@ assert.match(
   /await import\(["']expo-image-manipulator["']\)/u,
   "ExpoImageManipulator must remain deferred until HEIC/HEIF conversion is requested",
 );
+assert.match(
+  normalization,
+  /requireOptionalNativeModule\(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME\)/u,
+  "Android build 80 must probe native availability without throwing",
+);
+assert.match(nativeBoundary, /native_module_unavailable/u);
+assert.match(nativeBoundary, /JPEG or PNG/u);
 
 const passthroughIndex = normalization.indexOf("if (!isHeicOrHeifImage(file))");
 const nativeImportIndex = normalization.indexOf("await loadImageManipulator()");
 assert.ok(passthroughIndex >= 0 && nativeImportIndex > passthroughIndex, "ordinary images must return before the native module is loaded");
-assert.match(normalization, /catch\s*\{[\s\S]*Choose another photo or try again\./u);
+const nativeProbeIndex = normalization.indexOf("requireOptionalNativeModule(IMAGE_MANIPULATOR_NATIVE_MODULE_NAME)");
+const packageImportIndex = normalization.indexOf('await import("expo-image-manipulator")');
+assert.ok(nativeProbeIndex >= 0 && packageImportIndex > nativeProbeIndex, "native availability must be proved before package evaluation");
+assert.match(normalization, /reportRuntimeError\(["']image-upload-normalization-capability["']/u);
+assert.match(normalization, /catch\s*\(error\)[\s\S]*Choose another photo or try again\./u);
 
-console.log("OTA native boundary guard passed: Android build 80 cannot eagerly load its absent image-manipulator module.");
+console.log("OTA native boundary guard passed: Android build 80 cannot evaluate its absent image-manipulator module.");

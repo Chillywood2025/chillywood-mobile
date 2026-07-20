@@ -2,6 +2,18 @@
 
 # Cloudflare R2 Media Delivery Staged Proof
 
+## Android native-image deployment follow-up
+
+The `ExpoImageManipulator` startup crash is source-fixed and proven in
+`ANDROID_CRASH_REPORT.md`. Do not use the two superseded incompatible Android OTA
+groups listed there. The safe next release decision is explicit: an Android-only
+runtime-`1.0.0` OTA may deliver crash prevention to build 80, but it must continue
+to reject HEIC/HEIF with JPEG/PNG guidance. A replacement Android binary is
+required before claiming HEIC/HEIF conversion works. After that binary exists,
+run bounded physical Profile, Chat, Profile post/comment, creator-video comment,
+Watch Party, and Live Stage image proof for JPEG, PNG, HEIC, cancel,
+permission-denied, oversized-file, upload, and cleanup behavior.
+
 Current latest truth:
 - Autonomous operating model is now the governing policy: Do not ask owner approval for Level 0/1 autonomous operations; classify first, proceed inside safe policy, and report. Ask owner for Level 3; ask owner plus external confirmation for Level 4.
 - User Report Router is now under `support_success_operator`: authenticated reports are sanitized, classified, clustered, deduped by unique reporter, and routed to the owning autonomous system. Three unique matching bug/fix reports within seven days create a routed finding or Owner Command. Critical safety/security/privacy/payment/provider issues can escalate immediately for review. Reports cannot directly execute money movement, Premium grants, auth/RLS mutation, enforcement, OTA publish/rollback, LiveKit/R2 changes, provider product changes, or ads/sponsor activation.
