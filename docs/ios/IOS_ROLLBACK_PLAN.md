@@ -164,21 +164,26 @@ For a faulty deployment:
   `24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8`,
   submission `e0b894e3-5dfc-44c5-9da2-e36c3b85bd5b`, and Apple build
   `a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f`.
-- Current iOS retry-safe activation OTA is group
-  `38ee9039-e53d-462f-b396-6bb49e639839`, update
-  `019f7ca4-55c4-793c-8702-20af64a8efc5`, source
-  `3f3b6695cd2daa8653d14ab110c4222913a94d89`, on `ios-qa` / `1.0.0-iosqa1`.
+- Current iOS incoming-call role/presentation OTA is group
+  `e1b08f9a-5428-4335-8866-04be7a0e33f6`, update
+  `019f7cdb-844f-7f5d-875d-f785d3bc1c43`, source
+  `31ffc0ff0f67474b3b3a13d6277cabbac7845dd9`, on `ios-qa` / `1.0.0-iosqa1`.
   Its compatible rollback target is group
-  `e39980d0-090a-4204-a910-7882395a8f0c`.
-- Current Android retry-safe/native-compatible OTA is group
-  `f4172575-e0bf-4909-b534-9e5e9a11cc93`, update
-  `019f7ca6-9b70-75b8-9777-18dbc328fcca`, source
-  `3f3b6695cd2daa8653d14ab110c4222913a94d89`, on `production` / `1.0.0`.
+  `38ee9039-e53d-462f-b396-6bb49e639839`.
+- Current Android incoming-call role/presentation OTA is group
+  `37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5`, update
+  `019f7cdd-b989-74e3-9775-254352ce68cd`, source
+  `31ffc0ff0f67474b3b3a13d6277cabbac7845dd9`, on `production` / `1.0.0`.
   Its safe rollback target is group
-  `52940abe-e1d4-4764-a579-b6718364c7d0`. Do not select superseded groups
+  `f4172575-e0bf-4909-b534-9e5e9a11cc93`. Do not select superseded groups
   `bfce1629-6ef1-4f48-b827-4f9e8f364246` or
   `7d4e8224-73c4-48dc-9d7a-bbd861a7112d`; both contain an eager native import
   that is incompatible with Android build 80.
+- Migration `20260719220000_atomic_chilly_chat_call_begin` is already deployed.
+  Do not down-migrate or delete call history. If a defect is found, stop new-call
+  QA through the existing rollout control, revert source normally, and ship a
+  reviewed forward migration that preserves invites, events, transition delivery,
+  and audit evidence.
 - If build 8 is faulty, remove only build 8 from `Chillywood Internal`, keep build
   7/its rollback target as historical evidence, disable the affected server
   switch, use a normal `git revert`, and create a later isolated binary only after

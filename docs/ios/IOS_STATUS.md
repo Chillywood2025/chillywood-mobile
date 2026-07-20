@@ -9,6 +9,35 @@ default is false. A local, production-signed build 8 was created without an EAS
 cloud build for the isolated `ios-qa` / `1.0.0-iosqa1` all-flags lane. The full
 physical-device matrix has not begun and remains the final unclaimed proof.**
 
+## Cross-platform incoming-call role and presentation correction
+
+The foreground behavior shown in the July 19 two-phone evidence was caused by
+two independent defects: simultaneous reverse-direction call starts could create
+competing invites/rooms, and the JavaScript foreground receiver used a blocking
+full-screen sheet while the native Android background path used only the system
+incoming-call notification. Source
+`31ffc0ff0f67474b3b3a13d6277cabbac7845dd9` corrects both boundaries.
+
+Migration `20260719220000_atomic_chilly_chat_call_begin` is deployed and linked
+history is aligned. Its authenticated, security-definer call-begin RPC serializes
+starts per direct thread, selects one durable winning invite/room, makes the other
+participant the callee, and closes only a losing candidate room. Legacy reverse
+inserts are also rejected. The foreground app now shows a compact Answer/Decline
+banner (owned by the thread when already on that thread and by the root elsewhere),
+the outgoing ringing panel is caller-only, and background/inactive presentation
+is left to Android CallStyle or iOS PushKit/CallKit. The JavaScript overlay no
+longer presents the large blocking incoming-call sheet.
+
+The same reviewed source was published to iOS `ios-qa` group
+`e1b08f9a-5428-4335-8866-04be7a0e33f6` / update
+`019f7cdb-844f-7f5d-875d-f785d3bc1c43` on runtime `1.0.0-iosqa1`, and Android
+`production` group `37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5` / update
+`019f7cdd-b989-74e3-9775-254352ce68cd` on runtime `1.0.0`. All ten PR checks,
+local reset, and 7-file/285-assertion pgTAP passed. The connected SM-N986U1 was
+verified after two relaunches on the exact Android update ID, build 80, without a
+fatal Android/React Native log. The second Android phone and iPhone uptake remain
+physical verification items; no two-party success is inferred.
+
 ## Cross-platform chat-call media-control correction
 
 The reported Android caller failure was traced to direct WebRTC media starting
@@ -39,11 +68,12 @@ bundle must be verified by `updateId`. Source
 retry-safe and defers the HEIC-only `expo-image-manipulator` import because the
 provider-observed Android build 80 source
 `08fd60e29a5040672c9f9dc91befc9142861d82e` predates that native module. The
-native boundary is now guarded in CI. Both connected Android devices were
-verified on final update `019f7ca6-9b70-75b8-9777-18dbc328fcca`, production
-channel/runtime `1.0.0`, with clean relaunch error logs. The final iOS provider
-record is update `019f7ca4-55c4-793c-8702-20af64a8efc5` on `ios-qa` /
-`1.0.0-iosqa1`; physical iOS uptake is still pending.
+native boundary is now guarded in CI. The latest Android provider record is
+update `019f7cdd-b989-74e3-9775-254352ce68cd`, production channel/runtime `1.0.0`;
+the connected SM-N986U1 was verified on that exact update with clean relaunch
+error logs. The latest iOS provider record is update
+`019f7cdb-844f-7f5d-875d-f785d3bc1c43` on `ios-qa` / `1.0.0-iosqa1`; physical
+iOS uptake is still pending.
 
 ## Autonomous iOS source/backend checkpoint
 
@@ -100,6 +130,7 @@ job remains required alongside it.
 | Build-8 iOS call-handoff OTA | group `3a571903-85b8-4e12-be19-171ecc9298bd`, update `019f763e-f713-75e8-8662-d0e9bcfd213f`, source `7e0eae77790d7a9843429def37ab7b69adfe44a1`, `ios-qa` / `1.0.0-iosqa1` | Preserves the four build-8 QA client capabilities and changes JavaScript only | Fixes the observed Android-caller to iPhone-receiver CallKit answer handoff: a native Answer now uses one clean route, preserves allowed background call audio, reacts to native AVAudioSession/application activation, restores foreground video, and returns an existing subscribed Realtime channel to `live`. Published to iOS only after all ten PR checks passed. The preceding group `9b320d78-8def-4235-a909-1f82908eb53e` is the compatible rollback target. Physical retest remains required. |
 | Build-8 accepted-media-control OTA | group `e83cdc3e-d6d6-4f75-8116-decb3c36bed8`, update `019f7c68-4ae1-73e4-aa50-5c1774c3562a`, source `1334221b1dfbf418fba3fcaaae8757e7f5295df9`, `ios-qa` / `1.0.0-iosqa1` | Preserves all four build-8 QA client capabilities; JavaScript only | Starts direct WebRTC media only after durable acceptance and serializes mic/camera control changes. Android received the same source on its separate production-runtime OTA. The previous compatible iOS rollback group is `05a795c8-50da-44f2-b158-9512e22db1ad`. Physical two-phone retest remains required. |
 | Build-8 retry-safe activation OTA | group `38ee9039-e53d-462f-b396-6bb49e639839`, update `019f7ca4-55c4-793c-8702-20af64a8efc5`, source `3f3b6695cd2daa8653d14ab110c4222913a94d89`, `ios-qa` / `1.0.0-iosqa1` | Preserves all four build-8 QA client capabilities; JavaScript only | Activates a native-downloaded update even after an earlier reload was interrupted and keeps image normalization compatible with the different Android build-80 native boundary. Provider publication is proven; physical iOS uptake and call retest remain required. |
+| Build-8 incoming-call role/presentation OTA | group `e1b08f9a-5428-4335-8866-04be7a0e33f6`, update `019f7cdb-844f-7f5d-875d-f785d3bc1c43`, source `31ffc0ff0f67474b3b3a13d6277cabbac7845dd9`, `ios-qa` / `1.0.0-iosqa1` | Preserves all four build-8 QA client capabilities; JavaScript only | Uses one atomic caller/callee winner, compact foreground Answer/Decline banners, caller-only outgoing ringing UI, and native background presentation. Android received the same source as update `019f7cdd-b989-74e3-9775-254352ce68cd`. Previous compatible iOS rollback group: `38ee9039-e53d-462f-b396-6bb49e639839`. Physical two-phone retest remains required. |
 
 The recorded build-7 OTA rollback target is group
 `8e158980-75d1-47ef-bd26-f3f9e564fdab`. Roll back with
