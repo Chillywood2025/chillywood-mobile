@@ -152,6 +152,10 @@ export function computeAndroidNativeCompatibility() {
     androidPlugins,
     localPluginEvidence,
     androidAssets,
+    buildInputPolicy: {
+      easIgnoreSha256: sha256File(".easignore"),
+      managedAndroidPrebuildRequired: readJson("config/release/android-production.json").nativeBuildSource !== "committed_android_project",
+    },
     nativePackages,
   });
   return {

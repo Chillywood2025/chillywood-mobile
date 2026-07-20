@@ -16,10 +16,11 @@ deno.lock
 *.ipa
 *.xcarchive/
 
-# Generated iOS project and native build output
-# This repository uses managed iOS prebuild; local iOS output must never become
-# EAS build input or carry local-only Firebase/signing paths into the archive.
+# Generated native projects and native build output
+# This repository uses managed prebuild; local native output must never become
+# EAS build input or carry local-only SDK/Firebase/signing paths into artifacts.
 /ios
+/android
 android/.gradle/
 android/build/
 android/app/build/

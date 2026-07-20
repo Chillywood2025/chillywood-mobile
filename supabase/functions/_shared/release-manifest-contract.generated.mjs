@@ -31,5 +31,5 @@ export const ANDROID_PRODUCTION_RELEASE_MANIFEST = Object.freeze({
   "channel": "production",
   "distributionSource": "google_play_internal",
   "sourceCommit": null,
-  "nativeCompatibilityDigest": "238817fcb911495627987853ddcb532d01cffe9aaceda9320a50fff16fa745de"
+  "nativeCompatibilityDigest": "f7d2da58e432e78278ec1a2e77b601c94a61b50ab17d5e132cad5be443d5c1aa"
 });

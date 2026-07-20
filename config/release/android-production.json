@@ -23,7 +23,7 @@
   },
   "nativeCompatibility": {
     "schemaVersion": 1,
-    "digest": "238817fcb911495627987853ddcb532d01cffe9aaceda9320a50fff16fa745de",
+    "digest": "f7d2da58e432e78278ec1a2e77b601c94a61b50ab17d5e132cad5be443d5c1aa",
     "runtimeBindings": [
       {
         "runtimeVersion": "1.0.0",
@@ -32,7 +32,7 @@
       },
       {
         "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
-        "digest": "238817fcb911495627987853ddcb532d01cffe9aaceda9320a50fff16fa745de",
+        "digest": "f7d2da58e432e78278ec1a2e77b601c94a61b50ab17d5e132cad5be443d5c1aa",
         "status": "reviewed_replacement_candidate"
       }
     ],
