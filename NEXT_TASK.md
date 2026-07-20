@@ -4,15 +4,18 @@
 
 ## Android native-image deployment follow-up
 
-The `ExpoImageManipulator` startup crash is source-fixed and proven in
-`ANDROID_CRASH_REPORT.md`. Do not use the two superseded incompatible Android OTA
-groups listed there. The safe next release decision is explicit: an Android-only
-runtime-`1.0.0` OTA may deliver crash prevention to build 80, but it must continue
-to reject HEIC/HEIF with JPEG/PNG guidance. A replacement Android binary is
-required before claiming HEIC/HEIF conversion works. After that binary exists,
-run bounded physical Profile, Chat, Profile post/comment, creator-video comment,
-Watch Party, and Live Stage image proof for JPEG, PNG, HEIC, cancel,
-permission-denied, oversized-file, upload, and cleanup behavior.
+The permanent Android replacement exists but must not be submitted yet. Version
+1.0.0 (84), runtime `1.0.0-android-imagemanipulator-v1`, was built locally from
+`8c426f4e74de61de7d4529d32d124744833912dc`; its AAB and exact AAB-derived QA APK
+contain and register `ExpoImageManipulator` 14.0.8. Clean Android API 34 proof
+passed the native path for JPEG, HEIC, HEIF, and high-resolution HEIC, while a
+corrupt HEIC failed safely. Google accepted the upload-key reset, but the new key
+does not become valid until 2026-07-22 at 21:49 UTC. The next authorized action
+after that time is a read-only Play fingerprint confirmation and EAS credential
+sync; a later, separately authorized Google Play internal-track submission is
+required for true build-80 in-place-upgrade proof. Do not publish either of the
+superseded incompatible runtime-1.0.0 update groups. Build 80 is protected by the
+existing safety update but intentionally cannot perform HEIC/HEIF conversion.
 
 Current latest truth:
 - Autonomous operating model is now the governing policy: Do not ask owner approval for Level 0/1 autonomous operations; classify first, proceed inside safe policy, and report. Ask owner for Level 3; ask owner plus external confirmation for Level 4.

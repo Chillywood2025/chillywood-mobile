@@ -110,6 +110,15 @@ await cleanup();
 await cleanup();
 assert.equal(cleanupCalls, 1, "temporary output cleanup must be idempotent");
 
+let failedCleanupCalls = 0;
+const failedCleanup = createIdempotentCleanup(async () => {
+  failedCleanupCalls += 1;
+  throw new Error("fixture_cleanup_failed");
+});
+await assert.rejects(failedCleanup(), /fixture_cleanup_failed/u);
+await failedCleanup();
+assert.equal(failedCleanupCalls, 1, "failed temporary cleanup must not rerun or create duplicate work");
+
 const rejectedResolution = await resolveImageManipulatorRuntime({
   nativeModuleAvailable: true,
   loadRuntime: async () => {
@@ -147,6 +156,8 @@ for (const fixture of [
   { file: { uri: "file:///photo.HEIC" }, expected: true },
   { file: { uri: "file:///photo.heif" }, expected: true },
   { file: { uri: "content://picker/item", mimeType: "image/heic-sequence" }, expected: true },
+  { file: { uri: "content://picker/item-no-extension", mimeType: "image/png" }, expected: false },
+  { file: { uri: "content://picker/item-no-extension", mimeType: "image/heif" }, expected: true },
 ]) {
   assert.equal(policy.isHeicOrHeifImage(fixture.file), fixture.expected);
 }

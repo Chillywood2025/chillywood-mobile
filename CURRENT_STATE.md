@@ -6,16 +6,23 @@ This file is intentionally compact. Keep current truth here, keep detailed proof
 Full checkpoint history through April 24, 2026 is preserved at `docs/archive/current-state-history-through-2026-04-24.md`. Later detailed proof history is available in git history and task artifacts; this hot-path file should carry only the current governing facts future sessions must not undo.
 
 ## Current Checkpoint
-Android `ExpoImageManipulator` crash root cause and the permanent source boundary
-are recorded in `ANDROID_CRASH_REPORT.md`. Google Play internal build 80 came from
-`08fd60e29a5040672c9f9dc91befc9142861d82e`, before
-`expo-image-manipulator` entered the dependency graph, while later runtime-`1.0.0`
-OTA JavaScript eagerly imported the native package. Current source checks native
-availability before package evaluation, leaves JPEG/PNG and the rest of the app
-usable, reports a sanitized non-fatal, and gives HEIC/HEIF users bounded guidance.
-An Android-only OTA can deliver crash prevention, but only a replacement Android
-binary can add the native module and restore HEIC/HEIF conversion. No OTA or build
-was started as part of the source investigation.
+Android `ExpoImageManipulator` crash prevention and native replacement closeout
+are recorded in `ANDROID_CRASH_REPORT.md` and
+`docs/android/ANDROID_IMAGE_MANIPULATOR_NATIVE_FIX.md`. Historical Google Play
+build 80/runtime `1.0.0` predates the native module and is protected from the
+startup fatal by existing Android safety update group
+`37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5`; HEIC/HEIF remains fail-closed there. A
+local production AAB and exact AAB-derived universal QA APK were built from
+`8c426f4e74de61de7d4529d32d124744833912dc` as versionCode 84, runtime
+`1.0.0-android-imagemanipulator-v1`. Actual artifact inspection proves
+`ExpoImageManipulator` 14.0.8 is packaged and registered, and Android API 34
+clean-install proof passed JPEG, HEIC, HEIF, high-resolution HEIC, safe corrupt
+input failure, and background/foreground duplicate prevention. The compromised
+upload credential was removed from EAS, a replacement key has two verified
+encrypted backups, and Google accepted the reset request; the replacement becomes
+valid on 2026-07-22 at 21:49 UTC. Until then the AAB is
+`NOT_UPLOADABLE_PENDING_GOOGLE_UPLOAD_KEY_RESET`. Nothing was submitted to Google
+Play and no OTA was published by this closeout.
 
 Chi'llywood autonomous app operating model is now documented in `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`. Future Codex/operator work should be autonomous by default for Level 0/1 safe operations such as eligible media discovery, safe batch sizing, scoped backups, restore drills, public-safe media work inside caps, post-write audit, scoped rollback, fallback playback, and telemetry reporting. Owner approval remains required for Level 3/4 boundaries: money/billing/provider changes, auth/RLS changes, Premium entitlement changes, payout/cashout, destructive production DB changes, broad catalog backfill, public/private exposure changes, public launch, legal/compliance, payment production mutation, and public marketing claims. Emergency stop, fallback, audit, rollback/quarantine, no-secret logging, and no unauthorized public exposure remain mandatory.
 

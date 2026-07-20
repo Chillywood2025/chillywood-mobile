@@ -2,15 +2,17 @@
 
 ## Android Image Manipulator Native-Boundary Closeout
 
-Source crash prevention is complete. Android build 80 predates
-`expo-image-manipulator`; later JavaScript in the same runtime namespace caused
-`requireNativeModule("ExpoImageManipulator")` to throw during bundle evaluation.
-The package is now deferred behind an optional-native preflight and HEIC/HEIF
-fails closed without affecting startup, JPEG/PNG, navigation, or unrelated media.
-CI behaviorally enforces the boundary. Deployment remains two staged actions:
-Android-only OTA for existing-build crash prevention, then a replacement Android
-binary for working HEIC/HEIF conversion and physical media regression. See
-`ANDROID_CRASH_REPORT.md`. Source completion is not installed-app proof.
+Source, native artifact, and clean-install proof are complete. Android build 80
+predates `expo-image-manipulator`; its runtime-`1.0.0` safety update prevents the
+startup crash while keeping HEIC/HEIF fail-closed. Replacement versionCode 84,
+runtime `1.0.0-android-imagemanipulator-v1`, contains and registers
+`ExpoImageManipulator` 14.0.8 and passed clean API-34 native-path image proof. Its
+upload certificate reset is accepted but becomes effective 2026-07-22 21:49 UTC,
+so the artifact is not uploadable yet and was not submitted. Remaining release
+work is Play fingerprint/EAS credential reconciliation after the waiting period,
+a separately approved internal-track upload for Google-signed in-place-upgrade
+proof, and the unobserved per-surface/device cases listed in
+`docs/android/ANDROID_IMAGE_MANIPULATOR_NATIVE_FIX.md`.
 
 ## Current Play-Internal Two-Phone Chat/Live Proof
 

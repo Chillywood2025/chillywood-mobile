@@ -1,17 +1,17 @@
 {
-  "manifestVersion": 2,
+  "manifestVersion": 3,
   "platform": "android",
   "packageIdentifier": "com.chillywood.mobile",
   "appVersion": "1.0.0",
-  "nativeBuild": null,
+  "nativeBuild": "84",
   "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
   "channel": "production",
-  "distributionSource": "google_play_internal",
-  "buildProfile": "production",
-  "nativeBuildSource": "local_eas_build_pending",
-  "expectedBinarySourceCommit": null,
+  "distributionSource": "local_qa_not_submitted",
+  "buildProfile": "android-production-local-recovery",
+  "nativeBuildSource": "local_eas_build",
+  "expectedBinarySourceCommit": "8c426f4e74de61de7d4529d32d124744833912dc",
   "nativeBuildId": null,
-  "releaseStatus": "build_pending",
+  "releaseStatus": "local_qa_validated_pending_google_upload_key_reset",
   "expoSdkVersion": "54.0.36",
   "expoImageManipulatorVersion": "14.0.8",
   "legacyBuild": {
@@ -19,7 +19,10 @@
     "runtimeVersion": "1.0.0",
     "nativeModuleAvailable": false,
     "installationSourceObserved": "google_play",
-    "protectionState": "pending_update_history_readback"
+    "protectionState": "protected_by_existing_android_safety_ota",
+    "activeSafetyUpdateGroup": "37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5",
+    "activeSafetyUpdateId": "019f7cdd-b989-74e3-9775-254352ce68cd",
+    "activeSafetyUpdateSourceCommit": "31ffc0ff0f67474b3b3a13d6277cabbac7845dd9"
   },
   "nativeCompatibility": {
     "schemaVersion": 1,
@@ -33,7 +36,7 @@
       {
         "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
         "digest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a",
-        "status": "reviewed_replacement_candidate"
+        "status": "reviewed_replacement_built_and_validated"
       }
     ],
     "requiredModules": {
@@ -41,11 +44,42 @@
     }
   },
   "artifactEvidence": {
-    "productionAabSha256": null,
-    "qaInstallArtifactSha256": null,
-    "signingCertificateSha256": null,
-    "modulePackagingProved": false,
-    "runtimeModuleProved": false
+    "productionAabSha256": "de8f4da21956988bdcf7e8ea74bf96493a8d2649018557ed97d4914a7ceabb30",
+    "qaApksSha256": "d5f36daf6e60947428c05bebfa8d7eac16f6e67c19d04822a006183fbde36bce",
+    "qaInstallArtifactSha256": "1bdc302a633be44f96b2dc72c524d51762852acfafdb1726462626b1ee0cc1da",
+    "signingCertificateSha256": "6D:37:4C:35:AE:3E:AA:1E:9D:2E:01:9F:EE:63:CF:2F:9B:BF:D4:1E:65:F8:85:A5:49:58:21:6F:57:83:A2:C7",
+    "bundletoolValidationPassed": true,
+    "manifestValidationPassed": true,
+    "modulePackagingProved": true,
+    "moduleRegistrationProved": true,
+    "moduleClass": "expo.modules.imagemanipulator.ImageManipulatorModule",
+    "moduleName": "ExpoImageManipulator",
+    "releaseMinificationEnabled": false,
+    "runtimeModuleProved": true,
+    "nativePathUsed": true,
+    "fallbackUsed": false,
+    "cleanInstallPassed": true,
+    "inPlaceUpgradeState": "blocked_signing_source"
+  },
+  "signingIncident": {
+    "classification": "compromised_google_play_upload_key",
+    "compromisedEasCredentialRemoved": true,
+    "googlePlayAppSigningKeyChanged": false,
+    "replacementBackupsVerified": true,
+    "googleUploadKeyResetStatus": "waiting_for_google_upload_key_reset",
+    "googleUploadKeyEffectiveAt": "2026-07-22T21:49:00Z",
+    "googlePlaySubmissionState": "not_submitted"
+  },
+  "runtimeFixtureEvidence": {
+    "deviceClass": "android_emulator_api_34",
+    "jpeg": "passed",
+    "pngCancel": "passed",
+    "heic": "passed",
+    "heif": "passed",
+    "highResolutionHeic": "passed",
+    "corruptedHeic": "failed_safely_without_crash",
+    "backgroundForeground": "passed_without_duplicate_storage_object",
+    "lowMemory": "not_observed"
   },
   "otaNativeCompatibility": {
     "optionalDeferredPackages": [

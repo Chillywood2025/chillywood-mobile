@@ -20,6 +20,11 @@ assert.equal(manifest.runtimeVersion, "1.0.0-android-imagemanipulator-v1");
 assert.notEqual(manifest.runtimeVersion, manifest.legacyBuild?.runtimeVersion);
 assert.equal(manifest.legacyBuild?.nativeBuild, "80");
 assert.equal(manifest.legacyBuild?.runtimeVersion, "1.0.0");
+assert.equal(manifest.legacyBuild?.protectionState, "protected_by_existing_android_safety_ota");
+assert.ok(Number.parseInt(manifest.nativeBuild, 10) > 82, "the replacement native build must be greater than consumed versionCode 82");
+assert.match(manifest.expectedBinarySourceCommit, /^[0-9a-f]{40}$/u);
+assert.equal(manifest.releaseStatus, "local_qa_validated_pending_google_upload_key_reset");
+assert.equal(manifest.distributionSource, "local_qa_not_submitted");
 assert.equal(appJson.runtimeVersion, "1.0.0", "the shared/iOS runtime baseline must remain unchanged");
 assert.equal(packageJson.dependencies?.["expo-image-manipulator"], "~14.0.8");
 assert.equal(compatibility.summary.expoImageManipulatorVersion, "14.0.8");
@@ -43,6 +48,30 @@ assert.equal(reviewedBinding.runtimeVersion, manifest.runtimeVersion);
 const digestBindings = (manifest.nativeCompatibility?.runtimeBindings ?? [])
   .filter((binding) => binding.digest === compatibility.digest);
 assert.equal(digestBindings.length, 1, "a native digest may bind to only one reviewed Android runtime");
+
+const artifactEvidence = manifest.artifactEvidence ?? {};
+for (const field of ["productionAabSha256", "qaApksSha256", "qaInstallArtifactSha256"]) {
+  assert.match(artifactEvidence[field], /^[0-9a-f]{64}$/u, `${field} must contain an observed SHA-256`);
+}
+assert.match(artifactEvidence.signingCertificateSha256,
+  /^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/u,
+  "the release manifest may contain only the public signing-certificate SHA-256 fingerprint");
+assert.equal(artifactEvidence.bundletoolValidationPassed, true);
+assert.equal(artifactEvidence.manifestValidationPassed, true);
+assert.equal(artifactEvidence.modulePackagingProved, true);
+assert.equal(artifactEvidence.moduleRegistrationProved, true);
+assert.equal(artifactEvidence.moduleClass, "expo.modules.imagemanipulator.ImageManipulatorModule");
+assert.equal(artifactEvidence.moduleName, "ExpoImageManipulator");
+assert.equal(artifactEvidence.runtimeModuleProved, true);
+assert.equal(artifactEvidence.nativePathUsed, true);
+assert.equal(artifactEvidence.fallbackUsed, false);
+assert.equal(artifactEvidence.cleanInstallPassed, true);
+assert.equal(artifactEvidence.inPlaceUpgradeState, "blocked_signing_source");
+assert.equal(manifest.signingIncident?.compromisedEasCredentialRemoved, true);
+assert.equal(manifest.signingIncident?.googlePlayAppSigningKeyChanged, false);
+assert.equal(manifest.signingIncident?.replacementBackupsVerified, true);
+assert.equal(manifest.signingIncident?.googleUploadKeyResetStatus, "waiting_for_google_upload_key_reset");
+assert.equal(manifest.signingIncident?.googlePlaySubmissionState, "not_submitted");
 
 const appConfig = read("app.config.ts");
 assert.match(appConfig, /ANDROID_RELEASE_MANIFEST_PATH/u);

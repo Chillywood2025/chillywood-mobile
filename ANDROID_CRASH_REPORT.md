@@ -2,7 +2,7 @@
 
 Date: 2026-07-20
 
-Status: source fixed and validated; deployment to installed users is not part of this report.
+Status: native replacement built and validated locally; Google upload-key reset pending until 2026-07-22 21:49 UTC; not submitted.
 
 ## Incident
 
@@ -129,8 +129,12 @@ dynamic import moves before that check.
 - The crash-prevention/fail-closed correction is JavaScript-only. A reviewed
   Android-only OTA compatible with production runtime `1.0.0` can protect existing
   build-80 users without a new binary.
-- No OTA was published by this investigation. Existing users receive this exact
-  correction only after a separately authorized Android deployment.
+- No OTA was published by the native closeout. Read-only update history proves
+  build 80 is already protected by compatible Android safety update group
+  `37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5`, Android update
+  `019f7cdd-b989-74e3-9775-254352ce68cd`, source
+  `31ffc0ff0f67474b3b3a13d6277cabbac7845dd9`. That source has no eager package
+  import; missing native conversion is translated to bounded JPEG/PNG guidance.
 - An OTA cannot add `ExpoImageManipulator` to build 80. On build 80, HEIC/HEIF
   conversion must remain unavailable with the friendly JPEG/PNG guidance.
 - A replacement Android binary is mandatory to make HEIC/HEIF conversion work.
@@ -169,12 +173,55 @@ their existing guarded paths. Physical gallery/provider upload proof and HEIC
 conversion on a replacement Android binary remain device-level follow-up; they
 are not claimed by source tests.
 
+## Native replacement result
+
+The replacement was built locally from committed source
+`8c426f4e74de61de7d4529d32d124744833912dc`:
+
+- app/package: `1.0.0` / `com.chillywood.mobile`
+- versionCode/runtime/channel: `84` /
+  `1.0.0-android-imagemanipulator-v1` / `production`
+- AAB SHA-256:
+  `de8f4da21956988bdcf7e8ea74bf96493a8d2649018557ed97d4914a7ceabb30`
+- exact AAB-derived universal APK SHA-256:
+  `1bdc302a633be44f96b2dc72c524d51762852acfafdb1726462626b1ee0cc1da`
+- bundletool and signing validation: passed
+- release DEX class: `expo.modules.imagemanipulator.ImageManipulatorModule`
+- Expo registry name: `ExpoImageManipulator`
+- minSdk/targetSdk/debuggable: `24` / `36` / `false`
+- runtime diagnostic: module available, native path used, fallback not used
+
+Release minification is disabled by the generated release configuration; the
+exact class is present in the final DEX. This is packaging proof, not a claim about
+behavior under an unconfigured R8-minified release.
+
+Clean Android API 34 validation passed JPEG, PNG cancel, standard HEIC, standard
+HEIF, 6000x4000 HEIC, corrupt-HEIC safe failure, repeated edits, and an app
+background/foreground save without a duplicate storage object. Profile photo and
+profile background were exercised directly. Chat, profile posts/comments,
+creator-video comments, Watch Party comments, and Live Stage comments retain the
+same guarded `createSocialAttachmentForSurface` source path but were not all
+individually exercised on hardware. EXIF-orientation, permission-denied,
+network-failure/retry, unsupported masquerade/no-extension picker behavior,
+minimum API, second OEM, and low-memory behavior remain unobserved and are not
+claimed.
+
+The original upload key—not the Play app-signing key—was exposed by failed local
+build diagnostics. It was removed from EAS and never reused. A new RSA-2048 upload
+key was generated with two verified encrypted backups. Google accepted the reset
+request; the replacement upload certificate becomes valid on 2026-07-22 at 21:49
+UTC. The AAB is therefore `NOT_UPLOADABLE_PENDING_GOOGLE_UPLOAD_KEY_RESET` and
+was not submitted. Build 80 is Play-app-signed while the local QA APK is
+upload-key-signed, so direct in-place upgrade proof is `BLOCKED_SIGNING_SOURCE`.
+True upgrade proof requires a later separately authorized Google Play internal or
+closed-track delivery.
+
 ## Remaining action
 
-1. Publish the reviewed JavaScript correction only through an explicitly
-   authorized Android production OTA if immediate build-80 crash protection is
-   required.
-2. Produce a replacement Android binary before claiming HEIC/HEIF conversion is
-   supported on Android.
-3. On the replacement binary, run bounded physical JPEG, PNG, HEIC, cancel,
-   permission-denied, large-file, conversion, upload, and cleanup proof.
+1. After the waiting period, confirm Google Play's upload fingerprint matches the
+   replacement public certificate and only then synchronize that credential to
+   EAS.
+2. Obtain separate authorization before any Google Play internal-track upload;
+   none occurred during this closeout.
+3. Run the remaining unobserved device/surface cases without weakening the
+   permanent JavaScript fallback or reusing runtime `1.0.0` for native changes.
