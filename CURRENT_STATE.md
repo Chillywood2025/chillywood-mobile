@@ -19,10 +19,17 @@ local production AAB and exact AAB-derived universal QA APK were built from
 clean-install proof passed JPEG, HEIC, HEIF, high-resolution HEIC, safe corrupt
 input failure, and background/foreground duplicate prevention. The compromised
 upload credential was removed from EAS, a replacement key has two verified
-encrypted backups, and Google accepted the reset request; the replacement becomes
-valid on 2026-07-22 at 21:49 UTC. Until then the AAB is
-`NOT_UPLOADABLE_PENDING_GOOGLE_UPLOAD_KEY_RESET`. Nothing was submitted to Google
-Play and no OTA was published by this closeout.
+encrypted backups, and post-activation Google App Integrity readback now shows the
+replacement upload certificate active while the Play app-signing certificate is
+unchanged. Google/EAS/AAB/local public fingerprints match and the compromised EAS
+credential remains removed. The unchanged AAB hash
+`de8f4da21956988bdcf7e8ea74bf96493a8d2649018557ed97d4914a7ceabb30`
+was accepted and processed on Google Play Internal Testing only; build 84 is
+available to the existing bounded 17-tester email list and build 80 is deactivated
+on that track. No authorized Android device was visible to ADB, so Play-delivered
+build-80-to-84 upgrade, session/settings preservation, physical HEIC/native-module
+proof, and post-upgrade crash proof remain pending. No rebuild, versionCode 85,
+production/open/closed release, or OTA occurred.
 
 Chi'llywood autonomous app operating model is now documented in `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`. Future Codex/operator work should be autonomous by default for Level 0/1 safe operations such as eligible media discovery, safe batch sizing, scoped backups, restore drills, public-safe media work inside caps, post-write audit, scoped rollback, fallback playback, and telemetry reporting. Owner approval remains required for Level 3/4 boundaries: money/billing/provider changes, auth/RLS changes, Premium entitlement changes, payout/cashout, destructive production DB changes, broad catalog backfill, public/private exposure changes, public launch, legal/compliance, payment production mutation, and public marketing claims. Emergency stop, fallback, audit, rollback/quarantine, no-secret logging, and no unauthorized public exposure remain mandatory.
 

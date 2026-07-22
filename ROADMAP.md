@@ -7,11 +7,13 @@ predates `expo-image-manipulator`; its runtime-`1.0.0` safety update prevents th
 startup crash while keeping HEIC/HEIF fail-closed. Replacement versionCode 84,
 runtime `1.0.0-android-imagemanipulator-v1`, contains and registers
 `ExpoImageManipulator` 14.0.8 and passed clean API-34 native-path image proof. Its
-upload certificate reset is accepted but becomes effective 2026-07-22 21:49 UTC,
-so the artifact is not uploadable yet and was not submitted. Remaining release
-work is Play fingerprint/EAS credential reconciliation after the waiting period,
-a separately approved internal-track upload for Google-signed in-place-upgrade
-proof, and the unobserved per-surface/device cases listed in
+replacement upload certificate is active, the Play app-signing certificate is
+unchanged, and Google/EAS/AAB/local public fingerprints match. The exact preserved
+AAB is processed and available on Google Play Internal Testing only to the
+existing bounded 17-tester lane; build 80 is deactivated on that track and no
+production/open/closed release changed. Remaining work is the Google Play
+build-80-to-84 in-place upgrade and physical native-path/crash proof after an
+approved Android device reconnects, plus the unobserved per-surface/device cases in
 `docs/android/ANDROID_IMAGE_MANIPULATOR_NATIVE_FIX.md`.
 
 ## Current Play-Internal Two-Phone Chat/Live Proof

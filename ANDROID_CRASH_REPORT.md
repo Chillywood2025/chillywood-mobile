@@ -1,8 +1,8 @@
 # Android `ExpoImageManipulator` Crash Report
 
-Date: 2026-07-20
+Date: 2026-07-22
 
-Status: native replacement built and validated locally; Google upload-key reset pending until 2026-07-22 21:49 UTC; not submitted.
+Status: native replacement build 84 is available through Google Play Internal Testing; Play-delivered physical upgrade proof is pending because no approved Android device was connected.
 
 ## Incident
 
@@ -208,20 +208,33 @@ claimed.
 
 The original upload key—not the Play app-signing key—was exposed by failed local
 build diagnostics. It was removed from EAS and never reused. A new RSA-2048 upload
-key was generated with two verified encrypted backups. Google accepted the reset
-request; the replacement upload certificate becomes valid on 2026-07-22 at 21:49
-UTC. The AAB is therefore `NOT_UPLOADABLE_PENDING_GOOGLE_UPLOAD_KEY_RESET` and
-was not submitted. Build 80 is Play-app-signed while the local QA APK is
-upload-key-signed, so direct in-place upgrade proof is `BLOCKED_SIGNING_SOURCE`.
-True upgrade proof requires a later separately authorized Google Play internal or
-closed-track delivery.
+key was generated with two verified encrypted backups. Post-activation App
+Integrity readback shows that replacement as the active upload certificate while
+the Play app-signing certificate is unchanged. Google Play, EAS, the preserved
+AAB, and the local replacement public certificate match; the compromised EAS
+credential remains absent.
+
+The exact preserved AAB SHA-256
+`de8f4da21956988bdcf7e8ea74bf96493a8d2649018557ed97d4914a7ceabb30`
+was submitted once to Google Play Internal Testing. Google processed build 84 and
+shows it as available to the existing bounded 17-tester email list; build 80 is
+deactivated on that track. Production, open testing, and closed testing were not
+changed. No rebuild, versionCode 85, or OTA was created.
+
+No approved Android device was visible to ADB after Internal availability, so the
+Google Play in-place upgrade from build 80, session/settings preservation,
+physical native-module diagnostic, physical HEIC/HEIF conversion, and post-upgrade
+fatal-signature window remain `DEVICE_NOT_AVAILABLE`. Earlier API-34 clean-install
+artifact proof remains valid but is not a substitute for Play-delivered upgrade
+proof.
 
 ## Remaining action
 
-1. After the waiting period, confirm Google Play's upload fingerprint matches the
-   replacement public certificate and only then synchronize that credential to
-   EAS.
-2. Obtain separate authorization before any Google Play internal-track upload;
-   none occurred during this closeout.
+1. Connect the approved Play-installed build-80 device and update to build 84 from
+   the existing Internal Testing lane without uninstalling, clearing data, or
+   sideloading.
+2. Verify the replacement runtime, session/settings preservation,
+   `ExpoImageManipulator` native path, HEIC conversion, and absence of the
+   historical fatal during the observed post-upgrade window.
 3. Run the remaining unobserved device/surface cases without weakening the
    permanent JavaScript fallback or reusing runtime `1.0.0` for native changes.

@@ -4,18 +4,23 @@
 
 ## Android native-image deployment follow-up
 
-The permanent Android replacement exists but must not be submitted yet. Version
+The permanent Android replacement is available on Google Play Internal Testing.
+Version
 1.0.0 (84), runtime `1.0.0-android-imagemanipulator-v1`, was built locally from
 `8c426f4e74de61de7d4529d32d124744833912dc`; its AAB and exact AAB-derived QA APK
 contain and register `ExpoImageManipulator` 14.0.8. Clean Android API 34 proof
 passed the native path for JPEG, HEIC, HEIF, and high-resolution HEIC, while a
-corrupt HEIC failed safely. Google accepted the upload-key reset, but the new key
-does not become valid until 2026-07-22 at 21:49 UTC. The next authorized action
-after that time is a read-only Play fingerprint confirmation and EAS credential
-sync; a later, separately authorized Google Play internal-track submission is
-required for true build-80 in-place-upgrade proof. Do not publish either of the
-superseded incompatible runtime-1.0.0 update groups. Build 80 is protected by the
-existing safety update but intentionally cannot perform HEIC/HEIF conversion.
+corrupt HEIC failed safely. Google App Integrity now shows the replacement upload
+certificate active, the Play app-signing certificate unchanged, and the same
+public fingerprint in EAS, Google, the preserved AAB, and the local replacement.
+The exact preserved AAB is processed and available on the internal track to the
+existing bounded 17-tester lane; production/open/closed testing were unchanged.
+No approved Android device was connected, so the next task is the Play-delivered
+build-80-to-84 in-place upgrade with no uninstall/clear/sideload, followed by
+session/settings preservation, native module, HEIC/HEIF, and fatal-signature
+proof. Do not publish either superseded incompatible runtime-1.0.0 update group.
+Build 80 is protected by the existing safety update but intentionally cannot
+perform HEIC/HEIF conversion.
 
 Current latest truth:
 - Autonomous operating model is now the governing policy: Do not ask owner approval for Level 0/1 autonomous operations; classify first, proceed inside safe policy, and report. Ask owner for Level 3; ask owner plus external confirmation for Level 4.

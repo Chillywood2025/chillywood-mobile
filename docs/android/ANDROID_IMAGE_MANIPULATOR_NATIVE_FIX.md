@@ -1,8 +1,8 @@
 # Android Image Manipulator Native Fix
 
-Date: 2026-07-20
+Date: 2026-07-22
 
-Status: `LOCAL_ARTIFACT_VALIDATED_WAITING_FOR_GOOGLE_UPLOAD_KEY_RESET`
+Status: `GOOGLE_PLAY_INTERNAL_BUILD_AVAILABLE_PHYSICAL_UPGRADE_PENDING`
 
 ## Root cause and compatibility boundary
 
@@ -38,7 +38,7 @@ runtime-`1.0.0` update to build 84.
 | Image Manipulator | `14.0.8` |
 | Native compatibility digest | `4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a` |
 | Build profile | `android-production-local-recovery` |
-| Release state | `NOT_UPLOADABLE_PENDING_GOOGLE_UPLOAD_KEY_RESET` |
+| Release state | `INTERNAL_BUILD_AVAILABLE` |
 
 `expo-modules-autolinking` resolved
 `expo.modules.imagemanipulator.ImageManipulatorModule`. Gradle's release runtime
@@ -48,8 +48,11 @@ classpath resolved
 
 ## Actual release-artifact proof
 
-The production AAB was built locally from the exact committed source. It was not
-uploaded or submitted.
+The production AAB was built locally from the exact committed source. On
+2026-07-22, its SHA-256 was recomputed before provider mutation and the unchanged
+artifact was uploaded to Google Play Internal Testing only. Google Play now shows
+versionCode 84 as the active internal bundle and build 80 as deactivated on that
+track. Production, open testing, and closed testing were not changed.
 
 | Artifact | SHA-256 |
 | --- | --- |
@@ -81,10 +84,19 @@ certificate SHA-256 is:
 
 Two encrypted owner-controlled backups were verified by public fingerprint and
 alias readback. No private key, password, or keystore location is in the
-repository. Google accepted the reset request and reports that the replacement
-becomes valid on 2026-07-22 at 21:49 UTC. Until effective readback, the replacement
-must not be synchronized to EAS or used for a Google Play upload. No test upload
-was attempted.
+repository. Google's post-activation App Integrity readback now shows the
+replacement upload certificate as active. The Play app-signing certificate
+remains unchanged. EAS, Google Play, the preserved AAB, and the local replacement
+certificate all match the replacement public SHA-256 above; the compromised EAS
+credential remains removed. The replacement credential is now the default
+Android build credential in EAS. No build was started during synchronization.
+
+The exact preserved AAB was submitted at `2026-07-22T22:33:08Z` through the
+repository's `production` submit profile, whose Android target is `internal`.
+Sanitized submission identifier SHA-256:
+`196c2535dde720cc3a618f37e18067689b3bef46f37ef2a8ef882c33747ed4a2`.
+Google Play accepted and processed it, and the existing bounded internal email
+list remains selected with 17 testers. No tester identity or join URL is recorded.
 
 ## Runtime and fixture result
 
@@ -125,11 +137,27 @@ LiveKit media, and thumbnail validation are not direct Image Manipulator callers
 
 ## Installation and legacy truth
 
-The physical Samsung holding build 80 is Google Play-installed and signed by the
-Play app-signing certificate. The local QA APK is signed by the replacement upload
-certificate, so direct in-place installation is `BLOCKED_SIGNING_SOURCE`; the
-Samsung installation was not removed or changed. True upgrade proof requires a
-later separately authorized Google Play internal/closed-track delivery.
+The physical Samsung previously observed with build 80 is Google Play-installed
+and signed by the Play app-signing certificate. Build 84 is now available through
+Google Play Internal Testing, which is the correct signer-compatible in-place
+upgrade path. No approved Android device was visible to ADB during this closeout,
+so upgrade, session/settings preservation, physical native-module diagnostics,
+physical HEIC/HEIF conversion, and the post-upgrade crash window remain
+`DEVICE_NOT_AVAILABLE`; none is claimed passed. The app was not uninstalled,
+cleared, or sideloaded.
+
+## Autonomous release/readiness readback
+
+The Android provider adapter read Google Play build 84 as
+`available_to_internal_testers` on `internal`. Its independent EAS cloud-history
+rail still reports the older cloud build/runtime, which is truthful because build
+84 was built locally; the expected manifest was not substituted for observed EAS
+history. Posting a fresh `watch_once` to the deployed release and installed-QA
+operators was blocked on this Mac because their operator-token environment files
+are server-owned and absent here. Current readiness is therefore
+`internal_build_ready` plus `physical_proof_required`, not
+`play_installed_upgrade_pass`. No autonomous system moved or can move the release
+to production.
 
 Read-only Expo history shows build 80 is protected by compatible safety update
 group `37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5`, Android update
@@ -140,15 +168,20 @@ rollback targets.
 
 ## Remaining gates
 
-After 2026-07-22 21:49 UTC, read back the active Google upload fingerprint and
-then synchronize the replacement key to EAS if it matches. A Google Play internal
-submission, track change, and true in-place upgrade require separate owner
-authorization. Remaining optional coverage includes a second OEM, minimum API,
-permission-denied, network retry, low-memory, trusted EXIF orientation,
-no-extension/masquerade picker behavior, and individual social-surface device
-tests. None is claimed complete here.
+Connect the approved Google Play build-80 Android device, use the existing
+Internal Testing lane, and install build 84 from Play without uninstalling or
+clearing data. Then verify session/settings preservation, runtime
+`1.0.0-android-imagemanipulator-v1`, native-module availability, native-path HEIC
+conversion, and absence of the historical fatal. Remaining optional coverage
+includes a second OEM, minimum API, permission-denied, network retry, low-memory,
+trusted EXIF orientation, no-extension/masquerade picker behavior, and individual
+social-surface device tests. None is claimed complete here.
 
-Rollback/discard is artifact-only: delete the local AAB/APKS/APK securely, keep
-the new runtime boundary and defensive JavaScript guard, retain credential-incident
-audit evidence and backups, and use normal git revert for source changes. Never
-restore the compromised key or roll back build 80 to the eager-import updates.
+If build 84 must be withdrawn before physical proof, deactivate/remove only its
+Internal Testing release or pause that track, leave production/open/closed tracks
+untouched, and keep build 80 on the reviewed safety OTA. Delete local AAB/APKS/APK
+copies only when the owner intentionally discards the release evidence. Keep the
+new runtime boundary and defensive JavaScript guard, retain credential-incident
+audit evidence and backups, and use normal git revert for documentation/source
+changes. Never restore the compromised key or roll build 80 back to an eager-import
+update.

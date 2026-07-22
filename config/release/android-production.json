@@ -6,12 +6,12 @@
   "nativeBuild": "84",
   "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
   "channel": "production",
-  "distributionSource": "local_qa_not_submitted",
+  "distributionSource": "google_play_internal",
   "buildProfile": "android-production-local-recovery",
   "nativeBuildSource": "local_eas_build",
   "expectedBinarySourceCommit": "8c426f4e74de61de7d4529d32d124744833912dc",
   "nativeBuildId": null,
-  "releaseStatus": "local_qa_validated_pending_google_upload_key_reset",
+  "releaseStatus": "internal_build_available_physical_upgrade_pending",
   "expoSdkVersion": "54.0.36",
   "expoImageManipulatorVersion": "14.0.8",
   "legacyBuild": {
@@ -59,16 +59,35 @@
     "nativePathUsed": true,
     "fallbackUsed": false,
     "cleanInstallPassed": true,
-    "inPlaceUpgradeState": "blocked_signing_source"
+    "inPlaceUpgradeState": "device_not_available"
   },
   "signingIncident": {
     "classification": "compromised_google_play_upload_key",
     "compromisedEasCredentialRemoved": true,
     "googlePlayAppSigningKeyChanged": false,
     "replacementBackupsVerified": true,
-    "googleUploadKeyResetStatus": "waiting_for_google_upload_key_reset",
+    "googleUploadKeyResetStatus": "upload_key_reset_effective",
     "googleUploadKeyEffectiveAt": "2026-07-22T21:49:00Z",
-    "googlePlaySubmissionState": "not_submitted"
+    "googlePlaySubmissionState": "internal_testing_available",
+    "replacementEasCredentialSynchronized": true,
+    "fourWayPublicCertificateMatch": true
+  },
+  "playDistributionEvidence": {
+    "track": "internal",
+    "nativeBuild": "84",
+    "uploadEvidenceAt": "2026-07-22T22:33:08Z",
+    "submissionIdentifierSha256": "196c2535dde720cc3a618f37e18067689b3bef46f37ef2a8ef882c33747ed4a2",
+    "processingState": "available_to_internal_testers",
+    "testerLane": "existing_bounded_email_list",
+    "testerCount": 17,
+    "productionTrackChanged": false,
+    "openTestingTrackChanged": false,
+    "closedTestingTrackChanged": false,
+    "playDeliveredUpgradeState": "device_not_available",
+    "sessionPreservationState": "not_observed",
+    "settingsPreservationState": "not_observed",
+    "physicalNativeModuleState": "not_observed",
+    "physicalHeicState": "not_observed"
   },
   "runtimeFixtureEvidence": {
     "deviceClass": "android_emulator_api_34",
