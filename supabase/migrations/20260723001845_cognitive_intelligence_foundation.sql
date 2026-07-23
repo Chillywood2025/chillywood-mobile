@@ -3313,16 +3313,42 @@ declare
     nullif(current_setting('request.jwt.claims', true), ''),
     '{}'
   )::jsonb;
+  actor_user_id text := nullif(auth.uid()::text, '');
   metadata jsonb := coalesce(claims->'app_metadata','{}'::jsonb);
   project_ids jsonb := coalesce(metadata->'cognitive_project_ids','[]'::jsonb);
   task_ids jsonb := coalesce(metadata->'cognitive_task_ids','[]'::jsonb);
   platforms jsonb := coalesce(metadata->'cognitive_platforms','[]'::jsonb);
 begin
-  if public.has_platform_role(array['owner'::text,'super_admin'::text]) then
+  if actor_user_id is null then
+    return false;
+  end if;
+  if exists (
+    select 1
+    from public.platform_role_memberships membership
+    where membership.status = 'active'
+      and membership.role in ('owner', 'super_admin')
+      and membership.user_id = actor_user_id
+  ) then
     return true;
   end if;
-  return public.has_platform_role(array['operator'::text])
-    and public.has_platform_permission('admin.cognitive.read')
+  return exists (
+      select 1
+      from public.platform_role_memberships membership
+      where membership.status = 'active'
+        and membership.role = 'operator'
+        and membership.user_id = actor_user_id
+    )
+    and exists (
+      select 1
+      from public.platform_staff_permission_grants permission_grant
+      where permission_grant.status = 'active'
+        and permission_grant.permission_key = 'admin.cognitive.read'
+        and permission_grant.target_user_id = actor_user_id
+        and (
+          permission_grant.expires_at is null
+          or permission_grant.expires_at > timezone('utc', now())
+        )
+    )
     and jsonb_typeof(project_ids)='array'
     and project_ids ? p_project_id::text
     and (

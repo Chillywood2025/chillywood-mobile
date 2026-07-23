@@ -310,3 +310,26 @@ focused cognitive pgTAP assertions, and 528/528 assertions across the complete
 local database suite. These are authored implementation results only. Every
 sixteenth-review finding remains open until the next exact-head isolated A/B/C
 review reports zero P0/P1.
+
+The seventeenth exact-head A/B/C review of
+`8c995e35f1e7fe677bf280ddb18a95364bc40c7b` reported zero P0. Reviewers A
+and C reported zero P1. Reviewer B independently proved one P1:
+`cognitive_can_read_scope` delegated staff identity to a legacy helper that
+accepted email as an alternative to immutable user ID. A recycled orphan staff
+email could therefore expose cognitive memory to a different authentication
+account.
+
+The correction removes email-based staff authorization from the cognitive read
+boundary. Owner, super-admin, operator, and `admin.cognitive.read` grants must
+now match `auth.uid()` exactly; operator access still requires explicit
+project/task/platform JWT scope. A regression fixture creates a stale Owner,
+operator, and permission grant for one user ID, authenticates a different user
+with the recycled email, and proves both the scope helper and table policy deny
+access. The focused cognitive suite now passes 245/245 assertions and the full
+local database suite passes 530/530 assertions.
+
+This correction addresses only the independently reported P1. No additional
+self-generated adversarial variants were added after the owner's freeze.
+Remaining P2/P3 observations are future or deployment-review work. The new
+checkpoint remains `security_hardening_in_progress` until every independent
+lane, the canonical 40-attack suite, and PR CI pass on the exact frozen head.

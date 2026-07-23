@@ -607,6 +607,63 @@ select throws_ok(
 );
 reset role;
 
+insert into auth.users(id,email,is_sso_user,is_anonymous)
+values (
+  '09000000-0000-0000-0000-000000000009',
+  'recycled-cognitive-owner@example.invalid',
+  false,
+  false
+);
+insert into public.platform_role_memberships(role,user_id,email,status)
+values
+(
+  'owner',
+  '09000000-0000-0000-0000-000000000008',
+  'recycled-cognitive-owner@example.invalid',
+  'active'
+),
+(
+  'operator',
+  '09000000-0000-0000-0000-000000000008',
+  'recycled-cognitive-owner@example.invalid',
+  'active'
+);
+insert into public.platform_staff_permission_grants(
+  target_user_id,target_email,permission_key,status
+) values (
+  '09000000-0000-0000-0000-000000000008',
+  'recycled-cognitive-owner@example.invalid',
+  'admin.cognitive.read',
+  'active'
+);
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub','09000000-0000-0000-0000-000000000009',
+    'email','recycled-cognitive-owner@example.invalid',
+    'role','authenticated',
+    'app_metadata','{}'::jsonb
+  )::text,
+  true
+);
+select is(
+  public.cognitive_can_read_scope(
+    '10000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    'ios'
+  ),
+  false,
+  'a recycled Owner email cannot inherit global cognitive read scope'
+);
+select is(
+  (select count(*)::integer from public.intelligence_tasks),
+  0,
+  'a recycled staff email cannot read cognitive task memory'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+
 insert into auth.users(id,is_sso_user,is_anonymous)
 values ('09000000-0000-0000-0000-000000000001',false,false);
 insert into public.platform_role_memberships(role,user_id,email,status)

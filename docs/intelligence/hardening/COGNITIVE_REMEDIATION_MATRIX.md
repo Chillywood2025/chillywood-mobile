@@ -428,3 +428,22 @@ The scaffold remains `security_hardening_in_progress`.
 | A16/B16/C16-FALSEPOS-001 | P2/P3 | Safe translated denials, numeric metadata, version fragments, and harmless credential-documentation URLs were overblocked. | Apply exact denial translations, context-aware numeric metadata, bounded version controls, and assignment-evidence URL semantics. | R-100/R-101/R-102; focused pgTAP safe controls | fixed locally | pending |
 | B16-BOUNDS-001 | P2 | A valid 128-record positioned payload exceeded the five-second reviewed statement timeout. | Add a bounded simple-scalar child path and repeated-safe-value aggregate fast path while retaining full top-level position/secret checks. | focused 128-record `performs_ok` | fixed locally | pending |
 | A16-SUPPLY-001 | P2 | The locked tree still reports 23 inherited advisories, including three high-severity advisories. | No dependency changed and no audit fix ran; separately reviewed dependency upgrades remain an explicit deployment blocker. | read-only dependency audit | accepted deployment blocker | pending |
+
+## Seventeenth exact-head retest findings
+
+The seventeenth isolated A/B/C review examined
+`8c995e35f1e7fe677bf280ddb18a95364bc40c7b`. Reviewers A and C reported
+P0=0/P1=0. Reviewer B reported P0=0/P1=1 after proving that the cognitive
+read helper inherited the legacy staff helper's email fallback. Reviewer D was
+correctly withheld because the zero-P1 gate was not met.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| B17-IDENTITY-001 | P1 | A newly created authentication account could inherit global cognitive read access when its email matched an orphaned active Owner/operator membership or permission grant belonging to a different user ID. | Bind cognitive Owner, super-admin, operator, and `admin.cognitive.read` authorization directly to the authenticated immutable user ID; retain project/task/platform scope checks for operators. | pgTAP recycled-email Owner/operator/permission assertions | fixed locally | pending |
+
+Reviewer A's remaining five P2 items and one P3 item, plus Reviewer C's
+remaining six P2 items and one P3 item, are recorded as future or
+deployment-review work under the owner's freeze instruction. They do not grant
+production authority and are not being expanded into additional
+self-generated adversarial variants. The inherited dependency advisories and
+owner/counsel retention decision remain deployment blockers.
