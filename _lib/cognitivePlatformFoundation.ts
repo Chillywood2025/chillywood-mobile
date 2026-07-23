@@ -238,7 +238,7 @@ export const validateLearningPatch = (patch: Readonly<Record<string, unknown>>):
 };
 
 export const COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION = {
-  deploymentState: "source_complete_not_deployed",
+  deploymentState: "security_hardening_in_progress",
   readOnly: true,
   visibleSections: [
     "intelligence tasks",

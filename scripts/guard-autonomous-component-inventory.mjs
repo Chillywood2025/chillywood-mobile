@@ -26,7 +26,8 @@ const validDeploymentStates = new Set([
   "existing_protected_service",
   "non_autonomous",
   "manual_only",
-  "source_complete_not_deployed",
+  "security_hardening_in_progress",
+  "security_hardened_scaffold_not_deployed",
 ]);
 const requiredFields = [
   "id", "owningSystem", "componentType", "supportedPlatforms", "paths",

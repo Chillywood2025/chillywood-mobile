@@ -5,21 +5,23 @@ import { COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION } from "../../_lib/cognitiveP
 const STATUS_ROWS = [
   ["System", "product_intelligence_operator"],
   ["Activation", "Off"],
-  ["Deployment", "Source complete · not deployed"],
+  ["Deployment", "Security hardening in progress · not deployed"],
   ["Scheduler", "None"],
   ["Model credential", "None"],
-  ["Database", "Local migration only"],
-  ["Execution", "Structured draft-branch plans only"],
-  ["Evaluator", "Independent · read only"],
+  ["Tool credential", "None"],
+  ["Database", "No live memory · local migration only"],
+  ["Research", "No live research"],
+  ["Execution", "No execution authority"],
+  ["Evaluator", "No live evaluator"],
 ] as const;
 
 export const CognitiveControlCenterFoundation = () => (
   <View testID="admin-cognitive-control-center" style={styles.surface}>
     <View style={styles.hero}>
-      <Text style={styles.kicker}>READ-ONLY FOUNDATION</Text>
-      <Text style={styles.title}>Cognitive Intelligence</Text>
+      <Text style={styles.kicker}>SOURCE MANIFEST · READ ONLY</Text>
+      <Text style={styles.title}>Cognitive Intelligence Foundation</Text>
       <Text style={styles.body}>
-        Source contract for research, planning, memory, bounded engineering, and independent evaluation. No production execution is wired.
+        This source manifest describes an undeployed scaffold. It is not live system status and has no memory, research, evaluator, scheduler, credentials, or production authority.
       </Text>
       <View style={styles.pillRow}>
         <View style={styles.pill}><Text style={styles.pillText}>OFF</Text></View>

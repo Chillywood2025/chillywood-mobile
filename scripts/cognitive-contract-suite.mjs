@@ -48,14 +48,14 @@ const guardIntelligence = () => {
     "self approval or approval-level mutation",
   ], "cognitive registry");
   assert.equal(contract.systemId, "product_intelligence_operator");
-  assert.equal(contract.deploymentState, "source_complete_not_deployed");
+  assert.equal(contract.deploymentState, "security_hardening_in_progress");
   assert.equal(contract.activationMode, "off");
   assert.equal(contract.scheduler, "none");
   assert.deepEqual(contract.components.map((entry) => entry.id), expectedComponents);
   for (const id of ["product_intelligence_operator", ...expectedComponents]) {
     const component = inventory.components.find((entry) => entry.id === id);
     assert.ok(component, `inventory missing ${id}`);
-    assert.equal(component.deploymentState, "source_complete_not_deployed");
+    assert.equal(component.deploymentState, "security_hardening_in_progress");
     assert.equal(component.scheduleStatus, "no_scheduler");
     assert.ok(component.budget, `${id} missing bounded budget`);
   }
