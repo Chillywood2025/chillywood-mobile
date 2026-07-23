@@ -205,9 +205,10 @@ export const cognitiveSha256 = (text: string): string => {
 };
 const validIdentifier = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u.test(value);
-const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]+$|^(?:api[_.:-]?key|password|pwd|secret|credential|service[_.:-]?role|authorization|auth|cookie|private[_.:-]?key|token|bearer|signature|sig|key)[_.:-][A-Za-z0-9._:-]+$)/u;
+const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]+$|^(?:api[_.:-]?key|client[_.:-]?secret|password|pwd|secret|credential|service[_.:-]?role|authorization|auth|cookie|private[_.:-]?key|token|bearer|signature|sig|key)[_.:-][A-Za-z0-9._:-]+$)/u;
 function securityIdentifierContainsSecret(value: string): boolean {
   return SECRET_SHAPED_IDENTIFIER.test(value)
+    || containsSensitiveIdentifierLabel(value)
     || containsSecretLikeValue(value)
     || containsPrivateIdentifier(value)
     || maybeDecodeEncoded(value).some((candidate) =>
@@ -686,13 +687,14 @@ export type CognitiveToolResultEnvelope = {
   data: unknown;
 };
 
-const PROVIDER_SCOPE_ACTION = String.raw`(?:grants?|provides?|requir(?:e|es|ed)|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?|authenticates?|promotes?|upgrades?|authorizes?|uses?|sets?|enabl(?:e|es|ed)|runs?|has|have|gives?|makes?)`;
-const PROVIDER_SCOPE_TARGET = String.raw`(?:owner(?:\s+role)?|super[- ]?admin|administrator|admin|production|root|credentials?|permissions?|privileges?|scope|access|roles?|rights?|service\s+accounts?)`;
+const PROVIDER_SCOPE_ACTION = String.raw`(?:allows?|permits?|grants?|provides?|requir(?:e|es|ed)|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?|authenticates?|promotes?|upgrades?|authorizes?|uses?|sets?|enabl(?:e|es|ed)|runs?|has|have|gives?|makes?)`;
+const PROVIDER_SCOPE_TARGET = String.raw`(?:owner(?:\s+role)?|super[- ]?admin|administrator|admin|production|root|iam|all\s+(?:actions?|resources?|permissions?)|wildcard|credentials?|permissions?|privileges?|scope|access|roles?|rights?|service\s+accounts?)`;
 const PROVIDER_SCOPE_EXPANSION = new RegExp(
   String.raw`\b(?:${PROVIDER_SCOPE_ACTION})\b[\s\S]{0,100}\b(?:${PROVIDER_SCOPE_TARGET})\b|\b(?:${PROVIDER_SCOPE_TARGET})\b[\s\S]{0,100}\b(?:(?:is|are|must|should|needs?)(?:\s+be|\s+to\s+be)?\s+)?(?:${PROVIDER_SCOPE_ACTION})\b`,
   "iu",
 );
-const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|administrator(?:access)?|admin|root|superuser|uid[-_\s]*0|sudo|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|emergency[-_\s]+master)\b[\s\S]{0,60}\b(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?|mandatory|required|enabled)|(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?)\b[\s\S]{0,60}\b(?:owner|super[- ]?admin|administrator(?:access)?|admin|root|superuser|uid[-_\s]*0|sudo|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|emergency[-_\s]+master|mandatory|required|enabled)|(?:run|operate|execute|authenticate|switch|use|set)\b[\s\S]{0,24}\b(?:root|superuser|uid[-_\s]*0)\b|sudo|full[- ]?control|unrestricted\s+account|break[- ]?glass\s+identity|god[-_\s]+mode|carte[-_\s]+blanche|administratoraccess|emergency[-_\s]+master\s+identity|(?:all|wildcard)[-_\s]+permissions?|(?:permit|allow|grant|enable|use|switch)[\s\S]{0,60}\b(?:everything|anything|unrestricted|without\s+restriction)\b|identity[\s\S]{0,60}\b(?:do|access|control)[\s\S]{0,24}\b(?:anything|everything)\b)\b/iu;
+const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|administrator(?:access)?|admin|root|superuser|uid[-_\s]*0|sudo|wheel|poweruseraccess|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|emergency[-_\s]+master)\b[\s\S]{0,60}\b(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?|mandatory|required|enabled)|(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?)\b[\s\S]{0,60}\b(?:owner|super[- ]?admin|administrator(?:access)?|admin|root|superuser|uid[-_\s]*0|sudo|wheel|poweruseraccess|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|emergency[-_\s]+master|mandatory|required|enabled)|(?:run|operate|execute|authenticate|switch|use|set)\b[\s\S]{0,24}\b(?:root|superuser|uid[-_\s]*0)\b|sudo|wheel\s+account|poweruseraccess|no\s+(?:restrictions?|limits?)|supreme\s+authority|tenant\s+owner|impersonate[\s\S]{0,24}\bowner|escalate[\s\S]{0,24}\bsuperuser|principal[\s\S]{0,40}\bno\s+limits?|operate[\s\S]{0,40}\babove\s+all[\s\S]{0,24}\broles?|full[- ]?control|unrestricted\s+account|break[- ]?glass\s+identity|god[-_\s]+mode|carte[-_\s]+blanche|administratoraccess|emergency[-_\s]+master\s+identity|(?:all|wildcard)[-_\s]+permissions?|iam\s*:\s*\*|(?:allow|permit|grant)[\s\S]{0,60}\ball\s+(?:actions?|resources?|permissions?)\b|(?:permissions?|privileges?|rights?)[\s\S]{0,24}\ball\b|\ball\b[\s\S]{0,24}\b(?:permissions?|privileges?|rights?)|(?:permit|allow|grant|enable|use|switch)[\s\S]{0,60}\b(?:everything|anything|unrestricted|without\s+restriction)\b|identity[\s\S]{0,60}\b(?:do|access|control)[\s\S]{0,24}\b(?:anything|everything)\b)\b/iu;
+const PROVIDER_STANDALONE_PRIVILEGE = /(?:\biam\s*:\s*\*|^\s*(?:poweruseraccess|wheel|no\s+(?:restrictions?|limits?))\s*[.!]?\s*$)/iu;
 
 const canonicalCognitiveJson = (value: unknown): string => {
   const normalize = (entry: unknown): unknown => {
@@ -766,10 +768,15 @@ export const createUntrustedToolEnvelope = (
     providerFragments.join(" "),
     providerFragments.join("-"),
     providerFragments.join("_"),
-  ].flatMap((candidate) => [candidate, ...maybeDecodeEncoded(candidate)]);
+  ].flatMap((candidate) => [
+    candidate,
+    candidate.normalize("NFKC"),
+    ...maybeDecodeEncoded(candidate),
+  ]);
   const ownerReviewRequired = providerScopeCandidates.some((candidate) =>
     PROVIDER_SCOPE_EXPANSION.test(candidate)
     || PROVIDER_PRIVILEGED_SCOPE_MENTION.test(candidate)
+    || PROVIDER_STANDALONE_PRIVILEGE.test(candidate)
   ) || sanitized.categories.includes("secret_like_value");
   const boundaryTruncated = sanitized.categories.some((category) =>
     category.startsWith("maximum_")
@@ -949,17 +956,26 @@ const SECRET_PATTERNS = [
 
 const SENSITIVE_ASSIGNMENT_LABELS = new Set([
   "accesskey", "accesstoken", "apikey", "auth", "authorization", "authorizationtoken",
-  "bearer", "cookie", "credential", "credentialkey", "credentialtoken", "key", "password", "privatekey", "pwd",
+  "bearer", "clientsecret", "cookie", "credential", "credentialkey", "credentialtoken", "key", "password", "privatekey", "pwd",
   "refreshtoken", "secret", "servicerole", "sig", "signature", "token", "xapikey",
+]);
+const SENSITIVE_ASSIGNMENT_PARTS = new Set([
+  "auth", "authorization", "bearer", "cookie", "credential", "key", "password",
+  "pwd", "secret", "sig", "signature", "token",
 ]);
 const normalizeSecurityLabel = (value: string): string =>
   value.normalize("NFKC").toLowerCase().replace(/[^a-z0-9]/gu, "");
 const containsSensitiveAssignment = (value: string): boolean => {
   const normalized = value.normalize("NFKC");
-  for (const match of normalized.matchAll(/(?:^|[?&\s])([^?&=:\s]{1,256})\s*[:=]/gu)) {
+  for (const match of normalized.matchAll(/([^?&=:\s]{1,256})\s*[:=]/gu)) {
     const label = normalizeSecurityLabel(match[1]);
+    const labelParts = match[1]
+      .toLowerCase()
+      .split(/[^a-z0-9]+/gu)
+      .filter(Boolean);
     if (
       SENSITIVE_ASSIGNMENT_LABELS.has(label)
+      || labelParts.some((part) => SENSITIVE_ASSIGNMENT_PARTS.has(part))
       || /^(?:access|refresh)(?:key|token)$/u.test(label)
       || /^(?:api|private)(?:key|token)$/u.test(label)
       || /^service(?:key|role|token)$/u.test(label)
@@ -968,6 +984,11 @@ const containsSensitiveAssignment = (value: string): boolean => {
   }
   return false;
 };
+const containsSensitiveIdentifierLabel = (value: string): boolean =>
+  value.normalize("NFKC").toLowerCase()
+    .split(/[^a-z0-9]+/gu)
+    .filter(Boolean)
+    .some((part) => SENSITIVE_ASSIGNMENT_PARTS.has(part));
 export const containsPromptInjection = (value: string): boolean =>
   PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(value));
 export const containsSecretLikeValue = (value: string): boolean =>
@@ -977,11 +998,11 @@ const containsPrivateIdentifier = (value: string): boolean => {
   const normalized = value.normalize("NFKC");
   if (
     /^[a-f0-9]{40,128}$/iu.test(normalized)
-    || /^[a-f0-9-]{36}$/iu.test(normalized)
-    || /^(?:task|project|finding):[a-f0-9-]{36}$/iu.test(normalized)
+    || /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(normalized)
+    || /^(?:task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(normalized)
   ) return false;
   if (
-    /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u.test(normalized)
+    /[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(normalized)
     || /(?:^|[^A-Za-z0-9-])\+?[0-9][0-9 ()-]{7,}[0-9](?![A-Za-z0-9-])/u.test(normalized)
     || /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(normalized)
   ) return true;
@@ -998,6 +1019,16 @@ const maybeDecodeEncoded = (value: string): string[] => {
     } catch {
       return null;
     }
+  };
+  const addDecodedCandidate = (value: string, next: string[]): void => {
+    const normalized = value.normalize("NFKC").slice(0, 4_096);
+    if (
+      normalized.length < 3
+      || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(normalized)
+      || candidates.has(normalized)
+    ) return;
+    candidates.add(normalized);
+    next.push(normalized);
   };
   let frontier = [value.normalize("NFKC")];
   for (let depth = 0; depth < 6; depth += 1) {
@@ -1019,9 +1050,7 @@ const maybeDecodeEncoded = (value: string): string[] => {
           const binary = globalThis.atob(padded);
           const decoded = decodeUtf8(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
           if (decoded !== null) {
-            const bounded = decoded.normalize("NFKC").slice(0, 4_096);
-            if (!candidates.has(bounded)) next.push(bounded);
-            candidates.add(bounded);
+            addDecodedCandidate(decoded, next);
           }
         } catch {
           // Invalid base64 remains ordinary untrusted text.
@@ -1032,9 +1061,7 @@ const maybeDecodeEncoded = (value: string): string[] => {
         for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(match[0].slice(index * 2, (index * 2) + 2), 16);
         const decoded = decodeUtf8(bytes);
         if (decoded !== null) {
-          const normalized = decoded.normalize("NFKC");
-          if (!candidates.has(normalized)) next.push(normalized);
-          candidates.add(normalized);
+          addDecodedCandidate(decoded, next);
         }
       }
     }
@@ -1428,6 +1455,14 @@ export const validateResearchUrl = (raw: string): readonly string[] => {
   ])];
   if (containsSecretLikeValue(raw) || containsSecretLikeValue(url.href)
     || decodedCandidates.some(containsSecretLikeValue)) {
+    blockers.push("credential_bearing_url_forbidden");
+  }
+  const researchDataCandidates = [
+    url.search,
+    url.hash,
+    ...url.searchParams.values(),
+  ].flatMap((candidate) => [candidate, ...maybeDecodeEncoded(candidate)]);
+  if (researchDataCandidates.some(containsPrivateIdentifier)) {
     blockers.push("credential_bearing_url_forbidden");
   }
   if (url.port && url.port !== "443") blockers.push("port_not_allowed");

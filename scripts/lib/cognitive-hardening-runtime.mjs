@@ -409,18 +409,27 @@ const RESEARCH_MAX_URL_BYTES = 2_048;
 const RESEARCH_CREDENTIAL_PATTERN = /\b(?:(?:access|refresh)\s*(?:[_-]?token|\[\s*token\s*\])|token|api[_-]?key|service[_-]?role|private[_-]?key|secret|password|pwd|credential|authorization|auth|cookie|bearer|signature|sig|key)(?:[._-][A-Za-z0-9_-]{1,64})?\s*[:=]/iu;
 const SENSITIVE_RESEARCH_LABELS = new Set([
   "accesskey", "accesstoken", "apikey", "auth", "authorization", "authorizationtoken",
-  "bearer", "cookie", "credential", "credentialkey", "credentialtoken", "key", "password", "privatekey", "pwd",
+  "bearer", "clientsecret", "cookie", "credential", "credentialkey", "credentialtoken", "key", "password", "privatekey", "pwd",
   "refreshtoken", "secret", "servicerole", "sig", "signature", "token", "xapikey",
+]);
+const SENSITIVE_RESEARCH_LABEL_PARTS = new Set([
+  "auth", "authorization", "bearer", "cookie", "credential", "key", "password",
+  "pwd", "secret", "sig", "signature", "token",
 ]);
 const normalizedSecurityText = (value) => String(value).normalize("NFKC");
 const normalizedSecurityLabel = (value) =>
   normalizedSecurityText(value).toLowerCase().replace(/[^a-z0-9]/gu, "");
 const hasSensitiveResearchAssignment = (value) => {
   const normalized = normalizedSecurityText(value);
-  for (const match of normalized.matchAll(/(?:^|[?&\s])([^?&=:\s]{1,256})\s*[:=]/gu)) {
+  for (const match of normalized.matchAll(/([^?&=:\s]{1,256})\s*[:=]/gu)) {
     const label = normalizedSecurityLabel(match[1]);
+    const labelParts = match[1]
+      .toLowerCase()
+      .split(/[^a-z0-9]+/gu)
+      .filter(Boolean);
     if (
       SENSITIVE_RESEARCH_LABELS.has(label)
+      || labelParts.some((part) => SENSITIVE_RESEARCH_LABEL_PARTS.has(part))
       || /^(?:access|refresh)(?:key|token)$/u.test(label)
       || /^(?:api|private)(?:key|token)$/u.test(label)
       || /^service(?:key|role|token)$/u.test(label)
@@ -432,7 +441,12 @@ const hasSensitiveResearchAssignment = (value) => {
 const hasPrivateIdentifierText = (value) => {
   const normalized = normalizedSecurityText(value);
   if (
-    /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u.test(normalized)
+    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(normalized)
+    || /^[a-f0-9]{40,128}$/iu.test(normalized)
+    || (/^[a-f0-9]{16}$/iu.test(normalized) && /[a-f]/iu.test(normalized))
+  ) return false;
+  if (
+    /[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(normalized)
     || /\+?[0-9][0-9 ()-]{7,}[0-9]/u.test(normalized)
     || /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(normalized)
   ) return true;
@@ -444,7 +458,15 @@ const hasPrivateIdentifierInResearchData = (value) =>
   normalizedSecurityText(value).split(/\r?\n/gu).some((line) => {
     try {
       const url = new URL(line);
-      return hasPrivateIdentifierText(`${url.search}\n${url.hash}`);
+      const decodedValues = [...url.searchParams.values()].map((entry) => {
+        try {
+          return decodeURIComponent(entry);
+        } catch {
+          return entry;
+        }
+      });
+      return hasPrivateIdentifierText(url.hash)
+        || decodedValues.some((entry) => hasPrivateIdentifierText(entry));
     } catch {
       const queryIndex = line.indexOf("?");
       if (line.includes("https://") && queryIndex >= 0) {
@@ -461,6 +483,16 @@ const decodeBoundedSecurityCandidates = (value) => {
   const candidates = new Set([initial]);
   let frontier = [...candidates];
   const decoder = new TextDecoder("utf-8", { fatal: true });
+  const addDecodedCandidate = (decoded, next) => {
+    const normalized = normalizedSecurityText(decoded).slice(0, 16_384);
+    if (
+      normalized.length < 3
+      || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(normalized)
+      || candidates.has(normalized)
+    ) return;
+    candidates.add(normalized);
+    next.push(normalized);
+  };
   for (let depth = 0; depth < 6; depth += 1) {
     const next = [];
     for (const candidate of frontier) {
@@ -477,24 +509,17 @@ const decodeBoundedSecurityCandidates = (value) => {
         try {
           const normalized = match[0].replaceAll("-", "+").replaceAll("_", "/");
           const bytes = Buffer.from(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="), "base64");
-          const decoded = normalizedSecurityText(decoder.decode(bytes)).slice(0, 16_384);
-          if (decoded && !candidates.has(decoded)) {
-            candidates.add(decoded);
-            next.push(decoded);
-          }
+          addDecodedCandidate(decoder.decode(bytes), next);
         } catch {
           // Invalid base64/base64url is ordinary untrusted URL text.
         }
       }
       for (const match of candidate.matchAll(/\b(?:[0-9a-fA-F]{2}){4,}\b/gu)) {
         try {
-          const decoded = normalizedSecurityText(
+          addDecodedCandidate(
             decoder.decode(Buffer.from(match[0].slice(0, 32_768), "hex")),
-          ).slice(0, 16_384);
-          if (decoded && !candidates.has(decoded)) {
-            candidates.add(decoded);
-            next.push(decoded);
-          }
+            next,
+          );
         } catch {
           // Non-UTF-8 hexadecimal data is not interpreted as text.
         }
@@ -502,7 +527,10 @@ const decodeBoundedSecurityCandidates = (value) => {
     }
     if (next.length === 0) return [...candidates];
     if (next.length > 128) throw new Error("credential_bearing_url_forbidden");
-    if (depth === 5) throw new Error("credential_bearing_url_forbidden");
+    if (depth === 5) {
+      candidates.add("secret=encoded_depth_exceeded");
+      return [...candidates];
+    }
     frontier = next.slice(0, 128);
   }
   return [...candidates];
@@ -546,7 +574,38 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
       throw new Error("url_encoding_invalid");
     }
   }
-  const securityCandidates = decodeBoundedSecurityCandidates(`${rawText}\n${decoded}`);
+  let fullyDecodedUrl;
+  try {
+    fullyDecodedUrl = new URL(decoded);
+  } catch {
+    throw new Error("url_encoding_invalid");
+  }
+  const encodedValues = [
+    ...parsed.searchParams.values(),
+    ...fullyDecodedUrl.searchParams.values(),
+    ...parsed.pathname.split("/").filter(Boolean),
+    ...fullyDecodedUrl.pathname.split("/").filter(Boolean),
+  ];
+  if (encodedValues.length > 128) throw new Error("credential_bearing_url_forbidden");
+  const securityCandidates = [
+    rawText,
+    decoded,
+    ...encodedValues.flatMap((value) => {
+      const decodedValueCandidates = decodeBoundedSecurityCandidates(value);
+      const depthExceeded = decodedValueCandidates.includes("secret=encoded_depth_exceeded");
+      const reviewedOpaque = (
+        /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(value)
+        || /^[a-f0-9]{16}$/iu.test(value)
+        || /^[a-f0-9]{40,128}$/iu.test(value)
+      );
+      if (depthExceeded && !reviewedOpaque) {
+        throw new Error("credential_bearing_url_forbidden");
+      }
+      return decodedValueCandidates.filter((candidate) =>
+        candidate !== "secret=encoded_depth_exceeded"
+      );
+    }),
+  ];
   if (securityCandidates.some((candidate) =>
     RESEARCH_CREDENTIAL_PATTERN.test(candidate)
     || hasSensitiveResearchAssignment(candidate)

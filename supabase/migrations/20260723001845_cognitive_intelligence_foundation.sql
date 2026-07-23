@@ -71,14 +71,16 @@ declare
   octet integer;
   position_value integer;
   depth integer;
+  nested_hex_depth integer;
   percent_changed boolean;
   fragment_count integer;
+  decoded_bytes bytea;
 begin
   if octet_length(coalesce(payload, '')) > 65536 then
     return true;
   end if;
-  if coalesce(payload,'') ~ '^[a-f0-9-]{36}$'
-     or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9-]{36}$' then
+  if coalesce(payload,'') ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+     or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' then
     return false;
   end if;
   -- Walk a bounded decoding frontier instead of repeatedly appending the
@@ -86,29 +88,59 @@ begin
   -- remains encoded beyond that bound is rejected rather than retained.
   for depth in 0..5 loop
     percent_changed := false;
-    decoded := '';
+    decoded_bytes := ''::bytea;
     position_value := 1;
     while position_value <= length(candidate) loop
       if substring(candidate from position_value for 1) = '%'
          and substring(candidate from position_value + 1 for 2) ~ '^[0-9A-Fa-f]{2}$' then
         begin
-          octet := get_byte(decode(substring(candidate from position_value + 1 for 2), 'hex'), 0);
-          decoded := decoded || chr(octet);
+          decoded_bytes := decoded_bytes
+            || decode(substring(candidate from position_value + 1 for 2), 'hex');
           position_value := position_value + 3;
         exception when others then
-          decoded := decoded || substring(candidate from position_value for 1);
+          decoded_bytes := decoded_bytes
+            || convert_to(substring(candidate from position_value for 1), 'UTF8');
           position_value := position_value + 1;
         end;
       else
-        decoded := decoded || substring(candidate from position_value for 1);
+        decoded_bytes := decoded_bytes
+          || convert_to(substring(candidate from position_value for 1), 'UTF8');
         position_value := position_value + 1;
       end if;
     end loop;
+    begin
+      decoded := convert_from(decoded_bytes, 'UTF8');
+    exception when others then
+      return true;
+    end;
     percent_changed := decoded <> candidate;
     candidate := decoded;
+    -- Decode a complete hexadecimal envelope before any competing decoder
+    -- can replace the active branch. This bounded inner walk preserves the
+    -- only candidate at every layer and therefore cannot lose recursively
+    -- hex-encoded credential labels to coincidental base64 matches.
+    for nested_hex_depth in 0..5 loop
+      exit when length(candidate) < 8
+        or length(candidate) % 2 <> 0
+        or candidate !~ '^[0-9A-Fa-f]+$';
+      begin
+        decoded := convert_from(decode(candidate, 'hex'), 'UTF8');
+        exit when decoded = candidate;
+        candidate := left(decoded, 65536);
+      exception when others then
+        exit;
+      end;
+    end loop;
+    if nested_hex_depth = 5
+       and length(candidate) >= 8
+       and length(candidate) % 2 = 0
+       and candidate ~ '^[0-9A-Fa-f]+$' then
+      return true;
+    end if;
     normalized := lower(regexp_replace(normalize(candidate, NFKC), '[^a-zA-Z0-9_=:/.?&+-]', '', 'g'));
     if candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
-       or normalized ~* '(access(token|key)|refreshtoken|apikey|authorization(token|key)?|auth|bearer|cookie|credential(token|key)?|key|password|pwd|privatekey|secret|service(role|key|token)|sig|signature|token)[:=][^,&}[:space:]]+'
+       or normalized ~* '(accesstoken|accesskey|refreshtoken|apikey|authorization|auth|bearer|clientsecret|cookie|credential|key|password|pwd|privatekey|secret|servicerole|sig|signature|token)[a-z0-9]{0,64}[:=][^,&}[:space:]]+'
+       or candidate ~* '(access|api|authorization|auth|bearer|client|cookie|credential|key|password|private|pwd|refresh|secret|service|sig|signature|token)[[:space:]_.-]*\[[^]]{1,64}\][[:space:]]*[:=]'
        or candidate ~* '(^|[^A-Za-z0-9])(password|pwd|secret|credential|service[[:space:]_\[\]:.-]?(role|key|token)|access[[:space:]_\[\]:.-]?(token|key)|refresh[[:space:]_\[\]:.-]?token|api[[:space:]_\[\]:.-]?key|authorization([[:space:]_\[\]:.-]?(token|key))?|auth|cookie|private[[:space:]_\[\]:.-]?key|token|bearer|signature|sig|key)[=_:.-][A-Za-z0-9._:-]+'
        or candidate ~* '\b(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}\b'
        or candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
@@ -116,10 +148,10 @@ begin
        or candidate ~* '\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b'
        or candidate ~* 'https?://[^/@:[:space:]]+:[^/@[:space:]]+@'
        or candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)='
-       or candidate ~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
-       or candidate ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
-       or candidate ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
-       or candidate ~* '(^|[^0-9A-F:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^0-9A-F:]|$)' then
+       or normalize(candidate, NFKC) ~* '[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}'
+       or normalize(candidate, NFKC) ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
+       or normalize(candidate, NFKC) ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
+       or normalize(candidate, NFKC) ~* '(^|[^A-Za-z0-9:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^A-Za-z0-9:]|$)' then
       return true;
     end if;
 
@@ -268,12 +300,12 @@ set search_path = ''
 as $$
   select case
     when coalesce(payload,'') ~ '^[a-f0-9]{40,128}$'
-      or coalesce(payload,'') ~ '^[a-f0-9-]{36}$'
-      or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9-]{36}$' then false
-    else normalize(coalesce(payload,''), NFKC) ~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
+      or coalesce(payload,'') ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+      or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' then false
+    else normalize(coalesce(payload,''), NFKC) ~* '[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}'
       or normalize(coalesce(payload,''), NFKC) ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
       or normalize(coalesce(payload,''), NFKC) ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
-      or normalize(coalesce(payload,''), NFKC) ~* '(^|[^0-9A-F:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^0-9A-F:]|$)'
+      or normalize(coalesce(payload,''), NFKC) ~* '(^|[^A-Za-z0-9:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^A-Za-z0-9:]|$)'
   end
 $$;
 
@@ -289,6 +321,9 @@ declare
   object_key text;
   payload_type text;
   aggregate_value text := '';
+  string_values text[] := '{}'::text[];
+  left_value text;
+  right_value text;
 begin
   if payload is null then return true; end if;
   if pg_column_size(payload) > 16384
@@ -309,7 +344,7 @@ begin
       if public.cognitive_text_has_secret(object_key)
          or public.cognitive_text_has_private_identifier(object_key)
          or regexp_replace(normalize(object_key, NFKC), '[^a-zA-Z0-9]', '', 'g')
-            ~* '^(accesskey|accesstoken|apikey|auth|authorization|authorizationtoken|bearer|cookie|credential|credentialkey|credentialtoken|key|password|privatekey|pwd|refreshtoken|secret|servicerole|sig|signature|token|xapikey)$'
+            ~* '^(accesskey|accesstoken|apikey|auth|authorization|authorizationtoken|bearer|clientsecret|cookie|credential|credentialkey|credentialtoken|key|password|privatekey|pwd|refreshtoken|secret|servicerole|sig|signature|token|xapikey)[a-zA-Z0-9]{0,64}$'
          or not public.cognitive_json_is_sanitized(child_value) then
         return false;
       end if;
@@ -322,9 +357,24 @@ begin
     from jsonb_path_query(payload, 'strict $.** ? (@.type() == "string")') value
   loop
     aggregate_value := left(aggregate_value || string_value, 32768);
+    string_values := array_append(string_values, string_value);
   end loop;
-  return not public.cognitive_text_has_secret(aggregate_value)
-    and not public.cognitive_text_has_private_identifier(aggregate_value);
+  if public.cognitive_text_has_secret(aggregate_value)
+     or public.cognitive_text_has_private_identifier(aggregate_value) then
+    return false;
+  end if;
+  foreach left_value in array string_values loop
+    foreach right_value in array string_values loop
+      if left_value <> right_value
+         and (
+           public.cognitive_text_has_secret(left(left_value || right_value, 32768))
+           or public.cognitive_text_has_private_identifier(left(left_value || right_value, 32768))
+         ) then
+        return false;
+      end if;
+    end loop;
+  end loop;
+  return true;
 end;
 $$;
 revoke all on function public.cognitive_text_has_secret(text) from public, anon, authenticated;

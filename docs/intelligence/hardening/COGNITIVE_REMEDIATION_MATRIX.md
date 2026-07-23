@@ -10,7 +10,7 @@ The matrix retains every independent-review finding. “Fixed locally” means i
 source change and regression test pass on the hardening branch; it is not a
 deployment claim. Every completed automated independent retest found remaining
 P1s and therefore did not close any row. The current corrective working tree
-adds composed enforcement plus 47 independent-variant regressions. The
+adds composed enforcement plus 78 independent-variant regressions. The
 “pending” values below refer to the required fresh retest of the next exact
 corrective commit.
 
@@ -262,3 +262,22 @@ positive. The scaffold remains `security_hardening_in_progress`.
 | A9/C9-PRIVATE-001 | P1 | Encoded email/phone/IP values could leave through research, and compressed IPv6 could cross operational identifiers and SQL. | Scan decoded research query/fragment data for private identifiers and recognize compressed IPv6 in TypeScript/runtime/SQL without misclassifying the destination host. | R-73, R-74; pgTAP compressed IPv6 matrix | fixed locally | pending |
 | B9-TYPED-UUID-001 | P1 | Safe task UUIDs embedded in JSON were falsely rejected by generic aggregate scanning. | Recursively validate JSON keys/values, preserve exact typed UUID/hash exceptions, and reconstruct only bounded leaf strings for split-secret/private-data detection. | R-75; pgTAP typed UUID/split-value checks | fixed locally | pending |
 | A9/C9-SCOPE-001 | P2/P3 | Superuser, UID-0, AdministratorAccess, emergency-master, broad permission, and split break-glass language did not always create an owner-review finding. | Aggregate bounded nested tool text, decode it, classify semantic privilege/broad-authority requests, discard retained data, and require owner review on unresolved encoded secret material. | R-75 | fixed locally | pending |
+
+## Tenth exact-head retest findings
+
+The tenth isolated retest reviewed
+`f96ddeed509205c4b2f8530dd2c7bb196093d490`. All lanes reported zero P0,
+but they found overlapping credential/private-data P1 boundaries, provider
+scope wording gaps, safe-data false positives, and the inherited dependency
+advisory deployment blocker. The scaffold remains
+`security_hardening_in_progress`.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A10/B10/C10-LABEL-001 | P1 | Compound credential suffixes, NFKC/fullwidth labels, and nested percent/base64/hex representations crossed source, transport, or SQL boundaries. | Apply one NFKC segment-aware assignment grammar, recursively decode bounded candidates, reject sensitive JSON keys, and preserve every active decoding branch. | R-76; pgTAP normalized/recursive encoding matrix | fixed locally | pending |
+| A10/B10-PRIVATE-001 | P1 | Internationalized email identifiers and reordered split private values could cross retention boundaries. | Classify Unicode-domain email identifiers and pairwise reconstruct bounded JSON leaf values independently of JSONB key order. | R-77; pgTAP IDN/split-order matrix | fixed locally | pending |
+| B10-HEX-001 | P1 | The prior broad 36-character “UUID” exemption and generic decoder competition allowed a twice-hex-encoded credential to survive. | Restrict UUID exemptions to hyphenated UUID shape and decode complete hexadecimal envelopes before competing candidates. | pgTAP recursive-hex assertion | fixed locally | pending |
+| C10-SCOPE-001 | P1 | IAM wildcards, all-action/resource requests, PowerUserAccess, wheel, no-restriction, and fullwidth sudo wording were not consistently escalated. | Add bounded semantic privilege classification over raw, NFKC-normalized, decoded, and structured provider fragments; retain no payload and require owner review. | R-78 | fixed locally | pending |
+| B10-IPV6-001 | P2 | Namespace notation such as `namespace::method` was falsely classified as compressed IPv6. | Require alphanumeric address boundaries and successful IPv6 parsing; retain ordinary namespace notation. | pgTAP namespace assertions | fixed locally | pending |
+| C10-URL-001 | P2/P3 | Safe UUID/opaque-hex URL values and the exact 2,048-byte contract boundary were overblocked. | Use typed opaque-value exceptions only after exact-shape checks and enforce the URL byte cap before recursive candidate expansion. | R-78 | fixed locally | pending |
+| A10-SUPPLY-001 | P2 | The locked dependency tree retains 23 inherited advisories. | No dependency changed and no audit fix ran; separately reviewed upgrades remain a deployment blocker. | read-only dependency audit | accepted deployment blocker | pending |

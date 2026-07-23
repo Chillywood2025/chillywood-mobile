@@ -282,6 +282,16 @@ select ok(
         ('authorization[token]=x'),
         ('service[role]=x'),
         ('private[key]=x'),
+        ('client_secret=x'),
+        ('authorization[x]=x'),
+        ('cookie[x]=x'),
+        ('credential[x]=x'),
+        ('key[x]=x'),
+        ('q=api[key]=x'),
+        ('token[session]=x'),
+        ('cookie[session]=x'),
+        ('ｃｏｏｋｉｅ［ｓｅｓｓｉｏｎ］=x'),
+        ('%EF%BD%81%EF%BD%90%EF%BD%89%EF%BC%BF%EF%BD%8B%EF%BD%85%EF%BD%99%3Dx'),
         ('key=x'),
         ('pwd=x'),
         ('auth=x')
@@ -290,16 +300,34 @@ select ok(
   'short encodings and normalized credential assignment labels fail closed'
 );
 select ok(
+  public.cognitive_text_has_secret(
+    encode(
+      convert_to(encode(convert_to('api_key=x','UTF8'),'hex'),'UTF8'),
+      'hex'
+    )
+  ),
+  'recursive hexadecimal credential encoding cannot displace the active decode branch'
+);
+select ok(
   (
     select bool_and(public.cognitive_text_has_secret(value))
     from (
       values
         ('2001:db8::1'),
+        ('person@例子.测试'),
+        ('person%EF%BC%A0%E4%BE%8B%E5%AD%90%EF%BC%8E%E6%B5%8B%E8%AF%95'),
         (rtrim(translate(replace(encode(convert_to('2001:db8::1','UTF8'),'base64'), E'\n', ''), '+/', '-_'), '=')),
-        (encode(convert_to('2001:db8::1','UTF8'),'hex'))
+        (encode(convert_to('2001:db8::1','UTF8'),'hex')),
+        (rtrim(translate(replace(encode(convert_to('person@例子.测试','UTF8'),'base64'), E'\n', ''), '+/', '-_'), '='))
     ) variants(value)
   ),
   'compressed IPv6 private identifiers fail closed in plain and encoded forms'
+);
+select ok(
+  not public.cognitive_text_has_private_identifier('namespace::method')
+  and not public.cognitive_text_has_private_identifier('std::vector')
+  and not public.cognitive_text_has_private_identifier('crate::module'),
+  'ordinary namespace symbols are not classified as compressed IPv6'
 );
 select ok(
   public.cognitive_json_is_sanitized(
@@ -308,10 +336,42 @@ select ok(
   'typed safe UUID JSON remains accepted'
 );
 select ok(
+  not public.cognitive_text_has_secret('0123456789abcdef')
+  and public.cognitive_json_is_sanitized(jsonb_build_object('digest','0123456789abcdef')),
+  'bounded opaque hexadecimal identifiers are not falsely classified as credentials'
+);
+select ok(
   not public.cognitive_json_is_sanitized(
     jsonb_build_object('left','person@','right','example.invalid')
   ),
   'split private identifiers cannot be reconstructed from sanitized JSON'
+);
+select ok(
+  not public.cognitive_json_is_sanitized(
+    jsonb_build_object('z','person@','a','example.invalid')
+  )
+  and not public.cognitive_json_is_sanitized(
+    jsonb_build_object('z','api_','a','key=x')
+  )
+  and not public.cognitive_json_is_sanitized(
+    jsonb_build_object('z','198.51.','a','100.42')
+  )
+  and not public.cognitive_json_is_sanitized(
+    jsonb_build_object('z','+1 312 ','a','555 0100')
+  ),
+  'split private and secret values fail closed independent of JSONB key order'
+);
+select ok(
+  not public.cognitive_json_is_sanitized(
+    jsonb_build_object('token[session]','x')
+  )
+  and not public.cognitive_json_is_sanitized(
+    jsonb_build_object('ｃｏｏｋｉｅ［ｓｅｓｓｉｏｎ］','x')
+  )
+  and not public.cognitive_json_is_sanitized(
+    jsonb_build_object('client_secret','x')
+  ),
+  'compound and Unicode-normalized credential JSON keys are rejected'
 );
 select ok(
   not public.cognitive_json_is_sanitized(

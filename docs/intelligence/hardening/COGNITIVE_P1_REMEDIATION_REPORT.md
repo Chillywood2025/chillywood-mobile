@@ -8,12 +8,12 @@ Independent review: PR #15 at `ff6b2588e2dcc4fa8e76c8f8f6dac47f64cb0667`
 
 The branch is an undeployed, off, uncredentialed scaffold. Local remediation
 addressed the original review inventory, and each exact-head retest was allowed
-to reopen rows when it found a new composed-boundary bypass. The fourth retest
+to reopen rows when it found a new composed-boundary bypass. The tenth retest
 findings are corrected locally but remain open until a fresh exact-head
 independent retest verifies them.
 The executable attack suite reports 40/40, the cognitive database suite reports
-191/191, the full repository database suite reports 476/476, the independent
-source variants report 75/75, the runtime-authority variants report 11/11, and the separate
+196/196, the full repository database suite reports 481/481, the independent
+source variants report 78/78, the runtime-authority variants report 11/11, and the separate
 two-session recurrence race reports one current row, two occurrences, and two
 immutable lifecycle events.
 
@@ -95,12 +95,15 @@ Implementation commits:
 - pending corrective commit — request/capability composition, pinned filesystem
   descriptors, postflight rollback, source authority, service actor identity,
   exact scoped Admin reads, deterministic test selection, connected-peer
-  verification, exact-head bypass closure, and 47 cumulative independent variants.
+  verification, exact-head bypass closure, and 78 cumulative independent variants.
 
 The read-only dependency audit remains at the inherited baseline: 23 advisories
 (3 high, 19 moderate, 1 low, 0 critical), with no package-lock or dependency
 change introduced by hardening. No audit fix ran. The existing owner/counsel
 retention decision and three human review lanes remain deployment gates.
+The inherited advisories remain an explicit source-side deployment blocker
+pending separately reviewed dependency upgrades; this remediation did not hide,
+downgrade, or automatically rewrite them.
 No new direct, transitive, native, postinstall, or license obligation was added;
 the hardening runtime uses Node built-ins and the already locked TypeScript
 package. All 35 workflow action references are pinned to immutable commit SHAs
@@ -151,6 +154,22 @@ text aggregation. Authored evidence is 75/75 independent variants, 40/40
 canonical attacks, 11/11 runtime-authority tests, 476/476 local pgTAP
 assertions, and a passing two-session finding race. These findings remain
 independently open until the next exact-head retest.
+
+The tenth exact-head review of
+`f96ddeed509205c4b2f8530dd2c7bb196093d490` found no P0 but correctly
+reopened compound credential-label, Unicode/private-identifier, recursive
+hexadecimal branch, provider-privilege wording, and false-positive boundary
+cases across TypeScript, the exact research transport, and PostgreSQL. The
+corrective checkpoint now detects suffix labels such as `token[session]`,
+NFKC-normalized labels, internationalized email identifiers, recursively
+hex-encoded credential assignments, reordered split JSON values, and explicit
+provider wildcard/admin language before DNS or persistence. Safe UUIDs,
+bounded opaque hexadecimal identifiers, namespace notation, and a 2,048-byte
+research URL remain accepted. Authored evidence is 78/78 independent variants,
+40/40 canonical attacks, 11/11 runtime-authority tests, 196/196 cognitive
+pgTAP assertions, 481/481 repository pgTAP assertions, and a passing concurrent
+finding lifecycle test. These results remain implementation evidence only
+until the next exact-head isolated review returns zero P0/P1.
 
 No remediation grants production execution, scheduler, deployment, release,
 money, rights, auth/RLS, role, moderation, provider-product or self-approval
