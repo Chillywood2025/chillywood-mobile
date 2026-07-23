@@ -6,7 +6,7 @@ import net from "node:net";
 import https from "node:https";
 
 const FORBIDDEN_SEGMENTS = new Set([".git", "node_modules", "android", "ios"]);
-const CREDENTIAL_FILE = /(?:^|\/)(?:\.env(?:\.|$)|credentials?\.json$|.*\.(?:jks|keystore|p8|p12|pem|key)$)/iu;
+const CREDENTIAL_FILE = /(?:^|\/)(?:\.env(?:\.|$)|credentials?\.json$|service-account\.json$|firebase-adminsdk-[^/]+\.json$|secrets?\.json$|\.aws\/credentials$|\.npmrc$|\.netrc$|id_(?:rsa|dsa|ecdsa|ed25519)$|.*\.(?:jks|keystore|p8|p12|pem|key)$)/iu;
 const PRIVATE_V4 = [
   ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8],
   ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24],
@@ -419,15 +419,30 @@ const SENSITIVE_RESEARCH_LABEL_PARTS = new Set([
 const SECURITY_CONFUSABLES = Object.freeze({
   а: "a", в: "b", е: "e", к: "k", м: "m", н: "h", о: "o", р: "p", с: "c",
   т: "t", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", ԛ: "q", ԝ: "w",
-  ү: "y", ӏ: "l", α: "a", β: "b", ε: "e", η: "h", ι: "i", κ: "k", μ: "m",
+  ү: "y", ӏ: "l", һ: "h", α: "a", β: "b", ε: "e", η: "h", ι: "i", κ: "k", μ: "m",
   ν: "v", ο: "o", ρ: "p", τ: "t", υ: "y", χ: "x", ϲ: "c", ն: "n", օ: "o",
+  ı: "i", ɡ: "g",
 });
+const SECURITY_DECIMAL_BLOCKS = Object.freeze([
+  48,1632,1776,1984,2406,2534,2662,2790,2918,3046,3174,3302,3430,3558,
+  3664,3792,3872,4160,4240,6112,6160,6470,6608,6784,6800,6992,7088,7232,
+  7248,42528,43216,43264,43472,43504,43600,44016,66720,68912,69734,69872,
+  69942,70096,70384,70736,70864,71248,71360,71472,71904,72016,72784,73040,
+  73120,73552,92768,92864,93008,120782,120792,120802,120812,120822,
+  123200,123632,124144,125264,130032,
+]);
+const normalizeDecimalDigit = (character) => {
+  const codePoint = character.codePointAt(0);
+  const block = SECURITY_DECIMAL_BLOCKS.find((start) => codePoint >= start && codePoint <= start + 9);
+  return block === undefined ? character : String(codePoint - block);
+};
 const normalizedSecurityText = (value) =>
   String(value)
     .normalize("NFKD")
     .replace(/[\u3002\uff0e\uff61]/gu, ".")
     .replace(/[\p{Default_Ignorable_Code_Point}\p{Mark}]/gu, "")
-    .replace(/[АВЕКМНОРСТУХІЈЅԀԚԜҮӀавекмнорстухіјѕԁԛԝүӏΑΒΕΗΙΚΜΝΟΡΤΥΧϹαβεηικμνορτυχϲՆՕնօ]/gu, (character) =>
+    .replace(/\p{Nd}/gu, normalizeDecimalDigit)
+    .replace(/[АВЕКМНОРСТУХІЈЅԀԚԜҮӀҺавекмнорстухіјѕԁԛԝүӏһΑΒΕΗΙΚΜΝΟΡΤΥΧϹαβεηικμνορτυχϲՆՕնօıɡꞬ]/gu, (character) =>
       SECURITY_CONFUSABLES[character.toLowerCase()] ?? character
     );
 const normalizedSecurityLabel = (value) =>
@@ -555,16 +570,36 @@ const decodeBoundedSecurityCandidates = (value) => {
 
 const reconstructNamedResearchFragments = (searchParams) => {
   const groups = new Map();
+  const allIndexed = [];
   for (const [key, value] of searchParams.entries()) {
-    const match = key.match(/^(.{1,64}?)(?:\[|[_-]?)([0-9]{1,3})\]?$/u);
+    const normalizedKey = normalizedSecurityText(key).slice(0, 128);
+    const match = normalizedKey.match(/^(.*?)([0-9]{1,3})(.*)$/u);
     if (!match) continue;
     const position = Number(match[2]);
     if (!Number.isSafeInteger(position) || position < 0 || position >= 128) continue;
-    const group = groups.get(match[1]) ?? [];
-    group.push({ position, value: value.slice(0, 1_024) });
-    groups.set(match[1], group);
+    const fragment = { position, value: value.slice(0, 1_024) };
+    const groupKey = normalizedSecurityLabel(`${match[1]}${match[3]}`) || "indexed";
+    const group = groups.get(groupKey) ?? [];
+    group.push(fragment);
+    groups.set(groupKey, group);
+    allIndexed.push(fragment);
   }
   const candidates = [];
+  if (allIndexed.length >= 2) {
+    const positions = new Set(allIndexed.map((fragment) => fragment.position));
+    if (positions.size !== allIndexed.length) {
+      candidates.push("secret=ambiguous_fragment_stream");
+    } else {
+      const inputOrder = allIndexed.map((fragment) => fragment.value);
+      const positionOrder = [...allIndexed]
+        .sort((left, right) => left.position - right.position)
+        .map((fragment) => fragment.value);
+      for (const values of [inputOrder, positionOrder]) {
+        candidates.push(values.join(""));
+        candidates.push([...values].reverse().join(""));
+      }
+    }
+  }
   for (const fragments of groups.values()) {
     if (fragments.length < 2 || fragments.length > 128) continue;
     const positions = new Set(fragments.map((fragment) => fragment.position));

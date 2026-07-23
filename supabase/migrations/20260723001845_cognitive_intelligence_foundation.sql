@@ -91,11 +91,12 @@ begin
     ]) with ordinality as digit_block(block_start, block_order)
   cross join generate_series(0,9) digit_offset;
   normalized := translate(normalized, digit_characters, ascii_digits);
-  return translate(
+  normalized := translate(
     normalized,
     U&'\0410\0412\0415\041A\041C\041D\041E\0420\0421\0422\0423\0425\0406\0408\0405\0500\051A\051C\04AE\04C0\0391\0392\0395\0397\0399\039A\039C\039D\039F\03A1\03A4\03A5\03A7\03F9\0546\0555\0430\0432\0435\043A\043C\043D\043E\0440\0441\0442\0443\0445\0456\0458\0455\0501\051B\051D\04AF\04CF\03B1\03B2\03B5\03B7\03B9\03BA\03BC\03BD\03BF\03C1\03C4\03C5\03C7\03F2\0576\0585',
     'ABEKMHOPCTYXIJSDQWYLABEHIKMVOPTYXCNOabekmhopctyxijsdqwylabehikmvoptyxcno'
   );
+  return translate(normalized, U&'\04BB\0131\0261', 'hig');
 end;
 $$;
 revoke all on function public.cognitive_security_normalize(text) from public, anon, authenticated;
@@ -152,7 +153,7 @@ declare
   fragment_count integer;
   decoded_bytes bytea;
 begin
-  if octet_length(coalesce(payload, '')) > 65536 then
+  if octet_length(coalesce(payload, '')) > 4000 then
     return true;
   end if;
   if length(coalesce(payload,'')) > 4096
@@ -426,40 +427,77 @@ as $$
   end
 $$;
 
+create or replace function public.cognitive_fragments_assemble_target(
+  payload text[],
+  target text
+)
+returns boolean
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  fragments text[];
+  fragment text;
+  available_characters text;
+  target_character text;
+  target_length integer := length(coalesce(target, ''));
+  reachable boolean[];
+begin
+  if target_length not between 1 and 32 then return false; end if;
+  select array_agg(piece order by piece)
+  into fragments
+  from unnest(coalesce(payload, '{}'::text[])) raw_fragment
+  cross join lateral regexp_split_to_table(
+    lower(public.cognitive_security_normalize(left(raw_fragment, 1024))),
+    '[^a-z0-9]+'
+  ) piece
+  where piece <> ''
+    and length(piece) <= target_length
+    and position(piece in target) > 0;
+  if coalesce(cardinality(fragments), 0) = 0 then return false; end if;
+  available_characters := array_to_string(fragments, '');
+  for character_position in 1..target_length loop
+    target_character := substring(target from character_position for 1);
+    if length(available_characters) - length(replace(available_characters, target_character, ''))
+       < length(target) - length(replace(target, target_character, '')) then
+      return false;
+    end if;
+  end loop;
+  reachable := array_fill(false, array[target_length + 1], array[0]);
+  reachable[0] := true;
+  for target_position in 0..target_length - 1 loop
+    if not reachable[target_position] then continue; end if;
+    foreach fragment in array fragments loop
+      if substring(target from target_position + 1 for length(fragment)) = fragment then
+        reachable[target_position + length(fragment)] := true;
+      end if;
+    end loop;
+  end loop;
+  return reachable[target_length];
+end;
+$$;
+revoke all on function public.cognitive_fragments_assemble_target(text[],text)
+  from public, anon, authenticated;
+grant execute on function public.cognitive_fragments_assemble_target(text[],text)
+  to service_role;
+
 create or replace function public.cognitive_fragments_have_sensitive_label(payload text[])
 returns boolean
 language sql
 immutable
 set search_path = ''
 as $$
-  with labels as (
-    select array_agg(
-      regexp_replace(
-        lower(public.cognitive_security_normalize(fragment)),
-        '[^a-z0-9]',
-        '',
-        'g'
-      )
-    ) as values
-    from unnest(coalesce(payload, '{}'::text[])) fragment
-  )
-  select coalesce(
-    values && array[
-      'accesskey','accesstoken','apikey','auth','authorization',
-      'authorizationtoken','bearer','clientsecret','cookie','credential',
-      'key','password','privatekey','pwd','refreshtoken','secret',
-      'servicerole','sig','signature','token'
-    ]::text[]
-    or ('client'=any(values) and 'secret'=any(values))
-    or ('service'=any(values) and ('role'=any(values) or 'key'=any(values) or 'token'=any(values)))
-    or ('access'=any(values) and ('key'=any(values) or 'token'=any(values)))
-    or ('refresh'=any(values) and 'token'=any(values))
-    or ('api'=any(values) and 'key'=any(values))
-    or ('private'=any(values) and 'key'=any(values))
-    or ('authorization'=any(values) and ('key'=any(values) or 'token'=any(values))),
-    false
-  )
-  from labels
+  select coalesce(bool_or(
+    public.cognitive_fragments_assemble_target(payload, sensitive_target)
+  ), false)
+  from unnest(array[
+    'accesskey','accesstoken','apikey','auth','authorization',
+    'authorizationtoken','bearer','clientsecret','cookie','credential',
+    'credentialkey','credentialtoken','key','password','privatekey','pwd',
+    'refreshtoken','secret','servicerole','servicekey','servicetoken',
+    'sig','signature','token','xapikey'
+  ]::text[]) sensitive_target
 $$;
 revoke all on function public.cognitive_fragments_have_sensitive_label(text[])
   from public, anon, authenticated;
@@ -526,18 +564,27 @@ declare
   object_fragments text[] := '{}'::text[];
   object_sequence_fragments text[] := '{}'::text[];
   fragment_text text;
+  fragment_label text;
+  assignment_value text;
+  numeric_piece_count integer;
   numeric_fragment_count integer := 0;
   numeric_fragment_digits integer := 0;
   numeric_only_count integer := 0;
   has_assignment boolean := false;
+  has_unsafe_assignment_value boolean := false;
+  has_unsafe_standalone_value boolean := false;
   standalone_at_count integer := 0;
+  any_at_count integer := 0;
   local_part_count integer := 0;
   domain_count integer := 0;
+  pure_alpha_count integer := 0;
   dot_marker_count integer := 0;
+  dot_character_count integer := 0;
   ipv4_number_count integer := 0;
   positioned_aggregate text;
   positioned_count integer := 0;
   positioned_distinct_count integer := 0;
+  assembled_sensitive_label boolean := false;
 begin
   if payload is null then return true; end if;
   if pg_column_size(payload) > 16384
@@ -593,6 +640,13 @@ begin
   else
     return true;
   end if;
+  for object_key in
+    select object_member
+    from jsonb_path_query(payload, 'strict $.** ? (@.type() == "object")') nested_object
+    cross join lateral jsonb_object_keys(nested_object) object_member
+  loop
+    string_values := array_append(string_values, object_key);
+  end loop;
   for string_value in
     select value #>> '{}'
     from jsonb_path_query(payload, 'strict $.** ? (@.type() == "string")') value
@@ -602,9 +656,42 @@ begin
     string_values := array_append(string_values, string_value);
     fragment_text := public.cognitive_security_normalize(string_value);
     has_assignment := has_assignment or fragment_text ~ '[:=]';
+    if fragment_text ~ '[:=]' then
+      assignment_value := regexp_replace(fragment_text, '^.*?[:=]', '', '');
+      fragment_label := regexp_replace(lower(assignment_value), '[^a-z0-9]', '', 'g');
+      if fragment_label <> ''
+         and fragment_label not in (
+           'active','disabled','enabled','inactive','none','ok','state','status',
+           'unavailable','unknown'
+         ) then
+        has_unsafe_assignment_value := true;
+      end if;
+    else
+      fragment_label := regexp_replace(lower(fragment_text), '[^a-z0-9]', '', 'g');
+      if fragment_label <> ''
+         and fragment_label not in (
+           'active','api','authorization','client','disabled','enabled','inactive',
+           'none','ok','private','refresh','service','state','status','unavailable',
+           'unknown'
+         )
+         and not exists (
+           select 1
+           from unnest(array[
+             'accesskey','accesstoken','apikey','auth','authorization',
+             'authorizationtoken','bearer','clientsecret','cookie','credential',
+             'credentialkey','credentialtoken','key','password','privatekey','pwd',
+             'refreshtoken','secret','servicerole','servicekey','servicetoken',
+             'sig','signature','token','xapikey'
+           ]::text[]) sensitive_target
+           where position(fragment_label in sensitive_target) > 0
+         ) then
+        has_unsafe_standalone_value := true;
+      end if;
+    end if;
     if lower(trim(fragment_text)) in ('@','%40','qa','qa==','40') then
       standalone_at_count := standalone_at_count + 1;
     end if;
+    if position('@' in fragment_text) > 0 then any_at_count := any_at_count + 1; end if;
     if fragment_text ~* '^[[:alnum:]_.%+-]{1,64}$'
        and fragment_text !~ '^[0-9]+$' then
       local_part_count := local_part_count + 1;
@@ -612,16 +699,35 @@ begin
     if fragment_text ~* '^[[:alnum:]-]{1,63}(\.[[:alnum:]-]{1,63})*\.[[:alpha:]]{2,}$' then
       domain_count := domain_count + 1;
     end if;
+    if fragment_text ~* '^[[:alpha:]]{2,64}$' then pure_alpha_count := pure_alpha_count + 1; end if;
     if trim(fragment_text) = '.' then dot_marker_count := dot_marker_count + 1; end if;
+    dot_character_count := dot_character_count
+      + length(fragment_text) - length(replace(fragment_text, '.', ''));
     if trim(fragment_text) ~ '^[0-9]{1,3}$' then ipv4_number_count := ipv4_number_count + 1; end if;
+    select count(*)::integer
+    into numeric_piece_count
+    from regexp_split_to_table(fragment_text, '[^0-9]+') piece
+    where piece ~ '^[0-9]{1,3}$'
+      and piece::integer between 0 and 255;
+    ipv4_number_count := ipv4_number_count + numeric_piece_count;
     if fragment_text ~ '^[0-9]{1,8}$' then numeric_only_count := numeric_only_count + 1; end if;
-    if fragment_text ~* '^[0-9]{3,}[a-z]?$' then
+    if fragment_text ~* '^[a-z]{0,2}[+() .-]*[0-9][0-9+() .-]*[a-z]{0,2}$'
+       and length(regexp_replace(fragment_text, '[^0-9]', '', 'g')) between 1 and 8 then
       numeric_fragment_count := numeric_fragment_count + 1;
       numeric_fragment_digits := numeric_fragment_digits
         + length(regexp_replace(fragment_text, '[^0-9]', '', 'g'));
     end if;
   end loop;
-  if not (cardinality(string_values) = 2 and numeric_only_count = 2)
+  assembled_sensitive_label := public.cognitive_fragments_have_sensitive_label(string_values);
+  if not (
+       cardinality(string_values) = 2 and numeric_only_count = 2
+     )
+     and not (
+       has_assignment
+       and assembled_sensitive_label
+       and not has_unsafe_assignment_value
+       and not has_unsafe_standalone_value
+     )
      and (
        public.cognitive_text_has_secret(aggregate_value)
        or public.cognitive_text_has_private_identifier(aggregate_value)
@@ -630,24 +736,69 @@ begin
      ) then
     return false;
   end if;
-  if has_assignment and public.cognitive_fragments_have_sensitive_label(string_values) then return false; end if;
-  if standalone_at_count > 0 and local_part_count > 0 and domain_count > 0 then return false; end if;
-  if dot_marker_count >= 3 and ipv4_number_count >= 4 then return false; end if;
-  if numeric_fragment_count >= 3 and numeric_fragment_digits >= 10 then return false; end if;
+  if assembled_sensitive_label
+     and (
+       (has_assignment and (has_unsafe_assignment_value or has_unsafe_standalone_value))
+       or (not has_assignment and has_unsafe_standalone_value)
+     ) then return false; end if;
+  if (standalone_at_count > 0 or any_at_count > 0)
+     and dot_character_count > 0
+     and (domain_count > 0 or pure_alpha_count >= 2) then return false; end if;
+  if (dot_marker_count >= 3 or dot_character_count >= 3) and ipv4_number_count >= 4 then return false; end if;
+  if numeric_fragment_count >= 2
+     and numeric_fragment_digits between 10 and 15
+     and not (
+       numeric_fragment_count = 2
+       and cardinality(string_values) = 2
+       and string_values[1] ~ '^[0-9]{5}$'
+       and string_values[2] ~ '^[0-9]{5}$'
+     ) then return false; end if;
   select
     string_agg(
-      coalesce(positioned_object->>'chunk', positioned_object->>'fragment', positioned_object->>'value'),
+      coalesce(
+        positioned_object->>'chunk',
+        positioned_object->>'fragment',
+        positioned_object->>'piece',
+        positioned_object->>'part',
+        case when positioned_object ? 'position' then positioned_object->>'value' end
+      ),
       ''
-      order by (positioned_object->>'position')::integer
+      order by (
+        public.cognitive_security_normalize(coalesce(
+          positioned_object->>'position',
+          positioned_object->>'index',
+          positioned_object->>'ordinal'
+        ))
+      )::integer
     ),
     count(*),
-    count(distinct (positioned_object->>'position')::integer)
+    count(distinct (
+      public.cognitive_security_normalize(coalesce(
+        positioned_object->>'position',
+        positioned_object->>'index',
+        positioned_object->>'ordinal'
+      ))
+    )::integer)
   into positioned_aggregate, positioned_count, positioned_distinct_count
   from jsonb_path_query(payload, 'strict $.** ? (@.type() == "object")') positioned_object
-  where positioned_object ? 'position'
-    and coalesce(positioned_object->>'chunk', positioned_object->>'fragment', positioned_object->>'value') is not null
-    and positioned_object->>'position' ~ '^[0-9]{1,3}$'
-    and (positioned_object->>'position')::integer between 0 and 127;
+  where (positioned_object ? 'position' or positioned_object ? 'index' or positioned_object ? 'ordinal')
+    and coalesce(
+      positioned_object->>'chunk',
+      positioned_object->>'fragment',
+      positioned_object->>'piece',
+      positioned_object->>'part',
+      case when positioned_object ? 'position' then positioned_object->>'value' end
+    ) is not null
+    and public.cognitive_security_normalize(coalesce(
+      positioned_object->>'position',
+      positioned_object->>'index',
+      positioned_object->>'ordinal'
+    )) ~ '^[0-9]{1,3}$'
+    and (public.cognitive_security_normalize(coalesce(
+      positioned_object->>'position',
+      positioned_object->>'index',
+      positioned_object->>'ordinal'
+    )))::integer between 0 and 127;
   if positioned_count > 128 or positioned_count <> positioned_distinct_count then return false; end if;
   if positioned_count >= 2 then
     positioned_aggregate := regexp_replace(positioned_aggregate, '[|,;[:space:]]', '', 'g');
@@ -661,11 +812,13 @@ end;
 $$;
 revoke all on function public.cognitive_text_has_secret(text) from public, anon, authenticated;
 revoke all on function public.cognitive_text_has_private_identifier(text) from public, anon, authenticated;
+revoke all on function public.cognitive_fragments_assemble_target(text[],text) from public, anon, authenticated;
 revoke all on function public.cognitive_fragments_have_sensitive_label(text[]) from public, anon, authenticated;
 revoke all on function public.cognitive_json_depth_within_limit(jsonb,integer) from public, anon, authenticated;
 revoke all on function public.cognitive_json_is_sanitized(jsonb) from public, anon, authenticated;
 grant execute on function public.cognitive_text_has_secret(text) to service_role;
 grant execute on function public.cognitive_text_has_private_identifier(text) to service_role;
+grant execute on function public.cognitive_fragments_assemble_target(text[],text) to service_role;
 grant execute on function public.cognitive_fragments_have_sensitive_label(text[]) to service_role;
 grant execute on function public.cognitive_json_depth_within_limit(jsonb,integer) to service_role;
 grant execute on function public.cognitive_json_is_sanitized(jsonb) to service_role;

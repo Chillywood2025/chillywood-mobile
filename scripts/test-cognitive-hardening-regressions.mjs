@@ -13,6 +13,7 @@ import {
   fetchResearchEvidence,
   isPrivateOrReservedNetworkAddress,
   registerIsolatedTestCapabilityLedger,
+  resolveConfinedRepositoryPath,
   ResourceLeaseRegistry,
   sha256,
   stableJson,
@@ -2508,6 +2509,131 @@ variant("R-91 nested encoded tokens remain secret while reviewed opaque values r
   assert.equal(foundation.sanitizeCognitivePayload("digest=0123456789012345").accepted, true);
 });
 
+variant("R-92 nested arbitrary-order fragments cannot compose credentials or private data", () => {
+  for (const dangerous of [
+    { first: { cl: "ient" }, middle: { se: "cr" }, last: { et: "=x" } },
+    ["cr", "ordinary", "cl", "=x", "et", "ient", "se"],
+    ["ali", "example", ".", "com", "@", "ce"],
+    ["168", ".", "1", ".", "192", ".", "1"],
+    ["+1", "23", "45", "67", "890"],
+  ]) {
+    assert.equal(foundation.sanitizeCognitivePayload(dangerous).accepted, false, JSON.stringify(dangerous));
+  }
+  for (const safe of [
+    ["authorization", "status"],
+    ["authorization", "=", "status"],
+    ["@documentation", "version 1.2"],
+    ["12345", "67890"],
+  ]) {
+    assert.equal(foundation.sanitizeCognitivePayload(safe).accepted, true, JSON.stringify(safe));
+  }
+});
+
+variant("R-93 positioned streams reject aliases, duplicates, and shared logical indices", () => {
+  const tokens = [
+    "AKIAABCDEFGHIJKLMNOP",
+    "eyJABCDEFGHIJKLMNOPQRSTUV.WXYZabcdefg.HIJKLMNOPQR",
+  ];
+  for (const token of tokens) {
+    const chunks = [token.slice(0, 8), token.slice(8, 20), token.slice(20)];
+    for (const indexKey of ["index", "ordinal"]) {
+      const payload = chunks.map((chunk, index) => ({ [indexKey]: index, chunk })).reverse();
+      assert.equal(foundation.sanitizeCognitivePayload(payload).accepted, false, `${indexKey}:${token}`);
+    }
+    const duplicates = [
+      { stream: "a", position: 0, chunk: chunks[0] },
+      { stream: "b", position: 0, chunk: chunks[1] },
+      { stream: "a", position: 1, chunk: chunks[2] },
+    ];
+    assert.equal(foundation.sanitizeCognitivePayload(duplicates).accepted, false, token);
+  }
+});
+
+variant("R-94 alternate and mixed numbered research fragments stop before DNS", async () => {
+  const token = ["client", "_secret", "=x"].join("");
+  const urls = [
+    `https://public.example.test/?part[0][chunk]=${token.slice(0, 4)}&part[1][chunk]=${token.slice(4, 10)}&part[2][chunk]=${encodeURIComponent(token.slice(10))}`,
+    `https://public.example.test/?part0=${token.slice(0, 4)}&piece1=${token.slice(4, 10)}&chunk2=${encodeURIComponent(token.slice(10))}`,
+    `https://public.example.test/?a0=cl&a1=ient&b0=se&b1=cr&c0=et&c1=${encodeURIComponent("=x")}`,
+    `https://public.example.test/?part\u0660=${token.slice(0, 4)}&part\u0661=${token.slice(4, 10)}&part\u0662=${encodeURIComponent(token.slice(10))}`,
+  ];
+  for (const url of urls) {
+    assert.ok(foundation.validateResearchUrl(url).includes("credential_bearing_url_forbidden"), url);
+    let dnsCalls = 0;
+    await assert.rejects(
+      () => validateResearchUrlWithDns(url, async () => {
+        dnsCalls += 1;
+        return [{ address: "93.184.216.34" }];
+      }),
+      /credential_bearing_url_forbidden/u,
+    );
+    assert.equal(dnsCalls, 0, url);
+  }
+});
+
+variant("R-95 additional confusables and provider policy structures fail closed", () => {
+  for (const dangerous of [
+    "aut\u04BB=x",
+    "s\u0131gnature=x",
+    "si\u0261nature=x",
+  ]) assert.equal(foundation.sanitizeCognitivePayload(dangerous).accepted, false, dangerous);
+  const envelope = (data) => foundation.createUntrustedToolEnvelope({
+    toolId: "provider",
+    callId: `provider-${hash(JSON.stringify(data)).slice(0, 16)}`,
+    taskId: "variant-task",
+    source: "provider",
+    contentType: "application/json",
+    timestamp: now.toISOString(),
+    truncated: false,
+    data,
+  });
+  for (const dangerous of [
+    { first: { pow: "er" }, middle: { us: "er" }, last: { acc: "ess" } },
+    { Effect: "Allow", NotAction: "iam:DeleteRole", Resource: "*" },
+    { apiGroups: ["*"], resources: ["*"], verbs: ["*"] },
+    { includedPermissions: ["*"] },
+    "It is false that root is disabled.",
+    "Do not keep root disabled.",
+    { first: "Root must", second: "not remain", third: "disabled." },
+  ]) assert.equal(envelope(dangerous).ownerReviewRequired, true, JSON.stringify(dangerous));
+  for (const safe of [
+    "PowerUserAccess is prohibited. No exceptions are permitted.",
+    "PowerUserAccess is prohibited and remains disabled.",
+    "PowerUserAccess is prohibited and will stay disabled.",
+    { value: "状态: active" },
+    { value: "東京: city" },
+  ]) assert.equal(envelope(safe).ownerReviewRequired, false, JSON.stringify(safe));
+});
+
+variant("R-96 credential filenames are excluded from lexical and runtime scope", () => {
+  const privateRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-credential-path-"));
+  try {
+    for (const relative of [
+      "docs/intelligence/service-account.json",
+      "docs/intelligence/firebase-adminsdk-fixture.json",
+      "docs/intelligence/.aws/credentials",
+      "docs/intelligence/.npmrc",
+      "docs/intelligence/.netrc",
+      "docs/intelligence/id_rsa",
+      "docs/intelligence/secrets.json",
+    ]) {
+      assert.ok(foundation.validateLexicalRepositoryPath(relative).includes("credential_path_forbidden"), relative);
+      assert.throws(
+        () => resolveConfinedRepositoryPath({
+          repositoryRoot: privateRoot,
+          requestedPath: relative,
+          allowedScopes: ["docs/intelligence/"],
+          allowNewFile: true,
+        }),
+        /credential_path_forbidden/u,
+        relative,
+      );
+    }
+  } finally {
+    fs.rmSync(privateRoot, { recursive: true, force: true });
+  }
+});
+
 for (const entry of variants) await entry.callback();
-assert.equal(variants.length, 91);
+assert.equal(variants.length, 96);
 process.stdout.write(`cognitive hardening independent variants ${variants.length}/${variants.length} passed\n`);

@@ -115,7 +115,7 @@ const FORBIDDEN_PATH_SEGMENTS = new Set([".git", "node_modules", "android", "ios
 const COMMAND_METACHARACTERS = /(?:[\n\r;|><`]|\$\(|\|\||&&|&\s*$)/u;
 const FORBIDDEN_ARGUMENT = /^(?:-f|--force(?:-with-lease)?|--delete|main|master|release|env|printenv|export|-x|--upload-pack)$/iu;
 const ENCODED_TRAVERSAL = /%(?:2e|2f|5c)/iu;
-const CREDENTIAL_FILE = /(?:^|\/)(?:\.env(?:\.|$)|credentials?\.json$|.*\.(?:jks|keystore|p8|p12|pem|key)$)/iu;
+const CREDENTIAL_FILE = /(?:^|\/)(?:\.env(?:\.|$)|credentials?\.json$|service-account\.json$|firebase-adminsdk-[^/]+\.json$|secrets?\.json$|\.aws\/credentials$|\.npmrc$|\.netrc$|id_(?:rsa|dsa|ecdsa|ed25519)$|.*\.(?:jks|keystore|p8|p12|pem|key)$)/iu;
 
 const decodeUntilStable = (value: string): string | null => {
   let current = value;
@@ -697,11 +697,11 @@ const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|adminis
 const PROVIDER_STANDALONE_PRIVILEGE = /(?:\b[a-z][a-z0-9-]{1,31}\s*:\s*\*|^\s*(?:poweruseraccess|wheel|no\s+(?:restrictions?|limits?)|cluster-admin|system:masters|nopasswd\s*:\s*all)\s*[.!]?\s*$)/iu;
 const PROVIDER_PRIVILEGE_TERM = String.raw`(?:poweruseraccess|wheel|cluster-admin|system:masters|nopasswd\s*:\s*all|root|superuser|admin(?:istrator)?|privileged|elevated|production|full[- ]?control|unrestricted)`;
 const PROVIDER_SAFE_DENIAL = new RegExp(
-  String.raw`^\s*(?:policy\s+)?(?:(?:strictly\s+)?(?:prohibits?|denies?|forbids?|disables?|blocks?)\s+${PROVIDER_PRIVILEGE_TERM}|${PROVIDER_PRIVILEGE_TERM}\s+(?:is|are|was|were|remains?)\s+(?:strictly\s+)?(?:prohibited|denied|forbidden|disabled|blocked|not\s+allowed)(?:\s+by\s+policy)?)\s*[.!]?\s*$`,
+  String.raw`^\s*(?:policy\s+)?(?:(?:strictly\s+)?(?:prohibits?|denies?|forbids?|disables?|blocks?)\s+${PROVIDER_PRIVILEGE_TERM}|${PROVIDER_PRIVILEGE_TERM}\s+(?:is|are|was|were|remains?)\s+(?:strictly\s+)?(?:prohibited|denied|forbidden|disabled|blocked|not\s+allowed)(?:\s+by\s+policy)?)(?:\s*(?:[.!]\s*)?(?:no\s+exceptions?\s+(?:are\s+)?permitted|and\s+(?:remains?|stays?|will\s+stay)\s+(?:disabled|blocked)))*\s*[.!]?\s*$`,
   "iu",
 );
 const PROVIDER_NEGATION_REVERSAL = new RegExp(
-  String.raw`\b${PROVIDER_PRIVILEGE_TERM}\b[\s\S]{0,80}\b(?:prohibited|denied|forbidden|disabled|blocked|not\s+allowed)\b[\s\S]{0,100}\b(?:false|incorrect|untrue|no\b|enable|grant|allow|activate|restore|use|remain(?:ing)?\s+(?:disabled|blocked)|stay(?:ing)?\s+(?:disabled|blocked))\b`,
+  String.raw`(?:\b(?:it\s+is\s+)?(?:false|incorrect|untrue)\s+that\s+${PROVIDER_PRIVILEGE_TERM}\s+(?:is|remains?)\s+(?:disabled|blocked|prohibited|denied|forbidden)\b|\b(?:do\s+not|must\s+not|should\s+not|cannot)\s+(?:keep|leave|remain|stay)\s+${PROVIDER_PRIVILEGE_TERM}?\s*(?:disabled|blocked)\b|\b${PROVIDER_PRIVILEGE_TERM}\b[\s\S]{0,80}\b(?:must|should|does)\s+not\s+(?:remain|stay)\s+(?:disabled|blocked)\b|\b${PROVIDER_PRIVILEGE_TERM}\b[\s\S]{0,80}\b(?:not\s+allowed\s+to|prohibited\s+from|forbidden\s+from)\s+(?:remain|remaining|stay|staying)\s+(?:disabled|blocked)\b|\b${PROVIDER_PRIVILEGE_TERM}\b[\s\S]{0,80}\b(?:prohibited|denied|forbidden|disabled|blocked|not\s+allowed)\b[\s\S]{0,80}\b(?:but|however|instead|actually|nevertheless)\b[\s\S]{0,60}\b(?:enable|grant|allow|activate|restore|use)\b)`,
   "iu",
 );
 
@@ -743,7 +743,13 @@ const providerPrivilegeFragmentsRequireReview = (fragments: readonly string[]): 
       .filter(Boolean),
   );
   const has = (...required: readonly string[]) => required.every((token) => tokens.has(token));
-  return has("power", "user", "access")
+  const hasPrivilegeTerm = [
+    "poweruseraccess", "administratoraccess", "cluster-admin", "root", "superuser",
+  ].some((token) => tokens.has(token));
+  return canAssembleFragmentTarget(fragments, PROVIDER_FRAGMENT_TARGETS)
+    || (hasPrivilegeTerm && has("must", "not", "remain", "disabled"))
+    || (hasPrivilegeTerm && has("do", "not", "keep", "disabled"))
+    || has("power", "user", "access")
     || has("cluster", "admin")
     || has("system", "masters")
     || has("no", "passwd", "all")
@@ -761,11 +767,7 @@ const providerCandidateRequiresReview = (candidate: string): boolean => {
   return PROVIDER_NEGATION_REVERSAL.test(reviewCandidate)
     || PROVIDER_SCOPE_EXPANSION.test(reviewCandidate)
     || PROVIDER_PRIVILEGED_SCOPE_MENTION.test(reviewCandidate)
-    || PROVIDER_STANDALONE_PRIVILEGE.test(reviewCandidate)
-    || (
-      /[^\x00-\x7f]/u.test(reviewCandidate)
-      && /(?:[:*]|\b(?:admin|root|owner|privilege|permission|scope|access)\b)/iu.test(reviewCandidate)
-    );
+    || PROVIDER_STANDALONE_PRIVILEGE.test(reviewCandidate);
 };
 
 const hasStructuredProviderPrivilege = (value: unknown, depth = 0): boolean => {
@@ -789,6 +791,16 @@ const hasStructuredProviderPrivilege = (value: unknown, depth = 0): boolean => {
     && actions.includes("*")
     && resources.includes("*")
   ) return true;
+  const notActions = [
+    ...providerScalarValues(normalized.get("notaction")),
+    ...providerScalarValues(normalized.get("notactions")),
+  ];
+  const apiGroups = providerScalarValues(normalized.get("apigroups"));
+  const verbs = providerScalarValues(normalized.get("verbs"));
+  const includedPermissions = providerScalarValues(normalized.get("includedpermissions"));
+  if (effects.includes("allow") && notActions.length > 0 && resources.includes("*")) return true;
+  if (apiGroups.includes("*") && resources.includes("*") && verbs.includes("*")) return true;
+  if (includedPermissions.includes("*")) return true;
   return entries.some(([, child]) => hasStructuredProviderPrivilege(child, depth + 1));
 };
 
@@ -866,9 +878,14 @@ export const createUntrustedToolEnvelope = (
     normalizeSecurityText(candidate),
     ...maybeDecodeEncoded(candidate),
   ]);
-  const ownerReviewRequired = providerScopeCandidates.some(providerCandidateRequiresReview)
+  const exactSafeProviderDenial = typeof value.data === "string"
+    && PROVIDER_SAFE_DENIAL.test(normalizeSecurityText(value.data));
+  const ownerReviewRequired = (!exactSafeProviderDenial && (
+    providerScopeCandidates.some(providerCandidateRequiresReview)
+    || providerCandidateRequiresReview(providerFragments.join(" "))
     || (Array.isArray(value.data) && providerCandidateRequiresReview(providerFragments.join("")))
     || providerPrivilegeFragmentsRequireReview(providerFragments)
+  ))
     || hasStructuredProviderPrivilege(value.data)
     || sanitized.categories.includes("secret_like_value");
   const boundaryTruncated = sanitized.categories.some((category) =>
@@ -1059,19 +1076,97 @@ const SENSITIVE_ASSIGNMENT_PARTS = new Set([
 const SECURITY_CONFUSABLES: Readonly<Record<string, string>> = Object.freeze({
   а: "a", в: "b", е: "e", к: "k", м: "m", н: "h", о: "o", р: "p", с: "c",
   т: "t", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", ԛ: "q", ԝ: "w",
-  ү: "y", ӏ: "l", α: "a", β: "b", ε: "e", η: "h", ι: "i", κ: "k", μ: "m",
+  ү: "y", ӏ: "l", һ: "h", α: "a", β: "b", ε: "e", η: "h", ι: "i", κ: "k", μ: "m",
   ν: "v", ο: "o", ρ: "p", τ: "t", υ: "y", χ: "x", ϲ: "c", ն: "n", օ: "o",
+  ı: "i", ɡ: "g",
 });
+const SECURITY_DECIMAL_BLOCKS = [
+  48,1632,1776,1984,2406,2534,2662,2790,2918,3046,3174,3302,3430,3558,
+  3664,3792,3872,4160,4240,6112,6160,6470,6608,6784,6800,6992,7088,7232,
+  7248,42528,43216,43264,43472,43504,43600,44016,66720,68912,69734,69872,
+  69942,70096,70384,70736,70864,71248,71360,71472,71904,72016,72784,73040,
+  73120,73552,92768,92864,93008,120782,120792,120802,120812,120822,
+  123200,123632,124144,125264,130032,
+] as const;
+const normalizeDecimalDigit = (character: string): string => {
+  const codePoint = character.codePointAt(0);
+  const block = codePoint === undefined
+    ? undefined
+    : SECURITY_DECIMAL_BLOCKS.find((start) => codePoint >= start && codePoint <= start + 9);
+  return block === undefined || codePoint === undefined ? character : String(codePoint - block);
+};
 const normalizeSecurityText = (value: string): string =>
   value
     .normalize("NFKD")
     .replace(/[\u3002\uff0e\uff61]/gu, ".")
     .replace(/[\p{Default_Ignorable_Code_Point}\p{Mark}]/gu, "")
-    .replace(/[АВЕКМНОРСТУХІЈЅԀԚԜҮӀавекмнорстухіјѕԁԛԝүӏΑΒΕΗΙΚΜΝΟΡΤΥΧϹαβεηικμνορτυχϲՆՕնօ]/gu, (character) =>
+    .replace(/\p{Nd}/gu, normalizeDecimalDigit)
+    .replace(/[АВЕКМНОРСТУХІЈЅԀԚԜҮӀҺавекмнорстухіјѕԁԛԝүӏһΑΒΕΗΙΚΜΝΟΡΤΥΧϹαβεηικμνορτυχϲՆՕնօıɡꞬ]/gu, (character) =>
       SECURITY_CONFUSABLES[character.toLowerCase()] ?? character
     );
 const normalizeSecurityLabel = (value: string): string =>
   normalizeSecurityText(value).toLowerCase().replace(/[^a-z0-9]/gu, "");
+const SENSITIVE_FRAGMENT_TARGETS = [
+  "accesskey", "accesstoken", "apikey", "auth", "authorization",
+  "authorizationtoken", "bearer", "clientsecret", "cookie", "credential",
+  "credentialkey", "credentialtoken", "key", "password", "privatekey", "pwd",
+  "refreshtoken", "secret", "servicerole", "servicekey", "servicetoken", "sig",
+  "signature", "token", "xapikey",
+] as const;
+const PROVIDER_FRAGMENT_TARGETS = [
+  "poweruseraccess", "administratoraccess", "clusteradmin", "systemmasters",
+  "nopasswdall", "fullcontrol", "breakglass", "superadmin", "rootaccess",
+  "owneraccess", "allpermissions",
+] as const;
+const SAFE_FRAGMENT_ASSIGNMENT_VALUES = new Set([
+  "active", "disabled", "enabled", "inactive", "none", "ok", "state", "status",
+  "unavailable", "unknown",
+]);
+
+const normalizedFragmentCandidates = (values: readonly string[]): string[] => {
+  const candidates: string[] = [];
+  for (const value of values.slice(0, 128)) {
+    const localCandidates = new Set<string>();
+    for (const decoded of [value, ...maybeDecodeEncoded(value)]) {
+      const normalized = normalizeSecurityText(decoded).toLowerCase().slice(0, 1_024);
+      for (const piece of normalized.split(/[^a-z0-9]+/gu)) {
+        if (piece) localCandidates.add(piece);
+      }
+      const label = normalizeSecurityLabel(normalized.split(/[:=]/u, 1)[0]);
+      if (label) localCandidates.add(label);
+    }
+    candidates.push(...localCandidates);
+  }
+  return candidates.slice(0, 512);
+};
+
+const canAssembleFragmentTarget = (
+  values: readonly string[],
+  targets: readonly string[],
+): boolean => {
+  const allFragments = normalizedFragmentCandidates(values);
+  for (const target of targets) {
+    const fragments = allFragments.filter((fragment) =>
+      fragment.length <= target.length && target.includes(fragment)
+    );
+    if (fragments.length === 0) continue;
+    const availableCharacters = fragments.join("");
+    if ([...new Set(target)].some((character) =>
+      (availableCharacters.match(new RegExp(character, "gu"))?.length ?? 0)
+      < (target.match(new RegExp(character, "gu"))?.length ?? 0)
+    )) continue;
+    const reachable = new Array<boolean>(target.length + 1).fill(false);
+    reachable[0] = true;
+    for (let position = 0; position < target.length; position += 1) {
+      if (!reachable[position]) continue;
+      for (const fragment of fragments) {
+        if (target.startsWith(fragment, position)) reachable[position + fragment.length] = true;
+      }
+    }
+    if (reachable[target.length]) return true;
+  }
+  return false;
+};
 const containsSensitiveAssignment = (value: string): boolean => {
   const normalized = normalizeSecurityText(value);
   for (const match of normalized.matchAll(/([^?&=:\s]{1,256})\s*[:=]/gu)) {
@@ -1215,41 +1310,62 @@ const boundedFragmentReconstructions = (values: readonly string[]): string[] => 
     candidates.add([...decodedFragments].reverse().join(""));
   }
   const normalizedFragments = decodedFragments.map(normalizeSecurityLabel);
-  const fragmentSet = new Set(normalizedFragments);
   const hasAssignment = decodedFragments.some((value) => /[:=]/u.test(normalizeSecurityText(value)));
-  const exactSensitiveLabel = normalizedFragments.some((label) =>
-    SENSITIVE_ASSIGNMENT_LABELS.has(label)
-    || SENSITIVE_ASSIGNMENT_PARTS.has(label)
+  const assignmentValues = decodedFragments.flatMap((value) => {
+    const normalized = normalizeSecurityText(value).toLowerCase();
+    const assignment = normalized.search(/[:=]/u);
+    return assignment < 0
+      ? []
+      : [normalizeSecurityLabel(normalized.slice(assignment + 1))].filter(Boolean);
+  });
+  const standaloneValues = normalizedFragments.filter((label) =>
+    label
+    && !SENSITIVE_ASSIGNMENT_LABELS.has(label)
+    && !SENSITIVE_ASSIGNMENT_PARTS.has(label)
+    && !SAFE_FRAGMENT_ASSIGNMENT_VALUES.has(label)
+    && ![
+      "client", "service", "access", "refresh", "api", "private",
+      "first", "middle", "last", "label", "value", "name", "type",
+    ].includes(label)
   );
-  const compoundSensitiveLabel = [
-    ["client", "secret"],
-    ["service", "role"],
-    ["service", "key"],
-    ["service", "token"],
-    ["access", "token"],
-    ["access", "key"],
-    ["refresh", "token"],
-    ["api", "key"],
-    ["private", "key"],
-    ["authorization", "token"],
-    ["authorization", "key"],
-  ].some(([left, right]) => fragmentSet.has(left) && fragmentSet.has(right));
-  if (hasAssignment && (exactSensitiveLabel || compoundSensitiveLabel)) {
+  const hasUnsafeAssignmentValue = assignmentValues.some((value) =>
+    !SAFE_FRAGMENT_ASSIGNMENT_VALUES.has(value)
+  ) || (assignmentValues.length === 0 && standaloneValues.length > 0);
+  const assembledSensitiveLabel = canAssembleFragmentTarget(
+    decodedFragments,
+    SENSITIVE_FRAGMENT_TARGETS,
+  );
+  if (hasAssignment && !hasUnsafeAssignmentValue && assembledSensitiveLabel) {
+    candidates.clear();
+    for (const value of bounded) candidates.add(value);
+  }
+  if (
+    (hasAssignment ? hasUnsafeAssignmentValue : standaloneValues.length > 0)
+    && assembledSensitiveLabel
+  ) {
     candidates.add("secret=fragment_reconstruction");
   }
-  const numericFragments = decodedFragments.filter((value) =>
-    /^\p{Nd}{3,}[a-z]?$/iu.test(normalizeSecurityText(value))
+  const phoneFragments = decodedFragments
+    .map((value) => normalizeSecurityText(value).trim())
+    .filter((value) => {
+      const digits = value.replace(/[^\p{Nd}]/gu, "");
+      const nonDigits = value.replace(/[\p{Nd}\s()+.-]/gu, "");
+      return digits.length > 0 && digits.length <= 8 && nonDigits.length <= 2;
+    });
+  const phoneDigitCount = phoneFragments.reduce(
+    (count, value) => count + (value.match(/\p{Nd}/gu)?.length ?? 0),
+    0,
   );
-  if (numericFragments.length >= 3
-    && numericFragments.reduce(
-      (count, value) => count + (normalizeSecurityText(value).match(/\p{Nd}/gu)?.length ?? 0),
-      0,
-    ) >= 10) {
+  const safeFiveByFiveCounters = phoneFragments.length === 2
+    && phoneFragments.every((value) => /^\p{Nd}{5}$/u.test(value));
+  if (!safeFiveByFiveCounters && phoneFragments.length >= 2 && phoneDigitCount >= 10 && phoneDigitCount <= 15) {
     candidates.add("private@example.invalid");
   }
-  const hasStandaloneAt = decodedFragments.some((value) =>
-    normalizeSecurityText(value).trim() === "@"
+  const normalizedTextFragments = decodedFragments.map((value) =>
+    normalizeSecurityText(value).trim()
   );
+  const hasStandaloneAt = normalizedTextFragments.some((value) => value === "@");
+  const hasAnyAt = normalizedTextFragments.some((value) => value.includes("@"));
   const hasLocalPart = decodedFragments.some((value) =>
     /^[\p{L}\p{N}._%+-]{1,64}$/u.test(normalizeSecurityText(value))
     && !/^\p{Nd}+$/u.test(normalizeSecurityText(value))
@@ -1258,12 +1374,23 @@ const boundedFragmentReconstructions = (values: readonly string[]): string[] => 
     /^[\p{L}\p{N}-]{1,63}(?:\.[\p{L}\p{N}-]{1,63})*\.[\p{L}]{2,}$/u
       .test(normalizeSecurityText(value))
   );
-  if (hasStandaloneAt && hasLocalPart && hasDomain) candidates.add("private@example.invalid");
-  const dotMarkers = decodedFragments.filter((value) => normalizeSecurityText(value).trim() === ".").length;
-  const ipv4Numbers = decodedFragments.filter((value) =>
-    /^\p{Nd}{1,3}$/u.test(normalizeSecurityText(value).trim())
-  ).length;
-  if (dotMarkers >= 3 && ipv4Numbers >= 4) candidates.add("192.0.2.1");
+  const hasTldFragment = normalizedTextFragments.some((value) =>
+    /(?:^|\.)\p{L}{2,63}$/u.test(value)
+  );
+  const dotCount = normalizedTextFragments.reduce(
+    (count, value) => count + (value.match(/\./gu)?.length ?? 0),
+    0,
+  );
+  if (
+    (hasStandaloneAt && hasLocalPart && (hasDomain || hasTldFragment || dotCount > 0))
+    || (hasAnyAt && hasTldFragment && hasLocalPart)
+  ) candidates.add("private@example.invalid");
+  const ipv4Numbers = normalizedTextFragments.flatMap((value) =>
+    [...value.matchAll(/(?:^|[^0-9])([0-9]{1,3})(?=$|[^0-9])/gu)]
+      .map((match) => Number(match[1]))
+      .filter((number) => number >= 0 && number <= 255)
+  );
+  if (dotCount >= 3 && ipv4Numbers.length >= 4) candidates.add("192.0.2.1");
   return [...candidates];
 };
 
@@ -1278,16 +1405,20 @@ const collectPositionedFragments = (
     return output;
   }
   const record = value as Record<string, unknown>;
-  const position = record.position;
-  const fragment = record.chunk ?? record.fragment ?? record.value;
+  const position = record.position ?? record.index ?? record.ordinal;
+  const fragment = record.chunk ?? record.fragment ?? record.piece ?? record.part
+    ?? (record.position !== undefined ? record.value : undefined);
+  const normalizedPosition = typeof position === "number"
+    ? position
+    : Number(normalizeSecurityText(String(position ?? "")));
   if (
-    Number.isSafeInteger(position)
-    && Number(position) >= 0
-    && Number(position) < 128
+    Number.isSafeInteger(normalizedPosition)
+    && normalizedPosition >= 0
+    && normalizedPosition < 128
     && typeof fragment === "string"
     && fragment.length <= 1_024
   ) {
-    output.push({ position: Number(position), value: fragment });
+    output.push({ position: normalizedPosition, value: fragment });
   }
   for (const child of Object.values(record).slice(0, 64)) collectPositionedFragments(child, output, depth + 1);
   return output;
@@ -1387,22 +1518,13 @@ export const sanitizeCognitivePayload = (
   const positionedFragments = collectPositionedFragments(input)
     .sort((left, right) => left.position - right.position);
   const positionedValues = positionedFragments.map((entry) => entry.value);
-  const safeTwoNumericStringValues = aggregateStringValues.length === 2
-    && aggregateStringValues.every((entry) => /^\p{Nd}{1,8}$/u.test(normalizeSecurityText(entry)));
+  if (
+    positionedFragments.length > 1
+    && new Set(positionedFragments.map((entry) => entry.position)).size !== positionedFragments.length
+  ) categories.add("ambiguous_fragment_position");
   const aggregateCandidates = [
-    aggregatePieces.join("="),
-    aggregatePieces.join(":"),
-    aggregateStringValues.join("="),
-    aggregateStringValues.join(":"),
-    aggregateStringValues.join("_"),
-    ...(safeTwoNumericStringValues ? [] : [
-      aggregateStringValues.join("-"),
-      aggregateStringValues.join(" "),
-    ]),
-    aggregateKeys.join(""),
-    aggregateKeys.join("="),
-    aggregateKeys.join(":"),
     ...aggregatePieces,
+    ...aggregateKeys,
     ...boundedFragmentReconstructions(aggregatePieces),
     ...boundedFragmentReconstructions(aggregateStringValues),
     ...boundedFragmentReconstructions(positionedValues),
@@ -1411,7 +1533,7 @@ export const sanitizeCognitivePayload = (
   if (aggregateCandidates.some(containsPrivateIdentifier)) categories.add("private_identifier");
   if (aggregateCandidates.some(containsPromptInjection)) categories.add("untrusted_instruction");
   if (totalBytes > limits.maxBytes) categories.add("maximum_total_bytes_exceeded");
-  const rejected = ["secret_like_value", "secret_key", "private_identifier", "prototype_pollution_key", "non_plain_object", "maximum_depth_exceeded", "maximum_total_bytes_exceeded", "circular_reference"];
+  const rejected = ["secret_like_value", "secret_key", "private_identifier", "prototype_pollution_key", "non_plain_object", "maximum_depth_exceeded", "maximum_total_bytes_exceeded", "circular_reference", "ambiguous_fragment_position"];
   return { accepted: !rejected.some((category) => categories.has(category)), value, categories: [...categories].sort(), totalBytes };
 };
 
@@ -1662,16 +1784,34 @@ export const isPrivateOrReservedAddress = (address: string): boolean => {
 
 const reconstructNamedUrlFragments = (searchParams: URLSearchParams): string[] => {
   const groups = new Map<string, Array<{ position: number; value: string }>>();
+  const allIndexed: Array<{ position: number; value: string }> = [];
   for (const [key, value] of searchParams.entries()) {
-    const match = key.match(/^(.{1,64}?)(?:\[|[_-]?)([0-9]{1,3})\]?$/u);
+    const normalizedKey = normalizeSecurityText(key).slice(0, 128);
+    const match = normalizedKey.match(/^(.*?)([0-9]{1,3})(.*)$/u);
     if (!match) continue;
     const position = Number(match[2]);
     if (!Number.isSafeInteger(position) || position < 0 || position >= 128) continue;
-    const group = groups.get(match[1]) ?? [];
-    group.push({ position, value: value.slice(0, 1_024) });
-    groups.set(match[1], group);
+    const fragment = { position, value: value.slice(0, 1_024) };
+    const groupKey = normalizeSecurityLabel(`${match[1]}${match[3]}`) || "indexed";
+    const group = groups.get(groupKey) ?? [];
+    group.push(fragment);
+    groups.set(groupKey, group);
+    allIndexed.push(fragment);
   }
   const candidates: string[] = [];
+  if (allIndexed.length >= 2) {
+    const positions = new Set(allIndexed.map((fragment) => fragment.position));
+    if (positions.size !== allIndexed.length) {
+      candidates.push("secret=ambiguous_fragment_stream");
+    } else {
+      candidates.push(...boundedFragmentReconstructions(allIndexed.map((fragment) => fragment.value)));
+      candidates.push(...boundedFragmentReconstructions(
+        [...allIndexed]
+          .sort((left, right) => left.position - right.position)
+          .map((fragment) => fragment.value),
+      ));
+    }
+  }
   for (const fragments of groups.values()) {
     if (fragments.length < 2 || fragments.length > 128) continue;
     const positions = new Set(fragments.map((fragment) => fragment.position));

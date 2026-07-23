@@ -236,3 +236,25 @@ reports zero P0/P1.
 No remediation grants production execution, scheduler, deployment, release,
 money, rights, auth/RLS, role, moderation, provider-product or self-approval
 authority.
+
+The fourteenth exact-head review of
+`6821a7921e19596ef18c331a0bb9d6d2e52620d0` again reported zero P0 and
+correctly withheld Reviewer D. It independently reproduced arbitrary-order,
+duplicate, indexed, ordinal, and filler-bearing credential fragments; split
+phone/email/IP components; alternate and mixed-prefix numbered research-query
+fragments; three additional Unicode confusables; nested provider-policy
+composition; structured AWS/Kubernetes/GCP broad-authority forms; common
+credential-filename omissions; and a large-whitespace SQL availability bound.
+
+The correction uses one bounded dynamic target-assembly contract in source and
+PostgreSQL, treats object keys and string leaves as a single detection envelope,
+rejects ambiguous positioned streams, normalizes every reviewed Unicode decimal
+index, reconstructs both global and grouped research-query streams before DNS,
+recognizes structural private-identifier fragments, and adds exact structured
+provider-policy checks. It also extends executor credential-file denial and
+rejects retained cognitive text above 4,000 bytes before expensive inspection.
+Authored executable evidence now reports 96/96 independent variants, 40/40
+canonical attacks, 232/232 focused cognitive pgTAP assertions, and 517/517
+assertions across the complete local database suite. These remain authored
+implementation results only; every fourteenth-review item stays independently
+open until a fresh exact-head review reports zero P0/P1.
