@@ -27,6 +27,7 @@ const validDeploymentStates = new Set([
   "non_autonomous",
   "manual_only",
   "security_hardening_in_progress",
+  "collective_governance_in_progress",
   "security_hardened_scaffold_not_deployed",
 ]);
 const requiredFields = [

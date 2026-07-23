@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION } from "../../_lib/cognitivePlatformFoundation";
+import { supabase } from "../../_lib/supabase";
 
 const REQUIRED_READ_PERMISSION = "admin.cognitive.read";
 
-const STATUS_ROWS = [
+const SOURCE_STATUS_ROWS = [
   ["System", "product_intelligence_operator"],
   ["Activation", "Off"],
   ["Deployment", "Security hardening in progress · not deployed"],
@@ -17,13 +18,66 @@ const STATUS_ROWS = [
   ["Evaluator", "No live evaluator"],
 ] as const;
 
-export const CognitiveControlCenterFoundation = () => (
+type LiveCognitiveStatus = {
+  deploymentState: string;
+  schedulerState: string;
+  switches: Record<string, boolean>;
+  pendingApprovalCount: number;
+  latestDecisionCount: number;
+  emergencyStop: boolean;
+};
+
+export const CognitiveControlCenterFoundation = () => {
+  const [liveStatus, setLiveStatus] = useState<LiveCognitiveStatus | null>(null);
+  const [readbackState, setReadbackState] = useState<"loading" | "live" | "source_only">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    const read = async () => {
+      const { data, error } = await supabase.functions.invoke(
+        "cognitive-governance-control",
+        { body: { action: "status" } },
+      );
+      if (cancelled) return;
+      if (error || data?.ok !== true || !data.status) {
+        setReadbackState("source_only");
+        return;
+      }
+      setLiveStatus(data.status as LiveCognitiveStatus);
+      setReadbackState("live");
+    };
+    void read();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const statusRows = useMemo(() => {
+    if (!liveStatus) return SOURCE_STATUS_ROWS;
+    return [
+      ["System", "product_intelligence_operator"],
+      ["Readback", "Live backend status"],
+      ["Deployment", liveStatus.deploymentState],
+      ["Scheduler", liveStatus.schedulerState],
+      ["Emergency stop", liveStatus.emergencyStop ? "Active" : "Inactive"],
+      ["Pending approvals", String(liveStatus.pendingApprovalCount)],
+      ["Decision manifests", String(liveStatus.latestDecisionCount)],
+      ["Level 2 repairs", "Off"],
+      ["User-derived memory", "Off"],
+    ] as const;
+  }, [liveStatus]);
+
+  return (
   <View testID="admin-cognitive-control-center" style={styles.surface}>
     <View style={styles.hero}>
-      <Text style={styles.kicker}>SOURCE MANIFEST · READ ONLY</Text>
+      <Text style={styles.kicker}>
+        {readbackState === "live" ? "LIVE BACKEND READBACK · READ ONLY" : "SOURCE MANIFEST · READ ONLY"}
+      </Text>
       <Text style={styles.title}>Cognitive Intelligence Foundation</Text>
       <Text style={styles.body}>
-        This source manifest describes an undeployed scaffold. It is not live system status and has no memory, research, evaluator, scheduler, credentials, or production authority.
+        {readbackState === "live"
+          ? "Backend-authoritative cognitive status. This screen exposes no credential and grants no execution authority."
+          : "This source manifest describes an undeployed scaffold. It is not live system status and has no memory, research, evaluator, scheduler, credentials, or production authority."}
       </Text>
       <Text style={styles.muted}>
         Access contract: Owner, Super Admin, or a scoped Admin with {REQUIRED_READ_PERMISSION}. The future backend remains authoritative.
@@ -36,7 +90,7 @@ export const CognitiveControlCenterFoundation = () => (
     </View>
 
     <View style={styles.grid}>
-      {STATUS_ROWS.map(([label, value]) => (
+      {statusRows.map(([label, value]) => (
         <View key={label} style={styles.statusRow}>
           <Text style={styles.statusLabel}>{label}</Text>
           <Text style={styles.statusValue}>{value}</Text>
@@ -79,7 +133,8 @@ export const CognitiveControlCenterFoundation = () => (
       </Text>
     </View>
   </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   surface: { gap: 14 },

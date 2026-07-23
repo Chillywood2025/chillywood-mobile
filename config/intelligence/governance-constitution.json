@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "constitutionId": "chillywood-cognitive-governance-v1",
+  "activationDelayHours": 24,
+  "amendmentAuthority": "owner_only_after_independent_review",
+  "selfAmendment": false,
+  "selfApproval": false,
+  "ownerAuthorityPreserved": true,
+  "mandatoryVetoDomains": [
+    "security",
+    "privacy",
+    "auth_rls",
+    "money",
+    "user_rights",
+    "public_release",
+    "legal",
+    "retention"
+  ],
+  "permanentlyOwnerControlled": [
+    "merge",
+    "public_release",
+    "store_submission",
+    "ota_publish",
+    "ota_rollback",
+    "money_movement",
+    "payout",
+    "transfer",
+    "withdrawal",
+    "cash_out",
+    "auth_rls_mutation",
+    "role_mutation",
+    "user_right_mutation",
+    "moderation_enforcement",
+    "legal_declaration",
+    "provider_product_mutation"
+  ],
+  "minimumCriticRoles": [
+    "security_privacy",
+    "reliability_release",
+    "product_user_experience",
+    "adversarial_red_team"
+  ],
+  "defaultApprovalHours": 24,
+  "capabilityMinimumMinutes": 15,
+  "capabilityMaximumMinutes": 60,
+  "highRiskMaximumExecutions": 1,
+  "level2ProductionRepairsEnabled": false
+}

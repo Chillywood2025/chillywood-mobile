@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "systemId": "product_intelligence_operator",
-  "deploymentState": "security_hardening_in_progress",
+  "deploymentState": "collective_governance_in_progress",
   "activationMode": "off",
   "scheduler": "none",
   "supportedPlatforms": ["shared", "ios", "android", "web"],
@@ -40,6 +40,22 @@
     "productionCredentials": "none",
     "productionScheduler": "none"
   },
+  "governanceComponents": [
+    {"id": "collective_intelligence_council", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "deliberation_orchestrator", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "governance_constitution_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "decision_manifest_authority", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "quorum_and_veto_engine", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "dissent_and_minority_report_registry", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "stakeholder_impact_panel", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "model_independence_guard", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "governance_audit_ledger", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "appeal_and_reconsideration_service", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "outcome_calibration_service", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "governance_emergency_control", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "owner_approval_lifecycle_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "approval_revalidation_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"}
+  ],
   "components": [
     {
       "id": "rachi_cognitive_orchestration",

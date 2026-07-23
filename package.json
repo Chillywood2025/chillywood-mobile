@@ -532,6 +532,9 @@
     "test:cognitive-red-team": "node ./scripts/test-cognitive-hardening.mjs all",
     "test:cognitive-hardening-regressions": "node ./scripts/test-cognitive-hardening-regressions.mjs",
     "test:cognitive-runtime-authority-regressions": "node ./scripts/test-cognitive-runtime-authority-regressions.mjs",
+    "guard:cognitive-policy-parity": "node ./scripts/test-cognitive-collective-governance.mjs",
+    "test:cognitive-collective-governance": "node ./scripts/test-cognitive-collective-governance.mjs",
+    "test:cognitive-governance-adversarial": "node ./scripts/test-cognitive-governance-adversarial.mjs",
     "test:cognitive-db-concurrency": "node ./scripts/test-cognitive-db-concurrency.mjs",
     "test:cognitive-budget-cancellation": "node ./scripts/test-cognitive-hardening.mjs budget",
     "test:cognitive-conflict-rollback": "node ./scripts/test-cognitive-hardening.mjs conflict",
@@ -625,6 +628,9 @@
         ]
       }
     }
+  },
+  "overrides": {
+    "postcss": "8.5.22"
   },
   "private": true
 }

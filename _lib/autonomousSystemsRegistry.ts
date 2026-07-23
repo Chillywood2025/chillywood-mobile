@@ -201,6 +201,23 @@ export const IOS_AUTONOMOUS_PLATFORM_ADAPTERS: readonly AutonomousPlatformAdapte
   },
 ] as const;
 
+const COGNITIVE_GOVERNANCE_COMPONENT_IDS = [
+  "collective_intelligence_council",
+  "deliberation_orchestrator",
+  "governance_constitution_service",
+  "decision_manifest_authority",
+  "quorum_and_veto_engine",
+  "dissent_and_minority_report_registry",
+  "stakeholder_impact_panel",
+  "model_independence_guard",
+  "governance_audit_ledger",
+  "appeal_and_reconsideration_service",
+  "outcome_calibration_service",
+  "governance_emergency_control",
+  "owner_approval_lifecycle_service",
+  "approval_revalidation_service",
+] as const;
+
 const COGNITIVE_FOUNDATION_SURFACES: readonly AutonomousSystemSurface[] = [
   {
     id: "rachi_cognitive_orchestration",
@@ -337,6 +354,40 @@ const COGNITIVE_FOUNDATION_SURFACES: readonly AutonomousSystemSurface[] = [
     platformScope: "shared_budgeted_model_router",
     platformContextRequired: false,
   },
+  ...COGNITIVE_GOVERNANCE_COMPONENT_IDS.map((id) => ({
+    id,
+    approvalLevel: 2 as const,
+    allowedReadScope: [
+      "immutable sanitized cognitive evidence packets",
+      "versioned governance constitution",
+      "bounded council assessments, dissent, approvals, receipts, and outcomes",
+    ],
+    allowedWriteScope: [
+      "undeployed governance state and immutable audit records",
+      "source-manifest status evidence",
+    ],
+    forbiddenScope: [
+      "self approval",
+      "direct tool execution by council roles",
+      "merge",
+      "public release",
+      "money movement",
+      "user rights",
+      "auth/RLS mutation",
+      "moderation enforcement",
+      "provider product mutation",
+    ],
+    proofScript: "test:cognitive-collective-governance",
+    guardScript: "guard:cognitive-policy-parity",
+    rollbackBehavior:
+      "revoke scoped capabilities, release leases, preserve immutable evidence, and require a new plan",
+    killSwitchOrFallback:
+      "component remains undeployed and off until the reviewed canary branch explicitly activates it",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared", "ios", "android", "web"] as const,
+    platformScope: "shared_collective_governance_control_plane",
+    platformContextRequired: true,
+  })),
 ] as const;
 
 export const AUTONOMOUS_SYSTEMS_REGISTRY = [

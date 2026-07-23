@@ -189,6 +189,9 @@ jobs:
           npm run test:cognitive-red-team
           npm run test:cognitive-hardening-regressions
           npm run test:cognitive-runtime-authority-regressions
+          npm run guard:cognitive-policy-parity
+          npm run test:cognitive-collective-governance
+          npm run test:cognitive-governance-adversarial
           npm run guard:cognitive-admin-truth
           npm run guard:cognitive-ci-supply-chain
           npm run guard:android-native-runtime-compatibility
