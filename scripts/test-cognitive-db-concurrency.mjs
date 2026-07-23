@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 const run = (args, input = "") => {
   const result = spawnSync("docker", args, {
@@ -12,6 +13,13 @@ const run = (args, input = "") => {
   return result.stdout.trim();
 };
 
+const requestedContainer = process.argv[2]
+  ?? `supabase_db_${path.basename(process.cwd()).replace(/[^A-Za-z0-9_.-]/gu, "_")}`;
+assert.match(
+  requestedContainer,
+  /^supabase_db_[A-Za-z0-9_.-]{1,200}$/u,
+  "explicit Supabase database container name is invalid",
+);
 const containers = run([
   "ps",
   "--filter",
@@ -21,8 +29,11 @@ const containers = run([
 ])
   .split("\n")
   .filter((name) => name.startsWith("supabase_db_"));
-assert.equal(containers.length, 1, "the project-local Supabase database must be running");
-const container = containers[0];
+assert.ok(
+  containers.includes(requestedContainer),
+  `the selected project-local Supabase database must be running (${requestedContainer})`,
+);
+const container = requestedContainer;
 const psqlArgs = [
   "exec", "-i", container, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
   "-U", "postgres", "-d", "postgres",

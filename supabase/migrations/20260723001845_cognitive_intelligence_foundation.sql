@@ -61,26 +61,55 @@ as $$
 declare
   candidate text := coalesce(payload, '');
   decoded text;
+  encoded text;
   normalized text;
+  previous text;
+  octet integer;
+  position_value integer;
   depth integer;
 begin
-  for depth in 0..2 loop
+  for depth in 0..3 loop
+    previous := candidate;
+    decoded := '';
+    position_value := 1;
+    while position_value <= length(candidate) loop
+      if substring(candidate from position_value for 1) = '%'
+         and substring(candidate from position_value + 1 for 2) ~ '^[0-9A-Fa-f]{2}$' then
+        begin
+          octet := get_byte(decode(substring(candidate from position_value + 1 for 2), 'hex'), 0);
+          decoded := decoded || chr(octet);
+          position_value := position_value + 3;
+        exception when others then
+          decoded := decoded || substring(candidate from position_value for 1);
+          position_value := position_value + 1;
+        end;
+      else
+        decoded := decoded || substring(candidate from position_value for 1);
+        position_value := position_value + 1;
+      end if;
+    end loop;
+    candidate := decoded;
     normalized := lower(regexp_replace(candidate, '[^a-zA-Z0-9_=:/.?&+-]', '', 'g'));
     if candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
        or normalized ~* '(password|secret|token|authorization|cookie|service_?role|private_?key|api_?key|access_?key|refresh_?token)[:=][^,}]{4,}'
        or candidate ~* '\b(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}\b'
+       or candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
        or candidate ~* '\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b'
        or candidate ~* 'https?://[^/@:[:space:]]+:[^/@[:space:]]+@'
        or candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)=' then
       return true;
     end if;
-    exit when candidate !~ '^[A-Za-z0-9+/]{16,}={0,2}$';
-    begin
-      decoded := convert_from(decode(candidate, 'base64'), 'UTF8');
-      candidate := decoded;
-    exception when others then
-      exit;
-    end;
+    if candidate ~ '^[A-Za-z0-9+/_-]{12,}={0,2}$' then
+      begin
+        encoded := translate(candidate, '-_', '+/');
+        encoded := encoded || repeat('=', (4 - (length(encoded) % 4)) % 4);
+        decoded := convert_from(decode(encoded, 'base64'), 'UTF8');
+        candidate := decoded;
+      exception when others then
+        null;
+      end;
+    end if;
+    exit when candidate = previous;
   end loop;
   return false;
 end;
@@ -401,9 +430,9 @@ create function public.cognitive_accept_tool_result(
   p_call_id text,
   p_opaque_bearer text,
   p_opaque_nonce text,
-  p_result_envelope_hash text
+  p_result_envelope jsonb
 )
-returns boolean
+returns text
 language plpgsql
 security definer
 set search_path = ''
@@ -412,6 +441,7 @@ declare
   capability public.cognitive_capabilities%rowtype;
   task_value public.intelligence_tasks%rowtype;
   emergency_status text;
+  result_envelope_hash text;
 begin
   perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into capability from public.cognitive_capabilities
@@ -431,7 +461,9 @@ begin
      or task_value.cancelled_at is not null or task_value.quarantined_at is not null
      or statement_timestamp() >= task_value.deadman_at
      or coalesce(emergency_status,'emergency_stop') <> 'active'
-     or p_result_envelope_hash !~ '^[a-f0-9]{64}$'
+     or p_result_envelope is null
+     or pg_column_size(p_result_envelope) > 65536
+     or not public.cognitive_json_is_sanitized(p_result_envelope)
      or not exists (
        select 1 from public.cognitive_capability_events event
        where event.capability_id=capability.id and event.call_id=p_call_id
@@ -443,12 +475,16 @@ begin
      ) then
     raise exception 'tool_result_postflight_rejected' using errcode='P0001';
   end if;
-  return true;
+  result_envelope_hash := encode(
+    extensions.digest(convert_to(p_result_envelope::text,'UTF8'),'sha256'),
+    'hex'
+  );
+  return result_envelope_hash;
 end;
 $$;
-revoke all on function public.cognitive_accept_tool_result(text,text,text,text,text)
+revoke all on function public.cognitive_accept_tool_result(text,text,text,text,jsonb)
   from public, anon, authenticated;
-grant execute on function public.cognitive_accept_tool_result(text,text,text,text,text)
+grant execute on function public.cognitive_accept_tool_result(text,text,text,text,jsonb)
   to service_role;
 
 create function public.cognitive_revoke_capability(

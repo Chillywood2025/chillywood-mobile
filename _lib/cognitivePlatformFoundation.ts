@@ -368,13 +368,6 @@ const capabilityScopeIsValid = (scope: unknown): scope is string => {
   return validateLexicalRepositoryPath(candidate).length === 0;
 };
 
-export type CognitiveCapabilityProofVerifier = (
-  opaqueBearer: string,
-  opaqueNonce: string,
-  expectedBearerHash: string,
-  expectedNonceHash: string,
-) => boolean;
-
 export const authorizeCapabilityUse = (
   capability: CognitiveCapability,
   use: CognitiveCapabilityUse,
@@ -427,11 +420,6 @@ export class CognitiveCapabilityLedger {
   readonly #capabilities = new Map<string, CognitiveCapability>();
   readonly #usedCallIds = new Set<string>();
   readonly #events: CognitiveCapabilityEvent[] = [];
-  readonly #verifyProof: CognitiveCapabilityProofVerifier;
-
-  constructor(verifyProof: CognitiveCapabilityProofVerifier) {
-    this.#verifyProof = verifyProof;
-  }
 
   capabilitySnapshot(capabilityId: string): Readonly<CognitiveCapability> | null {
     const capability = this.#capabilities.get(capabilityId);
@@ -521,12 +509,8 @@ export class CognitiveCapabilityLedger {
   consume(capabilityId: string, use: CognitiveCapabilityUse, gate: CognitiveRuntimeGate): CognitiveCapabilityEvent {
     const capability = this.#capabilities.get(capabilityId);
     if (!capability) throw new Error("capability_missing");
-    const proofVerified = this.#verifyProof(
-      use.opaqueBearer,
-      use.opaqueNonce,
-      capability.bearerHash,
-      capability.nonceHash,
-    );
+    const proofVerified = cognitiveSha256(use.opaqueBearer) === capability.bearerHash
+      && cognitiveSha256(use.opaqueNonce) === capability.nonceHash;
     const blockers = [...authorizeCapabilityUse(capability, use, gate, proofVerified)];
     if (this.#usedCallIds.has(use.callId)) blockers.push("capability_replay");
     if (blockers.length) {
@@ -555,12 +539,8 @@ export class CognitiveCapabilityLedger {
     const capability = this.#capabilities.get(capabilityId);
     if (!capability) return ["capability_missing"];
     if (!this.#usedCallIds.has(use.callId)) return ["capability_call_not_consumed"];
-    const proofVerified = this.#verifyProof(
-      use.opaqueBearer,
-      use.opaqueNonce,
-      capability.bearerHash,
-      capability.nonceHash,
-    );
+    const proofVerified = cognitiveSha256(use.opaqueBearer) === capability.bearerHash
+      && cognitiveSha256(use.opaqueNonce) === capability.nonceHash;
     const originalStatus = capability.status;
     if (originalStatus === "exhausted" && capability.consumedAt) capability.status = "active";
     const blockers = authorizeCapabilityUse(capability, use, gate, proofVerified)
@@ -696,7 +676,22 @@ export type CognitiveToolResultEnvelope = {
   data: unknown;
 };
 
-const PROVIDER_SCOPE_EXPANSION = /\b(?:grants?|provides?|requires?|requests?|needs?|expands?|broadens?|elevates?)\b[\s\S]{0,80}\b(?:administrator|admin|production|credentials?|permissions?|privileges?|scope|access)\b/iu;
+const PROVIDER_SCOPE_EXPANSION = /\b(?:grants?|provides?|requires?|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?)\b[\s\S]{0,80}\b(?:owner(?:\s+role)?|super[- ]?admin|administrator|admin|production|credentials?|permissions?|privileges?|scope|access|roles?)\b/iu;
+
+const canonicalCognitiveJson = (value: unknown): string => {
+  const normalize = (entry: unknown): unknown => {
+    if (Array.isArray(entry)) return entry.map(normalize);
+    if (entry && typeof entry === "object") {
+      return Object.fromEntries(
+        Object.keys(entry as Record<string, unknown>)
+          .sort()
+          .map((key) => [key, normalize((entry as Record<string, unknown>)[key])]),
+      );
+    }
+    return entry;
+  };
+  return JSON.stringify(normalize(value));
+};
 
 export const createUntrustedToolEnvelope = (
   value: {
@@ -709,7 +704,6 @@ export const createUntrustedToolEnvelope = (
     truncated: boolean;
     data: unknown;
   },
-  hashSanitizedValue: (value: unknown) => string,
 ): CognitiveToolResultEnvelope => {
   if (
     !validIdentifier(value.toolId)
@@ -730,12 +724,11 @@ export const createUntrustedToolEnvelope = (
     && !sanitized.categories.includes("untrusted_instruction")
     && !ownerReviewRequired;
   const retained = operationallySafe ? sanitized.value : null;
-  const dataHash = hashSanitizedValue({
+  const dataHash = cognitiveSha256(canonicalCognitiveJson({
     accepted: operationallySafe,
     categories: sanitized.categories,
     value: retained,
-  });
-  if (!validHash(dataHash)) throw new Error("tool_envelope_hash_invalid");
+  }));
   return {
     toolId: value.toolId,
     callId: value.callId,
@@ -764,8 +757,79 @@ export type StrictModelDocument = {
 const assertBoundedStringArray = (value: unknown, maxItems: number, maxLength: number): value is string[] =>
   Array.isArray(value) && value.length <= maxItems && value.every((entry) => typeof entry === "string" && entry.length <= maxLength);
 
+const hasDuplicateJsonObjectKeys = (raw: string): boolean => {
+  const stack: { type: "object" | "array"; keys?: Set<string>; expectingKey?: boolean }[] = [];
+  let index = 0;
+  while (index < raw.length) {
+    const character = raw[index];
+    if (/\s/u.test(character)) {
+      index += 1;
+      continue;
+    }
+    if (character === "{") {
+      stack.push({ type: "object", keys: new Set(), expectingKey: true });
+      index += 1;
+      continue;
+    }
+    if (character === "[") {
+      stack.push({ type: "array" });
+      index += 1;
+      continue;
+    }
+    if (character === "}" || character === "]") {
+      stack.pop();
+      index += 1;
+      continue;
+    }
+    if (character === ",") {
+      const current = stack.at(-1);
+      if (current?.type === "object") current.expectingKey = true;
+      index += 1;
+      continue;
+    }
+    if (character !== "\"") {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    index += 1;
+    let escaped = false;
+    while (index < raw.length) {
+      const current = raw[index];
+      index += 1;
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (current === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (current === "\"") break;
+    }
+    const context = stack.at(-1);
+    if (context?.type === "object" && context.expectingKey) {
+      let cursor = index;
+      while (cursor < raw.length && /\s/u.test(raw[cursor])) cursor += 1;
+      if (raw[cursor] === ":") {
+        let key: string;
+        try {
+          key = JSON.parse(raw.slice(start, index)) as string;
+        } catch {
+          return true;
+        }
+        if (context.keys?.has(key)) return true;
+        context.keys?.add(key);
+        context.expectingKey = false;
+      }
+    }
+  }
+  return false;
+};
+
 export const parseStrictModelDocument = (raw: string): StrictModelDocument => {
   if (typeof raw !== "string" || raw.length > 32_000 || !raw.startsWith("{") || !raw.endsWith("}")) throw new Error("model_document_invalid");
+  if (hasDuplicateJsonObjectKeys(raw)) throw new Error("model_document_duplicate_key");
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -820,6 +884,7 @@ const SECRET_PATTERNS = [
   /\b(?:password|secret|service[_-]?role|refresh[_-]?token|access[_-]?token|authorization|cookie)\s*[:=]\s*\S+/iu,
   /\b(?:api[_-]?key|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|google[_-]?api[_-]?key)\s*[:=]\s*\S+/iu,
   /\b(?:api[_-]?key|service[_-]?role|access[_-]?token|refresh[_-]?token)[\s:=_-]*[A-Za-z0-9][A-Za-z0-9._-]{7,}\b/iu,
+  /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u,
   /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/u,
   /https:\/\/[^/\s:@]+:[^/\s@]+@/iu,
   /https?:\/\/[^\s?]+\?[^\s]*(?:token|signature|sig|key|credential)=/iu,
@@ -1051,7 +1116,8 @@ const registeredResearchAuthority = (source: CognitiveResearchSource) => {
   let hostname = "";
   try {
     const parsed = new URL(source.reference);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password) return null;
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password
+      || (parsed.port && parsed.port !== "443")) return null;
     hostname = parsed.hostname.toLowerCase().replace(/\.$/u, "");
   } catch {
     return null;
@@ -1066,7 +1132,8 @@ const registeredResearchAuthority = (source: CognitiveResearchSource) => {
 const canonicalResearchReference = (reference: string): string | null => {
   try {
     const parsed = new URL(reference);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) return null;
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash
+      || (parsed.port && parsed.port !== "443")) return null;
     parsed.hostname = parsed.hostname.toLowerCase().replace(/\.$/u, "");
     return parsed.toString();
   } catch {
@@ -1118,6 +1185,8 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
     reasons.push("claim_freshness_ceiling_exceeded");
   }
   for (const source of input.sources) {
+    if (!validIdentifier(source.id) || containsSecretLikeValue(source.id)
+      || containsPromptInjection(source.id)) reasons.push("source_id_invalid");
     if (!authorityBySource.get(source.id)) reasons.push("source_authority_unverified");
     if (source.trustedForTools !== false) reasons.push("source_must_remain_untrusted");
     if (source.primary && !authoritativeTypes.includes(source.sourceType)) reasons.push("primary_source_type_invalid");
@@ -1150,7 +1219,13 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
       || freshness <= now.getTime()
       || freshness > retrieval + (sourceTtlDays * 86_400_000)) reasons.push("source_stale_or_invalid");
     if (source.publicationDate !== null && (!Number.isFinite(publication) || publication > retrieval)) reasons.push("source_publication_date_invalid");
-    const sanitized = sanitizeCognitivePayload({ reference: source.reference, publisher: source.publisher, excerpt: source.excerpt });
+    const sanitized = sanitizeCognitivePayload({
+      id: source.id,
+      reference: source.reference,
+      publisher: source.publisher,
+      excerpt: source.excerpt,
+      citationMetadata: source.citationMetadata,
+    });
     if (!sanitized.accepted) reasons.push("source_sensitive_content_rejected");
     if (sanitized.categories.includes("private_identifier")) reasons.push("source_private_identifier_rejected");
     if (sanitized.categories.includes("untrusted_instruction")) reasons.push("source_prompt_injection_detected");

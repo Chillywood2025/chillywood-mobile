@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import net from "node:net";
 import https from "node:https";
 
@@ -28,6 +29,7 @@ export const stableJson = (value) => {
 export const canonicalSnapshotHash = (snapshot) => sha256(stableJson(snapshot));
 
 const ENGINE_BUDGET_AUTHORITIES = new WeakSet();
+const ISOLATED_TEST_CAPABILITY_LEDGER_ROOTS = new WeakMap();
 const OWNER_POLICY_BUDGET_CEILING = Object.freeze({
   modelTokens: 10_000_000,
   modelCost: 25,
@@ -115,6 +117,35 @@ export class CognitiveEngineBudgetAuthority {
   }
 }
 Object.freeze(CognitiveEngineBudgetAuthority.prototype);
+
+export const registerIsolatedTestCapabilityLedger = (ledger, repositoryRoot) => {
+  if (!ledger || typeof ledger !== "object") throw new Error("capability_ledger_invalid");
+  const prototype = Object.getPrototypeOf(ledger);
+  const requiredMethods = [
+    "authorizeComposedRequest",
+    "capabilitySnapshot",
+    "consume",
+    "eventSnapshot",
+    "issue",
+    "reauthorizeAcceptedCall",
+    "revoke",
+  ];
+  if (!prototype
+    || prototype.constructor?.name !== "CognitiveCapabilityLedger"
+    || Object.keys(ledger).length !== 0
+    || requiredMethods.some((method) => typeof prototype[method] !== "function")) {
+    throw new Error("isolated_test_capability_ledger_required");
+  }
+  const canonicalRoot = fs.realpathSync(repositoryRoot);
+  const canonicalTemporaryRoot = fs.realpathSync(os.tmpdir());
+  if (!inside(canonicalRoot, canonicalTemporaryRoot)
+    || fs.existsSync(path.join(canonicalRoot, ".git"))
+    || !path.basename(canonicalRoot).startsWith("cognitive-")) {
+    throw new Error("isolated_test_capability_root_required");
+  }
+  ISOLATED_TEST_CAPABILITY_LEDGER_ROOTS.set(ledger, canonicalRoot);
+  return ledger;
+};
 
 const decodePath = (value) => {
   let current = String(value).normalize("NFKC");
@@ -370,6 +401,10 @@ export const executeAuthorizedAction = async ({
     || Object.getPrototypeOf(budgetLedger) !== CognitiveEngineBudgetAuthority.prototype) {
     return { accepted: false, status: "blocked_preflight", result: null, blockers: ["engine_budget_authority_required"] };
   }
+  const canonicalRepositoryRoot = fs.realpathSync(repositoryRoot);
+  if (ISOLATED_TEST_CAPABILITY_LEDGER_ROOTS.get(capabilityLedger) !== canonicalRepositoryRoot) {
+    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["capability_authority_unavailable"] };
+  }
   const canonicalPaths = request.paths.map((requestedPath) => resolveConfinedRepositoryPath({
     repositoryRoot,
     requestedPath,
@@ -443,7 +478,38 @@ export const executeAuthorizedAction = async ({
           pathHandles: pinnedHandles.map(({ relativePath, descriptor }) => ({ relativePath, descriptor })),
         }
       : invocation;
-    const result = await executeInvocation(executableInvocation, signal);
+    const executionPromise = Promise.resolve().then(() => executeInvocation(executableInvocation, signal));
+    let abortListener;
+    let result;
+    try {
+      result = await Promise.race([
+        executionPromise,
+        new Promise((_, reject) => {
+          abortListener = () => reject(new Error("execution_cancelled"));
+          signal.addEventListener("abort", abortListener, { once: true });
+        }),
+      ]);
+    } catch (error) {
+      if (signal.aborted || error?.message === "execution_cancelled") {
+        executionPromise.catch(() => undefined);
+        closePinnedPathHandles(pinnedHandles);
+        pinnedHandles = [];
+        capabilityLedger.revoke(capabilityId, getRuntimeGate().now);
+        if (rollbackCoordinator && typeof rollbackCoordinator.record === "function") {
+          rollbackCoordinator.record(capabilityUse.taskId, false, getRuntimeGate().now);
+        }
+        budgetLedger.release(budgetReservationId);
+        return {
+          accepted: false,
+          status: "rollback_failed_quarantined",
+          result: null,
+          blockers: ["execution_cancelled", "late_result_rejected"],
+        };
+      }
+      throw error;
+    } finally {
+      if (abortListener) signal.removeEventListener("abort", abortListener);
+    }
     const postGate = getRuntimeGate();
     const postBlockers = [
       ...(signal.aborted ? ["task_cancelled"] : []),
@@ -574,6 +640,20 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
   if (parsed.protocol !== "https:") throw new Error("https_required");
   if (parsed.username || parsed.password) throw new Error("embedded_credentials_forbidden");
   if (parsed.port && parsed.port !== "443") throw new Error("port_not_allowed");
+  let decoded = parsed.toString();
+  for (let index = 0; index < 3; index += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      throw new Error("url_encoding_invalid");
+    }
+  }
+  if (/(?:^|[?&#/;])(?:access[_-]?token|refresh[_-]?token|token|api[_-]?key|secret|password|credential|authorization|signature|sig|key)=/iu.test(decoded)
+    || /https:\/\/[^/\s:@]+:[^/\s@]+@/iu.test(decoded)) {
+    throw new Error("credential_bearing_url_forbidden");
+  }
   const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/gu, "").replace(/\.$/u, "");
   if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) throw new Error("private_or_internal_target");
   const addresses = net.isIP(hostname) ? [{ address: hostname }] : await resolveDns(hostname);
@@ -584,10 +664,63 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
 
 const RESEARCH_TRANSPORTS = new WeakMap();
 
-export const createMockResearchTransport = (handler) => {
-  if (typeof handler !== "function") throw new Error("research_mock_transport_invalid");
-  const transport = async (request) => handler(request);
-  RESEARCH_TRANSPORTS.set(transport, "mock");
+export const createMockResearchTransport = () => {
+  throw new Error("arbitrary_research_mock_transport_removed");
+};
+
+export const createDeterministicResearchFixtureTransport = (fixtures) => {
+  if (!Array.isArray(fixtures) || fixtures.length < 1 || fixtures.length > 32) {
+    throw new Error("research_fixture_transport_invalid");
+  }
+  const records = fixtures.map((fixture) => {
+    if (!fixture || typeof fixture !== "object"
+      || typeof fixture.url !== "string"
+      || !Number.isSafeInteger(fixture.status)
+      || fixture.status < 100 || fixture.status > 599
+      || !["text/html", "text/plain", "application/json"].includes(fixture.contentType)
+      || typeof fixture.body !== "string"
+      || fixture.body.length > 4_000_000
+      || (fixture.redirectUrl !== undefined && fixture.redirectUrl !== null
+        && typeof fixture.redirectUrl !== "string")
+      || !Number.isSafeInteger(fixture.delayMs ?? 0)
+      || (fixture.delayMs ?? 0) < 0 || (fixture.delayMs ?? 0) > 1_000
+      || !["pinned", "mismatch_public"].includes(fixture.peerMode ?? "pinned")) {
+      throw new Error("research_fixture_transport_invalid");
+    }
+    return Object.freeze({
+      url: fixture.url,
+      status: fixture.status,
+      contentType: fixture.contentType,
+      body: fixture.body,
+      redirectUrl: fixture.redirectUrl,
+      delayMs: fixture.delayMs ?? 0,
+      peerMode: fixture.peerMode ?? "pinned",
+    });
+  });
+  const transport = async ({ url, pinnedAddresses, signal }) => {
+    const fixture = records.find((candidate) => candidate.url === url);
+    if (!fixture || signal.aborted) throw new Error("research_fixture_missing");
+    if (fixture.delayMs > 0) {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(resolve, fixture.delayMs);
+        signal.addEventListener("abort", () => {
+          clearTimeout(timeout);
+          reject(new Error("research_cancelled"));
+        }, { once: true });
+      });
+    }
+    const bytes = Buffer.byteLength(fixture.body, "utf8");
+    return {
+      status: fixture.status,
+      connectedAddress: fixture.peerMode === "pinned" ? pinnedAddresses[0] : "8.8.8.8",
+      contentType: fixture.contentType,
+      compressedBytes: bytes,
+      decompressedBytes: bytes,
+      body: fixture.body,
+      redirectUrl: fixture.redirectUrl,
+    };
+  };
+  RESEARCH_TRANSPORTS.set(transport, "deterministic_fixture");
   return transport;
 };
 

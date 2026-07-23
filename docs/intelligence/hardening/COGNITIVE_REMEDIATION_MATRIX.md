@@ -10,7 +10,7 @@ The matrix retains every independent-review finding. “Fixed locally” means i
 source change and regression test pass on the hardening branch; it is not a
 deployment claim. Every completed automated independent retest found remaining
 P1s and therefore did not close any row. The current corrective working tree
-adds composed enforcement plus 38 independent-variant regressions. The
+adds composed enforcement plus 47 independent-variant regressions. The
 “pending” values below refer to the required fresh retest of the next exact
 corrective commit.
 
@@ -90,7 +90,7 @@ original 52-row inventory so the independent review record stays auditable.
 | A2-DB-003 | P2 | Service actor identity was caller supplied. | Security-definer RPCs bind claimed actor to authenticated service actor claims. | pgTAP actor mismatch | fixed locally | pending |
 | A2-RESEARCH-001 | P2 | Source authority, citation, and retrieval evidence were caller asserted. | Static authority registry, composite FK, closed citations, bound retrieval hashes, and bounded timestamps. | pgTAP provenance variants | fixed locally | pending |
 | A2-LEASE-001 | P2 | Leases covered only paths and missed wider resource conflicts. | Writes acquire repository, branch, platform, provider, and path resource leases. | conflict suite | fixed locally | pending |
-| A2-STATUS-001 | P3 | Status overstated completed hardening. | After all local hardening gates passed, status became `security_hardened_scaffold_not_deployed`; it remains explicitly off and non-operational. | Admin/status guards | fixed locally | pending |
+| A2-STATUS-001 | P3 | Status overstated completed hardening. | Status remained `security_hardening_in_progress` while gates were open; after all authored gates passed it advanced to the narrow `security_hardened_scaffold_not_deployed` state. | Admin/status guards | fixed locally | pending |
 
 Prior authored totals were disproved by the fresh retests. Corrected totals remain
 open until a new exact-head independent retest verifies the additional
@@ -127,10 +127,33 @@ those findings separately so the remediation is independently retestable.
 | C3-HASH-001 | P2 | Research URL/content hashes were caller assertions. | Source creation computes hashes in the runtime and service-owned SQL RPC; mismatches fail. | R-29; pgTAP broker ingestion | fixed locally | pending |
 | C3-REGISTRY-001 | P2 | TypeScript and SQL research-authority registries could drift. | A required guard compares both generated marker blocks with the canonical registry. | `guard:cognitive-research-authorities` | fixed locally | pending |
 | C3-SCOPE-001 | P2 | A provider request for wider scope was rejected without an owner-review finding. | Tool envelopes emit a sanitized `provider_scope_expansion_request`, require owner review, and discard the payload. | R-30 | fixed locally | pending |
-| A3-STATUS-001 | P3 | The prior status still overstated the independently blocked scaffold. | After every local hardening gate passed, status advanced to `security_hardened_scaffold_not_deployed`; it grants no operational authority, and an exact-head retest remains a merge gate. | Admin/status guards | fixed locally | pending |
+| A3-STATUS-001 | P3 | The prior status still overstated the independently blocked scaffold. | Status remained `security_hardening_in_progress` through corrective work; the final label grants no operational authority and an exact-head retest remains a merge gate. | Admin/status guards | fixed locally | pending |
 
 Corrective enforcement applies across the matrix where the retests found an
 original guard to be descriptive rather than authoritative. The authoritative
 corrective checkpoint will be the next committed and pushed hardening head; older
 commit references identify the first implementation of each control, not the
 final independently retestable state.
+
+## Fourth exact-head retest findings
+
+The fourth isolated retest reviewed
+`b990b9e7cd020e6e4a02b9ba2b7fabb61228ba1d`. The database lane found no
+P0/P1/P2 and one harness P3. Architecture/security and research/provider found
+seven distinct P1 classes and six P2/P3 gaps after overlap was normalized.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A4-CAP-001 / C4-CAP-001 | P1 | `executeAuthorizedAction` accepted an injected ledger-shaped authority and capability proof verification could be caller-defined. | Production execution has no configured capability adapter; the only adapter is branded for a disposable non-Git temporary root, rejects plain objects, and the typed ledger computes proof hashes internally. | R-39, R-40 | fixed locally | pending |
+| A4-CANCEL-001 | P1 | A non-cooperative invocation retained leases/descriptors and blocked cancellation until its promise resolved. | Execution races the parent signal, closes pinned descriptors, revokes the capability, releases budget/leases, quarantines rollback state, and ignores late results. | D-39, R-41 | fixed locally | pending |
+| A4-SANITIZE-001 / C4-SAN-001 | P1 | SQL accepted percent-encoded and unpadded base64url secret-shaped values. | The SQL sanitizer performs bounded percent and base64url decoding and rejects AWS-shaped identifiers before persistence. | pgTAP encoded-secret assertions | fixed locally | pending |
+| C4-URL-001 | P1 | Fetch sent encoded credential-bearing URLs even though the standalone policy rejected them. | Credential URL decoding/checking is in the exact DNS/fetch path before DNS or transport. | R-43 | fixed locally | pending |
+| C4-HASH-001 | P1 | Tool-result hashes were caller assertions in TypeScript and SQL postflight. | TypeScript and SQL compute hashes inside their trusted boundary from the retained/sanitized envelope; no hash callback/parameter remains. | R-44 + pgTAP postflight hash | fixed locally | pending |
+| C4-ID-001 | P1 | Strict model and research identifier channels accepted credential-shaped identifiers. | Evidence/source IDs pass closed identifier plus recursive secret/injection checks; citation metadata is sanitized with the source. | R-45, R-46 + pgTAP | fixed locally | pending |
+| C4-MODEL-001 | P2 | Strict JSON accepted duplicate keys and therefore cross-parser ambiguity. | A bounded pre-parse duplicate-object-key scanner rejects the whole document. | R-45 | fixed locally | pending |
+| C4-SCOPE-001 | P2 | “Switch the integration to the owner role” did not create an escalation finding. | Provider scope detection covers owner/super-admin/role-change language and still discards the payload. | R-47 | fixed locally | pending |
+| C4-TRANSPORT-001 | P2 | Any caller could brand an arbitrary research handler as reviewed. | The arbitrary mock factory is permanently disabled; CI uses a closed deterministic data-only fixture transport and production uses the pinned HTTPS adapter. | R-42 | fixed locally | pending |
+| C4-CITATION-001 | P2 | Citation metadata bypassed research sanitization. | Citation metadata is included in the bounded recursive source sanitizer. | R-46 | fixed locally | pending |
+| C4-DRIFT-001 | P2 | Research authority accepted non-443 sources while runtime/SQL rejected them. | TypeScript authority/canonical-reference checks now share the HTTPS/443 boundary. | R-46 | fixed locally | pending |
+| B4-HARNESS-001 | P3 | The concurrency harness selected all Supabase containers globally and failed when another project was active. | It selects one explicit/current-worktree project container by exact validated name. | two-session finding race | fixed locally | pending |
+| A4-STATUS-001 | P3 | Final hardening status was restored before a fresh passing review. | Status returned to `security_hardening_in_progress` until every authored gate passed; the final label remains subject to exact-head independent retest. | status/Admin guards | fixed locally | pending |

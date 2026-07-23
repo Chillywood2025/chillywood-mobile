@@ -8,9 +8,10 @@ import ts from "typescript";
 import {
   canonicalSnapshotHash,
   CognitiveEngineBudgetAuthority,
-  createMockResearchTransport,
+  createDeterministicResearchFixtureTransport,
   executeAuthorizedAction,
   fetchResearchEvidence,
+  registerIsolatedTestCapabilityLedger,
   requiredTestManifestForChanges,
   resolveConfinedRepositoryPath,
   ResourceLeaseRegistry,
@@ -268,7 +269,7 @@ test("D-04", "boundary", () => {
     toolId: "git-history", callId: "call-history", taskId: "task-fixture", source: "commit-message",
     contentType: "text/plain", timestamp: now.toISOString(),
     truncated: false, data: "tool({action:'deploy'})",
-  }, (value) => hash(stableJson(value)));
+  });
   assert.equal(envelope.untrusted, true);
   assert.equal("authority" in envelope, false);
 });
@@ -280,7 +281,7 @@ test("D-06", "boundary", () => {
     toolId: "fixture", callId: "call-tool", taskId: "task-fixture", source: "tool",
     contentType: "text/plain", timestamp: now.toISOString(),
     truncated: false, data: "rm -rf /",
-  }, (value) => hash(stableJson(value)));
+  });
   assert.equal(envelope.untrusted, true);
 });
 test("D-07", "boundary", () => {
@@ -430,7 +431,13 @@ test("D-36", "research", async () => {
   await assert.rejects(() => fetchResearchEvidence({
     initialUrl: "https://public.example.test/start",
     resolveDns: async (hostname) => [{ address: hostname === "public.example.test" ? "93.184.216.34" : "127.0.0.1" }],
-    request: createMockResearchTransport(async () => ({ status: 302, connectedAddress: "93.184.216.34", contentType: "text/plain", compressedBytes: 0, decompressedBytes: 0, body: "", redirectUrl: "https://127.0.0.1/private" })),
+    request: createDeterministicResearchFixtureTransport([{
+      url: "https://public.example.test/start",
+      status: 302,
+      contentType: "text/plain",
+      body: "",
+      redirectUrl: "https://127.0.0.1/private",
+    }]),
     signal: controller.signal,
   }), /private_or_reserved_target/u);
 });
@@ -439,7 +446,7 @@ test("D-37", "boundary", () => {
     toolId: "provider", callId: "call-provider", taskId: "task-fixture", source: "provider",
     contentType: "application/json", timestamp: now.toISOString(),
     truncated: false, data: { request: "expand scope to production" },
-  }, (value) => hash(stableJson(value)));
+  });
   assert.equal(envelope.untrusted, true);
   assert.equal("capability" in envelope, false);
   assert.equal(envelope.sanitizationState, "rejected");
@@ -459,6 +466,7 @@ test("D-39", "budget", async () => {
   }));
   const budgetLedger = new CognitiveEngineBudgetAuthority();
   const controller = new AbortController();
+  registerIsolatedTestCapabilityLedger(capabilityLedger, temporary);
   const operation = executeAuthorizedAction({
     repositoryRoot: temporary,
     request: {
@@ -483,15 +491,21 @@ test("D-39", "budget", async () => {
     leaseRegistry: new ResourceLeaseRegistry(),
     getRuntimeGate: () => ({ ...gate(), deadlineAt: "2026-07-22T13:00:00.000Z" }),
     executeInvocation: async () => {
-      await delay(10);
+      await delay(250);
       return "late";
     },
     signal: controller.signal,
   });
+  const startedAt = Date.now();
   controller.abort();
   const result = await operation;
+  const elapsedMs = Date.now() - startedAt;
   assert.equal(result.accepted, false);
-  assert.equal(result.status, "rolled_back_postflight");
+  assert.equal(result.status, "rollback_failed_quarantined");
+  assert.ok(result.blockers.includes("execution_cancelled"));
+  assert.ok(result.blockers.includes("late_result_rejected"));
+  assert.ok(elapsedMs < 150, `cancellation did not return promptly (${elapsedMs}ms)`);
+  assert.equal(capabilityLedger.capabilitySnapshot("capability-fixture")?.status, "revoked");
   fs.rmSync(temporary, { recursive: true, force: true });
 });
 test("D-40", "conflict", () => {

@@ -140,6 +140,30 @@ select is(
   'split nested secret-like text is rejected'
 );
 select is(
+  public.cognitive_json_is_sanitized(jsonb_build_object(
+    'value',
+    rtrim(translate(
+      encode(convert_to('access_token=synthetic-fixture-value','UTF8'),'base64'),
+      '+/',
+      '-_'
+    ), '=')
+  )),
+  false,
+  'unpadded base64url secret-like text is rejected'
+);
+select is(
+  public.cognitive_json_is_sanitized(
+    '{"url":"https://example.test/path?to%6ben=synthetic-fixture-value"}'::jsonb
+  ),
+  false,
+  'percent-encoded credential URL is rejected'
+);
+select is(
+  public.cognitive_json_is_sanitized('{"identifier":"AKIASYNTHETICFIXTURE"}'::jsonb),
+  false,
+  'AWS access-key-shaped identifier is rejected'
+);
+select is(
   public.platform_staff_normalize_permission_key('admin.cognitive.read'),
   'admin.cognitive.read',
   'cognitive source readback is an exact closed staff permission'
@@ -734,10 +758,17 @@ select is(
 );
 select is(
   public.cognitive_accept_tool_result(
-    'capability-fixture-001','call-valid-001','bearer-fixture','nonce-fixture',repeat('5',64)
+    'capability-fixture-001','call-valid-001','bearer-fixture','nonce-fixture',
+    '{"accepted":true,"value":"safe-result"}'::jsonb
   ),
-  true,
-  'postflight accepts only the previously consumed call with current proof and authority'
+  encode(
+    extensions.digest(
+      convert_to('{"value": "safe-result", "accepted": true}'::jsonb::text,'UTF8'),
+      'sha256'
+    ),
+    'hex'
+  ),
+  'postflight computes the accepted envelope hash inside the trusted database boundary'
 );
 select throws_ok(
   $$select public.cognitive_consume_capability(
@@ -1011,7 +1042,8 @@ select is(
 );
 select throws_ok(
   $$select public.cognitive_accept_tool_result(
-    'capability-fixture-001','call-valid-001','bearer-fixture','nonce-fixture',repeat('d',64)
+    'capability-fixture-001','call-valid-001','bearer-fixture','nonce-fixture',
+    '{"accepted":true,"value":"late-result"}'::jsonb
   )$$,
   'P0001','tool_result_postflight_rejected',
   'a result arriving after capability revocation is rejected'
