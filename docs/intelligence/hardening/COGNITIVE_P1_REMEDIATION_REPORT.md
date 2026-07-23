@@ -189,6 +189,27 @@ tests, and 203/203 focused cognitive pgTAP assertions. A timed benign
 implementation results only; every eleventh-review item stays independently
 open until a fresh exact-head review reports zero P0/P1.
 
+The twelfth exact-head review of
+`edba292e61038ae3307b9d5b214e99a6d8c59b70` again found zero P0 and kept
+the scaffold correctly blocked. It identified security-skeleton omissions for
+variation selectors, tags, combining marks, and additional cross-script
+confusables; a reconstruction cap above twelve leaves; incomplete Unicode
+decimal-phone normalization; structured provider wildcard aliases; date-shaped
+email erasure; multibyte URL-boundary false positives; a factorial SQL
+reconstruction cliff; and ordinary-prose/base64 false positives.
+
+The correction replaces finite invisible-character stripping with a
+detection-only Unicode security skeleton while preserving case-sensitive
+encoded input, normalizes reviewed Unicode decimal blocks, uses a linear
+fragment classifier for the full 128-value envelope, decodes structured
+provider policy scalars, separates email from phone/date exclusions, and
+removes the SQL permutation CTE. The executable regressions now report 87/87
+hardening variants, 40/40 canonical red-team attacks, and 214/214 focused
+cognitive pgTAP assertions; the complete local database suite reports 499/499.
+These are authored implementation results only.
+Every twelfth-review finding remains independently open until the next exact
+commit is retested with zero P0/P1.
+
 No remediation grants production execution, scheduler, deployment, release,
 money, rights, auth/RLS, role, moderation, provider-product or self-approval
 authority.

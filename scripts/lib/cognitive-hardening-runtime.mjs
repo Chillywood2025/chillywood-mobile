@@ -416,17 +416,20 @@ const SENSITIVE_RESEARCH_LABEL_PARTS = new Set([
   "auth", "authorization", "bearer", "cookie", "credential", "key", "password",
   "pwd", "secret", "sig", "signature", "token",
 ]);
-const SECURITY_DEFAULT_IGNORABLES = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/gu;
 const SECURITY_CONFUSABLES = Object.freeze({
-  а: "a", е: "e", о: "o", р: "p", с: "c", х: "x", у: "y", і: "i", ј: "j",
-  κ: "k", ο: "o", ρ: "p", χ: "x", α: "a", ε: "e", ι: "i",
+  а: "a", в: "b", е: "e", к: "k", м: "m", н: "h", о: "o", р: "p", с: "c",
+  т: "t", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", ԛ: "q", ԝ: "w",
+  ү: "y", ӏ: "l", α: "a", β: "b", ε: "e", η: "h", ι: "i", κ: "k", μ: "m",
+  ν: "v", ο: "o", ρ: "p", τ: "t", υ: "y", χ: "x", ϲ: "c", ն: "n", օ: "o",
 });
 const normalizedSecurityText = (value) =>
   String(value)
-    .normalize("NFKC")
+    .normalize("NFKD")
     .replace(/[\u3002\uff0e\uff61]/gu, ".")
-    .replace(SECURITY_DEFAULT_IGNORABLES, "")
-    .replace(/[аеорсхуіјκορχαει]/gu, (character) => SECURITY_CONFUSABLES[character] ?? character);
+    .replace(/[\p{Default_Ignorable_Code_Point}\p{Mark}]/gu, "")
+    .replace(/[АВЕКМНОРСТУХІЈЅԀԚԜҮӀавекмнорстухіјѕԁԛԝүӏΑΒΕΗΙΚΜΝΟΡΤΥΧϹαβεηικμνορτυχϲՆՕնօ]/gu, (character) =>
+      SECURITY_CONFUSABLES[character.toLowerCase()] ?? character
+    );
 const normalizedSecurityLabel = (value) =>
   normalizedSecurityText(value).toLowerCase().replace(/[^a-z0-9]/gu, "");
 const hasSensitiveResearchAssignment = (value) => {
@@ -438,7 +441,8 @@ const hasSensitiveResearchAssignment = (value) => {
       .split(/[^a-z0-9]+/gu)
       .filter(Boolean);
     if (
-      SENSITIVE_RESEARCH_LABELS.has(label)
+      /[^\x00-\x7f]/u.test(match[1])
+      || SENSITIVE_RESEARCH_LABELS.has(label)
       || labelParts.some((part) => SENSITIVE_RESEARCH_LABEL_PARTS.has(part))
       || /^(?:access|refresh)(?:key|token)$/u.test(label)
       || /^(?:api|private)(?:key|token)$/u.test(label)
@@ -455,12 +459,12 @@ const hasPrivateIdentifierText = (value) => {
     || /^[a-f0-9]{40,128}$/iu.test(normalized)
     || /^[a-f0-9]{16}$/iu.test(normalized)
   ) return false;
+  if (/[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(normalized)) return true;
   const reviewedOpaqueRemoved = normalized
     .replace(/\bdigest\s*[:=]\s*[a-f0-9]{16}\b/giu, "")
     .replace(/\b[12][0-9]{3}-[01][0-9]-[0-3][0-9](?:T[0-9:.+-]+Z?)?\b/gu, "");
   if (
-    /[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(reviewedOpaqueRemoved)
-    || /\+?\p{Nd}[\p{Nd} ()-]{7,}\p{Nd}/u.test(reviewedOpaqueRemoved)
+    /\+?\p{Nd}[\p{Nd} ()-]{7,}\p{Nd}/u.test(reviewedOpaqueRemoved)
     || /\b(?:\p{Nd}{1,3}\.){3}\p{Nd}{1,3}\b/u.test(reviewedOpaqueRemoved)
   ) return true;
   return reviewedOpaqueRemoved
@@ -491,7 +495,7 @@ const hasPrivateIdentifierInResearchData = (value) =>
   });
 const decodeBoundedSecurityCandidates = (value) => {
   const initial = normalizedSecurityText(value);
-  if (Buffer.byteLength(initial, "utf8") > RESEARCH_MAX_URL_BYTES * 2) {
+  if (Buffer.byteLength(initial, "utf8") > RESEARCH_MAX_URL_BYTES * 12) {
     throw new Error("url_too_long");
   }
   const candidates = new Set([initial]);

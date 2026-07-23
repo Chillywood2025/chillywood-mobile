@@ -695,22 +695,58 @@ const PROVIDER_SCOPE_EXPANSION = new RegExp(
 );
 const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|administrator(?:access)?|admin|root|superuser|uid[-_\s]*0|sudo|wheel|poweruseraccess|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|emergency[-_\s]+master)\b[\s\S]{0,60}\b(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?|mandatory|required|enabled)|(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?)\b[\s\S]{0,60}\b(?:owner|super[- ]?admin|administrator(?:access)?|admin|root|superuser|uid[-_\s]*0|sudo|wheel|poweruseraccess|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|emergency[-_\s]+master|mandatory|required|enabled)|(?:run|operate|execute|authenticate|switch|use|set)\b[\s\S]{0,24}\b(?:root|superuser|uid[-_\s]*0)\b|sudo|wheel\s+account|poweruseraccess|supreme\s+authority|tenant\s+owner|impersonate[\s\S]{0,24}\bowner|escalate[\s\S]{0,24}\bsuperuser|principal[\s\S]{0,40}\bno\s+limits?|operate[\s\S]{0,40}\babove\s+all[\s\S]{0,24}\broles?|full[- ]?control|unrestricted\s+account|break[- ]?glass\s+identity|god[-_\s]+mode|carte[-_\s]+blanche|administratoraccess|emergency[-_\s]+master\s+identity|(?:all|wildcard)[-_\s]+permissions?|iam\s*:\s*\*|(?:allow|permit|grant)[\s\S]{0,60}\ball\s+(?:actions?|resources?|permissions?)\b|(?:permissions?|privileges?|rights?)[\s\S]{0,24}\ball\b|\ball\b[\s\S]{0,24}\b(?:permissions?|privileges?|rights?)|(?:permit|allow|grant|enable|use|switch)[\s\S]{0,60}\b(?:everything|anything|unrestricted|without\s+restriction)\b|identity[\s\S]{0,60}\b(?:do|access|control)[\s\S]{0,24}\b(?:anything|everything)\b)\b/iu;
 const PROVIDER_STANDALONE_PRIVILEGE = /(?:\b[a-z][a-z0-9-]{1,31}\s*:\s*\*|^\s*(?:poweruseraccess|wheel|no\s+(?:restrictions?|limits?)|cluster-admin|system:masters|nopasswd\s*:\s*all)\s*[.!]?\s*$)/iu;
+const PROVIDER_NEGATED_PRIVILEGE = /\b(?:poweruseraccess|wheel|cluster-admin|system:masters|nopasswd\s*:\s*all|root|superuser|admin(?:istrator)?|privileged|elevated|production|full[- ]?control|unrestricted)\b[\s\S]{0,40}\b(?:is|are|was|were|remains?)\s+(?:strictly\s+)?(?:prohibited|denied|forbidden|disabled|blocked|not\s+allowed)\b/giu;
+
+const decodeProviderScalar = (value: string): string[] => {
+  const candidates = new Set<string>([normalizeSecurityText(value).toLowerCase().trim()]);
+  try {
+    candidates.add(normalizeSecurityText(decodeURIComponent(value)).toLowerCase().trim());
+  } catch {
+    // Invalid percent encoding remains untrusted ordinary provider text.
+  }
+  for (const decoded of maybeDecodeEncoded(value)) candidates.add(normalizeSecurityText(decoded).toLowerCase().trim());
+  if (/^[A-Za-z0-9+/_-]{2,8}={0,2}$/u.test(value)) {
+    try {
+      const encoded = value.replace(/-/gu, "+").replace(/_/gu, "/");
+      const binary = globalThis.atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "="));
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(
+        Uint8Array.from(binary, (character) => character.charCodeAt(0)),
+      );
+      candidates.add(normalizeSecurityText(decoded).toLowerCase().trim());
+    } catch {
+      // A short non-base64 scalar remains ordinary untrusted provider text.
+    }
+  }
+  return [...candidates];
+};
+
+const providerScalarValues = (value: unknown, depth = 0): string[] => {
+  if (depth > 4) return [];
+  if (typeof value === "string") return decodeProviderScalar(value);
+  if (Array.isArray(value)) return value.slice(0, 128).flatMap((entry) => providerScalarValues(entry, depth + 1));
+  return [];
+};
 
 const hasStructuredProviderPrivilege = (value: unknown, depth = 0): boolean => {
   if (depth > 8 || value === null || typeof value !== "object") return false;
   if (Array.isArray(value)) return value.slice(0, 128).some((entry) => hasStructuredProviderPrivilege(entry, depth + 1));
   const record = value as Record<string, unknown>;
   const entries = Object.entries(record).slice(0, 64);
-  const normalized = Object.fromEntries(entries.map(([key, child]) => [
-    normalizeSecurityLabel(key),
-    typeof child === "string" ? normalizeSecurityText(child).toLowerCase().trim() : child,
-  ]));
-  const action = normalized.action;
-  const resource = normalized.resource;
+  const normalized = new Map<string, unknown>();
+  for (const [key, child] of entries) normalized.set(normalizeSecurityLabel(key), child);
+  const effects = providerScalarValues(normalized.get("effect"));
+  const actions = [
+    ...providerScalarValues(normalized.get("action")),
+    ...providerScalarValues(normalized.get("actions")),
+  ];
+  const resources = [
+    ...providerScalarValues(normalized.get("resource")),
+    ...providerScalarValues(normalized.get("resources")),
+  ];
   if (
-    normalized.effect === "allow"
-    && (action === "*" || (Array.isArray(action) && action.includes("*")))
-    && (resource === "*" || (Array.isArray(resource) && resource.includes("*")))
+    effects.includes("allow")
+    && actions.includes("*")
+    && resources.includes("*")
   ) return true;
   return entries.some(([, child]) => hasStructuredProviderPrivilege(child, depth + 1));
 };
@@ -793,11 +829,16 @@ export const createUntrustedToolEnvelope = (
     normalizeSecurityText(candidate),
     ...maybeDecodeEncoded(candidate),
   ]);
-  const ownerReviewRequired = providerScopeCandidates.some((candidate) =>
-    PROVIDER_SCOPE_EXPANSION.test(candidate)
-    || PROVIDER_PRIVILEGED_SCOPE_MENTION.test(candidate)
-    || PROVIDER_STANDALONE_PRIVILEGE.test(candidate)
-  ) || hasStructuredProviderPrivilege(value.data)
+  const ownerReviewRequired = providerScopeCandidates.some((candidate) => {
+    const reviewCandidate = normalizeSecurityText(candidate).replace(PROVIDER_NEGATED_PRIVILEGE, " ");
+    return PROVIDER_SCOPE_EXPANSION.test(reviewCandidate)
+      || PROVIDER_PRIVILEGED_SCOPE_MENTION.test(reviewCandidate)
+      || PROVIDER_STANDALONE_PRIVILEGE.test(reviewCandidate)
+      || (
+        /[^\x00-\x7f]/u.test(reviewCandidate)
+        && /(?:[:*]|\b(?:admin|root|owner|privilege|permission|scope|access)\b)/iu.test(reviewCandidate)
+      );
+  }) || hasStructuredProviderPrivilege(value.data)
     || sanitized.categories.includes("secret_like_value");
   const boundaryTruncated = sanitized.categories.some((category) =>
     category.startsWith("maximum_")
@@ -984,17 +1025,20 @@ const SENSITIVE_ASSIGNMENT_PARTS = new Set([
   "auth", "authorization", "bearer", "cookie", "credential", "key", "password",
   "pwd", "secret", "sig", "signature", "token",
 ]);
-const SECURITY_DEFAULT_IGNORABLES = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/gu;
 const SECURITY_CONFUSABLES: Readonly<Record<string, string>> = Object.freeze({
-  а: "a", е: "e", о: "o", р: "p", с: "c", х: "x", у: "y", і: "i", ј: "j",
-  κ: "k", ο: "o", ρ: "p", χ: "x", α: "a", ε: "e", ι: "i",
+  а: "a", в: "b", е: "e", к: "k", м: "m", н: "h", о: "o", р: "p", с: "c",
+  т: "t", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", ԛ: "q", ԝ: "w",
+  ү: "y", ӏ: "l", α: "a", β: "b", ε: "e", η: "h", ι: "i", κ: "k", μ: "m",
+  ν: "v", ο: "o", ρ: "p", τ: "t", υ: "y", χ: "x", ϲ: "c", ն: "n", օ: "o",
 });
 const normalizeSecurityText = (value: string): string =>
   value
-    .normalize("NFKC")
+    .normalize("NFKD")
     .replace(/[\u3002\uff0e\uff61]/gu, ".")
-    .replace(SECURITY_DEFAULT_IGNORABLES, "")
-    .replace(/[аеорсхуіјκορχαει]/gu, (character) => SECURITY_CONFUSABLES[character] ?? character);
+    .replace(/[\p{Default_Ignorable_Code_Point}\p{Mark}]/gu, "")
+    .replace(/[АВЕКМНОРСТУХІЈЅԀԚԜҮӀавекмнорстухіјѕԁԛԝүӏΑΒΕΗΙΚΜΝΟΡΤΥΧϹαβεηικμνορτυχϲՆՕնօ]/gu, (character) =>
+      SECURITY_CONFUSABLES[character.toLowerCase()] ?? character
+    );
 const normalizeSecurityLabel = (value: string): string =>
   normalizeSecurityText(value).toLowerCase().replace(/[^a-z0-9]/gu, "");
 const containsSensitiveAssignment = (value: string): boolean => {
@@ -1006,7 +1050,8 @@ const containsSensitiveAssignment = (value: string): boolean => {
       .split(/[^a-z0-9]+/gu)
       .filter(Boolean);
     if (
-      SENSITIVE_ASSIGNMENT_LABELS.has(label)
+      /[^\x00-\x7f]/u.test(match[1])
+      || SENSITIVE_ASSIGNMENT_LABELS.has(label)
       || labelParts.some((part) => SENSITIVE_ASSIGNMENT_PARTS.has(part))
       || /^(?:access|refresh)(?:key|token)$/u.test(label)
       || /^(?:api|private)(?:key|token)$/u.test(label)
@@ -1022,7 +1067,12 @@ const containsSensitiveIdentifierLabel = (value: string): boolean =>
     .filter(Boolean)
     .some((part) => SENSITIVE_ASSIGNMENT_PARTS.has(part));
 export const containsPromptInjection = (value: string): boolean =>
-  PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(normalizeSecurityText(value)));
+  PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(normalizeSecurityText(value)))
+  || (
+    /[^\x00-\x7f]/u.test(normalizeSecurityText(value))
+    && /\b(?:system|developer|instructions?|shell|command|tool|github|merge|deploy|secret|credential|approval|rls|policy)\b/iu
+      .test(normalizeSecurityText(value))
+  );
 export const containsSecretLikeValue = (value: string): boolean =>
   SECRET_PATTERNS.some((pattern) => pattern.test(normalizeSecurityText(value)))
   || containsSensitiveAssignment(value);
@@ -1034,12 +1084,12 @@ const containsPrivateIdentifier = (value: string): boolean => {
     || /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(normalized)
     || /^(?:task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(normalized)
   ) return false;
+  if (/[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(normalized)) return true;
   const reviewedOpaqueRemoved = normalized
     .replace(/\bdigest\s*[:=]\s*[a-f0-9]{16}\b/giu, "")
     .replace(/\b[12][0-9]{3}-[01][0-9]-[0-3][0-9](?:T[0-9:.+-]+Z?)?\b/gu, "");
   if (
-    /[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(reviewedOpaqueRemoved)
-    || /(?:^|[^\p{L}\p{N}-])\+?\p{Nd}[\p{Nd} ()-]{7,}\p{Nd}(?![\p{L}\p{N}-])/u.test(reviewedOpaqueRemoved)
+    /(?:^|[^\p{L}\p{N}-])\+?\p{Nd}[\p{Nd} ()-]{7,}\p{Nd}(?![\p{L}\p{N}-])/u.test(reviewedOpaqueRemoved)
     || /\b(?:\p{Nd}{1,3}\.){3}\p{Nd}{1,3}\b/u.test(reviewedOpaqueRemoved)
   ) return true;
   return reviewedOpaqueRemoved
@@ -1116,8 +1166,21 @@ const maybeDecodeEncoded = (value: string): string[] => {
   return [...candidates];
 };
 
+const canFormSecurityWord = (haystack: string, word: string): boolean => {
+  const available = new Map<string, number>();
+  for (const character of normalizeSecurityLabel(haystack)) {
+    available.set(character, (available.get(character) ?? 0) + 1);
+  }
+  for (const character of word) {
+    const remaining = available.get(character) ?? 0;
+    if (remaining < 1) return false;
+    available.set(character, remaining - 1);
+  }
+  return true;
+};
+
 const boundedFragmentReconstructions = (values: readonly string[]): string[] => {
-  const bounded = values.slice(0, 12).map((value) => value.slice(0, 1_024));
+  const bounded = values.slice(0, 128).map((value) => value.slice(0, 1_024));
   const candidates = new Set<string>([
     bounded.join(""),
     [...bounded].reverse().join(""),
@@ -1127,26 +1190,48 @@ const boundedFragmentReconstructions = (values: readonly string[]): string[] => 
   const structurallySuspicious = bounded.some((value) =>
     /[@:=_.\[\]-]/u.test(normalizeSecurityText(value))
   );
-  if (!structurallySuspicious || values.length > 12) return [...candidates];
-  const visit = (prefix: string, used: Set<number>, depth: number): boolean => {
-    if (depth >= 2) {
-      candidates.add(prefix);
-      if (
-        containsSecretLikeValue(prefix)
-        || containsPrivateIdentifier(prefix)
-        || candidates.size >= 16_384
-      ) return true;
+  if (!structurallySuspicious) {
+    const numericFragments = bounded.filter((value) => /^\p{Nd}+$/u.test(normalizeSecurityText(value)));
+    if (numericFragments.length >= 2
+      && numericFragments.join("").replace(/[^\p{Nd}]/gu, "").length >= 9) {
+      candidates.add("private@example.invalid");
     }
-    if (depth === 4) return false;
-    for (let index = 0; index < bounded.length; index += 1) {
-      if (used.has(index)) continue;
-      const nextUsed = new Set(used);
-      nextUsed.add(index);
-      if (visit(`${prefix}${bounded[index]}`, nextUsed, depth + 1)) return true;
-    }
-    return false;
-  };
-  visit("", new Set(), 0);
+    return [...candidates];
+  }
+  const decodedFragments = bounded.flatMap((value) => [value, ...maybeDecodeEncoded(value)]);
+  const joined = decodedFragments.join("");
+  const securityBag = normalizeSecurityText(joined);
+  const hasAssignment = /[:=]/u.test(securityBag);
+  const sensitiveWords = [
+    "clientsecret", "servicerole", "accesstoken", "refreshtoken", "apikey",
+    "privatekey", "authorization", "password", "credential", "secret", "token",
+    "cookie", "bearer", "signature", "key", "auth",
+  ];
+  if (hasAssignment && sensitiveWords.some((word) =>
+    canFormSecurityWord(securityBag, word)
+    && !decodedFragments.some((fragment) => canFormSecurityWord(fragment, word))
+  )) {
+    candidates.add("secret=fragment_reconstruction");
+  }
+  const numericFragments = decodedFragments.filter((value) => /^\p{Nd}+$/u.test(normalizeSecurityText(value)));
+  if (numericFragments.length >= 2
+    && numericFragments.join("").replace(/[^\p{Nd}]/gu, "").length >= 9) {
+    candidates.add("private@example.invalid");
+  }
+  if (decodedFragments.some((value) => normalizeSecurityText(value).includes("@"))
+    && securityBag.includes(".")) {
+    candidates.add("private@example.invalid");
+  }
+  const shortFragments = decodedFragments.filter((fragment) =>
+    normalizeSecurityLabel(fragment).length > 0 && normalizeSecurityLabel(fragment).length <= 4
+  );
+  const shortFragmentBag = shortFragments.join("");
+  if (securityBag.includes("_")
+    && shortFragments.length >= 3
+    && (canFormSecurityWord(shortFragmentBag, "ghp") || canFormSecurityWord(shortFragmentBag, "githubpat"))
+    && normalizeSecurityLabel(securityBag).length >= 20) {
+    candidates.add("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  }
   return [...candidates];
 };
 

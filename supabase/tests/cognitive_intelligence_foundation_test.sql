@@ -1837,6 +1837,114 @@ select is(
 );
 select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
 
+-- Exact regressions from the twelfth independent exact-head review.
+select ok(
+  (
+    select bool_and(public.cognitive_text_has_secret(value))
+    from (
+      values
+        (U&'oauth_client_se\FE0Fcret=synthetic-value'),
+        ('oauth_client_se' || chr(917505) || 'cret=synthetic-value'),
+        ('oauth_client_se' || chr(917760) || 'cret=synthetic-value'),
+        (U&'client_secre\0301t=synthetic-value'),
+        (U&'client_\0455ecret=synthetic-value'),
+        (U&'client_s\0415cret=synthetic-value'),
+        (U&'passwor\0501=synthetic-value'),
+        (U&'toke\0576=synthetic-value'),
+        (U&'api_ke\04AF=synthetic-value')
+    ) variants(value)
+  ),
+  'default ignorables, marks, and cross-script confusables cannot hide credential labels'
+);
+select ok(
+  (
+    select bool_and(public.cognitive_text_has_secret(
+      encode(convert_to(value,'UTF8'),'base64')
+    ))
+    from (
+      values
+        (U&'client_\0455ecret=synthetic-value'),
+        (U&'client_s\0415cret=synthetic-value'),
+        (U&'passwor\0501=synthetic-value'),
+        (U&'toke\0576=synthetic-value'),
+        (U&'api_ke\04AF=synthetic-value')
+    ) variants(value)
+  ),
+  'encoded cross-script confusable credential labels fail closed'
+);
+select ok(
+  (
+    select bool_and(public.cognitive_text_has_private_identifier(value))
+    from (
+      values
+        (U&'\0967\0968\0969\096A\096B\096C\096D\096E\096F\0966'),
+        (U&'\09E7\09E8\09E9\09EA\09EB\09EC\09ED\09EE\09EF\09E6'),
+        (U&'\0E51\0E52\0E53\0E54\0E55\0E56\0E57\0E58\0E59\0E50'),
+        (U&'\0BE7\0BE8\0BE9\0BEA\0BEB\0BEC\0BED\0BEE\0BEF\0BE6'),
+        (U&'\1041\1042\1043\1044\1045\1046\1047\1048\1049\1040')
+    ) variants(value)
+  ),
+  'international decimal-digit phone identifiers normalize to ASCII before classification'
+);
+select ok(
+  public.cognitive_text_has_private_identifier('person@2026-07-23.com')
+  and public.cognitive_text_has_private_identifier('2026-07-23@example.com'),
+  'date-shaped email domains and local parts remain private identifiers'
+);
+select is(
+  public.cognitive_text_has_private_identifier('digest=0123456789012345'),
+  false,
+  'reviewed opaque digest text is not misclassified as a phone'
+);
+select is(
+  public.cognitive_json_is_sanitized(
+    '["client","safe-a","safe-b","safe-c","secret","safe-d","safe-e","safe-f","=synthetic","safe-g","safe-h","safe-i","safe-j"]'::jsonb
+  ),
+  false,
+  'credential fragments cannot hide behind thirteen leaves'
+);
+select is(
+  public.cognitive_json_is_sanitized(
+    '["person","safe-a","safe-b","%40","safe-c","safe-d","example.invalid","safe-e","safe-f","safe-g","safe-h","safe-i","safe-j"]'::jsonb
+  ),
+  false,
+  'private email fragments cannot hide behind thirteen leaves'
+);
+select is(
+  public.cognitive_json_is_sanitized(
+    '{"a":"123","b":"safe-divider","c":"456","d":"7890"}'::jsonb
+  ),
+  false,
+  'punctuation-free numeric fragments cannot reconstruct a phone'
+);
+select is(
+  public.cognitive_json_is_sanitized((
+    select jsonb_agg(fragment order by ordinal)
+    from (
+      select ordinal,fragment
+      from unnest(string_to_array('g,h,p,_,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z', ','))
+        with ordinality as pieces(fragment,ordinal)
+    ) ordered_fragments
+  )),
+  false,
+  'long token fragments are classified without a twelve-leaf cap'
+);
+select is(
+  public.cognitive_json_is_sanitized((
+    select jsonb_agg('bounded safe text'::text)
+    from generate_series(1,128)
+  )),
+  true,
+  'the maximum ordinary prose array remains accepted'
+);
+select performs_ok(
+  $$select public.cognitive_json_is_sanitized(
+    '["alpha-one","bravo-two","charlie-three","delta-four","echo-five","foxtrot-six","golf-seven","hotel-eight","india-nine","juliet-ten","kilo-eleven","lima-twelve"]'::jsonb
+  )$$,
+  500,
+  'twelve harmless fragments are classified without a permutation CPU cliff'
+);
+
 -- Static schema properties that back remaining behavioral tests.
 select col_is_pk('public', 'cognitive_projects', 'id', 'project identity is primary');
 select col_not_null('public', 'intelligence_tasks', 'project_id', 'task project is required');

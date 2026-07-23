@@ -303,3 +303,29 @@ therefore remains `security_hardening_in_progress`.
 | A11/C11-FALSEPOS-001 | P2/P3 | Opaque numeric 16-hex identifiers, policy dates, and harmless credential-suffix words were overblocked. | Keep narrow exact opaque/date exceptions and replace unanchored SQL label matching with segment-aware assignment rules. | R-79/R-80; pgTAP benign controls | fixed locally | pending |
 | A11-URL-BYTES-001 | P3 | The foundation measured URL characters while runtime enforced UTF-8 bytes. | Enforce the same normalized 2,048-byte boundary with `TextEncoder` before parsing. | R-83 | fixed locally | pending |
 | A11-SUPPLY-001 | P2 | The inherited locked tree still contains 23 advisories. | No dependency changed and no audit fix ran; reviewed upgrades remain an explicit deployment blocker. | read-only audit | accepted deployment blocker | pending |
+
+## Twelfth exact-head retest findings
+
+The twelfth isolated retest reviewed
+`edba292e61038ae3307b9d5b214e99a6d8c59b70`. It again found zero P0 and
+confirmed the authored 40-attack suite, but independently reproduced four
+overlapping P1 classes: Unicode security-skeleton gaps, reconstruction beyond
+twelve leaves, non-ASCII decimal phones in PostgreSQL, and encoded/plural
+provider wildcards. It also identified valid multibyte URL false positives,
+benign provider-denial false positives, a SQL permutation CPU cliff, ordinary
+prose-array false positives, date-shaped email erasure, and classifier lint.
+The scaffold remains `security_hardening_in_progress` until a new exact-head
+review independently closes this set.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A12/B12/C12-UNICODE-001 | P1 | Variation selectors, tag characters, combining marks, and additional Cyrillic/Greek/Armenian confusables hid credential, prompt-injection, and provider-authority text across source/runtime/SQL. | Build a detection-only NFKD security skeleton, remove Unicode default-ignorables and marks, preserve case-sensitive encoded envelopes, and map reviewed cross-script confusables before classification. | R-84; pgTAP Unicode/confusable matrices | fixed locally | pending |
+| A12/B12/C12-FRAGMENT-001 | P1 | Thirteen or more independent leaves could reconstruct credentials, emails, phones, or GitHub-shaped tokens while the bounded permutation search either stopped early or took seconds. | Replace permutation reconstruction with a linear, bounded fragment-risk classifier using decoded markers, task-safe character accounting, numeric-fragment totals, and short-token fragments. | R-85; pgTAP 13/30/128-leaf and timed 12-leaf cases | fixed locally | pending |
+| A12/B12/C12-DIGIT-001 | P1 | PostgreSQL normalized only Arabic/Persian digits, allowing other Unicode decimal phones to persist. | Normalize all reviewed Unicode decimal blocks, including mathematical digits, to ASCII before private-identifier classification. | pgTAP Devanagari/Bengali/Thai/Tamil/Myanmar cases | fixed locally | pending |
+| C12-PROVIDER-001 | P1 | Plural structured policy fields and encoded wildcard scalars bypassed owner review. | Decode bounded scalar values, inspect singular/plural action/resource fields, and require owner review for decoded allow-all policy structures. | R-86 | fixed locally | pending |
+| B12-EMAIL-001 | P1 | Removing date-shaped text before email classification erased valid addresses containing a date in the local part or domain. | Classify email addresses against the complete security-normalized text; date/digest exclusions apply only to phone/IP classification. | pgTAP date-email cases | fixed locally | pending |
+| A12/C12-URL-001 | P2 | Valid multibyte URLs at the 2,047/2,048-byte boundary were rejected after percent serialization expanded a secondary candidate. | Retain the original 2,048-byte pre-parse boundary and use a larger bounded internal decoded-candidate envelope. | R-87 | fixed locally | pending |
+| A12/C12-SCOPE-001 | P2 | A truthful statement that PowerUserAccess was prohibited was escalated as a request. | Remove bounded explicit denial clauses before semantic expansion detection while still inspecting any remaining positive request. | R-86 | fixed locally | pending |
+| A12-SUPPLY-001 | P2 | The inherited locked dependency tree still reports 23 advisories. | No dependency changed and no audit fix ran; separately reviewed dependency upgrades remain a deployment blocker. | read-only dependency audit | accepted deployment blocker | pending |
+| A12/B12-SANITIZER-001 | P3/P1 | Ordinary 64/128-value prose arrays were recursively treated as base64, while twelve suspicious leaves triggered a factorial-style permutation search. | Decode only strong bounded encoded envelopes and remove the recursive permutation CTE entirely. | pgTAP 128-value prose plus `performs_ok` CPU bound | fixed locally | pending |
+| B12-LINT-001 | P3 | Classifier loop variables shadowed declarations and the disabled broker retained unreachable future code. | Use non-shadowed loop state and reduce the database broker RPC to its truthful unconditional unavailable contract. | local database lint | fixed locally | pending |
