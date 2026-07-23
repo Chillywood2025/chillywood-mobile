@@ -61,9 +61,23 @@ content.
 
 ## Database reproduction
 
-Local Supabase reset and the complete pgTAP suite are pending consolidation with
-the isolated database lane. Linked remote state is read-only and will be recorded
-in the final database report and synthesis.
+The isolated database lane reproduced:
+
+- `supabase db reset`: PASS through the cognitive migration;
+- repository pgTAP: 8 files and 329 tests, all passed;
+- database review pgTAP: 47 assertions, all executed successfully (including
+  assertions that deliberately reproduce unsafe accepted states);
+- base-without-cognitive reset: PASS through `20260719220000`;
+- non-cognitive pgTAP with the cognitive migration absent: 7 files and 285 tests,
+  all passed;
+- linked migration state: cognitive migration `20260723001845` is MISSING
+  remotely;
+- linked cognitive function, scheduler, model-key-like secret name, and
+  cognitive tool-credential-like secret name: MISSING.
+
+The complete database matrix and adverse outcomes are recorded separately in the
+database/RLS report. Green pgTAP does not erase the reproduced isolation,
+state-machine, approval-linkage, storage, and retention findings.
 
 ## Dependency baseline
 

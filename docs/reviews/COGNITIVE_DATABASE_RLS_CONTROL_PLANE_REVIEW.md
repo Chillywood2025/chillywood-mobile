@@ -82,7 +82,7 @@ Common controls for every table:
 | `tool_invocations` | Tool name, text-array scope, call number, high-risk hard-false | service append / Owner+Admin | forced; role-only read; service update/delete revoked | common only | nullable; immutable invocation evidence; no task/capability/approval/provider FK |
 | `intelligence_budgets` | Optional task, ceilings and consumption | service / Owner+Admin | forced; role-only read | common only | nullable; mutable/deletable current state; nullable task FK |
 
-Source: `supabase/migrations/20260723001845_cognitive_intelligence_foundation.sql:5-196`; catalog assertions: `supabase/tests/reviews/cognitive_database_adversarial_review.sql:22-98`.
+Source: `supabase/migrations/20260723001845_cognitive_intelligence_foundation.sql:5-196`; catalog assertions: `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:22-98`.
 
 ## B2 — RLS and grants
 
@@ -94,7 +94,7 @@ Source: `supabase/migrations/20260723001845_cognitive_intelligence_foundation.sq
 - `service_role`: can read/insert all tables and update/delete 13 mutable tables; it cannot update/delete the seven immutable tables through grants, and the trigger also blocks a privileged PostgreSQL owner.
 - No cognitive view, sequence, or RPC reopens access. Client roles cannot CREATE in `public`. The migration does not alter default privileges.
 
-The RLS predicate calls the pre-existing function with an explicit schema. A hostile `pg_temp.has_platform_role` replacement did not bypass it. That existing helper is SECURITY DEFINER with `search_path = public` and performs exact active-role lookup (`supabase/migrations/202604190004_baseline_current_schema_truth.sql:581-602`). The direct client role tests are in `supabase/tests/reviews/cognitive_database_adversarial_review.sql:100-147`.
+The RLS predicate calls the pre-existing function with an explicit schema. A hostile `pg_temp.has_platform_role` replacement did not bypass it. That existing helper is SECURITY DEFINER with `search_path = public` and performs exact active-role lookup (`supabase/migrations/202604190004_baseline_current_schema_truth.sql:581-602`). The direct client role tests are in `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:100-147`.
 
 ## B3 — Security-definer functions
 
@@ -116,7 +116,7 @@ The immutable run does not snapshot or protect its plan. The service writer chan
 
 Each `dedupe_key` is globally unique per table. Two concurrent inserts for identical task, source/evidence, claim, hypothesis, run, evaluation/finding, and lesson keys produced one committed row and one unique-constraint failure; no duplicates, partial rows, or deadlocks were observed. However, the keys are not task-scoped, the losing occurrence is discarded, and there is no occurrence counter or conflict-safe reconciliation operation. See COG-B-007.
 
-Reproduction: `scripts/reviews/run-cognitive-dedupe-races.sh`.
+Reproduction: `docs/reviews/fixtures/run-cognitive-dedupe-races.sh`.
 
 ## B7 — State machines
 
@@ -162,7 +162,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** all cognitive persistence and RLS
 - **Violated contract:** one task must not read or mutate another task's data; platform scope must not cross; exact task/platform scope is required.
 - **Exact evidence:** 18 downstream tables have no `task_id`; `intelligence_budgets.task_id` is nullable; no table has a tenant key; every read policy checks only Owner/Admin role. An Admin read both iOS and Android rows. An Android run referencing an iOS plan inserted successfully.
-- **Reproduction:** run assertions at `supabase/tests/reviews/cognitive_database_adversarial_review.sql:118-179,200-208` after local reset.
+- **Reproduction:** run assertions at `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:118-179,200-208` after local reset.
 - **Exploit/failure scenario:** a service task or Admin query intended for one task/platform selects, correlates, or writes evidence belonging to another; a capability/approval for iOS is represented as an Android execution record.
 - **Impact:** cross-task evidence contamination and cross-platform authority confusion; tenant isolation cannot be added at the policy layer because the key is absent.
 - **Likelihood:** high if deployed/consumed; no current production exposure because the migration is undeployed.
@@ -178,7 +178,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** task/plan/run/evaluation/tool control plane
 - **Violated contract:** database rows cannot directly approve, pass preflight/evaluation, complete execution, bypass emergency stop, or substitute for the existing owner approval system.
 - **Exact evidence:** status is any 2–64 character text. Random unrelated UUIDs satisfy the cognitive no-self check; neither approval UUID is an FK. A plan inserted as `preflight_passed`; an Android run linked to its iOS plan and inserted as `completed`; an evaluation with no run inserted as `approved` with `completion_supported=true`. Tool invocation rows have no capability/approval binding columns.
-- **Reproduction:** `supabase/tests/reviews/cognitive_database_adversarial_review.sql:181-223,317-334`.
+- **Reproduction:** `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:181-223,317-334`.
 - **Exploit/failure scenario:** a compromised or buggy service writer manufactures apparently approved/completed cognitive state; a future executor or Admin UI trusts it without consulting the real approval request, fresh preflight, emergency state, or capability.
 - **Impact:** self-asserted authority and false completion become structurally representable. If wired to execution, this becomes an approval bypass.
 - **Likelihood:** high once any executor consumes these rows; currently dormant because execution is off and undeployed.
@@ -194,7 +194,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** execution/evaluation audit evidence
 - **Violated contract:** immutable evidence must not be silently altered by current-summary updates.
 - **Exact evidence:** `execution_runs` is immutable, but its referenced `execution_plans` row is broadly updateable. After inserting a run, the service writer changed the plan's status, branch, path allowlist, and rollback plan. Mutable rows also have no trigger maintaining `updated_at`.
-- **Reproduction:** `supabase/tests/reviews/cognitive_database_adversarial_review.sql:188-223,348-356`.
+- **Reproduction:** `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:188-223,348-356`.
 - **Exploit/failure scenario:** a run executed under one allowed path/rollback plan later appears to have executed under different context, weakening audit and rollback evidence.
 - **Impact:** audit interpretation, evaluator conclusions, and incident reconstruction can be falsified without changing the immutable row.
 - **Likelihood:** medium after deployment.
@@ -210,7 +210,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** prompts, research, logs, summaries, and metadata storage
 - **Violated contract:** no credential, signed URL, private prompt/output, or private-user material may be stored; metadata must be bounded and recursively sanitized.
 - **Exact evidence:** JSON keys `api_key`, `access_token`, and `signed_url` returned sanitized=true; a 1 MiB JSONB value inserted; private-user-derived fixture text inserted while `private_user_data_used=false`; large text fields bypass the JSON function.
-- **Reproduction:** `supabase/tests/reviews/cognitive_database_adversarial_review.sql:270-293`.
+- **Reproduction:** `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:270-293`.
 - **Exploit/failure scenario:** nested or alternatively named credentials and private text enter immutable evidence, where clients with Owner/Admin role can read them and no deletion route exists.
 - **Impact:** credential/PII retention and denial-of-service through oversized JSON/text.
 - **Likelihood:** medium to high for model/tool/provider text if deployed.
@@ -226,7 +226,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** all cognitive storage, especially seven immutable tables
 - **Violated contract:** distinguish audit evidence, expiring research, logs, private-user data, legal hold, and account erasure.
 - **Exact evidence:** all 20 retention fields are nullable; no enforcement job/state/legal hold/user provenance exists; seven tables reject every update/delete.
-- **Reproduction:** catalog assertion `supabase/tests/reviews/cognitive_database_adversarial_review.sql:336-346`; attempt delete on immutable source at lines 245-268.
+- **Reproduction:** catalog assertion `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:336-346`; attempt delete on immutable source at lines 245-268.
 - **Exploit/failure scenario:** deleted-user or copyrighted/private content persists indefinitely in immutable evidence, or an ad hoc cleanup destroys required audit context elsewhere.
 - **Impact:** unresolvable privacy/retention conflict and operational growth.
 - **Likelihood:** medium once real data is accepted.
@@ -242,7 +242,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** research claims/evidence provenance
 - **Violated contract:** every claim must retain valid source references and evidence/conclusions must remain separable.
 - **Exact evidence:** `research_claims.source_ids` is an unconstrained UUID array. A claim referencing a nonexistent UUID inserted successfully; no claim-to-source join table or task/platform match exists.
-- **Reproduction:** `supabase/tests/reviews/cognitive_database_adversarial_review.sql:225-233`.
+- **Reproduction:** `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:225-233`.
 - **Exploit/failure scenario:** a conclusion is displayed as sourced while every source ID is missing, belongs to another task/platform, or cannot be protected/reconciled relationally.
 - **Impact:** unverifiable provenance and cross-task evidence association.
 - **Likelihood:** high under ordinary application bugs.
@@ -258,7 +258,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** task, research, hypothesis, execution, evaluation, and learning ingestion
 - **Violated contract:** deterministic concurrent dedupe must avoid wrong-task merge, lost occurrence count, partial state, and unbounded retry.
 - **Exact evidence:** seven two-session races each yielded one row and one unique violation. No `occurrence_count` exists. The key is unique globally per table rather than within an explicit task/platform scope.
-- **Reproduction:** `scripts/reviews/run-cognitive-dedupe-races.sh:15-111`.
+- **Reproduction:** `docs/reviews/fixtures/run-cognitive-dedupe-races.sh:15-111`.
 - **Exploit/failure scenario:** a legitimate same-key event for another task is rejected or merged by application retry, while repeated evidence occurrences are silently lost.
 - **Impact:** incomplete frequency/audit data and wrong-scope reconciliation pressure.
 - **Likelihood:** medium under parallel ingestion.
@@ -274,7 +274,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** research freshness, graph traversal, plan/run evaluation, retention, and high-volume events
 - **Violated contract:** representative cognitive queries must avoid unbounded scans/graphs and denial-of-service growth.
 - **Exact evidence:** 5,000-row local `EXPLAIN` used sequential scans for freshness, source-array membership, sparse run-plan lookup, and retention; no leading specialized FK indexes were found; JSONB/arrays and per-task fan-out are unbounded.
-- **Reproduction:** catalog index assertion at `supabase/tests/reviews/cognitive_database_adversarial_review.sql:358-366`; repeat representative `EXPLAIN (ANALYZE, BUFFERS)` after 5,000 fixture rows.
+- **Reproduction:** catalog index assertion at `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:358-366`; repeat representative `EXPLAIN (ANALYZE, BUFFERS)` after 5,000 fixture rows.
 - **Exploit/failure scenario:** event volume or oversized metadata makes freshness, retention, relationship, and audit queries scan growing tables and hold resources.
 - **Impact:** degraded Admin/control-plane availability and costly retention/graph operations.
 - **Likelihood:** medium; workload dependent.
@@ -290,7 +290,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** budget enforcement and safe learning
 - **Violated contract:** a task cannot reset its budget; learning cannot alter approval levels or forbidden scope.
 - **Exact evidence:** service DML reset an exhausted budget, raised its caps, and zeroed consumption. A lesson containing `approval_level` and `forbidden_scope` inserted even though the source policy names both forbidden. No database constraint binds lessons to allowed fields or budgets to immutable owner-approved ceilings.
-- **Reproduction:** `supabase/tests/reviews/cognitive_database_adversarial_review.sql:276-280,301-315`.
+- **Reproduction:** `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:276-280,301-315`.
 - **Exploit/failure scenario:** a buggy/compromised writer erases spend/call evidence or persists a malicious lesson that a later router interprets as authority policy.
 - **Impact:** cost/loop enforcement and learning authority become unreliable if database state is trusted.
 - **Likelihood:** medium after consumers exist; no current executor is active.
@@ -306,7 +306,7 @@ The migration is additive. A disposable reset stopped at `20260719220000`, confi
 - **Affected component:** cognitive Admin readback
 - **Violated contract:** owner/admin readback must be minimal, explicit, and consistent with the owner/super-admin approval plane.
 - **Exact evidence:** policies allow `owner` and `operator` only. The `operator` is the public-facing Admin role and reads all platforms; a `super_admin` fixture reads zero rows.
-- **Reproduction:** `supabase/tests/reviews/cognitive_database_adversarial_review.sql:118-147`.
+- **Reproduction:** `docs/reviews/fixtures/cognitive_database_adversarial_review.sql:118-147`.
 - **Exploit/failure scenario:** a super-admin responsible for approval cannot inspect cognitive evidence, while a less clearly scoped Admin role receives global readback.
 - **Impact:** operational inconsistency; safe denial for super-admin but overbroad/unclear Admin scope.
 - **Likelihood:** high if the UI is deployed unchanged.
