@@ -212,16 +212,16 @@ const guardExecution = async (runBehavior) => {
     finalCommitAt: "2026-07-22T00:00:00.000Z",
   };
   const evaluationNow = new Date("2026-07-22T00:02:00.000Z");
-  assert.equal(foundation.evaluateCognitiveRun(safeEvaluation, ledger, evaluationNow).passed, true);
+  assert.equal(foundation.evaluateCognitiveRun(safeEvaluation, ledger.reader(), evaluationNow).passed, true);
   assert.ok(foundation.evaluateCognitiveRun({
     ...safeEvaluation,
     testEvidenceRecordIds: [],
     runEvidenceManifestHash: ledger.manifestHash("run-review", []),
-  }, ledger, evaluationNow).blockers.includes("required_test_missing:unit"));
+  }, ledger.reader(), evaluationNow).blockers.includes("required_test_missing:unit"));
   assert.ok(foundation.evaluateCognitiveRun({
     ...safeEvaluation,
     requiredTests: [{ ...requiredTest, physicalEvidenceRequired: true }],
-  }, ledger, evaluationNow).blockers.includes("physical_evidence_missing:unit"));
+  }, ledger.reader(), evaluationNow).blockers.includes("physical_evidence_missing:unit"));
   const unsafeLedger = new foundation.CognitiveTrustedEvidenceLedger({
     runnerCredentialHashes: { "runner-review": sha256(runnerCredential) },
     collectorCredentialHashes: {},
@@ -249,7 +249,7 @@ const guardExecution = async (runBehavior) => {
     runEvidenceManifestHash: unsafeLedger.manifestHash("run-unsafe", []),
     requiredTests: [],
   };
-  const unsafeResult = foundation.evaluateCognitiveRun(unsafeInput, unsafeLedger, evaluationNow);
+  const unsafeResult = foundation.evaluateCognitiveRun(unsafeInput, unsafeLedger.reader(), evaluationNow);
   assert.ok(unsafeResult.blockers.includes("permission_expansion_requires_owner_review"));
   assert.ok(unsafeResult.blockers.includes("money_boundary_violated"));
   assert.ok(unsafeResult.blockers.includes("user_rights_boundary_violated"));

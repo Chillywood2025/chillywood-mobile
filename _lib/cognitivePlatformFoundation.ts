@@ -1120,7 +1120,28 @@ export class CognitiveTrustedEvidenceLedger {
     if (!validHash(hash)) throw new Error("trusted_evidence_manifest_hash_invalid");
     return hash;
   }
+
+  reader(): CognitiveTrustedEvidenceReader {
+    return Object.freeze({
+      getTest: (recordId: string) => this.getTest(recordId),
+      getRun: (recordId: string) => this.getRun(recordId),
+      physicalForTest: (testId: string, finalCommit: string) =>
+        this.physicalForTest(testId, finalCommit),
+      manifestHash: (runRecordId: string, testRecordIds: readonly string[]) =>
+        this.manifestHash(runRecordId, testRecordIds),
+    });
+  }
 }
+
+export type CognitiveTrustedEvidenceReader = Readonly<{
+  getTest: (recordId: string) => Readonly<TrustedTestRecord> | null;
+  getRun: (recordId: string) => Readonly<TrustedRunEvidence> | null;
+  physicalForTest: (
+    testId: string,
+    finalCommit: string,
+  ) => readonly Readonly<TrustedPhysicalEvidence>[];
+  manifestHash: (runRecordId: string, testRecordIds: readonly string[]) => string;
+}>;
 
 export type CognitiveEvaluationInput = {
   evaluatorIdentity: string;
@@ -1145,7 +1166,7 @@ export type CognitiveEvaluation = {
 
 export const evaluateCognitiveRun = (
   input: CognitiveEvaluationInput,
-  evidenceLedger: CognitiveTrustedEvidenceLedger,
+  evidenceLedger: CognitiveTrustedEvidenceReader,
   now = new Date(),
 ): CognitiveEvaluation => {
   const blockers: string[] = [];

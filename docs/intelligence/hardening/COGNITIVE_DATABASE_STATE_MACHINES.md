@@ -15,10 +15,13 @@ digest, budget and rollback. Runs/evaluations use the snapshot hash rather than 
 mutable plan.
 
 Capability consumption and budget reservation/settlement lock the current row,
-check cancellation/quarantine/deadline/approval and consume unique usage IDs
-atomically. Findings use `(task_id, finding_key)`, transactional recurrence counts
-and immutable detection/resolution events. Rollback failure transitions to
-quarantine/escalation.
+prove hashed bearer/nonce material, check
+cancellation/quarantine/deadline/snapshot-bound approval and fresh preflight, and
+consume unique usage IDs atomically. Tool results require a postflight
+reauthorization of the consumed call. Findings use `(task_id, finding_key)`,
+transactional recurrence counts and immutable detection/resolution events.
+Rollback failure atomically quarantines the task, revokes its remaining
+capabilities, creates a critical finding and creates an owner-review request.
 
 User-derived content is not immutable raw evidence. Bounded redacted metadata may
 expire or be erased; an immutable non-personal tombstone records the lifecycle.

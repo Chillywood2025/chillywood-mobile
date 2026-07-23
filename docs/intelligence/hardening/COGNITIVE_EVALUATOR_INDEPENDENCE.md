@@ -5,6 +5,10 @@ approval, capability issuance, merge, release or deployment authority.
 
 Evaluation is bound to the original objective hash, immutable plan snapshot,
 final commit, diff hash, rollback hash and trusted execution-evidence manifest.
+A runner or physical collector cannot create trusted evidence without proving its
+separate authority credential to the evidence ledger; caller-supplied booleans,
+summaries and hashes do not create ledger records. The evaluator receives only the
+ledger’s read methods and has no evidence-write method.
 A required-test manifest is derived from changed paths, affected platform and
 risk. Each required record must come from a trusted runner, use the expected
 command, target the final commit, have a real exit code and output hashes, and not

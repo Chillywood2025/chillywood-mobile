@@ -18,5 +18,10 @@ Observed local result under Node 20.20.2:
 
 The suite invokes the implementation handlers for every attack rather than
 accepting documentation strings as results. Database state attacks are also
-covered by 88 cognitive pgTAP assertions and a real two-session recurrence race.
-The independent review-only retest remains a separate gate.
+covered by 125 cognitive pgTAP assertions and a real two-session recurrence race.
+`test:cognitive-hardening-regressions` adds 14 variants derived from the first
+failed independent retest, including wrong bearer/nonce proof, unconsumed-call
+postflight, mid-call revocation, double-encoded/split secrets, IPv6 and timeout
+SSRF cases, false source independence, fabricated evaluation input, and real
+rollback mutations. The fresh independent review-only retest remains a separate
+gate.

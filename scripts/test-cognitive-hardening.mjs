@@ -330,7 +330,7 @@ test("D-21", "conflict", () => {
 });
 test("D-22", "evaluator", () => {
   const fixture = evaluation();
-  const result = foundation.evaluateCognitiveRun(fixture.input, fixture.ledger, now);
+  const result = foundation.evaluateCognitiveRun(fixture.input, fixture.ledger.reader(), now);
   assert.equal(result.evaluatorWriteAllowed, false);
   assert.equal(result.ownerApprovalGranted, false);
   assert.equal(result.passed, true);
@@ -352,12 +352,12 @@ test("D-23", "evaluator", () => {
 });
 test("D-24", "evaluator", () => {
   const fixture = evaluation({ omitTests: true });
-  assert.equal(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger, now).status, "INCOMPLETE");
+  assert.equal(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger.reader(), now).status, "INCOMPLETE");
 });
 test("D-25", "evaluator", () => {
   const fixture = evaluation();
   fixture.input.requiredTests[0].physicalEvidenceRequired = true;
-  assert.ok(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger, now).blockers.includes("physical_evidence_missing:unit"));
+  assert.ok(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger.reader(), now).blockers.includes("physical_evidence_missing:unit"));
 });
 test("D-26", "research", () => {
   const result = foundation.evaluateResearchClaim(claim({

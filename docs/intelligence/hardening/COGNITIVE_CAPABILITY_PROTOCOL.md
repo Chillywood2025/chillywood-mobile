@@ -14,10 +14,12 @@ Each capability binds:
 - approval request/scope hash and immutable plan snapshot hash;
 - lifecycle and revocation state.
 
-Every call atomically verifies the complete scope, a fresh existing owner approval,
-emergency-stop/cancellation/quarantine state and remaining budgets. A unique call
-ID and usage sequence are consumed before work. The broker rechecks cancellation,
-revocation and scope before accepting long-running results. Replays, expiry,
+Every call proves both the opaque bearer and nonce against stored hashes, then
+atomically verifies the complete scope, a fresh snapshot-bound owner approval and
+preflight, emergency-stop/cancellation/quarantine state and remaining budgets. A
+unique call ID and usage sequence are consumed before work. The broker accepts a
+long-running result only for that consumed call ID and rechecks proof,
+cancellation, revocation, approval and scope. Replays, expiry,
 cross-task/project/repository/platform/provider use, stale snapshots and high-risk
 path mismatches fail closed.
 

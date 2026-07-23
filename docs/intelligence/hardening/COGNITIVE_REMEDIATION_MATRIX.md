@@ -8,15 +8,17 @@ Hardening state: `security_hardened_scaffold_not_deployed`
 
 The matrix retains every independent-review finding. “Fixed locally” means its
 source change and regression test pass on the hardening branch; it is not a
-deployment claim. Independent retest remains pending until the separate
-hardening-retest branch records its result.
+deployment claim. The first automated independent retest found remaining P1s and
+therefore did not close any row. Corrective commit `44aa2aa0` adds composed
+enforcement plus 14 new independent-variant regressions. The “pending” values
+below refer to the required fresh retest of that exact corrective commit.
 
 | Finding | Severity | Exact defect | Implementation change | Regression | Commit | Status | Independent retest |
 |---|---:|---|---|---|---|---|---|
 | A-SEC-001 | P1 | Executor accepted arbitrary/forbidden actions and unsafe paths. | Closed non-shell action engine and canonical filesystem confinement. | executor suite | `0b987819` | fixed locally | pending |
 | A-SEC-002 | P1 | Capability plane was declarative and replay-unaware. | Typed task/project/repository/branch/platform/environment/provider/action capability with atomic use. | capability + pgTAP | `0b987819`, `8c7b3bbd` | fixed locally | pending |
 | A-SEC-003 | P1 | Evaluator trusted executor assertions. | Independent read-only evidence evaluator and deterministic required-test manifest. | evaluator suite | `0b987819` | fixed locally | pending |
-| COG-B-001 | P1 | Task/project/platform isolation was unenforced. | Composite isolation keys and same-scope foreign keys. | 88 cognitive pgTAP assertions | `8c7b3bbd` | fixed locally | pending |
+| COG-B-001 | P1 | Task/project/platform isolation was unenforced. | Composite isolation keys and same-scope foreign keys. | 125 cognitive pgTAP assertions | `8c7b3bbd`, `44aa2aa0` | fixed locally | pending |
 | COG-B-002 | P1 | Direct state edits could fabricate control-plane outcomes. | Revoked state writes, transition RPCs, immutable transition events. | state-machine pgTAP | `8c7b3bbd` | fixed locally | pending |
 | C-08 | P1 | Workflow edits could produce release authority. | Workflow paths/actions permanently excluded from executor authority. | executor + CI guard | `0b987819`, `b19ee9ed` | fixed locally | pending |
 | D-06 | P1 | Tool output could become executable authority. | Untrusted bounded tool-result envelope. | D-06 | `0b987819` | fixed locally | pending |
@@ -69,3 +71,8 @@ hardening-retest branch records its result.
 Local totals: 25/25 P1 fixed, 23/23 technical P2 gaps fixed, 4/4 P3
 fixed. `OWNER_COUNSEL_RETENTION_DECISION_REQUIRED` remains a deliberate deployment
 blocker, not a claim of legal compliance.
+
+Corrective enforcement applies across the matrix where the first retest found an
+original guard to be descriptive rather than authoritative. The authoritative
+corrective checkpoint is `44aa2aa0`; older commit references identify the first
+implementation of each control, not the final independently retestable state.

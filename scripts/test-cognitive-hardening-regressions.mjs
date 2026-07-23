@@ -297,6 +297,10 @@ variant("R-11 evaluator ignores caller claims and requires trusted ledger record
     verifyCredential: (opaque, expected) => hash(opaque) === expected,
     hash: (value) => hash(stableJson(value)),
   });
+  const reader = ledger.reader();
+  assert.equal("recordTest" in reader, false);
+  assert.equal("recordRun" in reader, false);
+  assert.equal("recordPhysical" in reader, false);
   const result = foundation.evaluateCognitiveRun({
     evaluatorIdentity: "independent-evaluator",
     executorIdentity: "untrusted-executor",
@@ -317,7 +321,7 @@ variant("R-11 evaluator ignores caller claims and requires trusted ledger record
     }],
     testsPassed: true,
     completionSupported: true,
-  }, ledger, now);
+  }, reader, now);
   assert.equal(result.status, "INCOMPLETE");
   assert.equal(result.passed, false);
   assert.ok(result.blockers.includes("run_evidence_missing"));
