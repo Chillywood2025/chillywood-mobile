@@ -31,6 +31,9 @@ The service-principal registry supports explicit Owner revocation through
 `governance_revoke_two_party_service_principal`. A revoked service assertion can
 no longer satisfy `governance_assert_two_party_service_principal`, and the
 revocation records only a sanitized revocation hash, actor ID, and timestamp.
+The verifier is volatile and locks the matched active assertion row before
+authorizing execution, so an in-flight Owner revocation serializes with service
+authorization rather than racing as an unlocked read.
 
 Execution liveness remains strict for side-effect and success paths. When an
 Owner revokes approval or emergency stop activates after side effects begin, the
@@ -50,7 +53,7 @@ for product-quality activation tasks.
 
 Local proof:
 
-- `supabase test db`: 715/715 pgTAP tests passed.
+- `supabase test db`: 716/716 pgTAP tests passed.
 - `npm run test:cognitive-two-party-handoff`: passed.
 - `deno check` passed for both new Edge Functions and the modified governance
   control function.

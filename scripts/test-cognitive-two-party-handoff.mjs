@@ -68,6 +68,16 @@ contains(
 );
 contains(
   migration,
+  "from public.governance_two_party_service_assertions assertion",
+  "service-principal verifier does not read the assertion registry",
+);
+contains(
+  migration,
+  "for share;",
+  "service-principal verifier does not lock the matched assertion row",
+);
+contains(
+  migration,
   "create function public.governance_approved_execution_is_live",
   "missing post-claim execution liveness verifier",
 );

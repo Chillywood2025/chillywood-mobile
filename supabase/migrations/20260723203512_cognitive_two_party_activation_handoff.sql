@@ -763,7 +763,7 @@ create function public.governance_assert_two_party_service_principal(
 )
 returns text
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $$
@@ -773,25 +773,30 @@ declare
     nullif(current_setting('request.jwt.claim.role', true), ''),
     claims->>'role'
   );
+  matched_service_identity text;
 begin
   if request_role <> 'service_role'
      or p_worker_assertion is null
      or octet_length(p_worker_assertion) not between 32 and 1024
      or p_operation is null
-     or not public.governance_service_identity_allows_operation(p_service_identity, p_operation)
-     or not exists (
-       select 1
-       from public.governance_two_party_service_assertions assertion
-       where assertion.service_identity = p_service_identity
-         and assertion.status = 'active'
-         and assertion.revoked_at is null
-         and transaction_timestamp() < assertion.expires_at
-         and p_operation = any(assertion.allowed_operations)
-         and assertion.assertion_hash = encode(
-           extensions.digest(convert_to(p_worker_assertion,'UTF8'),'sha256'),
-           'hex'
-         )
-     ) then
+     or not public.governance_service_identity_allows_operation(p_service_identity, p_operation) then
+    raise exception 'two_party_service_principal_required' using errcode = '42501';
+  end if;
+
+  select assertion.service_identity into matched_service_identity
+  from public.governance_two_party_service_assertions assertion
+  where assertion.service_identity = p_service_identity
+    and assertion.status = 'active'
+    and assertion.revoked_at is null
+    and transaction_timestamp() < assertion.expires_at
+    and p_operation = any(assertion.allowed_operations)
+    and assertion.assertion_hash = encode(
+      extensions.digest(convert_to(p_worker_assertion,'UTF8'),'sha256'),
+      'hex'
+    )
+  for share;
+
+  if matched_service_identity is null then
     raise exception 'two_party_service_principal_required' using errcode = '42501';
   end if;
   return p_service_identity;

@@ -273,6 +273,15 @@ select ok(
   )) like '%governance_lock_approved_execution_liveness(p_execution_id)%',
   'side effects and success use locked liveness while cleanup uses locked cleanup scope'
 );
+select ok(
+  lower(pg_get_functiondef(
+    'public.governance_assert_two_party_service_principal(text,text,text)'::regprocedure
+  )) like '%from public.governance_two_party_service_assertions assertion%'
+  and lower(pg_get_functiondef(
+    'public.governance_assert_two_party_service_principal(text,text,text)'::regprocedure
+  )) like '%for share%',
+  'service-principal verifier locks the matched assertion row before authorizing execution'
+);
 
 select ok(
   not has_function_privilege(
