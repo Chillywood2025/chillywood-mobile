@@ -79,6 +79,36 @@ The complete database matrix and adverse outcomes are recorded separately in the
 database/RLS report. Green pgTAP does not erase the reproduced isolation,
 state-machine, approval-linkage, storage, and retention findings.
 
+Reviewer D's separate database fixture added 14 pgTAP observations and passed as
+written, including hostile observations that prove deeply nested secret-like JSON
+and unaudited resolution are accepted. Its executable attack fixture emitted all
+40 required IDs deterministically: 17 safe outcomes and 23 failures.
+
+## Review-branch validation
+
+After consolidating all reports and keeping review fixtures under
+`docs/reviews/`, the review branch repeated the required validation. The
+architecture graph initially and correctly reported stale when review fixtures
+were placed under production-indexed `scripts/` and `supabase/tests/` paths. The
+fixtures were moved—without changing their content—to the excluded review-evidence
+directory rather than altering the implementation graph. Graph guard/proof then
+passed against the unchanged reviewed snapshot.
+
+Final review-branch results:
+
+- Node install, lint, TypeScript, runtime, routes: PASS;
+- autonomous inventory/contract/model guards and proofs: PASS;
+- every cognitive guard, proof, and authored behavioral test: PASS;
+- Reviewer A fixture: 14 unsafe acceptance observations reproduced;
+- Reviewer B pgTAP: 47/47 assertions executed successfully;
+- Reviewer B concurrency: seven deterministic unique conflicts and no deadlock;
+- Reviewer D fixture: 40/40 attack IDs executed, 17 pass and 23 fail;
+- Reviewer D pgTAP: 14/14 observations executed successfully;
+- repository pgTAP: 329/329 PASS;
+- Owner Command Deno check: PASS;
+- Expo Doctor: 18/18 PASS;
+- graph guard/proof and `git diff --check`: PASS.
+
 ## Dependency baseline
 
 `npm ci` reported 23 known dependency audit findings (1 low, 19 moderate, 3 high)

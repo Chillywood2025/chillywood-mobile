@@ -3,12 +3,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { stripTypeScriptTypes } from "node:module";
+import ts from "typescript";
 
 const root = process.cwd();
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const loadTypescriptModule = async (relative) => {
-  const compiled = stripTypeScriptTypes(read(relative), { mode: "transform" });
+  const compiled = ts.transpileModule(read(relative), {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: relative,
+  }).outputText;
   return import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 };
 

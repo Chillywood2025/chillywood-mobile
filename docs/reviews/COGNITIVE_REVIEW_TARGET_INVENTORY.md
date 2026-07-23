@@ -64,3 +64,16 @@ The final status column is completed only from source, local reproduction, linke
 | No authority over money, rights, auth/RLS, roles, moderation, release/OTA, pricing, or provider products | registry/config/validator/owner command restrictions | cognitive execution tests | Current inert state verified; future enforcement disproved | Broad workflow/migration/source paths and caller risk flags can represent indirect privileged effects. | No present authority; permanent boundary is not yet enforceable. |
 | No self-approval | execution validator and registry | execution-safety suite | Disproved as a complete control | Missing approval IDs pass; distinct caller-supplied IDs pass; no FK/fresh approval/capability/evaluator identity exists. | Equality check is not a no-self-approval control. |
 | No unrestricted credential | registry/config and source scan | cognitive contract guard | Current absence verified | Capability/tool broker is declarative and cannot safely bind any future credential. | No current cognitive credential; credential addition remains blocked. |
+
+## Independent report index
+
+| Report | Decision/result | Findings |
+| --- | --- | --- |
+| `COGNITIVE_ARCHITECTURE_SECURITY_REVIEW.md` | `ARCH_SECURITY_CHANGES_REQUIRED` | 3 P1, 4 P2, 2 P3 |
+| `COGNITIVE_DATABASE_RLS_CONTROL_PLANE_REVIEW.md` | `DATABASE_RLS_CHANGES_REQUIRED` | 2 P1, 7 P2, 1 P3 |
+| `COGNITIVE_RESEARCH_TOOL_PROVIDER_REVIEW.md` | `RESEARCH_TOOL_CHANGES_REQUIRED` | 1 P1, 8 P2, 1 P3 |
+| `COGNITIVE_ADVERSARIAL_RED_TEAM_REPORT.md` | 17 pass / 23 fail | 19 P1, 4 P2 |
+| `COGNITIVE_FOUNDATION_INDEPENDENT_REVIEW_SYNTHESIS.md` | `REVIEW_BLOCKED_P1` | aggregate 0 P0, 25 P1, 23 P2, 4 P3 |
+
+No report is an approval. The isolated reviewers did not modify the implementation
+and Reviewer D froze its attack plan before A/B/C findings were available to it.

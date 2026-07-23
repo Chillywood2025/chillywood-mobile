@@ -19,6 +19,35 @@ The branch should not be represented or promoted as a source-complete cognitive 
 
 Severity means impact if the claimed component is wired or promoted: P1 is a deployment/activation blocker, P2 is a merge-readiness contract gap with contained current risk, and P3 is non-blocking hardening. Passing attacks have no severity.
 
+## Finding-field interpretation
+
+Each failed attack row is a complete Reviewer D finding under its row ID. For every
+failed row:
+
+- reviewer lane is D;
+- the title is the entry point plus hostile fixture in the first two columns;
+- affected component is the entry point;
+- affected file and line are the cited Evidence locations;
+- violated contract is the Expected safe behavior;
+- exact evidence is the Observed behavior plus cited fixture output;
+- reproduction is `node docs/reviews/COGNITIVE_ADVERSARIAL_FIXTURES.mjs` for
+  source attacks and `supabase test db
+  docs/reviews/COGNITIVE_ADVERSARIAL_DB_ATTACKS.sql` after disposable local reset
+  for database attacks;
+- exploit/failure scenario is the hostile Fixture;
+- recommended remediation is the row's Remediation;
+- required regression test is the same attack ID rerun against the real component,
+  requiring the Expected behavior and no side effect;
+- likelihood is high on activation for P1 and medium on activation for P2; current
+  production likelihood is contained by the off/undeployed state;
+- impact is authority/scope/execution escape or loss of trustworthy control-plane
+  evidence for P1, and unsafe decision input/audit/concurrency behavior for P2;
+- merge blocker is **yes under the current `source_complete_not_deployed` claim**;
+- deployment blocker is **yes**.
+
+This common metadata supplements, rather than replaces, each row's exact evidence
+and remediation. Passing rows are observations, not findings.
+
 ## Attack results D-01–D-10
 
 | ID | Entry point and hostile fixture | Expected | Observed | Verdict | Evidence | Severity | Remediation |
