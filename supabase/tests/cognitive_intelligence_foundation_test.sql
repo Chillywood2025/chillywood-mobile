@@ -272,6 +272,42 @@ select ok(
   'base64url, percent, phone, IP, and mixed private identifiers fail closed'
 );
 select ok(
+  (
+    select bool_and(public.cognitive_text_has_secret(value))
+    from (
+      values
+        (rtrim(translate(replace(encode(convert_to('sig=x','UTF8'),'base64'), E'\n', ''), '+/', '-_'), '=')),
+        (encode(convert_to('token=x','UTF8'),'hex')),
+        ('api[key]=x'),
+        ('authorization[token]=x'),
+        ('service[role]=x'),
+        ('private[key]=x'),
+        ('key=x'),
+        ('pwd=x'),
+        ('auth=x')
+    ) variants(value)
+  ),
+  'short encodings and normalized credential assignment labels fail closed'
+);
+select ok(
+  (
+    select bool_and(public.cognitive_text_has_secret(value))
+    from (
+      values
+        ('2001:db8::1'),
+        (rtrim(translate(replace(encode(convert_to('2001:db8::1','UTF8'),'base64'), E'\n', ''), '+/', '-_'), '=')),
+        (encode(convert_to('2001:db8::1','UTF8'),'hex'))
+    ) variants(value)
+  ),
+  'compressed IPv6 private identifiers fail closed in plain and encoded forms'
+);
+select ok(
+  public.cognitive_json_is_sanitized(
+    jsonb_build_object('task_id','550e8400-e29b-41d4-a716-446655440000')
+  ),
+  'typed safe UUID JSON remains accepted'
+);
+select ok(
   not public.cognitive_json_is_sanitized(
     jsonb_build_object('left','person@','right','example.invalid')
   ),

@@ -245,3 +245,20 @@ two P3 wording/attestation gaps after overlap was normalized.
 | A8-GRAPH-001 | P2 | A hostile `.git` pointer could make a local graph proof attest an unreviewed commit. | Require an externally supplied exact commit and compare it with repository HEAD; CI binds the value to trusted `github.sha`. | expected-commit mismatch regression; architecture guard/proof | fixed locally | pending |
 | C8-SCOPE-001 | P2/P3 | Sudo, break-glass, hyphen/underscore god-mode, and encoded provider escalation language were retained. | Run escalation detection over bounded decoded candidates and recognize explicit emergency/privileged identity language. | R-70 | fixed locally | pending |
 | B8-TYPED-DATA-001 | P3 | Stricter generic decoding initially rejected independently constrained SHA-256 and typed task UUID fields. | Keep generic metadata fail-closed while handling hashes/UUIDs only in exact typed constraints with independent format validation. | full pgTAP budget/rollback lifecycle | fixed locally | pending |
+
+## Ninth exact-head retest findings
+
+The ninth isolated retest reviewed
+`feef1e79c2962c5523d6b59c8d441e99ffbe90de`. It confirmed the architecture
+commit binding and candidate-cap controls, then found five overlapping P1
+boundary classes plus provider-escalation wording and one safe typed-data false
+positive. The scaffold remains `security_hardening_in_progress`.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A9/C9-SHORT-ENC-001 | P1 | Seven-character base64url and short hexadecimal credential values such as synthetic `sig=x` and `token=x` crossed JavaScript, transport, and SQL boundaries. | Inspect base64/base64url and hexadecimal candidates from four characters/four bytes, normalize every decoded layer, and retain the six-layer fail-closed cap. | R-71; pgTAP short encoding matrix | fixed locally | pending |
+| A9/B9/C9-LABEL-001 | P1 | Bracketed, dotted, underscored, fullwidth, and short credential labels were not classified consistently. | Normalize labels with NFKC, remove separators, apply one closed credential-key grammar, and reject before DNS or persistence. | R-71; pgTAP normalized label matrix | fixed locally | pending |
+| A9-URL-001 | P1 | The runtime truncated its security candidate, allowing a credential beyond 65,536 characters to reach DNS. | Reject research URLs above the 2,048-byte contract before parsing, decoding, DNS, or transport; no security input is truncated. | R-72 | fixed locally | pending |
+| A9/C9-PRIVATE-001 | P1 | Encoded email/phone/IP values could leave through research, and compressed IPv6 could cross operational identifiers and SQL. | Scan decoded research query/fragment data for private identifiers and recognize compressed IPv6 in TypeScript/runtime/SQL without misclassifying the destination host. | R-73, R-74; pgTAP compressed IPv6 matrix | fixed locally | pending |
+| B9-TYPED-UUID-001 | P1 | Safe task UUIDs embedded in JSON were falsely rejected by generic aggregate scanning. | Recursively validate JSON keys/values, preserve exact typed UUID/hash exceptions, and reconstruct only bounded leaf strings for split-secret/private-data detection. | R-75; pgTAP typed UUID/split-value checks | fixed locally | pending |
+| A9/C9-SCOPE-001 | P2/P3 | Superuser, UID-0, AdministratorAccess, emergency-master, broad permission, and split break-glass language did not always create an owner-review finding. | Aggregate bounded nested tool text, decode it, classify semantic privilege/broad-authority requests, discard retained data, and require owner review on unresolved encoded secret material. | R-75 | fixed locally | pending |

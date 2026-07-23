@@ -205,7 +205,7 @@ export const cognitiveSha256 = (text: string): string => {
 };
 const validIdentifier = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u.test(value);
-const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]+$|^(?:api[_.:-]?key|password|secret|credential|service[_.:-]?role|authorization|cookie|private[_.:-]?key|token|bearer)[_.:-][A-Za-z0-9._:-]+$)/u;
+const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]+$|^(?:api[_.:-]?key|password|pwd|secret|credential|service[_.:-]?role|authorization|auth|cookie|private[_.:-]?key|token|bearer|signature|sig|key)[_.:-][A-Za-z0-9._:-]+$)/u;
 function securityIdentifierContainsSecret(value: string): boolean {
   return SECRET_SHAPED_IDENTIFIER.test(value)
     || containsSecretLikeValue(value)
@@ -692,7 +692,7 @@ const PROVIDER_SCOPE_EXPANSION = new RegExp(
   String.raw`\b(?:${PROVIDER_SCOPE_ACTION})\b[\s\S]{0,100}\b(?:${PROVIDER_SCOPE_TARGET})\b|\b(?:${PROVIDER_SCOPE_TARGET})\b[\s\S]{0,100}\b(?:(?:is|are|must|should|needs?)(?:\s+be|\s+to\s+be)?\s+)?(?:${PROVIDER_SCOPE_ACTION})\b`,
   "iu",
 );
-const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|administrator|admin|root|sudo|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode)\b[\s\S]{0,60}\b(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?|mandatory|required|enabled)|(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?)\b[\s\S]{0,60}\b(?:owner|super[- ]?admin|administrator|admin|root|sudo|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|mandatory|required|enabled)|(?:run|operate|execute|authenticate|switch|use|set)\b[\s\S]{0,24}\broot\b|sudo|full[- ]?control|unrestricted\s+account|break[- ]?glass\s+identity|god[-_\s]+mode|carte\s+blanche)\b/iu;
+const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|administrator(?:access)?|admin|root|superuser|uid[-_\s]*0|sudo|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|emergency[-_\s]+master)\b[\s\S]{0,60}\b(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?|mandatory|required|enabled)|(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?)\b[\s\S]{0,60}\b(?:owner|super[- ]?admin|administrator(?:access)?|admin|root|superuser|uid[-_\s]*0|sudo|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|emergency[-_\s]+master|mandatory|required|enabled)|(?:run|operate|execute|authenticate|switch|use|set)\b[\s\S]{0,24}\b(?:root|superuser|uid[-_\s]*0)\b|sudo|full[- ]?control|unrestricted\s+account|break[- ]?glass\s+identity|god[-_\s]+mode|carte[-_\s]+blanche|administratoraccess|emergency[-_\s]+master\s+identity|(?:all|wildcard)[-_\s]+permissions?|(?:permit|allow|grant|enable|use|switch)[\s\S]{0,60}\b(?:everything|anything|unrestricted|without\s+restriction)\b|identity[\s\S]{0,60}\b(?:do|access|control)[\s\S]{0,24}\b(?:anything|everything)\b)\b/iu;
 
 const canonicalCognitiveJson = (value: unknown): string => {
   const normalize = (entry: unknown): unknown => {
@@ -707,6 +707,30 @@ const canonicalCognitiveJson = (value: unknown): string => {
     return entry;
   };
   return JSON.stringify(normalize(value));
+};
+
+const collectBoundedUntrustedText = (
+  value: unknown,
+  output: string[] = [],
+  depth = 0,
+): string[] => {
+  if (depth > 8 || output.length >= 128) return output;
+  if (typeof value === "string") {
+    output.push(value.slice(0, 4_000));
+    return output;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value.slice(0, 128)) collectBoundedUntrustedText(entry, output, depth + 1);
+    return output;
+  }
+  if (value !== null && typeof value === "object") {
+    for (const [key, child] of Object.entries(value).slice(0, 64)) {
+      output.push(key.slice(0, 256));
+      collectBoundedUntrustedText(child, output, depth + 1);
+      if (output.length >= 128) break;
+    }
+  }
+  return output;
 };
 
 export const createUntrustedToolEnvelope = (
@@ -735,11 +759,18 @@ export const createUntrustedToolEnvelope = (
   const serialized = typeof value.data === "string"
     ? value.data
     : String(JSON.stringify(value.data) ?? "").slice(0, 64_000);
-  const providerScopeCandidates = [serialized, ...maybeDecodeEncoded(serialized)];
+  const providerFragments = collectBoundedUntrustedText(value.data);
+  const providerScopeCandidates = [
+    serialized,
+    ...providerFragments,
+    providerFragments.join(" "),
+    providerFragments.join("-"),
+    providerFragments.join("_"),
+  ].flatMap((candidate) => [candidate, ...maybeDecodeEncoded(candidate)]);
   const ownerReviewRequired = providerScopeCandidates.some((candidate) =>
     PROVIDER_SCOPE_EXPANSION.test(candidate)
     || PROVIDER_PRIVILEGED_SCOPE_MENTION.test(candidate)
-  );
+  ) || sanitized.categories.includes("secret_like_value");
   const boundaryTruncated = sanitized.categories.some((category) =>
     category.startsWith("maximum_")
   );
@@ -907,7 +938,7 @@ const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----/u,
   /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9_-]{12,}\b/u,
   /\b(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}\b/u,
-  /\b(?:password|secret|service[_-]?role|refresh[_-]?token|access[_-]?token|authorization|cookie|private[_-]?key|token|bearer)\s*[:=]\s*\S+/iu,
+  /\b(?:password|pwd|secret|service[_-]?role|refresh[_-]?token|access[_-]?token|authorization|auth|cookie|private[_-]?key|token|bearer|signature|sig|key)\s*[:=]\s*\S+/iu,
   /\b(?:api[_-]?key|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|google[_-]?api[_-]?key)\s*[:=]\s*\S+/iu,
   /\b(?:api[_-]?key|service[_-]?role|access[_-]?token|refresh[_-]?token|authorization|cookie|private[_-]?key|token|bearer)[\s.:=_-]+[A-Za-z0-9][A-Za-z0-9._-]*\b/iu,
   /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u,
@@ -916,15 +947,48 @@ const SECRET_PATTERNS = [
   /https?:\/\/[^\s?]+\?[^\s]*(?:token|signature|sig|key|credential)=/iu,
 ];
 
+const SENSITIVE_ASSIGNMENT_LABELS = new Set([
+  "accesskey", "accesstoken", "apikey", "auth", "authorization", "authorizationtoken",
+  "bearer", "cookie", "credential", "credentialkey", "credentialtoken", "key", "password", "privatekey", "pwd",
+  "refreshtoken", "secret", "servicerole", "sig", "signature", "token", "xapikey",
+]);
+const normalizeSecurityLabel = (value: string): string =>
+  value.normalize("NFKC").toLowerCase().replace(/[^a-z0-9]/gu, "");
+const containsSensitiveAssignment = (value: string): boolean => {
+  const normalized = value.normalize("NFKC");
+  for (const match of normalized.matchAll(/(?:^|[?&\s])([^?&=:\s]{1,256})\s*[:=]/gu)) {
+    const label = normalizeSecurityLabel(match[1]);
+    if (
+      SENSITIVE_ASSIGNMENT_LABELS.has(label)
+      || /^(?:access|refresh)(?:key|token)$/u.test(label)
+      || /^(?:api|private)(?:key|token)$/u.test(label)
+      || /^service(?:key|role|token)$/u.test(label)
+      || /^authorization(?:key|token)$/u.test(label)
+    ) return true;
+  }
+  return false;
+};
 export const containsPromptInjection = (value: string): boolean =>
   PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(value));
 export const containsSecretLikeValue = (value: string): boolean =>
-  SECRET_PATTERNS.some((pattern) => pattern.test(value));
-const containsPrivateIdentifier = (value: string): boolean =>
-  /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u.test(value)
-  || /\+?[0-9][0-9 ()-]{7,}[0-9]/u.test(value)
-  || /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(value)
-  || /\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{0,4}\b/u.test(value);
+  SECRET_PATTERNS.some((pattern) => pattern.test(value.normalize("NFKC")))
+  || containsSensitiveAssignment(value);
+const containsPrivateIdentifier = (value: string): boolean => {
+  const normalized = value.normalize("NFKC");
+  if (
+    /^[a-f0-9]{40,128}$/iu.test(normalized)
+    || /^[a-f0-9-]{36}$/iu.test(normalized)
+    || /^(?:task|project|finding):[a-f0-9-]{36}$/iu.test(normalized)
+  ) return false;
+  if (
+    /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u.test(normalized)
+    || /(?:^|[^A-Za-z0-9-])\+?[0-9][0-9 ()-]{7,}[0-9](?![A-Za-z0-9-])/u.test(normalized)
+    || /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(normalized)
+  ) return true;
+  return normalized
+    .split(/[\s?&=,;()[\]{}<>"']/gu)
+    .some((fragment) => fragment.includes(":") && parseIpv6Address(fragment) !== null);
+};
 
 const maybeDecodeEncoded = (value: string): string[] => {
   const candidates = new Set<string>();
@@ -935,12 +999,12 @@ const maybeDecodeEncoded = (value: string): string[] => {
       return null;
     }
   };
-  let frontier = [value];
+  let frontier = [value.normalize("NFKC")];
   for (let depth = 0; depth < 6; depth += 1) {
     const next: string[] = [];
     for (const candidate of frontier) {
       try {
-        const percentDecoded = decodeURIComponent(candidate);
+        const percentDecoded = decodeURIComponent(candidate).normalize("NFKC");
         if (percentDecoded !== candidate && !candidates.has(percentDecoded)) {
           candidates.add(percentDecoded);
           next.push(percentDecoded);
@@ -948,14 +1012,14 @@ const maybeDecodeEncoded = (value: string): string[] => {
       } catch {
         // Malformed percent encoding remains untrusted ordinary text.
       }
-      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{8,}={0,2}\b/gu)) {
+      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{4,}={0,2}\b/gu)) {
         try {
           const normalized = match[0].replace(/-/gu, "+").replace(/_/gu, "/");
           const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
           const binary = globalThis.atob(padded);
           const decoded = decodeUtf8(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
           if (decoded !== null) {
-            const bounded = decoded.slice(0, 4_096);
+            const bounded = decoded.normalize("NFKC").slice(0, 4_096);
             if (!candidates.has(bounded)) next.push(bounded);
             candidates.add(bounded);
           }
@@ -963,13 +1027,14 @@ const maybeDecodeEncoded = (value: string): string[] => {
           // Invalid base64 remains ordinary untrusted text.
         }
       }
-      for (const match of candidate.matchAll(/\b(?:[0-9a-fA-F]{2}){8,}\b/gu)) {
+      for (const match of candidate.matchAll(/\b(?:[0-9a-fA-F]{2}){4,}\b/gu)) {
         const bytes = new Uint8Array(Math.min(match[0].length, 8_192) / 2);
         for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(match[0].slice(index * 2, (index * 2) + 2), 16);
         const decoded = decodeUtf8(bytes);
         if (decoded !== null) {
-          if (!candidates.has(decoded)) next.push(decoded);
-          candidates.add(decoded);
+          const normalized = decoded.normalize("NFKC");
+          if (!candidates.has(normalized)) next.push(normalized);
+          candidates.add(normalized);
         }
       }
     }
@@ -1026,18 +1091,21 @@ export const sanitizeCognitivePayload = (
         categories.add("secret_like_value");
         return "[REDACTED_SECRET_LIKE_VALUE]";
       }
-      if (!containsPrivateIdentifier(bounded) && decoded.some(containsPrivateIdentifier)) {
+      if (containsPrivateIdentifier(bounded)) {
+        categories.add("private_identifier");
+        const redacted = bounded
+          .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gu, "[REDACTED_EMAIL]")
+          .replace(/\+?[0-9][0-9 ()-]{7,}[0-9]/gu, "[REDACTED_PHONE]")
+          .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/gu, "[REDACTED_IP]")
+          .replace(/\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{0,4}\b/gu, "[REDACTED_IP]");
+        return redacted === bounded ? "[REDACTED_PRIVATE_IDENTIFIER]" : redacted;
+      }
+      if (decoded.some(containsPrivateIdentifier)) {
         categories.add("private_identifier");
         return "[REDACTED_PRIVATE_IDENTIFIER]";
       }
       if (containsPromptInjection(bounded) || decoded.some(containsPromptInjection)) categories.add("untrusted_instruction");
-      const withPrivateIdentifiersRedacted = bounded
-        .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gu, "[REDACTED_EMAIL]")
-        .replace(/\+?[0-9][0-9 ()-]{7,}[0-9]/gu, "[REDACTED_PHONE]")
-        .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/gu, "[REDACTED_IP]")
-        .replace(/\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{0,4}\b/gu, "[REDACTED_IP]");
-      if (withPrivateIdentifiersRedacted !== bounded) categories.add("private_identifier");
-      return withPrivateIdentifiersRedacted;
+      return bounded;
     }
     if (typeof value !== "object") {
       categories.add("unsupported_value_type");

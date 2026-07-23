@@ -12,8 +12,8 @@ to reopen rows when it found a new composed-boundary bypass. The fourth retest
 findings are corrected locally but remain open until a fresh exact-head
 independent retest verifies them.
 The executable attack suite reports 40/40, the cognitive database suite reports
-162/162, the full repository database suite reports 447/447, the independent
-source variants report 54/54, the runtime-authority variants report 11/11, and the separate
+191/191, the full repository database suite reports 476/476, the independent
+source variants report 75/75, the runtime-authority variants report 11/11, and the separate
 two-session recurrence race reports one current row, two occurrences, and two
 immutable lifecycle events.
 
@@ -136,6 +136,21 @@ hardening variants, 40/40 canonical attacks, 11/11 runtime-authority tests,
 473/473 local pgTAP assertions, and passing finding concurrency. The final
 status remains in progress until a new exact-head independent retest returns
 zero P0/P1.
+
+The ninth exact-head review of
+`feef1e79c2962c5523d6b59c8d441e99ffbe90de` found no P0 and confirmed the
+architecture provenance and candidate-saturation controls. It independently
+reproduced short base64url/hex credential aliases, compound/fullwidth query
+labels, caller-truncatable URL inspection, outbound encoded private identifiers,
+compressed IPv6 identifier persistence, a safe typed-UUID JSON false positive,
+and additional provider privilege wording. The corrective checkpoint now uses
+one NFKC-normalized sensitive-label grammar, a pre-parse URL byte cap, short
+bounded decoding, query-only private-data egress checks, compressed IPv6
+classification, recursive typed JSON validation, and bounded nested provider
+text aggregation. Authored evidence is 75/75 independent variants, 40/40
+canonical attacks, 11/11 runtime-authority tests, 476/476 local pgTAP
+assertions, and a passing two-session finding race. These findings remain
+independently open until the next exact-head retest.
 
 No remediation grants production execution, scheduler, deployment, release,
 money, rights, auth/RLS, role, moderation, provider-product or self-approval

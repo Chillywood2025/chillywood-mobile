@@ -74,6 +74,9 @@ declare
   percent_changed boolean;
   fragment_count integer;
 begin
+  if octet_length(coalesce(payload, '')) > 65536 then
+    return true;
+  end if;
   if coalesce(payload,'') ~ '^[a-f0-9-]{36}$'
      or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9-]{36}$' then
     return false;
@@ -103,10 +106,10 @@ begin
     end loop;
     percent_changed := decoded <> candidate;
     candidate := decoded;
-    normalized := lower(regexp_replace(candidate, '[^a-zA-Z0-9_=:/.?&+-]', '', 'g'));
+    normalized := lower(regexp_replace(normalize(candidate, NFKC), '[^a-zA-Z0-9_=:/.?&+-]', '', 'g'));
     if candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
-       or normalized ~* '(password|secret|token|authorization|cookie|service_?role|private_?key|api_?key|access_?key|refresh_?token)[:=][^,}]{4,}'
-       or candidate ~* '(^|[^A-Za-z0-9])(password|secret|credential|service[_:.-]?role|access[_:.-]?token|refresh[_:.-]?token|api[_:.-]?key|authorization|cookie|private[_:.-]?key|token|bearer)[=_:.-][A-Za-z0-9._:-]+'
+       or normalized ~* '(access(token|key)|refreshtoken|apikey|authorization(token|key)?|auth|bearer|cookie|credential(token|key)?|key|password|pwd|privatekey|secret|service(role|key|token)|sig|signature|token)[:=][^,&}[:space:]]+'
+       or candidate ~* '(^|[^A-Za-z0-9])(password|pwd|secret|credential|service[[:space:]_\[\]:.-]?(role|key|token)|access[[:space:]_\[\]:.-]?(token|key)|refresh[[:space:]_\[\]:.-]?token|api[[:space:]_\[\]:.-]?key|authorization([[:space:]_\[\]:.-]?(token|key))?|auth|cookie|private[[:space:]_\[\]:.-]?key|token|bearer|signature|sig|key)[=_:.-][A-Za-z0-9._:-]+'
        or candidate ~* '\b(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}\b'
        or candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
        or candidate ~* '(^|[^A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})([^A-Za-z0-9_]|$)'
@@ -115,7 +118,8 @@ begin
        or candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)='
        or candidate ~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
        or candidate ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
-       or candidate ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M' then
+       or candidate ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
+       or candidate ~* '(^|[^0-9A-F:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^0-9A-F:]|$)' then
       return true;
     end if;
 
@@ -125,7 +129,7 @@ begin
     -- closed without retaining the rejected payload.
     embedded_decoded := '';
     select count(*) into fragment_count
-    from regexp_matches(candidate, '([A-Za-z0-9+/_-]{8,}={0,2})', 'g');
+    from regexp_matches(candidate, '([A-Za-z0-9+/_-]{4,}={0,2})', 'g');
     if fragment_count > 128 then
       return true;
     end if;
@@ -133,7 +137,7 @@ begin
       select (match_value)[1]
       from regexp_matches(
         candidate,
-        '([A-Za-z0-9+/_-]{8,}={0,2})',
+        '([A-Za-z0-9+/_-]{4,}={0,2})',
         'g'
       ) as match_value
       limit 128
@@ -157,7 +161,7 @@ begin
     compacted_candidate := regexp_replace(candidate, '[[:space:]]+', '', 'g');
     if compacted_candidate <> candidate then
       select count(*) into fragment_count
-      from regexp_matches(compacted_candidate, '([A-Za-z0-9+/_-]{8,}={0,2})', 'g');
+      from regexp_matches(compacted_candidate, '([A-Za-z0-9+/_-]{4,}={0,2})', 'g');
       if fragment_count > 128 then
         return true;
       end if;
@@ -165,7 +169,7 @@ begin
         select (match_value)[1]
         from regexp_matches(
           compacted_candidate,
-          '([A-Za-z0-9+/_-]{8,}={0,2})',
+          '([A-Za-z0-9+/_-]{4,}={0,2})',
           'g'
         ) as match_value
         limit 128
@@ -190,7 +194,7 @@ begin
       select (match_value)[1]
       from regexp_matches(
         candidate,
-        '((?:[0-9A-Fa-f]{2}){8,})',
+        '((?:[0-9A-Fa-f]{2}){4,})',
         'g'
       ) as match_value
       limit 128
@@ -219,7 +223,7 @@ begin
     loop
       begin
         compacted_encoded := regexp_replace(folded_encoded, '[[:space:]]+', '', 'g');
-        if length(compacted_encoded) >= 8 then
+        if length(compacted_encoded) >= 4 then
           compacted_encoded := translate(compacted_encoded, '-_', '+/');
           compacted_encoded := compacted_encoded
             || repeat('=', (4 - (length(compacted_encoded) % 4)) % 4);
@@ -266,9 +270,10 @@ as $$
     when coalesce(payload,'') ~ '^[a-f0-9]{40,128}$'
       or coalesce(payload,'') ~ '^[a-f0-9-]{36}$'
       or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9-]{36}$' then false
-    else coalesce(payload,'') ~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
-      or coalesce(payload,'') ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
-      or coalesce(payload,'') ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
+    else normalize(coalesce(payload,''), NFKC) ~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
+      or normalize(coalesce(payload,''), NFKC) ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
+      or normalize(coalesce(payload,''), NFKC) ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
+      or normalize(coalesce(payload,''), NFKC) ~* '(^|[^0-9A-F:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^0-9A-F:]|$)'
   end
 $$;
 
@@ -280,6 +285,9 @@ set search_path = ''
 as $$
 declare
   string_value text;
+  child_value jsonb;
+  object_key text;
+  payload_type text;
   aggregate_value text := '';
 begin
   if payload is null then return true; end if;
@@ -287,16 +295,36 @@ begin
      or payload::text ~* '"(__proto__|constructor|prototype)"\s*:' then
     return false;
   end if;
+  payload_type := jsonb_typeof(payload);
+  if payload_type = 'string' then
+    string_value := payload #>> '{}';
+    return not public.cognitive_text_has_secret(string_value)
+      and not public.cognitive_text_has_private_identifier(string_value);
+  elsif payload_type = 'array' then
+    for child_value in select value from jsonb_array_elements(payload) loop
+      if not public.cognitive_json_is_sanitized(child_value) then return false; end if;
+    end loop;
+  elsif payload_type = 'object' then
+    for object_key, child_value in select key, value from jsonb_each(payload) loop
+      if public.cognitive_text_has_secret(object_key)
+         or public.cognitive_text_has_private_identifier(object_key)
+         or regexp_replace(normalize(object_key, NFKC), '[^a-zA-Z0-9]', '', 'g')
+            ~* '^(accesskey|accesstoken|apikey|auth|authorization|authorizationtoken|bearer|cookie|credential|credentialkey|credentialtoken|key|password|privatekey|pwd|refreshtoken|secret|servicerole|sig|signature|token|xapikey)$'
+         or not public.cognitive_json_is_sanitized(child_value) then
+        return false;
+      end if;
+    end loop;
+  else
+    return true;
+  end if;
   for string_value in
-    select trim(both '"' from value::text)
+    select value #>> '{}'
     from jsonb_path_query(payload, 'strict $.** ? (@.type() == "string")') value
   loop
     aggregate_value := left(aggregate_value || string_value, 32768);
-    if public.cognitive_text_has_secret(string_value)
-       or public.cognitive_text_has_private_identifier(string_value) then return false; end if;
   end loop;
   return not public.cognitive_text_has_secret(aggregate_value)
-    and not public.cognitive_text_has_secret(payload::text);
+    and not public.cognitive_text_has_private_identifier(aggregate_value);
 end;
 $$;
 revoke all on function public.cognitive_text_has_secret(text) from public, anon, authenticated;

@@ -405,16 +405,67 @@ const normalizedIp = (address) => {
   return parsed === null ? null : `v6:${parsed.toString(16).padStart(32, "0")}`;
 };
 
-const RESEARCH_CREDENTIAL_PATTERN = /\b(?:(?:access|refresh)\s*(?:[_-]?token|\[\s*token\s*\])|token|api[_-]?key|service[_-]?role|private[_-]?key|secret|password|credential|authorization|cookie|bearer|signature|sig)(?:[._-][A-Za-z0-9_-]{1,64})?\s*[:=]/iu;
+const RESEARCH_MAX_URL_BYTES = 2_048;
+const RESEARCH_CREDENTIAL_PATTERN = /\b(?:(?:access|refresh)\s*(?:[_-]?token|\[\s*token\s*\])|token|api[_-]?key|service[_-]?role|private[_-]?key|secret|password|pwd|credential|authorization|auth|cookie|bearer|signature|sig|key)(?:[._-][A-Za-z0-9_-]{1,64})?\s*[:=]/iu;
+const SENSITIVE_RESEARCH_LABELS = new Set([
+  "accesskey", "accesstoken", "apikey", "auth", "authorization", "authorizationtoken",
+  "bearer", "cookie", "credential", "credentialkey", "credentialtoken", "key", "password", "privatekey", "pwd",
+  "refreshtoken", "secret", "servicerole", "sig", "signature", "token", "xapikey",
+]);
+const normalizedSecurityText = (value) => String(value).normalize("NFKC");
+const normalizedSecurityLabel = (value) =>
+  normalizedSecurityText(value).toLowerCase().replace(/[^a-z0-9]/gu, "");
+const hasSensitiveResearchAssignment = (value) => {
+  const normalized = normalizedSecurityText(value);
+  for (const match of normalized.matchAll(/(?:^|[?&\s])([^?&=:\s]{1,256})\s*[:=]/gu)) {
+    const label = normalizedSecurityLabel(match[1]);
+    if (
+      SENSITIVE_RESEARCH_LABELS.has(label)
+      || /^(?:access|refresh)(?:key|token)$/u.test(label)
+      || /^(?:api|private)(?:key|token)$/u.test(label)
+      || /^service(?:key|role|token)$/u.test(label)
+      || /^authorization(?:key|token)$/u.test(label)
+    ) return true;
+  }
+  return false;
+};
+const hasPrivateIdentifierText = (value) => {
+  const normalized = normalizedSecurityText(value);
+  if (
+    /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u.test(normalized)
+    || /\+?[0-9][0-9 ()-]{7,}[0-9]/u.test(normalized)
+    || /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(normalized)
+  ) return true;
+  return normalized
+    .split(/[\s?&=,;()[\]{}<>"']/gu)
+    .some((fragment) => fragment.includes(":") && parseIpv6(fragment) !== null);
+};
+const hasPrivateIdentifierInResearchData = (value) =>
+  normalizedSecurityText(value).split(/\r?\n/gu).some((line) => {
+    try {
+      const url = new URL(line);
+      return hasPrivateIdentifierText(`${url.search}\n${url.hash}`);
+    } catch {
+      const queryIndex = line.indexOf("?");
+      if (line.includes("https://") && queryIndex >= 0) {
+        return hasPrivateIdentifierText(line.slice(queryIndex));
+      }
+      return !line.includes("https://") && hasPrivateIdentifierText(line);
+    }
+  });
 const decodeBoundedSecurityCandidates = (value) => {
-  const candidates = new Set([String(value).slice(0, 65_536)]);
+  const initial = normalizedSecurityText(value);
+  if (Buffer.byteLength(initial, "utf8") > RESEARCH_MAX_URL_BYTES * 2) {
+    throw new Error("url_too_long");
+  }
+  const candidates = new Set([initial]);
   let frontier = [...candidates];
   const decoder = new TextDecoder("utf-8", { fatal: true });
   for (let depth = 0; depth < 6; depth += 1) {
     const next = [];
     for (const candidate of frontier) {
       try {
-        const decoded = decodeURIComponent(candidate);
+        const decoded = normalizedSecurityText(decodeURIComponent(candidate));
         if (decoded !== candidate && !candidates.has(decoded)) {
           candidates.add(decoded);
           next.push(decoded);
@@ -422,11 +473,11 @@ const decodeBoundedSecurityCandidates = (value) => {
       } catch {
         throw new Error("url_encoding_invalid");
       }
-      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{8,}={0,2}\b/gu)) {
+      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{4,}={0,2}\b/gu)) {
         try {
           const normalized = match[0].replaceAll("-", "+").replaceAll("_", "/");
           const bytes = Buffer.from(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="), "base64");
-          const decoded = decoder.decode(bytes).slice(0, 16_384);
+          const decoded = normalizedSecurityText(decoder.decode(bytes)).slice(0, 16_384);
           if (decoded && !candidates.has(decoded)) {
             candidates.add(decoded);
             next.push(decoded);
@@ -435,9 +486,11 @@ const decodeBoundedSecurityCandidates = (value) => {
           // Invalid base64/base64url is ordinary untrusted URL text.
         }
       }
-      for (const match of candidate.matchAll(/\b(?:[0-9a-fA-F]{2}){8,}\b/gu)) {
+      for (const match of candidate.matchAll(/\b(?:[0-9a-fA-F]{2}){4,}\b/gu)) {
         try {
-          const decoded = decoder.decode(Buffer.from(match[0].slice(0, 32_768), "hex")).slice(0, 16_384);
+          const decoded = normalizedSecurityText(
+            decoder.decode(Buffer.from(match[0].slice(0, 32_768), "hex")),
+          ).slice(0, 16_384);
           if (decoded && !candidates.has(decoded)) {
             candidates.add(decoded);
             next.push(decoded);
@@ -456,9 +509,13 @@ const decodeBoundedSecurityCandidates = (value) => {
 };
 
 export const validateResearchUrlWithDns = async (raw, resolveDns) => {
+  const rawText = normalizedSecurityText(raw);
+  if (Buffer.byteLength(rawText, "utf8") > RESEARCH_MAX_URL_BYTES) {
+    throw new Error("url_too_long");
+  }
   let parsed;
   try {
-    parsed = new URL(raw);
+    parsed = new URL(rawText);
   } catch {
     throw new Error("url_invalid");
   }
@@ -489,9 +546,11 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
       throw new Error("url_encoding_invalid");
     }
   }
-  const securityCandidates = decodeBoundedSecurityCandidates(`${raw}\n${decoded}`);
+  const securityCandidates = decodeBoundedSecurityCandidates(`${rawText}\n${decoded}`);
   if (securityCandidates.some((candidate) =>
     RESEARCH_CREDENTIAL_PATTERN.test(candidate)
+    || hasSensitiveResearchAssignment(candidate)
+    || hasPrivateIdentifierInResearchData(candidate)
     || /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u.test(candidate)
     || /\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,})\b/u.test(candidate)
     || /https:\/\/[^/\s:@]+:[^/\s@]+@/iu.test(candidate)
