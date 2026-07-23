@@ -185,6 +185,7 @@ jobs:
           npm run test:cognitive-budget-cancellation
           npm run test:cognitive-conflict-rollback
           npm run test:cognitive-red-team
+          npm run test:cognitive-hardening-regressions
           npm run guard:cognitive-admin-truth
           npm run guard:cognitive-ci-supply-chain
           npm run guard:android-native-runtime-compatibility

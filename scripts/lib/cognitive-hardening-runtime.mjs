@@ -89,6 +89,165 @@ export const resolveConfinedRepositoryPath = ({
   return { canonicalRoot, canonicalTarget, relativePath: decoded };
 };
 
+const CLOSED_ACTIONS = new Set([
+  "repository_read_file",
+  "repository_list_files",
+  "repository_search",
+  "repository_apply_patch",
+  "repository_write_new_file",
+  "test_run_allowlisted",
+  "git_create_scoped_branch",
+  "git_stage_allowlisted_paths",
+  "git_commit_scoped",
+  "git_push_scoped_draft_branch",
+  "github_open_draft_pr",
+  "github_update_draft_pr_body",
+]);
+const WRITE_ACTIONS = new Set([
+  "repository_apply_patch",
+  "repository_write_new_file",
+  "git_stage_allowlisted_paths",
+  "git_commit_scoped",
+  "git_push_scoped_draft_branch",
+  "github_open_draft_pr",
+  "github_update_draft_pr_body",
+]);
+const TEST_COMMANDS = new Map([
+  ["lint", { program: "npm", args: ["run", "lint"] }],
+  ["typescript", { program: "npx", args: ["tsc", "--noEmit"] }],
+  ["cognitive_red_team", { program: "npm", args: ["run", "test:cognitive-red-team"] }],
+  ["route_contracts", { program: "npm", args: ["run", "guard:route-contracts"] }],
+]);
+
+const validScopedBranch = (value) => typeof value === "string"
+  && /^codex\/[a-z0-9][a-z0-9/_-]{2,120}$/u.test(value)
+  && !/(?:^|\/)(?:main|master|release(?:\/|$))/iu.test(value);
+
+const closedInvocation = (request, canonicalPaths) => {
+  if (!CLOSED_ACTIONS.has(request.action)) throw new Error("action_not_allowed");
+  if (request.repositoryFullName !== "Chillywood2025/chillywood-mobile") throw new Error("repository_not_allowed");
+  if (request.remote !== "origin") throw new Error("remote_not_allowed");
+  if (!validScopedBranch(request.branch)) throw new Error("branch_not_allowed");
+  if (!Array.isArray(request.argv) || request.argv.length > 64
+      || request.argv.some((entry) => typeof entry !== "string" || entry.length > 1_024 || /[\n\r;|><`]|\$\(|\|\||&&|&\s*$/u.test(entry))) {
+    throw new Error("command_injection_forbidden");
+  }
+  if (request.argv.some((entry) => /^(?:-f|--force(?:-with-lease)?|--delete|main|master|release|env|printenv|export|-x|--upload-pack)$/iu.test(entry))) {
+    throw new Error("forbidden_argument");
+  }
+  if (request.action.startsWith("repository_")) {
+    if (request.argv.length) throw new Error("repository_action_argv_forbidden");
+    return { kind: "internal", action: request.action, canonicalPaths };
+  }
+  if (request.action === "test_run_allowlisted") {
+    const command = request.argv.length === 1 ? TEST_COMMANDS.get(request.argv[0]) : null;
+    if (!command) throw new Error("test_command_not_allowlisted");
+    return { kind: "process", program: command.program, args: command.args, shell: false };
+  }
+  if (request.action === "git_create_scoped_branch") {
+    if (request.argv.length) throw new Error("git_action_argv_forbidden");
+    return { kind: "process", program: "git", args: ["switch", "-c", request.branch], shell: false };
+  }
+  if (request.action === "git_stage_allowlisted_paths") {
+    if (request.argv.length) throw new Error("git_action_argv_forbidden");
+    return { kind: "process", program: "git", args: ["add", "--", ...canonicalPaths.map((entry) => entry.relativePath)], shell: false };
+  }
+  if (request.action === "git_commit_scoped") {
+    if (request.argv.length !== 1 || request.argv[0].length < 3 || request.argv[0].length > 120) throw new Error("commit_message_invalid");
+    return { kind: "process", program: "git", args: ["commit", "-m", request.argv[0]], shell: false };
+  }
+  if (request.action === "git_push_scoped_draft_branch") {
+    if (request.argv.length) throw new Error("git_action_argv_forbidden");
+    return { kind: "process", program: "git", args: ["push", "origin", `${request.branch}:${request.branch}`], shell: false };
+  }
+  if (request.action === "github_open_draft_pr") return { kind: "github_api", action: "open_draft_pr", repository: request.repositoryFullName };
+  if (request.action === "github_update_draft_pr_body") return { kind: "github_api", action: "update_draft_pr_body", repository: request.repositoryFullName };
+  throw new Error("action_not_implemented");
+};
+
+export const executeAuthorizedAction = async ({
+  repositoryRoot,
+  request,
+  allowedScopes,
+  allowNewFile,
+  capabilityLedger,
+  capabilityId,
+  capabilityUse,
+  budgetLedger,
+  budgetReservationId,
+  budgetRequest,
+  leaseRegistry,
+  getRuntimeGate,
+  executeInvocation,
+  signal,
+}) => {
+  const preGate = getRuntimeGate();
+  if (signal.aborted || preGate.emergencyStop || preGate.taskCancelled || preGate.taskQuarantined) {
+    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["runtime_gate_closed"] };
+  }
+  const canonicalPaths = request.paths.map((requestedPath) => resolveConfinedRepositoryPath({
+    repositoryRoot,
+    requestedPath,
+    allowedScopes,
+    allowNewFile,
+  }));
+  if (!canonicalPaths.some((entry) => entry.relativePath === capabilityUse.path)) {
+    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["capability_path_not_resolved"] };
+  }
+  const invocation = closedInvocation(request, canonicalPaths);
+  const actionFingerprint = sha256(stableJson({
+    action: request.action,
+    branch: request.branch,
+    paths: canonicalPaths.map((entry) => entry.relativePath),
+  }));
+  const budgetGate = {
+    ...preGate,
+    deadlineAt: preGate.deadlineAt,
+    actionFingerprint,
+    planSnapshotHash: capabilityUse.planSnapshotHash,
+  };
+  if (!budgetLedger.reserve(budgetReservationId, budgetRequest, budgetGate)) {
+    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["budget_reservation_rejected"] };
+  }
+  const leaseKeys = canonicalPaths.map((entry) => `path:${entry.relativePath}`);
+  const leaseMode = WRITE_ACTIONS.has(request.action) ? "write" : "read";
+  for (const resourceKey of leaseKeys) {
+    const acquired = leaseRegistry.acquire({
+      resourceKey,
+      taskId: capabilityUse.taskId,
+      mode: leaseMode,
+      issuedAt: preGate.now.toISOString(),
+      expiresAt: preGate.deadlineAt,
+    }, preGate.now);
+    if (!acquired) {
+      budgetLedger.release(budgetReservationId);
+      leaseKeys.forEach((key) => leaseRegistry.release(key, capabilityUse.taskId));
+      return { accepted: false, status: "blocked_preflight", result: null, blockers: ["resource_lease_conflict"] };
+    }
+  }
+  const capabilityEvent = capabilityLedger.consume(capabilityId, capabilityUse, preGate);
+  if (capabilityEvent.event !== "consumed") {
+    budgetLedger.release(budgetReservationId);
+    leaseKeys.forEach((key) => leaseRegistry.release(key, capabilityUse.taskId));
+    return { accepted: false, status: "blocked_preflight", result: null, blockers: String(capabilityEvent.reason).split(",") };
+  }
+  try {
+    const result = await executeInvocation(invocation, signal);
+    const postGate = getRuntimeGate();
+    const postBlockers = [
+      ...(signal.aborted ? ["task_cancelled"] : []),
+      ...capabilityLedger.reauthorizeAcceptedCall(capabilityId, capabilityUse, postGate),
+    ];
+    const settled = budgetLedger.settle(budgetReservationId, budgetRequest, postGate);
+    if (postBlockers.length || !settled) {
+      return { accepted: false, status: "blocked_postflight", result: null, blockers: [...new Set([...postBlockers, ...(!settled ? ["budget_settlement_rejected"] : [])])].sort() };
+    }
+    return { accepted: true, status: "completed", result, blockers: [] };
+  } finally {
+    leaseKeys.forEach((key) => leaseRegistry.release(key, capabilityUse.taskId));
+  }
+};
+
 const ipv4Integer = (address) => address.split(".").reduce((result, octet) => (result * 256) + Number(octet), 0);
 const ipv4Private = (address) => {
   const number = ipv4Integer(address);
@@ -98,15 +257,59 @@ const ipv4Private = (address) => {
     return number >= baseInteger && number < baseInteger + size;
   });
 };
+
+const parseIpv6 = (address) => {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/gu, "").split("%")[0];
+  if (!normalized.includes(":")) return null;
+  let value = normalized;
+  const ipv4Tail = value.match(/(?:^|:)(\d{1,3}(?:\.\d{1,3}){3})$/u);
+  if (ipv4Tail) {
+    if (!net.isIPv4(ipv4Tail[1])) return null;
+    const octets = ipv4Tail[1].split(".").map(Number);
+    value = value.slice(0, -ipv4Tail[1].length)
+      + `${((octets[0] << 8) | octets[1]).toString(16)}:${((octets[2] << 8) | octets[3]).toString(16)}`;
+  }
+  const halves = value.split("::");
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - left.length - right.length;
+  if (missing < 0 || (halves.length === 1 && missing !== 0)) return null;
+  const groups = [...left, ...Array.from({ length: missing }, () => "0"), ...right];
+  if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/u.test(group))) return null;
+  return groups.reduce((result, group) => (result << 16n) | BigInt(`0x${group}`), 0n);
+};
+
+const ipv6PrefixMatch = (address, base, bits) => {
+  const value = parseIpv6(address);
+  const baseValue = parseIpv6(base);
+  if (value === null || baseValue === null) return true;
+  if (bits === 0) return true;
+  const shift = BigInt(128 - bits);
+  return (value >> shift) === (baseValue >> shift);
+};
+
+const RESERVED_V6 = [
+  ["::", 128],
+  ["::1", 128],
+  ["::ffff:0:0", 96],
+  ["64:ff9b::", 96],
+  ["64:ff9b:1::", 48],
+  ["100::", 64],
+  ["2001::", 23],
+  ["2001:db8::", 32],
+  ["2002::", 16],
+  ["3fff::", 20],
+  ["fc00::", 7],
+  ["fe80::", 10],
+  ["ff00::", 8],
+];
+
 export const isPrivateOrReservedNetworkAddress = (address) => {
-  if (net.isIPv4(address)) return ipv4Private(address);
-  if (!net.isIPv6(address)) return true;
-  const normalized = address.toLowerCase();
-  if (normalized === "::" || normalized === "::1" || normalized.startsWith("fe8") || normalized.startsWith("fe9")
-    || normalized.startsWith("fea") || normalized.startsWith("feb") || normalized.startsWith("fc") || normalized.startsWith("fd")
-    || normalized.startsWith("ff")) return true;
-  if (normalized.startsWith("::ffff:")) return isPrivateOrReservedNetworkAddress(normalized.slice(7));
-  return false;
+  const normalized = String(address).toLowerCase().replace(/^\[|\]$/gu, "").split("%")[0];
+  if (net.isIPv4(normalized)) return ipv4Private(normalized);
+  if (!net.isIPv6(normalized)) return true;
+  return RESERVED_V6.some(([base, bits]) => ipv6PrefixMatch(normalized, base, bits));
 };
 
 export const validateResearchUrlWithDns = async (raw, resolveDns) => {
@@ -119,7 +322,7 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
   if (parsed.protocol !== "https:") throw new Error("https_required");
   if (parsed.username || parsed.password) throw new Error("embedded_credentials_forbidden");
   if (parsed.port && parsed.port !== "443") throw new Error("port_not_allowed");
-  const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, "");
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/gu, "").replace(/\.$/u, "");
   if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) throw new Error("private_or_internal_target");
   const addresses = net.isIP(hostname) ? [{ address: hostname }] : await resolveDns(hostname);
   if (!Array.isArray(addresses) || addresses.length < 1) throw new Error("dns_resolution_missing");
@@ -136,21 +339,55 @@ export const fetchResearchEvidence = async ({
   maxCompressedBytes = 1_000_000,
   maxDecompressedBytes = 4_000_000,
   maxDecompressionRatio = 20,
+  totalTimeoutMs = 15_000,
 }) => {
+  if (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 100 || totalTimeoutMs > 60_000) throw new Error("research_timeout_invalid");
+  const startedAt = Date.now();
+  const runBounded = async (operation, timeoutLabel) => {
+    const remaining = totalTimeoutMs - (Date.now() - startedAt);
+    if (remaining <= 0) throw new Error("research_total_timeout");
+    let timeout;
+    try {
+      return await Promise.race([
+        operation(),
+        new Promise((_, reject) => {
+          timeout = setTimeout(() => reject(new Error(timeoutLabel)), remaining);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  };
   let current = initialUrl;
   const history = [];
   for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
     if (signal.aborted) throw new Error("research_cancelled");
-    const target = await validateResearchUrlWithDns(current, resolveDns);
-    const response = await request({
-      url: target.parsed.toString(),
-      pinnedAddresses: target.addresses,
-      signal,
-      headers: { accept: "text/html, text/plain, application/json", "user-agent": "ChillywoodResearchFoundation/1" },
-      credentials: "omit",
-      cookie: null,
-      authorization: null,
-    });
+    const target = await runBounded(
+      () => validateResearchUrlWithDns(current, resolveDns),
+      "research_dns_timeout",
+    );
+    const internalController = new AbortController();
+    const abortInternal = () => internalController.abort();
+    signal.addEventListener("abort", abortInternal, { once: true });
+    let response;
+    try {
+      response = await runBounded(
+        () => request({
+          url: target.parsed.toString(),
+          pinnedAddresses: target.addresses,
+          requireConnectedAddressMatch: true,
+          signal: internalController.signal,
+          headers: { accept: "text/html, text/plain, application/json", "user-agent": "ChillywoodResearchFoundation/1" },
+          credentials: "omit",
+          cookie: null,
+          authorization: null,
+        }),
+        "research_transport_timeout",
+      );
+    } finally {
+      internalController.abort();
+      signal.removeEventListener("abort", abortInternal);
+    }
     if (signal.aborted) throw new Error("research_cancelled");
     if (!Number.isSafeInteger(response.compressedBytes) || !Number.isSafeInteger(response.decompressedBytes)
       || response.compressedBytes < 0 || response.decompressedBytes < 0
@@ -199,11 +436,50 @@ export class ResourceLeaseRegistry {
   #leases = new Map();
 
   acquire({ resourceKey, taskId, mode, issuedAt, expiresAt }, now = new Date()) {
-    if (!["read", "write"].includes(mode) || Date.parse(expiresAt) <= now.getTime()) return false;
+    const issued = Date.parse(issuedAt);
+    const expires = Date.parse(expiresAt);
+    if (
+      typeof resourceKey !== "string"
+      || !/^(?:repository|branch|path|migration_namespace|edge_function|database_object|provider|release_channel|platform|feature_flag):[A-Za-z0-9._/:-]{1,512}$/u.test(resourceKey)
+      || typeof taskId !== "string"
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u.test(taskId)
+      || !["read", "write"].includes(mode)
+      || !Number.isFinite(issued)
+      || !Number.isFinite(expires)
+      || issued > now.getTime()
+      || expires <= now.getTime()
+      || expires <= issued
+    ) return false;
     const active = (this.#leases.get(resourceKey) ?? []).filter((lease) => !lease.revoked && Date.parse(lease.expiresAt) > now.getTime());
     if (active.some((lease) => lease.taskId !== taskId && (lease.mode === "write" || mode === "write"))) return false;
-    active.push({ resourceKey, taskId, mode, issuedAt, expiresAt, revoked: false });
+    if (active.some((lease) => lease.taskId === taskId && lease.mode === mode)) return false;
+    active.push({ resourceKey, taskId, mode, issuedAt, expiresAt, heartbeatAt: issuedAt, revoked: false });
     this.#leases.set(resourceKey, active);
+    return true;
+  }
+
+  heartbeat(resourceKey, taskId, at = new Date()) {
+    const active = this.#leases.get(resourceKey) ?? [];
+    const lease = active.find((entry) => entry.taskId === taskId && !entry.revoked && Date.parse(entry.expiresAt) > at.getTime());
+    if (!lease) return false;
+    lease.heartbeatAt = at.toISOString();
+    return true;
+  }
+
+  revoke(resourceKey, taskId) {
+    const active = this.#leases.get(resourceKey) ?? [];
+    const lease = active.find((entry) => entry.taskId === taskId && !entry.revoked);
+    if (!lease) return false;
+    lease.revoked = true;
+    return true;
+  }
+
+  release(resourceKey, taskId) {
+    const active = this.#leases.get(resourceKey) ?? [];
+    const remaining = active.filter((entry) => entry.taskId !== taskId);
+    if (remaining.length === active.length) return false;
+    if (remaining.length) this.#leases.set(resourceKey, remaining);
+    else this.#leases.delete(resourceKey);
     return true;
   }
 }

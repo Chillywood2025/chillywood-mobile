@@ -100,6 +100,17 @@ export type CognitiveExecutionPlan = {
 };
 
 const ACTION_SET = new Set<string>(COGNITIVE_EXECUTION_ACTIONS);
+const PLATFORM_SET = new Set<string>(["shared", "ios", "android", "web"]);
+const ENVIRONMENT_SET = new Set<string>(["local", "ci", "preview"]);
+const PROVIDER_SET = new Set<string>([
+  "repository",
+  "github",
+  "supabase_local",
+  "research_mock",
+  "model_mock",
+  "none",
+]);
+const RISK_SET = new Set<string>(["low", "medium", "high"]);
 const FORBIDDEN_PATH_SEGMENTS = new Set([".git", "node_modules", "android", "ios"]);
 const COMMAND_METACHARACTERS = /(?:[\n\r;|><`]|\$\(|\|\||&&|&\s*$)/u;
 const FORBIDDEN_ARGUMENT = /^(?:-f|--force(?:-with-lease)?|--delete|main|master|release|env|printenv|export|-x|--upload-pack)$/iu;
@@ -222,57 +233,10 @@ export const validateActionRequest = (request: CognitiveActionRequest): readonly
   return [...new Set(blockers)].sort();
 };
 
-export type CognitiveInvocationSpec =
-  | { kind: "internal"; action: CognitiveExecutionAction; paths: readonly string[] }
-  | { kind: "process"; program: "git" | "npm" | "npx"; args: readonly string[]; shell: false }
-  | { kind: "github_api"; action: "open_draft_pr" | "update_draft_pr_body"; repository: typeof COGNITIVE_REPOSITORY };
-
-const ALLOWLISTED_TEST_COMMANDS: Readonly<Record<string, readonly string[]>> = {
-  lint: ["npm", "run", "lint"],
-  typescript: ["npx", "tsc", "--noEmit"],
-  cognitive_red_team: ["npm", "run", "test:cognitive-red-team"],
-  route_contracts: ["npm", "run", "guard:route-contracts"],
-};
-
-export const buildClosedActionInvocation = (
-  request: CognitiveActionRequest,
-): CognitiveInvocationSpec => {
-  const blockers = validateActionRequest(request);
-  if (blockers.length) throw new Error(blockers.join(","));
-  if (["repository_read_file", "repository_list_files", "repository_search", "repository_apply_patch", "repository_write_new_file"].includes(request.action)) {
-    if (request.argv.length) throw new Error("repository_action_argv_forbidden");
-    return { kind: "internal", action: request.action, paths: [...request.paths] };
-  }
-  if (request.action === "test_run_allowlisted") {
-    const command = request.argv.length === 1 ? ALLOWLISTED_TEST_COMMANDS[request.argv[0]] : null;
-    if (!command) throw new Error("test_command_not_allowlisted");
-    return { kind: "process", program: command[0] as "npm" | "npx", args: command.slice(1), shell: false };
-  }
-  if (request.action === "git_create_scoped_branch") {
-    if (request.argv.length) throw new Error("git_action_argv_forbidden");
-    return { kind: "process", program: "git", args: ["switch", "-c", request.branch], shell: false };
-  }
-  if (request.action === "git_stage_allowlisted_paths") {
-    if (request.argv.length) throw new Error("git_action_argv_forbidden");
-    return { kind: "process", program: "git", args: ["add", "--", ...request.paths], shell: false };
-  }
-  if (request.action === "git_commit_scoped") {
-    if (request.argv.length !== 1 || request.argv[0].length < 3 || request.argv[0].length > 120) throw new Error("commit_message_invalid");
-    return { kind: "process", program: "git", args: ["commit", "-m", request.argv[0]], shell: false };
-  }
-  if (request.action === "git_push_scoped_draft_branch") {
-    if (request.argv.length) throw new Error("git_action_argv_forbidden");
-    return { kind: "process", program: "git", args: ["push", COGNITIVE_REMOTE, `${request.branch}:${request.branch}`], shell: false };
-  }
-  if (request.action === "github_open_draft_pr") return { kind: "github_api", action: "open_draft_pr", repository: COGNITIVE_REPOSITORY };
-  if (request.action === "github_update_draft_pr_body") return { kind: "github_api", action: "update_draft_pr_body", repository: COGNITIVE_REPOSITORY };
-  throw new Error("action_not_implemented");
-};
-
 export type CognitiveCapability = {
   capabilityId: string;
   bearerHash: string;
-  nonce: string;
+  nonceHash: string;
   taskId: string;
   projectId: string;
   repositoryFullName: typeof COGNITIVE_REPOSITORY;
@@ -303,6 +267,8 @@ export type CognitiveCapability = {
 
 export type CognitiveCapabilityUse = {
   callId: string;
+  opaqueBearer: string;
+  opaqueNonce: string;
   taskId: string;
   projectId: string;
   repositoryFullName: typeof COGNITIVE_REPOSITORY;
@@ -344,13 +310,43 @@ const HIGH_RISK_PATH = /^(?:supabase\/migrations\/|app\.json$|app\.config\.|eas\
 export const requiresHighRiskCapability = (pathValue: string): boolean => HIGH_RISK_PATH.test(pathValue);
 const riskRank = (value: "low" | "medium" | "high"): number => ({ low: 1, medium: 2, high: 3 })[value];
 
+const validTimestamp = (value: unknown): value is string =>
+  typeof value === "string" && Number.isFinite(Date.parse(value));
+
+const capabilityScopeIsValid = (scope: unknown): scope is string => {
+  if (typeof scope !== "string" || !scope || scope.length > 512) return false;
+  const candidate = scope.endsWith("/") ? `${scope}scope-placeholder` : scope;
+  return validateLexicalRepositoryPath(candidate).length === 0;
+};
+
+export type CognitiveCapabilityProofVerifier = (
+  opaqueBearer: string,
+  opaqueNonce: string,
+  expectedBearerHash: string,
+  expectedNonceHash: string,
+) => boolean;
+
 export const authorizeCapabilityUse = (
   capability: CognitiveCapability,
   use: CognitiveCapabilityUse,
   gate: CognitiveRuntimeGate,
+  proofVerified = false,
 ): readonly string[] => {
   const blockers: string[] = [];
   const nowMs = gate.now.getTime();
+  if (!validIdentifier(capability.capabilityId)) blockers.push("capability_id_invalid");
+  if (!validHash(capability.bearerHash) || !validHash(capability.nonceHash)) blockers.push("capability_proof_hash_invalid");
+  if (!proofVerified) blockers.push("capability_proof_invalid");
+  if (capability.repositoryFullName !== COGNITIVE_REPOSITORY || use.repositoryFullName !== COGNITIVE_REPOSITORY) blockers.push("repository_not_allowed");
+  if (!validBranch(capability.branch) || !validBranch(use.branch)) blockers.push("branch_not_allowed");
+  if (!PLATFORM_SET.has(capability.platform) || !PLATFORM_SET.has(use.platform)) blockers.push("platform_invalid");
+  if (!ENVIRONMENT_SET.has(capability.environment) || !ENVIRONMENT_SET.has(use.environment)) blockers.push("environment_invalid");
+  if (!RISK_SET.has(capability.riskLevel) || !RISK_SET.has(use.requiredRiskLevel)) blockers.push("risk_level_invalid");
+  if (!PROVIDER_SET.has(capability.provider) || !PROVIDER_SET.has(use.provider)) blockers.push("provider_invalid");
+  if (!ACTION_SET.has(capability.operation) || !ACTION_SET.has(use.operation)) blockers.push("operation_invalid");
+  if (!validTimestamp(capability.issuedAt) || !validTimestamp(capability.notBefore) || !validTimestamp(capability.expiresAt)
+      || Date.parse(capability.issuedAt) > Date.parse(capability.notBefore)
+      || Date.parse(capability.notBefore) >= Date.parse(capability.expiresAt)) blockers.push("capability_time_invalid");
   if (capability.status !== "active") blockers.push("capability_not_active");
   if (Date.parse(capability.notBefore) > nowMs) blockers.push("capability_not_yet_valid");
   if (Date.parse(capability.expiresAt) <= nowMs) blockers.push("capability_expired");
@@ -383,16 +379,65 @@ export class CognitiveCapabilityLedger {
   readonly usedCallIds = new Set<string>();
   readonly events: CognitiveCapabilityEvent[] = [];
 
+  readonly #verifyProof: CognitiveCapabilityProofVerifier;
+
+  constructor(verifyProof: CognitiveCapabilityProofVerifier) {
+    this.#verifyProof = verifyProof;
+  }
+
   issue(capability: CognitiveCapability): void {
-    if (this.capabilities.has(capability.capabilityId) || !validHash(capability.bearerHash)) throw new Error("capability_issue_rejected");
-    if (capability.maximumCalls < 1 || capability.remainingCalls !== capability.maximumCalls) throw new Error("capability_call_budget_invalid");
+    const timeValid = validTimestamp(capability.issuedAt)
+      && validTimestamp(capability.notBefore)
+      && validTimestamp(capability.expiresAt)
+      && Date.parse(capability.issuedAt) <= Date.parse(capability.notBefore)
+      && Date.parse(capability.notBefore) < Date.parse(capability.expiresAt);
+    const scopeValid = Array.isArray(capability.pathScopes)
+      && capability.pathScopes.length >= 1
+      && capability.pathScopes.length <= 128
+      && capability.pathScopes.every(capabilityScopeIsValid);
+    if (
+      this.capabilities.has(capability.capabilityId)
+      || !validIdentifier(capability.capabilityId)
+      || !validHash(capability.bearerHash)
+      || !validHash(capability.nonceHash)
+      || !validIdentifier(capability.taskId)
+      || !validIdentifier(capability.projectId)
+      || capability.repositoryFullName !== COGNITIVE_REPOSITORY
+      || !validBranch(capability.branch)
+      || !PLATFORM_SET.has(capability.platform)
+      || !ENVIRONMENT_SET.has(capability.environment)
+      || !RISK_SET.has(capability.riskLevel)
+      || !PROVIDER_SET.has(capability.provider)
+      || !ACTION_SET.has(capability.operation)
+      || !scopeValid
+      || !timeValid
+      || !validFiniteInteger(capability.maximumCalls, 1, 100)
+      || capability.remainingCalls !== capability.maximumCalls
+      || !validFiniteInteger(capability.maximumBytes, 1, 10_000_000)
+      || capability.remainingBytes !== capability.maximumBytes
+      || !validFiniteNumber(capability.maximumCost, 0, 25)
+      || capability.remainingCost !== capability.maximumCost
+      || !validIdentifier(capability.approvalRequestId)
+      || !validHash(capability.approvalScopeHash)
+      || !validHash(capability.planSnapshotHash)
+      || capability.status !== "active"
+      || capability.revokedAt !== null
+      || capability.consumedAt !== null
+      || capability.nextUsageSequence !== 1
+    ) throw new Error("capability_issue_rejected");
     this.capabilities.set(capability.capabilityId, { ...capability, pathScopes: [...capability.pathScopes] });
   }
 
   consume(capabilityId: string, use: CognitiveCapabilityUse, gate: CognitiveRuntimeGate): CognitiveCapabilityEvent {
     const capability = this.capabilities.get(capabilityId);
     if (!capability) throw new Error("capability_missing");
-    const blockers = [...authorizeCapabilityUse(capability, use, gate)];
+    const proofVerified = this.#verifyProof(
+      use.opaqueBearer,
+      use.opaqueNonce,
+      capability.bearerHash,
+      capability.nonceHash,
+    );
+    const blockers = [...authorizeCapabilityUse(capability, use, gate, proofVerified)];
     if (this.usedCallIds.has(use.callId)) blockers.push("capability_replay");
     if (blockers.length) {
       const event = { capabilityId, callId: use.callId, usageSequence: capability.nextUsageSequence, event: "rejected" as const, reason: [...new Set(blockers)].sort().join(","), at: gate.now.toISOString() };
@@ -410,6 +455,28 @@ export class CognitiveCapabilityLedger {
     const event = { capabilityId, callId: use.callId, usageSequence: sequence, event: "consumed" as const, reason: null, at: gate.now.toISOString() };
     this.events.push(event);
     return event;
+  }
+
+  reauthorizeAcceptedCall(
+    capabilityId: string,
+    use: CognitiveCapabilityUse,
+    gate: CognitiveRuntimeGate,
+  ): readonly string[] {
+    const capability = this.capabilities.get(capabilityId);
+    if (!capability) return ["capability_missing"];
+    if (!this.usedCallIds.has(use.callId)) return ["capability_call_not_consumed"];
+    const proofVerified = this.#verifyProof(
+      use.opaqueBearer,
+      use.opaqueNonce,
+      capability.bearerHash,
+      capability.nonceHash,
+    );
+    const originalStatus = capability.status;
+    if (originalStatus === "exhausted" && capability.consumedAt) capability.status = "active";
+    const blockers = authorizeCapabilityUse(capability, use, gate, proofVerified)
+      .filter((blocker) => !["call_budget_exhausted", "byte_budget_exhausted", "cost_budget_exhausted"].includes(blocker));
+    capability.status = originalStatus;
+    return blockers;
   }
 
   revoke(capabilityId: string, at = new Date()): void {
@@ -433,10 +500,22 @@ export type CognitiveBudgetLimits = {
   retries: number;
 };
 
+export type CognitiveBudgetRuntimeGate = {
+  now: Date;
+  deadlineAt: string;
+  emergencyStop: boolean;
+  taskCancelled: boolean;
+  taskQuarantined: boolean;
+  actionFingerprint: string;
+  planSnapshotHash: string;
+};
+
 export class CognitiveBudgetLedger {
   readonly limits: Readonly<CognitiveBudgetLimits>;
   readonly consumed: CognitiveBudgetLimits;
   readonly reservations = new Map<string, Partial<CognitiveBudgetLimits>>();
+  readonly actionOccurrences = new Map<string, number>();
+  readonly planOccurrences = new Map<string, number>();
 
   constructor(limits: CognitiveBudgetLimits) {
     for (const value of Object.values(limits)) if (!Number.isSafeInteger(value) || value < 0) throw new Error("budget_limit_invalid");
@@ -444,19 +523,48 @@ export class CognitiveBudgetLedger {
     this.consumed = { modelTokens: 0, modelCost: 0, toolCalls: 0, toolBytes: 0, elapsedMs: 0, childTasks: 0, recursionDepth: 0, concurrentCalls: 0, retries: 0 };
   }
 
-  reserve(reservationId: string, requested: Partial<CognitiveBudgetLimits>, cancelled = false): boolean {
-    if (cancelled || this.reservations.has(reservationId)) return false;
+  reserve(
+    reservationId: string,
+    requested: Partial<CognitiveBudgetLimits>,
+    gate: CognitiveBudgetRuntimeGate,
+  ): boolean {
+    const deadline = Date.parse(gate.deadlineAt);
+    if (
+      gate.emergencyStop
+      || gate.taskCancelled
+      || gate.taskQuarantined
+      || !Number.isFinite(deadline)
+      || gate.now.getTime() >= deadline
+      || !validIdentifier(reservationId)
+      || !validHash(gate.actionFingerprint)
+      || !validHash(gate.planSnapshotHash)
+      || this.reservations.has(reservationId)
+      || Object.keys(requested).length === 0
+    ) return false;
+    if ((this.actionOccurrences.get(gate.actionFingerprint) ?? 0) >= 3) return false;
+    if ((this.planOccurrences.get(gate.planSnapshotHash) ?? 0) >= 3) return false;
     for (const [key, raw] of Object.entries(requested) as [keyof CognitiveBudgetLimits, number][]) {
       if (!Number.isSafeInteger(raw) || raw < 0 || this.consumed[key] + raw > this.limits[key]) return false;
     }
     for (const [key, raw] of Object.entries(requested) as [keyof CognitiveBudgetLimits, number][]) this.consumed[key] += raw;
     this.reservations.set(reservationId, { ...requested });
+    this.actionOccurrences.set(gate.actionFingerprint, (this.actionOccurrences.get(gate.actionFingerprint) ?? 0) + 1);
+    this.planOccurrences.set(gate.planSnapshotHash, (this.planOccurrences.get(gate.planSnapshotHash) ?? 0) + 1);
     return true;
   }
 
-  settle(reservationId: string, actual: Partial<CognitiveBudgetLimits>): boolean {
+  settle(
+    reservationId: string,
+    actual: Partial<CognitiveBudgetLimits>,
+    gate: Pick<CognitiveBudgetRuntimeGate, "emergencyStop" | "taskCancelled" | "taskQuarantined">,
+  ): boolean {
     const reserved = this.reservations.get(reservationId);
     if (!reserved) return false;
+    if (gate.emergencyStop || gate.taskCancelled || gate.taskQuarantined) {
+      for (const [key, prior] of Object.entries(reserved) as [keyof CognitiveBudgetLimits, number][]) this.consumed[key] -= prior;
+      this.reservations.delete(reservationId);
+      return false;
+    }
     for (const [key, raw] of Object.entries(actual) as [keyof CognitiveBudgetLimits, number][]) {
       const prior = reserved[key] ?? 0;
       if (!Number.isSafeInteger(raw) || raw < 0 || this.consumed[key] - prior + raw > this.limits[key]) return false;
@@ -465,6 +573,20 @@ export class CognitiveBudgetLedger {
     for (const [key, raw] of Object.entries(actual) as [keyof CognitiveBudgetLimits, number][]) this.consumed[key] += raw;
     this.reservations.delete(reservationId);
     return true;
+  }
+
+  release(reservationId: string): boolean {
+    const reserved = this.reservations.get(reservationId);
+    if (!reserved) return false;
+    for (const [key, prior] of Object.entries(reserved) as [keyof CognitiveBudgetLimits, number][]) this.consumed[key] -= prior;
+    this.reservations.delete(reservationId);
+    return true;
+  }
+
+  retryAllowed(attempt: number, lastAttemptAt: string, now: Date, baseDelayMs = 1_000): boolean {
+    if (!validFiniteInteger(attempt, 1, this.limits.retries) || !validTimestamp(lastAttemptAt)) return false;
+    const delay = baseDelayMs * (2 ** (attempt - 1));
+    return Number.isSafeInteger(delay) && now.getTime() - Date.parse(lastAttemptAt) >= delay;
   }
 }
 
@@ -483,8 +605,51 @@ export type CognitiveToolResultEnvelope = {
 };
 
 export const createUntrustedToolEnvelope = (
-  value: Omit<CognitiveToolResultEnvelope, "untrusted">,
-): CognitiveToolResultEnvelope => ({ ...value, untrusted: true });
+  value: {
+    toolId: string;
+    callId: string;
+    taskId: string;
+    source: string;
+    contentType: CognitiveToolResultEnvelope["contentType"];
+    timestamp: string;
+    truncated: boolean;
+    data: unknown;
+  },
+  hashSanitizedValue: (value: unknown) => string,
+): CognitiveToolResultEnvelope => {
+  if (
+    !validIdentifier(value.toolId)
+    || !validIdentifier(value.callId)
+    || !validIdentifier(value.taskId)
+    || !validIdentifier(value.source)
+    || !["application/json", "text/plain"].includes(value.contentType)
+    || !validTimestamp(value.timestamp)
+    || value.timestamp !== new Date(value.timestamp).toISOString()
+    || typeof value.truncated !== "boolean"
+  ) throw new Error("tool_envelope_metadata_invalid");
+  const sanitized = sanitizeCognitivePayload(value.data);
+  const operationallySafe = sanitized.accepted && !sanitized.categories.includes("untrusted_instruction");
+  const retained = operationallySafe ? sanitized.value : null;
+  const dataHash = hashSanitizedValue({
+    accepted: operationallySafe,
+    categories: sanitized.categories,
+    value: retained,
+  });
+  if (!validHash(dataHash)) throw new Error("tool_envelope_hash_invalid");
+  return {
+    toolId: value.toolId,
+    callId: value.callId,
+    taskId: value.taskId,
+    source: value.source,
+    contentType: value.contentType,
+    dataHash,
+    timestamp: value.timestamp,
+    untrusted: true,
+    truncated: value.truncated,
+    sanitizationState: operationallySafe ? "sanitized" : "rejected",
+    data: retained,
+  };
+};
 
 export type StrictModelDocument = {
   schemaVersion: 1;
@@ -510,6 +675,8 @@ export const parseStrictModelDocument = (raw: string): StrictModelDocument => {
   const allowed = ["schemaVersion", "objective", "proposedActions", "evidenceIds", "blockers"];
   if (Object.keys(record).some((key) => !allowed.includes(key)) || Object.keys(record).length !== allowed.length) throw new Error("model_document_unknown_field");
   if (record.schemaVersion !== 1 || typeof record.objective !== "string" || record.objective.length < 1 || record.objective.length > 2_000) throw new Error("model_document_invalid");
+  const sanitizedObjective = sanitizeCognitivePayload(record.objective);
+  if (!sanitizedObjective.accepted || sanitizedObjective.categories.includes("untrusted_instruction")) throw new Error("model_document_objective_rejected");
   if (!Array.isArray(record.proposedActions) || record.proposedActions.length > 20 || record.proposedActions.some((action) => !ACTION_SET.has(String(action)))) throw new Error("model_document_action_invalid");
   if (!assertBoundedStringArray(record.evidenceIds, 64, 128) || !assertBoundedStringArray(record.blockers, 64, 256)) throw new Error("model_document_bounds_invalid");
   return record as StrictModelDocument;
@@ -522,12 +689,14 @@ const PROMPT_INJECTION_PATTERNS = [
   /\b(?:merge|deploy|release|publish|force[- ]?push)\b[\s\S]{0,60}\b(?:pull request|pr|branch|build|ota|production|track)\b/iu,
   /\b(?:read|dump|print|send|reveal|exfiltrate)\b[\s\S]{0,60}\b(?:environment|secret|token|password|credential|system prompt)\b/iu,
   /\b(?:disable|bypass|weaken|lower)\b[\s\S]{0,40}\b(?:guard|safety|approval|rls|policy)\b/iu,
+  /\b(?:expand|widen|broaden|elevate)\b[\s\S]{0,40}\b(?:scope|permission|privilege|authority|access)\b/iu,
 ];
 const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----/u,
   /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9_-]{12,}\b/u,
   /\b(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}\b/u,
   /\b(?:password|secret|service[_-]?role|refresh[_-]?token|access[_-]?token|authorization|cookie)\s*[:=]\s*\S+/iu,
+  /\b(?:api[_-]?key|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|google[_-]?api[_-]?key)\s*[:=]\s*\S+/iu,
   /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/u,
   /https:\/\/[^/\s:@]+:[^/\s@]+@/iu,
   /https?:\/\/[^\s?]+\?[^\s]*(?:token|signature|sig|key|credential)=/iu,
@@ -539,21 +708,35 @@ export const containsSecretLikeValue = (value: string): boolean =>
   SECRET_PATTERNS.some((pattern) => pattern.test(value));
 
 const maybeDecodeEncoded = (value: string): string[] => {
-  const candidates: string[] = [];
-  for (const match of value.matchAll(/\b[A-Za-z0-9+/]{20,}={0,2}\b/gu)) {
-    try {
-      const decoded = globalThis.atob(match[0]);
-      if (/^[\x09\x0A\x0D\x20-\x7E]+$/u.test(decoded)) candidates.push(decoded.slice(0, 4_096));
-    } catch {
-      // Invalid base64 remains ordinary untrusted text.
+  const candidates = new Set<string>();
+  let frontier = [value];
+  for (let depth = 0; depth < 3; depth += 1) {
+    const next: string[] = [];
+    for (const candidate of frontier) {
+      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/]{16,}={0,2}\b/gu)) {
+        try {
+          const decoded = globalThis.atob(match[0]);
+          if (/^[\x09\x0A\x0D\x20-\x7E]+$/u.test(decoded)) {
+            const bounded = decoded.slice(0, 4_096);
+            if (!candidates.has(bounded)) next.push(bounded);
+            candidates.add(bounded);
+          }
+        } catch {
+          // Invalid base64 remains ordinary untrusted text.
+        }
+      }
+      for (const match of candidate.matchAll(/\b(?:[0-9a-fA-F]{2}){8,}\b/gu)) {
+        let decoded = "";
+        for (let index = 0; index < Math.min(match[0].length, 8_192); index += 2) decoded += String.fromCharCode(Number.parseInt(match[0].slice(index, index + 2), 16));
+        if (/^[\x09\x0A\x0D\x20-\x7E]+$/u.test(decoded)) {
+          if (!candidates.has(decoded)) next.push(decoded);
+          candidates.add(decoded);
+        }
+      }
     }
+    frontier = next;
   }
-  for (const match of value.matchAll(/\b(?:[0-9a-fA-F]{2}){10,}\b/gu)) {
-    let decoded = "";
-    for (let index = 0; index < Math.min(match[0].length, 8_192); index += 2) decoded += String.fromCharCode(Number.parseInt(match[0].slice(index, index + 2), 16));
-    if (/^[\x09\x0A\x0D\x20-\x7E]+$/u.test(decoded)) candidates.push(decoded);
-  }
-  return candidates;
+  return [...candidates];
 };
 
 export type CognitiveSanitizationResult = {
@@ -570,6 +753,9 @@ export const sanitizeCognitivePayload = (
   const categories = new Set<string>();
   let totalBytes = 0;
   const seen = new WeakSet<object>();
+  const aggregatePieces: string[] = [];
+  const aggregateStringValues: string[] = [];
+  const aggregateKeys: string[] = [];
   const walk = (value: unknown, depth: number): unknown => {
     if (depth > limits.maxDepth) {
       categories.add("maximum_depth_exceeded");
@@ -581,6 +767,8 @@ export const sanitizeCognitivePayload = (
       return Number.isFinite(value) ? value : null;
     }
     if (typeof value === "string") {
+      aggregatePieces.push(value.slice(0, limits.maxString));
+      aggregateStringValues.push(value.slice(0, limits.maxString));
       totalBytes += new TextEncoder().encode(value).byteLength;
       if (value.length > limits.maxString) categories.add("maximum_string_length_exceeded");
       const bounded = value.slice(0, limits.maxString);
@@ -611,6 +799,8 @@ export const sanitizeCognitivePayload = (
     if (entries.length > limits.maxKeys) categories.add("maximum_object_keys_exceeded");
     const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
     for (const [key, child] of entries.slice(0, limits.maxKeys)) {
+      aggregatePieces.push(key.slice(0, 256));
+      aggregateKeys.push(key.slice(0, 256));
       if (["__proto__", "constructor", "prototype"].includes(key)) {
         categories.add("prototype_pollution_key");
         continue;
@@ -623,6 +813,20 @@ export const sanitizeCognitivePayload = (
     return output;
   };
   const value = walk(input, 0);
+  const aggregateCandidates = [
+    aggregatePieces.join(""),
+    aggregatePieces.join("="),
+    aggregatePieces.join(":"),
+    aggregateStringValues.join(""),
+    aggregateStringValues.join("="),
+    aggregateStringValues.join(":"),
+    aggregateKeys.join(""),
+    aggregateKeys.join("="),
+    aggregateKeys.join(":"),
+    ...aggregatePieces,
+  ].flatMap((candidate) => [candidate, ...maybeDecodeEncoded(candidate)]);
+  if (aggregateCandidates.some(containsSecretLikeValue)) categories.add("secret_like_value");
+  if (aggregateCandidates.some(containsPromptInjection)) categories.add("untrusted_instruction");
   if (totalBytes > limits.maxBytes) categories.add("maximum_total_bytes_exceeded");
   const rejected = ["secret_like_value", "secret_key", "prototype_pollution_key", "maximum_depth_exceeded", "maximum_total_bytes_exceeded", "circular_reference"];
   return { accepted: !rejected.some((category) => categories.has(category)), value, categories: [...categories].sort(), totalBytes };
@@ -654,6 +858,11 @@ export type CognitiveResearchSource = {
   contentHash: string;
   excerpt: string;
   freshnessDeadline: string;
+  retrievalStatus: "succeeded" | "failed" | "blocked";
+  citationMetadata: {
+    title: string;
+    locator: string;
+  };
   trustedForTools: false;
 };
 export type CognitiveResearchClaimInput = {
@@ -681,20 +890,35 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
   if (sanitizedClaim.categories.includes("untrusted_instruction")) reasons.push("prompt_injection_detected");
   if (!validFiniteNumber(input.confidence, 0, 1)) reasons.push("confidence_out_of_range");
   if (!input.sources.length || input.sources.length > 12) reasons.push("source_count_invalid");
-  if (input.technicalFact && !input.sources.some((source) => source.primary && ["official_documentation", "security_advisory", "platform_policy", "store_policy"].includes(source.sourceType))) reasons.push("technical_fact_requires_primary_source");
-  const newsPublishers = new Set(input.sources.filter((source) => source.sourceType === "news").map((source) => source.publisher.trim().toLowerCase()));
-  if (input.consequential && newsPublishers.size < 2) reasons.push("consequential_news_requires_independent_corroboration");
+  const authoritativeTypes = ["official_documentation", "security_advisory", "platform_policy", "store_policy"];
+  if (input.technicalFact && !input.sources.some((source) => source.primary && authoritativeTypes.includes(source.sourceType))) reasons.push("technical_fact_requires_primary_source");
+  const newsSources = input.sources.filter((source) => source.sourceType === "news");
+  const newsPublishers = new Set(newsSources.map((source) => source.publisher.trim().toLowerCase()));
+  const newsCanonicalUrls = new Set(newsSources.map((source) => source.canonicalUrlHash));
+  const newsContent = new Set(newsSources.map((source) => source.contentHash));
+  if (input.consequential && (newsPublishers.size < 2 || newsCanonicalUrls.size < 2 || newsContent.size < 2)) reasons.push("consequential_news_requires_independent_corroboration");
   if (input.contradictionState === "detected" || input.contradictionState === "unresolved") reasons.push("contradiction_unresolved");
   const claimFreshness = Date.parse(input.freshnessDeadline);
   if (!Number.isFinite(claimFreshness) || claimFreshness <= now.getTime()) reasons.push("claim_expired_refresh_required");
   for (const source of input.sources) {
     if (source.trustedForTools !== false) reasons.push("source_must_remain_untrusted");
+    if (source.primary && !authoritativeTypes.includes(source.sourceType)) reasons.push("primary_source_type_invalid");
+    if (source.retrievalStatus !== "succeeded") reasons.push("source_retrieval_not_verified");
+    if (
+      !source.citationMetadata
+      || typeof source.citationMetadata.title !== "string"
+      || source.citationMetadata.title.trim().length < 1
+      || source.citationMetadata.title.length > 512
+      || typeof source.citationMetadata.locator !== "string"
+      || source.citationMetadata.locator.trim().length < 1
+      || source.citationMetadata.locator.length > 512
+    ) reasons.push("source_citation_missing");
     if (!validHash(source.canonicalUrlHash) || !validHash(source.contentHash)) reasons.push("source_hash_invalid");
     if (!source.excerpt || source.excerpt.length > 2_000) reasons.push("source_excerpt_invalid");
     const publication = source.publicationDate === null ? Number.NaN : Date.parse(source.publicationDate);
     const retrieval = Date.parse(source.retrievalDate);
     const freshness = Date.parse(source.freshnessDeadline);
-    if (!Number.isFinite(retrieval) || !Number.isFinite(freshness) || freshness <= now.getTime()) reasons.push("source_stale_or_invalid");
+    if (!Number.isFinite(retrieval) || retrieval > now.getTime() || !Number.isFinite(freshness) || freshness <= now.getTime()) reasons.push("source_stale_or_invalid");
     if (source.publicationDate !== null && (!Number.isFinite(publication) || publication > retrieval)) reasons.push("source_publication_date_invalid");
     const sanitized = sanitizeCognitivePayload({ reference: source.reference, publisher: source.publisher, excerpt: source.excerpt });
     if (!sanitized.accepted) reasons.push("source_sensitive_content_rejected");
@@ -749,6 +973,8 @@ export type RequiredTest = {
   physicalEvidenceRequired: boolean;
 };
 export type TrustedTestRecord = {
+  recordId: string;
+  runnerId: string;
   testId: string;
   commandId: string;
   commit: string;
@@ -756,25 +982,157 @@ export type TrustedTestRecord = {
   stdoutHash: string;
   stderrHash: string;
   skipped: boolean;
-  trustedRunner: boolean;
   completedAt: string;
 };
+export type TrustedRunEvidence = {
+  recordId: string;
+  runnerId: string;
+  finalCommit: string;
+  objectiveHash: string;
+  planSnapshotHash: string;
+  diffHash: string;
+  rollbackPlanHash: string;
+  permissionExpansion: boolean;
+  moneyMoved: boolean;
+  userRightsChanged: boolean;
+  productionActionExecuted: boolean;
+  completedAt: string;
+};
+export type TrustedPhysicalEvidence = {
+  recordId: string;
+  collectorId: string;
+  testId: string;
+  evidenceType: "physical_device";
+  finalCommit: string;
+  artifactHash: string;
+  observedAt: string;
+};
+
+type CognitiveEvidenceHash = (value: unknown) => string;
+type CognitiveEvidenceCredentialVerifier = (
+  opaqueCredential: string,
+  expectedCredentialHash: string,
+) => boolean;
+
+export class CognitiveTrustedEvidenceLedger {
+  readonly #runnerCredentialHashes: Readonly<Record<string, string>>;
+  readonly #collectorCredentialHashes: Readonly<Record<string, string>>;
+  readonly #verifyCredential: CognitiveEvidenceCredentialVerifier;
+  readonly #hash: CognitiveEvidenceHash;
+  readonly #testRecords = new Map<string, Readonly<TrustedTestRecord>>();
+  readonly #runRecords = new Map<string, Readonly<TrustedRunEvidence>>();
+  readonly #physicalRecords = new Map<string, Readonly<TrustedPhysicalEvidence>>();
+
+  constructor(input: {
+    runnerCredentialHashes: Readonly<Record<string, string>>;
+    collectorCredentialHashes: Readonly<Record<string, string>>;
+    verifyCredential: CognitiveEvidenceCredentialVerifier;
+    hash: CognitiveEvidenceHash;
+  }) {
+    const runnerEntries = Object.entries(input.runnerCredentialHashes);
+    const collectorEntries = Object.entries(input.collectorCredentialHashes);
+    if (
+      !runnerEntries.length
+      || runnerEntries.some(([id, hash]) => !validIdentifier(id) || !validHash(hash))
+      || collectorEntries.some(([id, hash]) => !validIdentifier(id) || !validHash(hash))
+    ) throw new Error("evidence_trust_configuration_invalid");
+    this.#runnerCredentialHashes = Object.freeze({ ...input.runnerCredentialHashes });
+    this.#collectorCredentialHashes = Object.freeze({ ...input.collectorCredentialHashes });
+    this.#verifyCredential = input.verifyCredential;
+    this.#hash = input.hash;
+  }
+
+  #runnerAuthorized(runnerId: string, credential: string): boolean {
+    const expected = this.#runnerCredentialHashes[runnerId];
+    return Boolean(expected) && this.#verifyCredential(credential, expected);
+  }
+
+  recordTest(record: TrustedTestRecord, opaqueRunnerCredential: string): void {
+    if (
+      this.#testRecords.has(record.recordId)
+      || !this.#runnerAuthorized(record.runnerId, opaqueRunnerCredential)
+      || !validIdentifier(record.recordId)
+      || !validIdentifier(record.testId)
+      || !validIdentifier(record.commandId)
+      || !/^[a-f0-9]{40}$/u.test(record.commit)
+      || !validFiniteInteger(record.exitCode, 0, 255)
+      || !validHash(record.stdoutHash)
+      || !validHash(record.stderrHash)
+      || typeof record.skipped !== "boolean"
+      || !validTimestamp(record.completedAt)
+      || record.completedAt !== new Date(record.completedAt).toISOString()
+    ) throw new Error("trusted_test_evidence_rejected");
+    this.#testRecords.set(record.recordId, Object.freeze({ ...record }));
+  }
+
+  recordRun(record: TrustedRunEvidence, opaqueRunnerCredential: string): void {
+    if (
+      this.#runRecords.has(record.recordId)
+      || !this.#runnerAuthorized(record.runnerId, opaqueRunnerCredential)
+      || !validIdentifier(record.recordId)
+      || !/^[a-f0-9]{40}$/u.test(record.finalCommit)
+      || [record.objectiveHash, record.planSnapshotHash, record.diffHash, record.rollbackPlanHash].some((hash) => !validHash(hash))
+      || !validTimestamp(record.completedAt)
+      || record.completedAt !== new Date(record.completedAt).toISOString()
+      || [record.permissionExpansion, record.moneyMoved, record.userRightsChanged, record.productionActionExecuted].some((value) => typeof value !== "boolean")
+    ) throw new Error("trusted_run_evidence_rejected");
+    this.#runRecords.set(record.recordId, Object.freeze({ ...record }));
+  }
+
+  recordPhysical(record: TrustedPhysicalEvidence, opaqueCollectorCredential: string): void {
+    const expected = this.#collectorCredentialHashes[record.collectorId];
+    if (
+      this.#physicalRecords.has(record.recordId)
+      || !expected
+      || !this.#verifyCredential(opaqueCollectorCredential, expected)
+      || !validIdentifier(record.recordId)
+      || !validIdentifier(record.collectorId)
+      || !validIdentifier(record.testId)
+      || record.evidenceType !== "physical_device"
+      || !/^[a-f0-9]{40}$/u.test(record.finalCommit)
+      || !validHash(record.artifactHash)
+      || !validTimestamp(record.observedAt)
+      || record.observedAt !== new Date(record.observedAt).toISOString()
+    ) throw new Error("trusted_physical_evidence_rejected");
+    this.#physicalRecords.set(record.recordId, Object.freeze({ ...record }));
+  }
+
+  getTest(recordId: string): Readonly<TrustedTestRecord> | null {
+    return this.#testRecords.get(recordId) ?? null;
+  }
+
+  getRun(recordId: string): Readonly<TrustedRunEvidence> | null {
+    return this.#runRecords.get(recordId) ?? null;
+  }
+
+  physicalForTest(testId: string, finalCommit: string): readonly Readonly<TrustedPhysicalEvidence>[] {
+    return [...this.#physicalRecords.values()].filter((record) => record.testId === testId && record.finalCommit === finalCommit);
+  }
+
+  manifestHash(runRecordId: string, testRecordIds: readonly string[]): string {
+    const run = this.getRun(runRecordId);
+    const tests = testRecordIds.map((recordId) => this.getTest(recordId));
+    if (!run || tests.some((record) => record === null)) throw new Error("trusted_evidence_missing");
+    const hash = this.#hash({
+      run,
+      tests: tests.sort((left, right) => String(left?.recordId).localeCompare(String(right?.recordId))),
+    });
+    if (!validHash(hash)) throw new Error("trusted_evidence_manifest_hash_invalid");
+    return hash;
+  }
+}
+
 export type CognitiveEvaluationInput = {
   evaluatorIdentity: string;
   executorIdentity: string;
   objectiveHash: string;
   planSnapshotHash: string;
   runEvidenceManifestHash: string;
+  runEvidenceRecordId: string;
+  testEvidenceRecordIds: readonly string[];
   finalCommit: string;
+  finalCommitAt: string;
   requiredTests: readonly RequiredTest[];
-  trustedTestRecords: readonly TrustedTestRecord[];
-  diffHash: string;
-  rollbackPlanHash: string;
-  physicalEvidenceTypes: readonly string[];
-  permissionExpansion: boolean;
-  moneyMoved: boolean;
-  userRightsChanged: boolean;
-  productionActionExecuted: boolean;
 };
 export type CognitiveEvaluation = {
   status: "PASS" | "FAIL" | "INCOMPLETE" | "BLOCKED";
@@ -785,28 +1143,50 @@ export type CognitiveEvaluation = {
   completionSupported: boolean;
 };
 
-export const evaluateCognitiveRun = (input: CognitiveEvaluationInput): CognitiveEvaluation => {
+export const evaluateCognitiveRun = (
+  input: CognitiveEvaluationInput,
+  evidenceLedger: CognitiveTrustedEvidenceLedger,
+  now = new Date(),
+): CognitiveEvaluation => {
   const blockers: string[] = [];
   if (!validIdentifier(input.evaluatorIdentity) || input.evaluatorIdentity === input.executorIdentity) blockers.push("evaluator_identity_not_independent");
-  for (const hash of [input.objectiveHash, input.planSnapshotHash, input.runEvidenceManifestHash, input.diffHash, input.rollbackPlanHash]) if (!validHash(hash)) blockers.push("trusted_evidence_hash_invalid");
-  const records = new Map(input.trustedTestRecords.map((record) => [record.testId, record]));
+  for (const hash of [input.objectiveHash, input.planSnapshotHash, input.runEvidenceManifestHash]) if (!validHash(hash)) blockers.push("trusted_evidence_hash_invalid");
+  if (!/^[a-f0-9]{40}$/u.test(input.finalCommit) || !validTimestamp(input.finalCommitAt) || Date.parse(input.finalCommitAt) > now.getTime()) blockers.push("final_commit_identity_invalid");
+  const runEvidence = evidenceLedger.getRun(input.runEvidenceRecordId);
+  if (!runEvidence) blockers.push("run_evidence_missing");
+  else {
+    if (runEvidence.finalCommit !== input.finalCommit) blockers.push("run_evidence_wrong_commit");
+    if (runEvidence.objectiveHash !== input.objectiveHash || runEvidence.planSnapshotHash !== input.planSnapshotHash) blockers.push("run_evidence_scope_mismatch");
+    if (Date.parse(runEvidence.completedAt) < Date.parse(input.finalCommitAt) || Date.parse(runEvidence.completedAt) > now.getTime()) blockers.push("run_evidence_time_invalid");
+    if (runEvidence.permissionExpansion) blockers.push("permission_expansion_requires_owner_review");
+    if (runEvidence.moneyMoved) blockers.push("money_boundary_violated");
+    if (runEvidence.userRightsChanged) blockers.push("user_rights_boundary_violated");
+    if (runEvidence.productionActionExecuted) blockers.push("production_action_boundary_violated");
+  }
+  try {
+    if (evidenceLedger.manifestHash(input.runEvidenceRecordId, input.testEvidenceRecordIds) !== input.runEvidenceManifestHash) blockers.push("run_evidence_manifest_mismatch");
+  } catch {
+    blockers.push("run_evidence_manifest_unverifiable");
+  }
+  const records = new Map(
+    input.testEvidenceRecordIds
+      .map((recordId) => evidenceLedger.getTest(recordId))
+      .filter((record): record is Readonly<TrustedTestRecord> => record !== null)
+      .map((record) => [record.testId, record]),
+  );
   for (const required of input.requiredTests) {
     const record = records.get(required.id);
     if (!record) blockers.push(`required_test_missing:${required.id}`);
     else {
-      if (!record.trustedRunner) blockers.push(`test_runner_untrusted:${required.id}`);
       if (record.commandId !== required.commandId) blockers.push(`test_command_mismatch:${required.id}`);
       if (record.commit !== input.finalCommit || record.commit !== required.finalCommit) blockers.push(`test_wrong_commit:${required.id}`);
+      if (Date.parse(record.completedAt) < Date.parse(input.finalCommitAt) || Date.parse(record.completedAt) > now.getTime()) blockers.push(`test_time_invalid:${required.id}`);
       if (record.skipped) blockers.push(`required_test_skipped:${required.id}`);
       if (record.exitCode !== 0) blockers.push(`required_test_failed:${required.id}`);
       if (!validHash(record.stdoutHash) || !validHash(record.stderrHash)) blockers.push(`test_output_unverifiable:${required.id}`);
     }
-    if (required.physicalEvidenceRequired && !input.physicalEvidenceTypes.includes(`physical:${required.id}`)) blockers.push(`physical_evidence_missing:${required.id}`);
+    if (required.physicalEvidenceRequired && evidenceLedger.physicalForTest(required.id, input.finalCommit).length === 0) blockers.push(`physical_evidence_missing:${required.id}`);
   }
-  if (input.permissionExpansion) blockers.push("permission_expansion_requires_owner_review");
-  if (input.moneyMoved) blockers.push("money_boundary_violated");
-  if (input.userRightsChanged) blockers.push("user_rights_boundary_violated");
-  if (input.productionActionExecuted) blockers.push("production_action_boundary_violated");
   const unique = [...new Set(blockers)].sort();
   const incomplete = unique.some((blocker) => /missing|unverifiable|skipped/u.test(blocker));
   return {
@@ -869,19 +1249,75 @@ export type RollbackResult = {
   criticalFindingCreated: boolean;
   ownerReviewRequested: boolean;
 };
-export const handleRollbackResult = (succeeded: boolean): RollbackResult => succeeded
-  ? { status: "rollback_succeeded", taskStatus: "remediated", capabilitiesRevoked: true, childTasksStopped: true, criticalFindingCreated: false, ownerReviewRequested: false }
-  : { status: "rollback_failed", taskStatus: "quarantined", capabilitiesRevoked: true, childTasksStopped: true, criticalFindingCreated: true, ownerReviewRequested: true };
 
-export const executeAbortableTool = async <T>(
-  operation: (signal: AbortSignal) => Promise<T>,
-  signal: AbortSignal,
-): Promise<{ accepted: boolean; result: T | null; status: "completed" | "cancelled" }> => {
-  if (signal.aborted) return { accepted: false, result: null, status: "cancelled" };
-  const result = await operation(signal);
-  if (signal.aborted) return { accepted: false, result: null, status: "cancelled" };
-  return { accepted: true, result, status: "completed" };
+export type CognitiveRollbackEvent = {
+  taskId: string;
+  eventType: "rollback_succeeded" | "rollback_failed" | "task_quarantined" | "critical_finding_created" | "owner_review_requested";
+  at: string;
 };
+
+export class CognitiveRollbackCoordinator {
+  readonly #capabilityLedger: CognitiveCapabilityLedger;
+  readonly taskStates = new Map<string, "rollback_pending" | "remediated" | "quarantined">();
+  readonly childTaskStates = new Map<string, "active" | "stopped">();
+  readonly taskChildren = new Map<string, readonly string[]>();
+  readonly criticalFindings = new Set<string>();
+  readonly ownerReviewRequests = new Set<string>();
+  readonly events: CognitiveRollbackEvent[] = [];
+
+  constructor(capabilityLedger: CognitiveCapabilityLedger) {
+    this.#capabilityLedger = capabilityLedger;
+  }
+
+  register(taskId: string, childTaskIds: readonly string[] = []): void {
+    if (!validIdentifier(taskId) || childTaskIds.some((id) => !validIdentifier(id))) throw new Error("rollback_task_invalid");
+    this.taskStates.set(taskId, "rollback_pending");
+    this.taskChildren.set(taskId, [...new Set(childTaskIds)]);
+    childTaskIds.forEach((id) => this.childTaskStates.set(id, "active"));
+  }
+
+  record(taskId: string, succeeded: boolean, at = new Date()): RollbackResult {
+    if (this.taskStates.get(taskId) !== "rollback_pending" || !Number.isFinite(at.getTime())) throw new Error("rollback_state_invalid");
+    if (succeeded) {
+      this.taskStates.set(taskId, "remediated");
+      this.events.push({ taskId, eventType: "rollback_succeeded", at: at.toISOString() });
+      return {
+        status: "rollback_succeeded",
+        taskStatus: "remediated",
+        capabilitiesRevoked: false,
+        childTasksStopped: false,
+        criticalFindingCreated: false,
+        ownerReviewRequested: false,
+      };
+    }
+    this.taskStates.set(taskId, "quarantined");
+    this.events.push({ taskId, eventType: "rollback_failed", at: at.toISOString() });
+    for (const [capabilityId, capability] of this.#capabilityLedger.capabilities.entries()) {
+      if (capability.taskId === taskId) this.#capabilityLedger.revoke(capabilityId, at);
+    }
+    for (const childId of this.taskChildren.get(taskId) ?? []) this.childTaskStates.set(childId, "stopped");
+    this.criticalFindings.add(taskId);
+    this.ownerReviewRequests.add(taskId);
+    this.events.push(
+      { taskId, eventType: "task_quarantined", at: at.toISOString() },
+      { taskId, eventType: "critical_finding_created", at: at.toISOString() },
+      { taskId, eventType: "owner_review_requested", at: at.toISOString() },
+    );
+    const capabilitiesRevoked = [...this.#capabilityLedger.capabilities.values()]
+      .filter((capability) => capability.taskId === taskId)
+      .every((capability) => capability.status === "revoked");
+    const childTasksStopped = (this.taskChildren.get(taskId) ?? [])
+      .every((childId) => this.childTaskStates.get(childId) === "stopped");
+    return {
+      status: "rollback_failed",
+      taskStatus: "quarantined",
+      capabilitiesRevoked,
+      childTasksStopped,
+      criticalFindingCreated: this.criticalFindings.has(taskId),
+      ownerReviewRequested: this.ownerReviewRequests.has(taskId),
+    };
+  }
+}
 
 export const COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION = {
   deploymentState: COGNITIVE_STATUS,

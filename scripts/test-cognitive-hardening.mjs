@@ -7,11 +7,13 @@ import { setTimeout as delay } from "node:timers/promises";
 import ts from "typescript";
 import {
   canonicalSnapshotHash,
+  executeAuthorizedAction,
   fetchResearchEvidence,
   requiredTestManifestForChanges,
   resolveConfinedRepositoryPath,
   ResourceLeaseRegistry,
   sha256,
+  stableJson,
 } from "./lib/cognitive-hardening-runtime.mjs";
 
 const root = process.cwd();
@@ -41,6 +43,8 @@ const source = (overrides = {}) => ({
   excerpt: "A bounded official fixture excerpt.",
   freshnessDeadline: "2026-08-22T00:00:00.000Z",
   trustedForTools: false,
+  retrievalStatus: "succeeded",
+  citationMetadata: { title: "Official fixture", locator: "section-1" },
   ...overrides,
 });
 const claim = (overrides = {}) => ({
@@ -86,7 +90,7 @@ const safePlan = (overrides = {}) => ({
 const capability = (overrides = {}) => ({
   capabilityId: "capability-fixture",
   bearerHash: hash("bearer"),
-  nonce: "nonce-fixture",
+  nonceHash: hash("nonce"),
   taskId: "task-fixture",
   projectId: "project-fixture",
   repositoryFullName: "Chillywood2025/chillywood-mobile",
@@ -117,6 +121,8 @@ const capability = (overrides = {}) => ({
 });
 const use = (overrides = {}) => ({
   callId: "call-fixture-001",
+  opaqueBearer: "bearer",
+  opaqueNonce: "nonce",
   taskId: "task-fixture",
   projectId: "project-fixture",
   repositoryFullName: "Chillywood2025/chillywood-mobile",
@@ -142,7 +148,16 @@ const gate = (overrides = {}) => ({
   approvalValid: true,
   ...overrides,
 });
-const evaluation = (overrides = {}) => {
+const proofVerifier = (opaqueBearer, opaqueNonce, expectedBearerHash, expectedNonceHash) =>
+  hash(opaqueBearer) === expectedBearerHash && hash(opaqueNonce) === expectedNonceHash;
+const budgetGate = (overrides = {}) => ({
+  ...gate(),
+  deadlineAt: "2026-07-22T13:00:00.000Z",
+  actionFingerprint: hash("action"),
+  planSnapshotHash: hash("plan"),
+  ...overrides,
+});
+const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, inputOverrides = {} } = {}) => {
   const requiredTests = [{
     id: "unit",
     commandId: "npm:test",
@@ -151,34 +166,68 @@ const evaluation = (overrides = {}) => {
     risk: "high",
     physicalEvidenceRequired: false,
   }];
-  return {
-    evaluatorIdentity: "evaluator-fixture",
-    executorIdentity: "executor-fixture",
+  if (physical) requiredTests[0].physicalEvidenceRequired = true;
+  const runnerCredential = "runner-credential";
+  const collectorCredential = "collector-credential";
+  const ledger = new foundation.CognitiveTrustedEvidenceLedger({
+    runnerCredentialHashes: { "runner-fixture": hash(runnerCredential) },
+    collectorCredentialHashes: { "collector-fixture": hash(collectorCredential) },
+    verifyCredential: (opaque, expectedHash) => hash(opaque) === expectedHash,
+    hash: (value) => hash(stableJson(value)),
+  });
+  ledger.recordRun({
+    recordId: "run-evidence-fixture",
+    runnerId: "runner-fixture",
+    finalCommit: "a".repeat(40),
     objectiveHash: hash("objective"),
     planSnapshotHash: hash("plan"),
-    runEvidenceManifestHash: hash("manifest"),
-    finalCommit: "a".repeat(40),
-    requiredTests,
-    trustedTestRecords: [{
-      testId: "unit",
-      commandId: "npm:test",
-      commit: "a".repeat(40),
-      exitCode: 0,
-      stdoutHash: hash("stdout"),
-      stderrHash: hash("stderr"),
-      skipped: false,
-      trustedRunner: true,
-      completedAt: now.toISOString(),
-    }],
     diffHash: hash("diff"),
     rollbackPlanHash: hash("rollback"),
-    physicalEvidenceTypes: [],
     permissionExpansion: false,
     moneyMoved: false,
     userRightsChanged: false,
     productionActionExecuted: false,
-    ...overrides,
+    completedAt: now.toISOString(),
+    ...runOverrides,
+  }, runnerCredential);
+  if (!omitTests) ledger.recordTest({
+    recordId: "test-evidence-fixture",
+    runnerId: "runner-fixture",
+    testId: "unit",
+    commandId: "npm:test",
+    commit: "a".repeat(40),
+    exitCode: 0,
+    stdoutHash: hash("stdout"),
+    stderrHash: hash("stderr"),
+    skipped: false,
+    completedAt: now.toISOString(),
+  }, runnerCredential);
+  if (physical) ledger.recordPhysical({
+    recordId: "physical-evidence-fixture",
+    collectorId: "collector-fixture",
+    testId: "unit",
+    evidenceType: "physical_device",
+    finalCommit: "a".repeat(40),
+    artifactHash: hash("physical-artifact"),
+    observedAt: now.toISOString(),
+  }, collectorCredential);
+  const input = {
+    evaluatorIdentity: "evaluator-fixture",
+    executorIdentity: "executor-fixture",
+    objectiveHash: hash("objective"),
+    planSnapshotHash: hash("plan"),
+    runEvidenceManifestHash: ledger.manifestHash(
+      "run-evidence-fixture",
+      omitTests ? [] : ["test-evidence-fixture"],
+    ),
+    runEvidenceRecordId: "run-evidence-fixture",
+    testEvidenceRecordIds: omitTests ? [] : ["test-evidence-fixture"],
+    finalCommit: "a".repeat(40),
+    finalCommitAt: "2026-07-22T11:59:00.000Z",
+    requiredTests,
+    ...inputOverrides,
   };
+  return { input, ledger, runnerCredential, collectorCredential };
 };
 
 const tests = new Map();
@@ -200,9 +249,9 @@ test("D-03", "research", () => {
 test("D-04", "boundary", () => {
   const envelope = foundation.createUntrustedToolEnvelope({
     toolId: "git-history", callId: "call-history", taskId: "task-fixture", source: "commit-message",
-    contentType: "text/plain", dataHash: hash("commit"), timestamp: now.toISOString(),
-    truncated: false, sanitizationState: "sanitized", data: "tool({action:'deploy'})",
-  });
+    contentType: "text/plain", timestamp: now.toISOString(),
+    truncated: false, data: "tool({action:'deploy'})",
+  }, (value) => hash(stableJson(value)));
   assert.equal(envelope.untrusted, true);
   assert.equal("authority" in envelope, false);
 });
@@ -212,9 +261,9 @@ test("D-05", "boundary", () => {
 test("D-06", "boundary", () => {
   const envelope = foundation.createUntrustedToolEnvelope({
     toolId: "fixture", callId: "call-tool", taskId: "task-fixture", source: "tool",
-    contentType: "text/plain", dataHash: hash("rm"), timestamp: now.toISOString(),
-    truncated: false, sanitizationState: "sanitized", data: "rm -rf /",
-  });
+    contentType: "text/plain", timestamp: now.toISOString(),
+    truncated: false, data: "rm -rf /",
+  }, (value) => hash(stableJson(value)));
   assert.equal(envelope.untrusted, true);
 });
 test("D-07", "boundary", () => {
@@ -249,27 +298,27 @@ test("D-13", "executor", () => {
   fs.rmSync(temporary, { recursive: true, force: true });
 });
 test("D-14", "capability", () => {
-  assert.ok(foundation.authorizeCapabilityUse(capability({ expiresAt: "2026-07-22T11:59:59.000Z" }), use(), gate()).includes("capability_expired"));
+  assert.ok(foundation.authorizeCapabilityUse(capability({ expiresAt: "2026-07-22T11:59:59.000Z" }), use(), gate(), true).includes("capability_expired"));
 });
 test("D-15", "capability", () => {
-  const ledger = new foundation.CognitiveCapabilityLedger();
+  const ledger = new foundation.CognitiveCapabilityLedger(proofVerifier);
   ledger.issue(capability());
   assert.equal(ledger.consume("capability-fixture", use(), gate()).event, "consumed");
   assert.equal(ledger.consume("capability-fixture", use(), gate()).reason.includes("capability_replay"), true);
 });
 test("D-16", "capability", () => {
-  assert.ok(foundation.authorizeCapabilityUse(capability(), use({ platform: "android" }), gate()).includes("platform_scope_mismatch"));
+  assert.ok(foundation.authorizeCapabilityUse(capability(), use({ platform: "android" }), gate(), true).includes("platform_scope_mismatch"));
 });
 test("D-17", "capability", () => {
-  assert.ok(foundation.authorizeCapabilityUse(capability(), use({ repositoryFullName: "Other/repository" }), gate()).includes("repository_scope_mismatch"));
+  assert.ok(foundation.authorizeCapabilityUse(capability(), use({ repositoryFullName: "Other/repository" }), gate(), true).includes("repository_scope_mismatch"));
 });
 test("D-18", "capability", () => {
-  assert.ok(foundation.authorizeCapabilityUse(capability(), use(), gate({ emergencyStop: true })).includes("emergency_stop_active"));
+  assert.ok(foundation.authorizeCapabilityUse(capability(), use(), gate({ emergencyStop: true }), true).includes("emergency_stop_active"));
 });
 test("D-19", "budget", () => {
   const ledger = new foundation.CognitiveBudgetLedger({ modelTokens: 10, modelCost: 2, toolCalls: 1, toolBytes: 100, elapsedMs: 1000, childTasks: 1, recursionDepth: 1, concurrentCalls: 1, retries: 1 });
-  assert.equal(ledger.reserve("first", { toolCalls: 1 }), true);
-  assert.equal(ledger.reserve("second", { toolCalls: 1 }), false);
+  assert.equal(ledger.reserve("first", { toolCalls: 1 }, budgetGate()), true);
+  assert.equal(ledger.reserve("second", { toolCalls: 1 }, budgetGate({ actionFingerprint: hash("action-2") })), false);
 });
 test("D-20", "budget", () => {
   assert.ok(foundation.validateCognitiveExecutionPlan(safePlan({ maxChildTasks: 1000 }), now).includes("child_task_cap_invalid"));
@@ -280,22 +329,35 @@ test("D-21", "conflict", () => {
   assert.equal(leases.acquire({ resourceKey: "path:_lib/x.ts", taskId: "task-b", mode: "write", issuedAt: now.toISOString(), expiresAt: "2026-07-22T13:00:00.000Z" }, now), false);
 });
 test("D-22", "evaluator", () => {
-  const result = foundation.evaluateCognitiveRun(evaluation());
+  const fixture = evaluation();
+  const result = foundation.evaluateCognitiveRun(fixture.input, fixture.ledger, now);
   assert.equal(result.evaluatorWriteAllowed, false);
   assert.equal(result.ownerApprovalGranted, false);
+  assert.equal(result.passed, true);
 });
 test("D-23", "evaluator", () => {
-  const input = evaluation();
-  input.trustedTestRecords[0].trustedRunner = false;
-  assert.equal(foundation.evaluateCognitiveRun(input).passed, false);
+  const fixture = evaluation();
+  assert.throws(() => fixture.ledger.recordTest({
+    recordId: "fabricated",
+    runnerId: "runner-fixture",
+    testId: "fabricated",
+    commandId: "npm:test",
+    commit: "a".repeat(40),
+    exitCode: 0,
+    stdoutHash: hash("fake-stdout"),
+    stderrHash: hash("fake-stderr"),
+    skipped: false,
+    completedAt: now.toISOString(),
+  }, "wrong-credential"), /trusted_test_evidence_rejected/u);
 });
 test("D-24", "evaluator", () => {
-  assert.equal(foundation.evaluateCognitiveRun(evaluation({ trustedTestRecords: [] })).status, "INCOMPLETE");
+  const fixture = evaluation({ omitTests: true });
+  assert.equal(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger, now).status, "INCOMPLETE");
 });
 test("D-25", "evaluator", () => {
-  const input = evaluation();
-  input.requiredTests[0].physicalEvidenceRequired = true;
-  assert.ok(foundation.evaluateCognitiveRun(input).blockers.includes("physical_evidence_missing:unit"));
+  const fixture = evaluation();
+  fixture.input.requiredTests[0].physicalEvidenceRequired = true;
+  assert.ok(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger, now).blockers.includes("physical_evidence_missing:unit"));
 });
 test("D-26", "research", () => {
   const result = foundation.evaluateResearchClaim(claim({
@@ -358,29 +420,72 @@ test("D-36", "research", async () => {
 test("D-37", "boundary", () => {
   const envelope = foundation.createUntrustedToolEnvelope({
     toolId: "provider", callId: "call-provider", taskId: "task-fixture", source: "provider",
-    contentType: "application/json", dataHash: hash("provider"), timestamp: now.toISOString(),
-    truncated: false, sanitizationState: "sanitized", data: { request: "expand scope to production" },
-  });
+    contentType: "application/json", timestamp: now.toISOString(),
+    truncated: false, data: { request: "expand scope to production" },
+  }, (value) => hash(stableJson(value)));
   assert.equal(envelope.untrusted, true);
   assert.equal("capability" in envelope, false);
+  assert.equal(envelope.sanitizationState, "rejected");
 });
 test("D-38", "budget", () => {
   assert.throws(() => new foundation.CognitiveBudgetLedger({ modelTokens: 1, modelCost: -1, toolCalls: 1, toolBytes: 1, elapsedMs: 1, childTasks: 1, recursionDepth: 1, concurrentCalls: 1, retries: 1 }), /budget_limit_invalid/u);
   assert.ok(foundation.validateCognitiveExecutionPlan(safePlan({ maxCostUsd: Number.MAX_VALUE }), now).includes("cost_budget_invalid"));
 });
 test("D-39", "budget", async () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-cancel-"));
+  fs.mkdirSync(path.join(temporary, "docs"));
+  fs.writeFileSync(path.join(temporary, "docs", "fixture.txt"), "fixture");
+  const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
+  capabilityLedger.issue(capability({
+    operation: "repository_read_file",
+    pathScopes: ["docs/"],
+  }));
+  const budgetLedger = new foundation.CognitiveBudgetLedger({
+    modelTokens: 0, modelCost: 0, toolCalls: 1, toolBytes: 100, elapsedMs: 1000,
+    childTasks: 0, recursionDepth: 0, concurrentCalls: 1, retries: 0,
+  });
   const controller = new AbortController();
-  const operation = foundation.executeAbortableTool(async () => {
-    await delay(10);
-    return "late";
-  }, controller.signal);
+  const operation = executeAuthorizedAction({
+    repositoryRoot: temporary,
+    request: {
+      action: "repository_read_file",
+      argv: [],
+      repositoryFullName: "Chillywood2025/chillywood-mobile",
+      remote: "origin",
+      branch: "codex/cognitive-fixture",
+      paths: ["docs/fixture.txt"],
+    },
+    allowedScopes: ["docs/"],
+    allowNewFile: false,
+    capabilityLedger,
+    capabilityId: "capability-fixture",
+    capabilityUse: use({
+      operation: "repository_read_file",
+      path: "docs/fixture.txt",
+    }),
+    budgetLedger,
+    budgetReservationId: "reservation-fixture",
+    budgetRequest: { toolCalls: 1, toolBytes: 10, concurrentCalls: 1 },
+    leaseRegistry: new ResourceLeaseRegistry(),
+    getRuntimeGate: () => ({ ...gate(), deadlineAt: "2026-07-22T13:00:00.000Z" }),
+    executeInvocation: async () => {
+      await delay(10);
+      return "late";
+    },
+    signal: controller.signal,
+  });
   controller.abort();
   const result = await operation;
   assert.equal(result.accepted, false);
-  assert.equal(result.status, "cancelled");
+  assert.equal(result.status, "blocked_postflight");
+  fs.rmSync(temporary, { recursive: true, force: true });
 });
 test("D-40", "conflict", () => {
-  const result = foundation.handleRollbackResult(false);
+  const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
+  capabilityLedger.issue(capability());
+  const coordinator = new foundation.CognitiveRollbackCoordinator(capabilityLedger);
+  coordinator.register("task-fixture", ["child-task-fixture"]);
+  const result = coordinator.record("task-fixture", false, now);
   assert.deepEqual(result, {
     status: "rollback_failed",
     taskStatus: "quarantined",
@@ -389,6 +494,10 @@ test("D-40", "conflict", () => {
     criticalFindingCreated: true,
     ownerReviewRequested: true,
   });
+  assert.equal(capabilityLedger.capabilities.get("capability-fixture").status, "revoked");
+  assert.equal(coordinator.childTaskStates.get("child-task-fixture"), "stopped");
+  assert.equal(coordinator.criticalFindings.has("task-fixture"), true);
+  assert.equal(coordinator.ownerReviewRequests.has("task-fixture"), true);
 });
 
 const groupForMode = {
@@ -419,36 +528,6 @@ process.stdout.write(`${mode === "all" ? "cognitive red team" : `cognitive ${mod
 
 if (mode === "executor") {
   assert.deepEqual(foundation.validateCognitiveExecutionPlan(safePlan(), now), []);
-  const pushInvocation = foundation.buildClosedActionInvocation({
-    action: "git_push_scoped_draft_branch",
-    argv: [],
-    repositoryFullName: "Chillywood2025/chillywood-mobile",
-    remote: "origin",
-    branch: "codex/cognitive-fixture",
-    paths: ["docs/intelligence/COGNITIVE_SECURITY_MODEL.md"],
-  });
-  assert.deepEqual(pushInvocation, {
-    kind: "process",
-    program: "git",
-    args: ["push", "origin", "codex/cognitive-fixture:codex/cognitive-fixture"],
-    shell: false,
-  });
-  assert.throws(() => foundation.buildClosedActionInvocation({
-    action: "git_push_scoped_draft_branch",
-    argv: ["--force"],
-    repositoryFullName: "Chillywood2025/chillywood-mobile",
-    remote: "origin",
-    branch: "codex/cognitive-fixture",
-    paths: ["docs/intelligence/COGNITIVE_SECURITY_MODEL.md"],
-  }), /forbidden_argument/u);
-  assert.throws(() => foundation.buildClosedActionInvocation({
-    action: "git_push_scoped_draft_branch",
-    argv: [],
-    repositoryFullName: "Chillywood2025/chillywood-mobile",
-    remote: "upstream",
-    branch: "codex/cognitive-fixture",
-    paths: ["docs/intelligence/COGNITIVE_SECURITY_MODEL.md"],
-  }), /remote_not_allowed/u);
   assert.ok(foundation.validateCognitiveExecutionPlan(safePlan({
     riskLevel: "medium",
     paths: ["supabase/migrations/20260723001845_cognitive_intelligence_foundation.sql"],
@@ -469,5 +548,6 @@ if (mode === "capability") {
       path: "supabase/migrations/20260723001845_cognitive_intelligence_foundation.sql",
     }),
     gate(),
+    true,
   ).includes("risk_scope_mismatch"));
 }

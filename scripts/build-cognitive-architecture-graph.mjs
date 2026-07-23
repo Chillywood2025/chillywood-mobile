@@ -18,10 +18,12 @@ const repositoryId = execFileSync("git", ["config", "--get", "remote.origin.url"
   .replace(/\.git$/u, "");
 if (repositoryId !== config.repositoryId) throw new Error("architecture_graph_repository_mismatch");
 
-const tracked = execFileSync("git", ["ls-files", "--cached", "-z"], { cwd: root })
+const allTracked = execFileSync("git", ["ls-files", "--cached", "-z"], { cwd: root })
   .toString("utf8")
   .split("\0")
-  .filter(Boolean)
+  .filter(Boolean);
+const excludedSensitivePaths = allTracked.filter((relative) => forbiddenPath.test(relative));
+const tracked = allTracked
   .filter((relative) => relative !== "config/intelligence/architecture-knowledge-graph.json")
   .filter((relative) => !forbiddenPath.test(relative))
   .filter((relative) => sourceExtensions.test(relative));
@@ -49,6 +51,7 @@ const platformFor = (relative) => {
 const buildCompactArchitectureManifest = (enumeration = tracked) => {
   const skippedSymlinks = [];
   const files = [];
+  let totalBytes = 0;
   for (const relative of enumeration) {
     const absolute = path.resolve(root, relative);
     if (!absolute.startsWith(`${root}${path.sep}`)) throw new Error("architecture_graph_path_escape");
@@ -60,7 +63,9 @@ const buildCompactArchitectureManifest = (enumeration = tracked) => {
     }
     if (!stat.isFile()) continue;
     if (stat.size > config.caps.maxFileBytes) throw new Error("architecture_graph_single_file_cap_exceeded");
+    if (totalBytes + stat.size > config.caps.maxTotalBytes) throw new Error("architecture_graph_total_byte_cap_exceeded");
     const content = fs.readFileSync(absolute);
+    totalBytes += content.byteLength;
     files.push({
       path: relative.replaceAll(path.sep, "/").normalize("NFC"),
       contentHash: hash(content),
@@ -86,8 +91,6 @@ const buildCompactArchitectureManifest = (enumeration = tracked) => {
   }
   const normalizedEdges = [...new Set(edges)].sort(compareText);
   if (normalizedEdges.length > config.caps.maxEdges) throw new Error("architecture_graph_edge_cap_exceeded");
-  const totalBytes = files.reduce((sum, file) => sum + file.bytes, 0);
-  if (totalBytes > config.caps.maxTotalBytes) throw new Error("architecture_graph_total_byte_cap_exceeded");
   const fileListDigest = hash(JSON.stringify(files));
   const graphDigest = hash(JSON.stringify({
     repositoryId: config.repositoryId,
@@ -112,7 +115,9 @@ const buildCompactArchitectureManifest = (enumeration = tracked) => {
     skippedSymlinkDigest: hash(JSON.stringify(skippedSymlinks)),
     fileListDigest,
     graphDigest,
-    secretFilesIncluded: false,
+    secretFilesIncluded: files.some((file) => forbiddenPath.test(file.path)),
+    excludedSensitivePathCount: excludedSensitivePaths.length,
+    excludedSensitivePathDigest: hash(JSON.stringify([...excludedSensitivePaths].sort(compareText))),
   };
 };
 

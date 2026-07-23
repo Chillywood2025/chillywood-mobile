@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import ts from "typescript";
 
 const root = process.cwd();
+const sha256 = (value) => crypto.createHash("sha256").update(
+  typeof value === "string" ? value : JSON.stringify(value),
+).digest("hex");
 const [domain = "intelligence", mode = "guard"] = process.argv.slice(2);
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const exists = (relative) => fs.existsSync(path.join(root, relative));
@@ -84,6 +88,8 @@ const guardResearch = async (runBehavior) => {
     sourceType: "official_documentation", primary: true, trustedForTools: false,
     canonicalUrlHash: "1".repeat(64), contentHash: "2".repeat(64),
     excerpt: "A bounded official excerpt.", freshnessDeadline: "2026-08-22T00:00:00Z",
+    retrievalStatus: "succeeded",
+    citationMetadata: { title: "Official SDK contract", locator: "sdk-contract" },
   };
   assert.equal(foundation.evaluateResearchClaim({
     claim: "The supported SDK contract is documented.", confidence: 0.9,
@@ -163,27 +169,90 @@ const guardExecution = async (runBehavior) => {
     id: "unit", commandId: "npm:test", platform: "shared", finalCommit: "a".repeat(40),
     risk: "high", physicalEvidenceRequired: false,
   };
+  const runnerCredential = "runner-review-credential";
+  const ledger = new foundation.CognitiveTrustedEvidenceLedger({
+    runnerCredentialHashes: { "runner-review": sha256(runnerCredential) },
+    collectorCredentialHashes: { "collector-review": sha256("collector-review-credential") },
+    verifyCredential: (opaque, expectedHash) => sha256(opaque) === expectedHash,
+    hash: sha256,
+  });
+  ledger.recordRun({
+    recordId: "run-review",
+    runnerId: "runner-review",
+    finalCommit: "a".repeat(40),
+    objectiveHash: "1".repeat(64),
+    planSnapshotHash: "2".repeat(64),
+    diffHash: "6".repeat(64),
+    rollbackPlanHash: "7".repeat(64),
+    permissionExpansion: false,
+    moneyMoved: false,
+    userRightsChanged: false,
+    productionActionExecuted: false,
+    completedAt: "2026-07-22T00:01:00.000Z",
+  }, runnerCredential);
+  ledger.recordTest({
+    recordId: "test-review",
+    runnerId: "runner-review",
+    testId: "unit",
+    commandId: "npm:test",
+    commit: "a".repeat(40),
+    exitCode: 0,
+    stdoutHash: "4".repeat(64),
+    stderrHash: "5".repeat(64),
+    skipped: false,
+    completedAt: "2026-07-22T00:01:00.000Z",
+  }, runnerCredential);
   const safeEvaluation = {
     evaluatorIdentity: "evaluator-review", executorIdentity: "executor-run",
-    objectiveHash: "1".repeat(64), planSnapshotHash: "2".repeat(64), runEvidenceManifestHash: "3".repeat(64),
+    objectiveHash: "1".repeat(64), planSnapshotHash: "2".repeat(64),
+    runEvidenceManifestHash: ledger.manifestHash("run-review", ["test-review"]),
+    runEvidenceRecordId: "run-review",
+    testEvidenceRecordIds: ["test-review"],
     finalCommit: "a".repeat(40), requiredTests: [requiredTest],
-    trustedTestRecords: [{
-      testId: "unit", commandId: "npm:test", commit: "a".repeat(40), exitCode: 0,
-      stdoutHash: "4".repeat(64), stderrHash: "5".repeat(64), skipped: false,
-      trustedRunner: true, completedAt: "2026-07-22T00:00:00Z",
-    }],
-    diffHash: "6".repeat(64), rollbackPlanHash: "7".repeat(64), physicalEvidenceTypes: [],
-    permissionExpansion: false, moneyMoved: false, userRightsChanged: false, productionActionExecuted: false,
+    finalCommitAt: "2026-07-22T00:00:00.000Z",
   };
-  assert.equal(foundation.evaluateCognitiveRun(safeEvaluation).passed, true);
-  assert.ok(foundation.evaluateCognitiveRun({ ...safeEvaluation, trustedTestRecords: [] }).blockers.includes("required_test_missing:unit"));
+  const evaluationNow = new Date("2026-07-22T00:02:00.000Z");
+  assert.equal(foundation.evaluateCognitiveRun(safeEvaluation, ledger, evaluationNow).passed, true);
+  assert.ok(foundation.evaluateCognitiveRun({
+    ...safeEvaluation,
+    testEvidenceRecordIds: [],
+    runEvidenceManifestHash: ledger.manifestHash("run-review", []),
+  }, ledger, evaluationNow).blockers.includes("required_test_missing:unit"));
   assert.ok(foundation.evaluateCognitiveRun({
     ...safeEvaluation,
     requiredTests: [{ ...requiredTest, physicalEvidenceRequired: true }],
-  }).blockers.includes("physical_evidence_missing:unit"));
-  assert.ok(foundation.evaluateCognitiveRun({ ...safeEvaluation, permissionExpansion: true }).blockers.includes("permission_expansion_requires_owner_review"));
-  assert.ok(foundation.evaluateCognitiveRun({ ...safeEvaluation, moneyMoved: true }).blockers.includes("money_boundary_violated"));
-  assert.ok(foundation.evaluateCognitiveRun({ ...safeEvaluation, userRightsChanged: true }).blockers.includes("user_rights_boundary_violated"));
+  }, ledger, evaluationNow).blockers.includes("physical_evidence_missing:unit"));
+  const unsafeLedger = new foundation.CognitiveTrustedEvidenceLedger({
+    runnerCredentialHashes: { "runner-review": sha256(runnerCredential) },
+    collectorCredentialHashes: {},
+    verifyCredential: (opaque, expectedHash) => sha256(opaque) === expectedHash,
+    hash: sha256,
+  });
+  unsafeLedger.recordRun({
+    recordId: "run-unsafe",
+    runnerId: "runner-review",
+    finalCommit: "a".repeat(40),
+    objectiveHash: "1".repeat(64),
+    planSnapshotHash: "2".repeat(64),
+    diffHash: "6".repeat(64),
+    rollbackPlanHash: "7".repeat(64),
+    permissionExpansion: true,
+    moneyMoved: true,
+    userRightsChanged: true,
+    productionActionExecuted: false,
+    completedAt: "2026-07-22T00:01:00.000Z",
+  }, runnerCredential);
+  const unsafeInput = {
+    ...safeEvaluation,
+    runEvidenceRecordId: "run-unsafe",
+    testEvidenceRecordIds: [],
+    runEvidenceManifestHash: unsafeLedger.manifestHash("run-unsafe", []),
+    requiredTests: [],
+  };
+  const unsafeResult = foundation.evaluateCognitiveRun(unsafeInput, unsafeLedger, evaluationNow);
+  assert.ok(unsafeResult.blockers.includes("permission_expansion_requires_owner_review"));
+  assert.ok(unsafeResult.blockers.includes("money_boundary_violated"));
+  assert.ok(unsafeResult.blockers.includes("user_rights_boundary_violated"));
   assert.deepEqual(foundation.validateLearningPatch({ source_reliability_score: 0.8, test_priority_weight: 4 }), []);
   assert.ok(foundation.validateLearningPatch({ approval_level: 0 }).some((entry) => entry.includes("learning_field_forbidden")));
   assert.equal(foundation.COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION.productionExecutionWired, false);
