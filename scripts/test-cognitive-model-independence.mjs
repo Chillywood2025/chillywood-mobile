@@ -115,6 +115,14 @@ contains(
   "independence status does not require cross-provider diversity",
 );
 contains(
+  "model_family_count >= 2",
+  "independence status does not require distinct model families",
+);
+contains(
+  "model_version_count >= p_required_count",
+  "independence status does not require distinct model versions",
+);
+contains(
   "correlation_class = 'cross_provider'",
   "independence status does not require cross-provider correlation",
 );
@@ -125,6 +133,10 @@ contains(
 assert(
   twoPartyDbTest.includes("duplicate council-role attestations cannot claim independent quorum"),
   "database suite does not prove duplicate council roles fail live quorum",
+);
+assert(
+  twoPartyDbTest.includes("cross-provider same-family attestations cannot claim independent model quorum"),
+  "database suite does not prove same-family cross-provider attestations fail live quorum",
 );
 assert(
   governanceDbTest.includes("legacy active approval versions require verified model independence"),
@@ -141,6 +153,8 @@ const independenceSatisfied = (rows, requiredCount) => {
   const distinctRoles = new Set(rows.map((row) => row.councilRole)).size;
   const blindCount = rows.filter((row) => row.blindFirstRound).length;
   const providerCount = new Set(rows.map((row) => row.providerHash)).size;
+  const modelFamilyCount = new Set(rows.map((row) => row.family)).size;
+  const modelVersionCount = new Set(rows.map((row) => `${row.family}:${row.version}`)).size;
   const hasIndependentClass = rows.some((row) =>
     row.correlationClass === "cross_provider"
   );
@@ -150,7 +164,9 @@ const independenceSatisfied = (rows, requiredCount) => {
     distinctRoles >= requiredCount &&
     blindCount >= requiredCount &&
     hasIndependentClass &&
-    providerCount >= 2;
+    providerCount >= 2 &&
+    modelFamilyCount >= 2 &&
+    modelVersionCount >= requiredCount;
 };
 
 assert(
@@ -160,6 +176,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      version: "model-a",
       councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "cross_provider",
@@ -169,6 +186,7 @@ assert(
       outputHash: "2",
       providerHash: "provider-b",
       family: "family-b",
+      version: "model-b",
       councilRole: "security_privacy",
       blindFirstRound: true,
       correlationClass: "cross_provider",
@@ -183,6 +201,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      version: "model-a",
       councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "same_family_isolated_advisory",
@@ -192,6 +211,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      version: "model-a",
       councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "same_family_isolated_advisory",
@@ -206,6 +226,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      version: "model-a",
       councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "same_provider_distinct_model_family",
@@ -215,6 +236,7 @@ assert(
       outputHash: "2",
       providerHash: "provider-a",
       family: "family-b",
+      version: "model-b",
       councilRole: "security_privacy",
       blindFirstRound: true,
       correlationClass: "same_provider_distinct_model_family",
@@ -229,6 +251,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      version: "model-a",
       councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "cross_provider",
@@ -238,12 +261,38 @@ assert(
       outputHash: "2",
       providerHash: "provider-b",
       family: "family-b",
+      version: "model-b",
       councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "cross_provider",
     },
   ], 2),
   "duplicate council-role fixture should not satisfy independence",
+);
+assert(
+  !independenceSatisfied([
+    {
+      executionIdentity: "a",
+      outputHash: "1",
+      providerHash: "provider-a",
+      family: "family-a",
+      version: "model-a",
+      councilRole: "product_user_experience",
+      blindFirstRound: true,
+      correlationClass: "cross_provider",
+    },
+    {
+      executionIdentity: "b",
+      outputHash: "2",
+      providerHash: "provider-b",
+      family: "family-a",
+      version: "model-a",
+      councilRole: "security_privacy",
+      blindFirstRound: true,
+      correlationClass: "cross_provider",
+    },
+  ], 2),
+  "cross-provider same-family fixture should not satisfy model independence",
 );
 
 if (failures.length > 0) {

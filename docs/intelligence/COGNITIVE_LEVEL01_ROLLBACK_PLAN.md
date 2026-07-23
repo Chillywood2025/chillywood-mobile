@@ -9,6 +9,8 @@ Fail-safe controls:
 - service claims require active immutable approval version;
 - expired, revoked, consumed, wrong-scope, and replay claims fail closed;
 - emergency stop is rechecked before claim and during execution transitions;
+- post-side-effect Owner revocation or emergency stop blocks success completion
+  but still permits cleanup-only rollback/quarantine settlement;
 - failed rollback can quarantine the execution and preserve immutable evidence.
 
 Rollback states:

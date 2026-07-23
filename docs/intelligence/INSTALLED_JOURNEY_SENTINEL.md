@@ -15,6 +15,10 @@ The sentinel records bounded synthetic journeys with sanitized evidence hashes
 only. It must capture expected state, maximum duration, observed state,
 evidence hash, result state, and runtime identity.
 
+Journey evidence is schema bounded. The database rejects malformed screenshot or
+runtime hashes, unknown expected/observed states, impossible step counts, and
+unresolved-state counts that exceed the total journey steps.
+
 Initial journeys:
 
 - sign in;

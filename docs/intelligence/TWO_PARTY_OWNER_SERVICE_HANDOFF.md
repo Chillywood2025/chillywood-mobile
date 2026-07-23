@@ -27,9 +27,25 @@ Implemented database surfaces:
 - `governance_approved_action_executions`
 - `governance_two_party_service_assertions`
 
+The service-principal registry supports explicit Owner revocation through
+`governance_revoke_two_party_service_principal`. A revoked service assertion can
+no longer satisfy `governance_assert_two_party_service_principal`, and the
+revocation records only a sanitized revocation hash, actor ID, and timestamp.
+
+Execution liveness remains strict for side-effect and success paths. When an
+Owner revokes approval or emergency stop activates after side effects begin, the
+worker cannot complete successfully, but it can still enter the cleanup-only
+rollback/quarantine path through `governance_lock_approved_execution_cleanup_scope`.
+That path exists only to preserve evidence, revoke/settle authority, and
+escalate failed cleanup; it cannot execute a new approved action.
+
+`product_intelligence_operator` is now included in the Owner approval request
+allowlist and in the emergency-stop database gate used by the two-party worker
+for product-quality activation tasks.
+
 Local proof:
 
-- `supabase test db`: 703/703 pgTAP tests passed.
+- `supabase test db`: 714/714 pgTAP tests passed.
 - `npm run test:cognitive-two-party-handoff`: passed.
 - `deno check` passed for both new Edge Functions and the modified governance
   control function.

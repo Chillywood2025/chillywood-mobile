@@ -17,6 +17,9 @@ const workerEndpoint = read(
 const governanceControl = read(
   "supabase/functions/cognitive-governance-control/index.ts",
 );
+const autonomousApprovalRequest = read(
+  "supabase/functions/autonomous-approval-request/index.ts",
+);
 const dbTest = read("supabase/tests/cognitive_two_party_activation_handoff_test.sql");
 
 const failures = [];
@@ -50,6 +53,11 @@ contains(
 );
 contains(
   migration,
+  "create function public.governance_revoke_two_party_service_principal",
+  "missing explicit service-principal revocation RPC",
+);
+contains(
+  migration,
   "request_role <> 'service_role'",
   "service-principal verifier does not check the service-role claim",
 );
@@ -70,6 +78,11 @@ contains(
 );
 contains(
   migration,
+  "create function public.governance_lock_approved_execution_cleanup_scope",
+  "missing locked service execution cleanup verifier",
+);
+contains(
+  migration,
   "from public.governance_owner_approval_version_states state",
   "locked liveness verifier does not lock approval version state",
 );
@@ -82,6 +95,11 @@ contains(
   migration,
   "governance_lock_approved_execution_liveness(p_execution_id)",
   "side-effecting service RPCs do not use the locked liveness verifier",
+);
+contains(
+  migration,
+  "governance_lock_approved_execution_cleanup_scope(p_execution_id)",
+  "cleanup service RPCs do not use the locked cleanup verifier",
 );
 contains(
   migration,
@@ -194,6 +212,16 @@ contains(
   "legacy governance control endpoint does not reject direct service writes",
 );
 contains(
+  governanceControl,
+  "product_intelligence_operator",
+  "governance status endpoint does not read product-intelligence emergency state",
+);
+contains(
+  autonomousApprovalRequest,
+  "\"product_intelligence_operator\"",
+  "Owner emergency route does not allow product-intelligence emergency stop",
+);
+contains(
   dbTest,
   "Owner-authenticated requests cannot service-execute an approved action",
   "database suite does not prove Owner cannot service-execute",
@@ -202,6 +230,16 @@ contains(
   dbTest,
   "service principal cannot create Owner approval",
   "database suite does not prove service principal cannot approve",
+);
+contains(
+  dbTest,
+  "Owner can revoke a service-principal assertion through an explicit RPC",
+  "database suite does not prove explicit service-principal assertion revocation",
+);
+contains(
+  dbTest,
+  "revoked service-principal assertion cannot execute",
+  "database suite does not prove revoked service-principal assertions fail closed",
 );
 contains(
   dbTest,
@@ -230,8 +268,8 @@ contains(
 );
 contains(
   dbTest,
-  "all side-effecting service RPCs use the locked liveness check",
-  "database suite does not prove service side effects use locked liveness",
+  "side effects and success use locked liveness while cleanup uses locked cleanup scope",
+  "database suite does not prove side-effect liveness and cleanup-scope separation",
 );
 contains(
   dbTest,
@@ -245,8 +283,13 @@ contains(
 );
 contains(
   dbTest,
-  "post-claim Owner revocation blocks rollback and quarantine transition",
-  "database suite does not prove rollback/quarantine rechecks liveness",
+  "emergency stop after side effect permits audited quarantine cleanup",
+  "database suite does not prove emergency-stop cleanup after side effects",
+);
+contains(
+  dbTest,
+  "single-use Owner revocation permits quarantine cleanup after execution started",
+  "database suite does not prove revocation still permits terminal cleanup",
 );
 contains(
   dbTest,

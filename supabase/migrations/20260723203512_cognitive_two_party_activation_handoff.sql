@@ -140,9 +140,15 @@ create table public.governance_two_party_service_assertions (
   issued_at timestamptz not null default transaction_timestamp(),
   expires_at timestamptz not null,
   revoked_at timestamptz,
+  revoked_by uuid,
+  revocation_hash text check (revocation_hash is null or revocation_hash ~ '^[a-f0-9]{64}$'),
   created_at timestamptz not null default transaction_timestamp(),
   check (expires_at > issued_at and expires_at <= issued_at + interval '365 days'),
-  check ((status='revoked') = (revoked_at is not null))
+  check ((status='revoked') = (
+    revoked_at is not null
+    and revoked_by is not null
+    and revocation_hash is not null
+  ))
 );
 
 alter table public.governance_two_party_service_assertions enable row level security;
@@ -522,7 +528,13 @@ create table public.product_experience_sentinel_runs (
   check (retention_until > created_at),
   check (legal_hold or retention_until <= created_at + interval '365 days'),
   check (legal_hold = (data_class = 'legal_hold')),
-  check (erased_at is null),
+  check (
+    erased_at is null
+    or (
+      legal_hold = false
+      and erased_at >= retention_until
+    )
+  ),
   unique (task_id, sentinel_key, route_or_surface, evidence_manifest_hash),
   unique (id, task_id, project_id, platform, environment),
   foreign key (task_id, project_id, platform, environment)
@@ -596,7 +608,13 @@ create table public.product_quality_findings (
   check (retention_until > created_at),
   check (legal_hold or retention_until <= created_at + interval '365 days'),
   check (legal_hold = (data_class = 'legal_hold')),
-  check (erased_at is null),
+  check (
+    erased_at is null
+    or (
+      legal_hold = false
+      and erased_at >= retention_until
+    )
+  ),
   unique (task_id, finding_key),
   unique (id, task_id, project_id, platform, environment),
   foreign key (sentinel_run_id, task_id, project_id, platform, environment)
@@ -676,6 +694,40 @@ begin
   end loop;
 end
 $$;
+
+create function public.product_experience_evidence_mutation_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'immutable_product_experience_evidence' using errcode = '42501';
+  end if;
+  if old.erased_at is null
+     and new.erased_at is not null
+     and old.legal_hold = false
+     and new.erased_at >= old.retention_until
+     and to_jsonb(new) - 'erased_at' = to_jsonb(old) - 'erased_at' then
+    return new;
+  end if;
+  raise exception 'immutable_product_experience_evidence' using errcode = '42501';
+end;
+$$;
+revoke all on function public.product_experience_evidence_mutation_guard()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists product_experience_sentinel_runs_immutable
+  on public.product_experience_sentinel_runs;
+drop trigger if exists product_quality_findings_immutable
+  on public.product_quality_findings;
+create trigger product_experience_sentinel_runs_retention_tombstone_only
+before update or delete on public.product_experience_sentinel_runs
+for each row execute function public.product_experience_evidence_mutation_guard();
+create trigger product_quality_findings_retention_tombstone_only
+before update or delete on public.product_quality_findings
+for each row execute function public.product_experience_evidence_mutation_guard();
 
 create function public.governance_service_identity_allows_operation(
   p_service_identity text,
@@ -797,10 +849,10 @@ begin
   end if;
   insert into public.governance_two_party_service_assertions(
     service_identity, assertion_hash, allowed_operations, registered_by,
-    status, issued_at, expires_at, revoked_at
+    status, issued_at, expires_at, revoked_at, revoked_by, revocation_hash
   ) values (
     p_service_identity, p_assertion_hash, p_allowed_operations, owner_id,
-    'active', transaction_timestamp(), p_expires_at, null
+    'active', transaction_timestamp(), p_expires_at, null, null, null
   )
   on conflict (service_identity) do update
     set assertion_hash = excluded.assertion_hash,
@@ -809,7 +861,9 @@ begin
         status = 'active',
         issued_at = transaction_timestamp(),
         expires_at = excluded.expires_at,
-        revoked_at = null;
+        revoked_at = null,
+        revoked_by = null,
+        revocation_hash = null;
 
   evidence_hash_value := encode(extensions.digest(
     convert_to(p_service_identity || ':' || p_assertion_hash,'UTF8'),'sha256'
@@ -839,6 +893,60 @@ $$;
 revoke all on function public.governance_register_two_party_service_principal(text,text,text[],timestamptz)
   from public, anon, service_role;
 grant execute on function public.governance_register_two_party_service_principal(text,text,text[],timestamptz)
+  to authenticated;
+
+create function public.governance_revoke_two_party_service_principal(
+  p_service_identity text,
+  p_revocation_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  owner_id uuid := public.governance_assert_exact_owner();
+  now_at timestamptz := transaction_timestamp();
+begin
+  if p_service_identity not in (
+       'cognitive_approved_action_worker',
+       'product_experience_baseline_service',
+       'livekit_experience_sentinel',
+       'visual_product_experience_sentinel',
+       'installed_journey_sentinel',
+       'product_quality_triage_router',
+       'model_independence_attestation_service'
+     )
+     or p_revocation_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'two_party_service_principal_revoke_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  update public.governance_two_party_service_assertions assertion
+  set status = 'revoked',
+      revoked_at = now_at,
+      revoked_by = owner_id,
+      revocation_hash = p_revocation_hash
+  where assertion.service_identity = p_service_identity
+    and assertion.status = 'active'
+    and assertion.revoked_at is null;
+
+  if not found then
+    raise exception 'two_party_service_principal_revoke_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object(
+    'serviceIdentity', p_service_identity,
+    'status', 'revoked',
+    'revocationHash', p_revocation_hash,
+    'revokedAt', now_at
+  );
+end;
+$$;
+revoke all on function public.governance_revoke_two_party_service_principal(text,text)
+  from public, anon, service_role;
+grant execute on function public.governance_revoke_two_party_service_principal(text,text)
   to authenticated;
 
 create function public.governance_approval_event_next_sequence(p_approval_record_id uuid)
@@ -1479,6 +1587,66 @@ $$;
 revoke all on function public.governance_lock_approved_execution_liveness(uuid)
   from public, anon, authenticated, service_role;
 
+create function public.governance_lock_approved_execution_cleanup_scope(
+  p_execution_id uuid
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  if execution_value.id is null then
+    return false;
+  end if;
+
+  perform 1
+  from public.governance_owner_approval_version_states state
+  where state.approval_version_id = execution_value.approval_version_id
+    and state.task_id = execution_value.task_id
+    and state.project_id = execution_value.project_id
+    and state.platform = execution_value.platform
+    and state.environment = execution_value.environment
+  for update;
+  if not found then
+    return false;
+  end if;
+
+  perform 1
+  from public.intelligence_tasks task
+  where task.id = execution_value.task_id
+    and task.project_id = execution_value.project_id
+    and task.platform = execution_value.platform
+    and task.environment = execution_value.environment
+  for share;
+  if not found then
+    return false;
+  end if;
+
+  perform 1
+  from public.autonomous_system_emergency_states state
+  where state.system_id = 'product_intelligence_operator'
+  for share;
+  if not found then
+    return false;
+  end if;
+
+  return execution_value.state in (
+    'claimed','preflight','executing','postflight','evaluating',
+    'rollback_pending','rollback_running'
+  );
+end;
+$$;
+revoke all on function public.governance_lock_approved_execution_cleanup_scope(uuid)
+  from public, anon, authenticated, service_role;
+
 create function public.governance_claim_approved_action(
   p_approval_version_id uuid,
   p_service_identity text,
@@ -1845,7 +2013,7 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
-     or not public.governance_lock_approved_execution_liveness(p_execution_id)
+     or not public.governance_lock_approved_execution_cleanup_scope(p_execution_id)
      or execution_value.state not in ('claimed','preflight','executing','postflight','evaluating')
      or p_failure_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'two_party_execution_failure_rejected'
@@ -1913,7 +2081,7 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
-     or not public.governance_lock_approved_execution_liveness(p_execution_id)
+     or not public.governance_lock_approved_execution_cleanup_scope(p_execution_id)
      or p_transition not in (
        'rollback_pending','rollback_running','rollback_succeeded',
        'rollback_failed','quarantined'
@@ -2364,7 +2532,8 @@ as $$
         count(*) filter (where blind_first_round)::integer as blind_count,
         count(distinct council_role)::integer as distinct_roles,
         count(distinct provider_identity_hash)::integer as provider_count,
-        count(distinct provider_identity_hash || ':' || model_family)::integer as family_count,
+        count(distinct model_family)::integer as model_family_count,
+        count(distinct model_family || ':' || model_version)::integer as model_version_count,
         coalesce(bool_or(correlation_class = 'cross_provider'), false) as has_cross_provider_class
     from rows
   ),
@@ -2376,6 +2545,8 @@ as $$
         and blind_count >= p_required_count
         and distinct_roles >= p_required_count
         and provider_count >= 2
+        and model_family_count >= 2
+        and model_version_count >= p_required_count
         and has_cross_provider_class as independence_satisfied
     from aggregate
   )
@@ -2388,7 +2559,8 @@ as $$
       'blindFirstRoundCount', blind_count,
       'distinctCouncilRoles', distinct_roles,
       'providerCount', provider_count,
-    'modelFamilyCount', family_count,
+    'modelFamilyCount', model_family_count,
+    'modelVersionCount', model_version_count,
     'independenceSatisfied', independence_satisfied,
     'status',
       case
@@ -2643,16 +2815,43 @@ begin
          jsonb_typeof(p_metric_manifest->'journeyStepCount') <> 'number'
          or jsonb_typeof(p_metric_manifest->'unresolvedStateCount') <> 'number'
          or jsonb_typeof(p_metric_manifest->'maxDurationMs') <> 'number'
-           or jsonb_typeof(p_metric_manifest->'elapsedDurationMs') <> 'number'
-           or (p_metric_manifest->>'resultState') not in (
-             'success','loading','error','blocked','offline',
-             'permission_denied','blank','crashed'
-           )
-           or (p_metric_manifest->>'maxDurationMs')::integer not between 1 and 10000
-           or (p_metric_manifest->>'elapsedDurationMs')::integer not between 0 and 600000
-           or (
-             p_result_status = 'passed'
-             and (
+         or jsonb_typeof(p_metric_manifest->'elapsedDurationMs') <> 'number'
+         or jsonb_typeof(p_metric_manifest->'expectedState') <> 'string'
+         or jsonb_typeof(p_metric_manifest->'observedState') <> 'string'
+         or jsonb_typeof(p_metric_manifest->'resultState') <> 'string'
+         or jsonb_typeof(p_metric_manifest->'screenshotEvidenceHash') <> 'string'
+         or (p_metric_manifest->>'screenshotEvidenceHash') !~ '^[a-f0-9]{64}$'
+         or jsonb_typeof(p_metric_manifest->'sourceRuntimeHash') <> 'string'
+         or (p_metric_manifest->>'sourceRuntimeHash') !~ '^[a-f0-9]{64}$'
+         or (p_metric_manifest->>'expectedState') not in (
+           'signed_out','signed_in','session_restored','home_feed_visible',
+           'explore_visible','search_visible','library_visible','profile_visible',
+           'settings_visible','content_player_visible','public_profile_visible',
+           'chat_visible','live_surface_visible','watch_party_visible','loading',
+           'empty','error','offline','permission_denied','blank','crashed',
+           'no_state_change','route_unavailable','unknown_blocked'
+         )
+         or (p_metric_manifest->>'observedState') not in (
+           'signed_out','signed_in','session_restored','home_feed_visible',
+           'explore_visible','search_visible','library_visible','profile_visible',
+           'settings_visible','content_player_visible','public_profile_visible',
+           'chat_visible','live_surface_visible','watch_party_visible','loading',
+           'empty','error','offline','permission_denied','blank','crashed',
+           'no_state_change','route_unavailable','unknown_blocked'
+         )
+         or (p_metric_manifest->>'resultState') not in (
+           'success','loading','error','blocked','offline',
+           'permission_denied','blank','crashed'
+         )
+         or (p_metric_manifest->>'journeyStepCount')::integer not between 1 and 256
+         or (p_metric_manifest->>'unresolvedStateCount')::integer not between 0 and 256
+         or (p_metric_manifest->>'unresolvedStateCount')::integer >
+            (p_metric_manifest->>'journeyStepCount')::integer
+         or (p_metric_manifest->>'maxDurationMs')::integer not between 1 and 10000
+         or (p_metric_manifest->>'elapsedDurationMs')::integer not between 0 and 600000
+         or (
+           p_result_status = 'passed'
+           and (
              (p_metric_manifest->>'resultState') <> 'success'
              or (p_metric_manifest->>'unresolvedStateCount')::integer <> 0
              or (p_metric_manifest->>'elapsedDurationMs')::integer >
@@ -2745,12 +2944,27 @@ begin
      or p_evidence_hashes is null
      or not public.governance_hash_array_valid(p_evidence_hashes, 1, 64)
      or not run_value.evidence_manifest_hash = any(p_evidence_hashes)
+     or run_value.result_status not in ('finding_created','failed')
      or (
        p_reproduction_state in ('confirmed_defect','likely_defect')
        and (
-         run_value.result_status not in ('finding_created','failed')
+         p_physical_proof_status not in ('installed_ui_observed','simulator_observed')
+       )
+     )
+     or (
+       p_reproduction_state = 'design_baseline_missing'
+       and (
+         run_value.sentinel_key <> 'visual_product_experience_sentinel'
          or p_physical_proof_status not in ('installed_ui_observed','simulator_observed')
        )
+     )
+     or (
+       p_reproduction_state = 'provider_blocked'
+       and p_physical_proof_status <> 'provider_blocked'
+     )
+     or (
+       p_reproduction_state = 'device_unavailable'
+       and p_physical_proof_status <> 'device_unavailable'
      ) then
     raise exception 'product_quality_finding_rejected' using errcode = 'P0001';
   end if;
@@ -2782,6 +2996,96 @@ revoke all on function public.product_quality_record_finding(
 ) from public, anon, authenticated;
 grant execute on function public.product_quality_record_finding(
   uuid,text,text,text,text,text,text[],text,numeric,text,text,text,text,text,text,text
+) to service_role;
+
+create function public.product_experience_erase_expired_evidence(
+  p_target_table text,
+  p_target_id uuid,
+  p_tombstone_hash text,
+  p_service_identity text,
+  p_worker_assertion text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  run_value public.product_experience_sentinel_runs%rowtype;
+  finding_value public.product_quality_findings%rowtype;
+  now_at timestamptz := transaction_timestamp();
+begin
+  perform public.governance_assert_two_party_service_principal(
+    p_service_identity, p_worker_assertion, 'product_quality_triage'
+  );
+  if p_service_identity <> 'product_quality_triage_router'
+     or p_target_table not in (
+       'product_experience_sentinel_runs',
+       'product_quality_findings'
+     )
+     or p_tombstone_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'product_experience_retention_tombstone_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  if p_target_table = 'product_experience_sentinel_runs' then
+    select * into run_value
+    from public.product_experience_sentinel_runs
+    where id = p_target_id
+    for update;
+    if run_value.id is null
+       or run_value.legal_hold
+       or run_value.erased_at is not null
+       or now_at < run_value.retention_until then
+      raise exception 'product_experience_retention_tombstone_rejected'
+        using errcode = 'P0001';
+    end if;
+    update public.product_experience_sentinel_runs
+    set erased_at = now_at
+    where id = run_value.id;
+    insert into public.cognitive_erasure_events(
+      task_id, project_id, platform, environment, target_table, target_id,
+      prior_data_class, tombstone_hash, legal_hold, erased_at, actor_identity
+    ) values (
+      run_value.task_id, run_value.project_id, run_value.platform,
+      run_value.environment, p_target_table, run_value.id,
+      run_value.data_class, p_tombstone_hash, false, now_at,
+      p_service_identity
+    );
+    return run_value.id;
+  end if;
+
+  select * into finding_value
+  from public.product_quality_findings
+  where id = p_target_id
+  for update;
+  if finding_value.id is null
+     or finding_value.legal_hold
+     or finding_value.erased_at is not null
+     or now_at < finding_value.retention_until then
+    raise exception 'product_experience_retention_tombstone_rejected'
+      using errcode = 'P0001';
+  end if;
+  update public.product_quality_findings
+  set erased_at = now_at
+  where id = finding_value.id;
+  insert into public.cognitive_erasure_events(
+    task_id, project_id, platform, environment, target_table, target_id,
+    prior_data_class, tombstone_hash, legal_hold, erased_at, actor_identity
+  ) values (
+    finding_value.task_id, finding_value.project_id, finding_value.platform,
+    finding_value.environment, p_target_table, finding_value.id,
+    finding_value.data_class, p_tombstone_hash, false, now_at,
+    p_service_identity
+  );
+  return finding_value.id;
+end;
+$$;
+revoke all on function public.product_experience_erase_expired_evidence(
+  text,uuid,text,text,text
+) from public, anon, authenticated;
+grant execute on function public.product_experience_erase_expired_evidence(
+  text,uuid,text,text,text
 ) to service_role;
 
 comment on table public.governance_owner_approval_versions is

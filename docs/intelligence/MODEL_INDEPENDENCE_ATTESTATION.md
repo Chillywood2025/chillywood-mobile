@@ -14,6 +14,8 @@ Independence rules:
 - blind first-round status is preserved;
 - provider/model correlation is explicit;
 - cross-provider evidence is required for live quorum;
+- counted live quorum must include at least two model families and the required
+  number of distinct model-family/version pairs;
 - same-provider distinct-model-family evidence remains advisory and does not
   satisfy live quorum by itself;
 - same-family isolated analysis remains advisory.
@@ -34,8 +36,9 @@ independence status and evidence hash.
 Local proof:
 
 - `npm run test:cognitive-model-independence`: passed.
-- pgTAP verifies a single advisory model execution and same-provider
-  distinct-model-family executions return
+- pgTAP verifies a single advisory model execution, same-provider
+  distinct-model-family executions, and cross-provider same-family executions
+  return
   `MODEL_INDEPENDENCE_PROVIDER_REQUIRED`.
 - pgTAP verifies decision finalization fails before cross-provider attestations
   exist and succeeds only after verified independence evidence is present.

@@ -242,6 +242,21 @@ select ok(
 );
 select ok(
   lower(pg_get_functiondef(
+    'public.governance_lock_approved_execution_cleanup_scope(uuid)'::regprocedure
+  )) like '%governance_owner_approval_version_states%'
+  and lower(pg_get_functiondef(
+    'public.governance_lock_approved_execution_cleanup_scope(uuid)'::regprocedure
+  )) like '%for update%'
+  and lower(pg_get_functiondef(
+    'public.governance_lock_approved_execution_cleanup_scope(uuid)'::regprocedure
+  )) like '%autonomous_system_emergency_states%'
+  and lower(pg_get_functiondef(
+    'public.governance_lock_approved_execution_cleanup_scope(uuid)'::regprocedure
+  )) like '%for share%',
+  'service execution cleanup locks approval state, task, and emergency-stop rows without granting new side effects'
+);
+select ok(
+  lower(pg_get_functiondef(
     'public.governance_begin_approved_execution(uuid,text,text,text)'::regprocedure
   )) like '%governance_lock_approved_execution_liveness(p_execution_id)%'
   and lower(pg_get_functiondef(
@@ -249,14 +264,14 @@ select ok(
   )) like '%governance_lock_approved_execution_liveness(p_execution_id)%'
   and lower(pg_get_functiondef(
     'public.governance_fail_approved_execution(uuid,text,text,text)'::regprocedure
-  )) like '%governance_lock_approved_execution_liveness(p_execution_id)%'
+  )) like '%governance_lock_approved_execution_cleanup_scope(p_execution_id)%'
   and lower(pg_get_functiondef(
     'public.governance_release_or_quarantine_execution(uuid,text,text,text,text)'::regprocedure
-  )) like '%governance_lock_approved_execution_liveness(p_execution_id)%'
+  )) like '%governance_lock_approved_execution_cleanup_scope(p_execution_id)%'
   and lower(pg_get_functiondef(
     'public.governance_execute_approved_switch(uuid,text,text,text,boolean,text,text)'::regprocedure
   )) like '%governance_lock_approved_execution_liveness(p_execution_id)%',
-  'all side-effecting service RPCs use the locked liveness check'
+  'side effects and success use locked liveness while cleanup uses locked cleanup scope'
 );
 
 select ok(
@@ -616,6 +631,140 @@ select set_config(
 );
 insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
 select
+  'emergency-after-side-effect',
+  (result->>'approvalVersionId')::uuid,
+  result->>'approvalHash'
+from (
+  select public.governance_record_owner_approval(
+    'b7000000-0000-0000-0000-000000000001',
+    'emergency-after-side-effect-test',
+    repeat('4',64),
+    repeat('6',64),
+    repeat('5',40),
+    repeat('6',64),
+    repeat('4',64),
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'none',
+    'set_switch',
+    (select switch_target_hash from two_party_target_hashes),
+    '{}'::text[],
+    '{}'::text[],
+    '{}'::text[],
+    repeat('9',64),
+    1,
+    1,
+    1024,
+    1,
+    repeat('8',64),
+    array['two-party-test'],
+    repeat('9',64),
+    repeat('3',64),
+    interval '24 hours'
+  ) result
+) approval;
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+update two_party_liveness_fixture
+set execution_id = (result->>'executionId')::uuid
+from (
+  select public.governance_claim_approved_action(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('5',64),
+    repeat('6',64),
+    (select approval_hash from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
+    repeat('8',64),repeat('9',64),repeat('3',64)
+  ) result
+) claim
+where fixture_key='emergency-after-side-effect';
+select public.governance_begin_approved_execution(
+  (select execution_id from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'preflight'
+);
+select public.governance_begin_approved_execution(
+  (select execution_id from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'executing'
+);
+select public.governance_execute_approved_switch(
+  (select execution_id from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'cognitive_livekit_experience_sentinel_enabled',
+  true,
+  'two-party-test',
+  (select switch_target_hash from two_party_target_hashes)
+);
+select public.governance_begin_approved_execution(
+  (select execution_id from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'evaluating'
+);
+reset role;
+
+update public.autonomous_system_emergency_states
+set status = 'emergency_stop',
+    reason = 'two-party emergency cleanup fixture',
+    updated_at = transaction_timestamp()
+where system_id = 'product_intelligence_operator';
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.governance_complete_approved_execution(
+    (select execution_id from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('b',64),
+    repeat('c',64)
+  )$$,
+  'P0001',
+  'two_party_execution_completion_rejected',
+  'emergency stop after side effect blocks successful completion'
+);
+select is(
+  public.governance_release_or_quarantine_execution(
+    (select execution_id from two_party_liveness_fixture where fixture_key='emergency-after-side-effect'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'quarantined',
+    repeat('d',64)
+  )->>'state',
+  'quarantined',
+  'emergency stop after side effect permits audited quarantine cleanup'
+);
+reset role;
+
+update public.autonomous_system_emergency_states
+set status = 'active',
+    reason = 'two-party handoff fixture active emergency state',
+    updated_at = transaction_timestamp()
+where system_id = 'product_intelligence_operator';
+
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  true
+);
+insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
+select
   'cancelled-after-claim',
   (result->>'approvalVersionId')::uuid,
   result->>'approvalHash'
@@ -933,17 +1082,16 @@ select throws_ok(
   'two_party_execution_completion_rejected',
   'single-use Owner revocation blocks completion'
 );
-select throws_ok(
-  $$select public.governance_release_or_quarantine_execution(
+select is(
+  public.governance_release_or_quarantine_execution(
     (select execution_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
     'cognitive_approved_action_worker',
     'synthetic-worker-assertion-000000000000',
     'quarantined',
     repeat('d',64)
-  )$$,
-  'P0001',
-  'two_party_execution_release_rejected',
-  'single-use Owner revocation blocks rollback and quarantine transition'
+  )->>'state',
+  'quarantined',
+  'single-use Owner revocation permits quarantine cleanup after execution started'
 );
 reset role;
 
@@ -1148,10 +1296,34 @@ select public.governance_register_two_party_service_principal(
   array['installed_journey_canary'],
   transaction_timestamp()+interval '1 day'
 );
+select public.governance_register_two_party_service_principal(
+  'product_experience_baseline_service',
+  encode(extensions.digest(convert_to('synthetic-baseline-assertion-000000000000','UTF8'),'sha256'),'hex'),
+  array['visual_experience_canary'],
+  transaction_timestamp()+interval '1 day'
+);
+select is(
+  public.governance_revoke_two_party_service_principal(
+    'product_experience_baseline_service',
+    repeat('f',64)
+  )->>'status',
+  'revoked',
+  'Owner can revoke a service-principal assertion through an explicit RPC'
+);
 reset role;
 
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.governance_assert_two_party_service_principal(
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000',
+    'visual_experience_canary'
+  )$$,
+  '42501',
+  'two_party_service_principal_required',
+  'revoked service-principal assertion cannot execute'
+);
 select is(
   public.governance_record_model_execution_attestation(
     'two-party-assessment',
@@ -1205,6 +1377,35 @@ select is(
   'same-provider distinct-model attestations cannot claim independent quorum'
 );
 select public.governance_record_model_execution_attestation(
+  'cross-provider-same-family-assessment',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','architecture_engineering',repeat('1',64),
+  'family-a','model-a',repeat('2',64),repeat('3',64),repeat('4',64),
+  repeat('5',64),true,'cross_provider',0.1,100,
+  'model_independence_attestation_service',
+  'synthetic-model-assertion-000000000000'
+);
+select public.governance_record_model_execution_attestation(
+  'cross-provider-same-family-assessment',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','security_privacy',repeat('2',64),
+  'family-a','model-a',repeat('3',64),repeat('4',64),repeat('5',64),
+  repeat('6',64),true,'cross_provider',0.1,100,
+  'model_independence_attestation_service',
+  'synthetic-model-assertion-000000000000'
+);
+select is(
+  public.governance_model_independence_status(
+    'b1000000-0000-0000-0000-000000000001',
+    'cross-provider-same-family-assessment',
+    2
+  )->>'status',
+  'MODEL_INDEPENDENCE_PROVIDER_REQUIRED',
+  'cross-provider same-family attestations cannot claim independent model quorum'
+);
+select public.governance_record_model_execution_attestation(
   'duplicate-role-assessment',
   'b1000000-0000-0000-0000-000000000001',
   'b0000000-0000-0000-0000-000000000001',
@@ -1247,6 +1448,10 @@ reset role;
 
 create temporary table two_party_sentinel_run(id uuid);
 grant select, insert on two_party_sentinel_run to service_role;
+create temporary table two_party_visual_passed_run(id uuid);
+grant select, insert on two_party_visual_passed_run to service_role;
+create temporary table two_party_expired_sentinel_run(id uuid);
+grant select, insert on two_party_expired_sentinel_run to service_role;
 insert into public.cognitive_governance_switches(
   task_id, project_id, platform, environment, switch_key, enabled,
   policy_version, enabled_by, enabled_at, updated_at
@@ -1457,6 +1662,36 @@ select is(
   true,
   'visual sentinel accepts bounded baseline-review finding evidence'
 );
+insert into two_party_visual_passed_run(id)
+select public.product_experience_record_sentinel_run(
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','visual_product_experience_sentinel','Home',
+  repeat('8',64),repeat('e',64),
+  '{
+    "screenshotEvidenceHash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "cardViewportWidthRatio":0.42,
+    "cardsVisibleAboveFold":6,
+    "aspectRatio":"16:9",
+    "densityScore":0.74,
+    "baselineState":"approved_baseline",
+    "baselineComparisonHash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  }'::jsonb,
+  'passed','installed_ui_observed',
+  'visual_product_experience_sentinel','synthetic-visual-assertion-000000000000'
+);
+select throws_ok(
+  $$select public.product_quality_record_finding(
+    (select id from two_party_visual_passed_run),
+    'visual-passed-run-baseline-fixture','Home',repeat('8',64),'low',repeat('9',64),
+    array[repeat('e',64)],'layout_density',0.6000,'design_baseline_missing',
+    repeat('b',64),repeat('c',64),repeat('d',64),'installed_ui_observed',
+    'product_quality_triage_router','synthetic-triage-assertion-000000000000'
+  )$$,
+  'P0001',
+  'product_quality_finding_rejected',
+  'product triage rejects passed visual run as a governance finding'
+);
 select throws_ok(
   $$select public.product_experience_record_sentinel_run(
     'b1000000-0000-0000-0000-000000000001',
@@ -1500,6 +1735,30 @@ select throws_ok(
   'product_experience_sentinel_run_rejected',
   'installed journey sentinel pass rejects caller-overstated timing limits'
 );
+select throws_ok(
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','installed_journey_sentinel','Search',
+    repeat('8',64),repeat('9',64),
+    '{
+      "journeyStepCount":999,
+      "unresolvedStateCount":999,
+      "expectedState":"home_feed_visible",
+      "observedState":"not_a_reviewed_state",
+      "maxDurationMs":5000,
+      "elapsedDurationMs":1200,
+      "resultState":"success",
+      "screenshotEvidenceHash":"not-a-hash",
+      "sourceRuntimeHash":"also-not-a-hash"
+    }'::jsonb,
+    'passed','installed_ui_observed',
+    'installed_journey_sentinel','synthetic-installed-assertion-000000000000'
+  )$$,
+  'P0001',
+  'product_experience_sentinel_run_rejected',
+  'installed journey sentinel rejects malformed hashes and impossible step counts'
+);
 select is(
   public.product_experience_record_sentinel_run(
     'b1000000-0000-0000-0000-000000000001',
@@ -1535,6 +1794,59 @@ select is(
   'product triage records an evidence-based sentinel finding without product mutation'
 );
 reset role;
+
+with inserted as (
+  insert into public.product_experience_sentinel_runs(
+    task_id, project_id, platform, environment, sentinel_key, route_or_surface,
+    runtime_identity_hash, evidence_manifest_hash, metric_manifest, result_status,
+    physical_proof_status, created_at, retention_until
+  ) values (
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','installed_journey_sentinel','ExpiredRetentionFixture',
+    repeat('a',64),repeat('f',64),'{"retentionFixture":true}'::jsonb,
+    'blocked','device_unavailable',
+    transaction_timestamp()-interval '10 days',
+    transaction_timestamp()-interval '1 day'
+  ) returning id
+)
+insert into two_party_expired_sentinel_run(id)
+select id from inserted;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select is(
+  public.product_experience_erase_expired_evidence(
+    'product_experience_sentinel_runs',
+    (select id from two_party_expired_sentinel_run),
+    repeat('e',64),
+    'product_quality_triage_router',
+    'synthetic-triage-assertion-000000000000'
+  ) is not null,
+  true,
+  'expired sentinel evidence receives controlled retention tombstone'
+);
+reset role;
+
+select is(
+  (
+    select erased_at is not null
+    from public.product_experience_sentinel_runs
+    where id = (select id from two_party_expired_sentinel_run)
+  ),
+  true,
+  'retention tombstone marks expired sentinel evidence without deleting source row'
+);
+select is(
+  (
+    select count(*) = 1
+    from public.cognitive_erasure_events
+    where target_table = 'product_experience_sentinel_runs'
+      and target_id = (select id from two_party_expired_sentinel_run)
+  ),
+  true,
+  'retention tombstone records immutable erasure event'
+);
 
 select is(
   (

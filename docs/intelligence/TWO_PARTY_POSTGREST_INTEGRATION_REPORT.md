@@ -11,10 +11,13 @@ The pgTAP suite exercises the same SQL privileges used by PostgREST roles:
 - replayed single-use claims fail closed;
 - wrong decision-manifest hash fails closed;
 - legacy direct Owner switch activation fails closed.
+- service-principal assertion revocation blocks later service assertions;
+- emergency stop or Owner revocation after side effects blocks successful
+  completion but still permits cleanup-only quarantine/rollback settlement.
 
 Current local result:
 
-`supabase test db` passed 669 tests across 12 files, including
+`supabase test db` passed 714 tests across 12 files, including
 `supabase/tests/cognitive_two_party_activation_handoff_test.sql`.
 
 Remaining gap before deployment:

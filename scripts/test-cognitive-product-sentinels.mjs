@@ -121,8 +121,28 @@ contains(
   "installed journey sentinel does not cap caller-supplied per-step duration",
 );
 contains(
+  "(p_metric_manifest->>'screenshotEvidenceHash') !~ '^[a-f0-9]{64}$'",
+  "installed journey sentinel does not validate screenshot proof hashes",
+);
+contains(
+  "(p_metric_manifest->>'sourceRuntimeHash') !~ '^[a-f0-9]{64}$'",
+  "installed journey sentinel does not validate source runtime hashes",
+);
+contains(
+  "(p_metric_manifest->>'journeyStepCount')::integer not between 1 and 256",
+  "installed journey sentinel does not bound journey step counts",
+);
+contains(
   "not run_value.evidence_manifest_hash = any(p_evidence_hashes)",
   "product finding RPC does not require the referenced sentinel evidence hash",
+);
+contains(
+  "run_value.result_status not in ('finding_created','failed')",
+  "product finding RPC allows passed sentinel runs to create governance findings",
+);
+contains(
+  "run_value.sentinel_key <> 'visual_product_experience_sentinel'",
+  "product finding RPC does not bind design-baseline findings to visual sentinel runs",
 );
 assert(
   dbTest.includes("installed journey sentinel rejects missing expected/observed state and duration evidence"),
@@ -153,13 +173,34 @@ assert(
   "database suite does not reject installed-journey passes with overstated duration limits",
 );
 assert(
+  dbTest.includes("installed journey sentinel rejects malformed hashes and impossible step counts"),
+  "database suite does not reject malformed installed-journey hashes and step counts",
+);
+assert(
   dbTest.includes("installed journey sentinel accepts bounded expected/observed state evidence"),
   "database suite does not accept complete installed-journey evidence",
+);
+assert(
+  dbTest.includes("product triage rejects passed visual run as a governance finding"),
+  "database suite does not reject findings from passed sentinel runs",
+);
+assert(
+  dbTest.includes("expired sentinel evidence receives controlled retention tombstone"),
+  "database suite does not prove expired sentinel evidence can be tombstoned",
+);
+assert(
+  dbTest.includes("retention tombstone records immutable erasure event"),
+  "database suite does not prove retention tombstone audit events",
 );
 assert(
   migration.includes("product_experience_sentinel_runs_retention_idx") &&
     migration.includes("product_quality_findings_retention_idx"),
   "sentinel and finding evidence lack retention indexes",
+);
+assert(
+  migration.includes("product_experience_erase_expired_evidence") &&
+    migration.includes("product_experience_evidence_mutation_guard"),
+  "sentinel and finding evidence lack controlled retention tombstoning",
 );
 contains(
   "entered_collective_governance",
