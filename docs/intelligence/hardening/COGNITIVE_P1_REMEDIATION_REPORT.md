@@ -258,3 +258,25 @@ canonical attacks, 232/232 focused cognitive pgTAP assertions, and 517/517
 assertions across the complete local database suite. These remain authored
 implementation results only; every fourteenth-review item stays independently
 open until a fresh exact-head review reports zero P0/P1.
+
+The fifteenth exact-head review of
+`4b42964ae50a3ed6aea99f9d57565082590cf563` again reported zero P0 and
+correctly withheld Reviewer D. It reproduced ignored/out-of-range position
+aliases, semantic sibling ordering, non-numbered and path-based research
+egress, inline safe-value fragment abuse, suffixed phone fragments, three
+additional Unicode confusables, direct/nested provider wildcard authority,
+additional denial reversals, and common credential-file families. It also
+identified reinforcing-denial, numeric-counter, status-metadata, and duplicate
+URL-index false positives.
+
+The correction now requires exactly one normalized position and fragment alias,
+rejects invalid ranges, inspects canonical semantic object order, and evaluates
+bounded contiguous query/path sequences before DNS. The SQL and source
+sanitizers share explicit confusable, status, and phone composition behavior.
+Provider review now covers direct/nested AWS, Azure, Kubernetes, GCP, and
+GitHub authority shapes, and executor confinement denies the expanded credential
+filename families. Authored executable evidence reports 99/99 independent
+variants, 40/40 canonical attacks, 238/238 focused cognitive pgTAP assertions,
+and 523/523 assertions across the complete local database suite. These remain
+authored implementation results only; every fifteenth-review item stays
+independently open until a fresh exact-head review reports zero P0/P1.

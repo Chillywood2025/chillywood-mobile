@@ -2634,6 +2634,146 @@ variant("R-96 credential filenames are excluded from lexical and runtime scope",
   }
 });
 
+variant("R-97 semantic, positioned, private, and status fragments are bounded", () => {
+  const token = "AKIAQ1Z9A2Y8B3X7C4W6";
+  const chunks = [token.slice(0, 6), token.slice(6, 13), token.slice(13)];
+  for (const payload of [
+    chunks.map((value, index) => ({ index, value })).reverse(),
+    chunks.map((value, index) => ({ ordinal: index, value })).reverse(),
+    chunks.map((chunk, order) => ({ order, chunk })).reverse(),
+    chunks.map((part, idx) => ({ idx, part })).reverse(),
+    chunks.map((chunk, Position) => ({ Position, chunk })).reverse(),
+    chunks.map((chunk, position) => ({ position: position + 128, chunk })).reverse(),
+    chunks.map((chunk, index) => ({ index: index - 1, chunk })).reverse(),
+    [{ position: 0, index: 0, chunk: chunks[0] }, { position: 1, chunk: chunks[1] }],
+    { second: chunks[1], first: chunks[0], third: chunks[2] },
+    ["cl", "ient", "se", "cret", "=", "x"],
+    ["pa", "ss", "wo", "rd", "=", "d", "e", "a", "d", "b", "e", "e", "f"],
+    ["client", "secret", "=status"],
+    ["api", "key", "=enabled"],
+    ["123abc", "456def", "7890ghi"],
+    ["123!", "456!", "7890!"],
+    ["123456789x", "0y"],
+  ]) {
+    assert.equal(foundation.sanitizeCognitivePayload(payload).accepted, false, JSON.stringify(payload));
+  }
+  for (const safe of [
+    ["author", "ization", "status"],
+    ["pass", "word", "status"],
+    ["20260723", "1234"],
+    ["1", ".", ".", ".", "2"],
+    { queued: "1234", completed: "56789" },
+    { authorization: "status" },
+  ]) assert.equal(foundation.sanitizeCognitivePayload(safe).accepted, true, JSON.stringify(safe));
+});
+
+variant("R-98 semantic query and path credentials stop before DNS without numeric false positives", async () => {
+  const token = "AKIAQ1Z9A2Y8B3X7C4W6";
+  const chunks = [token.slice(0, 6), token.slice(6, 12), token.slice(12)];
+  const urls = [
+    `https://public.example.test/?part130=${chunks[2]}&part128=${chunks[0]}&part129=${chunks[1]}`,
+    `https://public.example.test/?part=2:${chunks[2]}&part=0:${chunks[0]}&part=1:${chunks[1]}`,
+    `https://public.example.test/?position=2&chunk=${chunks[2]}&position=0&chunk=${chunks[0]}&position=1&chunk=${chunks[1]}`,
+    `https://public.example.test/?part[two]=${chunks[2]}&part[zero]=${chunks[0]}&part[one]=${chunks[1]}`,
+    `https://public.example.test/?first=${chunks[0]}&middle=${chunks[1]}&last=${chunks[2]}`,
+    `https://public.example.test/source/${chunks.join("/")}`,
+    "https://public.example.test/?cl=ient&se=cr&et=%3Dx",
+    "https://public.example.test/cl/ient/se/cr/et/%3Dx",
+  ];
+  for (const url of urls) {
+    assert.ok(foundation.validateResearchUrl(url).includes("credential_bearing_url_forbidden"), url);
+    let dnsCalls = 0;
+    await assert.rejects(
+      () => validateResearchUrlWithDns(url, async () => {
+        dnsCalls += 1;
+        return [{ address: "93.184.216.34" }];
+      }),
+      /credential_bearing_url_forbidden/u,
+    );
+    assert.equal(dnsCalls, 0, url);
+  }
+  for (const url of [
+    "https://public.example.test/?item1=apple&count1=2",
+    "https://public.example.test/docs?v2_title=overview&v2_page=install",
+  ]) {
+    assert.deepEqual(foundation.validateResearchUrl(url), [], url);
+    let dnsCalls = 0;
+    await validateResearchUrlWithDns(url, async () => {
+      dnsCalls += 1;
+      return [{ address: "93.184.216.34" }];
+    });
+    assert.equal(dnsCalls, 1, url);
+  }
+});
+
+variant("R-99 provider semantics, confusables, and credential paths fail closed", () => {
+  for (const dangerous of [
+    "autհ=x",
+    "sɪgnature=x",
+    "sɩgnature=x",
+  ]) assert.equal(foundation.sanitizeCognitivePayload(dangerous).accepted, false, dangerous);
+  const envelope = (data) => foundation.createUntrustedToolEnvelope({
+    toolId: "provider",
+    callId: `provider-${hash(JSON.stringify(data)).slice(0, 16)}`,
+    taskId: "variant-task",
+    source: "provider",
+    contentType: "application/json",
+    timestamp: now.toISOString(),
+    truncated: false,
+    data,
+  });
+  for (const dangerous of [
+    { permissions: ["*"] },
+    { permissions: [{ actions: ["*"], notActions: [] }], assignableScopes: ["/"] },
+    { nonResourceURLs: ["*"], verbs: ["*"] },
+    { Effect: "Allow", Action: "*", NotResource: "arn:fixture" },
+    { Effect: "Allow", Action: "*", Resource: "arn:fixture" },
+    { permission: "resourcemanager.projects.setIamPolicy" },
+    { administration: "write" },
+    { resource: "users/impersonate" },
+    "The assertion that root is disabled is false.",
+    "Root being disabled is a lie.",
+    "Keep root from staying disabled.",
+  ]) assert.equal(envelope(dangerous).ownerReviewRequired, true, JSON.stringify(dangerous));
+  for (const safe of [
+    "PowerUserAccess is prohibited. No exceptions will be permitted.",
+    "PowerUserAccess está prohibido.",
+  ]) assert.equal(envelope(safe).ownerReviewRequired, false, safe);
+  const privateRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-credential-path-expanded-"));
+  try {
+    for (const relative of [
+      "docs/intelligence/.git-credentials",
+      "docs/intelligence/.docker/config.json",
+      "docs/intelligence/serviceAccountKey.json",
+      "docs/intelligence/.pypirc",
+      "docs/intelligence/.gem/credentials",
+      "docs/intelligence/.cargo/credentials.toml",
+      "docs/intelligence/kubeconfig",
+      "docs/intelligence/.htpasswd",
+      "docs/intelligence/service_account.json",
+      "docs/intelligence/gcp-service-account.json",
+      "docs/intelligence/firebase-admin.json",
+      "docs/intelligence/application_default_credentials.json",
+      "docs/intelligence/auth.json",
+      "docs/intelligence/token.json",
+    ]) {
+      assert.ok(foundation.validateLexicalRepositoryPath(relative).includes("credential_path_forbidden"), relative);
+      assert.throws(
+        () => resolveConfinedRepositoryPath({
+          repositoryRoot: privateRoot,
+          requestedPath: relative,
+          allowedScopes: ["docs/intelligence/"],
+          allowNewFile: true,
+        }),
+        /credential_path_forbidden/u,
+        relative,
+      );
+    }
+  } finally {
+    fs.rmSync(privateRoot, { recursive: true, force: true });
+  }
+});
+
 for (const entry of variants) await entry.callback();
-assert.equal(variants.length, 96);
+assert.equal(variants.length, 99);
 process.stdout.write(`cognitive hardening independent variants ${variants.length}/${variants.length} passed\n`);

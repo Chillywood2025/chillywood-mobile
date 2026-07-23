@@ -2127,6 +2127,67 @@ select ok(
   ),
   'bounded target assembly is order-independent without arbitrary anagrams'
 );
+select ok(
+  public.cognitive_text_has_secret('autհ=x')
+  and public.cognitive_text_has_secret('sɪgnature=x')
+  and public.cognitive_text_has_secret('sɩgnature=x')
+  and public.cognitive_text_has_secret('%61%75%74%d5%b0%3d%78')
+  and public.cognitive_text_has_secret('YXV01bA9eA=='),
+  'additional Armenian and Latin confusables fail closed through encoded forms'
+);
+select ok(
+  (
+    select bool_and(not public.cognitive_json_is_sanitized(payload))
+    from (values
+      ('["cl","ient","se","cret","=","x"]'::jsonb),
+      ('["pa","ss","wo","rd","=","d","e","a","d","b","e","e","f"]'::jsonb),
+      ('["client","secret","=status"]'::jsonb),
+      ('["api","key","=enabled"]'::jsonb)
+    ) dangerous(payload)
+  ),
+  'arbitrarily fragmented labels and inline values cannot use status exceptions'
+);
+select ok(
+  (
+    select bool_and(not public.cognitive_json_is_sanitized(payload))
+    from (values
+      ('["123abc","456def","7890ghi"]'::jsonb),
+      ('["123!","456!","7890!"]'::jsonb),
+      ('["123456789x","0y"]'::jsonb)
+    ) dangerous(payload)
+  ),
+  'fragmented phone identifiers fail closed with arbitrary bounded affixes'
+);
+select ok(
+  (
+    select bool_and(not public.cognitive_json_is_sanitized(payload))
+    from (values
+      ('[{"index":0,"value":"AKIAQ1"},{"index":1,"value":"Z9A2Y8"},{"index":2,"value":"B3X7C4W6"}]'::jsonb),
+      ('[{"ordinal":0,"value":"AKIAQ1"},{"ordinal":1,"value":"Z9A2Y8"},{"ordinal":2,"value":"B3X7C4W6"}]'::jsonb),
+      ('[{"order":0,"chunk":"AKIAQ1"},{"order":1,"chunk":"Z9A2Y8"},{"order":2,"chunk":"B3X7C4W6"}]'::jsonb),
+      ('[{"idx":0,"part":"AKIAQ1"},{"idx":1,"part":"Z9A2Y8"},{"idx":2,"part":"B3X7C4W6"}]'::jsonb),
+      ('[{"Position":0,"chunk":"AKIAQ1"},{"Position":1,"chunk":"Z9A2Y8"},{"Position":2,"chunk":"B3X7C4W6"}]'::jsonb),
+      ('[{"position":128,"chunk":"AKIAQ1"},{"position":129,"chunk":"Z9A2Y8"},{"position":130,"chunk":"B3X7C4W6"}]'::jsonb),
+      ('[{"position":0,"index":0,"chunk":"AKIAQ1"},{"position":1,"chunk":"Z9A2Y8"}]'::jsonb)
+    ) dangerous(payload)
+  ),
+  'all position aliases, invalid ranges, and mixed aliases fail closed'
+);
+select ok(
+  not public.cognitive_json_is_sanitized(
+    '{"second":"Z9A2Y8","first":"AKIAQ1","third":"B3X7C4W6"}'::jsonb
+  ),
+  'semantic sibling ordering cannot retain a reconstructed raw credential'
+);
+select ok(
+  public.cognitive_json_is_sanitized('["author","ization","status"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["pass","word","status"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["20260723","1234"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["1",".",".",".","2"]'::jsonb)
+  and public.cognitive_json_is_sanitized('{"queued":"1234","completed":"56789"}'::jsonb)
+  and public.cognitive_json_is_sanitized('{"authorization":"status"}'::jsonb),
+  'reviewed status and numeric metadata controls remain usable'
+);
 
 -- Static schema properties that back remaining behavioral tests.
 select col_is_pk('public', 'cognitive_projects', 'id', 'project identity is primary');
