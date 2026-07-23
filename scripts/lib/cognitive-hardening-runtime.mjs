@@ -6,7 +6,7 @@ import net from "node:net";
 import https from "node:https";
 
 const FORBIDDEN_SEGMENTS = new Set([".git", "node_modules", "android", "ios"]);
-const CREDENTIAL_FILE = /(?:^|\/)(?:\.env(?:\.|$)|\.git-credentials$|\.htpasswd$|\.npmrc$|\.netrc$|\.pypirc$|kubeconfig$|id_(?:rsa|dsa|ecdsa|ed25519)$|(?:auth|token|secrets?|credentials?|service[-_]?account(?:[-_]?key)?|serviceaccountkey|gcp[-_]?service[-_]?account|firebase[-_]?admin(?:sdk(?:-[^/]+)?)?|application[-_]?default[-_]?credentials)\.json$|\.aws\/credentials$|\.config\/gcloud\/application_default_credentials\.json$|\.docker\/config\.json$|\.gem\/credentials$|\.cargo\/credentials(?:\.toml)?$|.*\.(?:jks|keystore|p8|p12|pem|key)$)/iu;
+const CREDENTIAL_FILE = /(?:^|\/)(?:\.env(?:\.|$)|\.envrc$|\.git-credentials$|\.htpasswd$|\.npmrc$|\.yarnrc(?:\.ya?ml)?$|\.netrc$|\.pypirc$|\.pgpass$|\.my\.cnf$|\.boto$|\.s3cfg$|kubeconfig$|vault[-_]?token$|id_(?:rsa|dsa|ecdsa|ed25519)$|(?:auth|token|secrets?|credentials?|service[-_]?account(?:[-_]?key)?|serviceaccountkey|gcp[-_]?service[-_]?account|firebase[-_]?admin(?:sdk(?:-[^/]+)?)?|application[-_]?default[-_]?credentials|client[-_]?secrets?(?:[-_][^/]*)?|access[-_]?tokens?|msal[-_]?token[-_]?cache)\.(?:json|ya?ml|toml|ini|cfg|conf)$|credentials?\.tfrc\.json$|\.aws\/credentials$|\.kube\/config$|\.config\/gh\/hosts\.ya?ml$|\.azure\/accessTokens\.json$|\.config\/gcloud\/application_default_credentials\.json$|\.docker\/config\.json$|\.gem\/credentials$|\.cargo\/credentials(?:\.toml)?$|.*\.(?:jks|keystore|p8|p12|pem|key)$)/iu;
 const PRIVATE_V4 = [
   ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8],
   ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24],
@@ -406,14 +406,14 @@ const normalizedIp = (address) => {
 };
 
 const RESEARCH_MAX_URL_BYTES = 2_048;
-const RESEARCH_CREDENTIAL_PATTERN = /\b(?:(?:access|refresh)\s*(?:[_-]?token|\[\s*token\s*\])|token|api[_-]?key|service[_-]?role|private[_-]?key|secret|password|pwd|credential|authorization|auth|cookie|bearer|signature|sig|key)(?:[._-][A-Za-z0-9_-]{1,64})?\s*[:=]/iu;
+const RESEARCH_CREDENTIAL_PATTERN = /\b(?:(?:access|refresh)\s*(?:[_-]?token|\[\s*token\s*\])|token|api[_-]?key|service[_-]?role|private[_-]?key|secret|password|passwd|passphrase|pwd|credential|authorization|auth|cookie|bearer|signature|sig|key)(?:[._-][A-Za-z0-9_-]{1,64})?\s*[:=]/iu;
 const SENSITIVE_RESEARCH_LABELS = new Set([
   "accesskey", "accesstoken", "apikey", "auth", "authorization", "authorizationtoken",
-  "bearer", "clientsecret", "cookie", "credential", "credentialkey", "credentialtoken", "key", "password", "privatekey", "pwd",
+  "bearer", "clientsecret", "cookie", "credential", "credentialkey", "credentialtoken", "key", "password", "passwd", "passphrase", "privatekey", "pwd",
   "refreshtoken", "secret", "servicerole", "sig", "signature", "token", "xapikey",
 ]);
 const SENSITIVE_RESEARCH_LABEL_PARTS = new Set([
-  "auth", "authorization", "bearer", "cookie", "credential", "key", "password",
+  "auth", "authorization", "bearer", "cookie", "credential", "key", "password", "passwd", "passphrase",
   "pwd", "secret", "sig", "signature", "token",
 ]);
 const SECURITY_CONFUSABLES = Object.freeze({
@@ -421,7 +421,11 @@ const SECURITY_CONFUSABLES = Object.freeze({
   т: "t", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", ԛ: "q", ԝ: "w",
   ү: "y", ӏ: "l", һ: "h", α: "a", β: "b", ε: "e", η: "h", ι: "i", κ: "k", μ: "m",
   ν: "v", ο: "o", ρ: "p", τ: "t", υ: "y", χ: "x", ϲ: "c", ն: "n", օ: "o",
-  ı: "i", ɡ: "g", ɪ: "i", ɩ: "i", հ: "h",
+  ı: "i", ɑ: "a", ɡ: "g", ɪ: "i", ɩ: "i", հ: "h",
+  ᴀ: "a", ʙ: "b", ᴄ: "c", ᴅ: "d", ᴇ: "e", ꜰ: "f", ɢ: "g",
+  ʜ: "h", ᴊ: "j", ᴋ: "k", ʟ: "l", ᴍ: "m", ɴ: "n", ᴏ: "o",
+  ᴘ: "p", ʀ: "r", ꜱ: "s", ᴛ: "t", ᴜ: "u", ᴠ: "v", ᴡ: "w",
+  ʏ: "y", ᴢ: "z",
 });
 const SECURITY_DECIMAL_BLOCKS = Object.freeze([
   48,1632,1776,1984,2406,2534,2662,2790,2918,3046,3174,3302,3430,3558,
@@ -442,11 +446,48 @@ const normalizedSecurityText = (value) =>
     .replace(/[\u3002\uff0e\uff61]/gu, ".")
     .replace(/[\p{Default_Ignorable_Code_Point}\p{Mark}]/gu, "")
     .replace(/\p{Nd}/gu, normalizeDecimalDigit)
-    .replace(/[АВЕКМНОРСТУХІЈЅԀԚԜҮӀҺавекмнорстухіјѕԁԛԝүӏһΑΒΕΗΙΚΜΝΟΡΤΥΧϹαβεηικμνορτυχϲՆՕնօıɡꞬɪɩՀհ]/gu, (character) =>
+    .replace(/[АВЕКМНОРСТУХІЈЅԀԚԜҮӀҺавекмнорстухіјѕԁԛԝүӏһΑΒΕΗΙΚΜΝΟΡΤΥΧϹαβεηικμνορτυχϲՆՕնօıɑɡꞬɪɩՀհᴀʙᴄᴅᴇꜰɢʜᴊᴋʟᴍɴᴏᴘʀꜱᴛᴜᴠᴡʏᴢ]/gu, (character) =>
       SECURITY_CONFUSABLES[character.toLowerCase()] ?? character
     );
 const normalizedSecurityLabel = (value) =>
   normalizedSecurityText(value).toLowerCase().replace(/[^a-z0-9]/gu, "");
+const canAssembleResearchTarget = (values, targets) => {
+  const fragments = values.slice(0, 128).flatMap((value) => {
+    const candidates = decodeBoundedSecurityCandidates(value)
+      .filter((candidate) => candidate !== "secret=encoded_depth_exceeded");
+    return [...new Set([value, ...candidates].flatMap((candidate) =>
+      normalizedSecurityText(candidate).toLowerCase().split(/[^a-z0-9]+/gu).filter(Boolean)
+    ))];
+  }).slice(0, 512);
+  for (const target of targets) {
+    const eligible = fragments.filter((fragment) =>
+      fragment.length <= target.length && target.includes(fragment)
+    );
+    if (eligible.length === 0) continue;
+    const available = eligible.join("");
+    if ([...new Set(target)].some((character) =>
+      (available.match(new RegExp(character, "gu"))?.length ?? 0)
+      < (target.match(new RegExp(character, "gu"))?.length ?? 0)
+    )) continue;
+    const reachable = new Array(target.length + 1).fill(false);
+    reachable[0] = true;
+    for (let position = 0; position < target.length; position += 1) {
+      if (!reachable[position]) continue;
+      for (const fragment of eligible) {
+        if (target.startsWith(fragment, position)) reachable[position + fragment.length] = true;
+      }
+    }
+    if (reachable[target.length]) return true;
+  }
+  return false;
+};
+const SENSITIVE_RESEARCH_FRAGMENT_TARGETS = Object.freeze([
+  "accesskey", "accesstoken", "apikey", "auth", "authorization",
+  "authorizationtoken", "bearer", "clientsecret", "cookie", "credential",
+  "credentialkey", "credentialtoken", "key", "password", "passwd",
+  "passphrase", "privatekey", "pwd", "refreshtoken", "secret", "servicerole",
+  "servicekey", "servicetoken", "sig", "signature", "token", "xapikey",
+]);
 const hasSensitiveResearchAssignment = (value) => {
   const normalized = normalizedSecurityText(value);
   for (const match of normalized.matchAll(/([^?&=:\s]{1,256})\s*[:=]/gu)) {
@@ -468,6 +509,9 @@ const hasSensitiveResearchAssignment = (value) => {
 };
 const hasPrivateIdentifierText = (value) => {
   const normalized = normalizedSecurityText(value);
+  if (/^\p{Nd}+$/u.test(normalized)) {
+    return normalized.length >= 10 && normalized.length <= 15;
+  }
   if (
     /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(normalized)
     || /^[a-f0-9]{40,128}$/iu.test(normalized)
@@ -569,20 +613,74 @@ const decodeBoundedSecurityCandidates = (value) => {
 };
 
 const URL_POSITION_WORDS = Object.freeze({
-  zero: 0, first: 1, one: 1, second: 2, two: 2, third: 3, three: 3,
+  zero: 0, head: 0, header: 0, prefix: 0, start: 0, beginning: 0,
+  primary: 1, first: 1, one: 1, body: 1,
+  secondary: 2, second: 2, two: 2, fragment: 2,
+  tertiary: 3, third: 3, three: 3, checksum: 3,
   fourth: 4, four: 4, fifth: 5, five: 5, sixth: 6, six: 6,
   seventh: 7, seven: 7, eighth: 8, eight: 8, ninth: 9, nine: 9,
-  tenth: 10, ten: 10, middle: 50, penultimate: 98, last: 99,
+  tenth: 10, ten: 10, eleventh: 11, eleven: 11, twelfth: 12, twelve: 12,
+  thirteenth: 13, thirteen: 13, fourteenth: 14, fourteen: 14,
+  fifteenth: 15, fifteen: 15, sixteenth: 16, sixteen: 16,
+  seventeenth: 17, seventeen: 17, eighteenth: 18, eighteen: 18,
+  nineteenth: 19, nineteen: 19, twentieth: 20, twenty: 20,
+  mid: 50, middle: 50, penultimate: 98, tail: 99, footer: 99, end: 99,
+  ending: 99, last: 99,
 });
+const URL_ROMAN_ORDER = Object.freeze({
+  i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10,
+  xi: 11, xii: 12, xiii: 13, xiv: 14, xv: 15, xvi: 16, xvii: 17,
+  xviii: 18, xix: 19, xx: 20,
+});
+const URL_POSITION_LABELS = new Set([
+  "position", "index", "ordinal", "order", "idx", "sequence", "seq", "offset",
+  "rank", "slot", "fragmentindex", "positionindex",
+]);
+const URL_FRAGMENT_LABELS = new Set(["chunk", "fragment", "piece", "part", "value", "payload"]);
+const REVIEWED_URL_COUNTER_LABEL = /^(?:year|build|patch|count|version|item|page|release)[0-9]+$/u;
+const isUrlPositionLabel = (label) =>
+  URL_POSITION_LABELS.has(label)
+  || /^(?:(?:fragment|piece|chunk|part|payload|value)?(?:position|index|ordinal|order|sequence|seq|offset|rank|slot))$/u.test(label);
 const urlPosition = (value) => {
   const label = normalizedSecurityLabel(value);
   if (Object.hasOwn(URL_POSITION_WORDS, label)) return URL_POSITION_WORDS[label];
-  const numeric = label.match(/([0-9]{1,6})/u);
+  if (Object.hasOwn(URL_ROMAN_ORDER, label)) return URL_ROMAN_ORDER[label];
+  const numeric = label.match(/([0-9]{1,9})/u);
   if (numeric) return Number(numeric[1]);
-  for (const [word, position] of Object.entries(URL_POSITION_WORDS)) {
+  for (const [word, position] of Object.entries(URL_POSITION_WORDS)
+    .sort(([left], [right]) => right.length - left.length)) {
     if (label.includes(word)) return position;
   }
+  if (/^(?:part|chunk|fragment|piece|payload|value|position|index|ordinal|order|sequence|seq|offset|rank|slot)[ivx]+$/u.test(label)) {
+    for (const [roman, position] of Object.entries(URL_ROMAN_ORDER)
+      .sort(([left], [right]) => right.length - left.length)) {
+      if (label.endsWith(roman)) return position;
+    }
+  }
   return null;
+};
+const appendPermutationCandidates = (candidates, values, maximumCandidates = 2_048) => {
+  const fragments = values.slice(0, 10).map((value) => value.slice(0, 1_024)).filter(Boolean);
+  if (fragments.length < 2) return;
+  const startSize = candidates.length;
+  const used = new Array(fragments.length).fill(false);
+  const visit = (parts) => {
+    if (candidates.length - startSize >= maximumCandidates) return;
+    if (parts.length >= 2) candidates.push(parts.join(""));
+    if (parts.length >= Math.min(6, fragments.length)) return;
+    const visitedAtDepth = new Set();
+    for (let index = 0; index < fragments.length
+      && candidates.length - startSize < maximumCandidates; index += 1) {
+      if (used[index] || visitedAtDepth.has(fragments[index])) continue;
+      visitedAtDepth.add(fragments[index]);
+      used[index] = true;
+      parts.push(fragments[index]);
+      visit(parts);
+      parts.pop();
+      used[index] = false;
+    }
+  };
+  visit([]);
 };
 const appendContiguousCandidates = (candidates, values) => {
   const bounded = values.slice(0, 64).map((value) => value.slice(0, 1_024));
@@ -596,12 +694,35 @@ const appendContiguousCandidates = (candidates, values) => {
       if (end > start) candidates.push(joined);
     }
   }
+  appendPermutationCandidates(candidates, bounded);
+};
+const appendOrderedAlternatives = (candidates, fragments) => {
+  if (fragments.length < 2 || fragments.length > 128) return;
+  const groups = new Map();
+  for (const fragment of fragments) {
+    groups.set(fragment.position, [...(groups.get(fragment.position) ?? []), fragment.value]);
+  }
+  let alternatives = [[]];
+  for (const values of [...groups.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, groupValues]) => [...new Set(groupValues)])) {
+    alternatives = alternatives
+      .flatMap((prefix) => values.map((value) => [...prefix, value]))
+      .slice(0, 512);
+  }
+  for (const alternative of alternatives) {
+    appendContiguousCandidates(candidates, alternative);
+    if (canAssembleResearchTarget(alternative, SENSITIVE_RESEARCH_FRAGMENT_TARGETS)) {
+      candidates.push("secret=fragment_reconstruction");
+    }
+  }
 };
 const reconstructNamedResearchFragments = (searchParams) => {
   const groups = new Map();
   const allIndexed = [];
   const entries = [...searchParams.entries()].slice(0, 128);
   const candidates = [];
+  const structured = [];
   appendContiguousCandidates(candidates, entries.map(([, value]) => value));
   if (entries.length >= 2) {
     appendContiguousCandidates(candidates, entries.flatMap(([key, value]) => [key, value]));
@@ -611,25 +732,29 @@ const reconstructNamedResearchFragments = (searchParams) => {
   for (const [key, value] of entries) {
     const normalizedKey = normalizedSecurityText(key).slice(0, 128);
     const keyLabel = normalizedSecurityLabel(normalizedKey);
-    if (["position", "index", "ordinal", "order", "idx"].includes(keyLabel)) {
+    if (isUrlPositionLabel(keyLabel)) {
       pendingPosition = urlPosition(value);
       continue;
     }
-    if (["chunk", "fragment", "piece", "part", "value"].includes(keyLabel) && pendingPosition !== null) {
+    if (URL_FRAGMENT_LABELS.has(keyLabel) && pendingPosition !== null) {
       pairedFragments.push({ position: pendingPosition, value: value.slice(0, 1_024) });
       pendingPosition = null;
     }
     const embedded = normalizedSecurityText(value)
-      .match(/^\s*([0-9]{1,6}|zero|one|two|three|four|five|six|seven|eight|nine|ten)\s*[:|]\s*([\s\S]+)$/iu);
+      .match(/^\s*([a-z0-9]{1,32})\s*[:|]\s*([\s\S]+)$/iu);
     if (embedded) {
       const position = urlPosition(embedded[1]);
       if (position !== null) pairedFragments.push({ position, value: embedded[2].slice(0, 1_024) });
     }
-    const position = urlPosition(normalizedKey);
+    const position = REVIEWED_URL_COUNTER_LABEL.test(keyLabel)
+      ? null
+      : urlPosition(normalizedKey);
     if (position !== null) {
       const fragment = { position, value: value.slice(0, 1_024) };
-      const marker = /([0-9]{1,6}|zero|one|two|three|four|five|six|seven|eight|nine|ten)/iu;
-      const groupKey = normalizedSecurityLabel(normalizedKey.replace(marker, "")) || "indexed";
+      const groupKey = normalizedSecurityLabel(normalizedKey
+        .replace(/[0-9]{1,9}/gu, "")
+        .replace(new RegExp(Object.keys(URL_POSITION_WORDS).sort((left, right) => right.length - left.length).join("|"), "giu"), "")
+      ) || "indexed";
       const group = groups.get(groupKey) ?? [];
       group.push(fragment);
       groups.set(groupKey, group);
@@ -638,37 +763,30 @@ const reconstructNamedResearchFragments = (searchParams) => {
   }
   allIndexed.push(...pairedFragments);
   if (allIndexed.length >= 2) {
-    const positions = new Set(allIndexed.map((fragment) => fragment.position));
     const inputOrder = allIndexed.map((fragment) => fragment.value);
-    appendContiguousCandidates(candidates, inputOrder);
-    if (positions.size === allIndexed.length) {
-      const positionOrder = [...allIndexed]
-        .sort((left, right) => left.position - right.position)
-        .map((fragment) => fragment.value);
-      appendContiguousCandidates(candidates, positionOrder);
+    appendContiguousCandidates(structured, inputOrder);
+    if (canAssembleResearchTarget(inputOrder, SENSITIVE_RESEARCH_FRAGMENT_TARGETS)) {
+      structured.push("secret=fragment_reconstruction");
     }
+    appendOrderedAlternatives(structured, allIndexed);
   }
   for (const fragments of groups.values()) {
     if (fragments.length < 2 || fragments.length > 128) continue;
-    const positions = new Set(fragments.map((fragment) => fragment.position));
-    appendContiguousCandidates(candidates, fragments.map((fragment) => fragment.value));
-    if (positions.size === fragments.length) {
-      const sorted = [...fragments].sort((left, right) => left.position - right.position);
-      const rawOrdered = sorted.map((fragment) => fragment.value);
-      const ordered = sorted.map((fragment) => {
-        const decoded = decodeBoundedSecurityCandidates(fragment.value)
-          .filter((candidate) => candidate !== "secret=encoded_depth_exceeded");
-        return decoded.at(-1) ?? fragment.value;
-      });
-      appendContiguousCandidates(candidates, rawOrdered);
-      appendContiguousCandidates(candidates, ordered);
+    const values = fragments.map((fragment) => fragment.value);
+    appendContiguousCandidates(structured, values);
+    if (canAssembleResearchTarget(values, SENSITIVE_RESEARCH_FRAGMENT_TARGETS)) {
+      structured.push("secret=fragment_reconstruction");
     }
+    appendOrderedAlternatives(structured, fragments);
   }
-  return candidates;
+  return {
+    all: [...new Set([...candidates, ...structured])],
+    structured: [...new Set(structured)],
+  };
 };
 
 const pathResearchFragmentCandidates = (pathname) => {
-  const segments = pathname.split("/").filter(Boolean).slice(0, 64).map((segment) => {
+  const segments = pathname.split(/[\/;]/u).filter(Boolean).slice(0, 64).map((segment) => {
     try {
       return decodeURIComponent(segment).slice(0, 1_024);
     } catch {
@@ -677,7 +795,26 @@ const pathResearchFragmentCandidates = (pathname) => {
   });
   const candidates = [];
   appendContiguousCandidates(candidates, segments);
-  return candidates;
+  const structured = [];
+  const positioned = [];
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const label = segments[index].split("=", 1)[0];
+    const position = urlPosition(label);
+    if (position === null) continue;
+    const value = segments[index].includes("=")
+      ? segments[index].slice(segments[index].indexOf("=") + 1)
+      : segments[index + 1];
+    if (value) positioned.push({ position, value });
+  }
+  appendOrderedAlternatives(structured, positioned);
+  if (canAssembleResearchTarget(
+    positioned.map((fragment) => fragment.value),
+    SENSITIVE_RESEARCH_FRAGMENT_TARGETS,
+  )) structured.push("secret=fragment_reconstruction");
+  return {
+    all: [...new Set([...candidates, ...structured])],
+    structured: [...new Set(structured)],
+  };
 };
 
 export const validateResearchUrlWithDns = async (raw, resolveDns) => {
@@ -731,11 +868,27 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
     ...fullyDecodedUrl.pathname.split("/").filter(Boolean),
   ];
   if (encodedValues.length > 128) throw new Error("credential_bearing_url_forbidden");
+  const parsedQueryFragments = reconstructNamedResearchFragments(parsed.searchParams);
+  const decodedQueryFragments = reconstructNamedResearchFragments(fullyDecodedUrl.searchParams);
+  const parsedPathFragments = pathResearchFragmentCandidates(parsed.pathname);
+  const decodedPathFragments = pathResearchFragmentCandidates(fullyDecodedUrl.pathname);
+  const hashText = parsed.hash.startsWith("#") ? parsed.hash.slice(1) : parsed.hash;
+  const decodedHashText = fullyDecodedUrl.hash.startsWith("#")
+    ? fullyDecodedUrl.hash.slice(1)
+    : fullyDecodedUrl.hash;
+  const parsedHashFragments = hashText.includes("=") || hashText.includes("&")
+    ? reconstructNamedResearchFragments(new URLSearchParams(hashText))
+    : pathResearchFragmentCandidates(hashText);
+  const decodedHashFragments = decodedHashText.includes("=") || decodedHashText.includes("&")
+    ? reconstructNamedResearchFragments(new URLSearchParams(decodedHashText))
+    : pathResearchFragmentCandidates(decodedHashText);
   const namedFragmentCandidates = [
-    ...reconstructNamedResearchFragments(parsed.searchParams),
-    ...reconstructNamedResearchFragments(fullyDecodedUrl.searchParams),
-    ...pathResearchFragmentCandidates(parsed.pathname),
-    ...pathResearchFragmentCandidates(fullyDecodedUrl.pathname),
+    ...parsedQueryFragments.all,
+    ...decodedQueryFragments.all,
+    ...parsedPathFragments.all,
+    ...decodedPathFragments.all,
+    ...parsedHashFragments.all,
+    ...decodedHashFragments.all,
   ];
   const securityCandidates = [
     rawText,
@@ -760,13 +913,34 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
   if (securityCandidates.some((candidate) =>
     RESEARCH_CREDENTIAL_PATTERN.test(candidate)
     || hasSensitiveResearchAssignment(candidate)
-    || hasPrivateIdentifierInResearchData(candidate)
     || /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9_-]{12,}\b/u.test(candidate)
     || /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u.test(candidate)
     || /\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,})\b/u.test(candidate)
     || /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/u.test(candidate)
     || /https:\/\/[^/\s:@]+:[^/\s@]+@/iu.test(candidate)
   )) {
+    throw new Error("credential_bearing_url_forbidden");
+  }
+  const privateCandidates = [
+    parsed.hash,
+    fullyDecodedUrl.hash,
+    ...parsed.searchParams.values(),
+    ...fullyDecodedUrl.searchParams.values(),
+    ...parsedQueryFragments.structured,
+    ...decodedQueryFragments.structured,
+    ...parsedPathFragments.structured,
+    ...decodedPathFragments.structured,
+    ...parsedHashFragments.structured,
+    ...decodedHashFragments.structured,
+  ];
+  if (privateCandidates.flatMap((candidate) => {
+    try {
+      return decodeBoundedSecurityCandidates(candidate)
+        .filter((decodedCandidate) => decodedCandidate !== "secret=encoded_depth_exceeded");
+    } catch {
+      return [candidate];
+    }
+  }).some((candidate) => hasPrivateIdentifierInResearchData(candidate))) {
     throw new Error("credential_bearing_url_forbidden");
   }
   const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/gu, "").replace(/\.$/u, "");

@@ -280,3 +280,33 @@ variants, 40/40 canonical attacks, 238/238 focused cognitive pgTAP assertions,
 and 523/523 assertions across the complete local database suite. These remain
 authored implementation results only; every fifteenth-review item stays
 independently open until a fresh exact-head review reports zero P0/P1.
+
+The sixteenth exact-head review of
+`cf2f328a1d4ed9f0c0732df32d2fb5d485d3b37b` again reported zero P0 and
+correctly withheld Reviewer D. The three lanes independently reproduced
+credential reconstruction through semantic aliases, colliding positions,
+unordered object roles, additional Latin confusables, missing password
+vocabulary, safe-status assignment abuse, split phone values, query/path/hash
+egress variants, provider-native escalation policies, reversal paraphrases,
+and common credential-file conventions. They also identified safe counter,
+version, translated-denial, documentation-URL, and maximum-envelope latency
+gaps. The inherited dependency audit remains a deployment blocker.
+
+The corrective checkpoint replaces finite position handling with normalized
+typed position/fragment roles plus bounded alternative reconstruction, expands
+the detection-only Unicode security skeleton and credential vocabulary, makes
+assignment markers incompatible with status exceptions, and applies
+context-aware numeric/private-data handling. Static and runtime research URL
+boundaries now share duplicate-position, extended ordinal/Roman, paired,
+path, matrix, and hash reconstruction before DNS while preserving reviewed
+counter and documentation URLs. Provider review now recognizes exact AWS,
+Azure, Kubernetes, GCP, and GitHub escalation operations and additional
+denial reversals while retaining explicit Deny and translated-denial controls.
+The database uses the same aliases and semantic roles, and a simple-scalar fast
+path keeps the reviewed 128-record payload below the five-second statement
+timeout. Authored executable evidence reports 104/104 independent hardening
+variants, 40/40 canonical attacks, 11/11 runtime-authority variants, 243/243
+focused cognitive pgTAP assertions, and 528/528 assertions across the complete
+local database suite. These are authored implementation results only. Every
+sixteenth-review finding remains open until the next exact-head isolated A/B/C
+review reports zero P0/P1.

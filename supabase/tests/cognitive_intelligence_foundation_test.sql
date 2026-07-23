@@ -2018,7 +2018,7 @@ select ok(
 );
 select ok(
   public.cognitive_json_is_sanitized('["sector","=","trace"]'::jsonb)
-  and public.cognitive_json_is_sanitized('["12345","67890"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["123456789","987654321"]'::jsonb)
   and public.cognitive_json_is_sanitized('["@documentation","version 1.2"]'::jsonb)
   and public.cognitive_json_is_sanitized('["sky","theme","status=ok"]'::jsonb),
   'ordinary fragments are not rejected by token-bag, phone, email, or label heuristics'
@@ -2106,9 +2106,8 @@ select ok(
 );
 select ok(
   public.cognitive_json_is_sanitized('["authorization","status"]'::jsonb)
-  and public.cognitive_json_is_sanitized('["authorization","=","status"]'::jsonb)
   and public.cognitive_json_is_sanitized('["@documentation","version 1.2"]'::jsonb)
-  and public.cognitive_json_is_sanitized('["12345","67890"]'::jsonb),
+  and public.cognitive_json_is_sanitized('["123456789","987654321"]'::jsonb),
   'reviewed status, documentation, and counter controls remain usable'
 );
 select performs_ok(
@@ -2187,6 +2186,66 @@ select ok(
   and public.cognitive_json_is_sanitized('{"queued":"1234","completed":"56789"}'::jsonb)
   and public.cognitive_json_is_sanitized('{"authorization":"status"}'::jsonb),
   'reviewed status and numeric metadata controls remain usable'
+);
+select ok(
+  public.cognitive_text_has_secret('pɑssword=x')
+  and public.cognitive_text_has_secret('ᴘassword=x')
+  and public.cognitive_text_has_secret('toᴋen=x')
+  and public.cognitive_text_has_secret('ᴛoken=x')
+  and public.cognitive_text_has_secret('ꜱecret=x')
+  and public.cognitive_text_has_secret('passwd=hunter2')
+  and public.cognitive_text_has_secret('passphrase=hunter2')
+  and public.cognitive_text_has_secret('%70%C9%91%73%73%77%6F%72%64%3D%78')
+  and public.cognitive_text_has_secret('cMmRc3N3b3JkPXg=')
+  and public.cognitive_text_has_secret('70c9917373776f72643d78'),
+  'Latin confusables and password vocabulary fail closed through encoded forms'
+);
+select ok(
+  (
+    select bool_and(not public.cognitive_json_is_sanitized(payload))
+    from (values
+      ('[{"sequence":2,"value":"AAAAAAA"},{"sequence":0,"value":"AKIAZZ"},{"sequence":1,"value":"ZZZZZZA"}]'::jsonb),
+      ('[{"offset":2,"chunk":"AAAAAAA"},{"offset":0,"chunk":"AKIAZZ"},{"offset":1,"chunk":"ZZZZZZA"}]'::jsonb),
+      ('[{"rank":2,"piece":"AAAAAAA"},{"rank":0,"piece":"AKIAZZ"},{"rank":1,"piece":"ZZZZZZA"}]'::jsonb),
+      ('[{"slot":2,"part":"AAAAAAA"},{"slot":0,"part":"AKIAZZ"},{"slot":1,"part":"ZZZZZZA"}]'::jsonb),
+      ('[{"fragmentIndex":2,"payload":"AAAAAAA"},{"fragmentIndex":0,"payload":"AKIAZZ"},{"fragmentIndex":1,"payload":"ZZZZZZA"}]'::jsonb),
+      ('{"tail":"B3X7C4W6","head":"AKIAQ1","mid":"Z9A2Y8"}'::jsonb),
+      ('{"end":"B3X7C4W6","beginning":"AKIAQ1","middle":"Z9A2Y8"}'::jsonb),
+      ('{"body":"abcdef","header":"ghp_","fragment":"ghijkl","checksum":"mnopqrstuvwx"}'::jsonb)
+    ) dangerous(payload)
+  ),
+  'extended position aliases and semantic sibling roles cannot reconstruct credentials'
+);
+select ok(
+  (
+    select bool_and(not public.cognitive_json_is_sanitized(payload))
+    from (values
+      ('["password","=","status"]'::jsonb),
+      ('["pa","ss","word","=","status"]'::jsonb),
+      ('["authorization",":","status"]'::jsonb),
+      ('["31255","51234"]'::jsonb),
+      ('["312555","1234"]'::jsonb)
+    ) dangerous(payload)
+  ),
+  'literal assignments and split ten-digit phone identifiers cannot use safe metadata exceptions'
+);
+select ok(
+  public.cognitive_json_is_sanitized('["authorization","state"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["password","enabled"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["123456789","987654321"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["2024","2025","2026"]'::jsonb)
+  and public.cognitive_json_is_sanitized('{"queued":"1234","completed":"5678","failed":"90"}'::jsonb)
+  and public.cognitive_json_is_sanitized('{"first":"12345","second":"67890"}'::jsonb)
+  and public.cognitive_json_is_sanitized('["1",".","2",".","3",".","4"]'::jsonb),
+  'bounded status, counters, years, and semantic numeric metadata remain usable'
+);
+select performs_ok(
+  $$select public.cognitive_json_is_sanitized(
+    (select jsonb_agg(jsonb_build_object('position',n,'value','safe') order by n)
+     from generate_series(0,127) n)
+  )$$,
+  5000,
+  'maximum allowed positioned payload remains below the reviewed statement timeout'
 );
 
 -- Static schema properties that back remaining behavioral tests.

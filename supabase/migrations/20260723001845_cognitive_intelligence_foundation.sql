@@ -96,7 +96,12 @@ begin
     U&'\0410\0412\0415\041A\041C\041D\041E\0420\0421\0422\0423\0425\0406\0408\0405\0500\051A\051C\04AE\04C0\0391\0392\0395\0397\0399\039A\039C\039D\039F\03A1\03A4\03A5\03A7\03F9\0546\0555\0430\0432\0435\043A\043C\043D\043E\0440\0441\0442\0443\0445\0456\0458\0455\0501\051B\051D\04AF\04CF\03B1\03B2\03B5\03B7\03B9\03BA\03BC\03BD\03BF\03C1\03C4\03C5\03C7\03F2\0576\0585',
     'ABEKMHOPCTYXIJSDQWYLABEHIKMVOPTYXCNOabekmhopctyxijsdqwylabehikmvoptyxcno'
   );
-  return translate(normalized, U&'\04BB\0131\0261\026A\0269\0540\0570', 'higiiHh');
+  normalized := translate(normalized, U&'\04BB\0131\0261\026A\0269\0540\0570', 'higiiHh');
+  return translate(
+    normalized,
+    'ɑᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘʀꜱᴛᴜᴠᴡʏᴢ',
+    'aabcdefghijklmnoprstuvwyz'
+  );
 end;
 $$;
 revoke all on function public.cognitive_security_normalize(text) from public, anon, authenticated;
@@ -110,7 +115,7 @@ set search_path = ''
 as $$
   select public.cognitive_security_normalize(coalesce(payload, '')) ~* '[:=@?%]'
     or public.cognitive_security_normalize(coalesce(payload, ''))
-      ~* '(password|secret|credential|authorization|token|bearer|cookie|private[_. -]*key|service[_. -]*role|api[_. -]*key|client[_. -]*secret|ignore[[:space:]]+previous|run[[:space:]]+(shell|command))'
+      ~* '(password|passwd|passphrase|secret|credential|authorization|token|bearer|cookie|private[_. -]*key|service[_. -]*role|api[_. -]*key|client[_. -]*secret|ignore[[:space:]]+previous|run[[:space:]]+(shell|command))'
     or public.cognitive_security_normalize(coalesce(payload, ''))
       ~* '(^|[^A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}([^A-Za-z0-9_-]|$)'
     or public.cognitive_security_normalize(coalesce(payload, ''))
@@ -155,6 +160,10 @@ declare
 begin
   if octet_length(coalesce(payload, '')) > 4000 then
     return true;
+  end if;
+  if public.cognitive_security_normalize(coalesce(payload, '')) ~ '^[0-9]{1,18}$'
+     or public.cognitive_security_normalize(coalesce(payload, '')) ~ '^[0-9]{1,6}(\.[0-9]{1,6}){1,7}$' then
+    return false;
   end if;
   if length(coalesce(payload,'')) > 4096
      and coalesce(payload,'') ~ '^[A-Za-z0-9+/_-]+={0,2}$' then
@@ -237,9 +246,9 @@ begin
       'gi'
     );
     if security_candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
-       or security_candidate ~* '(^|[^A-Za-z0-9])(([A-Za-z0-9]+[_.-])*(client[_.-]*secret|service[_.-]*(role|key|token)|access[_.-]*(token|key)|refresh[_.-]*token|api[_.-]*key|private[_.-]*key|authorization[_.-]*(token|key))|(password|pwd|secret|credential|auth|authorization|cookie|token|bearer|signature|sig|key))[[:space:]]*[:=][^,&}[:space:]]+'
-       or security_candidate ~* '(access|api|authorization|auth|bearer|client|cookie|credential|key|password|private|pwd|refresh|secret|service|sig|signature|token)[[:space:]_.-]*\[[^]]{1,64}\][[:space:]]*[:=]'
-       or security_candidate ~* '(^|[^A-Za-z0-9])(password|pwd|secret|credential|service[[:space:]_\[\]:.-]?(role|key|token)|access[[:space:]_\[\]:.-]?(token|key)|refresh[[:space:]_\[\]:.-]?token|api[[:space:]_\[\]:.-]?key|authorization([[:space:]_\[\]:.-]?(token|key))?|auth|cookie|private[[:space:]_\[\]:.-]?key|token|bearer|signature|sig|key)[=_:.-][A-Za-z0-9._:-]+'
+       or security_candidate ~* '(^|[^A-Za-z0-9])(([A-Za-z0-9]+[_.-])*(client[_.-]*secret|service[_.-]*(role|key|token)|access[_.-]*(token|key)|refresh[_.-]*token|api[_.-]*key|private[_.-]*key|authorization[_.-]*(token|key))|(password|passwd|passphrase|pwd|secret|credential|auth|authorization|cookie|token|bearer|signature|sig|key))[[:space:]]*[:=][^,&}[:space:]]+'
+       or security_candidate ~* '(access|api|authorization|auth|bearer|client|cookie|credential|key|password|passwd|passphrase|private|pwd|refresh|secret|service|sig|signature|token)[[:space:]_.-]*\[[^]]{1,64}\][[:space:]]*[:=]'
+       or security_candidate ~* '(^|[^A-Za-z0-9])(password|passwd|passphrase|pwd|secret|credential|service[[:space:]_\[\]:.-]?(role|key|token)|access[[:space:]_\[\]:.-]?(token|key)|refresh[[:space:]_\[\]:.-]?token|api[[:space:]_\[\]:.-]?key|authorization([[:space:]_\[\]:.-]?(token|key))?|auth|cookie|private[[:space:]_\[\]:.-]?key|token|bearer|signature|sig|key)[=_:.-][A-Za-z0-9._:-]+'
        or security_candidate ~* '(^|[^A-Za-z0-9_])(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}([^A-Za-z0-9_]|$)'
        or security_candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
        or security_candidate ~* '(^|[^A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})([^A-Za-z0-9_]|$)'
@@ -415,6 +424,8 @@ immutable
 set search_path = ''
 as $$
   select case
+    when public.cognitive_security_normalize(coalesce(payload,'')) ~ '^[0-9]+$'
+      then length(public.cognitive_security_normalize(coalesce(payload,''))) between 10 and 15
     when public.cognitive_security_normalize(coalesce(payload,'')) ~* '^[a-f0-9]{16}$'
       or public.cognitive_security_normalize(coalesce(payload,'')) ~* '^[a-f0-9]{40,128}$'
       or public.cognitive_security_normalize(coalesce(payload,'')) ~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
@@ -494,7 +505,7 @@ as $$
   from unnest(array[
     'accesskey','accesstoken','apikey','auth','authorization',
     'authorizationtoken','bearer','clientsecret','cookie','credential',
-    'credentialkey','credentialtoken','key','password','privatekey','pwd',
+    'credentialkey','credentialtoken','key','password','passwd','passphrase','privatekey','pwd',
     'refreshtoken','secret','servicerole','servicekey','servicetoken',
     'sig','signature','token','xapikey'
   ]::text[]) sensitive_target
@@ -569,6 +580,9 @@ declare
   numeric_fragment_count integer := 0;
   numeric_fragment_digits integer := 0;
   reviewed_safe_status boolean := false;
+  reviewed_numeric_metadata boolean := false;
+  reviewed_version_fragments boolean := false;
+  reviewed_repeated_safe_value boolean := false;
   standalone_at_count integer := 0;
   any_at_count integer := 0;
   local_part_count integer := 0;
@@ -607,7 +621,46 @@ begin
   elsif payload_type = 'array' then
     if jsonb_array_length(payload) > 128 then return false; end if;
     for child_value in select value from jsonb_array_elements(payload) loop
-      if not public.cognitive_json_is_sanitized(child_value) then return false; end if;
+      if jsonb_typeof(child_value) = 'object'
+         and (select count(*) from jsonb_object_keys(child_value)) <= 64
+         and not exists (
+           select 1
+           from jsonb_each(child_value) scalar_member
+           where jsonb_typeof(scalar_member.value) in ('object','array')
+         ) then
+        for object_key, positioned_child in select key, value from jsonb_each(child_value) loop
+          if public.cognitive_text_has_secret(object_key)
+             or public.cognitive_text_has_private_identifier(object_key)
+             or (
+               jsonb_typeof(positioned_child) = 'string'
+               and (
+                 public.cognitive_text_has_secret(positioned_child #>> '{}')
+                 or public.cognitive_text_has_private_identifier(positioned_child #>> '{}')
+               )
+             )
+             or (
+               regexp_replace(
+                 lower(public.cognitive_security_normalize(object_key)),
+                 '[^a-z0-9]',
+                 '',
+                 'g'
+               ) ~ '^(auth|authorization|bearer|cookie|credential|key|password|passwd|passphrase|pwd|secret|sig|signature|token)$'
+               and not (
+                 jsonb_typeof(positioned_child) = 'string'
+                 and regexp_replace(
+                   lower(public.cognitive_security_normalize(positioned_child #>> '{}')),
+                   '[^a-z0-9]',
+                   '',
+                   'g'
+                 ) in ('active','disabled','enabled','inactive','none','ok','state','status','unavailable','unknown')
+               )
+             ) then
+            return false;
+          end if;
+        end loop;
+      elsif not public.cognitive_json_is_sanitized(child_value) then
+        return false;
+      end if;
     end loop;
   elsif payload_type = 'object' then
     if (select count(*) from jsonb_object_keys(payload)) > 64 then return false; end if;
@@ -630,9 +683,9 @@ begin
            or public.cognitive_security_normalize(object_key)
               ~* '(^|[_.-])(client[_.-]*secret|service[_.-]*(role|key|token)|access[_.-]*(key|token)|refresh[_.-]*token|api[_.-]*key|private[_.-]*key|authorization[_.-]*(key|token))([_.-]|$)'
            or public.cognitive_security_normalize(object_key)
-              ~* '^(auth|authorization|bearer|cookie|credential|key|password|pwd|secret|sig|signature|token)$'
+              ~* '^(auth|authorization|bearer|cookie|credential|key|password|passwd|passphrase|pwd|secret|sig|signature|token)$'
            or public.cognitive_security_normalize(object_key)
-              ~* '(^|[_.-])(auth|authorization|bearer|cookie|credential|key|password|pwd|secret|sig|signature|token)\[[^]]{1,64}\]$'
+              ~* '(^|[_.-])(auth|authorization|bearer|cookie|credential|key|password|passwd|passphrase|pwd|secret|sig|signature|token)\[[^]]{1,64}\]$'
          )
          and not (
            regexp_replace(lower(public.cognitive_security_normalize(object_key)), '[^a-z0-9]', '', 'g')
@@ -701,49 +754,110 @@ begin
         + length(regexp_replace(fragment_text, '[^0-9]', '', 'g'));
     end if;
   end loop;
-  assembled_sensitive_label := public.cognitive_fragments_have_sensitive_label(string_values);
+  reviewed_repeated_safe_value := cardinality(leaf_string_values) >= 32
+    and (
+      select count(distinct regexp_replace(
+        lower(public.cognitive_security_normalize(fragment)),
+        '[^a-z0-9]',
+        '',
+        'g'
+      )) = 1
+      and min(regexp_replace(
+        lower(public.cognitive_security_normalize(fragment)),
+        '[^a-z0-9]',
+        '',
+        'g'
+      )) in ('active','disabled','enabled','inactive','none','ok','safe','state','status','unavailable','unknown')
+      from unnest(leaf_string_values) fragment
+    );
+  assembled_sensitive_label := case
+    when reviewed_repeated_safe_value then false
+    else public.cognitive_fragments_have_sensitive_label(string_values)
+  end;
   reviewed_safe_status :=
     regexp_replace(
       lower(public.cognitive_security_normalize(array_to_string(string_values, ''))),
       '[^a-z0-9]',
       '',
       'g'
-    ) in ('authorizationstatus','passwordstatus')
+    ) ~ '^(authorization|password)(active|disabled|enabled|inactive|none|ok|state|status|unavailable|unknown)$'
     and not exists (
       select 1
       from unnest(string_values) fragment
       where public.cognitive_security_normalize(fragment) ~ '[:=]'
-        and trim(public.cognitive_security_normalize(fragment)) not in ('=',':')
     );
-  if not (
-       cardinality(leaf_string_values) = 2
-       and (
-         select bool_and(public.cognitive_security_normalize(fragment) ~ '^[0-9]{1,9}$')
-         from unnest(leaf_string_values) fragment
-       )
-     )
-     and not reviewed_safe_status
+  reviewed_numeric_metadata := payload_type = 'object'
+    and cardinality(leaf_string_values) > 0
+    and not exists (
+      select 1
+      from jsonb_each(payload) entry
+      where jsonb_typeof(entry.value) <> 'string'
+         or entry.value #>> '{}' !~ '^[0-9]{1,9}$'
+         or regexp_replace(
+              lower(public.cognitive_security_normalize(entry.key)),
+              '[^a-z0-9]',
+              '',
+              'g'
+            ) !~ '^(queued|completed|failed|year|build|patch|count|version|zero|first|one|second|two|third|three|fourth|four|fifth|five|sixth|six|seventh|seven|eighth|eight|ninth|nine|tenth|ten)$'
+    );
+  reviewed_version_fragments := payload_type = 'array'
+    and cardinality(leaf_string_values) >= 2
+    and (
+      (
+        not exists (
+          select 1 from unnest(leaf_string_values) fragment
+          where public.cognitive_security_normalize(fragment) !~ '^([0-9]{1,6}|\.)$'
+             or (
+               public.cognitive_security_normalize(fragment) ~ '^[0-9]+$'
+               and public.cognitive_security_normalize(fragment)::integer > 99
+             )
+        )
+        and array_to_string(leaf_string_values, '') ~ '^[0-9]{1,6}(\.[0-9]{1,6}){1,7}$'
+      )
+      or (
+        not exists (
+          select 1 from unnest(leaf_string_values) fragment
+          where public.cognitive_security_normalize(fragment) !~ '^[0-9]{4}$'
+             or public.cognitive_security_normalize(fragment)::integer not between 1900 and 2100
+        )
+      )
+      or (
+        cardinality(leaf_string_values) = 2
+        and public.cognitive_security_normalize(leaf_string_values[1]) ~ '^20[0-9]{6}$'
+        and public.cognitive_security_normalize(leaf_string_values[2]) ~ '^[0-9]{1,6}$'
+      )
+    );
+  if not reviewed_safe_status
+     and not reviewed_repeated_safe_value
      and (
        public.cognitive_text_has_secret(aggregate_value)
-       or public.cognitive_text_has_private_identifier(aggregate_value)
        or public.cognitive_text_has_secret(reverse_aggregate_value)
-       or public.cognitive_text_has_private_identifier(reverse_aggregate_value)
+       or (
+         not reviewed_numeric_metadata
+         and not reviewed_version_fragments
+         and (
+           public.cognitive_text_has_private_identifier(aggregate_value)
+           or public.cognitive_text_has_private_identifier(reverse_aggregate_value)
+         )
+       )
      ) then
     return false;
   end if;
-  if assembled_sensitive_label and not reviewed_safe_status then return false; end if;
+  if assembled_sensitive_label
+     and not reviewed_safe_status
+     and not reviewed_numeric_metadata
+     and not reviewed_version_fragments then return false; end if;
   if (standalone_at_count > 0 or any_at_count > 0)
      and dot_character_count > 0
      and (domain_count > 0 or pure_alpha_count >= 2) then return false; end if;
-  if (dot_marker_count >= 3 or dot_character_count >= 3) and ipv4_number_count >= 4 then return false; end if;
-  if numeric_fragment_count >= 2
+  if not reviewed_version_fragments
+     and (dot_marker_count >= 3 or dot_character_count >= 3)
+     and ipv4_number_count >= 4 then return false; end if;
+  if payload_type = 'array'
+     and not reviewed_version_fragments
+     and numeric_fragment_count >= 2
      and numeric_fragment_digits between 10 and 15
-     and not (
-       numeric_fragment_count = 2
-       and cardinality(leaf_string_values) = 2
-       and leaf_string_values[1] ~ '^[0-9]{4,9}$'
-       and leaf_string_values[2] ~ '^[0-9]{4,9}$'
-     ) then return false; end if;
+     then return false; end if;
   for positioned_object in
     select value
     from jsonb_path_query(payload, 'strict $.** ? (@.type() == "object")') value
@@ -761,7 +875,7 @@ begin
         '',
         'g'
       );
-      if normalized_position_key in ('position','index','ordinal','order','idx') then
+      if normalized_position_key ~ '^(position|index|ordinal|order|idx|sequence|seq|offset|rank|slot|fragmentindex|positionindex)$' then
         position_alias_count := position_alias_count + 1;
         if jsonb_typeof(positioned_child) in ('string','number') then
           position_text := positioned_child #>> '{}';
@@ -769,7 +883,7 @@ begin
           position_text := null;
         end if;
       end if;
-      if normalized_position_key in ('chunk','fragment','piece','part','value') then
+      if normalized_position_key in ('chunk','fragment','piece','part','value','payload') then
         fragment_alias_count := fragment_alias_count + 1;
         if jsonb_typeof(positioned_child) = 'string' then
           positioned_fragment := positioned_child #>> '{}';
@@ -815,46 +929,96 @@ begin
     select string_agg(
       semantic_entry.value #>> '{}',
       ''
-      order by case regexp_replace(
+      order by case
+        when semantic_label ~ '[0-9]{1,9}'
+          then substring(semantic_label from '([0-9]{1,9})')::bigint
+        when semantic_label ~ '(zero|head|header|prefix|start|beginning)$' then 0
+        when semantic_label ~ '(primary|first|one|body)$' then 1
+        when semantic_label ~ '(secondary|second|two|fragment)$' then 2
+        when semantic_label ~ '(tertiary|third|three|checksum)$' then 3
+        when semantic_label ~ '(fourth|four)$' then 4
+        when semantic_label ~ '(fifth|five)$' then 5
+        when semantic_label ~ '(sixth|six)$' then 6
+        when semantic_label ~ '(seventh|seven)$' then 7
+        when semantic_label ~ '(eighth|eight)$' then 8
+        when semantic_label ~ '(ninth|nine)$' then 9
+        when semantic_label ~ '(tenth|ten)$' then 10
+        when semantic_label ~ '(eleventh|eleven)$' then 11
+        when semantic_label ~ '(twelfth|twelve)$' then 12
+        when semantic_label ~ '(thirteenth|thirteen)$' then 13
+        when semantic_label ~ '(fourteenth|fourteen)$' then 14
+        when semantic_label ~ '(fifteenth|fifteen)$' then 15
+        when semantic_label ~ '(sixteenth|sixteen)$' then 16
+        when semantic_label ~ '(seventeenth|seventeen)$' then 17
+        when semantic_label ~ '(eighteenth|eighteen)$' then 18
+        when semantic_label ~ '(nineteenth|nineteen)$' then 19
+        when semantic_label ~ '(twentieth|twenty)$' then 20
+        when semantic_label ~ '(mid|middle)$' then 50
+        when semantic_label ~ 'penultimate$' then 98
+        when semantic_label ~ '(tail|footer|end|ending|last)$' then 99
+      end
+    )
+    from jsonb_path_query(payload, 'strict $.** ? (@.type() == "object")') semantic_object
+    cross join lateral jsonb_each(semantic_object) semantic_entry
+    cross join lateral (
+      select regexp_replace(
         lower(public.cognitive_security_normalize(semantic_entry.key)),
         '[^a-z0-9]',
         '',
         'g'
       )
-        when 'zero' then 0 when 'first' then 1 when 'one' then 1
-        when 'second' then 2 when 'two' then 2
-        when 'third' then 3 when 'three' then 3
-        when 'fourth' then 4 when 'four' then 4
-        when 'fifth' then 5 when 'five' then 5
-        when 'sixth' then 6 when 'six' then 6
-        when 'seventh' then 7 when 'seven' then 7
-        when 'eighth' then 8 when 'eight' then 8
-        when 'ninth' then 9 when 'nine' then 9
-        when 'tenth' then 10 when 'ten' then 10
-        when 'middle' then 50 when 'penultimate' then 98 when 'last' then 99
-      end
-    )
-    from jsonb_path_query(payload, 'strict $.** ? (@.type() == "object")') semantic_object
-    cross join lateral jsonb_each(semantic_object) semantic_entry
+    ) normalized(semantic_label)
     where jsonb_typeof(semantic_entry.value) = 'string'
-      and regexp_replace(
-        lower(public.cognitive_security_normalize(semantic_entry.key)),
-        '[^a-z0-9]',
-        '',
-        'g'
-      ) in (
-        'zero','first','one','second','two','third','three','fourth','four',
-        'fifth','five','sixth','six','seventh','seven','eighth','eight',
-        'ninth','nine','tenth','ten','middle','penultimate','last'
+      and (
+        semantic_label ~ '[0-9]{1,9}'
+        or semantic_label ~ '(zero|head|header|prefix|start|beginning|primary|first|one|body|secondary|second|two|fragment|tertiary|third|three|checksum|fourth|four|fifth|five|sixth|six|seventh|seven|eighth|eight|ninth|nine|tenth|ten|eleventh|eleven|twelfth|twelve|thirteenth|thirteen|fourteenth|fourteen|fifteenth|fifteen|sixteenth|sixteen|seventeenth|seventeen|eighteenth|eighteen|nineteenth|nineteen|twentieth|twenty|mid|middle|penultimate|tail|footer|end|ending|last)$'
       )
     group by semantic_object
     having count(*) >= 2
   loop
     if public.cognitive_text_has_secret(semantic_aggregate)
-       or public.cognitive_text_has_private_identifier(semantic_aggregate) then
+       or (
+         not reviewed_numeric_metadata
+         and public.cognitive_text_has_private_identifier(semantic_aggregate)
+       ) then
       return false;
     end if;
   end loop;
+  if cardinality(leaf_string_values) between 2 and 10
+     and not reviewed_numeric_metadata
+     and not reviewed_version_fragments
+     and not (
+       select bool_and(public.cognitive_security_normalize(fragment) ~ '^[0-9]{1,9}$')
+       from unnest(leaf_string_values) fragment
+     ) then
+    for semantic_aggregate in
+      with recursive fragments as (
+        select ordinality::integer as fragment_id, fragment_value
+        from unnest(leaf_string_values) with ordinality entry(fragment_value, ordinality)
+      ),
+      permutations(path_ids, joined_value, depth) as (
+        select array[fragment_id], left(fragment_value, 1024), 1
+        from fragments
+        union all
+        select
+          permutation.path_ids || fragment.fragment_id,
+          left(permutation.joined_value || fragment.fragment_value, 32768),
+          permutation.depth + 1
+        from permutations permutation
+        join fragments fragment on not fragment.fragment_id = any(permutation.path_ids)
+        where permutation.depth < least(6, cardinality(leaf_string_values))
+      )
+      select joined_value
+      from permutations
+      where depth >= 2
+      limit 8192
+    loop
+      if public.cognitive_text_has_secret(semantic_aggregate)
+         or public.cognitive_text_has_private_identifier(semantic_aggregate) then
+        return false;
+      end if;
+    end loop;
+  end if;
   return true;
 end;
 $$;
