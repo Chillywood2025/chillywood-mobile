@@ -441,8 +441,7 @@ const hasSensitiveResearchAssignment = (value) => {
       .split(/[^a-z0-9]+/gu)
       .filter(Boolean);
     if (
-      /[^\x00-\x7f]/u.test(match[1])
-      || SENSITIVE_RESEARCH_LABELS.has(label)
+      SENSITIVE_RESEARCH_LABELS.has(label)
       || labelParts.some((part) => SENSITIVE_RESEARCH_LABEL_PARTS.has(part))
       || /^(?:access|refresh)(?:key|token)$/u.test(label)
       || /^(?:api|private)(?:key|token)$/u.test(label)
@@ -461,7 +460,7 @@ const hasPrivateIdentifierText = (value) => {
   ) return false;
   if (/[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(normalized)) return true;
   const reviewedOpaqueRemoved = normalized
-    .replace(/\bdigest\s*[:=]\s*[a-f0-9]{16}\b/giu, "")
+    .replace(/digest\s*[:=]\s*[a-f0-9]{16}\b/giu, "")
     .replace(/\b[12][0-9]{3}-[01][0-9]-[0-3][0-9](?:T[0-9:.+-]+Z?)?\b/gu, "");
   if (
     /\+?\p{Nd}[\p{Nd} ()-]{7,}\p{Nd}/u.test(reviewedOpaqueRemoved)
@@ -554,6 +553,40 @@ const decodeBoundedSecurityCandidates = (value) => {
   return [...candidates];
 };
 
+const reconstructNamedResearchFragments = (searchParams) => {
+  const groups = new Map();
+  for (const [key, value] of searchParams.entries()) {
+    const match = key.match(/^(.{1,64}?)(?:\[|[_-]?)([0-9]{1,3})\]?$/u);
+    if (!match) continue;
+    const position = Number(match[2]);
+    if (!Number.isSafeInteger(position) || position < 0 || position >= 128) continue;
+    const group = groups.get(match[1]) ?? [];
+    group.push({ position, value: value.slice(0, 1_024) });
+    groups.set(match[1], group);
+  }
+  const candidates = [];
+  for (const fragments of groups.values()) {
+    if (fragments.length < 2 || fragments.length > 128) continue;
+    const positions = new Set(fragments.map((fragment) => fragment.position));
+    if (positions.size !== fragments.length) {
+      candidates.push("secret=duplicate_fragment_position");
+      continue;
+    }
+    const sorted = [...fragments].sort((left, right) => left.position - right.position);
+    const rawOrdered = sorted.map((fragment) => fragment.value);
+    const ordered = sorted.map((fragment) => {
+        const decoded = decodeBoundedSecurityCandidates(fragment.value)
+          .filter((candidate) => candidate !== "secret=encoded_depth_exceeded");
+        return decoded.at(-1) ?? fragment.value;
+      });
+    candidates.push(rawOrdered.join(""));
+    candidates.push([...rawOrdered].reverse().join(""));
+    candidates.push(ordered.join(""));
+    candidates.push([...ordered].reverse().join(""));
+  }
+  return candidates;
+};
+
 export const validateResearchUrlWithDns = async (raw, resolveDns) => {
   const rawText = String(raw).normalize("NFKC").replace(/[\u3002\uff0e\uff61]/gu, ".");
   if (Buffer.byteLength(rawText, "utf8") > RESEARCH_MAX_URL_BYTES) {
@@ -605,9 +638,14 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
     ...fullyDecodedUrl.pathname.split("/").filter(Boolean),
   ];
   if (encodedValues.length > 128) throw new Error("credential_bearing_url_forbidden");
+  const namedFragmentCandidates = [
+    ...reconstructNamedResearchFragments(parsed.searchParams),
+    ...reconstructNamedResearchFragments(fullyDecodedUrl.searchParams),
+  ];
   const securityCandidates = [
     rawText,
     decoded,
+    ...namedFragmentCandidates,
     ...encodedValues.flatMap((value) => {
       const decodedValueCandidates = decodeBoundedSecurityCandidates(value);
       const depthExceeded = decodedValueCandidates.includes("secret=encoded_depth_exceeded");
@@ -628,8 +666,10 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
     RESEARCH_CREDENTIAL_PATTERN.test(candidate)
     || hasSensitiveResearchAssignment(candidate)
     || hasPrivateIdentifierInResearchData(candidate)
+    || /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9_-]{12,}\b/u.test(candidate)
     || /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u.test(candidate)
     || /\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,})\b/u.test(candidate)
+    || /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/u.test(candidate)
     || /https:\/\/[^/\s:@]+:[^/\s@]+@/iu.test(candidate)
   )) {
     throw new Error("credential_bearing_url_forbidden");

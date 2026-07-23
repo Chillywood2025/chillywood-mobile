@@ -59,54 +59,38 @@ immutable
 set search_path = ''
 as $$
 declare
-  source_value text := normalize(coalesce(payload, ''), NFKD);
-  normalized text := '';
-  character_value text;
-  codepoint integer;
-  digit_start integer;
+  normalized text := normalize(coalesce(payload, ''), NFKD);
+  digit_characters text;
+  ascii_digits text;
+  supplementary_ignorable_pattern text;
 begin
-  for position_value in 1..length(source_value) loop
-    character_value := substring(source_value from position_value for 1);
-    codepoint := ascii(character_value);
-    if codepoint in (173,847,1564,4447,4448,6068,6069,6155,6156,6157,6158,6159,
-        8203,8204,8205,8206,8207,8234,8235,8236,8237,8238,12644,65279,65440)
-       or codepoint between 8288 and 8303
-       or codepoint between 65024 and 65039
-       or codepoint between 113824 and 113839
-       or codepoint between 119155 and 119162
-       or codepoint between 917504 and 921599
-       or codepoint between 768 and 879
-       or codepoint between 6832 and 6911
-       or codepoint between 7616 and 7679
-       or codepoint between 8400 and 8447
-       or codepoint between 65056 and 65071 then
-      continue;
-    end if;
-    if codepoint in (12290,65294,65377) then
-      normalized := normalized || '.';
-      continue;
-    end if;
-    if codepoint between 120782 and 120831 then
-      normalized := normalized || chr(48 + ((codepoint - 120782) % 10));
-      continue;
-    end if;
-    foreach digit_start in array array[
+  normalized := translate(normalized, U&'\3002\FF0E\FF61', '...');
+  normalized := regexp_replace(
+    normalized,
+    U&'[\00AD\0300-\036F\034F\061C\115F\1160\17B4\17B5\180B-\180F\1AB0-\1AFF\1DC0-\1DFF\200B-\200F\202A-\202E\2060-\206F\20D0-\20FF\3164\FE00-\FE0F\FE20-\FE2F\FEFF\FFA0]',
+    '',
+    'g'
+  );
+  supplementary_ignorable_pattern := '['
+    || chr(113824) || '-' || chr(113839)
+    || chr(119155) || '-' || chr(119162)
+    || chr(917504) || '-' || chr(921599)
+    || ']';
+  normalized := regexp_replace(normalized, supplementary_ignorable_pattern, '', 'g');
+  select
+    string_agg(chr(block_start + digit_offset), '' order by block_order, digit_offset),
+    string_agg(chr(48 + digit_offset), '' order by block_order, digit_offset)
+  into digit_characters, ascii_digits
+  from unnest(array[
       48,1632,1776,1984,2406,2534,2662,2790,2918,3046,3174,3302,3430,3558,
       3664,3792,3872,4160,4240,6112,6160,6470,6608,6784,6800,6992,7088,7232,
       7248,42528,43216,43264,43472,43504,43600,44016,66720,68912,69734,69872,
       69942,70096,70384,70736,70864,71248,71360,71472,71904,72016,72784,73040,
-      73120,73552,92768,92864,93008,123200,123632,124144,125264,130032
-    ] loop
-      if codepoint between digit_start and digit_start + 9 then
-        normalized := normalized || chr(48 + codepoint - digit_start);
-        exit;
-      end if;
-    end loop;
-    if codepoint between digit_start and digit_start + 9 then
-      continue;
-    end if;
-    normalized := normalized || character_value;
-  end loop;
+      73120,73552,92768,92864,93008,120782,120792,120802,120812,120822,
+      123200,123632,124144,125264,130032
+    ]) with ordinality as digit_block(block_start, block_order)
+  cross join generate_series(0,9) digit_offset;
+  normalized := translate(normalized, digit_characters, ascii_digits);
   return translate(
     normalized,
     U&'\0410\0412\0415\041A\041C\041D\041E\0420\0421\0422\0423\0425\0406\0408\0405\0500\051A\051C\04AE\04C0\0391\0392\0395\0397\0399\039A\039C\039D\039F\03A1\03A4\03A5\03A7\03F9\0546\0555\0430\0432\0435\043A\043C\043D\043E\0440\0441\0442\0443\0445\0456\0458\0455\0501\051B\051D\04AF\04CF\03B1\03B2\03B5\03B7\03B9\03BA\03BC\03BD\03BF\03C1\03C4\03C5\03C7\03F2\0576\0585',
@@ -126,6 +110,8 @@ as $$
   select public.cognitive_security_normalize(coalesce(payload, '')) ~* '[:=@?%]'
     or public.cognitive_security_normalize(coalesce(payload, ''))
       ~* '(password|secret|credential|authorization|token|bearer|cookie|private[_. -]*key|service[_. -]*role|api[_. -]*key|client[_. -]*secret|ignore[[:space:]]+previous|run[[:space:]]+(shell|command))'
+    or public.cognitive_security_normalize(coalesce(payload, ''))
+      ~* '(^|[^A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}([^A-Za-z0-9_-]|$)'
     or public.cognitive_security_normalize(coalesce(payload, ''))
       ~* '[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}'
     or public.cognitive_security_normalize(coalesce(payload, ''))
@@ -169,8 +155,20 @@ begin
   if octet_length(coalesce(payload, '')) > 65536 then
     return true;
   end if;
-  if coalesce(payload,'') ~* '^[a-f0-9]{16}$'
-     or coalesce(payload,'') ~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+  if length(coalesce(payload,'')) > 4096
+     and coalesce(payload,'') ~ '^[A-Za-z0-9+/_-]+={0,2}$' then
+    return true;
+  end if;
+  if coalesce(payload,'') ~* '^[a-f0-9]{16}$' then
+    begin
+      decoded := convert_from(decode(coalesce(payload,''), 'hex'), 'UTF8');
+      return public.cognitive_text_has_secret(decoded)
+        or public.cognitive_text_has_private_identifier(decoded);
+    exception when others then
+      return false;
+    end;
+  end if;
+  if coalesce(payload,'') ~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
      or coalesce(payload,'') ~* '^(task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' then
     return false;
   end if;
@@ -233,21 +231,18 @@ begin
     security_candidate := public.cognitive_security_normalize(candidate);
     phone_stripped_candidate := regexp_replace(
       security_candidate,
-      '(\mdigest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)',
+      '(digest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)',
       '',
       'gi'
     );
     if security_candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
-       or (
-         octet_length(security_candidate) <> length(security_candidate)
-         and security_candidate ~ '[:=]'
-       )
        or security_candidate ~* '(^|[^A-Za-z0-9])(([A-Za-z0-9]+[_.-])*(client[_.-]*secret|service[_.-]*(role|key|token)|access[_.-]*(token|key)|refresh[_.-]*token|api[_.-]*key|private[_.-]*key|authorization[_.-]*(token|key))|(password|pwd|secret|credential|auth|authorization|cookie|token|bearer|signature|sig|key))[[:space:]]*[:=][^,&}[:space:]]+'
        or security_candidate ~* '(access|api|authorization|auth|bearer|client|cookie|credential|key|password|private|pwd|refresh|secret|service|sig|signature|token)[[:space:]_.-]*\[[^]]{1,64}\][[:space:]]*[:=]'
        or security_candidate ~* '(^|[^A-Za-z0-9])(password|pwd|secret|credential|service[[:space:]_\[\]:.-]?(role|key|token)|access[[:space:]_\[\]:.-]?(token|key)|refresh[[:space:]_\[\]:.-]?token|api[[:space:]_\[\]:.-]?key|authorization([[:space:]_\[\]:.-]?(token|key))?|auth|cookie|private[[:space:]_\[\]:.-]?key|token|bearer|signature|sig|key)[=_:.-][A-Za-z0-9._:-]+'
        or security_candidate ~* '(^|[^A-Za-z0-9_])(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}([^A-Za-z0-9_]|$)'
        or security_candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
        or security_candidate ~* '(^|[^A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})([^A-Za-z0-9_]|$)'
+       or security_candidate ~ '(^|[^A-Za-z0-9_-])(xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,})([^A-Za-z0-9_-]|$)'
        or security_candidate ~* '(^|[^A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}([^A-Za-z0-9_-]|$)'
        or security_candidate ~* 'https?://[^/@:[:space:]]+:[^/@[:space:]]+@'
        or security_candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)='
@@ -425,15 +420,55 @@ as $$
       or public.cognitive_security_normalize(coalesce(payload,'')) ~* '^(task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' then false
     else public.cognitive_security_normalize(coalesce(payload,''))
         ~* '[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}'
-      or regexp_replace(public.cognitive_security_normalize(coalesce(payload,'')), '(\mdigest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)', '', 'gi') ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
-      or regexp_replace(public.cognitive_security_normalize(coalesce(payload,'')), '(\mdigest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)', '', 'gi') ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
+      or regexp_replace(public.cognitive_security_normalize(coalesce(payload,'')), '(digest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)', '', 'gi') ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
+      or regexp_replace(public.cognitive_security_normalize(coalesce(payload,'')), '(digest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)', '', 'gi') ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
       or public.cognitive_security_normalize(coalesce(payload,'')) ~* '(^|[^A-Za-z0-9:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^A-Za-z0-9:]|$)'
   end
 $$;
 
-create or replace function public.cognitive_text_can_form_word(
-  payload text,
-  required_word text
+create or replace function public.cognitive_fragments_have_sensitive_label(payload text[])
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  with labels as (
+    select array_agg(
+      regexp_replace(
+        lower(public.cognitive_security_normalize(fragment)),
+        '[^a-z0-9]',
+        '',
+        'g'
+      )
+    ) as values
+    from unnest(coalesce(payload, '{}'::text[])) fragment
+  )
+  select coalesce(
+    values && array[
+      'accesskey','accesstoken','apikey','auth','authorization',
+      'authorizationtoken','bearer','clientsecret','cookie','credential',
+      'key','password','privatekey','pwd','refreshtoken','secret',
+      'servicerole','sig','signature','token'
+    ]::text[]
+    or ('client'=any(values) and 'secret'=any(values))
+    or ('service'=any(values) and ('role'=any(values) or 'key'=any(values) or 'token'=any(values)))
+    or ('access'=any(values) and ('key'=any(values) or 'token'=any(values)))
+    or ('refresh'=any(values) and 'token'=any(values))
+    or ('api'=any(values) and 'key'=any(values))
+    or ('private'=any(values) and 'key'=any(values))
+    or ('authorization'=any(values) and ('key'=any(values) or 'token'=any(values))),
+    false
+  )
+  from labels
+$$;
+revoke all on function public.cognitive_fragments_have_sensitive_label(text[])
+  from public, anon, authenticated;
+grant execute on function public.cognitive_fragments_have_sensitive_label(text[])
+  to service_role;
+
+create or replace function public.cognitive_json_depth_within_limit(
+  payload jsonb,
+  maximum_depth integer
 )
 returns boolean
 language plpgsql
@@ -441,50 +476,37 @@ immutable
 set search_path = ''
 as $$
 declare
-  available text := regexp_replace(
-    public.cognitive_security_normalize(coalesce(payload, '')),
-    '[^a-z0-9]',
-    '',
-    'g'
-  );
-  required text := regexp_replace(lower(coalesce(required_word, '')), '[^a-z0-9]', '', 'g');
-  required_character text;
-  character_position integer;
+  serialized text := payload::text;
+  current_character text;
+  depth integer := 0;
+  in_string boolean := false;
+  escaped boolean := false;
 begin
-  if length(required) < 2 or length(required) > 64 then return false; end if;
-  for required_position in 1..length(required) loop
-    required_character := substring(required from required_position for 1);
-    character_position := strpos(available, required_character);
-    if character_position = 0 then return false; end if;
-    available := overlay(available placing '' from character_position for 1);
+  if maximum_depth not between 1 and 16 then return false; end if;
+  for character_position in 1..length(serialized) loop
+    current_character := substring(serialized from character_position for 1);
+    if in_string then
+      if escaped then escaped := false;
+      elsif current_character = E'\\' then escaped := true;
+      elsif current_character = '"' then in_string := false;
+      end if;
+      continue;
+    end if;
+    if current_character = '"' then in_string := true;
+    elsif current_character in ('{','[') then
+      depth := depth + 1;
+      if depth > maximum_depth then return false; end if;
+    elsif current_character in ('}',']') then
+      depth := depth - 1;
+      if depth < 0 then return false; end if;
+    end if;
   end loop;
-  return true;
+  return not in_string and depth = 0;
 end;
 $$;
-revoke all on function public.cognitive_text_can_form_word(text,text)
+revoke all on function public.cognitive_json_depth_within_limit(jsonb,integer)
   from public, anon, authenticated;
-grant execute on function public.cognitive_text_can_form_word(text,text)
-  to service_role;
-
-create or replace function public.cognitive_fragments_form_word(
-  payload text[],
-  required_word text
-)
-returns boolean
-language sql
-immutable
-set search_path = ''
-as $$
-  select public.cognitive_text_can_form_word(array_to_string(coalesce(payload, '{}'::text[]), ' '), required_word)
-    and not exists (
-      select 1
-      from unnest(coalesce(payload, '{}'::text[])) fragment
-      where public.cognitive_text_can_form_word(fragment, required_word)
-    )
-$$;
-revoke all on function public.cognitive_fragments_form_word(text[],text)
-  from public, anon, authenticated;
-grant execute on function public.cognitive_fragments_form_word(text[],text)
+grant execute on function public.cognitive_json_depth_within_limit(jsonb,integer)
   to service_role;
 
 create or replace function public.cognitive_json_is_sanitized(payload jsonb)
@@ -501,18 +523,26 @@ declare
   aggregate_value text := '';
   reverse_aggregate_value text := '';
   string_values text[] := '{}'::text[];
-  suspicious_fragments boolean := false;
+  object_fragments text[] := '{}'::text[];
+  object_sequence_fragments text[] := '{}'::text[];
   fragment_text text;
   numeric_fragment_count integer := 0;
   numeric_fragment_digits integer := 0;
+  numeric_only_count integer := 0;
   has_assignment boolean := false;
-  has_at_marker boolean := false;
-  has_dot_marker boolean := false;
-  has_underscore boolean := false;
+  standalone_at_count integer := 0;
+  local_part_count integer := 0;
+  domain_count integer := 0;
+  dot_marker_count integer := 0;
+  ipv4_number_count integer := 0;
+  positioned_aggregate text;
+  positioned_count integer := 0;
+  positioned_distinct_count integer := 0;
 begin
   if payload is null then return true; end if;
   if pg_column_size(payload) > 16384
-     or payload::text ~* '"(__proto__|constructor|prototype)"\s*:' then
+     or payload::text ~* '"(__proto__|constructor|prototype)"\s*:'
+     or not public.cognitive_json_depth_within_limit(payload, 8) then
     return false;
   end if;
   payload_type := jsonb_typeof(payload);
@@ -528,6 +558,18 @@ begin
   elsif payload_type = 'object' then
     if (select count(*) from jsonb_object_keys(payload)) > 64 then return false; end if;
     for object_key, child_value in select key, value from jsonb_each(payload) loop
+      object_fragments := array_append(object_fragments, object_key);
+      object_sequence_fragments := array_append(object_sequence_fragments, object_key);
+      if jsonb_typeof(child_value) = 'string' then
+        object_fragments := array_append(object_fragments, child_value #>> '{}');
+        object_sequence_fragments := array_append(object_sequence_fragments, child_value #>> '{}');
+        fragment_text := object_key || (child_value #>> '{}');
+        object_fragments := array_append(object_fragments, fragment_text);
+        object_fragments := array_append(
+          object_fragments,
+          regexp_replace(public.cognitive_security_normalize(fragment_text), '[:=].*$', '', 'g')
+        );
+      end if;
       if public.cognitive_text_has_secret(object_key)
          or public.cognitive_text_has_private_identifier(object_key)
          or public.cognitive_security_normalize(object_key)
@@ -540,6 +582,14 @@ begin
         return false;
       end if;
     end loop;
+    if array_to_string(object_sequence_fragments, '') ~ '[:=]'
+       and (
+         public.cognitive_text_has_secret(array_to_string(object_sequence_fragments, ''))
+         or public.cognitive_text_has_private_identifier(array_to_string(object_sequence_fragments, ''))
+         or public.cognitive_fragments_have_sensitive_label(object_fragments)
+       ) then
+      return false;
+    end if;
   else
     return true;
   end if;
@@ -551,107 +601,73 @@ begin
     reverse_aggregate_value := left(string_value || reverse_aggregate_value, 32768);
     string_values := array_append(string_values, string_value);
     fragment_text := public.cognitive_security_normalize(string_value);
-    suspicious_fragments := suspicious_fragments
-      or fragment_text ~ '[@:=_.\[\]-]'
-      or fragment_text ~* '%40|qa(==)?';
     has_assignment := has_assignment or fragment_text ~ '[:=]';
-    has_at_marker := has_at_marker or fragment_text ~ '@|%40'
-      or lower(regexp_replace(fragment_text, '[[:space:]]+', '', 'g')) in ('qa', 'qa==', '40');
-    has_dot_marker := has_dot_marker or fragment_text ~ '\.';
-    has_underscore := has_underscore or fragment_text ~ '_';
-    if fragment_text ~ '^[0-9]+$' then
+    if lower(trim(fragment_text)) in ('@','%40','qa','qa==','40') then
+      standalone_at_count := standalone_at_count + 1;
+    end if;
+    if fragment_text ~* '^[[:alnum:]_.%+-]{1,64}$'
+       and fragment_text !~ '^[0-9]+$' then
+      local_part_count := local_part_count + 1;
+    end if;
+    if fragment_text ~* '^[[:alnum:]-]{1,63}(\.[[:alnum:]-]{1,63})*\.[[:alpha:]]{2,}$' then
+      domain_count := domain_count + 1;
+    end if;
+    if trim(fragment_text) = '.' then dot_marker_count := dot_marker_count + 1; end if;
+    if trim(fragment_text) ~ '^[0-9]{1,3}$' then ipv4_number_count := ipv4_number_count + 1; end if;
+    if fragment_text ~ '^[0-9]{1,8}$' then numeric_only_count := numeric_only_count + 1; end if;
+    if fragment_text ~* '^[0-9]{3,}[a-z]?$' then
       numeric_fragment_count := numeric_fragment_count + 1;
-      numeric_fragment_digits := numeric_fragment_digits + length(fragment_text);
+      numeric_fragment_digits := numeric_fragment_digits
+        + length(regexp_replace(fragment_text, '[^0-9]', '', 'g'));
     end if;
   end loop;
-  if public.cognitive_text_has_secret(aggregate_value)
-     or public.cognitive_text_has_private_identifier(aggregate_value)
-     or public.cognitive_text_has_secret(reverse_aggregate_value)
-     or public.cognitive_text_has_private_identifier(reverse_aggregate_value) then
+  if not (cardinality(string_values) = 2 and numeric_only_count = 2)
+     and (
+       public.cognitive_text_has_secret(aggregate_value)
+       or public.cognitive_text_has_private_identifier(aggregate_value)
+       or public.cognitive_text_has_secret(reverse_aggregate_value)
+       or public.cognitive_text_has_private_identifier(reverse_aggregate_value)
+     ) then
     return false;
   end if;
-  if suspicious_fragments then
-    -- Classify reconstruction risk in linear time. No permutation tree is
-    -- evaluated, so every allowed 128-leaf payload has the same bounded shape.
-    fragment_text := public.cognitive_security_normalize(array_to_string(string_values, ' '));
-    if (has_at_marker and has_dot_marker)
-       or (
-         has_assignment
-         and (
-           public.cognitive_fragments_form_word(string_values, 'clientsecret')
-           or public.cognitive_fragments_form_word(string_values, 'servicerole')
-           or public.cognitive_fragments_form_word(string_values, 'accesstoken')
-           or public.cognitive_fragments_form_word(string_values, 'refreshtoken')
-           or public.cognitive_fragments_form_word(string_values, 'apikey')
-           or public.cognitive_fragments_form_word(string_values, 'privatekey')
-           or public.cognitive_fragments_form_word(string_values, 'authorization')
-           or public.cognitive_fragments_form_word(string_values, 'password')
-           or public.cognitive_fragments_form_word(string_values, 'credential')
-           or public.cognitive_fragments_form_word(string_values, 'secret')
-           or public.cognitive_fragments_form_word(string_values, 'token')
-           or public.cognitive_fragments_form_word(string_values, 'cookie')
-           or public.cognitive_fragments_form_word(string_values, 'bearer')
-           or public.cognitive_fragments_form_word(string_values, 'signature')
-           or public.cognitive_fragments_form_word(string_values, 'key')
-           or public.cognitive_fragments_form_word(string_values, 'auth')
-         )
-       )
-       or (
-         has_underscore
-         and (
-           select count(*) >= 3
-           from unnest(string_values) short_fragment
-           where length(regexp_replace(
-             public.cognitive_security_normalize(short_fragment),
-             '[^a-zA-Z0-9]',
-             '',
-             'g'
-           )) between 1 and 4
-         )
-         and (
-           public.cognitive_text_can_form_word((
-             select array_to_string(array_agg(short_fragment), '')
-             from unnest(string_values) short_fragment
-             where length(regexp_replace(
-               public.cognitive_security_normalize(short_fragment),
-               '[^a-zA-Z0-9]',
-               '',
-               'g'
-             )) between 1 and 4
-           ), 'ghp')
-           or public.cognitive_text_can_form_word((
-             select array_to_string(array_agg(short_fragment), '')
-             from unnest(string_values) short_fragment
-             where length(regexp_replace(
-               public.cognitive_security_normalize(short_fragment),
-               '[^a-zA-Z0-9]',
-               '',
-               'g'
-             )) between 1 and 4
-           ), 'githubpat')
-         )
-         and length(regexp_replace(fragment_text, '[^a-z0-9]', '', 'g')) >= 20
-       )
-       or (
-         length(regexp_replace(array_to_string(string_values, ''), '[^.]+', '', 'g')) >= 3
-         and length(regexp_replace(public.cognitive_security_normalize(array_to_string(string_values, '')), '[^0-9]+', '', 'g')) >= 4
-       ) then
+  if has_assignment and public.cognitive_fragments_have_sensitive_label(string_values) then return false; end if;
+  if standalone_at_count > 0 and local_part_count > 0 and domain_count > 0 then return false; end if;
+  if dot_marker_count >= 3 and ipv4_number_count >= 4 then return false; end if;
+  if numeric_fragment_count >= 3 and numeric_fragment_digits >= 10 then return false; end if;
+  select
+    string_agg(
+      coalesce(positioned_object->>'chunk', positioned_object->>'fragment', positioned_object->>'value'),
+      ''
+      order by (positioned_object->>'position')::integer
+    ),
+    count(*),
+    count(distinct (positioned_object->>'position')::integer)
+  into positioned_aggregate, positioned_count, positioned_distinct_count
+  from jsonb_path_query(payload, 'strict $.** ? (@.type() == "object")') positioned_object
+  where positioned_object ? 'position'
+    and coalesce(positioned_object->>'chunk', positioned_object->>'fragment', positioned_object->>'value') is not null
+    and positioned_object->>'position' ~ '^[0-9]{1,3}$'
+    and (positioned_object->>'position')::integer between 0 and 127;
+  if positioned_count > 128 or positioned_count <> positioned_distinct_count then return false; end if;
+  if positioned_count >= 2 then
+    positioned_aggregate := regexp_replace(positioned_aggregate, '[|,;[:space:]]', '', 'g');
+    if public.cognitive_text_has_secret(positioned_aggregate)
+       or public.cognitive_text_has_private_identifier(positioned_aggregate) then
       return false;
     end if;
   end if;
-  if numeric_fragment_count >= 2 and numeric_fragment_digits >= 9 then return false; end if;
   return true;
 end;
 $$;
 revoke all on function public.cognitive_text_has_secret(text) from public, anon, authenticated;
 revoke all on function public.cognitive_text_has_private_identifier(text) from public, anon, authenticated;
-revoke all on function public.cognitive_text_can_form_word(text,text) from public, anon, authenticated;
-revoke all on function public.cognitive_fragments_form_word(text[],text) from public, anon, authenticated;
+revoke all on function public.cognitive_fragments_have_sensitive_label(text[]) from public, anon, authenticated;
+revoke all on function public.cognitive_json_depth_within_limit(jsonb,integer) from public, anon, authenticated;
 revoke all on function public.cognitive_json_is_sanitized(jsonb) from public, anon, authenticated;
 grant execute on function public.cognitive_text_has_secret(text) to service_role;
 grant execute on function public.cognitive_text_has_private_identifier(text) to service_role;
-grant execute on function public.cognitive_text_can_form_word(text,text) to service_role;
-grant execute on function public.cognitive_fragments_form_word(text[],text) to service_role;
+grant execute on function public.cognitive_fragments_have_sensitive_label(text[]) to service_role;
+grant execute on function public.cognitive_json_depth_within_limit(jsonb,integer) to service_role;
 grant execute on function public.cognitive_json_is_sanitized(jsonb) to service_role;
 
 create or replace function public.cognitive_assert_service_actor(

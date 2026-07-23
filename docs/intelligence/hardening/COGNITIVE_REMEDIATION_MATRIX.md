@@ -329,3 +329,29 @@ review independently closes this set.
 | A12-SUPPLY-001 | P2 | The inherited locked dependency tree still reports 23 advisories. | No dependency changed and no audit fix ran; separately reviewed dependency upgrades remain a deployment blocker. | read-only dependency audit | accepted deployment blocker | pending |
 | A12/B12-SANITIZER-001 | P3/P1 | Ordinary 64/128-value prose arrays were recursively treated as base64, while twelve suspicious leaves triggered a factorial-style permutation search. | Decode only strong bounded encoded envelopes and remove the recursive permutation CTE entirely. | pgTAP 128-value prose plus `performs_ok` CPU bound | fixed locally | pending |
 | B12-LINT-001 | P3 | Classifier loop variables shadowed declarations and the disabled broker retained unreachable future code. | Use non-shadowed loop state and reduce the database broker RPC to its truthful unconditional unavailable contract. | local database lint | fixed locally | pending |
+
+## Thirteenth exact-head retest findings
+
+The thirteenth isolated retest reviewed
+`9004f33bcd207f3f5af7423e40690f195f44f94b`. All three lanes reported zero
+P0 but independently reproduced positioned token fragments, fragmented research
+query credentials, nested/outer encoding gaps, split JSON assignments and
+private identifiers, and provider-scope depth/composition/negation defects. The
+database lane also found bounded availability defects at large text and JSON
+depth, while architecture/research found false positives and the unchanged
+inherited dependency advisories. The scaffold remains
+`security_hardening_in_progress`; Reviewer D was correctly withheld because the
+zero-P1 gate was not met.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A13/B13/C13-FRAGMENT-001 | P1 | Positioned and permuted AWS, Google, JWT, credential-label, assignment, and cross-object key/value fragments could be retained across TypeScript and SQL. | Preserve bounded fragment position and object insertion sequence, reconstruct only exact sensitive labels/assignments, and scan the normalized aggregate without factorial permutations. | R-88; focused pgTAP positioned/object-fragment matrix | fixed locally | pending |
+| A13-URL-001 | P1 | Numbered research-query fragments could reconstruct Stripe, GitHub, AWS, Slack, Google, or JWT credentials after the per-parameter check and reach DNS. | Reconstruct unique numeric-suffix query fragments in numeric order and reject secret/private candidates before DNS or transport. | R-89 with zero-DNS assertions | fixed locally | pending |
+| B13-ENCODED-001 | P1 | Outer base64/base64url JWT and eight-byte hexadecimal credential assignments survived the SQL decoder exemptions. | Classify decoded JWT branches and recursively inspect valid UTF-8 hexadecimal payloads; the narrow safe opaque identifier control remains accepted. | focused pgTAP outer-JWT/hex matrix | fixed locally | pending |
+| B13-PRIVATE-001 | P1 | Three phone fragments with harmless-looking suffix characters could compose a retained ten-digit private identifier. | Strip non-digits only for the bounded three-fragment phone candidate and require exactly ten reconstructed digits. | R-88; focused pgTAP phone-fragment matrix | fixed locally | pending |
+| C13-PROVIDER-DEPTH-001 | P1 | Nested provider wildcard/action structures beyond the prior scalar traversal depth were not escalated. | Inspect provider scalar structures through the full bounded sanitizer depth and preserve fail-closed wildcard semantics. | R-90 provider depth fixture | fixed locally | pending |
+| A13/C13-PROVIDER-COMPOSE-001 | P1 | Dispersed `Power`/`User`/`Access` and related privilege terms could avoid owner review. | Use exact normalized fragment composition for reviewed provider privilege labels without broad anagram matching. | R-90 privilege-composition fixture | fixed locally | pending |
+| A13/C13-PROVIDER-NEGATION-001 | P1/P2 | A negated denial with a later positive scope request could be incorrectly treated as safe, while truthful standalone denials were overblocked. | Accept only exact bounded denial statements and separately detect negation reversal or any subsequent positive privilege request. | R-90 denial/reversal/specific-IAM controls | fixed locally | pending |
+| B13-BOUNDS-001 | P2 | Large text classification exceeded the bounded latency target and deeply nested JSON could overflow recursive SQL traversal. | Fail closed on oversized encoded envelopes, use bulk normalization, and reject serialized JSON depth above eight before recursion. | focused pgTAP 16K performance/depth assertions | fixed locally | pending |
+| A13/B13/C13-FALSEPOS-001 | P2/P3 | Broad fragment/anagram, multibyte-assignment, and metadata heuristics rejected safe international text, sector language, counters, digests, and provider-denial evidence. | Remove blanket multibyte/anagram rules and retain only exact sensitive-label, private-identifier, and provider-authority compositions. | R-88/R-90/R-91 plus focused safe controls | fixed locally | pending |
+| A13-SUPPLY-001 | P2 | The locked dependency tree still reports 23 inherited advisories, including three high-severity advisories. | No dependency changed and no audit fix ran; separately reviewed dependency upgrades remain a deployment blocker. | read-only dependency audit | accepted deployment blocker | pending |

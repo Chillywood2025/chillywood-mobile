@@ -210,6 +210,29 @@ These are authored implementation results only.
 Every twelfth-review finding remains independently open until the next exact
 commit is retested with zero P0/P1.
 
+The thirteenth exact-head review of
+`9004f33bcd207f3f5af7423e40690f195f44f94b` again reported zero P0 and
+correctly kept the scaffold blocked. It independently reproduced positioned
+AWS/Google/JWT fragments, numbered research-query reconstruction, outer
+base64/base64url JWT and short hexadecimal assignment payloads, separated JSON
+label/assignment and phone fragments, provider scalar-depth and composed
+PowerUserAccess gaps, and denial-reversal semantics. It also measured the
+remaining large-text/deep-JSON availability bounds and safe-evidence false
+positives.
+
+The correction preserves fragment positions and object insertion sequence,
+uses exact sensitive-label/private-identifier composition, reconstructs numbered
+research query fragments before DNS, recursively validates decoded hexadecimal
+and JWT payloads, bounds JSON depth before recursion, and distinguishes an exact
+provider denial from a denial followed by a positive privilege request. It
+removes the broad anagram and non-ASCII assignment rules that caused the safe
+international/provider evidence false positives. Authored executable evidence
+now reports 91/91 independent variants, 40/40 canonical attacks, 224/224
+focused cognitive pgTAP assertions, and 509/509 assertions across the complete
+local database suite. These remain authored implementation results only; every
+thirteenth-review item stays independently open until a fresh exact-head review
+reports zero P0/P1.
+
 No remediation grants production execution, scheduler, deployment, release,
 money, rights, auth/RLS, role, moderation, provider-product or self-approval
 authority.

@@ -1945,6 +1945,97 @@ select performs_ok(
   'twelve harmless fragments are classified without a permutation CPU cliff'
 );
 
+-- Exact regressions from the thirteenth independent exact-head review.
+select ok(
+  public.cognitive_text_has_secret(
+    encode(convert_to('eyJABCDEFGHIJKLMNOPQRSTUV.WXYZabcdefg.HIJKLMNOPQR','UTF8'),'base64')
+  )
+  and public.cognitive_text_has_secret(
+    translate(
+      rtrim(encode(convert_to('eyJABCDEFGHIJKLMNOPQRSTUV.WXYZabcdefg.HIJKLMNOPQR','UTF8'),'base64'),'='),
+      '+/',
+      '-_'
+    )
+  ),
+  'outer base64 and base64url JWT envelopes cannot bypass decoded-candidate relevance'
+);
+select ok(
+  (
+    select bool_and(public.cognitive_text_has_secret(encode(convert_to(value,'UTF8'),'hex')))
+    from (values ('token=xy'),('key=xxxx'),('auth=xyz'),('pwd=xxxx')) dangerous(value)
+  )
+  and not public.cognitive_text_has_secret('0123456789abcdef'),
+  'sixteen-hex dangerous text is decoded while reviewed opaque hexadecimal data remains usable'
+);
+select ok(
+  (
+    select bool_and(not public.cognitive_json_is_sanitized(value::jsonb))
+    from (
+      values
+        ('["client_secret","zzz","=x"]'),
+        ('["token","zzz","=x"]'),
+        ('["password","zzz","=x"]'),
+        ('["api_key","zzz","=x"]')
+    ) dangerous(value)
+  ),
+  'complete sensitive labels separated from assignments fail closed'
+);
+select is(
+  public.cognitive_json_is_sanitized('["123a","456b","7890c"]'::jsonb),
+  false,
+  'phone fragments with inert suffixes fail closed'
+);
+select ok(
+  not public.cognitive_json_is_sanitized('{"k":"e","y":"=x"}'::jsonb)
+  and not public.cognitive_json_is_sanitized('{"ser":"vice","ro":"le=x"}'::jsonb),
+  'object keys and values cannot compose credential assignments'
+);
+select ok(
+  (
+    select bool_and(not public.cognitive_json_is_sanitized(payload))
+    from (
+      select jsonb_agg(
+        jsonb_build_object('position',position_value-1,'chunk',substring(token from position_value for 1))
+        order by position_value desc
+      ) as payload
+      from (
+        values
+          ('AKIAABCDEFGHIJKLMNOP'),
+          ('AIzaABCDEFGHIJKLMNOPQRSTUVWXYZ123456789'),
+          ('eyJABCDEFGHIJKLMNOPQRSTUV.WXYZabcdefg.HIJKLMNOPQR')
+      ) tokens(token)
+      cross join lateral generate_series(1,length(token)) position_value
+      group by token
+    ) positioned
+  ),
+  'position-labelled raw token fragments are reconstructed independently of physical order'
+);
+select ok(
+  not public.cognitive_text_has_secret('状态=active')
+  and not public.cognitive_text_has_secret('東京:city')
+  and not public.cognitive_text_has_secret('ключ=value'),
+  'ordinary international key-value text is not classified as a credential'
+);
+select ok(
+  public.cognitive_json_is_sanitized('["sector","=","trace"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["12345","67890"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["@documentation","version 1.2"]'::jsonb)
+  and public.cognitive_json_is_sanitized('["sky","theme","status=ok"]'::jsonb),
+  'ordinary fragments are not rejected by token-bag, phone, email, or label heuristics'
+);
+select is(
+  public.cognitive_json_is_sanitized(
+    (repeat('{"x":',20)||'"safe"'||repeat('}',20))::jsonb
+  ),
+  false,
+  'nested JSON fails closed before recursive database traversal exceeds the depth contract'
+);
+select performs_ok(
+  $$select public.cognitive_text_has_secret(repeat('a',16384))$$,
+  1000,
+  'maximum-scale opaque text classification remains bounded'
+);
+
 -- Static schema properties that back remaining behavioral tests.
 select col_is_pk('public', 'cognitive_projects', 'id', 'project identity is primary');
 select col_not_null('public', 'intelligence_tasks', 'project_id', 'task project is required');

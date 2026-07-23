@@ -18,9 +18,9 @@ Observed local result under Node 20.20.2:
 
 The suite invokes the implementation handlers for every attack rather than
 accepting documentation strings as results. Database state attacks are also
-covered by 214 focused cognitive pgTAP assertions, 499 assertions across the
+covered by 224 focused cognitive pgTAP assertions, 509 assertions across the
 complete local database suite, and a real two-session recurrence race.
-`test:cognitive-hardening-regressions` adds 87 variants derived from the failed
+`test:cognitive-hardening-regressions` adds 91 variants derived from the failed
 independent retests, including wrong bearer/nonce proof, complete request/capability
 binding, no-follow existing-file identity pinning, fail-closed new-file creation,
 engine-owned and anti-forgery budget
@@ -31,6 +31,10 @@ database enforcement. The latest 87 variants also cover Unicode/IDNA security
 normalization, Unicode default-ignorables and cross-script confusables,
 linear reconstruction beyond twelve leaves, provider wildcard policy decoding,
 benign provider-denial semantics, encoded private IPv6, and normalized UTF-8
-URL bounds. Focused cognitive pgTAP now adds exact international-digit,
-date-email, long-fragment, maximum prose-envelope, and CPU-bound regressions.
+URL bounds. The latest variants additionally cover positioned credential
+fragments, numbered research-query reconstruction before DNS, nested provider
+wildcards, provider denial reversal, and outer/short decoded envelopes. Focused
+cognitive pgTAP now adds exact international-digit, date-email, long-fragment,
+maximum prose-envelope, cross-object assignment, bounded-depth, and CPU-bound
+regressions.
 The fresh independent review-only retest remains a separate gate.
