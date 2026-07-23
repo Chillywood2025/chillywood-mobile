@@ -6,12 +6,17 @@ import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
 const outputPath = path.join(root, "config/intelligence/architecture-knowledge-graph.json");
+const compareText = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
 const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: root })
   .toString("utf8")
   .split("\0")
   .filter(Boolean)
   .filter((relative) => relative !== "config/intelligence/architecture-knowledge-graph.json")
-  .filter((relative) => !/(?:credential|keystore|\.p8$|\.p12$|\.jks$|\.keystore$|\.env(?:\.|$))/iu.test(relative));
+  .filter((relative) => !/(?:credential|keystore|\.p8$|\.p12$|\.jks$|\.keystore$|\.env(?:\.|$))/iu.test(relative))
+  // `git ls-files --cached --others` emits untracked files before the tracked
+  // index. Sorting makes a snapshot generated before `git add` identical to a
+  // clean CI checkout after the same files are committed.
+  .sort(compareText);
 
 const sourceExtensions = /\.(?:ts|tsx|js|mjs|sql|json)$/u;
 const platformFor = (relative) => {
@@ -69,9 +74,9 @@ for (const relative of selected) {
   }
 }
 const uniqueEdges = [...new Map(edges.map((edge) => [`${edge.from}|${edge.relation}|${edge.to}`, edge])).values()]
-  .sort((a, b) => `${a.from}|${a.to}`.localeCompare(`${b.from}|${b.to}`));
+  .sort((a, b) => compareText(`${a.from}|${a.to}`, `${b.from}|${b.to}`));
 if (uniqueEdges.length > 20000) throw new Error("architecture_graph_edge_cap_exceeded");
-nodes.sort((a, b) => a.id.localeCompare(b.id));
+nodes.sort((a, b) => compareText(a.id, b.id));
 
 const impactAnalysis = nodes
   .filter((node) => ["route_screen", "edge_function", "provider_client_method", "build_runtime_contract"].includes(node.type))

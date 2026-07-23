@@ -7697,7 +7697,7 @@
     {
       "id": "database:public",
       "type": "database_object",
-      "path": "supabase/migrations/20260723001845_cognitive_intelligence_foundation.sql",
+      "path": "supabase/migrations/202604190004_baseline_current_schema_truth.sql",
       "platforms": [
         "shared"
       ]
@@ -10967,17 +10967,17 @@
       ]
     },
     {
-      "id": "file:_lib/chillyChatCalls.ts",
+      "id": "file:_lib/chillyChatCallSoundAssets.ts",
       "type": "client_method_or_hook",
-      "path": "_lib/chillyChatCalls.ts",
+      "path": "_lib/chillyChatCallSoundAssets.ts",
       "platforms": [
         "shared"
       ]
     },
     {
-      "id": "file:_lib/chillyChatCallSoundAssets.ts",
+      "id": "file:_lib/chillyChatCalls.ts",
       "type": "client_method_or_hook",
-      "path": "_lib/chillyChatCallSoundAssets.ts",
+      "path": "_lib/chillyChatCalls.ts",
       "platforms": [
         "shared"
       ]
@@ -12151,14 +12151,6 @@
       ]
     },
     {
-      "id": "file:_lib/usernameHandles.ts",
-      "type": "client_method_or_hook",
-      "path": "_lib/usernameHandles.ts",
-      "platforms": [
-        "shared"
-      ]
-    },
-    {
       "id": "file:_lib/userReportRouter.ts",
       "type": "client_method_or_hook",
       "path": "_lib/userReportRouter.ts",
@@ -12170,6 +12162,14 @@
       "id": "file:_lib/userReports.ts",
       "type": "client_method_or_hook",
       "path": "_lib/userReports.ts",
+      "platforms": [
+        "shared"
+      ]
+    },
+    {
+      "id": "file:_lib/usernameHandles.ts",
+      "type": "client_method_or_hook",
+      "path": "_lib/usernameHandles.ts",
       "platforms": [
         "shared"
       ]
@@ -12252,17 +12252,6 @@
       "path": "app.json",
       "platforms": [
         "shared"
-      ]
-    },
-    {
-      "id": "file:app/_layout.tsx",
-      "type": "route_screen",
-      "path": "app/_layout.tsx",
-      "platforms": [
-        "android",
-        "ios",
-        "shared",
-        "web"
       ]
     },
     {
@@ -12379,6 +12368,17 @@
       "id": "file:app/+not-found.tsx",
       "type": "route_screen",
       "path": "app/+not-found.tsx",
+      "platforms": [
+        "android",
+        "ios",
+        "shared",
+        "web"
+      ]
+    },
+    {
+      "id": "file:app/_layout.tsx",
+      "type": "route_screen",
+      "path": "app/_layout.tsx",
       "platforms": [
         "android",
         "ios",
@@ -13014,6 +13014,14 @@
       ]
     },
     {
+      "id": "file:components/ProfileSocialFeedCard.tsx",
+      "type": "component",
+      "path": "components/ProfileSocialFeedCard.tsx",
+      "platforms": [
+        "shared"
+      ]
+    },
+    {
       "id": "file:components/admin/cognitive-control-center.tsx",
       "type": "component",
       "path": "components/admin/cognitive-control-center.tsx",
@@ -13102,17 +13110,17 @@
       ]
     },
     {
-      "id": "file:components/creator-media/creator-video-card.tsx",
+      "id": "file:components/creator-media/CreatorContentActionSheet.tsx",
       "type": "component",
-      "path": "components/creator-media/creator-video-card.tsx",
+      "path": "components/creator-media/CreatorContentActionSheet.tsx",
       "platforms": [
         "shared"
       ]
     },
     {
-      "id": "file:components/creator-media/CreatorContentActionSheet.tsx",
+      "id": "file:components/creator-media/creator-video-card.tsx",
       "type": "component",
-      "path": "components/creator-media/CreatorContentActionSheet.tsx",
+      "path": "components/creator-media/creator-video-card.tsx",
       "platforms": [
         "shared"
       ]
@@ -13174,6 +13182,14 @@
       ]
     },
     {
+      "id": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "type": "component",
+      "path": "components/monetization/MoneyScopeInfoButton.tsx",
+      "platforms": [
+        "shared"
+      ]
+    },
+    {
       "id": "file:components/monetization/access-sheet.tsx",
       "type": "component",
       "path": "components/monetization/access-sheet.tsx",
@@ -13201,14 +13217,6 @@
       "id": "file:components/monetization/money-ui.tsx",
       "type": "component",
       "path": "components/monetization/money-ui.tsx",
-      "platforms": [
-        "shared"
-      ]
-    },
-    {
-      "id": "file:components/monetization/MoneyScopeInfoButton.tsx",
-      "type": "component",
-      "path": "components/monetization/MoneyScopeInfoButton.tsx",
       "platforms": [
         "shared"
       ]
@@ -13273,14 +13281,6 @@
       "id": "file:components/profile/profile-media-sheets.tsx",
       "type": "component",
       "path": "components/profile/profile-media-sheets.tsx",
-      "platforms": [
-        "shared"
-      ]
-    },
-    {
-      "id": "file:components/ProfileSocialFeedCard.tsx",
-      "type": "component",
-      "path": "components/ProfileSocialFeedCard.tsx",
       "platforms": [
         "shared"
       ]
@@ -13438,6 +13438,22 @@
       ]
     },
     {
+      "id": "file:components/ui/Skeleton.tsx",
+      "type": "component",
+      "path": "components/ui/Skeleton.tsx",
+      "platforms": [
+        "shared"
+      ]
+    },
+    {
+      "id": "file:components/ui/StableImage.tsx",
+      "type": "component",
+      "path": "components/ui/StableImage.tsx",
+      "platforms": [
+        "shared"
+      ]
+    },
+    {
       "id": "file:components/ui/app-surface.tsx",
       "type": "component",
       "path": "components/ui/app-surface.tsx",
@@ -13466,22 +13482,6 @@
       "id": "file:components/ui/icon-symbol.tsx",
       "type": "component",
       "path": "components/ui/icon-symbol.tsx",
-      "platforms": [
-        "shared"
-      ]
-    },
-    {
-      "id": "file:components/ui/Skeleton.tsx",
-      "type": "component",
-      "path": "components/ui/Skeleton.tsx",
-      "platforms": [
-        "shared"
-      ]
-    },
-    {
-      "id": "file:components/ui/StableImage.tsx",
-      "type": "component",
-      "path": "components/ui/StableImage.tsx",
       "platforms": [
         "shared"
       ]
@@ -19848,6 +19848,11 @@
       "relation": "imports"
     },
     {
+      "from": "file:_lib/chillyChatCallSoundAssets.ts",
+      "to": "file:_lib/chillyChatCalls.ts",
+      "relation": "imports"
+    },
+    {
       "from": "file:_lib/chillyChatCalls.ts",
       "to": "file:_lib/chillyChatCallDispatchSchema.ts",
       "relation": "imports"
@@ -19855,11 +19860,6 @@
     {
       "from": "file:_lib/chillyChatCalls.ts",
       "to": "file:_lib/supabase.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:_lib/chillyChatCallSoundAssets.ts",
-      "to": "file:_lib/chillyChatCalls.ts",
       "relation": "imports"
     },
     {
@@ -20504,12 +20504,12 @@
     },
     {
       "from": "file:_lib/notifications.ts",
-      "to": "file:_lib/chillyChatCalls.ts",
+      "to": "file:_lib/chillyChatCallSoundAssets.ts",
       "relation": "imports"
     },
     {
       "from": "file:_lib/notifications.ts",
-      "to": "file:_lib/chillyChatCallSoundAssets.ts",
+      "to": "file:_lib/chillyChatCalls.ts",
       "relation": "imports"
     },
     {
@@ -20983,12 +20983,12 @@
       "relation": "imports"
     },
     {
-      "from": "file:_lib/usernameHandles.ts",
+      "from": "file:_lib/userReports.ts",
       "to": "file:_lib/supabase.ts",
       "relation": "imports"
     },
     {
-      "from": "file:_lib/userReports.ts",
+      "from": "file:_lib/usernameHandles.ts",
       "to": "file:_lib/supabase.ts",
       "relation": "imports"
     },
@@ -21095,131 +21095,6 @@
     {
       "from": "file:_lib/watchPartyContentSources.ts",
       "to": "file:_lib/watchParty.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/analytics.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/appLinks.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/betaProgram.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/chat.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/chillyChatCalls.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/chillyChatCallSoundAssets.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/communicationCallMediaPolicy.mjs",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/featureFlags.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/firebaseAnalytics.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/firebaseCrashlytics.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/firebasePerformance.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/firebaseRemoteConfig.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/iosNativeCalls.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/livekit/bootstrap.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/logger.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/monetization.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/notifications.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/runtimeConfig.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/runtimeUpdates.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:_lib/session.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:components/ads/InterstitialController.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:components/beta/beta-welcome-sheet.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:components/dev/dev-debug-overlay.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:components/system/root-error-boundary.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/_layout.tsx",
-      "to": "file:components/system/runtime-unavailable-screen.tsx",
       "relation": "imports"
     },
     {
@@ -21454,12 +21329,12 @@
     },
     {
       "from": "file:app/(tabs)/index.tsx",
-      "to": "file:components/ui/app-surface.tsx",
+      "to": "file:components/ui/StableImage.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/(tabs)/index.tsx",
-      "to": "file:components/ui/StableImage.tsx",
+      "to": "file:components/ui/app-surface.tsx",
       "relation": "imports"
     },
     {
@@ -21510,6 +21385,131 @@
     {
       "from": "file:app/+not-found.tsx",
       "to": "file:_lib/analytics.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/analytics.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/appLinks.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/betaProgram.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/chat.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/chillyChatCallSoundAssets.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/chillyChatCalls.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/communicationCallMediaPolicy.mjs",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/featureFlags.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/firebaseAnalytics.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/firebaseCrashlytics.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/firebasePerformance.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/firebaseRemoteConfig.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/iosNativeCalls.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/livekit/bootstrap.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/logger.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/monetization.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/notifications.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/runtimeConfig.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/runtimeUpdates.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:_lib/session.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:components/ads/InterstitialController.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:components/beta/beta-welcome-sheet.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:components/dev/dev-debug-overlay.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:components/system/root-error-boundary.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/_layout.tsx",
+      "to": "file:components/system/runtime-unavailable-screen.tsx",
       "relation": "imports"
     },
     {
@@ -21969,12 +21969,12 @@
     },
     {
       "from": "file:app/channel-settings.tsx",
-      "to": "file:components/creator-media/creator-video-card.tsx",
+      "to": "file:components/creator-media/CreatorContentActionSheet.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/channel-settings.tsx",
-      "to": "file:components/creator-media/CreatorContentActionSheet.tsx",
+      "to": "file:components/creator-media/creator-video-card.tsx",
       "relation": "imports"
     },
     {
@@ -22029,12 +22029,12 @@
     },
     {
       "from": "file:app/channel-subscription/[creatorId].tsx",
-      "to": "file:components/monetization/money-ui.tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/channel-subscription/[creatorId].tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "to": "file:components/monetization/money-ui.tsx",
       "relation": "imports"
     },
     {
@@ -22189,12 +22189,12 @@
     },
     {
       "from": "file:app/chat/[threadId].tsx",
-      "to": "file:_lib/chillyChatCalls.ts",
+      "to": "file:_lib/chillyChatCallSoundAssets.ts",
       "relation": "imports"
     },
     {
       "from": "file:app/chat/[threadId].tsx",
-      "to": "file:_lib/chillyChatCallSoundAssets.ts",
+      "to": "file:_lib/chillyChatCalls.ts",
       "relation": "imports"
     },
     {
@@ -22464,12 +22464,12 @@
     },
     {
       "from": "file:app/event/[eventId].tsx",
-      "to": "file:components/monetization/money-ui.tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/event/[eventId].tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "to": "file:components/monetization/money-ui.tsx",
       "relation": "imports"
     },
     {
@@ -22659,17 +22659,17 @@
     },
     {
       "from": "file:app/player/[id].tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/player/[id].tsx",
       "to": "file:components/monetization/access-sheet.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/player/[id].tsx",
       "to": "file:components/monetization/money-ui.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/player/[id].tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
@@ -22874,6 +22874,11 @@
     },
     {
       "from": "file:app/profile/[userId].tsx",
+      "to": "file:components/ProfileSocialFeedCard.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/profile/[userId].tsx",
       "to": "file:components/creator-media/creator-video-card.tsx",
       "relation": "imports"
     },
@@ -22890,11 +22895,6 @@
     {
       "from": "file:app/profile/[userId].tsx",
       "to": "file:components/profile/profile-media-sheets.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/profile/[userId].tsx",
-      "to": "file:components/ProfileSocialFeedCard.tsx",
       "relation": "imports"
     },
     {
@@ -22964,12 +22964,12 @@
     },
     {
       "from": "file:app/settings.tsx",
-      "to": "file:_lib/chillyChatCalls.ts",
+      "to": "file:_lib/chillyChatCallSoundAssets.ts",
       "relation": "imports"
     },
     {
       "from": "file:app/settings.tsx",
-      "to": "file:_lib/chillyChatCallSoundAssets.ts",
+      "to": "file:_lib/chillyChatCalls.ts",
       "relation": "imports"
     },
     {
@@ -23259,12 +23259,12 @@
     },
     {
       "from": "file:app/vip-pass/[creatorId].tsx",
-      "to": "file:components/monetization/money-ui.tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/vip-pass/[creatorId].tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "to": "file:components/monetization/money-ui.tsx",
       "relation": "imports"
     },
     {
@@ -23409,17 +23409,17 @@
     },
     {
       "from": "file:app/watch-party/[partyId].tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:app/watch-party/[partyId].tsx",
       "to": "file:components/monetization/access-sheet.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/watch-party/[partyId].tsx",
       "to": "file:components/monetization/money-ui.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:app/watch-party/[partyId].tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
@@ -23564,12 +23564,12 @@
     },
     {
       "from": "file:app/watch-party/index.tsx",
-      "to": "file:components/monetization/access-sheet.tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/watch-party/index.tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "to": "file:components/monetization/access-sheet.tsx",
       "relation": "imports"
     },
     {
@@ -23754,12 +23754,12 @@
     },
     {
       "from": "file:app/watch-party/live-stage/[partyId].tsx",
-      "to": "file:components/monetization/access-sheet.tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
       "from": "file:app/watch-party/live-stage/[partyId].tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "to": "file:components/monetization/access-sheet.tsx",
       "relation": "imports"
     },
     {
@@ -23815,6 +23815,31 @@
     {
       "from": "file:app/watch-party/live-stage/index.tsx",
       "to": "file:app/watch-party/live-stage/[partyId].tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/ProfileSocialFeedCard.tsx",
+      "to": "file:_lib/creatorVideos.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/ProfileSocialFeedCard.tsx",
+      "to": "file:_lib/discoveryFeed.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/ProfileSocialFeedCard.tsx",
+      "to": "file:_lib/profileSocialFeed.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/ProfileSocialFeedCard.tsx",
+      "to": "file:components/social/linked-text.tsx",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/ProfileSocialFeedCard.tsx",
+      "to": "file:components/social/social-attachment-card.tsx",
       "relation": "imports"
     },
     {
@@ -23938,6 +23963,21 @@
       "relation": "imports"
     },
     {
+      "from": "file:components/creator-media/CreatorContentActionSheet.tsx",
+      "to": "file:_lib/creatorVideoLinks.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/creator-media/CreatorContentActionSheet.tsx",
+      "to": "file:_lib/creatorVideos.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/creator-media/CreatorContentActionSheet.tsx",
+      "to": "file:components/ui/typography.tsx",
+      "relation": "imports"
+    },
+    {
       "from": "file:components/creator-media/creator-video-card.tsx",
       "to": "file:_lib/clipStudio.ts",
       "relation": "imports"
@@ -23964,21 +24004,6 @@
     },
     {
       "from": "file:components/creator-media/creator-video-card.tsx",
-      "to": "file:components/ui/typography.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/creator-media/CreatorContentActionSheet.tsx",
-      "to": "file:_lib/creatorVideoLinks.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/creator-media/CreatorContentActionSheet.tsx",
-      "to": "file:_lib/creatorVideos.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/creator-media/CreatorContentActionSheet.tsx",
       "to": "file:components/ui/typography.tsx",
       "relation": "imports"
     },
@@ -24039,12 +24064,12 @@
     },
     {
       "from": "file:components/monetization/access-sheet.tsx",
-      "to": "file:components/monetization/money-ui.tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
       "from": "file:components/monetization/access-sheet.tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "to": "file:components/monetization/money-ui.tsx",
       "relation": "imports"
     },
     {
@@ -24094,12 +24119,12 @@
     },
     {
       "from": "file:components/monetization/tip-sheet.tsx",
-      "to": "file:components/monetization/money-ui.tsx",
+      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
       "relation": "imports"
     },
     {
       "from": "file:components/monetization/tip-sheet.tsx",
-      "to": "file:components/monetization/MoneyScopeInfoButton.tsx",
+      "to": "file:components/monetization/money-ui.tsx",
       "relation": "imports"
     },
     {
@@ -24135,31 +24160,6 @@
     {
       "from": "file:components/profile/profile-media-sheets.tsx",
       "to": "file:_lib/userData.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/ProfileSocialFeedCard.tsx",
-      "to": "file:_lib/creatorVideos.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/ProfileSocialFeedCard.tsx",
-      "to": "file:_lib/discoveryFeed.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/ProfileSocialFeedCard.tsx",
-      "to": "file:_lib/profileSocialFeed.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/ProfileSocialFeedCard.tsx",
-      "to": "file:components/social/linked-text.tsx",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/ProfileSocialFeedCard.tsx",
-      "to": "file:components/social/social-attachment-card.tsx",
       "relation": "imports"
     },
     {
@@ -24283,16 +24283,6 @@
       "relation": "imports"
     },
     {
-      "from": "file:components/ui/app-surface.tsx",
-      "to": "file:components/ui/tokens.ts",
-      "relation": "imports"
-    },
-    {
-      "from": "file:components/ui/app-surface.tsx",
-      "to": "file:components/ui/typography.tsx",
-      "relation": "imports"
-    },
-    {
       "from": "file:components/ui/Skeleton.tsx",
       "to": "file:components/ui/tokens.ts",
       "relation": "imports"
@@ -24305,6 +24295,16 @@
     {
       "from": "file:components/ui/StableImage.tsx",
       "to": "file:components/ui/tokens.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/ui/app-surface.tsx",
+      "to": "file:components/ui/tokens.ts",
+      "relation": "imports"
+    },
+    {
+      "from": "file:components/ui/app-surface.tsx",
+      "to": "file:components/ui/typography.tsx",
       "relation": "imports"
     },
     {
@@ -33111,8 +33111,8 @@
       ],
       "dependencies": [
         "file:_lib/appLinks.ts",
-        "file:_lib/chillyChatCalls.ts",
         "file:_lib/chillyChatCallSoundAssets.ts",
+        "file:_lib/chillyChatCalls.ts",
         "file:_lib/liveEvents.ts",
         "file:_lib/supabase.ts"
       ],
@@ -33334,55 +33334,6 @@
       "rollbackScope": "revert scoped draft-branch source and rerun affected guards"
     },
     {
-      "nodeId": "file:app/_layout.tsx",
-      "callers": [],
-      "dependencies": [
-        "file:_lib/analytics.ts",
-        "file:_lib/appLinks.ts",
-        "file:_lib/betaProgram.tsx",
-        "file:_lib/chat.ts",
-        "file:_lib/chillyChatCalls.ts",
-        "file:_lib/chillyChatCallSoundAssets.ts",
-        "file:_lib/communicationCallMediaPolicy.mjs",
-        "file:_lib/featureFlags.ts",
-        "file:_lib/firebaseAnalytics.ts",
-        "file:_lib/firebaseCrashlytics.ts",
-        "file:_lib/firebasePerformance.ts",
-        "file:_lib/firebaseRemoteConfig.ts",
-        "file:_lib/iosNativeCalls.ts",
-        "file:_lib/livekit/bootstrap.ts",
-        "file:_lib/logger.ts",
-        "file:_lib/monetization.ts",
-        "file:_lib/notifications.ts",
-        "file:_lib/runtimeConfig.ts",
-        "file:_lib/runtimeUpdates.tsx",
-        "file:_lib/session.tsx",
-        "file:components/ads/InterstitialController.tsx",
-        "file:components/beta/beta-welcome-sheet.tsx",
-        "file:components/dev/dev-debug-overlay.tsx",
-        "file:components/system/root-error-boundary.tsx",
-        "file:components/system/runtime-unavailable-screen.tsx"
-      ],
-      "platforms": [
-        "android",
-        "ios",
-        "shared",
-        "web"
-      ],
-      "roles": [
-        "runtime-dependent"
-      ],
-      "userStates": [
-        "signed_out_or_authenticated_as_route_requires"
-      ],
-      "data": [
-        "source_contract"
-      ],
-      "tests": [],
-      "releaseImpact": "platform regression and runtime review required",
-      "rollbackScope": "revert scoped draft-branch source and rerun affected guards"
-    },
-    {
       "nodeId": "file:app/(auth)/_layout.tsx",
       "callers": [],
       "dependencies": [],
@@ -33577,8 +33528,8 @@
         "file:components/creator-media/creator-video-card.tsx",
         "file:components/navigation/main-tab-profile-cache.ts",
         "file:components/notifications/notification-bell-button.tsx",
-        "file:components/ui/app-surface.tsx",
         "file:components/ui/StableImage.tsx",
+        "file:components/ui/app-surface.tsx",
         "file:components/ui/typography.tsx"
       ],
       "platforms": [
@@ -33712,6 +33663,55 @@
       "callers": [],
       "dependencies": [
         "file:_lib/analytics.ts"
+      ],
+      "platforms": [
+        "android",
+        "ios",
+        "shared",
+        "web"
+      ],
+      "roles": [
+        "runtime-dependent"
+      ],
+      "userStates": [
+        "signed_out_or_authenticated_as_route_requires"
+      ],
+      "data": [
+        "source_contract"
+      ],
+      "tests": [],
+      "releaseImpact": "platform regression and runtime review required",
+      "rollbackScope": "revert scoped draft-branch source and rerun affected guards"
+    },
+    {
+      "nodeId": "file:app/_layout.tsx",
+      "callers": [],
+      "dependencies": [
+        "file:_lib/analytics.ts",
+        "file:_lib/appLinks.ts",
+        "file:_lib/betaProgram.tsx",
+        "file:_lib/chat.ts",
+        "file:_lib/chillyChatCallSoundAssets.ts",
+        "file:_lib/chillyChatCalls.ts",
+        "file:_lib/communicationCallMediaPolicy.mjs",
+        "file:_lib/featureFlags.ts",
+        "file:_lib/firebaseAnalytics.ts",
+        "file:_lib/firebaseCrashlytics.ts",
+        "file:_lib/firebasePerformance.ts",
+        "file:_lib/firebaseRemoteConfig.ts",
+        "file:_lib/iosNativeCalls.ts",
+        "file:_lib/livekit/bootstrap.ts",
+        "file:_lib/logger.ts",
+        "file:_lib/monetization.ts",
+        "file:_lib/notifications.ts",
+        "file:_lib/runtimeConfig.ts",
+        "file:_lib/runtimeUpdates.tsx",
+        "file:_lib/session.tsx",
+        "file:components/ads/InterstitialController.tsx",
+        "file:components/beta/beta-welcome-sheet.tsx",
+        "file:components/dev/dev-debug-overlay.tsx",
+        "file:components/system/root-error-boundary.tsx",
+        "file:components/system/runtime-unavailable-screen.tsx"
       ],
       "platforms": [
         "android",
@@ -34140,8 +34140,8 @@
         "file:_lib/session.tsx",
         "file:_lib/userData.ts",
         "file:_lib/userFacingErrors.ts",
-        "file:components/creator-media/creator-video-card.tsx",
         "file:components/creator-media/CreatorContentActionSheet.tsx",
+        "file:components/creator-media/creator-video-card.tsx",
         "file:components/monetization/MoneyScopeInfoButton.tsx",
         "file:components/notifications/notification-bell-button.tsx",
         "file:components/system/beta-access-screen.tsx",
@@ -34203,8 +34203,8 @@
         "file:_lib/platformIdentity.ts",
         "file:_lib/session.tsx",
         "file:_lib/userData.ts",
-        "file:components/monetization/money-ui.tsx",
-        "file:components/monetization/MoneyScopeInfoButton.tsx"
+        "file:components/monetization/MoneyScopeInfoButton.tsx",
+        "file:components/monetization/money-ui.tsx"
       ],
       "platforms": [
         "android",
@@ -34283,8 +34283,8 @@
         "file:_lib/appConfig.ts",
         "file:_lib/chat.ts",
         "file:_lib/chillyChatCallDeliveryCopy.ts",
-        "file:_lib/chillyChatCalls.ts",
         "file:_lib/chillyChatCallSoundAssets.ts",
+        "file:_lib/chillyChatCalls.ts",
         "file:_lib/communication.ts",
         "file:_lib/communicationCallMediaPolicy.mjs",
         "file:_lib/displayText.ts",
@@ -34636,8 +34636,8 @@
         "file:_lib/moderation.ts",
         "file:_lib/paidCreatorEvents.ts",
         "file:_lib/supabase.ts",
-        "file:components/monetization/money-ui.tsx",
         "file:components/monetization/MoneyScopeInfoButton.tsx",
+        "file:components/monetization/money-ui.tsx",
         "file:components/safety/report-sheet.tsx"
       ],
       "platforms": [
@@ -34891,9 +34891,9 @@
         "file:_lib/watch-party/watch-party-live-source-truth.ts",
         "file:_lib/watchParty.ts",
         "file:_lib/watchPartyContentSources.ts",
+        "file:components/monetization/MoneyScopeInfoButton.tsx",
         "file:components/monetization/access-sheet.tsx",
         "file:components/monetization/money-ui.tsx",
-        "file:components/monetization/MoneyScopeInfoButton.tsx",
         "file:components/monetization/route-backed-monetization-proof-card.tsx",
         "file:components/prototype/protected-session-note.tsx",
         "file:components/room/control-style-tokens.ts",
@@ -35037,11 +35037,11 @@
         "file:_lib/userData.ts",
         "file:_lib/userFacingErrors.ts",
         "file:_lib/watchParty.ts",
+        "file:components/ProfileSocialFeedCard.tsx",
         "file:components/creator-media/creator-video-card.tsx",
         "file:components/monetization/access-sheet.tsx",
         "file:components/notifications/notification-bell-button.tsx",
         "file:components/profile/profile-media-sheets.tsx",
-        "file:components/ProfileSocialFeedCard.tsx",
         "file:components/safety/report-sheet.tsx",
         "file:components/social/linked-text.tsx",
         "file:components/social/social-attachment-action-sheet.tsx",
@@ -35129,8 +35129,8 @@
         "file:_lib/accessVisibility.ts",
         "file:_lib/accountDeletionRequests.ts",
         "file:_lib/analytics.ts",
-        "file:_lib/chillyChatCalls.ts",
         "file:_lib/chillyChatCallSoundAssets.ts",
+        "file:_lib/chillyChatCalls.ts",
         "file:_lib/displayText.ts",
         "file:_lib/iosNativeCalls.ts",
         "file:_lib/legalPolicies.ts",
@@ -35404,8 +35404,8 @@
         "file:_lib/platformIdentity.ts",
         "file:_lib/session.tsx",
         "file:_lib/userData.ts",
-        "file:components/monetization/money-ui.tsx",
-        "file:components/monetization/MoneyScopeInfoButton.tsx"
+        "file:components/monetization/MoneyScopeInfoButton.tsx",
+        "file:components/monetization/money-ui.tsx"
       ],
       "platforms": [
         "android",
@@ -35458,9 +35458,9 @@
         "file:_lib/watchPartyContentSources.ts",
         "file:_lib/watchPartyPinning.ts",
         "file:components/chat/internal-invite-sheet.tsx",
+        "file:components/monetization/MoneyScopeInfoButton.tsx",
         "file:components/monetization/access-sheet.tsx",
         "file:components/monetization/money-ui.tsx",
-        "file:components/monetization/MoneyScopeInfoButton.tsx",
         "file:components/monetization/route-backed-monetization-proof-card.tsx",
         "file:components/monetization/tip-sheet.tsx",
         "file:components/notifications/notification-bell-button.tsx",
@@ -35513,8 +35513,8 @@
         "file:_lib/watchPartyContentSources.ts",
         "file:app/watch-party/live-stage/[partyId].tsx",
         "file:components/chat/internal-invite-sheet.tsx",
-        "file:components/monetization/access-sheet.tsx",
         "file:components/monetization/MoneyScopeInfoButton.tsx",
+        "file:components/monetization/access-sheet.tsx",
         "file:components/notifications/notification-bell-button.tsx",
         "file:components/room/room-code-invite-card.tsx",
         "file:components/system/beta-access-screen.tsx",
@@ -35581,8 +35581,8 @@
         "file:_lib/watchPartyContentSources.ts",
         "file:components/chat/internal-invite-sheet.tsx",
         "file:components/live/live-effects-sheet.tsx",
-        "file:components/monetization/access-sheet.tsx",
         "file:components/monetization/MoneyScopeInfoButton.tsx",
+        "file:components/monetization/access-sheet.tsx",
         "file:components/monetization/route-backed-monetization-proof-card.tsx",
         "file:components/notifications/notification-bell-button.tsx",
         "file:components/prototype/protected-session-note.tsx",
@@ -37271,5 +37271,5 @@
       "rollbackScope": "revert scoped draft-branch source and rerun affected guards"
     }
   ],
-  "digest": "e82ff95c8953c714fc9c35fc6283ed9c26ea2796a0853ae14d5aa400b541b742"
+  "digest": "7c488013731120f70749285f52ae93542b1a10609b0530533fa978d36b5f3da1"
 }
