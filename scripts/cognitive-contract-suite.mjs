@@ -34,6 +34,14 @@ const expectedComponents = [
   "independent_evaluation_judge",
   "capability_and_tool_broker",
   "model_router_and_budget_controller",
+  "cognitive_owner_approval_endpoint",
+  "cognitive_approved_action_worker",
+  "model_independence_attestation_service",
+  "product_experience_baseline_service",
+  "livekit_experience_sentinel",
+  "visual_product_experience_sentinel",
+  "installed_journey_sentinel",
+  "product_quality_triage_router",
 ];
 
 const guardIntelligence = () => {

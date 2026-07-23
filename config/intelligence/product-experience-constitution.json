@@ -1,0 +1,110 @@
+{
+  "constitutionKey": "product-experience-constitution-v1",
+  "status": "needs_product_baseline_review",
+  "ownerApprovalVersion": "not_approved_yet",
+  "approvedBaselineHash": null,
+  "allowedBaselineVariance": {
+    "cardRatioDelta": 0.08,
+    "spacingDeltaPx": 4,
+    "typographyScaleDelta": 0.1,
+    "densityDelta": 0.15
+  },
+  "mobileFirstPrinciples": [
+    "Primary journeys must resolve on small phones before tablet refinements are accepted.",
+    "Controls must be reachable with one hand where the route is designed for feed or live use.",
+    "Touch targets must be at least 44 by 44 points unless the control is informational only."
+  ],
+  "streamingContentDensity": {
+    "minimumCardsAboveFold": {
+      "phonePortrait": 2,
+      "phoneLandscape": 3,
+      "tabletPortrait": 4,
+      "tabletLandscape": 6
+    },
+    "maximumEmptyViewportRatio": 0.35,
+    "maximumScrollDistanceToMeaningfulContentPx": 640
+  },
+  "routeCompletionExpectations": {
+    "requiredCoreRoutes": [
+      "Home",
+      "Explore",
+      "Search",
+      "Library",
+      "Profile",
+      "Settings",
+      "Content",
+      "Live",
+      "WatchParty",
+      "Chat"
+    ],
+    "tapNoChangeMaximumMs": 1500,
+    "routeTransitionMaximumMs": 3000,
+    "blankScreenMaximumMs": 1000
+  },
+  "loadingStateDeadlines": {
+    "defaultRouteResolutionMs": 10000,
+    "livekitTokenMs": 3000,
+    "livekitRoomConnectMs": 12000,
+    "livekitUiStateResolutionMs": 15000,
+    "livekitFirstRemoteMediaMs": 20000,
+    "offlineRecoveryMs": 8000
+  },
+  "emptyErrorOfflineStates": {
+    "emptyStateRequiresAction": true,
+    "errorStateRequiresRetryOrExit": true,
+    "offlineStateRequiresConnectionStatus": true,
+    "silentFailureMaximumMs": 3000
+  },
+  "cardMetrics": {
+    "maximumCardViewportWidthRatio": {
+      "phone": 0.88,
+      "tablet": 0.46
+    },
+    "maximumCardViewportHeightRatio": {
+      "phone": 0.58,
+      "tablet": 0.42
+    },
+    "acceptedAspectRatios": [
+      "16:9",
+      "4:5",
+      "1:1"
+    ],
+    "minimumHorizontalSpacingPx": 8,
+    "maximumHorizontalSpacingPx": 24,
+    "maximumTitleLines": 2,
+    "metadataMaximumHeightRatio": 0.28
+  },
+  "typography": {
+    "minimumBodySizePt": 13,
+    "maximumCardTitleSizePt": 18,
+    "negativeLetterSpacingAllowed": false,
+    "dynamicTypeMustNotClip": true
+  },
+  "breakpoints": {
+    "smallPhoneMaxWidth": 374,
+    "phoneMaxWidth": 767,
+    "tabletMinWidth": 768,
+    "landscapeMinAspectRatio": 1.3
+  },
+  "accessibility": {
+    "minimumTouchTargetPt": 44,
+    "increasedTextSizeMustPreservePrimaryAction": true,
+    "screenReaderCriticalControlsMustHaveLabels": true
+  },
+  "screenshotProvenance": {
+    "requiresRuntimeIdentityHash": true,
+    "requiresDeviceClass": true,
+    "requiresOrientation": true,
+    "requiresSyntheticAccountFlag": true,
+    "allowsPrivateUserData": false
+  },
+  "sentinelAuthority": {
+    "mayObserve": true,
+    "mayCollectScreenshots": true,
+    "mayCreateFindings": true,
+    "mayProposeAlternatives": true,
+    "mayMutateProduction": false,
+    "mayApproveBaseline": false,
+    "mayPublishRelease": false
+  }
+}

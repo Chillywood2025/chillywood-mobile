@@ -4,7 +4,7 @@ Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 ## Shape
 
-`product_intelligence_operator` is the only new top-level system. It coordinates nine registered surfaces/protected control planes:
+`product_intelligence_operator` is the only new top-level system. It coordinates the original nine registered surfaces/protected control planes plus the two-party activation and product-experience sentinel surfaces:
 
 1. `rachi_cognitive_orchestration` plans and delegates.
 2. `research_source_broker` normalizes cited, fresh, untrusted evidence.
@@ -15,10 +15,18 @@ Status: `SECURITY_HARDENING_IN_PROGRESS`
 7. `independent_evaluation_judge` evaluates without editing source.
 8. `capability_and_tool_broker` limits tools, paths, calls, time, and expiry.
 9. `model_router_and_budget_controller` caps model calls and cost.
+10. `cognitive_owner_approval_endpoint` records immutable exact Owner approval versions through the authenticated Owner path.
+11. `cognitive_approved_action_worker` claims and executes only exact active approval versions through a separately verified service principal.
+12. `model_independence_attestation_service` records sanitized model execution attestations and fails closed with `MODEL_INDEPENDENCE_PROVIDER_REQUIRED` when live quorum cannot be proven.
+13. `product_experience_baseline_service` versions product-experience baselines only after exact Owner approval.
+14. `livekit_experience_sentinel` observes synthetic LiveKit journeys and separates backend, media, and installed UI state.
+15. `visual_product_experience_sentinel` measures screenshot/content-density and card-layout metrics against an Owner-reviewed baseline.
+16. `installed_journey_sentinel` runs bounded synthetic product journeys for stuck routes, dead taps, blank screens, and unresolved loading states.
+17. `product_quality_triage_router` turns sanitized sentinel runs into governance findings.
 
 The orchestration flow is:
 
-`objective → research → plan → capability preflight → specialized executor → independent evaluation → owner-visible evidence`
+`objective → research → plan → decision manifest → exact Owner approval → service-principal claim → bounded execution → independent evaluation → owner-visible evidence`
 
 Existing notification, release, observability, installed QA, LiveKit, money, security, recovery, privacy, support, moderation, search, and media systems remain domain executors.
 

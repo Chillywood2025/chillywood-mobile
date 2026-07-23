@@ -18,7 +18,6 @@ const CORS_HEADERS = Object.freeze({
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const PLATFORM = "shared";
 const ENVIRONMENT = "production";
-const POLICY_VERSION = "collective-governance-v1";
 const SECURITY_POLICY = securityPolicyJson as CanonicalSecurityPolicy;
 const RESEARCH_KEYS = Object.freeze([
   "platform_policy_research",
@@ -273,40 +272,6 @@ const readStatus = async (
   });
 };
 
-const setSwitch = async (
-  actorClient: SupabaseClientLike,
-  scope: { projectId: string; taskId: string },
-  payload: Record<string, unknown>,
-): Promise<Response> => {
-  const switchKey = toText(payload.switchKey);
-  const enabled = payload.enabled;
-  if (
-    typeof enabled !== "boolean" ||
-    ![
-      "cognitive_research_enabled",
-      "cognitive_memory_enabled",
-      "cognitive_collective_deliberation_enabled",
-      "cognitive_draft_pr_executor_enabled",
-      "cognitive_scheduled_level01_enabled",
-    ].includes(switchKey)
-  ) {
-    return json(400, { error: "level01_switch_scope_rejected" });
-  }
-  const result = await actorClient.rpc("governance_set_level01_switch", {
-    p_enabled: enabled,
-    p_environment: ENVIRONMENT,
-    p_platform: PLATFORM,
-    p_policy_version: POLICY_VERSION,
-    p_project_id: scope.projectId,
-    p_switch_key: switchKey,
-    p_task_id: scope.taskId,
-  });
-  if (result.error) {
-    return json(409, { error: "level01_switch_change_rejected" });
-  }
-  return json(200, { enabled, ok: true, switchKey });
-};
-
 export const recordResearchFromTrustedRecords = async (
   actorClient: SupabaseClientLike,
   scope: { projectId: string; taskId: string },
@@ -527,40 +492,16 @@ export const handler = async (request: Request): Promise<Response> => {
     const scope = await readCanaryScope(adminClient);
     if (scope instanceof Response) return scope;
     if (action === "set_switch") {
-      return await setSwitch(actorClient, scope, payload);
+      return json(409, { error: "two_party_owner_approval_required" });
     }
     if (action === "record_public_research_canary") {
-      const governanceControlIdentityToken = readRequiredSecret(
-        "COGNITIVE_GOVERNANCE_CONTROL_IDENTITY_TOKEN",
-      );
-      return await recordResearchFromTrustedRecords(
-        actorClient,
-        scope,
-        governanceControlIdentityToken,
-        payload,
-      );
+      return json(409, { error: "two_party_service_worker_required" });
     }
     if (action === "record_collective_deliberation_canary") {
-      const governanceControlIdentityToken = readRequiredSecret(
-        "COGNITIVE_GOVERNANCE_CONTROL_IDENTITY_TOKEN",
-      );
-      return await recordDeliberationFromTrustedRecords(
-        actorClient,
-        scope,
-        governanceControlIdentityToken,
-        payload,
-      );
+      return json(409, { error: "two_party_service_worker_required" });
     }
     if (action === "record_level01_credential_attestation") {
-      const governanceControlIdentityToken = readRequiredSecret(
-        "COGNITIVE_GOVERNANCE_CONTROL_IDENTITY_TOKEN",
-      );
-      return await recordCredentialFromTrustedRecords(
-        actorClient,
-        scope,
-        governanceControlIdentityToken,
-        payload,
-      );
+      return json(409, { error: "two_party_service_worker_required" });
     }
     return json(400, { error: "unsupported_action" });
   } catch {

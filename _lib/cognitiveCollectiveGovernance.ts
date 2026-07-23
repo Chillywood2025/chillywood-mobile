@@ -1400,6 +1400,9 @@ export type CognitiveCanarySwitches = Readonly<{
   cognitive_collective_deliberation_enabled: boolean;
   cognitive_draft_pr_executor_enabled: boolean;
   cognitive_scheduled_level01_enabled: boolean;
+  cognitive_livekit_experience_sentinel_enabled: boolean;
+  cognitive_visual_experience_sentinel_enabled: boolean;
+  cognitive_installed_journey_sentinel_enabled: boolean;
   cognitive_level2_production_repairs_enabled: false;
   cognitive_user_derived_memory_enabled: false;
 }>;
@@ -1411,6 +1414,9 @@ export const INITIAL_COGNITIVE_CANARY_SWITCHES: CognitiveCanarySwitches =
     cognitive_collective_deliberation_enabled: false,
     cognitive_draft_pr_executor_enabled: false,
     cognitive_scheduled_level01_enabled: false,
+    cognitive_livekit_experience_sentinel_enabled: false,
+    cognitive_visual_experience_sentinel_enabled: false,
+    cognitive_installed_journey_sentinel_enabled: false,
     cognitive_level2_production_repairs_enabled: false,
     cognitive_user_derived_memory_enabled: false,
   });

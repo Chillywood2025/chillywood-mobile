@@ -197,7 +197,7 @@ select set_config(
   true
 );
 set local role authenticated;
-select lives_ok(
+select throws_ok(
   format(
     $$select public.governance_set_level01_switch(
       %L,%L,'shared','production','cognitive_research_enabled',true,
@@ -206,9 +206,11 @@ select lives_ok(
     (select task_id from level01_fixture),
     (select project_id from level01_fixture)
   ),
-  'Owner enables the bounded public research switch'
+  'P0001',
+  'two_party_owner_approval_required',
+  'legacy Owner direct research switch is blocked by the two-party handoff'
 );
-select lives_ok(
+select throws_ok(
   format(
     $$select public.governance_set_level01_switch(
       %L,%L,'shared','production','cognitive_memory_enabled',true,
@@ -217,9 +219,30 @@ select lives_ok(
     (select task_id from level01_fixture),
     (select project_id from level01_fixture)
   ),
-  'Owner enables only non-personal durable memory'
+  'P0001',
+  'two_party_owner_approval_required',
+  'legacy Owner direct memory switch is blocked by the two-party handoff'
 );
 reset role;
+insert into public.cognitive_governance_switches(
+  task_id, project_id, platform, environment, switch_key, enabled,
+  policy_version, enabled_by, enabled_at, updated_at
+)
+select
+  fixture.task_id, fixture.project_id, 'shared', 'production', switch_key,
+  true, 'two-party-fixture', 'b5000000-0000-0000-0000-000000000001',
+  transaction_timestamp(), transaction_timestamp()
+from level01_fixture fixture
+cross join unnest(array[
+  'cognitive_research_enabled',
+  'cognitive_memory_enabled'
+]) switch_key
+on conflict (task_id, switch_key) do update
+set enabled = excluded.enabled,
+    policy_version = excluded.policy_version,
+    enabled_by = excluded.enabled_by,
+    enabled_at = excluded.enabled_at,
+    updated_at = excluded.updated_at;
 select set_config('request.jwt.claim.role','service_role',true);
 select pg_temp.set_level01_test_actor('research_source_broker');
 
@@ -317,7 +340,7 @@ select set_config(
   true
 );
 set local role authenticated;
-select lives_ok(
+select throws_ok(
   format(
     $$select public.governance_set_level01_switch(
       %L,%L,'shared','production',
@@ -327,9 +350,27 @@ select lives_ok(
     (select task_id from level01_fixture),
     (select project_id from level01_fixture)
   ),
-  'Owner enables collective deliberation only after research canary setup'
+  'P0001',
+  'two_party_owner_approval_required',
+  'legacy Owner direct collective-deliberation switch is blocked'
 );
 reset role;
+insert into public.cognitive_governance_switches(
+  task_id, project_id, platform, environment, switch_key, enabled,
+  policy_version, enabled_by, enabled_at, updated_at
+)
+select
+  fixture.task_id, fixture.project_id, 'shared', 'production',
+  'cognitive_collective_deliberation_enabled', true, 'two-party-fixture',
+  'b5000000-0000-0000-0000-000000000001', transaction_timestamp(),
+  transaction_timestamp()
+from level01_fixture fixture
+on conflict (task_id, switch_key) do update
+set enabled = excluded.enabled,
+    policy_version = excluded.policy_version,
+    enabled_by = excluded.enabled_by,
+    enabled_at = excluded.enabled_at,
+    updated_at = excluded.updated_at;
 select set_config('request.jwt.claim.role','service_role',true);
 select pg_temp.set_level01_test_actor('deliberation_orchestrator');
 
@@ -382,8 +423,8 @@ select throws_ok(
     (select project_id from level01_fixture)
   ),
   'P0001',
-  'cognitive_draft_pr_canary_prerequisites_required',
-  'draft-PR executor remains off until all three deliberation canaries pass'
+  'two_party_owner_approval_required',
+  'draft-PR executor cannot be enabled by the legacy direct Owner RPC'
 );
 select throws_ok(
   format(

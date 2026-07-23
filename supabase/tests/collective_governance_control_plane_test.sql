@@ -1099,8 +1099,8 @@ select throws_ok(
     'shared','ci','cognitive_research_enabled',true,'fixture-v1'
   )$$,
   'P0001',
-  'governance_switch_scope_rejected',
-  'Level 0/1 activation is rejected outside the exact production canary scope'
+  'two_party_owner_approval_required',
+  'legacy direct Level 0/1 activation is rejected by the two-party handoff'
 );
 select throws_ok(
   $$select public.governance_set_level01_switch(
@@ -1109,8 +1109,8 @@ select throws_ok(
     'shared','ci','cognitive_level2_production_repairs_enabled',true,'fixture-v1'
   )$$,
   'P0001',
-  'governance_switch_scope_rejected',
-  'Level 2 production repair cannot be activated by the Level 0/1 switch RPC'
+  'two_party_owner_approval_required',
+  'Level 2 production repair cannot be activated by the legacy direct switch RPC'
 );
 select throws_ok(
   $$select public.governance_set_level01_switch(
@@ -1119,8 +1119,8 @@ select throws_ok(
     'shared','ci','cognitive_user_derived_memory_enabled',true,'fixture-v1'
   )$$,
   'P0001',
-  'governance_switch_scope_rejected',
-  'user-derived memory remains outside the Level 0/1 activation path'
+  'two_party_owner_approval_required',
+  'user-derived memory remains outside the legacy direct switch path'
 );
 reset role;
 

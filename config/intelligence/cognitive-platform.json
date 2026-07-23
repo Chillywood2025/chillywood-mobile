@@ -38,7 +38,9 @@
     "researchTransport": "https_dns_and_redirect_validated_mock_only",
     "databaseDeployment": "absent",
     "productionCredentials": "none",
-    "productionScheduler": "none"
+    "productionScheduler": "none",
+    "twoPartyActivation": "owner_approval_and_service_execution_are_distinct_requests",
+    "legacyDirectSwitchRpc": "fail_closed_two_party_owner_approval_required"
   },
   "governanceComponents": [
     {"id": "collective_intelligence_council", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
@@ -54,7 +56,15 @@
     {"id": "outcome_calibration_service", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
     {"id": "governance_emergency_control", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
     {"id": "owner_approval_lifecycle_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
-    {"id": "approval_revalidation_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"}
+    {"id": "approval_revalidation_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "cognitive_owner_approval_endpoint", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "cognitive_approved_action_worker", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "model_independence_attestation_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "product_experience_baseline_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "livekit_experience_sentinel", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "visual_product_experience_sentinel", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "installed_journey_sentinel", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "product_quality_triage_router", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"}
   ],
   "components": [
     {
@@ -128,6 +138,70 @@
       "approvalLevel": 2,
       "writes": ["model_invocations", "intelligence_budgets"],
       "forbidden": ["budget bypass", "secret-bearing prompts", "policy mutation"]
+    },
+    {
+      "id": "cognitive_owner_approval_endpoint",
+      "componentType": "protected_control_plane",
+      "purpose": "Record immutable exact Owner approval versions through the normal authenticated JWT path.",
+      "approvalLevel": 2,
+      "writes": ["governance_owner_approval_versions", "governance_owner_approval_lifecycle_events"],
+      "forbidden": ["service execution", "service-role key use", "approval mutation", "credential issuance"]
+    },
+    {
+      "id": "cognitive_approved_action_worker",
+      "componentType": "protected_control_plane",
+      "purpose": "Claim and execute only exact active approval versions using a separately verified service principal.",
+      "approvalLevel": 2,
+      "writes": ["governance_approved_action_executions", "cognitive_governance_switches"],
+      "forbidden": ["Owner approval creation", "Owner impersonation", "scope widening", "replay"]
+    },
+    {
+      "id": "model_independence_attestation_service",
+      "componentType": "protected_control_plane",
+      "purpose": "Record sanitized model execution attestations and report provider/model independence status.",
+      "approvalLevel": 2,
+      "writes": ["governance_model_execution_attestations"],
+      "forbidden": ["model credential storage", "raw prompt storage", "fake quorum", "copied-output double counting"]
+    },
+    {
+      "id": "product_experience_baseline_service",
+      "componentType": "protected_control_plane",
+      "purpose": "Version product-experience baselines only after exact Owner approval.",
+      "approvalLevel": 2,
+      "writes": ["product_experience_baseline_versions"],
+      "forbidden": ["silent current-app baseline approval", "autonomous redesign authority", "private user data"]
+    },
+    {
+      "id": "livekit_experience_sentinel",
+      "componentType": "registered_surface",
+      "purpose": "Observe synthetic end-to-end LiveKit product experience and classify backend, media, and installed UI failure layers.",
+      "approvalLevel": 1,
+      "writes": ["product_experience_sentinel_runs"],
+      "forbidden": ["provider mutation", "production repair", "release", "private user data"]
+    },
+    {
+      "id": "visual_product_experience_sentinel",
+      "componentType": "registered_surface",
+      "purpose": "Measure content density, card metrics, spacing, typography, and breakpoint behavior from screenshots and route analysis.",
+      "approvalLevel": 1,
+      "writes": ["product_experience_sentinel_runs"],
+      "forbidden": ["autonomous redesign", "baseline approval", "production mutation", "private user data"]
+    },
+    {
+      "id": "installed_journey_sentinel",
+      "componentType": "registered_surface",
+      "purpose": "Run bounded synthetic installed-product journeys and detect stuck loading, broken taps, blank screens, and route failures.",
+      "approvalLevel": 1,
+      "writes": ["product_experience_sentinel_runs"],
+      "forbidden": ["production mutation", "store release", "private user data", "Level 2 repair"]
+    },
+    {
+      "id": "product_quality_triage_router",
+      "componentType": "protected_control_plane",
+      "purpose": "Route sanitized sentinel findings into collective governance with deterministic classification metadata.",
+      "approvalLevel": 1,
+      "writes": ["product_quality_findings"],
+      "forbidden": ["finding fabrication", "evidence deletion", "production mutation", "self approval"]
     }
   ]
 }

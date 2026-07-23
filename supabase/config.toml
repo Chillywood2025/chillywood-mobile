@@ -180,3 +180,9 @@ verify_jwt = false
 
 [functions.cognitive-governance-control]
 verify_jwt = true
+
+[functions.cognitive-owner-approval]
+verify_jwt = true
+
+[functions.cognitive-approved-action-worker]
+verify_jwt = true

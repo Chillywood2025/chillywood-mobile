@@ -74,6 +74,25 @@ export const CognitiveControlCenterFoundation = () => {
           ? "Enabled"
           : "Off",
       ],
+      [
+        "LiveKit sentinel",
+        liveStatus.switches.cognitive_livekit_experience_sentinel_enabled
+          ? "Enabled"
+          : "Off",
+      ],
+      [
+        "Visual sentinel",
+        liveStatus.switches.cognitive_visual_experience_sentinel_enabled
+          ? "Enabled"
+          : "Off",
+      ],
+      [
+        "Journey sentinel",
+        liveStatus.switches.cognitive_installed_journey_sentinel_enabled
+          ? "Enabled"
+          : "Off",
+      ],
+      ["Activation handoff", "Owner approval + service execution"],
       ["Level 2 repairs", "Off"],
       ["User-derived memory", "Off"],
     ] as const;

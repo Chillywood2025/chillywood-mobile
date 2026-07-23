@@ -6,6 +6,10 @@
   "selfAmendment": false,
   "selfApproval": false,
   "ownerAuthorityPreserved": true,
+  "twoPartyActivationRequired": true,
+  "ownerMayServiceExecute": false,
+  "servicePrincipalMayRecordOwnerApproval": false,
+  "serviceMayImpersonateOwner": false,
   "mandatoryVetoDomains": [
     "security",
     "privacy",
