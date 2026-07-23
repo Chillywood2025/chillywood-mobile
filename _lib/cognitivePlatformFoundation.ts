@@ -205,9 +205,14 @@ export const cognitiveSha256 = (text: string): string => {
 };
 const validIdentifier = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u.test(value);
-const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]{8,}$|^(?:api[_.:-]?key|password|secret|credential)[_.:-][A-Za-z0-9._:-]{8,}$)/u;
+const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]{8,}$|^(?:api[_.:-]?key|password|secret|credential|service[_.:-]?role)[_.:-][A-Za-z0-9._:-]{8,}$)/u;
+function securityIdentifierContainsSecret(value: string): boolean {
+  return SECRET_SHAPED_IDENTIFIER.test(value)
+    || containsSecretLikeValue(value)
+    || maybeDecodeEncoded(value).some(containsSecretLikeValue);
+}
 const validSecurityIdentifier = (value: unknown): value is string =>
-  validIdentifier(value) && !SECRET_SHAPED_IDENTIFIER.test(value);
+  validIdentifier(value) && !securityIdentifierContainsSecret(value);
 const validBranch = (value: unknown): value is string =>
   typeof value === "string"
   && /^codex\/[a-z0-9][a-z0-9/_-]{2,120}$/u.test(value)
@@ -678,12 +683,13 @@ export type CognitiveToolResultEnvelope = {
   data: unknown;
 };
 
-const PROVIDER_SCOPE_ACTION = String.raw`(?:grants?|provides?|requir(?:e|es|ed)|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?|authenticates?|promotes?|upgrades?|authorizes?|uses?|sets?|enabl(?:e|es|ed)|runs?|has|have)`;
-const PROVIDER_SCOPE_TARGET = String.raw`(?:owner(?:\s+role)?|super[- ]?admin|administrator|admin|production|credentials?|permissions?|privileges?|scope|access|roles?)`;
+const PROVIDER_SCOPE_ACTION = String.raw`(?:grants?|provides?|requir(?:e|es|ed)|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?|authenticates?|promotes?|upgrades?|authorizes?|uses?|sets?|enabl(?:e|es|ed)|runs?|has|have|gives?|makes?)`;
+const PROVIDER_SCOPE_TARGET = String.raw`(?:owner(?:\s+role)?|super[- ]?admin|administrator|admin|production|root|credentials?|permissions?|privileges?|scope|access|roles?|rights?|service\s+accounts?)`;
 const PROVIDER_SCOPE_EXPANSION = new RegExp(
   String.raw`\b(?:${PROVIDER_SCOPE_ACTION})\b[\s\S]{0,100}\b(?:${PROVIDER_SCOPE_TARGET})\b|\b(?:${PROVIDER_SCOPE_TARGET})\b[\s\S]{0,100}\b(?:(?:is|are|must|should|needs?)(?:\s+be|\s+to\s+be)?\s+)?(?:${PROVIDER_SCOPE_ACTION})\b`,
   "iu",
 );
+const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|administrator|admin|root|privileged|elevated|production|full[- ]?control|unrestricted|god\s+mode)\b[\s\S]{0,60}\b(?:access|accounts?|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?|mandatory|required|enabled)|(?:access|accounts?|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?)\b[\s\S]{0,60}\b(?:owner|super[- ]?admin|administrator|admin|root|privileged|elevated|production|full[- ]?control|unrestricted|god\s+mode|mandatory|required|enabled)|root|full[- ]?control|unrestricted\s+account|god\s+mode)\b/iu;
 
 const canonicalCognitiveJson = (value: unknown): string => {
   const normalize = (entry: unknown): unknown => {
@@ -726,14 +732,21 @@ export const createUntrustedToolEnvelope = (
   const serialized = typeof value.data === "string"
     ? value.data
     : String(JSON.stringify(value.data) ?? "").slice(0, 64_000);
-  const ownerReviewRequired = PROVIDER_SCOPE_EXPANSION.test(serialized);
+  const ownerReviewRequired = PROVIDER_SCOPE_EXPANSION.test(serialized)
+    || PROVIDER_PRIVILEGED_SCOPE_MENTION.test(serialized);
+  const boundaryTruncated = sanitized.categories.some((category) =>
+    category.startsWith("maximum_")
+  );
+  const effectiveTruncated = value.truncated || boundaryTruncated;
   const operationallySafe = sanitized.accepted
     && !sanitized.categories.includes("untrusted_instruction")
+    && !boundaryTruncated
     && !ownerReviewRequired;
   const retained = operationallySafe ? sanitized.value : null;
   const dataHash = cognitiveSha256(canonicalCognitiveJson({
     accepted: operationallySafe,
     categories: sanitized.categories,
+    truncated: effectiveTruncated,
     value: retained,
   }));
   return {
@@ -745,7 +758,7 @@ export const createUntrustedToolEnvelope = (
     dataHash,
     timestamp: value.timestamp,
     untrusted: true,
-    truncated: value.truncated,
+    truncated: effectiveTruncated,
     sanitizationState: operationallySafe ? "sanitized" : "rejected",
     ownerReviewRequired,
     findingType: ownerReviewRequired ? "provider_scope_expansion_request" : null,
@@ -912,7 +925,7 @@ const maybeDecodeEncoded = (value: string): string[] => {
     }
   };
   let frontier = [value];
-  for (let depth = 0; depth < 3; depth += 1) {
+  for (let depth = 0; depth < 6; depth += 1) {
     const next: string[] = [];
     for (const candidate of frontier) {
       try {
@@ -948,6 +961,12 @@ const maybeDecodeEncoded = (value: string): string[] => {
           candidates.add(decoded);
         }
       }
+    }
+    if (depth === 5 && next.length > 0) {
+      // Encoded content that remains recursively decodable beyond the reviewed
+      // inspection bound is rejected rather than retained as ordinary text.
+      candidates.add("secret=encoded_depth_exceeded");
+      break;
     }
     frontier = next;
   }

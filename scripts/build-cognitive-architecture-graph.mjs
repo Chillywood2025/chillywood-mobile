@@ -5,16 +5,24 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
+const gitEnvironment = { ...process.env };
+for (const key of Object.keys(gitEnvironment)) {
+  if (key.startsWith("GIT_")) delete gitEnvironment[key];
+}
+const git = (argumentsList, options = {}) => execFileSync(
+  "/usr/bin/git",
+  argumentsList,
+  { cwd: root, env: gitEnvironment, ...options },
+);
 const compareText = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const sourceExtensions = /\.(?:ts|tsx|js|mjs|sql|json|yml|yaml)$/u;
 const forbiddenPath = /(?:^|\/)(?:\.git|node_modules|android|ios|dist|build|coverage)(?:\/|$)|(?:^|\/)\.env(?:\.|$)|(?:credential|keystore|\.p8$|\.p12$|\.jks$|\.keystore$)/iu;
-const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+const sourceCommit = git(["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 if (!/^[a-f0-9]{40}$/u.test(sourceCommit)) throw new Error("architecture_graph_source_commit_invalid");
-const treeEntries = execFileSync(
-  "git",
+const treeEntries = git(
   ["ls-tree", "-rz", "--full-tree", sourceCommit],
-  { cwd: root, maxBuffer: 32 * 1024 * 1024 },
+  { maxBuffer: 32 * 1024 * 1024 },
 ).toString("utf8").split("\0").filter(Boolean).map((record) => {
   const separator = record.indexOf("\t");
   if (separator < 0) throw new Error("architecture_graph_tree_record_invalid");
@@ -25,10 +33,9 @@ const treeEntries = execFileSync(
   }
   return { mode, type, objectId, relative };
 });
-const readSingleCommitBlob = (objectId) => execFileSync(
-  "git",
+const readSingleCommitBlob = (objectId) => git(
   ["cat-file", "blob", objectId],
-  { cwd: root, maxBuffer: 4 * 1024 * 1024 },
+  { maxBuffer: 4 * 1024 * 1024 },
 );
 const configEntry = treeEntries.find(({ relative }) =>
   relative === "config/intelligence/architecture-knowledge-graph-config.json");
@@ -36,7 +43,7 @@ if (!configEntry || configEntry.mode === "120000" || configEntry.type !== "blob"
   throw new Error("architecture_graph_config_missing_from_commit");
 }
 const config = JSON.parse(readSingleCommitBlob(configEntry.objectId).toString("utf8"));
-const repositoryId = execFileSync("git", ["config", "--get", "remote.origin.url"], { cwd: root, encoding: "utf8" })
+const repositoryId = git(["config", "--get", "remote.origin.url"], { encoding: "utf8" })
   .trim()
   .replace(/^.*github\.com[:/]/u, "")
   .replace(/\.git$/u, "");
@@ -54,11 +61,9 @@ const trackedObjectIds = [...new Set(
     .filter(({ mode, type }) => mode !== "120000" && type === "blob" && mode.startsWith("100"))
     .map(({ objectId }) => objectId),
 )];
-const batchOutput = execFileSync(
-  "git",
+const batchOutput = git(
   ["cat-file", "--batch"],
   {
-    cwd: root,
     input: `${trackedObjectIds.join("\n")}\n`,
     maxBuffer: config.caps.maxTotalBytes + (trackedObjectIds.length * 128),
   },

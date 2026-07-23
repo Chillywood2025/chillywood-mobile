@@ -207,3 +207,22 @@ retested.
 | C6-SCOPE-001 | P3 | Common provider escalation phrases were not classified. | Expand grammar-independent owner/admin/credential escalation detection while retaining no payload. | R-57 | fixed locally | pending |
 | C6-ID-001 | P3 | Model evidence and research source IDs inconsistently accepted dotted secret-shaped values. | Use the closed security-identifier validator for every operational ID. | R-58 | fixed locally | pending |
 | A6-STATUS-001 | P3 | Admin copy said “Security-hardened” while canonical status remained in progress. | Admin and intelligence documents now state security hardening is in progress until a fresh exact-head retest passes. | Admin truth guard | fixed locally | pending |
+
+## Seventh exact-head retest findings
+
+The seventh isolated retest reviewed
+`ac488bd5302671326ffbe1873f7eb67680e8a6d0`. It confirmed the original
+review findings remained closed, but independently found six overlapping P1
+classes, three P2 gaps, and one P3 wording gap. The scaffold remains
+`security_hardening_in_progress`; no finding is independently closed by the
+authoring pass.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A7-SAN-001 / B7-SAN-001 | P1 | Four-layer TypeScript encoding and whitespace-folded SQL base64 could preserve credential-shaped values. | Inspect a six-layer bounded decoding frontier, join folded base64 groups, and fail closed when encoded content remains at the bound. | R-60; pgTAP folded/deep encoding | fixed locally | pending |
+| A7-URL-001 / C7-URL-001 | P1 | The exact research fetch accepted deeply percent-, base64url-, or hex-encoded credential query values. | Decode bounded percent/base64url/hex candidates inside the exact pre-DNS path; reject unresolved encoding at the bound. | R-61, R-63 | fixed locally | pending |
+| B7-PERCENT-001 | P1 | Double-percent encoded credential material passed SQL classification and the real finding RPC. | Continue the SQL percent frontier even without a base64 candidate and reject residual encoding at the boundary. | pgTAP nested percent classifier/RPC | fixed locally | pending |
+| C7-ID-001 | P1 | Operational identifiers accepted dotted and encoded secret-shaped values. | Apply the same recursive secret classifier to tool, call, task, source, capability, model-evidence, and research identifiers; add SQL dotted/hex detection. | R-64; pgTAP dotted/hex classifier/RPC | fixed locally | pending |
+| A7-GRAPH-001 | P2 | Hostile `GIT_DIR`/Git configuration could redirect graph evidence away from the reviewed repository. | Use the fixed system Git binary with every ambient `GIT_*` variable removed and read only exact-commit tree/blob bytes. | R-59 | fixed locally | pending |
+| C7-TOOL-001 | P2 | Tool-result truncation was caller-declared, allowing retained truncated content to be labeled complete. | Compute truncation from sanitizer boundaries, bind it into the hash, and reject boundary-truncated operational data. | R-65 | fixed locally | pending |
+| A7/C7-SCOPE-001 | P2/P3 | Root, full-control, unrestricted-account, and god-mode provider language did not always create an owner-review finding. | Treat explicit privileged-account language as scope expansion regardless of sentence grammar and discard the payload. | R-62, R-66 | fixed locally | pending |

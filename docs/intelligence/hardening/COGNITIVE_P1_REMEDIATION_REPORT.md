@@ -110,6 +110,20 @@ Independent automated retest status: prior exact-head passes correctly found
 remaining P1s; the fresh retest of the next corrective commit is pending on the
 separate review-only branch.
 
+The seventh exact-head review of
+`ac488bd5302671326ffbe1873f7eb67680e8a6d0` independently reproduced
+additional encoded-boundary defects in TypeScript, PostgreSQL, and the exact
+research transport. It also found that operational identifiers did not all use
+the recursive secret classifier. The corrective working tree now covers
+six-layer fail-closed decoding, folded base64 and hexadecimal SQL input,
+encoded identifiers, pre-DNS credential rejection, computed tool truncation,
+privileged provider wording, and hostile Git environment isolation. Authored
+evidence is 66/66 hardening variants, 40/40 canonical red-team attacks,
+11/11 runtime-authority regressions, 462/462 local pgTAP assertions, and a
+passing two-session finding race. These are implementation results only; a
+fresh exact-head independent retest remains required before the final
+hardening label can be used.
+
 No remediation grants production execution, scheduler, deployment, release,
 money, rights, auth/RLS, role, moderation, provider-product or self-approval
 authority.

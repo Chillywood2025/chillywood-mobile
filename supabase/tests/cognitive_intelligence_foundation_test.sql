@@ -142,6 +142,40 @@ select ok(
   'triple-nested embedded base64url credential-like text is classified as secret'
 );
 select ok(
+  (
+    with recursive encoded(depth, value) as (
+      select 0, 'access_token=synthetic-fixture-value'::text
+      union all
+      select depth + 1,
+        replace(encode(convert_to(value,'UTF8'),'base64'), E'\n', '')
+      from encoded
+      where depth < 3
+    )
+    select public.cognitive_text_has_secret(
+      regexp_replace(value, '(.{8})', E'\\1 ', 'g')
+    )
+    from encoded
+    where depth = 3
+  ),
+  'whitespace-folded nested base64 credential-like text is classified as secret'
+);
+select ok(
+  public.cognitive_text_has_secret(
+    'access%255Ftoken%253Dsynthetic-fixture-value'
+  ),
+  'nested percent-encoded credential-like text is classified as secret'
+);
+select ok(
+  public.cognitive_text_has_secret('service_role.synthetic-fixture-value'),
+  'dotted service-role credential-like text is classified as secret'
+);
+select ok(
+  public.cognitive_text_has_secret(
+    encode(convert_to('api_key=synthetic-fixture-value','UTF8'),'hex')
+  ),
+  'hexadecimal credential-like text is classified as secret'
+);
+select ok(
   not public.cognitive_json_is_sanitized(
     jsonb_build_object(
       'metadata',
@@ -1066,6 +1100,62 @@ select throws_ok(
   )$$,
   'P0001','cognitive_finding_payload_rejected',
   'finding target cannot retain a private identifier'
+);
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-percent-scope-probe','executor_scope',
+    'access%255Ftoken%253Dsynthetic-fixture-value',
+    'p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding target cannot retain nested percent-encoded secret material'
+);
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-folded-scope-probe','executor_scope',
+    (
+      with recursive encoded(depth, value) as (
+        select 0, 'access_token=synthetic-fixture-value'::text
+        union all
+        select depth + 1,
+          replace(encode(convert_to(value,'UTF8'),'base64'), E'\n', '')
+        from encoded
+        where depth < 3
+      )
+      select regexp_replace(value, '(.{8})', E'\\1 ', 'g')
+      from encoded
+      where depth = 3
+    ),
+    'p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding target cannot retain whitespace-folded encoded secret material'
+);
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-dotted-secret-probe','executor_scope',
+    'service_role.synthetic-fixture-value',
+    'p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding target cannot retain dotted service-role credential material'
+);
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-hex-secret-probe','executor_scope',
+    encode(convert_to('api_key=synthetic-fixture-value','UTF8'),'hex'),
+    'p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding target cannot retain hexadecimal credential material'
 );
 select is(
   (select occurrence_count from public.cognitive_current_findings

@@ -63,15 +63,20 @@ declare
   decoded text;
   encoded text;
   embedded_decoded text;
+  folded_encoded text;
+  compacted_encoded text;
+  hex_encoded text;
   normalized text;
   octet integer;
   position_value integer;
   depth integer;
+  percent_changed boolean;
 begin
   -- Walk a bounded decoding frontier instead of repeatedly appending the
   -- original encoded text. Six nested layers are inspected; a payload that
   -- remains encoded beyond that bound is rejected rather than retained.
   for depth in 0..5 loop
+    percent_changed := false;
     decoded := '';
     position_value := 1;
     while position_value <= length(candidate) loop
@@ -90,10 +95,12 @@ begin
         position_value := position_value + 1;
       end if;
     end loop;
+    percent_changed := decoded <> candidate;
     candidate := decoded;
     normalized := lower(regexp_replace(candidate, '[^a-zA-Z0-9_=:/.?&+-]', '', 'g'));
     if candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
        or normalized ~* '(password|secret|token|authorization|cookie|service_?role|private_?key|api_?key|access_?key|refresh_?token)[:=][^,}]{4,}'
+       or candidate ~* '(^|[^A-Za-z0-9])(password|secret|credential|service[_:.-]?role|access[_:.-]?token|refresh[_:.-]?token|api[_:.-]?key)[_:.-][A-Za-z0-9._:-]{8,}'
        or candidate ~* '\b(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}\b'
        or candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
        or candidate ~* '(^|[^A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})([^A-Za-z0-9_]|$)'
@@ -129,11 +136,65 @@ begin
         null;
       end;
     end loop;
+    -- Decode bounded hexadecimal fragments only when they form valid UTF-8.
+    -- Ordinary digests remain harmless because random bytes fail UTF-8 or do
+    -- not decode into a credential-shaped value.
+    for hex_encoded in
+      select (match_value)[1]
+      from regexp_matches(
+        candidate,
+        '((?:[0-9A-Fa-f]{2}){8,})',
+        'g'
+      ) as match_value
+      limit 128
+    loop
+      begin
+        decoded := convert_from(decode(left(hex_encoded, 32768), 'hex'), 'UTF8');
+        embedded_decoded := left(
+          embedded_decoded || E'\n' || decoded,
+          32768
+        );
+      exception when others then
+        null;
+      end;
+    end loop;
+    -- Some encoders fold long base64 values across spaces/newlines. Inspect a
+    -- bounded sequence of base64 groups as one fragment so folding cannot turn
+    -- a credential into individually too-short tokens.
+    for folded_encoded in
+      select (match_value)[1]
+      from regexp_matches(
+        candidate,
+        '([A-Za-z0-9+/_-]{4,}(?:[[:space:]]+[A-Za-z0-9+/_-]{4,})+={0,2})',
+        'g'
+      ) as match_value
+      limit 128
+    loop
+      begin
+        compacted_encoded := regexp_replace(folded_encoded, '[[:space:]]+', '', 'g');
+        if length(compacted_encoded) >= 16 then
+          compacted_encoded := translate(compacted_encoded, '-_', '+/');
+          compacted_encoded := compacted_encoded
+            || repeat('=', (4 - (length(compacted_encoded) % 4)) % 4);
+          decoded := convert_from(decode(compacted_encoded, 'base64'), 'UTF8');
+          embedded_decoded := left(
+            embedded_decoded || E'\n' || decoded,
+            32768
+          );
+        end if;
+      exception when others then
+        null;
+      end;
+    end loop;
     if embedded_decoded <> '' then
       if depth = 5 then
         return true;
       end if;
       candidate := left(embedded_decoded, 65536);
+    elsif percent_changed then
+      if depth = 5 then
+        return true;
+      end if;
     else
       return false;
     end if;

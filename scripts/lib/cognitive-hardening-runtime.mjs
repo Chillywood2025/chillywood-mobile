@@ -405,6 +405,55 @@ const normalizedIp = (address) => {
   return parsed === null ? null : `v6:${parsed.toString(16).padStart(32, "0")}`;
 };
 
+const RESEARCH_CREDENTIAL_PATTERN = /\b(?:access[_-]?token|refresh[_-]?token|token|api[_-]?key|service[_-]?role|private[_-]?key|secret|password|credential|authorization|signature|sig|key)\s*[:=]/iu;
+const decodeBoundedSecurityCandidates = (value) => {
+  const candidates = new Set([String(value).slice(0, 65_536)]);
+  let frontier = [...candidates];
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  for (let depth = 0; depth < 6; depth += 1) {
+    const next = [];
+    for (const candidate of frontier) {
+      try {
+        const decoded = decodeURIComponent(candidate);
+        if (decoded !== candidate && !candidates.has(decoded)) {
+          candidates.add(decoded);
+          next.push(decoded);
+        }
+      } catch {
+        throw new Error("url_encoding_invalid");
+      }
+      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{16,}={0,2}\b/gu)) {
+        try {
+          const normalized = match[0].replaceAll("-", "+").replaceAll("_", "/");
+          const bytes = Buffer.from(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="), "base64");
+          const decoded = decoder.decode(bytes).slice(0, 16_384);
+          if (decoded && !candidates.has(decoded)) {
+            candidates.add(decoded);
+            next.push(decoded);
+          }
+        } catch {
+          // Invalid base64/base64url is ordinary untrusted URL text.
+        }
+      }
+      for (const match of candidate.matchAll(/\b(?:[0-9a-fA-F]{2}){8,}\b/gu)) {
+        try {
+          const decoded = decoder.decode(Buffer.from(match[0].slice(0, 32_768), "hex")).slice(0, 16_384);
+          if (decoded && !candidates.has(decoded)) {
+            candidates.add(decoded);
+            next.push(decoded);
+          }
+        } catch {
+          // Non-UTF-8 hexadecimal data is not interpreted as text.
+        }
+      }
+    }
+    if (next.length === 0) return [...candidates];
+    if (depth === 5) throw new Error("credential_bearing_url_forbidden");
+    frontier = next.slice(0, 128);
+  }
+  return [...candidates];
+};
+
 export const validateResearchUrlWithDns = async (raw, resolveDns) => {
   let parsed;
   try {
@@ -416,19 +465,36 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
   if (parsed.username || parsed.password) throw new Error("embedded_credentials_forbidden");
   if (parsed.port && parsed.port !== "443") throw new Error("port_not_allowed");
   let decoded = parsed.toString();
-  for (let index = 0; index < 3; index += 1) {
+  let fullyDecoded = false;
+  for (let index = 0; index < 6; index += 1) {
     try {
       const next = decodeURIComponent(decoded);
-      if (next === decoded) break;
+      if (next === decoded) {
+        fullyDecoded = true;
+        break;
+      }
       decoded = next;
     } catch {
       throw new Error("url_encoding_invalid");
     }
   }
-  if (/\b(?:access[_-]?token|refresh[_-]?token|token|api[_-]?key|secret|password|credential|authorization|signature|sig|key)=/iu.test(decoded)
-    || /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u.test(decoded)
-    || /\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,})\b/u.test(decoded)
-    || /https:\/\/[^/\s:@]+:[^/\s@]+@/iu.test(decoded)) {
+  if (!fullyDecoded) {
+    try {
+      if (decodeURIComponent(decoded) !== decoded) {
+        throw new Error("credential_bearing_url_forbidden");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === "credential_bearing_url_forbidden") throw error;
+      throw new Error("url_encoding_invalid");
+    }
+  }
+  const securityCandidates = decodeBoundedSecurityCandidates(`${raw}\n${decoded}`);
+  if (securityCandidates.some((candidate) =>
+    RESEARCH_CREDENTIAL_PATTERN.test(candidate)
+    || /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u.test(candidate)
+    || /\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,})\b/u.test(candidate)
+    || /https:\/\/[^/\s:@]+:[^/\s@]+@/iu.test(candidate)
+  )) {
     throw new Error("credential_bearing_url_forbidden");
   }
   const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/gu, "").replace(/\.$/u, "");
