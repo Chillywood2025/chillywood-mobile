@@ -44,6 +44,26 @@ contains(
   "sentinel run RPC does not bind service identity to sentinel key",
 );
 contains(
+  "public.governance_task_writes_allowed",
+  "sentinel RPCs do not check emergency/task liveness",
+);
+contains(
+  "p_result_status in ('passed','finding_created')",
+  "sentinel RPC does not bind pass/finding status to installed proof",
+);
+contains(
+  "tokenRequested','tokenReturned','websocketConnected'",
+  "LiveKit sentinel RPC does not require staged LiveKit evidence",
+);
+contains(
+  "p_physical_proof_status <> run_value.physical_proof_status",
+  "product finding RPC does not bind proof status to the referenced sentinel run",
+);
+contains(
+  "not run_value.evidence_manifest_hash = any(p_evidence_hashes)",
+  "product finding RPC does not require the referenced sentinel evidence hash",
+);
+contains(
   "entered_collective_governance",
   "product findings do not enter collective governance",
 );

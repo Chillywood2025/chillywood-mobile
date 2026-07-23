@@ -71,8 +71,12 @@ contains(
   "independence status does not count distinct outputs",
 );
 contains(
-  "provider_count >= 2 or family_count >= 2",
-  "independence status does not require provider or model-family diversity",
+  "provider_count >= 2",
+  "independence status does not require cross-provider diversity",
+);
+contains(
+  "correlation_class = 'cross_provider'",
+  "independence status does not require cross-provider correlation",
 );
 contains(
   "MODEL_INDEPENDENCE_PROVIDER_REQUIRED",
@@ -84,20 +88,15 @@ const independenceSatisfied = (rows, requiredCount) => {
   const distinctOutputs = new Set(rows.map((row) => row.outputHash)).size;
   const blindCount = rows.filter((row) => row.blindFirstRound).length;
   const providerCount = new Set(rows.map((row) => row.providerHash)).size;
-  const familyCount = new Set(rows.map((row) => `${row.providerHash}:${row.family}`)).size;
   const hasIndependentClass = rows.some((row) =>
-    [
-      "cross_provider",
-      "cross_model_family",
-      "same_provider_distinct_model_family",
-    ].includes(row.correlationClass)
+    row.correlationClass === "cross_provider"
   );
   return rows.length >= requiredCount &&
     distinctExecutions >= requiredCount &&
     distinctOutputs >= requiredCount &&
     blindCount >= requiredCount &&
     hasIndependentClass &&
-    (providerCount >= 2 || familyCount >= 2);
+    providerCount >= 2;
 };
 
 assert(
@@ -141,6 +140,27 @@ assert(
     },
   ], 2),
   "repeated same-model output fixture should not satisfy independence",
+);
+assert(
+  !independenceSatisfied([
+    {
+      executionIdentity: "a",
+      outputHash: "1",
+      providerHash: "provider-a",
+      family: "family-a",
+      blindFirstRound: true,
+      correlationClass: "same_provider_distinct_model_family",
+    },
+    {
+      executionIdentity: "b",
+      outputHash: "2",
+      providerHash: "provider-a",
+      family: "family-b",
+      blindFirstRound: true,
+      correlationClass: "same_provider_distinct_model_family",
+    },
+  ], 2),
+  "same-provider distinct-family fixture should not satisfy independence",
 );
 
 if (failures.length > 0) {

@@ -40,6 +40,11 @@ contains(
 );
 contains(
   migration,
+  "create function public.governance_service_identity_allows_operation",
+  "missing service identity to operation allowlist",
+);
+contains(
+  migration,
   "create function public.governance_assert_two_party_service_principal",
   "missing database service-principal verifier",
 );
@@ -52,6 +57,21 @@ contains(
   migration,
   "assertion.assertion_hash = encode(",
   "service-principal verifier does not bind a server-side assertion hash",
+);
+contains(
+  migration,
+  "create function public.governance_approved_execution_is_live",
+  "missing post-claim execution liveness verifier",
+);
+contains(
+  migration,
+  "create function public.governance_switch_target_hash",
+  "missing deterministic approved switch target binding",
+);
+contains(
+  migration,
+  "p_target_resource_hash <> public.governance_switch_target_hash",
+  "approved switch execution does not recompute target hash from switch payload",
 );
 contains(
   migration,
@@ -118,6 +138,11 @@ contains(
   "SUPABASE_SERVICE_ROLE_KEY",
   "worker endpoint does not use the service principal path",
 );
+contains(
+  workerEndpoint,
+  "switchTargetHash",
+  "worker endpoint does not derive switch target hash from exact switch payload",
+);
 notContains(
   workerEndpoint,
   "governance_record_owner_approval",
@@ -147,6 +172,21 @@ contains(
   dbTest,
   "single-use approval cannot replay after first claim",
   "database suite does not prove replay is denied",
+);
+contains(
+  dbTest,
+  "post-claim task cancellation blocks execution transition",
+  "database suite does not prove cancellation blocks claimed execution",
+);
+contains(
+  dbTest,
+  "post-claim Owner revocation blocks execution transition",
+  "database suite does not prove revocation blocks claimed execution",
+);
+contains(
+  dbTest,
+  "approved switch execution rejects a different switch key",
+  "database suite does not prove switch target payload binding",
 );
 
 if (failures.length > 0) {

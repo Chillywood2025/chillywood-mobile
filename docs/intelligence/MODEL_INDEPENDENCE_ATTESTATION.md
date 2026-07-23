@@ -13,8 +13,9 @@ Independence rules:
 - copied output hashes do not count twice;
 - blind first-round status is preserved;
 - provider/model correlation is explicit;
-- at least cross-provider or cross-model-family evidence is required for live
-  quorum;
+- cross-provider evidence is required for live quorum;
+- same-provider distinct-model-family evidence remains advisory and does not
+  satisfy live quorum by itself;
 - same-family isolated analysis remains advisory.
 
 Fail-closed status:
@@ -26,5 +27,6 @@ collective approval from repeated calls to one model/provider.
 Local proof:
 
 - `npm run test:cognitive-model-independence`: passed.
-- pgTAP verifies a single advisory model execution returns
+- pgTAP verifies a single advisory model execution and same-provider
+  distinct-model-family executions return
   `MODEL_INDEPENDENCE_PROVIDER_REQUIRED`.

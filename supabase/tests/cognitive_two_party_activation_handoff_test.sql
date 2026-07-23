@@ -129,7 +129,7 @@ insert into public.governance_decision_manifests(
   repeat('6',64),repeat('c',64),'{}'::text[],repeat('d',64),
   '{}'::text[],repeat('e',64),repeat('f',64),repeat('1',64),
   repeat('2',64),repeat('3',64),'low',array['two-party-test'],
-  repeat('4',64),repeat('9',64),1,repeat('3',64),repeat('5',64),
+  repeat('4',64),repeat('9',64),2,repeat('3',64),repeat('5',64),
   'finalized',transaction_timestamp()+interval '1 day',
   transaction_timestamp()
 );
@@ -141,6 +141,25 @@ create temporary table two_party_fixture(
   execution_id uuid
 );
 grant select, insert, update on two_party_fixture to authenticated, service_role;
+
+create temporary table two_party_liveness_fixture(
+  fixture_key text primary key,
+  approval_version_id uuid,
+  approval_hash text,
+  execution_id uuid
+);
+grant select, insert, update on two_party_liveness_fixture to authenticated, service_role;
+
+create temporary table two_party_target_hashes(
+  switch_target_hash text not null
+);
+insert into two_party_target_hashes values (
+  encode(extensions.digest(convert_to(
+    'set_switch|cognitive_livekit_experience_sentinel_enabled|true|two-party-test',
+    'UTF8'
+  ), 'sha256'), 'hex')
+);
+grant select on two_party_target_hashes to authenticated, service_role;
 
 select ok(
   (
@@ -198,7 +217,7 @@ from (
     'codex/cognitive-two-party-fixture',
     'none',
     'set_switch',
-    repeat('7',64),
+    (select switch_target_hash from two_party_target_hashes),
     '{}'::text[],
     '{}'::text[],
     '{}'::text[],
@@ -232,7 +251,8 @@ select throws_ok(
     'b1000000-0000-0000-0000-000000000001',
     'b0000000-0000-0000-0000-000000000001',
     'Chillywood2025/chillywood-mobile','codex/cognitive-two-party-fixture',
-    'shared','production','none','set_switch',repeat('7',64),repeat('9',64),
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
     repeat('8',64),repeat('9',64),repeat('3',64)
   )$$,
   '42501',
@@ -254,7 +274,8 @@ select throws_ok(
     'b7000000-0000-0000-0000-000000000001','non-owner-attempt',
     repeat('4',64),repeat('6',64),repeat('5',40),repeat('6',64),
     repeat('4',64),'Chillywood2025/chillywood-mobile',
-    'codex/cognitive-two-party-fixture','none','set_switch',repeat('7',64),
+    'codex/cognitive-two-party-fixture','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),
     '{}'::text[],'{}'::text[],'{}'::text[],repeat('9',64),1,1,1024,1,
     repeat('8',64),array['two-party-test'],repeat('9',64),repeat('3',64),
     interval '24 hours'
@@ -311,7 +332,8 @@ select throws_ok(
     'b7000000-0000-0000-0000-000000000001','service-owner-attempt',
     repeat('4',64),repeat('6',64),repeat('5',40),repeat('6',64),
     repeat('4',64),'Chillywood2025/chillywood-mobile',
-    'codex/cognitive-two-party-fixture','none','set_switch',repeat('7',64),
+    'codex/cognitive-two-party-fixture','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),
     '{}'::text[],'{}'::text[],'{}'::text[],repeat('9',64),1,1,1024,1,
     repeat('8',64),array['two-party-test'],repeat('9',64),repeat('3',64),
     interval '24 hours'
@@ -336,7 +358,8 @@ from (
     'b0000000-0000-0000-0000-000000000001',
     'Chillywood2025/chillywood-mobile',
     'codex/cognitive-two-party-fixture',
-    'shared','production','none','set_switch',repeat('7',64),repeat('9',64),
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
     repeat('8',64),repeat('9',64),repeat('3',64)
   ) result
 ) claim;
@@ -355,7 +378,8 @@ select throws_ok(
     'b1000000-0000-0000-0000-000000000001',
     'b0000000-0000-0000-0000-000000000001',
     'Chillywood2025/chillywood-mobile','codex/cognitive-two-party-fixture',
-    'shared','production','none','set_switch',repeat('7',64),repeat('9',64),
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
     repeat('8',64),repeat('9',64),repeat('3',64)
   )$$,
   'P0001',
@@ -372,7 +396,8 @@ select throws_ok(
     'b1000000-0000-0000-0000-000000000001',
     'b0000000-0000-0000-0000-000000000001',
     'Chillywood2025/chillywood-mobile','codex/cognitive-two-party-fixture',
-    'shared','production','none','set_switch',repeat('7',64),repeat('9',64),
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
     repeat('8',64),repeat('9',64),repeat('3',64)
   )$$,
   'P0001',
@@ -399,6 +424,34 @@ select is(
   'executing',
   'service worker enters executing after preflight'
 );
+select throws_ok(
+  $$select public.governance_execute_approved_switch(
+    (select execution_id from two_party_fixture where execution_id is not null),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'cognitive_visual_experience_sentinel_enabled',
+    true,
+    'two-party-test',
+    (select switch_target_hash from two_party_target_hashes)
+  )$$,
+  'P0001',
+  'two_party_switch_execution_rejected',
+  'approved switch execution rejects a different switch key with the approved target hash'
+);
+select throws_ok(
+  $$select public.governance_execute_approved_switch(
+    (select execution_id from two_party_fixture where execution_id is not null),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'cognitive_livekit_experience_sentinel_enabled',
+    false,
+    'two-party-test',
+    (select switch_target_hash from two_party_target_hashes)
+  )$$,
+  'P0001',
+  'two_party_switch_execution_rejected',
+  'approved switch execution rejects a different desired state with the approved target hash'
+);
 select is(
   public.governance_execute_approved_switch(
     (select execution_id from two_party_fixture where execution_id is not null),
@@ -407,7 +460,7 @@ select is(
     'cognitive_livekit_experience_sentinel_enabled',
     true,
     'two-party-test',
-    repeat('7',64)
+    (select switch_target_hash from two_party_target_hashes)
   )->>'enabled',
   'true',
   'service worker executes a switch change only after exact approval'
@@ -464,6 +517,195 @@ select throws_ok(
 );
 reset role;
 
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  true
+);
+insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
+select
+  'cancelled-after-claim',
+  (result->>'approvalVersionId')::uuid,
+  result->>'approvalHash'
+from (
+  select public.governance_record_owner_approval(
+    'b7000000-0000-0000-0000-000000000001',
+    'post-claim-cancel-test',
+    repeat('4',64),
+    repeat('6',64),
+    repeat('5',40),
+    repeat('6',64),
+    repeat('4',64),
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'none',
+    'set_switch',
+    (select switch_target_hash from two_party_target_hashes),
+    '{}'::text[],
+    '{}'::text[],
+    '{}'::text[],
+    repeat('9',64),
+    1,
+    1,
+    1024,
+    1,
+    repeat('8',64),
+    array['two-party-test'],
+    repeat('9',64),
+    repeat('3',64),
+    interval '24 hours'
+  ) result
+) approval;
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+update two_party_liveness_fixture
+set execution_id = (result->>'executionId')::uuid
+from (
+  select public.governance_claim_approved_action(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='cancelled-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('5',64),
+    repeat('6',64),
+    (select approval_hash from two_party_liveness_fixture where fixture_key='cancelled-after-claim'),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
+    repeat('8',64),repeat('9',64),repeat('3',64)
+  ) result
+) claim
+where fixture_key='cancelled-after-claim';
+reset role;
+update public.intelligence_tasks
+set cancelled_at = transaction_timestamp()
+where id = 'b1000000-0000-0000-0000-000000000001';
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.governance_begin_approved_execution(
+    (select execution_id from two_party_liveness_fixture where fixture_key='cancelled-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'preflight'
+  )$$,
+  'P0001',
+  'two_party_execution_transition_rejected',
+  'post-claim task cancellation blocks execution transition'
+);
+reset role;
+update public.intelligence_tasks
+set cancelled_at = null
+where id = 'b1000000-0000-0000-0000-000000000001';
+
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  true
+);
+insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
+select
+  'revoked-after-claim',
+  (result->>'approvalVersionId')::uuid,
+  result->>'approvalHash'
+from (
+  select public.governance_record_owner_approval(
+    'b7000000-0000-0000-0000-000000000001',
+    'post-claim-revoke-test',
+    repeat('4',64),
+    repeat('6',64),
+    repeat('5',40),
+    repeat('6',64),
+    repeat('4',64),
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'none',
+    'set_switch',
+    (select switch_target_hash from two_party_target_hashes),
+    '{}'::text[],
+    '{}'::text[],
+    '{}'::text[],
+    repeat('9',64),
+    1,
+    2,
+    1024,
+    2,
+    repeat('8',64),
+    array['two-party-test'],
+    repeat('9',64),
+    repeat('3',64),
+    interval '24 hours'
+  ) result
+) approval;
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+update two_party_liveness_fixture
+set execution_id = (result->>'executionId')::uuid
+from (
+  select public.governance_claim_approved_action(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='revoked-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('5',64),
+    repeat('6',64),
+    (select approval_hash from two_party_liveness_fixture where fixture_key='revoked-after-claim'),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
+    repeat('8',64),repeat('9',64),repeat('3',64)
+  ) result
+) claim
+where fixture_key='revoked-after-claim';
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  true
+);
+select is(
+  public.governance_revoke_owner_approval(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='revoked-after-claim'),
+    repeat('e',64)
+  )->>'status',
+  'revoked',
+  'Owner revocation can invalidate a claimed multi-use approval'
+);
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.governance_begin_approved_execution(
+    (select execution_id from two_party_liveness_fixture where fixture_key='revoked-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'preflight'
+  )$$,
+  'P0001',
+  'two_party_execution_transition_rejected',
+  'post-claim Owner revocation blocks execution transition'
+);
+reset role;
+
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select throws_ok(
@@ -503,6 +745,12 @@ select public.governance_register_two_party_service_principal(
   array['product_quality_triage'],
   transaction_timestamp()+interval '1 day'
 );
+select public.governance_register_two_party_service_principal(
+  'livekit_experience_sentinel',
+  encode(extensions.digest(convert_to('synthetic-livekit-assertion-000000000000','UTF8'),'sha256'),'hex'),
+  array['livekit_experience_canary'],
+  transaction_timestamp()+interval '1 day'
+);
 reset role;
 
 set local role service_role;
@@ -530,29 +778,104 @@ select is(
   'MODEL_INDEPENDENCE_PROVIDER_REQUIRED',
   'single model execution cannot claim independent quorum'
 );
+select public.governance_record_model_execution_attestation(
+  'same-provider-assessment',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','architecture_engineering',repeat('a',64),
+  'family-a','model-a',repeat('b',64),repeat('c',64),repeat('d',64),
+  repeat('e',64),true,'same_provider_distinct_model_family',0.1,100,
+  'model_independence_attestation_service',
+  'synthetic-model-assertion-000000000000'
+);
+select public.governance_record_model_execution_attestation(
+  'same-provider-assessment',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','security_privacy',repeat('a',64),
+  'family-b','model-b',repeat('c',64),repeat('d',64),repeat('e',64),
+  repeat('f',64),true,'same_provider_distinct_model_family',0.1,100,
+  'model_independence_attestation_service',
+  'synthetic-model-assertion-000000000000'
+);
+select is(
+  public.governance_model_independence_status(
+    'b1000000-0000-0000-0000-000000000001',
+    'same-provider-assessment',
+    2
+  )->>'status',
+  'MODEL_INDEPENDENCE_PROVIDER_REQUIRED',
+  'same-provider distinct-model attestations cannot claim independent quorum'
+);
 reset role;
 
 create temporary table two_party_sentinel_run(id uuid);
-insert into public.product_experience_sentinel_runs(
-  id, task_id, project_id, platform, environment, sentinel_key,
-  route_or_surface, runtime_identity_hash, evidence_manifest_hash,
-  metric_manifest, result_status, physical_proof_status
-) values (
-  'b8000000-0000-0000-0000-000000000001',
+grant select, insert on two_party_sentinel_run to service_role;
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','livekit_experience_sentinel','Live',
+    repeat('6',64),repeat('7',64),
+    '{
+      "tokenRequested":true,
+      "tokenReturned":true,
+      "websocketConnected":true,
+      "iceState":"connected",
+      "roomConnected":true,
+      "localTrackPublished":true,
+      "remoteParticipantJoined":true,
+      "remoteTrackSubscribed":true,
+      "firstAudioVideoObserved":true,
+      "connectingResolved":true
+    }'::jsonb,
+    'passed','source_only',
+    'livekit_experience_sentinel','synthetic-livekit-assertion-000000000000'
+  )$$,
+  'P0001',
+  'product_experience_sentinel_run_rejected',
+  'LiveKit sentinel cannot pass from source-only evidence'
+);
+insert into two_party_sentinel_run(id)
+select public.product_experience_record_sentinel_run(
   'b1000000-0000-0000-0000-000000000001',
   'b0000000-0000-0000-0000-000000000001',
   'shared','production','livekit_experience_sentinel','Live',
   repeat('6',64),repeat('7',64),
-  '{"uiState":"connecting","backendState":"healthy","mediaState":"missing"}'::jsonb,
-  'finding_created','installed_ui_observed'
+  '{
+    "tokenRequested":true,
+    "tokenReturned":true,
+    "websocketConnected":true,
+    "iceState":"connected",
+    "roomConnected":true,
+    "localTrackPublished":true,
+    "remoteParticipantJoined":true,
+    "remoteTrackSubscribed":true,
+    "firstAudioVideoObserved":false,
+    "connectingResolved":false
+  }'::jsonb,
+  'finding_created','installed_ui_observed',
+  'livekit_experience_sentinel','synthetic-livekit-assertion-000000000000'
 );
-insert into two_party_sentinel_run values ('b8000000-0000-0000-0000-000000000001');
-select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.product_quality_record_finding(
+    (select id from two_party_sentinel_run),
+    'livekit-proof-mismatch-fixture','Live',repeat('8',64),'high',repeat('9',64),
+    array[repeat('7',64)],'installed_ui_state',0.9000,'confirmed_defect',
+    repeat('b',64),repeat('c',64),repeat('d',64),'source_only',
+    'product_quality_triage_router','synthetic-triage-assertion-000000000000'
+  )$$,
+  'P0001',
+  'product_quality_finding_rejected',
+  'product triage rejects proof-status mismatch against the sentinel run'
+);
 select is(
   public.product_quality_record_finding(
     (select id from two_party_sentinel_run),
     'livekit-connecting-fixture','Live',repeat('8',64),'high',repeat('9',64),
-    array[repeat('a',64)],'installed_ui_state',0.9000,'confirmed_defect',
+    array[repeat('7',64),repeat('a',64)],'installed_ui_state',0.9000,'confirmed_defect',
     repeat('b',64),repeat('c',64),repeat('d',64),'installed_ui_observed',
     'product_quality_triage_router','synthetic-triage-assertion-000000000000'
   ) is not null,

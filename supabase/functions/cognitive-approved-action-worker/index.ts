@@ -81,6 +81,9 @@ const createServiceClient = (): SupabaseClientLike => {
 const workerAssertion = (): string =>
   readRequiredSecret("COGNITIVE_APPROVED_ACTION_WORKER_ASSERTION");
 
+const switchTargetHash = (switchKey: string, enabled: boolean, policyVersion: string) =>
+  sha256Hex(`set_switch|${switchKey}|${enabled ? "true" : "false"}|${policyVersion}`);
+
 const claimApprovedAction = async (
   serviceClient: SupabaseClientLike,
   payload: Record<string, unknown>,
@@ -149,13 +152,16 @@ const executeApprovedSwitch = async (
   serviceClient: SupabaseClientLike,
   payload: Record<string, unknown>,
 ): Promise<Response> => {
+  const switchKey = toText(payload.switchKey);
+  const enabled = payload.enabled === true;
+  const policyVersion = toText(payload.policyVersion);
   const result = await serviceClient.rpc("governance_execute_approved_switch", {
-    p_enabled: payload.enabled === true,
+    p_enabled: enabled,
     p_execution_id: toText(payload.executionId),
-    p_policy_version: toText(payload.policyVersion),
+    p_policy_version: policyVersion,
     p_service_identity: SERVICE_IDENTITY,
-    p_switch_key: toText(payload.switchKey),
-    p_target_resource_hash: toText(payload.targetResourceHash),
+    p_switch_key: switchKey,
+    p_target_resource_hash: await switchTargetHash(switchKey, enabled, policyVersion),
     p_worker_assertion: workerAssertion(),
   });
   if (result.error || !isRecord(result.data)) {

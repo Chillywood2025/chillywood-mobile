@@ -572,6 +572,33 @@ begin
 end
 $$;
 
+create function public.governance_service_identity_allows_operation(
+  p_service_identity text,
+  p_operation text
+)
+returns boolean
+language sql
+immutable
+security definer
+set search_path = ''
+as $$
+  select case p_service_identity
+    when 'cognitive_approved_action_worker' then p_operation = any(array[
+      'bootstrap_control_plane','set_switch','public_research_ingest',
+      'collective_deliberation','github_draft_pr'
+    ]::text[])
+    when 'product_experience_baseline_service' then p_operation = 'visual_experience_canary'
+    when 'livekit_experience_sentinel' then p_operation = 'livekit_experience_canary'
+    when 'visual_product_experience_sentinel' then p_operation = 'visual_experience_canary'
+    when 'installed_journey_sentinel' then p_operation = 'installed_journey_canary'
+    when 'product_quality_triage_router' then p_operation = 'product_quality_triage'
+    when 'model_independence_attestation_service' then p_operation = 'model_independence_attestation'
+    else false
+  end;
+$$;
+revoke all on function public.governance_service_identity_allows_operation(text,text)
+  from public, anon, authenticated, service_role;
+
 create function public.governance_assert_two_party_service_principal(
   p_service_identity text,
   p_worker_assertion text,
@@ -594,6 +621,7 @@ begin
      or p_worker_assertion is null
      or octet_length(p_worker_assertion) not between 32 and 1024
      or p_operation is null
+     or not public.governance_service_identity_allows_operation(p_service_identity, p_operation)
      or not exists (
        select 1
        from public.governance_two_party_service_assertions assertion
@@ -650,6 +678,13 @@ begin
        'livekit_experience_canary','visual_experience_canary',
        'installed_journey_canary','product_quality_triage','github_draft_pr'
      ]::text[]
+     or exists (
+       select 1
+       from unnest(p_allowed_operations) allowed_operation
+       where not public.governance_service_identity_allows_operation(
+         p_service_identity, allowed_operation
+       )
+     )
      or p_expires_at <= transaction_timestamp()
      or p_expires_at > transaction_timestamp() + interval '365 days' then
     raise exception 'two_party_service_principal_registration_rejected'
@@ -703,16 +738,50 @@ grant execute on function public.governance_register_two_party_service_principal
 
 create function public.governance_approval_event_next_sequence(p_approval_record_id uuid)
 returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  next_sequence integer;
+begin
+  perform 1
+  from public.governance_owner_approval_records
+  where id = p_approval_record_id
+  for update;
+  if not found then
+    raise exception 'two_party_approval_record_missing' using errcode = 'P0001';
+  end if;
+  select coalesce(max(event_sequence), 0) + 1
+    into next_sequence
+  from public.governance_owner_approval_lifecycle_events
+  where approval_record_id = p_approval_record_id;
+  return next_sequence;
+end;
+$$;
+revoke all on function public.governance_approval_event_next_sequence(uuid)
+  from public, anon, authenticated, service_role;
+
+create function public.governance_switch_target_hash(
+  p_switch_key text,
+  p_enabled boolean,
+  p_policy_version text
+)
+returns text
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select coalesce(max(event_sequence), 0) + 1
-  from public.governance_owner_approval_lifecycle_events
-  where approval_record_id = p_approval_record_id;
+  select encode(extensions.digest(convert_to(concat_ws(
+    '|',
+    'set_switch',
+    p_switch_key,
+    case when p_enabled then 'true' else 'false' end,
+    p_policy_version
+  ), 'UTF8'), 'sha256'), 'hex');
 $$;
-revoke all on function public.governance_approval_event_next_sequence(uuid)
+revoke all on function public.governance_switch_target_hash(text,boolean,text)
   from public, anon, authenticated, service_role;
 
 create function public.governance_record_owner_approval(
@@ -1154,6 +1223,73 @@ $$;
 revoke all on function public.governance_approval_emergency_active()
   from public, anon, authenticated, service_role;
 
+create function public.governance_task_writes_allowed(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.governance_approval_emergency_active()
+    and exists (
+      select 1
+      from public.intelligence_tasks task
+      where task.id = p_task_id
+        and task.project_id = p_project_id
+        and task.platform = p_platform
+        and task.environment = p_environment
+        and task.cancelled_at is null
+        and task.quarantined_at is null
+        and transaction_timestamp() < task.deadman_at
+    );
+$$;
+revoke all on function public.governance_task_writes_allowed(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment
+) from public, anon, authenticated, service_role;
+
+create function public.governance_approved_execution_is_live(p_execution_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.governance_approved_action_executions execution
+    join public.governance_owner_approval_versions version
+      on version.id = execution.approval_version_id
+     and version.task_id = execution.task_id
+     and version.project_id = execution.project_id
+     and version.platform = execution.platform
+     and version.environment = execution.environment
+    join public.governance_owner_approval_version_states state
+      on state.approval_version_id = execution.approval_version_id
+     and state.task_id = execution.task_id
+     and state.project_id = execution.project_id
+     and state.platform = execution.platform
+     and state.environment = execution.environment
+    where execution.id = p_execution_id
+      and public.governance_task_writes_allowed(
+        execution.task_id, execution.project_id,
+        execution.platform, execution.environment
+      )
+      and transaction_timestamp() >= version.valid_from
+      and transaction_timestamp() < version.expires_at
+      and state.state in ('active','consumed')
+      and state.revoked_at is null
+      and state.superseded_at is null
+      and state.cancelled_at is null
+  );
+$$;
+revoke all on function public.governance_approved_execution_is_live(uuid)
+  from public, anon, authenticated, service_role;
+
 create function public.governance_claim_approved_action(
   p_approval_version_id uuid,
   p_service_identity text,
@@ -1345,6 +1481,7 @@ begin
   );
   if execution_value.service_identity <> service_identity_value
      or not public.governance_approval_emergency_active()
+     or not public.governance_approved_execution_is_live(p_execution_id)
      or (
        execution_value.state = 'claimed' and p_next_state <> 'preflight'
      )
@@ -1423,6 +1560,7 @@ begin
   );
   if execution_value.service_identity <> service_identity_value
      or not public.governance_approval_emergency_active()
+     or not public.governance_approved_execution_is_live(p_execution_id)
      or execution_value.state <> 'evaluating'
      or p_execution_receipt_hash !~ '^[a-f0-9]{64}$'
      or p_evaluator_proof_hash !~ '^[a-f0-9]{64}$' then
@@ -1512,6 +1650,7 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
+     or not public.governance_approved_execution_is_live(p_execution_id)
      or execution_value.state not in ('claimed','preflight','executing','postflight','evaluating')
      or p_failure_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'two_party_execution_failure_rejected'
@@ -1579,6 +1718,10 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
+     or (
+       p_transition in ('rollback_pending','rollback_running')
+       and not public.governance_approved_execution_is_live(p_execution_id)
+     )
      or p_transition not in (
        'rollback_pending','rollback_running','rollback_succeeded',
        'rollback_failed','quarantined'
@@ -1674,8 +1817,12 @@ begin
      or execution_value.operation <> 'set_switch'
      or execution_value.state <> 'executing'
      or not public.governance_approval_emergency_active()
+     or not public.governance_approved_execution_is_live(p_execution_id)
      or version_value.id is null
      or version_value.target_resource_hash <> p_target_resource_hash
+     or p_target_resource_hash <> public.governance_switch_target_hash(
+       p_switch_key, p_enabled, p_policy_version
+     )
      or p_switch_key not in (
        'cognitive_research_enabled',
        'cognitive_memory_enabled',
@@ -1962,6 +2109,11 @@ begin
   if p_service_identity <> 'model_independence_attestation_service' then
     raise exception 'model_attestation_service_required' using errcode = '42501';
   end if;
+  if not public.governance_task_writes_allowed(
+    p_task_id, p_project_id, p_platform, p_environment
+  ) then
+    raise exception 'model_attestation_task_not_live' using errcode = 'P0001';
+  end if;
   insert into public.governance_model_execution_attestations(
     assessment_id, task_id, project_id, platform, environment, council_role,
     provider_identity_hash, model_family, model_version, execution_identity_hash,
@@ -1992,31 +2144,65 @@ create function public.governance_model_independence_status(
   p_required_count integer default 3
 )
 returns jsonb
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
-  with rows as (
-    select *
-    from public.governance_model_execution_attestations
-    where task_id = p_task_id
-      and assessment_id = p_assessment_id
-  ),
-  aggregate as (
-    select
-      count(*)::integer as total_count,
-      count(distinct execution_identity_hash)::integer as distinct_executions,
-      count(distinct output_hash)::integer as distinct_outputs,
-      count(*) filter (where blind_first_round)::integer as blind_count,
-      count(distinct provider_identity_hash)::integer as provider_count,
-      count(distinct provider_identity_hash || ':' || model_family)::integer as family_count,
-      bool_or(correlation_class in (
-        'cross_provider','cross_model_family','same_provider_distinct_model_family'
-      )) as has_independent_class
-    from rows
-  )
-  select jsonb_build_object(
+declare
+  claims jsonb := coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb;
+  request_role text := coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    claims->>'role'
+  );
+  task_value public.intelligence_tasks%rowtype;
+  total_count integer;
+  distinct_executions integer;
+  distinct_outputs integer;
+  blind_count integer;
+  provider_count integer;
+  family_count integer;
+  has_cross_provider_class boolean;
+  independence_satisfied boolean;
+begin
+  select * into task_value
+  from public.intelligence_tasks
+  where id = p_task_id;
+  if task_value.id is null
+     or (
+       request_role <> 'service_role'
+       and not public.cognitive_can_read_scope(
+         task_value.project_id, task_value.id, task_value.platform
+       )
+     ) then
+    raise exception 'model_independence_status_scope_denied'
+      using errcode = '42501';
+  end if;
+
+  select
+    count(*)::integer,
+    count(distinct execution_identity_hash)::integer,
+    count(distinct output_hash)::integer,
+    count(*) filter (where blind_first_round)::integer,
+    count(distinct provider_identity_hash)::integer,
+    count(distinct provider_identity_hash || ':' || model_family)::integer,
+    coalesce(bool_or(correlation_class = 'cross_provider'), false)
+  into
+    total_count, distinct_executions, distinct_outputs, blind_count,
+    provider_count, family_count, has_cross_provider_class
+  from public.governance_model_execution_attestations
+  where task_id = p_task_id
+    and assessment_id = p_assessment_id;
+
+  independence_satisfied :=
+    total_count >= p_required_count
+    and distinct_executions >= p_required_count
+    and distinct_outputs >= p_required_count
+    and blind_count >= p_required_count
+    and provider_count >= 2
+    and has_cross_provider_class;
+
+  return jsonb_build_object(
     'assessmentId', p_assessment_id,
     'requiredCount', p_required_count,
     'totalCount', total_count,
@@ -2026,25 +2212,15 @@ as $$
     'providerCount', provider_count,
     'modelFamilyCount', family_count,
     'independenceSatisfied',
-      total_count >= p_required_count
-      and distinct_executions >= p_required_count
-      and distinct_outputs >= p_required_count
-      and blind_count >= p_required_count
-      and has_independent_class
-      and (provider_count >= 2 or family_count >= 2),
+      independence_satisfied,
     'status',
       case
-        when total_count >= p_required_count
-          and distinct_executions >= p_required_count
-          and distinct_outputs >= p_required_count
-          and blind_count >= p_required_count
-          and has_independent_class
-          and (provider_count >= 2 or family_count >= 2)
+        when independence_satisfied
         then 'MODEL_INDEPENDENCE_VERIFIED'
         else 'MODEL_INDEPENDENCE_PROVIDER_REQUIRED'
       end
-  )
-  from aggregate;
+  );
+end;
 $$;
 revoke all on function public.governance_model_independence_status(uuid,text,integer)
   from public, anon;
@@ -2085,10 +2261,54 @@ begin
   );
   if expected_operation is null
      or p_service_identity <> p_sentinel_key
+     or not public.governance_task_writes_allowed(
+       p_task_id, p_project_id, p_platform, p_environment
+     )
      or p_result_status not in ('passed','finding_created','blocked','failed')
      or p_physical_proof_status not in (
        'installed_ui_observed','simulator_observed','source_only',
        'provider_blocked','device_unavailable','new_binary_or_ota_required'
+     )
+     or (
+       p_result_status in ('passed','finding_created')
+       and p_physical_proof_status not in ('installed_ui_observed','simulator_observed')
+     )
+     or (
+       p_sentinel_key = 'livekit_experience_sentinel'
+       and (
+         not p_metric_manifest ?& array[
+           'tokenRequested','tokenReturned','websocketConnected','iceState',
+           'roomConnected','localTrackPublished','remoteParticipantJoined',
+           'remoteTrackSubscribed','firstAudioVideoObserved','connectingResolved'
+         ]
+         or (
+           p_result_status = 'passed'
+           and not (
+             p_metric_manifest->'tokenReturned' = 'true'::jsonb
+             and p_metric_manifest->'websocketConnected' = 'true'::jsonb
+             and p_metric_manifest->'roomConnected' = 'true'::jsonb
+             and p_metric_manifest->'localTrackPublished' = 'true'::jsonb
+             and p_metric_manifest->'remoteParticipantJoined' = 'true'::jsonb
+             and p_metric_manifest->'remoteTrackSubscribed' = 'true'::jsonb
+             and p_metric_manifest->'firstAudioVideoObserved' = 'true'::jsonb
+             and p_metric_manifest->'connectingResolved' = 'true'::jsonb
+           )
+         )
+       )
+     )
+     or (
+       p_sentinel_key = 'visual_product_experience_sentinel'
+       and not p_metric_manifest ?& array[
+         'screenshotEvidenceHash','cardViewportWidthRatio',
+         'cardsVisibleAboveFold','aspectRatio','densityScore'
+       ]
+     )
+     or (
+       p_sentinel_key = 'installed_journey_sentinel'
+       and not p_metric_manifest ?& array[
+         'journeyStepCount','unresolvedStateCount',
+         'screenshotEvidenceHash','sourceRuntimeHash'
+       ]
      )
      or not exists (
        select 1 from public.cognitive_governance_switches switch
@@ -2165,8 +2385,22 @@ begin
   where id = p_sentinel_run_id
   for share;
   if run_value.id is null
+     or not public.governance_task_writes_allowed(
+       run_value.task_id, run_value.project_id,
+       run_value.platform, run_value.environment
+     )
+     or p_route_or_surface <> run_value.route_or_surface
+     or p_physical_proof_status <> run_value.physical_proof_status
      or p_evidence_hashes is null
-     or not public.governance_hash_array_valid(p_evidence_hashes, 1, 64) then
+     or not public.governance_hash_array_valid(p_evidence_hashes, 1, 64)
+     or not run_value.evidence_manifest_hash = any(p_evidence_hashes)
+     or (
+       p_reproduction_state in ('confirmed_defect','likely_defect')
+       and (
+         run_value.result_status not in ('finding_created','failed')
+         or p_physical_proof_status not in ('installed_ui_observed','simulator_observed')
+       )
+     ) then
     raise exception 'product_quality_finding_rejected' using errcode = 'P0001';
   end if;
   insert into public.product_quality_findings(
