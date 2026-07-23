@@ -59,6 +59,11 @@ const pathFixtures = [
   "docs/.yarnrc.yml",
   "docs/.pypirc",
   "docs/.gem/credentials",
+  "config/npm-token.txt",
+  "config/npm_token.txt",
+  "config/.npm-token",
+  "config/yarn-token.txt",
+  "config/github-token.txt",
 ];
 
 const sourceResult = {

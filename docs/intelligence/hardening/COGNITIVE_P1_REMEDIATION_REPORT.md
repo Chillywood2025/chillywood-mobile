@@ -368,3 +368,13 @@ source cases, 32/32 governance adversarial cases, 8/8 Edge boundary cases,
 local database suite. These are not independent approval. The exact corrective
 commit must be frozen, pass CI, and receive a fresh four-lane review with zero
 P0/P1 before deployment work may begin.
+
+Reviewer C then reproduced one remaining credential-path P1 on exact candidate
+`0e05b8064bb50f8adc608787619836ee13992f86`: package-manager and GitHub
+token filenames under the allowlisted `config/` prefix were classified as safe.
+The shared policy and actual executor now reject the fixed reproduced family:
+`npm-token`, `npm_token`, hidden `.npm-token`, `yarn-token`, and
+`github-token`, including ordinary file extensions. Source/runtime parity and
+executor-confinement tests exercise those exact cases. This is the only change
+made in response to that independent P1; a new exact-head review is still
+required.

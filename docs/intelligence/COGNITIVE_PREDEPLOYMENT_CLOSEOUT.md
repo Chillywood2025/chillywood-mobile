@@ -15,6 +15,11 @@ service identity, and credential-path confinement. Those findings are corrected
 in source and have authored regression coverage. They remain open until a fresh
 four-lane review evaluates the exact corrective head.
 
+The credential-path correction includes the independently reproduced
+`config/npm-token.txt`, `config/npm_token.txt`, `config/.npm-token`,
+`config/yarn-token.txt`, and `config/github-token.txt` family in both the
+machine-readable policy and the actual executor boundary.
+
 Deployment remains prohibited until the exact corrective head has zero P0/P1
 findings, all 40 canonical and all governance attacks pass, CI and the local
 database suite are green, dependency blockers are closed, migration and functions
