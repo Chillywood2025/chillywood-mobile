@@ -392,7 +392,7 @@ export class CognitiveCapabilityLedger {
   consume(capabilityId: string, use: CognitiveCapabilityUse, gate: CognitiveRuntimeGate): CognitiveCapabilityEvent {
     const capability = this.capabilities.get(capabilityId);
     if (!capability) throw new Error("capability_missing");
-    const blockers = authorizeCapabilityUse(capability, use, gate);
+    const blockers = [...authorizeCapabilityUse(capability, use, gate)];
     if (this.usedCallIds.has(use.callId)) blockers.push("capability_replay");
     if (blockers.length) {
       const event = { capabilityId, callId: use.callId, usageSequence: capability.nextUsageSequence, event: "rejected" as const, reason: [...new Set(blockers)].sort().join(","), at: gate.now.toISOString() };

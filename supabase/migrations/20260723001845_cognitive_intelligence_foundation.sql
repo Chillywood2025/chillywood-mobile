@@ -17,6 +17,39 @@ create type public.cognitive_data_class as enum (
   'user_derived', 'security_evidence', 'legal_hold'
 );
 
+-- Extend the existing closed staff-permission vocabulary for source-manifest
+-- readback. The normalizer remains fail-closed and this migration remains local.
+create or replace function public.platform_staff_normalize_permission_key(p_permission_key text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when lower(trim(coalesce(p_permission_key, ''))) = 'moderator_grants'
+      then 'manage_moderators'
+    when lower(trim(coalesce(p_permission_key, ''))) = any(array[
+      'support_inbox','user_lookup','content_moderation','reports_review',
+      'live_ops','billing_support_read','creator_support','legal_review',
+      'evidence_preview','dmca_review','copyright_review','evidence_export',
+      'legal_hold','legal_ops','emergency_break_glass','admin_grants',
+      'manage_moderators','audit_review','security_review',
+      'staff_permission_templates','legal_request_intake','admin.user.search',
+      'admin.user.view','admin.user.suspend','admin.user.restore',
+      'admin.support.view','admin.support.manage','admin.dmca.view',
+      'admin.dmca.manage','admin.payment_status.view',
+      'admin.refund_status.record','admin.profile_private.view',
+      'admin.room_private.view','admin.chat_evidence.view',
+      'admin.content.hide','admin.content.restore','admin.content.remove',
+      'admin.comment.moderate','admin.room.moderate',
+      'admin.live.force_end','admin.audit.view','admin.lower_role.manage',
+      'admin.cognitive.read'
+    ]::text[])
+      then lower(trim(p_permission_key))
+    else null
+  end
+$$;
+
 create or replace function public.cognitive_json_is_sanitized(payload jsonb)
 returns boolean
 language sql

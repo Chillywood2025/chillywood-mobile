@@ -107,6 +107,25 @@ select is(
 select is(public.cognitive_json_is_sanitized('{"source":"official"}'::jsonb), true, 'bounded safe JSON accepted');
 select is(public.cognitive_json_is_sanitized('{"password":"synthetic"}'::jsonb), false, 'nested secret key rejected');
 select is(public.cognitive_json_is_sanitized('{"__proto__":{"x":1}}'::jsonb), false, 'prototype pollution key rejected');
+select is(
+  public.platform_staff_normalize_permission_key('admin.cognitive.read'),
+  'admin.cognitive.read',
+  'cognitive source readback is an exact closed staff permission'
+);
+select is(
+  public.platform_staff_normalize_permission_key('admin.cognitive.execute'),
+  null,
+  'unrecognized cognitive execution permission fails closed'
+);
+select is(
+  (select count(*)::integer from pg_policies
+   where schemaname='public'
+     and policyname like '%_cognitive_exact_read'
+     and qual like '%super_admin%'
+     and qual like '%admin.cognitive.read%'),
+  34,
+  'all cognitive read policies require Owner/super-admin or the exact scoped permission'
+);
 
 insert into public.cognitive_projects(
   id, repository_full_name
