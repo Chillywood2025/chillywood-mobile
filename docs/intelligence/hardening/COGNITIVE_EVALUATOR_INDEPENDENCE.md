@@ -10,7 +10,9 @@ separate authority credential to the evidence ledger; caller-supplied booleans,
 summaries and hashes do not create ledger records. The evaluator receives only the
 ledger’s read methods and has no evidence-write method.
 A required-test manifest is derived from changed paths, affected platform and
-risk. Each required record must come from a trusted runner, use the expected
+risk. Changed paths themselves come from a trusted, commit-and-diff-bound
+manifest in the evidence ledger rather than evaluation input supplied by the
+executor or caller. Each required record must come from a trusted runner, use the expected
 command, target the final commit, have a real exit code and output hashes, and not
 be skipped.
 
@@ -22,8 +24,8 @@ owner approval.
 The undeployed scaffold intentionally configures no trusted evidence authority,
 so a caller-created ledger cannot produce `PASS`. A future deployment must add a
 separately reviewed verifier identity and credential boundary. Required tests are
-derived inside the evaluator from the final changed paths and platform; callers
-cannot submit an empty manifest to suppress them.
+derived inside the evaluator from the trusted final changed-path manifest and
+platform; callers cannot submit an empty path or test manifest to suppress them.
 
 Regression: `guard:cognitive-evaluator-independence` and
 `test:cognitive-evaluator-independence`.

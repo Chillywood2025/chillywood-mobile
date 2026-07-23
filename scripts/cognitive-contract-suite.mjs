@@ -78,15 +78,34 @@ const guardIntelligence = () => {
 };
 
 const guardResearch = async (runBehavior) => {
+  execFileSync(process.execPath, ["scripts/guard-cognitive-research-authorities.mjs"], {
+    cwd: root,
+    stdio: "pipe",
+  });
   const foundation = await loadFoundation();
   const policy = read("docs/intelligence/RESEARCH_SOURCE_POLICY.md");
+  const authorityRegistry = JSON.parse(read("config/intelligence/research-authorities.json"));
+  const migration = read("supabase/migrations/20260723001845_cognitive_intelligence_foundation.sql");
+  const foundationSource = read("_lib/cognitivePlatformFoundation.ts");
+  assert.equal(authorityRegistry.schemaVersion, 1);
+  assert.equal(new Set(authorityRegistry.authorities.map((entry) =>
+    `${entry.hostname}|${entry.sourceType}|${entry.publisher}|${entry.ownerId}`)).size, authorityRegistry.authorities.length);
+  for (const authority of authorityRegistry.authorities) {
+    const sqlTuple = `('${authority.authorityId}','${authority.hostname}','${authority.sourceType}','${authority.publisher}','${authority.ownerId}')`;
+    assert.ok(migration.includes(sqlTuple), `migration authority drift: ${authority.authorityId}`);
+    assert.ok(foundationSource.includes(`hostname: "${authority.hostname}"`), `runtime authority host drift: ${authority.hostname}`);
+    assert.ok(foundationSource.includes(`ownerId: "${authority.ownerId}"`), `runtime authority owner drift: ${authority.ownerId}`);
+    assert.ok(foundationSource.includes(`publisher: "${authority.publisher}"`), `runtime authority publisher drift: ${authority.publisher}`);
+    assert.ok(foundationSource.includes(`"${authority.sourceType}"`), `runtime authority type drift: ${authority.sourceType}`);
+  }
   requireIncludes(policy.toLowerCase(), ["primary sources first", "untrusted", "prompt injection", "freshness", "corroboration", "private user data"], "research policy");
   if (!runBehavior) return;
   const primary = {
     id: "official-1", reference: "https://docs.expo.dev/sdk", publisher: "Expo",
     publicationDate: "2026-07-01T00:00:00Z", retrievalDate: "2026-07-21T00:00:00Z",
     sourceType: "official_documentation", primary: true, trustedForTools: false,
-    canonicalUrlHash: "1".repeat(64), contentHash: "2".repeat(64),
+    canonicalUrlHash: foundation.cognitiveSha256("https://docs.expo.dev/sdk"),
+    contentHash: foundation.cognitiveSha256("A bounded official excerpt."),
     excerpt: "A bounded official excerpt.", freshnessDeadline: "2026-08-22T00:00:00Z",
     retrievalStatus: "succeeded",
     citationMetadata: { title: "Official SDK contract", locator: "sdk-contract" },
@@ -203,6 +222,22 @@ const guardExecution = async (runBehavior) => {
     skipped: false,
     completedAt: "2026-07-22T00:01:00.000Z",
   }, runnerCredential);
+  ledger.recordChangedPaths({
+    recordId: "changed-paths-review",
+    collectorId: "collector-review",
+    finalCommit: "a".repeat(40),
+    diffHash: "6".repeat(64),
+    changedPaths: ["docs/intelligence/fixture.md"],
+    observedAt: "2026-07-22T00:01:00.000Z",
+  }, "collector-review-credential");
+  ledger.recordChangedPaths({
+    recordId: "changed-paths-release-review",
+    collectorId: "collector-review",
+    finalCommit: "a".repeat(40),
+    diffHash: "6".repeat(64),
+    changedPaths: ["config/release/android-production.json"],
+    observedAt: "2026-07-22T00:01:00.000Z",
+  }, "collector-review-credential");
   const safeEvaluation = {
     evaluatorIdentity: "evaluator-review", executorIdentity: "executor-run",
     objectiveHash: "1".repeat(64), planSnapshotHash: "2".repeat(64),
@@ -210,7 +245,7 @@ const guardExecution = async (runBehavior) => {
     runEvidenceRecordId: "run-review",
     testEvidenceRecordIds: ["test-review"],
     finalCommit: "a".repeat(40),
-    changedPaths: ["docs/intelligence/fixture.md"], platform: "shared",
+    changedPathManifestRecordId: "changed-paths-review", platform: "shared",
     finalCommitAt: "2026-07-22T00:00:00.000Z",
   };
   const evaluationNow = new Date("2026-07-22T00:02:00.000Z");
@@ -224,7 +259,7 @@ const guardExecution = async (runBehavior) => {
   }, ledger.reader(), evaluationNow).blockers.includes("required_test_missing:lint"));
   assert.ok(foundation.evaluateCognitiveRun({
     ...safeEvaluation,
-    changedPaths: ["config/release/android-production.json"],
+    changedPathManifestRecordId: "changed-paths-release-review",
   }, ledger.reader(), evaluationNow).blockers.includes("physical_evidence_missing:native-runtime"));
   const unsafeLedger = new foundation.CognitiveTrustedEvidenceLedger({
     authorityId: "synthetic-contract-unsafe-authority",
@@ -252,7 +287,6 @@ const guardExecution = async (runBehavior) => {
     runEvidenceRecordId: "run-unsafe",
     testEvidenceRecordIds: [],
     runEvidenceManifestHash: unsafeLedger.manifestHash("run-unsafe", []),
-    changedPaths: [],
   };
   const unsafeResult = foundation.evaluateCognitiveRun(unsafeInput, unsafeLedger.reader(), evaluationNow);
   assert.ok(unsafeResult.blockers.includes("permission_expansion_requires_owner_review"));

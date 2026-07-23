@@ -84,6 +84,9 @@ select ok(not has_table_privilege('service_role', 'public.intelligence_tasks', '
 select ok(not has_table_privilege('service_role', 'public.execution_plans', 'INSERT'), 'service role cannot fabricate a plan directly');
 select ok(not has_table_privilege('service_role', 'public.cognitive_capabilities', 'INSERT'), 'service role cannot fabricate a capability directly');
 select ok(not has_table_privilege('service_role', 'public.cognitive_state_transition_events', 'INSERT'), 'service role cannot fabricate lifecycle evidence directly');
+select ok(not has_table_privilege('service_role', 'public.cognitive_research_authorities', 'INSERT'), 'service role cannot add a research trust anchor');
+select ok(not has_table_privilege('service_role', 'public.cognitive_research_authorities', 'UPDATE'), 'service role cannot rewrite a research trust anchor');
+select ok(not has_table_privilege('service_role', 'public.cognitive_research_authorities', 'DELETE'), 'service role cannot delete a research trust anchor');
 
 select has_function(
   'public',
@@ -1108,6 +1111,103 @@ select is(
   'rollback failure records one current critical quarantine finding'
 );
 
+insert into public.hypotheses(
+  id,task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
+  summary,evidence_metadata,data_class,retention_until,legal_hold
+) values (
+  '39000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  'ios','ci','cognitive_control_plane','judge-transition-fixture','received',
+  '{}'::jsonb,'{}'::jsonb,'operational_metadata',statement_timestamp()+interval '30 days',false
+);
+select set_config('request.jwt.claim.cognitive_actor','independent_evaluation_judge',true);
+select throws_ok(
+  $$select public.cognitive_transition_entity(
+    'hypothesis','39000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','received','planned','independent_evaluation_judge',repeat('7',64),
+    null,null,null,null
+  )$$,
+  '42501','cognitive_service_actor_mismatch',
+  'independent evaluator cannot mutate general cognitive entity state'
+);
+select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
+
+select throws_ok(
+  $$insert into public.intelligence_tasks(
+    id,project_id,task_key,platform,environment,objective_hash,status,actor_identity,
+    repository_full_name,branch_name,deadman_at,retention_until,data_class
+  ) values (
+    '29000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001','user-derived-task-fixture','ios','ci',
+    repeat('8',64),'received','cognitive_control_plane',
+    'Chillywood2025/chillywood-mobile','codex/cognitive-user-derived-fixture',
+    statement_timestamp()+interval '1 hour',statement_timestamp()+interval '30 days','user_derived'
+  )$$,
+  '23514',null,
+  'task rows cannot retain user-derived objective material'
+);
+select throws_ok(
+  $$insert into public.research_sources
+    select (jsonb_populate_record(
+      null::public.research_sources,
+      to_jsonb(source) || jsonb_build_object(
+        'id','39000000-0000-0000-0000-000000000002',
+        'dedupe_key','ancient-source-fixture',
+        'retrieval_date','2000-01-01T00:00:00Z',
+        'freshness_deadline','2126-01-01T00:00:00Z'
+      )
+    )).*
+    from public.research_sources source
+    where source.id='30000000-0000-0000-0000-000000000001'$$,
+  '23514',null,
+  'ancient caller-declared research freshness is rejected'
+);
+
+insert into public.intelligence_tasks(
+  id,project_id,task_key,platform,environment,repository_full_name,branch_name,
+  objective_hash,status,actor_identity,deadman_at,retention_until,data_class
+) values (
+  '29000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000001','research-ingestion-fixture','shared','ci',
+  'Chillywood2025/chillywood-mobile','codex/cognitive-research-ingestion',
+  repeat('9',64),'received','research_source_broker',
+  statement_timestamp()+interval '1 hour',statement_timestamp()+interval '30 days',
+  'operational_metadata'
+);
+select set_config('request.jwt.claim.cognitive_actor','research_source_broker',true);
+select lives_ok(
+  $$select public.cognitive_record_research_source(
+    '29000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000001',
+    'shared','ci','expo-docs','https://docs.expo.dev/research-source-fixture',
+    'Expo',null,statement_timestamp(),statement_timestamp()+interval '30 days',
+    'official_documentation',true,'Bounded broker-computed fixture excerpt.',
+    'Official fixture','research-source-fixture',array[repeat('a',64)],
+    'research_source_broker'
+  )$$,
+  'reviewed broker RPC computes and records research evidence hashes'
+);
+select is(
+  (select canonical_url_hash from public.research_sources
+   where task_id='29000000-0000-0000-0000-000000000002'),
+  encode(extensions.digest(
+    convert_to('https://docs.expo.dev/research-source-fixture','UTF8'),'sha256'
+  ),'hex'),
+  'canonical URL hash is broker-computed rather than caller supplied'
+);
+select is(
+  (select content_hash from public.research_sources
+   where task_id='29000000-0000-0000-0000-000000000002'),
+  encode(extensions.digest(
+    convert_to('Bounded broker-computed fixture excerpt.','UTF8'),'sha256'
+  ),'hex'),
+  'bounded evidence hash is broker-computed rather than caller supplied'
+);
+select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
+
 -- Static schema properties that back remaining behavioral tests.
 select col_is_pk('public', 'cognitive_projects', 'id', 'project identity is primary');
 select col_not_null('public', 'intelligence_tasks', 'project_id', 'task project is required');
@@ -1118,6 +1218,9 @@ select col_not_null('public', 'cognitive_capabilities', 'plan_snapshot_hash', 'c
 select col_not_null('public', 'execution_runs', 'snapshot_hash', 'run immutable snapshot hash is required');
 select col_not_null('public', 'evaluation_results', 'evaluator_identity', 'evaluator identity is required');
 select col_not_null('public', 'evaluation_results', 'executor_identity', 'executor identity is required');
+select col_not_null('public', 'execution_plan_snapshots', 'data_class', 'snapshot data class is required');
+select col_not_null('public', 'execution_plan_snapshots', 'retention_until', 'snapshot retention deadline is required');
+select col_not_null('public', 'execution_plan_snapshots', 'legal_hold', 'snapshot legal-hold state is explicit');
 select has_index('public', 'cognitive_capabilities', 'cognitive_capabilities_active_scope_idx', 'capability scope query is indexed');
 select has_index('public', 'cognitive_resource_leases', 'cognitive_resource_lease_write_active_idx', 'write lease conflict is indexed');
 select has_index('public', 'cognitive_state_transition_events', 'cognitive_state_transition_scope_idx', 'state lifecycle query is indexed');

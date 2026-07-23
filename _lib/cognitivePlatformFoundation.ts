@@ -154,6 +154,55 @@ const validFiniteNumber = (value: unknown, minimum: number, maximum: number): bo
   typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum;
 const validHash = (value: unknown): value is string =>
   typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
+const SHA256_CONSTANTS = [
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2,
+] as const;
+const rotateRight = (value: number, bits: number): number => (value >>> bits) | (value << (32 - bits));
+export const cognitiveSha256 = (text: string): string => {
+  const input = new TextEncoder().encode(text);
+  const bitLength = input.length * 8;
+  const paddedLength = Math.ceil((input.length + 9) / 64) * 64;
+  const bytes = new Uint8Array(paddedLength);
+  bytes.set(input);
+  bytes[input.length] = 0x80;
+  const view = new DataView(bytes.buffer);
+  const high = Math.floor(bitLength / 0x1_0000_0000);
+  const low = bitLength >>> 0;
+  view.setUint32(paddedLength - 8, high, false);
+  view.setUint32(paddedLength - 4, low, false);
+  const hash = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const words = new Uint32Array(64);
+  for (let offset = 0; offset < bytes.length; offset += 64) {
+    for (let index = 0; index < 16; index += 1) words[index] = view.getUint32(offset + (index * 4), false);
+    for (let index = 16; index < 64; index += 1) {
+      const a = words[index - 15];
+      const b = words[index - 2];
+      const s0 = rotateRight(a, 7) ^ rotateRight(a, 18) ^ (a >>> 3);
+      const s1 = rotateRight(b, 17) ^ rotateRight(b, 19) ^ (b >>> 10);
+      words[index] = (words[index - 16] + s0 + words[index - 7] + s1) >>> 0;
+    }
+    let [a,b,c,d,e,f,g,h] = hash;
+    for (let index = 0; index < 64; index += 1) {
+      const s1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+      const choice = (e & f) ^ (~e & g);
+      const temp1 = (h + s1 + choice + SHA256_CONSTANTS[index] + words[index]) >>> 0;
+      const s0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+      const majority = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (s0 + majority) >>> 0;
+      h=g; g=f; f=e; e=(d+temp1)>>>0; d=c; c=b; b=a; a=(temp1+temp2)>>>0;
+    }
+    hash[0]=(hash[0]+a)>>>0; hash[1]=(hash[1]+b)>>>0; hash[2]=(hash[2]+c)>>>0; hash[3]=(hash[3]+d)>>>0;
+    hash[4]=(hash[4]+e)>>>0; hash[5]=(hash[5]+f)>>>0; hash[6]=(hash[6]+g)>>>0; hash[7]=(hash[7]+h)>>>0;
+  }
+  return hash.map((value) => value.toString(16).padStart(8, "0")).join("");
+};
 const validIdentifier = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u.test(value);
 const validBranch = (value: unknown): value is string =>
@@ -375,14 +424,31 @@ export const authorizeCapabilityUse = (
 };
 
 export class CognitiveCapabilityLedger {
-  readonly capabilities = new Map<string, CognitiveCapability>();
-  readonly usedCallIds = new Set<string>();
-  readonly events: CognitiveCapabilityEvent[] = [];
-
+  readonly #capabilities = new Map<string, CognitiveCapability>();
+  readonly #usedCallIds = new Set<string>();
+  readonly #events: CognitiveCapabilityEvent[] = [];
   readonly #verifyProof: CognitiveCapabilityProofVerifier;
 
   constructor(verifyProof: CognitiveCapabilityProofVerifier) {
     this.#verifyProof = verifyProof;
+  }
+
+  capabilitySnapshot(capabilityId: string): Readonly<CognitiveCapability> | null {
+    const capability = this.#capabilities.get(capabilityId);
+    return capability
+      ? Object.freeze({ ...capability, pathScopes: Object.freeze([...capability.pathScopes]) })
+      : null;
+  }
+
+  capabilityIdsForTask(taskId: string): readonly string[] {
+    return Object.freeze([...this.#capabilities.values()]
+      .filter((capability) => capability.taskId === taskId)
+      .map((capability) => capability.capabilityId)
+      .sort());
+  }
+
+  eventSnapshot(): readonly Readonly<CognitiveCapabilityEvent>[] {
+    return Object.freeze(this.#events.map((event) => Object.freeze({ ...event })));
   }
 
   issue(capability: CognitiveCapability): void {
@@ -396,7 +462,7 @@ export class CognitiveCapabilityLedger {
       && capability.pathScopes.length <= 128
       && capability.pathScopes.every(capabilityScopeIsValid);
     if (
-      this.capabilities.has(capability.capabilityId)
+      this.#capabilities.has(capability.capabilityId)
       || !validIdentifier(capability.capabilityId)
       || !validHash(capability.bearerHash)
       || !validHash(capability.nonceHash)
@@ -425,7 +491,7 @@ export class CognitiveCapabilityLedger {
       || capability.consumedAt !== null
       || capability.nextUsageSequence !== 1
     ) throw new Error("capability_issue_rejected");
-    this.capabilities.set(capability.capabilityId, { ...capability, pathScopes: [...capability.pathScopes] });
+    this.#capabilities.set(capability.capabilityId, { ...capability, pathScopes: [...capability.pathScopes] });
   }
 
   authorizeComposedRequest(
@@ -433,7 +499,7 @@ export class CognitiveCapabilityLedger {
     request: Pick<CognitiveActionRequest, "action" | "repositoryFullName" | "branch" | "paths">,
     use: CognitiveCapabilityUse,
   ): readonly string[] {
-    const capability = this.capabilities.get(capabilityId);
+    const capability = this.#capabilities.get(capabilityId);
     if (!capability) return ["capability_missing"];
     const blockers: string[] = [];
     if (request.repositoryFullName !== capability.repositoryFullName
@@ -453,7 +519,7 @@ export class CognitiveCapabilityLedger {
   }
 
   consume(capabilityId: string, use: CognitiveCapabilityUse, gate: CognitiveRuntimeGate): CognitiveCapabilityEvent {
-    const capability = this.capabilities.get(capabilityId);
+    const capability = this.#capabilities.get(capabilityId);
     if (!capability) throw new Error("capability_missing");
     const proofVerified = this.#verifyProof(
       use.opaqueBearer,
@@ -462,13 +528,13 @@ export class CognitiveCapabilityLedger {
       capability.nonceHash,
     );
     const blockers = [...authorizeCapabilityUse(capability, use, gate, proofVerified)];
-    if (this.usedCallIds.has(use.callId)) blockers.push("capability_replay");
+    if (this.#usedCallIds.has(use.callId)) blockers.push("capability_replay");
     if (blockers.length) {
       const event = { capabilityId, callId: use.callId, usageSequence: capability.nextUsageSequence, event: "rejected" as const, reason: [...new Set(blockers)].sort().join(","), at: gate.now.toISOString() };
-      this.events.push(event);
+      this.#events.push(event);
       return event;
     }
-    this.usedCallIds.add(use.callId);
+    this.#usedCallIds.add(use.callId);
     capability.remainingCalls -= 1;
     capability.remainingBytes -= use.bytes;
     capability.remainingCost -= use.cost;
@@ -477,7 +543,7 @@ export class CognitiveCapabilityLedger {
     capability.nextUsageSequence += 1;
     if (capability.remainingCalls === 0) capability.status = "exhausted";
     const event = { capabilityId, callId: use.callId, usageSequence: sequence, event: "consumed" as const, reason: null, at: gate.now.toISOString() };
-    this.events.push(event);
+    this.#events.push(event);
     return event;
   }
 
@@ -486,9 +552,9 @@ export class CognitiveCapabilityLedger {
     use: CognitiveCapabilityUse,
     gate: CognitiveRuntimeGate,
   ): readonly string[] {
-    const capability = this.capabilities.get(capabilityId);
+    const capability = this.#capabilities.get(capabilityId);
     if (!capability) return ["capability_missing"];
-    if (!this.usedCallIds.has(use.callId)) return ["capability_call_not_consumed"];
+    if (!this.#usedCallIds.has(use.callId)) return ["capability_call_not_consumed"];
     const proofVerified = this.#verifyProof(
       use.opaqueBearer,
       use.opaqueNonce,
@@ -504,11 +570,11 @@ export class CognitiveCapabilityLedger {
   }
 
   revoke(capabilityId: string, at = new Date()): void {
-    const capability = this.capabilities.get(capabilityId);
+    const capability = this.#capabilities.get(capabilityId);
     if (!capability) return;
     capability.status = "revoked";
     capability.revokedAt = at.toISOString();
-    this.events.push({ capabilityId, callId: "lifecycle-revoke", usageSequence: capability.nextUsageSequence, event: "revoked", reason: "owner_or_system_revocation", at: at.toISOString() });
+    this.#events.push({ capabilityId, callId: "lifecycle-revoke", usageSequence: capability.nextUsageSequence, event: "revoked", reason: "owner_or_system_revocation", at: at.toISOString() });
   }
 }
 
@@ -625,8 +691,12 @@ export type CognitiveToolResultEnvelope = {
   untrusted: true;
   truncated: boolean;
   sanitizationState: "sanitized" | "rejected";
+  ownerReviewRequired: boolean;
+  findingType: "provider_scope_expansion_request" | null;
   data: unknown;
 };
+
+const PROVIDER_SCOPE_EXPANSION = /\b(?:grants?|provides?|requires?|requests?|needs?|expands?|broadens?|elevates?)\b[\s\S]{0,80}\b(?:administrator|admin|production|credentials?|permissions?|privileges?|scope|access)\b/iu;
 
 export const createUntrustedToolEnvelope = (
   value: {
@@ -652,7 +722,13 @@ export const createUntrustedToolEnvelope = (
     || typeof value.truncated !== "boolean"
   ) throw new Error("tool_envelope_metadata_invalid");
   const sanitized = sanitizeCognitivePayload(value.data);
-  const operationallySafe = sanitized.accepted && !sanitized.categories.includes("untrusted_instruction");
+  const serialized = typeof value.data === "string"
+    ? value.data
+    : String(JSON.stringify(value.data) ?? "").slice(0, 64_000);
+  const ownerReviewRequired = PROVIDER_SCOPE_EXPANSION.test(serialized);
+  const operationallySafe = sanitized.accepted
+    && !sanitized.categories.includes("untrusted_instruction")
+    && !ownerReviewRequired;
   const retained = operationallySafe ? sanitized.value : null;
   const dataHash = hashSanitizedValue({
     accepted: operationallySafe,
@@ -671,6 +747,8 @@ export const createUntrustedToolEnvelope = (
     untrusted: true,
     truncated: value.truncated,
     sanitizationState: operationallySafe ? "sanitized" : "rejected",
+    ownerReviewRequired,
+    findingType: ownerReviewRequired ? "provider_scope_expansion_request" : null,
     data: retained,
   };
 };
@@ -703,9 +781,18 @@ export const parseStrictModelDocument = (raw: string): StrictModelDocument => {
   if (!sanitizedObjective.accepted || sanitizedObjective.categories.includes("untrusted_instruction")) throw new Error("model_document_objective_rejected");
   if (!Array.isArray(record.proposedActions) || record.proposedActions.length > 20 || record.proposedActions.some((action) => !ACTION_SET.has(String(action)))) throw new Error("model_document_action_invalid");
   if (!assertBoundedStringArray(record.evidenceIds, 64, 128) || !assertBoundedStringArray(record.blockers, 64, 256)) throw new Error("model_document_bounds_invalid");
-  if ((record.evidenceIds as string[]).some((entry) => !validIdentifier(entry))) throw new Error("model_document_evidence_id_invalid");
+  const sanitizedEvidenceIds = sanitizeCognitivePayload(record.evidenceIds);
+  if ((record.evidenceIds as string[]).some((entry) =>
+    !validIdentifier(entry) || containsSecretLikeValue(entry) || containsPromptInjection(entry))
+    || !sanitizedEvidenceIds.accepted
+    || sanitizedEvidenceIds.categories.includes("untrusted_instruction")) {
+    throw new Error("model_document_evidence_id_invalid");
+  }
+  const sanitizedBlockerArray = sanitizeCognitivePayload(record.blockers);
   const sanitizedBlockers = (record.blockers as string[]).map((entry) => sanitizeCognitivePayload(entry));
-  if (sanitizedBlockers.some((result) => !result.accepted || result.categories.includes("untrusted_instruction"))) {
+  if (!sanitizedBlockerArray.accepted
+    || sanitizedBlockerArray.categories.includes("untrusted_instruction")
+    || sanitizedBlockers.some((result) => !result.accepted || result.categories.includes("untrusted_instruction"))) {
     throw new Error("model_document_blocker_rejected");
   }
   return {
@@ -756,9 +843,20 @@ const maybeDecodeEncoded = (value: string): string[] => {
   for (let depth = 0; depth < 3; depth += 1) {
     const next: string[] = [];
     for (const candidate of frontier) {
-      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/]{16,}={0,2}\b/gu)) {
+      try {
+        const percentDecoded = decodeURIComponent(candidate);
+        if (percentDecoded !== candidate && !candidates.has(percentDecoded)) {
+          candidates.add(percentDecoded);
+          next.push(percentDecoded);
+        }
+      } catch {
+        // Malformed percent encoding remains untrusted ordinary text.
+      }
+      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{16,}={0,2}\b/gu)) {
         try {
-          const binary = globalThis.atob(match[0]);
+          const normalized = match[0].replace(/-/gu, "+").replace(/_/gu, "/");
+          const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+          const binary = globalThis.atob(padded);
           const decoded = decodeUtf8(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
           if (decoded !== null) {
             const bounded = decoded.slice(0, 4_096);
@@ -848,6 +946,7 @@ export const sanitizeCognitivePayload = (
     if (entries.length > limits.maxKeys) categories.add("maximum_object_keys_exceeded");
     const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
     for (const [key, child] of entries.slice(0, limits.maxKeys)) {
+      totalBytes += new TextEncoder().encode(key).byteLength;
       aggregatePieces.push(key.slice(0, 256));
       aggregateKeys.push(key.slice(0, 256));
       if (["__proto__", "constructor", "prototype"].includes(key)) {
@@ -917,21 +1016,37 @@ export type CognitiveResearchSource = {
   };
   trustedForTools: false;
 };
+// BEGIN GENERATED RESEARCH AUTHORITIES — config/intelligence/research-authorities.json
 const COGNITIVE_SOURCE_AUTHORITY_REGISTRY = [
-  { hostname: "developer.apple.com", ownerId: "apple", publisher: "Apple", types: ["official_documentation", "platform_policy", "store_policy", "security_advisory"] },
-  { hostname: "developer.android.com", ownerId: "google", publisher: "Google", types: ["official_documentation", "platform_policy", "store_policy", "security_advisory"] },
-  { hostname: "firebase.google.com", ownerId: "google", publisher: "Google", types: ["official_documentation", "security_advisory"] },
-  { hostname: "docs.expo.dev", ownerId: "expo", publisher: "Expo", types: ["official_documentation", "security_advisory"] },
-  { hostname: "supabase.com", ownerId: "supabase", publisher: "Supabase", types: ["official_documentation", "security_advisory"] },
-  { hostname: "docs.github.com", ownerId: "github", publisher: "GitHub", types: ["official_documentation", "security_advisory"] },
-  { hostname: "revenuecat.com", ownerId: "revenuecat", publisher: "RevenueCat", types: ["official_documentation", "security_advisory"] },
-  { hostname: "stripe.com", ownerId: "stripe", publisher: "Stripe", types: ["official_documentation", "security_advisory"] },
-  { hostname: "docs.livekit.io", ownerId: "livekit", publisher: "LiveKit", types: ["official_documentation", "security_advisory"] },
-  { hostname: "developers.cloudflare.com", ownerId: "cloudflare", publisher: "Cloudflare", types: ["official_documentation", "security_advisory"] },
-  { hostname: "iana.org", ownerId: "iana", publisher: "IANA", types: ["official_documentation"] },
-  { hostname: "reuters.com", ownerId: "reuters", publisher: "Reuters", types: ["news"] },
-  { hostname: "apnews.com", ownerId: "associated-press", publisher: "Associated Press", types: ["news"] },
+  { authorityId: "apple-docs", hostname: "developer.apple.com", ownerId: "apple", publisher: "Apple", sourceType: "official_documentation" },
+  { authorityId: "apple-policy", hostname: "developer.apple.com", ownerId: "apple", publisher: "Apple", sourceType: "platform_policy" },
+  { authorityId: "apple-store-policy", hostname: "developer.apple.com", ownerId: "apple", publisher: "Apple", sourceType: "store_policy" },
+  { authorityId: "apple-security", hostname: "developer.apple.com", ownerId: "apple", publisher: "Apple", sourceType: "security_advisory" },
+  { authorityId: "android-docs", hostname: "developer.android.com", ownerId: "google", publisher: "Google", sourceType: "official_documentation" },
+  { authorityId: "android-policy", hostname: "developer.android.com", ownerId: "google", publisher: "Google", sourceType: "platform_policy" },
+  { authorityId: "android-store-policy", hostname: "developer.android.com", ownerId: "google", publisher: "Google", sourceType: "store_policy" },
+  { authorityId: "android-security", hostname: "developer.android.com", ownerId: "google", publisher: "Google", sourceType: "security_advisory" },
+  { authorityId: "firebase-docs", hostname: "firebase.google.com", ownerId: "google", publisher: "Google", sourceType: "official_documentation" },
+  { authorityId: "firebase-security", hostname: "firebase.google.com", ownerId: "google", publisher: "Google", sourceType: "security_advisory" },
+  { authorityId: "expo-docs", hostname: "docs.expo.dev", ownerId: "expo", publisher: "Expo", sourceType: "official_documentation" },
+  { authorityId: "expo-security", hostname: "docs.expo.dev", ownerId: "expo", publisher: "Expo", sourceType: "security_advisory" },
+  { authorityId: "supabase-docs", hostname: "supabase.com", ownerId: "supabase", publisher: "Supabase", sourceType: "official_documentation" },
+  { authorityId: "supabase-security", hostname: "supabase.com", ownerId: "supabase", publisher: "Supabase", sourceType: "security_advisory" },
+  { authorityId: "github-docs", hostname: "docs.github.com", ownerId: "github", publisher: "GitHub", sourceType: "official_documentation" },
+  { authorityId: "github-security", hostname: "docs.github.com", ownerId: "github", publisher: "GitHub", sourceType: "security_advisory" },
+  { authorityId: "revenuecat-docs", hostname: "revenuecat.com", ownerId: "revenuecat", publisher: "RevenueCat", sourceType: "official_documentation" },
+  { authorityId: "revenuecat-security", hostname: "revenuecat.com", ownerId: "revenuecat", publisher: "RevenueCat", sourceType: "security_advisory" },
+  { authorityId: "stripe-docs", hostname: "stripe.com", ownerId: "stripe", publisher: "Stripe", sourceType: "official_documentation" },
+  { authorityId: "stripe-security", hostname: "stripe.com", ownerId: "stripe", publisher: "Stripe", sourceType: "security_advisory" },
+  { authorityId: "livekit-docs", hostname: "docs.livekit.io", ownerId: "livekit", publisher: "LiveKit", sourceType: "official_documentation" },
+  { authorityId: "livekit-security", hostname: "docs.livekit.io", ownerId: "livekit", publisher: "LiveKit", sourceType: "security_advisory" },
+  { authorityId: "cloudflare-docs", hostname: "developers.cloudflare.com", ownerId: "cloudflare", publisher: "Cloudflare", sourceType: "official_documentation" },
+  { authorityId: "cloudflare-security", hostname: "developers.cloudflare.com", ownerId: "cloudflare", publisher: "Cloudflare", sourceType: "security_advisory" },
+  { authorityId: "iana-docs", hostname: "iana.org", ownerId: "iana", publisher: "IANA", sourceType: "official_documentation" },
+  { authorityId: "reuters-news", hostname: "reuters.com", ownerId: "reuters", publisher: "Reuters", sourceType: "news" },
+  { authorityId: "ap-news", hostname: "apnews.com", ownerId: "associated-press", publisher: "Associated Press", sourceType: "news" },
 ] as const;
+// END GENERATED RESEARCH AUTHORITIES
 const registeredResearchAuthority = (source: CognitiveResearchSource) => {
   let hostname = "";
   try {
@@ -942,11 +1057,21 @@ const registeredResearchAuthority = (source: CognitiveResearchSource) => {
     return null;
   }
   const entry = COGNITIVE_SOURCE_AUTHORITY_REGISTRY.find((candidate) =>
-    hostname === candidate.hostname || hostname.endsWith(`.${candidate.hostname}`));
+    (hostname === candidate.hostname || hostname.endsWith(`.${candidate.hostname}`))
+    && candidate.sourceType === source.sourceType);
   if (!entry
-    || !(entry.types as readonly string[]).includes(source.sourceType)
     || entry.publisher.toLowerCase() !== source.publisher.trim().toLowerCase()) return null;
   return { hostname, ownerId: entry.ownerId };
+};
+const canonicalResearchReference = (reference: string): string | null => {
+  try {
+    const parsed = new URL(reference);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) return null;
+    parsed.hostname = parsed.hostname.toLowerCase().replace(/\.$/u, "");
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 };
 export type CognitiveResearchClaimInput = {
   claim: string;
@@ -970,6 +1095,7 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
   if (!input.claim.trim() || input.claim.length > 8_000) reasons.push("claim_invalid");
   const sanitizedClaim = sanitizeCognitivePayload(input.claim);
   if (!sanitizedClaim.accepted) reasons.push("claim_sensitive_content_rejected");
+  if (sanitizedClaim.categories.includes("private_identifier")) reasons.push("claim_private_identifier_rejected");
   if (sanitizedClaim.categories.includes("untrusted_instruction")) reasons.push("prompt_injection_detected");
   if (!validFiniteNumber(input.confidence, 0, 1)) reasons.push("confidence_out_of_range");
   if (!input.sources.length || input.sources.length > 12) reasons.push("source_count_invalid");
@@ -987,6 +1113,10 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
   if (input.contradictionState === "detected" || input.contradictionState === "unresolved") reasons.push("contradiction_unresolved");
   const claimFreshness = Date.parse(input.freshnessDeadline);
   if (!Number.isFinite(claimFreshness) || claimFreshness <= now.getTime()) reasons.push("claim_expired_refresh_required");
+  const claimTtlDays = input.consequential ? 7 : input.technicalFact ? 90 : 30;
+  if (Number.isFinite(claimFreshness) && claimFreshness > now.getTime() + (claimTtlDays * 86_400_000)) {
+    reasons.push("claim_freshness_ceiling_exceeded");
+  }
   for (const source of input.sources) {
     if (!authorityBySource.get(source.id)) reasons.push("source_authority_unverified");
     if (source.trustedForTools !== false) reasons.push("source_must_remain_untrusted");
@@ -1001,15 +1131,28 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
       || source.citationMetadata.locator.trim().length < 1
       || source.citationMetadata.locator.length > 512
     ) reasons.push("source_citation_missing");
-    if (!validHash(source.canonicalUrlHash) || !validHash(source.contentHash)) reasons.push("source_hash_invalid");
+    const canonicalReference = canonicalResearchReference(source.reference);
+    if (!canonicalReference
+      || source.canonicalUrlHash !== cognitiveSha256(canonicalReference)
+      || source.contentHash !== cognitiveSha256(source.excerpt)) reasons.push("source_hash_binding_invalid");
     if (!source.excerpt || source.excerpt.length > 2_000) reasons.push("source_excerpt_invalid");
     const publication = source.publicationDate === null ? Number.NaN : Date.parse(source.publicationDate);
     const retrieval = Date.parse(source.retrievalDate);
     const freshness = Date.parse(source.freshnessDeadline);
-    if (!Number.isFinite(retrieval) || retrieval > now.getTime() || !Number.isFinite(freshness) || freshness <= now.getTime()) reasons.push("source_stale_or_invalid");
+    const sourceTtlDays = source.sourceType === "news" ? 7
+      : source.sourceType === "security_advisory" ? 14
+      : ["platform_policy", "store_policy"].includes(source.sourceType) ? 30
+      : 90;
+    if (!Number.isFinite(retrieval)
+      || retrieval > now.getTime()
+      || retrieval < now.getTime() - (2 * 86_400_000)
+      || !Number.isFinite(freshness)
+      || freshness <= now.getTime()
+      || freshness > retrieval + (sourceTtlDays * 86_400_000)) reasons.push("source_stale_or_invalid");
     if (source.publicationDate !== null && (!Number.isFinite(publication) || publication > retrieval)) reasons.push("source_publication_date_invalid");
     const sanitized = sanitizeCognitivePayload({ reference: source.reference, publisher: source.publisher, excerpt: source.excerpt });
     if (!sanitized.accepted) reasons.push("source_sensitive_content_rejected");
+    if (sanitized.categories.includes("private_identifier")) reasons.push("source_private_identifier_rejected");
     if (sanitized.categories.includes("untrusted_instruction")) reasons.push("source_prompt_injection_detected");
   }
   return {
@@ -1073,6 +1216,10 @@ export const validateResearchUrl = (raw: string): readonly string[] => {
   }
   if (url.protocol !== "https:") blockers.push("https_required");
   if (url.username || url.password) blockers.push("embedded_credentials_forbidden");
+  const decodedCandidates = maybeDecodeEncoded(url.href);
+  if (containsSecretLikeValue(url.href) || decodedCandidates.some(containsSecretLikeValue)) {
+    blockers.push("credential_bearing_url_forbidden");
+  }
   if (url.port && url.port !== "443") blockers.push("port_not_allowed");
   const hostname = url.hostname.toLowerCase().replace(/\.$/u, "");
   if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || isPrivateOrReservedAddress(hostname)) blockers.push("private_or_reserved_target");
@@ -1181,6 +1328,14 @@ export type TrustedPhysicalEvidence = {
   artifactHash: string;
   observedAt: string;
 };
+export type TrustedChangedPathManifest = {
+  recordId: string;
+  collectorId: string;
+  finalCommit: string;
+  diffHash: string;
+  changedPaths: readonly string[];
+  observedAt: string;
+};
 
 type CognitiveEvidenceHash = (value: unknown) => string;
 type CognitiveEvidenceCredentialVerifier = (
@@ -1197,6 +1352,7 @@ export class CognitiveTrustedEvidenceLedger {
   readonly #testRecords = new Map<string, Readonly<TrustedTestRecord>>();
   readonly #runRecords = new Map<string, Readonly<TrustedRunEvidence>>();
   readonly #physicalRecords = new Map<string, Readonly<TrustedPhysicalEvidence>>();
+  readonly #changedPathRecords = new Map<string, Readonly<TrustedChangedPathManifest>>();
 
   constructor(input: {
     authorityId: string;
@@ -1275,12 +1431,38 @@ export class CognitiveTrustedEvidenceLedger {
     this.#physicalRecords.set(record.recordId, Object.freeze({ ...record }));
   }
 
+  recordChangedPaths(record: TrustedChangedPathManifest, opaqueCollectorCredential: string): void {
+    const expected = this.#collectorCredentialHashes[record.collectorId];
+    if (
+      this.#changedPathRecords.has(record.recordId)
+      || !expected
+      || !this.#verifyCredential(opaqueCollectorCredential, expected)
+      || !validIdentifier(record.recordId)
+      || !validIdentifier(record.collectorId)
+      || !/^[a-f0-9]{40}$/u.test(record.finalCommit)
+      || !validHash(record.diffHash)
+      || !Array.isArray(record.changedPaths)
+      || record.changedPaths.length > 2_000
+      || record.changedPaths.some((entry) => validateLexicalRepositoryPath(entry).length)
+      || !validTimestamp(record.observedAt)
+      || record.observedAt !== new Date(record.observedAt).toISOString()
+    ) throw new Error("trusted_changed_path_manifest_rejected");
+    this.#changedPathRecords.set(record.recordId, Object.freeze({
+      ...record,
+      changedPaths: Object.freeze([...new Set(record.changedPaths)].sort()),
+    }));
+  }
+
   getTest(recordId: string): Readonly<TrustedTestRecord> | null {
     return this.#testRecords.get(recordId) ?? null;
   }
 
   getRun(recordId: string): Readonly<TrustedRunEvidence> | null {
     return this.#runRecords.get(recordId) ?? null;
+  }
+
+  getChangedPaths(recordId: string): Readonly<TrustedChangedPathManifest> | null {
+    return this.#changedPathRecords.get(recordId) ?? null;
   }
 
   physicalForTest(testId: string, finalCommit: string): readonly Readonly<TrustedPhysicalEvidence>[] {
@@ -1304,6 +1486,7 @@ export class CognitiveTrustedEvidenceLedger {
       authorityId: this.authorityId,
       getTest: (recordId: string) => this.getTest(recordId),
       getRun: (recordId: string) => this.getRun(recordId),
+      getChangedPaths: (recordId: string) => this.getChangedPaths(recordId),
       physicalForTest: (testId: string, finalCommit: string) =>
         this.physicalForTest(testId, finalCommit),
       manifestHash: (runRecordId: string, testRecordIds: readonly string[]) =>
@@ -1316,6 +1499,7 @@ export type CognitiveTrustedEvidenceReader = Readonly<{
   authorityId: string;
   getTest: (recordId: string) => Readonly<TrustedTestRecord> | null;
   getRun: (recordId: string) => Readonly<TrustedRunEvidence> | null;
+  getChangedPaths: (recordId: string) => Readonly<TrustedChangedPathManifest> | null;
   physicalForTest: (
     testId: string,
     finalCommit: string,
@@ -1333,7 +1517,7 @@ export type CognitiveEvaluationInput = {
   testEvidenceRecordIds: readonly string[];
   finalCommit: string;
   finalCommitAt: string;
-  changedPaths: readonly string[];
+  changedPathManifestRecordId: string;
   platform: CognitivePlatform;
 };
 export type CognitiveEvaluation = {
@@ -1376,8 +1560,15 @@ export const evaluateCognitiveRun = (
     blockers.push("run_evidence_manifest_unverifiable");
   }
   let requiredTests: readonly RequiredTest[] = [];
+  const changedPathManifest = evidenceLedger.getChangedPaths(input.changedPathManifestRecordId);
   try {
-    requiredTests = requiredCognitiveTestsForChanges(input.changedPaths, input.finalCommit, input.platform);
+    if (!changedPathManifest
+      || changedPathManifest.finalCommit !== input.finalCommit
+      || changedPathManifest.diffHash !== runEvidence?.diffHash) {
+      blockers.push("trusted_changed_path_manifest_missing_or_mismatched");
+    } else {
+      requiredTests = requiredCognitiveTestsForChanges(changedPathManifest.changedPaths, input.finalCommit, input.platform);
+    }
   } catch {
     blockers.push("required_test_manifest_invalid");
   }
@@ -1505,8 +1696,8 @@ export class CognitiveRollbackCoordinator {
     }
     this.taskStates.set(taskId, "quarantined");
     this.events.push({ taskId, eventType: "rollback_failed", at: at.toISOString() });
-    for (const [capabilityId, capability] of this.#capabilityLedger.capabilities.entries()) {
-      if (capability.taskId === taskId) this.#capabilityLedger.revoke(capabilityId, at);
+    for (const capabilityId of this.#capabilityLedger.capabilityIdsForTask(taskId)) {
+      this.#capabilityLedger.revoke(capabilityId, at);
     }
     for (const childId of this.taskChildren.get(taskId) ?? []) this.childTaskStates.set(childId, "stopped");
     this.criticalFindings.add(taskId);
@@ -1516,9 +1707,8 @@ export class CognitiveRollbackCoordinator {
       { taskId, eventType: "critical_finding_created", at: at.toISOString() },
       { taskId, eventType: "owner_review_requested", at: at.toISOString() },
     );
-    const capabilitiesRevoked = [...this.#capabilityLedger.capabilities.values()]
-      .filter((capability) => capability.taskId === taskId)
-      .every((capability) => capability.status === "revoked");
+    const capabilitiesRevoked = this.#capabilityLedger.capabilityIdsForTask(taskId)
+      .every((capabilityId) => this.#capabilityLedger.capabilitySnapshot(capabilityId)?.status === "revoked");
     const childTasksStopped = (this.taskChildren.get(taskId) ?? [])
       .every((childId) => this.childTaskStates.get(childId) === "stopped");
     return {

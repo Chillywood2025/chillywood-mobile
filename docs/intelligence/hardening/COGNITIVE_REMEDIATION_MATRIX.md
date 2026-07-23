@@ -8,9 +8,9 @@ Hardening state: `security_hardened_scaffold_not_deployed`
 
 The matrix retains every independent-review finding. “Fixed locally” means its
 source change and regression test pass on the hardening branch; it is not a
-deployment claim. The first two automated independent retest rounds found
-remaining P1s and therefore did not close any row. The current corrective working
-tree adds composed enforcement plus 25 independent-variant regressions. The
+deployment claim. Every completed automated independent retest found remaining
+P1s and therefore did not close any row. The current corrective working tree
+adds composed enforcement plus 38 independent-variant regressions. The
 “pending” values below refer to the required fresh retest of the next exact
 corrective commit.
 
@@ -96,6 +96,38 @@ Prior authored totals were disproved by the fresh retests. Corrected totals rema
 open until a new exact-head independent retest verifies the additional
 composed-boundary findings. `OWNER_COUNSEL_RETENTION_DECISION_REQUIRED` remains a deliberate deployment
 blocker, not a claim of legal compliance.
+
+## Latest exact-head retest findings
+
+The latest isolated architecture, database, and research passes reviewed
+`87e3a980e6e16bc4dea0aacb7cfdd50d4ced0796`. They found no P0, but they found
+eight P1 defects and thirteen technical P2 gaps. The following rows preserve
+those findings separately so the remediation is independently retestable.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A3-EXEC-001 | P1 | New-file parent replacement created a path outside the repository and rollback falsely reported success. | Autonomous new-file execution now fails closed until a reviewed descriptor-relative `openat` adapter exists; it performs no pathname-based write. | R-33 | fixed locally | pending |
+| A3-CAP-001 | P1 | Capability records, used call IDs, and lifecycle events were publicly mutable. | Capability state, replay set, and events use private fields; only immutable snapshots are exposed. | R-31 | fixed locally | pending |
+| A3-BUDGET-001 | P1 | A caller-supplied object could authorize an arbitrary budget reservation. | Only an engine-branded, exact-prototype, frozen budget authority is accepted; subclass and plain-object forgeries are rejected. | R-32, R-38 | fixed locally | pending |
+| A3-SANITIZE-001 | P1 | Base64url and cross-field split secrets bypassed recursive sanitization. | Bounded base64url/percent decoding and aggregate whole-document scanning reject split secret material. | R-26, R-27 | fixed locally | pending |
+| B3-TRUST-001 | P1 | `service_role` retained direct DML authority over the research-authority trust anchor. | Final grants explicitly revoke insert, update, and delete on `cognitive_research_authorities`; updates require a future reviewed migration. | pgTAP trust-anchor DML denial | fixed locally | pending |
+| B3-EVAL-001 | P1 | The evaluator actor could call the general state-transition RPC and mutate hypotheses. | `independent_evaluation_judge` is excluded from the general transition actor set and remains evidence-read-only. | pgTAP evaluator transition denial | fixed locally | pending |
+| C3-MODEL-001 | P1 | Token-shaped operational evidence IDs passed the strict model parser. | Every evidence ID is recursively sanitized and secret/private-identifier shaped IDs are rejected. | R-26 | fixed locally | pending |
+| C3-URL-001 | P1 | Percent-encoded credential-bearing research URL queries passed validation. | URL validation scans bounded decoded candidates and rejects credential-bearing URLs before transport. | R-27 | fixed locally | pending |
+| A3-RESEARCH-001 | P2 | A caller could fabricate research authority and evidence hashes. | One canonical 27-row authority registry generates matching TypeScript and SQL data; service RPCs compute URL/content hashes. | authority guard; R-29; pgTAP broker ingestion | fixed locally | pending |
+| A3-SANITIZE-002 | P2 | Object-key bytes did not count toward the total sanitizer budget. | Key bytes count toward the bounded aggregate payload size. | R-34 | fixed locally | pending |
+| A3-EVAL-001 | P2 | Required-test selection trusted caller-supplied changed paths. | The trusted evidence ledger records a commit/diff-bound changed-path manifest; evaluator test derivation reads only that record. | evaluator suite | fixed locally | pending |
+| A3-SSRF-001 | P2 | Injected transports could self-attest a public connected peer. | Only branded reviewed mock transports or the pinned HTTPS transport are accepted; the production contract pins DNS and verifies the socket peer. | R-35 | fixed locally | pending |
+| A3-CANCEL-001 | P2 | DNS resolution did not receive parent cancellation. | An internal abort controller propagates cancellation into DNS and rejects late resolution. | R-36 | fixed locally | pending |
+| B3-ERASURE-001 | P2 | Task rows allowed raw `user_derived` data outside erasure coverage. | Intelligence task rows structurally reject `user_derived`; allowed personal-data tables retain transactional tombstone behavior. | pgTAP task data-class denial | fixed locally | pending |
+| B3-FRESHNESS-001 | P2 | Ancient sources and caller-declared century-long freshness were accepted. | Source/claim checks enforce retrieval recency and category-specific TTL ceilings. | pgTAP ancient/overlong freshness denial | fixed locally | pending |
+| B3-SNAPSHOT-001 | P2 | Immutable plan snapshots lacked data class, retention, and legal-hold fields. | Snapshots require non-personal class, bounded retention, and explicit legal-hold state. | pgTAP snapshot retention contract | fixed locally | pending |
+| C3-HTTP-001 | P2 | A terminal HTTP 500 body could be accepted as research evidence. | Non-2xx terminal responses fail closed. | R-28 | fixed locally | pending |
+| C3-SIZE-001 | P2 | Research size limits trusted caller-reported byte counts. | The broker verifies actual UTF-8 body bytes against the reported count and the decompressed cap. | R-28 | fixed locally | pending |
+| C3-HASH-001 | P2 | Research URL/content hashes were caller assertions. | Source creation computes hashes in the runtime and service-owned SQL RPC; mismatches fail. | R-29; pgTAP broker ingestion | fixed locally | pending |
+| C3-REGISTRY-001 | P2 | TypeScript and SQL research-authority registries could drift. | A required guard compares both generated marker blocks with the canonical registry. | `guard:cognitive-research-authorities` | fixed locally | pending |
+| C3-SCOPE-001 | P2 | A provider request for wider scope was rejected without an owner-review finding. | Tool envelopes emit a sanitized `provider_scope_expansion_request`, require owner review, and discard the payload. | R-30 | fixed locally | pending |
+| A3-STATUS-001 | P3 | The prior status still overstated the independently blocked scaffold. | After every local hardening gate passed, status advanced to `security_hardened_scaffold_not_deployed`; it grants no operational authority, and an exact-head retest remains a merge gate. | Admin/status guards | fixed locally | pending |
 
 Corrective enforcement applies across the matrix where the retests found an
 original guard to be descriptive rather than authoritative. The authoritative

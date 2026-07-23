@@ -28,6 +28,10 @@ capabilities, creates a critical finding and creates an owner-review request.
 User-derived content is not immutable raw evidence. Bounded redacted metadata may
 expire or be erased; an immutable non-personal tombstone records the lifecycle.
 Tables outside the erasure RPC reject `user_derived`. Research evidence is bound
-to a static authority registry, closed citation metadata, request/content hashes,
-and bounded evidence timestamps.
+to a canonical 27-row authority registry, closed citation metadata,
+service-computed URL/content hashes, category-specific freshness ceilings, and
+bounded evidence timestamps. The research-authority trust anchor has no runtime
+insert, update, or delete grant, including for `service_role`; changing it
+requires a reviewed migration. The evaluator identity is excluded from the
+general entity-transition RPC.
 `OWNER_COUNSEL_RETENTION_DECISION_REQUIRED` remains a deployment blocker.

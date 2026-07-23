@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import net from "node:net";
+import https from "node:https";
 
 const FORBIDDEN_SEGMENTS = new Set([".git", "node_modules", "android", "ios"]);
 const CREDENTIAL_FILE = /(?:^|\/)(?:\.env(?:\.|$)|credentials?\.json$|.*\.(?:jks|keystore|p8|p12|pem|key)$)/iu;
@@ -25,6 +26,95 @@ export const stableJson = (value) => {
   return JSON.stringify(normalize(value));
 };
 export const canonicalSnapshotHash = (snapshot) => sha256(stableJson(snapshot));
+
+const ENGINE_BUDGET_AUTHORITIES = new WeakSet();
+const OWNER_POLICY_BUDGET_CEILING = Object.freeze({
+  modelTokens: 10_000_000,
+  modelCost: 25,
+  toolCalls: 100,
+  toolBytes: 10_000_000,
+  elapsedMs: 14_400_000,
+  childTasks: 20,
+  recursionDepth: 4,
+  concurrentCalls: 4,
+  retries: 5,
+});
+
+export class CognitiveEngineBudgetAuthority {
+  #limits;
+  #consumed = Object.fromEntries(Object.keys(OWNER_POLICY_BUDGET_CEILING).map((key) => [key, 0]));
+  #reservations = new Map();
+  #actionOccurrences = new Map();
+  #planOccurrences = new Map();
+
+  constructor(requestedLimits = OWNER_POLICY_BUDGET_CEILING) {
+    const keys = Object.keys(OWNER_POLICY_BUDGET_CEILING);
+    if (!requestedLimits || Object.keys(requestedLimits).length !== keys.length
+      || keys.some((key) => !Number.isSafeInteger(requestedLimits[key])
+        || requestedLimits[key] < 0
+        || requestedLimits[key] > OWNER_POLICY_BUDGET_CEILING[key])) {
+      throw new Error("owner_policy_budget_invalid");
+    }
+    this.#limits = Object.freeze({ ...requestedLimits });
+    ENGINE_BUDGET_AUTHORITIES.add(this);
+    Object.freeze(this);
+  }
+
+  reserve(reservationId, requested, gate) {
+    const deadline = Date.parse(gate.deadlineAt);
+    if (gate.emergencyStop || gate.taskCancelled || gate.taskQuarantined
+      || !Number.isFinite(deadline) || gate.now.getTime() >= deadline
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u.test(reservationId)
+      || !/^[a-f0-9]{64}$/u.test(gate.actionFingerprint)
+      || !/^[a-f0-9]{64}$/u.test(gate.planSnapshotHash)
+      || this.#reservations.has(reservationId)
+      || !requested || Object.keys(requested).length === 0
+      || (this.#actionOccurrences.get(gate.actionFingerprint) ?? 0) >= 3
+      || (this.#planOccurrences.get(gate.planSnapshotHash) ?? 0) >= 3) return false;
+    for (const [key, raw] of Object.entries(requested)) {
+      if (!(key in this.#limits)
+        || !Number.isSafeInteger(raw) || raw < 0
+        || this.#consumed[key] + raw > this.#limits[key]) return false;
+    }
+    for (const [key, raw] of Object.entries(requested)) this.#consumed[key] += raw;
+    this.#reservations.set(reservationId, Object.freeze({ ...requested }));
+    this.#actionOccurrences.set(gate.actionFingerprint, (this.#actionOccurrences.get(gate.actionFingerprint) ?? 0) + 1);
+    this.#planOccurrences.set(gate.planSnapshotHash, (this.#planOccurrences.get(gate.planSnapshotHash) ?? 0) + 1);
+    return true;
+  }
+
+  settle(reservationId, actual, gate) {
+    const reserved = this.#reservations.get(reservationId);
+    if (!reserved) return false;
+    if (gate.emergencyStop || gate.taskCancelled || gate.taskQuarantined) {
+      this.release(reservationId);
+      return false;
+    }
+    for (const [key, raw] of Object.entries(actual)) {
+      const prior = reserved[key] ?? 0;
+      if (!(key in this.#limits)
+        || !Number.isSafeInteger(raw) || raw < 0
+        || this.#consumed[key] - prior + raw > this.#limits[key]) return false;
+    }
+    for (const [key, prior] of Object.entries(reserved)) this.#consumed[key] -= prior;
+    for (const [key, raw] of Object.entries(actual)) this.#consumed[key] += raw;
+    this.#reservations.delete(reservationId);
+    return true;
+  }
+
+  release(reservationId) {
+    const reserved = this.#reservations.get(reservationId);
+    if (!reserved) return false;
+    for (const [key, prior] of Object.entries(reserved)) this.#consumed[key] -= prior;
+    this.#reservations.delete(reservationId);
+    return true;
+  }
+
+  snapshot() {
+    return Object.freeze({ limits: this.#limits, consumed: Object.freeze({ ...this.#consumed }) });
+  }
+}
+Object.freeze(CognitiveEngineBudgetAuthority.prototype);
 
 const decodePath = (value) => {
   let current = String(value).normalize("NFKC");
@@ -179,7 +269,11 @@ const preparePinnedPathHandles = (action, canonicalPaths) => {
       if (action === "repository_apply_patch") flags = fs.constants.O_RDWR | fs.constants.O_NOFOLLOW;
       if (action === "repository_write_new_file") {
         if (exists) throw new Error("new_file_already_exists");
-        flags = fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR | fs.constants.O_NOFOLLOW;
+        // Node does not expose openat(2). Creating through a pathname would leave
+        // a parent-directory swap window even with O_NOFOLLOW on the final
+        // component. Keep the action in the closed contract, but fail closed
+        // until a reviewed descriptor-relative native adapter is supplied.
+        throw new Error("secure_new_file_creation_unavailable");
       } else if (!exists) throw new Error("path_missing_at_use");
       const descriptor = fs.openSync(entry.canonicalTarget, flags, 0o600);
       const descriptorStat = fs.fstatSync(descriptor);
@@ -271,6 +365,10 @@ export const executeAuthorizedAction = async ({
       || (!request.action.startsWith("repository_") && typeof rollbackInvocation !== "function")
     )) {
     return { accepted: false, status: "blocked_preflight", result: null, blockers: ["rollback_contract_missing"] };
+  }
+  if (!ENGINE_BUDGET_AUTHORITIES.has(budgetLedger)
+    || Object.getPrototypeOf(budgetLedger) !== CognitiveEngineBudgetAuthority.prototype) {
+    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["engine_budget_authority_required"] };
   }
   const canonicalPaths = request.paths.map((requestedPath) => resolveConfinedRepositoryPath({
     repositoryRoot,
@@ -484,6 +582,63 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
   return { parsed, addresses: addresses.map((entry) => entry.address).sort() };
 };
 
+const RESEARCH_TRANSPORTS = new WeakMap();
+
+export const createMockResearchTransport = (handler) => {
+  if (typeof handler !== "function") throw new Error("research_mock_transport_invalid");
+  const transport = async (request) => handler(request);
+  RESEARCH_TRANSPORTS.set(transport, "mock");
+  return transport;
+};
+
+export const createPinnedHttpsResearchTransport = () => {
+  const transport = ({ url, pinnedAddresses, signal, headers }) => new Promise((resolve, reject) => {
+    if (!Array.isArray(pinnedAddresses) || pinnedAddresses.length < 1 || signal.aborted) {
+      reject(new Error("research_transport_scope_invalid"));
+      return;
+    }
+    const parsed = new URL(url);
+    const pinned = pinnedAddresses[0];
+    const request = https.request({
+      protocol: "https:",
+      hostname: parsed.hostname,
+      port: 443,
+      path: `${parsed.pathname}${parsed.search}`,
+      method: "GET",
+      headers: { ...headers, "accept-encoding": "identity" },
+      agent: false,
+      lookup: (_hostname, _options, callback) =>
+        callback(null, pinned, net.isIPv6(pinned) ? 6 : 4),
+      signal,
+    }, (response) => {
+      const chunks = [];
+      let bytes = 0;
+      const connectedAddress = response.socket.remoteAddress;
+      response.on("data", (chunk) => {
+        bytes += chunk.length;
+        if (bytes > 4_000_000) request.destroy(new Error("research_response_size_rejected"));
+        else chunks.push(chunk);
+      });
+      response.on("end", () => {
+        const body = Buffer.concat(chunks);
+        resolve({
+          status: response.statusCode,
+          connectedAddress,
+          contentType: response.headers["content-type"] ?? "",
+          compressedBytes: bytes,
+          decompressedBytes: bytes,
+          body: body.toString("utf8"),
+          redirectUrl: response.headers.location ?? null,
+        });
+      });
+    });
+    request.on("error", reject);
+    request.end();
+  });
+  RESEARCH_TRANSPORTS.set(transport, "pinned_https");
+  return transport;
+};
+
 export const fetchResearchEvidence = async ({
   initialUrl,
   resolveDns,
@@ -495,6 +650,7 @@ export const fetchResearchEvidence = async ({
   maxDecompressionRatio = 20,
   totalTimeoutMs = 15_000,
 }) => {
+  if (!RESEARCH_TRANSPORTS.has(request)) throw new Error("research_transport_not_reviewed");
   if (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 100 || totalTimeoutMs > 60_000) throw new Error("research_timeout_invalid");
   const startedAt = Date.now();
   const runBounded = async (operation, timeoutLabel) => {
@@ -523,10 +679,20 @@ export const fetchResearchEvidence = async ({
   const history = [];
   for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
     if (signal.aborted) throw new Error("research_cancelled");
-    const target = await runBounded(
-      () => validateResearchUrlWithDns(current, resolveDns),
-      "research_dns_timeout",
-    );
+    const dnsController = new AbortController();
+    const abortDns = () => dnsController.abort();
+    signal.addEventListener("abort", abortDns, { once: true });
+    let target;
+    try {
+      target = await runBounded(
+        () => validateResearchUrlWithDns(current, (hostname) =>
+          resolveDns(hostname, { signal: dnsController.signal })),
+        "research_dns_timeout",
+      );
+    } finally {
+      dnsController.abort();
+      signal.removeEventListener("abort", abortDns);
+    }
     const internalController = new AbortController();
     const abortInternal = () => internalController.abort();
     signal.addEventListener("abort", abortInternal, { once: true });
@@ -559,13 +725,19 @@ export const fetchResearchEvidence = async ({
       || response.compressedBytes < 0 || response.decompressedBytes < 0
       || response.compressedBytes > maxCompressedBytes || response.decompressedBytes > maxDecompressedBytes
       || response.decompressedBytes > Math.max(1, response.compressedBytes) * maxDecompressionRatio) throw new Error("research_response_size_rejected");
+    const actualBodyBytes = Buffer.byteLength(String(response.body ?? ""), "utf8");
+    if (actualBodyBytes !== response.decompressedBytes
+      || actualBodyBytes > maxDecompressedBytes) throw new Error("research_response_size_mismatch");
     if (!["text/html", "text/plain", "application/json"].includes(String(response.contentType).split(";")[0].trim().toLowerCase())) throw new Error("research_content_type_rejected");
+    if (!Number.isSafeInteger(response.status) || response.status < 200 || response.status > 399) throw new Error("research_http_status_rejected");
     history.push({ urlHash: sha256(current), addressHashes: target.addresses.map(sha256), status: response.status });
     if (response.redirectUrl) {
+      if (response.status < 300 || response.status > 399) throw new Error("research_redirect_status_invalid");
       if (redirect === maxRedirects) throw new Error("redirect_limit_exceeded");
       current = new URL(response.redirectUrl, current).toString();
       continue;
     }
+    if (response.status < 200 || response.status > 299) throw new Error("research_http_status_rejected");
     const text = String(response.body ?? "")
       .replace(/<script[\s\S]*?<\/script>/giu, " ")
       .replace(/<style[\s\S]*?<\/style>/giu, " ")

@@ -7,6 +7,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import ts from "typescript";
 import {
   canonicalSnapshotHash,
+  CognitiveEngineBudgetAuthority,
+  createMockResearchTransport,
   executeAuthorizedAction,
   fetchResearchEvidence,
   requiredTestManifestForChanges,
@@ -30,23 +32,27 @@ const foundation = await loadTypescriptModule("_lib/cognitivePlatformFoundation.
 const hash = (label) => sha256(label);
 const now = new Date("2026-07-22T12:00:00.000Z");
 
-const source = (overrides = {}) => ({
+const source = (overrides = {}) => {
+  const reference = overrides.reference ?? "https://docs.expo.dev/reference";
+  const excerpt = overrides.excerpt ?? "A bounded official fixture excerpt.";
+  return ({
   id: "source-fixture",
-  reference: "https://docs.expo.dev/reference",
+  reference,
   publisher: "Expo",
   publicationDate: "2026-07-20T00:00:00.000Z",
   retrievalDate: "2026-07-21T00:00:00.000Z",
   sourceType: "official_documentation",
   primary: true,
-  canonicalUrlHash: hash("url"),
-  contentHash: hash("content"),
-  excerpt: "A bounded official fixture excerpt.",
+  canonicalUrlHash: foundation.cognitiveSha256(new URL(reference).toString()),
+  contentHash: foundation.cognitiveSha256(excerpt),
+  excerpt,
   freshnessDeadline: "2026-08-22T00:00:00.000Z",
   trustedForTools: false,
   retrievalStatus: "succeeded",
   citationMetadata: { title: "Official fixture", locator: "section-1" },
   ...overrides,
-});
+  });
+};
 const claim = (overrides = {}) => ({
   claim: "The fixture technical contract is supported.",
   confidence: 0.9,
@@ -212,6 +218,14 @@ const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, in
     artifactHash: hash("physical-artifact"),
     observedAt: now.toISOString(),
   }, collectorCredential);
+  ledger.recordChangedPaths({
+    recordId: "changed-paths-fixture",
+    collectorId: "collector-fixture",
+    finalCommit: "a".repeat(40),
+    diffHash: hash("diff"),
+    changedPaths: inputOverrides.changedPaths ?? ["docs/intelligence/fixture.md"],
+    observedAt: now.toISOString(),
+  }, collectorCredential);
   const input = {
     evaluatorIdentity: "evaluator-fixture",
     executorIdentity: "executor-fixture",
@@ -225,10 +239,11 @@ const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, in
     testEvidenceRecordIds: omitTests ? [] : ["test-evidence-fixture"],
     finalCommit: "a".repeat(40),
     finalCommitAt: "2026-07-22T11:59:00.000Z",
-    changedPaths: ["docs/intelligence/fixture.md"],
+    changedPathManifestRecordId: "changed-paths-fixture",
     platform: "shared",
     ...inputOverrides,
   };
+  delete input.changedPaths;
   return { input, ledger, runnerCredential, collectorCredential };
 };
 
@@ -358,8 +373,7 @@ test("D-24", "evaluator", () => {
   assert.equal(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger.reader(), now).status, "INCOMPLETE");
 });
 test("D-25", "evaluator", () => {
-  const fixture = evaluation();
-  fixture.input.changedPaths = ["config/release/android-production.json"];
+  const fixture = evaluation({ inputOverrides: { changedPaths: ["config/release/android-production.json"] } });
   assert.ok(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger.reader(), now).blockers.includes("physical_evidence_missing:native-runtime"));
 });
 test("D-26", "research", () => {
@@ -416,7 +430,7 @@ test("D-36", "research", async () => {
   await assert.rejects(() => fetchResearchEvidence({
     initialUrl: "https://public.example.test/start",
     resolveDns: async (hostname) => [{ address: hostname === "public.example.test" ? "93.184.216.34" : "127.0.0.1" }],
-    request: async () => ({ status: 302, connectedAddress: "93.184.216.34", contentType: "text/plain", compressedBytes: 10, decompressedBytes: 10, body: "", redirectUrl: "https://127.0.0.1/private" }),
+    request: createMockResearchTransport(async () => ({ status: 302, connectedAddress: "93.184.216.34", contentType: "text/plain", compressedBytes: 0, decompressedBytes: 0, body: "", redirectUrl: "https://127.0.0.1/private" })),
     signal: controller.signal,
   }), /private_or_reserved_target/u);
 });
@@ -443,10 +457,7 @@ test("D-39", "budget", async () => {
     operation: "repository_read_file",
     pathScopes: ["docs/"],
   }));
-  const budgetLedger = new foundation.CognitiveBudgetLedger({
-    modelTokens: 0, modelCost: 0, toolCalls: 1, toolBytes: 100, elapsedMs: 1000,
-    childTasks: 0, recursionDepth: 0, concurrentCalls: 1, retries: 0,
-  });
+  const budgetLedger = new CognitiveEngineBudgetAuthority();
   const controller = new AbortController();
   const operation = executeAuthorizedAction({
     repositoryRoot: temporary,
@@ -497,7 +508,7 @@ test("D-40", "conflict", () => {
     criticalFindingCreated: true,
     ownerReviewRequested: true,
   });
-  assert.equal(capabilityLedger.capabilities.get("capability-fixture").status, "revoked");
+  assert.equal(capabilityLedger.capabilitySnapshot("capability-fixture")?.status, "revoked");
   assert.equal(coordinator.childTaskStates.get("child-task-fixture"), "stopped");
   assert.equal(coordinator.criticalFindings.has("task-fixture"), true);
   assert.equal(coordinator.ownerReviewRequests.has("task-fixture"), true);

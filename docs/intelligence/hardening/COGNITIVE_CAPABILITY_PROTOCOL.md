@@ -23,6 +23,10 @@ cancellation, revocation, approval and scope. Replays, expiry,
 cross-task/project/repository/platform/provider use, stale snapshots and high-risk
 path mismatches fail closed.
 
+The in-memory source implementation keeps capability records, used call IDs, and
+lifecycle events in private fields. Consumers receive frozen snapshots only and
+cannot mutate replay or authorization state through an object reference.
+
 The action engine separately binds the complete requested action, repository,
 branch, every normalized path, high-risk classification, and primary resource to
 the capability before execution. A capability valid for one requested path

@@ -18,10 +18,11 @@ Observed local result under Node 20.20.2:
 
 The suite invokes the implementation handlers for every attack rather than
 accepting documentation strings as results. Database state attacks are also
-covered by 135 cognitive pgTAP assertions and a real two-session recurrence race.
-`test:cognitive-hardening-regressions` adds 25 variants derived from the failed
+covered by 147 cognitive pgTAP assertions and a real two-session recurrence race.
+`test:cognitive-hardening-regressions` adds 38 variants derived from the failed
 independent retests, including wrong bearer/nonce proof, complete request/capability
-binding, no-follow file and parent identity pinning, engine-owned budget
+binding, no-follow existing-file identity pinning, fail-closed new-file creation,
+engine-owned and anti-forgery budget
 reservation, postflight rollback, double-encoded/split secrets, IPv6/connected-peer
 and cancellation SSRF cases, verified source authority, caller-created evidence
 roots, deterministic required tests, and exact service-actor/scoped-Admin

@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import ts from "typescript";
 import {
+  CognitiveEngineBudgetAuthority,
+  createMockResearchTransport,
   executeAuthorizedAction,
   fetchResearchEvidence,
   isPrivateOrReservedNetworkAddress,
@@ -120,17 +122,7 @@ variant("R-03 composed action engine rejects a result after revocation", async (
     fs.writeFileSync(path.join(temporary, "docs", "intelligence", "COGNITIVE_SECURITY_MODEL.md"), "fixture");
     const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
     capabilityLedger.issue(capability());
-    const budgetLedger = new foundation.CognitiveBudgetLedger({
-      modelTokens: 0,
-      modelCost: 0,
-      toolCalls: 1,
-      toolBytes: 1_000,
-      elapsedMs: 1_000,
-      childTasks: 0,
-      recursionDepth: 0,
-      concurrentCalls: 1,
-      retries: 0,
-    });
+    const budgetLedger = new CognitiveEngineBudgetAuthority();
     const result = await executeAuthorizedAction({
       repositoryRoot: temporary,
       request: {
@@ -239,10 +231,10 @@ variant("R-08 research transport aborts an overlong request", async () => {
   await assert.rejects(() => fetchResearchEvidence({
     initialUrl: "https://public.example.test/timeout",
     resolveDns: async () => [{ address: "93.184.216.34" }],
-    request: ({ signal }) => {
+    request: createMockResearchTransport(({ signal }) => {
       requestSignal = signal;
       return new Promise(() => {});
-    },
+    }),
     signal: controller.signal,
     totalTimeoutMs: 100,
   }), /research_transport_timeout/u);
@@ -254,21 +246,21 @@ variant("R-09 redirect destination DNS is revalidated", async () => {
   await assert.rejects(() => fetchResearchEvidence({
     initialUrl: "https://public.example.test/start",
     resolveDns: async (hostname) => [{ address: hostname === "public.example.test" ? "93.184.216.34" : "169.254.169.254" }],
-    request: async () => ({
+    request: createMockResearchTransport(async () => ({
       status: 302,
       connectedAddress: "93.184.216.34",
       contentType: "text/plain",
-      compressedBytes: 8,
-      decompressedBytes: 8,
+      compressedBytes: 0,
+      decompressedBytes: 0,
       body: "",
       redirectUrl: "https://metadata.example.test/latest",
-    }),
+    })),
     signal: controller.signal,
   }), /private_or_reserved_target/u);
 });
 
 variant("R-10 consequential news requires three independent dimensions", () => {
-  const news = (id, publisher, reference, url, content) => ({
+  const news = (id, publisher, reference, content, overrides = {}) => ({
     id,
     reference,
     publisher,
@@ -276,26 +268,27 @@ variant("R-10 consequential news requires three independent dimensions", () => {
     retrievalDate: "2026-07-21T00:00:00.000Z",
     sourceType: "news",
     primary: false,
-    canonicalUrlHash: hash(url),
-    contentHash: hash(content),
-    excerpt: "Bounded news fixture.",
-    freshnessDeadline: "2026-08-22T00:00:00.000Z",
+    canonicalUrlHash: foundation.cognitiveSha256(new URL(reference).toString()),
+    contentHash: foundation.cognitiveSha256(content),
+    excerpt: content,
+    freshnessDeadline: "2026-07-27T00:00:00.000Z",
     retrievalStatus: "succeeded",
     citationMetadata: { title: id, locator: "section-1" },
     trustedForTools: false,
+    ...overrides,
   });
   const common = {
     claim: "Consequential current fixture.",
     confidence: 0.8,
-    freshnessDeadline: "2026-08-22T00:00:00.000Z",
+    freshnessDeadline: "2026-07-27T00:00:00.000Z",
     consequential: true,
     technicalFact: false,
     contradictionState: "none",
   };
   for (const sources of [
-    [news("a", "Reuters", "https://reuters.com/a", "a", "a"), news("b", "Reuters", "https://reuters.com/b", "b", "b")],
-    [news("a", "Reuters", "https://reuters.com/a", "same", "a"), news("b", "Associated Press", "https://apnews.com/b", "same", "b")],
-    [news("a", "Reuters", "https://reuters.com/a", "a", "same"), news("b", "Associated Press", "https://apnews.com/b", "b", "same")],
+    [news("a", "Reuters", "https://reuters.com/a", "excerpt-a"), news("b", "Reuters", "https://reuters.com/b", "excerpt-b")],
+    [news("a", "Reuters", "https://reuters.com/a", "excerpt-a"), news("b", "Associated Press", "https://apnews.com/b", "excerpt-b", { canonicalUrlHash: foundation.cognitiveSha256("https://reuters.com/a") })],
+    [news("a", "Reuters", "https://reuters.com/a", "same excerpt"), news("b", "Associated Press", "https://apnews.com/b", "same excerpt")],
   ]) {
     assert.ok(foundation.evaluateResearchClaim({ ...common, sources }, now)
       .reasons.includes("consequential_news_requires_verified_independent_corroboration"));
@@ -314,6 +307,7 @@ variant("R-11 evaluator ignores caller claims and requires trusted ledger record
   assert.equal("recordTest" in reader, false);
   assert.equal("recordRun" in reader, false);
   assert.equal("recordPhysical" in reader, false);
+  assert.equal("recordChangedPaths" in reader, false);
   const result = foundation.evaluateCognitiveRun({
     evaluatorIdentity: "independent-evaluator",
     executorIdentity: "untrusted-executor",
@@ -324,7 +318,7 @@ variant("R-11 evaluator ignores caller claims and requires trusted ledger record
     testEvidenceRecordIds: [],
     finalCommit: "a".repeat(40),
     finalCommitAt: "2026-07-22T11:59:00.000Z",
-    changedPaths: ["_lib/cognitivePlatformFoundation.ts"],
+    changedPathManifestRecordId: "missing-path-manifest",
     platform: "shared",
     testsPassed: true,
     completionSupported: true,
@@ -333,7 +327,7 @@ variant("R-11 evaluator ignores caller claims and requires trusted ledger record
   assert.equal(result.passed, false);
   assert.ok(result.blockers.includes("trusted_evidence_authority_not_configured"));
   assert.ok(result.blockers.includes("run_evidence_missing"));
-  assert.ok(result.blockers.includes("required_test_missing:lint"));
+  assert.ok(result.blockers.includes("trusted_changed_path_manifest_missing_or_mismatched"));
 });
 
 variant("R-12 rollback failure mutates every quarantine boundary", () => {
@@ -343,7 +337,7 @@ variant("R-12 rollback failure mutates every quarantine boundary", () => {
   rollback.register("variant-task", ["variant-child"]);
   const result = rollback.record("variant-task", false, now);
   assert.equal(result.taskStatus, "quarantined");
-  assert.equal(ledger.capabilities.get("variant-capability").status, "revoked");
+  assert.equal(ledger.capabilitySnapshot("variant-capability")?.status, "revoked");
   assert.equal(rollback.childTaskStates.get("variant-child"), "stopped");
   assert.equal(rollback.criticalFindings.has("variant-task"), true);
   assert.equal(rollback.ownerReviewRequests.has("variant-task"), true);
@@ -424,7 +418,7 @@ variant("R-15 composed executor binds action, branch, and every path", async () 
     ]) {
       const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
       capabilityLedger.issue(capability({ pathScopes: ["docs/intelligence/"] }));
-      const budgetLedger = new foundation.CognitiveBudgetLedger({
+      const budgetLedger = new CognitiveEngineBudgetAuthority({
         modelTokens: 0, modelCost: 0, toolCalls: 1, toolBytes: 1_000, elapsedMs: 1_000,
         childTasks: 0, recursionDepth: 0, concurrentCalls: 1, retries: 0,
       });
@@ -464,7 +458,7 @@ variant("R-16 a tool action cannot execute against zero tool budget", async () =
     fs.writeFileSync(path.join(temporary, "docs", "intelligence", "COGNITIVE_SECURITY_MODEL.md"), "allowed");
     const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
     capabilityLedger.issue(capability());
-    const budgetLedger = new foundation.CognitiveBudgetLedger({
+    const budgetLedger = new CognitiveEngineBudgetAuthority({
       modelTokens: 0, modelCost: 0, toolCalls: 0, toolBytes: 0, elapsedMs: 1_000,
       childTasks: 0, recursionDepth: 0, concurrentCalls: 0, retries: 0,
     });
@@ -502,7 +496,7 @@ variant("R-17 repository reads use a pinned no-follow descriptor", async () => {
     fs.writeFileSync(path.join(external, "outside.md"), "outside");
     const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
     capabilityLedger.issue(capability());
-    const budgetLedger = new foundation.CognitiveBudgetLedger({
+    const budgetLedger = new CognitiveEngineBudgetAuthority({
       modelTokens: 0, modelCost: 0, toolCalls: 1, toolBytes: 1_000, elapsedMs: 1_000,
       childTasks: 0, recursionDepth: 0, concurrentCalls: 1, retries: 0,
     });
@@ -554,7 +548,7 @@ variant("R-18 a parent-directory swap cannot escape a pinned path", async () => 
       fs.symlinkSync(path.join(external, "intelligence"), path.join(temporary, "docs", "intelligence"));
       return blockers;
     };
-    const budgetLedger = new foundation.CognitiveBudgetLedger({
+    const budgetLedger = new CognitiveEngineBudgetAuthority({
       modelTokens: 0, modelCost: 0, toolCalls: 1, toolBytes: 1_000, elapsedMs: 1_000,
       childTasks: 0, recursionDepth: 0, concurrentCalls: 1, retries: 0,
     });
@@ -582,7 +576,7 @@ variant("R-18 a parent-directory swap cannot escape a pinned path", async () => 
   }
 });
 
-variant("R-19 postflight revocation rolls back an engine-owned write", async () => {
+variant("R-19 new-file creation fails closed without a descriptor-relative openat adapter", async () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-write-rollback-"));
   try {
     fs.mkdirSync(path.join(temporary, "docs", "intelligence"), { recursive: true });
@@ -592,7 +586,7 @@ variant("R-19 postflight revocation rolls back an engine-owned write", async () 
       operation: "repository_write_new_file",
       pathScopes: ["docs/intelligence/"],
     }));
-    const budgetLedger = new foundation.CognitiveBudgetLedger({
+    const budgetLedger = new CognitiveEngineBudgetAuthority({
       modelTokens: 0, modelCost: 0, toolCalls: 1, toolBytes: 1_000, elapsedMs: 1_000,
       childTasks: 0, recursionDepth: 0, concurrentCalls: 1, retries: 0,
     });
@@ -619,7 +613,8 @@ variant("R-19 postflight revocation rolls back an engine-owned write", async () 
       rollbackCoordinator: rollback,
       signal: new AbortController().signal,
     });
-    assert.equal(result.status, "rolled_back_postflight");
+    assert.equal(result.status, "execution_failed_rolled_back");
+    assert.deepEqual(result.blockers, ["execution_failed"]);
     assert.equal(fs.existsSync(path.join(temporary, relative)), false);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
@@ -630,10 +625,10 @@ variant("R-20 connected research peer must match the public DNS pin", async () =
   await assert.rejects(() => fetchResearchEvidence({
     initialUrl: "https://public.example.test/peer",
     resolveDns: async () => [{ address: "93.184.216.34" }],
-    request: async () => ({
+    request: createMockResearchTransport(async () => ({
       status: 200, connectedAddress: "127.0.0.1", contentType: "text/plain",
       compressedBytes: 2, decompressedBytes: 2, body: "ok",
-    }),
+    })),
     signal: new AbortController().signal,
   }), /research_connected_peer_mismatch/u);
 });
@@ -645,7 +640,7 @@ variant("R-21 research cancellation wins over a noncooperative transport timeout
   await assert.rejects(() => fetchResearchEvidence({
     initialUrl: "https://public.example.test/cancel",
     resolveDns: async () => [{ address: "93.184.216.34" }],
-    request: async () => new Promise(() => {}),
+    request: createMockResearchTransport(async () => new Promise(() => {})),
     signal: controller.signal,
     totalTimeoutMs: 500,
   }), /research_cancelled/u);
@@ -713,11 +708,11 @@ variant("R-24 evaluator derives required tests and rejects caller-created author
     runEvidenceManifestHash: hash("manifest"), runEvidenceRecordId: "missing-run",
     testEvidenceRecordIds: [], finalCommit: "a".repeat(40),
     finalCommitAt: "2026-07-22T11:59:00.000Z",
-    changedPaths: [], platform: "shared",
+    changedPathManifestRecordId: "missing-path-manifest", platform: "shared",
   }, ledger.reader(), now);
   assert.notEqual(result.status, "PASS");
   assert.ok(result.blockers.includes("trusted_evidence_authority_not_configured"));
-  assert.ok(result.blockers.includes("required_test_missing:lint"));
+  assert.ok(result.blockers.includes("trusted_changed_path_manifest_missing_or_mismatched"));
 });
 
 variant("R-25 private identifiers are classified and redacted", () => {
@@ -727,6 +722,268 @@ variant("R-25 private identifiers are classified and redacted", () => {
   assert.equal(result.value.clientIp, "[REDACTED_IP]");
 });
 
+variant("R-26 strict model fields reject token-shaped and cross-field encoded secrets", () => {
+  const modelDocument = (overrides = {}) => JSON.stringify({
+    schemaVersion: 1,
+    objective: "Review bounded evidence.",
+    proposedActions: [],
+    evidenceIds: [],
+    blockers: [],
+    ...overrides,
+  });
+  assert.throws(
+    () => foundation.parseStrictModelDocument(modelDocument({ evidenceIds: ["ghp_abcdefghijklmnopqrstuvwxyz"] })),
+    /model_document_evidence_id_invalid/u,
+  );
+  assert.throws(
+    () => foundation.parseStrictModelDocument(modelDocument({ blockers: ["service_", "role=synthetic-secret-value"] })),
+    /model_document_blocker_rejected/u,
+  );
+  const encoded = Buffer.from("service_role=synthetic-secret-value").toString("base64url");
+  assert.equal(foundation.sanitizeCognitivePayload(encoded).accepted, false);
+});
+
+variant("R-27 percent-encoded credential query keys are rejected", () => {
+  const value = "https://example.com/path?to%6ben=synthetic-secret-value";
+  assert.equal(foundation.sanitizeCognitivePayload(value).accepted, false);
+  assert.ok(foundation.validateResearchUrl(value).includes("credential_bearing_url_forbidden"));
+});
+
+variant("R-28 research rejects HTTP errors and dishonest byte metadata", async () => {
+  const common = {
+    initialUrl: "https://public.example.test/evidence",
+    resolveDns: async () => [{ address: "93.184.216.34" }],
+    signal: new AbortController().signal,
+  };
+  await assert.rejects(() => fetchResearchEvidence({
+    ...common,
+    request: createMockResearchTransport(async () => ({
+      status: 500, connectedAddress: "93.184.216.34", contentType: "text/plain",
+      compressedBytes: 14, decompressedBytes: 14, body: "provider error",
+    })),
+  }), /research_http_status_rejected/u);
+  await assert.rejects(() => fetchResearchEvidence({
+    ...common,
+    request: createMockResearchTransport(async () => ({
+      status: 200, connectedAddress: "93.184.216.34", contentType: "text/plain",
+      compressedBytes: 1, decompressedBytes: 1, body: "x".repeat(5_000_000),
+    })),
+  }), /research_response_size_mismatch/u);
+});
+
+variant("R-29 research hashes are bound to the canonical URL and retained excerpt", () => {
+  const excerpt = "Bounded official evidence.";
+  const source = {
+    id: "hash-bound-source",
+    reference: "https://docs.expo.dev/reference",
+    publisher: "Expo",
+    publicationDate: "2026-07-21T00:00:00.000Z",
+    retrievalDate: "2026-07-22T00:00:00.000Z",
+    sourceType: "official_documentation",
+    primary: true,
+    canonicalUrlHash: hash("wrong-url"),
+    contentHash: hash("wrong-content"),
+    excerpt,
+    freshnessDeadline: "2026-08-20T00:00:00.000Z",
+    retrievalStatus: "succeeded",
+    citationMetadata: { title: "Official", locator: "reference" },
+    trustedForTools: false,
+  };
+  const result = foundation.evaluateResearchClaim({
+    claim: "A bounded technical claim.", confidence: 0.8,
+    freshnessDeadline: "2026-08-20T00:00:00.000Z",
+    consequential: false, technicalFact: true, sources: [source],
+    contradictionState: "none",
+  }, now);
+  assert.equal(result.accepted, false);
+  assert.ok(result.reasons.includes("source_hash_binding_invalid"));
+});
+
+variant("R-30 provider scope requests create a rejected owner-review finding", () => {
+  const envelope = foundation.createUntrustedToolEnvelope({
+    toolId: "provider", callId: "scope-request", taskId: "variant-task", source: "provider",
+    contentType: "text/plain", timestamp: now.toISOString(), truncated: false,
+    data: "Provider requires administrator access and production credentials.",
+  }, (value) => hash(stableJson(value)));
+  assert.equal(envelope.sanitizationState, "rejected");
+  assert.equal(envelope.ownerReviewRequired, true);
+  assert.equal(envelope.findingType, "provider_scope_expansion_request");
+  assert.equal(envelope.data, null);
+});
+
+variant("R-31 capability state and replay audit are not publicly mutable", () => {
+  const ledger = new foundation.CognitiveCapabilityLedger(proofVerifier);
+  ledger.issue(capability({ maximumCalls: 2, remainingCalls: 2 }));
+  assert.equal("capabilities" in ledger, false);
+  assert.equal("usedCallIds" in ledger, false);
+  assert.equal("events" in ledger, false);
+  assert.equal(ledger.consume("variant-capability", use(), gateState).event, "consumed");
+  const snapshot = ledger.capabilitySnapshot("variant-capability");
+  assert.throws(() => { snapshot.status = "active"; }, TypeError);
+  const events = ledger.eventSnapshot();
+  assert.throws(() => { events.length = 0; }, TypeError);
+  assert.match(ledger.consume("variant-capability", use(), gateState).reason, /capability_replay/u);
+});
+
+variant("R-32 a forged budget object cannot authorize execution", async () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-forged-budget-"));
+  try {
+    fs.mkdirSync(path.join(temporary, "docs"));
+    fs.writeFileSync(path.join(temporary, "docs", "fixture.md"), "fixture");
+    const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
+    capabilityLedger.issue(capability({ pathScopes: ["docs/"], operation: "repository_read_file" }));
+    const result = await executeAuthorizedAction({
+      repositoryRoot: temporary,
+      request: {
+        action: "repository_read_file", argv: [],
+        repositoryFullName: "Chillywood2025/chillywood-mobile", remote: "origin",
+        branch: "codex/cognitive-variant", paths: ["docs/fixture.md"],
+      },
+      allowedScopes: ["docs/"], allowNewFile: false,
+      capabilityLedger, capabilityId: "variant-capability",
+      capabilityUse: use({ path: "docs/fixture.md" }),
+      budgetLedger: { reserve: () => true, settle: () => true, release: () => true },
+      budgetReservationId: "forged-budget",
+      budgetRequest: { toolCalls: 1, toolBytes: 100, concurrentCalls: 1 },
+      leaseRegistry: new ResourceLeaseRegistry(), getRuntimeGate: () => gateState,
+      executeInvocation: async () => "must-not-run",
+      signal: new AbortController().signal,
+    });
+    assert.equal(result.accepted, false);
+    assert.deepEqual(result.blockers, ["engine_budget_authority_required"]);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+variant("R-33 new-file creation has no pathname-based parent-swap window", async () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-create-safe-"));
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-create-external-"));
+  try {
+    fs.mkdirSync(path.join(temporary, "docs", "intelligence"), { recursive: true });
+    fs.mkdirSync(path.join(external, "intelligence"), { recursive: true });
+    const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
+    capabilityLedger.issue(capability({ operation: "repository_write_new_file", pathScopes: ["docs/intelligence/"] }));
+    const rollback = new foundation.CognitiveRollbackCoordinator(capabilityLedger);
+    rollback.register("variant-task");
+    const result = await executeAuthorizedAction({
+      repositoryRoot: temporary,
+      request: {
+        action: "repository_write_new_file", argv: [],
+        repositoryFullName: "Chillywood2025/chillywood-mobile", remote: "origin",
+        branch: "codex/cognitive-variant", paths: ["docs/intelligence/new.md"],
+      },
+      allowedScopes: ["docs/intelligence/"], allowNewFile: true,
+      capabilityLedger, capabilityId: "variant-capability",
+      capabilityUse: use({ operation: "repository_write_new_file", path: "docs/intelligence/new.md" }),
+      budgetLedger: new CognitiveEngineBudgetAuthority({
+        modelTokens: 0, modelCost: 0, toolCalls: 1, toolBytes: 1_000, elapsedMs: 1_000,
+        childTasks: 0, recursionDepth: 0, concurrentCalls: 1, retries: 0,
+      }),
+      budgetReservationId: "new-file-safe",
+      budgetRequest: { toolCalls: 1, toolBytes: 100, concurrentCalls: 1 },
+      leaseRegistry: new ResourceLeaseRegistry(), getRuntimeGate: () => gateState,
+      executeInvocation: async () => {
+        throw new Error("must_not_execute");
+      },
+      rollbackCoordinator: rollback,
+      signal: new AbortController().signal,
+    });
+    assert.equal(result.accepted, false);
+    assert.equal(fs.existsSync(path.join(temporary, "docs", "intelligence", "new.md")), false);
+    assert.equal(fs.existsSync(path.join(external, "intelligence", "new.md")), false);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+    fs.rmSync(external, { recursive: true, force: true });
+  }
+});
+
+variant("R-34 object-key bytes count against the recursive sanitizer cap", () => {
+  const result = foundation.sanitizeCognitivePayload({ ["k".repeat(100_000)]: "safe" }, {
+    maxDepth: 8, maxKeys: 64, maxArray: 128, maxString: 4_000, maxBytes: 64,
+  });
+  assert.equal(result.accepted, false);
+  assert.ok(result.categories.includes("maximum_total_bytes_exceeded"));
+});
+
+variant("R-35 unreviewed research transports are rejected before network work", async () => {
+  await assert.rejects(() => fetchResearchEvidence({
+    initialUrl: "https://public.example.test/unreviewed",
+    resolveDns: async () => [{ address: "93.184.216.34" }],
+    request: async () => ({
+      status: 200, connectedAddress: "93.184.216.34", contentType: "text/plain",
+      compressedBytes: 2, decompressedBytes: 2, body: "ok",
+    }),
+    signal: new AbortController().signal,
+  }), /research_transport_not_reviewed/u);
+});
+
+variant("R-36 DNS receives and observes cancellation", async () => {
+  const controller = new AbortController();
+  let resolverSignal;
+  setTimeout(() => controller.abort(), 20);
+  await assert.rejects(() => fetchResearchEvidence({
+    initialUrl: "https://public.example.test/dns-cancel",
+    resolveDns: async (_hostname, options) => {
+      resolverSignal = options.signal;
+      return new Promise((_resolve, reject) => options.signal.addEventListener(
+        "abort", () => reject(new Error("dns_cancelled")), { once: true },
+      ));
+    },
+    request: createMockResearchTransport(async () => {
+      throw new Error("must_not_request");
+    }),
+    signal: controller.signal,
+    totalTimeoutMs: 500,
+  }), /research_cancelled|dns_cancelled/u);
+  assert.equal(resolverSignal.aborted, true);
+});
+
+variant("R-37 pure runtime SHA-256 binds research evidence deterministically", () => {
+  for (const value of ["", "abc", "Chi’llywood research fixture"]) {
+    assert.equal(foundation.cognitiveSha256(value), hash(value));
+  }
+});
+
+variant("R-38 a branded budget subclass cannot override engine reservations", async () => {
+  class ForgedBudgetAuthority extends CognitiveEngineBudgetAuthority {
+    reserve() { return true; }
+    settle() { return true; }
+    release() { return true; }
+  }
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-forged-budget-subclass-"));
+  try {
+    fs.mkdirSync(path.join(temporary, "docs"));
+    fs.writeFileSync(path.join(temporary, "docs", "fixture.md"), "fixture");
+    const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
+    capabilityLedger.issue(capability({ pathScopes: ["docs/"], operation: "repository_read_file" }));
+    const result = await executeAuthorizedAction({
+      repositoryRoot: temporary,
+      request: {
+        action: "repository_read_file", argv: [],
+        repositoryFullName: "Chillywood2025/chillywood-mobile", remote: "origin",
+        branch: "codex/cognitive-variant", paths: ["docs/fixture.md"],
+      },
+      allowedScopes: ["docs/"], allowNewFile: false,
+      capabilityLedger, capabilityId: "variant-capability",
+      capabilityUse: use({ path: "docs/fixture.md" }),
+      budgetLedger: new ForgedBudgetAuthority({
+        modelTokens: 0, modelCost: 0, toolCalls: 1, toolBytes: 1_000, elapsedMs: 1_000,
+        childTasks: 0, recursionDepth: 0, concurrentCalls: 1, retries: 0,
+      }),
+      budgetReservationId: "forged-budget-subclass",
+      budgetRequest: { toolCalls: 1, toolBytes: 100, concurrentCalls: 1 },
+      leaseRegistry: new ResourceLeaseRegistry(), getRuntimeGate: () => gateState,
+      executeInvocation: async () => "must-not-run",
+      signal: new AbortController().signal,
+    });
+    assert.equal(result.accepted, false);
+    assert.deepEqual(result.blockers, ["engine_budget_authority_required"]);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
 for (const entry of variants) await entry.callback();
-assert.equal(variants.length, 25);
+assert.equal(variants.length, 38);
 process.stdout.write(`cognitive hardening independent variants ${variants.length}/${variants.length} passed\n`);

@@ -86,6 +86,21 @@ begin
 end;
 $$;
 
+create or replace function public.cognitive_text_has_private_identifier(payload text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when coalesce(payload,'') ~ '^[a-f0-9]{40,128}$'
+      or coalesce(payload,'') ~ '^[a-f0-9-]{36}$' then false
+    else coalesce(payload,'') ~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
+      or coalesce(payload,'') ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
+      or coalesce(payload,'') ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
+  end
+$$;
+
 create or replace function public.cognitive_json_is_sanitized(payload jsonb)
 returns boolean
 language plpgsql
@@ -106,15 +121,18 @@ begin
     from jsonb_path_query(payload, 'strict $.** ? (@.type() == "string")') value
   loop
     aggregate_value := left(aggregate_value || string_value, 32768);
-    if public.cognitive_text_has_secret(string_value) then return false; end if;
+    if public.cognitive_text_has_secret(string_value)
+       or public.cognitive_text_has_private_identifier(string_value) then return false; end if;
   end loop;
   return not public.cognitive_text_has_secret(aggregate_value)
     and not public.cognitive_text_has_secret(payload::text);
 end;
 $$;
 revoke all on function public.cognitive_text_has_secret(text) from public, anon, authenticated;
+revoke all on function public.cognitive_text_has_private_identifier(text) from public, anon, authenticated;
 revoke all on function public.cognitive_json_is_sanitized(jsonb) from public, anon, authenticated;
 grant execute on function public.cognitive_text_has_secret(text) to service_role;
+grant execute on function public.cognitive_text_has_private_identifier(text) to service_role;
 grant execute on function public.cognitive_json_is_sanitized(jsonb) to service_role;
 
 create or replace function public.cognitive_assert_service_actor(
@@ -159,7 +177,10 @@ create table public.cognitive_projects (
   id uuid primary key default gen_random_uuid(),
   repository_full_name text not null check (repository_full_name = 'Chillywood2025/chillywood-mobile'),
   source_state text not null default 'security_hardened_scaffold_not_deployed'
-    check (source_state in ('security_hardening_in_progress', 'security_hardened_scaffold_not_deployed')),
+    check (source_state in (
+      'security_hardening_in_progress',
+      'security_hardened_scaffold_not_deployed'
+    )),
   activation_state text not null default 'off' check (activation_state = 'off'),
   scheduler_state text not null default 'none' check (scheduler_state = 'none'),
   production_authority boolean not null default false check (production_authority = false),
@@ -176,7 +197,11 @@ create table public.intelligence_tasks (
     branch_name ~ '^codex/[a-z0-9][a-z0-9/_-]{2,120}$'
     and branch_name !~* '(^|/)(main|master|release)(/|$)'
   ),
-  task_key text not null check (length(task_key) between 8 and 256),
+  task_key text not null check (
+    length(task_key) between 8 and 256
+    and not public.cognitive_text_has_secret(task_key)
+    and not public.cognitive_text_has_private_identifier(task_key)
+  ),
   objective_hash text not null check (objective_hash ~ '^[a-f0-9]{64}$'),
   status public.cognitive_task_status not null default 'received',
   actor_identity text not null check (length(actor_identity) between 3 and 128),
@@ -190,6 +215,9 @@ create table public.intelligence_tasks (
   unique (project_id, platform, environment, task_key),
   unique (id, project_id, platform, environment)
 );
+alter table public.intelligence_tasks
+  add constraint intelligence_tasks_no_user_content
+  check (data_class <> 'user_derived');
 
 do $$
 declare
@@ -715,22 +743,35 @@ create table public.cognitive_research_authorities (
 insert into public.cognitive_research_authorities(
   authority_id,canonical_host,source_type,publisher,ownership_identity
 ) values
-  ('expo-docs','docs.expo.dev','official_documentation','Expo','expo'),
+  -- BEGIN GENERATED RESEARCH AUTHORITIES — config/intelligence/research-authorities.json
   ('apple-docs','developer.apple.com','official_documentation','Apple','apple'),
   ('apple-policy','developer.apple.com','platform_policy','Apple','apple'),
   ('apple-store-policy','developer.apple.com','store_policy','Apple','apple'),
+  ('apple-security','developer.apple.com','security_advisory','Apple','apple'),
   ('android-docs','developer.android.com','official_documentation','Google','google'),
   ('android-policy','developer.android.com','platform_policy','Google','google'),
   ('android-store-policy','developer.android.com','store_policy','Google','google'),
+  ('android-security','developer.android.com','security_advisory','Google','google'),
+  ('firebase-docs','firebase.google.com','official_documentation','Google','google'),
+  ('firebase-security','firebase.google.com','security_advisory','Google','google'),
+  ('expo-docs','docs.expo.dev','official_documentation','Expo','expo'),
+  ('expo-security','docs.expo.dev','security_advisory','Expo','expo'),
   ('supabase-docs','supabase.com','official_documentation','Supabase','supabase'),
+  ('supabase-security','supabase.com','security_advisory','Supabase','supabase'),
   ('github-docs','docs.github.com','official_documentation','GitHub','github'),
+  ('github-security','docs.github.com','security_advisory','GitHub','github'),
   ('revenuecat-docs','revenuecat.com','official_documentation','RevenueCat','revenuecat'),
+  ('revenuecat-security','revenuecat.com','security_advisory','RevenueCat','revenuecat'),
   ('stripe-docs','stripe.com','official_documentation','Stripe','stripe'),
+  ('stripe-security','stripe.com','security_advisory','Stripe','stripe'),
   ('livekit-docs','docs.livekit.io','official_documentation','LiveKit','livekit'),
+  ('livekit-security','docs.livekit.io','security_advisory','LiveKit','livekit'),
   ('cloudflare-docs','developers.cloudflare.com','official_documentation','Cloudflare','cloudflare'),
+  ('cloudflare-security','developers.cloudflare.com','security_advisory','Cloudflare','cloudflare'),
   ('iana-docs','iana.org','official_documentation','IANA','iana'),
   ('reuters-news','reuters.com','news','Reuters','reuters'),
   ('ap-news','apnews.com','news','Associated Press','associated-press');
+  -- END GENERATED RESEARCH AUTHORITIES
 alter table public.cognitive_research_authorities enable row level security;
 alter table public.cognitive_research_authorities force row level security;
 revoke all on table public.cognitive_research_authorities from public,anon,authenticated;
@@ -759,7 +800,16 @@ alter table public.research_sources
   add column trusted_for_tool_execution boolean not null default false check (trusted_for_tool_execution = false),
   add constraint research_source_date_order check (
     (publication_date is null or publication_date <= retrieval_date)
+    and retrieval_date >= created_at - interval '48 hours'
     and retrieval_date <= created_at + interval '5 minutes'
+    and freshness_deadline > retrieval_date
+    and freshness_deadline <= retrieval_date + case source_type
+      when 'news' then interval '7 days'
+      when 'security_advisory' then interval '14 days'
+      when 'platform_policy' then interval '30 days'
+      when 'store_policy' then interval '30 days'
+      else interval '90 days'
+    end
     and created_at <= statement_timestamp() + interval '5 minutes'
   ),
   add constraint research_source_text_sanitized check (
@@ -792,6 +842,16 @@ alter table public.research_claims
     check (contradiction_state in ('none', 'detected', 'unresolved', 'resolved')),
   add column support_state text not null default 'pending'
     check (support_state in ('pending', 'supported', 'blocked', 'stale', 'contradicted'));
+alter table public.research_claims
+  add constraint research_claim_freshness_ceiling check (
+    freshness_deadline > created_at
+    and freshness_deadline <= created_at + case category
+      when 'consequential_news' then interval '7 days'
+      when 'security' then interval '14 days'
+      when 'platform_policy' then interval '30 days'
+      else interval '90 days'
+    end
+  );
 
 create table public.research_claim_sources (
   claim_id uuid not null,
@@ -943,6 +1003,11 @@ create table public.execution_plan_snapshots (
   approval_scope_hash text not null check (approval_scope_hash ~ '^[a-f0-9]{64}$'),
   approval_request_id uuid not null references public.autonomous_approval_requests(id),
   created_at timestamptz not null default statement_timestamp(),
+  data_class public.cognitive_data_class not null default 'operational_metadata'
+    check (data_class in ('operational_metadata','non_personal_audit','security_evidence')),
+  retention_until timestamptz not null default statement_timestamp() + interval '365 days'
+    check (retention_until > created_at and retention_until <= created_at + interval '365 days'),
+  legal_hold boolean not null default false,
   unique (id, task_id, project_id, platform, environment),
   unique (task_id, snapshot_hash),
   foreign key (plan_id, task_id, project_id, platform, environment)
@@ -1441,10 +1506,10 @@ declare
   run_value public.execution_runs%rowtype;
 begin
   perform public.cognitive_assert_service_actor(
-    array['cognitive_control_plane','product_intelligence_operator','independent_evaluation_judge'],
+    array['cognitive_control_plane','product_intelligence_operator'],
     p_actor_identity
   );
-  if p_actor_identity not in ('cognitive_control_plane','product_intelligence_operator','independent_evaluation_judge')
+  if p_actor_identity not in ('cognitive_control_plane','product_intelligence_operator')
      or p_transition_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'cognitive_transition_actor_or_hash_invalid' using errcode='P0001';
   end if;
@@ -2368,7 +2433,7 @@ begin
     'cognitive_resource_leases','cognitive_resource_lease_events',
     'cognitive_state_transition_events','cognitive_current_findings',
     'finding_lifecycle_events','cognitive_erasure_events','cognitive_owner_review_requests',
-    'cognitive_approval_bindings'
+    'cognitive_approval_bindings','cognitive_research_authorities'
   ] loop
     execute format(
       'revoke insert, update, delete, truncate, references, trigger on table public.%I from service_role',
@@ -2377,6 +2442,128 @@ begin
   end loop;
 end
 $$;
+
+-- The broker, not a model/caller, computes the URL and bounded-evidence hashes.
+-- This is the only future source-ingestion write surface; the migration remains
+-- undeployed and therefore cannot ingest production research.
+create function public.cognitive_record_research_source(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment,
+  p_authority_id text,
+  p_reference text,
+  p_publisher text,
+  p_publication_date timestamptz,
+  p_retrieval_date timestamptz,
+  p_freshness_deadline timestamptz,
+  p_source_type text,
+  p_is_primary boolean,
+  p_bounded_excerpt text,
+  p_citation_title text,
+  p_citation_locator text,
+  p_resolved_address_hashes text[],
+  p_actor_identity text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  source_id uuid;
+  v_canonical_host text;
+  owner_identity text;
+  url_hash text;
+  body_hash text;
+  ttl interval;
+begin
+  perform public.cognitive_assert_service_actor(array['research_source_broker'],p_actor_identity);
+  v_canonical_host := lower((regexp_match(p_reference, '^https://([^/?#:@]+)(?:[/?]|$)'))[1]);
+  ttl := case p_source_type
+    when 'news' then interval '7 days'
+    when 'security_advisory' then interval '14 days'
+    when 'platform_policy' then interval '30 days'
+    when 'store_policy' then interval '30 days'
+    else interval '90 days'
+  end;
+  if p_actor_identity <> 'research_source_broker'
+     or v_canonical_host is null
+     or length(p_reference) not between 10 and 2048
+     or p_reference ~ '#'
+     or split_part(p_reference,'?',2) ~ '%'
+     or public.cognitive_text_has_secret(p_reference)
+     or public.cognitive_text_has_private_identifier(p_reference)
+     or public.cognitive_text_has_secret(p_bounded_excerpt)
+     or public.cognitive_text_has_private_identifier(p_bounded_excerpt)
+     or length(p_bounded_excerpt) not between 1 and 2000
+     or length(trim(p_citation_title)) not between 1 and 512
+     or length(trim(p_citation_locator)) not between 1 and 512
+     or public.cognitive_text_has_secret(p_citation_title)
+     or public.cognitive_text_has_secret(p_citation_locator)
+     or p_retrieval_date < statement_timestamp()-interval '48 hours'
+     or p_retrieval_date > statement_timestamp()+interval '5 minutes'
+     or p_freshness_deadline <= p_retrieval_date
+     or p_freshness_deadline > p_retrieval_date+ttl
+     or p_publication_date is not null and p_publication_date > p_retrieval_date
+     or cardinality(p_resolved_address_hashes) not between 1 and 16
+     or exists (
+       select 1 from unnest(p_resolved_address_hashes) address_hash
+       where address_hash !~ '^[a-f0-9]{64}$'
+     )
+     or not exists (
+       select 1 from public.intelligence_tasks task
+       where task.id=p_task_id and task.project_id=p_project_id
+         and task.platform=p_platform and task.environment=p_environment
+         and task.cancelled_at is null and task.quarantined_at is null
+     ) then
+    raise exception 'research_source_ingestion_rejected' using errcode='P0001';
+  end if;
+  select authority.ownership_identity into owner_identity
+  from public.cognitive_research_authorities authority
+  where authority.authority_id=p_authority_id
+    and authority.canonical_host=v_canonical_host
+    and authority.source_type=p_source_type
+    and authority.publisher=p_publisher;
+  if owner_identity is null then
+    raise exception 'research_source_authority_rejected' using errcode='P0001';
+  end if;
+  url_hash := encode(extensions.digest(convert_to(p_reference,'UTF8'),'sha256'),'hex');
+  body_hash := encode(extensions.digest(convert_to(p_bounded_excerpt,'UTF8'),'sha256'),'hex');
+  insert into public.research_sources(
+    task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
+    summary,evidence_metadata,data_class,retention_until,legal_hold,
+    authority_id,canonical_host,ownership_identity,source_reference_hash,
+    canonical_url_hash,content_hash,publisher,publication_date,retrieval_date,
+    freshness_deadline,source_type,is_primary,bounded_excerpt,citation_metadata,
+    trusted_for_tool_execution
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,p_actor_identity,
+    v_canonical_host || ':' || p_source_type || ':' || url_hash,'verified',
+    '{}'::jsonb,'{}'::jsonb,'research_cache',p_freshness_deadline,false,
+    p_authority_id,v_canonical_host,owner_identity,url_hash,url_hash,body_hash,
+    p_publisher,p_publication_date,p_retrieval_date,p_freshness_deadline,
+    p_source_type,p_is_primary,p_bounded_excerpt,
+    jsonb_build_object('title',p_citation_title,'locator',p_citation_locator),false
+  ) returning id into source_id;
+  insert into public.research_retrieval_events(
+    source_id,task_id,project_id,platform,environment,request_url_hash,
+    resolved_address_hashes,response_hash,result
+  ) values (
+    source_id,p_task_id,p_project_id,p_platform,p_environment,url_hash,
+    p_resolved_address_hashes,body_hash,'accepted'
+  );
+  return source_id;
+end;
+$$;
+revoke all on function public.cognitive_record_research_source(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,
+  timestamptz,timestamptz,timestamptz,text,boolean,text,text,text,text[],text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_record_research_source(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,
+  timestamptz,timestamptz,timestamptz,text,boolean,text,text,text,text[],text
+) to service_role;
 
 -- Superseded overloads were created in source order above for baseline
 -- compatibility; remove them after the strict RPCs have been installed.

@@ -20,5 +20,9 @@ decompression-ratio limits and a text/JSON content-type allowlist prevent respon
 amplification. Scripts, forms and hidden control content are stripped. Remaining
 text is still labeled untrusted evidence and cannot invoke a tool or widen scope.
 
-CI uses an injected mock resolver/transport. No production web credential or
-network authority exists.
+CI accepts only a branded reviewed mock transport. The source also contains a
+credential-free HTTPS transport that pins the validated DNS address through the
+TLS connection lookup, verifies the actual socket peer, applies identity
+encoding, counts actual streamed bytes, rejects non-2xx results, and propagates
+cancellation into DNS. Neither transport is deployed and no production web
+credential or network authority exists.
