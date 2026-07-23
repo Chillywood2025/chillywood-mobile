@@ -77,6 +77,17 @@ const normalizeSecurityText = (
     : normalized;
 };
 
+const normalizePolicyLabel = (
+  value: string,
+  policy: CanonicalSecurityPolicy,
+): string => {
+  const normalized = normalizeSecurityText(value, policy);
+  const folded = policy.normalization.caseFoldLabels
+    ? normalized.toLocaleLowerCase("en-US")
+    : normalized;
+  return folded.replace(/[^a-z0-9]/giu, "");
+};
+
 const boundedDecode = (
   value: string,
   policy: CanonicalSecurityPolicy,
@@ -127,11 +138,31 @@ const boundedDecode = (
 const collectBoundedText = (
   value: unknown,
   policy: CanonicalSecurityPolicy,
-): Readonly<{ valid: boolean; texts: readonly string[] }> => {
+): Readonly<{
+  valid: boolean;
+  sensitiveLabeledValue: boolean;
+  texts: readonly string[];
+}> => {
   const texts: string[] = [];
   const seen = new WeakSet<object>();
   let totalBytes = 0;
   let fragments = 0;
+  let sensitiveLabeledValue = false;
+  const secretLabels = new Set(
+    policy.secretLabels.map((label) => normalizePolicyLabel(label, policy)),
+  );
+  const privateLabelAliases = policy.privateIdentifierCategories.flatMap((category) => {
+    const normalized = normalizePolicyLabel(category, policy);
+    return normalized.endsWith("identifier")
+      ? [normalized, normalized.replace(/identifier$/u, "id"), normalized.replace(/identifier$/u, "")]
+      : [normalized];
+  });
+  const safeStatuses = new Set(
+    policy.safeStatusMetadata.map((status) => normalizePolicyLabel(status, policy)),
+  );
+  const isSafeStatus = (entry: unknown): boolean =>
+    typeof entry === "string" &&
+    safeStatuses.has(normalizePolicyLabel(entry, policy));
   const visit = (entry: unknown, depth: number): boolean => {
     if (depth > policy.limits.maximumDepth) return false;
     if (typeof entry === "string") {
@@ -167,6 +198,28 @@ const collectBoundedText = (
       }
       for (const key of keys.sort()) {
         const normalizedKey = normalizeSecurityText(key, policy);
+        const keyBytes = new TextEncoder().encode(key).byteLength;
+        if (keyBytes > policy.limits.maximumStringBytes) return false;
+        totalBytes += keyBytes;
+        fragments += 1;
+        if (
+          totalBytes > policy.limits.maximumTotalBytes ||
+          fragments > policy.limits.maximumFragments
+        ) {
+          return false;
+        }
+        const policyKey = normalizePolicyLabel(key, policy);
+        if (
+          (
+            secretLabels.has(policyKey) ||
+            privateLabelAliases.some(
+              (alias) => alias.length >= 4 && policyKey.includes(alias),
+            )
+          ) &&
+          !isSafeStatus(record[key])
+        ) {
+          sensitiveLabeledValue = true;
+        }
         texts.push(normalizedKey);
         if (!visit(record[key], depth + 1)) return false;
       }
@@ -174,7 +227,8 @@ const collectBoundedText = (
     }
     return false;
   };
-  return Object.freeze({ valid: visit(value, 0), texts: Object.freeze(texts) });
+  const valid = visit(value, 0);
+  return Object.freeze({ valid, sensitiveLabeledValue, texts: Object.freeze(texts) });
 };
 
 export const classifyCanonicalSecurityPayload = (
@@ -184,6 +238,7 @@ export const classifyCanonicalSecurityPayload = (
   const startedAt = Date.now();
   const collected = collectBoundedText(value, policy);
   if (!collected.valid) return "invalid_or_oversized";
+  if (collected.sensitiveLabeledValue) return "secret_or_private";
   const joined = collected.texts.join(" ");
   const fragmentJoined = collected.texts.join("");
   const candidates = new Set<string>([
@@ -502,12 +557,50 @@ const structuredProviderClassification = (
   }
 
   if (provider === "github") {
-    const permissionEntries = entries.filter(([key]) =>
-      ["actions", "administration", "contents", "members", "workflows"].includes(key)
+    const knownPermissionKeys = new Set([
+      "actions",
+      "administration",
+      "attestations",
+      "checks",
+      "codespaces",
+      "contents",
+      "dependabotsecrets",
+      "deployments",
+      "environments",
+      "issues",
+      "members",
+      "metadata",
+      "organizationadministration",
+      "packages",
+      "pages",
+      "pullrequests",
+      "releases",
+      "repositoryhooks",
+      "secrets",
+      "securityevents",
+      "statuses",
+      "workflows",
+    ]);
+    const permissionValues = new Set(["read", "write", "none"]);
+    const permissionEntries = entries.filter(([, value]) =>
+      permissionValues.has(value)
     );
+    const unknownPermission = permissionEntries.some(
+      ([key]) => !knownPermissionKeys.has(key),
+    );
+    const malformedKnownPermission = entries.some(
+      ([key, value]) => knownPermissionKeys.has(key) && !permissionValues.has(value),
+    );
+    if (unknownPermission || malformedKnownPermission) return "unknown";
     if (
       permissionEntries.some(([key, value]) =>
-        (key === "administration" || key === "members") && value === "write"
+        [
+          "administration",
+          "members",
+          "organizationadministration",
+          "repositoryhooks",
+          "secrets",
+        ].includes(key) && value === "write"
       )
     ) return "owner_admin_or_escalation";
     if (permissionEntries.some(([, value]) => value === "write")) {
@@ -577,9 +670,6 @@ export const classifyProviderPolicy = (
         ? "owner_admin_or_escalation"
         : "write_or_release_authority";
       reasons.push("mutation_or_escalation_authority_observed");
-    } else if (/\b(?:read|view|list|get|describe|download)\b/iu.test(serialized)) {
-      classification = "read_only";
-      reasons.push("read_only_authority_observed");
     } else {
       reasons.push("provider_policy_unknown");
     }

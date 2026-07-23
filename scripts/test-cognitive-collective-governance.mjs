@@ -39,12 +39,16 @@ compile("_lib/cognitivePolicyEngine.ts", "cognitivePolicyEngine.mjs", [
     'from "./cognitivePlatformFoundation.mjs"',
   ],
 ]);
+compile("_lib/cognitiveAdminStatus.ts", "cognitiveAdminStatus.mjs");
 
 const governance = await import(
   `file://${path.join(temporaryRoot, "cognitiveCollectiveGovernance.mjs")}`
 );
 const policyEngine = await import(
   `file://${path.join(temporaryRoot, "cognitivePolicyEngine.mjs")}`
+);
+const adminStatus = await import(
+  `file://${path.join(temporaryRoot, "cognitiveAdminStatus.mjs")}`
 );
 const securityPolicy = JSON.parse(
   fs.readFileSync(
@@ -217,6 +221,29 @@ await test("blind first assessment is required", () => {
 await test("risk quorum passes with required critics", () => {
   assert.equal(quorumEvaluation.state, "quorum_met");
 });
+await test("runtime quorum rejects invented council roles", () => {
+  const inventedRoles = ["invented_role_a", "invented_role_b"];
+  const evaluation = governance.evaluateGovernanceDecision({
+    decisionId: "decision-001",
+    optionId: "minimal-repair",
+    risk: "high",
+    votes: [
+      ...votes,
+      ...inventedRoles.map((role, index) => ({
+        ...votes[0],
+        voteId: `invented-vote-${index}`,
+        role,
+        voterIdentityHash: hash(`invented:${role}`),
+        assessmentHash: hash(`invented-assessment:${role}`),
+      })),
+    ],
+    vetoes: [],
+    dissents: [],
+  });
+  assert.equal(evaluation.state, "invalid");
+  assert.ok(evaluation.blockers.includes("vote_invalid"));
+  assert.equal(evaluation.uniqueRoleCount, roles.length);
+});
 await test("duplicate model vote is rejected", () => {
   const evaluation = governance.evaluateGovernanceDecision({
     decisionId: "decision-001",
@@ -267,9 +294,10 @@ await test("decision manifest requires quorum", () => {
           rejectedOptionIds: ["no-action"],
           councilRoles: roles,
           independenceAttestationHashes: roles.map((role) => hash(role)),
-          voteManifestHash: hash("votes"),
-          vetoManifestHash: hash("vetoes"),
-          dissentManifestHash: hash("dissent"),
+          voteManifestHash: quorumEvaluation.voteManifestHash,
+          vetoManifestHash: quorumEvaluation.vetoManifestHash,
+          dissentManifestHash: quorumEvaluation.dissentManifestHash,
+          evaluationHash: quorumEvaluation.evaluationHash,
           stakeholderImpactHash: hash("impact"),
           risk: "medium",
           requiredTestsHash: hash("tests"),
@@ -300,9 +328,10 @@ await test("decision manifest hash is internal", () => {
       rejectedOptionIds: ["no-action"],
       councilRoles: roles,
       independenceAttestationHashes: roles.map((role) => hash(role)),
-      voteManifestHash: hash("votes"),
-      vetoManifestHash: hash("vetoes"),
-      dissentManifestHash: hash("dissent"),
+      voteManifestHash: quorumEvaluation.voteManifestHash,
+      vetoManifestHash: quorumEvaluation.vetoManifestHash,
+      dissentManifestHash: quorumEvaluation.dissentManifestHash,
+      evaluationHash: quorumEvaluation.evaluationHash,
       stakeholderImpactHash: hash("impact"),
       risk: "medium",
       requiredTestsHash: hash("tests"),
@@ -317,6 +346,7 @@ await test("decision manifest hash is internal", () => {
     quorumEvaluation,
   );
   assert.match(manifest.decisionHash, /^[a-f0-9]{64}$/u);
+  assert.equal(manifest.evaluationHash, quorumEvaluation.evaluationHash);
 });
 await test("owner approval window is exactly twenty-four hours", () => {
   assert.deepEqual(
@@ -375,6 +405,56 @@ await test("capability renewal cannot widen scope", () => {
         newCapabilityId: "capability-002",
         issuedAt: "2026-07-23T12:15:00.000Z",
         expiresAt: "2026-07-23T12:45:00.000Z",
+        taskState: "active",
+        emergencyStop: false,
+        newBlocker: false,
+        executionsRemaining: 1,
+        budgetAvailable: true,
+      }),
+    /capability_renewal_not_authorized/u,
+  );
+});
+await test("revoked and consumed capabilities cannot renew", () => {
+  for (const status of ["revoked", "consumed"]) {
+    assert.throws(
+      () =>
+        governance.authorizeEquivalentCapabilityRenewal({
+          approval: approvalBase,
+          priorCapability: {
+            capabilityId: `capability-${status}`,
+            taskId: "task-001",
+            decisionManifestHash: approvalBase.decisionManifestHash,
+            scopeHash: approvalBase.scopeHash,
+            status,
+          },
+          newCapabilityId: `renewed-${status}`,
+          issuedAt: "2026-07-23T12:15:00.000Z",
+          expiresAt: "2026-07-23T12:45:00.000Z",
+          taskState: "active",
+          emergencyStop: false,
+          newBlocker: false,
+          executionsRemaining: 1,
+          budgetAvailable: true,
+        }),
+      /capability_renewal_not_authorized/u,
+    );
+  }
+});
+await test("capability renewal cannot outlive owner approval", () => {
+  assert.throws(
+    () =>
+      governance.authorizeEquivalentCapabilityRenewal({
+        approval: approvalBase,
+        priorCapability: {
+          capabilityId: "capability-active",
+          taskId: "task-001",
+          decisionManifestHash: approvalBase.decisionManifestHash,
+          scopeHash: approvalBase.scopeHash,
+          status: "active",
+        },
+        newCapabilityId: "capability-too-late",
+        issuedAt: "2026-07-24T11:45:00.000Z",
+        expiresAt: "2026-07-24T12:45:00.000Z",
         taskState: "active",
         emergencyStop: false,
         newBlocker: false,
@@ -764,6 +844,22 @@ await test("canonical sanitizer detects fragments and credentials", () => {
     "secret_or_private",
   );
 });
+await test("canonical sanitizer enforces policy labels and object-key byte budget", () => {
+  assert.equal(
+    policyEngine.classifyCanonicalSecurityPayload(
+      { api_key: "synthetic-sensitive-value" },
+      securityPolicy,
+    ),
+    "secret_or_private",
+  );
+  assert.equal(
+    policyEngine.classifyCanonicalSecurityPayload(
+      { ["x".repeat(securityPolicy.limits.maximumStringBytes + 1)]: "safe" },
+      securityPolicy,
+    ),
+    "invalid_or_oversized",
+  );
+});
 await test("canonical sanitizer preserves safe international text", () => {
   assert.equal(
     policyEngine.classifyCanonicalSecurityPayload(
@@ -811,6 +907,18 @@ await test("credential path policy rejects backups and unicode variants", () => 
     ),
     "forbidden",
   );
+  for (const value of [
+    "docs/.cargo/credentials.toml",
+    "docs/.yarnrc.yml",
+    "docs/.pypirc",
+    "docs/.gem/credentials",
+  ]) {
+    assert.equal(
+      policyEngine.classifySensitiveRepositoryPath(value, pathPolicy),
+      "forbidden",
+      value,
+    );
+  }
 });
 await test("provider authority is never executable", () => {
   const decision = policyEngine.classifyProviderPolicy("aws", {
@@ -839,6 +947,59 @@ await test("typed provider policy interpreters preserve deny and escalation sema
     assert.equal(decision.classification, expected, String(provider));
     assert.equal(decision.executable, false);
   }
+});
+await test("provider policies fail closed for unknown and release permissions", () => {
+  const unknownGithub = policyEngine.classifyProviderPolicy("github", {
+    permissions: { contents: "read", synthetic_future_permission: "read" },
+  });
+  assert.equal(unknownGithub.classification, "unknown");
+  assert.equal(unknownGithub.ownerReviewRequired, true);
+  const malformedGithub = policyEngine.classifyProviderPolicy("github", {
+    permissions: { contents: "read", workflows: "sometimes" },
+  });
+  assert.equal(malformedGithub.classification, "unknown");
+  const releaseGithub = policyEngine.classifyProviderPolicy("github", {
+    permissions: { releases: "write" },
+  });
+  assert.equal(releaseGithub.classification, "write_or_release_authority");
+  const unknownPlay = policyEngine.classifyProviderPolicy("google_play", {
+    operation: "synthetic_future_operation",
+  });
+  assert.equal(unknownPlay.classification, "unknown");
+  assert.equal(unknownPlay.ownerReviewRequired, true);
+});
+await test("Admin status parser accepts direct and enveloped live readback only", () => {
+  const direct = {
+    source: "live_readback",
+    canManageLevel01: true,
+    deploymentState: "deployed",
+    schedulerState: "none",
+    switches: { cognitive_research_enabled: true },
+    pendingApprovalCount: 1,
+    latestDecisionCount: 2,
+    emergencyStop: false,
+  };
+  assert.deepEqual(adminStatus.parseLiveCognitiveStatusResponse(direct), {
+    canManageLevel01: true,
+    deploymentState: "deployed",
+    schedulerState: "none",
+    switches: { cognitive_research_enabled: true },
+    pendingApprovalCount: 1,
+    latestDecisionCount: 2,
+    emergencyStop: false,
+  });
+  assert.equal(
+    adminStatus.parseLiveCognitiveStatusResponse({ ok: true, status: direct })
+      ?.latestDecisionCount,
+    2,
+  );
+  assert.equal(
+    adminStatus.parseLiveCognitiveStatusResponse({
+      ...direct,
+      source: "source_manifest",
+    }),
+    null,
+  );
 });
 await test("timestamp exact expiration is inactive", () => {
   assert.equal(

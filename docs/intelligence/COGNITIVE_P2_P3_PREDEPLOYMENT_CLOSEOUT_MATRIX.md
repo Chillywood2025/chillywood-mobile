@@ -22,6 +22,10 @@ Governance head and its separate review-only PR are the deployment evidence.
 | Retention and erasure | Policy remains `owner_counsel_decision_required`; private/user-derived memory, reports, chats, media, analytics, and model inputs fail closed. Only public/repository/non-personal bounded evidence is permitted. | Level 0/1 pgTAP | closed for public/non-personal canary only |
 | Activation prerequisites | Research/memory require retention gate; deliberation requires three research canaries; executor requires three deliberations plus a fresh credential attestation; schedules require three independently evaluated draft PRs. | Level 0/1 pgTAP | closed |
 | Admin truth | Source fallback is labeled source-only. Live readback is backend-authoritative. Only exact Owner can attempt Level 0/1 changes; backend gates remain authoritative. | TypeScript, route/access guards, Edge check | closed |
+| Service identity | Runtime governance mutations require a separately stored opaque service token whose hash is bound to one closed service identity, purpose, validity window, and revocation state. A caller cannot select an identity label. | governance Edge tests; foundation/governance/Level 0/1 pgTAP | closed pending independent retest |
+| Canary evidence | Research, deliberation, and credential canary acceptance require existing relational evidence, a trusted execution receipt, and an independent evaluator pass. Request JSON cannot create a passing canary or credential attestation. | governance Edge tests; Level 0/1 pgTAP | closed pending independent retest |
+| Governance derivation | Council roles, votes, vetoes, dissents, and evaluation hashes use closed schemas. Quorum requires support to exceed opposition, mandatory vetoes fail closed, and authorization recomputes/binds the evaluation to the exact manifest. | governance source and adversarial tests | closed pending independent retest |
+| Capability postflight | Consumption rechecks the finalized decision, active approval, veto state, execution count, expiry, task state, cancellation, quarantine, deadman, exact stored result, budget, and scoped write leases. | foundation/governance pgTAP | closed pending independent retest |
 
 Remaining non-technical decisions:
 
@@ -31,3 +35,8 @@ Remaining non-technical decisions:
   draft-PR executor canary.
 - A model provider credential is optional for deterministic source ingestion but
   required before model-backed production research or deliberation.
+
+The trusted research transport/runner, model-backed deliberation worker,
+least-privilege GitHub draft-PR broker, and bounded schedule worker are not
+fabricated by this checkpoint. Their absence is a deployment/canary blocker, not
+evidence of a successful canary.

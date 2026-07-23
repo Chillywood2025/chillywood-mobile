@@ -369,7 +369,7 @@ begin
         'sourceCommit', p_source_commit
       ),
       p_rollback_hash,
-      'governance_constitution_service'
+      p_actor_identity
     );
   else
     select version.id into constitution_version_id
@@ -1533,3 +1533,779 @@ comment on table public.cognitive_level01_canary_runs is
   'Immutable bounded Level 0/1 canary evidence; never stores private user content.';
 comment on table public.cognitive_level01_schedule_definitions is
   'Owner-gated bounded Level 0/1 schedule definitions; all rows begin disabled.';
+
+-- Trusted runner evidence is produced by a credential-isolated runner and read
+-- by the evaluator.  The evaluator never accepts caller-authored pass booleans,
+-- exit codes, commits, or physical-proof labels.
+create table public.cognitive_trusted_test_results (
+  id uuid primary key default gen_random_uuid(),
+  receipt_id uuid not null,
+  task_id uuid not null,
+  project_id uuid not null,
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  test_id text not null check (
+    length(test_id) between 3 and 128
+    and not public.cognitive_text_has_secret(test_id)
+    and not public.cognitive_text_has_private_identifier(test_id)
+  ),
+  result_status text not null check (result_status in ('passed','failed','skipped')),
+  exit_code integer not null check (exit_code between -255 and 255),
+  tested_commit text not null check (tested_commit ~ '^[a-f0-9]{40}$'),
+  stdout_hash text not null check (stdout_hash ~ '^[a-f0-9]{64}$'),
+  stderr_hash text not null check (stderr_hash ~ '^[a-f0-9]{64}$'),
+  runner_identity_hash text not null check (runner_identity_hash ~ '^[a-f0-9]{64}$'),
+  result_hash text not null unique check (result_hash ~ '^[a-f0-9]{64}$'),
+  created_at timestamptz not null default transaction_timestamp(),
+  unique (receipt_id,test_id),
+  unique (id,task_id,project_id,platform,environment),
+  foreign key (receipt_id,task_id,project_id,platform,environment)
+    references public.cognitive_execution_receipts(id,task_id,project_id,platform,environment)
+);
+
+create table public.cognitive_trusted_evidence_manifests (
+  id uuid primary key default gen_random_uuid(),
+  receipt_id uuid not null,
+  task_id uuid not null,
+  project_id uuid not null,
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  evaluated_commit text not null check (evaluated_commit ~ '^[a-f0-9]{40}$'),
+  evaluated_diff_hash text not null check (evaluated_diff_hash ~ '^[a-f0-9]{64}$'),
+  physical_evidence_type text not null check (
+    physical_evidence_type in ('none','device_attested','provider_attested')
+  ),
+  physical_evidence_record_id uuid,
+  manifest_hash text not null unique check (manifest_hash ~ '^[a-f0-9]{64}$'),
+  runner_identity_hash text not null check (runner_identity_hash ~ '^[a-f0-9]{64}$'),
+  finalized_at timestamptz not null default transaction_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
+  unique (receipt_id),
+  unique (id,task_id,project_id,platform,environment),
+  foreign key (receipt_id,task_id,project_id,platform,environment)
+    references public.cognitive_execution_receipts(id,task_id,project_id,platform,environment),
+  check (
+    (physical_evidence_type='none' and physical_evidence_record_id is null)
+    or (physical_evidence_type<>'none' and physical_evidence_record_id is not null)
+  )
+);
+
+create table public.cognitive_subject_evaluations (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null,
+  project_id uuid not null,
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  subject_type text not null check (
+    subject_type in ('research_claim','decision_manifest','provider_credential')
+  ),
+  subject_id uuid not null,
+  evaluation_status public.cognitive_evaluation_status not null,
+  evidence_hash text not null check (evidence_hash ~ '^[a-f0-9]{64}$'),
+  evaluator_identity_hash text not null check (evaluator_identity_hash ~ '^[a-f0-9]{64}$'),
+  evaluated_at timestamptz not null default transaction_timestamp(),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default transaction_timestamp(),
+  unique (subject_type,subject_id),
+  unique (id,task_id,project_id,platform,environment),
+  foreign key (task_id,project_id,platform,environment)
+    references public.intelligence_tasks(id,project_id,platform,environment),
+  check (expires_at > evaluated_at and expires_at <= evaluated_at + interval '7 days')
+);
+
+create table public.cognitive_provider_credential_receipts (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null,
+  project_id uuid not null,
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  receipt_type text not null check (receipt_type in ('provider_attestation','provider_readback')),
+  credential_kind text not null check (credential_kind in ('model_provider','github_draft_pr')),
+  provider text not null check (provider in ('model_provider','github')),
+  state text not null check (state in ('configured','missing','revoked')),
+  public_fingerprint_hash text not null check (public_fingerprint_hash ~ '^[a-f0-9]{64}$'),
+  scope_manifest_hash text not null check (scope_manifest_hash ~ '^[a-f0-9]{64}$'),
+  producer_identity_hash text not null check (producer_identity_hash ~ '^[a-f0-9]{64}$'),
+  verified_at timestamptz not null default transaction_timestamp(),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default transaction_timestamp(),
+  unique (task_id,credential_kind,receipt_type,verified_at),
+  unique (id,task_id,project_id,platform,environment),
+  foreign key (task_id,project_id,platform,environment)
+    references public.intelligence_tasks(id,project_id,platform,environment),
+  check (expires_at > verified_at and expires_at <= verified_at + interval '30 days')
+);
+
+do $$
+declare table_name text;
+begin
+  foreach table_name in array array[
+    'cognitive_trusted_test_results',
+    'cognitive_trusted_evidence_manifests',
+    'cognitive_subject_evaluations',
+    'cognitive_provider_credential_receipts'
+  ] loop
+    execute format('alter table public.%I enable row level security',table_name);
+    execute format('alter table public.%I force row level security',table_name);
+    execute format(
+      'revoke all on table public.%I from public,anon,authenticated,service_role',
+      table_name
+    );
+    execute format('grant select on table public.%I to authenticated,service_role',table_name);
+    execute format(
+      'create policy %I on public.%I for select to authenticated using (
+        (select public.cognitive_can_read_scope(project_id,task_id,platform))
+      )',table_name || '_exact_read',table_name
+    );
+    execute format(
+      'create trigger %I before update or delete on public.%I
+       for each row execute function public.reject_cognitive_evidence_mutation()',
+      table_name || '_immutable',table_name
+    );
+  end loop;
+end
+$$;
+
+create function public.cognitive_record_trusted_test_result(
+  p_receipt_id uuid,
+  p_test_id text,
+  p_result_status text,
+  p_exit_code integer,
+  p_tested_commit text,
+  p_stdout_hash text,
+  p_stderr_hash text,
+  p_service_identity_token text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path=''
+as $$
+declare receipt public.cognitive_execution_receipts%rowtype;
+declare result_id uuid;
+declare result_hash_value text;
+begin
+  perform public.cognitive_verify_service_token('trusted_test_runner',p_service_identity_token);
+  select * into receipt from public.cognitive_execution_receipts
+  where id=p_receipt_id;
+  if receipt.id is null
+     or length(p_test_id) not between 3 and 128
+     or public.cognitive_text_has_secret(p_test_id)
+     or public.cognitive_text_has_private_identifier(p_test_id)
+     or p_result_status not in ('passed','failed','skipped')
+     or p_exit_code not between -255 and 255
+     or p_tested_commit is distinct from receipt.final_commit
+     or p_stdout_hash !~ '^[a-f0-9]{64}$'
+     or p_stderr_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'trusted_test_result_rejected' using errcode='P0001';
+  end if;
+  result_hash_value := encode(extensions.digest(convert_to(concat_ws(
+    '|',receipt.id::text,p_test_id,p_result_status,p_exit_code::text,
+    p_tested_commit,p_stdout_hash,p_stderr_hash
+  ),'UTF8'),'sha256'),'hex');
+  insert into public.cognitive_trusted_test_results(
+    receipt_id,task_id,project_id,platform,environment,test_id,result_status,
+    exit_code,tested_commit,stdout_hash,stderr_hash,runner_identity_hash,result_hash
+  ) values (
+    receipt.id,receipt.task_id,receipt.project_id,receipt.platform,receipt.environment,
+    p_test_id,p_result_status,p_exit_code,p_tested_commit,p_stdout_hash,p_stderr_hash,
+    encode(extensions.digest(convert_to('trusted_test_runner','UTF8'),'sha256'),'hex'),
+    result_hash_value
+  ) returning id into result_id;
+  return result_id;
+end;
+$$;
+revoke all on function public.cognitive_record_trusted_test_result(
+  uuid,text,text,integer,text,text,text,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_record_trusted_test_result(
+  uuid,text,text,integer,text,text,text,text
+) to service_role;
+
+create function public.cognitive_finalize_trusted_evidence_manifest(
+  p_receipt_id uuid,
+  p_physical_evidence_type text,
+  p_physical_evidence_record_id uuid,
+  p_service_identity_token text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path=''
+as $$
+declare receipt public.cognitive_execution_receipts%rowtype;
+declare result_id uuid;
+declare manifest_hash_value text;
+begin
+  perform public.cognitive_verify_service_token('trusted_test_runner',p_service_identity_token);
+  select * into receipt from public.cognitive_execution_receipts where id=p_receipt_id;
+  if receipt.id is null or receipt.final_commit is null or receipt.diff_hash is null
+     or p_physical_evidence_type not in ('none','device_attested','provider_attested')
+     or (p_physical_evidence_type='none') <> (p_physical_evidence_record_id is null)
+     or not exists (
+       select 1 from public.cognitive_trusted_test_results test
+       where test.receipt_id=receipt.id
+     ) then
+    raise exception 'trusted_evidence_manifest_rejected' using errcode='P0001';
+  end if;
+  manifest_hash_value := encode(extensions.digest(convert_to(concat_ws(
+    '|',receipt.id::text,receipt.final_commit,receipt.diff_hash,
+    p_physical_evidence_type,coalesce(p_physical_evidence_record_id::text,''),
+    coalesce((
+      select string_agg(test.result_hash,',' order by test.test_id)
+      from public.cognitive_trusted_test_results test
+      where test.receipt_id=receipt.id
+    ),'')
+  ),'UTF8'),'sha256'),'hex');
+  insert into public.cognitive_trusted_evidence_manifests(
+    receipt_id,task_id,project_id,platform,environment,evaluated_commit,
+    evaluated_diff_hash,physical_evidence_type,physical_evidence_record_id,
+    manifest_hash,runner_identity_hash
+  ) values (
+    receipt.id,receipt.task_id,receipt.project_id,receipt.platform,receipt.environment,
+    receipt.final_commit,receipt.diff_hash,p_physical_evidence_type,
+    p_physical_evidence_record_id,manifest_hash_value,
+    encode(extensions.digest(convert_to('trusted_test_runner','UTF8'),'sha256'),'hex')
+  ) returning id into result_id;
+  return result_id;
+end;
+$$;
+revoke all on function public.cognitive_finalize_trusted_evidence_manifest(
+  uuid,text,uuid,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_finalize_trusted_evidence_manifest(
+  uuid,text,uuid,text
+) to service_role;
+
+create function public.cognitive_record_subject_evaluation(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment,
+  p_subject_type text,
+  p_subject_id uuid,
+  p_evaluation_status public.cognitive_evaluation_status,
+  p_service_identity_token text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path=''
+as $$
+declare result_id uuid;
+declare evidence_hash_value text;
+declare now_at timestamptz := transaction_timestamp();
+begin
+  perform public.cognitive_verify_service_token(
+    'independent_evaluation_judge',p_service_identity_token
+  );
+  if p_subject_type not in ('research_claim','decision_manifest','provider_credential')
+     or p_evaluation_status not in ('pass','fail','incomplete','blocked')
+     or not exists (
+       select 1 from public.intelligence_tasks task
+       where task.id=p_task_id and task.project_id=p_project_id
+         and task.platform=p_platform and task.environment=p_environment
+         and task.cancelled_at is null and task.quarantined_at is null
+         and now_at < task.deadman_at
+     )
+     or (
+       p_subject_type='research_claim' and not exists (
+         select 1 from public.research_claims claim
+         where claim.id=p_subject_id and claim.task_id=p_task_id
+           and claim.project_id=p_project_id and claim.platform=p_platform
+           and claim.environment=p_environment
+       )
+     )
+     or (
+       p_subject_type='decision_manifest' and not exists (
+         select 1 from public.governance_decision_manifests decision
+         where decision.id=p_subject_id and decision.task_id=p_task_id
+           and decision.project_id=p_project_id and decision.platform=p_platform
+           and decision.environment=p_environment
+       )
+     )
+     or (
+       p_subject_type='provider_credential' and not exists (
+         select 1 from public.cognitive_provider_credential_receipts receipt
+         where receipt.id=p_subject_id and receipt.task_id=p_task_id
+           and receipt.project_id=p_project_id and receipt.platform=p_platform
+           and receipt.environment=p_environment
+       )
+     ) then
+    raise exception 'cognitive_subject_evaluation_rejected' using errcode='P0001';
+  end if;
+  evidence_hash_value := encode(extensions.digest(convert_to(concat_ws(
+    '|',p_task_id::text,p_subject_type,p_subject_id::text,
+    p_evaluation_status::text,now_at::text
+  ),'UTF8'),'sha256'),'hex');
+  insert into public.cognitive_subject_evaluations(
+    task_id,project_id,platform,environment,subject_type,subject_id,
+    evaluation_status,evidence_hash,evaluator_identity_hash,evaluated_at,expires_at
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,p_subject_type,p_subject_id,
+    p_evaluation_status,evidence_hash_value,
+    encode(extensions.digest(convert_to('independent_evaluation_judge','UTF8'),'sha256'),'hex'),
+    now_at,now_at+interval '24 hours'
+  ) returning id into result_id;
+  return result_id;
+end;
+$$;
+revoke all on function public.cognitive_record_subject_evaluation(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,uuid,public.cognitive_evaluation_status,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_record_subject_evaluation(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,uuid,public.cognitive_evaluation_status,text
+) to service_role;
+
+create function public.cognitive_record_provider_credential_receipt(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment,
+  p_receipt_type text,
+  p_credential_kind text,
+  p_state text,
+  p_public_fingerprint_hash text,
+  p_scope_manifest_hash text,
+  p_expires_at timestamptz,
+  p_service_identity_token text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path=''
+as $$
+declare result_id uuid;
+declare expected_identity text;
+declare now_at timestamptz := transaction_timestamp();
+begin
+  expected_identity := case p_receipt_type
+    when 'provider_attestation' then 'credential_attestation_authority'
+    when 'provider_readback' then 'capability_and_tool_broker'
+    else null
+  end;
+  perform public.cognitive_verify_service_token(expected_identity,p_service_identity_token);
+  if expected_identity is null
+     or p_platform<>'shared' or p_environment<>'production'
+     or p_credential_kind not in ('model_provider','github_draft_pr')
+     or p_state not in ('configured','missing','revoked')
+     or p_public_fingerprint_hash !~ '^[a-f0-9]{64}$'
+     or p_scope_manifest_hash !~ '^[a-f0-9]{64}$'
+     or p_expires_at<=now_at or p_expires_at>now_at+interval '30 days'
+     or not exists (
+       select 1 from public.intelligence_tasks task
+       where task.id=p_task_id and task.project_id=p_project_id
+         and task.platform=p_platform and task.environment=p_environment
+     ) then
+    raise exception 'provider_credential_receipt_rejected' using errcode='P0001';
+  end if;
+  insert into public.cognitive_provider_credential_receipts(
+    task_id,project_id,platform,environment,receipt_type,credential_kind,
+    provider,state,public_fingerprint_hash,scope_manifest_hash,
+    producer_identity_hash,verified_at,expires_at
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,p_receipt_type,p_credential_kind,
+    case p_credential_kind when 'github_draft_pr' then 'github' else 'model_provider' end,
+    p_state,p_public_fingerprint_hash,p_scope_manifest_hash,
+    encode(extensions.digest(convert_to(expected_identity,'UTF8'),'sha256'),'hex'),
+    now_at,p_expires_at
+  ) returning id into result_id;
+  return result_id;
+end;
+$$;
+revoke all on function public.cognitive_record_provider_credential_receipt(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,text,text,text,text,timestamptz,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_record_provider_credential_receipt(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,text,text,text,text,timestamptz,text
+) to service_role;
+
+create function public.cognitive_accept_verified_research_canary(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment,
+  p_canary_key text,
+  p_broker_receipt_id uuid,
+  p_research_claim_id uuid,
+  p_evaluator_record_id uuid,
+  p_owner_actor_id uuid,
+  p_service_identity_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=''
+as $$
+declare claim public.research_claims%rowtype;
+declare retrieval public.research_retrieval_events%rowtype;
+declare evaluator public.cognitive_subject_evaluations%rowtype;
+declare canary_id uuid;
+declare source_commit_value text;
+declare evidence_hash_value text;
+declare now_at timestamptz := transaction_timestamp();
+begin
+  perform public.cognitive_verify_service_token(
+    'governance_canary_scheduler',p_service_identity_token
+  );
+  if not public.governance_exact_owner(p_owner_actor_id) then
+    raise exception 'exact_owner_membership_required' using errcode='42501';
+  end if;
+  select * into claim from public.research_claims
+  where id=p_research_claim_id and task_id=p_task_id and project_id=p_project_id
+    and platform=p_platform and environment=p_environment;
+  select * into retrieval from public.research_retrieval_events
+  where id=p_broker_receipt_id and task_id=p_task_id and project_id=p_project_id
+    and platform=p_platform and environment=p_environment and result='accepted';
+  select * into evaluator from public.cognitive_subject_evaluations
+  where id=p_evaluator_record_id and task_id=p_task_id and project_id=p_project_id
+    and platform=p_platform and environment=p_environment
+    and subject_type='research_claim' and subject_id=p_research_claim_id
+    and evaluation_status='pass' and now_at<expires_at;
+  select version.policy_snapshot->>'sourceCommit' into source_commit_value
+  from public.governance_constitution_versions version
+  where version.task_id=p_task_id
+  order by version.created_at desc limit 1;
+  if p_platform<>'shared' or p_environment<>'production'
+     or p_canary_key not in (
+       'platform_policy_research','repository_architecture_ux',
+       'dependency_security_research'
+     )
+     or claim.id is null or retrieval.id is null or evaluator.id is null
+     or claim.status<>'supported' or claim.support_state<>'supported'
+     or claim.contradiction_state not in ('none','resolved')
+     or now_at>=claim.freshness_deadline
+     or source_commit_value !~ '^[a-f0-9]{40}$'
+     or not exists (
+       select 1 from public.research_claim_sources relation
+       join public.research_sources source
+         on source.id=relation.source_id and source.task_id=relation.task_id
+        and source.project_id=relation.project_id and source.platform=relation.platform
+        and source.environment=relation.environment
+       where relation.claim_id=claim.id and relation.relationship='supports'
+         and source.id=retrieval.source_id
+         and retrieval.request_url_hash=source.canonical_url_hash
+         and retrieval.response_hash=source.content_hash
+         and now_at<source.freshness_deadline
+     )
+     or exists (
+       select 1 from public.research_contradictions contradiction
+       where contradiction.claim_id=claim.id and contradiction.resolution_state='open'
+     ) then
+    raise exception 'verified_research_canary_rejected' using errcode='P0001';
+  end if;
+  evidence_hash_value := encode(extensions.digest(convert_to(concat_ws(
+    '|',claim.claim_hash,retrieval.id::text,evaluator.evidence_hash,
+    source_commit_value
+  ),'UTF8'),'sha256'),'hex');
+  insert into public.cognitive_level01_canary_runs(
+    task_id,project_id,platform,environment,canary_key,canary_type,
+    result_status,source_manifest,result_manifest,source_commit,evidence_hash,
+    evaluator_state,completed_at
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,p_canary_key,'research',
+    'passed',jsonb_build_array(retrieval.id),
+    jsonb_build_object(
+      'claimHash',claim.claim_hash,'brokerReceiptId',retrieval.id,
+      'evaluatorRecordId',evaluator.id,'publicOnly',true,'toolAuthority',false
+    ),source_commit_value,evidence_hash_value,'pass',now_at
+  ) returning id into canary_id;
+  return jsonb_build_object(
+    'accepted',true,'result_status','passed','evaluator_state','pass',
+    'canary_run_id',canary_id,'canary_key',p_canary_key,
+    'broker_receipt_id',p_broker_receipt_id,
+    'research_claim_id',p_research_claim_id,
+    'evaluator_record_id',p_evaluator_record_id
+  );
+end;
+$$;
+revoke all on function public.cognitive_accept_verified_research_canary(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,uuid,uuid,uuid,uuid,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_accept_verified_research_canary(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,uuid,uuid,uuid,uuid,text
+) to service_role;
+
+create function public.cognitive_accept_verified_deliberation_canary(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment,
+  p_canary_key text,
+  p_deliberation_id uuid,
+  p_decision_manifest_id uuid,
+  p_evaluator_record_id uuid,
+  p_owner_actor_id uuid,
+  p_service_identity_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=''
+as $$
+declare deliberation public.governance_deliberations%rowtype;
+declare decision public.governance_decision_manifests%rowtype;
+declare evaluator public.cognitive_subject_evaluations%rowtype;
+declare canary_id uuid;
+declare evidence_hash_value text;
+declare now_at timestamptz := transaction_timestamp();
+begin
+  perform public.cognitive_verify_service_token(
+    'governance_canary_scheduler',p_service_identity_token
+  );
+  if not public.governance_exact_owner(p_owner_actor_id) then
+    raise exception 'exact_owner_membership_required' using errcode='42501';
+  end if;
+  select * into deliberation from public.governance_deliberations
+  where id=p_deliberation_id and task_id=p_task_id and project_id=p_project_id
+    and platform=p_platform and environment=p_environment;
+  select * into decision from public.governance_decision_manifests
+  where id=p_decision_manifest_id and deliberation_id=p_deliberation_id
+    and task_id=p_task_id and project_id=p_project_id and platform=p_platform
+    and environment=p_environment;
+  select * into evaluator from public.cognitive_subject_evaluations
+  where id=p_evaluator_record_id and task_id=p_task_id and project_id=p_project_id
+    and platform=p_platform and environment=p_environment
+    and subject_type='decision_manifest' and subject_id=p_decision_manifest_id
+    and evaluation_status='pass' and now_at<expires_at;
+  if p_platform<>'shared' or p_environment<>'production'
+     or p_canary_key not in (
+       'low_risk_ux_deliberation','backend_reliability_deliberation',
+       'security_dependency_deliberation'
+     )
+     or deliberation.id is null or decision.id is null or evaluator.id is null
+     or deliberation.status<>'decided' or decision.status<>'finalized'
+     or now_at>=decision.expires_at
+     or decision.source_commit<>deliberation.source_commit
+     or decision.architecture_graph_digest<>deliberation.architecture_graph_digest
+     or exists (
+       select 1 from public.governance_vetoes veto
+       where veto.deliberation_id=deliberation.id
+         and veto.mandatory and veto.status='active'
+     )
+     or (
+       select count(*) from public.governance_votes vote
+       where vote.deliberation_id=deliberation.id
+         and vote.proposal_id=decision.selected_proposal_id
+         and vote.position='support'
+     )<deliberation.required_quorum
+     or (
+       select count(distinct impact.stakeholder_key)
+       from public.governance_stakeholder_impacts impact
+       where impact.deliberation_id=deliberation.id
+         and impact.proposal_id=decision.selected_proposal_id
+     )<>16 then
+    raise exception 'verified_deliberation_canary_rejected' using errcode='P0001';
+  end if;
+  evidence_hash_value := encode(extensions.digest(convert_to(concat_ws(
+    '|',decision.decision_hash,evaluator.evidence_hash,deliberation.id::text
+  ),'UTF8'),'sha256'),'hex');
+  insert into public.cognitive_level01_canary_runs(
+    task_id,project_id,platform,environment,canary_key,canary_type,
+    result_status,source_manifest,result_manifest,source_commit,evidence_hash,
+    evaluator_state,completed_at
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,p_canary_key,'deliberation',
+    'passed',jsonb_build_array(decision.evidence_manifest_hash),
+    jsonb_build_object(
+      'decisionHash',decision.decision_hash,'deliberationId',deliberation.id,
+      'evaluatorRecordId',evaluator.id
+    ),decision.source_commit,evidence_hash_value,'pass',now_at
+  ) returning id into canary_id;
+  return jsonb_build_object(
+    'accepted',true,'result_status','passed','evaluator_state','pass',
+    'canary_run_id',canary_id,'canary_key',p_canary_key,
+    'deliberation_id',p_deliberation_id,
+    'decision_manifest_id',p_decision_manifest_id,
+    'evaluator_record_id',p_evaluator_record_id
+  );
+end;
+$$;
+revoke all on function public.cognitive_accept_verified_deliberation_canary(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,uuid,uuid,uuid,uuid,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_accept_verified_deliberation_canary(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,uuid,uuid,uuid,uuid,text
+) to service_role;
+
+create function public.cognitive_accept_verified_credential_attestation(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment,
+  p_credential_kind text,
+  p_provider_attestation_id uuid,
+  p_provider_readback_id uuid,
+  p_evaluator_record_id uuid,
+  p_owner_actor_id uuid,
+  p_service_identity_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=''
+as $$
+declare attestation public.cognitive_provider_credential_receipts%rowtype;
+declare readback public.cognitive_provider_credential_receipts%rowtype;
+declare evaluator public.cognitive_subject_evaluations%rowtype;
+declare result_id uuid;
+declare now_at timestamptz := transaction_timestamp();
+begin
+  perform public.cognitive_verify_service_token(
+    'governance_canary_scheduler',p_service_identity_token
+  );
+  if not public.governance_exact_owner(p_owner_actor_id) then
+    raise exception 'exact_owner_membership_required' using errcode='42501';
+  end if;
+  select * into attestation from public.cognitive_provider_credential_receipts
+  where id=p_provider_attestation_id and task_id=p_task_id
+    and project_id=p_project_id and platform=p_platform
+    and environment=p_environment and receipt_type='provider_attestation';
+  select * into readback from public.cognitive_provider_credential_receipts
+  where id=p_provider_readback_id and task_id=p_task_id
+    and project_id=p_project_id and platform=p_platform
+    and environment=p_environment and receipt_type='provider_readback';
+  select * into evaluator from public.cognitive_subject_evaluations
+  where id=p_evaluator_record_id and task_id=p_task_id and project_id=p_project_id
+    and platform=p_platform and environment=p_environment
+    and subject_type='provider_credential' and subject_id=p_provider_readback_id
+    and evaluation_status='pass' and now_at<expires_at;
+  if p_platform<>'shared' or p_environment<>'production'
+     or p_credential_kind not in ('model_provider','github_draft_pr')
+     or attestation.id is null or readback.id is null or evaluator.id is null
+     or attestation.credential_kind<>p_credential_kind
+     or readback.credential_kind<>p_credential_kind
+     or attestation.state<>'configured' or readback.state<>'configured'
+     or attestation.public_fingerprint_hash<>readback.public_fingerprint_hash
+     or attestation.scope_manifest_hash<>readback.scope_manifest_hash
+     or now_at>=attestation.expires_at or now_at>=readback.expires_at then
+    raise exception 'verified_credential_attestation_rejected' using errcode='P0001';
+  end if;
+  insert into public.cognitive_level01_credential_attestations(
+    task_id,project_id,platform,environment,credential_kind,state,
+    public_fingerprint_hash,scope_manifest_hash,verified_at,expires_at
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,p_credential_kind,'configured',
+    readback.public_fingerprint_hash,readback.scope_manifest_hash,now_at,
+    least(attestation.expires_at,readback.expires_at)
+  ) returning id into result_id;
+  return jsonb_build_object(
+    'accepted',true,'state','configured','evaluator_state','pass',
+    'credential_attestation_id',result_id,'credential_kind',p_credential_kind,
+    'provider_attestation_id',p_provider_attestation_id,
+    'provider_readback_id',p_provider_readback_id,
+    'evaluator_record_id',p_evaluator_record_id
+  );
+end;
+$$;
+revoke all on function public.cognitive_accept_verified_credential_attestation(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,uuid,uuid,uuid,uuid,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_accept_verified_credential_attestation(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,uuid,uuid,uuid,uuid,text
+) to service_role;
+
+-- Supersede the caller-authored JSON/hash canary paths.  They remain in source
+-- only for migration-history readability and are not executable by any runtime
+-- role after this migration.
+revoke all on function public.cognitive_record_level01_deliberation_canary(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,jsonb,text,text
+) from public,anon,authenticated,service_role;
+revoke all on function public.cognitive_record_level01_credential_attestation(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,text,text,text,timestamptz,text
+) from public,anon,authenticated,service_role;
+
+create or replace function public.cognitive_record_execution_evaluation(
+  p_receipt_id uuid,
+  p_evaluation_status public.cognitive_evaluation_status,
+  p_proof_manifest jsonb,
+  p_actor_identity text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path=''
+as $$
+declare
+  receipt public.cognitive_execution_receipts%rowtype;
+  decision public.governance_decision_manifests%rowtype;
+  trusted_manifest public.cognitive_trusted_evidence_manifests%rowtype;
+  evaluation_id uuid;
+  required_test_manifest_hash_value text;
+  trusted_proof_manifest jsonb;
+  missing_required_test boolean;
+begin
+  perform public.governance_assert_level01_service_actor(
+    array['independent_evaluation_judge'],p_actor_identity
+  );
+  select * into receipt from public.cognitive_execution_receipts
+  where id=p_receipt_id for share;
+  select * into decision from public.governance_decision_manifests
+  where id=receipt.decision_manifest_id and task_id=receipt.task_id
+    and project_id=receipt.project_id and platform=receipt.platform
+    and environment=receipt.environment;
+  select * into trusted_manifest from public.cognitive_trusted_evidence_manifests
+  where receipt_id=receipt.id;
+  select exists (
+    select 1 from unnest(decision.required_test_ids) required_test_id
+    where not exists (
+      select 1 from public.cognitive_trusted_test_results test
+      where test.receipt_id=receipt.id and test.test_id=required_test_id
+        and test.result_status='passed' and test.exit_code=0
+        and test.tested_commit=receipt.final_commit
+    )
+  ) into missing_required_test;
+  if receipt.id is null or decision.id is null or trusted_manifest.id is null
+     or p_evaluation_status not in ('pass','fail','incomplete','blocked')
+     -- The compatibility parameter may not carry proof.  Trusted proof is
+     -- reconstructed only from immutable runner rows below.
+     or p_proof_manifest is distinct from '{}'::jsonb
+     or receipt.final_commit is null or receipt.diff_hash is null
+     or trusted_manifest.evaluated_commit<>receipt.final_commit
+     or trusted_manifest.evaluated_diff_hash<>receipt.diff_hash
+     or (p_evaluation_status='pass' and missing_required_test)
+     or exists (
+       select 1 from public.cognitive_trusted_test_results test
+       where test.receipt_id=receipt.id
+         and test.test_id=any(decision.required_test_ids)
+         and (test.result_status<>'passed' or test.exit_code<>0)
+     ) then
+    raise exception 'cognitive_execution_evaluation_trusted_evidence_rejected'
+      using errcode='P0001';
+  end if;
+  required_test_manifest_hash_value := encode(extensions.digest(convert_to(
+    (select jsonb_agg(value order by value)::text
+     from unnest(decision.required_test_ids) value),'UTF8'),'sha256'),'hex');
+  trusted_proof_manifest := jsonb_build_object(
+    'trustedEvidenceManifestId',trusted_manifest.id,
+    'trustedEvidenceManifestHash',trusted_manifest.manifest_hash,
+    'requiredTestCount',cardinality(decision.required_test_ids),
+    'physicalEvidenceType',trusted_manifest.physical_evidence_type
+  );
+  insert into public.governance_execution_evaluations(
+    receipt_id,task_id,project_id,platform,environment,evaluator_identity_hash,
+    evaluation_status,required_test_manifest_hash,evidence_manifest_hash,
+    evaluated_commit,evaluated_diff_hash,proof_manifest
+  ) values (
+    receipt.id,receipt.task_id,receipt.project_id,receipt.platform,
+    receipt.environment,
+    encode(extensions.digest(convert_to(p_actor_identity,'UTF8'),'sha256'),'hex'),
+    p_evaluation_status,required_test_manifest_hash_value,
+    trusted_manifest.manifest_hash,receipt.final_commit,receipt.diff_hash,
+    trusted_proof_manifest
+  ) returning id into evaluation_id;
+  return evaluation_id;
+end;
+$$;

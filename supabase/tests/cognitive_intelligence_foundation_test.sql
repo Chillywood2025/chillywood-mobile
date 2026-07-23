@@ -1,7 +1,34 @@
 begin;
 select no_plan();
+insert into public.cognitive_service_identities(
+  service_identity,credential_hash,status,expires_at
+)
+select identity,encode(extensions.digest(
+  convert_to('synthetic-test-credential-for-' || identity || '-0000000000000000','UTF8'),
+  'sha256'
+),'hex'),'active',transaction_timestamp()+interval '1 day'
+from unnest(array[
+  'cognitive_control_plane','product_intelligence_operator',
+  'privacy_compliance_operator','research_source_broker',
+  'independent_evaluation_judge','capability_and_tool_broker'
+]) identity
+on conflict (service_identity) do update
+set credential_hash=excluded.credential_hash,status='active',
+    expires_at=excluded.expires_at,revoked_at=null;
+create function pg_temp.set_cognitive_test_actor(p_actor text)
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.cognitive_actor',p_actor,true);
+  perform set_config(
+    'request.jwt.claim.cognitive_service_credential',
+    'synthetic-test-credential-for-' || p_actor || '-0000000000000000',
+    true
+  );
+  return p_actor;
+end;
+$$;
 select set_config('request.jwt.claim.role','service_role',true);
-select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
+select pg_temp.set_cognitive_test_actor('cognitive_control_plane');
 
 -- Inventory and hard off-state.
 select has_table('public', 'cognitive_projects', 'project boundary exists');
@@ -952,7 +979,7 @@ select throws_ok(
   'P0001', 'research_retrieval_binding_rejected',
   'retrieval evidence cannot be attached to a different request URL'
 );
-select set_config('request.jwt.claim.cognitive_actor','product_intelligence_operator',true);
+select pg_temp.set_cognitive_test_actor('product_intelligence_operator');
 select is(
   public.cognitive_transition_entity(
     'research_claim','31000000-0000-0000-0000-000000000001',
@@ -964,7 +991,7 @@ select is(
   'supported',
   'technical claim requires and accepts same-scope primary provenance'
 );
-select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
+select pg_temp.set_cognitive_test_actor('cognitive_control_plane');
 select throws_ok(
   $$insert into public.research_claim_sources(
     claim_id,source_id,task_id,project_id,platform,environment,relationship
@@ -1250,32 +1277,6 @@ select throws_ok(
   'P0001','capability_scope_or_proof_rejected',
   'capability consumption rejects a secret-shaped call identifier before use'
 );
-select is(
-  public.cognitive_consume_capability(
-    'capability-fixture-001','bearer-fixture','nonce-fixture','call-valid-001',
-    '20000000-0000-0000-0000-000000000001',
-    '10000000-0000-0000-0000-000000000001',
-    'Chillywood2025/chillywood-mobile','codex/task-ios','ios','ci',
-    'repository','repository_apply_patch','docs/intelligence/COGNITIVE_SECURITY_MODEL.md',
-    100,0,repeat('d',64),(select snapshot_hash from cognitive_test_snapshot),repeat('4',64)
-  ),
-  1,
-  'valid capability use atomically consumes usage sequence one'
-);
-select is(
-  public.cognitive_accept_tool_result(
-    'capability-fixture-001','call-valid-001','bearer-fixture','nonce-fixture',
-    '{"accepted":true,"value":"safe-result"}'::jsonb
-  ),
-  encode(
-    extensions.digest(
-      convert_to('{"value": "safe-result", "accepted": true}'::jsonb::text,'UTF8'),
-      'sha256'
-    ),
-    'hex'
-  ),
-  'postflight computes the accepted envelope hash inside the trusted database boundary'
-);
 select throws_ok(
   $$select public.cognitive_consume_capability(
     'capability-fixture-001','bearer-fixture','nonce-fixture','call-valid-001',
@@ -1285,12 +1286,35 @@ select throws_ok(
     'repository','repository_apply_patch','docs/intelligence/COGNITIVE_SECURITY_MODEL.md',
     100,0,repeat('d',64),(select snapshot_hash from cognitive_test_snapshot),repeat('4',64)
   )$$,
-  '23505','capability_replay','capability call ID replay is rejected'
+  'P0001','governed_capability_not_active',
+  'capability use cannot begin without an active governance decision and approval binding'
+);
+select pg_temp.set_cognitive_test_actor('capability_and_tool_broker');
+select throws_ok(
+  $$select public.cognitive_accept_tool_result(
+    'capability-fixture-001','call-valid-001','bearer-fixture','nonce-fixture',
+    '{"accepted":true,"value":"safe-result"}'::jsonb
+  )$$,
+  'P0001','tool_result_postflight_rejected',
+  'tool result is rejected when no governed capability call was consumed'
+);
+select pg_temp.set_cognitive_test_actor('cognitive_control_plane');
+select throws_ok(
+  $$select public.cognitive_consume_capability(
+    'capability-fixture-001','bearer-fixture','nonce-fixture','call-valid-001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'Chillywood2025/chillywood-mobile','codex/task-ios','ios','ci',
+    'repository','repository_apply_patch','docs/intelligence/COGNITIVE_SECURITY_MODEL.md',
+    100,0,repeat('d',64),(select snapshot_hash from cognitive_test_snapshot),repeat('4',64)
+  )$$,
+  'P0001','governed_capability_not_active',
+  'repeated ungoverned capability use remains rejected'
 );
 select is(
   (select remaining_calls from public.cognitive_capabilities where capability_id='capability-fixture-001'),
-  1,
-  'rejected replay does not consume another call'
+  2,
+  'rejected ungoverned calls consume no capability budget'
 );
 select throws_ok(
   $$insert into public.cognitive_capability_events(
@@ -1604,7 +1628,7 @@ insert into public.knowledge_entities(
   '{"source":"synthetic"}'::jsonb,
   'user_derived',now()+interval '1 day',false
 );
-select set_config('request.jwt.claim.cognitive_actor','privacy_compliance_operator',true);
+select pg_temp.set_cognitive_test_actor('privacy_compliance_operator');
 select is(
   public.cognitive_erase_task_user_data(
     '20000000-0000-0000-0000-000000000001',repeat('8',64),
@@ -1613,7 +1637,7 @@ select is(
   1,
   'erasure RPC redacts one user-derived memory row'
 );
-select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
+select pg_temp.set_cognitive_test_actor('cognitive_control_plane');
 select is(
   (select summary from public.knowledge_entities where id='70000000-0000-0000-0000-000000000001'),
   '{}'::jsonb,
@@ -1703,6 +1727,7 @@ select is(
   true,
   'capability revocation succeeds through the controlled lifecycle RPC'
 );
+select pg_temp.set_cognitive_test_actor('capability_and_tool_broker');
 select throws_ok(
   $$select public.cognitive_accept_tool_result(
     'capability-fixture-001','call-valid-001','bearer-fixture','nonce-fixture',
@@ -1711,6 +1736,7 @@ select throws_ok(
   'P0001','tool_result_postflight_rejected',
   'a result arriving after capability revocation is rejected'
 );
+select pg_temp.set_cognitive_test_actor('cognitive_control_plane');
 insert into public.cognitive_capabilities(
   id,capability_id,bearer_hash,nonce_hash,task_id,project_id,repository_full_name,
   branch_name,platform,environment,risk_level,provider,operation,path_scopes,
@@ -1816,7 +1842,7 @@ insert into public.hypotheses(
   'ios','ci','cognitive_control_plane','judge-transition-fixture','received',
   '{}'::jsonb,'{}'::jsonb,'operational_metadata',statement_timestamp()+interval '30 days',false
 );
-select set_config('request.jwt.claim.cognitive_actor','independent_evaluation_judge',true);
+select pg_temp.set_cognitive_test_actor('independent_evaluation_judge');
 select throws_ok(
   $$select public.cognitive_transition_entity(
     'hypothesis','39000000-0000-0000-0000-000000000001',
@@ -1828,7 +1854,7 @@ select throws_ok(
   '42501','cognitive_service_actor_mismatch',
   'independent evaluator cannot mutate general cognitive entity state'
 );
-select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
+select pg_temp.set_cognitive_test_actor('cognitive_control_plane');
 
 select throws_ok(
   $$insert into public.intelligence_tasks(
@@ -1872,7 +1898,7 @@ insert into public.intelligence_tasks(
   statement_timestamp()+interval '1 hour',statement_timestamp()+interval '30 days',
   'operational_metadata'
 );
-select set_config('request.jwt.claim.cognitive_actor','research_source_broker',true);
+select pg_temp.set_cognitive_test_actor('research_source_broker');
 select throws_ok(
   $$select public.cognitive_record_research_source(
     '29000000-0000-0000-0000-000000000002',
@@ -1892,7 +1918,7 @@ select is(
   0,
   'unattested caller evidence is not persisted as research'
 );
-select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
+select pg_temp.set_cognitive_test_actor('cognitive_control_plane');
 
 -- Exact regressions from the twelfth independent exact-head review.
 select ok(

@@ -1045,9 +1045,9 @@ revoke all on function public.governance_assert_exact_owner()
 grant execute on function public.governance_assert_exact_owner()
   to authenticated;
 
--- Edge Functions hold the service credential, never a model or client.  This
--- helper narrows that already-privileged server identity to a closed cognitive
--- actor label without depending on caller-controlled JWT custom claims.
+-- Edge Functions hold distinct opaque service credentials.  The foundation
+-- registry, rather than a caller-supplied label, establishes the service
+-- identity used by this governance function.
 create function public.governance_assert_level01_service_actor(
   p_allowed_actors text[],
   p_claimed_actor text
@@ -1058,15 +1058,9 @@ stable
 security definer
 set search_path = ''
 as $$
-declare
-  request_role text := nullif(
-    current_setting('request.jwt.claim.role', true),
-    ''
-  );
+declare authenticated_actor text;
 begin
-  if request_role <> 'service_role'
-     or p_claimed_actor is null
-     or not p_claimed_actor = any(p_allowed_actors)
+  if p_claimed_actor is null
      or p_claimed_actor not in (
        'governance_constitution_service',
        'deliberation_orchestrator',
@@ -1083,7 +1077,11 @@ begin
     raise exception 'governance_level01_service_actor_mismatch'
       using errcode = '42501';
   end if;
-  return p_claimed_actor;
+  authenticated_actor := public.cognitive_assert_service_actor(
+    p_allowed_actors,
+    p_claimed_actor
+  );
+  return authenticated_actor;
 end;
 $$;
 revoke all on function public.governance_assert_level01_service_actor(text[],text)
@@ -1115,7 +1113,7 @@ declare
   veto_scope_values text[];
 begin
   perform public.governance_assert_level01_service_actor(
-    array['governance_constitution_service'],
+    array['governance_constitution_service','governance_canary_scheduler'],
     p_actor_identity
   );
   if p_constitution_hash !~ '^[a-f0-9]{64}$'
@@ -1859,6 +1857,8 @@ declare
   approval_version public.governance_approval_versions%rowtype;
   approval_value public.governance_approvals%rowtype;
   snapshot_value public.execution_plan_snapshots%rowtype;
+  task_value public.intelligence_tasks%rowtype;
+  tool_result_value public.cognitive_tool_result_records%rowtype;
   receipt_id uuid;
   result_hash text;
   receipt_hash_value text;
@@ -1891,6 +1891,16 @@ begin
   select * into snapshot_value
   from public.execution_plan_snapshots
   where id = capability_value.plan_snapshot_id;
+  select * into task_value
+  from public.intelligence_tasks
+  where id=capability_value.task_id and project_id=capability_value.project_id
+    and platform=capability_value.platform and environment=capability_value.environment
+  for update;
+  select * into tool_result_value
+  from public.cognitive_tool_result_records
+  where capability_id=capability_value.id
+    and call_id=p_call_id
+    and usage_sequence=p_capability_usage_sequence;
 
   if capability_value.id is null
      or binding_value.id is null
@@ -1909,6 +1919,10 @@ begin
      or now_at >= approval_version.expires_at
      or approval_value.status <> 'active'
      or approval_value.executions_consumed >= approval_value.maximum_executions
+     or task_value.id is null
+     or task_value.cancelled_at is not null
+     or task_value.quarantined_at is not null
+     or now_at >= task_value.deadman_at
      or decision_value.status <> 'finalized'
      or now_at >= decision_value.expires_at
      or capability_value.task_id <> decision_value.task_id
@@ -1939,6 +1953,7 @@ begin
      or p_result_envelope is null
      or pg_column_size(p_result_envelope) > 65536
      or not public.cognitive_json_is_sanitized(p_result_envelope)
+     or tool_result_value.id is null
      or p_actual_bytes < 0
      or p_actual_bytes > capability_value.maximum_bytes
      or coalesce((
@@ -1964,6 +1979,15 @@ begin
        > capability_value.maximum_cost - capability_value.remaining_cost
      or p_resource_lease_ids is null
      or cardinality(p_resource_lease_ids) > 64
+     or (
+       capability_value.operation in (
+         'repository_apply_patch','repository_write_new_file',
+         'git_create_scoped_branch','git_stage_allowlisted_paths',
+         'git_commit_scoped','git_push_scoped_draft_branch',
+         'github_open_draft_pr','github_update_draft_pr_body'
+       )
+       and cardinality(p_resource_lease_ids) < 1
+     )
      or (
        select count(*) <> count(distinct value)
        from unnest(p_resource_lease_ids) value
@@ -2003,6 +2027,30 @@ begin
     extensions.digest(convert_to(p_result_envelope::text,'UTF8'),'sha256'),
     'hex'
   );
+  if result_hash is distinct from tool_result_value.result_envelope_hash then
+    raise exception 'governance_postflight_result_binding_rejected'
+      using errcode='P0001';
+  end if;
+
+  if capability_value.operation in (
+       'repository_apply_patch','repository_write_new_file',
+       'git_create_scoped_branch','git_stage_allowlisted_paths',
+       'git_commit_scoped','git_push_scoped_draft_branch',
+       'github_open_draft_pr','github_update_draft_pr_body'
+     ) and not exists (
+       select 1 from public.cognitive_resource_leases lease
+       where lease.id=any(p_resource_lease_ids)
+         and lease.task_id=capability_value.task_id
+         and lease.project_id=capability_value.project_id
+         and lease.platform=capability_value.platform
+         and lease.environment=capability_value.environment
+         and lease.mode='write'
+         and lease.revoked_at is null
+         and now_at >= lease.issued_at and now_at < lease.expires_at
+     ) then
+    raise exception 'governance_postflight_write_lease_required'
+      using errcode='P0001';
+  end if;
   receipt_hash_value := encode(extensions.digest(convert_to(concat_ws(
     '|',
     capability_value.task_id::text,
@@ -2335,3 +2383,168 @@ $$;
 -- No governance table is directly writable by a public role, ordinary client,
 -- scoped Admin, Owner client, or service_role. The reviewed security-definer
 -- RPCs above are the only mutation surface.
+
+-- Owner-controlled service registration stores only credential digests.  It is
+-- intentionally impossible for a service-role caller to mint or rotate its own
+-- identity.
+create function public.governance_owner_register_service_identity(
+  p_service_identity text,
+  p_credential_hash text,
+  p_expires_at timestamptz
+)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare owner_id uuid := public.governance_assert_exact_owner();
+begin
+  if p_credential_hash !~ '^[a-f0-9]{64}$'
+     or p_expires_at <= transaction_timestamp()
+     or p_expires_at > transaction_timestamp() + interval '365 days' then
+    raise exception 'cognitive_service_identity_registration_rejected'
+      using errcode='P0001';
+  end if;
+  insert into public.cognitive_service_identities(
+    service_identity,credential_hash,status,issued_at,expires_at,revoked_at
+  ) values (
+    p_service_identity,p_credential_hash,'active',transaction_timestamp(),
+    p_expires_at,null
+  )
+  on conflict (service_identity) do update
+    set credential_hash=excluded.credential_hash,
+        status='active',
+        issued_at=transaction_timestamp(),
+        expires_at=excluded.expires_at,
+        revoked_at=null;
+  insert into public.governance_audit_events(
+    task_id,project_id,platform,environment,entity_type,entity_id,event_type,
+    actor_identity_hash,evidence_hash
+  )
+  select task.id,task.project_id,task.platform,task.environment,'switch',task.id,
+    'service_identity_registered',
+    encode(extensions.digest(convert_to(owner_id::text,'UTF8'),'sha256'),'hex'),
+    encode(extensions.digest(
+      convert_to(p_service_identity || ':' || p_credential_hash,'UTF8'),'sha256'
+    ),'hex')
+  from public.intelligence_tasks task
+  where task.task_key='cognitive-level01-canary-control'
+  order by task.created_at
+  limit 1;
+  return p_service_identity;
+end;
+$$;
+revoke all on function public.governance_owner_register_service_identity(text,text,timestamptz)
+  from public, anon, service_role;
+grant execute on function public.governance_owner_register_service_identity(text,text,timestamptz)
+  to authenticated;
+
+create function public.cognitive_verify_service_token(
+  p_expected_identity text,
+  p_opaque_token text
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if nullif(current_setting('request.jwt.claim.role',true),'') <> 'service_role'
+     or p_opaque_token is null
+     or octet_length(p_opaque_token) not between 32 and 512
+     or not exists (
+       select 1 from public.cognitive_service_identities identity
+       where identity.service_identity=p_expected_identity
+         and identity.status='active'
+         and identity.revoked_at is null
+         and transaction_timestamp() < identity.expires_at
+         and identity.credential_hash=encode(
+           extensions.digest(convert_to(p_opaque_token,'UTF8'),'sha256'),'hex'
+         )
+     ) then
+    raise exception 'cognitive_service_token_rejected' using errcode='42501';
+  end if;
+  return p_expected_identity;
+end;
+$$;
+revoke all on function public.cognitive_verify_service_token(text,text)
+  from public, anon, authenticated;
+grant execute on function public.cognitive_verify_service_token(text,text)
+  to service_role;
+
+-- Any decrement of a capability budget is a side-effect authorization point.
+-- Enforce the governance decision/approval/veto envelope in the database even
+-- when a caller reaches the lower-level capability RPC directly.
+create function public.governance_enforce_capability_consumption()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare now_at timestamptz := transaction_timestamp();
+begin
+  if new.remaining_calls < old.remaining_calls
+     or new.remaining_bytes < old.remaining_bytes
+     or new.remaining_cost < old.remaining_cost then
+    if not exists (
+      select 1
+      from public.governance_decision_capability_bindings binding
+      join public.governance_decision_manifests decision
+        on decision.id=binding.decision_manifest_id
+       and decision.task_id=binding.task_id
+       and decision.project_id=binding.project_id
+       and decision.platform=binding.platform
+       and decision.environment=binding.environment
+      join public.governance_approval_versions version
+        on version.id=binding.approval_version_id
+       and version.task_id=binding.task_id
+       and version.project_id=binding.project_id
+       and version.platform=binding.platform
+       and version.environment=binding.environment
+      join public.governance_approvals approval
+        on approval.id=version.approval_id
+       and approval.task_id=version.task_id
+       and approval.project_id=version.project_id
+       and approval.platform=version.platform
+       and approval.environment=version.environment
+      join public.intelligence_tasks task
+        on task.id=binding.task_id and task.project_id=binding.project_id
+       and task.platform=binding.platform and task.environment=binding.environment
+      where binding.capability_id=old.id
+        and binding.revoked_at is null
+        and binding.decision_manifest_hash=decision.decision_hash
+        and binding.approval_scope_hash=version.approval_scope_hash
+        and binding.plan_snapshot_hash=old.plan_snapshot_hash
+        and decision.status='finalized'
+        and now_at < decision.expires_at
+        and version.status='active'
+        and now_at >= version.valid_from
+        and now_at < version.expires_at
+        and approval.status='active'
+        and approval.executions_consumed < approval.maximum_executions
+        and task.cancelled_at is null
+        and task.quarantined_at is null
+        and now_at < task.deadman_at
+        and not exists (
+          select 1 from public.governance_vetoes veto
+          where veto.deliberation_id=decision.deliberation_id
+            and veto.mandatory and veto.status='active'
+        )
+        and coalesce((
+          select emergency.status='active'
+          from public.autonomous_system_emergency_states emergency
+          where emergency.system_id='product_intelligence_operator'
+        ),false)
+    ) then
+      raise exception 'governed_capability_not_active' using errcode='P0001';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.governance_enforce_capability_consumption()
+  from public,anon,authenticated,service_role;
+create trigger cognitive_capability_governance_consumption_guard
+before update on public.cognitive_capabilities
+for each row execute function public.governance_enforce_capability_consumption();

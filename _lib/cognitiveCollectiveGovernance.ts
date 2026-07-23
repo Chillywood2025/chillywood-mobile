@@ -283,16 +283,65 @@ export type GovernanceDissent = Readonly<{
 }>;
 
 export type GovernanceDecisionEvaluation = Readonly<{
+  decisionId: string;
+  optionId: string;
+  risk: GovernanceRisk;
   state: "quorum_met" | "quorum_not_met" | "mandatory_veto_active" | "invalid";
   supportCount: number;
   opposeCount: number;
   abstainCount: number;
   uniqueRoleCount: number;
+  participatingRoles: readonly CognitiveCouncilRole[];
+  voteManifestHash: string;
+  vetoManifestHash: string;
+  dissentManifestHash: string;
   blockers: readonly string[];
+  evaluationHash: string;
 }>;
 
 const minimumQuorum = (risk: GovernanceRisk): number =>
   ({ low: 3, medium: 4, high: 6, critical: 7 })[risk];
+
+const sortedByStableId = <T>(
+  entries: readonly T[],
+  readId: (entry: T) => string,
+): readonly T[] =>
+  Object.freeze([...entries].sort((left, right) => readId(left).localeCompare(readId(right))));
+
+const finalizeGovernanceEvaluation = (
+  evaluation: Omit<GovernanceDecisionEvaluation, "evaluationHash">,
+): GovernanceDecisionEvaluation => {
+  const frozen = Object.freeze({
+    ...evaluation,
+    participatingRoles: Object.freeze([...evaluation.participatingRoles]),
+    blockers: Object.freeze([...evaluation.blockers]),
+  });
+  return Object.freeze({
+    ...frozen,
+    evaluationHash: canonicalGovernanceHash(frozen),
+  });
+};
+
+const governanceEvaluationMatchesManifest = (
+  evaluation: GovernanceDecisionEvaluation,
+  manifest: GovernanceDecisionManifest,
+): boolean => {
+  const { evaluationHash, ...evaluationBody } = evaluation;
+  return (
+    validHash(evaluationHash) &&
+    canonicalGovernanceHash(evaluationBody) === evaluationHash &&
+    evaluation.state === "quorum_met" &&
+    evaluation.decisionId === manifest.decisionId &&
+    evaluation.optionId === manifest.selectedOptionId &&
+    evaluation.risk === manifest.risk &&
+    evaluation.voteManifestHash === manifest.voteManifestHash &&
+    evaluation.vetoManifestHash === manifest.vetoManifestHash &&
+    evaluation.dissentManifestHash === manifest.dissentManifestHash &&
+    evaluation.evaluationHash === manifest.evaluationHash &&
+    canonicalGovernanceHash([...evaluation.participatingRoles].sort()) ===
+      canonicalGovernanceHash([...manifest.councilRoles].sort())
+  );
+};
 
 export const evaluateGovernanceDecision = (input: {
   decisionId: string;
@@ -309,11 +358,14 @@ export const evaluateGovernanceDecision = (input: {
   const matchingVotes = input.votes.filter(
     (vote) => vote.decisionId === input.decisionId && vote.optionId === input.optionId,
   );
-  const roleKeys = new Set<string>();
+  if (matchingVotes.length !== input.votes.length) blockers.push("vote_scope_mismatch");
+  const roleKeys = new Set<CognitiveCouncilRole>();
   const identityKeys = new Set<string>();
   for (const vote of matchingVotes) {
     if (
       !validId(vote.voteId) ||
+      !COGNITIVE_COUNCIL_ROLES.includes(vote.role as CognitiveCouncilRole) ||
+      !["support", "oppose", "abstain"].includes(vote.vote) ||
       !validHash(vote.voterIdentityHash) ||
       !validHash(vote.assessmentHash) ||
       !validDate(vote.createdAt)
@@ -322,8 +374,23 @@ export const evaluateGovernanceDecision = (input: {
     }
     if (roleKeys.has(vote.role)) blockers.push("duplicate_role_vote");
     if (identityKeys.has(vote.voterIdentityHash)) blockers.push("duplicate_identity_vote");
-    roleKeys.add(vote.role);
+    if (COGNITIVE_COUNCIL_ROLES.includes(vote.role as CognitiveCouncilRole)) {
+      roleKeys.add(vote.role as CognitiveCouncilRole);
+    }
     identityKeys.add(vote.voterIdentityHash);
+  }
+  for (const veto of input.vetoes) {
+    if (
+      !validId(veto.vetoId) ||
+      veto.decisionId !== input.decisionId ||
+      !MANDATORY_VETO_DOMAINS.includes(veto.domain as MandatoryVetoDomain) ||
+      !COGNITIVE_COUNCIL_ROLES.includes(veto.role as CognitiveCouncilRole) ||
+      !validHash(veto.evidenceHash) ||
+      !validHash(veto.reasonHash) ||
+      (veto.resolvedAt !== null && !validDate(veto.resolvedAt))
+    ) {
+      blockers.push("veto_invalid");
+    }
   }
   const activeVetoes = input.vetoes.filter(
     (veto) =>
@@ -335,7 +402,13 @@ export const evaluateGovernanceDecision = (input: {
   const supportCount = matchingVotes.filter((vote) => vote.vote === "support").length;
   const opposeCount = matchingVotes.filter((vote) => vote.vote === "oppose").length;
   const abstainCount = matchingVotes.filter((vote) => vote.vote === "abstain").length;
-  const critics = new Set(matchingVotes.map((vote) => vote.role));
+  const critics = new Set(
+    matchingVotes
+      .map((vote) => vote.role)
+      .filter((role): role is CognitiveCouncilRole =>
+        COGNITIVE_COUNCIL_ROLES.includes(role as CognitiveCouncilRole)
+      ),
+  );
   for (const role of [
     "security_privacy",
     "reliability_release",
@@ -344,41 +417,66 @@ export const evaluateGovernanceDecision = (input: {
   ] satisfies CognitiveCouncilRole[]) {
     if (!critics.has(role)) blockers.push(`required_critic_missing:${role}`);
   }
-  if (input.dissents.some((entry) => entry.state === "open" && !entry.evidenceHashes.every(validHash))) {
-    blockers.push("dissent_evidence_invalid");
+  for (const entry of input.dissents) {
+    if (
+      !validId(entry.dissentId) ||
+      entry.decisionId !== input.decisionId ||
+      !COGNITIVE_COUNCIL_ROLES.includes(entry.role as CognitiveCouncilRole) ||
+      !validHash(entry.reasonHash) ||
+      !entry.evidenceHashes.every(validHash) ||
+      !["low", "medium", "high", "critical"].includes(entry.predictedRisk) ||
+      !validHash(entry.importantWhenHash) ||
+      !["open", "resolved", "accepted_residual_risk"].includes(entry.state)
+    ) {
+      blockers.push("dissent_invalid");
+    }
   }
-  if (blockers.length > 0) {
-    return Object.freeze({
-      state: "invalid",
+  const participatingRoles = Object.freeze([...roleKeys].sort());
+  const voteManifestHash = canonicalGovernanceHash(
+    sortedByStableId(matchingVotes, (vote) => vote.voteId),
+  );
+  const vetoManifestHash = canonicalGovernanceHash(
+    sortedByStableId(input.vetoes, (veto) => veto.vetoId),
+  );
+  const dissentManifestHash = canonicalGovernanceHash(
+    sortedByStableId(input.dissents, (dissent) => dissent.dissentId),
+  );
+  const buildEvaluation = (
+    state: GovernanceDecisionEvaluation["state"],
+    evaluationBlockers: readonly string[],
+  ): GovernanceDecisionEvaluation =>
+    finalizeGovernanceEvaluation({
+      decisionId: input.decisionId,
+      optionId: input.optionId,
+      risk: input.risk,
+      state,
       supportCount,
       opposeCount,
       abstainCount,
       uniqueRoleCount: roleKeys.size,
-      blockers: Object.freeze(blockers),
+      participatingRoles,
+      voteManifestHash,
+      vetoManifestHash,
+      dissentManifestHash,
+      blockers: evaluationBlockers,
     });
+  if (blockers.length > 0) {
+    return buildEvaluation("invalid", blockers);
   }
   if (activeVetoes.length > 0) {
-    return Object.freeze({
-      state: "mandatory_veto_active",
-      supportCount,
-      opposeCount,
-      abstainCount,
-      uniqueRoleCount: roleKeys.size,
-      blockers: Object.freeze(activeVetoes.map((veto) => `mandatory_veto:${veto.domain}`)),
-    });
+    return buildEvaluation(
+      "mandatory_veto_active",
+      activeVetoes.map((veto) => `mandatory_veto:${veto.domain}`),
+    );
   }
   const quorum = minimumQuorum(input.risk);
   const passed = roleKeys.size >= quorum && supportCount > opposeCount;
-  return Object.freeze({
-    state: passed ? "quorum_met" : "quorum_not_met",
-    supportCount,
-    opposeCount,
-    abstainCount,
-    uniqueRoleCount: roleKeys.size,
-    blockers: Object.freeze(
+  return buildEvaluation(
+    passed ? "quorum_met" : "quorum_not_met",
+    Object.freeze(
       passed ? [] : [`required_quorum:${quorum}`, "support_must_exceed_opposition"],
     ),
-  });
+  );
 };
 
 export type GovernanceDecisionManifest = Readonly<{
@@ -396,6 +494,7 @@ export type GovernanceDecisionManifest = Readonly<{
   voteManifestHash: string;
   vetoManifestHash: string;
   dissentManifestHash: string;
+  evaluationHash: string;
   stakeholderImpactHash: string;
   risk: GovernanceRisk;
   requiredTestsHash: string;
@@ -426,6 +525,7 @@ export const createDecisionManifest = (
     !validHash(input.voteManifestHash) ||
     !validHash(input.vetoManifestHash) ||
     !validHash(input.dissentManifestHash) ||
+    !validHash(input.evaluationHash) ||
     !validHash(input.stakeholderImpactHash) ||
     !validHash(input.requiredTestsHash) ||
     !validHash(input.capabilityScopeHash) ||
@@ -436,6 +536,10 @@ export const createDecisionManifest = (
     !validDate(input.expiresAt)
   ) {
     throw new Error("decision_manifest_invalid");
+  }
+  const provisional = { ...input, decisionHash: "" } as GovernanceDecisionManifest;
+  if (!governanceEvaluationMatchesManifest(evaluation, provisional)) {
+    throw new Error("decision_manifest_evaluation_mismatch");
   }
   const decisionHash = canonicalGovernanceHash(input);
   return Object.freeze({
@@ -565,12 +669,14 @@ export const authorizeEquivalentCapabilityRenewal = (input: {
   const duration = expiry - now.getTime();
   if (
     validateApprovalEnvelope(input.approval, now).length > 0 ||
+    !["active", "expired"].includes(input.priorCapability.status) ||
     input.priorCapability.taskId !== input.approval.taskId ||
     input.priorCapability.decisionManifestHash !== input.approval.decisionManifestHash ||
     input.priorCapability.scopeHash !== input.approval.scopeHash ||
     !validId(input.newCapabilityId) ||
     duration < CAPABILITY_MINIMUM_MS ||
     duration > CAPABILITY_MAXIMUM_MS ||
+    expiry > Date.parse(input.approval.expiresAt) ||
     input.taskState !== "active" ||
     input.emergencyStop ||
     input.newBlocker ||
@@ -1446,6 +1552,7 @@ export class DecisionCapabilityAuthority {
     const { decisionHash: suppliedDecisionHash, ...manifestBody } = input.manifest;
     if (
       input.evaluation.state !== "quorum_met" ||
+      !governanceEvaluationMatchesManifest(input.evaluation, input.manifest) ||
       canonicalGovernanceHash(manifestBody) !== suppliedDecisionHash ||
       input.manifest.decisionHash !== input.approval.decisionManifestHash ||
       input.manifest.sourceCommit !== input.currentSourceCommit ||

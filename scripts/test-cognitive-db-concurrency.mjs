@@ -41,8 +41,25 @@ const psqlArgs = [
 
 const projectId = randomUUID();
 const taskId = randomUUID();
+const serviceIdentity = "cognitive_control_plane";
+const syntheticCredential =
+  "synthetic-concurrency-credential-for-local-database-test-0000000000000000";
 
 run(psqlArgs, `
+insert into public.cognitive_service_identities(
+  service_identity,credential_hash,status,expires_at
+) values (
+  '${serviceIdentity}',
+  encode(extensions.digest(
+    convert_to('${syntheticCredential}','UTF8'),
+    'sha256'
+  ),'hex'),
+  'active',
+  transaction_timestamp()+interval '1 hour'
+)
+on conflict (service_identity) do update
+set credential_hash=excluded.credential_hash,status='active',
+    expires_at=excluded.expires_at,revoked_at=null;
 insert into public.cognitive_projects(id,repository_full_name)
 values ('${projectId}','Chillywood2025/chillywood-mobile');
 insert into public.intelligence_tasks(
@@ -58,7 +75,12 @@ insert into public.intelligence_tasks(
 const findingSql = (evidenceCharacter) => `
 begin;
 select set_config('request.jwt.claim.role','service_role',true);
-select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
+select set_config('request.jwt.claim.cognitive_actor','${serviceIdentity}',true);
+select set_config(
+  'request.jwt.claim.cognitive_service_credential',
+  '${syntheticCredential}',
+  true
+);
 select pg_sleep(0.25);
 select public.cognitive_record_finding(
   '${taskId}','${projectId}','shared','ci',

@@ -33,6 +33,9 @@ compile("_lib/cognitivePolicyEngine.ts", "policy.mjs", [
 const policyEngine = await import(
   `file://${path.join(temporaryRoot, "policy.mjs")}`
 );
+const executorBoundary = await import(
+  `file://${path.join(temporaryRoot, "foundation.mjs")}`
+);
 const networkPolicy = JSON.parse(
   fs.readFileSync(
     path.join(root, "config/intelligence/cognitive-network-policy.json"),
@@ -45,18 +48,27 @@ const pathPolicy = JSON.parse(
     "utf8",
   ),
 );
+const pathFixtures = [
+  "docs/.env",
+  "docs/.AWS/credentials.old",
+  "docs/.config/gcloud/application_default_credentials.json.copy",
+  "docs/intelligence/safe.md",
+  "docs/..%252f.env",
+  "docs/ＮＥＳＴＥＤ/.ＳＳＨ/id_ed25519",
+  "docs/.cargo/credentials.toml",
+  "docs/.yarnrc.yml",
+  "docs/.pypirc",
+  "docs/.gem/credentials",
+];
 
 const sourceResult = {
-  paths: [
-    ".env",
-    "nested/.AWS/credentials.old",
-    ".config/gcloud/application_default_credentials.json.copy",
-    "docs/intelligence/safe.md",
-    "..%252f.env",
-    "ＮＥＳＴＥＤ/.ＳＳＨ/id_ed25519",
-  ].map((value) => [
+  paths: pathFixtures.map((value) => [
     value,
     policyEngine.classifySensitiveRepositoryPath(value, pathPolicy),
+  ]),
+  executorPaths: pathFixtures.map((value) => [
+    value,
+    executorBoundary.validateLexicalRepositoryPath(value),
   ]),
   peers: [
     [["93.184.216.34"], "93.184.216.34"],
@@ -123,6 +135,20 @@ assert.deepEqual(
 assert.equal(sourceResult.paths[3][1], "allowed", "safe repository path remains usable");
 for (const [, classification] of sourceResult.paths.filter((_, index) => index !== 3)) {
   assert.equal(classification, "forbidden", "sensitive path fixture must fail closed");
+}
+assert.deepEqual(
+  sourceResult.executorPaths[3][1],
+  [],
+  "actual executor must allow the safe repository fixture",
+);
+for (const [, blockers] of sourceResult.executorPaths.filter((_, index) => index !== 3)) {
+  assert.ok(
+    blockers.includes("credential_path_forbidden") ||
+      blockers.includes("path_traversal_forbidden") ||
+      blockers.includes("path_encoding_invalid") ||
+      blockers.includes("forbidden_path"),
+    "actual executor must fail closed for each sensitive path fixture",
+  );
 }
 
 console.log(

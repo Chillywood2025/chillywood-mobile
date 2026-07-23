@@ -1035,6 +1035,45 @@ grant execute on function public.cognitive_fragments_have_sensitive_label(text[]
 grant execute on function public.cognitive_json_depth_within_limit(jsonb,integer) to service_role;
 grant execute on function public.cognitive_json_is_sanitized(jsonb) to service_role;
 
+-- A service-role JWT is necessary but not sufficient to select a cognitive
+-- service identity.  Each service proves possession of a distinct opaque
+-- credential whose digest is registered by an owner-controlled provisioning
+-- path.  The plaintext credential is never stored.
+create table public.cognitive_service_identities (
+  service_identity text primary key check (
+    service_identity in (
+      'cognitive_control_plane',
+      'product_intelligence_operator',
+      'privacy_compliance_operator',
+      'research_source_broker',
+      'governance_constitution_service',
+      'deliberation_orchestrator',
+      'decision_manifest_authority',
+      'owner_approval_lifecycle_service',
+      'capability_and_tool_broker',
+      'cognitive_postflight_authority',
+      'independent_evaluation_judge',
+      'approval_revalidation_service',
+      'intelligence_memory_service',
+      'governance_canary_scheduler',
+      'trusted_test_runner',
+      'credential_attestation_authority'
+    )
+  ),
+  credential_hash text not null unique check (credential_hash ~ '^[a-f0-9]{64}$'),
+  status text not null default 'active' check (status in ('active','revoked')),
+  issued_at timestamptz not null default transaction_timestamp(),
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  created_at timestamptz not null default transaction_timestamp(),
+  check (expires_at > issued_at),
+  check ((status = 'revoked') = (revoked_at is not null))
+);
+alter table public.cognitive_service_identities enable row level security;
+alter table public.cognitive_service_identities force row level security;
+revoke all on table public.cognitive_service_identities
+  from public, anon, authenticated, service_role;
+
 create or replace function public.cognitive_assert_service_actor(
   p_allowed_actors text[],
   p_claimed_actor text default null
@@ -1058,11 +1097,28 @@ declare
     nullif(current_setting('request.jwt.claim.cognitive_actor', true), ''),
     claims->>'cognitive_actor'
   );
+  opaque_credential text := coalesce(
+    nullif(current_setting('request.jwt.claim.cognitive_service_credential', true), ''),
+    claims->>'cognitive_service_credential'
+  );
 begin
   if request_role <> 'service_role'
      or request_actor is null
      or not request_actor = any(p_allowed_actors)
-     or (p_claimed_actor is not null and p_claimed_actor <> request_actor) then
+     or (p_claimed_actor is not null and p_claimed_actor <> request_actor)
+     or opaque_credential is null
+     or not exists (
+       select 1
+       from public.cognitive_service_identities identity
+       where identity.service_identity = request_actor
+         and identity.status = 'active'
+         and identity.revoked_at is null
+         and transaction_timestamp() < identity.expires_at
+         and identity.credential_hash = encode(
+           extensions.digest(convert_to(opaque_credential,'UTF8'),'sha256'),
+           'hex'
+         )
+     ) then
     raise exception 'cognitive_service_actor_mismatch' using errcode='42501';
   end if;
   return request_actor;
@@ -1545,7 +1601,7 @@ begin
     when 'executing' then p_next in ('evaluating','failed','cancelled','budget_exhausted','rollback_pending','quarantined')
     when 'evaluating' then p_next in ('completed','failed','rollback_pending','quarantined')
     when 'rollback_pending' then p_next in ('rollback_running','quarantined')
-    when 'rollback_running' then p_next in ('rollback_succeeded','rollback_failed','quarantined')
+    when 'rollback_running' then p_next in ('rollback_failed','quarantined')
     when 'rollback_failed' then p_next in ('quarantined','escalation_required')
     else false
   end;
@@ -2650,7 +2706,7 @@ begin
       or (p_expected = 'executing' and p_next in ('evaluating','failed','cancelled','budget_exhausted','rollback_pending','quarantined'))
       or (p_expected = 'evaluating' and p_next in ('completed','failed','rollback_pending','quarantined'))
       or (p_expected = 'rollback_pending' and p_next in ('rollback_running','quarantined'))
-      or (p_expected = 'rollback_running' and p_next in ('rollback_succeeded','rollback_failed','quarantined'))
+      or (p_expected = 'rollback_running' and p_next in ('rollback_failed','quarantined'))
       or (p_expected = 'rollback_failed' and p_next in ('quarantined','escalation_required'))
     when 'lesson' then
       (p_expected = 'proposed' and p_next in ('accepted','rejected','quarantined'))
@@ -4077,6 +4133,446 @@ begin
   end loop;
 end
 $$;
+
+-- A tool result is untrusted data, but its receipt from the broker is immutable
+-- and internally hashed.  Later postflight logic binds to this row instead of
+-- accepting a caller-computed result hash.
+create table public.cognitive_tool_result_records (
+  id uuid primary key default gen_random_uuid(),
+  capability_id uuid not null,
+  task_id uuid not null,
+  project_id uuid not null,
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  call_id text not null check (
+    length(call_id) between 3 and 128
+    and not public.cognitive_text_has_secret(call_id)
+    and not public.cognitive_text_has_private_identifier(call_id)
+  ),
+  usage_sequence integer not null check (usage_sequence >= 1),
+  result_envelope jsonb not null check (
+    pg_column_size(result_envelope) <= 65536
+    and public.cognitive_json_is_sanitized(result_envelope)
+  ),
+  result_envelope_hash text not null check (result_envelope_hash ~ '^[a-f0-9]{64}$'),
+  result_source text not null check (result_source in ('tool_broker')),
+  accepted_at timestamptz not null default transaction_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
+  unique (capability_id, call_id),
+  unique (capability_id, usage_sequence),
+  unique (id, task_id, project_id, platform, environment),
+  foreign key (capability_id, task_id, project_id, platform, environment)
+    references public.cognitive_capabilities(id, task_id, project_id, platform, environment)
+);
+alter table public.cognitive_tool_result_records enable row level security;
+alter table public.cognitive_tool_result_records force row level security;
+revoke all on table public.cognitive_tool_result_records
+  from public, anon, authenticated, service_role;
+grant select on table public.cognitive_tool_result_records
+  to authenticated, service_role;
+create policy cognitive_tool_result_records_exact_read
+  on public.cognitive_tool_result_records
+  for select to authenticated
+  using ((select public.cognitive_can_read_scope(project_id,task_id,platform)));
+create trigger cognitive_tool_result_records_immutable
+before update or delete on public.cognitive_tool_result_records
+for each row execute function public.reject_cognitive_evidence_mutation();
+
+create function public.cognitive_resource_scopes_conflict(
+  p_left_type text,
+  p_left_key text,
+  p_right_type text,
+  p_right_key text
+)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select
+    (p_left_type=p_right_type and p_left_key=p_right_key)
+    or p_left_type='repository'
+    or p_right_type='repository'
+    or (
+      p_left_type='platform' and p_right_type in (
+        'branch','path','migration_namespace','edge_function','database_object',
+        'provider','release_channel','feature_flag'
+      )
+    )
+    or (
+      p_right_type='platform' and p_left_type in (
+        'branch','path','migration_namespace','edge_function','database_object',
+        'provider','release_channel','feature_flag'
+      )
+    )
+    or (
+      p_left_type='branch'
+      and p_right_type in ('path','migration_namespace','edge_function','database_object')
+    )
+    or (
+      p_right_type='branch'
+      and p_left_type in ('path','migration_namespace','edge_function','database_object')
+    )
+    or (
+      p_left_type='path' and p_right_type='path'
+      and (
+        regexp_replace(p_left_key,'^path:','') =
+          regexp_replace(p_right_key,'^path:','')
+        or regexp_replace(p_left_key,'^path:','') like
+          rtrim(regexp_replace(p_right_key,'^path:',''),'/') || '/%'
+        or regexp_replace(p_right_key,'^path:','') like
+          rtrim(regexp_replace(p_left_key,'^path:',''),'/') || '/%'
+      )
+    )
+    or (
+      p_left_type='provider'
+      and p_right_type in ('release_channel','feature_flag')
+    )
+    or (
+      p_right_type='provider'
+      and p_left_type in ('release_channel','feature_flag')
+    );
+$$;
+revoke all on function public.cognitive_resource_scopes_conflict(text,text,text,text)
+  from public, anon, authenticated;
+grant execute on function public.cognitive_resource_scopes_conflict(text,text,text,text)
+  to service_role;
+
+create or replace function public.cognitive_acquire_resource_lease(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment,
+  p_resource_type text,
+  p_resource_key text,
+  p_mode text,
+  p_expires_at timestamptz,
+  p_event_hash text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare lease_id uuid;
+begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
+  if p_resource_type not in (
+       'repository','branch','path','migration_namespace','edge_function',
+       'database_object','provider','release_channel','platform','feature_flag'
+     )
+     or p_mode not in ('read','write')
+     or length(p_resource_key) not between 3 and 512
+     or public.cognitive_text_has_secret(p_resource_key)
+     or public.cognitive_text_has_private_identifier(p_resource_key)
+     or p_expires_at <= transaction_timestamp()
+     or p_expires_at > transaction_timestamp()+interval '4 hours'
+     or p_event_hash !~ '^[a-f0-9]{64}$'
+     or not exists (
+       select 1 from public.intelligence_tasks task
+       where task.id=p_task_id and task.project_id=p_project_id
+         and task.platform=p_platform and task.environment=p_environment
+         and task.cancelled_at is null and task.quarantined_at is null
+         and task.deadman_at > transaction_timestamp()
+     ) then
+    raise exception 'resource_lease_request_rejected' using errcode='P0001';
+  end if;
+  -- Serialize the complete hierarchy for one project/platform/environment.
+  perform pg_advisory_xact_lock(hashtextextended(
+    p_project_id::text || ':' || p_platform::text || ':' || p_environment::text,0
+  ));
+  with expired as (
+    update public.cognitive_resource_leases
+    set revoked_at=transaction_timestamp()
+    where project_id=p_project_id and platform=p_platform
+      and environment=p_environment and revoked_at is null
+      and expires_at <= transaction_timestamp()
+    returning *
+  )
+  insert into public.cognitive_resource_lease_events(
+    lease_id,task_id,project_id,platform,environment,event_type,event_hash
+  )
+  select id,task_id,project_id,platform,environment,'expired',p_event_hash
+  from expired;
+  if exists (
+    select 1 from public.cognitive_resource_leases lease
+    where lease.project_id=p_project_id
+      and lease.platform=p_platform
+      and lease.environment=p_environment
+      and lease.revoked_at is null
+      and lease.expires_at > transaction_timestamp()
+      and lease.task_id <> p_task_id
+      and (lease.mode='write' or p_mode='write')
+      and public.cognitive_resource_scopes_conflict(
+        lease.resource_type,lease.resource_key,p_resource_type,p_resource_key
+      )
+  ) then
+    raise exception 'resource_lease_conflict' using errcode='55P03';
+  end if;
+  insert into public.cognitive_resource_leases(
+    task_id,project_id,platform,environment,resource_type,resource_key,mode,
+    issued_at,expires_at,heartbeat_at
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,p_resource_type,p_resource_key,
+    p_mode,transaction_timestamp(),p_expires_at,transaction_timestamp()
+  ) returning id into lease_id;
+  insert into public.cognitive_resource_lease_events(
+    lease_id,task_id,project_id,platform,environment,event_type,event_hash
+  ) values (
+    lease_id,p_task_id,p_project_id,p_platform,p_environment,'acquired',p_event_hash
+  );
+  return lease_id;
+end;
+$$;
+revoke all on function public.cognitive_acquire_resource_lease(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,text,text,timestamptz,text
+) from public, anon, authenticated;
+grant execute on function public.cognitive_acquire_resource_lease(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  text,text,text,timestamptz,text
+) to service_role;
+
+create or replace function public.cognitive_accept_tool_result(
+  p_capability_id text,
+  p_call_id text,
+  p_opaque_bearer text,
+  p_opaque_nonce text,
+  p_result_envelope jsonb
+)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  capability public.cognitive_capabilities%rowtype;
+  task_value public.intelligence_tasks%rowtype;
+  consumed_event public.cognitive_capability_events%rowtype;
+  emergency_status text;
+  result_envelope_hash text;
+begin
+  perform public.cognitive_assert_service_actor(array['capability_and_tool_broker'],null);
+  select * into capability
+  from public.cognitive_capabilities
+  where capability_id=p_capability_id
+  for update;
+  select * into task_value
+  from public.intelligence_tasks
+  where id=capability.task_id and project_id=capability.project_id
+    and platform=capability.platform and environment=capability.environment;
+  select * into consumed_event
+  from public.cognitive_capability_events event
+  where event.capability_id=capability.id and event.call_id=p_call_id
+    and event.event_type='consumed';
+  select status into emergency_status
+  from public.autonomous_system_emergency_states
+  where system_id='product_intelligence_operator';
+  if capability.id is null
+     or encode(extensions.digest(convert_to(coalesce(p_opaque_bearer,''),'UTF8'),'sha256'),'hex')
+          is distinct from capability.bearer_hash
+     or encode(extensions.digest(convert_to(coalesce(p_opaque_nonce,''),'UTF8'),'sha256'),'hex')
+          is distinct from capability.nonce_hash
+     or capability.status not in ('active','exhausted')
+     or capability.revoked_at is not null
+     or transaction_timestamp() >= capability.expires_at
+     or task_value.id is null
+     or task_value.cancelled_at is not null
+     or task_value.quarantined_at is not null
+     or transaction_timestamp() >= task_value.deadman_at
+     or coalesce(emergency_status,'emergency_stop') <> 'active'
+     or consumed_event.id is null
+     or p_result_envelope is null
+     or pg_column_size(p_result_envelope) > 65536
+     or not public.cognitive_json_is_sanitized(p_result_envelope)
+     or not public.cognitive_approval_is_fresh(
+       capability.approval_request_id,capability.operation,capability.platform,
+       capability.approval_scope_hash,capability.plan_snapshot_hash
+     ) then
+    raise exception 'tool_result_postflight_rejected' using errcode='P0001';
+  end if;
+  result_envelope_hash := encode(
+    extensions.digest(convert_to(p_result_envelope::text,'UTF8'),'sha256'),
+    'hex'
+  );
+  insert into public.cognitive_tool_result_records(
+    capability_id,task_id,project_id,platform,environment,call_id,
+    usage_sequence,result_envelope,result_envelope_hash,result_source
+  ) values (
+    capability.id,capability.task_id,capability.project_id,capability.platform,
+    capability.environment,p_call_id,consumed_event.usage_sequence,
+    p_result_envelope,result_envelope_hash,'tool_broker'
+  );
+  return result_envelope_hash;
+end;
+$$;
+revoke all on function public.cognitive_accept_tool_result(text,text,text,text,jsonb)
+  from public, anon, authenticated;
+grant execute on function public.cognitive_accept_tool_result(text,text,text,text,jsonb)
+  to service_role;
+
+alter table public.intelligence_tasks
+  add column parent_task_id uuid,
+  add foreign key (parent_task_id,project_id,platform,environment)
+    references public.intelligence_tasks(id,project_id,platform,environment);
+
+create table public.cognitive_rollback_outcomes (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null,
+  project_id uuid not null,
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  rollback_evidence_id uuid not null,
+  restored_state_hash text not null check (restored_state_hash ~ '^[a-f0-9]{64}$'),
+  evaluator_result_id uuid not null,
+  post_rollback_evaluation_state public.cognitive_evaluation_status not null
+    check (post_rollback_evaluation_state='pass'),
+  event_hash text not null check (event_hash ~ '^[a-f0-9]{64}$'),
+  created_at timestamptz not null default transaction_timestamp(),
+  unique (task_id),
+  unique (id,task_id,project_id,platform,environment),
+  foreign key (rollback_evidence_id)
+    references public.execution_evidence_records(id),
+  foreign key (evaluator_result_id)
+    references public.evaluation_results(id),
+  foreign key (task_id,project_id,platform,environment)
+    references public.intelligence_tasks(id,project_id,platform,environment)
+);
+alter table public.cognitive_rollback_outcomes enable row level security;
+alter table public.cognitive_rollback_outcomes force row level security;
+revoke all on table public.cognitive_rollback_outcomes
+  from public,anon,authenticated,service_role;
+grant select on table public.cognitive_rollback_outcomes
+  to authenticated,service_role;
+create policy cognitive_rollback_outcomes_exact_read
+  on public.cognitive_rollback_outcomes
+  for select to authenticated
+  using ((select public.cognitive_can_read_scope(project_id,task_id,platform)));
+create trigger cognitive_rollback_outcomes_immutable
+before update or delete on public.cognitive_rollback_outcomes
+for each row execute function public.reject_cognitive_evidence_mutation();
+
+create function public.cognitive_complete_rollback_success(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment,
+  p_rollback_evidence_id uuid,
+  p_evaluator_result_id uuid,
+  p_event_hash text,
+  p_actor_identity text
+)
+returns public.cognitive_task_status
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  task_value public.intelligence_tasks%rowtype;
+  rollback_evidence public.execution_evidence_records%rowtype;
+  evaluator public.evaluation_results%rowtype;
+  now_at timestamptz := transaction_timestamp();
+begin
+  perform public.cognitive_assert_service_actor(
+    array['cognitive_control_plane'],p_actor_identity
+  );
+  select * into task_value
+  from public.intelligence_tasks
+  where id=p_task_id and project_id=p_project_id and platform=p_platform
+    and environment=p_environment
+  for update;
+  select * into rollback_evidence
+  from public.execution_evidence_records
+  where id=p_rollback_evidence_id and task_id=p_task_id
+    and project_id=p_project_id and platform=p_platform
+    and environment=p_environment and evidence_type='rollback';
+  select * into evaluator
+  from public.evaluation_results
+  where id=p_evaluator_result_id and task_id=p_task_id
+    and project_id=p_project_id and platform=p_platform
+    and environment=p_environment and evaluation_status='pass'
+    and completion_supported and not owner_approval_granted
+    and not evaluator_write_allowed;
+  if task_value.id is null
+     or task_value.status <> 'rollback_running'
+     or rollback_evidence.id is null
+     or evaluator.id is null
+     or evaluator.execution_run_id <> rollback_evidence.run_id
+     or evaluator.snapshot_hash is distinct from (
+       select run.snapshot_hash from public.execution_runs run
+       where run.id=rollback_evidence.run_id
+     )
+     or p_event_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'rollback_success_proof_rejected' using errcode='P0001';
+  end if;
+
+  update public.intelligence_tasks
+  set status='rollback_succeeded',updated_at=now_at
+  where id=p_task_id;
+  update public.intelligence_tasks
+  set status='cancelled',cancelled_at=now_at,updated_at=now_at
+  where parent_task_id=p_task_id
+    and status not in ('completed','failed','cancelled','rollback_succeeded','quarantined');
+  update public.execution_plans
+  set status='invalidated'
+  where task_id=p_task_id and project_id=p_project_id
+    and platform=p_platform and environment=p_environment
+    and status in ('draft','awaiting_approval','approved');
+
+  with revoked as (
+    update public.cognitive_capabilities
+    set status='revoked',revoked_at=now_at,
+        next_usage_sequence=next_usage_sequence+1
+    where task_id=p_task_id and status in ('active','exhausted')
+    returning *
+  )
+  insert into public.cognitive_capability_events(
+    capability_id,task_id,project_id,platform,environment,call_id,
+    usage_sequence,event_type,reason,request_hash
+  )
+  select id,task_id,project_id,platform,environment,
+    'rollback-success-' || substr(id::text,1,8),next_usage_sequence-1,
+    'revoked','rollback_success_requires_new_plan',p_event_hash
+  from revoked;
+
+  with released as (
+    update public.cognitive_resource_leases
+    set revoked_at=now_at
+    where task_id=p_task_id and revoked_at is null
+    returning *
+  )
+  insert into public.cognitive_resource_lease_events(
+    lease_id,task_id,project_id,platform,environment,event_type,event_hash
+  )
+  select id,task_id,project_id,platform,environment,'released',p_event_hash
+  from released;
+
+  insert into public.cognitive_state_transition_events(
+    task_id,project_id,platform,environment,entity_type,entity_id,
+    prior_status,next_status,actor_identity,transition_hash
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,'task',p_task_id,
+    'rollback_running','rollback_succeeded',p_actor_identity,p_event_hash
+  );
+  insert into public.cognitive_rollback_outcomes(
+    task_id,project_id,platform,environment,rollback_evidence_id,
+    restored_state_hash,evaluator_result_id,post_rollback_evaluation_state,
+    event_hash
+  ) values (
+    p_task_id,p_project_id,p_platform,p_environment,p_rollback_evidence_id,
+    rollback_evidence.evidence_hash,p_evaluator_result_id,'pass',p_event_hash
+  );
+  return 'rollback_succeeded';
+end;
+$$;
+revoke all on function public.cognitive_complete_rollback_success(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  uuid,uuid,text,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_complete_rollback_success(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,
+  uuid,uuid,text,text
+) to service_role;
 
 set check_function_bodies = true;
 

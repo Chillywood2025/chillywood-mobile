@@ -5,6 +5,7 @@ import {
   type CanonicalNetworkPolicy,
   type SensitivePathPolicy,
 } from "../_lib/cognitivePolicyEngine.ts";
+import { validateLexicalRepositoryPath } from "../_lib/cognitivePlatformFoundation.ts";
 import networkPolicyJson from "../config/intelligence/cognitive-network-policy.json" with {
   type: "json",
 };
@@ -14,18 +15,27 @@ import pathPolicyJson from "../config/intelligence/cognitive-sensitive-path-poli
 
 const networkPolicy = networkPolicyJson as CanonicalNetworkPolicy;
 const pathPolicy = pathPolicyJson as SensitivePathPolicy;
+const pathFixtures = [
+  "docs/.env",
+  "docs/.AWS/credentials.old",
+  "docs/.config/gcloud/application_default_credentials.json.copy",
+  "docs/intelligence/safe.md",
+  "docs/..%252f.env",
+  "docs/ＮＥＳＴＥＤ/.ＳＳＨ/id_ed25519",
+  "docs/.cargo/credentials.toml",
+  "docs/.yarnrc.yml",
+  "docs/.pypirc",
+  "docs/.gem/credentials",
+] as const;
 
 const result = {
-  paths: [
-    ".env",
-    "nested/.AWS/credentials.old",
-    ".config/gcloud/application_default_credentials.json.copy",
-    "docs/intelligence/safe.md",
-    "..%252f.env",
-    "ＮＥＳＴＥＤ/.ＳＳＨ/id_ed25519",
-  ].map((value) => [
+  paths: pathFixtures.map((value) => [
     value,
     classifySensitiveRepositoryPath(value, pathPolicy),
+  ]),
+  executorPaths: pathFixtures.map((value) => [
+    value,
+    validateLexicalRepositoryPath(value),
   ]),
   peers: [
     [["93.184.216.34"], "93.184.216.34"],

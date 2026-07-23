@@ -1,5 +1,32 @@
 begin;
 select no_plan();
+insert into public.cognitive_service_identities(
+  service_identity,credential_hash,status,expires_at
+)
+select identity,encode(extensions.digest(
+  convert_to('synthetic-test-credential-for-' || identity || '-0000000000000000','UTF8'),
+  'sha256'
+),'hex'),'active',transaction_timestamp()+interval '1 day'
+from unnest(array[
+  'governance_canary_scheduler','governance_constitution_service',
+  'capability_and_tool_broker','research_source_broker',
+  'deliberation_orchestrator','independent_evaluation_judge'
+]) identity
+on conflict (service_identity) do update
+set credential_hash=excluded.credential_hash,status='active',
+    expires_at=excluded.expires_at,revoked_at=null;
+create function pg_temp.set_level01_test_actor(p_actor text)
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.cognitive_actor',p_actor,true);
+  perform set_config(
+    'request.jwt.claim.cognitive_service_credential',
+    'synthetic-test-credential-for-' || p_actor || '-0000000000000000',
+    true
+  );
+  return p_actor;
+end;
+$$;
 
 select ok(
   (
@@ -35,6 +62,7 @@ select ok(
 );
 
 select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_level01_test_actor('governance_canary_scheduler');
 create temporary table level01_fixture(task_id uuid, project_id uuid);
 insert into level01_fixture
 select
@@ -51,6 +79,7 @@ from (
 ) bootstrap;
 grant select on level01_fixture to authenticated;
 
+select pg_temp.set_level01_test_actor('capability_and_tool_broker');
 select is(
   public.cognitive_record_level01_credential_attestation(
     (select task_id from level01_fixture),
@@ -139,7 +168,7 @@ select throws_ok(
     'decision_manifest_authority'
   )$$,
   '42501',
-  'governance_level01_service_actor_mismatch',
+  'cognitive_service_actor_mismatch',
   'service actor claims cannot cross the closed operation scope'
 );
 
@@ -192,6 +221,7 @@ select lives_ok(
 );
 reset role;
 select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_level01_test_actor('research_source_broker');
 
 create temporary table level01_source(source_id uuid);
 insert into level01_source
@@ -301,6 +331,7 @@ select lives_ok(
 );
 reset role;
 select set_config('request.jwt.claim.role','service_role',true);
+select pg_temp.set_level01_test_actor('deliberation_orchestrator');
 
 select lives_ok(
   format(

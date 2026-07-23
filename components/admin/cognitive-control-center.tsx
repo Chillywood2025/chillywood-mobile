@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION } from "../../_lib/cognitivePlatformFoundation";
+import {
+  parseLiveCognitiveStatusResponse,
+  type LiveCognitiveStatus,
+} from "../../_lib/cognitiveAdminStatus";
 import { supabase } from "../../_lib/supabase";
 
 const REQUIRED_READ_PERMISSION = "admin.cognitive.read";
@@ -18,16 +22,6 @@ const SOURCE_STATUS_ROWS = [
   ["Evaluator", "No live evaluator"],
 ] as const;
 
-type LiveCognitiveStatus = {
-  canManageLevel01: boolean;
-  deploymentState: string;
-  schedulerState: string;
-  switches: Record<string, boolean>;
-  pendingApprovalCount: number;
-  latestDecisionCount: number;
-  emergencyStop: boolean;
-};
-
 export const CognitiveControlCenterFoundation = () => {
   const [liveStatus, setLiveStatus] = useState<LiveCognitiveStatus | null>(null);
   const [readbackState, setReadbackState] = useState<"loading" | "live" | "source_only">("loading");
@@ -40,11 +34,12 @@ export const CognitiveControlCenterFoundation = () => {
         { body: { action: "status" } },
       );
       if (cancelled) return;
-      if (error || data?.ok !== true || !data.status) {
+      const status = error ? null : parseLiveCognitiveStatusResponse(data);
+      if (!status) {
         setReadbackState("source_only");
         return;
       }
-      setLiveStatus(data.status as LiveCognitiveStatus);
+      setLiveStatus(status);
       setReadbackState("live");
     };
     void read();

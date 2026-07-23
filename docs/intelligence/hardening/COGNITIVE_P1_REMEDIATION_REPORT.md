@@ -333,3 +333,38 @@ self-generated adversarial variants were added after the owner's freeze.
 Remaining P2/P3 observations are future or deployment-review work. The new
 checkpoint remains `security_hardening_in_progress` until every independent
 lane, the canonical 40-attack suite, and PR CI pass on the exact frozen head.
+
+## Collective Governance pre-freeze review correction
+
+The first four-lane review of the Collective Governance candidate
+`792673ef098eb0a9a3da42f5d490dd064e9ae731` reported no P0 and reproduced
+P1 defects across the new governance and canary boundaries. The overlapping
+findings were consolidated without weakening any expected result:
+
+- quorum/evaluation accepted caller-composed or unknown-role evidence;
+- capability renewal/consumption did not fully revalidate lifecycle, approval,
+  veto, decision, and expiration state;
+- one service-role caller could select the asserted service identity;
+- evaluator and postflight paths accepted insufficiently trusted evidence or
+  unstored result binding;
+- write postflight did not require exact active scoped leases;
+- leases were not hierarchical and rollback success did not invalidate all old
+  authority;
+- request JSON could synthesize passing research, deliberation, or credential
+  readiness;
+- GitHub provider policy and common package-manager credential paths had
+  fail-open cases.
+
+The corrective source uses closed council roles and immutable evaluation hashes,
+hashed service identities with narrow purpose, trusted runner/evaluator records,
+decision/approval/veto-bound capability consumption, stored tool-result binding,
+hierarchical leases, rollback revocation, and relational canary acceptance. The
+Edge boundary has no request-only passing path.
+
+Authored evidence after the correction is 40/40 canonical attacks, 104/104
+hardening regressions, 11/11 runtime-authority regressions, 38/38 governance
+source cases, 32/32 governance adversarial cases, 8/8 Edge boundary cases,
+326/326 focused cognitive pgTAP assertions, and 631/631 assertions in the full
+local database suite. These are not independent approval. The exact corrective
+commit must be frozen, pass CI, and receive a fresh four-lane review with zero
+P0/P1 before deployment work may begin.

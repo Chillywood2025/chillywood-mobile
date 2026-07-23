@@ -71,9 +71,10 @@ const manifestInput = {
   rejectedOptionIds: ["no-action"],
   councilRoles: roles,
   independenceAttestationHashes: roles.map((role) => hash(role)),
-  voteManifestHash: hash("votes"),
-  vetoManifestHash: hash("vetoes"),
-  dissentManifestHash: hash("dissent"),
+  voteManifestHash: quorum.voteManifestHash,
+  vetoManifestHash: quorum.vetoManifestHash,
+  dissentManifestHash: quorum.dissentManifestHash,
+  evaluationHash: quorum.evaluationHash,
   stakeholderImpactHash: hash("impact"),
   risk: "medium",
   requiredTestsHash: hash("tests"),
@@ -473,6 +474,95 @@ await attack("GOV-27-outcome-contradicts-proposal", () => {
   assert.equal(result.reconsiderationRequired, true);
 });
 
-assert.equal(results.length, 27);
+await attack("GOV-28-invented-role-cannot-create-quorum", () => {
+  const result = governance.evaluateGovernanceDecision({
+    decisionId: "decision-red-team",
+    optionId: "minimal-repair",
+    risk: "high",
+    votes: [
+      ...votes,
+      ...["invented-role-a", "invented-role-b"].map((role, index) => ({
+        ...votes[0],
+        voteId: `invented-${index}`,
+        role,
+        voterIdentityHash: hash(`invented:${role}`),
+        assessmentHash: hash(`invented-assessment:${role}`),
+      })),
+    ],
+    vetoes: [],
+    dissents: [],
+  });
+  assert.equal(result.state, "invalid");
+  assert.equal(result.uniqueRoleCount, roles.length);
+});
+await attack("GOV-29-caller-evaluation-cannot-authorize", () => {
+  assert.throws(
+    () =>
+      authorize({
+        evaluation: {
+          ...quorum,
+          supportCount: quorum.supportCount + 100,
+        },
+      }),
+    /decision_capability_not_authorized/u,
+  );
+});
+await attack("GOV-30-revoked-capability-cannot-renew", () => {
+  assert.throws(() =>
+    governance.authorizeEquivalentCapabilityRenewal({
+      approval,
+      priorCapability: {
+        capabilityId: "capability-revoked",
+        taskId: approval.taskId,
+        decisionManifestHash: approval.decisionManifestHash,
+        scopeHash: approval.scopeHash,
+        status: "revoked",
+      },
+      newCapabilityId: "capability-revoked-renewal",
+      issuedAt: "2026-07-23T12:15:00.000Z",
+      expiresAt: "2026-07-23T12:45:00.000Z",
+      taskState: "active",
+      emergencyStop: false,
+      newBlocker: false,
+      executionsRemaining: 1,
+      budgetAvailable: true,
+    }),
+  );
+});
+await attack("GOV-31-renewal-cannot-outlive-approval", () => {
+  assert.throws(() =>
+    governance.authorizeEquivalentCapabilityRenewal({
+      approval,
+      priorCapability: {
+        capabilityId: "capability-active",
+        taskId: approval.taskId,
+        decisionManifestHash: approval.decisionManifestHash,
+        scopeHash: approval.scopeHash,
+        status: "active",
+      },
+      newCapabilityId: "capability-overrun",
+      issuedAt: "2026-07-24T11:45:00.000Z",
+      expiresAt: "2026-07-24T12:45:00.000Z",
+      taskState: "active",
+      emergencyStop: false,
+      newBlocker: false,
+      executionsRemaining: 1,
+      budgetAvailable: true,
+    }),
+  );
+});
+await attack("GOV-32-unknown-provider-permission-fails-closed", () => {
+  const result = policy.classifyProviderPolicy("github", {
+    permissions: {
+      contents: "read",
+      synthetic_future_permission: "read",
+    },
+  });
+  assert.equal(result.classification, "unknown");
+  assert.equal(result.ownerReviewRequired, true);
+  assert.equal(result.executable, false);
+});
+
+assert.equal(results.length, 32);
 fs.rmSync(temporaryRoot, { recursive: true, force: true });
-console.log("Cognitive Governance adversarial suite: 27/27 passed");
+console.log("Cognitive Governance adversarial suite: 32/32 passed");

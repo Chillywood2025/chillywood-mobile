@@ -1,5 +1,33 @@
 begin;
 select no_plan();
+insert into public.cognitive_service_identities(
+  service_identity,credential_hash,status,expires_at
+)
+select identity,encode(extensions.digest(
+  convert_to('synthetic-test-credential-for-' || identity || '-0000000000000000','UTF8'),
+  'sha256'
+),'hex'),'active',transaction_timestamp()+interval '1 day'
+from unnest(array[
+  'governance_constitution_service','decision_manifest_authority',
+  'owner_approval_lifecycle_service','capability_and_tool_broker',
+  'cognitive_postflight_authority','independent_evaluation_judge',
+  'cognitive_control_plane'
+]) identity
+on conflict (service_identity) do update
+set credential_hash=excluded.credential_hash,status='active',
+    expires_at=excluded.expires_at,revoked_at=null;
+create function pg_temp.set_governance_test_actor(p_actor text)
+returns text language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.cognitive_actor',p_actor,true);
+  perform set_config(
+    'request.jwt.claim.cognitive_service_credential',
+    'synthetic-test-credential-for-' || p_actor || '-0000000000000000',
+    true
+  );
+  return p_actor;
+end;
+$$;
 
 select is(
   (
@@ -132,8 +160,8 @@ select is(
       and prosecdef
       and proconfig @> array['search_path=""']
   ),
-  12,
-  'all twelve governance security-definer RPCs have an empty fixed search_path'
+  14,
+  'all fourteen governance security-definer RPCs have an empty fixed search_path'
 );
 
 insert into public.cognitive_projects(id,repository_full_name)
@@ -153,11 +181,7 @@ insert into public.intelligence_tasks(
 );
 
 select set_config('request.jwt.claim.role','service_role',true);
-select set_config(
-  'request.jwt.claim.cognitive_actor',
-  'governance_constitution_service',
-  true
-);
+select pg_temp.set_governance_test_actor('governance_constitution_service');
 create temporary table governance_fixture_constitution(version_id uuid);
 insert into governance_fixture_constitution(version_id)
 select public.governance_bootstrap_constitution(
@@ -385,11 +409,7 @@ select
   'shared','ci','security',repeat('2',64)
 from public.governance_council_roles role
 where role.role_key='security_privacy';
-select set_config(
-  'request.jwt.claim.cognitive_actor',
-  'decision_manifest_authority',
-  true
-);
+select pg_temp.set_governance_test_actor('decision_manifest_authority');
 select throws_ok(
   $$select public.governance_finalize_decision(
     'a2000000-0000-0000-0000-000000000001',
@@ -432,11 +452,7 @@ select throws_ok(
   'finalized decision manifests are immutable'
 );
 
-select set_config(
-  'request.jwt.claim.cognitive_actor',
-  'owner_approval_lifecycle_service',
-  true
-);
+select pg_temp.set_governance_test_actor('owner_approval_lifecycle_service');
 create temporary table governance_fixture_approval(approval_id uuid);
 grant select on governance_fixture_approval to authenticated;
 insert into governance_fixture_approval(approval_id)
@@ -593,11 +609,7 @@ insert into public.cognitive_capabilities(
   'a6200000-0000-0000-0000-000000000001',
   (select snapshot_hash from governance_fixture_snapshot)
 );
-select set_config(
-  'request.jwt.claim.cognitive_actor',
-  'capability_and_tool_broker',
-  true
-);
+select pg_temp.set_governance_test_actor('capability_and_tool_broker');
 select lives_ok(
   $$select public.governance_bind_capability_to_decision(
     (select id from public.governance_decision_manifests limit 1),
@@ -624,6 +636,20 @@ insert into public.cognitive_capability_events(
   'a0000000-0000-0000-0000-000000000001',
   'shared','ci','governance-call-fixture',1,'consumed',repeat('4',64)
 );
+insert into public.cognitive_tool_result_records(
+  capability_id,task_id,project_id,platform,environment,call_id,
+  usage_sequence,result_envelope,result_envelope_hash,result_source
+) values (
+  'a6300000-0000-0000-0000-000000000001',
+  'a1000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'shared','ci','governance-call-fixture',1,
+  '{"status":"ok","source":"fixture"}'::jsonb,
+  encode(extensions.digest(
+    convert_to('{"source": "fixture", "status": "ok"}','UTF8'),'sha256'
+  ),'hex'),
+  'tool_broker'
+);
 insert into public.cognitive_resource_leases(
   id,task_id,project_id,platform,environment,resource_type,resource_key,mode,
   issued_at,expires_at,heartbeat_at
@@ -639,11 +665,7 @@ insert into public.autonomous_system_emergency_states(system_id,status,reason)
 values ('product_intelligence_operator','active','local governance fixture')
 on conflict (system_id) do update
 set status='active',reason='local governance fixture';
-select set_config(
-  'request.jwt.claim.cognitive_actor',
-  'cognitive_postflight_authority',
-  true
-);
+select pg_temp.set_governance_test_actor('cognitive_postflight_authority');
 select lives_ok(
   $$select public.governance_record_execution_receipt(
     'a6300000-0000-0000-0000-000000000001',
@@ -679,47 +701,42 @@ select is(
   true,
   'successful postflight releases the exact write lease'
 );
-select set_config(
-  'request.jwt.claim.cognitive_actor',
-  'independent_evaluation_judge',
-  true
-);
+select pg_temp.set_governance_test_actor('independent_evaluation_judge');
 select throws_ok(
   $$select public.cognitive_record_execution_evaluation(
     (select id from public.cognitive_execution_receipts limit 1),
     'pass',
-    jsonb_build_object(
-      'tests',jsonb_build_array(),
-      'finalCommit',repeat('a',40),
-      'diffHash',repeat('e',64),
-      'evidenceManifestHash',repeat('b',64),
-      'physicalEvidenceType','none'
-    ),
+    jsonb_build_object('callerClaimsPassed',true),
     'independent_evaluation_judge'
   )$$,
   'P0001',
-  'cognitive_execution_evaluation_required_test_missing',
-  'independent evaluator cannot omit a required test and claim pass'
+  'cognitive_execution_evaluation_trusted_evidence_rejected',
+  'independent evaluator rejects caller-authored pass evidence'
 );
+insert into public.cognitive_trusted_test_results(
+  receipt_id,task_id,project_id,platform,environment,test_id,result_status,
+  exit_code,tested_commit,stdout_hash,stderr_hash,runner_identity_hash,result_hash
+)
+select receipt.id,receipt.task_id,receipt.project_id,receipt.platform,
+  receipt.environment,'governance-red-team','passed',0,receipt.final_commit,
+  repeat('1',64),repeat('2',64),repeat('3',64),repeat('4',64)
+from public.cognitive_execution_receipts receipt;
+insert into public.cognitive_trusted_evidence_manifests(
+  receipt_id,task_id,project_id,platform,environment,evaluated_commit,
+  evaluated_diff_hash,physical_evidence_type,manifest_hash,runner_identity_hash
+)
+select receipt.id,receipt.task_id,receipt.project_id,receipt.platform,
+  receipt.environment,receipt.final_commit,receipt.diff_hash,'none',
+  repeat('5',64),repeat('3',64)
+from public.cognitive_execution_receipts receipt;
 select lives_ok(
   $$select public.cognitive_record_execution_evaluation(
     (select id from public.cognitive_execution_receipts limit 1),
     'pass',
-    jsonb_build_object(
-      'tests',jsonb_build_array(jsonb_build_object(
-        'testId','governance-red-team',
-        'status','passed',
-        'exitCode',0,
-        'commit',repeat('a',40)
-      )),
-      'finalCommit',repeat('a',40),
-      'diffHash',repeat('e',64),
-      'evidenceManifestHash',repeat('b',64),
-      'physicalEvidenceType','none'
-    ),
+    '{}'::jsonb,
     'independent_evaluation_judge'
   )$$,
-  'independent evaluator verifies the actual receipt commit, diff, and required test'
+  'independent evaluator derives the commit, diff, and required test from trusted runner rows'
 );
 select is(
   (
@@ -736,11 +753,7 @@ select throws_ok(
   'immutable_cognitive_evidence',
   'independent evaluation evidence cannot be deleted'
 );
-select set_config(
-  'request.jwt.claim.cognitive_actor',
-  'cognitive_postflight_authority',
-  true
-);
+select pg_temp.set_governance_test_actor('cognitive_postflight_authority');
 select throws_ok(
   $$select public.governance_record_execution_receipt(
     'a6300000-0000-0000-0000-000000000001',
@@ -761,11 +774,7 @@ select throws_ok(
   'postflight receipt cannot be deleted'
 );
 
-select set_config(
-  'request.jwt.claim.cognitive_actor',
-  'owner_approval_lifecycle_service',
-  true
-);
+select pg_temp.set_governance_test_actor('owner_approval_lifecycle_service');
 create temporary table governance_fixture_self_approval(approval_id uuid);
 grant select on governance_fixture_self_approval to authenticated;
 insert into governance_fixture_self_approval(approval_id)

@@ -117,6 +117,7 @@ const COMMAND_METACHARACTERS = /(?:[\n\r;|><`]|\$\(|\|\||&&|&\s*$)/u;
 const FORBIDDEN_ARGUMENT = /^(?:-f|--force(?:-with-lease)?|--delete|main|master|release|env|printenv|export|-x|--upload-pack)$/iu;
 const ENCODED_TRAVERSAL = /%(?:2e|2f|5c)/iu;
 const CREDENTIAL_FILE = /(?:^|\/)(?:\.env(?:\.|$)|\.envrc$|\.git-credentials$|\.htpasswd$|\.npmrc$|\.yarnrc(?:\.ya?ml)?$|\.netrc$|\.pypirc$|\.pgpass$|\.my\.cnf$|\.boto$|\.s3cfg$|kubeconfig$|vault[-_]?token$|id_(?:rsa|dsa|ecdsa|ed25519)$|(?:auth|token|secrets?|credentials?|service[-_]?account(?:[-_]?key)?|serviceaccountkey|gcp[-_]?service[-_]?account|firebase[-_]?admin(?:sdk(?:-[^/]+)?)?|application[-_]?default[-_]?credentials|client[-_]?secrets?(?:[-_][^/]*)?|access[-_]?tokens?|msal[-_]?token[-_]?cache)\.(?:json|ya?ml|toml|ini|cfg|conf)$|credentials?\.tfrc\.json$|\.aws\/credentials$|\.kube\/config$|\.config\/gh\/hosts\.ya?ml$|\.azure\/accessTokens\.json$|\.config\/gcloud\/application_default_credentials\.json$|\.docker\/config\.json$|\.gem\/credentials$|\.cargo\/credentials(?:\.toml)?$|.*\.(?:jks|keystore|p8|p12|pem|key)$)/iu;
+const BACKUP_OR_TEMP_SUFFIX = /(?:\.(?:bak|copy|old|swo|swp|tmp))+$/iu;
 
 const decodeUntilStable = (value: string): string | null => {
   let current = value;
@@ -144,7 +145,10 @@ export const validateLexicalRepositoryPath = (value: unknown): readonly string[]
   if (segments.some((segment) => segment === ".." || segment === "." || segment === "")) blockers.push("path_traversal_forbidden");
   if (segments.some((segment) => FORBIDDEN_PATH_SEGMENTS.has(segment))) blockers.push("forbidden_path");
   if (normalized === ".github/workflows" || normalized.startsWith(".github/workflows/")) blockers.push("workflow_edit_forbidden");
-  if (CREDENTIAL_FILE.test(normalized)) blockers.push("credential_path_forbidden");
+  const credentialCandidate = normalized.replace(BACKUP_OR_TEMP_SUFFIX, "");
+  if (CREDENTIAL_FILE.test(normalized) || CREDENTIAL_FILE.test(credentialCandidate)) {
+    blockers.push("credential_path_forbidden");
+  }
   if (!COGNITIVE_ALLOWED_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) blockers.push("path_outside_allowlist");
   return [...new Set(blockers)].sort();
 };
