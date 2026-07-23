@@ -8,12 +8,12 @@ Independent review: PR #15 at `ff6b2588e2dcc4fa8e76c8f8f6dac47f64cb0667`
 
 The branch is an undeployed, off, uncredentialed scaffold. Local remediation
 addressed the original review inventory, and each exact-head retest was allowed
-to reopen rows when it found a new composed-boundary bypass. The tenth retest
+to reopen rows when it found a new composed-boundary bypass. The eleventh retest
 findings are corrected locally but remain open until a fresh exact-head
 independent retest verifies them.
 The executable attack suite reports 40/40, the cognitive database suite reports
-196/196, the full repository database suite reports 481/481, the independent
-source variants report 78/78, the runtime-authority variants report 11/11, and the separate
+203/203, the full repository database suite reports 488/488, the independent
+source variants report 83/83, the runtime-authority variants report 11/11, and the separate
 two-session recurrence race reports one current row, two occurrences, and two
 immutable lifecycle events.
 
@@ -170,6 +170,24 @@ research URL remain accepted. Authored evidence is 78/78 independent variants,
 pgTAP assertions, 481/481 repository pgTAP assertions, and a passing concurrent
 finding lifecycle test. These results remain implementation evidence only
 until the next exact-head isolated review returns zero P0/P1.
+
+The eleventh exact-head review of
+`42b2dd62df225f088693dc3b7435ecf933adaff4` again found zero P0 and
+correctly stopped closure. It reproduced default-ignorable and confusable
+credential labels, IDNA-equivalent email separators, Unicode phone/private-IP
+forms, three-/four-fragment JSON reconstruction, PostgreSQL Stripe/JWT boundary
+errors, prefixed credential keys, private IPv6 escaping through custom-scheme
+parsing, and structured provider privilege semantics. It also measured the
+all-pairs SQL sanitizer above fifteen seconds below the documented payload
+limit. The corrective checkpoint now uses one detection-only security
+normalizer across source/runtime/SQL, explicit token boundaries,
+segment-aware keys, bounded small-envelope reconstruction, structured provider
+policy checks, and a linear 128-value database path. Authored evidence is
+83/83 hardening variants, 40/40 canonical attacks, 11/11 runtime-authority
+tests, and 203/203 focused cognitive pgTAP assertions. A timed benign
+128-value SQL envelope completed in under one second locally. These remain
+implementation results only; every eleventh-review item stays independently
+open until a fresh exact-head review reports zero P0/P1.
 
 No remediation grants production execution, scheduler, deployment, release,
 money, rights, auth/RLS, role, moderation, provider-product or self-approval

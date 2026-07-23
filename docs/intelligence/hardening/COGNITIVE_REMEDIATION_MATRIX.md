@@ -281,3 +281,25 @@ advisory deployment blocker. The scaffold remains
 | B10-IPV6-001 | P2 | Namespace notation such as `namespace::method` was falsely classified as compressed IPv6. | Require alphanumeric address boundaries and successful IPv6 parsing; retain ordinary namespace notation. | pgTAP namespace assertions | fixed locally | pending |
 | C10-URL-001 | P2/P3 | Safe UUID/opaque-hex URL values and the exact 2,048-byte contract boundary were overblocked. | Use typed opaque-value exceptions only after exact-shape checks and enforce the URL byte cap before recursive candidate expansion. | R-78 | fixed locally | pending |
 | A10-SUPPLY-001 | P2 | The locked dependency tree retains 23 inherited advisories. | No dependency changed and no audit fix ran; separately reviewed upgrades remain a deployment blocker. | read-only dependency audit | accepted deployment blocker | pending |
+
+## Eleventh exact-head retest findings
+
+The eleventh isolated retest reviewed
+`42b2dd62df225f088693dc3b7435ecf933adaff4`. The three lanes reported zero
+P0, but independently reproduced Unicode/IDNA classification gaps,
+multi-fragment reconstruction, provider-policy semantics, SQL token-boundary
+errors, and an availability defect in the all-pairs JSON scan. The scaffold
+therefore remains `security_hardening_in_progress`.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A11/B11/C11-UNICODE-001 | P1 | Default-ignorable characters, IDNA dot equivalents, Cyrillic-confusable credential labels, and Unicode decimal phones bypassed one or more source/runtime/SQL boundaries. | Apply one detection-only NFKC normalizer that strips reviewed default-ignorables, maps IDNA separators, decimal digits, and curated confusables before classification. | R-79/R-82; pgTAP Unicode matrix | fixed locally | pending |
+| B11/C11-FRAGMENT-001 | P1 | Three-/four-fragment secret, email, IP, and phone payloads survived canonical JSONB ordering and pairwise-only reconstruction. | Add bounded forward/reverse and suspicious small-envelope permutation reconstruction; fail closed on independent address/assignment fragments without retaining raw payloads. | R-80; pgTAP three/four-fragment matrix | fixed locally | pending |
+| B11-TOKEN-001 | P1 | PostgreSQL word-boundary assumptions allowed Stripe/JWT-shaped values and the finding RPC to retain them. | Use explicit ASCII-token boundaries and test plain/encoded values through real constraints. | pgTAP Stripe/JWT matrix | fixed locally | pending |
+| B11-KEY-001 | P1 | Fullwidth `service_role` and prefixed compound keys such as `oauth_client_secret` bypassed JSON key classification. | Normalize before segment-aware exact/compound key matching; generic words no longer match harmless suffixes. | pgTAP fullwidth/prefixed-key matrix | fixed locally | pending |
+| A11/C11-PROVIDER-001 | P1/P2 | Invisible/split IAM and PowerUser labels, wildcard policy objects, provider action wildcards, cluster-admin, system:masters, and NOPASSWD semantics were retained, while benign reporting language was overblocked. | Inspect normalized no-separator fragments and structured policy objects; require exact privilege semantics while removing broad IAM/no-restriction prose matches. | R-81 | fixed locally | pending |
+| B11-SANITIZER-CPU-001 | P1 | SQL’s all-pairs leaf comparison took more than 15 seconds below the 16KB input bound. | Remove the quadratic scan, cap arrays/objects, use linear aggregate checks, and run bounded reconstruction only for suspicious envelopes of at most twelve strings. | 128-leaf pgTAP plus timed local probe | fixed locally | pending |
+| A11/C11-NETWORK-001 | P1 | Base64url private IPv6 was parsed as a custom URL scheme, and invisible-format email/IPv6 values reached DNS. | Classify non-HTTPS decoded candidates directly before URL parsing and normalize private identifiers before the DNS gate. | R-82 | fixed locally | pending |
+| A11/C11-FALSEPOS-001 | P2/P3 | Opaque numeric 16-hex identifiers, policy dates, and harmless credential-suffix words were overblocked. | Keep narrow exact opaque/date exceptions and replace unanchored SQL label matching with segment-aware assignment rules. | R-79/R-80; pgTAP benign controls | fixed locally | pending |
+| A11-URL-BYTES-001 | P3 | The foundation measured URL characters while runtime enforced UTF-8 bytes. | Enforce the same normalized 2,048-byte boundary with `TextEncoder` before parsing. | R-83 | fixed locally | pending |
+| A11-SUPPLY-001 | P2 | The inherited locked tree still contains 23 advisories. | No dependency changed and no audit fix ran; reviewed upgrades remain an explicit deployment blocker. | read-only audit | accepted deployment blocker | pending |

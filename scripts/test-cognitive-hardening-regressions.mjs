@@ -2205,6 +2205,119 @@ variant("R-78 provider wildcard requests escalate without overblocking opaque sa
   assert.equal(exactLimitDnsCalls, 1);
 });
 
+variant("R-79 invisible, confusable, and IDNA-equivalent identifiers fail closed", () => {
+  for (const value of [
+    "oauth_client_se\u200Bcret=x",
+    "oauth_client_secrеt=x",
+    "person@例子。测试",
+    "person@例子｡测试",
+    "person\u200B@example.invalid",
+    "2001:db8::\u200B1",
+    "هاتف ١٢٣٤٥٦٧٨٩٠",
+  ]) {
+    assert.equal(foundation.sanitizeCognitivePayload({ value }).accepted, false, value);
+  }
+  assert.equal(foundation.sanitizeCognitivePayload({ value: "digest=0123456789012345" }).accepted, true);
+});
+
+variant("R-80 bounded fragment reconstruction rejects reordered compound data", () => {
+  for (const data of [
+    { z: "person", y: "@", x: "example.invalid" },
+    { z: "service", y: "_role", x: "=synthetic-fixture" },
+    { z: "client", y: "_secret", x: "=synthetic-fixture" },
+    { d: "example.invalid", c: "@", b: "person", a: "prefix " },
+  ]) assert.equal(foundation.sanitizeCognitivePayload(data).accepted, false, JSON.stringify(data));
+  for (const value of [
+    "keyboard=x",
+    "tokenizer=x",
+    "secretary=x",
+    "cookiePolicy=x",
+    "authorizationStatus=x",
+    "passwordless=true",
+  ]) assert.equal(foundation.sanitizeCognitivePayload({ value }).accepted, true, value);
+});
+
+variant("R-81 provider-native wildcard privilege semantics require owner review", () => {
+  for (const [index, data] of [
+    "I\u200BAM:*",
+    "Power\u200BUserAccess",
+    ["IA", "M:*"],
+    ["Power", "User", "Access"],
+    "ec2:*",
+    "system:masters",
+    "cluster-admin",
+    "NOPASSWD: ALL",
+    { Effect: "Allow", Action: "*", Resource: "*" },
+  ].entries()) {
+    const envelope = foundation.createUntrustedToolEnvelope({
+      toolId: "provider",
+      callId: `provider-native-${index}`,
+      taskId: "variant-task",
+      source: "provider",
+      contentType: "application/json",
+      timestamp: now.toISOString(),
+      truncated: false,
+      data,
+    });
+    assert.equal(envelope.ownerReviewRequired, true, JSON.stringify(data));
+    assert.equal(envelope.sanitizationState, "rejected", JSON.stringify(data));
+  }
+  for (const statement of [
+    "The IAM documentation provides examples of deny policies.",
+    "No restrictions were observed in the public API response.",
+  ]) {
+    const envelope = foundation.createUntrustedToolEnvelope({
+      toolId: "provider",
+      callId: `safe-provider-${hash(statement).slice(0, 8)}`,
+      taskId: "variant-task",
+      source: "provider",
+      contentType: "text/plain",
+      timestamp: now.toISOString(),
+      truncated: false,
+      data: statement,
+    });
+    assert.equal(envelope.ownerReviewRequired, false, statement);
+    assert.equal(envelope.sanitizationState, "sanitized", statement);
+  }
+});
+
+variant("R-82 encoded private IPv6 and Unicode identifiers stop before DNS", async () => {
+  for (const privateValue of [
+    "fc00::1",
+    "person\u200B@example.invalid",
+    "2001:db8::\u200B1",
+    "١٢٣٤٥٦٧٨٩٠",
+  ]) {
+    const encoded = Buffer.from(privateValue).toString("base64url");
+    const url = `https://public.example.test/path?q=${encoded}`;
+    let dnsCalls = 0;
+    await assert.rejects(() => fetchResearchEvidence({
+      initialUrl: url,
+      resolveDns: async () => {
+        dnsCalls += 1;
+        return [{ address: "93.184.216.34" }];
+      },
+      request: createDeterministicResearchFixtureTransport([{
+        url,
+        status: 200,
+        contentType: "text/plain",
+        body: "must-not-be-fetched",
+      }]),
+      signal: new AbortController().signal,
+    }), /credential_bearing_url_forbidden/u, privateValue);
+    assert.equal(dnsCalls, 0, privateValue);
+  }
+});
+
+variant("R-83 foundation research limits use normalized UTF-8 bytes", () => {
+  const prefix = "https://public.example.test/path?q=";
+  const safeUnicode = "é";
+  const exact = `${prefix}${safeUnicode.repeat(Math.floor((2_048 - Buffer.byteLength(prefix)) / 2))}`;
+  assert.ok(Buffer.byteLength(exact) <= 2_048);
+  assert.deepEqual(foundation.validateResearchUrl(exact), []);
+  assert.ok(foundation.validateResearchUrl(`${exact}${safeUnicode}`).includes("url_too_long"));
+});
+
 for (const entry of variants) await entry.callback();
-assert.equal(variants.length, 78);
+assert.equal(variants.length, 83);
 process.stdout.write(`cognitive hardening independent variants ${variants.length}/${variants.length} passed\n`);

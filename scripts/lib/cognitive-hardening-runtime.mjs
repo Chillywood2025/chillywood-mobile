@@ -416,7 +416,17 @@ const SENSITIVE_RESEARCH_LABEL_PARTS = new Set([
   "auth", "authorization", "bearer", "cookie", "credential", "key", "password",
   "pwd", "secret", "sig", "signature", "token",
 ]);
-const normalizedSecurityText = (value) => String(value).normalize("NFKC");
+const SECURITY_DEFAULT_IGNORABLES = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/gu;
+const SECURITY_CONFUSABLES = Object.freeze({
+  а: "a", е: "e", о: "o", р: "p", с: "c", х: "x", у: "y", і: "i", ј: "j",
+  κ: "k", ο: "o", ρ: "p", χ: "x", α: "a", ε: "e", ι: "i",
+});
+const normalizedSecurityText = (value) =>
+  String(value)
+    .normalize("NFKC")
+    .replace(/[\u3002\uff0e\uff61]/gu, ".")
+    .replace(SECURITY_DEFAULT_IGNORABLES, "")
+    .replace(/[аеорсхуіјκορχαει]/gu, (character) => SECURITY_CONFUSABLES[character] ?? character);
 const normalizedSecurityLabel = (value) =>
   normalizedSecurityText(value).toLowerCase().replace(/[^a-z0-9]/gu, "");
 const hasSensitiveResearchAssignment = (value) => {
@@ -443,19 +453,23 @@ const hasPrivateIdentifierText = (value) => {
   if (
     /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(normalized)
     || /^[a-f0-9]{40,128}$/iu.test(normalized)
-    || (/^[a-f0-9]{16}$/iu.test(normalized) && /[a-f]/iu.test(normalized))
+    || /^[a-f0-9]{16}$/iu.test(normalized)
   ) return false;
+  const reviewedOpaqueRemoved = normalized
+    .replace(/\bdigest\s*[:=]\s*[a-f0-9]{16}\b/giu, "")
+    .replace(/\b[12][0-9]{3}-[01][0-9]-[0-3][0-9](?:T[0-9:.+-]+Z?)?\b/gu, "");
   if (
-    /[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(normalized)
-    || /\+?[0-9][0-9 ()-]{7,}[0-9]/u.test(normalized)
-    || /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(normalized)
+    /[\p{L}\p{N}._%+-]+@[^\s@]+\.[^\s@]{2,}/u.test(reviewedOpaqueRemoved)
+    || /\+?\p{Nd}[\p{Nd} ()-]{7,}\p{Nd}/u.test(reviewedOpaqueRemoved)
+    || /\b(?:\p{Nd}{1,3}\.){3}\p{Nd}{1,3}\b/u.test(reviewedOpaqueRemoved)
   ) return true;
-  return normalized
+  return reviewedOpaqueRemoved
     .split(/[\s?&=,;()[\]{}<>"']/gu)
     .some((fragment) => fragment.includes(":") && parseIpv6(fragment) !== null);
 };
 const hasPrivateIdentifierInResearchData = (value) =>
   normalizedSecurityText(value).split(/\r?\n/gu).some((line) => {
+    if (!/^https:\/\//iu.test(line)) return hasPrivateIdentifierText(line);
     try {
       const url = new URL(line);
       const decodedValues = [...url.searchParams.values()].map((entry) => {
@@ -537,7 +551,7 @@ const decodeBoundedSecurityCandidates = (value) => {
 };
 
 export const validateResearchUrlWithDns = async (raw, resolveDns) => {
-  const rawText = normalizedSecurityText(raw);
+  const rawText = String(raw).normalize("NFKC").replace(/[\u3002\uff0e\uff61]/gu, ".");
   if (Buffer.byteLength(rawText, "utf8") > RESEARCH_MAX_URL_BYTES) {
     throw new Error("url_too_long");
   }

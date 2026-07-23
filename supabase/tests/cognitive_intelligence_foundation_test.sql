@@ -397,6 +397,55 @@ select ok(
   ),
   'nested JSON containing encoded credential-like text is rejected'
 );
+select ok(
+  public.cognitive_text_has_secret('oauth_client_se' || U&'\200B' || 'cret=x')
+  and public.cognitive_text_has_secret('oauth_client_secr' || U&'\0435' || 't=x')
+  and public.cognitive_text_has_secret(U&'\FF53\FF45\FF52\FF56\FF49\FF43\FF45\FF3F\FF52\FF4F\FF4C\FF45\FF1D\FF58'),
+  'invisible, confusable, and fullwidth credential labels fail closed'
+);
+select ok(
+  public.cognitive_text_has_secret('sk_test_abcdefghijklmnopqrstuvwxyz')
+  and public.cognitive_text_has_secret('eyJabcdefghijklmnopqrstuvwxyz.ABCDEFGHIJKLMNOP.QRSTUVWXYZabcdef')
+  and public.cognitive_text_has_secret(encode(convert_to('sk_test_abcdefghijklmnopqrstuvwxyz','UTF8'),'base64')),
+  'Stripe- and JWT-shaped values fail closed across plain and encoded forms'
+);
+select ok(
+  public.cognitive_text_has_private_identifier('person@例子' || U&'\3002' || '测试')
+  and public.cognitive_text_has_private_identifier('person@例子' || U&'\FF61' || '测试')
+  and public.cognitive_text_has_private_identifier('person' || U&'\200B' || '@example.invalid')
+  and public.cognitive_text_has_private_identifier('هاتف ١٢٣٤٥٦٧٨٩٠'),
+  'IDNA separators, invisible format characters, and Unicode decimal phones fail closed'
+);
+select ok(
+  not public.cognitive_json_is_sanitized('{"z":"person","y":"@","x":"example.invalid"}'::jsonb)
+  and not public.cognitive_json_is_sanitized('{"z":"service","y":"_role","x":"=synthetic-fixture"}'::jsonb)
+  and not public.cognitive_json_is_sanitized('{"z":"client","y":"_secret","x":"=synthetic-fixture"}'::jsonb)
+  and not public.cognitive_json_is_sanitized('{"d":"example.invalid","c":"@","b":"person","a":"prefix"}'::jsonb),
+  'three- and four-fragment reconstruction is rejected independent of JSONB key ordering'
+);
+select ok(
+  not public.cognitive_json_is_sanitized('{"oauth_client_secret":"x"}'::jsonb)
+  and not public.cognitive_json_is_sanitized('{"oauth.service-role":"x"}'::jsonb),
+  'prefixed compound credential keys fail closed'
+);
+select ok(
+  public.cognitive_json_is_sanitized(jsonb_build_object(
+    'values',
+    (select jsonb_agg('safe-value-' || value order by value) from generate_series(1,128) value)
+  )),
+  'the complete 128-value benign envelope remains bounded and accepted without an all-pairs scan'
+);
+select ok(
+  not public.cognitive_text_has_secret('keyboard=x')
+  and not public.cognitive_text_has_secret('tokenizer=x')
+  and not public.cognitive_text_has_secret('secretary=x')
+  and not public.cognitive_text_has_secret('cookiePolicy=x')
+  and not public.cognitive_text_has_secret('authorizationStatus=x')
+  and not public.cognitive_text_has_secret('passwordless=true')
+  and not public.cognitive_text_has_private_identifier('{"Version":"2012-10-17","Effect":"Allow"}')
+  and public.cognitive_json_is_sanitized(jsonb_build_object('digest','0123456789012345')),
+  'benign assignments, policy dates, and reviewed opaque digests are not overblocked'
+);
 
 select has_function(
   'public',

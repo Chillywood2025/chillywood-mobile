@@ -52,6 +52,37 @@ as $$
   end
 $$;
 
+create or replace function public.cognitive_security_normalize(payload text)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  normalized text := normalize(coalesce(payload, ''), NFKC);
+begin
+  normalized := translate(
+    normalized,
+    U&'\3002\FF0E\FF61\0660\0661\0662\0663\0664\0665\0666\0667\0668\0669\06F0\06F1\06F2\06F3\06F4\06F5\06F6\06F7\06F8\06F9',
+    '...01234567890123456789'
+  );
+  normalized := regexp_replace(
+    normalized,
+    U&'[\00AD\034F\061C\115F\1160\17B4\17B5\180B-\180E\200B-\200F\202A-\202E\2060-\206F\FEFF]',
+    '',
+    'g'
+  );
+  normalized := translate(
+    normalized,
+    U&'\0430\0435\043E\0440\0441\0445\0443\0456\0458\03BA\03BF\03C1\03C7\03B1\03B5\03B9',
+    'aeopcxyijkopxaei'
+  );
+  return normalized;
+end;
+$$;
+revoke all on function public.cognitive_security_normalize(text) from public, anon, authenticated;
+grant execute on function public.cognitive_security_normalize(text) to service_role;
+
 create or replace function public.cognitive_text_has_secret(payload text)
 returns boolean
 language plpgsql
@@ -68,6 +99,8 @@ declare
   compacted_candidate text;
   hex_encoded text;
   normalized text;
+  security_candidate text;
+  date_stripped_candidate text;
   octet integer;
   position_value integer;
   depth integer;
@@ -79,8 +112,9 @@ begin
   if octet_length(coalesce(payload, '')) > 65536 then
     return true;
   end if;
-  if coalesce(payload,'') ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
-     or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' then
+  if coalesce(payload,'') ~* '^[a-f0-9]{16}$'
+     or coalesce(payload,'') ~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+     or coalesce(payload,'') ~* '^(task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' then
     return false;
   end if;
   -- Walk a bounded decoding frontier instead of repeatedly appending the
@@ -137,21 +171,28 @@ begin
        and candidate ~ '^[0-9A-Fa-f]+$' then
       return true;
     end if;
-    normalized := lower(regexp_replace(normalize(candidate, NFKC), '[^a-zA-Z0-9_=:/.?&+-]', '', 'g'));
-    if candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
-       or normalized ~* '(accesstoken|accesskey|refreshtoken|apikey|authorization|auth|bearer|clientsecret|cookie|credential|key|password|pwd|privatekey|secret|servicerole|sig|signature|token)[a-z0-9]{0,64}[:=][^,&}[:space:]]+'
-       or candidate ~* '(access|api|authorization|auth|bearer|client|cookie|credential|key|password|private|pwd|refresh|secret|service|sig|signature|token)[[:space:]_.-]*\[[^]]{1,64}\][[:space:]]*[:=]'
-       or candidate ~* '(^|[^A-Za-z0-9])(password|pwd|secret|credential|service[[:space:]_\[\]:.-]?(role|key|token)|access[[:space:]_\[\]:.-]?(token|key)|refresh[[:space:]_\[\]:.-]?token|api[[:space:]_\[\]:.-]?key|authorization([[:space:]_\[\]:.-]?(token|key))?|auth|cookie|private[[:space:]_\[\]:.-]?key|token|bearer|signature|sig|key)[=_:.-][A-Za-z0-9._:-]+'
-       or candidate ~* '\b(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}\b'
-       or candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
-       or candidate ~* '(^|[^A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})([^A-Za-z0-9_]|$)'
-       or candidate ~* '\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b'
-       or candidate ~* 'https?://[^/@:[:space:]]+:[^/@[:space:]]+@'
-       or candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)='
-       or normalize(candidate, NFKC) ~* '[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}'
-       or normalize(candidate, NFKC) ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
-       or normalize(candidate, NFKC) ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
-       or normalize(candidate, NFKC) ~* '(^|[^A-Za-z0-9:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^A-Za-z0-9:]|$)' then
+    security_candidate := public.cognitive_security_normalize(candidate);
+    normalized := lower(regexp_replace(security_candidate, '[^a-zA-Z0-9=:/?&+.-]', '', 'g'));
+    date_stripped_candidate := regexp_replace(
+      security_candidate,
+      '\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M',
+      '',
+      'g'
+    );
+    if security_candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
+       or security_candidate ~* '(^|[^A-Za-z0-9])(([A-Za-z0-9]+[_.-])*(client[_.-]*secret|service[_.-]*(role|key|token)|access[_.-]*(token|key)|refresh[_.-]*token|api[_.-]*key|private[_.-]*key|authorization[_.-]*(token|key))|(password|pwd|secret|credential|auth|authorization|cookie|token|bearer|signature|sig|key))[[:space:]]*[:=][^,&}[:space:]]+'
+       or security_candidate ~* '(access|api|authorization|auth|bearer|client|cookie|credential|key|password|private|pwd|refresh|secret|service|sig|signature|token)[[:space:]_.-]*\[[^]]{1,64}\][[:space:]]*[:=]'
+       or security_candidate ~* '(^|[^A-Za-z0-9])(password|pwd|secret|credential|service[[:space:]_\[\]:.-]?(role|key|token)|access[[:space:]_\[\]:.-]?(token|key)|refresh[[:space:]_\[\]:.-]?token|api[[:space:]_\[\]:.-]?key|authorization([[:space:]_\[\]:.-]?(token|key))?|auth|cookie|private[[:space:]_\[\]:.-]?key|token|bearer|signature|sig|key)[=_:.-][A-Za-z0-9._:-]+'
+       or security_candidate ~* '(^|[^A-Za-z0-9_])(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}([^A-Za-z0-9_]|$)'
+       or security_candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
+       or security_candidate ~* '(^|[^A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})([^A-Za-z0-9_]|$)'
+       or security_candidate ~* '(^|[^A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}([^A-Za-z0-9_-]|$)'
+       or security_candidate ~* 'https?://[^/@:[:space:]]+:[^/@[:space:]]+@'
+       or security_candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)='
+       or date_stripped_candidate ~* '[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}'
+       or date_stripped_candidate ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
+       or date_stripped_candidate ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
+       or date_stripped_candidate ~* '(^|[^A-Za-z0-9:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^A-Za-z0-9:]|$)' then
       return true;
     end if;
 
@@ -299,13 +340,19 @@ immutable
 set search_path = ''
 as $$
   select case
-    when coalesce(payload,'') ~ '^[a-f0-9]{40,128}$'
-      or coalesce(payload,'') ~ '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
-      or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' then false
-    else normalize(coalesce(payload,''), NFKC) ~* '[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}'
-      or normalize(coalesce(payload,''), NFKC) ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
-      or normalize(coalesce(payload,''), NFKC) ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
-      or normalize(coalesce(payload,''), NFKC) ~* '(^|[^A-Za-z0-9:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^A-Za-z0-9:]|$)'
+    when public.cognitive_security_normalize(coalesce(payload,'')) ~* '^[a-f0-9]{16}$'
+      or public.cognitive_security_normalize(coalesce(payload,'')) ~* '^[a-f0-9]{40,128}$'
+      or public.cognitive_security_normalize(coalesce(payload,'')) ~* '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+      or public.cognitive_security_normalize(coalesce(payload,'')) ~* '^(task|project|finding):[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' then false
+    else regexp_replace(
+        public.cognitive_security_normalize(coalesce(payload,'')),
+        '(\mdigest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)',
+        '',
+        'gi'
+      ) ~* '[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}'
+      or regexp_replace(public.cognitive_security_normalize(coalesce(payload,'')), '(\mdigest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)', '', 'gi') ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
+      or regexp_replace(public.cognitive_security_normalize(coalesce(payload,'')), '(\mdigest[[:space:]]*[:=][[:space:]]*[a-f0-9]{16}\M)|(\m[12][0-9]{3}-[01][0-9]-[0-3][0-9](T[0-9:.+-]+Z?)?\M)', '', 'gi') ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
+      or public.cognitive_security_normalize(coalesce(payload,'')) ~* '(^|[^A-Za-z0-9:])((([0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4})|([0-9A-F:]*::[0-9A-F:]*))([^A-Za-z0-9:]|$)'
   end
 $$;
 
@@ -321,9 +368,11 @@ declare
   object_key text;
   payload_type text;
   aggregate_value text := '';
+  reverse_aggregate_value text := '';
   string_values text[] := '{}'::text[];
-  left_value text;
-  right_value text;
+  string_count integer := 0;
+  suspicious_fragments boolean := false;
+  reconstructed_unsafe boolean := false;
 begin
   if payload is null then return true; end if;
   if pg_column_size(payload) > 16384
@@ -336,15 +385,21 @@ begin
     return not public.cognitive_text_has_secret(string_value)
       and not public.cognitive_text_has_private_identifier(string_value);
   elsif payload_type = 'array' then
+    if jsonb_array_length(payload) > 128 then return false; end if;
     for child_value in select value from jsonb_array_elements(payload) loop
       if not public.cognitive_json_is_sanitized(child_value) then return false; end if;
     end loop;
   elsif payload_type = 'object' then
+    if (select count(*) from jsonb_object_keys(payload)) > 64 then return false; end if;
     for object_key, child_value in select key, value from jsonb_each(payload) loop
       if public.cognitive_text_has_secret(object_key)
          or public.cognitive_text_has_private_identifier(object_key)
-         or regexp_replace(normalize(object_key, NFKC), '[^a-zA-Z0-9]', '', 'g')
-            ~* '^(accesskey|accesstoken|apikey|auth|authorization|authorizationtoken|bearer|clientsecret|cookie|credential|credentialkey|credentialtoken|key|password|privatekey|pwd|refreshtoken|secret|servicerole|sig|signature|token|xapikey)[a-zA-Z0-9]{0,64}$'
+         or public.cognitive_security_normalize(object_key)
+            ~* '(^|[_.-])(client[_.-]*secret|service[_.-]*(role|key|token)|access[_.-]*(key|token)|refresh[_.-]*token|api[_.-]*key|private[_.-]*key|authorization[_.-]*(key|token))([_.-]|$)'
+         or public.cognitive_security_normalize(object_key)
+            ~* '^(auth|authorization|bearer|cookie|credential|key|password|pwd|secret|sig|signature|token)$'
+         or public.cognitive_security_normalize(object_key)
+            ~* '(^|[_.-])(auth|authorization|bearer|cookie|credential|key|password|pwd|secret|sig|signature|token)\[[^]]{1,64}\]$'
          or not public.cognitive_json_is_sanitized(child_value) then
         return false;
       end if;
@@ -357,23 +412,66 @@ begin
     from jsonb_path_query(payload, 'strict $.** ? (@.type() == "string")') value
   loop
     aggregate_value := left(aggregate_value || string_value, 32768);
+    reverse_aggregate_value := left(string_value || reverse_aggregate_value, 32768);
     string_values := array_append(string_values, string_value);
+    string_count := string_count + 1;
+    suspicious_fragments := suspicious_fragments
+      or public.cognitive_security_normalize(string_value) ~ '[@:=_.\[\]-]';
   end loop;
   if public.cognitive_text_has_secret(aggregate_value)
-     or public.cognitive_text_has_private_identifier(aggregate_value) then
+     or public.cognitive_text_has_private_identifier(aggregate_value)
+     or public.cognitive_text_has_secret(reverse_aggregate_value)
+     or public.cognitive_text_has_private_identifier(reverse_aggregate_value) then
     return false;
   end if;
-  foreach left_value in array string_values loop
-    foreach right_value in array string_values loop
-      if left_value <> right_value
+  if suspicious_fragments then
+    -- Independent fragments are data, never instructions. Fail closed for
+    -- obvious reconstruction primitives without evaluating an O(n^2) pair
+    -- matrix across the full allowed 128-value envelope.
+    if array_to_string(string_values, '') ~ '@'
+       or (
+         array_to_string(string_values, '') ~ '[:=]'
          and (
-           public.cognitive_text_has_secret(left(left_value || right_value, 32768))
-           or public.cognitive_text_has_private_identifier(left(left_value || right_value, 32768))
-         ) then
-        return false;
-      end if;
-    end loop;
-  end loop;
+           public.cognitive_security_normalize(array_to_string(string_values, ' ')) ~* '(^|[^a-z])(password|pwd|secret|credential|auth|authorization|cookie|token|bearer|signature|sig|key)([^a-z]|$)'
+           or (
+             public.cognitive_security_normalize(array_to_string(string_values, ' ')) ~* '(^|[^a-z])(client|service|access|refresh|api|private)([^a-z]|$)'
+             and public.cognitive_security_normalize(array_to_string(string_values, ' ')) ~* '(^|[^a-z])(secret|role|key|token)([^a-z]|$)'
+           )
+         )
+       )
+       or (
+         length(regexp_replace(array_to_string(string_values, ''), '[^.]+', '', 'g')) >= 3
+         and length(regexp_replace(public.cognitive_security_normalize(array_to_string(string_values, '')), '[^0-9]+', '', 'g')) >= 4
+       ) then
+      return false;
+    end if;
+    if string_count <= 12 then
+      with recursive reconstructions(combined, used_positions, depth) as (
+        select left(string_values[position_value], 32768), array[position_value], 1
+        from generate_subscripts(string_values, 1) position_value
+        union all
+        select
+          left(reconstructions.combined || string_values[position_value], 32768),
+          reconstructions.used_positions || position_value,
+          reconstructions.depth + 1
+        from reconstructions
+        cross join generate_subscripts(string_values, 1) position_value
+        where reconstructions.depth < least(4, string_count)
+          and not position_value = any(reconstructions.used_positions)
+      )
+      select exists (
+        select 1
+        from reconstructions
+        where depth >= 2
+          and (
+            public.cognitive_text_has_secret(combined)
+            or public.cognitive_text_has_private_identifier(combined)
+          )
+      )
+      into reconstructed_unsafe;
+      if reconstructed_unsafe then return false; end if;
+    end if;
+  end if;
   return true;
 end;
 $$;
