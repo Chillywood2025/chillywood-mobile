@@ -2,6 +2,8 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION } from "../../_lib/cognitivePlatformFoundation";
 
+const REQUIRED_READ_PERMISSION = "admin.cognitive.read";
+
 const STATUS_ROWS = [
   ["System", "product_intelligence_operator"],
   ["Activation", "Off"],
@@ -22,6 +24,9 @@ export const CognitiveControlCenterFoundation = () => (
       <Text style={styles.title}>Cognitive Intelligence Foundation</Text>
       <Text style={styles.body}>
         This source manifest describes an undeployed scaffold. It is not live system status and has no memory, research, evaluator, scheduler, credentials, or production authority.
+      </Text>
+      <Text style={styles.muted}>
+        Access contract: Owner, Super Admin, or a scoped Admin with {REQUIRED_READ_PERMISSION}. The future backend remains authoritative.
       </Text>
       <View style={styles.pillRow}>
         <View style={styles.pill}><Text style={styles.pillText}>OFF</Text></View>

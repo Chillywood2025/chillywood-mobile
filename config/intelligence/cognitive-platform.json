@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "systemId": "product_intelligence_operator",
-  "deploymentState": "security_hardening_in_progress",
+  "deploymentState": "security_hardened_scaffold_not_deployed",
   "activationMode": "off",
   "scheduler": "none",
   "supportedPlatforms": ["shared", "ios", "android", "web"],
@@ -15,10 +15,30 @@
     "provider product mutation"
   ],
   "budgets": {
+    "maxModelTokens": 10000000,
     "maxToolCalls": 100,
+    "maxToolBytes": 10000000,
     "maxDurationSeconds": 14400,
     "maxCostUsd": 25,
+    "maxChildTasks": 20,
+    "maxChildDepth": 4,
+    "maxConcurrentCalls": 4,
+    "maxRetries": 5,
     "capabilityExpiryRequired": true
+  },
+  "hardening": {
+    "arbitraryShell": false,
+    "workflowEditAuthority": false,
+    "forcePushAuthority": false,
+    "mainWriteAuthority": false,
+    "selfApproval": false,
+    "capabilityProtocol": "task_project_repository_branch_platform_environment_provider_operation_path_snapshot_bound",
+    "modelOutput": "strict_closed_schema",
+    "toolOutput": "untrusted_envelope",
+    "researchTransport": "https_dns_and_redirect_validated_mock_only",
+    "databaseDeployment": "absent",
+    "productionCredentials": "none",
+    "productionScheduler": "none"
   },
   "components": [
     {

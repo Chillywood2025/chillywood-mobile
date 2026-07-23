@@ -439,7 +439,7 @@
       "killSwitch": "remain off with no function, credentials, or scheduler",
       "rollback": "revert draft-branch source; undeployed migration is discarded or forward-corrected locally",
       "budget": {"maxToolCalls": 100, "maxDurationSeconds": 14400, "maxCostUsd": 25},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -459,7 +459,7 @@
       "killSwitch": "no deployed orchestrator",
       "rollback": "discard plan and revert draft commit",
       "budget": {"maxToolCalls": 100, "maxDurationSeconds": 14400, "maxCostUsd": 25},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -479,7 +479,7 @@
       "killSwitch": "no production network access",
       "rollback": "quarantine the claim and retain provenance",
       "budget": {"maxSourcesPerClaim": 12, "maxClaimLength": 8000},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -499,7 +499,7 @@
       "killSwitch": "migration remains undeployed",
       "rollback": "drop only in disposable local database or use future forward correction",
       "budget": {"retentionRequired": true, "expiryRequiredForCapabilities": true},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -507,7 +507,7 @@
       "owningSystem": "product_intelligence_operator",
       "componentType": "registered_surface",
       "supportedPlatforms": ["shared", "ios", "android", "web"],
-      "paths": ["scripts/build-cognitive-architecture-graph.mjs", "config/intelligence/architecture-knowledge-graph.json"],
+      "paths": ["scripts/build-cognitive-architecture-graph.mjs", "config/intelligence/architecture-knowledge-graph-config.json"],
       "schedulerCadence": "manual deterministic local generation",
       "scheduleStatus": "no_scheduler",
       "allowedReads": ["tracked source and configuration"],
@@ -519,7 +519,7 @@
       "killSwitch": "do not run local generator",
       "rollback": "regenerate or discard snapshot",
       "budget": {"maxFiles": 5000, "maxEdges": 20000},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -539,7 +539,7 @@
       "killSwitch": "no assignments or production flags",
       "rollback": "cancel local plan and retain evaluation",
       "budget": {"maxConcurrentExperiments": 0},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -559,7 +559,7 @@
       "killSwitch": "no deployed executor and capabilities expire",
       "rollback": "revert draft-branch commits",
       "budget": {"maxToolCalls": 100, "maxDurationSeconds": 14400, "maxCostUsd": 25},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -579,7 +579,7 @@
       "killSwitch": "no production evaluator",
       "rollback": "reject completion without changing source",
       "budget": {"writeAccess": false},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -599,7 +599,7 @@
       "killSwitch": "all production capabilities absent",
       "rollback": "expire capability and stop calls",
       "budget": {"expiryRequired": true, "maxToolCalls": 100},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -619,7 +619,7 @@
       "killSwitch": "no production router or credentials",
       "rollback": "stop at cap and retain audit",
       "budget": {"maxCostUsd": 25, "maxToolCalls": 100},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {

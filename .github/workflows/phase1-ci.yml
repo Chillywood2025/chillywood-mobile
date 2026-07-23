@@ -16,18 +16,18 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
 
       - name: Setup Deno
-        uses: denoland/setup-deno@v2
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
 
@@ -92,12 +92,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -133,11 +133,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -161,11 +161,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -176,6 +176,17 @@ jobs:
           npm run guard:cognitive-execution-safety
           npm run proof:cognitive-execution-safety
           npm run test:cognitive-execution-safety
+          npm run guard:cognitive-executor-confinement
+          npm run test:cognitive-executor-confinement
+          npm run guard:cognitive-capability-contract
+          npm run test:cognitive-capability-contract
+          npm run guard:cognitive-evaluator-independence
+          npm run test:cognitive-evaluator-independence
+          npm run test:cognitive-budget-cancellation
+          npm run test:cognitive-conflict-rollback
+          npm run test:cognitive-red-team
+          npm run guard:cognitive-admin-truth
+          npm run guard:cognitive-ci-supply-chain
           npm run guard:android-native-runtime-compatibility
           npm run guard:ios-config-policy
           npm run proof:ios-config
@@ -186,16 +197,16 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
         with:
           version: 2.109.1
       - name: Install dependencies
@@ -205,6 +216,8 @@ jobs:
           npm run guard:research-source-integrity
           npm run proof:research-source-integrity
           npm run test:research-source-broker
+          node ./scripts/test-cognitive-hardening.mjs research
+          node ./scripts/test-cognitive-hardening.mjs sanitizer
           npm run guard:cognitive-memory-integrity
           npm run proof:cognitive-memory-integrity
       - name: Exercise undeployed migration locally
@@ -212,6 +225,7 @@ jobs:
           supabase start
           supabase db reset
           supabase test db supabase/tests/cognitive_intelligence_foundation_test.sql
+          npm run test:cognitive-db-concurrency
 
   supabase-database-integration:
     name: Phase 1 / Supabase Database Integration
@@ -219,12 +233,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
         with:
           version: 2.109.1
 
@@ -271,12 +285,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm

@@ -3759,6 +3759,16 @@ export default function AdminStudioScreen() {
     && platformRolesChecked
     && hasPlatformRoleMembership(platformRoles, ["owner", "operator"]);
   const isOwnerStaff = isSignedIn && isActive && platformRolesChecked && hasPlatformRoleMembership(platformRoles, ["owner"]);
+  const canAccessCognitiveSourceManifest = isSignedIn
+    && isActive
+    && platformRolesChecked
+    && (
+      hasPlatformRoleMembership(platformRoles, ["owner", "super_admin"])
+      || (
+        hasPlatformRoleMembership(platformRoles, ["operator"])
+        && hasPlatformStaffPermission(platformRoles, ["admin.cognitive.read"])
+      )
+    );
   const canAccessDmca = isSignedIn && isActive && platformRolesChecked && canAccessDmcaTools(platformRoles);
   const canManageAdminStaff = isSignedIn && isActive && platformRolesChecked && canManageAdminRoleAssignments(platformRoles);
   const canManageModeratorStaff = isSignedIn && isActive && platformRolesChecked && canManageModeratorRoleAssignments(platformRoles);
@@ -3810,7 +3820,8 @@ export default function AdminStudioScreen() {
       if (canAccessCanaryChecks) scopedTabs.push("canary");
       if (canManagePermissionTemplates) scopedTabs.push("permission-templates");
       if (canAccessBreakGlass) scopedTabs.push("break-glass");
-      if (canAccessOwnerSecurity) scopedTabs.push("owner-security", "safety-dashboard", "cognitive");
+      if (canAccessOwnerSecurity) scopedTabs.push("owner-security", "safety-dashboard");
+      if (canAccessCognitiveSourceManifest) scopedTabs.push("cognitive");
       return operatorTabs.filter((tab) => scopedTabs.includes(tab.key));
     },
     [
@@ -3822,6 +3833,7 @@ export default function AdminStudioScreen() {
       canAccessLegalIntake,
       canAccessLiveOps,
       canAccessOwnerSecurity,
+      canAccessCognitiveSourceManifest,
       canAccessCanaryChecks,
       canAccessDmca,
       canManagePrivilegedWrites,
@@ -18143,7 +18155,7 @@ export default function AdminStudioScreen() {
         </View>
         ) : null}
 
-        {operatorTab === "cognitive" ? (
+        {operatorTab === "cognitive" && canAccessCognitiveSourceManifest ? (
           <CognitiveControlCenterFoundation />
         ) : null}
 
