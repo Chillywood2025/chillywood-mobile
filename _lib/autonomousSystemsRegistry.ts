@@ -1884,7 +1884,7 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     platformScope: "shared_cognitive_planning_and_delegation_foundation",
     platformContextRequired: true,
     displayName: "Product Intelligence Operator",
-    status: "security_hardened_scaffold_not_deployed",
+    status: "security_hardening_in_progress",
     activeActivationMode: "off",
     schedulerStatus: "no_scheduler_no_function_no_production_model_credentials",
     activationModes: ["off", "manual_cli"],

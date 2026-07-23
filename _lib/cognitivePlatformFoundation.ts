@@ -10,7 +10,7 @@ export type CognitiveProvider =
 
 export const COGNITIVE_REPOSITORY = "Chillywood2025/chillywood-mobile" as const;
 export const COGNITIVE_REMOTE = "origin" as const;
-export const COGNITIVE_STATUS = "security_hardened_scaffold_not_deployed" as const;
+export const COGNITIVE_STATUS = "security_hardening_in_progress" as const;
 
 export const COGNITIVE_EXECUTION_ACTIONS = [
   "repository_read_file",
@@ -205,6 +205,9 @@ export const cognitiveSha256 = (text: string): string => {
 };
 const validIdentifier = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u.test(value);
+const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]{8,}$|^(?:api[_.:-]?key|password|secret|credential)[_.:-][A-Za-z0-9._:-]{8,}$)/u;
+const validSecurityIdentifier = (value: unknown): value is string =>
+  validIdentifier(value) && !SECRET_SHAPED_IDENTIFIER.test(value);
 const validBranch = (value: unknown): value is string =>
   typeof value === "string"
   && /^codex\/[a-z0-9][a-z0-9/_-]{2,120}$/u.test(value)
@@ -372,11 +375,14 @@ export const authorizeCapabilityUse = (
   capability: CognitiveCapability,
   use: CognitiveCapabilityUse,
   gate: CognitiveRuntimeGate,
-  proofVerified = false,
 ): readonly string[] => {
   const blockers: string[] = [];
   const nowMs = gate.now.getTime();
-  if (!validIdentifier(capability.capabilityId)) blockers.push("capability_id_invalid");
+  const proofVerified = cognitiveSha256(use.opaqueBearer) === capability.bearerHash
+    && cognitiveSha256(use.opaqueNonce) === capability.nonceHash;
+  if (!validSecurityIdentifier(capability.capabilityId)) blockers.push("capability_id_invalid");
+  if (!validSecurityIdentifier(capability.taskId) || !validSecurityIdentifier(use.taskId)) blockers.push("task_id_invalid");
+  if (!validSecurityIdentifier(capability.projectId) || !validSecurityIdentifier(use.projectId)) blockers.push("project_id_invalid");
   if (!validHash(capability.bearerHash) || !validHash(capability.nonceHash)) blockers.push("capability_proof_hash_invalid");
   if (!proofVerified) blockers.push("capability_proof_invalid");
   if (capability.repositoryFullName !== COGNITIVE_REPOSITORY || use.repositoryFullName !== COGNITIVE_REPOSITORY) blockers.push("repository_not_allowed");
@@ -405,7 +411,7 @@ export const authorizeCapabilityUse = (
   if (validateLexicalRepositoryPath(use.path).length || !pathInsideScopes(use.path, capability.pathScopes)) blockers.push("path_scope_mismatch");
   if (capability.approvalRequestId !== use.approvalRequestId || capability.approvalScopeHash !== use.approvalScopeHash) blockers.push("approval_scope_mismatch");
   if (capability.planSnapshotHash !== use.planSnapshotHash) blockers.push("plan_snapshot_mismatch");
-  if (!validIdentifier(use.callId)) blockers.push("call_id_invalid");
+  if (!validSecurityIdentifier(use.callId)) blockers.push("call_id_invalid");
   if (!validFiniteInteger(use.bytes, 0, 10_000_000) || use.bytes > capability.remainingBytes) blockers.push("byte_budget_exhausted");
   if (!validFiniteNumber(use.cost, 0, 25) || use.cost > capability.remainingCost) blockers.push("cost_budget_exhausted");
   if (capability.remainingCalls < 1) blockers.push("call_budget_exhausted");
@@ -451,11 +457,11 @@ export class CognitiveCapabilityLedger {
       && capability.pathScopes.every(capabilityScopeIsValid);
     if (
       this.#capabilities.has(capability.capabilityId)
-      || !validIdentifier(capability.capabilityId)
+      || !validSecurityIdentifier(capability.capabilityId)
       || !validHash(capability.bearerHash)
       || !validHash(capability.nonceHash)
-      || !validIdentifier(capability.taskId)
-      || !validIdentifier(capability.projectId)
+      || !validSecurityIdentifier(capability.taskId)
+      || !validSecurityIdentifier(capability.projectId)
       || capability.repositoryFullName !== COGNITIVE_REPOSITORY
       || !validBranch(capability.branch)
       || !PLATFORM_SET.has(capability.platform)
@@ -471,7 +477,7 @@ export class CognitiveCapabilityLedger {
       || capability.remainingBytes !== capability.maximumBytes
       || !validFiniteNumber(capability.maximumCost, 0, 25)
       || capability.remainingCost !== capability.maximumCost
-      || !validIdentifier(capability.approvalRequestId)
+      || !validSecurityIdentifier(capability.approvalRequestId)
       || !validHash(capability.approvalScopeHash)
       || !validHash(capability.planSnapshotHash)
       || capability.status !== "active"
@@ -509,9 +515,7 @@ export class CognitiveCapabilityLedger {
   consume(capabilityId: string, use: CognitiveCapabilityUse, gate: CognitiveRuntimeGate): CognitiveCapabilityEvent {
     const capability = this.#capabilities.get(capabilityId);
     if (!capability) throw new Error("capability_missing");
-    const proofVerified = cognitiveSha256(use.opaqueBearer) === capability.bearerHash
-      && cognitiveSha256(use.opaqueNonce) === capability.nonceHash;
-    const blockers = [...authorizeCapabilityUse(capability, use, gate, proofVerified)];
+    const blockers = [...authorizeCapabilityUse(capability, use, gate)];
     if (this.#usedCallIds.has(use.callId)) blockers.push("capability_replay");
     if (blockers.length) {
       const event = { capabilityId, callId: use.callId, usageSequence: capability.nextUsageSequence, event: "rejected" as const, reason: [...new Set(blockers)].sort().join(","), at: gate.now.toISOString() };
@@ -539,11 +543,9 @@ export class CognitiveCapabilityLedger {
     const capability = this.#capabilities.get(capabilityId);
     if (!capability) return ["capability_missing"];
     if (!this.#usedCallIds.has(use.callId)) return ["capability_call_not_consumed"];
-    const proofVerified = cognitiveSha256(use.opaqueBearer) === capability.bearerHash
-      && cognitiveSha256(use.opaqueNonce) === capability.nonceHash;
     const originalStatus = capability.status;
     if (originalStatus === "exhausted" && capability.consumedAt) capability.status = "active";
-    const blockers = authorizeCapabilityUse(capability, use, gate, proofVerified)
+    const blockers = authorizeCapabilityUse(capability, use, gate)
       .filter((blocker) => !["call_budget_exhausted", "byte_budget_exhausted", "cost_budget_exhausted"].includes(blocker));
     capability.status = originalStatus;
     return blockers;
@@ -676,7 +678,12 @@ export type CognitiveToolResultEnvelope = {
   data: unknown;
 };
 
-const PROVIDER_SCOPE_EXPANSION = /\b(?:grants?|provides?|requires?|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?)\b[\s\S]{0,80}\b(?:owner(?:\s+role)?|super[- ]?admin|administrator|admin|production|credentials?|permissions?|privileges?|scope|access|roles?)\b/iu;
+const PROVIDER_SCOPE_ACTION = String.raw`(?:grants?|provides?|requir(?:e|es|ed)|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?|authenticates?|promotes?|upgrades?|authorizes?)`;
+const PROVIDER_SCOPE_TARGET = String.raw`(?:owner(?:\s+role)?|super[- ]?admin|administrator|admin|production|credentials?|permissions?|privileges?|scope|access|roles?)`;
+const PROVIDER_SCOPE_EXPANSION = new RegExp(
+  String.raw`\b(?:${PROVIDER_SCOPE_ACTION})\b[\s\S]{0,100}\b(?:${PROVIDER_SCOPE_TARGET})\b|\b(?:${PROVIDER_SCOPE_TARGET})\b[\s\S]{0,100}\b(?:is\s+)?(?:${PROVIDER_SCOPE_ACTION})\b`,
+  "iu",
+);
 
 const canonicalCognitiveJson = (value: unknown): string => {
   const normalize = (entry: unknown): unknown => {
@@ -706,10 +713,10 @@ export const createUntrustedToolEnvelope = (
   },
 ): CognitiveToolResultEnvelope => {
   if (
-    !validIdentifier(value.toolId)
-    || !validIdentifier(value.callId)
-    || !validIdentifier(value.taskId)
-    || !validIdentifier(value.source)
+    !validSecurityIdentifier(value.toolId)
+    || !validSecurityIdentifier(value.callId)
+    || !validSecurityIdentifier(value.taskId)
+    || !validSecurityIdentifier(value.source)
     || !["application/json", "text/plain"].includes(value.contentType)
     || !validTimestamp(value.timestamp)
     || value.timestamp !== new Date(value.timestamp).toISOString()
@@ -1007,6 +1014,11 @@ export const sanitizeCognitivePayload = (
       if (value.length > limits.maxArray) categories.add("maximum_array_length_exceeded");
       return value.slice(0, limits.maxArray).map((entry) => walk(entry, depth + 1));
     }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      categories.add("non_plain_object");
+      return null;
+    }
     const entries = Object.entries(value as Record<string, unknown>);
     if (entries.length > limits.maxKeys) categories.add("maximum_object_keys_exceeded");
     const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
@@ -1044,7 +1056,7 @@ export const sanitizeCognitivePayload = (
   if (aggregateCandidates.some(containsSecretLikeValue)) categories.add("secret_like_value");
   if (aggregateCandidates.some(containsPromptInjection)) categories.add("untrusted_instruction");
   if (totalBytes > limits.maxBytes) categories.add("maximum_total_bytes_exceeded");
-  const rejected = ["secret_like_value", "secret_key", "prototype_pollution_key", "maximum_depth_exceeded", "maximum_total_bytes_exceeded", "circular_reference"];
+  const rejected = ["secret_like_value", "secret_key", "prototype_pollution_key", "non_plain_object", "maximum_depth_exceeded", "maximum_total_bytes_exceeded", "circular_reference"];
   return { accepted: !rejected.some((category) => categories.has(category)), value, categories: [...categories].sort(), totalBytes };
 };
 
@@ -1166,14 +1178,18 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
   if (sanitizedClaim.categories.includes("untrusted_instruction")) reasons.push("prompt_injection_detected");
   if (!validFiniteNumber(input.confidence, 0, 1)) reasons.push("confidence_out_of_range");
   if (!input.sources.length || input.sources.length > 12) reasons.push("source_count_invalid");
+  if (new Set(input.sources.map((source) => source.id)).size !== input.sources.length) reasons.push("source_id_duplicate");
   const authoritativeTypes = ["official_documentation", "security_advisory", "platform_policy", "store_policy"];
-  const authorityBySource = new Map(input.sources.map((source) => [source.id, registeredResearchAuthority(source)]));
-  if (input.technicalFact && !input.sources.some((source) =>
-    source.primary && authoritativeTypes.includes(source.sourceType) && authorityBySource.get(source.id))) {
+  const sourceAuthorities = input.sources.map((source) => registeredResearchAuthority(source));
+  if (input.technicalFact && !input.sources.some((source, index) =>
+    source.primary && authoritativeTypes.includes(source.sourceType) && sourceAuthorities[index])) {
     reasons.push("technical_fact_requires_verified_primary_source");
   }
-  const newsSources = input.sources.filter((source) => source.sourceType === "news");
-  const newsOwners = new Set(newsSources.map((source) => authorityBySource.get(source.id)?.ownerId).filter(Boolean));
+  const newsSourceEntries = input.sources
+    .map((source, index) => ({ source, authority: sourceAuthorities[index] }))
+    .filter(({ source }) => source.sourceType === "news");
+  const newsSources = newsSourceEntries.map(({ source }) => source);
+  const newsOwners = new Set(newsSourceEntries.map(({ authority }) => authority?.ownerId).filter(Boolean));
   const newsCanonicalUrls = new Set(newsSources.map((source) => source.canonicalUrlHash));
   const newsContent = new Set(newsSources.map((source) => source.contentHash));
   if (input.consequential && (newsOwners.size < 2 || newsCanonicalUrls.size < 2 || newsContent.size < 2)) reasons.push("consequential_news_requires_verified_independent_corroboration");
@@ -1184,10 +1200,10 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
   if (Number.isFinite(claimFreshness) && claimFreshness > now.getTime() + (claimTtlDays * 86_400_000)) {
     reasons.push("claim_freshness_ceiling_exceeded");
   }
-  for (const source of input.sources) {
+  for (const [sourceIndex, source] of input.sources.entries()) {
     if (!validIdentifier(source.id) || containsSecretLikeValue(source.id)
       || containsPromptInjection(source.id)) reasons.push("source_id_invalid");
-    if (!authorityBySource.get(source.id)) reasons.push("source_authority_unverified");
+    if (!sourceAuthorities[sourceIndex]) reasons.push("source_authority_unverified");
     if (source.trustedForTools !== false) reasons.push("source_must_remain_untrusted");
     if (source.primary && !authoritativeTypes.includes(source.sourceType)) reasons.push("primary_source_type_invalid");
     if (source.retrievalStatus !== "succeeded") reasons.push("source_retrieval_not_verified");
@@ -1218,6 +1234,9 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
       || !Number.isFinite(freshness)
       || freshness <= now.getTime()
       || freshness > retrieval + (sourceTtlDays * 86_400_000)) reasons.push("source_stale_or_invalid");
+    if (Number.isFinite(claimFreshness) && Number.isFinite(freshness) && claimFreshness > freshness) {
+      reasons.push("claim_freshness_exceeds_source");
+    }
     if (source.publicationDate !== null && (!Number.isFinite(publication) || publication > retrieval)) reasons.push("source_publication_date_invalid");
     const sanitized = sanitizeCognitivePayload({
       id: source.id,
@@ -1291,8 +1310,12 @@ export const validateResearchUrl = (raw: string): readonly string[] => {
   }
   if (url.protocol !== "https:") blockers.push("https_required");
   if (url.username || url.password) blockers.push("embedded_credentials_forbidden");
-  const decodedCandidates = maybeDecodeEncoded(url.href);
-  if (containsSecretLikeValue(url.href) || decodedCandidates.some(containsSecretLikeValue)) {
+  const decodedCandidates = [...new Set([
+    ...maybeDecodeEncoded(raw),
+    ...maybeDecodeEncoded(url.href),
+  ])];
+  if (containsSecretLikeValue(raw) || containsSecretLikeValue(url.href)
+    || decodedCandidates.some(containsSecretLikeValue)) {
     blockers.push("credential_bearing_url_forbidden");
   }
   if (url.port && url.port !== "443") blockers.push("port_not_allowed");
@@ -1412,18 +1435,12 @@ export type TrustedChangedPathManifest = {
   observedAt: string;
 };
 
-type CognitiveEvidenceHash = (value: unknown) => string;
-type CognitiveEvidenceCredentialVerifier = (
-  opaqueCredential: string,
-  expectedCredentialHash: string,
-) => boolean;
+const COGNITIVE_EVIDENCE_AUTHORITY_CONSTRUCTION = Symbol("cognitive-evidence-authority-construction");
 
 export class CognitiveTrustedEvidenceLedger {
   readonly authorityId: string;
   readonly #runnerCredentialHashes: Readonly<Record<string, string>>;
   readonly #collectorCredentialHashes: Readonly<Record<string, string>>;
-  readonly #verifyCredential: CognitiveEvidenceCredentialVerifier;
-  readonly #hash: CognitiveEvidenceHash;
   readonly #testRecords = new Map<string, Readonly<TrustedTestRecord>>();
   readonly #runRecords = new Map<string, Readonly<TrustedRunEvidence>>();
   readonly #physicalRecords = new Map<string, Readonly<TrustedPhysicalEvidence>>();
@@ -1433,36 +1450,39 @@ export class CognitiveTrustedEvidenceLedger {
     authorityId: string;
     runnerCredentialHashes: Readonly<Record<string, string>>;
     collectorCredentialHashes: Readonly<Record<string, string>>;
-    verifyCredential: CognitiveEvidenceCredentialVerifier;
-    hash: CognitiveEvidenceHash;
-  }) {
+  }, authorityConstruction?: symbol) {
+    // The scaffold has no deployed evidence authority. Keeping the construction
+    // token module-private prevents a caller from minting a trust root by choosing
+    // its own runner hashes. A reviewed deployment may add an internal broker
+    // factory without exposing this token to model/executor input.
+    if (authorityConstruction !== COGNITIVE_EVIDENCE_AUTHORITY_CONSTRUCTION) {
+      throw new Error("trusted_evidence_authority_unconfigured");
+    }
     const runnerEntries = Object.entries(input.runnerCredentialHashes);
     const collectorEntries = Object.entries(input.collectorCredentialHashes);
     if (
-      !validIdentifier(input.authorityId)
+      !validSecurityIdentifier(input.authorityId)
       || !runnerEntries.length
-      || runnerEntries.some(([id, hash]) => !validIdentifier(id) || !validHash(hash))
-      || collectorEntries.some(([id, hash]) => !validIdentifier(id) || !validHash(hash))
+      || runnerEntries.some(([id, hash]) => !validSecurityIdentifier(id) || !validHash(hash))
+      || collectorEntries.some(([id, hash]) => !validSecurityIdentifier(id) || !validHash(hash))
     ) throw new Error("evidence_trust_configuration_invalid");
     this.authorityId = input.authorityId;
     this.#runnerCredentialHashes = Object.freeze({ ...input.runnerCredentialHashes });
     this.#collectorCredentialHashes = Object.freeze({ ...input.collectorCredentialHashes });
-    this.#verifyCredential = input.verifyCredential;
-    this.#hash = input.hash;
   }
 
   #runnerAuthorized(runnerId: string, credential: string): boolean {
     const expected = this.#runnerCredentialHashes[runnerId];
-    return Boolean(expected) && this.#verifyCredential(credential, expected);
+    return Boolean(expected) && cognitiveSha256(credential) === expected;
   }
 
   recordTest(record: TrustedTestRecord, opaqueRunnerCredential: string): void {
     if (
       this.#testRecords.has(record.recordId)
       || !this.#runnerAuthorized(record.runnerId, opaqueRunnerCredential)
-      || !validIdentifier(record.recordId)
-      || !validIdentifier(record.testId)
-      || !validIdentifier(record.commandId)
+      || !validSecurityIdentifier(record.recordId)
+      || !validSecurityIdentifier(record.testId)
+      || !validSecurityIdentifier(record.commandId)
       || !/^[a-f0-9]{40}$/u.test(record.commit)
       || !validFiniteInteger(record.exitCode, 0, 255)
       || !validHash(record.stdoutHash)
@@ -1478,7 +1498,7 @@ export class CognitiveTrustedEvidenceLedger {
     if (
       this.#runRecords.has(record.recordId)
       || !this.#runnerAuthorized(record.runnerId, opaqueRunnerCredential)
-      || !validIdentifier(record.recordId)
+      || !validSecurityIdentifier(record.recordId)
       || !/^[a-f0-9]{40}$/u.test(record.finalCommit)
       || [record.objectiveHash, record.planSnapshotHash, record.diffHash, record.rollbackPlanHash].some((hash) => !validHash(hash))
       || !validTimestamp(record.completedAt)
@@ -1493,10 +1513,10 @@ export class CognitiveTrustedEvidenceLedger {
     if (
       this.#physicalRecords.has(record.recordId)
       || !expected
-      || !this.#verifyCredential(opaqueCollectorCredential, expected)
-      || !validIdentifier(record.recordId)
-      || !validIdentifier(record.collectorId)
-      || !validIdentifier(record.testId)
+      || cognitiveSha256(opaqueCollectorCredential) !== expected
+      || !validSecurityIdentifier(record.recordId)
+      || !validSecurityIdentifier(record.collectorId)
+      || !validSecurityIdentifier(record.testId)
       || record.evidenceType !== "physical_device"
       || !/^[a-f0-9]{40}$/u.test(record.finalCommit)
       || !validHash(record.artifactHash)
@@ -1511,9 +1531,9 @@ export class CognitiveTrustedEvidenceLedger {
     if (
       this.#changedPathRecords.has(record.recordId)
       || !expected
-      || !this.#verifyCredential(opaqueCollectorCredential, expected)
-      || !validIdentifier(record.recordId)
-      || !validIdentifier(record.collectorId)
+      || cognitiveSha256(opaqueCollectorCredential) !== expected
+      || !validSecurityIdentifier(record.recordId)
+      || !validSecurityIdentifier(record.collectorId)
       || !/^[a-f0-9]{40}$/u.test(record.finalCommit)
       || !validHash(record.diffHash)
       || !Array.isArray(record.changedPaths)
@@ -1548,10 +1568,10 @@ export class CognitiveTrustedEvidenceLedger {
     const run = this.getRun(runRecordId);
     const tests = testRecordIds.map((recordId) => this.getTest(recordId));
     if (!run || tests.some((record) => record === null)) throw new Error("trusted_evidence_missing");
-    const hash = this.#hash({
+    const hash = cognitiveSha256(canonicalCognitiveJson({
       run,
       tests: tests.sort((left, right) => String(left?.recordId).localeCompare(String(right?.recordId))),
-    });
+    }));
     if (!validHash(hash)) throw new Error("trusted_evidence_manifest_hash_invalid");
     return hash;
   }

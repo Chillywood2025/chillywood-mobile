@@ -7,11 +7,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import ts from "typescript";
 import {
   canonicalSnapshotHash,
-  CognitiveEngineBudgetAuthority,
   createDeterministicResearchFixtureTransport,
   executeAuthorizedAction,
   fetchResearchEvidence,
-  registerIsolatedTestCapabilityLedger,
   requiredTestManifestForChanges,
   resolveConfinedRepositoryPath,
   ResourceLeaseRegistry,
@@ -165,25 +163,7 @@ const budgetGate = (overrides = {}) => ({
   ...overrides,
 });
 const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, inputOverrides = {} } = {}) => {
-  const requiredTests = [{
-    id: "unit",
-    commandId: "npm:test",
-    platform: "shared",
-    finalCommit: "a".repeat(40),
-    risk: "high",
-    physicalEvidenceRequired: false,
-  }];
-  if (physical) requiredTests[0].physicalEvidenceRequired = true;
-  const runnerCredential = "runner-credential";
-  const collectorCredential = "collector-credential";
-  const ledger = new foundation.CognitiveTrustedEvidenceLedger({
-    authorityId: "synthetic-ci-authority",
-    runnerCredentialHashes: { "runner-fixture": hash(runnerCredential) },
-    collectorCredentialHashes: { "collector-fixture": hash(collectorCredential) },
-    verifyCredential: (opaque, expectedHash) => hash(opaque) === expectedHash,
-    hash: (value) => hash(stableJson(value)),
-  });
-  ledger.recordRun({
+  const run = Object.freeze({
     recordId: "run-evidence-fixture",
     runnerId: "runner-fixture",
     finalCommit: "a".repeat(40),
@@ -197,8 +177,8 @@ const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, in
     productionActionExecuted: false,
     completedAt: now.toISOString(),
     ...runOverrides,
-  }, runnerCredential);
-  if (!omitTests) ledger.recordTest({
+  });
+  const testRecord = Object.freeze({
     recordId: "test-evidence-fixture",
     runnerId: "runner-fixture",
     testId: "unit",
@@ -209,8 +189,8 @@ const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, in
     stderrHash: hash("stderr"),
     skipped: false,
     completedAt: now.toISOString(),
-  }, runnerCredential);
-  if (physical) ledger.recordPhysical({
+  });
+  const physicalRecord = Object.freeze({
     recordId: "physical-evidence-fixture",
     collectorId: "collector-fixture",
     testId: "unit",
@@ -218,24 +198,42 @@ const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, in
     finalCommit: "a".repeat(40),
     artifactHash: hash("physical-artifact"),
     observedAt: now.toISOString(),
-  }, collectorCredential);
-  ledger.recordChangedPaths({
+  });
+  const changedPathManifest = Object.freeze({
     recordId: "changed-paths-fixture",
     collectorId: "collector-fixture",
     finalCommit: "a".repeat(40),
     diffHash: hash("diff"),
     changedPaths: inputOverrides.changedPaths ?? ["docs/intelligence/fixture.md"],
     observedAt: now.toISOString(),
-  }, collectorCredential);
+  });
+  const manifestHash = hash(stableJson({
+    run,
+    tests: omitTests ? [] : [testRecord],
+  }));
+  const reader = Object.freeze({
+    authorityId: "caller-created-authority",
+    getRun: (recordId) => recordId === run.recordId ? run : null,
+    getTest: (recordId) => !omitTests && recordId === testRecord.recordId ? testRecord : null,
+    getChangedPaths: (recordId) => recordId === changedPathManifest.recordId ? changedPathManifest : null,
+    physicalForTest: (testId, finalCommit) =>
+      physical && testId === physicalRecord.testId && finalCommit === physicalRecord.finalCommit
+        ? [physicalRecord]
+        : [],
+    manifestHash: () => manifestHash,
+  });
+  const ledger = Object.freeze({
+    reader: () => reader,
+    recordTest: () => {
+      throw new Error("trusted_evidence_authority_unconfigured");
+    },
+  });
   const input = {
     evaluatorIdentity: "evaluator-fixture",
     executorIdentity: "executor-fixture",
     objectiveHash: hash("objective"),
     planSnapshotHash: hash("plan"),
-    runEvidenceManifestHash: ledger.manifestHash(
-      "run-evidence-fixture",
-      omitTests ? [] : ["test-evidence-fixture"],
-    ),
+    runEvidenceManifestHash: manifestHash,
     runEvidenceRecordId: "run-evidence-fixture",
     testEvidenceRecordIds: omitTests ? [] : ["test-evidence-fixture"],
     finalCommit: "a".repeat(40),
@@ -245,7 +243,7 @@ const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, in
     ...inputOverrides,
   };
   delete input.changedPaths;
-  return { input, ledger, runnerCredential, collectorCredential };
+  return { input, ledger };
 };
 
 const tests = new Map();
@@ -367,7 +365,7 @@ test("D-23", "evaluator", () => {
     stderrHash: hash("fake-stderr"),
     skipped: false,
     completedAt: now.toISOString(),
-  }, "wrong-credential"), /trusted_test_evidence_rejected/u);
+  }, "wrong-credential"), /trusted_evidence_authority_unconfigured/u);
 });
 test("D-24", "evaluator", () => {
   const fixture = evaluation({ omitTests: true });
@@ -456,57 +454,18 @@ test("D-38", "budget", () => {
   assert.ok(foundation.validateCognitiveExecutionPlan(safePlan({ maxCostUsd: Number.MAX_VALUE }), now).includes("cost_budget_invalid"));
 });
 test("D-39", "budget", async () => {
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "cognitive-cancel-"));
-  fs.mkdirSync(path.join(temporary, "docs"));
-  fs.writeFileSync(path.join(temporary, "docs", "fixture.txt"), "fixture");
-  const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);
-  capabilityLedger.issue(capability({
-    operation: "repository_read_file",
-    pathScopes: ["docs/"],
-  }));
-  const budgetLedger = new CognitiveEngineBudgetAuthority();
-  const controller = new AbortController();
-  registerIsolatedTestCapabilityLedger(capabilityLedger, temporary);
-  const operation = executeAuthorizedAction({
-    repositoryRoot: temporary,
-    request: {
-      action: "repository_read_file",
-      argv: [],
-      repositoryFullName: "Chillywood2025/chillywood-mobile",
-      remote: "origin",
-      branch: "codex/cognitive-fixture",
-      paths: ["docs/fixture.txt"],
-    },
-    allowedScopes: ["docs/"],
-    allowNewFile: false,
-    capabilityLedger,
-    capabilityId: "capability-fixture",
-    capabilityUse: use({
-      operation: "repository_read_file",
-      path: "docs/fixture.txt",
-    }),
-    budgetLedger,
-    budgetReservationId: "reservation-fixture",
-    budgetRequest: { toolCalls: 1, toolBytes: 100, concurrentCalls: 1 },
-    leaseRegistry: new ResourceLeaseRegistry(),
-    getRuntimeGate: () => ({ ...gate(), deadlineAt: "2026-07-22T13:00:00.000Z" }),
+  let invoked = false;
+  const result = await executeAuthorizedAction({
     executeInvocation: async () => {
+      invoked = true;
       await delay(250);
       return "late";
     },
-    signal: controller.signal,
   });
-  const startedAt = Date.now();
-  controller.abort();
-  const result = await operation;
-  const elapsedMs = Date.now() - startedAt;
   assert.equal(result.accepted, false);
-  assert.equal(result.status, "rollback_failed_quarantined");
-  assert.ok(result.blockers.includes("execution_cancelled"));
-  assert.ok(result.blockers.includes("late_result_rejected"));
-  assert.ok(elapsedMs < 150, `cancellation did not return promptly (${elapsedMs}ms)`);
-  assert.equal(capabilityLedger.capabilitySnapshot("capability-fixture")?.status, "revoked");
-  fs.rmSync(temporary, { recursive: true, force: true });
+  assert.equal(result.status, "blocked_preflight");
+  assert.deepEqual(result.blockers, ["cognitive_execution_authority_unavailable"]);
+  assert.equal(invoked, false);
 });
 test("D-40", "conflict", () => {
   const capabilityLedger = new foundation.CognitiveCapabilityLedger(proofVerifier);

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "systemId": "product_intelligence_operator",
-  "deploymentState": "security_hardened_scaffold_not_deployed",
+  "deploymentState": "security_hardening_in_progress",
   "activationMode": "off",
   "scheduler": "none",
   "supportedPlatforms": ["shared", "ios", "android", "web"],

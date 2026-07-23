@@ -59,9 +59,10 @@ immutable
 set search_path = ''
 as $$
 declare
-  candidate text := coalesce(payload, '');
+  candidate text := left(coalesce(payload, ''), 65536);
   decoded text;
   encoded text;
+  embedded_decoded text;
   normalized text;
   previous text;
   octet integer;
@@ -94,20 +95,41 @@ begin
        or normalized ~* '(password|secret|token|authorization|cookie|service_?role|private_?key|api_?key|access_?key|refresh_?token)[:=][^,}]{4,}'
        or candidate ~* '\b(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}\b'
        or candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
+       or candidate ~* '(^|[^A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})([^A-Za-z0-9_]|$)'
        or candidate ~* '\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b'
        or candidate ~* 'https?://[^/@:[:space:]]+:[^/@[:space:]]+@'
        or candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)=' then
       return true;
     end if;
-    if candidate ~ '^[A-Za-z0-9+/_-]{12,}={0,2}$' then
+
+    -- Decode bounded base64/base64url fragments wherever they appear, not only
+    -- when the complete caller string is encoded. The decoded text is scanned
+    -- in the next bounded pass so nested/embedded credential-like values fail
+    -- closed without retaining the rejected payload.
+    embedded_decoded := '';
+    for encoded in
+      select (match_value)[1]
+      from regexp_matches(
+        candidate,
+        '([A-Za-z0-9+/_-]{12,}={0,2})',
+        'g'
+      ) as match_value
+      limit 128
+    loop
       begin
-        encoded := translate(candidate, '-_', '+/');
+        encoded := translate(encoded, '-_', '+/');
         encoded := encoded || repeat('=', (4 - (length(encoded) % 4)) % 4);
         decoded := convert_from(decode(encoded, 'base64'), 'UTF8');
-        candidate := decoded;
+        embedded_decoded := left(
+          embedded_decoded || E'\n' || decoded,
+          32768
+        );
       exception when others then
         null;
       end;
+    end loop;
+    if embedded_decoded <> '' then
+      candidate := left(candidate || E'\n' || embedded_decoded, 65536);
     end if;
     exit when candidate = previous;
   end loop;
@@ -205,7 +227,7 @@ grant execute on function public.cognitive_assert_service_actor(text[],text)
 create table public.cognitive_projects (
   id uuid primary key default gen_random_uuid(),
   repository_full_name text not null check (repository_full_name = 'Chillywood2025/chillywood-mobile'),
-  source_state text not null default 'security_hardened_scaffold_not_deployed'
+  source_state text not null default 'security_hardening_in_progress'
     check (source_state in (
       'security_hardening_in_progress',
       'security_hardened_scaffold_not_deployed'
@@ -233,7 +255,11 @@ create table public.intelligence_tasks (
   ),
   objective_hash text not null check (objective_hash ~ '^[a-f0-9]{64}$'),
   status public.cognitive_task_status not null default 'received',
-  actor_identity text not null check (length(actor_identity) between 3 and 128),
+  actor_identity text not null check (
+    length(actor_identity) between 3 and 128
+    and not public.cognitive_text_has_secret(actor_identity)
+    and not public.cognitive_text_has_private_identifier(actor_identity)
+  ),
   cancelled_at timestamptz,
   quarantined_at timestamptz,
   deadman_at timestamptz not null,
@@ -267,8 +293,16 @@ begin
         project_id uuid not null,
         platform public.cognitive_platform not null,
         environment public.cognitive_environment not null,
-        actor_identity text not null check (length(actor_identity) between 3 and 128),
-        dedupe_key text not null check (length(dedupe_key) between 8 and 256),
+        actor_identity text not null check (
+          length(actor_identity) between 3 and 128
+          and not public.cognitive_text_has_secret(actor_identity)
+          and not public.cognitive_text_has_private_identifier(actor_identity)
+        ),
+        dedupe_key text not null check (
+          length(dedupe_key) between 8 and 256
+          and not public.cognitive_text_has_secret(dedupe_key)
+          and not public.cognitive_text_has_private_identifier(dedupe_key)
+        ),
         status text not null default ''received'' check (length(status) between 2 and 64),
         summary jsonb not null default ''{}''::jsonb check (public.cognitive_json_is_sanitized(summary)),
         evidence_metadata jsonb not null default ''{}''::jsonb check (public.cognitive_json_is_sanitized(evidence_metadata)),
@@ -339,6 +373,14 @@ declare
   sequence_value integer;
 begin
   perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
+  if length(p_capability_id) not between 8 and 128
+     or public.cognitive_text_has_secret(p_capability_id)
+     or public.cognitive_text_has_private_identifier(p_capability_id)
+     or length(p_call_id) not between 3 and 128
+     or public.cognitive_text_has_secret(p_call_id)
+     or public.cognitive_text_has_private_identifier(p_call_id) then
+    raise exception 'capability_scope_or_proof_rejected' using errcode='P0001';
+  end if;
   select * into capability
   from public.cognitive_capabilities
   where capability_id=p_capability_id
@@ -389,8 +431,7 @@ begin
      or capability.remaining_calls < 1
      or p_bytes < 0 or p_bytes > capability.remaining_bytes
      or p_cost < 0 or p_cost > capability.remaining_cost
-     or p_request_hash !~ '^[a-f0-9]{64}$'
-     or length(p_call_id) not between 3 and 128 then
+     or p_request_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'capability_scope_or_proof_rejected' using errcode='P0001';
   end if;
   if exists (
@@ -444,6 +485,14 @@ declare
   result_envelope_hash text;
 begin
   perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
+  if length(p_capability_id) not between 8 and 128
+     or public.cognitive_text_has_secret(p_capability_id)
+     or public.cognitive_text_has_private_identifier(p_capability_id)
+     or length(p_call_id) not between 3 and 128
+     or public.cognitive_text_has_secret(p_call_id)
+     or public.cognitive_text_has_private_identifier(p_call_id) then
+    raise exception 'tool_result_postflight_rejected' using errcode='P0001';
+  end if;
   select * into capability from public.cognitive_capabilities
   where capability_id=p_capability_id for update;
   select * into task_value from public.intelligence_tasks
@@ -500,6 +549,13 @@ as $$
 declare capability public.cognitive_capabilities%rowtype;
 begin
   perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
+  if length(p_capability_id) not between 8 and 128
+     or public.cognitive_text_has_secret(p_capability_id)
+     or public.cognitive_text_has_private_identifier(p_capability_id)
+     or public.cognitive_text_has_secret(p_reason)
+     or public.cognitive_text_has_private_identifier(p_reason) then
+    raise exception 'capability_revocation_rejected' using errcode='P0001';
+  end if;
   select * into capability from public.cognitive_capabilities
   where capability_id=p_capability_id for update;
   if capability.id is null or capability.status='revoked'
@@ -907,6 +963,84 @@ create table public.research_claim_sources (
 create index research_claim_sources_scope_idx
   on public.research_claim_sources(task_id, project_id, platform, relationship);
 
+create function public.enforce_research_claim_source_freshness()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  claim_deadline timestamptz;
+  source_deadline timestamptz;
+begin
+  if new.relationship <> 'supports' then
+    return new;
+  end if;
+  select claim.freshness_deadline, source.freshness_deadline
+    into claim_deadline, source_deadline
+  from public.research_claims claim
+  join public.research_sources source
+    on source.id = new.source_id
+    and source.task_id = new.task_id
+    and source.project_id = new.project_id
+    and source.platform = new.platform
+    and source.environment = new.environment
+  where claim.id = new.claim_id
+    and claim.task_id = new.task_id
+    and claim.project_id = new.project_id
+    and claim.platform = new.platform
+    and claim.environment = new.environment;
+  -- Scope/identity absence is rejected by the composite foreign keys. Only
+  -- evaluate freshness when both same-scope parents are present so the trigger
+  -- does not mask the relational binding error.
+  if claim_deadline is not null
+     and source_deadline is not null
+     and claim_deadline > source_deadline then
+    raise exception 'research_claim_freshness_exceeds_source' using errcode='P0001';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.enforce_research_claim_source_freshness()
+  from public, anon, authenticated;
+create trigger research_claim_sources_freshness_guard
+  before insert or update on public.research_claim_sources
+  for each row execute function public.enforce_research_claim_source_freshness();
+
+create function public.enforce_research_claim_freshness_update()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.freshness_deadline > old.freshness_deadline
+     and exists (
+       select 1
+       from public.research_claim_sources relation
+       join public.research_sources source
+         on source.id = relation.source_id
+         and source.task_id = relation.task_id
+         and source.project_id = relation.project_id
+         and source.platform = relation.platform
+         and source.environment = relation.environment
+       where relation.claim_id = old.id
+         and relation.task_id = old.task_id
+         and relation.project_id = old.project_id
+         and relation.platform = old.platform
+         and relation.environment = old.environment
+         and relation.relationship = 'supports'
+         and source.freshness_deadline < new.freshness_deadline
+     ) then
+    raise exception 'research_claim_freshness_exceeds_source' using errcode='P0001';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.enforce_research_claim_freshness_update()
+  from public, anon, authenticated;
+create trigger research_claim_freshness_update_guard
+  before update of freshness_deadline on public.research_claims
+  for each row execute function public.enforce_research_claim_freshness_update();
+
 create table public.research_contradictions (
   id uuid primary key default gen_random_uuid(),
   claim_id uuid not null,
@@ -1084,8 +1218,16 @@ create table public.execution_evidence_records (
 alter table public.evaluation_results
   add column execution_run_id uuid not null,
   add column snapshot_hash text not null check (snapshot_hash ~ '^[a-f0-9]{64}$'),
-  add column evaluator_identity text not null check (length(evaluator_identity) between 3 and 128),
-  add column executor_identity text not null check (length(executor_identity) between 3 and 128),
+  add column evaluator_identity text not null check (
+    length(evaluator_identity) between 3 and 128
+    and not public.cognitive_text_has_secret(evaluator_identity)
+    and not public.cognitive_text_has_private_identifier(evaluator_identity)
+  ),
+  add column executor_identity text not null check (
+    length(executor_identity) between 3 and 128
+    and not public.cognitive_text_has_secret(executor_identity)
+    and not public.cognitive_text_has_private_identifier(executor_identity)
+  ),
   add column evaluation_status public.cognitive_evaluation_status not null,
   add column completion_supported boolean not null default false,
   add column owner_approval_granted boolean not null default false check (owner_approval_granted = false),
@@ -1110,7 +1252,11 @@ alter table public.model_invocations
 
 alter table public.tool_invocations
   add column capability_id uuid not null,
-  add column call_id text not null check (length(call_id) between 3 and 128),
+  add column call_id text not null check (
+    length(call_id) between 3 and 128
+    and not public.cognitive_text_has_secret(call_id)
+    and not public.cognitive_text_has_private_identifier(call_id)
+  ),
   add column operation text not null check (operation in (
     'repository_read_file', 'repository_list_files', 'repository_search',
     'repository_apply_patch', 'repository_write_new_file', 'test_run_allowlisted',
@@ -1125,7 +1271,11 @@ alter table public.tool_invocations
 
 create table public.cognitive_capabilities (
   id uuid primary key default gen_random_uuid(),
-  capability_id text not null unique check (length(capability_id) between 8 and 128),
+  capability_id text not null unique check (
+    length(capability_id) between 8 and 128
+    and not public.cognitive_text_has_secret(capability_id)
+    and not public.cognitive_text_has_private_identifier(capability_id)
+  ),
   bearer_hash text not null unique check (bearer_hash ~ '^[a-f0-9]{64}$'),
   nonce_hash text not null unique check (nonce_hash ~ '^[a-f0-9]{64}$'),
   task_id uuid not null,
@@ -1183,10 +1333,20 @@ create table public.cognitive_capability_events (
   project_id uuid not null,
   platform public.cognitive_platform not null,
   environment public.cognitive_environment not null,
-  call_id text not null check (length(call_id) between 3 and 128),
+  call_id text not null check (
+    length(call_id) between 3 and 128
+    and not public.cognitive_text_has_secret(call_id)
+    and not public.cognitive_text_has_private_identifier(call_id)
+  ),
   usage_sequence integer not null check (usage_sequence >= 1),
   event_type text not null check (event_type in ('issued', 'consumed', 'rejected', 'revoked', 'expired')),
-  reason text check (reason is null or length(reason) between 2 and 512),
+  reason text check (
+    reason is null or (
+      length(reason) between 2 and 512
+      and not public.cognitive_text_has_secret(reason)
+      and not public.cognitive_text_has_private_identifier(reason)
+    )
+  ),
   request_hash text not null check (request_hash ~ '^[a-f0-9]{64}$'),
   created_at timestamptz not null default statement_timestamp(),
   unique (capability_id, call_id),
@@ -1224,7 +1384,11 @@ create table public.cognitive_budget_events (
   project_id uuid not null,
   platform public.cognitive_platform not null,
   environment public.cognitive_environment not null,
-  reservation_id text not null check (length(reservation_id) between 3 and 128),
+  reservation_id text not null check (
+    length(reservation_id) between 3 and 128
+    and not public.cognitive_text_has_secret(reservation_id)
+    and not public.cognitive_text_has_private_identifier(reservation_id)
+  ),
   event_type text not null check (event_type in ('reserved', 'settled', 'rejected', 'released')),
   usage jsonb not null check (
     pg_column_size(usage) <= 8192 and public.cognitive_json_is_sanitized(usage)
@@ -1245,7 +1409,11 @@ create table public.cognitive_resource_leases (
     'repository', 'branch', 'path', 'migration_namespace', 'edge_function',
     'database_object', 'provider', 'release_channel', 'platform', 'feature_flag'
   )),
-  resource_key text not null check (length(resource_key) between 3 and 512),
+  resource_key text not null check (
+    length(resource_key) between 3 and 512
+    and not public.cognitive_text_has_secret(resource_key)
+    and not public.cognitive_text_has_private_identifier(resource_key)
+  ),
   mode text not null check (mode in ('read', 'write')),
   issued_at timestamptz not null,
   expires_at timestamptz not null check (expires_at > issued_at),
@@ -1272,7 +1440,11 @@ create table public.cognitive_state_transition_events (
   entity_id uuid not null,
   prior_status text,
   next_status text not null,
-  actor_identity text not null check (length(actor_identity) between 3 and 128),
+  actor_identity text not null check (
+    length(actor_identity) between 3 and 128
+    and not public.cognitive_text_has_secret(actor_identity)
+    and not public.cognitive_text_has_private_identifier(actor_identity)
+  ),
   transition_hash text not null check (transition_hash ~ '^[a-f0-9]{64}$'),
   created_at timestamptz not null default statement_timestamp(),
   foreign key (task_id, project_id, platform, environment)
@@ -1287,7 +1459,11 @@ create table public.cognitive_current_findings (
   project_id uuid not null,
   platform public.cognitive_platform not null,
   environment public.cognitive_environment not null,
-  finding_key text not null check (length(finding_key) between 8 and 256),
+  finding_key text not null check (
+    length(finding_key) between 8 and 256
+    and not public.cognitive_text_has_secret(finding_key)
+    and not public.cognitive_text_has_private_identifier(finding_key)
+  ),
   finding_type text not null check (length(finding_type) between 3 and 128),
   target_scope text not null check (length(target_scope) between 3 and 256),
   severity text not null check (severity in ('p0', 'p1', 'p2', 'p3', 'info')),
@@ -1330,7 +1506,11 @@ create table public.cognitive_erasure_events (
   tombstone_hash text not null check (tombstone_hash ~ '^[a-f0-9]{64}$'),
   legal_hold boolean not null,
   erased_at timestamptz not null,
-  actor_identity text not null check (length(actor_identity) between 3 and 128),
+  actor_identity text not null check (
+    length(actor_identity) between 3 and 128
+    and not public.cognitive_text_has_secret(actor_identity)
+    and not public.cognitive_text_has_private_identifier(actor_identity)
+  ),
   created_at timestamptz not null default statement_timestamp(),
   foreign key (task_id, project_id, platform, environment)
     references public.intelligence_tasks(id, project_id, platform, environment)
@@ -1681,6 +1861,7 @@ begin
               and source.source_type in ('official_documentation','security_advisory','platform_policy','store_policy')
               and source.citation_metadata <> '{}'::jsonb
               and source.freshness_deadline > statement_timestamp()
+              and source.freshness_deadline >= claim.freshness_deadline
               and exists (
                 select 1 from public.research_retrieval_events retrieval
                 where retrieval.source_id=source.id and retrieval.task_id=source.task_id
@@ -1706,6 +1887,7 @@ begin
             where relation.claim_id=claim.id and relation.relationship='supports'
               and source.source_type='news' and source.citation_metadata <> '{}'::jsonb
               and source.freshness_deadline > statement_timestamp()
+              and source.freshness_deadline >= claim.freshness_deadline
               and exists (
                 select 1 from public.research_retrieval_events retrieval
                 where retrieval.source_id=source.id and retrieval.task_id=source.task_id
@@ -1727,6 +1909,7 @@ begin
             where relation.claim_id=claim.id and relation.relationship='supports'
               and source.citation_metadata <> '{}'::jsonb
               and source.freshness_deadline > statement_timestamp()
+              and source.freshness_deadline >= claim.freshness_deadline
               and exists (
                 select 1 from public.research_retrieval_events retrieval
                 where retrieval.source_id=source.id and retrieval.task_id=source.task_id
@@ -2295,7 +2478,11 @@ alter table public.research_claims
     check (data_class <> 'user_derived');
 
 alter table public.model_invocations
-  add column invocation_key text not null check (length(invocation_key) between 8 and 128),
+  add column invocation_key text not null check (
+    length(invocation_key) between 8 and 128
+    and not public.cognitive_text_has_secret(invocation_key)
+    and not public.cognitive_text_has_private_identifier(invocation_key)
+  ),
   add column schema_validation_result text not null check (schema_validation_result in ('passed','rejected')),
   add column invocation_result text not null check (invocation_result in ('completed','failed','timeout','rate_limited','cancelled')),
   add column retry_sequence integer not null default 0 check (retry_sequence between 0 and 5),

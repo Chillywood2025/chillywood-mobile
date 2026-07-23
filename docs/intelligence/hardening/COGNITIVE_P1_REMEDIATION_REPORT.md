@@ -1,6 +1,6 @@
 # Cognitive P1 remediation report
 
-Status: `security_hardened_scaffold_not_deployed`
+Status: `security_hardening_in_progress`
 
 Implementation base: `bd8fd0c709db8ff843b69fa9b9a5039a74d09a94`
 
@@ -12,8 +12,8 @@ to reopen rows when it found a new composed-boundary bypass. The fourth retest
 findings are corrected locally but remain open until a fresh exact-head
 independent retest verifies them.
 The executable attack suite reports 40/40, the cognitive database suite reports
-150/150, the full repository database suite reports 435/435, the independent
-source variants report 47/47, and the separate
+162/162, the full repository database suite reports 447/447, the independent
+source variants report 54/54, the runtime-authority variants report 11/11, and the separate
 two-session recurrence race reports one current row, two occurrences, and two
 immutable lifecycle events.
 
@@ -52,6 +52,20 @@ only executor adapter to disposable non-Git roots, rejects and quarantines late
 execution, computes evidence hashes internally, removes arbitrary mock handlers,
 and adds the missing encoded-secret, identifier, citation, JSON, URL, and provider
 scope regressions.
+
+The fifth exact-head retest of
+`2c8be0edd3f4aee2bd3cb9c3b3fbec24894bb8d1` again left the database isolation
+lane green, but found caller-mintable isolated capability, budget, lease, fixture,
+and evidence authorities; an unconstrained Git index commit; raw tool output;
+late cancellation side effects; exact-fetch credential URL gaps; secret-shaped
+audit identifiers; duplicate research authority IDs; prototype-backed citations;
+claim/source freshness drift; and phrase-dependent provider escalation. The
+scaffold returned to `security_hardening_in_progress`. The current correction
+removes every caller-supplied side-effect authority while undeployed, keeps the
+closed executor as a validated plan contract, and adds direct independent
+regressions for every fifth-head bypass. Local source, SQL, and runtime suites
+are green; a new exact-head independent retest is required before final
+hardening status can be restored.
 
 Implementation commits:
 

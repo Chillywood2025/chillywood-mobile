@@ -88,6 +88,49 @@ select ok(not has_table_privilege('service_role', 'public.cognitive_research_aut
 select ok(not has_table_privilege('service_role', 'public.cognitive_research_authorities', 'UPDATE'), 'service role cannot rewrite a research trust anchor');
 select ok(not has_table_privilege('service_role', 'public.cognitive_research_authorities', 'DELETE'), 'service role cannot delete a research trust anchor');
 
+-- Recursive credential-shape detection covers direct and embedded encoded data.
+select ok(
+  public.cognitive_text_has_secret('ghp_abcdefghijklmnopqrstuvwxyz'),
+  'GitHub token-shaped identifiers are classified as secrets'
+);
+select ok(
+  public.cognitive_text_has_secret(
+    'fixture.' || encode(convert_to('access_token=synthetic-fixture-value','UTF8'),'base64') || '.metadata'
+  ),
+  'embedded base64 credential-like text is classified as secret'
+);
+select ok(
+  public.cognitive_text_has_secret(
+    'fixture.' || rtrim(
+      translate(
+        encode(
+          convert_to(
+            encode(convert_to('refresh_token=synthetic-fixture-value','UTF8'),'base64'),
+            'UTF8'
+          ),
+          'base64'
+        ),
+        '+/',
+        '-_'
+      ),
+      '='
+    ) || '.metadata'
+  ),
+  'nested embedded base64url credential-like text is classified as secret'
+);
+select ok(
+  not public.cognitive_json_is_sanitized(
+    jsonb_build_object(
+      'metadata',
+      jsonb_build_array(
+        'safe-prefix',
+        encode(convert_to('api_key=synthetic-fixture-value','UTF8'),'base64')
+      )
+    )
+  ),
+  'nested JSON containing encoded credential-like text is rejected'
+);
+
 select has_function(
   'public',
   'cognitive_transition_task',
@@ -347,6 +390,19 @@ select throws_ok(
   $$delete from public.cognitive_state_transition_events where task_id='20000000-0000-0000-0000-000000000001'$$,
   '42501', 'immutable_cognitive_evidence', 'transition history cannot be deleted'
 );
+select throws_ok(
+  $$insert into public.cognitive_state_transition_events(
+    task_id,project_id,platform,environment,entity_type,entity_id,
+    prior_status,next_status,actor_identity,transition_hash
+  ) values (
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','task','20000000-0000-0000-0000-000000000001',
+    'planning','awaiting_approval','ghp_abcdefghijklmnopqrstuvwxyz',repeat('d',64)
+  )$$,
+  '23514', null,
+  'immutable audit actor identifiers reject secret-shaped values'
+);
 
 -- Relational research provenance and cross-task denial.
 insert into public.research_sources(
@@ -362,7 +418,7 @@ insert into public.research_sources(
   'ios','ci','research-fixture','source-official-fixture','accepted',
   'research_cache',now()+interval '30 days',repeat('1',64),repeat('2',64),repeat('3',64),
   'expo-docs','docs.expo.dev','expo','Expo',
-  now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
+  now()-interval '2 days',now()-interval '1 day',now()+interval '8 days',
   'official_documentation',true,'Bounded fixture excerpt.',
   '{"title":"Official fixture","locator":"section-1"}'::jsonb,false
 );
@@ -467,6 +523,39 @@ select lives_ok(
     'ios','ci','supports'
   )$$,
   'same-task research provenance accepted'
+);
+select throws_ok(
+  $$update public.research_claims
+    set freshness_deadline=now()+interval '9 days'
+    where id='31000000-0000-0000-0000-000000000001'$$,
+  'P0001', 'research_claim_freshness_exceeds_source',
+  'a linked claim cannot be extended beyond its supporting source'
+);
+insert into public.research_claims(
+  id,task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
+  data_class,retention_until,claim_hash,bounded_claim,confidence,category,
+  freshness_deadline,contradiction_state,support_state
+) values (
+  '31000000-0000-0000-0000-000000000002',
+  '20000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  'ios','ci','research-fixture','claim-overlong-freshness','pending',
+  'research_cache',now()+interval '30 days',repeat('5',64),
+  'Fixture claim whose validity outlives its source.',0.8,
+  'technical',now()+interval '9 days','none','pending'
+);
+select throws_ok(
+  $$insert into public.research_claim_sources(
+    claim_id,source_id,task_id,project_id,platform,environment,relationship
+  ) values (
+    '31000000-0000-0000-0000-000000000002',
+    '30000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','supports'
+  )$$,
+  'P0001', 'research_claim_freshness_exceeds_source',
+  'a claim cannot link to support that expires before the claim'
 );
 insert into public.research_retrieval_events(
   source_id,task_id,project_id,platform,environment,request_url_hash,
@@ -711,6 +800,37 @@ insert into public.cognitive_capabilities(
   repeat('d',64),'42000000-0000-0000-0000-000000000001',
   (select snapshot_hash from cognitive_test_snapshot)
 );
+select throws_ok(
+  $$update public.cognitive_capabilities
+    set capability_id='ghp_abcdefghijklmnopqrstuvwxyz'
+    where id='43000000-0000-0000-0000-000000000001'$$,
+  '23514', null,
+  'capability identifiers reject secret-shaped values'
+);
+select throws_ok(
+  $$update public.cognitive_capabilities
+    set capability_id='AKIASYNTHETICFIXTURE'
+    where id='43000000-0000-0000-0000-000000000001'$$,
+  '23514', null,
+  'capability identifiers reject AWS credential-shaped values'
+);
+select throws_ok(
+  $$insert into public.tool_invocations(
+    task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
+    data_class,retention_until,capability_id,call_id,operation,
+    result_envelope_hash,result_untrusted,result_sanitized,result_truncated,output_bytes
+  ) values (
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','cognitive_control_plane','tool-secret-call-fixture','received',
+    'operational_metadata',now()+interval '30 days',
+    '43000000-0000-0000-0000-000000000001',
+    'ghp_abcdefghijklmnopqrstuvwxyz','repository_apply_patch',
+    repeat('7',64),true,true,false,0
+  )$$,
+  '23514', null,
+  'tool invocation call identifiers reject secret-shaped values'
+);
 select is(
   public.cognitive_transition_task(
     '20000000-0000-0000-0000-000000000001',
@@ -743,6 +863,19 @@ select throws_ok(
     100,0,repeat('d',64),(select snapshot_hash from cognitive_test_snapshot),repeat('3',64)
   )$$,
   'P0001','capability_scope_or_proof_rejected','iOS capability cannot authorize Android'
+);
+select throws_ok(
+  $$select public.cognitive_consume_capability(
+    'capability-fixture-001','bearer-fixture','nonce-fixture',
+    'ghp_abcdefghijklmnopqrstuvwxyz',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'Chillywood2025/chillywood-mobile','codex/task-ios','ios','ci',
+    'repository','repository_apply_patch','docs/intelligence/COGNITIVE_SECURITY_MODEL.md',
+    100,0,repeat('d',64),(select snapshot_hash from cognitive_test_snapshot),repeat('3',64)
+  )$$,
+  'P0001','capability_scope_or_proof_rejected',
+  'capability consumption rejects a secret-shaped call identifier before use'
 );
 select is(
   public.cognitive_consume_capability(
@@ -799,6 +932,19 @@ select throws_ok(
   '23503',
   null,
   'capability lifecycle evidence cannot cross task or platform scope'
+);
+select throws_ok(
+  $$insert into public.cognitive_capability_events(
+    capability_id,task_id,project_id,platform,environment,call_id,
+    usage_sequence,event_type,request_hash
+  ) values (
+    '43000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','ghp_abcdefghijklmnopqrstuvwxyz',2,'rejected',repeat('6',64)
+  )$$,
+  '23514', null,
+  'capability lifecycle call identifiers reject secret-shaped values'
 );
 
 insert into public.intelligence_budgets(

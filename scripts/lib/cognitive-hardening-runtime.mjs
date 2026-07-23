@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
+import { Buffer } from "node:buffer";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import net from "node:net";
 import https from "node:https";
 
@@ -28,8 +28,6 @@ export const stableJson = (value) => {
 };
 export const canonicalSnapshotHash = (snapshot) => sha256(stableJson(snapshot));
 
-const ENGINE_BUDGET_AUTHORITIES = new WeakSet();
-const ISOLATED_TEST_CAPABILITY_LEDGER_ROOTS = new WeakMap();
 const OWNER_POLICY_BUDGET_CEILING = Object.freeze({
   modelTokens: 10_000_000,
   modelCost: 25,
@@ -42,7 +40,7 @@ const OWNER_POLICY_BUDGET_CEILING = Object.freeze({
   retries: 5,
 });
 
-export class CognitiveEngineBudgetAuthority {
+export class CognitiveBudgetFixtureCoordinator {
   #limits;
   #consumed = Object.fromEntries(Object.keys(OWNER_POLICY_BUDGET_CEILING).map((key) => [key, 0]));
   #reservations = new Map();
@@ -58,7 +56,10 @@ export class CognitiveEngineBudgetAuthority {
       throw new Error("owner_policy_budget_invalid");
     }
     this.#limits = Object.freeze({ ...requestedLimits });
-    ENGINE_BUDGET_AUTHORITIES.add(this);
+    Object.defineProperties(this, {
+      authorityAvailable: { value: false, enumerable: true, writable: false },
+      coordinatorKind: { value: "pure_fixture_budget", enumerable: true, writable: false },
+    });
     Object.freeze(this);
   }
 
@@ -116,40 +117,25 @@ export class CognitiveEngineBudgetAuthority {
     return Object.freeze({ limits: this.#limits, consumed: Object.freeze({ ...this.#consumed }) });
   }
 }
-Object.freeze(CognitiveEngineBudgetAuthority.prototype);
+Object.freeze(CognitiveBudgetFixtureCoordinator.prototype);
+
+// Backward-compatible import name for existing pure tests. It is not consulted
+// by executeAuthorizedAction and cannot mint execution authority.
+export const CognitiveEngineBudgetAuthority = CognitiveBudgetFixtureCoordinator;
 
 export const registerIsolatedTestCapabilityLedger = (ledger, repositoryRoot) => {
-  if (!ledger || typeof ledger !== "object") throw new Error("capability_ledger_invalid");
-  const prototype = Object.getPrototypeOf(ledger);
-  const requiredMethods = [
-    "authorizeComposedRequest",
-    "capabilitySnapshot",
-    "consume",
-    "eventSnapshot",
-    "issue",
-    "reauthorizeAcceptedCall",
-    "revoke",
-  ];
-  if (!prototype
-    || prototype.constructor?.name !== "CognitiveCapabilityLedger"
-    || Object.keys(ledger).length !== 0
-    || requiredMethods.some((method) => typeof prototype[method] !== "function")) {
-    throw new Error("isolated_test_capability_ledger_required");
-  }
-  const canonicalRoot = fs.realpathSync(repositoryRoot);
-  const canonicalTemporaryRoot = fs.realpathSync(os.tmpdir());
-  if (!inside(canonicalRoot, canonicalTemporaryRoot)
-    || fs.existsSync(path.join(canonicalRoot, ".git"))
-    || !path.basename(canonicalRoot).startsWith("cognitive-")) {
-    throw new Error("isolated_test_capability_root_required");
-  }
-  ISOLATED_TEST_CAPABILITY_LEDGER_ROOTS.set(ledger, canonicalRoot);
-  return ledger;
+  void ledger;
+  void repositoryRoot;
+  // This source-only scaffold has no credential broker or production executor.
+  // A caller-created object cannot become an execution authority, including in a
+  // temporary directory. Pure capability/state-machine behavior is tested
+  // independently of side-effecting execution.
+  throw new Error("cognitive_execution_authority_unavailable");
 };
 
 const decodePath = (value) => {
   let current = String(value).normalize("NFKC");
-  for (let index = 0; index < 3; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     const next = decodeURIComponent(current);
     if (next === current) return next;
     current = next;
@@ -224,15 +210,6 @@ const CLOSED_ACTIONS = new Set([
   "github_open_draft_pr",
   "github_update_draft_pr_body",
 ]);
-const WRITE_ACTIONS = new Set([
-  "repository_apply_patch",
-  "repository_write_new_file",
-  "git_stage_allowlisted_paths",
-  "git_commit_scoped",
-  "git_push_scoped_draft_branch",
-  "github_open_draft_pr",
-  "github_update_draft_pr_body",
-]);
 const TEST_COMMANDS = new Map([
   ["lint", { program: "npm", args: ["run", "lint"] }],
   ["typescript", { program: "npx", args: ["tsc", "--noEmit"] }],
@@ -259,7 +236,7 @@ const closedInvocation = (request, canonicalPaths) => {
   if (request.action.startsWith("repository_")) {
     if (request.argv.length) throw new Error("repository_action_argv_forbidden");
     return {
-      kind: "internal",
+      kind: "disabled_contract",
       action: request.action,
       relativePaths: canonicalPaths.map((entry) => entry.relativePath),
     };
@@ -267,143 +244,49 @@ const closedInvocation = (request, canonicalPaths) => {
   if (request.action === "test_run_allowlisted") {
     const command = request.argv.length === 1 ? TEST_COMMANDS.get(request.argv[0]) : null;
     if (!command) throw new Error("test_command_not_allowlisted");
-    return { kind: "process", program: command.program, args: command.args, shell: false };
+    return {
+      kind: "disabled_contract",
+      action: request.action,
+      program: command.program,
+      args: command.args,
+      shell: false,
+    };
   }
   if (request.action === "git_create_scoped_branch") {
     if (request.argv.length) throw new Error("git_action_argv_forbidden");
-    return { kind: "process", program: "git", args: ["switch", "-c", request.branch], shell: false };
+    return { kind: "disabled_contract", action: request.action, branch: request.branch };
   }
   if (request.action === "git_stage_allowlisted_paths") {
     if (request.argv.length) throw new Error("git_action_argv_forbidden");
-    return { kind: "process", program: "git", args: ["add", "--", ...canonicalPaths.map((entry) => entry.relativePath)], shell: false };
+    return {
+      kind: "disabled_contract",
+      action: request.action,
+      relativePaths: canonicalPaths.map((entry) => entry.relativePath),
+    };
   }
   if (request.action === "git_commit_scoped") {
     if (request.argv.length !== 1 || request.argv[0].length < 3 || request.argv[0].length > 120) throw new Error("commit_message_invalid");
-    return { kind: "process", program: "git", args: ["commit", "-m", request.argv[0]], shell: false };
+    // A future executor must commit from an engine-owned index populated from
+    // pinned allowed-path descriptors. The ambient Git index is never accepted.
+    return { kind: "disabled_contract", action: request.action };
   }
   if (request.action === "git_push_scoped_draft_branch") {
     if (request.argv.length) throw new Error("git_action_argv_forbidden");
-    return { kind: "process", program: "git", args: ["push", "origin", `${request.branch}:${request.branch}`], shell: false };
+    return { kind: "disabled_contract", action: request.action, branch: request.branch };
   }
-  if (request.action === "github_open_draft_pr") return { kind: "github_api", action: "open_draft_pr", repository: request.repositoryFullName };
-  if (request.action === "github_update_draft_pr_body") return { kind: "github_api", action: "update_draft_pr_body", repository: request.repositoryFullName };
+  if (request.action === "github_open_draft_pr") return { kind: "disabled_contract", action: request.action, repository: request.repositoryFullName };
+  if (request.action === "github_update_draft_pr_body") return { kind: "disabled_contract", action: request.action, repository: request.repositoryFullName };
   throw new Error("action_not_implemented");
 };
 
-const preparePinnedPathHandles = (action, canonicalPaths) => {
-  if (!action.startsWith("repository_")) return [];
-  const handles = [];
-  try {
-    for (const entry of canonicalPaths) {
-      const exists = fs.existsSync(entry.canonicalTarget);
-      let flags = fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW;
-      if (action === "repository_apply_patch") flags = fs.constants.O_RDWR | fs.constants.O_NOFOLLOW;
-      if (action === "repository_write_new_file") {
-        if (exists) throw new Error("new_file_already_exists");
-        // Node does not expose openat(2). Creating through a pathname would leave
-        // a parent-directory swap window even with O_NOFOLLOW on the final
-        // component. Keep the action in the closed contract, but fail closed
-        // until a reviewed descriptor-relative native adapter is supplied.
-        throw new Error("secure_new_file_creation_unavailable");
-      } else if (!exists) throw new Error("path_missing_at_use");
-      const descriptor = fs.openSync(entry.canonicalTarget, flags, 0o600);
-      const descriptorStat = fs.fstatSync(descriptor);
-      const pathStat = fs.lstatSync(entry.canonicalTarget);
-      const useTimeCanonicalTarget = fs.realpathSync(entry.canonicalTarget);
-      if (pathStat.isSymbolicLink()
-        || useTimeCanonicalTarget !== entry.canonicalTarget
-        || descriptorStat.dev !== pathStat.dev
-        || descriptorStat.ino !== pathStat.ino) {
-        fs.closeSync(descriptor);
-        throw new Error("path_identity_changed");
-      }
-      const original = action === "repository_apply_patch"
-        ? fs.readFileSync(descriptor, { encoding: null, flag: "r" })
-        : null;
-      handles.push({
-        relativePath: entry.relativePath,
-        descriptor,
-        createdByEngine: action === "repository_write_new_file",
-        original,
-        canonicalTarget: entry.canonicalTarget,
-      });
-    }
-    return handles;
-  } catch (error) {
-    for (const handle of handles) fs.closeSync(handle.descriptor);
-    throw error;
-  }
-};
-
-const rollbackPinnedPathHandles = (handles) => {
-  try {
-    for (const handle of handles) {
-      if (handle.createdByEngine) {
-        fs.closeSync(handle.descriptor);
-        handle.descriptor = null;
-        fs.unlinkSync(handle.canonicalTarget);
-      } else if (handle.original) {
-        fs.ftruncateSync(handle.descriptor, 0);
-        fs.writeSync(handle.descriptor, handle.original, 0, handle.original.length, 0);
-        fs.fsyncSync(handle.descriptor);
-      }
-    }
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const closePinnedPathHandles = (handles) => {
-  for (const handle of handles) {
-    if (Number.isInteger(handle.descriptor)) {
-      try {
-        fs.closeSync(handle.descriptor);
-      } catch {
-        // A rollback may already have closed a newly created file descriptor.
-      }
-      handle.descriptor = null;
-    }
-  }
-};
-
-export const executeAuthorizedAction = async ({
+export const validateCognitiveExecutionContract = ({
   repositoryRoot,
   request,
   allowedScopes,
   allowNewFile,
-  capabilityLedger,
-  capabilityId,
-  capabilityUse,
-  budgetLedger,
-  budgetReservationId,
-  budgetRequest,
-  leaseRegistry,
-  getRuntimeGate,
-  executeInvocation,
-  rollbackCoordinator,
-  rollbackInvocation,
-  signal,
 }) => {
-  const preGate = getRuntimeGate();
-  if (signal.aborted || preGate.emergencyStop || preGate.taskCancelled || preGate.taskQuarantined) {
-    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["runtime_gate_closed"] };
-  }
-  if (WRITE_ACTIONS.has(request.action)
-    && (
-      !rollbackCoordinator
-      || rollbackCoordinator.taskStates?.get(capabilityUse.taskId) !== "rollback_pending"
-      || (!request.action.startsWith("repository_") && typeof rollbackInvocation !== "function")
-    )) {
-    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["rollback_contract_missing"] };
-  }
-  if (!ENGINE_BUDGET_AUTHORITIES.has(budgetLedger)
-    || Object.getPrototypeOf(budgetLedger) !== CognitiveEngineBudgetAuthority.prototype) {
-    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["engine_budget_authority_required"] };
-  }
-  const canonicalRepositoryRoot = fs.realpathSync(repositoryRoot);
-  if (ISOLATED_TEST_CAPABILITY_LEDGER_ROOTS.get(capabilityLedger) !== canonicalRepositoryRoot) {
-    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["capability_authority_unavailable"] };
+  if (!request || typeof request !== "object" || !Array.isArray(request.paths)) {
+    throw new Error("execution_contract_invalid");
   }
   const canonicalPaths = request.paths.map((requestedPath) => resolveConfinedRepositoryPath({
     repositoryRoot,
@@ -411,149 +294,41 @@ export const executeAuthorizedAction = async ({
     allowedScopes,
     allowNewFile,
   }));
-  const composedBlockers = capabilityLedger.authorizeComposedRequest(
-    capabilityId,
-    { ...request, paths: canonicalPaths.map((entry) => entry.relativePath) },
-    capabilityUse,
-  );
-  if (composedBlockers.length) return { accepted: false, status: "blocked_preflight", result: null, blockers: composedBlockers };
   const invocation = closedInvocation(request, canonicalPaths);
-  const actionFingerprint = sha256(stableJson({
+  return Object.freeze({
     action: request.action,
-    branch: request.branch,
-    paths: canonicalPaths.map((entry) => entry.relativePath),
-  }));
-  const budgetGate = {
-    ...preGate,
-    deadlineAt: preGate.deadlineAt,
-    actionFingerprint,
-    planSnapshotHash: capabilityUse.planSnapshotHash,
-  };
-  const requiredBudget = {
-    ...budgetRequest,
-    toolCalls: 1,
-    toolBytes: capabilityUse.bytes,
-    concurrentCalls: 1,
-  };
-  if (budgetRequest.toolCalls !== 1
-    || budgetRequest.toolBytes !== capabilityUse.bytes
-    || budgetRequest.concurrentCalls !== 1
-    || !budgetLedger.reserve(budgetReservationId, requiredBudget, budgetGate)) {
-    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["budget_reservation_rejected"] };
-  }
-  const leaseKeys = [
-    `repository:${request.repositoryFullName}`,
-    `branch:${request.branch}`,
-    `platform:${capabilityUse.platform}`,
-    `provider:${capabilityUse.provider}`,
-    ...canonicalPaths.map((entry) => `path:${entry.relativePath}`),
-  ];
-  const leaseMode = WRITE_ACTIONS.has(request.action) ? "write" : "read";
-  for (const resourceKey of leaseKeys) {
-    const acquired = leaseRegistry.acquire({
-      resourceKey,
-      taskId: capabilityUse.taskId,
-      mode: leaseMode,
-      issuedAt: preGate.now.toISOString(),
-      expiresAt: preGate.deadlineAt,
-    }, preGate.now);
-    if (!acquired) {
-      budgetLedger.release(budgetReservationId);
-      leaseKeys.forEach((key) => leaseRegistry.release(key, capabilityUse.taskId));
-      return { accepted: false, status: "blocked_preflight", result: null, blockers: ["resource_lease_conflict"] };
-    }
-  }
-  const capabilityEvent = capabilityLedger.consume(capabilityId, capabilityUse, preGate);
-  if (capabilityEvent.event !== "consumed") {
-    budgetLedger.release(budgetReservationId);
-    leaseKeys.forEach((key) => leaseRegistry.release(key, capabilityUse.taskId));
-    return { accepted: false, status: "blocked_preflight", result: null, blockers: String(capabilityEvent.reason).split(",") };
-  }
-  let pinnedHandles = [];
-  try {
-    pinnedHandles = preparePinnedPathHandles(request.action, canonicalPaths);
-    const executableInvocation = invocation.kind === "internal"
-      ? {
-          ...invocation,
-          pathHandles: pinnedHandles.map(({ relativePath, descriptor }) => ({ relativePath, descriptor })),
-        }
-      : invocation;
-    const executionPromise = Promise.resolve().then(() => executeInvocation(executableInvocation, signal));
-    let abortListener;
-    let result;
-    try {
-      result = await Promise.race([
-        executionPromise,
-        new Promise((_, reject) => {
-          abortListener = () => reject(new Error("execution_cancelled"));
-          signal.addEventListener("abort", abortListener, { once: true });
-        }),
-      ]);
-    } catch (error) {
-      if (signal.aborted || error?.message === "execution_cancelled") {
-        executionPromise.catch(() => undefined);
-        closePinnedPathHandles(pinnedHandles);
-        pinnedHandles = [];
-        capabilityLedger.revoke(capabilityId, getRuntimeGate().now);
-        if (rollbackCoordinator && typeof rollbackCoordinator.record === "function") {
-          rollbackCoordinator.record(capabilityUse.taskId, false, getRuntimeGate().now);
-        }
-        budgetLedger.release(budgetReservationId);
-        return {
-          accepted: false,
-          status: "rollback_failed_quarantined",
-          result: null,
-          blockers: ["execution_cancelled", "late_result_rejected"],
-        };
-      }
-      throw error;
-    } finally {
-      if (abortListener) signal.removeEventListener("abort", abortListener);
-    }
-    const postGate = getRuntimeGate();
-    const postBlockers = [
-      ...(signal.aborted ? ["task_cancelled"] : []),
-      ...capabilityLedger.reauthorizeAcceptedCall(capabilityId, capabilityUse, postGate),
-    ];
-    const settled = budgetLedger.settle(budgetReservationId, requiredBudget, postGate);
-    if (postBlockers.length || !settled) {
-      const blockers = [...new Set([...postBlockers, ...(!settled ? ["budget_settlement_rejected"] : [])])].sort();
-      const internalRollback = rollbackPinnedPathHandles(pinnedHandles);
-      const externalRollback = typeof rollbackInvocation === "function"
-        ? await rollbackInvocation(executableInvocation, result, signal)
-        : invocation.kind === "internal";
-      const rollbackSucceeded = internalRollback && externalRollback === true;
-      if (rollbackCoordinator && typeof rollbackCoordinator.record === "function") {
-        rollbackCoordinator.record(capabilityUse.taskId, rollbackSucceeded, postGate.now);
-      }
-      return {
-        accepted: false,
-        status: rollbackSucceeded ? "rolled_back_postflight" : "rollback_failed_quarantined",
-        result: null,
-        blockers: [...new Set([...blockers, ...(rollbackSucceeded ? [] : ["rollback_failed"])])].sort(),
-      };
-    }
-    return { accepted: true, status: "completed", result, blockers: [] };
-  } catch {
-    const internalRollback = rollbackPinnedPathHandles(pinnedHandles);
-    const externalRollback = typeof rollbackInvocation === "function"
-      ? await rollbackInvocation(invocation, null, signal)
-      : invocation.kind === "internal";
-    const rollbackSucceeded = internalRollback && externalRollback === true;
-    if (rollbackCoordinator && typeof rollbackCoordinator.record === "function") {
-      rollbackCoordinator.record(capabilityUse.taskId, rollbackSucceeded, getRuntimeGate().now);
-    }
-    budgetLedger.release(budgetReservationId);
-    return {
+    invocation: Object.freeze({ ...invocation }),
+    relativePaths: Object.freeze(canonicalPaths.map((entry) => entry.relativePath)),
+    productionExecutionAvailable: false,
+  });
+};
+
+export const executeAuthorizedAction = async ({
+  signal,
+  getRuntimeGate,
+}) => {
+  // Deliberately do not call any caller-supplied ledger, budget, lease, rollback,
+  // invocation, or result callback. Those objects cannot confer authority while
+  // the scaffold is undeployed. This also prevents late side effects after
+  // cancellation and prevents raw tool/provider output from crossing the trust
+  // boundary.
+  if (signal?.aborted) {
+    return Object.freeze({
       accepted: false,
-      status: rollbackSucceeded ? "execution_failed_rolled_back" : "rollback_failed_quarantined",
+      status: "blocked_preflight",
       result: null,
-      blockers: [rollbackSucceeded ? "execution_failed" : "rollback_failed"],
-    };
-  } finally {
-    closePinnedPathHandles(pinnedHandles);
-    leaseKeys.forEach((key) => leaseRegistry.release(key, capabilityUse.taskId));
+      blockers: Object.freeze(["runtime_gate_closed", "cognitive_execution_authority_unavailable"]),
+    });
   }
+  // getRuntimeGate is intentionally not invoked: it is caller-controlled and no
+  // runtime authority exists that could authenticate its answer.
+  void getRuntimeGate;
+  return Object.freeze({
+    accepted: false,
+    status: "blocked_preflight",
+    result: null,
+    blockers: Object.freeze(["cognitive_execution_authority_unavailable"]),
+  });
 };
 
 const ipv4Integer = (address) => address.split(".").reduce((result, octet) => (result * 256) + Number(octet), 0);
@@ -650,7 +425,9 @@ export const validateResearchUrlWithDns = async (raw, resolveDns) => {
       throw new Error("url_encoding_invalid");
     }
   }
-  if (/(?:^|[?&#/;])(?:access[_-]?token|refresh[_-]?token|token|api[_-]?key|secret|password|credential|authorization|signature|sig|key)=/iu.test(decoded)
+  if (/\b(?:access[_-]?token|refresh[_-]?token|token|api[_-]?key|secret|password|credential|authorization|signature|sig|key)=/iu.test(decoded)
+    || /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u.test(decoded)
+    || /\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,})\b/u.test(decoded)
     || /https:\/\/[^/\s:@]+:[^/\s@]+@/iu.test(decoded)) {
     throw new Error("credential_bearing_url_forbidden");
   }
@@ -673,8 +450,21 @@ export const createDeterministicResearchFixtureTransport = (fixtures) => {
     throw new Error("research_fixture_transport_invalid");
   }
   const records = fixtures.map((fixture) => {
+    let fixtureUrl;
+    let redirectUrl;
+    try {
+      fixtureUrl = new URL(fixture?.url);
+      redirectUrl = fixture?.redirectUrl ? new URL(fixture.redirectUrl, fixtureUrl) : null;
+    } catch {
+      throw new Error("research_fixture_transport_invalid");
+    }
+    const syntheticHost = (url) =>
+      url.protocol === "https:"
+      && (url.hostname.endsWith(".test") || url.hostname.endsWith(".invalid"));
     if (!fixture || typeof fixture !== "object"
       || typeof fixture.url !== "string"
+      || !syntheticHost(fixtureUrl)
+      || (redirectUrl && redirectUrl.protocol !== "https:")
       || !Number.isSafeInteger(fixture.status)
       || fixture.status < 100 || fixture.status > 599
       || !["text/html", "text/plain", "application/json"].includes(fixture.contentType)
@@ -688,11 +478,11 @@ export const createDeterministicResearchFixtureTransport = (fixtures) => {
       throw new Error("research_fixture_transport_invalid");
     }
     return Object.freeze({
-      url: fixture.url,
+      url: fixtureUrl.toString(),
       status: fixture.status,
       contentType: fixture.contentType,
       body: fixture.body,
-      redirectUrl: fixture.redirectUrl,
+      redirectUrl: redirectUrl?.toString() ?? null,
       delayMs: fixture.delayMs ?? 0,
       peerMode: fixture.peerMode ?? "pinned",
     });
@@ -784,6 +574,7 @@ export const fetchResearchEvidence = async ({
   totalTimeoutMs = 15_000,
 }) => {
   if (!RESEARCH_TRANSPORTS.has(request)) throw new Error("research_transport_not_reviewed");
+  const transportKind = RESEARCH_TRANSPORTS.get(request);
   if (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 100 || totalTimeoutMs > 60_000) throw new Error("research_timeout_invalid");
   const startedAt = Date.now();
   const runBounded = async (operation, timeoutLabel) => {
@@ -877,7 +668,18 @@ export const fetchResearchEvidence = async ({
       .replace(/<form[\s\S]*?<\/form>/giu, " ")
       .replace(/<[^>]+(?:hidden|display\s*:\s*none)[^>]*>[\s\S]*?<\/[^>]+>/giu, " ")
       .slice(0, maxDecompressedBytes);
-    return { text, history, untrusted: true, credentialsSent: false, authorizationPersisted: false };
+    return {
+      text,
+      history,
+      untrusted: true,
+      credentialsSent: false,
+      authorizationPersisted: false,
+      transportKind,
+      claimSupportEligible: transportKind === "pinned_https",
+      evidenceAuthority: transportKind === "pinned_https"
+        ? "untrusted_network_evidence"
+        : "synthetic_fixture_only",
+    };
   }
   throw new Error("redirect_limit_exceeded");
 };
@@ -903,8 +705,16 @@ export const requiredTestManifestForChanges = ({
   return [...tests.values()].sort((left, right) => left.id.localeCompare(right.id));
 };
 
-export class ResourceLeaseRegistry {
+export class CognitiveLeaseFixtureCoordinator {
   #leases = new Map();
+
+  constructor() {
+    Object.defineProperties(this, {
+      authorityAvailable: { value: false, enumerable: true, writable: false },
+      coordinatorKind: { value: "pure_fixture_lease", enumerable: true, writable: false },
+    });
+    Object.freeze(this);
+  }
 
   acquire({ resourceKey, taskId, mode, issuedAt, expiresAt }, now = new Date()) {
     const issued = Date.parse(issuedAt);
@@ -954,3 +764,7 @@ export class ResourceLeaseRegistry {
     return true;
   }
 }
+
+// Backward-compatible import name for existing pure tests. It is not consulted
+// by executeAuthorizedAction and cannot mint execution authority.
+export const ResourceLeaseRegistry = CognitiveLeaseFixtureCoordinator;

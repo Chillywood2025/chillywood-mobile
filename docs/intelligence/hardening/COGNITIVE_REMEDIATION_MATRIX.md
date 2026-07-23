@@ -4,7 +4,7 @@ Review source: PR #15 at `ff6b2588e2dcc4fa8e76c8f8f6dac47f64cb0667`
 
 Implementation base: `bd8fd0c709db8ff843b69fa9b9a5039a74d09a94`
 
-Hardening state: `security_hardened_scaffold_not_deployed`
+Hardening state: `security_hardening_in_progress`
 
 The matrix retains every independent-review finding. “Fixed locally” means its
 source change and regression test pass on the hardening branch; it is not a
@@ -157,3 +157,33 @@ seven distinct P1 classes and six P2/P3 gaps after overlap was normalized.
 | C4-DRIFT-001 | P2 | Research authority accepted non-443 sources while runtime/SQL rejected them. | TypeScript authority/canonical-reference checks now share the HTTPS/443 boundary. | R-46 | fixed locally | pending |
 | B4-HARNESS-001 | P3 | The concurrency harness selected all Supabase containers globally and failed when another project was active. | It selects one explicit/current-worktree project container by exact validated name. | two-session finding race | fixed locally | pending |
 | A4-STATUS-001 | P3 | Final hardening status was restored before a fresh passing review. | Status returned to `security_hardening_in_progress` until every authored gate passed; the final label remains subject to exact-head independent retest. | status/Admin guards | fixed locally | pending |
+
+## Fifth exact-head retest findings
+
+The fifth isolated retest reviewed
+`2c8be0edd3f4aee2bd3cb9c3b3fbec24894bb8d1`. The database lane independently
+passed with no technical finding, 150/150 focused pgTAP assertions, 435/435 full
+database assertions, and a successful two-session recurrence race. The
+architecture/security and research/provider lanes found nine P1 defects, seven
+P2 gaps, and one P3 status defect. Hardening returned immediately to
+`security_hardening_in_progress`.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A5-CAP-001 | P1 | A caller-defined class with the expected constructor name could register as the isolated capability authority; a caller-supplied proof boolean could also authorize standalone use. | Remove caller-mintable execution authority and caller proof assertions; the undeployed executor remains structurally fail-closed. | fifth-head authority forgery probes | fixed locally | pending |
+| A5-EXEC-001 | P1 | `git commit -m` could include unrelated content already present in the Git index. | No Git side-effect adapter is available while undeployed; scoped Git actions remain validated plans only. | pre-staged workflow fixture | fixed locally | pending |
+| A5-BUDGET-001 | P1 | Public construction reset per-action and per-plan budget occurrence controls. | Remove caller-mintable composed execution authority and test budget behavior through one engine-owned pure coordinator. | repeated-authority fixture | fixed locally | pending |
+| A5-TOOL-001 | P1 | Composed execution returned raw tool/provider output instead of an untrusted envelope. | No composed tool execution is available while undeployed; standalone result retention always uses an internally hashed untrusted envelope. | provider scope-expansion fixture | fixed locally | pending |
+| A5-CANCEL-001 | P1 | A non-cooperative callback retained a writable descriptor and mutated a file after cancellation returned. | Do not invoke caller callbacks or expose pinned descriptors; pure cancellation tests require late results to be ignored. | late-side-effect fixture | fixed locally | pending |
+| A5-SANITIZE-001 | P1 | SQL missed a token-shaped identifier and embedded base64url secret material. | Expand bounded recursive SQL token/embedded encoding detection and reject secret-shaped audit identifiers. | pgTAP encoded identifier/body fixtures | fixed locally | pending |
+| C5-URL-001 | P1 | The exact fetch path accepted a double-encoded credential value and an AWS-shaped query value before DNS. | Apply bounded whole-URL decoding and secret detection before DNS/transport. | pre-DNS credential URL fixtures | fixed locally | pending |
+| C5-ID-001 | P1 | Tool/call/source audit identifiers accepted GitHub/AWS token-shaped values. | Apply closed identifier syntax plus secret/injection rejection in TypeScript and SQL. | audit identifier fixtures | fixed locally | pending |
+| C5-EXEC-001 | P1 | Adding `.git` after isolated-adapter registration bypassed the non-Git-root gate. | Eliminate the caller-registered execution adapter and keep the scaffold executor fail-closed. | post-registration Git-root fixture | fixed locally | pending |
+| A5-LEASE-001 | P2 | A caller-supplied lease registry could bypass conflict control. | No caller-supplied registry participates in side-effect execution; pure lease coordinators remain independently testable. | lease-forgery fixture | fixed locally | pending |
+| A5-TRANSPORT-001 | P2 | A caller could brand arbitrary fixture content under an official authority URL. | Deterministic research fixtures are selected from a closed built-in fixture registry; callers cannot supply official content. | fabricated-official-source fixture | fixed locally | pending |
+| A5-EVIDENCE-001 | P2 | Trusted evidence construction accepted caller verifier/hash functions. | Keep evaluator evidence authority unconfigured and remove caller-mintable verifier/hash roots. | evidence-root forgery fixture | fixed locally | pending |
+| C5-SOURCE-001 | P2 | Duplicate source IDs could transfer registered authority to a different source through `Map` collapse. | Reject duplicate source IDs before authority lookup. | duplicate-authority fixture | fixed locally | pending |
+| C5-CITATION-001 | P2 | Prototype-backed inherited citation values bypassed own-property sanitization. | Reject non-plain objects and require own bounded citation properties. | prototype-backed citation fixture | fixed locally | pending |
+| C5-FRESHNESS-001 | P2 | A supported claim could outlive the freshness deadline of its supporting source. | Bound claim freshness to every support source in TypeScript and relational SQL. | source/claim deadline fixtures | fixed locally | pending |
+| C5-SCOPE-001 | P2 | Provider owner/admin escalation detection depended on verb-before-role phrasing. | Detect bounded role/credential escalation language in either order and continue to discard the payload. | phrase-order fixtures | fixed locally | pending |
+| A5-STATUS-001 | P3 | The final hardening label was restored despite independent P1 blockers. | Use `security_hardening_in_progress` until a new exact-head four-lane retest returns zero P0/P1. | status/Admin guards | fixed locally | pending |
