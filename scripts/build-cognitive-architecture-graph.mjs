@@ -5,6 +5,13 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
+const expectedCommitArgumentIndex = process.argv.indexOf("--expected-commit");
+const expectedSourceCommit = expectedCommitArgumentIndex >= 0
+  ? process.argv[expectedCommitArgumentIndex + 1]
+  : process.env.COGNITIVE_EXPECTED_SOURCE_COMMIT;
+if (!/^[a-f0-9]{40}$/u.test(String(expectedSourceCommit ?? ""))) {
+  throw new Error("architecture_graph_expected_source_commit_required");
+}
 const gitEnvironment = { ...process.env };
 for (const key of Object.keys(gitEnvironment)) {
   if (key.startsWith("GIT_")) delete gitEnvironment[key];
@@ -20,6 +27,7 @@ const sourceExtensions = /\.(?:ts|tsx|js|mjs|sql|json|yml|yaml)$/u;
 const forbiddenPath = /(?:^|\/)(?:\.git|node_modules|android|ios|dist|build|coverage)(?:\/|$)|(?:^|\/)\.env(?:\.|$)|(?:credential|keystore|\.p8$|\.p12$|\.jks$|\.keystore$)/iu;
 const sourceCommit = git(["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 if (!/^[a-f0-9]{40}$/u.test(sourceCommit)) throw new Error("architecture_graph_source_commit_invalid");
+if (sourceCommit !== expectedSourceCommit) throw new Error("architecture_graph_expected_source_commit_mismatch");
 const treeEntries = git(
   ["ls-tree", "-rz", "--full-tree", sourceCommit],
   { maxBuffer: 32 * 1024 * 1024 },

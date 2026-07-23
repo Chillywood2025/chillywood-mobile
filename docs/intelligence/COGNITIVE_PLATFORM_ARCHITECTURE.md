@@ -30,14 +30,19 @@ The cognitive layer cannot directly own or execute money movement, user-rights c
 
 `scripts/build-cognitive-architecture-graph.mjs` deterministically indexes regular
 source blobs from the exact reviewed Git commit without consulting the ambient
-index or working tree and without secret-like filenames. It models routes,
+index or working tree and without secret-like filenames. The caller must supply
+the expected 40-character commit through `COGNITIVE_EXPECTED_SOURCE_COMMIT` or
+`--expected-commit`; missing or mismatched expectations fail closed. CI binds
+that value to the immutable checked-out `github.sha`. It models routes,
 screens, components, client methods/hooks, Edge Functions,
 migrations/RPCs/tables, providers, notifications, LiveKit, purchases,
 native/build contracts, and tests/guards. Import and definition edges support
 impact output for callers, dependencies, platforms, roles, user states, data,
 tests, release impact, and rollback scope.
 
-The committed snapshot is a reproducible source artifact, not production telemetry and not a deployed graph database.
+Only the graph schema, generator, and compact fixture evidence are committed.
+The generated compact manifest is a reproducible CI/owner-only artifact, not
+production telemetry and not a deployed graph database.
 
 ## Promotion gates
 

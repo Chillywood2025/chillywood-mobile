@@ -256,17 +256,21 @@ const guardMemory = () => {
 };
 
 const guardArchitecture = () => {
-  execFileSync(process.execPath, ["scripts/build-cognitive-architecture-graph.mjs", "--check"], { cwd: root, stdio: "pipe" });
+  const expectedSourceCommit = process.env.COGNITIVE_EXPECTED_SOURCE_COMMIT;
+  assert.match(String(expectedSourceCommit ?? ""), /^[a-f0-9]{40}$/u, "externally supplied architecture source commit is required");
+  const graphArguments = ["scripts/build-cognitive-architecture-graph.mjs", "--expected-commit", expectedSourceCommit];
+  execFileSync(process.execPath, [...graphArguments, "--check"], { cwd: root, stdio: "pipe" });
   const config = JSON.parse(read("config/intelligence/architecture-knowledge-graph-config.json"));
   assert.equal(config.repositoryId, "Chillywood2025/chillywood-mobile");
   assert.equal(config.symlinkPolicy, "skip_all");
   assert.equal(config.fullGraphPersistence, "ci_or_owner_only_artifact");
-  const first = execFileSync(process.execPath, ["scripts/build-cognitive-architecture-graph.mjs"], { cwd: root, encoding: "utf8" });
-  const second = execFileSync(process.execPath, ["scripts/build-cognitive-architecture-graph.mjs"], { cwd: root, encoding: "utf8" });
+  const first = execFileSync(process.execPath, graphArguments, { cwd: root, encoding: "utf8" });
+  const second = execFileSync(process.execPath, graphArguments, { cwd: root, encoding: "utf8" });
   assert.equal(first, second, "architecture manifest must be deterministic");
   const manifest = JSON.parse(first);
   assert.equal(manifest.secretFilesIncluded, false);
   assert.equal(manifest.repositoryId, "Chillywood2025/chillywood-mobile");
+  assert.equal(manifest.sourceCommit, expectedSourceCommit);
   assert.match(manifest.sourceCommit, /^[a-f0-9]{40}$/u);
   assert.match(manifest.fileListDigest, /^[a-f0-9]{64}$/u);
   assert.match(manifest.graphDigest, /^[a-f0-9]{64}$/u);

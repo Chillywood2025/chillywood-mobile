@@ -65,13 +65,19 @@ declare
   embedded_decoded text;
   folded_encoded text;
   compacted_encoded text;
+  compacted_candidate text;
   hex_encoded text;
   normalized text;
   octet integer;
   position_value integer;
   depth integer;
   percent_changed boolean;
+  fragment_count integer;
 begin
+  if coalesce(payload,'') ~ '^[a-f0-9-]{36}$'
+     or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9-]{36}$' then
+    return false;
+  end if;
   -- Walk a bounded decoding frontier instead of repeatedly appending the
   -- original encoded text. Six nested layers are inspected; a payload that
   -- remains encoded beyond that bound is rejected rather than retained.
@@ -100,13 +106,16 @@ begin
     normalized := lower(regexp_replace(candidate, '[^a-zA-Z0-9_=:/.?&+-]', '', 'g'));
     if candidate ~* '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----'
        or normalized ~* '(password|secret|token|authorization|cookie|service_?role|private_?key|api_?key|access_?key|refresh_?token)[:=][^,}]{4,}'
-       or candidate ~* '(^|[^A-Za-z0-9])(password|secret|credential|service[_:.-]?role|access[_:.-]?token|refresh[_:.-]?token|api[_:.-]?key)[_:.-][A-Za-z0-9._:-]{8,}'
+       or candidate ~* '(^|[^A-Za-z0-9])(password|secret|credential|service[_:.-]?role|access[_:.-]?token|refresh[_:.-]?token|api[_:.-]?key|authorization|cookie|private[_:.-]?key|token|bearer)[=_:.-][A-Za-z0-9._:-]+'
        or candidate ~* '\b(sk|rk)_(live|test)_[A-Za-z0-9_-]{12,}\b'
        or candidate ~ '(AKIA|ASIA)[A-Z0-9]{16}'
        or candidate ~* '(^|[^A-Za-z0-9_])(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})([^A-Za-z0-9_]|$)'
        or candidate ~* '\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b'
        or candidate ~* 'https?://[^/@:[:space:]]+:[^/@[:space:]]+@'
-       or candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)=' then
+       or candidate ~* 'https?://[^?[:space:]]+\?[^[:space:]]*(token|signature|sig|key|credential)='
+       or candidate ~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
+       or candidate ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
+       or candidate ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M' then
       return true;
     end if;
 
@@ -115,11 +124,16 @@ begin
     -- in the next bounded pass so nested/embedded credential-like values fail
     -- closed without retaining the rejected payload.
     embedded_decoded := '';
+    select count(*) into fragment_count
+    from regexp_matches(candidate, '([A-Za-z0-9+/_-]{8,}={0,2})', 'g');
+    if fragment_count > 128 then
+      return true;
+    end if;
     for encoded in
       select (match_value)[1]
       from regexp_matches(
         candidate,
-        '([A-Za-z0-9+/_-]{12,}={0,2})',
+        '([A-Za-z0-9+/_-]{8,}={0,2})',
         'g'
       ) as match_value
       limit 128
@@ -136,6 +150,39 @@ begin
         null;
       end;
     end loop;
+    -- Whitespace is legal inside folded base64 at arbitrary widths. Scan a
+    -- bounded whitespace-free view as well as contiguous/folded fragments so
+    -- one-character folds, CRLF, tabs, and percent-wrapped folds cannot evade
+    -- the recursive classifier.
+    compacted_candidate := regexp_replace(candidate, '[[:space:]]+', '', 'g');
+    if compacted_candidate <> candidate then
+      select count(*) into fragment_count
+      from regexp_matches(compacted_candidate, '([A-Za-z0-9+/_-]{8,}={0,2})', 'g');
+      if fragment_count > 128 then
+        return true;
+      end if;
+      for encoded in
+        select (match_value)[1]
+        from regexp_matches(
+          compacted_candidate,
+          '([A-Za-z0-9+/_-]{8,}={0,2})',
+          'g'
+        ) as match_value
+        limit 128
+      loop
+        begin
+          encoded := translate(encoded, '-_', '+/');
+          encoded := encoded || repeat('=', (4 - (length(encoded) % 4)) % 4);
+          decoded := convert_from(decode(encoded, 'base64'), 'UTF8');
+          embedded_decoded := left(
+            embedded_decoded || E'\n' || decoded,
+            32768
+          );
+        exception when others then
+          null;
+        end;
+      end loop;
+    end if;
     -- Decode bounded hexadecimal fragments only when they form valid UTF-8.
     -- Ordinary digests remain harmless because random bytes fail UTF-8 or do
     -- not decode into a credential-shaped value.
@@ -172,7 +219,7 @@ begin
     loop
       begin
         compacted_encoded := regexp_replace(folded_encoded, '[[:space:]]+', '', 'g');
-        if length(compacted_encoded) >= 16 then
+        if length(compacted_encoded) >= 8 then
           compacted_encoded := translate(compacted_encoded, '-_', '+/');
           compacted_encoded := compacted_encoded
             || repeat('=', (4 - (length(compacted_encoded) % 4)) % 4);
@@ -186,6 +233,12 @@ begin
         null;
       end;
     end loop;
+    if percent_changed and embedded_decoded <> '' then
+      -- Preserve both decoding branches. A percent-encoded credential must
+      -- not disappear merely because an unrelated substring also happens to
+      -- decode as UTF-8 base64 in the same pass.
+      embedded_decoded := left(candidate || E'\n' || embedded_decoded, 65536);
+    end if;
     if embedded_decoded <> '' then
       if depth = 5 then
         return true;
@@ -1458,7 +1511,22 @@ create table public.cognitive_budget_events (
   ),
   event_type text not null check (event_type in ('reserved', 'settled', 'rejected', 'released')),
   usage jsonb not null check (
-    pg_column_size(usage) <= 8192 and public.cognitive_json_is_sanitized(usage)
+    pg_column_size(usage) <= 8192
+    and public.cognitive_json_is_sanitized(
+      usage - array['action_hash','plan_snapshot_hash','reason_hash']
+    )
+    and (
+      not usage ? 'action_hash'
+      or usage->>'action_hash' ~ '^[a-f0-9]{64}$'
+    )
+    and (
+      not usage ? 'plan_snapshot_hash'
+      or usage->>'plan_snapshot_hash' ~ '^[a-f0-9]{64}$'
+    )
+    and (
+      not usage ? 'reason_hash'
+      or usage->>'reason_hash' ~ '^[a-f0-9]{64}$'
+    )
   ),
   created_at timestamptz not null default statement_timestamp(),
   unique (budget_id, reservation_id, event_type),

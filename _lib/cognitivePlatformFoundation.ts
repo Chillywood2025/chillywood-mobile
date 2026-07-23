@@ -205,11 +205,14 @@ export const cognitiveSha256 = (text: string): string => {
 };
 const validIdentifier = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u.test(value);
-const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]{8,}$|^(?:api[_.:-]?key|password|secret|credential|service[_.:-]?role)[_.:-][A-Za-z0-9._:-]{8,}$)/u;
+const SECRET_SHAPED_IDENTIFIER = /(?:\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|^(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}$|^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$|^(?:access|refresh)[_.:-]?token[_.:-][A-Za-z0-9._:-]+$|^(?:api[_.:-]?key|password|secret|credential|service[_.:-]?role|authorization|cookie|private[_.:-]?key|token|bearer)[_.:-][A-Za-z0-9._:-]+$)/u;
 function securityIdentifierContainsSecret(value: string): boolean {
   return SECRET_SHAPED_IDENTIFIER.test(value)
     || containsSecretLikeValue(value)
-    || maybeDecodeEncoded(value).some(containsSecretLikeValue);
+    || containsPrivateIdentifier(value)
+    || maybeDecodeEncoded(value).some((candidate) =>
+      containsSecretLikeValue(candidate) || containsPrivateIdentifier(candidate)
+    );
 }
 const validSecurityIdentifier = (value: unknown): value is string =>
   validIdentifier(value) && !securityIdentifierContainsSecret(value);
@@ -689,7 +692,7 @@ const PROVIDER_SCOPE_EXPANSION = new RegExp(
   String.raw`\b(?:${PROVIDER_SCOPE_ACTION})\b[\s\S]{0,100}\b(?:${PROVIDER_SCOPE_TARGET})\b|\b(?:${PROVIDER_SCOPE_TARGET})\b[\s\S]{0,100}\b(?:(?:is|are|must|should|needs?)(?:\s+be|\s+to\s+be)?\s+)?(?:${PROVIDER_SCOPE_ACTION})\b`,
   "iu",
 );
-const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|administrator|admin|root|privileged|elevated|production|full[- ]?control|unrestricted|god\s+mode)\b[\s\S]{0,60}\b(?:access|accounts?|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?|mandatory|required|enabled)|(?:access|accounts?|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?)\b[\s\S]{0,60}\b(?:owner|super[- ]?admin|administrator|admin|root|privileged|elevated|production|full[- ]?control|unrestricted|god\s+mode|mandatory|required|enabled)|root|full[- ]?control|unrestricted\s+account|god\s+mode)\b/iu;
+const PROVIDER_PRIVILEGED_SCOPE_MENTION = /\b(?:(?:owner|super[- ]?admin|administrator|admin|root|sudo|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode)\b[\s\S]{0,60}\b(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?|mandatory|required|enabled)|(?:access|accounts?|identity|roles?|credentials?|permissions?|privileges?|rights?|service\s+accounts?)\b[\s\S]{0,60}\b(?:owner|super[- ]?admin|administrator|admin|root|sudo|privileged|elevated|production|full[- ]?control|unrestricted|break[- ]?glass|god[-_\s]+mode|mandatory|required|enabled)|(?:run|operate|execute|authenticate|switch|use|set)\b[\s\S]{0,24}\broot\b|sudo|full[- ]?control|unrestricted\s+account|break[- ]?glass\s+identity|god[-_\s]+mode|carte\s+blanche)\b/iu;
 
 const canonicalCognitiveJson = (value: unknown): string => {
   const normalize = (entry: unknown): unknown => {
@@ -732,8 +735,11 @@ export const createUntrustedToolEnvelope = (
   const serialized = typeof value.data === "string"
     ? value.data
     : String(JSON.stringify(value.data) ?? "").slice(0, 64_000);
-  const ownerReviewRequired = PROVIDER_SCOPE_EXPANSION.test(serialized)
-    || PROVIDER_PRIVILEGED_SCOPE_MENTION.test(serialized);
+  const providerScopeCandidates = [serialized, ...maybeDecodeEncoded(serialized)];
+  const ownerReviewRequired = providerScopeCandidates.some((candidate) =>
+    PROVIDER_SCOPE_EXPANSION.test(candidate)
+    || PROVIDER_PRIVILEGED_SCOPE_MENTION.test(candidate)
+  );
   const boundaryTruncated = sanitized.categories.some((category) =>
     category.startsWith("maximum_")
   );
@@ -901,9 +907,9 @@ const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----/u,
   /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9_-]{12,}\b/u,
   /\b(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}\b/u,
-  /\b(?:password|secret|service[_-]?role|refresh[_-]?token|access[_-]?token|authorization|cookie)\s*[:=]\s*\S+/iu,
+  /\b(?:password|secret|service[_-]?role|refresh[_-]?token|access[_-]?token|authorization|cookie|private[_-]?key|token|bearer)\s*[:=]\s*\S+/iu,
   /\b(?:api[_-]?key|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|google[_-]?api[_-]?key)\s*[:=]\s*\S+/iu,
-  /\b(?:api[_-]?key|service[_-]?role|access[_-]?token|refresh[_-]?token)[\s:=_-]*[A-Za-z0-9][A-Za-z0-9._-]{7,}\b/iu,
+  /\b(?:api[_-]?key|service[_-]?role|access[_-]?token|refresh[_-]?token|authorization|cookie|private[_-]?key|token|bearer)[\s.:=_-]+[A-Za-z0-9][A-Za-z0-9._-]*\b/iu,
   /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/u,
   /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/u,
   /https:\/\/[^/\s:@]+:[^/\s@]+@/iu,
@@ -914,6 +920,11 @@ export const containsPromptInjection = (value: string): boolean =>
   PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(value));
 export const containsSecretLikeValue = (value: string): boolean =>
   SECRET_PATTERNS.some((pattern) => pattern.test(value));
+const containsPrivateIdentifier = (value: string): boolean =>
+  /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u.test(value)
+  || /\+?[0-9][0-9 ()-]{7,}[0-9]/u.test(value)
+  || /\b(?:\d{1,3}\.){3}\d{1,3}\b/u.test(value)
+  || /\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{0,4}\b/u.test(value);
 
 const maybeDecodeEncoded = (value: string): string[] => {
   const candidates = new Set<string>();
@@ -937,7 +948,7 @@ const maybeDecodeEncoded = (value: string): string[] => {
       } catch {
         // Malformed percent encoding remains untrusted ordinary text.
       }
-      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{16,}={0,2}\b/gu)) {
+      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{8,}={0,2}\b/gu)) {
         try {
           const normalized = match[0].replace(/-/gu, "+").replace(/_/gu, "/");
           const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
@@ -966,6 +977,10 @@ const maybeDecodeEncoded = (value: string): string[] => {
       // Encoded content that remains recursively decodable beyond the reviewed
       // inspection bound is rejected rather than retained as ordinary text.
       candidates.add("secret=encoded_depth_exceeded");
+      break;
+    }
+    if (next.length > 128) {
+      candidates.add("secret=encoded_candidate_limit_exceeded");
       break;
     }
     frontier = next;
@@ -1010,6 +1025,10 @@ export const sanitizeCognitivePayload = (
       if (containsSecretLikeValue(bounded) || decoded.some(containsSecretLikeValue)) {
         categories.add("secret_like_value");
         return "[REDACTED_SECRET_LIKE_VALUE]";
+      }
+      if (!containsPrivateIdentifier(bounded) && decoded.some(containsPrivateIdentifier)) {
+        categories.add("private_identifier");
+        return "[REDACTED_PRIVATE_IDENTIFIER]";
       }
       if (containsPromptInjection(bounded) || decoded.some(containsPromptInjection)) categories.add("untrusted_instruction");
       const withPrivateIdentifiersRedacted = bounded
@@ -1073,9 +1092,10 @@ export const sanitizeCognitivePayload = (
     ...aggregatePieces,
   ].flatMap((candidate) => [candidate, ...maybeDecodeEncoded(candidate)]);
   if (aggregateCandidates.some(containsSecretLikeValue)) categories.add("secret_like_value");
+  if (aggregateCandidates.some(containsPrivateIdentifier)) categories.add("private_identifier");
   if (aggregateCandidates.some(containsPromptInjection)) categories.add("untrusted_instruction");
   if (totalBytes > limits.maxBytes) categories.add("maximum_total_bytes_exceeded");
-  const rejected = ["secret_like_value", "secret_key", "prototype_pollution_key", "non_plain_object", "maximum_depth_exceeded", "maximum_total_bytes_exceeded", "circular_reference"];
+  const rejected = ["secret_like_value", "secret_key", "private_identifier", "prototype_pollution_key", "non_plain_object", "maximum_depth_exceeded", "maximum_total_bytes_exceeded", "circular_reference"];
   return { accepted: !rejected.some((category) => categories.has(category)), value, categories: [...categories].sort(), totalBytes };
 };
 

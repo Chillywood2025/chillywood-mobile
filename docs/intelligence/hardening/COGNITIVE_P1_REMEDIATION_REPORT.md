@@ -124,6 +124,19 @@ passing two-session finding race. These are implementation results only; a
 fresh exact-head independent retest remains required before the final
 hardening label can be used.
 
+The eighth exact-head review of
+`565096d76d212511f0e38afcd54a27451e2d3605` again correctly prevented a
+premature close. Independent probes found short encoded credentials,
+separator aliases, candidate-frontier saturation, arbitrary whitespace-folded
+base64, encoded/split private identifiers, and a SQL percent/base64 branch-loss
+case. It also required externally binding architecture evidence to the reviewed
+commit and decoding provider escalation telemetry. The next corrective
+checkpoint includes those exact vectors. Authored evidence is now 70/70
+hardening variants, 40/40 canonical attacks, 11/11 runtime-authority tests,
+473/473 local pgTAP assertions, and passing finding concurrency. The final
+status remains in progress until a new exact-head independent retest returns
+zero P0/P1.
+
 No remediation grants production execution, scheduler, deployment, release,
 money, rights, auth/RLS, role, moderation, provider-product or self-approval
 authority.

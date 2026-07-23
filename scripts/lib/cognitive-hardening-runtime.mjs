@@ -405,7 +405,7 @@ const normalizedIp = (address) => {
   return parsed === null ? null : `v6:${parsed.toString(16).padStart(32, "0")}`;
 };
 
-const RESEARCH_CREDENTIAL_PATTERN = /\b(?:access[_-]?token|refresh[_-]?token|token|api[_-]?key|service[_-]?role|private[_-]?key|secret|password|credential|authorization|signature|sig|key)\s*[:=]/iu;
+const RESEARCH_CREDENTIAL_PATTERN = /\b(?:(?:access|refresh)\s*(?:[_-]?token|\[\s*token\s*\])|token|api[_-]?key|service[_-]?role|private[_-]?key|secret|password|credential|authorization|cookie|bearer|signature|sig)(?:[._-][A-Za-z0-9_-]{1,64})?\s*[:=]/iu;
 const decodeBoundedSecurityCandidates = (value) => {
   const candidates = new Set([String(value).slice(0, 65_536)]);
   let frontier = [...candidates];
@@ -422,7 +422,7 @@ const decodeBoundedSecurityCandidates = (value) => {
       } catch {
         throw new Error("url_encoding_invalid");
       }
-      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{16,}={0,2}\b/gu)) {
+      for (const match of candidate.matchAll(/\b[A-Za-z0-9+/_-]{8,}={0,2}\b/gu)) {
         try {
           const normalized = match[0].replaceAll("-", "+").replaceAll("_", "/");
           const bytes = Buffer.from(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="), "base64");
@@ -448,6 +448,7 @@ const decodeBoundedSecurityCandidates = (value) => {
       }
     }
     if (next.length === 0) return [...candidates];
+    if (next.length > 128) throw new Error("credential_bearing_url_forbidden");
     if (depth === 5) throw new Error("credential_bearing_url_forbidden");
     frontier = next.slice(0, 128);
   }

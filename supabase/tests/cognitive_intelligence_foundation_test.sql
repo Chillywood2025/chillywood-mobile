@@ -166,6 +166,21 @@ select ok(
   'nested percent-encoded credential-like text is classified as secret'
 );
 select ok(
+  (
+    with recursive encoded(depth, value) as (
+      select 0, 'access_token=synthetic-fixture-value'::text
+      union all
+      select depth + 1, replace(value, '%', '%25')
+      from encoded
+      where depth < 12
+    )
+    select bool_and(public.cognitive_text_has_secret(value))
+    from encoded
+    where depth between 1 and 12
+  ),
+  'percent-encoded credential text fails closed at every depth through twelve layers'
+);
+select ok(
   public.cognitive_text_has_secret('service_role.synthetic-fixture-value'),
   'dotted service-role credential-like text is classified as secret'
 );
@@ -174,6 +189,105 @@ select ok(
     encode(convert_to('api_key=synthetic-fixture-value','UTF8'),'hex')
   ),
   'hexadecimal credential-like text is classified as secret'
+);
+select ok(
+  public.cognitive_text_has_secret(
+    regexp_replace(
+      replace(encode(convert_to('token=x','UTF8'),'base64'), E'\n', ''),
+      '(.)',
+      E'\\1 ',
+      'g'
+    )
+  ),
+  'one-character whitespace-folded short base64 credential is classified as secret'
+);
+select ok(
+  (
+    with recursive encoded(depth, value) as (
+      select 0, 'access_token=synthetic-fixture-value'::text
+      union all
+      select depth + 1, replace(encode(convert_to(value,'UTF8'),'base64'), E'\n', '')
+      from encoded
+      where depth < 5
+    ),
+    separators(separator) as (
+      values (E' '::text), (E'\t'::text), (E'\r\n'::text)
+    ),
+    vectors as (
+      select regexp_replace(
+        value,
+        '(.{' || width::text || '})',
+        E'\\1' || separator,
+        'g'
+      ) as value
+      from encoded
+      cross join generate_series(1,5) width
+      cross join separators
+      where depth between 1 and 5
+    )
+    select bool_and(public.cognitive_text_has_secret(value))
+    from vectors
+  ),
+  'arbitrary legal base64 folding fails closed across separators, widths, and depths'
+);
+select ok(
+  (
+    with folded as (
+      select regexp_replace(
+        replace(encode(convert_to('access_token=synthetic-fixture-value','UTF8'),'base64'), E'\n', ''),
+        '(.{3})',
+        E'\\1 ',
+        'g'
+      ) as value
+    )
+    select public.cognitive_text_has_secret(replace(value, ' ', '%20'))
+    from folded
+  ),
+  'percent-wrapped folded base64 credential is classified as secret'
+);
+select ok(
+  public.cognitive_text_has_secret(
+    encode(convert_to('person@example.invalid','UTF8'),'base64')
+  ),
+  'base64-encoded email is classified as private data'
+);
+select ok(
+  public.cognitive_text_has_secret(
+    encode(convert_to('198.51.100.42','UTF8'),'hex')
+  ),
+  'hexadecimal private IP is classified as private data'
+);
+select ok(
+  (
+    select bool_and(public.cognitive_text_has_secret(value))
+    from (
+      values
+        (rtrim(translate(replace(encode(convert_to('person@example.invalid','UTF8'),'base64'), E'\n', ''), '+/', '-_'), '=')),
+        ('person%40example%2Einvalid'),
+        (encode(convert_to('+1 (312) 555-0100','UTF8'),'base64')),
+        (encode(convert_to('198.51.100.42','UTF8'),'base64')),
+        (encode(convert_to('person%40example%2Einvalid','UTF8'),'base64'))
+    ) variants(value)
+  ),
+  'base64url, percent, phone, IP, and mixed private identifiers fail closed'
+);
+select ok(
+  not public.cognitive_json_is_sanitized(
+    jsonb_build_object('left','person@','right','example.invalid')
+  ),
+  'split private identifiers cannot be reconstructed from sanitized JSON'
+);
+select ok(
+  not public.cognitive_json_is_sanitized(
+    jsonb_build_object(
+      'metadata',
+      jsonb_build_array(
+        'safe',
+        encode(convert_to('person@example.invalid','UTF8'),'base64')
+      )
+    )
+  ),
+  'nested encoded private identifiers cannot persist in JSON'
 );
 select ok(
   not public.cognitive_json_is_sanitized(
@@ -1156,6 +1270,33 @@ select throws_ok(
   )$$,
   'P0001','cognitive_finding_payload_rejected',
   'finding target cannot retain hexadecimal credential material'
+);
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-encoded-private-probe','executor_scope',
+    encode(convert_to('person@example.invalid','UTF8'),'base64'),
+    'p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding target cannot retain an encoded private identifier'
+);
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-arbitrary-fold-probe','executor_scope',
+    regexp_replace(
+      replace(encode(convert_to('token=x','UTF8'),'base64'), E'\n', ''),
+      '(.{2})',
+      E'\\1' || E'\r\n',
+      'g'
+    ),
+    'p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding target cannot retain arbitrarily folded short credential material'
 );
 select is(
   (select occurrence_count from public.cognitive_current_findings

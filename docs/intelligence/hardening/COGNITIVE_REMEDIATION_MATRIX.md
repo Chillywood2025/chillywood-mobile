@@ -226,3 +226,22 @@ authoring pass.
 | A7-GRAPH-001 | P2 | Hostile `GIT_DIR`/Git configuration could redirect graph evidence away from the reviewed repository. | Use the fixed system Git binary with every ambient `GIT_*` variable removed and read only exact-commit tree/blob bytes. | R-59 | fixed locally | pending |
 | C7-TOOL-001 | P2 | Tool-result truncation was caller-declared, allowing retained truncated content to be labeled complete. | Compute truncation from sanitizer boundaries, bind it into the hash, and reject boundary-truncated operational data. | R-65 | fixed locally | pending |
 | A7/C7-SCOPE-001 | P2/P3 | Root, full-control, unrestricted-account, and god-mode provider language did not always create an owner-review finding. | Treat explicit privileged-account language as scope expansion regardless of sentence grammar and discard the payload. | R-62, R-66 | fixed locally | pending |
+
+## Eighth exact-head retest findings
+
+The eighth isolated retest reviewed
+`565096d76d212511f0e38afcd54a27451e2d3605`. All three lanes found zero P0,
+but the combined result remained blocked by six P1 classes, three P2 gaps, and
+two P3 wording/attestation gaps after overlap was normalized.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A8-SHORT-ENC-001 | P1 | Credential strings shorter than the 16-character base64 candidate floor survived one-to-seven encoding layers. | Lower the reviewed UTF-8 candidate floor to eight characters and reject any still-recursive value or over-cap frontier. | R-67 | fixed locally | pending |
+| A8-ID-001 | P1 | `authorization.*`, `cookie.*`, `private_key.*`, `token.*`, and `bearer.*` operational IDs were accepted. | Expand closed secret-label separators and apply recursive secret/private classification to every operational ID. | R-64, R-69 | fixed locally | pending |
+| A8-URL-001 | P1 | `access[token]`, dotted authorization parameters, short encodings, and 140-decoy frontier saturation reached DNS. | Recognize bracket/dotted labels, decode short candidates, and reject a frontier exceeding the reviewed cap before DNS. | R-68 | fixed locally | pending |
+| B8-FOLD-001 | P1 | Legal arbitrary whitespace folding and percent-wrapped folded base64 bypassed SQL classification and the finding RPC. | Scan a bounded whitespace-free candidate view at every decoding layer and fail closed when candidate counts exceed the cap. | pgTAP folded separator/width/depth matrix and RPC denial | fixed locally | pending |
+| B8-PRIVATE-001 | P1 | Encoded email/IP/phone and split/nested private JSON persisted through current-state paths. | Re-scan every decoded SQL/TypeScript candidate for private identifiers; reject aggregate reconstructed private data and encoded operational IDs. | R-69; pgTAP encoded/split private matrix | fixed locally | pending |
+| C8-PERCENT-001 | P1 | A coincidental base64 candidate replaced the active SQL percent frontier, allowing layer-nine input to persist. | Preserve percent and base64/hex branches together and reject either branch at the depth boundary. | pgTAP percent layers 1–12 and finding RPC | fixed locally | pending |
+| A8-GRAPH-001 | P2 | A hostile `.git` pointer could make a local graph proof attest an unreviewed commit. | Require an externally supplied exact commit and compare it with repository HEAD; CI binds the value to trusted `github.sha`. | expected-commit mismatch regression; architecture guard/proof | fixed locally | pending |
+| C8-SCOPE-001 | P2/P3 | Sudo, break-glass, hyphen/underscore god-mode, and encoded provider escalation language were retained. | Run escalation detection over bounded decoded candidates and recognize explicit emergency/privileged identity language. | R-70 | fixed locally | pending |
+| B8-TYPED-DATA-001 | P3 | Stricter generic decoding initially rejected independently constrained SHA-256 and typed task UUID fields. | Keep generic metadata fail-closed while handling hashes/UUIDs only in exact typed constraints with independent format validation. | full pgTAP budget/rollback lifecycle | fixed locally | pending |

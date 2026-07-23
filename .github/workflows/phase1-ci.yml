@@ -144,6 +144,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Validate cognitive registry and architecture
+        env:
+          COGNITIVE_EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
         run: |
           npm run guard:autonomous-component-inventory
           npm run proof:autonomous-component-inventory
