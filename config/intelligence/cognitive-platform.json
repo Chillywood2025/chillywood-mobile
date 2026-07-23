@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "systemId": "product_intelligence_operator",
+  "deploymentState": "source_complete_not_deployed",
+  "activationMode": "off",
+  "scheduler": "none",
+  "supportedPlatforms": ["shared", "ios", "android", "web"],
+  "orchestrationRule": "plan_and_delegate_to_registered_domain_executors",
+  "directExecutionForbidden": [
+    "money movement",
+    "user rights",
+    "auth or RLS",
+    "moderation enforcement",
+    "public release",
+    "provider product mutation"
+  ],
+  "budgets": {
+    "maxToolCalls": 100,
+    "maxDurationSeconds": 14400,
+    "maxCostUsd": 25,
+    "capabilityExpiryRequired": true
+  },
+  "components": [
+    {
+      "id": "rachi_cognitive_orchestration",
+      "componentType": "protected_control_plane",
+      "purpose": "Plan bounded work and delegate it to registered specialized systems.",
+      "approvalLevel": 2,
+      "writes": ["intelligence_tasks", "execution_plans", "approval requests"],
+      "forbidden": ["self approval", "direct domain mutation", "production execution"]
+    },
+    {
+      "id": "research_source_broker",
+      "componentType": "registered_surface",
+      "purpose": "Normalize cited, fresh, untrusted research evidence.",
+      "approvalLevel": 1,
+      "writes": ["research_sources", "research_claims"],
+      "forbidden": ["tool execution from web text", "secrets", "private user data"]
+    },
+    {
+      "id": "intelligence_memory_service",
+      "componentType": "protected_control_plane",
+      "purpose": "Maintain deduplicated service-owned evidence, summaries, lessons, and playbooks.",
+      "approvalLevel": 2,
+      "writes": ["cognitive memory tables"],
+      "forbidden": ["direct client writes", "private-user-data model training", "immutable evidence deletion"]
+    },
+    {
+      "id": "architecture_knowledge_graph",
+      "componentType": "registered_surface",
+      "purpose": "Index repository relationships and produce deterministic impact analysis.",
+      "approvalLevel": 1,
+      "writes": ["local generated graph evidence"],
+      "forbidden": ["secret indexing", "production mutation"]
+    },
+    {
+      "id": "product_experiment_engine",
+      "componentType": "registered_surface",
+      "purpose": "Plan bounded hypotheses and experiments without activating product changes.",
+      "approvalLevel": 2,
+      "writes": ["hypotheses", "experiments", "experiment_results"],
+      "forbidden": ["price changes", "rights changes", "production feature flags"]
+    },
+    {
+      "id": "software_engineering_executor",
+      "componentType": "protected_control_plane",
+      "purpose": "Execute validated source-only plans on scoped draft-PR branches.",
+      "approvalLevel": 2,
+      "writes": ["allowlisted source paths", "draft branches", "draft PR evidence"],
+      "forbidden": ["main writes", "merge", "force push", "production deploy", "store release", "OTA"]
+    },
+    {
+      "id": "independent_evaluation_judge",
+      "componentType": "protected_control_plane",
+      "purpose": "Independently reject unsupported or unsafe completion claims.",
+      "approvalLevel": 1,
+      "writes": ["evaluation_results"],
+      "forbidden": ["source modification", "self approval", "evidence deletion"]
+    },
+    {
+      "id": "capability_and_tool_broker",
+      "componentType": "protected_control_plane",
+      "purpose": "Issue expiring, allowlisted, budgeted local capabilities.",
+      "approvalLevel": 2,
+      "writes": ["tool_invocations", "capability audit"],
+      "forbidden": ["unrestricted root credential", "expired capability use", "scope expansion"]
+    },
+    {
+      "id": "model_router_and_budget_controller",
+      "componentType": "protected_control_plane",
+      "purpose": "Route models within task, time, call, and cost budgets.",
+      "approvalLevel": 2,
+      "writes": ["model_invocations", "intelligence_budgets"],
+      "forbidden": ["budget bypass", "secret-bearing prompts", "policy mutation"]
+    }
+  ]
+}

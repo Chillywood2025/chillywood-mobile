@@ -31,6 +31,7 @@ Current approved systems:
 - `privacy_compliance_operator`
 - `support_success_operator`
 - `search_ranking_integrity_operator`
+- `product_intelligence_operator` (source-only, off, not deployed)
 - `ads_sponsor_delivery_operator` foundation-only
 
 Component ownership is machine-enforced by `config/autonomy/autonomous-components.json`. A component is exactly one of `top_level_system`, `registered_surface`, `protected_control_plane`, `non_autonomous_utility`, or `foundation_only_off`. Scheduled host units, database cron workers, scheduled workflows, Cloudflare scheduler templates, long-running queue consumers, and operator-like Edge Functions must appear in that inventory. New behavior attaches to an existing owner when its authority already exists; a technical worker is not automatically a new top-level system.
@@ -245,3 +246,10 @@ For Level 2 operations, proceed only when the emergency stop, caps, rollback, au
 Ask the owner before Level 3 operations. Ask the owner and require external confirmation before Level 4 operations.
 
 If unsure, classify the operation, explain the approval level, state the risk boundary, and choose the safer level until the classification is clear.
+# Cognitive orchestration boundary
+
+The source-only `product_intelligence_operator` may research, plan, delegate, remember sanitized evidence, and independently evaluate bounded engineering/product work. It remains off and undeployed. Existing domain operators remain the specialized executors.
+
+The cognitive layer follows the same Detect → Plan → Preflight → Dry-run → Execute → Audit → Rollback/quarantine → Report discipline, but raw model or web text is never executable. Every capability is branch/path/tool scoped, capped by calls/time/cost, expires, and has a rollback plan. The executor cannot approve itself and the evaluator cannot edit source.
+
+No cognitive component can directly execute money movement, change user rights, mutate auth/RLS or roles, enforce moderation, publish or roll back an OTA, release publicly, change a store/provider product, or activate a production scheduler. Those boundaries cannot be learned away.

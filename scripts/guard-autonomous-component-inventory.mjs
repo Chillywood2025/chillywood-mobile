@@ -26,6 +26,7 @@ const validDeploymentStates = new Set([
   "existing_protected_service",
   "non_autonomous",
   "manual_only",
+  "source_complete_not_deployed",
 ]);
 const requiredFields = [
   "id", "owningSystem", "componentType", "supportedPlatforms", "paths",
@@ -134,6 +135,12 @@ for (const required of [
   ["livekit-heartbeat-monitor", "livekit_heartbeat_monitor"],
   ["installed-qa-firebase-test-lab", "android_firebase_test_lab_installed_qa"],
   ["ops-alert-automation", "ops_alert_automation_control_plane"],
+  ["product-intelligence", "product_intelligence_operator"],
+  ["research-source-broker", "research_source_broker"],
+  ["intelligence-memory", "intelligence_memory_service"],
+  ["architecture-knowledge-graph", "architecture_knowledge_graph"],
+  ["software-engineering-executor", "software_engineering_executor"],
+  ["independent-evaluation-judge", "independent_evaluation_judge"],
 ]) {
   if (!ids.has(required[1])) fail(`required_component_missing:${required[0]}`);
 }

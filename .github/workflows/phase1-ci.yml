@@ -127,6 +127,92 @@ jobs:
           npm run guard:ios-autonomous-system-coverage
           npm run proof:ios-autonomous-system-coverage
 
+  cognitive-intelligence-contract:
+    name: Phase 1 / Cognitive Intelligence Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate cognitive registry and architecture
+        run: |
+          npm run guard:autonomous-component-inventory
+          npm run proof:autonomous-component-inventory
+          npm run guard:autonomous-systems-contract
+          npm run proof:autonomous-systems-contract
+          npm run guard:autonomous-operating-model
+          npm run guard:cognitive-intelligence-contract
+          npm run proof:cognitive-intelligence-contract
+          npm run guard:cognitive-architecture-graph
+          npm run proof:cognitive-architecture-graph
+
+  cognitive-execution-safety:
+    name: Phase 1 / Cognitive Execution Safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Test bounded execution and evaluator independence
+        run: |
+          npm run guard:cognitive-execution-safety
+          npm run proof:cognitive-execution-safety
+          npm run test:cognitive-execution-safety
+          npm run guard:android-native-runtime-compatibility
+          npm run guard:ios-config-policy
+          npm run proof:ios-config
+
+  research-and-memory-integrity:
+    name: Phase 1 / Research and Memory Integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate mocked research and memory contract
+        run: |
+          npm run guard:research-source-integrity
+          npm run proof:research-source-integrity
+          npm run test:research-source-broker
+          npm run guard:cognitive-memory-integrity
+          npm run proof:cognitive-memory-integrity
+      - name: Exercise undeployed migration locally
+        run: |
+          supabase start
+          supabase db reset
+          supabase test db supabase/tests/cognitive_intelligence_foundation_test.sql
+
   supabase-database-integration:
     name: Phase 1 / Supabase Database Integration
     runs-on: ubuntu-latest
@@ -143,7 +229,7 @@ jobs:
           version: 2.109.1
 
       - name: Verify required database suites are present
-        run: test -f supabase/tests/chilly_chat_call_transitions_test.sql && test -f supabase/tests/revenuecat_atomic_transactions_test.sql && test -f supabase/tests/ios_autonomous_systems_test.sql && test -f supabase/tests/all_platform_autonomy_test.sql
+        run: test -f supabase/tests/chilly_chat_call_transitions_test.sql && test -f supabase/tests/revenuecat_atomic_transactions_test.sql && test -f supabase/tests/ios_autonomous_systems_test.sql && test -f supabase/tests/all_platform_autonomy_test.sql && test -f supabase/tests/cognitive_intelligence_foundation_test.sql
 
       - name: Start local Supabase services
         run: supabase start
