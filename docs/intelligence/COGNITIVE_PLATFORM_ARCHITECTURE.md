@@ -32,7 +32,7 @@ Existing notification, release, observability, installed QA, LiveKit, money, sec
 
 ## Authority boundary
 
-The cognitive layer cannot directly own or execute money movement, user-rights changes, auth/RLS, owner-role changes, moderation enforcement, public release, OTA, store release, provider-product mutation, or pricing. It cannot approve itself. Future Level 3/4 work still uses the autonomous approval control plane and target operator.
+The cognitive layer cannot directly own or execute money movement, user-rights changes, auth/RLS, owner-role changes, moderation enforcement, public release, OTA, store release, provider-product mutation, or pricing. That statement is scoped to cognitive authority: pre-existing manual repository workflows and release-provider paths are outside this subsystem and remain owner/operator controlled. It cannot approve itself. Future Level 3/4 work still uses the autonomous approval control plane and target operator.
 
 ## Knowledge graph
 

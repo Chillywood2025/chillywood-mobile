@@ -875,6 +875,95 @@ select throws_ok(
   'decision/capability binding is immutable'
 );
 
+insert into public.governance_decision_manifests(
+  id,deliberation_id,evidence_packet_id,selected_proposal_id,task_id,project_id,
+  platform,environment,decision_key,source_commit,architecture_graph_digest,
+  evidence_manifest_hash,research_claim_hashes,selected_option_hash,
+  rejected_option_hashes,council_attestation_hash,votes_hash,vetoes_hash,
+  dissent_hash,stakeholder_impact_hash,risk_level,required_test_ids,
+  capability_scope_hash,budget_hash,maximum_executions,rollback_hash,
+  decision_hash,status,expires_at
+) values (
+  'a7000000-0000-0000-0000-000000000002',
+  'a2000000-0000-0000-0000-000000000001',
+  'a3000000-0000-0000-0000-000000000001',
+  'a4000000-0000-0000-0000-000000000002',
+  'a1000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'shared','ci','unverified-legacy-decision-fixture',repeat('4',40),
+  repeat('5',64),repeat('6',64),array[]::text[],repeat('7',64),
+  array[]::text[],repeat('8',64),repeat('9',64),repeat('a',64),
+  repeat('b',64),repeat('c',64),'low',array['governance-red-team'],
+  repeat('d',64),repeat('e',64),1,repeat('f',64),
+  encode(extensions.digest(convert_to(
+    'unverified-legacy-decision-fixture','UTF8'
+  ),'sha256'),'hex'),
+  'draft',transaction_timestamp()+interval '1 day'
+);
+insert into public.governance_approvals(
+  id,decision_manifest_id,task_id,project_id,platform,environment,approval_key,
+  objective_hash,requester_identity_hash,requester_user_id,current_version,
+  status,maximum_executions,executions_consumed
+) values (
+  'a7100000-0000-0000-0000-000000000001',
+  'a7000000-0000-0000-0000-000000000002',
+  'a1000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'shared','ci','unverified-legacy-approval-fixture',
+  repeat('a',64),repeat('b',64),null,0,'pending',1,0
+);
+select throws_ok(
+  $$insert into public.governance_approval_versions(
+    id,approval_id,decision_manifest_id,task_id,project_id,platform,environment,
+    version_number,prior_version_id,decision_manifest_hash,approval_scope_hash,
+    objective_hash,repository_full_name,branch_name,provider,target_scope_hash,
+    allowed_action_types,allowed_resource_hashes,maximum_risk,maximum_cost,
+    maximum_calls,maximum_bytes,maximum_executions,required_test_ids,
+    evaluator_required,rollback_hash,approved_by,approved_at,valid_from,
+    expires_at,status
+  ) values (
+    'a7200000-0000-0000-0000-000000000001',
+    'a7100000-0000-0000-0000-000000000001',
+    'a7000000-0000-0000-0000-000000000002',
+    'a1000000-0000-0000-0000-000000000001',
+    'a0000000-0000-0000-0000-000000000001',
+    'shared','ci',1,null,repeat('7',64),repeat('7',64),repeat('a',64),
+    'Chillywood2025/chillywood-mobile','codex/governance-fixture',
+    'repository',repeat('c',64),array['repository_apply_patch'],
+    array[encode(extensions.digest(convert_to(
+      'docs/intelligence/','UTF8'
+    ),'sha256'),'hex')],
+    'medium',5,2,1000,1,array['governance-red-team'],true,repeat('9',64),
+    'a5000000-0000-0000-0000-000000000001',
+    transaction_timestamp(),transaction_timestamp(),
+    transaction_timestamp()+interval '1 hour','active'
+  )$$,
+  'P0001',
+  'governance_model_independence_required',
+  'legacy active approval versions require verified model independence'
+);
+select throws_ok(
+  $$insert into public.governance_decision_capability_bindings(
+    decision_manifest_id,approval_version_id,capability_id,task_id,project_id,
+    platform,environment,decision_manifest_hash,approval_scope_hash,
+    plan_snapshot_hash,binding_hash
+  ) values (
+    'a7000000-0000-0000-0000-000000000002',
+    (select id from public.governance_approval_versions where version_number=1 limit 1),
+    'a6300000-0000-0000-0000-000000000001',
+    'a1000000-0000-0000-0000-000000000001',
+    'a0000000-0000-0000-0000-000000000001',
+    'shared','ci',repeat('7',64),repeat('7',64),
+    (select snapshot_hash from governance_fixture_snapshot),
+    encode(extensions.digest(convert_to(
+      'unverified-legacy-capability-binding','UTF8'
+    ),'sha256'),'hex')
+  )$$,
+  'P0001',
+  'governance_model_independence_required',
+  'legacy capability binding cannot attach to an unverified decision'
+);
+
 insert into public.cognitive_resource_leases(
   id,task_id,project_id,platform,environment,resource_type,resource_key,mode,
   issued_at,expires_at,heartbeat_at

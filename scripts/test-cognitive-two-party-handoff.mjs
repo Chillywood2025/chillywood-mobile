@@ -65,6 +65,11 @@ contains(
 );
 contains(
   migration,
+  "and state.revoked_at is null",
+  "post-claim execution liveness does not recheck Owner revocation",
+);
+contains(
+  migration,
   "p_transition = 'rollback_pending'",
   "rollback release RPC does not enforce explicit legal prior states",
 );
@@ -192,6 +197,16 @@ contains(
   dbTest,
   "post-claim Owner revocation blocks execution transition",
   "database suite does not prove revocation blocks claimed execution",
+);
+contains(
+  dbTest,
+  "single-use Owner revocation blocks later approved switch execution",
+  "database suite does not prove consumed single-use approvals remain revokable while in flight",
+);
+contains(
+  dbTest,
+  "single-use Owner revocation blocks completion",
+  "database suite does not prove consumed single-use revocation blocks late completion",
 );
 contains(
   dbTest,

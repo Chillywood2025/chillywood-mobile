@@ -9,6 +9,14 @@ const migration = fs.readFileSync(
   ),
   "utf8",
 );
+const twoPartyDbTest = fs.readFileSync(
+  path.join(root, "supabase/tests/cognitive_two_party_activation_handoff_test.sql"),
+  "utf8",
+);
+const governanceDbTest = fs.readFileSync(
+  path.join(root, "supabase/tests/collective_governance_control_plane_test.sql"),
+  "utf8",
+);
 
 const failures = [];
 const assert = (condition, message) => {
@@ -67,8 +75,20 @@ contains(
   "missing decision-manifest model independence enforcement trigger",
 );
 contains(
+  "create function public.governance_decision_has_verified_model_independence",
+  "missing reusable verified-decision model independence predicate",
+);
+contains(
   "governance_decision_model_independence_before_insert",
   "decision manifests are not gated by model independence at insert time",
+);
+contains(
+  "governance_approval_versions_model_independence_before_insert",
+  "legacy approval versions are not gated by model independence at insert time",
+);
+contains(
+  "governance_decision_capability_model_independence_before_insert",
+  "legacy capability bindings are not gated by model independence at insert time",
 );
 contains(
   "decision_value.model_independence_status <> 'MODEL_INDEPENDENCE_VERIFIED'",
@@ -83,6 +103,14 @@ contains(
   "independence status does not count distinct outputs",
 );
 contains(
+  "count(distinct council_role)",
+  "independence status does not count distinct council roles",
+);
+contains(
+  "distinct_roles >= p_required_count",
+  "independence status does not require distinct council roles for quorum",
+);
+contains(
   "provider_count >= 2",
   "independence status does not require cross-provider diversity",
 );
@@ -94,10 +122,23 @@ contains(
   "MODEL_INDEPENDENCE_PROVIDER_REQUIRED",
   "missing fail-closed provider-required status",
 );
+assert(
+  twoPartyDbTest.includes("duplicate council-role attestations cannot claim independent quorum"),
+  "database suite does not prove duplicate council roles fail live quorum",
+);
+assert(
+  governanceDbTest.includes("legacy active approval versions require verified model independence"),
+  "database suite does not prove legacy approval activation is gated by model independence",
+);
+assert(
+  governanceDbTest.includes("legacy capability binding cannot attach to an unverified decision"),
+  "database suite does not prove legacy capability binding is gated by model independence",
+);
 
 const independenceSatisfied = (rows, requiredCount) => {
   const distinctExecutions = new Set(rows.map((row) => row.executionIdentity)).size;
   const distinctOutputs = new Set(rows.map((row) => row.outputHash)).size;
+  const distinctRoles = new Set(rows.map((row) => row.councilRole)).size;
   const blindCount = rows.filter((row) => row.blindFirstRound).length;
   const providerCount = new Set(rows.map((row) => row.providerHash)).size;
   const hasIndependentClass = rows.some((row) =>
@@ -106,6 +147,7 @@ const independenceSatisfied = (rows, requiredCount) => {
   return rows.length >= requiredCount &&
     distinctExecutions >= requiredCount &&
     distinctOutputs >= requiredCount &&
+    distinctRoles >= requiredCount &&
     blindCount >= requiredCount &&
     hasIndependentClass &&
     providerCount >= 2;
@@ -118,6 +160,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "cross_provider",
     },
@@ -126,6 +169,7 @@ assert(
       outputHash: "2",
       providerHash: "provider-b",
       family: "family-b",
+      councilRole: "security_privacy",
       blindFirstRound: true,
       correlationClass: "cross_provider",
     },
@@ -139,6 +183,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "same_family_isolated_advisory",
     },
@@ -147,6 +192,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "same_family_isolated_advisory",
     },
@@ -160,6 +206,7 @@ assert(
       outputHash: "1",
       providerHash: "provider-a",
       family: "family-a",
+      councilRole: "product_user_experience",
       blindFirstRound: true,
       correlationClass: "same_provider_distinct_model_family",
     },
@@ -168,11 +215,35 @@ assert(
       outputHash: "2",
       providerHash: "provider-a",
       family: "family-b",
+      councilRole: "security_privacy",
       blindFirstRound: true,
       correlationClass: "same_provider_distinct_model_family",
     },
   ], 2),
   "same-provider distinct-family fixture should not satisfy independence",
+);
+assert(
+  !independenceSatisfied([
+    {
+      executionIdentity: "a",
+      outputHash: "1",
+      providerHash: "provider-a",
+      family: "family-a",
+      councilRole: "product_user_experience",
+      blindFirstRound: true,
+      correlationClass: "cross_provider",
+    },
+    {
+      executionIdentity: "b",
+      outputHash: "2",
+      providerHash: "provider-b",
+      family: "family-b",
+      councilRole: "product_user_experience",
+      blindFirstRound: true,
+      correlationClass: "cross_provider",
+    },
+  ], 2),
+  "duplicate council-role fixture should not satisfy independence",
 );
 
 if (failures.length > 0) {

@@ -761,6 +761,146 @@ select throws_ok(
 );
 reset role;
 
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  true
+);
+insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
+select
+  'single-use-revoked-after-claim',
+  (result->>'approvalVersionId')::uuid,
+  result->>'approvalHash'
+from (
+  select public.governance_record_owner_approval(
+    'b7000000-0000-0000-0000-000000000001',
+    'single-use-post-claim-revoke-test',
+    repeat('4',64),
+    repeat('6',64),
+    repeat('5',40),
+    repeat('6',64),
+    repeat('4',64),
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'none',
+    'set_switch',
+    (select switch_target_hash from two_party_target_hashes),
+    '{}'::text[],
+    '{}'::text[],
+    '{}'::text[],
+    repeat('9',64),
+    1,
+    1,
+    1024,
+    1,
+    repeat('8',64),
+    array['two-party-test'],
+    repeat('9',64),
+    repeat('3',64),
+    interval '24 hours'
+  ) result
+) approval;
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+update two_party_liveness_fixture
+set execution_id = (result->>'executionId')::uuid
+from (
+  select public.governance_claim_approved_action(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('5',64),
+    repeat('6',64),
+    (select approval_hash from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
+    repeat('8',64),repeat('9',64),repeat('3',64)
+  ) result
+) claim
+where fixture_key='single-use-revoked-after-claim';
+select public.governance_begin_approved_execution(
+  (select execution_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'preflight'
+);
+select public.governance_begin_approved_execution(
+  (select execution_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'executing'
+);
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  true
+);
+select is(
+  public.governance_revoke_owner_approval(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
+    repeat('a',64)
+  )->>'status',
+  'revoked',
+  'Owner revocation can invalidate a consumed single-use in-flight approval'
+);
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.governance_execute_approved_switch(
+    (select execution_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'cognitive_livekit_experience_sentinel_enabled',
+    true,
+    'two-party-test',
+    (select switch_target_hash from two_party_target_hashes)
+  )$$,
+  'P0001',
+  'two_party_switch_execution_rejected',
+  'single-use Owner revocation blocks later approved switch execution'
+);
+select throws_ok(
+  $$select public.governance_complete_approved_execution(
+    (select execution_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('b',64),
+    repeat('c',64)
+  )$$,
+  'P0001',
+  'two_party_execution_completion_rejected',
+  'single-use Owner revocation blocks completion'
+);
+select throws_ok(
+  $$select public.governance_release_or_quarantine_execution(
+    (select execution_id from two_party_liveness_fixture where fixture_key='single-use-revoked-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'quarantined',
+    repeat('d',64)
+  )$$,
+  'P0001',
+  'two_party_execution_release_rejected',
+  'single-use Owner revocation blocks rollback and quarantine transition'
+);
+reset role;
+
 reset role;
 insert into public.governance_owner_approval_records(
   id, decision_manifest_id, task_id, project_id, platform, environment,
@@ -1012,6 +1152,45 @@ select is(
   'MODEL_INDEPENDENCE_PROVIDER_REQUIRED',
   'same-provider distinct-model attestations cannot claim independent quorum'
 );
+select public.governance_record_model_execution_attestation(
+  'duplicate-role-assessment',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','product_user_experience',repeat('a',64),
+  'family-a','model-a',repeat('b',64),repeat('c',64),repeat('d',64),
+  repeat('e',64),true,'cross_provider',0.1,100,
+  'model_independence_attestation_service',
+  'synthetic-model-assertion-000000000000'
+);
+select public.governance_record_model_execution_attestation(
+  'duplicate-role-assessment',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','product_user_experience',repeat('b',64),
+  'family-b','model-b',repeat('c',64),repeat('d',64),repeat('e',64),
+  repeat('f',64),true,'cross_provider',0.1,100,
+  'model_independence_attestation_service',
+  'synthetic-model-assertion-000000000000'
+);
+select public.governance_record_model_execution_attestation(
+  'duplicate-role-assessment',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','product_user_experience',repeat('c',64),
+  'family-c','model-c',repeat('d',64),repeat('e',64),repeat('f',64),
+  repeat('a',64),true,'cross_provider',0.1,100,
+  'model_independence_attestation_service',
+  'synthetic-model-assertion-000000000000'
+);
+select is(
+  public.governance_model_independence_status(
+    'b1000000-0000-0000-0000-000000000001',
+    'duplicate-role-assessment',
+    3
+  )->>'status',
+  'MODEL_INDEPENDENCE_PROVIDER_REQUIRED',
+  'duplicate council-role attestations cannot claim independent quorum'
+);
 reset role;
 
 create temporary table two_party_sentinel_run(id uuid);
@@ -1041,17 +1220,71 @@ select throws_ok(
       "iceState":"connected",
       "roomConnected":true,
       "localTrackPublished":true,
+        "remoteParticipantJoined":true,
+        "remoteTrackSubscribed":true,
+        "firstAudioVideoObserved":true,
+        "connectingResolved":true
+      }'::jsonb,
+      'passed','source_only',
+    'livekit_experience_sentinel','synthetic-livekit-assertion-000000000000'
+  )$$,
+  'P0001',
+    'product_experience_sentinel_run_rejected',
+    'LiveKit sentinel cannot pass from source-only evidence'
+  );
+select throws_ok(
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','livekit_experience_sentinel','Live',
+    repeat('6',64),repeat('7',64),
+    '{
+      "tokenRequested":true,
+      "tokenReturned":true,
+      "websocketConnected":true,
+      "iceState":"connected",
+      "roomConnected":true,
+      "localTrackPublished":true,
       "remoteParticipantJoined":true,
       "remoteTrackSubscribed":true,
       "firstAudioVideoObserved":true,
       "connectingResolved":true
     }'::jsonb,
-    'passed','source_only',
+    'passed','installed_ui_observed',
     'livekit_experience_sentinel','synthetic-livekit-assertion-000000000000'
   )$$,
   'P0001',
   'product_experience_sentinel_run_rejected',
-  'LiveKit sentinel cannot pass from source-only evidence'
+  'LiveKit sentinel pass rejects missing bounded timing evidence'
+);
+select throws_ok(
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','livekit_experience_sentinel','Live',
+    repeat('6',64),repeat('7',64),
+    '{
+      "tokenRequested":true,
+      "tokenReturned":true,
+      "websocketConnected":true,
+      "iceState":"connected",
+      "roomConnected":true,
+      "localTrackPublished":true,
+      "remoteParticipantJoined":true,
+      "remoteTrackSubscribed":true,
+      "firstAudioVideoObserved":true,
+      "connectingResolved":true,
+      "tokenIssuedElapsedMs":3001,
+      "roomConnectElapsedMs":1000,
+      "uiStateResolutionElapsedMs":1000,
+      "firstRemoteMediaElapsedMs":1000
+    }'::jsonb,
+    'passed','installed_ui_observed',
+    'livekit_experience_sentinel','synthetic-livekit-assertion-000000000000'
+  )$$,
+  'P0001',
+  'product_experience_sentinel_run_rejected',
+  'LiveKit sentinel pass rejects constitution deadline violations'
 );
 insert into two_party_sentinel_run(id)
 select public.product_experience_record_sentinel_run(
@@ -1069,9 +1302,13 @@ select public.product_experience_record_sentinel_run(
     "remoteParticipantJoined":true,
     "remoteTrackSubscribed":true,
     "firstAudioVideoObserved":false,
-    "connectingResolved":false
+    "connectingResolved":false,
+    "tokenIssuedElapsedMs":2500,
+    "roomConnectElapsedMs":11000,
+    "uiStateResolutionElapsedMs":15001,
+    "firstRemoteMediaElapsedMs":20001
   }'::jsonb,
-  'finding_created','installed_ui_observed',
+    'finding_created','installed_ui_observed',
   'livekit_experience_sentinel','synthetic-livekit-assertion-000000000000'
 );
 select throws_ok(
@@ -1102,8 +1339,32 @@ select throws_ok(
     'installed_journey_sentinel','synthetic-installed-assertion-000000000000'
   )$$,
   'P0001',
+    'product_experience_sentinel_run_rejected',
+    'installed journey sentinel rejects missing expected/observed state and duration evidence'
+  );
+select throws_ok(
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','installed_journey_sentinel','Home',
+    repeat('8',64),repeat('9',64),
+    '{
+      "journeyStepCount":3,
+      "unresolvedStateCount":0,
+      "expectedState":"home_feed_visible",
+      "observedState":"home_feed_visible",
+      "maxDurationMs":999999999,
+      "elapsedDurationMs":120000,
+      "resultState":"success",
+      "screenshotEvidenceHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceRuntimeHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }'::jsonb,
+    'passed','installed_ui_observed',
+    'installed_journey_sentinel','synthetic-installed-assertion-000000000000'
+  )$$,
+  'P0001',
   'product_experience_sentinel_run_rejected',
-  'installed journey sentinel rejects missing expected/observed state and duration evidence'
+  'installed journey sentinel pass rejects caller-overstated timing limits'
 );
 select is(
   public.product_experience_record_sentinel_run(

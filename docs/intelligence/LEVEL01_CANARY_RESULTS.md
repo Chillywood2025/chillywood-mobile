@@ -4,7 +4,7 @@ Status: local source and database canaries only; production canaries not run.
 
 Local proof completed:
 
-- pgTAP: 669/669 passed.
+- pgTAP: 696/696 passed.
 - `npm run test:cognitive-two-party-handoff`: passed.
 - `npm run test:cognitive-model-independence`: passed.
 - `npm run test:cognitive-product-sentinels`: passed.

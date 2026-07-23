@@ -2,6 +2,10 @@
 
 Status: `SECURITY_HARDENING_IN_PROGRESS`
 
+This matrix describes cognitive foundation authority only. It does not assert
+that owner/operator-controlled manual build, release, or provider workflows are
+absent from the repository.
+
 | Action | Foundation authority |
 |---|---|
 | Create branch | Allowed by validated structured plan |

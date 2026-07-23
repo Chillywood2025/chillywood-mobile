@@ -47,6 +47,66 @@ alter table public.governance_decision_manifests
     or model_independence_evidence_hash ~ '^[a-f0-9]{64}$'
   );
 
+create function public.governance_decision_has_verified_model_independence(
+  p_decision_manifest_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.governance_decision_manifests decision
+    where decision.id = p_decision_manifest_id
+      and decision.status = 'finalized'
+      and decision.model_independence_status = 'MODEL_INDEPENDENCE_VERIFIED'
+      and decision.model_independence_assessment_id is not null
+      and decision.model_independence_evidence_hash is not null
+  );
+$$;
+revoke all on function public.governance_decision_has_verified_model_independence(uuid)
+  from public, anon, authenticated, service_role;
+
+create function public.governance_enforce_legacy_approval_model_independence()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_table_name = 'governance_approval_versions' then
+    if new.status <> 'active' then
+      return new;
+    end if;
+  end if;
+  if not public.governance_decision_has_verified_model_independence(
+    new.decision_manifest_id
+  ) then
+    raise exception 'governance_model_independence_required'
+      using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.governance_enforce_legacy_approval_model_independence()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists governance_approval_versions_model_independence_before_insert
+  on public.governance_approval_versions;
+create trigger governance_approval_versions_model_independence_before_insert
+  before insert on public.governance_approval_versions
+  for each row
+  execute function public.governance_enforce_legacy_approval_model_independence();
+
+drop trigger if exists governance_decision_capability_model_independence_before_insert
+  on public.governance_decision_capability_bindings;
+create trigger governance_decision_capability_model_independence_before_insert
+  before insert on public.governance_decision_capability_bindings
+  for each row
+  execute function public.governance_enforce_legacy_approval_model_independence();
+
 create table public.governance_two_party_service_assertions (
   service_identity text primary key check (
     service_identity in (
@@ -1027,11 +1087,25 @@ begin
     raise exception 'two_party_owner_revoke_rejected' using errcode = 'P0001';
   end if;
 
-  update public.governance_owner_approval_version_states
-  set state = 'revoked', revoked_at = now_at, updated_at = now_at
-  where approval_version_id = p_approval_version_id
-    and state in ('active','expired')
-  returning state into strict updated_state;
+    update public.governance_owner_approval_version_states
+    set state = 'revoked', revoked_at = now_at, updated_at = now_at
+    where approval_version_id = p_approval_version_id
+      and (
+        state in ('active','expired')
+        or (
+          state = 'consumed'
+          and exists (
+            select 1
+            from public.governance_approved_action_executions execution
+            where execution.approval_version_id = p_approval_version_id
+              and execution.state not in (
+                'completed','failed','rollback_succeeded',
+                'rollback_failed','quarantined'
+              )
+          )
+        )
+      )
+    returning state into strict updated_state;
 
   update public.governance_owner_approval_records
   set current_state = 'revoked', updated_at = now_at
@@ -2208,21 +2282,23 @@ as $$
     select
       count(*)::integer as total_count,
       count(distinct execution_identity_hash)::integer as distinct_executions,
-      count(distinct output_hash)::integer as distinct_outputs,
-      count(*) filter (where blind_first_round)::integer as blind_count,
-      count(distinct provider_identity_hash)::integer as provider_count,
-      count(distinct provider_identity_hash || ':' || model_family)::integer as family_count,
-      coalesce(bool_or(correlation_class = 'cross_provider'), false) as has_cross_provider_class
+        count(distinct output_hash)::integer as distinct_outputs,
+        count(*) filter (where blind_first_round)::integer as blind_count,
+        count(distinct council_role)::integer as distinct_roles,
+        count(distinct provider_identity_hash)::integer as provider_count,
+        count(distinct provider_identity_hash || ':' || model_family)::integer as family_count,
+        coalesce(bool_or(correlation_class = 'cross_provider'), false) as has_cross_provider_class
     from rows
   ),
   status as (
     select *,
       total_count >= p_required_count
-      and distinct_executions >= p_required_count
-      and distinct_outputs >= p_required_count
-      and blind_count >= p_required_count
-      and provider_count >= 2
-      and has_cross_provider_class as independence_satisfied
+        and distinct_executions >= p_required_count
+        and distinct_outputs >= p_required_count
+        and blind_count >= p_required_count
+        and distinct_roles >= p_required_count
+        and provider_count >= 2
+        and has_cross_provider_class as independence_satisfied
     from aggregate
   )
   select jsonb_build_object(
@@ -2230,9 +2306,10 @@ as $$
     'requiredCount', p_required_count,
     'totalCount', total_count,
     'distinctExecutions', distinct_executions,
-    'distinctOutputs', distinct_outputs,
-    'blindFirstRoundCount', blind_count,
-    'providerCount', provider_count,
+      'distinctOutputs', distinct_outputs,
+      'blindFirstRoundCount', blind_count,
+      'distinctCouncilRoles', distinct_roles,
+      'providerCount', provider_count,
     'modelFamilyCount', family_count,
     'independenceSatisfied', independence_satisfied,
     'status',
@@ -2396,25 +2473,35 @@ begin
      or (
        p_sentinel_key = 'livekit_experience_sentinel'
        and (
-         not p_metric_manifest ?& array[
-           'tokenRequested','tokenReturned','websocketConnected','iceState',
-           'roomConnected','localTrackPublished','remoteParticipantJoined',
-           'remoteTrackSubscribed','firstAudioVideoObserved','connectingResolved'
-         ]
-         or (
-           p_result_status = 'passed'
-           and not (
-             p_metric_manifest->'tokenReturned' = 'true'::jsonb
+           not p_metric_manifest ?& array[
+             'tokenRequested','tokenReturned','websocketConnected','iceState',
+             'roomConnected','localTrackPublished','remoteParticipantJoined',
+             'remoteTrackSubscribed','firstAudioVideoObserved','connectingResolved',
+             'tokenIssuedElapsedMs','roomConnectElapsedMs',
+             'uiStateResolutionElapsedMs','firstRemoteMediaElapsedMs'
+           ]
+           or jsonb_typeof(p_metric_manifest->'tokenIssuedElapsedMs') <> 'number'
+           or jsonb_typeof(p_metric_manifest->'roomConnectElapsedMs') <> 'number'
+           or jsonb_typeof(p_metric_manifest->'uiStateResolutionElapsedMs') <> 'number'
+           or jsonb_typeof(p_metric_manifest->'firstRemoteMediaElapsedMs') <> 'number'
+           or (
+             p_result_status = 'passed'
+             and not (
+               p_metric_manifest->'tokenReturned' = 'true'::jsonb
              and p_metric_manifest->'websocketConnected' = 'true'::jsonb
              and p_metric_manifest->'roomConnected' = 'true'::jsonb
              and p_metric_manifest->'localTrackPublished' = 'true'::jsonb
-             and p_metric_manifest->'remoteParticipantJoined' = 'true'::jsonb
-             and p_metric_manifest->'remoteTrackSubscribed' = 'true'::jsonb
-             and p_metric_manifest->'firstAudioVideoObserved' = 'true'::jsonb
-             and p_metric_manifest->'connectingResolved' = 'true'::jsonb
+               and p_metric_manifest->'remoteParticipantJoined' = 'true'::jsonb
+               and p_metric_manifest->'remoteTrackSubscribed' = 'true'::jsonb
+               and p_metric_manifest->'firstAudioVideoObserved' = 'true'::jsonb
+               and p_metric_manifest->'connectingResolved' = 'true'::jsonb
+               and (p_metric_manifest->>'tokenIssuedElapsedMs')::integer between 0 and 3000
+               and (p_metric_manifest->>'roomConnectElapsedMs')::integer between 0 and 12000
+               and (p_metric_manifest->>'uiStateResolutionElapsedMs')::integer between 0 and 15000
+               and (p_metric_manifest->>'firstRemoteMediaElapsedMs')::integer between 0 and 20000
+             )
            )
          )
-       )
      )
      or (
        p_sentinel_key = 'visual_product_experience_sentinel'
@@ -2437,14 +2524,16 @@ begin
          jsonb_typeof(p_metric_manifest->'journeyStepCount') <> 'number'
          or jsonb_typeof(p_metric_manifest->'unresolvedStateCount') <> 'number'
          or jsonb_typeof(p_metric_manifest->'maxDurationMs') <> 'number'
-         or jsonb_typeof(p_metric_manifest->'elapsedDurationMs') <> 'number'
-         or (p_metric_manifest->>'resultState') not in (
-           'success','loading','error','blocked','offline',
-           'permission_denied','blank','crashed'
-         )
-         or (
-           p_result_status = 'passed'
-           and (
+           or jsonb_typeof(p_metric_manifest->'elapsedDurationMs') <> 'number'
+           or (p_metric_manifest->>'resultState') not in (
+             'success','loading','error','blocked','offline',
+             'permission_denied','blank','crashed'
+           )
+           or (p_metric_manifest->>'maxDurationMs')::integer not between 1 and 10000
+           or (p_metric_manifest->>'elapsedDurationMs')::integer not between 0 and 600000
+           or (
+             p_result_status = 'passed'
+             and (
              (p_metric_manifest->>'resultState') <> 'success'
              or (p_metric_manifest->>'unresolvedStateCount')::integer <> 0
              or (p_metric_manifest->>'elapsedDurationMs')::integer >

@@ -57,6 +57,26 @@ contains(
   "LiveKit sentinel RPC does not require staged LiveKit evidence",
 );
 contains(
+  "'tokenIssuedElapsedMs','roomConnectElapsedMs'",
+  "LiveKit sentinel RPC does not require bounded timing evidence",
+);
+contains(
+  "(p_metric_manifest->>'tokenIssuedElapsedMs')::integer between 0 and 3000",
+  "LiveKit sentinel RPC does not enforce the token issuance deadline",
+);
+contains(
+  "(p_metric_manifest->>'roomConnectElapsedMs')::integer between 0 and 12000",
+  "LiveKit sentinel RPC does not enforce the room connection deadline",
+);
+contains(
+  "(p_metric_manifest->>'uiStateResolutionElapsedMs')::integer between 0 and 15000",
+  "LiveKit sentinel RPC does not enforce the installed UI resolution deadline",
+);
+contains(
+  "(p_metric_manifest->>'firstRemoteMediaElapsedMs')::integer between 0 and 20000",
+  "LiveKit sentinel RPC does not enforce the remote media deadline",
+);
+contains(
   "p_physical_proof_status <> run_value.physical_proof_status",
   "product finding RPC does not bind proof status to the referenced sentinel run",
 );
@@ -69,12 +89,28 @@ contains(
   "installed journey sentinel does not validate result state values",
 );
 contains(
+  "(p_metric_manifest->>'maxDurationMs')::integer not between 1 and 10000",
+  "installed journey sentinel does not cap caller-supplied per-step duration",
+);
+contains(
   "not run_value.evidence_manifest_hash = any(p_evidence_hashes)",
   "product finding RPC does not require the referenced sentinel evidence hash",
 );
 assert(
   dbTest.includes("installed journey sentinel rejects missing expected/observed state and duration evidence"),
   "database suite does not reject incomplete installed-journey evidence",
+);
+assert(
+  dbTest.includes("LiveKit sentinel pass rejects missing bounded timing evidence"),
+  "database suite does not reject LiveKit passes without bounded timing proof",
+);
+assert(
+  dbTest.includes("LiveKit sentinel pass rejects constitution deadline violations"),
+  "database suite does not reject LiveKit passes that violate timing deadlines",
+);
+assert(
+  dbTest.includes("installed journey sentinel pass rejects caller-overstated timing limits"),
+  "database suite does not reject installed-journey passes with overstated duration limits",
 );
 assert(
   dbTest.includes("installed journey sentinel accepts bounded expected/observed state evidence"),
