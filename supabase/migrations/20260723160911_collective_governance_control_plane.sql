@@ -1228,7 +1228,13 @@ declare
   decision_hash_value text;
   now_at timestamptz := transaction_timestamp();
   supporting_votes integer;
+  opposing_votes integer;
   stakeholder_count integer;
+  council_attestation_hash_value text;
+  votes_hash_value text;
+  vetoes_hash_value text;
+  dissent_hash_value text;
+  stakeholder_impact_hash_value text;
 begin
   perform public.governance_assert_level01_service_actor(
     array['decision_manifest_authority'],
@@ -1298,6 +1304,7 @@ begin
        and council_role.environment = assessment.environment
       join public.governance_council_assignments assignment
         on assignment.id = assessment.assignment_id
+       and assignment.council_role_id = assessment.council_role_id
        and assignment.task_id = assessment.task_id
        and assignment.project_id = assessment.project_id
        and assignment.platform = assessment.platform
@@ -1327,6 +1334,8 @@ begin
   from public.governance_votes vote
   join public.governance_council_assignments assignment
     on assignment.id = vote.assignment_id
+   and assignment.council_role_id = vote.council_role_id
+   and assignment.participant_identity_hash = vote.participant_identity_hash
    and assignment.task_id = vote.task_id
    and assignment.project_id = vote.project_id
    and assignment.platform = vote.platform
@@ -1335,7 +1344,22 @@ begin
     and vote.proposal_id = proposal_value.id
     and vote.position = 'support'
     and assignment.conflict_state = 'clear';
-  if supporting_votes < deliberation_value.required_quorum then
+  select count(*)::integer into opposing_votes
+  from public.governance_votes vote
+  join public.governance_council_assignments assignment
+    on assignment.id = vote.assignment_id
+   and assignment.council_role_id = vote.council_role_id
+   and assignment.participant_identity_hash = vote.participant_identity_hash
+   and assignment.task_id = vote.task_id
+   and assignment.project_id = vote.project_id
+   and assignment.platform = vote.platform
+   and assignment.environment = vote.environment
+  where vote.deliberation_id = deliberation_value.id
+    and vote.proposal_id = proposal_value.id
+    and vote.position = 'oppose'
+    and assignment.conflict_state = 'clear';
+  if supporting_votes < deliberation_value.required_quorum
+     or supporting_votes <= opposing_votes then
     raise exception 'governance_quorum_not_met' using errcode = 'P0001';
   end if;
   select count(distinct stakeholder_key)::integer into stakeholder_count
@@ -1345,6 +1369,85 @@ begin
   if stakeholder_count <> 16 then
     raise exception 'governance_stakeholder_review_incomplete' using errcode = 'P0001';
   end if;
+
+  select encode(extensions.digest(convert_to(coalesce(jsonb_agg(
+    jsonb_build_object(
+      'assignmentId', assignment.id,
+      'roleId', assignment.council_role_id,
+      'participantHash', assignment.participant_identity_hash,
+      'modelHash', assignment.model_identity_hash,
+      'conflictState', assignment.conflict_state,
+      'assessmentHash', assessment.assessment_hash,
+      'schemaHash', assessment.output_schema_hash,
+      'round', assessment.round_number,
+      'blind', assessment.blind_submission
+    ) order by assignment.council_role_id, assessment.round_number
+  ),'[]'::jsonb)::text,'UTF8'),'sha256'),'hex')
+  into council_attestation_hash_value
+  from public.governance_council_assignments assignment
+  left join public.governance_assessments assessment
+    on assessment.assignment_id=assignment.id
+   and assessment.council_role_id=assignment.council_role_id
+   and assessment.task_id=assignment.task_id
+   and assessment.project_id=assignment.project_id
+   and assessment.platform=assignment.platform
+   and assessment.environment=assignment.environment
+  where assignment.deliberation_id=deliberation_value.id;
+
+  select encode(extensions.digest(convert_to(coalesce(jsonb_agg(
+    jsonb_build_object(
+      'roleId',vote.council_role_id,
+      'assignmentId',vote.assignment_id,
+      'participantHash',vote.participant_identity_hash,
+      'proposalId',vote.proposal_id,
+      'position',vote.position,
+      'rationaleHash',vote.rationale_hash
+    ) order by vote.council_role_id
+  ),'[]'::jsonb)::text,'UTF8'),'sha256'),'hex')
+  into votes_hash_value
+  from public.governance_votes vote
+  where vote.deliberation_id=deliberation_value.id;
+
+  select encode(extensions.digest(convert_to(coalesce(jsonb_agg(
+    jsonb_build_object(
+      'roleId',veto.council_role_id,
+      'proposalId',veto.proposal_id,
+      'scope',veto.veto_scope,
+      'mandatory',veto.mandatory,
+      'reasonHash',veto.reason_hash,
+      'status',veto.status
+    ) order by veto.council_role_id,veto.veto_scope
+  ),'[]'::jsonb)::text,'UTF8'),'sha256'),'hex')
+  into vetoes_hash_value
+  from public.governance_vetoes veto
+  where veto.deliberation_id=deliberation_value.id;
+
+  select encode(extensions.digest(convert_to(coalesce(jsonb_agg(
+    jsonb_build_object(
+      'roleId',dissent.council_role_id,
+      'proposalId',dissent.proposal_id,
+      'dissentHash',dissent.dissent_hash,
+      'evidenceHash',dissent.evidence_hash,
+      'predictedRisk',dissent.predicted_risk,
+      'resolutionState',dissent.resolution_state
+    ) order by dissent.council_role_id,dissent.proposal_id
+  ),'[]'::jsonb)::text,'UTF8'),'sha256'),'hex')
+  into dissent_hash_value
+  from public.governance_dissent_reports dissent
+  where dissent.deliberation_id=deliberation_value.id;
+
+  select encode(extensions.digest(convert_to(coalesce(jsonb_agg(
+    jsonb_build_object(
+      'proposalId',impact.proposal_id,
+      'stakeholder',impact.stakeholder_key,
+      'impact',impact.impact_level,
+      'impactHash',impact.impact_hash,
+      'mitigationHash',impact.mitigation_hash
+    ) order by impact.proposal_id,impact.stakeholder_key
+  ),'[]'::jsonb)::text,'UTF8'),'sha256'),'hex')
+  into stakeholder_impact_hash_value
+  from public.governance_stakeholder_impacts impact
+  where impact.deliberation_id=deliberation_value.id;
 
   decision_hash_value := encode(extensions.digest(convert_to(concat_ws(
     '|',
@@ -1356,7 +1459,12 @@ begin
     p_capability_scope_hash,
     p_budget_hash,
     p_maximum_executions::text,
-    p_rollback_hash
+    p_rollback_hash,
+    council_attestation_hash_value,
+    votes_hash_value,
+    vetoes_hash_value,
+    dissent_hash_value,
+    stakeholder_impact_hash_value
   ),'UTF8'),'sha256'),'hex');
 
   insert into public.governance_decision_manifests(
@@ -1381,11 +1489,11 @@ begin
       where proposal.deliberation_id = deliberation_value.id
         and proposal.id <> proposal_value.id
     ), '{}'::text[]),
-    encode(extensions.digest(convert_to(deliberation_value.id::text || ':council','UTF8'),'sha256'),'hex'),
-    encode(extensions.digest(convert_to(deliberation_value.id::text || ':votes','UTF8'),'sha256'),'hex'),
-    encode(extensions.digest(convert_to(deliberation_value.id::text || ':vetoes','UTF8'),'sha256'),'hex'),
-    encode(extensions.digest(convert_to(deliberation_value.id::text || ':dissent','UTF8'),'sha256'),'hex'),
-    encode(extensions.digest(convert_to(deliberation_value.id::text || ':stakeholders','UTF8'),'sha256'),'hex'),
+    council_attestation_hash_value,
+    votes_hash_value,
+    vetoes_hash_value,
+    dissent_hash_value,
+    stakeholder_impact_hash_value,
     deliberation_value.risk_level, p_required_test_ids,
     p_capability_scope_hash, p_budget_hash, p_maximum_executions,
     p_rollback_hash, p_external_confirmation_required, decision_hash_value,
@@ -1859,6 +1967,7 @@ declare
   snapshot_value public.execution_plan_snapshots%rowtype;
   task_value public.intelligence_tasks%rowtype;
   tool_result_value public.cognitive_tool_result_records%rowtype;
+  consumed_event_value public.cognitive_capability_events%rowtype;
   receipt_id uuid;
   result_hash text;
   receipt_hash_value text;
@@ -1901,6 +2010,12 @@ begin
   where capability_id=capability_value.id
     and call_id=p_call_id
     and usage_sequence=p_capability_usage_sequence;
+  select * into consumed_event_value
+  from public.cognitive_capability_events event
+  where event.capability_id=capability_value.id
+    and event.call_id=p_call_id
+    and event.usage_sequence=p_capability_usage_sequence
+    and event.event_type='consumed';
 
   if capability_value.id is null
      or binding_value.id is null
@@ -1929,14 +2044,7 @@ begin
      or capability_value.project_id <> decision_value.project_id
      or capability_value.platform <> decision_value.platform
      or capability_value.environment <> decision_value.environment
-     or not exists (
-       select 1
-       from public.cognitive_capability_events event
-       where event.capability_id = capability_value.id
-         and event.call_id = p_call_id
-         and event.usage_sequence = p_capability_usage_sequence
-         and event.event_type = 'consumed'
-     )
+     or consumed_event_value.id is null
      or exists (
        select 1
        from public.governance_vetoes veto
@@ -1954,7 +2062,14 @@ begin
      or pg_column_size(p_result_envelope) > 65536
      or not public.cognitive_json_is_sanitized(p_result_envelope)
      or tool_result_value.id is null
+     or tool_result_value.before_state_hash is distinct from p_before_state_hash
+     or tool_result_value.after_state_hash is distinct from p_after_state_hash
+     or tool_result_value.diff_hash is distinct from p_diff_hash
+     or tool_result_value.final_commit is distinct from p_final_commit
+     or tool_result_value.resource_type is distinct from consumed_event_value.resource_type
+     or tool_result_value.resource_key is distinct from consumed_event_value.resource_key
      or p_actual_bytes < 0
+     or p_actual_bytes > consumed_event_value.reserved_bytes
      or p_actual_bytes > capability_value.maximum_bytes
      or coalesce((
        select sum(receipt.actual_bytes)
@@ -1970,6 +2085,7 @@ begin
      ),0) + p_actual_calls
        > capability_value.maximum_calls - capability_value.remaining_calls
      or p_actual_cost < 0
+     or p_actual_cost > consumed_event_value.reserved_cost
      or p_actual_cost > capability_value.maximum_cost
      or coalesce((
        select sum(receipt.actual_cost)
@@ -1978,7 +2094,8 @@ begin
      ),0) + p_actual_cost
        > capability_value.maximum_cost - capability_value.remaining_cost
      or p_resource_lease_ids is null
-     or cardinality(p_resource_lease_ids) > 64
+     or cardinality(p_resource_lease_ids) <> 1
+     or p_resource_lease_ids[1] is distinct from consumed_event_value.resource_lease_id
      or (
        capability_value.operation in (
          'repository_apply_patch','repository_write_new_file',
@@ -2019,6 +2136,8 @@ begin
        or lease.revoked_at is not null
        or now_at < lease.issued_at
        or now_at >= lease.expires_at
+       or lease.resource_type is distinct from consumed_event_value.resource_type
+       or lease.resource_key is distinct from consumed_event_value.resource_key
   ) then
     raise exception 'governance_postflight_lease_rejected' using errcode = 'P0001';
   end if;
@@ -2045,6 +2164,8 @@ begin
          and lease.platform=capability_value.platform
          and lease.environment=capability_value.environment
          and lease.mode='write'
+         and lease.resource_type=consumed_event_value.resource_type
+         and lease.resource_key=consumed_event_value.resource_key
          and lease.revoked_at is null
          and now_at >= lease.issued_at and now_at < lease.expires_at
      ) then
@@ -2095,6 +2216,29 @@ begin
     p_final_commit, p_rollback_state, 'incomplete', 'pending_evaluation',
     receipt_hash_value, now_at, now_at
   ) returning id into receipt_id;
+
+  insert into public.cognitive_capability_usage_settlements(
+    capability_event_id,receipt_id,task_id,project_id,platform,environment,
+    reserved_bytes,actual_bytes,released_bytes,
+    reserved_cost,actual_cost,released_cost
+  ) values (
+    consumed_event_value.id,receipt_id,capability_value.task_id,
+    capability_value.project_id,capability_value.platform,
+    capability_value.environment,consumed_event_value.reserved_bytes,
+    p_actual_bytes,consumed_event_value.reserved_bytes-p_actual_bytes,
+    consumed_event_value.reserved_cost,p_actual_cost,
+    consumed_event_value.reserved_cost-p_actual_cost
+  );
+  update public.cognitive_capabilities
+  set remaining_bytes=least(
+        maximum_bytes,
+        remaining_bytes+consumed_event_value.reserved_bytes-p_actual_bytes
+      ),
+      remaining_cost=least(
+        maximum_cost,
+        remaining_cost+consumed_event_value.reserved_cost-p_actual_cost
+      )
+  where id=capability_value.id;
 
   foreach lease_id_value in array p_resource_lease_ids loop
     insert into public.governance_execution_receipt_leases(

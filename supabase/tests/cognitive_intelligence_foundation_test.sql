@@ -1316,15 +1316,30 @@ select is(
   2,
   'rejected ungoverned calls consume no capability budget'
 );
+insert into public.cognitive_resource_leases(
+  id,task_id,project_id,platform,environment,resource_type,resource_key,mode,
+  issued_at,expires_at,heartbeat_at
+) values (
+  '45000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  'ios','ci','path',
+  'path:docs/intelligence/COGNITIVE_SECURITY_MODEL.md','write',
+  transaction_timestamp(),transaction_timestamp()+interval '30 minutes',
+  transaction_timestamp()
+);
 select throws_ok(
   $$insert into public.cognitive_capability_events(
     capability_id,task_id,project_id,platform,environment,call_id,
-    usage_sequence,event_type,request_hash
+    usage_sequence,event_type,request_hash,resource_lease_id,
+    resource_type,resource_key,reserved_bytes,reserved_cost
   ) values (
     '43000000-0000-0000-0000-000000000001',
     '20000000-0000-0000-0000-000000000002',
     '10000000-0000-0000-0000-000000000001',
-    'android','ci','cross-task-event',2,'consumed',repeat('6',64)
+    'android','ci','cross-task-event',2,'consumed',repeat('6',64),
+    '45000000-0000-0000-0000-000000000001',
+    'path','path:docs/intelligence/COGNITIVE_SECURITY_MODEL.md',100,0
   )$$,
   '23503',
   null,

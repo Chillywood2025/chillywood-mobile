@@ -8,7 +8,6 @@ const SCOPE = Object.freeze({
   projectId: "00000000-0000-4000-8000-000000000001",
   taskId: "00000000-0000-4000-8000-000000000002",
 });
-const OWNER_ID = "00000000-0000-4000-8000-000000000003";
 const SERVICE_IDENTITY_TOKEN = "synthetic-governance-control-test-token";
 const BROKER_RECEIPT_ID = "00000000-0000-4000-8000-000000000004";
 const CLAIM_ID = "00000000-0000-4000-8000-000000000005";
@@ -64,7 +63,6 @@ Deno.test("owner JSON cannot mint a research transport receipt or passed claim",
       return { data: null, error: null };
     }),
     SCOPE,
-    OWNER_ID,
     SERVICE_IDENTITY_TOKEN,
     {
       action: "record_public_research_canary",
@@ -104,7 +102,6 @@ Deno.test("arbitrary research record IDs cannot pass without DB verification", a
         : null,
     })),
     SCOPE,
-    OWNER_ID,
     SERVICE_IDENTITY_TOKEN,
     {
       action: "record_public_research_canary",
@@ -134,7 +131,6 @@ Deno.test("trusted record acceptance requires the dedicated governance service i
       return { data: null, error: null };
     }),
     SCOPE,
-    OWNER_ID,
     "",
     {
       action: "record_public_research_canary",
@@ -160,7 +156,6 @@ Deno.test("topic-only owner JSON cannot synthesize collective deliberation", asy
       return { data: null, error: null };
     }),
     SCOPE,
-    OWNER_ID,
     SERVICE_IDENTITY_TOKEN,
     {
       action: "record_collective_deliberation_canary",
@@ -201,7 +196,6 @@ Deno.test("mismatched DB deliberation records cannot be accepted", async () => {
       error: null,
     })),
     SCOPE,
-    OWNER_ID,
     SERVICE_IDENTITY_TOKEN,
     {
       action: "record_collective_deliberation_canary",
@@ -226,7 +220,6 @@ Deno.test("owner JSON cannot self-attest a credential with supplied hashes", asy
       return { data: null, error: null };
     }),
     SCOPE,
-    OWNER_ID,
     SERVICE_IDENTITY_TOKEN,
     {
       action: "record_level01_credential_attestation",
@@ -257,14 +250,14 @@ Deno.test("matching immutable DB records are the only accepted research path", a
         "trusted acceptance RPC name",
       );
       assertEquals(
-        parameters.p_owner_actor_id,
-        OWNER_ID,
-        "owner identity must bind the verification request",
+        "p_owner_actor_id" in parameters,
+        false,
+        "the database must bind Owner authorization to auth.uid()",
       );
       assertEquals(
-        parameters.p_service_identity,
-        "owner_approval_lifecycle_service",
-        "governance control must use only its dedicated service identity",
+        "p_service_identity" in parameters,
+        false,
+        "the database derives service identity from the verified token",
       );
       assertEquals(
         parameters.p_service_identity_token,
@@ -286,7 +279,6 @@ Deno.test("matching immutable DB records are the only accepted research path", a
       };
     }),
     SCOPE,
-    OWNER_ID,
     SERVICE_IDENTITY_TOKEN,
     {
       action: "record_public_research_canary",
@@ -319,7 +311,6 @@ Deno.test("matching immutable DB records are the only configured credential path
       error: null,
     })),
     SCOPE,
-    OWNER_ID,
     SERVICE_IDENTITY_TOKEN,
     {
       action: "record_level01_credential_attestation",

@@ -1161,6 +1161,19 @@ begin
      or receipt.approval_version_id <> approval_version.id
      or receipt.branch_name <> p_branch_name
      or receipt.receipt_state <> 'pending_evaluation'
+     or not exists (
+       select 1
+       from public.cognitive_execution_receipt_verdicts verdict
+       where verdict.receipt_id=receipt.id
+         and verdict.evaluation_id=evaluation.id
+         and verdict.task_id=p_task_id
+         and verdict.project_id=p_project_id
+         and verdict.platform=p_platform
+         and verdict.environment=p_environment
+         and verdict.verdict='pass'
+         and verdict.evaluated_commit=receipt.final_commit
+         and verdict.evaluated_diff_hash=receipt.diff_hash
+     )
      or receipt.final_commit is null
      or exists (
        select 1
@@ -1238,6 +1251,7 @@ declare
   result_id uuid;
   now_at timestamptz := transaction_timestamp();
   audit_hash text;
+  schedule_count integer;
 begin
   if p_platform <> 'shared'
      or p_environment <> 'production'
@@ -1357,7 +1371,6 @@ begin
            and schedule.project_id = p_project_id
            and schedule.platform = p_platform
            and schedule.environment = p_environment
-           and schedule.enabled
        ) <> 5
      ) then
     raise exception 'cognitive_schedule_canaries_required' using errcode = 'P0001';
@@ -1386,6 +1399,20 @@ begin
   returning id into result_id;
   if result_id is null then
     raise exception 'governance_switch_scope_rejected' using errcode = 'P0001';
+  end if;
+
+  if p_switch_key='cognitive_scheduled_level01_enabled' then
+    update public.cognitive_level01_schedule_definitions schedule
+    set enabled=p_enabled,updated_at=now_at
+    where schedule.task_id=p_task_id
+      and schedule.project_id=p_project_id
+      and schedule.platform=p_platform
+      and schedule.environment=p_environment;
+    get diagnostics schedule_count=row_count;
+    if schedule_count<>5 then
+      raise exception 'cognitive_level01_schedule_scope_rejected'
+        using errcode='P0001';
+    end if;
   end if;
 
   if not p_enabled and p_switch_key in (
@@ -1419,6 +1446,12 @@ begin
           else array['cognitive_scheduled_level01_enabled']
         end
       );
+    update public.cognitive_level01_schedule_definitions schedule
+    set enabled=false,updated_at=now_at
+    where schedule.task_id=p_task_id
+      and schedule.project_id=p_project_id
+      and schedule.platform=p_platform
+      and schedule.environment=p_environment;
   end if;
 
   audit_hash := encode(extensions.digest(
@@ -1933,7 +1966,6 @@ create function public.cognitive_accept_verified_research_canary(
   p_broker_receipt_id uuid,
   p_research_claim_id uuid,
   p_evaluator_record_id uuid,
-  p_owner_actor_id uuid,
   p_service_identity_token text
 )
 returns jsonb
@@ -1949,12 +1981,10 @@ declare source_commit_value text;
 declare evidence_hash_value text;
 declare now_at timestamptz := transaction_timestamp();
 begin
+  perform public.governance_assert_exact_owner();
   perform public.cognitive_verify_service_token(
     'governance_canary_scheduler',p_service_identity_token
   );
-  if not public.governance_exact_owner(p_owner_actor_id) then
-    raise exception 'exact_owner_membership_required' using errcode='42501';
-  end if;
   select * into claim from public.research_claims
   where id=p_research_claim_id and task_id=p_task_id and project_id=p_project_id
     and platform=p_platform and environment=p_environment;
@@ -2025,12 +2055,12 @@ end;
 $$;
 revoke all on function public.cognitive_accept_verified_research_canary(
   uuid,uuid,public.cognitive_platform,public.cognitive_environment,
-  text,uuid,uuid,uuid,uuid,text
-) from public,anon,authenticated;
+  text,uuid,uuid,uuid,text
+) from public,anon,authenticated,service_role;
 grant execute on function public.cognitive_accept_verified_research_canary(
   uuid,uuid,public.cognitive_platform,public.cognitive_environment,
-  text,uuid,uuid,uuid,uuid,text
-) to service_role;
+  text,uuid,uuid,uuid,text
+) to authenticated;
 
 create function public.cognitive_accept_verified_deliberation_canary(
   p_task_id uuid,
@@ -2041,7 +2071,6 @@ create function public.cognitive_accept_verified_deliberation_canary(
   p_deliberation_id uuid,
   p_decision_manifest_id uuid,
   p_evaluator_record_id uuid,
-  p_owner_actor_id uuid,
   p_service_identity_token text
 )
 returns jsonb
@@ -2056,12 +2085,10 @@ declare canary_id uuid;
 declare evidence_hash_value text;
 declare now_at timestamptz := transaction_timestamp();
 begin
+  perform public.governance_assert_exact_owner();
   perform public.cognitive_verify_service_token(
     'governance_canary_scheduler',p_service_identity_token
   );
-  if not public.governance_exact_owner(p_owner_actor_id) then
-    raise exception 'exact_owner_membership_required' using errcode='42501';
-  end if;
   select * into deliberation from public.governance_deliberations
   where id=p_deliberation_id and task_id=p_task_id and project_id=p_project_id
     and platform=p_platform and environment=p_environment;
@@ -2096,6 +2123,17 @@ begin
          and vote.position='support'
      )<deliberation.required_quorum
      or (
+       select count(*) from public.governance_votes vote
+       where vote.deliberation_id=deliberation.id
+         and vote.proposal_id=decision.selected_proposal_id
+         and vote.position='support'
+     )<=(
+       select count(*) from public.governance_votes vote
+       where vote.deliberation_id=deliberation.id
+         and vote.proposal_id=decision.selected_proposal_id
+         and vote.position='oppose'
+     )
+     or (
        select count(distinct impact.stakeholder_key)
        from public.governance_stakeholder_impacts impact
        where impact.deliberation_id=deliberation.id
@@ -2129,12 +2167,12 @@ end;
 $$;
 revoke all on function public.cognitive_accept_verified_deliberation_canary(
   uuid,uuid,public.cognitive_platform,public.cognitive_environment,
-  text,uuid,uuid,uuid,uuid,text
-) from public,anon,authenticated;
+  text,uuid,uuid,uuid,text
+) from public,anon,authenticated,service_role;
 grant execute on function public.cognitive_accept_verified_deliberation_canary(
   uuid,uuid,public.cognitive_platform,public.cognitive_environment,
-  text,uuid,uuid,uuid,uuid,text
-) to service_role;
+  text,uuid,uuid,uuid,text
+) to authenticated;
 
 create function public.cognitive_accept_verified_credential_attestation(
   p_task_id uuid,
@@ -2145,7 +2183,6 @@ create function public.cognitive_accept_verified_credential_attestation(
   p_provider_attestation_id uuid,
   p_provider_readback_id uuid,
   p_evaluator_record_id uuid,
-  p_owner_actor_id uuid,
   p_service_identity_token text
 )
 returns jsonb
@@ -2159,12 +2196,10 @@ declare evaluator public.cognitive_subject_evaluations%rowtype;
 declare result_id uuid;
 declare now_at timestamptz := transaction_timestamp();
 begin
+  perform public.governance_assert_exact_owner();
   perform public.cognitive_verify_service_token(
     'governance_canary_scheduler',p_service_identity_token
   );
-  if not public.governance_exact_owner(p_owner_actor_id) then
-    raise exception 'exact_owner_membership_required' using errcode='42501';
-  end if;
   select * into attestation from public.cognitive_provider_credential_receipts
   where id=p_provider_attestation_id and task_id=p_task_id
     and project_id=p_project_id and platform=p_platform
@@ -2208,12 +2243,12 @@ end;
 $$;
 revoke all on function public.cognitive_accept_verified_credential_attestation(
   uuid,uuid,public.cognitive_platform,public.cognitive_environment,
-  text,uuid,uuid,uuid,uuid,text
-) from public,anon,authenticated;
+  text,uuid,uuid,uuid,text
+) from public,anon,authenticated,service_role;
 grant execute on function public.cognitive_accept_verified_credential_attestation(
   uuid,uuid,public.cognitive_platform,public.cognitive_environment,
-  text,uuid,uuid,uuid,uuid,text
-) to service_role;
+  text,uuid,uuid,uuid,text
+) to authenticated;
 
 -- Supersede the caller-authored JSON/hash canary paths.  They remain in source
 -- only for migration-history readability and are not executable by any runtime

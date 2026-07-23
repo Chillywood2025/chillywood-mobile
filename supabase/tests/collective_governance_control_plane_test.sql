@@ -11,7 +11,7 @@ from unnest(array[
   'governance_constitution_service','decision_manifest_authority',
   'owner_approval_lifecycle_service','capability_and_tool_broker',
   'cognitive_postflight_authority','independent_evaluation_judge',
-  'cognitive_control_plane'
+  'cognitive_control_plane','deliberation_orchestrator'
 ]) identity
 on conflict (service_identity) do update
 set credential_hash=excluded.credential_hash,status='active',
@@ -151,6 +151,49 @@ select ok(
   ),
   'authenticated callers cannot finalize a decision'
 );
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.cognitive_record_public_research_claim(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,numeric,timestamptz,text,uuid[],text,text)',
+    'EXECUTE'
+  ),
+  'the superseded broker self-pass research helper is unavailable'
+);
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.cognitive_record_subject_evaluation(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,uuid,public.cognitive_evaluation_status,text)',
+    'EXECUTE'
+  ),
+  'the status-only subject evaluator is unavailable'
+);
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.cognitive_derive_subject_evaluation(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,uuid,text)',
+    'EXECUTE'
+  ),
+  'the evidence-derived independent subject evaluator is available'
+);
+select is(
+  (
+    select count(*)::integer
+    from pg_constraint
+    where conrelid='public.cognitive_trusted_evidence_manifests'::regclass
+      and confrelid='public.cognitive_verified_external_evidence'::regclass
+      and contype='f'
+  ),
+  1,
+  'physical or provider evidence must reference the verified evidence registry'
+);
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.cognitive_accept_verified_research_canary(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,uuid,uuid,uuid,text)',
+    'EXECUTE'
+  ),
+  'a service process cannot nominate an Owner to accept a research canary'
+);
 select is(
   (
     select count(*)::integer
@@ -158,10 +201,10 @@ select is(
     where pronamespace = 'public'::regnamespace
       and proname like 'governance_%'
       and prosecdef
-      and proconfig @> array['search_path=""']
+      and not (proconfig @> array['search_path=""'])
   ),
-  14,
-  'all fourteen governance security-definer RPCs have an empty fixed search_path'
+  0,
+  'all governance security-definer RPCs have an empty fixed search_path'
 );
 
 insert into public.cognitive_projects(id,repository_full_name)
@@ -224,6 +267,103 @@ select throws_ok(
   'governance_constitution_exists',
   'constitution bootstrap is replay protected'
 );
+
+savepoint controlled_deliberation_path;
+insert into public.governance_constitution_activation_events(
+  constitution_version_id,task_id,project_id,platform,environment,event_type,
+  owner_identity_id,independent_review_hash,rollback_hash,
+  activation_not_before
+)
+select
+  version.id,version.task_id,version.project_id,version.platform,
+  version.environment,'activated',
+  'a5000000-0000-0000-0000-000000000001',repeat('f',64),
+  version.rollback_hash,transaction_timestamp()-interval '1 minute'
+from public.governance_constitution_versions version
+where version.id=(select version_id from governance_fixture_constitution);
+update public.governance_constitutions
+set status='active'
+where task_id='a1000000-0000-0000-0000-000000000001';
+create temporary table governance_controlled_deliberation(id uuid);
+insert into governance_controlled_deliberation(id)
+select public.governance_open_deliberation(
+  'a1000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'shared','ci',(select version_id from governance_fixture_constitution),
+  'controlled-deliberation-fixture',repeat('1',64),repeat('2',40),
+  repeat('3',64),'low',5,transaction_timestamp()+interval '2 days',
+  'synthetic-test-credential-for-deliberation_orchestrator-0000000000000000'
+);
+create temporary table governance_controlled_packet(id uuid);
+insert into governance_controlled_packet(id)
+select public.governance_record_evidence_packet(
+  (select id from governance_controlled_deliberation),
+  repeat('4',64),repeat('2',40),repeat('3',64),array[]::text[],
+  repeat('5',64),'{"providerState":"unknown"}'::jsonb,'owner',
+  repeat('6',64),repeat('7',64),transaction_timestamp()+interval '1 day',
+  'synthetic-test-credential-for-deliberation_orchestrator-0000000000000000'
+);
+create temporary table governance_controlled_assignments(
+  id uuid,
+  role_key text
+);
+insert into governance_controlled_assignments(id,role_key)
+select public.governance_assign_council_member(
+  (select id from governance_controlled_deliberation),role.id,
+  encode(extensions.digest(convert_to(
+    role.role_key || ':controlled-participant','UTF8'
+  ),'sha256'),'hex'),
+  encode(extensions.digest(convert_to(
+    role.role_key || ':controlled-model','UTF8'
+  ),'sha256'),'hex'),
+  'synthetic-test-credential-for-deliberation_orchestrator-0000000000000000'
+),role.role_key
+from public.governance_council_roles role
+where role.role_key in (
+  'product_user_experience','security_privacy',
+  'reliability_release','adversarial_red_team'
+);
+create temporary table governance_controlled_assessments(id uuid);
+insert into governance_controlled_assessments(id)
+select public.governance_record_blind_assessment(
+  assignment.id,(select id from governance_controlled_packet),1,
+  encode(extensions.digest(convert_to(
+    assignment.role_key || ':controlled-assessment','UTF8'
+  ),'sha256'),'hex'),
+  repeat('8',64),0.75,'medium',
+  'synthetic-test-credential-for-deliberation_orchestrator-0000000000000000'
+)
+from governance_controlled_assignments assignment;
+create temporary table governance_controlled_proposals(id uuid);
+insert into governance_controlled_proposals(id)
+select public.governance_record_proposal(
+  (select id from governance_controlled_deliberation),option_kind,
+  encode(extensions.digest(convert_to(
+    option_kind || ':controlled-proposal','UTF8'
+  ),'sha256'),'hex'),
+  50,10,'full',1,'source',repeat('9',64),
+  'synthetic-test-credential-for-deliberation_orchestrator-0000000000000000'
+)
+from unnest(array[
+  'no_action','minimal_repair','moderate_improvement'
+]) option_kind;
+select is(
+  public.governance_advance_deliberation_to_voting(
+    (select id from governance_controlled_deliberation),repeat('a',64),
+    'synthetic-test-credential-for-deliberation_orchestrator-0000000000000000'
+  ),
+  true,
+  'token-authenticated controlled ingestion opens a complete voting round'
+);
+select is(
+  (
+    select status::text from public.governance_deliberations
+    where id=(select id from governance_controlled_deliberation)
+  ),
+  'voting',
+  'the controlled deliberation state machine reaches voting only after evidence, criticism, and alternatives'
+);
+rollback to savepoint controlled_deliberation_path;
 
 set local role authenticated;
 select is(
@@ -297,6 +437,30 @@ where role.role_key in (
   'reliability_release',
   'adversarial_red_team'
 );
+select throws_ok(
+  $$insert into public.governance_assessments(
+    deliberation_id,evidence_packet_id,council_role_id,assignment_id,
+    task_id,project_id,platform,environment,assessment_hash,
+    output_schema_hash,confidence,uncertainty
+  )
+  select
+    assignment.deliberation_id,
+    'a3000000-0000-0000-0000-000000000001',
+    mismatched_role.id,
+    assignment.id,
+    assignment.task_id,assignment.project_id,assignment.platform,
+    assignment.environment,repeat('1',64),repeat('2',64),0.5,'medium'
+  from public.governance_council_assignments assignment
+  join public.governance_council_roles assigned_role
+    on assigned_role.id=assignment.council_role_id
+  join public.governance_council_roles mismatched_role
+    on mismatched_role.role_key='security_privacy'
+   and mismatched_role.task_id=assignment.task_id
+  where assigned_role.role_key='product_user_experience'$$,
+  '23503',
+  null,
+  'an assessment cannot mix a valid assignment with another council role'
+);
 insert into public.governance_assessments(
   deliberation_id,evidence_packet_id,council_role_id,assignment_id,
   task_id,project_id,platform,environment,assessment_hash,
@@ -343,6 +507,30 @@ insert into public.governance_proposals(
   'a1000000-0000-0000-0000-000000000001',
   'a0000000-0000-0000-0000-000000000001',
   'shared','ci','moderate_improvement',repeat('e',64),80,20,'bounded',2,'source',repeat('f',64)
+);
+select throws_ok(
+  $$insert into public.governance_votes(
+    deliberation_id,proposal_id,council_role_id,assignment_id,
+    task_id,project_id,platform,environment,participant_identity_hash,
+    position,rationale_hash
+  )
+  select
+    assignment.deliberation_id,
+    'a4000000-0000-0000-0000-000000000002',
+    assignment.council_role_id,assignment.id,assignment.task_id,
+    assignment.project_id,assignment.platform,assignment.environment,
+    other.participant_identity_hash,'support',repeat('3',64)
+  from public.governance_council_assignments assignment
+  join public.governance_council_roles role
+    on role.id=assignment.council_role_id
+  join public.governance_council_assignments other
+    on other.deliberation_id=assignment.deliberation_id
+   and other.id<>assignment.id
+  where role.role_key='product_user_experience'
+  limit 1$$,
+  '23503',
+  null,
+  'a vote cannot borrow another assignment participant identity'
 );
 insert into public.governance_votes(
   deliberation_id,proposal_id,council_role_id,assignment_id,
@@ -396,6 +584,24 @@ from unnest(array[
   'infrastructure_cost','provider_cost','legal_compliance'
 ]) stakeholder_key;
 
+select throws_ok(
+  $$insert into public.governance_vetoes(
+    deliberation_id,proposal_id,council_role_id,task_id,project_id,
+    platform,environment,veto_scope,reason_hash
+  )
+  select
+    'a2000000-0000-0000-0000-000000000001',
+    'a4000000-0000-0000-0000-000000000002',
+    role.id,
+    'a1000000-0000-0000-0000-000000000001',
+    'a0000000-0000-0000-0000-000000000001',
+    'shared','ci','security',repeat('1',64)
+  from public.governance_council_roles role
+  where role.role_key='product_user_experience'$$,
+  'P0001',
+  'governance_role_authority_rejected',
+  'a role cannot exercise a mandatory veto outside its constitution scope'
+);
 insert into public.governance_vetoes(
   deliberation_id,proposal_id,council_role_id,task_id,project_id,
   platform,environment,veto_scope,reason_hash
@@ -627,29 +833,6 @@ select throws_ok(
   'decision/capability binding is immutable'
 );
 
-insert into public.cognitive_capability_events(
-  capability_id,task_id,project_id,platform,environment,call_id,
-  usage_sequence,event_type,request_hash
-) values (
-  'a6300000-0000-0000-0000-000000000001',
-  'a1000000-0000-0000-0000-000000000001',
-  'a0000000-0000-0000-0000-000000000001',
-  'shared','ci','governance-call-fixture',1,'consumed',repeat('4',64)
-);
-insert into public.cognitive_tool_result_records(
-  capability_id,task_id,project_id,platform,environment,call_id,
-  usage_sequence,result_envelope,result_envelope_hash,result_source
-) values (
-  'a6300000-0000-0000-0000-000000000001',
-  'a1000000-0000-0000-0000-000000000001',
-  'a0000000-0000-0000-0000-000000000001',
-  'shared','ci','governance-call-fixture',1,
-  '{"status":"ok","source":"fixture"}'::jsonb,
-  encode(extensions.digest(
-    convert_to('{"source": "fixture", "status": "ok"}','UTF8'),'sha256'
-  ),'hex'),
-  'tool_broker'
-);
 insert into public.cognitive_resource_leases(
   id,task_id,project_id,platform,environment,resource_type,resource_key,mode,
   issued_at,expires_at,heartbeat_at
@@ -661,11 +844,66 @@ insert into public.cognitive_resource_leases(
   transaction_timestamp(),transaction_timestamp()+interval '30 minutes',
   transaction_timestamp()
 );
+insert into public.cognitive_capability_events(
+  capability_id,task_id,project_id,platform,environment,call_id,
+  usage_sequence,event_type,request_hash,resource_lease_id,
+  resource_type,resource_key,reserved_bytes,reserved_cost
+) values (
+  'a6300000-0000-0000-0000-000000000001',
+  'a1000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'shared','ci','governance-call-fixture',1,'consumed',repeat('4',64),
+  'a6400000-0000-0000-0000-000000000001',
+  'path','path:docs/intelligence',500,1
+);
+insert into public.cognitive_tool_result_records(
+  capability_id,task_id,project_id,platform,environment,call_id,
+  usage_sequence,result_envelope,result_envelope_hash,result_source,
+  before_state_hash,after_state_hash,diff_hash,final_commit,
+  resource_type,resource_key
+) values (
+  'a6300000-0000-0000-0000-000000000001',
+  'a1000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'shared','ci','governance-call-fixture',1,
+  '{"status":"ok","source":"fixture"}'::jsonb,
+  encode(extensions.digest(
+    convert_to('{"source": "fixture", "status": "ok"}','UTF8'),'sha256'
+  ),'hex'),
+  'tool_broker',repeat('5',64),repeat('6',64),repeat('e',64),
+  repeat('a',40),'path','path:docs/intelligence'
+);
 insert into public.autonomous_system_emergency_states(system_id,status,reason)
 values ('product_intelligence_operator','active','local governance fixture')
 on conflict (system_id) do update
 set status='active',reason='local governance fixture';
 select pg_temp.set_governance_test_actor('cognitive_postflight_authority');
+select throws_ok(
+  $$select public.governance_record_execution_receipt(
+    'a6300000-0000-0000-0000-000000000001',
+    'governance-call-fixture',1,repeat('5',64),repeat('7',64),
+    '{"status":"ok","source":"fixture"}'::jsonb,
+    400,1,1,array['a6400000-0000-0000-0000-000000000001'::uuid],
+    repeat('e',64),repeat('a',40),'not_required',
+    'cognitive_postflight_authority'
+  )$$,
+  'P0001',
+  'governance_postflight_rejected',
+  'postflight rejects caller state hashes that differ from the broker receipt'
+);
+select throws_ok(
+  $$select public.governance_record_execution_receipt(
+    'a6300000-0000-0000-0000-000000000001',
+    'governance-call-fixture',1,repeat('5',64),repeat('6',64),
+    '{"status":"ok","source":"fixture"}'::jsonb,
+    400,1,1,array['a6500000-0000-0000-0000-000000000001'::uuid],
+    repeat('e',64),repeat('a',40),'not_required',
+    'cognitive_postflight_authority'
+  )$$,
+  'P0001',
+  'governance_postflight_rejected',
+  'postflight rejects a lease that was not consumed by the exact capability call'
+);
 select lives_ok(
   $$select public.governance_record_execution_receipt(
     'a6300000-0000-0000-0000-000000000001',
@@ -691,6 +929,14 @@ select is(
   (select count(*)::integer from public.governance_execution_receipt_leases),
   1,
   'receipt lease is relationally bound to the same task scope'
+);
+select ok(
+  (
+    select reserved_bytes=500 and actual_bytes=400 and released_bytes=100
+      and reserved_cost=1 and actual_cost=1 and released_cost=0
+    from public.cognitive_capability_usage_settlements
+  ),
+  'postflight settles actual usage once and releases the unused reservation'
 );
 select is(
   (
@@ -746,6 +992,17 @@ select is(
   ),
   'pass',
   'independent evaluator result is stored separately from the immutable receipt'
+);
+select ok(
+  (
+    select verdict.verdict='pass'
+      and verdict.evaluated_commit=receipt.final_commit
+      and verdict.evaluated_diff_hash=receipt.diff_hash
+    from public.cognitive_execution_receipt_verdicts verdict
+    join public.cognitive_execution_receipts receipt
+      on receipt.id=verdict.receipt_id
+  ),
+  'the evaluator creates an immutable receipt verdict bound to commit and diff'
 );
 select throws_ok(
   $$delete from public.governance_execution_evaluations$$,

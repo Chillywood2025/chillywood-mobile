@@ -1643,18 +1643,36 @@ begin
   if p_next = 'completed' and not exists (
     select 1
     from public.execution_runs run
-    join public.evaluation_results evaluation
-      on evaluation.execution_run_id=run.id
-      and evaluation.task_id=run.task_id and evaluation.project_id=run.project_id
-      and evaluation.platform=run.platform and evaluation.environment=run.environment
+    join public.cognitive_execution_receipts receipt
+      on receipt.plan_snapshot_id=run.snapshot_id
+      and receipt.task_id=run.task_id and receipt.project_id=run.project_id
+      and receipt.platform=run.platform and receipt.environment=run.environment
+      and receipt.plan_snapshot_hash=run.snapshot_hash
+      and receipt.final_commit=run.final_commit
+    join public.governance_execution_evaluations evaluation
+      on evaluation.receipt_id=receipt.id
+      and evaluation.task_id=receipt.task_id
+      and evaluation.project_id=receipt.project_id
+      and evaluation.platform=receipt.platform
+      and evaluation.environment=receipt.environment
+    join public.cognitive_execution_receipt_verdicts verdict
+      on verdict.receipt_id=receipt.id
+      and verdict.evaluation_id=evaluation.id
+      and verdict.task_id=receipt.task_id
+      and verdict.project_id=receipt.project_id
+      and verdict.platform=receipt.platform
+      and verdict.environment=receipt.environment
     where run.task_id=p_task_id and run.project_id=p_project_id
       and run.platform=p_platform and run.environment=p_environment
       and run.status='completed' and run.snapshot_hash=p_snapshot_hash
       and evaluation.evaluation_status='pass'
-      and evaluation.completion_supported=true
       and evaluation.owner_approval_granted=false
-      and evaluation.evaluator_write_allowed=false
-      and evaluation.snapshot_hash=p_snapshot_hash
+      and evaluation.source_write_allowed=false
+      and evaluation.evaluated_commit=run.final_commit
+      and evaluation.evaluated_diff_hash=receipt.diff_hash
+      and verdict.verdict='pass'
+      and verdict.evaluated_commit=run.final_commit
+      and verdict.evaluated_diff_hash=receipt.diff_hash
   ) then
     raise exception 'cognitive_transition_passing_evaluation_required' using errcode = 'P0001';
   end if;
@@ -2778,15 +2796,34 @@ begin
       )
     ) then raise exception 'execution_run_trusted_evidence_required' using errcode='P0001'; end if;
     if p_next='completed' and not exists (
-      select 1 from public.evaluation_results evaluation
-      where evaluation.execution_run_id=p_entity_id
-        and evaluation.task_id=p_task_id and evaluation.project_id=p_project_id
-        and evaluation.platform=p_platform and evaluation.environment=p_environment
-        and evaluation.snapshot_hash=p_snapshot_hash
+      select 1
+      from public.cognitive_execution_receipts receipt
+      join public.governance_execution_evaluations evaluation
+        on evaluation.receipt_id=receipt.id
+        and evaluation.task_id=receipt.task_id
+        and evaluation.project_id=receipt.project_id
+        and evaluation.platform=receipt.platform
+        and evaluation.environment=receipt.environment
+      join public.cognitive_execution_receipt_verdicts verdict
+        on verdict.receipt_id=receipt.id
+        and verdict.evaluation_id=evaluation.id
+        and verdict.task_id=receipt.task_id
+        and verdict.project_id=receipt.project_id
+        and verdict.platform=receipt.platform
+        and verdict.environment=receipt.environment
+      where receipt.plan_snapshot_id=run_value.snapshot_id
+        and receipt.task_id=p_task_id and receipt.project_id=p_project_id
+        and receipt.platform=p_platform and receipt.environment=p_environment
+        and receipt.plan_snapshot_hash=p_snapshot_hash
+        and receipt.final_commit=run_value.final_commit
         and evaluation.evaluation_status='pass'
-        and evaluation.completion_supported=true
         and evaluation.owner_approval_granted=false
-        and evaluation.evaluator_write_allowed=false
+        and evaluation.source_write_allowed=false
+        and evaluation.evaluated_commit=run_value.final_commit
+        and evaluation.evaluated_diff_hash=receipt.diff_hash
+        and verdict.verdict='pass'
+        and verdict.evaluated_commit=run_value.final_commit
+        and verdict.evaluated_diff_hash=receipt.diff_hash
     ) then raise exception 'execution_run_passing_evaluation_required' using errcode='P0001'; end if;
   end if;
 

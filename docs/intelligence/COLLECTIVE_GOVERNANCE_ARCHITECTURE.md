@@ -17,6 +17,19 @@ The governance layer will provide:
 - exact capability, budget, lease, receipt, and evaluator binding;
 - bounded Level 0/1 canary controls.
 
+The controlled database path now opens a deliberation against an activated
+constitution version, records one immutable evidence packet, assigns exact
+role/participant identities, accepts blind assessments and bounded alternatives,
+then advances to voting only when the four mandatory critics and three required
+alternatives exist. Votes, vetoes, dissent, and stakeholder impacts are accepted
+only in the voting state through token-bound service RPCs.
+
+The exact decision hash includes normalized assignment/assessment, vote, veto,
+dissent, and stakeholder records. Support must meet quorum and exceed opposition.
+Capability consumption and postflight bind the same decision, approval, snapshot,
+call, broker result, reservation, and resource lease. Evaluation creates a
+separate immutable trusted-evidence verdict.
+
 It grants no authority to merge, release, deploy application changes, move
 money, alter user rights, weaken authentication or RLS, change roles, enforce
 moderation, mutate provider products, or approve itself.

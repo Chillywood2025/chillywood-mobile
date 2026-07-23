@@ -8,6 +8,11 @@ council identities, votes, vetoes, dissent, stakeholder impacts, risk, tests,
 capability scope, budget, execution count, rollback, expiration, and owner approval.
 The service computes the canonical hash; callers cannot supply a trusted hash.
 
+The content hashes are derived from the normalized relational rows, including the
+role assignment and participant identity for assessments and votes. Placeholder
+labels are not evidence. A minority cannot finalize merely by reaching a numeric
+quorum: supporting votes must also exceed opposing votes.
+
 A manifest is created only after risk-based quorum and all mandatory critic roles.
 Any unresolved mandatory veto prevents creation. Changing the source commit,
 evidence, graph, scope, budget, tests, rollback, or selected option creates a new

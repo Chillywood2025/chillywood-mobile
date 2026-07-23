@@ -1,6 +1,6 @@
 # Cognitive P2/P3 Predeployment Closeout Matrix
 
-Status: `collective_governance_source_complete_not_deployed`
+Status: `collective_governance_source_complete_awaiting_exact_head_review`
 
 This matrix closes the bounded technical P2/P3 controls requested after the frozen
 hardening review. It does not authorize deployment. The exact frozen Collective
@@ -9,8 +9,8 @@ Governance head and its separate review-only PR are the deployment evidence.
 | Control | Implemented boundary | Regression evidence | Predeployment state |
 | --- | --- | --- | --- |
 | Canonical sanitizer and fragments | One JSON policy drives TypeScript and Deno; the fixed corpus is mirrored in pgTAP. Bounded seeded properties use a fixed seed and hard CPU/input caps. | `guard:cognitive-policy-parity`; `cognitive_security_policy_parity_test.sql` | closed |
-| Postflight result binding | Receipt binds task/project/repository/branch/platform/environment, capability usage, call, decision, approval, snapshot, before/after state, internally hashed tool result, actual usage, leases, diff, commit, rollback, and evaluation state. | collective governance source tests; governance pgTAP | closed |
-| Independent evaluation | A distinct service actor records an immutable evaluation against the actual receipt, final commit, diff, evidence hash, and every decision-required test. Missing tests cannot pass. | governance pgTAP | closed |
+| Postflight result binding | Receipt binds task/project/repository/branch/platform/environment, capability usage, call, decision, approval, snapshot, before/after state, internally hashed credential-isolated broker result, actual usage, the exact consumed lease, diff, commit, rollback, and evaluation input. Caller-authored state hashes and substituted leases fail closed. | collective governance source tests; governance pgTAP | corrected; independent retest required |
+| Independent evaluation | A distinct service actor derives an immutable verdict from the actual receipt, trusted runner manifest, final commit, diff, and every decision-required test. Status-only evaluation and arbitrary physical/provider proof are not executable runtime paths. | governance pgTAP | corrected; independent retest required |
 | Budget edge cases | Reservations expire, orphaned reservations recover, settlement is single-use, cancellation is final, and negative/overflow usage fails closed. | `test:cognitive-collective-governance`; inherited budget suite | closed |
 | Hierarchical leases | Repository/branch/path/provider scopes use deterministic conflict rules, opaque ownership, expiration, heartbeat, revocation, and cancellation cleanup. | collective governance and canonical adversarial suites | closed |
 | Rollback authority | Successful rollback revokes prior write capability, releases leases, stops children, invalidates the plan, and requires a new plan/capability; failure quarantines and escalates. | collective governance and canonical adversarial suites | closed |
@@ -24,8 +24,10 @@ Governance head and its separate review-only PR are the deployment evidence.
 | Admin truth | Source fallback is labeled source-only. Live readback is backend-authoritative. Only exact Owner can attempt Level 0/1 changes; backend gates remain authoritative. | TypeScript, route/access guards, Edge check | closed |
 | Service identity | Runtime governance mutations require a separately stored opaque service token whose hash is bound to one closed service identity, purpose, validity window, and revocation state. A caller cannot select an identity label. | governance Edge tests; foundation/governance/Level 0/1 pgTAP | closed pending independent retest |
 | Canary evidence | Research, deliberation, and credential canary acceptance require existing relational evidence, a trusted execution receipt, and an independent evaluator pass. Request JSON cannot create a passing canary or credential attestation. | governance Edge tests; Level 0/1 pgTAP | closed pending independent retest |
-| Governance derivation | Council roles, votes, vetoes, dissents, and evaluation hashes use closed schemas. Quorum requires support to exceed opposition, mandatory vetoes fail closed, and authorization recomputes/binds the evaluation to the exact manifest. | governance source and adversarial tests | closed pending independent retest |
-| Capability postflight | Consumption rechecks the finalized decision, active approval, veto state, execution count, expiry, task state, cancellation, quarantine, deadman, exact stored result, budget, and scoped write leases. | foundation/governance pgTAP | closed pending independent retest |
+| Governance derivation | Assessments and votes are relationally bound to the exact role assignment and participant. Veto/dissent authority is constitution-scoped. Canonical hashes cover the actual assignments, assessments, votes, vetoes, dissent, and stakeholder rows. Quorum requires support to exceed opposition. | governance source, 33-case governance adversarial suite, governance pgTAP | corrected; independent retest required |
+| Capability postflight | Consumption binds an exact task/project/repository/branch/platform/environment/operation/path lease and reservation. Postflight accepts only the same call/lease/broker result, records a single immutable settlement, refunds unused byte/cost reservation, and creates an evaluator-bound verdict. | foundation/governance pgTAP | corrected; independent retest required |
+| Controlled evidence producers | Research source/claim, council assignment/assessment/proposal/vote/veto/dissent/stakeholder, provider-readback, and external-evidence writes use closed service-token RPCs. Superseded broker self-pass and status-only evaluator RPCs are revoked from every runtime role. | governance pgTAP; Edge boundary tests | corrected; independent retest required |
+| Owner acceptance | Research, deliberation, credential, and switch acceptance bind Owner authorization to `auth.uid()` through the immutable Owner identity boundary. A service process cannot nominate an Owner UUID. | governance/Level 0/1 pgTAP; Edge boundary tests | corrected; independent retest required |
 
 Remaining non-technical decisions:
 

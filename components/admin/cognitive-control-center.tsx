@@ -58,6 +58,22 @@ export const CognitiveControlCenterFoundation = () => {
       ["Emergency stop", liveStatus.emergencyStop ? "Active" : "Inactive"],
       ["Pending approvals", String(liveStatus.pendingApprovalCount)],
       ["Decision manifests", String(liveStatus.latestDecisionCount)],
+      [
+        "Public research",
+        liveStatus.switches.cognitive_research_enabled ? "Enabled" : "Off",
+      ],
+      [
+        "Collective deliberation",
+        liveStatus.switches.cognitive_collective_deliberation_enabled
+          ? "Enabled"
+          : "Off",
+      ],
+      [
+        "Draft-PR executor",
+        liveStatus.switches.cognitive_draft_pr_executor_enabled
+          ? "Enabled"
+          : "Off",
+      ],
       ["Level 2 repairs", "Off"],
       ["User-derived memory", "Off"],
     ] as const;
@@ -79,8 +95,18 @@ export const CognitiveControlCenterFoundation = () => {
         Access contract: Owner, Super Admin, or a scoped Admin with {REQUIRED_READ_PERMISSION}. The future backend remains authoritative.
       </Text>
       <View style={styles.pillRow}>
-        <View style={styles.pill}><Text style={styles.pillText}>OFF</Text></View>
-        <View style={styles.pill}><Text style={styles.pillText}>NOT DEPLOYED</Text></View>
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>
+            {readbackState === "live" ? "LIVE READBACK" : "OFF"}
+          </Text>
+        </View>
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>
+            {readbackState === "live"
+              ? liveStatus?.deploymentState.toUpperCase()
+              : "NOT DEPLOYED"}
+          </Text>
+        </View>
         <View style={styles.pill}><Text style={styles.pillText}>NO SELF-APPROVAL</Text></View>
       </View>
     </View>
@@ -105,7 +131,10 @@ export const CognitiveControlCenterFoundation = () => {
 
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>Future controls</Text>
-      <Text style={styles.muted}>Visible for contract review only. Every control is disabled and has no RPC or production capability.</Text>
+      <Text style={styles.muted}>
+        Visible for contract review only. Change controls remain disabled in this
+        client; live state is read from the backend and cannot be changed here.
+      </Text>
       <View style={styles.controlGrid}>
         {COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION.disabledControls.map((label) => (
           <TouchableOpacity

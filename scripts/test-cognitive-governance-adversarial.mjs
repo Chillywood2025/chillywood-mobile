@@ -562,7 +562,40 @@ await attack("GOV-32-unknown-provider-permission-fails-closed", () => {
   assert.equal(result.ownerReviewRequired, true);
   assert.equal(result.executable, false);
 });
+await attack("GOV-33-minority-support-cannot-finalize", () => {
+  const allRoles = [
+    "product_user_experience",
+    "architecture_engineering",
+    "security_privacy",
+    "reliability_release",
+    "safety_trust",
+    "accessibility_inclusion",
+    "money_commercial_policy",
+    "research_futures",
+    "adversarial_red_team",
+  ];
+  const minorityVotes = allRoles.map((role, index) => ({
+    voteId: `minority-${index}`,
+    decisionId: "decision-minority",
+    role,
+    voterIdentityHash: hash(`minority-identity:${role}`),
+    optionId: "minimal-repair",
+    vote: index < 3 ? "support" : "oppose",
+    assessmentHash: hash(`minority-assessment:${role}`),
+    createdAt: now.toISOString(),
+  }));
+  const result = governance.evaluateGovernanceDecision({
+    decisionId: "decision-minority",
+    optionId: "minimal-repair",
+    risk: "low",
+    votes: minorityVotes,
+    vetoes: [],
+    dissents: [],
+  });
+  assert.equal(result.state, "quorum_not_met");
+  assert.ok(result.blockers.includes("support_must_exceed_opposition"));
+});
 
-assert.equal(results.length, 32);
+assert.equal(results.length, 33);
 fs.rmSync(temporaryRoot, { recursive: true, force: true });
-console.log("Cognitive Governance adversarial suite: 32/32 passed");
+console.log("Cognitive Governance adversarial suite: 33/33 passed");

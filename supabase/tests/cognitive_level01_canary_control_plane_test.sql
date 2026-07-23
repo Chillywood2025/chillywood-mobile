@@ -393,9 +393,9 @@ select throws_ok(
     (select task_id from level01_fixture),
     (select project_id from level01_fixture)
   ),
-  'P0001',
-  'cognitive_level01_executor_canaries_required',
-  'schedules remain fail closed until all three draft-PR canaries pass'
+  '42501',
+  'permission denied for function cognitive_set_level01_schedule_state',
+  'superseded non-atomic schedule RPC is not executable'
 );
 reset role;
 

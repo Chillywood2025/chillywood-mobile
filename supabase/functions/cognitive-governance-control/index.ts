@@ -19,7 +19,6 @@ const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const PLATFORM = "shared";
 const ENVIRONMENT = "production";
 const POLICY_VERSION = "collective-governance-v1";
-const SERVICE_IDENTITY = "owner_approval_lifecycle_service";
 const SECURITY_POLICY = securityPolicyJson as CanonicalSecurityPolicy;
 const RESEARCH_KEYS = Object.freeze([
   "platform_policy_research",
@@ -293,21 +292,6 @@ const setSwitch = async (
   ) {
     return json(400, { error: "level01_switch_scope_rejected" });
   }
-  if (switchKey === "cognitive_scheduled_level01_enabled" && enabled) {
-    const scheduleResult = await actorClient.rpc(
-      "cognitive_set_level01_schedule_state",
-      {
-        p_enabled: true,
-        p_environment: ENVIRONMENT,
-        p_platform: PLATFORM,
-        p_project_id: scope.projectId,
-        p_task_id: scope.taskId,
-      },
-    );
-    if (scheduleResult.error) {
-      return json(409, { error: "level01_schedule_prerequisites_rejected" });
-    }
-  }
   const result = await actorClient.rpc("governance_set_level01_switch", {
     p_enabled: enabled,
     p_environment: ENVIRONMENT,
@@ -320,28 +304,12 @@ const setSwitch = async (
   if (result.error) {
     return json(409, { error: "level01_switch_change_rejected" });
   }
-  if (switchKey === "cognitive_scheduled_level01_enabled" && !enabled) {
-    const scheduleResult = await actorClient.rpc(
-      "cognitive_set_level01_schedule_state",
-      {
-        p_enabled: false,
-        p_environment: ENVIRONMENT,
-        p_platform: PLATFORM,
-        p_project_id: scope.projectId,
-        p_task_id: scope.taskId,
-      },
-    );
-    if (scheduleResult.error) {
-      return json(409, { error: "level01_schedule_disable_rejected" });
-    }
-  }
   return json(200, { enabled, ok: true, switchKey });
 };
 
 export const recordResearchFromTrustedRecords = async (
-  adminClient: SupabaseClientLike,
+  actorClient: SupabaseClientLike,
   scope: { projectId: string; taskId: string },
-  ownerActorId: string,
   serviceIdentityToken: string,
   payload: Record<string, unknown>,
 ): Promise<Response> => {
@@ -365,18 +333,16 @@ export const recordResearchFromTrustedRecords = async (
   ) {
     return json(400, { error: "trusted_research_records_required" });
   }
-  const result = await adminClient.rpc(
+  const result = await actorClient.rpc(
     "cognitive_accept_verified_research_canary",
     {
       p_broker_receipt_id: brokerReceiptId,
       p_canary_key: canaryKey,
       p_environment: ENVIRONMENT,
       p_evaluator_record_id: evaluatorRecordId,
-      p_owner_actor_id: ownerActorId,
       p_platform: PLATFORM,
       p_project_id: scope.projectId,
       p_research_claim_id: researchClaimId,
-      p_service_identity: SERVICE_IDENTITY,
       p_service_identity_token: serviceIdentityToken,
       p_task_id: scope.taskId,
     },
@@ -405,9 +371,8 @@ export const recordResearchFromTrustedRecords = async (
 };
 
 export const recordDeliberationFromTrustedRecords = async (
-  adminClient: SupabaseClientLike,
+  actorClient: SupabaseClientLike,
   scope: { projectId: string; taskId: string },
-  ownerActorId: string,
   serviceIdentityToken: string,
   payload: Record<string, unknown>,
 ): Promise<Response> => {
@@ -431,7 +396,7 @@ export const recordDeliberationFromTrustedRecords = async (
   ) {
     return json(400, { error: "trusted_deliberation_records_required" });
   }
-  const result = await adminClient.rpc(
+  const result = await actorClient.rpc(
     "cognitive_accept_verified_deliberation_canary",
     {
       p_canary_key: canaryKey,
@@ -439,10 +404,8 @@ export const recordDeliberationFromTrustedRecords = async (
       p_deliberation_id: deliberationId,
       p_environment: ENVIRONMENT,
       p_evaluator_record_id: evaluatorRecordId,
-      p_owner_actor_id: ownerActorId,
       p_platform: PLATFORM,
       p_project_id: scope.projectId,
-      p_service_identity: SERVICE_IDENTITY,
       p_service_identity_token: serviceIdentityToken,
       p_task_id: scope.taskId,
     },
@@ -471,9 +434,8 @@ export const recordDeliberationFromTrustedRecords = async (
 };
 
 export const recordCredentialFromTrustedRecords = async (
-  adminClient: SupabaseClientLike,
+  actorClient: SupabaseClientLike,
   scope: { projectId: string; taskId: string },
-  ownerActorId: string,
   serviceIdentityToken: string,
   payload: Record<string, unknown>,
 ): Promise<Response> => {
@@ -497,18 +459,16 @@ export const recordCredentialFromTrustedRecords = async (
   ) {
     return json(400, { error: "trusted_credential_records_required" });
   }
-  const result = await adminClient.rpc(
+  const result = await actorClient.rpc(
     "cognitive_accept_verified_credential_attestation",
     {
       p_credential_kind: credentialKind,
       p_environment: ENVIRONMENT,
       p_evaluator_record_id: evaluatorRecordId,
-      p_owner_actor_id: ownerActorId,
       p_platform: PLATFORM,
       p_project_id: scope.projectId,
       p_provider_attestation_id: providerAttestationId,
       p_provider_readback_id: providerReadbackId,
-      p_service_identity: SERVICE_IDENTITY,
       p_service_identity_token: serviceIdentityToken,
       p_task_id: scope.taskId,
     },
@@ -574,9 +534,8 @@ export const handler = async (request: Request): Promise<Response> => {
         "COGNITIVE_GOVERNANCE_CONTROL_IDENTITY_TOKEN",
       );
       return await recordResearchFromTrustedRecords(
-        adminClient,
+        actorClient,
         scope,
-        actor.id,
         governanceControlIdentityToken,
         payload,
       );
@@ -586,9 +545,8 @@ export const handler = async (request: Request): Promise<Response> => {
         "COGNITIVE_GOVERNANCE_CONTROL_IDENTITY_TOKEN",
       );
       return await recordDeliberationFromTrustedRecords(
-        adminClient,
+        actorClient,
         scope,
-        actor.id,
         governanceControlIdentityToken,
         payload,
       );
@@ -598,9 +556,8 @@ export const handler = async (request: Request): Promise<Response> => {
         "COGNITIVE_GOVERNANCE_CONTROL_IDENTITY_TOKEN",
       );
       return await recordCredentialFromTrustedRecords(
-        adminClient,
+        actorClient,
         scope,
-        actor.id,
         governanceControlIdentityToken,
         payload,
       );
