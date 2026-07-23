@@ -84,6 +84,8 @@ const workerAssertion = (): string =>
 const switchTargetHash = (switchKey: string, enabled: boolean, policyVersion: string) =>
   sha256Hex(`set_switch|${switchKey}|${enabled ? "true" : "false"}|${policyVersion}`);
 
+const BEGIN_STATES = new Set(["preflight", "executing", "evaluating"]);
+
 const claimApprovedAction = async (
   serviceClient: SupabaseClientLike,
   payload: Record<string, unknown>,
@@ -119,9 +121,13 @@ const beginApprovedExecution = async (
   serviceClient: SupabaseClientLike,
   payload: Record<string, unknown>,
 ): Promise<Response> => {
+  const nextState = toText(payload.nextState);
+  if (!BEGIN_STATES.has(nextState)) {
+    return json(409, { error: "approved_execution_transition_rejected" });
+  }
   const result = await serviceClient.rpc("governance_begin_approved_execution", {
     p_execution_id: toText(payload.executionId),
-    p_next_state: toText(payload.nextState),
+    p_next_state: nextState,
     p_service_identity: SERVICE_IDENTITY,
     p_worker_assertion: workerAssertion(),
   });

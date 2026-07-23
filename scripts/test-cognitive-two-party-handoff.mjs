@@ -103,6 +103,16 @@ contains(
 );
 contains(
   migration,
+  "(execution_value.state = 'postflight' and p_next_state = 'evaluating')",
+  "generic begin transitions do not preserve postflight to evaluating handoff",
+);
+notContains(
+  migration,
+  "execution_value.state = 'executing' and p_next_state <> 'postflight'",
+  "generic begin transition still allows executing to postflight",
+);
+contains(
+  migration,
   "and state.revoked_at is null",
   "post-claim execution liveness does not recheck Owner revocation",
 );
@@ -196,6 +206,11 @@ contains(
   "switchTargetHash",
   "worker endpoint does not derive switch target hash from exact switch payload",
 );
+contains(
+  workerEndpoint,
+  'const BEGIN_STATES = new Set(["preflight", "executing", "evaluating"])',
+  "worker endpoint permits postflight as a generic begin transition",
+);
 notContains(
   workerEndpoint,
   "governance_record_owner_approval",
@@ -255,6 +270,11 @@ contains(
   dbTest,
   "post-claim Owner revocation blocks execution transition",
   "database suite does not prove revocation blocks claimed execution",
+);
+contains(
+  dbTest,
+  "generic begin cannot enter postflight before the approved operation-specific executor runs",
+  "database suite does not prove postflight requires the operation-specific executor",
 );
 contains(
   dbTest,

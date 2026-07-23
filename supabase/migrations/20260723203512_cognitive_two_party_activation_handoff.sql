@@ -1846,19 +1846,11 @@ begin
   );
   if execution_value.service_identity <> service_identity_value
      or not public.governance_lock_approved_execution_liveness(p_execution_id)
-     or (
-       execution_value.state = 'claimed' and p_next_state <> 'preflight'
-     )
-     or (
-       execution_value.state = 'preflight' and p_next_state <> 'executing'
-     )
-     or (
-       execution_value.state = 'executing' and p_next_state <> 'postflight'
-     )
-     or (
-       execution_value.state = 'postflight' and p_next_state <> 'evaluating'
-     )
-     or p_next_state not in ('preflight','executing','postflight','evaluating') then
+     or not (
+       (execution_value.state = 'claimed' and p_next_state = 'preflight')
+       or (execution_value.state = 'preflight' and p_next_state = 'executing')
+       or (execution_value.state = 'postflight' and p_next_state = 'evaluating')
+     ) then
     raise exception 'two_party_execution_transition_rejected'
       using errcode = 'P0001';
   end if;

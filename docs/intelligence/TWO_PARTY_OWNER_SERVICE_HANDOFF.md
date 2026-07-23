@@ -39,13 +39,18 @@ rollback/quarantine path through `governance_lock_approved_execution_cleanup_sco
 That path exists only to preserve evidence, revoke/settle authority, and
 escalate failed cleanup; it cannot execute a new approved action.
 
+Generic worker state transitions cannot enter `postflight`. `postflight` is set
+only by operation-specific execution RPCs, such as
+`governance_execute_approved_switch`, after the exact approved side effect and
+target-resource hash are verified.
+
 `product_intelligence_operator` is now included in the Owner approval request
 allowlist and in the emergency-stop database gate used by the two-party worker
 for product-quality activation tasks.
 
 Local proof:
 
-- `supabase test db`: 714/714 pgTAP tests passed.
+- `supabase test db`: 715/715 pgTAP tests passed.
 - `npm run test:cognitive-two-party-handoff`: passed.
 - `deno check` passed for both new Edge Functions and the modified governance
   control function.

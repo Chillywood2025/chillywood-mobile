@@ -517,6 +517,17 @@ select is(
   'service worker enters executing after preflight'
 );
 select throws_ok(
+  $$select public.governance_begin_approved_execution(
+    (select execution_id from two_party_fixture where execution_id is not null),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'postflight'
+  )$$,
+  'P0001',
+  'two_party_execution_transition_rejected',
+  'generic begin cannot enter postflight before the approved operation-specific executor runs'
+);
+select throws_ok(
   $$select public.governance_release_or_quarantine_execution(
     (select execution_id from two_party_fixture where execution_id is not null),
     'cognitive_approved_action_worker',

@@ -17,7 +17,7 @@ The pgTAP suite exercises the same SQL privileges used by PostgREST roles:
 
 Current local result:
 
-`supabase test db` passed 714 tests across 12 files, including
+`supabase test db` passed 715 tests across 12 files, including
 `supabase/tests/cognitive_two_party_activation_handoff_test.sql`.
 
 Remaining gap before deployment:
