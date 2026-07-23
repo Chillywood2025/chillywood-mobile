@@ -428,6 +428,30 @@ export class CognitiveCapabilityLedger {
     this.capabilities.set(capability.capabilityId, { ...capability, pathScopes: [...capability.pathScopes] });
   }
 
+  authorizeComposedRequest(
+    capabilityId: string,
+    request: Pick<CognitiveActionRequest, "action" | "repositoryFullName" | "branch" | "paths">,
+    use: CognitiveCapabilityUse,
+  ): readonly string[] {
+    const capability = this.capabilities.get(capabilityId);
+    if (!capability) return ["capability_missing"];
+    const blockers: string[] = [];
+    if (request.repositoryFullName !== capability.repositoryFullName
+      || request.repositoryFullName !== use.repositoryFullName) blockers.push("request_repository_scope_mismatch");
+    if (request.branch !== capability.branch || request.branch !== use.branch) blockers.push("request_branch_scope_mismatch");
+    if (request.action !== capability.operation || request.action !== use.operation) blockers.push("request_operation_scope_mismatch");
+    if (!Array.isArray(request.paths) || request.paths.length < 1) blockers.push("request_paths_missing");
+    else {
+      for (const requestedPath of request.paths) {
+        if (validateLexicalRepositoryPath(requestedPath).length
+          || !pathInsideScopes(requestedPath, capability.pathScopes)) blockers.push("request_path_scope_mismatch");
+        if (requiresHighRiskCapability(requestedPath) && capability.riskLevel !== "high") blockers.push("request_risk_scope_mismatch");
+      }
+      if (!request.paths.includes(use.path)) blockers.push("capability_primary_path_missing");
+    }
+    return [...new Set(blockers)].sort();
+  }
+
   consume(capabilityId: string, use: CognitiveCapabilityUse, gate: CognitiveRuntimeGate): CognitiveCapabilityEvent {
     const capability = this.capabilities.get(capabilityId);
     if (!capability) throw new Error("capability_missing");
@@ -679,7 +703,18 @@ export const parseStrictModelDocument = (raw: string): StrictModelDocument => {
   if (!sanitizedObjective.accepted || sanitizedObjective.categories.includes("untrusted_instruction")) throw new Error("model_document_objective_rejected");
   if (!Array.isArray(record.proposedActions) || record.proposedActions.length > 20 || record.proposedActions.some((action) => !ACTION_SET.has(String(action)))) throw new Error("model_document_action_invalid");
   if (!assertBoundedStringArray(record.evidenceIds, 64, 128) || !assertBoundedStringArray(record.blockers, 64, 256)) throw new Error("model_document_bounds_invalid");
-  return record as StrictModelDocument;
+  if ((record.evidenceIds as string[]).some((entry) => !validIdentifier(entry))) throw new Error("model_document_evidence_id_invalid");
+  const sanitizedBlockers = (record.blockers as string[]).map((entry) => sanitizeCognitivePayload(entry));
+  if (sanitizedBlockers.some((result) => !result.accepted || result.categories.includes("untrusted_instruction"))) {
+    throw new Error("model_document_blocker_rejected");
+  }
+  return {
+    schemaVersion: 1,
+    objective: sanitizedObjective.value as string,
+    proposedActions: [...record.proposedActions as CognitiveExecutionAction[]],
+    evidenceIds: [...record.evidenceIds as string[]],
+    blockers: sanitizedBlockers.map((result) => result.value as string),
+  };
 };
 
 const PROMPT_INJECTION_PATTERNS = [
@@ -697,6 +732,7 @@ const SECRET_PATTERNS = [
   /\b(?:ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_-]{12,}\b/u,
   /\b(?:password|secret|service[_-]?role|refresh[_-]?token|access[_-]?token|authorization|cookie)\s*[:=]\s*\S+/iu,
   /\b(?:api[_-]?key|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|google[_-]?api[_-]?key)\s*[:=]\s*\S+/iu,
+  /\b(?:api[_-]?key|service[_-]?role|access[_-]?token|refresh[_-]?token)[\s:=_-]*[A-Za-z0-9][A-Za-z0-9._-]{7,}\b/iu,
   /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/u,
   /https:\/\/[^/\s:@]+:[^/\s@]+@/iu,
   /https?:\/\/[^\s?]+\?[^\s]*(?:token|signature|sig|key|credential)=/iu,
@@ -709,14 +745,22 @@ export const containsSecretLikeValue = (value: string): boolean =>
 
 const maybeDecodeEncoded = (value: string): string[] => {
   const candidates = new Set<string>();
+  const decodeUtf8 = (bytes: Uint8Array): string | null => {
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      return null;
+    }
+  };
   let frontier = [value];
   for (let depth = 0; depth < 3; depth += 1) {
     const next: string[] = [];
     for (const candidate of frontier) {
       for (const match of candidate.matchAll(/\b[A-Za-z0-9+/]{16,}={0,2}\b/gu)) {
         try {
-          const decoded = globalThis.atob(match[0]);
-          if (/^[\x09\x0A\x0D\x20-\x7E]+$/u.test(decoded)) {
+          const binary = globalThis.atob(match[0]);
+          const decoded = decodeUtf8(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+          if (decoded !== null) {
             const bounded = decoded.slice(0, 4_096);
             if (!candidates.has(bounded)) next.push(bounded);
             candidates.add(bounded);
@@ -726,9 +770,10 @@ const maybeDecodeEncoded = (value: string): string[] => {
         }
       }
       for (const match of candidate.matchAll(/\b(?:[0-9a-fA-F]{2}){8,}\b/gu)) {
-        let decoded = "";
-        for (let index = 0; index < Math.min(match[0].length, 8_192); index += 2) decoded += String.fromCharCode(Number.parseInt(match[0].slice(index, index + 2), 16));
-        if (/^[\x09\x0A\x0D\x20-\x7E]+$/u.test(decoded)) {
+        const bytes = new Uint8Array(Math.min(match[0].length, 8_192) / 2);
+        for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(match[0].slice(index * 2, (index * 2) + 2), 16);
+        const decoded = decodeUtf8(bytes);
+        if (decoded !== null) {
           if (!candidates.has(decoded)) next.push(decoded);
           candidates.add(decoded);
         }
@@ -778,9 +823,13 @@ export const sanitizeCognitivePayload = (
         return "[REDACTED_SECRET_LIKE_VALUE]";
       }
       if (containsPromptInjection(bounded) || decoded.some(containsPromptInjection)) categories.add("untrusted_instruction");
-      return bounded
+      const withPrivateIdentifiersRedacted = bounded
         .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gu, "[REDACTED_EMAIL]")
-        .replace(/\+?[0-9][0-9 ()-]{7,}[0-9]/gu, "[REDACTED_PHONE]");
+        .replace(/\+?[0-9][0-9 ()-]{7,}[0-9]/gu, "[REDACTED_PHONE]")
+        .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/gu, "[REDACTED_IP]")
+        .replace(/\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{0,4}\b/gu, "[REDACTED_IP]");
+      if (withPrivateIdentifiersRedacted !== bounded) categories.add("private_identifier");
+      return withPrivateIdentifiersRedacted;
     }
     if (typeof value !== "object") {
       categories.add("unsupported_value_type");
@@ -820,6 +869,9 @@ export const sanitizeCognitivePayload = (
     aggregateStringValues.join(""),
     aggregateStringValues.join("="),
     aggregateStringValues.join(":"),
+    aggregateStringValues.join("_"),
+    aggregateStringValues.join("-"),
+    aggregateStringValues.join(" "),
     aggregateKeys.join(""),
     aggregateKeys.join("="),
     aggregateKeys.join(":"),
@@ -865,6 +917,37 @@ export type CognitiveResearchSource = {
   };
   trustedForTools: false;
 };
+const COGNITIVE_SOURCE_AUTHORITY_REGISTRY = [
+  { hostname: "developer.apple.com", ownerId: "apple", publisher: "Apple", types: ["official_documentation", "platform_policy", "store_policy", "security_advisory"] },
+  { hostname: "developer.android.com", ownerId: "google", publisher: "Google", types: ["official_documentation", "platform_policy", "store_policy", "security_advisory"] },
+  { hostname: "firebase.google.com", ownerId: "google", publisher: "Google", types: ["official_documentation", "security_advisory"] },
+  { hostname: "docs.expo.dev", ownerId: "expo", publisher: "Expo", types: ["official_documentation", "security_advisory"] },
+  { hostname: "supabase.com", ownerId: "supabase", publisher: "Supabase", types: ["official_documentation", "security_advisory"] },
+  { hostname: "docs.github.com", ownerId: "github", publisher: "GitHub", types: ["official_documentation", "security_advisory"] },
+  { hostname: "revenuecat.com", ownerId: "revenuecat", publisher: "RevenueCat", types: ["official_documentation", "security_advisory"] },
+  { hostname: "stripe.com", ownerId: "stripe", publisher: "Stripe", types: ["official_documentation", "security_advisory"] },
+  { hostname: "docs.livekit.io", ownerId: "livekit", publisher: "LiveKit", types: ["official_documentation", "security_advisory"] },
+  { hostname: "developers.cloudflare.com", ownerId: "cloudflare", publisher: "Cloudflare", types: ["official_documentation", "security_advisory"] },
+  { hostname: "iana.org", ownerId: "iana", publisher: "IANA", types: ["official_documentation"] },
+  { hostname: "reuters.com", ownerId: "reuters", publisher: "Reuters", types: ["news"] },
+  { hostname: "apnews.com", ownerId: "associated-press", publisher: "Associated Press", types: ["news"] },
+] as const;
+const registeredResearchAuthority = (source: CognitiveResearchSource) => {
+  let hostname = "";
+  try {
+    const parsed = new URL(source.reference);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password) return null;
+    hostname = parsed.hostname.toLowerCase().replace(/\.$/u, "");
+  } catch {
+    return null;
+  }
+  const entry = COGNITIVE_SOURCE_AUTHORITY_REGISTRY.find((candidate) =>
+    hostname === candidate.hostname || hostname.endsWith(`.${candidate.hostname}`));
+  if (!entry
+    || !(entry.types as readonly string[]).includes(source.sourceType)
+    || entry.publisher.toLowerCase() !== source.publisher.trim().toLowerCase()) return null;
+  return { hostname, ownerId: entry.ownerId };
+};
 export type CognitiveResearchClaimInput = {
   claim: string;
   confidence: number;
@@ -891,16 +974,21 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
   if (!validFiniteNumber(input.confidence, 0, 1)) reasons.push("confidence_out_of_range");
   if (!input.sources.length || input.sources.length > 12) reasons.push("source_count_invalid");
   const authoritativeTypes = ["official_documentation", "security_advisory", "platform_policy", "store_policy"];
-  if (input.technicalFact && !input.sources.some((source) => source.primary && authoritativeTypes.includes(source.sourceType))) reasons.push("technical_fact_requires_primary_source");
+  const authorityBySource = new Map(input.sources.map((source) => [source.id, registeredResearchAuthority(source)]));
+  if (input.technicalFact && !input.sources.some((source) =>
+    source.primary && authoritativeTypes.includes(source.sourceType) && authorityBySource.get(source.id))) {
+    reasons.push("technical_fact_requires_verified_primary_source");
+  }
   const newsSources = input.sources.filter((source) => source.sourceType === "news");
-  const newsPublishers = new Set(newsSources.map((source) => source.publisher.trim().toLowerCase()));
+  const newsOwners = new Set(newsSources.map((source) => authorityBySource.get(source.id)?.ownerId).filter(Boolean));
   const newsCanonicalUrls = new Set(newsSources.map((source) => source.canonicalUrlHash));
   const newsContent = new Set(newsSources.map((source) => source.contentHash));
-  if (input.consequential && (newsPublishers.size < 2 || newsCanonicalUrls.size < 2 || newsContent.size < 2)) reasons.push("consequential_news_requires_independent_corroboration");
+  if (input.consequential && (newsOwners.size < 2 || newsCanonicalUrls.size < 2 || newsContent.size < 2)) reasons.push("consequential_news_requires_verified_independent_corroboration");
   if (input.contradictionState === "detected" || input.contradictionState === "unresolved") reasons.push("contradiction_unresolved");
   const claimFreshness = Date.parse(input.freshnessDeadline);
   if (!Number.isFinite(claimFreshness) || claimFreshness <= now.getTime()) reasons.push("claim_expired_refresh_required");
   for (const source of input.sources) {
+    if (!authorityBySource.get(source.id)) reasons.push("source_authority_unverified");
     if (source.trustedForTools !== false) reasons.push("source_must_remain_untrusted");
     if (source.primary && !authoritativeTypes.includes(source.sourceType)) reasons.push("primary_source_type_invalid");
     if (source.retrievalStatus !== "succeeded") reasons.push("source_retrieval_not_verified");
@@ -939,10 +1027,39 @@ const PRIVATE_IPV4 = [
   /^192\.0\.2\./u, /^192\.88\.99\./u, /^192\.168\./u, /^198\.(?:1[89]|51\.100)\./u,
   /^203\.0\.113\./u, /^224\./u, /^23[0-9]\./u, /^24[0-9]\./u, /^25[0-5]\./u,
 ];
+const parseIpv6Address = (address: string): bigint | null => {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/gu, "").split("%")[0];
+  const halves = normalized.split("::");
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - left.length - right.length;
+  if (missing < 0 || (halves.length === 1 && missing !== 0)) return null;
+  const groups = [...left, ...Array.from({ length: missing }, () => "0"), ...right];
+  if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/u.test(group))) return null;
+  return groups.reduce((result, group) => (result << 16n) | BigInt(`0x${group}`), 0n);
+};
+const ipv6Matches = (value: bigint, base: string, bits: number): boolean => {
+  const parsedBase = parseIpv6Address(base);
+  if (parsedBase === null) return true;
+  const shift = BigInt(128 - bits);
+  return (value >> shift) === (parsedBase >> shift);
+};
+const RESERVED_IPV6: readonly [string, number][] = [
+  ["::", 128], ["::1", 128], ["::ffff:0:0", 96], ["64:ff9b::", 96],
+  ["64:ff9b:1::", 48], ["100::", 64], ["2001::", 23], ["2001:db8::", 32],
+  ["2002::", 16], ["3fff::", 20], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8],
+];
 export const isPrivateOrReservedAddress = (address: string): boolean => {
   const value = address.toLowerCase().replace(/^\[|\]$/gu, "");
-  if (value === "::" || value === "::1" || value.startsWith("fe80:") || value.startsWith("fc") || value.startsWith("fd")) return true;
-  if (value.startsWith("::ffff:")) return isPrivateOrReservedAddress(value.slice(7));
+  if (value.startsWith("::ffff:") && value.slice(7).includes(".")) {
+    return isPrivateOrReservedAddress(value.slice(7));
+  }
+  const ipv6 = parseIpv6Address(value);
+  if (ipv6 !== null) {
+    if (!ipv6Matches(ipv6, "2000::", 3)) return true;
+    return RESERVED_IPV6.some(([base, bits]) => ipv6Matches(ipv6, base, bits));
+  }
   return PRIVATE_IPV4.some((pattern) => pattern.test(value));
 };
 
@@ -971,6 +1088,63 @@ export type RequiredTest = {
   finalCommit: string;
   risk: "low" | "medium" | "high" | "critical";
   physicalEvidenceRequired: boolean;
+};
+export const requiredCognitiveTestsForChanges = (
+  changedPaths: readonly string[],
+  finalCommit: string,
+  platform: CognitivePlatform,
+): readonly RequiredTest[] => {
+  if (!/^[a-f0-9]{40}$/u.test(finalCommit)
+    || !PLATFORM_SET.has(platform)
+    || !Array.isArray(changedPaths)
+    || changedPaths.length > 2_000
+    || changedPaths.some((entry) => validateLexicalRepositoryPath(entry).length)) {
+    throw new Error("required_test_input_invalid");
+  }
+  const tests = new Map<string, RequiredTest>();
+  const add = (
+    id: string,
+    commandId: string,
+    risk: RequiredTest["risk"] = "medium",
+    physicalEvidenceRequired = false,
+  ) => tests.set(id, { id, commandId, platform, finalCommit, risk, physicalEvidenceRequired });
+  add("lint", "npm:lint", "low");
+  add("typescript", "npx:tsc-no-emit", "low");
+  add("runtime", "npm:validate-runtime", "medium");
+  add("routes", "npm:guard-route-contracts", "medium");
+  for (const relative of [...changedPaths].sort()) {
+    if (relative.startsWith(".github/workflows/")) throw new Error("workflow_edit_forbidden");
+    if (relative.startsWith("supabase/migrations/") || relative.startsWith("supabase/tests/")) {
+      add("database", "supabase:test-db", "high");
+      add("rls-control-plane", "npm:proof-autonomous-systems-contract", "high");
+    }
+    if (/(?:app\.config|app\.json|package-lock\.json|android|ios|native|runtime)/u.test(relative)) {
+      add("native-runtime", "npm:guard-android-native-runtime-compatibility", "critical", true);
+      add("expo-doctor", "npx:expo-doctor", "high");
+    }
+    if (/cognitive|intelligence|research/iu.test(relative)) {
+      add("cognitive-red-team", "npm:test-cognitive-red-team", "high");
+      add("cognitive-executor", "npm:test-cognitive-executor-confinement", "high");
+      add("cognitive-capability", "npm:test-cognitive-capability-contract", "high");
+      add("cognitive-evaluator", "npm:test-cognitive-evaluator-independence", "high");
+      add("research-broker", "npm:test-research-source-broker", "high");
+      add("cognitive-admin", "npm:guard-cognitive-admin-truth", "medium");
+    }
+    if (/call|notification|livekit/iu.test(relative)) {
+      add("call-policy", "npm:guard-notification-room-call-policy", "high");
+      add("livekit", "npm:proof-livekit-autonomous-operator", "high");
+    }
+    if (/money|payment|revenuecat|stripe|storekit|billing/iu.test(relative)) {
+      add("payment-policy", "npm:guard-payment-rail-policy", "critical");
+    }
+    if (/release|eas|ota|update|runtime/iu.test(relative)) {
+      add("release-operator", "npm:proof-release-ota-operator", "critical");
+    }
+    if (/supabase\/functions\/|(?:^|\/)_shared\//u.test(relative)) add("deno-check", "deno:check-modified", "high");
+    if (/ios/iu.test(relative) || platform === "ios") add("ios-policy", "npm:guard-ios-config-policy", "high");
+    if (/android/iu.test(relative) || platform === "android") add("android-regression", "npm:guard-android-launcher-icon-policy", "high");
+  }
+  return [...tests.values()].sort((left, right) => left.id.localeCompare(right.id));
 };
 export type TrustedTestRecord = {
   recordId: string;
@@ -1015,6 +1189,7 @@ type CognitiveEvidenceCredentialVerifier = (
 ) => boolean;
 
 export class CognitiveTrustedEvidenceLedger {
+  readonly authorityId: string;
   readonly #runnerCredentialHashes: Readonly<Record<string, string>>;
   readonly #collectorCredentialHashes: Readonly<Record<string, string>>;
   readonly #verifyCredential: CognitiveEvidenceCredentialVerifier;
@@ -1024,6 +1199,7 @@ export class CognitiveTrustedEvidenceLedger {
   readonly #physicalRecords = new Map<string, Readonly<TrustedPhysicalEvidence>>();
 
   constructor(input: {
+    authorityId: string;
     runnerCredentialHashes: Readonly<Record<string, string>>;
     collectorCredentialHashes: Readonly<Record<string, string>>;
     verifyCredential: CognitiveEvidenceCredentialVerifier;
@@ -1032,10 +1208,12 @@ export class CognitiveTrustedEvidenceLedger {
     const runnerEntries = Object.entries(input.runnerCredentialHashes);
     const collectorEntries = Object.entries(input.collectorCredentialHashes);
     if (
-      !runnerEntries.length
+      !validIdentifier(input.authorityId)
+      || !runnerEntries.length
       || runnerEntries.some(([id, hash]) => !validIdentifier(id) || !validHash(hash))
       || collectorEntries.some(([id, hash]) => !validIdentifier(id) || !validHash(hash))
     ) throw new Error("evidence_trust_configuration_invalid");
+    this.authorityId = input.authorityId;
     this.#runnerCredentialHashes = Object.freeze({ ...input.runnerCredentialHashes });
     this.#collectorCredentialHashes = Object.freeze({ ...input.collectorCredentialHashes });
     this.#verifyCredential = input.verifyCredential;
@@ -1123,6 +1301,7 @@ export class CognitiveTrustedEvidenceLedger {
 
   reader(): CognitiveTrustedEvidenceReader {
     return Object.freeze({
+      authorityId: this.authorityId,
       getTest: (recordId: string) => this.getTest(recordId),
       getRun: (recordId: string) => this.getRun(recordId),
       physicalForTest: (testId: string, finalCommit: string) =>
@@ -1134,6 +1313,7 @@ export class CognitiveTrustedEvidenceLedger {
 }
 
 export type CognitiveTrustedEvidenceReader = Readonly<{
+  authorityId: string;
   getTest: (recordId: string) => Readonly<TrustedTestRecord> | null;
   getRun: (recordId: string) => Readonly<TrustedRunEvidence> | null;
   physicalForTest: (
@@ -1153,7 +1333,8 @@ export type CognitiveEvaluationInput = {
   testEvidenceRecordIds: readonly string[];
   finalCommit: string;
   finalCommitAt: string;
-  requiredTests: readonly RequiredTest[];
+  changedPaths: readonly string[];
+  platform: CognitivePlatform;
 };
 export type CognitiveEvaluation = {
   status: "PASS" | "FAIL" | "INCOMPLETE" | "BLOCKED";
@@ -1170,6 +1351,11 @@ export const evaluateCognitiveRun = (
   now = new Date(),
 ): CognitiveEvaluation => {
   const blockers: string[] = [];
+  // No production evidence authority is configured for this undeployed scaffold.
+  // A future deployment must add reviewed public verifier identities here; callers
+  // cannot manufacture a trust root by supplying their own verifier.
+  const trustedEvidenceAuthorityIds = new Set<string>();
+  if (!trustedEvidenceAuthorityIds.has(evidenceLedger.authorityId)) blockers.push("trusted_evidence_authority_not_configured");
   if (!validIdentifier(input.evaluatorIdentity) || input.evaluatorIdentity === input.executorIdentity) blockers.push("evaluator_identity_not_independent");
   for (const hash of [input.objectiveHash, input.planSnapshotHash, input.runEvidenceManifestHash]) if (!validHash(hash)) blockers.push("trusted_evidence_hash_invalid");
   if (!/^[a-f0-9]{40}$/u.test(input.finalCommit) || !validTimestamp(input.finalCommitAt) || Date.parse(input.finalCommitAt) > now.getTime()) blockers.push("final_commit_identity_invalid");
@@ -1189,13 +1375,19 @@ export const evaluateCognitiveRun = (
   } catch {
     blockers.push("run_evidence_manifest_unverifiable");
   }
+  let requiredTests: readonly RequiredTest[] = [];
+  try {
+    requiredTests = requiredCognitiveTestsForChanges(input.changedPaths, input.finalCommit, input.platform);
+  } catch {
+    blockers.push("required_test_manifest_invalid");
+  }
   const records = new Map(
     input.testEvidenceRecordIds
       .map((recordId) => evidenceLedger.getTest(recordId))
       .filter((record): record is Readonly<TrustedTestRecord> => record !== null)
       .map((record) => [record.testId, record]),
   );
-  for (const required of input.requiredTests) {
+  for (const required of requiredTests) {
     const record = records.get(required.id);
     if (!record) blockers.push(`required_test_missing:${required.id}`);
     else {

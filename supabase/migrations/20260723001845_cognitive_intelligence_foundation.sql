@@ -117,6 +117,44 @@ revoke all on function public.cognitive_json_is_sanitized(jsonb) from public, an
 grant execute on function public.cognitive_text_has_secret(text) to service_role;
 grant execute on function public.cognitive_json_is_sanitized(jsonb) to service_role;
 
+create or replace function public.cognitive_assert_service_actor(
+  p_allowed_actors text[],
+  p_claimed_actor text default null
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  claims jsonb := coalesce(
+    nullif(current_setting('request.jwt.claims', true), ''),
+    '{}'
+  )::jsonb;
+  request_role text := coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    claims->>'role'
+  );
+  request_actor text := coalesce(
+    nullif(current_setting('request.jwt.claim.cognitive_actor', true), ''),
+    claims->>'cognitive_actor'
+  );
+begin
+  if request_role <> 'service_role'
+     or request_actor is null
+     or not request_actor = any(p_allowed_actors)
+     or (p_claimed_actor is not null and p_claimed_actor <> request_actor) then
+    raise exception 'cognitive_service_actor_mismatch' using errcode='42501';
+  end if;
+  return request_actor;
+end;
+$$;
+revoke all on function public.cognitive_assert_service_actor(text[],text)
+  from public, anon, authenticated;
+grant execute on function public.cognitive_assert_service_actor(text[],text)
+  to service_role;
+
 create table public.cognitive_projects (
   id uuid primary key default gen_random_uuid(),
   repository_full_name text not null check (repository_full_name = 'Chillywood2025/chillywood-mobile'),
@@ -243,6 +281,7 @@ declare
   emergency_status text;
   sequence_value integer;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into capability
   from public.cognitive_capabilities
   where capability_id=p_capability_id
@@ -346,6 +385,7 @@ declare
   task_value public.intelligence_tasks%rowtype;
   emergency_status text;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into capability from public.cognitive_capabilities
   where capability_id=p_capability_id for update;
   select * into task_value from public.intelligence_tasks
@@ -395,6 +435,7 @@ set search_path = ''
 as $$
 declare capability public.cognitive_capabilities%rowtype;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into capability from public.cognitive_capabilities
   where capability_id=p_capability_id for update;
   if capability.id is null or capability.status='revoked'
@@ -508,8 +549,11 @@ declare
   allowed boolean;
   approval_scope_hash text;
 begin
-  if p_actor_identity not in ('cognitive_control_plane','product_intelligence_operator')
-     or p_transition_hash !~ '^[a-f0-9]{64}$' then
+  perform public.cognitive_assert_service_actor(
+    array['cognitive_control_plane','product_intelligence_operator'],
+    p_actor_identity
+  );
+  if p_transition_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'cognitive_transition_actor_or_hash_invalid' using errcode = 'P0001';
   end if;
   select * into task_value
@@ -652,7 +696,50 @@ grant execute on function public.cognitive_transition_task(
   public.cognitive_task_status,public.cognitive_task_status,text,text,uuid,text
 ) to service_role;
 
+create table public.cognitive_research_authorities (
+  authority_id text not null check (length(authority_id) between 2 and 80),
+  canonical_host text not null check (
+    canonical_host = lower(canonical_host)
+    and canonical_host ~ '^[a-z0-9.-]{3,253}$'
+  ),
+  source_type text not null check (source_type in (
+    'official_documentation','security_advisory','platform_policy','store_policy',
+    'product_research','competitor_research','engineering_practice','news'
+  )),
+  publisher text not null check (length(publisher) between 2 and 256),
+  ownership_identity text not null check (length(ownership_identity) between 2 and 80),
+  created_at timestamptz not null default statement_timestamp(),
+  primary key (authority_id, canonical_host, source_type),
+  unique (authority_id,canonical_host,source_type,publisher,ownership_identity)
+);
+insert into public.cognitive_research_authorities(
+  authority_id,canonical_host,source_type,publisher,ownership_identity
+) values
+  ('expo-docs','docs.expo.dev','official_documentation','Expo','expo'),
+  ('apple-docs','developer.apple.com','official_documentation','Apple','apple'),
+  ('apple-policy','developer.apple.com','platform_policy','Apple','apple'),
+  ('apple-store-policy','developer.apple.com','store_policy','Apple','apple'),
+  ('android-docs','developer.android.com','official_documentation','Google','google'),
+  ('android-policy','developer.android.com','platform_policy','Google','google'),
+  ('android-store-policy','developer.android.com','store_policy','Google','google'),
+  ('supabase-docs','supabase.com','official_documentation','Supabase','supabase'),
+  ('github-docs','docs.github.com','official_documentation','GitHub','github'),
+  ('revenuecat-docs','revenuecat.com','official_documentation','RevenueCat','revenuecat'),
+  ('stripe-docs','stripe.com','official_documentation','Stripe','stripe'),
+  ('livekit-docs','docs.livekit.io','official_documentation','LiveKit','livekit'),
+  ('cloudflare-docs','developers.cloudflare.com','official_documentation','Cloudflare','cloudflare'),
+  ('iana-docs','iana.org','official_documentation','IANA','iana'),
+  ('reuters-news','reuters.com','news','Reuters','reuters'),
+  ('ap-news','apnews.com','news','Associated Press','associated-press');
+alter table public.cognitive_research_authorities enable row level security;
+alter table public.cognitive_research_authorities force row level security;
+revoke all on table public.cognitive_research_authorities from public,anon,authenticated;
+grant select on table public.cognitive_research_authorities to service_role;
+
 alter table public.research_sources
+  add column authority_id text not null,
+  add column canonical_host text not null,
+  add column ownership_identity text not null,
   add column source_reference_hash text not null check (source_reference_hash ~ '^[a-f0-9]{64}$'),
   add column canonical_url_hash text not null check (canonical_url_hash ~ '^[a-f0-9]{64}$'),
   add column content_hash text not null check (content_hash ~ '^[a-f0-9]{64}$'),
@@ -671,7 +758,28 @@ alter table public.research_sources
   ),
   add column trusted_for_tool_execution boolean not null default false check (trusted_for_tool_execution = false),
   add constraint research_source_date_order check (
-    publication_date is null or publication_date <= retrieval_date
+    (publication_date is null or publication_date <= retrieval_date)
+    and retrieval_date <= created_at + interval '5 minutes'
+    and created_at <= statement_timestamp() + interval '5 minutes'
+  ),
+  add constraint research_source_text_sanitized check (
+    not public.cognitive_text_has_secret(publisher)
+    and not public.cognitive_text_has_secret(bounded_excerpt)
+  ),
+  add constraint research_source_citation_schema check (
+    jsonb_typeof(citation_metadata)='object'
+    and citation_metadata ?& array['title','locator']
+    and not citation_metadata ?| array['authority','credential','token','secret']
+    and citation_metadata - 'title' - 'locator' = '{}'::jsonb
+    and length(trim(citation_metadata->>'title')) between 1 and 512
+    and length(trim(citation_metadata->>'locator')) between 1 and 512
+    and not public.cognitive_text_has_secret(citation_metadata->>'title')
+    and not public.cognitive_text_has_secret(citation_metadata->>'locator')
+  ),
+  add foreign key (
+    authority_id,canonical_host,source_type,publisher,ownership_identity
+  ) references public.cognitive_research_authorities(
+    authority_id,canonical_host,source_type,publisher,ownership_identity
   );
 
 alter table public.research_claims
@@ -735,6 +843,36 @@ create table public.research_retrieval_events (
   foreign key (source_id, task_id, project_id, platform, environment)
     references public.research_sources(id, task_id, project_id, platform, environment)
 );
+
+create function public.cognitive_validate_research_retrieval()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare source_value public.research_sources%rowtype;
+begin
+  select * into source_value from public.research_sources
+  where id=new.source_id and task_id=new.task_id and project_id=new.project_id
+    and platform=new.platform and environment=new.environment;
+  if source_value.id is null
+     or new.request_url_hash <> source_value.canonical_url_hash
+     or (new.result='accepted' and new.response_hash is distinct from source_value.content_hash)
+     or new.created_at > statement_timestamp() + interval '5 minutes'
+     or exists (
+       select 1 from unnest(new.resolved_address_hashes) address_hash
+       where address_hash !~ '^[a-f0-9]{64}$'
+     ) then
+    raise exception 'research_retrieval_binding_rejected' using errcode='P0001';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.cognitive_validate_research_retrieval()
+  from public,anon,authenticated,service_role;
+create trigger cognitive_research_retrieval_binding
+before insert on public.research_retrieval_events
+for each row execute function public.cognitive_validate_research_retrieval();
 
 alter table public.knowledge_relationships
   add column source_entity_id uuid not null,
@@ -1230,6 +1368,10 @@ declare
   current_status public.cognitive_task_status;
   allowed boolean;
 begin
+  perform public.cognitive_assert_service_actor(
+    array['cognitive_control_plane','product_intelligence_operator'],
+    p_actor_identity
+  );
   select status into current_status
   from public.intelligence_tasks
   where id = p_task_id and project_id = p_project_id and platform = p_platform and environment = p_environment
@@ -1298,6 +1440,10 @@ declare
   approval_scope_hash text;
   run_value public.execution_runs%rowtype;
 begin
+  perform public.cognitive_assert_service_actor(
+    array['cognitive_control_plane','product_intelligence_operator','independent_evaluation_judge'],
+    p_actor_identity
+  );
   if p_actor_identity not in ('cognitive_control_plane','product_intelligence_operator','independent_evaluation_judge')
      or p_transition_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'cognitive_transition_actor_or_hash_invalid' using errcode='P0001';
@@ -1438,6 +1584,8 @@ begin
                 select 1 from public.research_retrieval_events retrieval
                 where retrieval.source_id=source.id and retrieval.task_id=source.task_id
                   and retrieval.result='accepted'
+                  and retrieval.request_url_hash=source.canonical_url_hash
+                  and retrieval.response_hash=source.content_hash
               )
           )
         )
@@ -1461,6 +1609,8 @@ begin
                 select 1 from public.research_retrieval_events retrieval
                 where retrieval.source_id=source.id and retrieval.task_id=source.task_id
                   and retrieval.result='accepted'
+                  and retrieval.request_url_hash=source.canonical_url_hash
+                  and retrieval.response_hash=source.content_hash
               )
           ) >= 2
         )
@@ -1480,6 +1630,8 @@ begin
                 select 1 from public.research_retrieval_events retrieval
                 where retrieval.source_id=source.id and retrieval.task_id=source.task_id
                   and retrieval.result='accepted'
+                  and retrieval.request_url_hash=source.canonical_url_hash
+                  and retrieval.response_hash=source.content_hash
               )
           )
         )
@@ -1575,6 +1727,7 @@ declare
   approval_scope_hash text;
   emergency_status text;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into row_value from public.cognitive_capabilities
   where capability_id = p_capability_id for update;
   if row_value.id is null then raise exception 'capability_missing' using errcode = 'P0001'; end if;
@@ -1668,6 +1821,7 @@ declare row_value public.intelligence_budgets%rowtype;
 declare task_value public.intelligence_tasks%rowtype;
 declare emergency_status text;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into row_value from public.intelligence_budgets
     where id=p_budget_id and task_id=p_task_id and project_id=p_project_id
       and platform=p_platform and environment=p_environment
@@ -1752,6 +1906,7 @@ declare reserved jsonb;
 declare task_value public.intelligence_tasks%rowtype;
 declare emergency_status text;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into row_value from public.intelligence_budgets
     where id=p_budget_id and task_id=p_task_id for update;
   select usage into reserved from public.cognitive_budget_events
@@ -1825,6 +1980,10 @@ set search_path = ''
 as $$
 declare result_id uuid;
 begin
+  perform public.cognitive_assert_service_actor(
+    array['cognitive_control_plane','product_intelligence_operator'],
+    null
+  );
   insert into public.cognitive_current_findings(
     task_id, project_id, platform, environment, finding_key, finding_type,
     target_scope, severity, first_seen_at, last_seen_at, evidence_hash
@@ -1868,6 +2027,10 @@ as $$
 declare result_id uuid;
 declare finding_value public.cognitive_current_findings%rowtype;
 begin
+  perform public.cognitive_assert_service_actor(
+    array['cognitive_control_plane','product_intelligence_operator'],
+    null
+  );
   update public.cognitive_current_findings
   set current_status = 'resolved', resolved_at = statement_timestamp(), last_seen_at = statement_timestamp()
   where task_id = p_task_id and finding_key = p_finding_key and current_status = 'open'
@@ -1887,10 +2050,57 @@ revoke all on function public.cognitive_resolve_finding(uuid, text, text) from p
 grant execute on function public.cognitive_resolve_finding(uuid, text, text) to service_role;
 
 -- RLS/readback: ordinary users receive nothing. Owner/super-admin and an
--- operator with the exact permission may read source-safe rows. No client writes.
+-- operator with the exact permission and an exact JWT project/task/platform
+-- assignment may read source-safe rows. No client writes.
+create or replace function public.cognitive_can_read_scope(
+  p_project_id uuid,
+  p_task_id uuid,
+  p_platform public.cognitive_platform
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  claims jsonb := coalesce(
+    nullif(current_setting('request.jwt.claims', true), ''),
+    '{}'
+  )::jsonb;
+  metadata jsonb := coalesce(claims->'app_metadata','{}'::jsonb);
+  project_ids jsonb := coalesce(metadata->'cognitive_project_ids','[]'::jsonb);
+  task_ids jsonb := coalesce(metadata->'cognitive_task_ids','[]'::jsonb);
+  platforms jsonb := coalesce(metadata->'cognitive_platforms','[]'::jsonb);
+begin
+  if public.has_platform_role(array['owner'::text,'super_admin'::text]) then
+    return true;
+  end if;
+  return public.has_platform_role(array['operator'::text])
+    and public.has_platform_permission('admin.cognitive.read')
+    and jsonb_typeof(project_ids)='array'
+    and project_ids ? p_project_id::text
+    and (
+      p_task_id is null
+      or (jsonb_typeof(task_ids)='array' and task_ids ? p_task_id::text)
+    )
+    and (
+      p_platform is null
+      or (jsonb_typeof(platforms)='array' and platforms ? p_platform::text)
+    );
+end;
+$$;
+revoke all on function public.cognitive_can_read_scope(
+  uuid,uuid,public.cognitive_platform
+) from public, anon;
+grant execute on function public.cognitive_can_read_scope(
+  uuid,uuid,public.cognitive_platform
+) to authenticated, service_role;
+
 do $$
 declare
   table_name text;
+  scope_expression text;
   cognitive_tables constant text[] := array[
     'cognitive_projects', 'intelligence_tasks', 'research_sources', 'research_claims',
     'research_claim_sources', 'research_contradictions', 'research_retrieval_events',
@@ -1905,6 +2115,13 @@ declare
   ];
 begin
   foreach table_name in array cognitive_tables loop
+    if table_name = 'cognitive_projects' then
+      scope_expression := 'public.cognitive_can_read_scope(id,null,null)';
+    elsif table_name = 'intelligence_tasks' then
+      scope_expression := 'public.cognitive_can_read_scope(project_id,id,platform)';
+    else
+      scope_expression := 'public.cognitive_can_read_scope(project_id,task_id,platform)';
+    end if;
     execute format('alter table public.%I enable row level security', table_name);
     execute format('alter table public.%I force row level security', table_name);
     execute format('revoke all on table public.%I from public, anon, authenticated', table_name);
@@ -1912,14 +2129,8 @@ begin
     execute format('grant select on table public.%I to authenticated', table_name);
     execute format('grant select, insert on table public.%I to service_role', table_name);
     execute format(
-      'create policy %I on public.%I for select to authenticated using (
-        public.has_platform_role(array[''owner''::text, ''super_admin''::text])
-        or (
-          public.has_platform_role(array[''operator''::text])
-          and public.has_platform_permission(''admin.cognitive.read'')
-        )
-      )',
-      table_name || '_cognitive_exact_read', table_name
+      'create policy %I on public.%I for select to authenticated using (%s)',
+      table_name || '_cognitive_exact_read', table_name, scope_expression
     );
   end loop;
 end
@@ -2006,6 +2217,26 @@ alter table public.tool_invocations
 alter table public.evaluation_results
   add constraint evaluation_results_no_user_content
     check (data_class <> 'user_derived');
+
+-- User-derived material is permitted only in the three tables covered by the
+-- transactional erasure/tombstone RPC. Every other generic content surface is
+-- structurally non-personal so a future caller cannot create unerasable memory.
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array[
+    'knowledge_relationships','architecture_components','architecture_dependencies',
+    'solution_candidates','experiments','experiment_results','execution_plans',
+    'execution_runs','lessons','playbooks','intelligence_budgets'
+  ] loop
+    execute format(
+      'alter table public.%I add constraint %I check (data_class <> ''user_derived'')',
+      table_name, table_name || '_no_user_content'
+    );
+  end loop;
+end
+$$;
 
 alter table public.execution_plan_snapshots
   add column canonical_snapshot_hash text not null default repeat('0', 64),
@@ -2104,11 +2335,7 @@ begin
     execute format('grant select on table public.%I to authenticated, service_role', table_name);
     execute format(
       'create policy %I on public.%I for select to authenticated using (
-        public.has_platform_role(array[''owner''::text, ''super_admin''::text])
-        or (
-          public.has_platform_role(array[''operator''::text])
-          and public.has_platform_permission(''admin.cognitive.read'')
-        )
+        public.cognitive_can_read_scope(project_id,task_id,platform)
       )',
       table_name || '_cognitive_exact_read', table_name
     );
@@ -2172,6 +2399,7 @@ set search_path = ''
 as $$
 declare changed integer;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   if p_event_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'capability_expiry_event_hash_invalid' using errcode='P0001';
   end if;
@@ -2278,6 +2506,7 @@ as $$
 declare budget public.intelligence_budgets%rowtype;
 declare reserved jsonb;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into budget from public.intelligence_budgets
     where id=p_budget_id and task_id=p_task_id for update;
   select usage into reserved from public.cognitive_budget_events
@@ -2328,6 +2557,7 @@ set search_path = ''
 as $$
 declare lease_id uuid;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   if p_resource_type not in (
        'repository','branch','path','migration_namespace','edge_function',
        'database_object','provider','release_channel','platform','feature_flag'
@@ -2398,6 +2628,7 @@ set search_path = ''
 as $$
 declare lease public.cognitive_resource_leases%rowtype;
 begin
+  perform public.cognitive_assert_service_actor(array['cognitive_control_plane'],null);
   select * into lease from public.cognitive_resource_leases
   where id=p_lease_id and task_id=p_task_id for update;
   if lease.id is null or lease.revoked_at is not null
@@ -2435,6 +2666,10 @@ declare changed integer := 0;
 declare row_count_value integer;
 declare task_value public.intelligence_tasks%rowtype;
 begin
+  perform public.cognitive_assert_service_actor(
+    array['cognitive_control_plane','privacy_compliance_operator'],
+    p_actor_identity
+  );
   select * into task_value from public.intelligence_tasks where id=p_task_id for update;
   if task_value.id is null or p_tombstone_hash !~ '^[a-f0-9]{64}$'
      or p_actor_identity not in ('cognitive_control_plane','privacy_compliance_operator')

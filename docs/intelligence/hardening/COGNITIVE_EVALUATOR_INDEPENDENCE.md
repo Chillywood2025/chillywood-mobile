@@ -19,5 +19,11 @@ omitted tests and physical claims without a physical evidence type cannot satisf
 the manifest. Results are `PASS`, `FAIL`, `INCOMPLETE`, or `BLOCKED`; none grants
 owner approval.
 
+The undeployed scaffold intentionally configures no trusted evidence authority,
+so a caller-created ledger cannot produce `PASS`. A future deployment must add a
+separately reviewed verifier identity and credential boundary. Required tests are
+derived inside the evaluator from the final changed paths and platform; callers
+cannot submit an empty manifest to suppress them.
+
 Regression: `guard:cognitive-evaluator-independence` and
 `test:cognitive-evaluator-independence`.

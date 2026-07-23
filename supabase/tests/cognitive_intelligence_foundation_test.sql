@@ -1,5 +1,7 @@
 begin;
 select no_plan();
+select set_config('request.jwt.claim.role','service_role',true);
+select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
 
 -- Inventory and hard off-state.
 select has_table('public', 'cognitive_projects', 'project boundary exists');
@@ -16,6 +18,7 @@ select has_table('public', 'cognitive_state_transition_events', 'state lifecycle
 select has_table('public', 'research_claim_sources', 'relational claim sources exist');
 select has_table('public', 'research_contradictions', 'contradiction evidence exists');
 select has_table('public', 'research_retrieval_events', 'retrieval lifecycle exists');
+select has_table('public', 'cognitive_research_authorities', 'research authority registry exists');
 select has_table('public', 'execution_evidence_records', 'trusted execution evidence exists');
 select has_table('public', 'cognitive_current_findings', 'current finding state exists');
 select has_table('public', 'finding_lifecycle_events', 'immutable finding lifecycle exists');
@@ -38,10 +41,11 @@ select is(
        'cognitive_state_transition_events','cognitive_current_findings',
        'finding_lifecycle_events','cognitive_erasure_events',
        'cognitive_owner_review_requests','cognitive_approval_bindings'
+       ,'cognitive_research_authorities'
      ]) name
    ) and relrowsecurity),
-  37,
-  'RLS enabled on all 37 cognitive tables'
+  38,
+  'RLS enabled on all 38 cognitive tables'
 );
 select is(
   (select count(*)::integer from pg_class
@@ -60,10 +64,11 @@ select is(
        'cognitive_state_transition_events','cognitive_current_findings',
        'finding_lifecycle_events','cognitive_erasure_events',
        'cognitive_owner_review_requests','cognitive_approval_bindings'
+       ,'cognitive_research_authorities'
      ]) name
    ) and relforcerowsecurity),
-  37,
-  'FORCE RLS enabled on all 37 cognitive tables'
+  38,
+  'FORCE RLS enabled on all 38 cognitive tables'
 );
 select ok(not has_table_privilege('anon', 'public.intelligence_tasks', 'SELECT'), 'anon cannot read tasks');
 select ok(not has_table_privilege('anon', 'public.intelligence_tasks', 'INSERT'), 'anon cannot create tasks');
@@ -145,10 +150,19 @@ select is(
   (select count(*)::integer from pg_policies
    where schemaname='public'
      and policyname like '%_cognitive_exact_read'
-     and qual like '%super_admin%'
-     and qual like '%admin.cognitive.read%'),
+     and qual like '%cognitive_can_read_scope%'),
   37,
-  'all cognitive read policies require Owner/super-admin or the exact scoped permission'
+  'all cognitive read policies delegate to the exact scoped authorization helper'
+);
+select ok(
+  (select prosrc from pg_proc
+   where oid='public.cognitive_can_read_scope(uuid,uuid,public.cognitive_platform)'::regprocedure)
+    like '%admin.cognitive.read%'
+  and
+  (select prosrc from pg_proc
+   where oid='public.cognitive_can_read_scope(uuid,uuid,public.cognitive_platform)'::regprocedure)
+    like '%super_admin%',
+  'the scoped authorization helper requires Owner/super-admin or admin.cognitive.read'
 );
 
 insert into public.cognitive_projects(
@@ -207,6 +221,47 @@ select throws_ok(
 );
 reset role;
 
+insert into auth.users(id,is_sso_user,is_anonymous)
+values ('09000000-0000-0000-0000-000000000001',false,false);
+insert into public.platform_role_memberships(role,user_id,email,status)
+values (
+  'operator','09000000-0000-0000-0000-000000000001',
+  'cognitive-review@example.invalid','active'
+);
+insert into public.platform_staff_permission_grants(
+  target_user_id,target_email,permission_key,status
+) values (
+  '09000000-0000-0000-0000-000000000001',
+  'cognitive-review@example.invalid','admin.cognitive.read','active'
+);
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub','09000000-0000-0000-0000-000000000001',
+    'email','cognitive-review@example.invalid',
+    'role','authenticated',
+    'app_metadata',jsonb_build_object(
+      'cognitive_project_ids',jsonb_build_array('10000000-0000-0000-0000-000000000001'),
+      'cognitive_task_ids',jsonb_build_array('20000000-0000-0000-0000-000000000001'),
+      'cognitive_platforms',jsonb_build_array('ios')
+    )
+  )::text,
+  true
+);
+select is(
+  (select count(*)::integer from public.intelligence_tasks),
+  1,
+  'scoped Admin reads only the exact assigned cognitive task'
+);
+select is(
+  (select count(*)::integer from public.intelligence_tasks where platform='android'),
+  0,
+  'scoped Admin cannot cross the assigned cognitive platform'
+);
+reset role;
+select set_config('request.jwt.claims','{}',true);
+
 select throws_ok(
   $$insert into public.intelligence_tasks(project_id,platform,environment,repository_full_name,branch_name,task_key,objective_hash,actor_identity,deadman_at)
     values ('10000000-0000-0000-0000-000000000001','ios','ci','Other/repo','codex/task-bad','task-bad-repo',repeat('c',64),'operator-fixture',now()+interval '1 hour')$$,
@@ -246,6 +301,16 @@ select throws_ok(
   )$$,
   'P0001', 'task_scope_or_expected_state_mismatch', 'cross-platform transition rejected'
 );
+select throws_ok(
+  $$select public.cognitive_transition_task(
+    '20000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000001',
+    'android','ci','received','planning','product_intelligence_operator',repeat('e',64),
+    null,null
+  )$$,
+  '42501', 'cognitive_service_actor_mismatch',
+  'caller-supplied actor cannot differ from the authenticated service actor'
+);
 select is(
   (select count(*)::integer from public.cognitive_state_transition_events where task_id='20000000-0000-0000-0000-000000000001'),
   1,
@@ -260,7 +325,8 @@ select throws_ok(
 insert into public.research_sources(
   id,task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
   data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
-  publisher,publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+  authority_id,canonical_host,ownership_identity,publisher,
+  publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
   bounded_excerpt,citation_metadata,trusted_for_tool_execution
 ) values (
   '30000000-0000-0000-0000-000000000001',
@@ -268,7 +334,8 @@ insert into public.research_sources(
   '10000000-0000-0000-0000-000000000001',
   'ios','ci','research-fixture','source-official-fixture','accepted',
   'research_cache',now()+interval '30 days',repeat('1',64),repeat('2',64),repeat('3',64),
-  'Official Fixture',now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
+  'expo-docs','docs.expo.dev','expo','Expo',
+  now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
   'official_documentation',true,'Bounded fixture excerpt.',
   '{"title":"Official fixture","locator":"section-1"}'::jsonb,false
 );
@@ -287,7 +354,8 @@ insert into public.research_claims(
 insert into public.research_sources(
   id,task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
   data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
-  publisher,publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+  authority_id,canonical_host,ownership_identity,publisher,
+  publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
   bounded_excerpt,citation_metadata,trusted_for_tool_execution
 ) values (
   '30000000-0000-0000-0000-000000000002',
@@ -295,9 +363,71 @@ insert into public.research_sources(
   '10000000-0000-0000-0000-000000000001',
   'android','ci','research-fixture','source-android-fixture','accepted',
   'research_cache',now()+interval '30 days',repeat('a',64),repeat('b',64),repeat('c',64),
-  'Android Fixture',now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
+  'android-docs','developer.android.com','google','Google',
+  now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
   'official_documentation',true,'Bounded Android fixture excerpt.',
   '{"title":"Android fixture","locator":"section-1"}'::jsonb,false
+);
+select throws_ok(
+  $$insert into public.research_sources(
+    task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
+    data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
+    authority_id,canonical_host,ownership_identity,publisher,
+    publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+    bounded_excerpt,citation_metadata,trusted_for_tool_execution
+  ) values (
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','research-fixture','source-forged-authority','accepted',
+    'research_cache',now()+interval '30 days',repeat('d',64),repeat('e',64),repeat('f',64),
+    'expo-docs','docs.expo.dev','expo','Forged Publisher',
+    now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
+    'official_documentation',true,'Bounded fixture excerpt.',
+    '{"title":"Forged fixture","locator":"section-1"}'::jsonb,false
+  )$$,
+  '23503', null,
+  'research source authority and publisher are relationally enforced'
+);
+select throws_ok(
+  $$insert into public.research_sources(
+    task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
+    data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
+    authority_id,canonical_host,ownership_identity,publisher,
+    publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+    bounded_excerpt,citation_metadata,trusted_for_tool_execution
+  ) values (
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','research-fixture','source-invalid-citation','accepted',
+    'research_cache',now()+interval '30 days',repeat('d',64),repeat('e',64),repeat('f',64),
+    'expo-docs','docs.expo.dev','expo','Expo',
+    now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
+    'official_documentation',true,'Bounded fixture excerpt.',
+    '{"title":"Fixture","locator":"section-1","authority":"self-asserted"}'::jsonb,false
+  )$$,
+  '23514', null,
+  'research citation schema rejects caller-authored authority metadata'
+);
+select throws_ok(
+  $$insert into public.research_sources(
+    task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
+    data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
+    authority_id,canonical_host,ownership_identity,publisher,
+    publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+    bounded_excerpt,citation_metadata,trusted_for_tool_execution,created_at
+  ) values (
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','research-fixture','source-future-time','accepted',
+    'research_cache',now()+interval '30 days',repeat('d',64),repeat('e',64),repeat('f',64),
+    'expo-docs','docs.expo.dev','expo','Expo',
+    now()-interval '2 days',now(),now()+interval '7 days',
+    'official_documentation',true,'Bounded fixture excerpt.',
+    '{"title":"Fixture","locator":"section-1"}'::jsonb,false,
+    now()+interval '1 day'
+  )$$,
+  '23514', null,
+  'research source cannot forge a future evidence timestamp'
 );
 select lives_ok(
   $$insert into public.research_claim_sources(
@@ -318,8 +448,22 @@ insert into public.research_retrieval_events(
   '30000000-0000-0000-0000-000000000001',
   '20000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
-  'ios','ci',repeat('2',64),array[repeat('3',64)],repeat('4',64),'accepted'
+  'ios','ci',repeat('2',64),array[repeat('3',64)],repeat('3',64),'accepted'
 );
+select throws_ok(
+  $$insert into public.research_retrieval_events(
+    source_id,task_id,project_id,platform,environment,request_url_hash,
+    resolved_address_hashes,response_hash,result
+  ) values (
+    '30000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci',repeat('9',64),array[repeat('3',64)],repeat('3',64),'accepted'
+  )$$,
+  'P0001', 'research_retrieval_binding_rejected',
+  'retrieval evidence cannot be attached to a different request URL'
+);
+select set_config('request.jwt.claim.cognitive_actor','product_intelligence_operator',true);
 select is(
   public.cognitive_transition_entity(
     'research_claim','31000000-0000-0000-0000-000000000001',
@@ -331,6 +475,7 @@ select is(
   'supported',
   'technical claim requires and accepts same-scope primary provenance'
 );
+select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
 select throws_ok(
   $$insert into public.research_claim_sources(
     claim_id,source_id,task_id,project_id,platform,environment,relationship
@@ -737,6 +882,19 @@ select throws_ok(
 );
 
 -- Erasure records preserve only tombstone metadata.
+select throws_ok(
+  $$insert into public.solution_candidates(
+    task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
+    summary,evidence_metadata,data_class,retention_until
+  ) values (
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','privacy-fixture','unerasable-user-derived-candidate','received',
+    '{"private":"synthetic"}'::jsonb,'{}'::jsonb,'user_derived',now()+interval '1 day'
+  )$$,
+  '23514', null,
+  'tables outside the erasure RPC cannot retain user-derived content'
+);
 insert into public.knowledge_entities(
   id,task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
   summary,evidence_metadata,data_class,retention_until,legal_hold
@@ -749,6 +907,7 @@ insert into public.knowledge_entities(
   '{"source":"synthetic"}'::jsonb,
   'user_derived',now()+interval '1 day',false
 );
+select set_config('request.jwt.claim.cognitive_actor','privacy_compliance_operator',true);
 select is(
   public.cognitive_erase_task_user_data(
     '20000000-0000-0000-0000-000000000001',repeat('8',64),
@@ -757,6 +916,7 @@ select is(
   1,
   'erasure RPC redacts one user-derived memory row'
 );
+select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
 select is(
   (select summary from public.knowledge_entities where id='70000000-0000-0000-0000-000000000001'),
   '{}'::jsonb,

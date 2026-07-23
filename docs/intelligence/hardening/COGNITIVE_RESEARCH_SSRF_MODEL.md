@@ -12,7 +12,10 @@ network validation, with a strict redirect cap.
 
 Requests send no cookie or authorization material. One internal total timeout
 bounds DNS, redirects and transport work, aborts the active request, and does not
-depend on caller cancellation. Caller cancellation remains mandatory. Compressed and decompressed byte ceilings,
+depend on caller cancellation. Caller cancellation is raced independently and
+must terminate promptly even when a transport ignores its abort signal. The
+connected peer must be reported and equal a normalized DNS-pinned public address;
+missing or mismatched peers fail closed. Compressed and decompressed byte ceilings,
 decompression-ratio limits and a text/JSON content-type allowlist prevent response
 amplification. Scripts, forms and hidden control content are stripped. Remaining
 text is still labeled untrusted evidence and cannot invoke a tool or widen scope.

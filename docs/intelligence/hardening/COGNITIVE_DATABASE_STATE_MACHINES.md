@@ -10,7 +10,9 @@ state updates are withheld.
 
 Security-definer transition RPCs use an empty `search_path`, schema-qualified
 objects, exact scope/expected-state checks, a closed transition graph and immutable
-events. Plan snapshots bind approval scope, source commit, required tests, graph
+events. Claimed actors must match the authenticated service actor claim. Exact
+Admin readback additionally binds project, task, and platform assignments.
+Plan snapshots bind approval scope, source commit, required tests, graph
 digest, budget and rollback. Runs/evaluations use the snapshot hash rather than a
 mutable plan.
 
@@ -25,4 +27,7 @@ capabilities, creates a critical finding and creates an owner-review request.
 
 User-derived content is not immutable raw evidence. Bounded redacted metadata may
 expire or be erased; an immutable non-personal tombstone records the lifecycle.
+Tables outside the erasure RPC reject `user_derived`. Research evidence is bound
+to a static authority registry, closed citation metadata, request/content hashes,
+and bounded evidence timestamps.
 `OWNER_COUNSEL_RETENTION_DECISION_REQUIRED` remains a deployment blocker.

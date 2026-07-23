@@ -1,6 +1,6 @@
 # Product Experiment Engine
 
-Status: `SECURITY_HARDENING_IN_PROGRESS`
+Status: `SECURITY_HARDENED_SCAFFOLD_NOT_DEPLOYED`
 
 The undeployed scaffold can represent hypotheses, solution candidates, experiments, expected measures, and immutable evaluation results after strict state transitions. It may propose route fixes, UX/copy improvements, loading/empty/error/offline behavior, permission and notification clarity, call/purchase funnel changes, accessibility work, backend simplification, performance work, architecture changes, and experiments.
 

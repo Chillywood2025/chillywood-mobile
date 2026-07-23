@@ -83,7 +83,7 @@ const guardResearch = async (runBehavior) => {
   requireIncludes(policy.toLowerCase(), ["primary sources first", "untrusted", "prompt injection", "freshness", "corroboration", "private user data"], "research policy");
   if (!runBehavior) return;
   const primary = {
-    id: "official-1", reference: "https://docs.example.test/sdk", publisher: "Official Publisher",
+    id: "official-1", reference: "https://docs.expo.dev/sdk", publisher: "Expo",
     publicationDate: "2026-07-01T00:00:00Z", retrievalDate: "2026-07-21T00:00:00Z",
     sourceType: "official_documentation", primary: true, trustedForTools: false,
     canonicalUrlHash: "1".repeat(64), contentHash: "2".repeat(64),
@@ -103,7 +103,7 @@ const guardResearch = async (runBehavior) => {
     claim: "A consequential event happened.", confidence: 0.7,
     freshnessDeadline: "2026-08-22T00:00:00Z", consequential: true, technicalFact: false,
     sources: [{ ...primary, sourceType: "news", primary: false }], contradictionState: "none",
-  }, new Date("2026-07-22T00:00:00Z")).reasons.includes("consequential_news_requires_independent_corroboration"));
+  }, new Date("2026-07-22T00:00:00Z")).reasons.includes("consequential_news_requires_verified_independent_corroboration"));
   assert.ok(foundation.evaluateResearchClaim({
     claim: "An expired fact.", confidence: 0.7, freshnessDeadline: "2026-01-01T00:00:00Z",
     consequential: false, technicalFact: false, sources: [primary], contradictionState: "none",
@@ -171,6 +171,7 @@ const guardExecution = async (runBehavior) => {
   };
   const runnerCredential = "runner-review-credential";
   const ledger = new foundation.CognitiveTrustedEvidenceLedger({
+    authorityId: "synthetic-contract-authority",
     runnerCredentialHashes: { "runner-review": sha256(runnerCredential) },
     collectorCredentialHashes: { "collector-review": sha256("collector-review-credential") },
     verifyCredential: (opaque, expectedHash) => sha256(opaque) === expectedHash,
@@ -208,21 +209,25 @@ const guardExecution = async (runBehavior) => {
     runEvidenceManifestHash: ledger.manifestHash("run-review", ["test-review"]),
     runEvidenceRecordId: "run-review",
     testEvidenceRecordIds: ["test-review"],
-    finalCommit: "a".repeat(40), requiredTests: [requiredTest],
+    finalCommit: "a".repeat(40),
+    changedPaths: ["docs/intelligence/fixture.md"], platform: "shared",
     finalCommitAt: "2026-07-22T00:00:00.000Z",
   };
   const evaluationNow = new Date("2026-07-22T00:02:00.000Z");
-  assert.equal(foundation.evaluateCognitiveRun(safeEvaluation, ledger.reader(), evaluationNow).passed, true);
+  assert.equal(foundation.evaluateCognitiveRun(safeEvaluation, ledger.reader(), evaluationNow).passed, false);
+  assert.ok(foundation.evaluateCognitiveRun(safeEvaluation, ledger.reader(), evaluationNow)
+    .blockers.includes("trusted_evidence_authority_not_configured"));
   assert.ok(foundation.evaluateCognitiveRun({
     ...safeEvaluation,
     testEvidenceRecordIds: [],
     runEvidenceManifestHash: ledger.manifestHash("run-review", []),
-  }, ledger.reader(), evaluationNow).blockers.includes("required_test_missing:unit"));
+  }, ledger.reader(), evaluationNow).blockers.includes("required_test_missing:lint"));
   assert.ok(foundation.evaluateCognitiveRun({
     ...safeEvaluation,
-    requiredTests: [{ ...requiredTest, physicalEvidenceRequired: true }],
-  }, ledger.reader(), evaluationNow).blockers.includes("physical_evidence_missing:unit"));
+    changedPaths: ["config/release/android-production.json"],
+  }, ledger.reader(), evaluationNow).blockers.includes("physical_evidence_missing:native-runtime"));
   const unsafeLedger = new foundation.CognitiveTrustedEvidenceLedger({
+    authorityId: "synthetic-contract-unsafe-authority",
     runnerCredentialHashes: { "runner-review": sha256(runnerCredential) },
     collectorCredentialHashes: {},
     verifyCredential: (opaque, expectedHash) => sha256(opaque) === expectedHash,
@@ -247,7 +252,7 @@ const guardExecution = async (runBehavior) => {
     runEvidenceRecordId: "run-unsafe",
     testEvidenceRecordIds: [],
     runEvidenceManifestHash: unsafeLedger.manifestHash("run-unsafe", []),
-    requiredTests: [],
+    changedPaths: [],
   };
   const unsafeResult = foundation.evaluateCognitiveRun(unsafeInput, unsafeLedger.reader(), evaluationNow);
   assert.ok(unsafeResult.blockers.includes("permission_expansion_requires_owner_review"));

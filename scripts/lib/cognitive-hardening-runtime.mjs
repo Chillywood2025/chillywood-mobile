@@ -137,7 +137,11 @@ const closedInvocation = (request, canonicalPaths) => {
   }
   if (request.action.startsWith("repository_")) {
     if (request.argv.length) throw new Error("repository_action_argv_forbidden");
-    return { kind: "internal", action: request.action, canonicalPaths };
+    return {
+      kind: "internal",
+      action: request.action,
+      relativePaths: canonicalPaths.map((entry) => entry.relativePath),
+    };
   }
   if (request.action === "test_run_allowlisted") {
     const command = request.argv.length === 1 ? TEST_COMMANDS.get(request.argv[0]) : null;
@@ -165,6 +169,79 @@ const closedInvocation = (request, canonicalPaths) => {
   throw new Error("action_not_implemented");
 };
 
+const preparePinnedPathHandles = (action, canonicalPaths) => {
+  if (!action.startsWith("repository_")) return [];
+  const handles = [];
+  try {
+    for (const entry of canonicalPaths) {
+      const exists = fs.existsSync(entry.canonicalTarget);
+      let flags = fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW;
+      if (action === "repository_apply_patch") flags = fs.constants.O_RDWR | fs.constants.O_NOFOLLOW;
+      if (action === "repository_write_new_file") {
+        if (exists) throw new Error("new_file_already_exists");
+        flags = fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR | fs.constants.O_NOFOLLOW;
+      } else if (!exists) throw new Error("path_missing_at_use");
+      const descriptor = fs.openSync(entry.canonicalTarget, flags, 0o600);
+      const descriptorStat = fs.fstatSync(descriptor);
+      const pathStat = fs.lstatSync(entry.canonicalTarget);
+      const useTimeCanonicalTarget = fs.realpathSync(entry.canonicalTarget);
+      if (pathStat.isSymbolicLink()
+        || useTimeCanonicalTarget !== entry.canonicalTarget
+        || descriptorStat.dev !== pathStat.dev
+        || descriptorStat.ino !== pathStat.ino) {
+        fs.closeSync(descriptor);
+        throw new Error("path_identity_changed");
+      }
+      const original = action === "repository_apply_patch"
+        ? fs.readFileSync(descriptor, { encoding: null, flag: "r" })
+        : null;
+      handles.push({
+        relativePath: entry.relativePath,
+        descriptor,
+        createdByEngine: action === "repository_write_new_file",
+        original,
+        canonicalTarget: entry.canonicalTarget,
+      });
+    }
+    return handles;
+  } catch (error) {
+    for (const handle of handles) fs.closeSync(handle.descriptor);
+    throw error;
+  }
+};
+
+const rollbackPinnedPathHandles = (handles) => {
+  try {
+    for (const handle of handles) {
+      if (handle.createdByEngine) {
+        fs.closeSync(handle.descriptor);
+        handle.descriptor = null;
+        fs.unlinkSync(handle.canonicalTarget);
+      } else if (handle.original) {
+        fs.ftruncateSync(handle.descriptor, 0);
+        fs.writeSync(handle.descriptor, handle.original, 0, handle.original.length, 0);
+        fs.fsyncSync(handle.descriptor);
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const closePinnedPathHandles = (handles) => {
+  for (const handle of handles) {
+    if (Number.isInteger(handle.descriptor)) {
+      try {
+        fs.closeSync(handle.descriptor);
+      } catch {
+        // A rollback may already have closed a newly created file descriptor.
+      }
+      handle.descriptor = null;
+    }
+  }
+};
+
 export const executeAuthorizedAction = async ({
   repositoryRoot,
   request,
@@ -179,11 +256,21 @@ export const executeAuthorizedAction = async ({
   leaseRegistry,
   getRuntimeGate,
   executeInvocation,
+  rollbackCoordinator,
+  rollbackInvocation,
   signal,
 }) => {
   const preGate = getRuntimeGate();
   if (signal.aborted || preGate.emergencyStop || preGate.taskCancelled || preGate.taskQuarantined) {
     return { accepted: false, status: "blocked_preflight", result: null, blockers: ["runtime_gate_closed"] };
+  }
+  if (WRITE_ACTIONS.has(request.action)
+    && (
+      !rollbackCoordinator
+      || rollbackCoordinator.taskStates?.get(capabilityUse.taskId) !== "rollback_pending"
+      || (!request.action.startsWith("repository_") && typeof rollbackInvocation !== "function")
+    )) {
+    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["rollback_contract_missing"] };
   }
   const canonicalPaths = request.paths.map((requestedPath) => resolveConfinedRepositoryPath({
     repositoryRoot,
@@ -191,9 +278,12 @@ export const executeAuthorizedAction = async ({
     allowedScopes,
     allowNewFile,
   }));
-  if (!canonicalPaths.some((entry) => entry.relativePath === capabilityUse.path)) {
-    return { accepted: false, status: "blocked_preflight", result: null, blockers: ["capability_path_not_resolved"] };
-  }
+  const composedBlockers = capabilityLedger.authorizeComposedRequest(
+    capabilityId,
+    { ...request, paths: canonicalPaths.map((entry) => entry.relativePath) },
+    capabilityUse,
+  );
+  if (composedBlockers.length) return { accepted: false, status: "blocked_preflight", result: null, blockers: composedBlockers };
   const invocation = closedInvocation(request, canonicalPaths);
   const actionFingerprint = sha256(stableJson({
     action: request.action,
@@ -206,10 +296,25 @@ export const executeAuthorizedAction = async ({
     actionFingerprint,
     planSnapshotHash: capabilityUse.planSnapshotHash,
   };
-  if (!budgetLedger.reserve(budgetReservationId, budgetRequest, budgetGate)) {
+  const requiredBudget = {
+    ...budgetRequest,
+    toolCalls: 1,
+    toolBytes: capabilityUse.bytes,
+    concurrentCalls: 1,
+  };
+  if (budgetRequest.toolCalls !== 1
+    || budgetRequest.toolBytes !== capabilityUse.bytes
+    || budgetRequest.concurrentCalls !== 1
+    || !budgetLedger.reserve(budgetReservationId, requiredBudget, budgetGate)) {
     return { accepted: false, status: "blocked_preflight", result: null, blockers: ["budget_reservation_rejected"] };
   }
-  const leaseKeys = canonicalPaths.map((entry) => `path:${entry.relativePath}`);
+  const leaseKeys = [
+    `repository:${request.repositoryFullName}`,
+    `branch:${request.branch}`,
+    `platform:${capabilityUse.platform}`,
+    `provider:${capabilityUse.provider}`,
+    ...canonicalPaths.map((entry) => `path:${entry.relativePath}`),
+  ];
   const leaseMode = WRITE_ACTIONS.has(request.action) ? "write" : "read";
   for (const resourceKey of leaseKeys) {
     const acquired = leaseRegistry.acquire({
@@ -231,19 +336,58 @@ export const executeAuthorizedAction = async ({
     leaseKeys.forEach((key) => leaseRegistry.release(key, capabilityUse.taskId));
     return { accepted: false, status: "blocked_preflight", result: null, blockers: String(capabilityEvent.reason).split(",") };
   }
+  let pinnedHandles = [];
   try {
-    const result = await executeInvocation(invocation, signal);
+    pinnedHandles = preparePinnedPathHandles(request.action, canonicalPaths);
+    const executableInvocation = invocation.kind === "internal"
+      ? {
+          ...invocation,
+          pathHandles: pinnedHandles.map(({ relativePath, descriptor }) => ({ relativePath, descriptor })),
+        }
+      : invocation;
+    const result = await executeInvocation(executableInvocation, signal);
     const postGate = getRuntimeGate();
     const postBlockers = [
       ...(signal.aborted ? ["task_cancelled"] : []),
       ...capabilityLedger.reauthorizeAcceptedCall(capabilityId, capabilityUse, postGate),
     ];
-    const settled = budgetLedger.settle(budgetReservationId, budgetRequest, postGate);
+    const settled = budgetLedger.settle(budgetReservationId, requiredBudget, postGate);
     if (postBlockers.length || !settled) {
-      return { accepted: false, status: "blocked_postflight", result: null, blockers: [...new Set([...postBlockers, ...(!settled ? ["budget_settlement_rejected"] : [])])].sort() };
+      const blockers = [...new Set([...postBlockers, ...(!settled ? ["budget_settlement_rejected"] : [])])].sort();
+      const internalRollback = rollbackPinnedPathHandles(pinnedHandles);
+      const externalRollback = typeof rollbackInvocation === "function"
+        ? await rollbackInvocation(executableInvocation, result, signal)
+        : invocation.kind === "internal";
+      const rollbackSucceeded = internalRollback && externalRollback === true;
+      if (rollbackCoordinator && typeof rollbackCoordinator.record === "function") {
+        rollbackCoordinator.record(capabilityUse.taskId, rollbackSucceeded, postGate.now);
+      }
+      return {
+        accepted: false,
+        status: rollbackSucceeded ? "rolled_back_postflight" : "rollback_failed_quarantined",
+        result: null,
+        blockers: [...new Set([...blockers, ...(rollbackSucceeded ? [] : ["rollback_failed"])])].sort(),
+      };
     }
     return { accepted: true, status: "completed", result, blockers: [] };
+  } catch {
+    const internalRollback = rollbackPinnedPathHandles(pinnedHandles);
+    const externalRollback = typeof rollbackInvocation === "function"
+      ? await rollbackInvocation(invocation, null, signal)
+      : invocation.kind === "internal";
+    const rollbackSucceeded = internalRollback && externalRollback === true;
+    if (rollbackCoordinator && typeof rollbackCoordinator.record === "function") {
+      rollbackCoordinator.record(capabilityUse.taskId, rollbackSucceeded, getRuntimeGate().now);
+    }
+    budgetLedger.release(budgetReservationId);
+    return {
+      accepted: false,
+      status: rollbackSucceeded ? "execution_failed_rolled_back" : "rollback_failed_quarantined",
+      result: null,
+      blockers: [rollbackSucceeded ? "execution_failed" : "rollback_failed"],
+    };
   } finally {
+    closePinnedPathHandles(pinnedHandles);
     leaseKeys.forEach((key) => leaseRegistry.release(key, capabilityUse.taskId));
   }
 };
@@ -309,7 +453,17 @@ export const isPrivateOrReservedNetworkAddress = (address) => {
   const normalized = String(address).toLowerCase().replace(/^\[|\]$/gu, "").split("%")[0];
   if (net.isIPv4(normalized)) return ipv4Private(normalized);
   if (!net.isIPv6(normalized)) return true;
+  // Fail closed: IANA currently allocates global unicast from 2000::/3.
+  // Special-purpose prefixes inside that block remain denied below.
+  if (!ipv6PrefixMatch(normalized, "2000::", 3)) return true;
   return RESERVED_V6.some(([base, bits]) => ipv6PrefixMatch(normalized, base, bits));
+};
+
+const normalizedIp = (address) => {
+  const value = String(address).toLowerCase().replace(/^\[|\]$/gu, "").split("%")[0];
+  if (net.isIPv4(value)) return `v4:${value.split(".").map(Number).join(".")}`;
+  const parsed = parseIpv6(value);
+  return parsed === null ? null : `v6:${parsed.toString(16).padStart(32, "0")}`;
 };
 
 export const validateResearchUrlWithDns = async (raw, resolveDns) => {
@@ -344,18 +498,25 @@ export const fetchResearchEvidence = async ({
   if (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 100 || totalTimeoutMs > 60_000) throw new Error("research_timeout_invalid");
   const startedAt = Date.now();
   const runBounded = async (operation, timeoutLabel) => {
+    if (signal.aborted) throw new Error("research_cancelled");
     const remaining = totalTimeoutMs - (Date.now() - startedAt);
     if (remaining <= 0) throw new Error("research_total_timeout");
     let timeout;
+    let abortListener;
     try {
       return await Promise.race([
         operation(),
         new Promise((_, reject) => {
           timeout = setTimeout(() => reject(new Error(timeoutLabel)), remaining);
         }),
+        new Promise((_, reject) => {
+          abortListener = () => reject(new Error("research_cancelled"));
+          signal.addEventListener("abort", abortListener, { once: true });
+        }),
       ]);
     } finally {
       if (timeout) clearTimeout(timeout);
+      if (abortListener) signal.removeEventListener("abort", abortListener);
     }
   };
   let current = initialUrl;
@@ -389,6 +550,11 @@ export const fetchResearchEvidence = async ({
       signal.removeEventListener("abort", abortInternal);
     }
     if (signal.aborted) throw new Error("research_cancelled");
+    const connectedAddress = normalizedIp(response.connectedAddress);
+    const pinnedAddresses = new Set(target.addresses.map(normalizedIp));
+    if (!connectedAddress
+      || isPrivateOrReservedNetworkAddress(response.connectedAddress)
+      || !pinnedAddresses.has(connectedAddress)) throw new Error("research_connected_peer_mismatch");
     if (!Number.isSafeInteger(response.compressedBytes) || !Number.isSafeInteger(response.decompressedBytes)
       || response.compressedBytes < 0 || response.decompressedBytes < 0
       || response.compressedBytes > maxCompressedBytes || response.decompressedBytes > maxDecompressedBytes

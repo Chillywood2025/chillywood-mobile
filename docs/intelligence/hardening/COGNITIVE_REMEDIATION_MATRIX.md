@@ -8,10 +8,11 @@ Hardening state: `security_hardened_scaffold_not_deployed`
 
 The matrix retains every independent-review finding. “Fixed locally” means its
 source change and regression test pass on the hardening branch; it is not a
-deployment claim. The first automated independent retest found remaining P1s and
-therefore did not close any row. Corrective commit `44aa2aa0` adds composed
-enforcement plus 14 new independent-variant regressions. The “pending” values
-below refer to the required fresh retest of that exact corrective commit.
+deployment claim. The first two automated independent retest rounds found
+remaining P1s and therefore did not close any row. The current corrective working
+tree adds composed enforcement plus 25 independent-variant regressions. The
+“pending” values below refer to the required fresh retest of the next exact
+corrective commit.
 
 | Finding | Severity | Exact defect | Implementation change | Regression | Commit | Status | Independent retest |
 |---|---:|---|---|---|---|---|---|
@@ -68,11 +69,36 @@ below refer to the required fresh retest of that exact corrective commit.
 | COG-B-010 | P3 | Super-admin was omitted and Admin readback was global. | Owner/super-admin/scoped `admin.cognitive.read`; normal-user denial. | Admin + pgTAP | `b19ee9ed`, `8c7b3bbd`, `a869e69f` | fixed locally | pending |
 | C-10 | P3 | Admin status was hard-coded as live truth. | Compiled source manifest is explicitly labeled non-live. | Admin truth guard | `b19ee9ed` | fixed locally | pending |
 
-Local totals: 25/25 P1 fixed, 23/23 technical P2 gaps fixed, 4/4 P3
-fixed. `OWNER_COUNSEL_RETENTION_DECISION_REQUIRED` remains a deliberate deployment
+## Corrective exact-head findings
+
+The second retest added these concrete findings. They remain separate from the
+original 52-row inventory so the independent review record stays auditable.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| A2-EXEC-001 | P1 | Request action, branch, and all paths were not compositionally bound to the capability. | The complete request/capability tuple is validated before execution. | R15–R17 | fixed locally | pending |
+| A2-EXEC-002 | P1 | A checked path could be swapped after authorization. | Existing files use no-follow pinned descriptors with device/inode verification; new files use no-follow exclusive creation. | R18 | fixed locally | pending |
+| A2-BUDGET-001 | P1 | Zero tool budget could execute when caller usage was zero. | The engine reserves its own minimum call/concurrency and actual byte usage. | R19 | fixed locally | pending |
+| A2-POSTFLIGHT-001 | P1 | Postflight revocation left a completed side effect. | Write actions require a rollback coordinator; rejection restores/removes the scoped file and rollback failure quarantines. | R20 | fixed locally | pending |
+| A2-EVAL-001 | P1 | Caller-created evidence roots and caller-empty required tests could pass evaluation. | Tests derive from changed paths/platform; the undeployed scaffold has no configured trusted evidence authority and cannot return PASS. | R24 | fixed locally | pending |
+| A2-SSRF-001 | P1 | Research accepted an unverified connected peer and incomplete IPv6 reservation rules. | Connected peer must match the pinned public address; non-global and reserved IPv6 is denied. | R13, R20 | fixed locally | pending |
+| A2-CANCEL-001 | P1 | Research cancellation waited for the transport timeout. | Parent cancellation aborts promptly and late output is rejected. | R21 | fixed locally | pending |
+| A2-MODEL-001 | P1 | Operational model evidence IDs and blockers bypassed sanitization. | Identifier-only evidence references and recursive sanitized blockers are required. | R22 | fixed locally | pending |
+| A2-SANITIZE-001 | P1 | Unicode-encoded and split credential-like content bypassed detection. | UTF-8 bounded decoding, aggregate scanning, split-token detection, and private-identifier classification. | R01, R02, R25 | fixed locally | pending |
+| A2-DB-001 | P2 | Erasure covered only three tables while other tables could retain user-derived content. | Tables outside the erasure RPC structurally reject `user_derived`; allowed tables use transactional tombstones. | pgTAP erasure | fixed locally | pending |
+| A2-DB-002 | P2 | `admin.cognitive.read` was global. | Exact JWT project/task/platform assignment is required with the closed permission. | pgTAP scoped Admin | fixed locally | pending |
+| A2-DB-003 | P2 | Service actor identity was caller supplied. | Security-definer RPCs bind claimed actor to authenticated service actor claims. | pgTAP actor mismatch | fixed locally | pending |
+| A2-RESEARCH-001 | P2 | Source authority, citation, and retrieval evidence were caller asserted. | Static authority registry, composite FK, closed citations, bound retrieval hashes, and bounded timestamps. | pgTAP provenance variants | fixed locally | pending |
+| A2-LEASE-001 | P2 | Leases covered only paths and missed wider resource conflicts. | Writes acquire repository, branch, platform, provider, and path resource leases. | conflict suite | fixed locally | pending |
+| A2-STATUS-001 | P3 | Status overstated completed hardening. | After all local hardening gates passed, status became `security_hardened_scaffold_not_deployed`; it remains explicitly off and non-operational. | Admin/status guards | fixed locally | pending |
+
+Prior authored totals were disproved by the fresh retests. Corrected totals remain
+open until a new exact-head independent retest verifies the additional
+composed-boundary findings. `OWNER_COUNSEL_RETENTION_DECISION_REQUIRED` remains a deliberate deployment
 blocker, not a claim of legal compliance.
 
-Corrective enforcement applies across the matrix where the first retest found an
+Corrective enforcement applies across the matrix where the retests found an
 original guard to be descriptive rather than authoritative. The authoritative
-corrective checkpoint is `44aa2aa0`; older commit references identify the first
-implementation of each control, not the final independently retestable state.
+corrective checkpoint will be the next committed and pushed hardening head; older
+commit references identify the first implementation of each control, not the
+final independently retestable state.

@@ -1,6 +1,6 @@
 # Cognitive Platform Architecture
 
-Status: `SECURITY_HARDENING_IN_PROGRESS`
+Status: `SECURITY_HARDENED_SCAFFOLD_NOT_DEPLOYED`
 
 ## Shape
 
@@ -43,8 +43,11 @@ The committed snapshot is a reproducible source artifact, not production telemet
 
 ## Security-hardening state
 
-The platform is an undeployed scaffold under hardening, not a cognitive brain.
+The platform is a security-hardened undeployed scaffold, not a cognitive brain.
 Closed executor actions, consumable capabilities, immutable snapshots, an
 independent evidence evaluator, recursive sanitization, an SSRF-safe mock research
 transport, atomic budgets, leases, cancellation and rollback quarantine are
-defined in `docs/intelligence/hardening/`. Production activation remains absent.
+defined in `docs/intelligence/hardening/`. “Hardened” describes the passing local
+source, database, and adversarial contracts only. Production activation, trusted
+evidence authorities, credentials, schedulers, and deployed services remain
+absent.

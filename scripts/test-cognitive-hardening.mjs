@@ -32,8 +32,8 @@ const now = new Date("2026-07-22T12:00:00.000Z");
 
 const source = (overrides = {}) => ({
   id: "source-fixture",
-  reference: "https://docs.example.test/reference",
-  publisher: "Official Fixture Publisher",
+  reference: "https://docs.expo.dev/reference",
+  publisher: "Expo",
   publicationDate: "2026-07-20T00:00:00.000Z",
   retrievalDate: "2026-07-21T00:00:00.000Z",
   sourceType: "official_documentation",
@@ -170,6 +170,7 @@ const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, in
   const runnerCredential = "runner-credential";
   const collectorCredential = "collector-credential";
   const ledger = new foundation.CognitiveTrustedEvidenceLedger({
+    authorityId: "synthetic-ci-authority",
     runnerCredentialHashes: { "runner-fixture": hash(runnerCredential) },
     collectorCredentialHashes: { "collector-fixture": hash(collectorCredential) },
     verifyCredential: (opaque, expectedHash) => hash(opaque) === expectedHash,
@@ -224,7 +225,8 @@ const evaluation = ({ physical = false, omitTests = false, runOverrides = {}, in
     testEvidenceRecordIds: omitTests ? [] : ["test-evidence-fixture"],
     finalCommit: "a".repeat(40),
     finalCommitAt: "2026-07-22T11:59:00.000Z",
-    requiredTests,
+    changedPaths: ["docs/intelligence/fixture.md"],
+    platform: "shared",
     ...inputOverrides,
   };
   return { input, ledger, runnerCredential, collectorCredential };
@@ -333,7 +335,8 @@ test("D-22", "evaluator", () => {
   const result = foundation.evaluateCognitiveRun(fixture.input, fixture.ledger.reader(), now);
   assert.equal(result.evaluatorWriteAllowed, false);
   assert.equal(result.ownerApprovalGranted, false);
-  assert.equal(result.passed, true);
+  assert.equal(result.passed, false);
+  assert.ok(result.blockers.includes("trusted_evidence_authority_not_configured"));
 });
 test("D-23", "evaluator", () => {
   const fixture = evaluation();
@@ -356,14 +359,14 @@ test("D-24", "evaluator", () => {
 });
 test("D-25", "evaluator", () => {
   const fixture = evaluation();
-  fixture.input.requiredTests[0].physicalEvidenceRequired = true;
-  assert.ok(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger.reader(), now).blockers.includes("physical_evidence_missing:unit"));
+  fixture.input.changedPaths = ["config/release/android-production.json"];
+  assert.ok(foundation.evaluateCognitiveRun(fixture.input, fixture.ledger.reader(), now).blockers.includes("physical_evidence_missing:native-runtime"));
 });
 test("D-26", "research", () => {
   const result = foundation.evaluateResearchClaim(claim({
     technicalFact: false, consequential: true, sources: [source({ sourceType: "news", primary: false })],
   }), now);
-  assert.ok(result.reasons.includes("consequential_news_requires_independent_corroboration"));
+  assert.ok(result.reasons.includes("consequential_news_requires_verified_independent_corroboration"));
 });
 test("D-27", "graph", () => {
   const first = canonicalSnapshotHash({ commit: "a", files: [{ path: "x", hash: hash("before") }] });
@@ -413,7 +416,7 @@ test("D-36", "research", async () => {
   await assert.rejects(() => fetchResearchEvidence({
     initialUrl: "https://public.example.test/start",
     resolveDns: async (hostname) => [{ address: hostname === "public.example.test" ? "93.184.216.34" : "127.0.0.1" }],
-    request: async () => ({ status: 302, contentType: "text/plain", compressedBytes: 10, decompressedBytes: 10, body: "", redirectUrl: "https://127.0.0.1/private" }),
+    request: async () => ({ status: 302, connectedAddress: "93.184.216.34", contentType: "text/plain", compressedBytes: 10, decompressedBytes: 10, body: "", redirectUrl: "https://127.0.0.1/private" }),
     signal: controller.signal,
   }), /private_or_reserved_target/u);
 });
@@ -465,7 +468,7 @@ test("D-39", "budget", async () => {
     }),
     budgetLedger,
     budgetReservationId: "reservation-fixture",
-    budgetRequest: { toolCalls: 1, toolBytes: 10, concurrentCalls: 1 },
+    budgetRequest: { toolCalls: 1, toolBytes: 100, concurrentCalls: 1 },
     leaseRegistry: new ResourceLeaseRegistry(),
     getRuntimeGate: () => ({ ...gate(), deadlineAt: "2026-07-22T13:00:00.000Z" }),
     executeInvocation: async () => {
@@ -477,7 +480,7 @@ test("D-39", "budget", async () => {
   controller.abort();
   const result = await operation;
   assert.equal(result.accepted, false);
-  assert.equal(result.status, "blocked_postflight");
+  assert.equal(result.status, "rolled_back_postflight");
   fs.rmSync(temporary, { recursive: true, force: true });
 });
 test("D-40", "conflict", () => {

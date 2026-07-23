@@ -1,6 +1,6 @@
 # Cognitive Security Model
 
-Status: `SECURITY_HARDENING_IN_PROGRESS`
+Status: `SECURITY_HARDENED_SCAFFOLD_NOT_DEPLOYED`
 
 - No unrestricted root credential and no production model credential.
 - Expiring capabilities bind task, branch, path, tool, call count, duration, and cost.

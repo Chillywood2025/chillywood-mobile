@@ -15,7 +15,7 @@ const run = (args, input = "") => {
 const containers = run([
   "ps",
   "--filter",
-  "label=com.supabase.cli.project=chillywood-mobile",
+  "label=com.supabase.cli.project",
   "--format",
   "{{.Names}}",
 ])
@@ -46,6 +46,8 @@ insert into public.intelligence_tasks(
 
 const findingSql = (evidenceCharacter) => `
 begin;
+select set_config('request.jwt.claim.role','service_role',true);
+select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
 select pg_sleep(0.25);
 select public.cognitive_record_finding(
   '${taskId}','${projectId}','shared','ci',

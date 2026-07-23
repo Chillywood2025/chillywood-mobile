@@ -23,6 +23,11 @@ cancellation, revocation, approval and scope. Replays, expiry,
 cross-task/project/repository/platform/provider use, stale snapshots and high-risk
 path mismatches fail closed.
 
+The action engine separately binds the complete requested action, repository,
+branch, every normalized path, high-risk classification, and primary resource to
+the capability before execution. A capability valid for one requested path
+cannot authorize a sibling path smuggled into the same action.
+
 The undeployed database creates immutable capability events and exposes only the
 controlled consumption RPC to `service_role`; clients cannot issue or activate
 capabilities.
