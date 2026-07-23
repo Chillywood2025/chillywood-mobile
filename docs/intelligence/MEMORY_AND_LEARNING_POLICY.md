@@ -1,6 +1,6 @@
 # Memory and Learning Policy
 
-Status: `SECURITY_HARDENED_SCAFFOLD_NOT_DEPLOYED`
+Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 The redesigned local-only migration defines the original twenty domain tables plus scoped project, provenance, snapshot, capability, budget, lease, evidence, finding and erasure lifecycle tables.
 

@@ -187,3 +187,23 @@ P2 gaps, and one P3 status defect. Hardening returned immediately to
 | C5-FRESHNESS-001 | P2 | A supported claim could outlive the freshness deadline of its supporting source. | Bound claim freshness to every support source in TypeScript and relational SQL. | source/claim deadline fixtures | fixed locally | pending |
 | C5-SCOPE-001 | P2 | Provider owner/admin escalation detection depended on verb-before-role phrasing. | Detect bounded role/credential escalation language in either order and continue to discard the payload. | phrase-order fixtures | fixed locally | pending |
 | A5-STATUS-001 | P3 | The final hardening label was restored despite independent P1 blockers. | Use `security_hardening_in_progress` until a new exact-head four-lane retest returns zero P0/P1. | status/Admin guards | fixed locally | pending |
+
+## Sixth exact-head retest findings
+
+The sixth isolated retest reviewed
+`09845ff5d757673c9174ecab2481823824ba93d0`. All original PR #15 P1
+findings remained closed, but the database lane found two new persistence P1s.
+The architecture and research lanes also found three P2 and three P3 gaps. The
+scaffold remains `security_hardening_in_progress` while this corrective set is
+retested.
+
+| Retest finding | Severity | Exact defect | Corrective implementation | Regression | Status | Independent retest |
+|---|---:|---|---|---|---|---|
+| DB6-SAN-001 | P1 | Triple-nested unpadded base64url credential-shaped text passed SQL sanitization and persisted as research evidence. | Decode a bounded frontier across six layers and reject still-encoded input at the boundary; research persistence additionally fails closed while broker receipt authority is absent. | pgTAP triple-nested base64url fixture | fixed locally | pending |
+| DB6-FIND-001 | P1 | Finding type and target scope accepted secret-shaped and encoded-secret values. | Add table and RPC secret/private-identifier rejection for both fields. | pgTAP secret type/target/private target denials | fixed locally | pending |
+| DB6-RET-001 | P2 | Current findings had no retention, legal-hold, or erasure path. | Add bounded retention/data classification/legal-hold/erasure state plus controlled transactional erasure and immutable tombstone/lifecycle events. | pgTAP finding erasure/tombstone fixtures | fixed locally | pending |
+| A6/C6-RESEARCH-001 | P2 | Caller-written official/news metadata and caller-computable hashes could mark research supported. | TypeScript always returns broker-authority-unconfigured; SQL ingestion always rejects until a non-caller-mintable service-owned receipt authority is separately reviewed. | R-55, R-56; pgTAP broker-authority-unavailable | fixed locally | pending |
+| A6-GRAPH-001 | P2 | Graph evidence used ambient index/worktree bytes while claiming the exact HEAD commit. | Enumerate the exact commit tree and batch-read immutable commit blobs; ignore alternate indexes and working-tree bytes. | R-59 alternate empty-index equivalence | fixed locally | pending |
+| C6-SCOPE-001 | P3 | Common provider escalation phrases were not classified. | Expand grammar-independent owner/admin/credential escalation detection while retaining no payload. | R-57 | fixed locally | pending |
+| C6-ID-001 | P3 | Model evidence and research source IDs inconsistently accepted dotted secret-shaped values. | Use the closed security-identifier validator for every operational ID. | R-58 | fixed locally | pending |
+| A6-STATUS-001 | P3 | Admin copy said “Security-hardened” while canonical status remained in progress. | Admin and intelligence documents now state security hardening is in progress until a fresh exact-head retest passes. | Admin truth guard | fixed locally | pending |

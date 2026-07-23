@@ -1,6 +1,6 @@
 # Research Source Policy
 
-Status: `SECURITY_HARDENED_SCAFFOLD_NOT_DEPLOYED`
+Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 Primary sources first for technical facts, security advisories, platform behavior, and store policy. Consequential news requires corroboration. Product, UX, competitor, and engineering research must remain clearly labeled by source type.
 
@@ -17,3 +17,9 @@ from a caller boolean. Consequential news requires distinct registered owners,
 canonical URL hashes, and content hashes. The transport must report the connected
 peer and it must match one of the public DNS-pinned addresses. Missing, private,
 or mismatched peer identity fails closed.
+
+The scaffold does not yet have a non-caller-mintable broker receipt authority.
+Therefore structurally valid caller-provided URLs, excerpts, publishers, dates,
+and hashes remain unsupported and cannot be persisted as broker-observed
+research. Activation requires a separately reviewed service-owned transport
+receipt boundary.

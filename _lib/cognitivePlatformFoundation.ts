@@ -678,10 +678,10 @@ export type CognitiveToolResultEnvelope = {
   data: unknown;
 };
 
-const PROVIDER_SCOPE_ACTION = String.raw`(?:grants?|provides?|requir(?:e|es|ed)|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?|authenticates?|promotes?|upgrades?|authorizes?)`;
+const PROVIDER_SCOPE_ACTION = String.raw`(?:grants?|provides?|requir(?:e|es|ed)|requests?|needs?|expands?|broadens?|elevates?|switch(?:es)?|changes?|assumes?|authenticates?|promotes?|upgrades?|authorizes?|uses?|sets?|enabl(?:e|es|ed)|runs?|has|have)`;
 const PROVIDER_SCOPE_TARGET = String.raw`(?:owner(?:\s+role)?|super[- ]?admin|administrator|admin|production|credentials?|permissions?|privileges?|scope|access|roles?)`;
 const PROVIDER_SCOPE_EXPANSION = new RegExp(
-  String.raw`\b(?:${PROVIDER_SCOPE_ACTION})\b[\s\S]{0,100}\b(?:${PROVIDER_SCOPE_TARGET})\b|\b(?:${PROVIDER_SCOPE_TARGET})\b[\s\S]{0,100}\b(?:is\s+)?(?:${PROVIDER_SCOPE_ACTION})\b`,
+  String.raw`\b(?:${PROVIDER_SCOPE_ACTION})\b[\s\S]{0,100}\b(?:${PROVIDER_SCOPE_TARGET})\b|\b(?:${PROVIDER_SCOPE_TARGET})\b[\s\S]{0,100}\b(?:(?:is|are|must|should|needs?)(?:\s+be|\s+to\s+be)?\s+)?(?:${PROVIDER_SCOPE_ACTION})\b`,
   "iu",
 );
 
@@ -854,7 +854,7 @@ export const parseStrictModelDocument = (raw: string): StrictModelDocument => {
   if (!assertBoundedStringArray(record.evidenceIds, 64, 128) || !assertBoundedStringArray(record.blockers, 64, 256)) throw new Error("model_document_bounds_invalid");
   const sanitizedEvidenceIds = sanitizeCognitivePayload(record.evidenceIds);
   if ((record.evidenceIds as string[]).some((entry) =>
-    !validIdentifier(entry) || containsSecretLikeValue(entry) || containsPromptInjection(entry))
+    !validSecurityIdentifier(entry) || containsSecretLikeValue(entry) || containsPromptInjection(entry))
     || !sanitizedEvidenceIds.accepted
     || sanitizedEvidenceIds.categories.includes("untrusted_instruction")) {
     throw new Error("model_document_evidence_id_invalid");
@@ -1170,7 +1170,12 @@ export type CognitiveResearchDecision = {
 };
 
 export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = new Date()): CognitiveResearchDecision => {
-  const reasons: string[] = [];
+  // This undeployed scaffold intentionally has no constructible broker receipt
+  // authority. Caller-provided URLs, excerpts, dates, publishers, and hashes can
+  // be structurally reviewed, but they can never make a claim supported. A
+  // future deployment must inject service-owned transport/retrieval evidence
+  // through a separately reviewed, non-exported authority boundary.
+  const reasons: string[] = ["research_broker_authority_not_configured"];
   if (!input.claim.trim() || input.claim.length > 8_000) reasons.push("claim_invalid");
   const sanitizedClaim = sanitizeCognitivePayload(input.claim);
   if (!sanitizedClaim.accepted) reasons.push("claim_sensitive_content_rejected");
@@ -1201,7 +1206,7 @@ export const evaluateResearchClaim = (input: CognitiveResearchClaimInput, now = 
     reasons.push("claim_freshness_ceiling_exceeded");
   }
   for (const [sourceIndex, source] of input.sources.entries()) {
-    if (!validIdentifier(source.id) || containsSecretLikeValue(source.id)
+    if (!validSecurityIdentifier(source.id) || containsSecretLikeValue(source.id)
       || containsPromptInjection(source.id)) reasons.push("source_id_invalid");
     if (!sourceAuthorities[sourceIndex]) reasons.push("source_authority_unverified");
     if (source.trustedForTools !== false) reasons.push("source_must_remain_untrusted");

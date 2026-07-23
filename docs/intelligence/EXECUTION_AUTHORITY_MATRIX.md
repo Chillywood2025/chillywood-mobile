@@ -1,6 +1,6 @@
 # Cognitive Execution Authority Matrix
 
-Status: `SECURITY_HARDENED_SCAFFOLD_NOT_DEPLOYED`
+Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 | Action | Foundation authority |
 |---|---|

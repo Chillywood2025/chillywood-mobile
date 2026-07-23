@@ -7,7 +7,7 @@ const REQUIRED_READ_PERMISSION = "admin.cognitive.read";
 const STATUS_ROWS = [
   ["System", "product_intelligence_operator"],
   ["Activation", "Off"],
-  ["Deployment", "Security-hardened scaffold · not deployed"],
+  ["Deployment", "Security hardening in progress · not deployed"],
   ["Scheduler", "None"],
   ["Model credential", "None"],
   ["Tool credential", "None"],

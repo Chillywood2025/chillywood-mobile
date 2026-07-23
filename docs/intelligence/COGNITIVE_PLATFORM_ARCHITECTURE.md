@@ -1,6 +1,6 @@
 # Cognitive Platform Architecture
 
-Status: `SECURITY_HARDENED_SCAFFOLD_NOT_DEPLOYED`
+Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 ## Shape
 
@@ -28,7 +28,14 @@ The cognitive layer cannot directly own or execute money movement, user-rights c
 
 ## Knowledge graph
 
-`scripts/build-cognitive-architecture-graph.mjs` deterministically indexes tracked and pending source files without secret-like filenames. It models routes, screens, components, client methods/hooks, Edge Functions, migrations/RPCs/tables, providers, notifications, LiveKit, purchases, native/build contracts, and tests/guards. Import and definition edges support impact output for callers, dependencies, platforms, roles, user states, data, tests, release impact, and rollback scope.
+`scripts/build-cognitive-architecture-graph.mjs` deterministically indexes regular
+source blobs from the exact reviewed Git commit without consulting the ambient
+index or working tree and without secret-like filenames. It models routes,
+screens, components, client methods/hooks, Edge Functions,
+migrations/RPCs/tables, providers, notifications, LiveKit, purchases,
+native/build contracts, and tests/guards. Import and definition edges support
+impact output for callers, dependencies, platforms, roles, user states, data,
+tests, release impact, and rollback scope.
 
 The committed snapshot is a reproducible source artifact, not production telemetry and not a deployed graph database.
 
@@ -43,7 +50,7 @@ The committed snapshot is a reproducible source artifact, not production telemet
 
 ## Security-hardening state
 
-The platform is a security-hardened undeployed scaffold, not a cognitive brain.
+The platform is an undeployed scaffold under security hardening, not a cognitive brain.
 Closed executor actions, consumable capabilities, immutable snapshots, an
 independent evidence evaluator, recursive sanitization, an SSRF-safe mock research
 transport, atomic budgets, leases, cancellation and rollback quarantine are

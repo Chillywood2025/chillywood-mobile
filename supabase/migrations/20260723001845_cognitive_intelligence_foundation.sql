@@ -64,13 +64,14 @@ declare
   encoded text;
   embedded_decoded text;
   normalized text;
-  previous text;
   octet integer;
   position_value integer;
   depth integer;
 begin
-  for depth in 0..3 loop
-    previous := candidate;
+  -- Walk a bounded decoding frontier instead of repeatedly appending the
+  -- original encoded text. Six nested layers are inspected; a payload that
+  -- remains encoded beyond that bound is rejected rather than retained.
+  for depth in 0..5 loop
     decoded := '';
     position_value := 1;
     while position_value <= length(candidate) loop
@@ -129,9 +130,13 @@ begin
       end;
     end loop;
     if embedded_decoded <> '' then
-      candidate := left(candidate || E'\n' || embedded_decoded, 65536);
+      if depth = 5 then
+        return true;
+      end if;
+      candidate := left(embedded_decoded, 65536);
+    else
+      return false;
     end if;
-    exit when candidate = previous;
   end loop;
   return false;
 end;
@@ -145,7 +150,8 @@ set search_path = ''
 as $$
   select case
     when coalesce(payload,'') ~ '^[a-f0-9]{40,128}$'
-      or coalesce(payload,'') ~ '^[a-f0-9-]{36}$' then false
+      or coalesce(payload,'') ~ '^[a-f0-9-]{36}$'
+      or coalesce(payload,'') ~ '^(task|project|finding):[a-f0-9-]{36}$' then false
     else coalesce(payload,'') ~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
       or coalesce(payload,'') ~ '\m([0-9]{1,3}\.){3}[0-9]{1,3}\M'
       or coalesce(payload,'') ~ '\m\+?[0-9][0-9 ()-]{7,}[0-9]\M'
@@ -1464,8 +1470,16 @@ create table public.cognitive_current_findings (
     and not public.cognitive_text_has_secret(finding_key)
     and not public.cognitive_text_has_private_identifier(finding_key)
   ),
-  finding_type text not null check (length(finding_type) between 3 and 128),
-  target_scope text not null check (length(target_scope) between 3 and 256),
+  finding_type text not null check (
+    length(finding_type) between 3 and 128
+    and not public.cognitive_text_has_secret(finding_type)
+    and not public.cognitive_text_has_private_identifier(finding_type)
+  ),
+  target_scope text not null check (
+    length(target_scope) between 3 and 256
+    and not public.cognitive_text_has_secret(target_scope)
+    and not public.cognitive_text_has_private_identifier(target_scope)
+  ),
   severity text not null check (severity in ('p0', 'p1', 'p2', 'p3', 'info')),
   occurrence_count integer not null default 1 check (occurrence_count >= 1),
   first_seen_at timestamptz not null,
@@ -1473,12 +1487,31 @@ create table public.cognitive_current_findings (
   current_status text not null default 'open' check (current_status in ('open', 'resolved')),
   resolved_at timestamptz,
   evidence_hash text not null check (evidence_hash ~ '^[a-f0-9]{64}$'),
+  data_class public.cognitive_data_class not null default 'operational_metadata'
+    check (data_class in ('operational_metadata', 'security_evidence', 'legal_hold')),
+  retention_until timestamptz not null default statement_timestamp() + interval '90 days',
+  legal_hold boolean not null default false,
+  erased_at timestamptz,
   created_at timestamptz not null default statement_timestamp(),
+  check (retention_until > created_at),
+  check (legal_hold or retention_until <= created_at + interval '365 days'),
+  check (legal_hold = (data_class = 'legal_hold')),
+  check (
+    erased_at is null
+    or (
+      current_status = 'resolved'
+      and finding_type = 'erased_finding'
+      and target_scope = 'erased_scope'
+    )
+  ),
   unique (task_id, finding_key),
   unique (id, task_id, project_id, platform, environment),
   foreign key (task_id, project_id, platform, environment)
     references public.intelligence_tasks(id, project_id, platform, environment)
 );
+create index cognitive_current_findings_retention_idx
+  on public.cognitive_current_findings(retention_until)
+  where legal_hold = false and erased_at is null;
 
 create table public.finding_lifecycle_events (
   id uuid primary key default gen_random_uuid(),
@@ -1487,7 +1520,7 @@ create table public.finding_lifecycle_events (
   project_id uuid not null,
   platform public.cognitive_platform not null,
   environment public.cognitive_environment not null,
-  event_type text not null check (event_type in ('detected', 'recurred', 'resolved')),
+  event_type text not null check (event_type in ('detected', 'recurred', 'resolved', 'erased')),
   evidence_hash text not null check (evidence_hash ~ '^[a-f0-9]{64}$'),
   created_at timestamptz not null default statement_timestamp(),
   foreign key (finding_id, task_id, project_id, platform, environment)
@@ -2268,6 +2301,14 @@ begin
     array['cognitive_control_plane','product_intelligence_operator'],
     null
   );
+  if length(coalesce(p_finding_type, '')) not between 3 and 128
+     or length(coalesce(p_target_scope, '')) not between 3 and 256
+     or public.cognitive_text_has_secret(p_finding_type)
+     or public.cognitive_text_has_private_identifier(p_finding_type)
+     or public.cognitive_text_has_secret(p_target_scope)
+     or public.cognitive_text_has_private_identifier(p_target_scope) then
+    raise exception 'cognitive_finding_payload_rejected' using errcode = 'P0001';
+  end if;
   insert into public.cognitive_current_findings(
     task_id, project_id, platform, environment, finding_key, finding_type,
     target_scope, severity, first_seen_at, last_seen_at, evidence_hash
@@ -2332,6 +2373,68 @@ end;
 $$;
 revoke all on function public.cognitive_resolve_finding(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.cognitive_resolve_finding(uuid, text, text) to service_role;
+
+create or replace function public.cognitive_erase_finding_details(
+  p_task_id uuid,
+  p_finding_key text,
+  p_tombstone_hash text,
+  p_actor_identity text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare result_id uuid;
+declare finding_value public.cognitive_current_findings%rowtype;
+begin
+  perform public.cognitive_assert_service_actor(
+    array['cognitive_control_plane','privacy_compliance_operator'],
+    p_actor_identity
+  );
+  if p_tombstone_hash !~ '^[a-f0-9]{64}$'
+     or p_actor_identity not in ('cognitive_control_plane','privacy_compliance_operator') then
+    raise exception 'cognitive_finding_erasure_rejected' using errcode = 'P0001';
+  end if;
+  select * into finding_value
+  from public.cognitive_current_findings
+  where task_id = p_task_id and finding_key = p_finding_key
+  for update;
+  if finding_value.id is null or finding_value.legal_hold or finding_value.erased_at is not null then
+    raise exception 'cognitive_finding_erasure_rejected' using errcode = 'P0001';
+  end if;
+  update public.cognitive_current_findings
+  set finding_type = 'erased_finding',
+      target_scope = 'erased_scope',
+      current_status = 'resolved',
+      resolved_at = coalesce(resolved_at, statement_timestamp()),
+      last_seen_at = statement_timestamp(),
+      erased_at = statement_timestamp(),
+      data_class = 'operational_metadata'
+  where id = finding_value.id
+  returning id into result_id;
+  insert into public.finding_lifecycle_events(
+    finding_id, task_id, project_id, platform, environment, event_type, evidence_hash
+  ) values (
+    result_id, finding_value.task_id, finding_value.project_id,
+    finding_value.platform, finding_value.environment, 'erased', p_tombstone_hash
+  );
+  insert into public.cognitive_erasure_events(
+    task_id, project_id, platform, environment, target_table, target_id,
+    prior_data_class, tombstone_hash, legal_hold, erased_at, actor_identity
+  ) values (
+    finding_value.task_id, finding_value.project_id, finding_value.platform,
+    finding_value.environment, 'cognitive_current_findings', finding_value.id,
+    finding_value.data_class, p_tombstone_hash, false, statement_timestamp(),
+    p_actor_identity
+  );
+  return result_id;
+end;
+$$;
+revoke all on function public.cognitive_erase_finding_details(uuid, text, text, text)
+  from public, anon, authenticated;
+grant execute on function public.cognitive_erase_finding_details(uuid, text, text, text)
+  to service_role;
 
 -- RLS/readback: ordinary users receive nothing. Owner/super-admin and an
 -- operator with the exact permission and an exact JWT project/task/platform
@@ -2702,6 +2805,10 @@ declare
   ttl interval;
 begin
   perform public.cognitive_assert_service_actor(array['research_source_broker'],p_actor_identity);
+  -- The foundation has no deployed, non-caller-mintable transport receipt
+  -- authority. Structural validation below is retained as the reviewed future
+  -- contract, but no caller can currently persist a source as broker-observed.
+  raise exception 'cognitive_research_broker_authority_unavailable' using errcode = 'P0001';
   v_canonical_host := lower((regexp_match(p_reference, '^https://([^/?#:@]+)(?:[/?]|$)'))[1]);
   ttl := case p_source_type
     when 'news' then interval '7 days'

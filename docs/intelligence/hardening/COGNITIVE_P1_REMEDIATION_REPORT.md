@@ -67,6 +67,18 @@ regressions for every fifth-head bypass. Local source, SQL, and runtime suites
 are green; a new exact-head independent retest is required before final
 hardening status can be restored.
 
+The sixth exact-head retest of
+`09845ff5d757673c9174ecab2481823824ba93d0` confirmed that every original
+PR #15 P1 remained closed, then found two new SQL persistence P1s: a
+triple-nested base64url credential bypass and unsanitized finding type/target
+fields. The corrective migration closes both, gives current findings bounded
+retention and controlled erasure, and keeps research ingestion unavailable
+until a service-owned broker receipt authority exists. The same corrective set
+binds architecture evidence to immutable commit blobs, rejects caller-fabricated
+research support, broadens provider escalation classification, aligns security
+identifiers, and restores truthful in-progress copy. Local source and database
+regressions pass; exact-head independent retest remains required.
+
 Implementation commits:
 
 - `0b987819` — closed executor, capabilities, sanitizer, research, evaluator,

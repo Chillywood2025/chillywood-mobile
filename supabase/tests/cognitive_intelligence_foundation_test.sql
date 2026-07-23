@@ -119,6 +119,29 @@ select ok(
   'nested embedded base64url credential-like text is classified as secret'
 );
 select ok(
+  (
+    with recursive encoded(depth, value) as (
+      select 0, 'access_token=synthetic-fixture-value'::text
+      union all
+      select depth + 1,
+        rtrim(
+          translate(
+            replace(encode(convert_to(value,'UTF8'),'base64'), E'\n', ''),
+            '+/',
+            '-_'
+          ),
+          '='
+        )
+      from encoded
+      where depth < 3
+    )
+    select public.cognitive_text_has_secret('prefix.' || value || '.suffix')
+    from encoded
+    where depth = 3
+  ),
+  'triple-nested embedded base64url credential-like text is classified as secret'
+);
+select ok(
   not public.cognitive_json_is_sanitized(
     jsonb_build_object(
       'metadata',
@@ -1013,6 +1036,37 @@ select lives_ok(
   )$$,
   'finding recurrence is atomically deduped'
 );
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-secret-type-probe','ghp_abcdefghijklmnopqrstuvwxyz',
+    'path:_lib/safe.ts','p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding type cannot retain a secret-shaped identifier'
+);
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-secret-scope-probe','executor_scope',
+    'scope.YWNjZXNzX3Rva2VuPXN5bnRoZXRpYy1maXh0dXJlLXZhbHVl',
+    'p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding target cannot retain an encoded secret-shaped value'
+);
+select throws_ok(
+  $$select public.cognitive_record_finding(
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ios','ci','finding-private-scope-probe','executor_scope',
+    'user@example.invalid','p1',repeat('5',64)
+  )$$,
+  'P0001','cognitive_finding_payload_rejected',
+  'finding target cannot retain a private identifier'
+);
 select is(
   (select occurrence_count from public.cognitive_current_findings
    where task_id='20000000-0000-0000-0000-000000000001' and finding_key='finding-fixture-key'),
@@ -1041,6 +1095,36 @@ select is(
    where task_id='20000000-0000-0000-0000-000000000001' and event_type='resolved'),
   1,
   'resolution creates immutable event'
+);
+select lives_ok(
+  $$select public.cognitive_erase_finding_details(
+    '20000000-0000-0000-0000-000000000001',
+    'finding-fixture-key',
+    repeat('8',64),
+    'cognitive_control_plane'
+  )$$,
+  'bounded finding details can be erased through the controlled RPC'
+);
+select is(
+  (select finding_type || ':' || target_scope
+   from public.cognitive_current_findings
+   where task_id='20000000-0000-0000-0000-000000000001'
+     and finding_key='finding-fixture-key'),
+  'erased_finding:erased_scope',
+  'finding erasure retains only bounded non-personal tombstone state'
+);
+select is(
+  (select count(*)::integer from public.finding_lifecycle_events
+   where task_id='20000000-0000-0000-0000-000000000001' and event_type='erased'),
+  1,
+  'finding erasure creates immutable lifecycle evidence'
+);
+select is(
+  (select count(*)::integer from public.cognitive_erasure_events
+   where task_id='20000000-0000-0000-0000-000000000001'
+     and target_table='cognitive_current_findings'),
+  1,
+  'finding erasure creates a non-personal tombstone audit event'
 );
 select throws_ok(
   $$delete from public.finding_lifecycle_events where task_id='20000000-0000-0000-0000-000000000001'$$,
@@ -1356,7 +1440,7 @@ insert into public.intelligence_tasks(
   'operational_metadata'
 );
 select set_config('request.jwt.claim.cognitive_actor','research_source_broker',true);
-select lives_ok(
+select throws_ok(
   $$select public.cognitive_record_research_source(
     '29000000-0000-0000-0000-000000000002',
     '10000000-0000-0000-0000-000000000001',
@@ -1366,23 +1450,14 @@ select lives_ok(
     'Official fixture','research-source-fixture',array[repeat('a',64)],
     'research_source_broker'
   )$$,
-  'reviewed broker RPC computes and records research evidence hashes'
+  'P0001','cognitive_research_broker_authority_unavailable',
+  'caller-written source evidence cannot substitute for an unconfigured broker receipt authority'
 );
 select is(
-  (select canonical_url_hash from public.research_sources
+  (select count(*)::integer from public.research_sources
    where task_id='29000000-0000-0000-0000-000000000002'),
-  encode(extensions.digest(
-    convert_to('https://docs.expo.dev/research-source-fixture','UTF8'),'sha256'
-  ),'hex'),
-  'canonical URL hash is broker-computed rather than caller supplied'
-);
-select is(
-  (select content_hash from public.research_sources
-   where task_id='29000000-0000-0000-0000-000000000002'),
-  encode(extensions.digest(
-    convert_to('Bounded broker-computed fixture excerpt.','UTF8'),'sha256'
-  ),'hex'),
-  'bounded evidence hash is broker-computed rather than caller supplied'
+  0,
+  'unattested caller evidence is not persisted as research'
 );
 select set_config('request.jwt.claim.cognitive_actor','cognitive_control_plane',true);
 

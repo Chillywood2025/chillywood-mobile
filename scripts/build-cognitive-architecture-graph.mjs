@@ -5,29 +5,82 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
-const configPath = path.join(root, "config/intelligence/architecture-knowledge-graph-config.json");
-const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const compareText = (left, right) => (left < right ? -1 : left > right ? 1 : 0);
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const sourceExtensions = /\.(?:ts|tsx|js|mjs|sql|json|yml|yaml)$/u;
 const forbiddenPath = /(?:^|\/)(?:\.git|node_modules|android|ios|dist|build|coverage)(?:\/|$)|(?:^|\/)\.env(?:\.|$)|(?:credential|keystore|\.p8$|\.p12$|\.jks$|\.keystore$)/iu;
 const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+if (!/^[a-f0-9]{40}$/u.test(sourceCommit)) throw new Error("architecture_graph_source_commit_invalid");
+const treeEntries = execFileSync(
+  "git",
+  ["ls-tree", "-rz", "--full-tree", sourceCommit],
+  { cwd: root, maxBuffer: 32 * 1024 * 1024 },
+).toString("utf8").split("\0").filter(Boolean).map((record) => {
+  const separator = record.indexOf("\t");
+  if (separator < 0) throw new Error("architecture_graph_tree_record_invalid");
+  const [mode, type, objectId] = record.slice(0, separator).split(" ");
+  const relative = record.slice(separator + 1).normalize("NFC");
+  if (!/^[0-9]{6}$/u.test(mode) || !/^[a-f0-9]{40}$/u.test(objectId) || !relative) {
+    throw new Error("architecture_graph_tree_record_invalid");
+  }
+  return { mode, type, objectId, relative };
+});
+const readSingleCommitBlob = (objectId) => execFileSync(
+  "git",
+  ["cat-file", "blob", objectId],
+  { cwd: root, maxBuffer: 4 * 1024 * 1024 },
+);
+const configEntry = treeEntries.find(({ relative }) =>
+  relative === "config/intelligence/architecture-knowledge-graph-config.json");
+if (!configEntry || configEntry.mode === "120000" || configEntry.type !== "blob") {
+  throw new Error("architecture_graph_config_missing_from_commit");
+}
+const config = JSON.parse(readSingleCommitBlob(configEntry.objectId).toString("utf8"));
 const repositoryId = execFileSync("git", ["config", "--get", "remote.origin.url"], { cwd: root, encoding: "utf8" })
   .trim()
   .replace(/^.*github\.com[:/]/u, "")
   .replace(/\.git$/u, "");
 if (repositoryId !== config.repositoryId) throw new Error("architecture_graph_repository_mismatch");
 
-const allTracked = execFileSync("git", ["ls-files", "--cached", "-z"], { cwd: root })
-  .toString("utf8")
-  .split("\0")
-  .filter(Boolean);
+const allTracked = treeEntries.map(({ relative }) => relative);
 const excludedSensitivePaths = allTracked.filter((relative) => forbiddenPath.test(relative));
-const tracked = allTracked
-  .filter((relative) => relative !== "config/intelligence/architecture-knowledge-graph.json")
-  .filter((relative) => !forbiddenPath.test(relative))
-  .filter((relative) => sourceExtensions.test(relative));
+const tracked = treeEntries
+  .filter(({ relative }) => relative !== "config/intelligence/architecture-knowledge-graph.json")
+  .filter(({ relative }) => !forbiddenPath.test(relative))
+  .filter(({ relative }) => sourceExtensions.test(relative));
 if (tracked.length > config.caps.maxFiles) throw new Error("architecture_graph_file_cap_exceeded");
+const trackedObjectIds = [...new Set(
+  tracked
+    .filter(({ mode, type }) => mode !== "120000" && type === "blob" && mode.startsWith("100"))
+    .map(({ objectId }) => objectId),
+)];
+const batchOutput = execFileSync(
+  "git",
+  ["cat-file", "--batch"],
+  {
+    cwd: root,
+    input: `${trackedObjectIds.join("\n")}\n`,
+    maxBuffer: config.caps.maxTotalBytes + (trackedObjectIds.length * 128),
+  },
+);
+const blobByObjectId = new Map();
+let batchOffset = 0;
+for (const expectedObjectId of trackedObjectIds) {
+  const headerEnd = batchOutput.indexOf(0x0a, batchOffset);
+  if (headerEnd < 0) throw new Error("architecture_graph_blob_batch_invalid");
+  const [actualObjectId, type, sizeText] = batchOutput.subarray(batchOffset, headerEnd).toString("utf8").split(" ");
+  const size = Number(sizeText);
+  if (actualObjectId !== expectedObjectId || type !== "blob" || !Number.isSafeInteger(size) || size < 0) {
+    throw new Error("architecture_graph_blob_batch_invalid");
+  }
+  const contentStart = headerEnd + 1;
+  const contentEnd = contentStart + size;
+  if (contentEnd >= batchOutput.length || batchOutput[contentEnd] !== 0x0a) {
+    throw new Error("architecture_graph_blob_batch_invalid");
+  }
+  blobByObjectId.set(expectedObjectId, batchOutput.subarray(contentStart, contentEnd));
+  batchOffset = contentEnd + 1;
+}
 
 const typeFor = (relative) => {
   if (/^app\/.*\.(?:ts|tsx)$/u.test(relative)) return "route_screen";
@@ -51,23 +104,26 @@ const platformFor = (relative) => {
 const buildCompactArchitectureManifest = (enumeration = tracked) => {
   const skippedSymlinks = [];
   const files = [];
+  const sourceByPath = new Map();
   let totalBytes = 0;
-  for (const relative of enumeration) {
-    const absolute = path.resolve(root, relative);
-    if (!absolute.startsWith(`${root}${path.sep}`)) throw new Error("architecture_graph_path_escape");
-    if (!fs.existsSync(absolute)) continue;
-    const stat = fs.lstatSync(absolute);
-    if (stat.isSymbolicLink()) {
+  for (const entry of enumeration) {
+    const { mode, type, objectId, relative } = entry;
+    if (relative.startsWith("/") || relative.split("/").includes("..")) {
+      throw new Error("architecture_graph_path_escape");
+    }
+    if (mode === "120000") {
       skippedSymlinks.push(relative);
       continue;
     }
-    if (!stat.isFile()) continue;
-    if (stat.size > config.caps.maxFileBytes) throw new Error("architecture_graph_single_file_cap_exceeded");
-    if (totalBytes + stat.size > config.caps.maxTotalBytes) throw new Error("architecture_graph_total_byte_cap_exceeded");
-    const content = fs.readFileSync(absolute);
+    if (type !== "blob" || !mode.startsWith("100")) continue;
+    const content = blobByObjectId.get(objectId);
+    if (!content) throw new Error("architecture_graph_commit_blob_missing");
+    if (content.byteLength > config.caps.maxFileBytes) throw new Error("architecture_graph_single_file_cap_exceeded");
+    if (totalBytes + content.byteLength > config.caps.maxTotalBytes) throw new Error("architecture_graph_total_byte_cap_exceeded");
     totalBytes += content.byteLength;
+    sourceByPath.set(relative, content);
     files.push({
-      path: relative.replaceAll(path.sep, "/").normalize("NFC"),
+      path: relative,
       contentHash: hash(content),
       bytes: content.byteLength,
       type: typeFor(relative),
@@ -80,7 +136,7 @@ const buildCompactArchitectureManifest = (enumeration = tracked) => {
   const edges = [];
   for (const file of files) {
     if (!/\.(?:ts|tsx|js|mjs)$/u.test(file.path)) continue;
-    const source = fs.readFileSync(path.join(root, file.path), "utf8");
+    const source = sourceByPath.get(file.path)?.toString("utf8") ?? "";
     for (const match of source.matchAll(/(?:from\s+|import\s*\(|require\s*\()\s*["']([^"']+)["']/gu)) {
       if (!match[1].startsWith(".")) continue;
       const base = path.posix.normalize(path.posix.join(path.posix.dirname(file.path), match[1]));
