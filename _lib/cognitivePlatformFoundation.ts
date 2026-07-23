@@ -1,5 +1,5 @@
 export type CognitivePlatform = "shared" | "ios" | "android" | "web";
-export type CognitiveEnvironment = "local" | "ci" | "preview";
+export type CognitiveEnvironment = "local" | "ci" | "preview" | "production";
 export type CognitiveProvider =
   | "repository"
   | "github"
@@ -10,7 +10,8 @@ export type CognitiveProvider =
 
 export const COGNITIVE_REPOSITORY = "Chillywood2025/chillywood-mobile" as const;
 export const COGNITIVE_REMOTE = "origin" as const;
-export const COGNITIVE_STATUS = "security_hardening_in_progress" as const;
+export const COGNITIVE_STATUS =
+  "security_hardened_scaffold_not_deployed" as const;
 
 export const COGNITIVE_EXECUTION_ACTIONS = [
   "repository_read_file",
@@ -2736,8 +2737,12 @@ export class CognitiveRollbackCoordinator {
 
 export const COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION = {
   deploymentState: COGNITIVE_STATUS,
-  sourceManifestOnly: true,
+  sourceManifestOnly: false,
+  sourceManifestFallback: true,
+  liveReadbackCapable: true,
+  boundedLevel01OwnerControls: false,
   readOnly: true,
+  readOnlyForNonOwner: true,
   liveMemory: false,
   liveResearch: false,
   liveExecutor: false,

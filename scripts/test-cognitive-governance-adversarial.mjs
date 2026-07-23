@@ -24,7 +24,7 @@ compile("_lib/cognitiveCollectiveGovernance.ts", "governance.mjs", [
   ['from "./cognitivePlatformFoundation"', 'from "./foundation.mjs"'],
 ]);
 compile("_lib/cognitivePolicyEngine.ts", "policy.mjs", [
-  ['from "./cognitivePlatformFoundation"', 'from "./foundation.mjs"'],
+  ['from "./cognitivePlatformFoundation.ts"', 'from "./foundation.mjs"'],
 ]);
 const governance = await import(`file://${path.join(temporaryRoot, "governance.mjs")}`);
 const policy = await import(`file://${path.join(temporaryRoot, "policy.mjs")}`);

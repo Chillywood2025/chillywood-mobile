@@ -35,7 +35,7 @@ compile("_lib/cognitiveCollectiveGovernance.ts", "cognitiveCollectiveGovernance.
 ]);
 compile("_lib/cognitivePolicyEngine.ts", "cognitivePolicyEngine.mjs", [
   [
-    'from "./cognitivePlatformFoundation"',
+    'from "./cognitivePlatformFoundation.ts"',
     'from "./cognitivePlatformFoundation.mjs"',
   ],
 ]);
@@ -820,6 +820,25 @@ await test("provider authority is never executable", () => {
   });
   assert.equal(decision.executable, false);
   assert.equal(decision.ownerReviewRequired, true);
+});
+await test("typed provider policy interpreters preserve deny and escalation semantics", () => {
+  const fixtures = [
+    ["aws", { Effect: "Deny", Action: "*" }, "explicit_deny"],
+    ["azure", { effect: "Allow", role: "Owner", assignableScopes: ["/"] }, "owner_admin_or_escalation"],
+    ["kubernetes", { verbs: ["get", "list"], resources: ["pods"] }, "read_only"],
+    ["gcp", { roles: ["roles/iam.serviceAccountTokenCreator"] }, "owner_admin_or_escalation"],
+    ["github", { permissions: { contents: "write", actions: "read" } }, "write_or_release_authority"],
+    ["app_store_connect", { operation: "submit release" }, "write_or_release_authority"],
+    ["google_play", { operation: "change release track" }, "write_or_release_authority"],
+    ["eas", { operation: "publish update" }, "write_or_release_authority"],
+    ["revenuecat", { operation: "update offering" }, "write_or_release_authority"],
+    ["stripe", { operation: "create payout" }, "write_or_release_authority"],
+  ];
+  for (const [provider, rawPolicy, expected] of fixtures) {
+    const decision = policyEngine.classifyProviderPolicy(provider, rawPolicy);
+    assert.equal(decision.classification, expected, String(provider));
+    assert.equal(decision.executable, false);
+  }
 });
 await test("timestamp exact expiration is inactive", () => {
   assert.equal(

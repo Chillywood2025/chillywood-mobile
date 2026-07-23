@@ -1,7 +1,7 @@
 import { cognitiveSha256 } from "./cognitivePlatformFoundation";
 
 export const COLLECTIVE_GOVERNANCE_STATUS =
-  "collective_governance_in_progress" as const;
+  "collective_governance_source_complete_not_deployed" as const;
 
 export const COGNITIVE_GOVERNANCE_COMPONENTS = [
   "collective_intelligence_council",

@@ -1,7 +1,7 @@
 import {
   isPrivateOrReservedAddress,
   sanitizeCognitivePayload,
-} from "./cognitivePlatformFoundation";
+} from "./cognitivePlatformFoundation.ts";
 
 export type CanonicalSecurityPolicy = Readonly<{
   policyId: string;
@@ -371,6 +371,182 @@ const WRITE_AUTHORITY =
 const DENY_AUTHORITY = /\b(?:deny|denied|forbidden|not authorized|insufficient permission)\b/iu;
 const DENIAL_REVERSAL = /\b(?:remove|disable|bypass|override|reverse)\b[\s\S]{0,30}\b(?:deny|denial|restriction)\b/iu;
 
+const collectProviderEntries = (
+  value: unknown,
+  entries: Array<readonly [string, string]> = [],
+  parent = "",
+  depth = 0,
+): readonly (readonly [string, string])[] => {
+  if (depth > 8 || entries.length >= 256) return entries;
+  if (Array.isArray(value)) {
+    for (const child of value.slice(0, 128)) {
+      collectProviderEntries(child, entries, parent, depth + 1);
+    }
+    return entries;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value).slice(0, 128)) {
+      const normalizedKey = normalizeSecurityText(key, {
+        normalization: {
+          unicodeForm: "NFKC",
+          stripDefaultIgnorables: true,
+          caseFoldLabels: true,
+          maximumDecodeDepth: 3,
+          maximumEncodedCandidateBytes: 4096,
+        },
+      } as CanonicalSecurityPolicy)
+        .toLocaleLowerCase("en-US")
+        .replace(/[^a-z0-9]/gu, "");
+      collectProviderEntries(child, entries, normalizedKey, depth + 1);
+    }
+    return entries;
+  }
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    entries.push([parent, String(value).toLocaleLowerCase("en-US")]);
+  }
+  return entries;
+};
+
+const valuesFor = (
+  entries: readonly (readonly [string, string])[],
+  ...keys: readonly string[]
+): readonly string[] =>
+  entries
+    .filter(([key]) => keys.includes(key))
+    .map(([, value]) => value);
+
+const structuredProviderClassification = (
+  provider: ProviderPolicyDecision["provider"],
+  rawPolicy: unknown,
+): ProviderPolicyDecision["classification"] | null => {
+  if (!rawPolicy || typeof rawPolicy !== "object") return null;
+  const entries = collectProviderEntries(rawPolicy);
+  const effects = valuesFor(entries, "effect");
+  const explicitDeny = effects.includes("deny") || effects.includes("denied");
+  const explicitAllow = effects.includes("allow") || effects.includes("allowed");
+  const allValues = entries.map(([, value]) => value);
+  const wildcard = allValues.includes("*");
+  if (explicitDeny && !explicitAllow) return "explicit_deny";
+
+  if (provider === "aws") {
+    const actions = valuesFor(entries, "action", "actions");
+    const notActions = valuesFor(entries, "notaction", "notactions");
+    const notResources = valuesFor(entries, "notresource", "notresources");
+    if (
+      explicitAllow &&
+      (
+        wildcard ||
+        notActions.length > 0 ||
+        notResources.length > 0 ||
+        actions.some((value) =>
+          /(?:iam:passrole|iam:createpolicyversion|sts:assumerole|\*)/iu.test(value)
+        )
+      )
+    ) return "owner_admin_or_escalation";
+    if (explicitAllow && actions.length > 0) return "write_or_release_authority";
+  }
+
+  if (provider === "azure") {
+    const actions = valuesFor(entries, "actions", "dataactions");
+    const roles = valuesFor(entries, "role", "rolename", "name");
+    const scopes = valuesFor(entries, "assignablescopes");
+    if (
+      explicitAllow &&
+      (
+        wildcard ||
+        scopes.includes("/") ||
+        roles.some((value) => /(?:owner|administrator|contributor)/iu.test(value))
+      )
+    ) return "owner_admin_or_escalation";
+    if (explicitAllow && actions.length > 0) return "write_or_release_authority";
+  }
+
+  if (provider === "kubernetes") {
+    const verbs = valuesFor(entries, "verb", "verbs");
+    const roles = valuesFor(entries, "role", "roleref", "group", "groups");
+    if (
+      wildcard ||
+      verbs.includes("impersonate") ||
+      roles.some((value) => /(?:cluster-admin|system:masters)/iu.test(value))
+    ) return "owner_admin_or_escalation";
+    if (verbs.some((value) => !/^(?:get|list|watch)$/u.test(value))) {
+      return "write_or_release_authority";
+    }
+    if (verbs.length > 0) return "read_only";
+  }
+
+  if (provider === "gcp") {
+    const roles = valuesFor(entries, "role", "roles");
+    const permissions = valuesFor(entries, "permission", "permissions");
+    if (
+      wildcard ||
+      roles.some((value) =>
+        /(?:roles\/owner|roles\/editor|serviceaccounttokencreator|serviceaccountuser)/iu.test(
+          value,
+        )
+      ) ||
+      permissions.some((value) =>
+        /(?:setiampolicy|iam\.serviceaccounts\.(?:actas|getaccesstoken))/iu.test(
+          value,
+        )
+      )
+    ) return "owner_admin_or_escalation";
+    if (
+      permissions.some((value) => !/^(?:get|list|read|view|describe)/u.test(value))
+    ) return "write_or_release_authority";
+    if (permissions.length > 0) return "read_only";
+  }
+
+  if (provider === "github") {
+    const permissionEntries = entries.filter(([key]) =>
+      ["actions", "administration", "contents", "members", "workflows"].includes(key)
+    );
+    if (
+      permissionEntries.some(([key, value]) =>
+        (key === "administration" || key === "members") && value === "write"
+      )
+    ) return "owner_admin_or_escalation";
+    if (permissionEntries.some(([, value]) => value === "write")) {
+      return "write_or_release_authority";
+    }
+    if (
+      permissionEntries.length > 0 &&
+      permissionEntries.every(([, value]) => ["read", "none"].includes(value))
+    ) return "read_only";
+  }
+
+  const providerScalar = allValues.join(" ");
+  if (
+    ["app_store_connect", "google_play", "eas"].includes(provider) &&
+    /\b(?:admin|owner|release|publish|submit|rollout|track|update|build)\b/iu.test(
+      providerScalar,
+    )
+  ) return /\b(?:admin|owner)\b/iu.test(providerScalar)
+    ? "owner_admin_or_escalation"
+    : "write_or_release_authority";
+  if (
+    provider === "revenuecat" &&
+    /\b(?:admin|owner|write|create|update|delete|entitlement|product|offering)\b/iu.test(
+      providerScalar,
+    )
+  ) return /\b(?:admin|owner)\b/iu.test(providerScalar)
+    ? "owner_admin_or_escalation"
+    : "write_or_release_authority";
+  if (
+    provider === "stripe" &&
+    /\b(?:admin|owner|write|create|update|delete|transfer|payout|refund|price|product)\b/iu.test(
+      providerScalar,
+    )
+  ) return /\b(?:admin|owner)\b/iu.test(providerScalar)
+    ? "owner_admin_or_escalation"
+    : "write_or_release_authority";
+  return null;
+};
+
 export const classifyProviderPolicy = (
   provider: ProviderPolicyDecision["provider"],
   rawPolicy: unknown,
@@ -381,26 +557,32 @@ export const classifyProviderPolicy = (
   if (DENIAL_REVERSAL.test(serialized)) {
     classification = "owner_admin_or_escalation";
     reasons.push("denial_reversal_requested");
-  } else if (DENY_AUTHORITY.test(serialized)) {
+  } else {
+    const structured = structuredProviderClassification(provider, rawPolicy);
+    if (structured) {
+      classification = structured;
+      reasons.push(`typed_${provider}_policy_interpreter`);
+    } else if (DENY_AUTHORITY.test(serialized)) {
     classification = "explicit_deny";
     reasons.push("explicit_deny_observed");
-  } else if (
-    WRITE_AUTHORITY.test(serialized) ||
-    /"Action"\s*:\s*"\*"|"NotAction"|"NotResource"|\bcluster-admin\b|\bsystem:masters\b/iu.test(
-      serialized,
-    )
-  ) {
-    classification = /\b(?:owner|root|administrator|admin|impersonate|setiampolicy|assumerole)\b/iu.test(
-      serialized,
-    )
-      ? "owner_admin_or_escalation"
-      : "write_or_release_authority";
-    reasons.push("mutation_or_escalation_authority_observed");
-  } else if (/\b(?:read|view|list|get|describe|download)\b/iu.test(serialized)) {
-    classification = "read_only";
-    reasons.push("read_only_authority_observed");
-  } else {
-    reasons.push("provider_policy_unknown");
+    } else if (
+      WRITE_AUTHORITY.test(serialized) ||
+      /"Action"\s*:\s*"\*"|"NotAction"|"NotResource"|\bcluster-admin\b|\bsystem:masters\b/iu.test(
+        serialized,
+      )
+    ) {
+      classification = /\b(?:owner|root|administrator|admin|impersonate|setiampolicy|assumerole)\b/iu.test(
+        serialized,
+      )
+        ? "owner_admin_or_escalation"
+        : "write_or_release_authority";
+      reasons.push("mutation_or_escalation_authority_observed");
+    } else if (/\b(?:read|view|list|get|describe|download)\b/iu.test(serialized)) {
+      classification = "read_only";
+      reasons.push("read_only_authority_observed");
+    } else {
+      reasons.push("provider_policy_unknown");
+    }
   }
   return Object.freeze({
     provider,

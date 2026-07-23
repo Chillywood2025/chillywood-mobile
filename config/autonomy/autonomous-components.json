@@ -439,7 +439,7 @@
       "killSwitch": "remain off with no function, credentials, or scheduler",
       "rollback": "revert draft-branch source; undeployed migration is discarded or forward-corrected locally",
       "budget": {"maxToolCalls": 100, "maxDurationSeconds": 14400, "maxCostUsd": 25},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -459,7 +459,7 @@
       "killSwitch": "no deployed orchestrator",
       "rollback": "discard plan and revert draft commit",
       "budget": {"maxToolCalls": 100, "maxDurationSeconds": 14400, "maxCostUsd": 25},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -479,7 +479,7 @@
       "killSwitch": "no production network access",
       "rollback": "quarantine the claim and retain provenance",
       "budget": {"maxSourcesPerClaim": 12, "maxClaimLength": 8000},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -499,7 +499,7 @@
       "killSwitch": "migration remains undeployed",
       "rollback": "drop only in disposable local database or use future forward correction",
       "budget": {"retentionRequired": true, "expiryRequiredForCapabilities": true},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -519,7 +519,7 @@
       "killSwitch": "do not run local generator",
       "rollback": "regenerate or discard snapshot",
       "budget": {"maxFiles": 5000, "maxEdges": 20000},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -539,7 +539,7 @@
       "killSwitch": "no assignments or production flags",
       "rollback": "cancel local plan and retain evaluation",
       "budget": {"maxConcurrentExperiments": 0},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -559,7 +559,7 @@
       "killSwitch": "no deployed executor and capabilities expire",
       "rollback": "revert draft-branch commits",
       "budget": {"maxToolCalls": 100, "maxDurationSeconds": 14400, "maxCostUsd": 25},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -579,7 +579,7 @@
       "killSwitch": "no production evaluator",
       "rollback": "reject completion without changing source",
       "budget": {"writeAccess": false},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -599,7 +599,7 @@
       "killSwitch": "all production capabilities absent",
       "rollback": "expire capability and stop calls",
       "budget": {"expiryRequired": true, "maxToolCalls": 100},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -619,7 +619,7 @@
       "killSwitch": "no production router or credentials",
       "rollback": "stop at cap and retain audit",
       "budget": {"maxCostUsd": 25, "maxToolCalls": 100},
-      "deploymentState": "security_hardening_in_progress",
+      "deploymentState": "security_hardened_scaffold_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -639,7 +639,7 @@
       "killSwitch": "collective deliberation switch remains off",
       "rollback": "discard unfinished deliberation and preserve immutable evidence",
       "budget": {"maxRoleCostUsd": 1, "maxRoleDurationSeconds": 120},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -659,7 +659,7 @@
       "killSwitch": "deliberation switch remains off",
       "rollback": "cancel deliberation and preserve assessments",
       "budget": {"maxRounds": 2, "maxRoles": 9},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -679,7 +679,7 @@
       "killSwitch": "retain prior active reviewed constitution",
       "rollback": "activate a reviewed prior version after owner approval",
       "budget": {"activationDelayHours": 24},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -699,7 +699,7 @@
       "killSwitch": "decision creation unavailable",
       "rollback": "expire decision; never rewrite its history",
       "budget": {"maximumExecutionsRequired": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -719,7 +719,7 @@
       "killSwitch": "fail closed without quorum",
       "rollback": "invalidate the decision and require a new vote version",
       "budget": {"riskBasedQuorum": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -739,7 +739,7 @@
       "killSwitch": "no manifest can hide an open dissent",
       "rollback": "append a correction without deleting the prior report",
       "budget": {"boundedTextRequired": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -759,7 +759,7 @@
       "killSwitch": "decision remains incomplete without required impact groups",
       "rollback": "reopen deliberation with corrected impact evidence",
       "budget": {"requiredStakeholderGroups": 16},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -779,7 +779,7 @@
       "killSwitch": "fail deliberation closed on identity conflict",
       "rollback": "discard conflicted assessment and require an independent rerun",
       "budget": {"identitySeparationRequired": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -799,7 +799,7 @@
       "killSwitch": "governance actions fail closed when audit append fails",
       "rollback": "forward-correct with a new immutable event",
       "budget": {"retentionPolicyRequired": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -819,7 +819,7 @@
       "killSwitch": "reopening denied without material new evidence",
       "rollback": "close the new version while preserving the prior decision",
       "budget": {"materialEvidenceRequired": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -839,7 +839,7 @@
       "killSwitch": "calibration writes remain off",
       "rollback": "append a corrected calibration record",
       "budget": {"closedFieldsOnly": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -859,7 +859,7 @@
       "killSwitch": "global cognitive emergency stop",
       "rollback": "owner-reviewed reinstatement after fresh preflight",
       "budget": {"failClosed": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -879,7 +879,7 @@
       "killSwitch": "revoke active approval capabilities and preserve history",
       "rollback": "expire the version and require a new owner action",
       "budget": {"defaultApprovalHours": 24, "capabilityMaximumMinutes": 60},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {
@@ -899,7 +899,7 @@
       "killSwitch": "leave approval expired",
       "rollback": "cancel proposed reinstatement without changing expired history",
       "budget": {"revalidationRequired": true},
-      "deploymentState": "collective_governance_in_progress",
+      "deploymentState": "collective_governance_source_complete_not_deployed",
       "physicalProofRequired": false
     },
     {

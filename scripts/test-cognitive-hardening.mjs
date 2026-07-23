@@ -422,7 +422,11 @@ test("D-34", "admin", () => {
 test("D-35", "admin", () => {
   const component = read("components/admin/cognitive-control-center.tsx");
   assert.doesNotMatch(component, /\bonPress\s*=/u);
-  assert.doesNotMatch(component, /\.rpc\(|functions\.invoke|supabase/iu);
+  assert.match(
+    component,
+    /functions\.invoke\(\s*["']cognitive-governance-control["'][\s\S]{0,160}action:\s*["']status["']/u,
+  );
+  assert.doesNotMatch(component, /\.rpc\(|set_switch|record_public_research|record_collective_deliberation/iu);
 });
 test("D-36", "research", async () => {
   const controller = new AbortController();

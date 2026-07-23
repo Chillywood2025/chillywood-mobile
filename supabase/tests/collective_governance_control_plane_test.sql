@@ -132,8 +132,8 @@ select is(
       and prosecdef
       and proconfig @> array['search_path=""']
   ),
-  11,
-  'all eleven governance security-definer RPCs have an empty fixed search_path'
+  12,
+  'all twelve governance security-definer RPCs have an empty fixed search_path'
 );
 
 insert into public.cognitive_projects(id,repository_full_name)
@@ -650,7 +650,7 @@ select lives_ok(
     'governance-call-fixture',1,repeat('5',64),repeat('6',64),
     '{"status":"ok","source":"fixture"}'::jsonb,
     400,1,1,array['a6400000-0000-0000-0000-000000000001'::uuid],
-    repeat('8',64),repeat('9',40),'not_required',
+    repeat('e',64),repeat('a',40),'not_required',
     'cognitive_postflight_authority'
   )$$,
   'postflight computes and stores an immutable receipt from the consumed call and live lease'
@@ -679,13 +679,75 @@ select is(
   true,
   'successful postflight releases the exact write lease'
 );
+select set_config(
+  'request.jwt.claim.cognitive_actor',
+  'independent_evaluation_judge',
+  true
+);
+select throws_ok(
+  $$select public.cognitive_record_execution_evaluation(
+    (select id from public.cognitive_execution_receipts limit 1),
+    'pass',
+    jsonb_build_object(
+      'tests',jsonb_build_array(),
+      'finalCommit',repeat('a',40),
+      'diffHash',repeat('e',64),
+      'evidenceManifestHash',repeat('b',64),
+      'physicalEvidenceType','none'
+    ),
+    'independent_evaluation_judge'
+  )$$,
+  'P0001',
+  'cognitive_execution_evaluation_required_test_missing',
+  'independent evaluator cannot omit a required test and claim pass'
+);
+select lives_ok(
+  $$select public.cognitive_record_execution_evaluation(
+    (select id from public.cognitive_execution_receipts limit 1),
+    'pass',
+    jsonb_build_object(
+      'tests',jsonb_build_array(jsonb_build_object(
+        'testId','governance-red-team',
+        'status','passed',
+        'exitCode',0,
+        'commit',repeat('a',40)
+      )),
+      'finalCommit',repeat('a',40),
+      'diffHash',repeat('e',64),
+      'evidenceManifestHash',repeat('b',64),
+      'physicalEvidenceType','none'
+    ),
+    'independent_evaluation_judge'
+  )$$,
+  'independent evaluator verifies the actual receipt commit, diff, and required test'
+);
+select is(
+  (
+    select evaluation_status::text
+    from public.governance_execution_evaluations
+    limit 1
+  ),
+  'pass',
+  'independent evaluator result is stored separately from the immutable receipt'
+);
+select throws_ok(
+  $$delete from public.governance_execution_evaluations$$,
+  '42501',
+  'immutable_cognitive_evidence',
+  'independent evaluation evidence cannot be deleted'
+);
+select set_config(
+  'request.jwt.claim.cognitive_actor',
+  'cognitive_postflight_authority',
+  true
+);
 select throws_ok(
   $$select public.governance_record_execution_receipt(
     'a6300000-0000-0000-0000-000000000001',
     'governance-call-fixture',1,repeat('5',64),repeat('6',64),
     '{"status":"ok","source":"replay"}'::jsonb,
     400,1,1,array['a6400000-0000-0000-0000-000000000001'::uuid],
-    repeat('8',64),repeat('9',40),'not_required',
+    repeat('e',64),repeat('a',40),'not_required',
     'cognitive_postflight_authority'
   )$$,
   'P0001',
@@ -764,14 +826,15 @@ select throws_ok(
   'governance_approval_scope_rejected',
   'approval activation rejects a validity window longer than 24 hours'
 );
-select is(
-  public.governance_set_level01_switch(
+select throws_ok(
+  $$select public.governance_set_level01_switch(
     'a1000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
     'shared','ci','cognitive_research_enabled',true,'fixture-v1'
-  ) is not null,
-  true,
-  'Owner can activate only an allowlisted Level 0/1 switch through the RPC'
+  )$$,
+  'P0001',
+  'governance_switch_scope_rejected',
+  'Level 0/1 activation is rejected outside the exact production canary scope'
 );
 select throws_ok(
   $$select public.governance_set_level01_switch(
@@ -864,6 +927,50 @@ select is(
   'recycled-email caller cannot read governance decisions'
 );
 reset role;
+
+select ok(
+  '2026-07-23 11:59:59.999+00'::timestamptz
+    < '2026-07-23 12:00:00+00'::timestamptz,
+  'authority remains active one millisecond before its exclusive expiration'
+);
+select ok(
+  not (
+    '2026-07-23 12:00:00+00'::timestamptz
+      < '2026-07-23 12:00:00+00'::timestamptz
+  ),
+  'authority is inactive at the exact exclusive expiration boundary'
+);
+select ok(
+  not (
+    '2026-07-23 12:00:00.001+00'::timestamptz
+      < '2026-07-23 12:00:00+00'::timestamptz
+  ),
+  'authority remains inactive after its exclusive expiration'
+);
+select is(
+  transaction_timestamp(),
+  transaction_timestamp(),
+  'authority functions use one database-authoritative transaction clock'
+);
+set local timezone = 'America/Chicago';
+select is(
+  '2026-11-01 01:30:00-05'::timestamptz
+    < '2026-11-01 01:30:00-06'::timestamptz,
+  true,
+  'DST fallback ambiguity is resolved by timestamptz instants'
+);
+set local timezone = 'UTC';
+select is(
+  '2026-07-23 12:00:00+00'::timestamptz,
+  '2026-07-23 07:00:00-05'::timestamptz,
+  'authority timestamps compare as instants across non-UTC sessions'
+);
+select is(
+  '2026-07-22 21:49:00+00'::timestamptz
+    <= '2026-07-22 21:49:00+00'::timestamptz,
+  true,
+  'provider waiting periods become effective at their exact inclusive activation instant'
+);
 
 select finish();
 rollback;

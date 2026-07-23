@@ -1883,8 +1883,8 @@ select throws_ok(
     'Official fixture','research-source-fixture',array[repeat('a',64)],
     'research_source_broker'
   )$$,
-  'P0001','cognitive_research_broker_authority_unavailable',
-  'caller-written source evidence cannot substitute for an unconfigured broker receipt authority'
+  'P0001','cognitive_public_research_canary_rejected',
+  'caller-written evidence outside the exact production canary scope is rejected'
 );
 select is(
   (select count(*)::integer from public.research_sources

@@ -177,3 +177,6 @@ verify_jwt = false
 
 [functions.admin-owner-controls]
 verify_jwt = false
+
+[functions.cognitive-governance-control]
+verify_jwt = true

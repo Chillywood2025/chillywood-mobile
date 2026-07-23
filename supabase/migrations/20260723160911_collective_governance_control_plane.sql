@@ -1045,6 +1045,52 @@ revoke all on function public.governance_assert_exact_owner()
 grant execute on function public.governance_assert_exact_owner()
   to authenticated;
 
+-- Edge Functions hold the service credential, never a model or client.  This
+-- helper narrows that already-privileged server identity to a closed cognitive
+-- actor label without depending on caller-controlled JWT custom claims.
+create function public.governance_assert_level01_service_actor(
+  p_allowed_actors text[],
+  p_claimed_actor text
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  request_role text := nullif(
+    current_setting('request.jwt.claim.role', true),
+    ''
+  );
+begin
+  if request_role <> 'service_role'
+     or p_claimed_actor is null
+     or not p_claimed_actor = any(p_allowed_actors)
+     or p_claimed_actor not in (
+       'governance_constitution_service',
+       'deliberation_orchestrator',
+       'decision_manifest_authority',
+       'owner_approval_lifecycle_service',
+       'capability_and_tool_broker',
+       'cognitive_postflight_authority',
+       'independent_evaluation_judge',
+       'approval_revalidation_service',
+       'research_source_broker',
+       'intelligence_memory_service',
+       'governance_canary_scheduler'
+     ) then
+    raise exception 'governance_level01_service_actor_mismatch'
+      using errcode = '42501';
+  end if;
+  return p_claimed_actor;
+end;
+$$;
+revoke all on function public.governance_assert_level01_service_actor(text[],text)
+  from public, anon, authenticated;
+grant execute on function public.governance_assert_level01_service_actor(text[],text)
+  to service_role;
+
 create function public.governance_bootstrap_constitution(
   p_task_id uuid,
   p_project_id uuid,
@@ -1068,7 +1114,7 @@ declare
   role_key_value text;
   veto_scope_values text[];
 begin
-  perform public.cognitive_assert_service_actor(
+  perform public.governance_assert_level01_service_actor(
     array['governance_constitution_service'],
     p_actor_identity
   );
@@ -1186,7 +1232,7 @@ declare
   supporting_votes integer;
   stakeholder_count integer;
 begin
-  perform public.cognitive_assert_service_actor(
+  perform public.governance_assert_level01_service_actor(
     array['decision_manifest_authority'],
     p_actor_identity
   );
@@ -1387,7 +1433,7 @@ declare
   decision_value public.governance_decision_manifests%rowtype;
   approval_id uuid;
 begin
-  perform public.cognitive_assert_service_actor(
+  perform public.governance_assert_level01_service_actor(
     array['owner_approval_lifecycle_service'],
     p_actor_identity
   );
@@ -1673,7 +1719,7 @@ declare
   result_id uuid;
   now_at timestamptz := transaction_timestamp();
 begin
-  perform public.cognitive_assert_service_actor(
+  perform public.governance_assert_level01_service_actor(
     array['capability_and_tool_broker'],
     p_actor_identity
   );
@@ -1820,7 +1866,7 @@ declare
   lease_id_value uuid;
   event_sequence_value integer;
 begin
-  perform public.cognitive_assert_service_actor(
+  perform public.governance_assert_level01_service_actor(
     array['cognitive_postflight_authority'],
     p_actor_identity
   );
@@ -2072,7 +2118,7 @@ declare
   now_at timestamptz := transaction_timestamp();
   expired_count integer;
 begin
-  perform public.cognitive_assert_service_actor(
+  perform public.governance_assert_level01_service_actor(
     array['approval_revalidation_service'],
     p_actor_identity
   );

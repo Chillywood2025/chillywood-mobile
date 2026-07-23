@@ -1,5 +1,16 @@
 # Cognitive Dependency Advisory Review
 
+Observed closeout:
+
+- Root production audit: 0 critical, 0 high, 23 moderate.
+- `ops/alert-automation`: 0 critical, 0 high, 0 moderate.
+- The root moderate advisories are inherited Expo/build/development tooling. They
+  are not a demonstrated Level 0/1 server runtime path and remain tracked for a
+  reviewed upstream upgrade.
+- No automatic audit fix was run.
+- `guard:cognitive-dependency-advisories` fails on any production critical or high
+  advisory.
+
 Status: production-reachable critical/high deployment gate closed for the current
 Collective Governance dependency state.
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "systemId": "product_intelligence_operator",
-  "deploymentState": "collective_governance_in_progress",
+  "deploymentState": "collective_governance_source_complete_not_deployed",
   "activationMode": "off",
   "scheduler": "none",
   "supportedPlatforms": ["shared", "ios", "android", "web"],

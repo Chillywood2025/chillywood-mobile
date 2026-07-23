@@ -395,7 +395,10 @@ variant("R-13 leases reject cross-task writes and release cleanly", () => {
 });
 
 variant("R-14 source status remains explicitly undeployed and uncredentialed", () => {
-  assert.equal(foundation.COGNITIVE_STATUS, "security_hardening_in_progress");
+  assert.equal(
+    foundation.COGNITIVE_STATUS,
+    "security_hardened_scaffold_not_deployed",
+  );
   assert.deepEqual({
     liveMemory: foundation.COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION.liveMemory,
     liveResearch: foundation.COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION.liveResearch,

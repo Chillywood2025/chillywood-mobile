@@ -1,6 +1,6 @@
 # Cognitive Predeployment Closeout
 
-Current gate: `collective_governance_in_progress`.
+Current gate: `collective_governance_source_complete_not_deployed`.
 
 Implemented source controls include canonical sanitizer/network/path policies,
 fail-closed retention, postflight receipts, budget reservations, hierarchical

@@ -8,7 +8,7 @@ const REQUIRED_READ_PERMISSION = "admin.cognitive.read";
 const SOURCE_STATUS_ROWS = [
   ["System", "product_intelligence_operator"],
   ["Activation", "Off"],
-  ["Deployment", "Security hardening in progress · not deployed"],
+  ["Deployment", "Collective governance source complete · not deployed"],
   ["Scheduler", "None"],
   ["Model credential", "None"],
   ["Tool credential", "None"],
@@ -19,6 +19,7 @@ const SOURCE_STATUS_ROWS = [
 ] as const;
 
 type LiveCognitiveStatus = {
+  canManageLevel01: boolean;
   deploymentState: string;
   schedulerState: string;
   switches: Record<string, boolean>;

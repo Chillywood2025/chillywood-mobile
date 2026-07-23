@@ -29,6 +29,7 @@ const validDeploymentStates = new Set([
   "security_hardening_in_progress",
   "collective_governance_in_progress",
   "security_hardened_scaffold_not_deployed",
+  "collective_governance_source_complete_not_deployed",
 ]);
 const requiredFields = [
   "id", "owningSystem", "componentType", "supportedPlatforms", "paths",

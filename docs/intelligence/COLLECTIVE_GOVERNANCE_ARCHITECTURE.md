@@ -1,6 +1,6 @@
 # Collective Intelligence and Governance Architecture
 
-Status: `collective_governance_in_progress`
+Status: `collective_governance_source_complete_not_deployed`
 
 Source base: `747a6d1257c029001e0f8051bf385b6bf1b5c261`
 

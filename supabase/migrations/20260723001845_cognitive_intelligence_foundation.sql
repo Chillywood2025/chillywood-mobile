@@ -3,7 +3,7 @@
 -- provider credential, or execution authority is created by this migration.
 
 create type public.cognitive_platform as enum ('shared', 'ios', 'android', 'web', 'unknown');
-create type public.cognitive_environment as enum ('local', 'ci', 'preview');
+create type public.cognitive_environment as enum ('local', 'ci', 'preview', 'production');
 create type public.cognitive_task_status as enum (
   'received', 'planning', 'awaiting_approval', 'approved', 'executing',
   'evaluating', 'completed', 'failed', 'cancelled', 'budget_exhausted',
@@ -1079,12 +1079,16 @@ create table public.cognitive_projects (
   source_state text not null default 'security_hardening_in_progress'
     check (source_state in (
       'security_hardening_in_progress',
-      'security_hardened_scaffold_not_deployed'
+      'security_hardened_scaffold_not_deployed',
+      'collective_governance_source_complete_not_deployed',
+      'level01_canary'
     )),
-  activation_state text not null default 'off' check (activation_state = 'off'),
-  scheduler_state text not null default 'none' check (scheduler_state = 'none'),
+  activation_state text not null default 'off'
+    check (activation_state in ('off', 'level01_canary')),
+  scheduler_state text not null default 'none'
+    check (scheduler_state in ('none', 'bounded_level01')),
   production_authority boolean not null default false check (production_authority = false),
-  created_at timestamptz not null default statement_timestamp()
+  created_at timestamptz not null default transaction_timestamp()
 );
 
 create table public.intelligence_tasks (
@@ -1114,8 +1118,8 @@ create table public.intelligence_tasks (
   deadman_at timestamptz not null,
   retention_until timestamptz,
   data_class public.cognitive_data_class not null default 'operational_metadata',
-  created_at timestamptz not null default statement_timestamp(),
-  updated_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
+  updated_at timestamptz not null default transaction_timestamp(),
   unique (project_id, platform, environment, task_key),
   unique (id, project_id, platform, environment)
 );
@@ -1159,7 +1163,7 @@ begin
         retention_until timestamptz,
         legal_hold boolean not null default false,
         erased_at timestamptz,
-        created_at timestamptz not null default statement_timestamp(),
+        created_at timestamptz not null default transaction_timestamp(),
         unique (task_id, dedupe_key),
         unique (id, task_id, project_id, platform, environment),
         foreign key (task_id, project_id, platform, environment)
@@ -1248,12 +1252,12 @@ begin
      or encode(extensions.digest(convert_to(coalesce(p_opaque_nonce,''),'UTF8'),'sha256'),'hex')
        is distinct from capability.nonce_hash
      or capability.status <> 'active'
-     or statement_timestamp() < capability.not_before
-     or statement_timestamp() >= capability.expires_at
+     or transaction_timestamp() < capability.not_before
+     or transaction_timestamp() >= capability.expires_at
      or capability.revoked_at is not null
      or task_value.id is null or task_value.cancelled_at is not null
      or task_value.quarantined_at is not null
-     or statement_timestamp() >= task_value.deadman_at
+     or transaction_timestamp() >= task_value.deadman_at
      or coalesce(emergency_status,'emergency_stop') <> 'active'
      or capability.task_id <> p_task_id or capability.project_id <> p_project_id
      or capability.repository_full_name <> 'Chillywood2025/chillywood-mobile'
@@ -1292,7 +1296,7 @@ begin
     remaining_calls=remaining_calls-1,
     remaining_bytes=remaining_bytes-p_bytes,
     remaining_cost=remaining_cost-p_cost,
-    consumed_at=statement_timestamp(),
+    consumed_at=transaction_timestamp(),
     next_usage_sequence=next_usage_sequence+1,
     status=case when remaining_calls-1=0 then 'exhausted'::public.cognitive_capability_status else status end
   where id=capability.id;
@@ -1355,9 +1359,9 @@ begin
      or encode(extensions.digest(convert_to(coalesce(p_opaque_nonce,''),'UTF8'),'sha256'),'hex')
           is distinct from capability.nonce_hash
      or capability.status not in ('active','exhausted')
-     or capability.revoked_at is not null or statement_timestamp() >= capability.expires_at
+     or capability.revoked_at is not null or transaction_timestamp() >= capability.expires_at
      or task_value.cancelled_at is not null or task_value.quarantined_at is not null
-     or statement_timestamp() >= task_value.deadman_at
+     or transaction_timestamp() >= task_value.deadman_at
      or coalesce(emergency_status,'emergency_stop') <> 'active'
      or p_result_envelope is null
      or pg_column_size(p_result_envelope) > 65536
@@ -1413,7 +1417,7 @@ begin
     raise exception 'capability_revocation_rejected' using errcode='P0001';
   end if;
   update public.cognitive_capabilities set
-    status='revoked',revoked_at=statement_timestamp(),
+    status='revoked',revoked_at=transaction_timestamp(),
     next_usage_sequence=next_usage_sequence+1
   where id=capability.id;
   insert into public.cognitive_capability_events(
@@ -1465,7 +1469,7 @@ as $$
         and request.status = 'approved'
         and request.approved_by is not null
         and request.approved_at is not null
-        and request.expires_at > statement_timestamp()
+        and request.expires_at > transaction_timestamp()
         and request.metadata->>'approval_scope_hash' is not distinct from p_approval_scope_hash
         and request.metadata->>'plan_snapshot_hash' is not distinct from p_snapshot_hash
         and exists (
@@ -1574,8 +1578,8 @@ begin
       and capability.platform=p_platform and capability.environment=p_environment
       and capability.approval_request_id=p_approval_request_id
       and capability.plan_snapshot_hash=p_snapshot_hash
-      and capability.status='active' and capability.not_before <= statement_timestamp()
-      and capability.expires_at > statement_timestamp() and capability.revoked_at is null
+      and capability.status='active' and capability.not_before <= transaction_timestamp()
+      and capability.expires_at > transaction_timestamp() and capability.revoked_at is null
   ) then
     raise exception 'cognitive_transition_active_capability_required' using errcode = 'P0001';
   end if;
@@ -1601,8 +1605,8 @@ begin
 
   if task_value.status='rollback_running' and p_next='rollback_failed' then
     update public.intelligence_tasks
-      set status='quarantined', quarantined_at=statement_timestamp(),
-          updated_at=statement_timestamp()
+      set status='quarantined', quarantined_at=transaction_timestamp(),
+          updated_at=transaction_timestamp()
       where id=p_task_id;
     insert into public.cognitive_state_transition_events(
       task_id,project_id,platform,environment,entity_type,entity_id,
@@ -1614,7 +1618,7 @@ begin
        'rollback_failed','quarantined',p_actor_identity,p_transition_hash);
     with revoked as (
       update public.cognitive_capabilities
-      set status='revoked', revoked_at=statement_timestamp(),
+      set status='revoked', revoked_at=transaction_timestamp(),
           next_usage_sequence=next_usage_sequence+1
       where task_id=p_task_id and status in ('active','exhausted')
       returning *
@@ -1642,9 +1646,9 @@ begin
 
   update public.intelligence_tasks set
     status=p_next,
-    updated_at=statement_timestamp(),
-    cancelled_at=case when p_next='cancelled' then statement_timestamp() else cancelled_at end,
-    quarantined_at=case when p_next='quarantined' then statement_timestamp() else quarantined_at end
+    updated_at=transaction_timestamp(),
+    cancelled_at=case when p_next='cancelled' then transaction_timestamp() else cancelled_at end,
+    quarantined_at=case when p_next='quarantined' then transaction_timestamp() else quarantined_at end
   where id=p_task_id;
   insert into public.cognitive_state_transition_events(
     task_id,project_id,platform,environment,entity_type,entity_id,
@@ -1677,7 +1681,7 @@ create table public.cognitive_research_authorities (
   )),
   publisher text not null check (length(publisher) between 2 and 256),
   ownership_identity text not null check (length(ownership_identity) between 2 and 80),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   primary key (authority_id, canonical_host, source_type),
   unique (authority_id,canonical_host,source_type,publisher,ownership_identity)
 );
@@ -1751,7 +1755,7 @@ alter table public.research_sources
       when 'store_policy' then interval '30 days'
       else interval '90 days'
     end
-    and created_at <= statement_timestamp() + interval '5 minutes'
+    and created_at <= transaction_timestamp() + interval '5 minutes'
   ),
   add constraint research_source_text_sanitized check (
     not public.cognitive_text_has_secret(publisher)
@@ -1802,7 +1806,7 @@ create table public.research_claim_sources (
   platform public.cognitive_platform not null,
   environment public.cognitive_environment not null,
   relationship text not null check (relationship in ('supports', 'contradicts', 'context')),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   primary key (claim_id, source_id),
   foreign key (claim_id, task_id, project_id, platform, environment)
     references public.research_claims(id, task_id, project_id, platform, environment),
@@ -1900,7 +1904,7 @@ create table public.research_contradictions (
   environment public.cognitive_environment not null,
   evidence_hash text not null check (evidence_hash ~ '^[a-f0-9]{64}$'),
   resolution_state text not null default 'open' check (resolution_state in ('open', 'resolved')),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   foreign key (claim_id, task_id, project_id, platform, environment)
     references public.research_claims(id, task_id, project_id, platform, environment),
   foreign key (source_id, task_id, project_id, platform, environment)
@@ -1918,7 +1922,7 @@ create table public.research_retrieval_events (
   resolved_address_hashes text[] not null check (cardinality(resolved_address_hashes) between 1 and 16),
   response_hash text check (response_hash is null or response_hash ~ '^[a-f0-9]{64}$'),
   result text not null check (result in ('accepted', 'blocked', 'failed')),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   foreign key (source_id, task_id, project_id, platform, environment)
     references public.research_sources(id, task_id, project_id, platform, environment)
 );
@@ -1937,7 +1941,7 @@ begin
   if source_value.id is null
      or new.request_url_hash <> source_value.canonical_url_hash
      or (new.result='accepted' and new.response_hash is distinct from source_value.content_hash)
-     or new.created_at > statement_timestamp() + interval '5 minutes'
+     or new.created_at > transaction_timestamp() + interval '5 minutes'
      or exists (
        select 1 from unnest(new.resolved_address_hashes) address_hash
        where address_hash !~ '^[a-f0-9]{64}$'
@@ -2021,10 +2025,10 @@ create table public.execution_plan_snapshots (
   ),
   approval_scope_hash text not null check (approval_scope_hash ~ '^[a-f0-9]{64}$'),
   approval_request_id uuid not null references public.autonomous_approval_requests(id),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   data_class public.cognitive_data_class not null default 'operational_metadata'
     check (data_class in ('operational_metadata','non_personal_audit','security_evidence')),
-  retention_until timestamptz not null default statement_timestamp() + interval '365 days'
+  retention_until timestamptz not null default transaction_timestamp() + interval '365 days'
     check (retention_until > created_at and retention_until <= created_at + interval '365 days'),
   legal_hold boolean not null default false,
   unique (id, task_id, project_id, platform, environment),
@@ -2059,7 +2063,7 @@ create table public.execution_evidence_records (
   evidence_hash text not null check (evidence_hash ~ '^[a-f0-9]{64}$'),
   trusted_producer text not null check (length(trusted_producer) between 3 and 128),
   final_commit text not null check (final_commit ~ '^[a-f0-9]{40}$'),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   foreign key (run_id, task_id, project_id, platform, environment)
     references public.execution_runs(id, task_id, project_id, platform, environment)
 );
@@ -2159,7 +2163,7 @@ create table public.cognitive_capabilities (
   revoked_at timestamptz,
   consumed_at timestamptz,
   next_usage_sequence integer not null default 1 check (next_usage_sequence >= 1),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   unique (id, task_id, project_id, platform, environment),
   foreign key (task_id, project_id, platform, environment)
     references public.intelligence_tasks(id, project_id, platform, environment),
@@ -2197,7 +2201,7 @@ create table public.cognitive_capability_events (
     )
   ),
   request_hash text not null check (request_hash ~ '^[a-f0-9]{64}$'),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   unique (capability_id, call_id),
   unique (capability_id, usage_sequence),
   foreign key (capability_id, task_id, project_id, platform, environment)
@@ -2257,7 +2261,7 @@ create table public.cognitive_budget_events (
       or usage->>'reason_hash' ~ '^[a-f0-9]{64}$'
     )
   ),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   unique (budget_id, reservation_id, event_type),
   foreign key (budget_id, task_id, project_id, platform, environment)
     references public.intelligence_budgets(id, task_id, project_id, platform, environment)
@@ -2283,7 +2287,7 @@ create table public.cognitive_resource_leases (
   expires_at timestamptz not null check (expires_at > issued_at),
   heartbeat_at timestamptz not null,
   revoked_at timestamptz,
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   foreign key (task_id, project_id, platform, environment)
     references public.intelligence_tasks(id, project_id, platform, environment)
 );
@@ -2310,7 +2314,7 @@ create table public.cognitive_state_transition_events (
     and not public.cognitive_text_has_private_identifier(actor_identity)
   ),
   transition_hash text not null check (transition_hash ~ '^[a-f0-9]{64}$'),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   foreign key (task_id, project_id, platform, environment)
     references public.intelligence_tasks(id, project_id, platform, environment)
 );
@@ -2347,10 +2351,10 @@ create table public.cognitive_current_findings (
   evidence_hash text not null check (evidence_hash ~ '^[a-f0-9]{64}$'),
   data_class public.cognitive_data_class not null default 'operational_metadata'
     check (data_class in ('operational_metadata', 'security_evidence', 'legal_hold')),
-  retention_until timestamptz not null default statement_timestamp() + interval '90 days',
+  retention_until timestamptz not null default transaction_timestamp() + interval '90 days',
   legal_hold boolean not null default false,
   erased_at timestamptz,
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   check (retention_until > created_at),
   check (legal_hold or retention_until <= created_at + interval '365 days'),
   check (legal_hold = (data_class = 'legal_hold')),
@@ -2380,7 +2384,7 @@ create table public.finding_lifecycle_events (
   environment public.cognitive_environment not null,
   event_type text not null check (event_type in ('detected', 'recurred', 'resolved', 'erased')),
   evidence_hash text not null check (evidence_hash ~ '^[a-f0-9]{64}$'),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   foreign key (finding_id, task_id, project_id, platform, environment)
     references public.cognitive_current_findings(id, task_id, project_id, platform, environment)
 );
@@ -2402,7 +2406,7 @@ create table public.cognitive_erasure_events (
     and not public.cognitive_text_has_secret(actor_identity)
     and not public.cognitive_text_has_private_identifier(actor_identity)
   ),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   foreign key (task_id, project_id, platform, environment)
     references public.intelligence_tasks(id, project_id, platform, environment)
 );
@@ -2566,9 +2570,9 @@ begin
   if not allowed then raise exception 'invalid_cognitive_task_transition' using errcode = 'P0001'; end if;
   update public.intelligence_tasks
     set status = p_next,
-        updated_at = statement_timestamp(),
-        cancelled_at = case when p_next = 'cancelled' then statement_timestamp() else cancelled_at end,
-        quarantined_at = case when p_next = 'quarantined' then statement_timestamp() else quarantined_at end
+        updated_at = transaction_timestamp(),
+        cancelled_at = case when p_next = 'cancelled' then transaction_timestamp() else cancelled_at end,
+        quarantined_at = case when p_next = 'quarantined' then transaction_timestamp() else quarantined_at end
   where id = p_task_id;
   insert into public.cognitive_state_transition_events(
     task_id, project_id, platform, environment, entity_type, entity_id,
@@ -2693,8 +2697,8 @@ begin
         and capability.plan_snapshot_hash=p_snapshot_hash
         and capability.approval_request_id=p_approval_request_id
         and capability.status='active' and capability.revoked_at is null
-        and capability.not_before <= statement_timestamp()
-        and capability.expires_at > statement_timestamp()
+        and capability.not_before <= transaction_timestamp()
+        and capability.expires_at > transaction_timestamp()
         and public.cognitive_approval_is_fresh(
           capability.approval_request_id,capability.operation,p_platform,
           capability.approval_scope_hash,p_snapshot_hash
@@ -2735,7 +2739,7 @@ begin
     from public.research_claims claim
     where claim.id=p_entity_id and claim.task_id=p_task_id and claim.project_id=p_project_id
       and claim.platform=p_platform and claim.environment=p_environment
-      and claim.freshness_deadline > statement_timestamp()
+      and claim.freshness_deadline > transaction_timestamp()
       and claim.contradiction_state not in ('detected','unresolved')
       and (
         (
@@ -2751,7 +2755,7 @@ begin
               and source.is_primary=true
               and source.source_type in ('official_documentation','security_advisory','platform_policy','store_policy')
               and source.citation_metadata <> '{}'::jsonb
-              and source.freshness_deadline > statement_timestamp()
+              and source.freshness_deadline > transaction_timestamp()
               and source.freshness_deadline >= claim.freshness_deadline
               and exists (
                 select 1 from public.research_retrieval_events retrieval
@@ -2777,7 +2781,7 @@ begin
               and source.environment=relation.environment
             where relation.claim_id=claim.id and relation.relationship='supports'
               and source.source_type='news' and source.citation_metadata <> '{}'::jsonb
-              and source.freshness_deadline > statement_timestamp()
+              and source.freshness_deadline > transaction_timestamp()
               and source.freshness_deadline >= claim.freshness_deadline
               and exists (
                 select 1 from public.research_retrieval_events retrieval
@@ -2799,7 +2803,7 @@ begin
               and source.environment=relation.environment
             where relation.claim_id=claim.id and relation.relationship='supports'
               and source.citation_metadata <> '{}'::jsonb
-              and source.freshness_deadline > statement_timestamp()
+              and source.freshness_deadline > transaction_timestamp()
               and source.freshness_deadline >= claim.freshness_deadline
               and exists (
                 select 1 from public.research_retrieval_events retrieval
@@ -2916,10 +2920,10 @@ begin
   select status into emergency_status
   from public.autonomous_system_emergency_states
   where system_id = 'product_intelligence_operator';
-  if row_value.status <> 'active' or statement_timestamp() < row_value.not_before
-     or statement_timestamp() >= row_value.expires_at or row_value.revoked_at is not null
+  if row_value.status <> 'active' or transaction_timestamp() < row_value.not_before
+     or transaction_timestamp() >= row_value.expires_at or row_value.revoked_at is not null
      or task_cancelled is not null or task_quarantined is not null
-     or approval_status <> 'approved' or approval_expires <= statement_timestamp()
+     or approval_status <> 'approved' or approval_expires <= transaction_timestamp()
      or approval_platform <> p_platform::text or approval_scope_hash <> p_approval_scope_hash
      or coalesce(emergency_status, 'emergency_stop') <> 'active'
      or row_value.task_id <> p_task_id or row_value.project_id <> p_project_id
@@ -2950,7 +2954,7 @@ begin
     remaining_calls = remaining_calls - 1,
     remaining_bytes = remaining_bytes - p_bytes,
     remaining_cost = remaining_cost - p_cost,
-    consumed_at = statement_timestamp(),
+    consumed_at = transaction_timestamp(),
     next_usage_sequence = next_usage_sequence + 1,
     status = case when remaining_calls - 1 = 0 then 'exhausted'::public.cognitive_capability_status else status end
   where id = row_value.id;
@@ -3006,8 +3010,8 @@ begin
   select status into emergency_status from public.autonomous_system_emergency_states
     where system_id='product_intelligence_operator';
   if row_value.id is null or task_value.id is null or task_value.cancelled_at is not null
-     or task_value.quarantined_at is not null or statement_timestamp() >= row_value.deadline_at
-     or statement_timestamp() >= task_value.deadman_at
+     or task_value.quarantined_at is not null or transaction_timestamp() >= row_value.deadline_at
+     or transaction_timestamp() >= task_value.deadman_at
      or coalesce(emergency_status,'emergency_stop') <> 'active'
      or p_model_tokens < 0 or p_model_cost < 0 or p_tool_calls < 0
      or p_tool_bytes < 0 or p_child_tasks < 0 or p_recursion_depth < 0
@@ -3094,8 +3098,8 @@ begin
   if row_value.id is null or reserved is null
      or task_value.id is null or task_value.cancelled_at is not null
      or task_value.quarantined_at is not null
-     or statement_timestamp() >= task_value.deadman_at
-     or statement_timestamp() >= row_value.deadline_at
+     or transaction_timestamp() >= task_value.deadman_at
+     or transaction_timestamp() >= row_value.deadline_at
      or coalesce(emergency_status,'emergency_stop') <> 'active'
      or exists (
        select 1 from public.cognitive_budget_events
@@ -3172,11 +3176,11 @@ begin
     target_scope, severity, first_seen_at, last_seen_at, evidence_hash
   ) values (
     p_task_id, p_project_id, p_platform, p_environment, p_finding_key, p_finding_type,
-    p_target_scope, p_severity, statement_timestamp(), statement_timestamp(), p_evidence_hash
+    p_target_scope, p_severity, transaction_timestamp(), transaction_timestamp(), p_evidence_hash
   )
   on conflict (task_id, finding_key) do update set
     occurrence_count = public.cognitive_current_findings.occurrence_count + 1,
-    last_seen_at = statement_timestamp(),
+    last_seen_at = transaction_timestamp(),
     current_status = 'open',
     resolved_at = null,
     evidence_hash = excluded.evidence_hash
@@ -3215,7 +3219,7 @@ begin
     null
   );
   update public.cognitive_current_findings
-  set current_status = 'resolved', resolved_at = statement_timestamp(), last_seen_at = statement_timestamp()
+  set current_status = 'resolved', resolved_at = transaction_timestamp(), last_seen_at = transaction_timestamp()
   where task_id = p_task_id and finding_key = p_finding_key and current_status = 'open'
   returning * into finding_value;
   result_id := finding_value.id;
@@ -3265,9 +3269,9 @@ begin
   set finding_type = 'erased_finding',
       target_scope = 'erased_scope',
       current_status = 'resolved',
-      resolved_at = coalesce(resolved_at, statement_timestamp()),
-      last_seen_at = statement_timestamp(),
-      erased_at = statement_timestamp(),
+      resolved_at = coalesce(resolved_at, transaction_timestamp()),
+      last_seen_at = transaction_timestamp(),
+      erased_at = transaction_timestamp(),
       data_class = 'operational_metadata'
   where id = finding_value.id
   returning id into result_id;
@@ -3283,7 +3287,7 @@ begin
   ) values (
     finding_value.task_id, finding_value.project_id, finding_value.platform,
     finding_value.environment, 'cognitive_current_findings', finding_value.id,
-    finding_value.data_class, p_tombstone_hash, false, statement_timestamp(),
+    finding_value.data_class, p_tombstone_hash, false, transaction_timestamp(),
     p_actor_identity
   );
   return result_id;
@@ -3346,7 +3350,7 @@ begin
         and permission_grant.target_user_id = actor_user_id
         and (
           permission_grant.expires_at is null
-          or permission_grant.expires_at > timezone('utc', now())
+          or permission_grant.expires_at > transaction_timestamp()
         )
     )
     and jsonb_typeof(project_ids)='array'
@@ -3557,7 +3561,7 @@ create table public.cognitive_resource_lease_events (
   environment public.cognitive_environment not null,
   event_type text not null check (event_type in ('acquired','heartbeat','released','revoked','expired')),
   event_hash text not null check (event_hash ~ '^[a-f0-9]{64}$'),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   foreign key (lease_id, task_id, project_id, platform, environment)
     references public.cognitive_resource_leases(id, task_id, project_id, platform, environment)
 );
@@ -3571,7 +3575,7 @@ create table public.cognitive_owner_review_requests (
   request_type text not null check (request_type in ('rollback_failed','security_quarantine','retention_decision')),
   request_status text not null default 'pending' check (request_status in ('pending','acknowledged','resolved')),
   evidence_hash text not null check (evidence_hash ~ '^[a-f0-9]{64}$'),
-  created_at timestamptz not null default statement_timestamp(),
+  created_at timestamptz not null default transaction_timestamp(),
   unique (task_id, request_type, request_status),
   foreign key (task_id, project_id, platform, environment)
     references public.intelligence_tasks(id, project_id, platform, environment)
@@ -3589,7 +3593,7 @@ create table public.cognitive_approval_bindings (
   approval_scope_hash text not null check (approval_scope_hash ~ '^[a-f0-9]{64}$'),
   bound_by uuid not null,
   binding_hash text not null check (binding_hash ~ '^[a-f0-9]{64}$'),
-  bound_at timestamptz not null default statement_timestamp(),
+  bound_at timestamptz not null default transaction_timestamp(),
   unique (approval_request_id, snapshot_id),
   foreign key (snapshot_id, task_id, project_id, platform, environment)
     references public.execution_plan_snapshots(id, task_id, project_id, platform, environment)
@@ -3730,7 +3734,7 @@ begin
   with expired as (
     update public.cognitive_capabilities
     set status='expired',next_usage_sequence=next_usage_sequence+1
-    where status='active' and expires_at <= statement_timestamp()
+    where status='active' and expires_at <= transaction_timestamp()
     returning *
   ), events as (
     insert into public.cognitive_capability_events(
@@ -3778,7 +3782,7 @@ begin
      or request.platform <> snapshot.platform::text
      or request.status <> 'approved'
      or request.approved_by is distinct from auth.uid()
-     or request.approved_at is null or request.expires_at <= statement_timestamp()
+     or request.approved_at is null or request.expires_at <= transaction_timestamp()
      or request.metadata->>'approval_scope_hash' is distinct from snapshot.approval_scope_hash
      or request.metadata->>'plan_snapshot_hash' is distinct from snapshot.snapshot_hash
      or jsonb_typeof(request.metadata->'allowed_operations') <> 'array'
@@ -3888,22 +3892,22 @@ begin
      )
      or p_mode not in ('read','write')
      or length(p_resource_key) not between 3 and 512
-     or p_expires_at <= statement_timestamp()
-     or p_expires_at > statement_timestamp()+interval '4 hours'
+     or p_expires_at <= transaction_timestamp()
+     or p_expires_at > transaction_timestamp()+interval '4 hours'
      or p_event_hash !~ '^[a-f0-9]{64}$'
      or not exists (
        select 1 from public.intelligence_tasks task
        where task.id=p_task_id and task.project_id=p_project_id
          and task.platform=p_platform and task.environment=p_environment
          and task.cancelled_at is null and task.quarantined_at is null
-         and task.deadman_at > statement_timestamp()
+         and task.deadman_at > transaction_timestamp()
      ) then raise exception 'resource_lease_request_rejected' using errcode='P0001'; end if;
   perform pg_advisory_xact_lock(hashtextextended(p_resource_type || ':' || p_resource_key,0));
   with expired as (
     update public.cognitive_resource_leases
-    set revoked_at=statement_timestamp()
+    set revoked_at=transaction_timestamp()
     where resource_type=p_resource_type and resource_key=p_resource_key
-      and revoked_at is null and expires_at <= statement_timestamp()
+      and revoked_at is null and expires_at <= transaction_timestamp()
     returning *
   )
   insert into public.cognitive_resource_lease_events(
@@ -3913,7 +3917,7 @@ begin
   if exists (
     select 1 from public.cognitive_resource_leases lease
     where lease.resource_type=p_resource_type and lease.resource_key=p_resource_key
-      and lease.revoked_at is null and lease.expires_at > statement_timestamp()
+      and lease.revoked_at is null and lease.expires_at > transaction_timestamp()
       and lease.task_id <> p_task_id
       and (lease.mode='write' or p_mode='write')
   ) then raise exception 'resource_lease_conflict' using errcode='55P03'; end if;
@@ -3922,7 +3926,7 @@ begin
     issued_at,expires_at,heartbeat_at
   ) values (
     p_task_id,p_project_id,p_platform,p_environment,p_resource_type,p_resource_key,p_mode,
-    statement_timestamp(),p_expires_at,statement_timestamp()
+    transaction_timestamp(),p_expires_at,transaction_timestamp()
   ) returning id into lease_id;
   insert into public.cognitive_resource_lease_events(
     lease_id,task_id,project_id,platform,environment,event_type,event_hash
@@ -3960,7 +3964,7 @@ begin
      or p_event_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'resource_lease_release_rejected' using errcode='P0001';
   end if;
-  update public.cognitive_resource_leases set revoked_at=statement_timestamp()
+  update public.cognitive_resource_leases set revoked_at=transaction_timestamp()
   where id=p_lease_id;
   insert into public.cognitive_resource_lease_events(
     lease_id,task_id,project_id,platform,environment,event_type,event_hash
@@ -4005,17 +4009,17 @@ begin
        ) held where legal_hold
      ) then raise exception 'cognitive_erasure_rejected' using errcode='P0001'; end if;
   update public.knowledge_entities
-    set summary='{}'::jsonb,evidence_metadata='{}'::jsonb,erased_at=statement_timestamp(),
+    set summary='{}'::jsonb,evidence_metadata='{}'::jsonb,erased_at=transaction_timestamp(),
         data_class='operational_metadata'
     where task_id=p_task_id and data_class='user_derived' and legal_hold=false;
   get diagnostics row_count_value=row_count; changed:=changed+row_count_value;
   update public.decision_records
-    set summary='{}'::jsonb,evidence_metadata='{}'::jsonb,erased_at=statement_timestamp(),
+    set summary='{}'::jsonb,evidence_metadata='{}'::jsonb,erased_at=transaction_timestamp(),
         data_class='operational_metadata'
     where task_id=p_task_id and data_class='user_derived' and legal_hold=false;
   get diagnostics row_count_value=row_count; changed:=changed+row_count_value;
   update public.hypotheses
-    set summary='{}'::jsonb,evidence_metadata='{}'::jsonb,erased_at=statement_timestamp(),
+    set summary='{}'::jsonb,evidence_metadata='{}'::jsonb,erased_at=transaction_timestamp(),
         data_class='operational_metadata'
     where task_id=p_task_id and data_class='user_derived' and legal_hold=false;
   get diagnostics row_count_value=row_count; changed:=changed+row_count_value;
@@ -4025,7 +4029,7 @@ begin
   ) values (
     task_value.id,task_value.project_id,task_value.platform,task_value.environment,
     'task_user_derived_content',task_value.id,'user_derived',p_tombstone_hash,
-    false,statement_timestamp(),p_actor_identity
+    false,transaction_timestamp(),p_actor_identity
   );
   return changed;
 end;

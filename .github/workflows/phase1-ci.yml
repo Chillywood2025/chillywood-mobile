@@ -190,6 +190,9 @@ jobs:
           npm run test:cognitive-hardening-regressions
           npm run test:cognitive-runtime-authority-regressions
           npm run guard:cognitive-policy-parity
+          npm run guard:cognitive-network-policy-parity
+          npm run guard:cognitive-credential-path-policy-parity
+          npm run guard:cognitive-dependency-advisories
           npm run test:cognitive-collective-governance
           npm run test:cognitive-governance-adversarial
           npm run guard:cognitive-admin-truth

@@ -1,6 +1,6 @@
 # Governance Constitution
 
-Status: `collective_governance_in_progress`; not deployed and not active.
+Status: `collective_governance_source_complete_not_deployed`; not deployed and not active.
 
 The canonical machine-readable constitution is
 `config/intelligence/governance-constitution.json`. It preserves owner authority,
