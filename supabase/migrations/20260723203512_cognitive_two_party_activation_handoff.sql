@@ -26,6 +26,27 @@ alter table public.cognitive_governance_switches
     )
   );
 
+alter table public.governance_decision_manifests
+  add column if not exists model_independence_assessment_id text check (
+    model_independence_assessment_id is null
+    or (
+      length(model_independence_assessment_id) between 8 and 160
+      and not public.cognitive_text_has_secret(model_independence_assessment_id)
+      and not public.cognitive_text_has_private_identifier(model_independence_assessment_id)
+    )
+  ),
+  add column if not exists model_independence_status text check (
+    model_independence_status is null
+    or model_independence_status in (
+      'MODEL_INDEPENDENCE_VERIFIED',
+      'MODEL_INDEPENDENCE_PROVIDER_REQUIRED'
+    )
+  ),
+  add column if not exists model_independence_evidence_hash text check (
+    model_independence_evidence_hash is null
+    or model_independence_evidence_hash ~ '^[a-f0-9]{64}$'
+  );
+
 create table public.governance_two_party_service_assertions (
   service_identity text primary key check (
     service_identity in (
@@ -833,6 +854,9 @@ begin
 
   if decision_value.id is null
      or decision_value.status <> 'finalized'
+     or decision_value.model_independence_status <> 'MODEL_INDEPENDENCE_VERIFIED'
+     or decision_value.model_independence_assessment_id is null
+     or decision_value.model_independence_evidence_hash is null
      or now_at >= decision_value.expires_at
      or exists (
        select 1 from public.governance_vetoes veto
@@ -1069,7 +1093,7 @@ begin
   select * into old_version
   from public.governance_owner_approval_versions
   where id = p_expired_version_id
-  for share;
+  for update;
   select * into old_state
   from public.governance_owner_approval_version_states
   where approval_version_id = p_expired_version_id
@@ -1092,6 +1116,8 @@ begin
 
   if old_version.owner_user_id <> owner_id
      or old_state.state not in ('active','expired')
+     or approval_value.current_version <> old_version.version_number
+     or approval_value.current_state not in ('active','expired')
      or now_at < old_version.expires_at
      or p_revalidation_hash !~ '^[a-f0-9]{64}$'
      or p_current_decision_manifest_hash <> old_version.decision_manifest_hash
@@ -1166,6 +1192,14 @@ begin
     old_version.project_id, old_version.platform, old_version.environment,
     'active', old_version.maximum_executions
   );
+
+  update public.governance_owner_approval_version_states
+  set state = 'superseded',
+      superseded_at = now_at,
+      updated_at = now_at
+  where approval_record_id = old_version.approval_record_id
+    and approval_version_id not in (old_version.id, new_version_id)
+    and state = 'active';
 
   update public.governance_owner_approval_records
   set current_version = next_version,
@@ -1320,6 +1354,7 @@ declare
   service_identity_value text;
   version_value public.governance_owner_approval_versions%rowtype;
   state_value public.governance_owner_approval_version_states%rowtype;
+  approval_value public.governance_owner_approval_records%rowtype;
   task_value public.intelligence_tasks%rowtype;
   claim_sequence_value integer;
   execution_id uuid;
@@ -1338,6 +1373,10 @@ begin
   from public.governance_owner_approval_version_states
   where approval_version_id = p_approval_version_id
   for update;
+  select * into approval_value
+  from public.governance_owner_approval_records
+  where id = version_value.approval_record_id
+  for update;
   select * into task_value
   from public.intelligence_tasks
   where id = p_task_id
@@ -1348,7 +1387,10 @@ begin
 
   if version_value.id is null
      or state_value.approval_version_id is null
+     or approval_value.id is null
      or task_value.id is null
+     or approval_value.current_version <> version_value.version_number
+     or approval_value.current_state <> 'active'
      or task_value.cancelled_at is not null
      or task_value.quarantined_at is not null
      or now_at >= task_value.deadman_at
@@ -1718,13 +1760,20 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
-     or (
-       p_transition in ('rollback_pending','rollback_running')
-       and not public.governance_approved_execution_is_live(p_execution_id)
-     )
+     or not public.governance_approved_execution_is_live(p_execution_id)
      or p_transition not in (
        'rollback_pending','rollback_running','rollback_succeeded',
        'rollback_failed','quarantined'
+     )
+     or not (
+       (p_transition = 'rollback_pending'
+        and execution_value.state in ('executing','postflight','evaluating'))
+       or (p_transition = 'rollback_running'
+        and execution_value.state = 'rollback_pending')
+       or (p_transition in ('rollback_succeeded','rollback_failed')
+        and execution_value.state = 'rollback_running')
+       or (p_transition = 'quarantined'
+        and execution_value.state in ('executing','postflight','evaluating','rollback_running'))
      )
      or p_evidence_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'two_party_execution_release_rejected'
@@ -2138,6 +2187,66 @@ grant execute on function public.governance_record_model_execution_attestation(
   text,text,text,text,text,text,text,text,boolean,text,numeric,integer,text,text
 ) to service_role;
 
+create function public.governance_model_independence_status_internal(
+  p_task_id uuid,
+  p_assessment_id text,
+  p_required_count integer
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with rows as (
+    select *
+    from public.governance_model_execution_attestations
+    where task_id = p_task_id
+      and assessment_id = p_assessment_id
+  ),
+  aggregate as (
+    select
+      count(*)::integer as total_count,
+      count(distinct execution_identity_hash)::integer as distinct_executions,
+      count(distinct output_hash)::integer as distinct_outputs,
+      count(*) filter (where blind_first_round)::integer as blind_count,
+      count(distinct provider_identity_hash)::integer as provider_count,
+      count(distinct provider_identity_hash || ':' || model_family)::integer as family_count,
+      coalesce(bool_or(correlation_class = 'cross_provider'), false) as has_cross_provider_class
+    from rows
+  ),
+  status as (
+    select *,
+      total_count >= p_required_count
+      and distinct_executions >= p_required_count
+      and distinct_outputs >= p_required_count
+      and blind_count >= p_required_count
+      and provider_count >= 2
+      and has_cross_provider_class as independence_satisfied
+    from aggregate
+  )
+  select jsonb_build_object(
+    'assessmentId', p_assessment_id,
+    'requiredCount', p_required_count,
+    'totalCount', total_count,
+    'distinctExecutions', distinct_executions,
+    'distinctOutputs', distinct_outputs,
+    'blindFirstRoundCount', blind_count,
+    'providerCount', provider_count,
+    'modelFamilyCount', family_count,
+    'independenceSatisfied', independence_satisfied,
+    'status',
+      case
+        when independence_satisfied
+        then 'MODEL_INDEPENDENCE_VERIFIED'
+        else 'MODEL_INDEPENDENCE_PROVIDER_REQUIRED'
+      end
+  )
+  from status;
+$$;
+revoke all on function public.governance_model_independence_status_internal(uuid,text,integer)
+  from public, anon, authenticated, service_role;
+
 create function public.governance_model_independence_status(
   p_task_id uuid,
   p_assessment_id text,
@@ -2156,14 +2265,6 @@ declare
     claims->>'role'
   );
   task_value public.intelligence_tasks%rowtype;
-  total_count integer;
-  distinct_executions integer;
-  distinct_outputs integer;
-  blind_count integer;
-  provider_count integer;
-  family_count integer;
-  has_cross_provider_class boolean;
-  independence_satisfied boolean;
 begin
   select * into task_value
   from public.intelligence_tasks
@@ -2178,47 +2279,8 @@ begin
     raise exception 'model_independence_status_scope_denied'
       using errcode = '42501';
   end if;
-
-  select
-    count(*)::integer,
-    count(distinct execution_identity_hash)::integer,
-    count(distinct output_hash)::integer,
-    count(*) filter (where blind_first_round)::integer,
-    count(distinct provider_identity_hash)::integer,
-    count(distinct provider_identity_hash || ':' || model_family)::integer,
-    coalesce(bool_or(correlation_class = 'cross_provider'), false)
-  into
-    total_count, distinct_executions, distinct_outputs, blind_count,
-    provider_count, family_count, has_cross_provider_class
-  from public.governance_model_execution_attestations
-  where task_id = p_task_id
-    and assessment_id = p_assessment_id;
-
-  independence_satisfied :=
-    total_count >= p_required_count
-    and distinct_executions >= p_required_count
-    and distinct_outputs >= p_required_count
-    and blind_count >= p_required_count
-    and provider_count >= 2
-    and has_cross_provider_class;
-
-  return jsonb_build_object(
-    'assessmentId', p_assessment_id,
-    'requiredCount', p_required_count,
-    'totalCount', total_count,
-    'distinctExecutions', distinct_executions,
-    'distinctOutputs', distinct_outputs,
-    'blindFirstRoundCount', blind_count,
-    'providerCount', provider_count,
-    'modelFamilyCount', family_count,
-    'independenceSatisfied',
-      independence_satisfied,
-    'status',
-      case
-        when independence_satisfied
-        then 'MODEL_INDEPENDENCE_VERIFIED'
-        else 'MODEL_INDEPENDENCE_PROVIDER_REQUIRED'
-      end
+  return public.governance_model_independence_status_internal(
+    p_task_id, p_assessment_id, p_required_count
   );
 end;
 $$;
@@ -2226,6 +2288,64 @@ revoke all on function public.governance_model_independence_status(uuid,text,int
   from public, anon;
 grant execute on function public.governance_model_independence_status(uuid,text,integer)
   to authenticated, service_role;
+
+create function public.governance_enforce_decision_model_independence()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  required_count integer;
+  assessment_id_value text;
+  status_value jsonb;
+begin
+  if new.status <> 'finalized' then
+    return new;
+  end if;
+
+  select deliberation.required_quorum
+    into required_count
+  from public.governance_deliberations deliberation
+  where deliberation.id = new.deliberation_id
+    and deliberation.task_id = new.task_id
+    and deliberation.project_id = new.project_id
+    and deliberation.platform = new.platform
+    and deliberation.environment = new.environment;
+
+  assessment_id_value := coalesce(
+    new.model_independence_assessment_id,
+    'deliberation-' || encode(extensions.digest(
+      convert_to(new.deliberation_id::text, 'UTF8'), 'sha256'
+    ), 'hex')
+  );
+  status_value := public.governance_model_independence_status_internal(
+    new.task_id, assessment_id_value, coalesce(required_count, 3)
+  );
+
+  if required_count is null
+     or status_value->>'status' <> 'MODEL_INDEPENDENCE_VERIFIED' then
+    raise exception 'governance_model_independence_required'
+      using errcode = 'P0001';
+  end if;
+
+  new.model_independence_assessment_id := assessment_id_value;
+  new.model_independence_status := status_value->>'status';
+  new.model_independence_evidence_hash := encode(extensions.digest(convert_to(
+    concat_ws('|', new.id::text, new.decision_hash, assessment_id_value, status_value::text),
+    'UTF8'
+  ), 'sha256'), 'hex');
+  return new;
+end;
+$$;
+revoke all on function public.governance_enforce_decision_model_independence()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists governance_decision_model_independence_before_insert
+  on public.governance_decision_manifests;
+create trigger governance_decision_model_independence_before_insert
+  before insert on public.governance_decision_manifests
+  for each row execute function public.governance_enforce_decision_model_independence();
 
 create function public.product_experience_record_sentinel_run(
   p_task_id uuid,
@@ -2307,8 +2427,31 @@ begin
        p_sentinel_key = 'installed_journey_sentinel'
        and not p_metric_manifest ?& array[
          'journeyStepCount','unresolvedStateCount',
-         'screenshotEvidenceHash','sourceRuntimeHash'
+         'expectedState','observedState','maxDurationMs','elapsedDurationMs',
+         'resultState','screenshotEvidenceHash','sourceRuntimeHash'
        ]
+     )
+     or (
+       p_sentinel_key = 'installed_journey_sentinel'
+       and (
+         jsonb_typeof(p_metric_manifest->'journeyStepCount') <> 'number'
+         or jsonb_typeof(p_metric_manifest->'unresolvedStateCount') <> 'number'
+         or jsonb_typeof(p_metric_manifest->'maxDurationMs') <> 'number'
+         or jsonb_typeof(p_metric_manifest->'elapsedDurationMs') <> 'number'
+         or (p_metric_manifest->>'resultState') not in (
+           'success','loading','error','blocked','offline',
+           'permission_denied','blank','crashed'
+         )
+         or (
+           p_result_status = 'passed'
+           and (
+             (p_metric_manifest->>'resultState') <> 'success'
+             or (p_metric_manifest->>'unresolvedStateCount')::integer <> 0
+             or (p_metric_manifest->>'elapsedDurationMs')::integer >
+                (p_metric_manifest->>'maxDurationMs')::integer
+           )
+         )
+       )
      )
      or not exists (
        select 1 from public.cognitive_governance_switches switch

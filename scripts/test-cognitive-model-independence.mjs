@@ -63,6 +63,18 @@ contains(
   "missing model independence status function",
 );
 contains(
+  "create function public.governance_enforce_decision_model_independence",
+  "missing decision-manifest model independence enforcement trigger",
+);
+contains(
+  "governance_decision_model_independence_before_insert",
+  "decision manifests are not gated by model independence at insert time",
+);
+contains(
+  "decision_value.model_independence_status <> 'MODEL_INDEPENDENCE_VERIFIED'",
+  "Owner approval path does not require verified model independence",
+);
+contains(
   "count(distinct execution_identity_hash)",
   "independence status does not count distinct executions",
 );

@@ -631,6 +631,48 @@ select throws_ok(
 update public.governance_vetoes
 set status='withdrawn'
 where deliberation_id='a2000000-0000-0000-0000-000000000001';
+select throws_ok(
+  $$select public.governance_finalize_decision(
+    'a2000000-0000-0000-0000-000000000001',
+    'a4000000-0000-0000-0000-000000000002',
+    'governance-decision-fixture',array['governance-red-team'],
+    repeat('7',64),repeat('8',64),1,repeat('9',64),false,
+    'decision_manifest_authority'
+  )$$,
+  'P0001',
+  'governance_model_independence_required',
+  'decision finalization requires verified cross-provider model independence'
+);
+insert into public.governance_model_execution_attestations(
+  assessment_id, task_id, project_id, platform, environment, council_role,
+  provider_identity_hash, model_family, model_version, execution_identity_hash,
+  evidence_packet_hash, prompt_template_version_hash, output_hash,
+  blind_first_round, correlation_class, cost, latency_ms
+) values
+  (
+    ('deliberation-' || encode(extensions.digest(convert_to('a2000000-0000-0000-0000-000000000001','UTF8'),'sha256'),'hex')),
+    'a1000000-0000-0000-0000-000000000001',
+    'a0000000-0000-0000-0000-000000000001',
+    'shared','ci','product_user_experience',repeat('a',64),
+    'family-a','model-a',repeat('b',64),repeat('c',64),repeat('d',64),
+    repeat('e',64),true,'cross_provider',0.1,100
+  ),
+  (
+    ('deliberation-' || encode(extensions.digest(convert_to('a2000000-0000-0000-0000-000000000001','UTF8'),'sha256'),'hex')),
+    'a1000000-0000-0000-0000-000000000001',
+    'a0000000-0000-0000-0000-000000000001',
+    'shared','ci','security_privacy',repeat('b',64),
+    'family-b','model-b',repeat('c',64),repeat('d',64),repeat('e',64),
+    repeat('f',64),true,'cross_provider',0.1,100
+  ),
+  (
+    ('deliberation-' || encode(extensions.digest(convert_to('a2000000-0000-0000-0000-000000000001','UTF8'),'sha256'),'hex')),
+    'a1000000-0000-0000-0000-000000000001',
+    'a0000000-0000-0000-0000-000000000001',
+    'shared','ci','reliability_release',repeat('c',64),
+    'family-c','model-c',repeat('d',64),repeat('e',64),repeat('f',64),
+    repeat('a',64),true,'cross_provider',0.1,100
+  );
 select lives_ok(
   $$select public.governance_finalize_decision(
     'a2000000-0000-0000-0000-000000000001',

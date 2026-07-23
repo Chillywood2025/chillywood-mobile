@@ -7,6 +7,7 @@ const read = (relativePath) =>
 const migration = read(
   "supabase/migrations/20260723203512_cognitive_two_party_activation_handoff.sql",
 );
+const dbTest = read("supabase/tests/cognitive_two_party_activation_handoff_test.sql");
 const constitution = JSON.parse(
   read("config/intelligence/product-experience-constitution.json"),
 );
@@ -60,8 +61,24 @@ contains(
   "product finding RPC does not bind proof status to the referenced sentinel run",
 );
 contains(
+  "'expectedState','observedState','maxDurationMs','elapsedDurationMs'",
+  "installed journey sentinel does not require bounded state and duration evidence",
+);
+contains(
+  "(p_metric_manifest->>'resultState') not in",
+  "installed journey sentinel does not validate result state values",
+);
+contains(
   "not run_value.evidence_manifest_hash = any(p_evidence_hashes)",
   "product finding RPC does not require the referenced sentinel evidence hash",
+);
+assert(
+  dbTest.includes("installed journey sentinel rejects missing expected/observed state and duration evidence"),
+  "database suite does not reject incomplete installed-journey evidence",
+);
+assert(
+  dbTest.includes("installed journey sentinel accepts bounded expected/observed state evidence"),
+  "database suite does not accept complete installed-journey evidence",
 );
 contains(
   "entered_collective_governance",

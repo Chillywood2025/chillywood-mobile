@@ -110,6 +110,37 @@ insert into public.governance_proposals(
   0,'source',repeat('3',64)
 );
 
+insert into public.governance_model_execution_attestations(
+  assessment_id, task_id, project_id, platform, environment, council_role,
+  provider_identity_hash, model_family, model_version, execution_identity_hash,
+  evidence_packet_hash, prompt_template_version_hash, output_hash,
+  blind_first_round, correlation_class, cost, latency_ms
+) values
+  (
+    ('deliberation-' || encode(extensions.digest(convert_to('b4000000-0000-0000-0000-000000000001','UTF8'),'sha256'),'hex')),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','product_user_experience',repeat('a',64),
+    'family-a','model-a',repeat('b',64),repeat('c',64),repeat('d',64),
+    repeat('e',64),true,'cross_provider',0.1,100
+  ),
+  (
+    ('deliberation-' || encode(extensions.digest(convert_to('b4000000-0000-0000-0000-000000000001','UTF8'),'sha256'),'hex')),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','security_privacy',repeat('b',64),
+    'family-b','model-b',repeat('c',64),repeat('d',64),repeat('e',64),
+    repeat('f',64),true,'cross_provider',0.1,100
+  ),
+  (
+    ('deliberation-' || encode(extensions.digest(convert_to('b4000000-0000-0000-0000-000000000001','UTF8'),'sha256'),'hex')),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','reliability_release',repeat('c',64),
+    'family-c','model-c',repeat('d',64),repeat('e',64),repeat('f',64),
+    repeat('a',64),true,'cross_provider',0.1,100
+  );
+
 insert into public.governance_decision_manifests(
   id, deliberation_id, evidence_packet_id, selected_proposal_id, task_id,
   project_id, platform, environment, decision_key, source_commit,
@@ -425,6 +456,18 @@ select is(
   'service worker enters executing after preflight'
 );
 select throws_ok(
+  $$select public.governance_release_or_quarantine_execution(
+    (select execution_id from two_party_fixture where execution_id is not null),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'rollback_succeeded',
+    repeat('f',64)
+  )$$,
+  'P0001',
+  'two_party_execution_release_rejected',
+  'rollback cannot skip directly from executing to rollback_succeeded'
+);
+select throws_ok(
   $$select public.governance_execute_approved_switch(
     (select execution_id from two_party_fixture where execution_id is not null),
     'cognitive_approved_action_worker',
@@ -704,6 +747,162 @@ select throws_ok(
   'two_party_execution_transition_rejected',
   'post-claim Owner revocation blocks execution transition'
 );
+select throws_ok(
+  $$select public.governance_release_or_quarantine_execution(
+    (select execution_id from two_party_liveness_fixture where fixture_key='revoked-after-claim'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    'quarantined',
+    repeat('f',64)
+  )$$,
+  'P0001',
+  'two_party_execution_release_rejected',
+  'post-claim Owner revocation blocks rollback and quarantine transition'
+);
+reset role;
+
+reset role;
+insert into public.governance_owner_approval_records(
+  id, decision_manifest_id, task_id, project_id, platform, environment,
+  approval_key, objective_hash, owner_user_id, current_version, current_state,
+  maximum_executions, executions_claimed, executions_completed, approval_hash,
+  created_at, updated_at
+) values (
+  'b7100000-0000-0000-0000-000000000001',
+  'b7000000-0000-0000-0000-000000000001',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','expired-revalidation-test',repeat('4',64),
+  'b2000000-0000-0000-0000-000000000001',
+  1,'expired',1,0,0,repeat('7',64),
+  transaction_timestamp() - interval '2 seconds',
+  transaction_timestamp() - interval '1 second'
+);
+insert into public.governance_owner_approval_versions(
+  id, approval_record_id, decision_manifest_id, task_id, project_id, platform,
+  environment, version_number, owner_user_id, owner_identity_hash,
+  decision_manifest_hash, plan_snapshot_hash, source_commit,
+  architecture_graph_digest, approval_scope_hash, objective_hash,
+  repository_full_name, branch_name, provider, operation, target_resource_hash,
+  path_scope_hashes, table_scope_hashes, function_scope_hashes, budget_hash,
+  maximum_cost, maximum_calls, maximum_bytes, maximum_executions, tests_hash,
+  required_test_ids, evaluator_requirement_hash, rollback_hash, approval_hash,
+  approved_at, valid_from, expires_at
+) values (
+  'b7200000-0000-0000-0000-000000000001',
+  'b7100000-0000-0000-0000-000000000001',
+  'b7000000-0000-0000-0000-000000000001',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production',1,'b2000000-0000-0000-0000-000000000001',
+  encode(extensions.digest(convert_to('b2000000-0000-0000-0000-000000000001','UTF8'),'sha256'),'hex'),
+  repeat('5',64),repeat('6',64),repeat('5',40),repeat('6',64),repeat('4',64),
+  repeat('4',64),'Chillywood2025/chillywood-mobile',
+  'codex/cognitive-two-party-fixture','none','set_switch',
+  (select switch_target_hash from two_party_target_hashes),
+  '{}'::text[],'{}'::text[],'{}'::text[],repeat('9',64),1,1,1024,1,
+  repeat('8',64),array['two-party-test'],repeat('9',64),repeat('3',64),
+  repeat('7',64),
+  transaction_timestamp() - interval '2 seconds',
+  transaction_timestamp() - interval '2 seconds',
+  transaction_timestamp() - interval '1 second'
+);
+insert into public.governance_owner_approval_version_states(
+  approval_version_id, approval_record_id, task_id, project_id, platform,
+  environment, state, maximum_executions
+) values (
+  'b7200000-0000-0000-0000-000000000001',
+  'b7100000-0000-0000-0000-000000000001',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','expired',1
+);
+insert into public.governance_owner_approval_lifecycle_events(
+  approval_record_id, approval_version_id, task_id, project_id, platform,
+  environment, event_sequence, event_type, event_hash, actor_identity_hash
+) values (
+  'b7100000-0000-0000-0000-000000000001',
+  'b7200000-0000-0000-0000-000000000001',
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production',1,'owner_approved',repeat('7',64),
+  encode(extensions.digest(convert_to('b2000000-0000-0000-0000-000000000001','UTF8'),'sha256'),'hex')
+);
+insert into two_party_liveness_fixture(
+  fixture_key, approval_version_id, approval_hash
+) values (
+  'expired-revalidation',
+  'b7200000-0000-0000-0000-000000000001',
+  repeat('7',64)
+);
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  true
+);
+select is(
+  public.governance_revalidate_owner_approval(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='expired-revalidation'),
+    repeat('1',64),repeat('5',64),repeat('5',40),repeat('6',64),false,
+    interval '24 hours'
+  )->>'status',
+  'active',
+  'expired approval revalidation creates one active successor version'
+);
+select throws_ok(
+  $$select public.governance_revalidate_owner_approval(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='expired-revalidation'),
+    repeat('2',64),repeat('5',64),repeat('5',40),repeat('6',64),false,
+    interval '24 hours'
+  )$$,
+  'P0001',
+  'two_party_reinstatement_requires_amended_approval',
+  'same expired approval version cannot be revalidated twice'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.governance_owner_approval_version_states state
+    where state.approval_record_id = (
+      select approval_record_id
+      from public.governance_owner_approval_versions
+      where id = (
+        select approval_version_id
+        from two_party_liveness_fixture
+        where fixture_key='expired-revalidation'
+      )
+    )
+      and state.state = 'active'
+  ),
+  1,
+  'revalidation preserves a single active approval version per approval record'
+);
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.governance_claim_approved_action(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='expired-revalidation'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('5',64),repeat('6',64),
+    (select approval_hash from two_party_liveness_fixture where fixture_key='expired-revalidation'),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'Chillywood2025/chillywood-mobile','codex/cognitive-two-party-fixture',
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_target_hashes),repeat('9',64),
+    repeat('8',64),repeat('9',64),repeat('3',64)
+  )$$,
+  'P0001',
+  'two_party_approved_action_claim_rejected',
+  'stale non-current approval version cannot be claimed after revalidation'
+);
 reset role;
 
 set local role service_role;
@@ -749,6 +948,12 @@ select public.governance_register_two_party_service_principal(
   'livekit_experience_sentinel',
   encode(extensions.digest(convert_to('synthetic-livekit-assertion-000000000000','UTF8'),'sha256'),'hex'),
   array['livekit_experience_canary'],
+  transaction_timestamp()+interval '1 day'
+);
+select public.governance_register_two_party_service_principal(
+  'installed_journey_sentinel',
+  encode(extensions.digest(convert_to('synthetic-installed-assertion-000000000000','UTF8'),'sha256'),'hex'),
+  array['installed_journey_canary'],
   transaction_timestamp()+interval '1 day'
 );
 reset role;
@@ -811,6 +1016,16 @@ reset role;
 
 create temporary table two_party_sentinel_run(id uuid);
 grant select, insert on two_party_sentinel_run to service_role;
+insert into public.cognitive_governance_switches(
+  task_id, project_id, platform, environment, switch_key, enabled,
+  policy_version, enabled_by, enabled_at, updated_at
+) values (
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','cognitive_installed_journey_sentinel_enabled',
+  true,'two-party-installed-test','b2000000-0000-0000-0000-000000000001',
+  transaction_timestamp(),transaction_timestamp()
+);
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select throws_ok(
@@ -870,6 +1085,48 @@ select throws_ok(
   'P0001',
   'product_quality_finding_rejected',
   'product triage rejects proof-status mismatch against the sentinel run'
+);
+select throws_ok(
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','installed_journey_sentinel','Home',
+    repeat('8',64),repeat('9',64),
+    '{
+      "journeyStepCount":3,
+      "unresolvedStateCount":1,
+      "screenshotEvidenceHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceRuntimeHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }'::jsonb,
+    'finding_created','installed_ui_observed',
+    'installed_journey_sentinel','synthetic-installed-assertion-000000000000'
+  )$$,
+  'P0001',
+  'product_experience_sentinel_run_rejected',
+  'installed journey sentinel rejects missing expected/observed state and duration evidence'
+);
+select is(
+  public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','installed_journey_sentinel','Home',
+    repeat('8',64),repeat('9',64),
+    '{
+      "journeyStepCount":3,
+      "unresolvedStateCount":0,
+      "expectedState":"home_feed_visible",
+      "observedState":"home_feed_visible",
+      "maxDurationMs":5000,
+      "elapsedDurationMs":1200,
+      "resultState":"success",
+      "screenshotEvidenceHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceRuntimeHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }'::jsonb,
+    'passed','installed_ui_observed',
+    'installed_journey_sentinel','synthetic-installed-assertion-000000000000'
+  ) is not null,
+  true,
+  'installed journey sentinel accepts bounded expected/observed state evidence'
 );
 select is(
   public.product_quality_record_finding(

@@ -65,6 +65,16 @@ contains(
 );
 contains(
   migration,
+  "p_transition = 'rollback_pending'",
+  "rollback release RPC does not enforce explicit legal prior states",
+);
+contains(
+  migration,
+  "execution_value.state = 'rollback_running'",
+  "rollback terminal states are not bound to rollback_running",
+);
+contains(
+  migration,
   "create function public.governance_switch_target_hash",
   "missing deterministic approved switch target binding",
 );
@@ -187,6 +197,26 @@ contains(
   dbTest,
   "approved switch execution rejects a different switch key",
   "database suite does not prove switch target payload binding",
+);
+contains(
+  dbTest,
+  "rollback cannot skip directly from executing to rollback_succeeded",
+  "database suite does not prove rollback state skips are rejected",
+);
+contains(
+  dbTest,
+  "post-claim Owner revocation blocks rollback and quarantine transition",
+  "database suite does not prove rollback/quarantine rechecks liveness",
+);
+contains(
+  dbTest,
+  "same expired approval version cannot be revalidated twice",
+  "database suite does not prove stale approval revalidation is rejected",
+);
+contains(
+  dbTest,
+  "stale non-current approval version cannot be claimed after revalidation",
+  "database suite does not prove claim requires the current approval version",
 );
 
 if (failures.length > 0) {
