@@ -29,7 +29,7 @@ Implemented database surfaces:
 
 Local proof:
 
-- `supabase test db`: 696/696 pgTAP tests passed.
+- `supabase test db`: 703/703 pgTAP tests passed.
 - `npm run test:cognitive-two-party-handoff`: passed.
 - `deno check` passed for both new Edge Functions and the modified governance
   control function.

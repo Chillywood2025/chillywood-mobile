@@ -213,6 +213,52 @@ select ok(
   'two-party and sentinel tables have RLS plus FORCE RLS'
 );
 
+select has_column(
+  'public',
+  'product_experience_sentinel_runs',
+  'retention_until',
+  'sentinel runs carry bounded retention metadata'
+);
+select has_column(
+  'public',
+  'product_quality_findings',
+  'retention_until',
+  'product findings carry bounded retention metadata'
+);
+select ok(
+  lower(pg_get_functiondef(
+    'public.governance_lock_approved_execution_liveness(uuid)'::regprocedure
+  )) like '%governance_owner_approval_version_states%'
+  and lower(pg_get_functiondef(
+    'public.governance_lock_approved_execution_liveness(uuid)'::regprocedure
+  )) like '%for update%'
+  and lower(pg_get_functiondef(
+    'public.governance_lock_approved_execution_liveness(uuid)'::regprocedure
+  )) like '%autonomous_system_emergency_states%'
+  and lower(pg_get_functiondef(
+    'public.governance_lock_approved_execution_liveness(uuid)'::regprocedure
+  )) like '%for share%',
+  'service execution liveness locks approval state, task, and emergency-stop rows before side effects'
+);
+select ok(
+  lower(pg_get_functiondef(
+    'public.governance_begin_approved_execution(uuid,text,text,text)'::regprocedure
+  )) like '%governance_lock_approved_execution_liveness(p_execution_id)%'
+  and lower(pg_get_functiondef(
+    'public.governance_complete_approved_execution(uuid,text,text,text,text)'::regprocedure
+  )) like '%governance_lock_approved_execution_liveness(p_execution_id)%'
+  and lower(pg_get_functiondef(
+    'public.governance_fail_approved_execution(uuid,text,text,text)'::regprocedure
+  )) like '%governance_lock_approved_execution_liveness(p_execution_id)%'
+  and lower(pg_get_functiondef(
+    'public.governance_release_or_quarantine_execution(uuid,text,text,text,text)'::regprocedure
+  )) like '%governance_lock_approved_execution_liveness(p_execution_id)%'
+  and lower(pg_get_functiondef(
+    'public.governance_execute_approved_switch(uuid,text,text,text,boolean,text,text)'::regprocedure
+  )) like '%governance_lock_approved_execution_liveness(p_execution_id)%',
+  'all side-effecting service RPCs use the locked liveness check'
+);
+
 select ok(
   not has_function_privilege(
     'service_role',
@@ -1091,6 +1137,12 @@ select public.governance_register_two_party_service_principal(
   transaction_timestamp()+interval '1 day'
 );
 select public.governance_register_two_party_service_principal(
+  'visual_product_experience_sentinel',
+  encode(extensions.digest(convert_to('synthetic-visual-assertion-000000000000','UTF8'),'sha256'),'hex'),
+  array['visual_experience_canary'],
+  transaction_timestamp()+interval '1 day'
+);
+select public.governance_register_two_party_service_principal(
   'installed_journey_sentinel',
   encode(extensions.digest(convert_to('synthetic-installed-assertion-000000000000','UTF8'),'sha256'),'hex'),
   array['installed_journey_canary'],
@@ -1205,6 +1257,16 @@ insert into public.cognitive_governance_switches(
   true,'two-party-installed-test','b2000000-0000-0000-0000-000000000001',
   transaction_timestamp(),transaction_timestamp()
 );
+insert into public.cognitive_governance_switches(
+  task_id, project_id, platform, environment, switch_key, enabled,
+  policy_version, enabled_by, enabled_at, updated_at
+) values (
+  'b1000000-0000-0000-0000-000000000001',
+  'b0000000-0000-0000-0000-000000000001',
+  'shared','production','cognitive_visual_experience_sentinel_enabled',
+  true,'two-party-visual-test','b2000000-0000-0000-0000-000000000001',
+  transaction_timestamp(),transaction_timestamp()
+);
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select throws_ok(
@@ -1286,6 +1348,35 @@ select throws_ok(
   'product_experience_sentinel_run_rejected',
   'LiveKit sentinel pass rejects constitution deadline violations'
 );
+select throws_ok(
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','livekit_experience_sentinel','Live',
+    repeat('6',64),repeat('7',64),
+    '{
+      "tokenRequested":true,
+      "tokenReturned":false,
+      "websocketConnected":true,
+      "iceState":"failed",
+      "roomConnected":false,
+      "localTrackPublished":false,
+      "remoteParticipantJoined":false,
+      "remoteTrackSubscribed":false,
+      "firstAudioVideoObserved":false,
+      "connectingResolved":false,
+      "tokenIssuedElapsedMs":600001,
+      "roomConnectElapsedMs":1000,
+      "uiStateResolutionElapsedMs":1000,
+      "firstRemoteMediaElapsedMs":1000
+    }'::jsonb,
+    'finding_created','installed_ui_observed',
+    'livekit_experience_sentinel','synthetic-livekit-assertion-000000000000'
+  )$$,
+  'P0001',
+  'product_experience_sentinel_run_rejected',
+  'LiveKit sentinel finding rejects unbounded timing evidence'
+);
 insert into two_party_sentinel_run(id)
 select public.product_experience_record_sentinel_run(
   'b1000000-0000-0000-0000-000000000001',
@@ -1322,6 +1413,49 @@ select throws_ok(
   'P0001',
   'product_quality_finding_rejected',
   'product triage rejects proof-status mismatch against the sentinel run'
+);
+select throws_ok(
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','visual_product_experience_sentinel','Home',
+    repeat('8',64),repeat('9',64),
+    '{
+      "screenshotEvidenceHash":"not-a-hash",
+      "cardViewportWidthRatio":99,
+      "cardsVisibleAboveFold":"many",
+      "aspectRatio":"9:16",
+      "densityScore":2,
+      "baselineState":"needs_product_baseline_review",
+      "baselineComparisonHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }'::jsonb,
+    'finding_created','installed_ui_observed',
+    'visual_product_experience_sentinel','synthetic-visual-assertion-000000000000'
+  )$$,
+  'P0001',
+  'product_experience_sentinel_run_rejected',
+  'visual sentinel rejects unbounded metric, hash, and aspect-ratio evidence'
+);
+select is(
+  public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','visual_product_experience_sentinel','Home',
+    repeat('8',64),repeat('9',64),
+    '{
+      "screenshotEvidenceHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "cardViewportWidthRatio":0.94,
+      "cardsVisibleAboveFold":1,
+      "aspectRatio":"16:9",
+      "densityScore":0.32,
+      "baselineState":"needs_product_baseline_review",
+      "baselineComparisonHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }'::jsonb,
+    'finding_created','installed_ui_observed',
+    'visual_product_experience_sentinel','synthetic-visual-assertion-000000000000'
+  ) is not null,
+  true,
+  'visual sentinel accepts bounded baseline-review finding evidence'
 );
 select throws_ok(
   $$select public.product_experience_record_sentinel_run(

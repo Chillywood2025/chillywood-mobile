@@ -12,6 +12,11 @@ Policy state: `owner_counsel_decision_required`.
 | User-derived memory | Yes | undecided | disabled | none | disabled pending decision |
 | Raw user reports/chats/media/analytics | Yes | not authorized | disabled | none | never ingest |
 
+Product-experience sentinel runs and product-quality findings are stored only as
+synthetic/sanitized operational metadata with `retention_until`, `data_class`,
+`legal_hold`, and retention indexes. They cannot contain raw private user data or
+user-derived memory while the Level 0/1 private-data switches remain off.
+
 Before user-derived memory can activate, owner and counsel must decide lawful
 purpose, retention, access roles, backup deletion, provider processing, legal hold,
 redaction, erasure, and post-erasure audit fields. Until then database and function

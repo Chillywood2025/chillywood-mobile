@@ -65,6 +65,26 @@ contains(
 );
 contains(
   migration,
+  "create function public.governance_lock_approved_execution_liveness",
+  "missing locked service execution liveness verifier",
+);
+contains(
+  migration,
+  "from public.governance_owner_approval_version_states state",
+  "locked liveness verifier does not lock approval version state",
+);
+contains(
+  migration,
+  "from public.autonomous_system_emergency_states state",
+  "locked liveness verifier does not lock emergency-stop state",
+);
+contains(
+  migration,
+  "governance_lock_approved_execution_liveness(p_execution_id)",
+  "side-effecting service RPCs do not use the locked liveness verifier",
+);
+contains(
+  migration,
   "and state.revoked_at is null",
   "post-claim execution liveness does not recheck Owner revocation",
 );
@@ -207,6 +227,11 @@ contains(
   dbTest,
   "single-use Owner revocation blocks completion",
   "database suite does not prove consumed single-use revocation blocks late completion",
+);
+contains(
+  dbTest,
+  "all side-effecting service RPCs use the locked liveness check",
+  "database suite does not prove service side effects use locked liveness",
 );
 contains(
   dbTest,

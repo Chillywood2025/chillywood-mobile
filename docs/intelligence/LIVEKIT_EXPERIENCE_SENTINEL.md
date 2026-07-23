@@ -35,3 +35,8 @@ Required observation stages:
 
 The sentinel must not pass based only on backend health or room existence. It must
 separate backend/token health, media state, and installed UI state.
+
+Every persisted LiveKit timing metric is typed and bounded. A finding may exceed
+the pass deadlines, but it cannot store unbounded timing evidence. A pass requires
+token issuance, room connection, UI resolution, and first remote media within the
+constitution deadlines.

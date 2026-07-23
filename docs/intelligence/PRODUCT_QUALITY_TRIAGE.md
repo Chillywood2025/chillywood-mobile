@@ -7,6 +7,10 @@ Product quality findings are written through the service-only
 sanitized and contain hashes plus classification metadata, not raw private
 evidence.
 
+Sentinel runs and findings carry operational `data_class`, `retention_until`, and
+`legal_hold` metadata. Private/user-derived data flags are forced off for Level
+0/1 product monitoring.
+
 Finding fields include:
 
 - deterministic finding key;

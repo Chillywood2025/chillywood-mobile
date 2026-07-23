@@ -513,7 +513,16 @@ create table public.product_experience_sentinel_runs (
   ),
   private_data_used boolean not null default false check (private_data_used = false),
   user_derived_data_used boolean not null default false check (user_derived_data_used = false),
+  data_class public.cognitive_data_class not null default 'operational_metadata'
+    check (data_class in ('operational_metadata','security_evidence','legal_hold')),
+  retention_until timestamptz not null default transaction_timestamp() + interval '90 days',
+  legal_hold boolean not null default false,
+  erased_at timestamptz,
   created_at timestamptz not null default transaction_timestamp(),
+  check (retention_until > created_at),
+  check (legal_hold or retention_until <= created_at + interval '365 days'),
+  check (legal_hold = (data_class = 'legal_hold')),
+  check (erased_at is null),
   unique (task_id, sentinel_key, route_or_surface, evidence_manifest_hash),
   unique (id, task_id, project_id, platform, environment),
   foreign key (task_id, project_id, platform, environment)
@@ -578,7 +587,16 @@ create table public.product_quality_findings (
       'proposal_requested','owner_approval_requested','closed_no_action'
     )
   ),
+  data_class public.cognitive_data_class not null default 'operational_metadata'
+    check (data_class in ('operational_metadata','security_evidence','legal_hold')),
+  retention_until timestamptz not null default transaction_timestamp() + interval '90 days',
+  legal_hold boolean not null default false,
+  erased_at timestamptz,
   created_at timestamptz not null default transaction_timestamp(),
+  check (retention_until > created_at),
+  check (legal_hold or retention_until <= created_at + interval '365 days'),
+  check (legal_hold = (data_class = 'legal_hold')),
+  check (erased_at is null),
   unique (task_id, finding_key),
   unique (id, task_id, project_id, platform, environment),
   foreign key (sentinel_run_id, task_id, project_id, platform, environment)
@@ -595,6 +613,12 @@ create index governance_model_execution_attestations_assessment_idx
   on public.governance_model_execution_attestations(task_id, assessment_id, correlation_class);
 create index product_quality_findings_triage_idx
   on public.product_quality_findings(task_id, platform, route_or_surface, reproduction_state, severity);
+create index product_experience_sentinel_runs_retention_idx
+  on public.product_experience_sentinel_runs(retention_until)
+  where legal_hold = false and erased_at is null;
+create index product_quality_findings_retention_idx
+  on public.product_quality_findings(retention_until)
+  where legal_hold = false and erased_at is null;
 
 do $$
 declare
@@ -1398,6 +1422,63 @@ $$;
 revoke all on function public.governance_approved_execution_is_live(uuid)
   from public, anon, authenticated, service_role;
 
+create function public.governance_lock_approved_execution_liveness(
+  p_execution_id uuid
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  if execution_value.id is null then
+    return false;
+  end if;
+
+  perform 1
+  from public.governance_owner_approval_version_states state
+  where state.approval_version_id = execution_value.approval_version_id
+    and state.task_id = execution_value.task_id
+    and state.project_id = execution_value.project_id
+    and state.platform = execution_value.platform
+    and state.environment = execution_value.environment
+  for update;
+  if not found then
+    return false;
+  end if;
+
+  perform 1
+  from public.intelligence_tasks task
+  where task.id = execution_value.task_id
+    and task.project_id = execution_value.project_id
+    and task.platform = execution_value.platform
+    and task.environment = execution_value.environment
+  for share;
+  if not found then
+    return false;
+  end if;
+
+  perform 1
+  from public.autonomous_system_emergency_states state
+  where state.system_id = 'product_intelligence_operator'
+  for share;
+  if not found then
+    return false;
+  end if;
+
+  return public.governance_approved_execution_is_live(p_execution_id);
+end;
+$$;
+revoke all on function public.governance_lock_approved_execution_liveness(uuid)
+  from public, anon, authenticated, service_role;
+
 create function public.governance_claim_approved_action(
   p_approval_version_id uuid,
   p_service_identity text,
@@ -1596,8 +1677,7 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
-     or not public.governance_approval_emergency_active()
-     or not public.governance_approved_execution_is_live(p_execution_id)
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
      or (
        execution_value.state = 'claimed' and p_next_state <> 'preflight'
      )
@@ -1675,8 +1755,7 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
-     or not public.governance_approval_emergency_active()
-     or not public.governance_approved_execution_is_live(p_execution_id)
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
      or execution_value.state <> 'evaluating'
      or p_execution_receipt_hash !~ '^[a-f0-9]{64}$'
      or p_evaluator_proof_hash !~ '^[a-f0-9]{64}$' then
@@ -1766,7 +1845,7 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
-     or not public.governance_approved_execution_is_live(p_execution_id)
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
      or execution_value.state not in ('claimed','preflight','executing','postflight','evaluating')
      or p_failure_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'two_party_execution_failure_rejected'
@@ -1834,7 +1913,7 @@ begin
     p_service_identity, p_worker_assertion, execution_value.operation
   );
   if execution_value.service_identity <> service_identity_value
-     or not public.governance_approved_execution_is_live(p_execution_id)
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
      or p_transition not in (
        'rollback_pending','rollback_running','rollback_succeeded',
        'rollback_failed','quarantined'
@@ -1939,8 +2018,7 @@ begin
   if execution_value.service_identity <> service_identity_value
      or execution_value.operation <> 'set_switch'
      or execution_value.state <> 'executing'
-     or not public.governance_approval_emergency_active()
-     or not public.governance_approved_execution_is_live(p_execution_id)
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
      or version_value.id is null
      or version_value.target_resource_hash <> p_target_resource_hash
      or p_target_resource_hash <> public.governance_switch_target_hash(
@@ -2480,10 +2558,28 @@ begin
              'tokenIssuedElapsedMs','roomConnectElapsedMs',
              'uiStateResolutionElapsedMs','firstRemoteMediaElapsedMs'
            ]
+           or jsonb_typeof(p_metric_manifest->'tokenRequested') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'tokenReturned') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'websocketConnected') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'roomConnected') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'localTrackPublished') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'remoteParticipantJoined') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'remoteTrackSubscribed') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'firstAudioVideoObserved') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'connectingResolved') <> 'boolean'
+           or jsonb_typeof(p_metric_manifest->'iceState') <> 'string'
+           or (p_metric_manifest->>'iceState') not in (
+             'new','checking','connected','completed','failed',
+             'disconnected','closed','unknown'
+           )
            or jsonb_typeof(p_metric_manifest->'tokenIssuedElapsedMs') <> 'number'
            or jsonb_typeof(p_metric_manifest->'roomConnectElapsedMs') <> 'number'
            or jsonb_typeof(p_metric_manifest->'uiStateResolutionElapsedMs') <> 'number'
            or jsonb_typeof(p_metric_manifest->'firstRemoteMediaElapsedMs') <> 'number'
+           or (p_metric_manifest->>'tokenIssuedElapsedMs')::numeric not between 0 and 600000
+           or (p_metric_manifest->>'roomConnectElapsedMs')::numeric not between 0 and 600000
+           or (p_metric_manifest->>'uiStateResolutionElapsedMs')::numeric not between 0 and 600000
+           or (p_metric_manifest->>'firstRemoteMediaElapsedMs')::numeric not between 0 and 600000
            or (
              p_result_status = 'passed'
              and not (
@@ -2495,21 +2591,44 @@ begin
                and p_metric_manifest->'remoteTrackSubscribed' = 'true'::jsonb
                and p_metric_manifest->'firstAudioVideoObserved' = 'true'::jsonb
                and p_metric_manifest->'connectingResolved' = 'true'::jsonb
-               and (p_metric_manifest->>'tokenIssuedElapsedMs')::integer between 0 and 3000
-               and (p_metric_manifest->>'roomConnectElapsedMs')::integer between 0 and 12000
-               and (p_metric_manifest->>'uiStateResolutionElapsedMs')::integer between 0 and 15000
-               and (p_metric_manifest->>'firstRemoteMediaElapsedMs')::integer between 0 and 20000
+               and (p_metric_manifest->>'tokenIssuedElapsedMs')::numeric between 0 and 3000
+               and (p_metric_manifest->>'roomConnectElapsedMs')::numeric between 0 and 12000
+               and (p_metric_manifest->>'uiStateResolutionElapsedMs')::numeric between 0 and 15000
+               and (p_metric_manifest->>'firstRemoteMediaElapsedMs')::numeric between 0 and 20000
              )
            )
          )
      )
-     or (
-       p_sentinel_key = 'visual_product_experience_sentinel'
-       and not p_metric_manifest ?& array[
-         'screenshotEvidenceHash','cardViewportWidthRatio',
-         'cardsVisibleAboveFold','aspectRatio','densityScore'
-       ]
-     )
+       or (
+         p_sentinel_key = 'visual_product_experience_sentinel'
+         and (
+           not p_metric_manifest ?& array[
+             'screenshotEvidenceHash','cardViewportWidthRatio',
+             'cardsVisibleAboveFold','aspectRatio','densityScore',
+             'baselineState','baselineComparisonHash'
+           ]
+           or jsonb_typeof(p_metric_manifest->'screenshotEvidenceHash') <> 'string'
+           or (p_metric_manifest->>'screenshotEvidenceHash') !~ '^[a-f0-9]{64}$'
+           or jsonb_typeof(p_metric_manifest->'baselineComparisonHash') <> 'string'
+           or (p_metric_manifest->>'baselineComparisonHash') !~ '^[a-f0-9]{64}$'
+           or jsonb_typeof(p_metric_manifest->'cardViewportWidthRatio') <> 'number'
+           or (p_metric_manifest->>'cardViewportWidthRatio')::numeric not between 0 and 2
+           or jsonb_typeof(p_metric_manifest->'cardsVisibleAboveFold') <> 'number'
+           or (p_metric_manifest->>'cardsVisibleAboveFold')::numeric not between 0 and 100
+           or jsonb_typeof(p_metric_manifest->'aspectRatio') <> 'string'
+           or (p_metric_manifest->>'aspectRatio') not in ('16:9','4:5','1:1','mixed','unknown')
+           or jsonb_typeof(p_metric_manifest->'densityScore') <> 'number'
+           or (p_metric_manifest->>'densityScore')::numeric not between 0 and 1
+           or jsonb_typeof(p_metric_manifest->'baselineState') <> 'string'
+           or (p_metric_manifest->>'baselineState') not in (
+             'needs_product_baseline_review','approved_baseline'
+           )
+           or (
+             p_result_status = 'passed'
+             and (p_metric_manifest->>'baselineState') <> 'approved_baseline'
+           )
+         )
+       )
      or (
        p_sentinel_key = 'installed_journey_sentinel'
        and not p_metric_manifest ?& array[

@@ -28,3 +28,9 @@ include:
 Before Owner baseline approval, visual outliers can be classified as
 `design_baseline_missing` or as evidence-based defects. The sentinel cannot
 autonomously redesign the app.
+
+Persisted visual evidence must include a screenshot evidence hash, bounded numeric
+card and density metrics, an accepted aspect-ratio class, a baseline comparison
+hash, and an explicit baseline state. A visual pass requires an approved baseline;
+before that, the sentinel may create only baseline-review or evidence-based
+finding records.

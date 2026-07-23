@@ -61,20 +61,48 @@ contains(
   "LiveKit sentinel RPC does not require bounded timing evidence",
 );
 contains(
-  "(p_metric_manifest->>'tokenIssuedElapsedMs')::integer between 0 and 3000",
+  "(p_metric_manifest->>'tokenIssuedElapsedMs')::numeric between 0 and 3000",
   "LiveKit sentinel RPC does not enforce the token issuance deadline",
 );
 contains(
-  "(p_metric_manifest->>'roomConnectElapsedMs')::integer between 0 and 12000",
+  "(p_metric_manifest->>'roomConnectElapsedMs')::numeric between 0 and 12000",
   "LiveKit sentinel RPC does not enforce the room connection deadline",
 );
 contains(
-  "(p_metric_manifest->>'uiStateResolutionElapsedMs')::integer between 0 and 15000",
+  "(p_metric_manifest->>'uiStateResolutionElapsedMs')::numeric between 0 and 15000",
   "LiveKit sentinel RPC does not enforce the installed UI resolution deadline",
 );
 contains(
-  "(p_metric_manifest->>'firstRemoteMediaElapsedMs')::integer between 0 and 20000",
+  "(p_metric_manifest->>'firstRemoteMediaElapsedMs')::numeric between 0 and 20000",
   "LiveKit sentinel RPC does not enforce the remote media deadline",
+);
+contains(
+  "(p_metric_manifest->>'tokenIssuedElapsedMs')::numeric not between 0 and 600000",
+  "LiveKit sentinel findings do not cap persisted timing evidence",
+);
+contains(
+  "jsonb_typeof(p_metric_manifest->'tokenReturned') <> 'boolean'",
+  "LiveKit sentinel evidence does not enforce boolean metric types",
+);
+contains(
+  "'baselineState','baselineComparisonHash'",
+  "visual sentinel evidence does not require baseline state and comparison hash",
+);
+contains(
+  "(p_metric_manifest->>'cardViewportWidthRatio')::numeric not between 0 and 2",
+  "visual sentinel evidence does not bound card viewport ratio",
+);
+contains(
+  "(p_metric_manifest->>'densityScore')::numeric not between 0 and 1",
+  "visual sentinel evidence does not bound density score",
+);
+contains(
+  "(p_metric_manifest->>'baselineState') not in",
+  "visual sentinel evidence does not validate baseline state",
+);
+contains(
+  "p_result_status = 'passed'",
+  "visual sentinel pass does not require an approved baseline state",
 );
 contains(
   "p_physical_proof_status <> run_value.physical_proof_status",
@@ -109,12 +137,29 @@ assert(
   "database suite does not reject LiveKit passes that violate timing deadlines",
 );
 assert(
+  dbTest.includes("LiveKit sentinel finding rejects unbounded timing evidence"),
+  "database suite does not reject LiveKit findings with unbounded timing evidence",
+);
+assert(
+  dbTest.includes("visual sentinel rejects unbounded metric, hash, and aspect-ratio evidence"),
+  "database suite does not reject malformed visual metric evidence",
+);
+assert(
+  dbTest.includes("visual sentinel accepts bounded baseline-review finding evidence"),
+  "database suite does not accept bounded visual baseline-review evidence",
+);
+assert(
   dbTest.includes("installed journey sentinel pass rejects caller-overstated timing limits"),
   "database suite does not reject installed-journey passes with overstated duration limits",
 );
 assert(
   dbTest.includes("installed journey sentinel accepts bounded expected/observed state evidence"),
   "database suite does not accept complete installed-journey evidence",
+);
+assert(
+  migration.includes("product_experience_sentinel_runs_retention_idx") &&
+    migration.includes("product_quality_findings_retention_idx"),
+  "sentinel and finding evidence lack retention indexes",
 );
 contains(
   "entered_collective_governance",
