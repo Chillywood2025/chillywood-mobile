@@ -11,7 +11,7 @@
   "nativeBuildSource": "local_eas_build",
   "expectedBinarySourceCommit": "8c426f4e74de61de7d4529d32d124744833912dc",
   "nativeBuildId": null,
-  "releaseStatus": "internal_build_available_physical_upgrade_pending",
+  "releaseStatus": "android_image_manipulator_incident_closed_internal_only",
   "expoSdkVersion": "54.0.36",
   "expoImageManipulatorVersion": "14.0.8",
   "legacyBuild": {
@@ -59,7 +59,7 @@
     "nativePathUsed": true,
     "fallbackUsed": false,
     "cleanInstallPassed": true,
-    "inPlaceUpgradeState": "device_not_available"
+    "inPlaceUpgradeState": "google_play_build_80_to_84_pass"
   },
   "signingIncident": {
     "classification": "compromised_google_play_upload_key",
@@ -83,11 +83,11 @@
     "productionTrackChanged": false,
     "openTestingTrackChanged": false,
     "closedTestingTrackChanged": false,
-    "playDeliveredUpgradeState": "device_not_available",
-    "sessionPreservationState": "not_observed",
-    "settingsPreservationState": "not_observed",
-    "physicalNativeModuleState": "not_observed",
-    "physicalHeicState": "not_observed"
+    "playDeliveredUpgradeState": "pass",
+    "sessionPreservationState": "pass",
+    "settingsPreservationState": "pass",
+    "physicalNativeModuleState": "available",
+    "physicalHeicState": "native_conversion_pass"
   },
   "runtimeFixtureEvidence": {
     "deviceClass": "android_emulator_api_34",
@@ -99,6 +99,36 @@
     "corruptedHeic": "failed_safely_without_crash",
     "backgroundForeground": "passed_without_duplicate_storage_object",
     "lowMemory": "not_observed"
+  },
+  "playUpgradeEvidence": {
+    "proofDate": "2026-07-22",
+    "deviceClass": "samsung_physical_android_11",
+    "startingNativeBuild": "80",
+    "replacementNativeBuild": "84",
+    "installationSource": "google_play_internal",
+    "inPlaceWithoutDataClear": true,
+    "playAppSigningCertificateMatch": true,
+    "sessionPreserved": true,
+    "settingsPreserved": true,
+    "notificationPreferencesPreserved": true,
+    "runtimeIsolationPassed": true,
+    "nativeModuleAvailable": true,
+    "nativePathUsed": true,
+    "fallbackUsed": false,
+    "jpeg": "saved_once",
+    "png": "review_cancel_pass",
+    "heic": "native_conversion_saved_once",
+    "heif": "native_conversion_saved_once",
+    "highResolutionHeic": "saved_without_fatal_or_observed_oom",
+    "corruptedHeic": "failed_safely_without_process_exit",
+    "backgroundForeground": "review_resumed_and_saved_once",
+    "duplicatePrevention": "single_profile_slot_state_observed",
+    "historicalFatalObservedCount": 0,
+    "javascriptFatalObservedCount": 0,
+    "lowMemory": "not_observed",
+    "minimumApi": "not_observed",
+    "secondOem": "not_observed",
+    "allImageSurfaces": "not_observed"
   },
   "otaNativeCompatibility": {
     "optionalDeferredPackages": [

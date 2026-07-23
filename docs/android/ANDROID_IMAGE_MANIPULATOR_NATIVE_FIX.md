@@ -2,7 +2,7 @@
 
 Date: 2026-07-22
 
-Status: `GOOGLE_PLAY_INTERNAL_BUILD_AVAILABLE_PHYSICAL_UPGRADE_PENDING`
+Status: `ANDROID_IMAGE_MANIPULATOR_INCIDENT_CLOSED`
 
 ## Root cause and compatibility boundary
 
@@ -137,27 +137,52 @@ LiveKit media, and thumbnail validation are not direct Image Manipulator callers
 
 ## Installation and legacy truth
 
-The physical Samsung previously observed with build 80 is Google Play-installed
-and signed by the Play app-signing certificate. Build 84 is now available through
-Google Play Internal Testing, which is the correct signer-compatible in-place
-upgrade path. No approved Android device was visible to ADB during this closeout,
-so upgrade, session/settings preservation, physical native-module diagnostics,
-physical HEIC/HEIF conversion, and the post-upgrade crash window remain
-`DEVICE_NOT_AVAILABLE`; none is claimed passed. The app was not uninstalled,
-cleared, or sideloaded.
+On 2026-07-22, `QA Android A` (Samsung physical device class, Android 11) began on
+the Google Play-installed build 80/runtime `1.0.0`. Google Play Internal Testing
+updated the same installation to build 84 without uninstalling, clearing app data,
+or sideloading. The package stayed `com.chillywood.mobile`; the Play installer and
+unchanged Play app-signing public certificate matched. The existing signed-in
+session, safe settings, notification state, and profile state survived the update,
+full termination, and relaunch.
+
+The updated app reported runtime
+`1.0.0-android-imagemanipulator-v1`, production channel, build 84, embedded launch,
+emergency launch false, and `HEIC native module = Available`. Successful HEIC and
+HEIF saves prove the guarded native path was used and the missing-module fallback
+was not used. Build 80 remains protected by the existing safety OTA for testers
+who have not upgraded; that OTA prevents the startup fatal but intentionally does
+not add the missing native module.
+
+| Play-delivered physical test | Result |
+| --- | --- |
+| Build 80 to 84 in-place update | Pass; Google Play only, no uninstall/data clear/sideload |
+| Session and safe settings | Preserved through update and relaunch |
+| JPEG | Saved once |
+| PNG | Review and cancel passed |
+| Standard HEIC | Native conversion and save passed |
+| Standard HEIF | Native conversion and save passed |
+| High-resolution HEIC | Saved; no fatal or observed OOM |
+| Corrupted HEIC | Bounded user-facing failure; process remained alive |
+| Background/foreground | Review resumed and saved once |
+| Duplicate prevention | One active profile-photo slot observed |
+| Historical fatal signature | Zero occurrences in bounded logcat window |
 
 ## Autonomous release/readiness readback
 
 The Android provider adapter read Google Play build 84 as
-`available_to_internal_testers` on `internal`. Its independent EAS cloud-history
-rail still reports the older cloud build/runtime, which is truthful because build
-84 was built locally; the expected manifest was not substituted for observed EAS
-history. Posting a fresh `watch_once` to the deployed release and installed-QA
-operators was blocked on this Mac because their operator-token environment files
-are server-owned and absent here. Current readiness is therefore
-`internal_build_ready` plus `physical_proof_required`, not
-`play_installed_upgrade_pass`. No autonomous system moved or can move the release
-to production.
+`available_to_internal_testers` on `internal`; its EAS build and channel reads also
+completed. EAS cloud-build history truthfully still identifies the historical
+cloud runtime `1.0.0`, because build 84 was built locally. That historical cloud
+identity was not substituted for the Play-delivered binary.
+
+The reviewed Android binary attestation is now `verified` with build 84, the
+replacement runtime, exact source commit, and AAB digest. Installed QA records a
+sanitized `play_installed_upgrade_pass`, `native_module_available`,
+`heic_conversion_observed`, and `historical_fatal_not_observed` physical-proof
+event. The scheduled release snapshot remains blocked until its host adapter is
+given the same sanitized Play/local-attestation composition; it was not falsely
+rewritten as healthy. No autonomous system moved or can move the release to
+production.
 
 Read-only Expo history shows build 80 is protected by compatible safety update
 group `37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5`, Android update
@@ -168,16 +193,13 @@ rollback targets.
 
 ## Remaining gates
 
-Connect the approved Google Play build-80 Android device, use the existing
-Internal Testing lane, and install build 84 from Play without uninstalling or
-clearing data. Then verify session/settings preservation, runtime
-`1.0.0-android-imagemanipulator-v1`, native-module availability, native-path HEIC
-conversion, and absence of the historical fatal. Remaining optional coverage
-includes a second OEM, minimum API, permission-denied, network retry, low-memory,
-trusted EXIF orientation, no-extension/masquerade picker behavior, and individual
-social-surface device tests. None is claimed complete here.
+The incident-specific upgrade gate is closed. Remaining optional breadth includes
+a second OEM, minimum API, permission-denied, network retry, low-memory, trusted
+EXIF orientation, no-extension/masquerade picker behavior, and individual physical
+tests for every social attachment surface. None of those broader cases is claimed
+complete here, and build 84 remains Internal Testing only.
 
-If build 84 must be withdrawn before physical proof, deactivate/remove only its
+If build 84 must be withdrawn, deactivate/remove only its
 Internal Testing release or pause that track, leave production/open/closed tracks
 untouched, and keep build 80 on the reviewed safety OTA. Delete local AAB/APKS/APK
 copies only when the owner intentionally discards the release evidence. Keep the

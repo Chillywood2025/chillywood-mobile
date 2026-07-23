@@ -2,7 +2,7 @@
 
 Date: 2026-07-22
 
-Status: native replacement build 84 is available through Google Play Internal Testing; Play-delivered physical upgrade proof is pending because no approved Android device was connected.
+Status: **CLOSED** — Google Play build 80 upgraded in place to internal build 84 on an approved physical Android device; the session and safe settings survived, `ExpoImageManipulator` was available, native HEIC/HEIF conversion succeeded, and the historical fatal was absent from the bounded log window.
 
 ## Incident
 
@@ -169,9 +169,10 @@ The behavioral fixtures cover absent native module, valid native module, failed
 package load, invalid runtime, HEIC/HEIF recognition, JPEG/PNG pass-through, and
 retention of every guarded profile/social caller. Picker cancel/permission paths,
 large-image rejection, upload cleanup, and ordinary JPEG/PNG behavior remain on
-their existing guarded paths. Physical gallery/provider upload proof and HEIC
-conversion on a replacement Android binary remain device-level follow-up; they
-are not claimed by source tests.
+their existing guarded paths. The Play-delivered physical closeout additionally
+proved JPEG save, PNG review/cancel, HEIC and HEIF native conversion, a
+high-resolution HEIC save, corrupt-HEIC fail-safe behavior, and
+background/foreground resumption without a duplicate profile result.
 
 ## Native replacement result
 
@@ -221,20 +222,38 @@ shows it as available to the existing bounded 17-tester email list; build 80 is
 deactivated on that track. Production, open testing, and closed testing were not
 changed. No rebuild, versionCode 85, or OTA was created.
 
-No approved Android device was visible to ADB after Internal availability, so the
-Google Play in-place upgrade from build 80, session/settings preservation,
-physical native-module diagnostic, physical HEIC/HEIF conversion, and post-upgrade
-fatal-signature window remain `DEVICE_NOT_AVAILABLE`. Earlier API-34 clean-install
-artifact proof remains valid but is not a substitute for Play-delivered upgrade
-proof.
+On 2026-07-22, approved `QA Android A` (Samsung physical device class, Android 11)
+was connected with the Google Play-installed build 80 still present. Google Play
+Internal Testing updated that exact installation to build 84 without uninstalling,
+clearing storage, or sideloading. Package, version, runtime, production channel,
+Play installer, and the unchanged Play app-signing public certificate all matched.
+The existing signed-in session, safe app settings, notification registration and
+preferences, and visible profile state survived termination and relaunch.
 
-## Remaining action
+Settings reported build 84, runtime
+`1.0.0-android-imagemanipulator-v1`, channel `production`, embedded launch,
+emergency launch false, and `HEIC native module = Available`. JPEG saved once; PNG
+reached review and canceled safely; real HEIC and HEIF fixtures used the guarded
+native conversion path and saved once; a high-resolution HEIC saved without a
+fatal or observed out-of-memory event; corrupted HEIC showed the bounded error and
+left the process alive. A HEIC review survived background/foreground and saved
+once. The profile retained one active photo slot after repeated edits.
 
-1. Connect the approved Play-installed build-80 device and update to build 84 from
-   the existing Internal Testing lane without uninstalling, clearing data, or
-   sideloading.
-2. Verify the replacement runtime, session/settings preservation,
-   `ExpoImageManipulator` native path, HEIC conversion, and absence of the
-   historical fatal during the observed post-upgrade window.
-3. Run the remaining unobserved device/surface cases without weakening the
-   permanent JavaScript fallback or reusing runtime `1.0.0` for native changes.
+The bounded post-upgrade logcat window contained zero occurrences of
+`Cannot find native module "ExpoImageManipulator"`, zero React Native
+`JavascriptException` fatal markers, zero Image Manipulator fatal markers, and
+zero observed out-of-memory fatal markers. Crashlytics provider-level absence is
+not claimed because that provider readback was unavailable.
+
+## Incident closeout and remaining coverage
+
+The Android `ExpoImageManipulator` incident is **CLOSED** for the historical
+build-80-to-build-84 upgrade failure. Build 80 remains protected by the reviewed
+runtime-`1.0.0` safety OTA for testers who have not upgraded, while build 84 uses a
+different runtime and contains the native module.
+
+Non-blocking coverage still not claimed: second OEM, minimum API, deliberate
+permission denial, network failure/retry, low-memory recovery, trustworthy EXIF
+orientation, no-extension/masquerade picker behavior, and individual physical
+proof for every social attachment caller. Those cases must retain the defensive
+fallback and must not reuse runtime `1.0.0` for a future native dependency change.

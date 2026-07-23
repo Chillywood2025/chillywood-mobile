@@ -6,8 +6,7 @@ This file is intentionally compact. Keep current truth here, keep detailed proof
 Full checkpoint history through April 24, 2026 is preserved at `docs/archive/current-state-history-through-2026-04-24.md`. Later detailed proof history is available in git history and task artifacts; this hot-path file should carry only the current governing facts future sessions must not undo.
 
 ## Current Checkpoint
-Android `ExpoImageManipulator` crash prevention and native replacement closeout
-are recorded in `ANDROID_CRASH_REPORT.md` and
+Android `ExpoImageManipulator` incident closeout is **CLOSED** and recorded in `ANDROID_CRASH_REPORT.md` and
 `docs/android/ANDROID_IMAGE_MANIPULATOR_NATIVE_FIX.md`. Historical Google Play
 build 80/runtime `1.0.0` predates the native module and is protected from the
 startup fatal by existing Android safety update group
@@ -25,10 +24,15 @@ unchanged. Google/EAS/AAB/local public fingerprints match and the compromised EA
 credential remains removed. The unchanged AAB hash
 `de8f4da21956988bdcf7e8ea74bf96493a8d2649018557ed97d4914a7ceabb30`
 was accepted and processed on Google Play Internal Testing only; build 84 is
-available to the existing bounded 17-tester email list and build 80 is deactivated
-on that track. No authorized Android device was visible to ADB, so Play-delivered
-build-80-to-84 upgrade, session/settings preservation, physical HEIC/native-module
-proof, and post-upgrade crash proof remain pending. No rebuild, versionCode 85,
+available to the existing bounded tester lane and build 80 is deactivated on that
+track. On 2026-07-22, an approved Samsung Android 11 device updated in place from
+Google Play build 80 to 84 without uninstall, data clear, or sideload. Session,
+safe settings, notification state, and profile state survived. Settings reported
+the replacement runtime and native module available; JPEG, HEIC, HEIF,
+high-resolution HEIC, corrupt-input fail-safe, and background/foreground tests
+passed as documented. The bounded log window contained no historical native-module
+or React Native fatal signature. A verified Android binary attestation and
+installed-QA physical proof row record the result. No rebuild, versionCode 85,
 production/open/closed release, or OTA occurred.
 
 Chi'llywood autonomous app operating model is now documented in `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`. Future Codex/operator work should be autonomous by default for Level 0/1 safe operations such as eligible media discovery, safe batch sizing, scoped backups, restore drills, public-safe media work inside caps, post-write audit, scoped rollback, fallback playback, and telemetry reporting. Owner approval remains required for Level 3/4 boundaries: money/billing/provider changes, auth/RLS changes, Premium entitlement changes, payout/cashout, destructive production DB changes, broad catalog backfill, public/private exposure changes, public launch, legal/compliance, payment production mutation, and public marketing claims. Emergency stop, fallback, audit, rollback/quarantine, no-secret logging, and no unauthorized public exposure remain mandatory.

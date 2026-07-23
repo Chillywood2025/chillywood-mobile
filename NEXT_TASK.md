@@ -2,7 +2,7 @@
 
 # Cloudflare R2 Media Delivery Staged Proof
 
-## Android native-image deployment follow-up
+## Android native-image incident closed
 
 The permanent Android replacement is available on Google Play Internal Testing.
 Version
@@ -15,12 +15,16 @@ certificate active, the Play app-signing certificate unchanged, and the same
 public fingerprint in EAS, Google, the preserved AAB, and the local replacement.
 The exact preserved AAB is processed and available on the internal track to the
 existing bounded 17-tester lane; production/open/closed testing were unchanged.
-No approved Android device was connected, so the next task is the Play-delivered
-build-80-to-84 in-place upgrade with no uninstall/clear/sideload, followed by
-session/settings preservation, native module, HEIC/HEIF, and fatal-signature
-proof. Do not publish either superseded incompatible runtime-1.0.0 update group.
-Build 80 is protected by the existing safety update but intentionally cannot
-perform HEIC/HEIF conversion.
+An approved Samsung Android 11 device completed the Play-delivered build-80-to-84
+in-place upgrade with no uninstall, clear, or sideload. Session, safe settings,
+notification state, and profile state survived. The replacement runtime and native
+module were observed; JPEG, HEIC, HEIF, high-resolution HEIC, corrupt-input
+fail-safe, repeated edits, and background/foreground behavior passed without the
+historical fatal. The incident is closed. Do not publish either superseded
+incompatible runtime-1.0.0 update group. Build 80 is protected by the existing
+safety update but intentionally cannot perform HEIC/HEIF conversion. Remaining
+coverage is second-OEM/minimum-API/permission/network/low-memory/EXIF and every
+individual social attachment surface, not a blocker to this incident closeout.
 
 Current latest truth:
 - Autonomous operating model is now the governing policy: Do not ask owner approval for Level 0/1 autonomous operations; classify first, proceed inside safe policy, and report. Ask owner for Level 3; ask owner plus external confirmation for Level 4.

@@ -2,7 +2,8 @@
 
 ## Android Image Manipulator Native-Boundary Closeout
 
-Source, native artifact, and clean-install proof are complete. Android build 80
+Source, native artifact, clean-install proof, and the Google Play in-place upgrade
+proof are complete. Android build 80
 predates `expo-image-manipulator`; its runtime-`1.0.0` safety update prevents the
 startup crash while keeping HEIC/HEIF fail-closed. Replacement versionCode 84,
 runtime `1.0.0-android-imagemanipulator-v1`, contains and registers
@@ -11,9 +12,12 @@ replacement upload certificate is active, the Play app-signing certificate is
 unchanged, and Google/EAS/AAB/local public fingerprints match. The exact preserved
 AAB is processed and available on Google Play Internal Testing only to the
 existing bounded 17-tester lane; build 80 is deactivated on that track and no
-production/open/closed release changed. Remaining work is the Google Play
-build-80-to-84 in-place upgrade and physical native-path/crash proof after an
-approved Android device reconnects, plus the unobserved per-surface/device cases in
+production/open/closed release changed. An approved Samsung Android 11 device
+updated from Play build 80 to 84 without uninstall/data clear/sideload; session and
+safe settings survived, native HEIC/HEIF conversion passed, and the bounded log
+window contained no historical fatal. The incident is **CLOSED**. Remaining work
+is optional per-surface, second-OEM, minimum-API, permission/network, EXIF, and
+low-memory breadth listed in
 `docs/android/ANDROID_IMAGE_MANIPULATOR_NATIVE_FIX.md`.
 
 ## Current Play-Internal Two-Phone Chat/Live Proof
