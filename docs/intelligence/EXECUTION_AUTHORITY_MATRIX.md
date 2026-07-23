@@ -1,6 +1,6 @@
 # Cognitive Execution Authority Matrix
 
-Status: `SOURCE_COMPLETE_NOT_DEPLOYED`
+Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 | Action | Foundation authority |
 |---|---|
@@ -19,4 +19,6 @@ Status: `SOURCE_COMPLETE_NOT_DEPLOYED`
 | Auth/RLS, role, or user-rights mutation | Forbidden |
 | Provider-product mutation | Forbidden |
 
-Plans require branch/path/tool allowlists, call/time/cost caps, expiry, audit, and rollback. Raw model text never executes. No self-approval: an executor identity cannot satisfy owner approval. Future high-risk work must be routed to the existing domain operator and approval control plane.
+Plans require the exact repository/remote/task branch, closed action and canonical path scopes, immutable snapshot/approval hashes, atomic call/time/byte/cost/child/retry caps, expiry, audit and rollback. Raw model text never executes. Process actions use fixed argument arrays with `shell=false`. No self-approval: an executor identity cannot satisfy owner approval. Future high-risk work must be routed to the existing domain operator and approval control plane.
+
+Workflows are permanently outside executor authority. Native/release/migration/auth/RLS/role/money/provider paths require a separate high-risk capability and still cannot be deployed by this scaffold.

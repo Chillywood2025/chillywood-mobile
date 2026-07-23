@@ -1,6 +1,6 @@
 # Cognitive Security Model
 
-Status: `SOURCE_COMPLETE_NOT_DEPLOYED`
+Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 - No unrestricted root credential and no production model credential.
 - Expiring capabilities bind task, branch, path, tool, call count, duration, and cost.
@@ -13,3 +13,9 @@ Status: `SOURCE_COMPLETE_NOT_DEPLOYED`
 - Kill switch is currently structural: no deployed function, scheduler, model credential, or linked migration exists.
 
 Future promotion requires threat modeling for prompt injection, supply chain, model/tool isolation, budget exhaustion, data retention, and incident response.
+
+The hardening branch implements source-side controls for those risks, but does not
+claim production proof. Capability credentials stay in a broker, tool/provider
+results are untrusted envelopes, operational model output is a strict closed
+document, and required-test evidence is verified by a distinct read-only
+evaluator. All 40 independent attack IDs are required in CI.

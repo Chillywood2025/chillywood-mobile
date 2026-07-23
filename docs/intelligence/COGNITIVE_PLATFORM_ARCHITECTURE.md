@@ -1,6 +1,6 @@
 # Cognitive Platform Architecture
 
-Status: `SOURCE_COMPLETE_NOT_DEPLOYED`
+Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 ## Shape
 
@@ -40,3 +40,11 @@ The committed snapshot is a reproducible source artifact, not production telemet
 - Production budget, retention, incident, and emergency-stop runbooks.
 - Deployed evaluator independence proof.
 - No migration/function/scheduler promotion from this branch.
+
+## Security-hardening state
+
+The platform is an undeployed scaffold under hardening, not a cognitive brain.
+Closed executor actions, consumable capabilities, immutable snapshots, an
+independent evidence evaluator, recursive sanitization, an SSRF-safe mock research
+transport, atomic budgets, leases, cancellation and rollback quarantine are
+defined in `docs/intelligence/hardening/`. Production activation remains absent.

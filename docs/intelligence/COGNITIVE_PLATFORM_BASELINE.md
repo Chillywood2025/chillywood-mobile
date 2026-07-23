@@ -1,6 +1,6 @@
 # Cognitive Platform Baseline
 
-Status: `SOURCE_COMPLETE_NOT_DEPLOYED`
+Status: `SECURITY_HARDENING_IN_PROGRESS`
 
 The baseline is the existing autonomous control plane at Android closeout commit `deb8996bd720893c877b3bf03accd54e54802489`. It has fourteen active specialized domain systems, one foundation-only ads system, the Owner Command router, registered workers/surfaces, platform-scoped approvals, User Report Router, bounded schedulers, immutable audit evidence, and provider-specific readback.
 
