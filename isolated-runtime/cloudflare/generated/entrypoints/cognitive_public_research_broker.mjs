@@ -1,7 +1,7 @@
 import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";
 import { createScopedDatabasePort } from "../../src/database-core.mjs";
 import { PUBLIC_RESEARCH_BROKER_ADAPTERS } from "../../src/adapters/research-broker.mjs";
-import { NO_DOMAIN_STATEMENTS } from "../../src/database-statements/none.mjs";
+import { RESEARCH_BROKER_STATEMENTS } from "../../src/database-statements/research-broker.mjs";
 
 const principal = Object.freeze({
   "binding": "COGNITIVE_PUBLIC_RESEARCH_BROKER",
@@ -54,7 +54,7 @@ const principal = Object.freeze({
         "taskId"
       ],
       "rpcEntrypoints": [
-        "cognitive_record_public_research_claim_evidence"
+        "cognitive_runtime.record_research_claim_with_readback"
       ]
     },
     "detect_contradiction": {
@@ -87,6 +87,7 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
     "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN"
@@ -99,7 +100,7 @@ const principal = Object.freeze({
 });
 const createDatabase = (options) => createScopedDatabasePort({
   ...options,
-  domainStatements: NO_DOMAIN_STATEMENTS,
+  domainStatements: RESEARCH_BROKER_STATEMENTS,
 });
 
 export default createPrivateWorkerEntrypoint({

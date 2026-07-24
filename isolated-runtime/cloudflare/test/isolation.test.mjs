@@ -60,7 +60,10 @@ const database = (overrides = {}) => ({
     principal,
     serviceRoleMember: false,
   }),
-  revocationStatus: async () => ({ databaseAccessRevoked: false }),
+  revocationStatus: async (principal) => ({
+    databaseAccessRevoked: false,
+    principal,
+  }),
   ...overrides,
 });
 
@@ -215,6 +218,42 @@ test("wrong invocation, emergency stop and revocation fail closed", async () => 
       operationAdapter("cognitive_product_baseline_executor", operation),
   });
   await assert.rejects(() => revoked(envelope, TOKEN), /revocation_rejected/u);
+
+  for (
+    const malformedRevocation of [
+      { databaseAccessRevoked: false },
+      {
+        databaseAccessRevoked: false,
+        principal: "cognitive_sentinel_collector",
+      },
+      {
+        databaseAccessRevoked: true,
+        principal: "cognitive_product_baseline_executor",
+        revoked: false,
+      },
+      {
+        principal: "cognitive_product_baseline_executor",
+        revoked: false,
+      },
+    ]
+  ) {
+    const malformed = createPrivateInvocationHandler({
+      createDatabase: () =>
+        database({
+          revocationStatus: async () => malformedRevocation,
+        }),
+      env: await baselineEnv(),
+      logger: silentLogger,
+      now: () => NOW,
+      principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
+      resolveAdapter: (operation) =>
+        operationAdapter("cognitive_product_baseline_executor", operation),
+    });
+    await assert.rejects(
+      () => malformed(envelope, TOKEN),
+      /revocation_rejected/u,
+    );
+  }
 });
 
 test("deadline cancellation closes the isolated database connection", async () => {
@@ -287,4 +326,35 @@ test("gateway rejects unauthenticated, wrong-principal and absent binding calls"
     {},
   );
   assert.equal(response.status, 503);
+});
+
+test("gateway rejects oversized and malformed request bodies before dispatch", async () => {
+  const authenticated = createGatewayHandler({
+    now: () => NOW,
+    verifyAccess: async () => true,
+  });
+  let response = await authenticated(
+    new Request("https://gateway.invalid/v1", {
+      body: "{}",
+      headers: {
+        "content-length": "131073",
+        "x-cognitive-principal-invocation": TOKEN,
+      },
+      method: "POST",
+    }),
+    {},
+  );
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "request_body_too_large" });
+
+  response = await authenticated(
+    new Request("https://gateway.invalid/v1", {
+      body: "{not-json",
+      headers: { "x-cognitive-principal-invocation": TOKEN },
+      method: "POST",
+    }),
+    {},
+  );
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "request_body_invalid" });
 });

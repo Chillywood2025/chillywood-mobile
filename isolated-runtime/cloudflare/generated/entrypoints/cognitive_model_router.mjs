@@ -1,7 +1,7 @@
 import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";
 import { createScopedDatabasePort } from "../../src/database-core.mjs";
 import { MODEL_ROUTER_ADAPTERS } from "../../src/adapters/model.mjs";
-import { NO_DOMAIN_STATEMENTS } from "../../src/database-statements/none.mjs";
+import { MODEL_STATEMENTS } from "../../src/database-statements/model.mjs";
 
 const principal = Object.freeze({
   "binding": "COGNITIVE_MODEL_ROUTER",
@@ -45,6 +45,13 @@ const principal = Object.freeze({
     }
   },
   "provider": "approved_model_provider",
+  "runtimeConfiguration": {
+    "COGNITIVE_MODEL_FAMILY": "REPLACE_WITH_APPROVED_MODEL_FAMILY",
+    "COGNITIVE_MODEL_INPUT_USD_PER_MILLION": "REPLACE_WITH_APPROVED_INPUT_USD_PER_MILLION",
+    "COGNITIVE_MODEL_NAME": "REPLACE_WITH_APPROVED_MODEL_NAME",
+    "COGNITIVE_MODEL_OUTPUT_USD_PER_MILLION": "REPLACE_WITH_APPROVED_OUTPUT_USD_PER_MILLION",
+    "COGNITIVE_MODEL_PROVIDER": "openai"
+  },
   "requiredSecrets": [
     "COGNITIVE_MODEL_ROUTER_INVOKE_SHA256",
     "COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION",
@@ -58,7 +65,7 @@ const principal = Object.freeze({
 });
 const createDatabase = (options) => createScopedDatabasePort({
   ...options,
-  domainStatements: NO_DOMAIN_STATEMENTS,
+  domainStatements: MODEL_STATEMENTS,
 });
 
 export default createPrivateWorkerEntrypoint({

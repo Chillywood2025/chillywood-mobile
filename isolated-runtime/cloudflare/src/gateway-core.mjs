@@ -5,9 +5,51 @@ const JSON_HEADERS = Object.freeze({
   "cache-control": "no-store",
   "content-type": "application/json",
 });
+const MAX_GATEWAY_BODY_BYTES = 131_072;
 
 const json = (status, body) =>
   new Response(JSON.stringify(body), { headers: JSON_HEADERS, status });
+
+const readBoundedJson = async (request) => {
+  const declaredLength = request.headers.get("content-length");
+  if (
+    declaredLength !== null &&
+    (!/^[0-9]+$/u.test(declaredLength) ||
+      Number(declaredLength) > MAX_GATEWAY_BODY_BYTES)
+  ) {
+    throw new Error("request_body_too_large");
+  }
+  if (!request.body) throw new Error("request_body_invalid");
+
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_GATEWAY_BODY_BYTES) {
+        await reader.cancel();
+        throw new Error("request_body_too_large");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    throw new Error("request_body_invalid");
+  }
+};
 
 export const createGatewayHandler = ({
   now = () => Date.now(),
@@ -30,7 +72,15 @@ export const createGatewayHandler = ({
     ) {
       return json(401, { error: "principal_invocation_required" });
     }
-    const body = await request.json().catch(() => null);
+    let body;
+    try {
+      body = await readBoundedJson(request);
+    } catch (error) {
+      return error instanceof Error &&
+          error.message === "request_body_too_large"
+        ? json(413, { error: "request_body_too_large" })
+        : json(400, { error: "request_body_invalid" });
+    }
     const validation = await validateEnvelope(
       body,
       now(),

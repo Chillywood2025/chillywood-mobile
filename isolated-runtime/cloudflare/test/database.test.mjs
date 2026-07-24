@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createDatabasePort, STATEMENT_INVENTORY } from "../src/database.mjs";
-import { operationAdapter } from "../src/operation-adapters.mjs";
+import {
+  OPERATION_ADAPTERS,
+  operationAdapter,
+} from "../src/operation-adapters.mjs";
 
 const calls = [];
 const sqlFactory = (_connectionString, options) => ({
@@ -66,19 +69,22 @@ test("ready operation adapters use exact static parameter order", async () => {
   ]);
 });
 
-test("unported provider/pure-core operations are explicit fail-closed blockers", () => {
-  const expected = [
-    ["cognitive_product_quality_evaluator", "evaluate_sentinel_detection"],
-    ["cognitive_public_research_broker", "retrieve_source"],
-    ["cognitive_research_evaluator", "evaluate_research_claim"],
-    ["cognitive_model_router", "assess_sanitized_evidence"],
-    ["cognitive_livekit_experience_collector", "record_run"],
-    ["cognitive_github_draft_pr_broker", "execute_canary"],
-    ["cognitive_level01_scheduler", "dispatch_occurrence"],
-  ];
-  for (const [principal, operation] of expected) {
-    const adapter = operationAdapter(principal, operation);
-    assert.equal(adapter.ready, false, `${principal}.${operation}`);
-    assert.match(adapter.reason, /_PURE_CORE_EXTRACTION_REQUIRED$/u);
+test("every reviewed operation has an explicit ready adapter and static database plan", () => {
+  for (const [principal, operations] of Object.entries(OPERATION_ADAPTERS)) {
+    for (const [operation, adapter] of Object.entries(operations)) {
+      assert.equal(adapter.ready, true, `${principal}.${operation}`);
+      assert.equal(adapter.reason, null, `${principal}.${operation}`);
+      assert.equal(
+        typeof adapter.execute,
+        "function",
+        `${principal}.${operation}`,
+      );
+      assert(Array.isArray(adapter.databaseOperations));
+      assert.equal(
+        new Set(adapter.databaseOperations).size,
+        adapter.databaseOperations.length,
+        `${principal}.${operation}`,
+      );
+    }
   }
 });

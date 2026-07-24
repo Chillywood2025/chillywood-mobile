@@ -97,10 +97,24 @@ test("gateway config has service bindings only and no secrets or Hyperdrive", as
 test("each generated private entrypoint contains only its principal manifest", async () => {
   const entrypointDirectory = resolve(runtimeRoot, "generated", "entrypoints");
   const databaseModuleByPrincipal = {
+    cognitive_github_draft_pr_broker:
+      "database-statements/github.mjs",
+    cognitive_level01_scheduler:
+      "database-statements/scheduler.mjs",
+    cognitive_livekit_experience_collector:
+      "database-statements/livekit.mjs",
+    cognitive_model_router:
+      "database-statements/model.mjs",
     cognitive_product_baseline_executor:
       "database-statements/baseline.mjs",
+    cognitive_product_quality_evaluator:
+      "database-statements/evaluator.mjs",
     cognitive_product_quality_triage:
       "database-statements/triage.mjs",
+    cognitive_public_research_broker:
+      "database-statements/research-broker.mjs",
+    cognitive_research_evaluator:
+      "database-statements/research-evaluator.mjs",
     cognitive_sentinel_collector:
       "database-statements/sentinel.mjs",
   };

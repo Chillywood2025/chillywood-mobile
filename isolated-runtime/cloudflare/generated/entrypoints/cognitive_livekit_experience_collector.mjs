@@ -1,7 +1,7 @@
 import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";
 import { createScopedDatabasePort } from "../../src/database-core.mjs";
 import { LIVEKIT_COLLECTOR_ADAPTERS } from "../../src/adapters/livekit.mjs";
-import { NO_DOMAIN_STATEMENTS } from "../../src/database-statements/none.mjs";
+import { LIVEKIT_STATEMENTS } from "../../src/database-statements/livekit.mjs";
 
 const principal = Object.freeze({
   "binding": "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR",
@@ -48,6 +48,7 @@ const principal = Object.freeze({
     }
   },
   "provider": "livekit_read_test",
+  "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
     "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION",
@@ -62,7 +63,7 @@ const principal = Object.freeze({
 });
 const createDatabase = (options) => createScopedDatabasePort({
   ...options,
-  domainStatements: NO_DOMAIN_STATEMENTS,
+  domainStatements: LIVEKIT_STATEMENTS,
 });
 
 export default createPrivateWorkerEntrypoint({

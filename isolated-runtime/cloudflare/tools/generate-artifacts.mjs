@@ -68,40 +68,40 @@ const adapterModuleByPrincipal = Object.freeze({
 });
 const databaseModuleByPrincipal = Object.freeze({
   cognitive_github_draft_pr_broker: {
-    exportName: "NO_DOMAIN_STATEMENTS",
-    path: "../../src/database-statements/none.mjs",
+    exportName: "GITHUB_STATEMENTS",
+    path: "../../src/database-statements/github.mjs",
   },
   cognitive_level01_scheduler: {
-    exportName: "NO_DOMAIN_STATEMENTS",
-    path: "../../src/database-statements/none.mjs",
+    exportName: "SCHEDULER_STATEMENTS",
+    path: "../../src/database-statements/scheduler.mjs",
   },
   cognitive_livekit_experience_collector: {
-    exportName: "NO_DOMAIN_STATEMENTS",
-    path: "../../src/database-statements/none.mjs",
+    exportName: "LIVEKIT_STATEMENTS",
+    path: "../../src/database-statements/livekit.mjs",
   },
   cognitive_model_router: {
-    exportName: "NO_DOMAIN_STATEMENTS",
-    path: "../../src/database-statements/none.mjs",
+    exportName: "MODEL_STATEMENTS",
+    path: "../../src/database-statements/model.mjs",
   },
   cognitive_product_baseline_executor: {
     exportName: "BASELINE_STATEMENTS",
     path: "../../src/database-statements/baseline.mjs",
   },
   cognitive_product_quality_evaluator: {
-    exportName: "NO_DOMAIN_STATEMENTS",
-    path: "../../src/database-statements/none.mjs",
+    exportName: "EVALUATOR_STATEMENTS",
+    path: "../../src/database-statements/evaluator.mjs",
   },
   cognitive_product_quality_triage: {
     exportName: "TRIAGE_STATEMENTS",
     path: "../../src/database-statements/triage.mjs",
   },
   cognitive_public_research_broker: {
-    exportName: "NO_DOMAIN_STATEMENTS",
-    path: "../../src/database-statements/none.mjs",
+    exportName: "RESEARCH_BROKER_STATEMENTS",
+    path: "../../src/database-statements/research-broker.mjs",
   },
   cognitive_research_evaluator: {
-    exportName: "NO_DOMAIN_STATEMENTS",
-    path: "../../src/database-statements/none.mjs",
+    exportName: "RESEARCH_EVALUATOR_STATEMENTS",
+    path: "../../src/database-statements/research-evaluator.mjs",
   },
   cognitive_sentinel_collector: {
     exportName: "SENTINEL_STATEMENTS",
@@ -174,6 +174,7 @@ for (const principal of RUNTIME_MANIFEST.principals) {
       RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
       SOURCE_COMMIT: "REPLACE_WITH_REVIEWED_SUCCESSOR_COMMIT",
       SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
+      ...principal.runtimeConfiguration,
     },
     version_metadata: { binding: "WORKER_VERSION" },
   };

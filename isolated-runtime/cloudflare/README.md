@@ -27,6 +27,7 @@ stop, audit, capability, and liveness reads require fresh state.
 Primary runtime references:
 
 - [Cloudflare Service Bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
+- [Protect workers.dev with Cloudflare Access](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
 - [Validate Cloudflare Access JWTs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
 - [Hyperdrive query caching](https://developers.cloudflare.com/hyperdrive/concepts/query-caching/)
 - [Per-Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
@@ -58,11 +59,10 @@ The generated Wrangler files are templates, not deployment authorization.
 operation marked `ready: false` has not yet had its reviewed pure
 validation/provider sequence extracted from the Deno implementation. The
 private Worker rejects that operation before database or provider access; a
-review must port and parity-test it before changing the flag. The initial
-adapter set contains complete static SQL mappings for the baseline executor,
-sentinel collector, and product-quality triage. It intentionally does not
-claim the evaluator, research, model, LiveKit, GitHub, or scheduler provider
-sequences are deployment-ready.
+review must port and parity-test it before changing the flag. The generated
+readiness file, adapter tests, static SQL statement inventory, and exact-head
+review are authoritative; this document never turns an incomplete operation
+into a deployment-ready operation.
 
 Before upload, the coordinator must:
 
@@ -71,14 +71,17 @@ Before upload, the coordinator must:
 2. prove every Hyperdrive configuration was created with
    `--caching-disabled` and its matching dedicated login;
 3. create and attach each required secret to only its named Worker;
-4. configure an Access application and Service Auth policy, then replace the
-   public team-domain and audience placeholders;
+4. configure an Access application and Service Auth policy for the gateway
+   `workers.dev` endpoint, then replace the public team-domain and audience
+   placeholders;
 5. verify the successor Git commit is supplied as `sourceCommit` and matches
    reviewed version metadata;
 6. run the negative isolation suite against deployed Workers.
 
-The templates intentionally provide no gateway route. The gateway route is
-attached only after the Access application and policy exist.
+The templates intentionally provide no gateway route and keep `workers_dev`
+disabled. The gateway `workers.dev` endpoint is enabled only after the Access
+application and Service Auth policy exist. Private Workers remain unreachable
+from the public Internet.
 
 ## Commands
 

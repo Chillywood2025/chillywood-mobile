@@ -689,7 +689,7 @@ begin
       end as required_keys,
       case
         when schedule.schedule_key = 'weekly_ux_route_dead_control'
-          then 'evaluated_installed_sentinel'
+          then 'installed_sentinel'
         when schedule.schedule_key = 'weekly_experiment_outcome'
           then 'draft_pr'
         else 'research'
@@ -829,9 +829,9 @@ begin
       'dispatchPrerequisitesPass', schedule.dispatch_pass,
       'currentState', case
         when schedule.enabled and schedule.dispatch_pass
-          then 'enabled_ready'
+          then 'enabled_dispatch_eligible'
         when schedule.enabled then 'enabled_blocked'
-        when schedule.activation_pass then 'disabled_eligible'
+        when schedule.activation_pass then 'disabled_activation_eligible'
         else 'disabled_blocked'
       end
     )
@@ -875,7 +875,7 @@ begin
     ),
     'githubCredential', jsonb_build_object(
       'state', coalesce(github_value.state, 'missing'),
-      'configured', github_value.state = 'configured',
+      'configured', coalesce(github_value.state = 'configured', false),
       'current', github_current,
       'verifiedAt', github_value.verified_at,
       'expiresAt', github_value.expires_at

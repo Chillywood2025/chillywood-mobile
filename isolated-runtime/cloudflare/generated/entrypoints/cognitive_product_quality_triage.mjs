@@ -55,6 +55,7 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_PRODUCT_QUALITY_TRIAGE_INVOKE_SHA256",
     "COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION"

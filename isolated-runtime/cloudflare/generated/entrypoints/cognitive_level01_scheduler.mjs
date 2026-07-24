@@ -1,7 +1,7 @@
 import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";
 import { createScopedDatabasePort } from "../../src/database-core.mjs";
 import { SCHEDULER_ADAPTERS } from "../../src/adapters/scheduler.mjs";
-import { NO_DOMAIN_STATEMENTS } from "../../src/database-statements/none.mjs";
+import { SCHEDULER_STATEMENTS } from "../../src/database-statements/scheduler.mjs";
 
 const principal = Object.freeze({
   "binding": "COGNITIVE_LEVEL01_SCHEDULER",
@@ -23,7 +23,7 @@ const principal = Object.freeze({
         "taskId"
       ],
       "rpcEntrypoints": [
-        "cognitive_runtime.scheduler_task_factory_status"
+        "cognitive_runtime.scheduler_prerequisite_snapshot"
       ]
     },
     "dispatch_occurrence": {
@@ -41,12 +41,13 @@ const principal = Object.freeze({
         "workState"
       ],
       "rpcEntrypoints": [
-        "cognitive_runtime.scheduler_task_factory_status",
+        "cognitive_runtime.scheduler_prerequisite_snapshot",
         "cognitive_runtime.issue_recurring_child_task"
       ]
     }
   },
   "provider": "none",
+  "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_LEVEL01_SCHEDULER_INVOKE_SHA256",
     "COGNITIVE_LEVEL01_SCHEDULER_ASSERTION"
@@ -59,7 +60,7 @@ const principal = Object.freeze({
 });
 const createDatabase = (options) => createScopedDatabasePort({
   ...options,
-  domainStatements: NO_DOMAIN_STATEMENTS,
+  domainStatements: SCHEDULER_STATEMENTS,
 });
 
 export default createPrivateWorkerEntrypoint({

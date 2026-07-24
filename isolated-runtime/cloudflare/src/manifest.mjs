@@ -43,6 +43,7 @@ const principal = ({
   edgeSource,
   provider = "none",
   providerSecrets = [],
+  runtimeConfiguration = {},
   internalSecrets = [],
   networkEgress = [],
   operations,
@@ -63,6 +64,7 @@ const principal = ({
     networkEgress: Object.freeze([...networkEgress]),
     operations: Object.freeze(operations),
     provider,
+    runtimeConfiguration: Object.freeze({ ...runtimeConfiguration }),
     requiredSecrets: Object.freeze([
       `${id.toUpperCase()}_INVOKE_SHA256`,
       ...internalSecrets,
@@ -207,7 +209,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "action", "boundedClaim", "canaryKey", "category", "confidence",
           "contradictionState", "environment", "freshnessDeadline",
           "platform", "projectId", "sourceIds", "taskId",
-        ], ["cognitive_record_public_research_claim_evidence"]),
+        ], ["cognitive_runtime.record_research_claim_with_readback"]),
         detect_contradiction: operation([
           "action", "boundedEvidence", "claimId", "environment", "platform",
           "projectId", "sourceId", "taskId",
@@ -227,7 +229,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
           scope.concat("researchClaimId"),
           [
             "cognitive_runtime.research_evaluator_snapshot",
-            "cognitive_derive_public_research_evaluation",
+            "cognitive_runtime.derive_research_evaluation_with_readback",
           ],
         ),
         evaluate_contradiction_resolution: operation([
@@ -247,6 +249,15 @@ export const RUNTIME_MANIFEST = Object.freeze({
       provider: "approved_model_provider",
       internalSecrets: ["COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION"],
       providerSecrets: ["COGNITIVE_MODEL_OPENAI_API_KEY"],
+      runtimeConfiguration: {
+        COGNITIVE_MODEL_FAMILY: "REPLACE_WITH_APPROVED_MODEL_FAMILY",
+        COGNITIVE_MODEL_INPUT_USD_PER_MILLION:
+          "REPLACE_WITH_APPROVED_INPUT_USD_PER_MILLION",
+        COGNITIVE_MODEL_NAME: "REPLACE_WITH_APPROVED_MODEL_NAME",
+        COGNITIVE_MODEL_OUTPUT_USD_PER_MILLION:
+          "REPLACE_WITH_APPROVED_OUTPUT_USD_PER_MILLION",
+        COGNITIVE_MODEL_PROVIDER: "openai",
+      },
       networkEgress: ["configured_model_api_origin_only"],
       operations: {
         assess_sanitized_evidence: operation([
@@ -322,7 +333,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
       operations: {
         evaluate_prerequisites: operation(
           ["action", "projectId", "taskId"],
-          ["cognitive_runtime.scheduler_task_factory_status"],
+          ["cognitive_runtime.scheduler_prerequisite_snapshot"],
         ),
         dispatch_occurrence: operation([
           "action", "capabilityId", "executionIdempotencyHash",
@@ -330,7 +341,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "scheduleDefinitionId", "scheduleKey", "scheduledFor", "taskId",
           "workState",
         ], [
-          "cognitive_runtime.scheduler_task_factory_status",
+          "cognitive_runtime.scheduler_prerequisite_snapshot",
           "cognitive_runtime.issue_recurring_child_task",
         ]),
       },

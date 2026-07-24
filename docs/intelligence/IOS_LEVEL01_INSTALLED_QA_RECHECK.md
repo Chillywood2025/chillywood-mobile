@@ -42,8 +42,19 @@ attestation, not a fresh provider-source readback.
   remains unverified.
 
 The device-signed IPA is a valid internal-device candidate, not a simulator
-artifact. Direct sideloading was not attempted. No build, OTA, submission,
-TestFlight assignment, external testing, App Review, or public release occurred.
+artifact. A bounded direct installation attempt was made against the approved,
+connected, paired, booted physical iPhone. Installation failed at the Apple
+beta-distribution boundary with `0xe800801f` (`CoreDeviceError 3002`,
+`MIInstallerErrorDomain 13`). This is the expected direct-sideload rejection
+for an App Store/TestFlight distribution profile; it is not evidence of a
+device trust, lock, IPA-integrity, or product defect.
+
+The sanitized installation-attempt evidence hash is
+`c84b00551eb51b39f2112350f782279d5a96fe198021fcf6e35c5c6d15f83f08`.
+Raw device output was deleted after hashing. No device identifier, signing
+material, token, account identity, or private log is stored here. No build,
+OTA, submission, TestFlight assignment, external testing, App Review, or public
+release occurred.
 
 ## Development-runtime evidence
 
@@ -93,11 +104,12 @@ identifier, log, or token is stored here.
 
 `IOS_INTERNAL_TESTFLIGHT_INSTALL_REQUIRED`
 
-The unavoidable next action is an interactive Owner/device action: confirm that
-Chi'llywood `1.0.0 (8)` remains available to the existing internal TestFlight
-group, install that existing build on the connected and unlocked iPhone, and
-leave the app available to authenticated local automation. This action must not
-add external testers, submit for App Review, or start a new build.
+The unavoidable next action is an interactive Owner/device action: install
+Chi'llywood `1.0.0 (8)` from the existing internal TestFlight group on the
+connected and unlocked iPhone, then leave the app available to authenticated
+local automation. Direct installation of the preserved IPA cannot replace this
+TestFlight installation step. This action must not add external testers, submit
+for App Review, or start a new build.
 
 After installation, read the installed build/runtime/channel in-app, sign in
 with one existing synthetic account, and run the visual, journey,

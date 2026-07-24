@@ -118,8 +118,8 @@ export const createPrivateInvocationHandler = ({
       now,
     );
     if (
-      revocation?.databaseAccessRevoked !== false &&
-      revocation?.revoked !== false
+      revocation?.principal !== principal.dbRole ||
+      revocation?.databaseAccessRevoked !== false
     ) {
       throw new Error("revocation_rejected");
     }

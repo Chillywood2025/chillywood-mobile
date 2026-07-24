@@ -103,6 +103,7 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_PRODUCT_BASELINE_EXECUTOR_INVOKE_SHA256",
     "COGNITIVE_PRODUCT_BASELINE_SERVICE_ASSERTION"

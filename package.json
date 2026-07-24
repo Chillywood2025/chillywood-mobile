@@ -544,6 +544,7 @@
     "test:cognitive-product-sentinels": "node ./scripts/test-cognitive-product-sentinels.mjs",
     "test:cognitive-product-baseline-v1": "node ./scripts/test-chillywood-product-experience-baseline-v1.mjs",
     "test:cognitive-livekit-experience-collector": "node ./scripts/test-cognitive-livekit-experience-collector.mjs",
+    "test:cognitive-isolated-runtime": "npm ci --ignore-scripts --prefix ./isolated-runtime/cloudflare && npm run verify --prefix ./isolated-runtime/cloudflare",
     "test:cognitive-github-draft-pr-broker": "deno test --allow-env --allow-net --allow-read supabase/functions/cognitive-github-draft-pr-broker/index_test.ts",
     "test:cognitive-level01-scheduler": "deno test --allow-env --allow-net --allow-read supabase/functions/cognitive-level01-scheduler/index_test.ts",
     "test:cognitive-level01-child-task-factory-concurrency": "node ./scripts/test-cognitive-level01-child-task-factory-concurrency.mjs",

@@ -1,7 +1,7 @@
 import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";
 import { createScopedDatabasePort } from "../../src/database-core.mjs";
 import { RESEARCH_EVALUATOR_ADAPTERS } from "../../src/adapters/research-evaluator.mjs";
-import { NO_DOMAIN_STATEMENTS } from "../../src/database-statements/none.mjs";
+import { RESEARCH_EVALUATOR_STATEMENTS } from "../../src/database-statements/research-evaluator.mjs";
 
 const principal = Object.freeze({
   "binding": "COGNITIVE_RESEARCH_EVALUATOR",
@@ -27,7 +27,7 @@ const principal = Object.freeze({
       ],
       "rpcEntrypoints": [
         "cognitive_runtime.research_evaluator_snapshot",
-        "cognitive_derive_public_research_evaluation"
+        "cognitive_runtime.derive_research_evaluation_with_readback"
       ]
     },
     "evaluate_contradiction_resolution": {
@@ -48,6 +48,7 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_RESEARCH_EVALUATOR_INVOKE_SHA256",
     "COGNITIVE_INDEPENDENT_EVALUATOR_SERVICE_TOKEN"
@@ -60,7 +61,7 @@ const principal = Object.freeze({
 });
 const createDatabase = (options) => createScopedDatabasePort({
   ...options,
-  domainStatements: NO_DOMAIN_STATEMENTS,
+  domainStatements: RESEARCH_EVALUATOR_STATEMENTS,
 });
 
 export default createPrivateWorkerEntrypoint({

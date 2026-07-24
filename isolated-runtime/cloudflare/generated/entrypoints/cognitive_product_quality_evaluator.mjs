@@ -1,7 +1,7 @@
 import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";
 import { createScopedDatabasePort } from "../../src/database-core.mjs";
 import { PRODUCT_QUALITY_EVALUATOR_ADAPTERS } from "../../src/adapters/evaluator.mjs";
-import { NO_DOMAIN_STATEMENTS } from "../../src/database-statements/none.mjs";
+import { EVALUATOR_STATEMENTS } from "../../src/database-statements/evaluator.mjs";
 
 const principal = Object.freeze({
   "binding": "COGNITIVE_PRODUCT_QUALITY_EVALUATOR",
@@ -66,6 +66,7 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_INVOKE_SHA256",
     "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION"
@@ -78,7 +79,7 @@ const principal = Object.freeze({
 });
 const createDatabase = (options) => createScopedDatabasePort({
   ...options,
-  domainStatements: NO_DOMAIN_STATEMENTS,
+  domainStatements: EVALUATOR_STATEMENTS,
 });
 
 export default createPrivateWorkerEntrypoint({

@@ -1,7 +1,7 @@
 import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";
 import { createScopedDatabasePort } from "../../src/database-core.mjs";
 import { GITHUB_BROKER_ADAPTERS } from "../../src/adapters/github.mjs";
-import { NO_DOMAIN_STATEMENTS } from "../../src/database-statements/none.mjs";
+import { GITHUB_STATEMENTS } from "../../src/database-statements/github.mjs";
 
 const principal = Object.freeze({
   "binding": "COGNITIVE_GITHUB_DRAFT_PR_BROKER",
@@ -64,6 +64,7 @@ const principal = Object.freeze({
     }
   },
   "provider": "github_app_repository_installation",
+  "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_GITHUB_DRAFT_PR_BROKER_INVOKE_SHA256",
     "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN",
@@ -80,7 +81,7 @@ const principal = Object.freeze({
 });
 const createDatabase = (options) => createScopedDatabasePort({
   ...options,
-  domainStatements: NO_DOMAIN_STATEMENTS,
+  domainStatements: GITHUB_STATEMENTS,
 });
 
 export default createPrivateWorkerEntrypoint({
