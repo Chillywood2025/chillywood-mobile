@@ -1,5 +1,6 @@
 import {
   APPROVED_OPTION_C_BASELINE_HASH,
+  deriveIndependentLiveKitFailureCategory,
   deterministicDetectionReasons,
   deterministicResolutionReasons,
   deterministicTouchTargetClassification,
@@ -164,6 +165,57 @@ const optionCTouchMetrics = (
   screenDensityDpi: 420,
   surfaceFamily: "standard_streaming_card",
   targetClassification: "below_platform_minimum",
+  ...overrides,
+});
+
+const liveKitMetrics = (
+  overrides: TestJsonObject = {},
+): TestJsonObject => ({
+  backgroundForegroundRecovery: true,
+  backgrounded: true,
+  buildRuntimeMatched: true,
+  cleanupDisconnected: true,
+  connectingResolved: true,
+  firstAudioVideoObserved: true,
+  firstRemoteMediaElapsedMs: 1_000,
+  foregrounded: true,
+  headlessParticipantUsed: true,
+  headlessObservationFinishedAt: "2026-07-24T12:00:20.000Z",
+  headlessObservationStartedAt: "2026-07-24T12:00:00.000Z",
+  headlessParticipantIdentityHash: "1".repeat(64),
+  iceCheckingObserved: true,
+  iceGatheringObserved: true,
+  iceState: "connected",
+  installedUiEvidenceHash: "2".repeat(64),
+  installedUiObserved: true,
+  installedObservationFinishedAt: "2026-07-24T12:00:19.000Z",
+  installedObservationStartedAt: "2026-07-24T12:00:01.000Z",
+  installedParticipantIdentityHash: "3".repeat(64),
+  installedRuntimeIdentityHash: "4".repeat(64),
+  installedRoomRunCorrelationHash: "5".repeat(64),
+  installedSourceBuildHash: "6".repeat(64),
+  localMediaSource: "test_tone",
+  localTrackPublished: true,
+  networkState: "ready",
+  participantIdentityDistinct: true,
+  peerConnectionEstablished: true,
+  permissionState: "granted",
+  providerState: "healthy",
+  remoteMediaKind: "audio",
+  remoteParticipantJoined: true,
+  remoteTrackSubscribed: true,
+  roomConnectElapsedMs: 1_000,
+  roomConnected: true,
+  roomRunCorrelationHash: "5".repeat(64),
+  stageFailureCategory: "none",
+  tokenIssuedElapsedMs: 500,
+  tokenRequestStarted: true,
+  tokenRequested: true,
+  tokenResultStatus: "success",
+  tokenReturned: true,
+  tokenClaimsValidated: true,
+  uiStateResolutionElapsedMs: 1_000,
+  websocketConnected: true,
   ...overrides,
 });
 
@@ -685,9 +737,46 @@ Deno.test("platform-specific touch units and web WCAG tiers are not mixed", () =
     deterministicTouchTargetClassification(
       webMinimumOnly,
       approvedContext,
+    ).classification === "confirmed_baseline_violation",
+    "web targets from 24 through 43 CSS px must be product baseline deviations",
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      webMinimumOnly,
+      approvedContext,
     ).profile?.findingClass ===
       "web_touch_target_below_preferred_44csspx",
     "web must distinguish the 24 CSS px WCAG floor from the 44 CSS px preference",
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      webMinimumOnly,
+      pendingContext,
+    ).classification === "baseline_ambiguity",
+    "the web preferred target must require the authenticated product baseline",
+  );
+  const webBelowWcag = storedRun(
+    "touch_target",
+    optionCTouchMetrics({
+      applicableMinimumThreshold: 24,
+      baselineComparisonHash: null,
+      baselineState: "needs_product_baseline_review",
+      interactiveTargetHeight: 23,
+      interactiveTargetWidth: 23,
+      measurementUnit: "css_px",
+      platform: "web",
+      preferredThreshold: 44,
+      screenDensityDpi: null,
+      targetClassification: "below_wcag_aa_minimum",
+    }),
+    { platform: "web" },
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      webBelowWcag,
+      pendingContext,
+    ).classification === "accessibility_violation",
+    "web targets below 24 CSS px remain objective accessibility violations",
   );
   assert(
     deterministicTouchTargetClassification(
@@ -704,6 +793,131 @@ Deno.test("platform-specific touch units and web WCAG tiers are not mixed", () =
       approvedContext,
     ).classification === "baseline_ambiguity",
     "mixed platform units must fail closed",
+  );
+
+  const visualWebPreferred = storedRun(
+    "visual_layout",
+    optionCVisualMetrics({
+      interactiveApplicableMinimumThreshold: 24,
+      interactivePreferredThreshold: 44,
+      interactiveTargetHeight: 30,
+      interactiveTargetWidth: 30,
+      measurementUnit: "css_px",
+      observedClassification: "product_preference_deviation",
+      platform: "web",
+      screenDensityDpi: null,
+    }),
+    { platform: "web" },
+  );
+  assert(
+    deterministicVisualClassification(
+      visualWebPreferred,
+      approvedContext,
+    ).classification === "confirmed_baseline_violation",
+    "visual evidence in the web preferred tier must remain a product preference",
+  );
+  assert(
+    deterministicVisualClassification(
+      {
+        ...visualWebPreferred,
+        metric_manifest: {
+          ...visualWebPreferred.metric_manifest,
+          metrics: {
+            ...visualWebPreferred.metric_manifest.metrics,
+            interactiveTargetHeight: 23,
+            interactiveTargetWidth: 23,
+            observedClassification: "accessibility_violation",
+          },
+        },
+      },
+      approvedContext,
+    ).classification === "accessibility_violation",
+    "visual web evidence below the WCAG floor remains accessibility",
+  );
+});
+
+Deno.test("LiveKit failure category is independently recomputed from exact evidence", () => {
+  const payload = validPayload();
+  const tokenFailure = liveKitMetrics({
+    firstAudioVideoObserved: false,
+    headlessParticipantIdentityHash: null,
+    iceCheckingObserved: false,
+    iceGatheringObserved: false,
+    iceState: "new",
+    localTrackPublished: false,
+    participantIdentityDistinct: false,
+    peerConnectionEstablished: false,
+    remoteMediaKind: "none",
+    remoteParticipantJoined: false,
+    remoteTrackSubscribed: false,
+    roomConnected: false,
+    stageFailureCategory: "token_backend_failure",
+    tokenClaimsValidated: false,
+    tokenResultStatus: "error",
+    tokenReturned: false,
+    websocketConnected: false,
+  });
+  assert(
+    deriveIndependentLiveKitFailureCategory(tokenFailure) ===
+      "token_backend_failure",
+    "the evaluator must derive token failure without trusting the category",
+  );
+  const run = storedRun(
+    "livekit_experience",
+    tokenFailure,
+    {
+      route_or_surface: "live-stage",
+      sentinel_key: "livekit_experience_sentinel",
+    },
+  );
+  const candidate = {
+    ...candidateFromPayload(payload),
+    confidence: 0.99,
+    findingClass: "livekit_token_backend_failure",
+    routeOrSurface: "live-stage",
+    severity: "high",
+    suspectedLayer: "backend_token",
+  };
+  assert(
+    deterministicDetectionReasons(run, candidate).length === 0,
+    "a correctly declared independently derived LiveKit failure must pass",
+  );
+  const mislabeledRun = {
+    ...run,
+    metric_manifest: {
+      ...run.metric_manifest,
+      metrics: {
+        ...liveKitMetrics(),
+        stageFailureCategory: "token_backend_failure",
+      },
+    },
+  };
+  const mismatchReasons = deterministicDetectionReasons(
+    mislabeledRun,
+    candidate,
+  );
+  assert(
+    mismatchReasons.length === 1 &&
+      mismatchReasons[0] === "livekit_failure_category_mismatch",
+    "a caller category that disagrees with independently derived stages must fail closed",
+  );
+  assert(
+    deriveIndependentLiveKitFailureCategory(
+      liveKitMetrics({
+        headlessParticipantIdentityHash: "3".repeat(64),
+        participantIdentityDistinct: false,
+      }),
+    ) === null,
+    "installed and second-participant identity binding must be validated",
+  );
+  assert(
+    deriveIndependentLiveKitFailureCategory(
+      liveKitMetrics({
+        connectingResolved: false,
+        stageFailureCategory: "installed_ui_connecting_stuck",
+      }),
+    ) === "installed_ui_connecting_stuck",
+    "installed UI state must be independently evaluated after media succeeds",
   );
 });
 

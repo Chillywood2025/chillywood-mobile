@@ -23,6 +23,7 @@ const principal = Object.freeze({
         "metricManifest",
         "observationFinishedAt",
         "observationStartedAt",
+        "platform",
         "routeOrSurface",
         "runtimeIdentityHash",
         "sourceBuildHash"
@@ -36,6 +37,7 @@ const principal = Object.freeze({
         "metricManifest",
         "observationFinishedAt",
         "observationStartedAt",
+        "platform",
         "routeOrSurface",
         "runtimeIdentityHash",
         "sourceBuildHash"

@@ -6,7 +6,10 @@ import productBaseline from "../../../config/intelligence/chillywood-product-exp
 };
 import {
   APPROVED_OPTION_C_BASELINE_HASH,
+  deriveIndependentLiveKitFailureCategory,
+  deterministicDetectionReasons,
   deterministicTouchTargetClassification,
+  deterministicVisualClassification,
   PRODUCT_QUALITY_EVALUATOR_ADAPTERS,
 } from "../src/adapters/evaluator.mjs";
 import {
@@ -171,6 +174,118 @@ const touchTargetMetrics = (changes = {}) => {
   };
 };
 
+const visualMetrics = (changes = {}) => {
+  const mappingId = "home_standard_discovery_rows";
+  return {
+    accessibilityNamePresent: true,
+    accessibilityRolePresent: true,
+    aspectRatioClass: "16:9",
+    automationStatus: "observed",
+    baselineApplicability: "option_c_default",
+    baselineComparisonHash: APPROVED_OPTION_C_BASELINE_HASH,
+    baselineId: "chillywood-product-experience-baseline-v1",
+    baselineState: "approved_baseline",
+    baselineVersion: 1,
+    cardsAboveFold: 3,
+    cardViewportHeightRatio: 200 / 844,
+    cardViewportWidthRatio: 252 / 390,
+    columnCount: 1,
+    columnGap: 0,
+    componentIdentityHash: HASH_A,
+    contentState: "loaded",
+    creatorIdentityVisible: true,
+    evidenceQuality: "measured_installed",
+    evidenceQualityHash: HASH_B,
+    exceptionContractHash: null,
+    exceptionContractId: null,
+    exceptionType: "none",
+    exceptionVersioned: false,
+    featuredPlacement: "not_applicable",
+    horizontalCardsVisible: 1.42,
+    horizontalGap: 12,
+    horizontalMargin: 16,
+    interactiveApplicableMinimumThreshold: 24,
+    interactivePreferredThreshold: 44,
+    interactiveTargetHeight: 30,
+    interactiveTargetWidth: 30,
+    layoutMode: "horizontal_row",
+    liveContent: false,
+    liveStateVisible: false,
+    mediaFrameHeight: 142,
+    mediaFrameWidth: 252,
+    measurementUnit: "css_px",
+    metadataBandHeight: 50,
+    metadataLineCount: 2,
+    observedClassification: "product_preference_deviation",
+    orientation: "portrait",
+    platform: "web",
+    providerState: "healthy",
+    referenceViewport: "phone_portrait_390x844",
+    routeFamilyMappingHash:
+      productBaseline.routeComponentMappingHashes[mappingId],
+    routeFamilyMappingId: mappingId,
+    screenDensityDpi: null,
+    surfaceFamily: "standard_streaming_card",
+    titleLineCount: 2,
+    totalCardContainerHeight: 200,
+    totalCardContainerWidth: 252,
+    verticalRowGap: 20,
+    viewportHeight: 844,
+    viewportWidth: 390,
+    windowClass: "compact",
+    ...changes,
+  };
+};
+
+const liveKitMetrics = (changes = {}) => ({
+  backgroundForegroundRecovery: true,
+  backgrounded: true,
+  buildRuntimeMatched: true,
+  cleanupDisconnected: true,
+  connectingResolved: true,
+  firstAudioVideoObserved: true,
+  firstRemoteMediaElapsedMs: 1_000,
+  foregrounded: true,
+  headlessParticipantUsed: true,
+  headlessObservationFinishedAt: "2026-07-24T12:00:20.000Z",
+  headlessObservationStartedAt: "2026-07-24T12:00:00.000Z",
+  headlessParticipantIdentityHash: HASH_A,
+  iceCheckingObserved: true,
+  iceGatheringObserved: true,
+  iceState: "connected",
+  installedUiEvidenceHash: HASH_B,
+  installedUiObserved: true,
+  installedObservationFinishedAt: "2026-07-24T12:00:19.000Z",
+  installedObservationStartedAt: "2026-07-24T12:00:01.000Z",
+  installedParticipantIdentityHash: HASH_C,
+  installedRuntimeIdentityHash: HASH_B,
+  installedRoomRunCorrelationHash: HASH_A,
+  installedSourceBuildHash: HASH_C,
+  localMediaSource: "test_tone",
+  localTrackPublished: true,
+  networkState: "ready",
+  participantIdentityDistinct: true,
+  peerConnectionEstablished: true,
+  permissionState: "granted",
+  providerState: "healthy",
+  remoteMediaKind: "audio",
+  remoteParticipantJoined: true,
+  remoteTrackSubscribed: true,
+  roomConnectElapsedMs: 1_000,
+  roomConnected: true,
+  roomRunCorrelationHash: HASH_A,
+  stageFailureCategory: "none",
+  tokenIssuedElapsedMs: 500,
+  tokenRequestStarted: true,
+  tokenRequested: true,
+  tokenResultStatus: "success",
+  tokenReturned: true,
+  tokenClaimsValidated: true,
+  uiStateResolutionElapsedMs: 1_000,
+  websocketConnected: true,
+  ...changes,
+});
+
 test("authoritative touch-target port preserves Android 23.24dp finding", () => {
   const run = {
     metric_manifest: { metrics: touchTargetMetrics() },
@@ -215,6 +330,161 @@ test("touch-target port separates web WCAG floor from preferred target", () => {
     "web_touch_target_below_preferred_44csspx",
   );
   assert.equal(result.profile.severity, "low");
+  assert.equal(result.classification, "confirmed_baseline_violation");
+  assert.equal(
+    deterministicTouchTargetClassification(run, {
+      approvedVisualBaselineCount: 0,
+      approvedVisualBaselineHash: null,
+    }).classification,
+    "baseline_ambiguity",
+  );
+  const belowWcag = deterministicTouchTargetClassification(
+    {
+      ...run,
+      metric_manifest: {
+        metrics: touchTargetMetrics({
+          applicableMinimumThreshold: 24,
+          baselineComparisonHash: null,
+          baselineState: "needs_product_baseline_review",
+          interactiveTargetHeight: 23,
+          interactiveTargetWidth: 23,
+          measurementUnit: "css_px",
+          platform: "web",
+          preferredThreshold: 44,
+          screenDensityDpi: null,
+          targetClassification: "below_wcag_aa_minimum",
+        }),
+      },
+    },
+    {
+      approvedVisualBaselineCount: 0,
+      approvedVisualBaselineHash: null,
+    },
+  );
+  assert.equal(belowWcag.classification, "accessibility_violation");
+  assert.equal(
+    belowWcag.profile.findingClass,
+    "web_touch_target_below_wcag_24csspx",
+  );
+});
+
+test("visual classification treats the web preferred tier as a baseline deviation", () => {
+  const run = {
+    metric_manifest: { metrics: visualMetrics() },
+    physical_proof_status: "installed_ui_observed",
+    platform: "web",
+  };
+  const result = deterministicVisualClassification(run, {
+    approvedVisualBaselineCount: 1,
+    approvedVisualBaselineHash: APPROVED_OPTION_C_BASELINE_HASH,
+  });
+  assert.equal(result.classification, "confirmed_baseline_violation");
+  assert.equal(
+    result.profile.findingClass,
+    "web_touch_target_below_preferred_44csspx",
+  );
+  const belowWcag = deterministicVisualClassification(
+    {
+      ...run,
+      metric_manifest: {
+        metrics: visualMetrics({
+          interactiveTargetHeight: 23,
+          interactiveTargetWidth: 23,
+          observedClassification: "accessibility_violation",
+        }),
+      },
+    },
+    {
+      approvedVisualBaselineCount: 1,
+      approvedVisualBaselineHash: APPROVED_OPTION_C_BASELINE_HASH,
+    },
+  );
+  assert.equal(belowWcag.classification, "accessibility_violation");
+  assert.equal(
+    belowWcag.profile.findingClass,
+    "web_touch_target_below_wcag_24csspx",
+  );
+});
+
+test("LiveKit evaluator independently derives stages and rejects a claimed category mismatch", () => {
+  const tokenFailure = liveKitMetrics({
+    firstAudioVideoObserved: false,
+    headlessParticipantIdentityHash: null,
+    iceCheckingObserved: false,
+    iceGatheringObserved: false,
+    iceState: "new",
+    localTrackPublished: false,
+    participantIdentityDistinct: false,
+    peerConnectionEstablished: false,
+    remoteMediaKind: "none",
+    remoteParticipantJoined: false,
+    remoteTrackSubscribed: false,
+    roomConnected: false,
+    stageFailureCategory: "token_backend_failure",
+    tokenClaimsValidated: false,
+    tokenResultStatus: "error",
+    tokenReturned: false,
+    websocketConnected: false,
+  });
+  assert.equal(
+    deriveIndependentLiveKitFailureCategory(tokenFailure),
+    "token_backend_failure",
+  );
+  const run = {
+    evidence_manifest_hash: HASH_A,
+    metric_manifest: {
+      metrics: tokenFailure,
+      observationKind: "livekit_experience",
+    },
+    physical_proof_status: "installed_ui_observed",
+    result_status: "failed",
+    route_or_surface: "live-stage",
+    source_build_hash: HASH_C,
+  };
+  const candidate = {
+    buildRuntimeHash: HASH_C,
+    confidence: 0.99,
+    evidenceHashes: [HASH_A],
+    findingClass: "livekit_token_backend_failure",
+    physicalProofStatus: "installed_ui_observed",
+    reproductionState: "confirmed_defect",
+    routeOrSurface: "live-stage",
+    severity: "high",
+    suspectedLayer: "backend_token",
+  };
+  assert.deepEqual(deterministicDetectionReasons(run, candidate), []);
+  const mislabeled = {
+    ...run,
+    metric_manifest: {
+      ...run.metric_manifest,
+      metrics: {
+        ...liveKitMetrics(),
+        stageFailureCategory: "token_backend_failure",
+      },
+    },
+  };
+  assert.deepEqual(
+    deterministicDetectionReasons(mislabeled, candidate),
+    ["livekit_failure_category_mismatch"],
+  );
+  assert.equal(
+    deriveIndependentLiveKitFailureCategory(
+      liveKitMetrics({
+        headlessParticipantIdentityHash: HASH_C,
+        participantIdentityDistinct: false,
+      }),
+    ),
+    null,
+  );
+  assert.equal(
+    deriveIndependentLiveKitFailureCategory(
+      liveKitMetrics({
+        connectingResolved: false,
+        stageFailureCategory: "installed_ui_connecting_stuck",
+      }),
+    ),
+    "installed_ui_connecting_stuck",
+  );
 });
 
 test("research authority validation is exact and repository paths remain commit-bound", () => {

@@ -57,6 +57,8 @@ for (
     "tokenClaimsValidated",
     "MAX_SESSION_OBSERVATION_WINDOW_MS",
     "MAX_SESSION_OBSERVATION_AGE_MS",
+    'const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"])',
+    "p_platform: packet.platform",
   ]
 ) {
   assert.ok(collector.includes(required), `collector missing ${required}`);
@@ -110,6 +112,8 @@ for (
     "same_participant_identity_rejected",
     "session_observation_window_rejected",
     "installed_evidence_stale_or_unbounded",
+    "value.observerKind !== `${input.platform}_installed_app`",
+    "platform: input.platform",
   ]
 ) {
   assert.ok(harness.includes(required), `headless harness missing ${required}`);
@@ -154,6 +158,7 @@ for (
     "rejects stale installed and headless evidence",
     "rejects same-identity participants",
     "rejects installed source/runtime mismatch",
+    "binds runs to Android or iOS, never shared",
   ]
 ) {
   assert.ok(

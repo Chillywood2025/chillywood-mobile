@@ -26,6 +26,7 @@ const SESSION_NONCE_PATTERN = /^[a-f0-9]{32,64}$/u;
 const BEARER_JWT_PATTERN =
   /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
+const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"]);
 const ICE_STATE_BY_NUMBER = Object.freeze({
   0: "new",
   1: "checking",
@@ -303,6 +304,7 @@ const readOwnerOnlyJson = (candidatePath, label) => {
 const validatePrivateInput = (value) => {
   if (
     !exactKeys(value, [
+      "platform",
       "routeOrSurface",
       "runtimeIdentityHash",
       "sessionCorrelationNonce",
@@ -310,6 +312,7 @@ const validatePrivateInput = (value) => {
       "sourceBuildHash",
       "tokenRequest",
     ]) ||
+    !INSTALLED_OBSERVER_PLATFORMS.has(value.platform) ||
     !ROUTES.has(value.routeOrSurface) ||
     !SHA256_PATTERN.test(value.runtimeIdentityHash) ||
     !SESSION_NONCE_PATTERN.test(value.sessionCorrelationNonce) ||
@@ -379,6 +382,7 @@ const validateInstalledEvidence = (value, input) => {
     !["android_installed_app", "ios_installed_app"].includes(
       value.observerKind,
     ) ||
+    value.observerKind !== `${input.platform}_installed_app` ||
     value.routeOrSurface !== input.routeOrSurface ||
     !SHA256_PATTERN.test(value.installedUiEvidenceHash) ||
     !SHA256_PATTERN.test(value.installedParticipantIdentityHash) ||
@@ -890,6 +894,7 @@ const runHeadlessParticipant = async (
     },
     observationFinishedAt: new Date(observationFinishedAtMillis).toISOString(),
     observationStartedAt: new Date(observationStartedAtMillis).toISOString(),
+    platform: input.platform,
     routeOrSurface: input.routeOrSurface,
     runtimeIdentityHash: input.runtimeIdentityHash,
     sourceBuildHash: input.sourceBuildHash,
@@ -913,6 +918,7 @@ const runSelfTest = () => {
   ].join(".");
   const sessionCorrelationNonce = "1".repeat(32);
   const privateInputFixture = {
+    platform: "android",
     routeOrSurface: "live-stage",
     runtimeIdentityHash: "a".repeat(64),
     sessionCorrelationNonce,

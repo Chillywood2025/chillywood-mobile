@@ -212,7 +212,9 @@ jobs:
             supabase/functions/cognitive-sentinel-collector/index_test.ts \
             supabase/functions/cognitive-product-quality-evaluator/index_test.ts \
             supabase/functions/cognitive-product-quality-triage/index_test.ts \
-            supabase/functions/cognitive-livekit-experience-collector/index_test.ts
+            supabase/functions/cognitive-livekit-experience-collector/index_test.ts \
+            supabase/functions/cognitive-github-draft-pr-broker/index_test.ts \
+            supabase/functions/cognitive-level01-scheduler/index_test.ts
           npm run guard:cognitive-admin-truth
           npm run guard:cognitive-ci-supply-chain
           npm run guard:android-native-runtime-compatibility

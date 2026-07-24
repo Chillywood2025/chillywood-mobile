@@ -53,11 +53,15 @@ prove media arrival.
 
 The private input is an owner-only `0600` JSON file outside Git, owned by the
 current process user, at most 64 KiB, and no older than six hours. It contains
-the app token-request endpoint, ephemeral authorization material, the existing
-app request body, a one-run correlation nonce, the resulting domain-separated
+the exact installed-observer platform (`android` or `ios`), the app
+token-request endpoint, ephemeral authorization material, the existing app
+request body, a one-run correlation nonce, the resulting domain-separated
 session/room correlation hash, the safe source/build and runtime hashes, and
-the reviewed surface. The nonce and raw room remain owner-only. The harness
-never prints the private input, the endpoint, participant tokens, participant
+the reviewed surface. When installed evidence is supplied, its observer kind
+must match that platform. The collector persists that platform and rejects
+`shared` or `web`; it never substitutes the control-plane platform for the
+installed observer. The nonce and raw room remain owner-only. The harness never
+prints the private input, the endpoint, participant tokens, participant
 identities, room identifiers, device identifiers, or provider credentials.
 
 The returned participant JWT is decoded only in memory. Its bounded `sub`,

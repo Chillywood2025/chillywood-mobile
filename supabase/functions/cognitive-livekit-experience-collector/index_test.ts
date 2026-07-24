@@ -101,6 +101,7 @@ const packet = async (
     },
     observationFinishedAt,
     observationStartedAt,
+    platform: "android",
     routeOrSurface: "live-stage",
     runtimeIdentityHash: awaitableHashes.runtime,
     sourceBuildHash: awaitableHashes.sourceBuild,
@@ -313,5 +314,31 @@ Deno.test("collector rejects installed source/runtime mismatch", async () => {
   const response = await invokePrepare(await packet(evidence));
   if (response.status !== 400) {
     throw new Error("collector accepted mismatched installed runtime evidence");
+  }
+});
+
+Deno.test("collector binds runs to Android or iOS, never shared", async () => {
+  const androidPayload = await packet(baseline());
+  const androidResponse = await invokePrepare(androidPayload);
+  if (androidResponse.status !== 200) {
+    throw new Error("collector rejected Android installed-observer platform");
+  }
+
+  const iosPayload = {
+    ...await packet(baseline()),
+    platform: "ios",
+  };
+  const iosResponse = await invokePrepare(iosPayload);
+  if (iosResponse.status !== 200) {
+    throw new Error("collector rejected iOS installed-observer platform");
+  }
+
+  const sharedPayload = {
+    ...await packet(baseline()),
+    platform: "shared",
+  };
+  const sharedResponse = await invokePrepare(sharedPayload);
+  if (sharedResponse.status !== 400) {
+    throw new Error("collector accepted shared as an installed platform");
   }
 });

@@ -282,13 +282,13 @@ export const RUNTIME_MANIFEST = Object.freeze({
       operations: {
         prepare_run: operation([
           "action", "evidenceManifestHash", "metricManifest",
-          "observationFinishedAt", "observationStartedAt", "routeOrSurface",
-          "runtimeIdentityHash", "sourceBuildHash",
+          "observationFinishedAt", "observationStartedAt", "platform",
+          "routeOrSurface", "runtimeIdentityHash", "sourceBuildHash",
         ], []),
         record_run: operation([
           "action", "evidenceManifestHash", "metricManifest",
-          "observationFinishedAt", "observationStartedAt", "routeOrSurface",
-          "runtimeIdentityHash", "sourceBuildHash",
+          "observationFinishedAt", "observationStartedAt", "platform",
+          "routeOrSurface", "runtimeIdentityHash", "sourceBuildHash",
         ], ["cognitive_runtime.collect_livekit_sentinel_run"]),
       },
       maxRequestBytes: 98_304,

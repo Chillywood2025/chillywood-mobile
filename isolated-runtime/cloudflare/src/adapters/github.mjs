@@ -14,6 +14,8 @@ const API_ROOT = "https://api.github.com";
 const API_VERSION = "2026-03-10";
 const USER_AGENT = "chillywood-cognitive-github-draft-pr-broker";
 const SERVICE_IDENTITY = "cognitive_github_draft_pr_broker";
+const PROVIDER_MERGE_DENIAL_BLOCKER =
+  "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED";
 const ALLOWED_PERMISSION_MANIFEST = Object.freeze({
   contents: "write",
   metadata: "read",
@@ -572,23 +574,42 @@ const acceptToolResult = async (
 export const createGitHubBrokerAdapters = ({
   fetcher = globalThis.fetch,
   now = () => Date.now(),
+  verifyProviderMergeDenial = async () => false,
 } = {}) => {
   const readInstallationCredential = createCredentialReader({ fetcher, now });
   const githubApi = createGithubApi({ fetcher });
+  const requireProviderMergeDenial = async () => {
+    const verified = await verifyProviderMergeDenial({
+      repository: REPOSITORY,
+      requiredBaseBranch: ALLOWED_BASE_BRANCH,
+    });
+    if (verified !== true) {
+      throw new Error(PROVIDER_MERGE_DENIAL_BLOCKER);
+    }
+  };
 
   const status = async ({ env }) => {
     const credential = credentialState(env);
     const identity = serviceIdentityState(env);
+    const providerMergeDenial = await verifyProviderMergeDenial({
+      repository: REPOSITORY,
+      requiredBaseBranch: ALLOWED_BASE_BRANCH,
+    });
     return Object.freeze({
       blocker: credential === "PRESENT"
         ? identity === "PRESENT"
-          ? null
+          ? providerMergeDenial === true
+            ? null
+            : PROVIDER_MERGE_DENIAL_BLOCKER
           : "GITHUB_DRAFT_PR_BROKER_IDENTITY_REQUIRED"
         : "GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED",
       brokerServiceIdentity: identity,
       credential,
+      providerMergeDenial: providerMergeDenial === true ? "MATCH" : "MISSING",
       repositoryScopeHash: await sha256Hex(REPOSITORY),
-      runtimeAuthority: "draft_pr_only",
+      runtimeAuthority: providerMergeDenial === true
+        ? "draft_pr_only"
+        : "blocked",
     });
   };
 
@@ -599,6 +620,7 @@ export const createGitHubBrokerAdapters = ({
     env,
     signal,
   }) => {
+    await requireProviderMergeDenial();
     const invocation = { assertActive, signal };
     const credential = await readInstallationCredential(env, invocation);
     const evidenceHash = await sha256Hex(
@@ -638,6 +660,7 @@ export const createGitHubBrokerAdapters = ({
     payload,
     signal,
   }) => {
+    await requireProviderMergeDenial();
     if (
       credentialState(env) !== "PRESENT" ||
       serviceIdentityState(env) !== "PRESENT"

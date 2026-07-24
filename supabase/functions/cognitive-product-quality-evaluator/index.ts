@@ -167,6 +167,103 @@ const PHYSICAL_PROOF_STATUSES = new Set([
   "device_unavailable",
   "new_binary_or_ota_required",
 ]);
+const LIVEKIT_MAX_TIMING_MS = 600_000;
+const LIVEKIT_MAX_OBSERVATION_WINDOW_MS = 120_000;
+const LIVEKIT_BOOLEAN_METRICS = Object.freeze([
+  "backgroundForegroundRecovery",
+  "backgrounded",
+  "buildRuntimeMatched",
+  "cleanupDisconnected",
+  "connectingResolved",
+  "firstAudioVideoObserved",
+  "foregrounded",
+  "headlessParticipantUsed",
+  "iceCheckingObserved",
+  "iceGatheringObserved",
+  "installedUiObserved",
+  "localTrackPublished",
+  "participantIdentityDistinct",
+  "peerConnectionEstablished",
+  "remoteParticipantJoined",
+  "remoteTrackSubscribed",
+  "roomConnected",
+  "tokenRequestStarted",
+  "tokenRequested",
+  "tokenReturned",
+  "tokenClaimsValidated",
+  "websocketConnected",
+] as const);
+const LIVEKIT_TIMING_METRICS = Object.freeze([
+  "firstRemoteMediaElapsedMs",
+  "roomConnectElapsedMs",
+  "tokenIssuedElapsedMs",
+  "uiStateResolutionElapsedMs",
+] as const);
+const LIVEKIT_METRIC_KEYS = Object.freeze([
+  ...LIVEKIT_BOOLEAN_METRICS,
+  ...LIVEKIT_TIMING_METRICS,
+  "headlessObservationFinishedAt",
+  "headlessObservationStartedAt",
+  "headlessParticipantIdentityHash",
+  "iceState",
+  "installedUiEvidenceHash",
+  "installedObservationFinishedAt",
+  "installedObservationStartedAt",
+  "installedParticipantIdentityHash",
+  "installedRuntimeIdentityHash",
+  "installedRoomRunCorrelationHash",
+  "installedSourceBuildHash",
+  "localMediaSource",
+  "networkState",
+  "permissionState",
+  "providerState",
+  "remoteMediaKind",
+  "roomRunCorrelationHash",
+  "stageFailureCategory",
+  "tokenResultStatus",
+] as const);
+const LIVEKIT_ICE_STATES = new Set([
+  "new",
+  "checking",
+  "connected",
+  "completed",
+  "failed",
+  "disconnected",
+  "closed",
+  "unknown",
+]);
+const LIVEKIT_LOCAL_MEDIA_SOURCES = new Set([
+  "test_tone",
+  "silent_audio",
+  "color_bars",
+  "none",
+]);
+const LIVEKIT_NETWORK_STATES = new Set(["ready", "interrupted", "unknown"]);
+const LIVEKIT_PERMISSION_STATES = new Set([
+  "granted",
+  "denied",
+  "unknown",
+  "not_applicable",
+]);
+const LIVEKIT_PROVIDER_STATES = new Set([
+  "healthy",
+  "degraded",
+  "blocked",
+  "unknown",
+]);
+const LIVEKIT_REMOTE_MEDIA_KINDS = new Set([
+  "audio",
+  "video",
+  "audio_video",
+  "none",
+]);
+const LIVEKIT_TOKEN_RESULT_STATES = new Set([
+  "success",
+  "denied",
+  "error",
+  "timeout",
+  "not_attempted",
+]);
 const SURFACE_FAMILIES = new Set([
   "standard_streaming_card",
   "live_streaming_card",
@@ -466,8 +563,14 @@ export const deterministicVisualClassification = (
     });
     const expectedObservedClassification =
       expectedByClassification[assessment.classification];
-    return !expectedObservedClassification ||
-        observedClassification === expectedObservedClassification
+    const observedMatches = assessment.classification ===
+        "confirmed_baseline_violation"
+      ? [
+        "confirmed_baseline_violation",
+        "product_preference_deviation",
+      ].includes(observedClassification)
+      : observedClassification === expectedObservedClassification;
+    return !expectedObservedClassification || observedMatches
       ? assessment
       : visualAssessment("baseline_ambiguity");
   };
@@ -659,7 +762,7 @@ export const deterministicVisualClassification = (
   }
   if (run.platform === "web" && minimumInteractiveTarget < 44) {
     return conclude(
-      accessibilityFinding(
+      visualFinding(
         "web_touch_target_below_preferred_44csspx",
         "low",
       ),
@@ -1280,10 +1383,14 @@ export const deterministicTouchTargetClassification = (
     );
   }
   if (derivedTargetClassification === "meets_wcag_aa_minimum_only") {
-    return accessibilityFinding(
-      "web_touch_target_below_preferred_44csspx",
-      "low",
-    );
+    return toText(metrics.baselineState) === "approved_baseline" &&
+        toText(metrics.baselineComparisonHash) ===
+          APPROVED_OPTION_C_BASELINE_HASH &&
+        context.approvedVisualBaselineCount === 1 &&
+        context.approvedVisualBaselineHash ===
+          APPROVED_OPTION_C_BASELINE_HASH
+      ? visualFinding("web_touch_target_below_preferred_44csspx", "low")
+      : visualAssessment("baseline_ambiguity");
   }
   return visualAssessment("false_positive");
 };
@@ -1323,6 +1430,227 @@ const liveKitProfile = (
   return expected
     ? profile(normalizedClass, expected[0], expected[1], expected[2])
     : null;
+};
+
+const parseCanonicalLiveKitTimestamp = (value: unknown): number | null => {
+  if (typeof value !== "string") return null;
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) &&
+      new Date(milliseconds).toISOString() === value
+    ? milliseconds
+    : null;
+};
+
+const nullableLiveKitHash = (value: unknown): boolean =>
+  value === null ||
+  (typeof value === "string" && LOWER_HEX_64.test(value));
+
+const nullableLiveKitTimestamp = (value: unknown): boolean =>
+  value === null || parseCanonicalLiveKitTimestamp(value) !== null;
+
+const liveKitMetricContractIsValid = (
+  metrics: Record<string, unknown>,
+): boolean => {
+  if (
+    !hasExactKeys(metrics, LIVEKIT_METRIC_KEYS) ||
+    LIVEKIT_BOOLEAN_METRICS.some(
+      (key) => typeof metrics[key] !== "boolean",
+    ) ||
+    LIVEKIT_TIMING_METRICS.some((key) => {
+      const value = metrics[key];
+      return !Number.isInteger(value) ||
+        Number(value) < 0 ||
+        Number(value) > LIVEKIT_MAX_TIMING_MS;
+    }) ||
+    !LIVEKIT_ICE_STATES.has(toText(metrics.iceState)) ||
+    !LIVEKIT_LOCAL_MEDIA_SOURCES.has(toText(metrics.localMediaSource)) ||
+    !LIVEKIT_NETWORK_STATES.has(toText(metrics.networkState)) ||
+    !LIVEKIT_PERMISSION_STATES.has(toText(metrics.permissionState)) ||
+    !LIVEKIT_PROVIDER_STATES.has(toText(metrics.providerState)) ||
+    !LIVEKIT_REMOTE_MEDIA_KINDS.has(toText(metrics.remoteMediaKind)) ||
+    !LIVEKIT_TOKEN_RESULT_STATES.has(toText(metrics.tokenResultStatus)) ||
+    !LOWER_HEX_64.test(toText(metrics.roomRunCorrelationHash)) ||
+    !nullableLiveKitHash(metrics.headlessParticipantIdentityHash) ||
+    !nullableLiveKitHash(metrics.installedUiEvidenceHash) ||
+    !nullableLiveKitHash(metrics.installedParticipantIdentityHash) ||
+    !nullableLiveKitHash(metrics.installedRuntimeIdentityHash) ||
+    !nullableLiveKitHash(metrics.installedRoomRunCorrelationHash) ||
+    !nullableLiveKitHash(metrics.installedSourceBuildHash) ||
+    !nullableLiveKitTimestamp(metrics.installedObservationStartedAt) ||
+    !nullableLiveKitTimestamp(metrics.installedObservationFinishedAt)
+  ) {
+    return false;
+  }
+  const headlessStarted = parseCanonicalLiveKitTimestamp(
+    metrics.headlessObservationStartedAt,
+  );
+  const headlessFinished = parseCanonicalLiveKitTimestamp(
+    metrics.headlessObservationFinishedAt,
+  );
+  const installedStarted = parseCanonicalLiveKitTimestamp(
+    metrics.installedObservationStartedAt,
+  );
+  const installedFinished = parseCanonicalLiveKitTimestamp(
+    metrics.installedObservationFinishedAt,
+  );
+  if (
+    headlessStarted === null ||
+    headlessFinished === null ||
+    headlessStarted > headlessFinished ||
+    headlessFinished - headlessStarted >
+      LIVEKIT_MAX_OBSERVATION_WINDOW_MS ||
+    (
+      metrics.installedUiObserved === true &&
+      (
+        installedStarted === null ||
+        installedFinished === null ||
+        installedStarted > installedFinished ||
+        installedFinished - installedStarted >
+          LIVEKIT_MAX_OBSERVATION_WINDOW_MS
+      )
+    )
+  ) {
+    return false;
+  }
+  const installedBound = metrics.installedUiObserved === true;
+  const identitiesDiffer =
+    metrics.headlessParticipantIdentityHash !== null &&
+    metrics.installedParticipantIdentityHash !== null &&
+    metrics.headlessParticipantIdentityHash !==
+      metrics.installedParticipantIdentityHash;
+  return (
+    installedBound === (metrics.installedUiEvidenceHash !== null) &&
+    installedBound === (metrics.installedObservationStartedAt !== null) &&
+    installedBound === (metrics.installedObservationFinishedAt !== null) &&
+    installedBound === (metrics.installedParticipantIdentityHash !== null) &&
+    installedBound === (metrics.installedRuntimeIdentityHash !== null) &&
+    installedBound ===
+      (metrics.installedRoomRunCorrelationHash !== null) &&
+    installedBound === (metrics.installedSourceBuildHash !== null) &&
+    (
+      !installedBound ||
+      metrics.installedRoomRunCorrelationHash ===
+        metrics.roomRunCorrelationHash
+    ) &&
+    metrics.participantIdentityDistinct === identitiesDiffer &&
+    (
+      metrics.tokenReturned !== true ||
+      (
+        metrics.tokenClaimsValidated === true &&
+        metrics.headlessParticipantIdentityHash !== null
+      )
+    ) &&
+    (
+      metrics.tokenReturned === true ||
+      (
+        metrics.tokenClaimsValidated === false &&
+        metrics.headlessParticipantIdentityHash === null
+      )
+    ) &&
+    (
+      metrics.tokenReturned !== true ||
+      !installedBound ||
+      metrics.participantIdentityDistinct === true
+    ) &&
+    metrics.firstAudioVideoObserved ===
+      (metrics.remoteMediaKind !== "none") &&
+    metrics.tokenReturned === (metrics.tokenResultStatus === "success") &&
+    metrics.tokenRequested === metrics.tokenRequestStarted &&
+    (
+      metrics.websocketConnected !== true ||
+      metrics.tokenReturned === true
+    ) &&
+    (
+      metrics.peerConnectionEstablished !== true ||
+      metrics.websocketConnected === true
+    ) &&
+    (
+      metrics.roomConnected !== true ||
+      metrics.peerConnectionEstablished === true
+    ) &&
+    (
+      metrics.localTrackPublished !== true ||
+      metrics.roomConnected === true
+    ) &&
+    (
+      metrics.remoteParticipantJoined !== true ||
+      metrics.roomConnected === true
+    ) &&
+    (
+      metrics.remoteTrackSubscribed !== true ||
+      metrics.remoteParticipantJoined === true
+    ) &&
+    (
+      metrics.firstAudioVideoObserved !== true ||
+      metrics.remoteTrackSubscribed === true
+    ) &&
+    (
+      metrics.backgroundForegroundRecovery !== true ||
+      (
+        installedBound &&
+        metrics.backgrounded === true &&
+        metrics.foregrounded === true
+      )
+    )
+  );
+};
+
+export const deriveIndependentLiveKitFailureCategory = (
+  metrics: Record<string, unknown>,
+): string | null => {
+  if (!liveKitMetricContractIsValid(metrics)) return null;
+  if (metrics.permissionState === "denied") return "permission_failure";
+  if (metrics.buildRuntimeMatched !== true) return "build_runtime_mismatch";
+  if (metrics.networkState === "interrupted") return "network_interruption";
+  if (metrics.tokenReturned !== true) return "token_backend_failure";
+  if (metrics.websocketConnected !== true) return "websocket_failure";
+  if (
+    ["failed", "disconnected", "closed"].includes(toText(metrics.iceState))
+  ) {
+    return "ice_turn_failure";
+  }
+  if (metrics.roomConnected !== true) {
+    return metrics.iceCheckingObserved === true
+      ? "ice_turn_failure"
+      : "room_connection_failure";
+  }
+  if (metrics.localTrackPublished !== true) return "local_publish_failure";
+  if (metrics.remoteParticipantJoined !== true) {
+    return "remote_participant_missing";
+  }
+  if (metrics.remoteTrackSubscribed !== true) {
+    return "remote_subscription_failure";
+  }
+  if (metrics.firstAudioVideoObserved !== true) return "first_media_missing";
+  if (
+    metrics.installedUiObserved === true &&
+    metrics.connectingResolved !== true
+  ) {
+    return "installed_ui_connecting_stuck";
+  }
+  if (
+    metrics.installedUiObserved === true &&
+    (
+      metrics.backgrounded !== true ||
+      metrics.foregrounded !== true ||
+      metrics.backgroundForegroundRecovery !== true
+    )
+  ) {
+    return "background_foreground_recovery_failed";
+  }
+  if (metrics.cleanupDisconnected !== true) return "cleanup_failure";
+  if (["blocked", "degraded"].includes(toText(metrics.providerState))) {
+    return "provider_degradation";
+  }
+  if (
+    Number(metrics.tokenIssuedElapsedMs) > 3_000 ||
+    Number(metrics.roomConnectElapsedMs) > 12_000 ||
+    Number(metrics.uiStateResolutionElapsedMs) > 15_000 ||
+    Number(metrics.firstRemoteMediaElapsedMs) > 20_000
+  ) {
+    return "deadline_exceeded";
+  }
+  return "none";
 };
 
 const installedJourneyProfile = (
@@ -1530,9 +1858,19 @@ export const deterministicDetectionReasons = (
       );
     }
   } else if (observationKind === "livekit_experience") {
-    const failureCategory = toText(metrics.stageFailureCategory);
-    expectedProfile = liveKitProfile(failureCategory);
-    if (!expectedProfile) {
+    const failureCategory = deriveIndependentLiveKitFailureCategory(metrics);
+    if (!failureCategory) {
+      reasons.add("livekit_metric_manifest_rejected");
+    } else if (toText(metrics.stageFailureCategory) !== failureCategory) {
+      reasons.add("livekit_failure_category_mismatch");
+    } else {
+      expectedProfile = liveKitProfile(failureCategory);
+    }
+    if (
+      failureCategory &&
+      toText(metrics.stageFailureCategory) === failureCategory &&
+      !expectedProfile
+    ) {
       reasons.add("livekit_classification_rejected");
     }
   } else if (observationKind === "visual_layout") {
