@@ -271,6 +271,13 @@ for (const phrase of [
   "rawLogsCaptured: false",
   "rawScreenshotsCaptured: false",
   "NEW_BINARY_OR_OTA_REQUIRED",
+  "NO_ARTIFACT_CHANGE_REQUIRED",
+  "INTERNAL_QA_OTA_REQUIRED",
+  "INTERNAL_QA_BINARY_REQUIRED",
+  "noArtifactInstalledCanarySubset",
+  "hasInstalledTarget && hasTwoLiveKitParticipants",
+  "release-diagnostics-runtime-version",
+  "emitLiveKitRenderTelemetryEvent",
   "hashId(serial)",
   "dumpsys",
   "simctl",
@@ -290,7 +297,9 @@ for (const phrase of [
 }
 for (const phrase of [
   "Android internal build",
+  "NO_ARTIFACT_CHANGE_REQUIRED",
   "iOS internal/simulator build",
+  "INTERNAL_QA_BINARY_REQUIRED",
   "Approved synthetic accounts",
   "Two LiveKit participants",
   "Provider/backend read-only telemetry",

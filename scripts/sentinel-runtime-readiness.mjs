@@ -8,6 +8,9 @@ const root = process.cwd();
 const configPath = path.join(root, "config/intelligence/sentinel-installed-runner.config.json");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const NEW_BINARY_OR_OTA_REQUIRED = config.newBinaryOrOtaRequiredStatus;
+const NO_ARTIFACT_CHANGE_REQUIRED = "NO_ARTIFACT_CHANGE_REQUIRED";
+const INTERNAL_QA_OTA_REQUIRED = "INTERNAL_QA_OTA_REQUIRED";
+const INTERNAL_QA_BINARY_REQUIRED = "INTERNAL_QA_BINARY_REQUIRED";
 
 const args = new Set(process.argv.slice(2));
 const writeArtifact = args.has("--write-artifact");
@@ -91,8 +94,69 @@ function parseLogcatCapability(serial) {
   };
 }
 
+function readAndroidSourceCapabilities() {
+  const manifestPath = path.join(root, "config/release/android-production.json");
+  if (!fs.existsSync(manifestPath)) {
+    return {
+      releaseManifestMatchesTarget: false,
+      diagnosticsAtRecordedSource: false,
+      liveKitTelemetryAtRecordedSource: false,
+    };
+  }
+
+  let manifest = {};
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch {
+    return {
+      releaseManifestMatchesTarget: false,
+      diagnosticsAtRecordedSource: false,
+      liveKitTelemetryAtRecordedSource: false,
+    };
+  }
+
+  const target = config.installedTargets.android;
+  const sourceCommit = String(manifest.expectedBinarySourceCommit ?? "").trim();
+  const settingsAtSource = sourceCommit
+    ? run("git", ["show", `${sourceCommit}:app/settings.tsx`])
+    : { ok: false, stdout: "" };
+  const liveKitAtSource = sourceCommit
+    ? run("git", [
+        "grep",
+        "-F",
+        "--name-only",
+        "emitLiveKitRenderTelemetryEvent",
+        sourceCommit,
+        "--",
+        "app",
+        "components",
+        "_lib",
+      ])
+    : { ok: false, stdout: "" };
+  const requiredDiagnosticMarkers = [
+    "release-diagnostics-runtime-version",
+    "release-diagnostics-channel",
+    "release-diagnostics-update-id",
+  ];
+
+  return {
+    releaseManifestMatchesTarget:
+      String(manifest.packageIdentifier ?? "") === target.packageId
+      && String(manifest.nativeBuild ?? "") === target.expectedNativeBuild
+      && String(manifest.runtimeVersion ?? "") === target.expectedRuntimeVersion
+      && String(manifest.channel ?? "") === target.expectedChannel
+      && String(manifest.distributionSource ?? "") === target.requiredDistributionSource,
+    recordedSourceCommitPresent: Boolean(sourceCommit && settingsAtSource.ok),
+    diagnosticsAtRecordedSource:
+      settingsAtSource.ok
+      && requiredDiagnosticMarkers.every((marker) => settingsAtSource.stdout.includes(marker)),
+    liveKitTelemetryAtRecordedSource: liveKitAtSource.ok && liveKitAtSource.stdout.trim().length > 0,
+  };
+}
+
 function readAndroid() {
   const devices = parseAndroidDevices();
+  const sourceCapabilities = readAndroidSourceCapabilities();
   const summaries = devices.online.map((serial) => {
     const packageReadback = parseAndroidPackage(serial);
     return {
@@ -109,19 +173,51 @@ function readAndroid() {
       && entry.packageReadback.buildMatchesExpected
       && entry.packageReadback.installerMatchesExpected
   );
+  const matchingHasObservationCapabilities = Boolean(
+    matching
+      && matching.screenshotCaptureAvailable
+      && matching.uiAutomationAvailable
+      && matching.logCaptureAvailable,
+  );
+  const installedDiagnosticsAvailable = Boolean(
+    matching
+      && sourceCapabilities.releaseManifestMatchesTarget
+      && sourceCapabilities.diagnosticsAtRecordedSource,
+  );
+  const sentinelObservationAvailable = Boolean(
+    matchingHasObservationCapabilities
+      && installedDiagnosticsAvailable
+      && sourceCapabilities.liveKitTelemetryAtRecordedSource,
+  );
+  const artifactDecision = sentinelObservationAvailable
+    ? NO_ARTIFACT_CHANGE_REQUIRED
+    : INTERNAL_QA_BINARY_REQUIRED;
   return {
     status: status(Boolean(matching)),
     adbAvailable: devices.adbAvailable,
     onlineDeviceCount: devices.online.length,
     devices: summaries,
-    canaryRuntimeChannelStatus: matching ? "blocked" : "blocked",
-    canaryRuntimeChannelBlocker: NEW_BINARY_OR_OTA_REQUIRED,
-    notes: matching
+    sourceCapabilities,
+    canaryRuntimeChannelStatus: installedDiagnosticsAvailable
+      ? "available_from_installed_diagnostics_unobserved"
+      : "blocked",
+    canaryRuntimeChannelBlocker: installedDiagnosticsAvailable ? null : NEW_BINARY_OR_OTA_REQUIRED,
+    artifactDecision,
+    artifactDecisionReason: artifactDecision === NO_ARTIFACT_CHANGE_REQUIRED
+      ? "play_internal_build_has_external_observation_and_installed_release_diagnostics"
+      : "matching_play_internal_binary_or_required_installed_diagnostics_unavailable",
+    otaDecisionReason: artifactDecision === NO_ARTIFACT_CHANGE_REQUIRED
+      ? "no_js_instrumentation_gap_proved"
+      : "production_channel_is_not_an_internal_qa_only_ota_target",
+    notes: sentinelObservationAvailable
       ? [
           "Google Play-installed Android internal build is present.",
-          "Installed package readback does not expose current Expo update id/runtime/channel; canary proof needs installed diagnostics.",
+          "The recorded binary source contains installed runtime/channel/update diagnostics and LiveKit render telemetry.",
+          "A synthetic-account traversal must still read the active values; source capability is not installed canary proof.",
         ]
-      : ["No connected Android device proved the expected Play-internal build."],
+      : [
+          "The current environment did not prove a matching Play-internal binary with all required observation capabilities.",
+        ],
   };
 }
 
@@ -138,6 +234,14 @@ function readIos() {
       xcrunAvailable: false,
       simulatorCount: 0,
       bootedSimulatorCount: 0,
+      screenshotCaptureAvailable: false,
+      uiAutomationAvailable: false,
+      logCaptureAvailable: false,
+      canaryRuntimeChannelStatus: "blocked",
+      canaryRuntimeChannelBlocker: NEW_BINARY_OR_OTA_REQUIRED,
+      artifactDecision: INTERNAL_QA_BINARY_REQUIRED,
+      artifactDecisionReason: "ios_internal_candidate_cannot_be_verified_on_this_host",
+      otaDecisionReason: "runtime_and_channel_compatibility_unverified",
       notes: ["xcrun unavailable on this host."],
     };
   }
@@ -191,6 +295,9 @@ function readIos() {
       && installedApp.runtimeMatchesInternalCandidate
       && installedApp.channelMatchesInternalCandidate,
   );
+  const artifactDecision = internalCandidateReady
+    ? NO_ARTIFACT_CHANGE_REQUIRED
+    : INTERNAL_QA_BINARY_REQUIRED;
 
   return {
     status: internalCandidateReady ? "pass" : "blocked",
@@ -208,15 +315,30 @@ function readIos() {
     logCaptureAvailable: booted.length > 0,
     canaryRuntimeChannelStatus: internalCandidateReady ? "pass" : "blocked",
     canaryRuntimeChannelBlocker: internalCandidateReady ? null : NEW_BINARY_OR_OTA_REQUIRED,
+    artifactDecision,
+    artifactDecisionReason: internalCandidateReady
+      ? "installed_internal_candidate_matches_build_runtime_and_channel"
+      : installedApp
+        ? "installed_development_candidate_cannot_receive_ios_qa_runtime"
+        : "expected_ios_internal_candidate_not_installed",
+    otaDecisionReason: internalCandidateReady
+      ? "no_js_instrumentation_gap_proved"
+      : "runtime_and_channel_mismatch_is_not_ota_compatible",
     notes: internalCandidateReady
       ? ["Booted iOS simulator has the expected internal canary runtime/channel."]
-      : ["Booted iOS simulator is not the expected ios-qa internal canary candidate."],
+      : [
+          "Booted iOS simulator is not the expected ios-qa internal canary candidate.",
+          "Reuse an already-approved matching internal binary if available; do not start a new build until that availability check fails.",
+        ],
   };
 }
 
 function evaluateCanaryReadiness(android, ios) {
-  const hasAndroidDevice = android.status === "pass";
-  const hasIosCandidate = ios.status === "pass";
+  const hasAndroidDevice = android.status === "pass"
+    && android.artifactDecision === NO_ARTIFACT_CHANGE_REQUIRED;
+  const hasIosCandidate = ios.status === "pass"
+    && ios.artifactDecision === NO_ARTIFACT_CHANGE_REQUIRED;
+  const hasInstalledTarget = hasAndroidDevice || hasIosCandidate;
   const hasTwoLiveKitParticipants = false;
   const syntheticAccountsApproved = false;
   const providerReadOnlyTelemetry = false;
@@ -244,16 +366,39 @@ function evaluateCanaryReadiness(android, ios) {
       blocker: "read_only_provider_backend_credentials_not_available_locally",
     },
     livekitExperienceCanary: {
-      status: hasAndroidDevice && hasIosCandidate && hasTwoLiveKitParticipants ? "ready" : "blocked",
-      blocker: NEW_BINARY_OR_OTA_REQUIRED,
+      status: hasInstalledTarget && hasTwoLiveKitParticipants ? "ready" : "blocked",
+      blocker: hasInstalledTarget
+        ? "two_distinct_approved_livekit_participants_required"
+        : NEW_BINARY_OR_OTA_REQUIRED,
     },
     visualExperienceCanary: {
-      status: hasAndroidDevice || hasIosCandidate ? "ready_with_blockers" : "blocked",
-      blocker: ios.status === "pass" || hasAndroidDevice ? "approved_baseline_and_sanitized_screenshot_metrics_required" : NEW_BINARY_OR_OTA_REQUIRED,
+      status: hasInstalledTarget ? "ready_with_blockers" : "blocked",
+      blocker: hasInstalledTarget
+        ? "approved_baseline_and_sanitized_screenshot_metrics_required"
+        : NEW_BINARY_OR_OTA_REQUIRED,
     },
     installedJourneyCanary: {
-      status: hasAndroidDevice || hasIosCandidate ? "ready_with_blockers" : "blocked",
-      blocker: syntheticAccountsApproved ? "sanitized_journey_evidence_required" : "approved_synthetic_fixture_not_available_locally",
+      status: hasInstalledTarget ? "ready_with_blockers" : "blocked",
+      blocker: !hasInstalledTarget
+        ? NEW_BINARY_OR_OTA_REQUIRED
+        : syntheticAccountsApproved
+          ? "sanitized_journey_evidence_required"
+          : "approved_synthetic_fixture_not_available_locally",
+    },
+    noArtifactInstalledCanarySubset: {
+      status: hasInstalledTarget ? "blocked_on_non_artifact_prerequisites" : "blocked",
+      platform: hasAndroidDevice ? "android" : hasIosCandidate ? "ios" : null,
+      candidateCanaries: hasInstalledTarget
+        ? ["livekit_experience", "visual_experience_metrics", "installed_journey"]
+        : [],
+      runnableNow: [],
+      blockers: hasInstalledTarget
+        ? [
+            "approved_synthetic_fixture_not_available_locally",
+            "two_distinct_approved_livekit_participants_required",
+            "sanitized_installed_evidence_not_captured",
+          ]
+        : [NEW_BINARY_OR_OTA_REQUIRED],
     },
   };
 }
@@ -295,14 +440,18 @@ if (markdown) {
     `Generated: ${report.generatedAt}`,
     "",
     `- Android internal build: ${android.status}`,
+    `- Android artifact decision: ${android.artifactDecision}`,
     `- iOS internal/simulator build: ${ios.status}`,
-    `- Runtime/channel proof blocker: ${android.canaryRuntimeChannelBlocker || ios.canaryRuntimeChannelBlocker || "none"}`,
+    `- iOS artifact decision: ${ios.artifactDecision}`,
+    `- Android runtime/channel readback: ${android.canaryRuntimeChannelStatus}`,
+    `- iOS runtime/channel readback: ${ios.canaryRuntimeChannelStatus}`,
     `- Approved synthetic accounts: ${canaryReadiness.approvedSyntheticAccounts.status}`,
     `- Two LiveKit participants: ${canaryReadiness.twoLiveKitParticipants.status}`,
     `- Screenshot capture: ${canaryReadiness.screenshotCapture.status}`,
     `- UI automation: ${canaryReadiness.uiAutomation.status}`,
     `- Log capture: ${canaryReadiness.logCapture.status}`,
     `- Provider/backend telemetry: ${canaryReadiness.providerBackendReadOnlyTelemetry.status}`,
+    `- No-artifact installed canary subset: ${canaryReadiness.noArtifactInstalledCanarySubset.status}`,
   ];
   console.log(lines.join("\n"));
 } else {
