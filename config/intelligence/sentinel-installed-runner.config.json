@@ -73,6 +73,12 @@
       "script": "npm run sentinel:canary:livekit -- --evidence <sanitized-evidence.json>",
       "sentinelKey": "livekit_experience_sentinel",
       "requiredInstalledEvidence": [
+        "roomRunCorrelationHash",
+        "installedParticipantIdentityHash",
+        "sourceBuildHash",
+        "runtimeIdentityHash",
+        "observationStartedAt",
+        "observationFinishedAt",
         "roomRequested",
         "tokenRequested",
         "tokenReturned",

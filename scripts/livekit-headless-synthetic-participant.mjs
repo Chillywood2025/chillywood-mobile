@@ -8,6 +8,8 @@ import { setTimeout as delay } from "node:timers/promises";
 const ROOT = path.resolve(process.cwd());
 const MAX_PRIVATE_INPUT_BYTES = 65_536;
 const MAX_PRIVATE_INPUT_AGE_MS = 6 * 60 * 60 * 1_000;
+const MAX_SESSION_OBSERVATION_AGE_MS = 5 * 60 * 1_000;
+const MAX_SESSION_OBSERVATION_WINDOW_MS = 120_000;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MIN_TIMEOUT_MS = 5_000;
 const MAX_TIMEOUT_MS = 60_000;
@@ -17,10 +19,12 @@ const FRAME_DURATION_MS = 10;
 const SAMPLES_PER_FRAME = SAMPLE_RATE / (1_000 / FRAME_DURATION_MS);
 const TEST_TONE_HZ = 440;
 const TEST_TONE_AMPLITUDE = Math.round(0.08 * 32_767);
-const APPROVED_TOKEN_ORIGIN =
-  "https://bmkkhihfbmsnnmcqkoly.supabase.co";
+const APPROVED_TOKEN_ORIGIN = "https://bmkkhihfbmsnnmcqkoly.supabase.co";
 const APPROVED_TOKEN_PATH = "/functions/v1/livekit-token";
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+const SESSION_NONCE_PATTERN = /^[a-f0-9]{32,64}$/u;
+const BEARER_JWT_PATTERN =
+  /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
 const ICE_STATE_BY_NUMBER = Object.freeze({
   0: "new",
@@ -42,15 +46,25 @@ const METRIC_KEYS = Object.freeze([
   "firstRemoteMediaElapsedMs",
   "foregrounded",
   "headlessParticipantUsed",
+  "headlessObservationFinishedAt",
+  "headlessObservationStartedAt",
+  "headlessParticipantIdentityHash",
   "iceCheckingObserved",
   "iceGatheringObserved",
   "iceState",
   "installedUiEvidenceHash",
   "installedUiObserved",
+  "installedObservationFinishedAt",
+  "installedObservationStartedAt",
+  "installedParticipantIdentityHash",
+  "installedRuntimeIdentityHash",
+  "installedRoomRunCorrelationHash",
+  "installedSourceBuildHash",
   "localMediaSource",
   "localTrackPublished",
   "networkState",
   "peerConnectionEstablished",
+  "participantIdentityDistinct",
   "permissionState",
   "providerState",
   "remoteMediaKind",
@@ -58,12 +72,14 @@ const METRIC_KEYS = Object.freeze([
   "remoteTrackSubscribed",
   "roomConnectElapsedMs",
   "roomConnected",
+  "roomRunCorrelationHash",
   "stageFailureCategory",
   "tokenIssuedElapsedMs",
   "tokenRequestStarted",
   "tokenRequested",
   "tokenResultStatus",
   "tokenReturned",
+  "tokenClaimsValidated",
   "uiStateResolutionElapsedMs",
   "websocketConnected",
 ]);
@@ -100,6 +116,119 @@ const hashJson = (value) =>
     .update(JSON.stringify(canonicalize(value)))
     .digest("hex");
 
+const hashText = (value) =>
+  crypto.createHash("sha256").update(value).digest("hex");
+
+const hashParticipantIdentity = (identity) =>
+  hashText(`livekit-participant-identity-v1\0${identity}`);
+
+const normalizeRoomName = (value) =>
+  typeof value === "string" ? value.trim().toUpperCase() : "";
+
+const hashSessionRoomCorrelation = (nonce, roomName) =>
+  hashText(
+    `livekit-session-room-correlation-v1\0${nonce}\0${
+      normalizeRoomName(roomName)
+    }`,
+  );
+
+const parseObservationTimestamp = (value) => {
+  if (typeof value !== "string") return null;
+  const millis = Date.parse(value);
+  if (
+    !Number.isFinite(millis) ||
+    new Date(millis).toISOString() !== value
+  ) {
+    return null;
+  }
+  return millis;
+};
+
+const decodeBase64UrlJson = (value) => {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) {
+    throw new Error("participant_token_claims_rejected");
+  }
+  const decoded = Buffer.from(value, "base64url");
+  if (decoded.length < 2 || decoded.length > 16_384) {
+    throw new Error("participant_token_claims_rejected");
+  }
+  const parsed = JSON.parse(decoded.toString("utf8"));
+  if (!isRecord(parsed)) {
+    throw new Error("participant_token_claims_rejected");
+  }
+  return parsed;
+};
+
+const validateParticipantTokenClaims = (token, expectedRoomName, nowMillis) => {
+  if (
+    typeof token !== "string" ||
+    token.length < 64 ||
+    token.length > 16_384
+  ) {
+    throw new Error("participant_token_claims_rejected");
+  }
+  const segments = token.split(".");
+  if (
+    segments.length !== 3 ||
+    segments.some((segment) => !/^[A-Za-z0-9_-]+$/u.test(segment))
+  ) {
+    throw new Error("participant_token_claims_rejected");
+  }
+  const claims = decodeBase64UrlJson(segments[1]);
+  const subject = typeof claims.sub === "string" ? claims.sub.trim() : "";
+  const tokenRoom = isRecord(claims.video) &&
+      typeof claims.video.room === "string"
+    ? claims.video.room.trim()
+    : "";
+  const nowSeconds = Math.floor(nowMillis / 1_000);
+  if (
+    subject.length < 1 ||
+    subject.length > 256 ||
+    tokenRoom.length < 1 ||
+    tokenRoom.length > 256 ||
+    normalizeRoomName(tokenRoom) !== normalizeRoomName(expectedRoomName) ||
+    !Number.isInteger(claims.exp) ||
+    claims.exp <= nowSeconds - 30 ||
+    claims.exp > nowSeconds + 2 * 60 * 60 ||
+    (
+      claims.nbf !== undefined &&
+      (!Number.isInteger(claims.nbf) || claims.nbf > nowSeconds + 60)
+    ) ||
+    (
+      claims.iat !== undefined &&
+      (
+        !Number.isInteger(claims.iat) ||
+        claims.iat > nowSeconds + 60 ||
+        claims.iat < nowSeconds - 10 * 60
+      )
+    )
+  ) {
+    throw new Error("participant_token_claims_rejected");
+  }
+  return {
+    participantIdentityHash: hashParticipantIdentity(subject),
+    roomName: normalizeRoomName(tokenRoom),
+  };
+};
+
+const assertParticipantIdentitySeparation = (
+  headlessParticipantIdentityHash,
+  installedParticipantIdentityHash,
+) => {
+  const participantIdentityDistinct =
+    headlessParticipantIdentityHash !== null &&
+    installedParticipantIdentityHash !== null &&
+    headlessParticipantIdentityHash !== installedParticipantIdentityHash;
+  if (
+    headlessParticipantIdentityHash !== null &&
+    installedParticipantIdentityHash !== null &&
+    !participantIdentityDistinct
+  ) {
+    throw new Error("same_participant_identity_rejected");
+  }
+  return participantIdentityDistinct;
+};
+
 const parseArgs = (argv) => {
   const parsed = {
     input: "",
@@ -109,8 +238,9 @@ const parseArgs = (argv) => {
   };
   for (const arg of argv) {
     if (arg === "--self-test") parsed.selfTest = true;
-    else if (arg.startsWith("--input=")) parsed.input = arg.slice("--input=".length);
-    else if (arg.startsWith("--installed-evidence=")) {
+    else if (arg.startsWith("--input=")) {
+      parsed.input = arg.slice("--input=".length);
+    } else if (arg.startsWith("--installed-evidence=")) {
       parsed.installedEvidence = arg.slice("--installed-evidence=".length);
     } else if (arg.startsWith("--timeout-ms=")) {
       parsed.timeoutMs = Number(arg.slice("--timeout-ms=".length));
@@ -129,7 +259,10 @@ const parseArgs = (argv) => {
 const readOwnerOnlyJson = (candidatePath, label) => {
   const absolute = path.resolve(candidatePath);
   const relative = path.relative(ROOT, absolute);
-  if (!path.isAbsolute(candidatePath) || (!relative.startsWith("..") && relative !== "..")) {
+  if (
+    !path.isAbsolute(candidatePath) ||
+    (!relative.startsWith("..") && relative !== "..")
+  ) {
     throw new Error(`${label}_must_be_outside_git`);
   }
   const pathStats = fs.lstatSync(absolute);
@@ -150,7 +283,9 @@ const readOwnerOnlyJson = (candidatePath, label) => {
     if ((stats.mode & 0o077) !== 0) {
       throw new Error(`${label}_must_be_0600`);
     }
-    if (typeof process.getuid === "function" && stats.uid !== process.getuid()) {
+    if (
+      typeof process.getuid === "function" && stats.uid !== process.getuid()
+    ) {
       throw new Error(`${label}_must_be_owner_readable`);
     }
     if (
@@ -170,11 +305,15 @@ const validatePrivateInput = (value) => {
     !exactKeys(value, [
       "routeOrSurface",
       "runtimeIdentityHash",
+      "sessionCorrelationNonce",
+      "roomRunCorrelationHash",
       "sourceBuildHash",
       "tokenRequest",
     ]) ||
     !ROUTES.has(value.routeOrSurface) ||
     !SHA256_PATTERN.test(value.runtimeIdentityHash) ||
+    !SESSION_NONCE_PATTERN.test(value.sessionCorrelationNonce) ||
+    !SHA256_PATTERN.test(value.roomRunCorrelationHash) ||
     !SHA256_PATTERN.test(value.sourceBuildHash) ||
     !exactKeys(value.tokenRequest, [
       "apiKey",
@@ -186,10 +325,18 @@ const validatePrivateInput = (value) => {
     value.tokenRequest.apiKey.length < 20 ||
     value.tokenRequest.apiKey.length > 4_096 ||
     typeof value.tokenRequest.authorization !== "string" ||
-    value.tokenRequest.authorization.length < 20 ||
+    !BEARER_JWT_PATTERN.test(value.tokenRequest.authorization) ||
     value.tokenRequest.authorization.length > 8_192 ||
     !isRecord(value.tokenRequest.body) ||
-    Buffer.byteLength(JSON.stringify(value.tokenRequest.body), "utf8") > 16_384
+    Buffer.byteLength(JSON.stringify(value.tokenRequest.body), "utf8") >
+      16_384 ||
+    typeof value.tokenRequest.body.roomName !== "string" ||
+    normalizeRoomName(value.tokenRequest.body.roomName).length < 1 ||
+    normalizeRoomName(value.tokenRequest.body.roomName).length > 256 ||
+    hashSessionRoomCorrelation(
+        value.sessionCorrelationNonce,
+        value.tokenRequest.body.roomName,
+      ) !== value.roomRunCorrelationHash
   ) {
     throw new Error("private_input_contract_rejected");
   }
@@ -208,7 +355,7 @@ const validatePrivateInput = (value) => {
   return value;
 };
 
-const validateInstalledEvidence = (value, routeOrSurface) => {
+const validateInstalledEvidence = (value, input) => {
   if (
     !exactKeys(value, [
       "backgroundForegroundRecovery",
@@ -217,20 +364,50 @@ const validateInstalledEvidence = (value, routeOrSurface) => {
       "connectingResolved",
       "foregrounded",
       "installedUiEvidenceHash",
+      "installedParticipantIdentityHash",
       "networkState",
+      "observationFinishedAt",
+      "observationStartedAt",
       "observerKind",
       "permissionState",
       "routeOrSurface",
+      "runtimeIdentityHash",
+      "roomRunCorrelationHash",
+      "sourceBuildHash",
       "uiStateResolutionElapsedMs",
     ]) ||
-    !["android_installed_app", "ios_installed_app"].includes(value.observerKind) ||
-    value.routeOrSurface !== routeOrSurface ||
+    !["android_installed_app", "ios_installed_app"].includes(
+      value.observerKind,
+    ) ||
+    value.routeOrSurface !== input.routeOrSurface ||
     !SHA256_PATTERN.test(value.installedUiEvidenceHash) ||
+    !SHA256_PATTERN.test(value.installedParticipantIdentityHash) ||
+    !SHA256_PATTERN.test(value.runtimeIdentityHash) ||
+    value.runtimeIdentityHash !== input.runtimeIdentityHash ||
+    !SHA256_PATTERN.test(value.sourceBuildHash) ||
+    value.sourceBuildHash !== input.sourceBuildHash ||
+    !SHA256_PATTERN.test(value.roomRunCorrelationHash) ||
+    value.roomRunCorrelationHash !== input.roomRunCorrelationHash ||
     !["ready", "interrupted", "unknown"].includes(value.networkState) ||
     !["granted", "denied", "unknown"].includes(value.permissionState) ||
     !boundedInteger(value.uiStateResolutionElapsedMs, 0, 600_000)
   ) {
     throw new Error("installed_evidence_contract_rejected");
+  }
+  const startedAtMillis = parseObservationTimestamp(value.observationStartedAt);
+  const finishedAtMillis = parseObservationTimestamp(
+    value.observationFinishedAt,
+  );
+  const nowMillis = Date.now();
+  if (
+    startedAtMillis === null ||
+    finishedAtMillis === null ||
+    startedAtMillis > finishedAtMillis ||
+    finishedAtMillis - startedAtMillis > MAX_SESSION_OBSERVATION_WINDOW_MS ||
+    nowMillis - finishedAtMillis > MAX_SESSION_OBSERVATION_AGE_MS ||
+    finishedAtMillis > nowMillis + 60_000
+  ) {
+    throw new Error("installed_evidence_stale_or_unbounded");
   }
   for (
     const key of [
@@ -425,12 +602,25 @@ const requestParticipantToken = async (input, timeoutMs, state) => {
     state.tokenResultStatus = "error";
     return null;
   }
+  let tokenClaims;
+  try {
+    tokenClaims = validateParticipantTokenClaims(
+      body.participantToken,
+      input.tokenRequest.body.roomName,
+      Date.now(),
+    );
+  } catch {
+    state.tokenResultStatus = "error";
+    return null;
+  }
   state.tokenResultStatus = "success";
   state.tokenReturned = true;
+  state.tokenClaimsValidated = true;
   state.networkState = "ready";
   state.providerState = "healthy";
   return {
     canPublish: body.requestedGrants.canPublish === true,
+    participantIdentityHash: tokenClaims.participantIdentityHash,
     participantToken: body.participantToken,
     serverUrl: body.serverUrl,
   };
@@ -465,6 +655,7 @@ const runHeadlessParticipant = async (
     tokenRequested: false,
     tokenResultStatus: "not_attempted",
     tokenReturned: false,
+    tokenClaimsValidated: false,
     websocketConnected: false,
   };
   const credentials = await requestParticipantToken(input, timeoutMs, state);
@@ -583,6 +774,38 @@ const runHeadlessParticipant = async (
   if (!state.firstAudioVideoObserved) {
     state.firstRemoteMediaElapsedMs = boundedElapsed(roomConnectStartedAt);
   }
+  const headlessObservationFinishedAt = new Date().toISOString();
+  const headlessObservationFinishedAtMillis = Date.parse(
+    headlessObservationFinishedAt,
+  );
+  const installedObservationStartedAtMillis = installedEvidence
+    ? Date.parse(installedEvidence.observationStartedAt)
+    : overallStartedAt;
+  const installedObservationFinishedAtMillis = installedEvidence
+    ? Date.parse(installedEvidence.observationFinishedAt)
+    : headlessObservationFinishedAtMillis;
+  const observationStartedAtMillis = Math.min(
+    overallStartedAt,
+    installedObservationStartedAtMillis,
+  );
+  const observationFinishedAtMillis = Math.max(
+    headlessObservationFinishedAtMillis,
+    installedObservationFinishedAtMillis,
+  );
+  if (
+    observationFinishedAtMillis - observationStartedAtMillis >
+      MAX_SESSION_OBSERVATION_WINDOW_MS
+  ) {
+    throw new Error("session_observation_window_rejected");
+  }
+  const headlessParticipantIdentityHash =
+    credentials?.participantIdentityHash ?? null;
+  const installedParticipantIdentityHash =
+    installedEvidence?.installedParticipantIdentityHash ?? null;
+  const participantIdentityDistinct = assertParticipantIdentitySeparation(
+    headlessParticipantIdentityHash,
+    installedParticipantIdentityHash,
+  );
   const remoteMediaKind = state.remoteMediaKinds.size === 2
     ? "audio_video"
     : state.remoteMediaKinds.has("audio")
@@ -601,16 +824,29 @@ const runHeadlessParticipant = async (
     firstRemoteMediaElapsedMs: state.firstRemoteMediaElapsedMs,
     foregrounded: installedEvidence?.foregrounded ?? false,
     headlessParticipantUsed: true,
+    headlessObservationFinishedAt,
+    headlessObservationStartedAt: observationStartedAt,
+    headlessParticipantIdentityHash,
     iceCheckingObserved: state.iceCheckingObserved,
     iceGatheringObserved: state.iceGatheringObserved,
     iceState: state.iceState,
-    installedUiEvidenceHash:
-      installedEvidence?.installedUiEvidenceHash ?? null,
+    installedUiEvidenceHash: installedEvidence?.installedUiEvidenceHash ?? null,
     installedUiObserved: !!installedEvidence,
+    installedObservationFinishedAt: installedEvidence?.observationFinishedAt ??
+      null,
+    installedObservationStartedAt: installedEvidence?.observationStartedAt ??
+      null,
+    installedParticipantIdentityHash,
+    installedRuntimeIdentityHash: installedEvidence?.runtimeIdentityHash ??
+      null,
+    installedRoomRunCorrelationHash:
+      installedEvidence?.roomRunCorrelationHash ?? null,
+    installedSourceBuildHash: installedEvidence?.sourceBuildHash ?? null,
     localMediaSource: state.localTrackPublished ? "test_tone" : "none",
     localTrackPublished: state.localTrackPublished,
     networkState: installedEvidence?.networkState ?? state.networkState,
     peerConnectionEstablished: state.peerConnectionEstablished,
+    participantIdentityDistinct,
     permissionState: installedEvidence?.permissionState ?? "not_applicable",
     providerState: state.providerState,
     remoteMediaKind,
@@ -618,14 +854,15 @@ const runHeadlessParticipant = async (
     remoteTrackSubscribed: state.remoteTrackSubscribed,
     roomConnectElapsedMs: state.roomConnectElapsedMs,
     roomConnected: state.roomConnected,
+    roomRunCorrelationHash: input.roomRunCorrelationHash,
     stageFailureCategory: "none",
     tokenIssuedElapsedMs: state.tokenIssuedElapsedMs,
     tokenRequestStarted: state.tokenRequestStarted,
     tokenRequested: state.tokenRequested,
     tokenResultStatus: state.tokenResultStatus,
     tokenReturned: state.tokenReturned,
-    uiStateResolutionElapsedMs:
-      installedEvidence?.uiStateResolutionElapsedMs ??
+    tokenClaimsValidated: state.tokenClaimsValidated,
+    uiStateResolutionElapsedMs: installedEvidence?.uiStateResolutionElapsedMs ??
       boundedElapsed(overallStartedAt),
     websocketConnected: state.websocketConnected,
   };
@@ -651,8 +888,8 @@ const runHeadlessParticipant = async (
       sanitizationVersion: "bounded-nonpersonal-v1",
       schemaVersion: "product-sentinel-v1",
     },
-    observationFinishedAt: new Date().toISOString(),
-    observationStartedAt,
+    observationFinishedAt: new Date(observationFinishedAtMillis).toISOString(),
+    observationStartedAt: new Date(observationStartedAtMillis).toISOString(),
     routeOrSurface: input.routeOrSurface,
     runtimeIdentityHash: input.runtimeIdentityHash,
     sourceBuildHash: input.sourceBuildHash,
@@ -660,14 +897,34 @@ const runHeadlessParticipant = async (
 };
 
 const runSelfTest = () => {
+  const selfTestNowMillis = Date.now();
+  const selfTestRoom = "SYNTHETIC-ROOM";
+  const selfTestSubject = "synthetic-headless-participant";
+  const selfTestToken = [
+    Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+      .toString("base64url"),
+    Buffer.from(JSON.stringify({
+      exp: Math.floor(selfTestNowMillis / 1_000) + 3_600,
+      iat: Math.floor(selfTestNowMillis / 1_000),
+      sub: selfTestSubject,
+      video: { room: selfTestRoom },
+    })).toString("base64url"),
+    "synthetic-signature",
+  ].join(".");
+  const sessionCorrelationNonce = "1".repeat(32);
   const privateInputFixture = {
     routeOrSurface: "live-stage",
     runtimeIdentityHash: "a".repeat(64),
+    sessionCorrelationNonce,
+    roomRunCorrelationHash: hashSessionRoomCorrelation(
+      sessionCorrelationNonce,
+      selfTestRoom,
+    ),
     sourceBuildHash: "b".repeat(64),
     tokenRequest: {
       apiKey: "synthetic-public-key-000000",
-      authorization: "Bearer synthetic-session-000000",
-      body: { roomName: "synthetic-room" },
+      authorization: `Bearer ${selfTestToken}`,
+      body: { roomName: selfTestRoom },
       endpointUrl: `${APPROVED_TOKEN_ORIGIN}${APPROVED_TOKEN_PATH}`,
     },
   };
@@ -682,8 +939,7 @@ const runSelfTest = () => {
       ...privateInputFixture,
       tokenRequest: {
         ...privateInputFixture.tokenRequest,
-        endpointUrl:
-          "https://example.invalid/functions/v1/livekit-token",
+        endpointUrl: "https://example.invalid/functions/v1/livekit-token",
       },
     });
   } catch (error) {
@@ -693,6 +949,46 @@ const runSelfTest = () => {
   if (!unapprovedTokenEndpointRejected) {
     throw new Error("self_test_token_endpoint_policy_failed");
   }
+  const tokenClaims = validateParticipantTokenClaims(
+    selfTestToken,
+    selfTestRoom,
+    selfTestNowMillis,
+  );
+  if (
+    tokenClaims.participantIdentityHash !==
+      hashParticipantIdentity(selfTestSubject)
+  ) {
+    throw new Error("self_test_token_subject_hash_failed");
+  }
+  let mismatchedRoomRejected = false;
+  try {
+    validateParticipantTokenClaims(
+      selfTestToken,
+      "UNRELATED-ROOM",
+      selfTestNowMillis,
+    );
+  } catch (error) {
+    mismatchedRoomRejected =
+      error?.message === "participant_token_claims_rejected";
+  }
+  if (!mismatchedRoomRejected) {
+    throw new Error("self_test_token_room_binding_failed");
+  }
+  let sameIdentityRejected = false;
+  try {
+    assertParticipantIdentitySeparation(
+      tokenClaims.participantIdentityHash,
+      tokenClaims.participantIdentityHash,
+    );
+  } catch (error) {
+    sameIdentityRejected =
+      error?.message === "same_participant_identity_rejected";
+  }
+  if (!sameIdentityRejected) {
+    throw new Error("self_test_participant_separation_failed");
+  }
+  const selfTestStartedAt = new Date(selfTestNowMillis - 1_000).toISOString();
+  const selfTestFinishedAt = new Date(selfTestNowMillis).toISOString();
   const metric = {
     backgroundForegroundRecovery: false,
     backgrounded: false,
@@ -703,15 +999,25 @@ const runSelfTest = () => {
     firstRemoteMediaElapsedMs: 900,
     foregrounded: false,
     headlessParticipantUsed: true,
+    headlessObservationFinishedAt: selfTestFinishedAt,
+    headlessObservationStartedAt: selfTestStartedAt,
+    headlessParticipantIdentityHash: tokenClaims.participantIdentityHash,
     iceCheckingObserved: true,
     iceGatheringObserved: true,
     iceState: "connected",
     installedUiEvidenceHash: null,
     installedUiObserved: false,
+    installedObservationFinishedAt: null,
+    installedObservationStartedAt: null,
+    installedParticipantIdentityHash: null,
+    installedRuntimeIdentityHash: null,
+    installedRoomRunCorrelationHash: null,
+    installedSourceBuildHash: null,
     localMediaSource: "test_tone",
     localTrackPublished: true,
     networkState: "ready",
     peerConnectionEstablished: true,
+    participantIdentityDistinct: false,
     permissionState: "not_applicable",
     providerState: "healthy",
     remoteMediaKind: "audio",
@@ -719,12 +1025,14 @@ const runSelfTest = () => {
     remoteTrackSubscribed: true,
     roomConnectElapsedMs: 500,
     roomConnected: true,
+    roomRunCorrelationHash: privateInputFixture.roomRunCorrelationHash,
     stageFailureCategory: "none",
     tokenIssuedElapsedMs: 100,
     tokenRequestStarted: true,
     tokenRequested: true,
     tokenResultStatus: "success",
     tokenReturned: true,
+    tokenClaimsValidated: true,
     uiStateResolutionElapsedMs: 1_000,
     websocketConnected: true,
   };
@@ -735,13 +1043,18 @@ const runSelfTest = () => {
   if (!exactKeys(metric, METRIC_KEYS) || hashJson(metric).length !== 64) {
     throw new Error("self_test_contract_failed");
   }
-  process.stdout.write(JSON.stringify({
-    approvedTokenEndpointAccepted: true,
-    headlessOnlyCannotClaimInstalledUi: metric.installedUiObserved === false,
-    ok: true,
-    stageCount: METRIC_KEYS.length,
-    unapprovedTokenEndpointRejected,
-  }) + "\n");
+  process.stdout.write(
+    JSON.stringify({
+      approvedTokenEndpointAccepted: true,
+      headlessOnlyCannotClaimInstalledUi: metric.installedUiObserved === false,
+      mismatchedRoomRejected,
+      ok: true,
+      participantClaimsValidated: true,
+      sameIdentityRejected,
+      stageCount: METRIC_KEYS.length,
+      unapprovedTokenEndpointRejected,
+    }) + "\n",
+  );
 };
 
 const main = async () => {
@@ -760,7 +1073,7 @@ const main = async () => {
         args.installedEvidence,
         "installed_evidence",
       ),
-      input.routeOrSurface,
+      input,
     )
     : null;
   const rtc = await import("@livekit/rtc-node").catch(() => {
