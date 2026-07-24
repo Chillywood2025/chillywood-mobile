@@ -1417,7 +1417,10 @@ begin
     set
       sentinel_run_id = run_value.id,
       build_runtime_hash = p_build_runtime_hash,
-      last_seen_at = transaction_timestamp(),
+      -- A transaction that began first can acquire the deterministic finding
+      -- lock second. Use wall-clock time after lock acquisition so recurrence
+      -- remains monotonic under that race.
+      last_seen_at = greatest(clock_timestamp(), finding_value.last_seen_at),
       occurrence_count = occurrence_value,
       severity = p_severity,
       user_impact_hash = p_user_impact_hash,
