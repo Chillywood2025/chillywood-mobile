@@ -31,11 +31,4 @@ export const EVALUATOR_STATEMENTS = Object.freeze({
       $1::uuid,$2::uuid,$3::text,$4::text
     ) as result`,
   }),
-  resolveActiveProductBaseline: Object.freeze({
-    arity: 5,
-    text: `select public.product_experience_resolve_current_active_baseline(
-      $1::uuid,$2::uuid,$3::public.cognitive_platform,
-      $4::public.cognitive_environment,$5::text
-    ) as result`,
-  }),
 });

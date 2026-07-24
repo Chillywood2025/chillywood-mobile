@@ -1,7 +1,8 @@
 import productBaselineJson from "../../../../config/intelligence/chillywood-product-experience-baseline-v1.json" with {
   type: "json",
 };
-import { blocked, ready } from "./helpers.mjs";
+import { hashJson, sha256Hex } from "../contracts.mjs";
+import { ready } from "./helpers.mjs";
 
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -40,6 +41,63 @@ const OPTION_C_TARGET_FAMILIES = new Set([
 const VERSIONED_EXCEPTION_FAMILIES = new Set([
   "featured_hero_card",
   "vertical_post_card",
+]);
+const DETECTION_KEYS = Object.freeze([
+  "action",
+  "affectedComponentsHash",
+  "buildRuntimeHash",
+  "confidence",
+  "evidenceHashes",
+  "findingClass",
+  "physicalProofStatus",
+  "proposedNextInvestigationHash",
+  "providerBackendStateHash",
+  "reproductionState",
+  "routeOrSurface",
+  "sentinelRunId",
+  "severity",
+  "suspectedLayer",
+  "userImpactHash",
+]);
+const RESOLUTION_KEYS = Object.freeze([
+  "action",
+  "findingId",
+  "resolutionReasonHash",
+  "sentinelRunId",
+]);
+const FINDING_CLASS = /^[a-z0-9][a-z0-9._-]{2,80}$/u;
+const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
+const REPRODUCTION_STATES = new Set([
+  "confirmed_defect",
+  "likely_defect",
+  "design_baseline_missing",
+  "provider_blocked",
+  "device_unavailable",
+]);
+const SUSPECTED_LAYERS = new Set([
+  "backend_token",
+  "websocket",
+  "ice_turn",
+  "media_publish",
+  "media_subscribe",
+  "installed_ui_state",
+  "react_state",
+  "permission",
+  "provider_degradation",
+  "layout_density",
+  "route_navigation",
+  "loading_state",
+  "empty_error_offline",
+  "platform_drift",
+  "unknown",
+]);
+const PHYSICAL_PROOF_STATUSES = new Set([
+  "installed_ui_observed",
+  "simulator_observed",
+  "source_only",
+  "provider_blocked",
+  "device_unavailable",
+  "new_binary_or_ota_required",
 ]);
 
 const isRecord = (value) =>
@@ -802,6 +860,396 @@ export const deterministicTouchTargetClassification = (
   return assessment("false_positive");
 };
 
+const candidateMatchesProfile = (candidate, expected) =>
+  candidate.findingClass === expected.findingClass &&
+  candidate.suspectedLayer === expected.suspectedLayer &&
+  candidate.severity === expected.severity &&
+  candidate.confidence === expected.confidence &&
+  candidate.reproductionState === expected.reproductionState;
+
+const liveKitProfile = (failureCategory) => {
+  const normalizedClass = `livekit_${failureCategory}`.replace(
+    /[^a-z0-9._-]/gu,
+    "_",
+  );
+  const byFailure = Object.freeze({
+    background_foreground_recovery_failed: [
+      "installed_ui_state",
+      "high",
+      0.99,
+    ],
+    build_runtime_mismatch: ["platform_drift", "high", 1],
+    cleanup_failure: ["installed_ui_state", "medium", 0.99],
+    deadline_exceeded: ["loading_state", "medium", 0.99],
+    first_media_missing: ["media_subscribe", "high", 0.99],
+    ice_turn_failure: ["ice_turn", "high", 0.99],
+    installed_ui_connecting_stuck: ["react_state", "high", 0.99],
+    local_publish_failure: ["media_publish", "high", 0.99],
+    network_interruption: ["websocket", "medium", 0.95],
+    permission_failure: ["permission", "medium", 1],
+    provider_degradation: ["provider_degradation", "low", 0.95],
+    remote_participant_missing: ["media_subscribe", "medium", 0.99],
+    remote_subscription_failure: ["media_subscribe", "high", 0.99],
+    room_connection_failure: ["websocket", "high", 0.99],
+    token_backend_failure: ["backend_token", "high", 0.99],
+    websocket_failure: ["websocket", "high", 0.99],
+  });
+  const expected = byFailure[failureCategory];
+  return expected
+    ? profile(normalizedClass, expected[0], expected[1], expected[2])
+    : null;
+};
+
+const installedJourneyProfile = (metrics) => {
+  const expectedState = text(metrics.expectedState);
+  const observedState = text(metrics.observedState);
+  const resultState = text(metrics.resultState);
+  const unresolvedStateCount = metricNumber(metrics, "unresolvedStateCount");
+  if (
+    !expectedState ||
+    !observedState ||
+    expectedState === observedState ||
+    unresolvedStateCount === null ||
+    unresolvedStateCount < 1
+  ) {
+    return null;
+  }
+  if (resultState === "loading" && observedState === "loading") {
+    const elapsedDurationMs = metricNumber(metrics, "elapsedDurationMs");
+    const maxDurationMs = metricNumber(metrics, "maxDurationMs");
+    return elapsedDurationMs !== null &&
+        maxDurationMs !== null &&
+        elapsedDurationMs >= maxDurationMs
+      ? profile(
+        "installed_journey_unresolved_loading",
+        "loading_state",
+        "medium",
+        1,
+      )
+      : null;
+  }
+  if (resultState === "error" && observedState === "error") {
+    return profile(
+      "installed_journey_error_state",
+      "empty_error_offline",
+      "medium",
+      1,
+    );
+  }
+  if (resultState === "offline" && observedState === "offline") {
+    return profile(
+      "installed_journey_offline_state",
+      "empty_error_offline",
+      "low",
+      1,
+    );
+  }
+  if (
+    resultState === "permission_denied" &&
+    observedState === "permission_denied"
+  ) {
+    return profile(
+      "installed_journey_permission_denied",
+      "permission",
+      "medium",
+      1,
+    );
+  }
+  if (resultState === "blank" && observedState === "blank") {
+    return profile(
+      "installed_journey_blank_state",
+      "installed_ui_state",
+      "high",
+      1,
+    );
+  }
+  if (resultState === "crashed" && observedState === "crashed") {
+    return profile(
+      "installed_journey_crashed",
+      "installed_ui_state",
+      "high",
+      1,
+    );
+  }
+  if (resultState !== "blocked") return null;
+  if (observedState === "no_state_change") {
+    return profile(
+      "installed_journey_no_state_change",
+      "route_navigation",
+      "medium",
+      1,
+    );
+  }
+  if (observedState === "route_unavailable") {
+    return profile(
+      "installed_journey_route_unavailable",
+      "route_navigation",
+      "high",
+      1,
+    );
+  }
+  return observedState === "unknown_blocked"
+    ? profile(
+      "installed_journey_blocked",
+      "unknown",
+      "medium",
+      1,
+    )
+    : null;
+};
+
+export const deterministicDetectionReasons = (
+  run,
+  candidate,
+  context,
+) => {
+  const reasons = new Set();
+  const metrics = metricObject(run);
+  const observationKind = text(run.metric_manifest?.observationKind);
+  let expectedProfile = null;
+  if (
+    run.route_or_surface !== candidate.routeOrSurface ||
+    run.source_build_hash !== candidate.buildRuntimeHash ||
+    run.physical_proof_status !== candidate.physicalProofStatus ||
+    !candidate.evidenceHashes.includes(run.evidence_manifest_hash)
+  ) {
+    reasons.add("run_binding_mismatch");
+  }
+  if (
+    run.result_status !== "failed" ||
+    !["installed_ui_observed", "simulator_observed"].includes(
+      run.physical_proof_status,
+    )
+  ) {
+    reasons.add("failed_physical_run_required");
+  }
+  if (!metrics) {
+    reasons.add("metric_manifest_missing");
+    return Object.freeze([...reasons].sort());
+  }
+  if (observationKind === "touch_target") {
+    const result = deterministicTouchTargetClassification(run, context);
+    expectedProfile = result.profile;
+    if (!expectedProfile) {
+      reasons.add(`touch_target_${result.classification}`);
+    }
+  } else if (observationKind === "search_accessibility") {
+    const confirmedGap = metrics.inputPresent === true &&
+      (
+        metrics.inputFocusable !== true ||
+        metrics.inputClickable !== true ||
+        metrics.accessibilityLabelPresent !== true ||
+        metrics.queryAccepted !== true ||
+        metrics.clearSucceeded !== true
+      );
+    if (!confirmedGap) {
+      reasons.add("search_accessibility_classification_rejected");
+    } else {
+      expectedProfile = profile(
+        "search_accessibility_interactivity_gap",
+        "installed_ui_state",
+        "medium",
+        0.99,
+      );
+    }
+  } else if (observationKind === "route_timing") {
+    if (metrics.timeoutObserved !== true) {
+      reasons.add("route_timing_classification_rejected");
+    } else {
+      const networkState = text(metrics.networkState);
+      expectedProfile = networkState === "offline"
+        ? profile(
+          "route_unresolved_or_error_state",
+          "empty_error_offline",
+          "low",
+          1,
+        )
+        : networkState === "provider_blocked"
+        ? profile(
+          "route_unresolved_or_error_state",
+          "provider_degradation",
+          "low",
+          0.95,
+          "provider_blocked",
+        )
+        : ["ready", "degraded", "unknown"].includes(networkState)
+        ? profile(
+          "route_unresolved_or_error_state",
+          "loading_state",
+          "medium",
+          0.99,
+        )
+        : null;
+      if (!expectedProfile) {
+        reasons.add("route_timing_classification_rejected");
+      }
+    }
+  } else if (observationKind === "crash_anr") {
+    const fatalCount = metricNumber(metrics, "fatalExceptionCount") ?? 0;
+    const anrCount = metricNumber(metrics, "anrCount") ?? 0;
+    if (fatalCount + anrCount < 1) {
+      reasons.add("crash_anr_classification_rejected");
+    } else {
+      expectedProfile = profile(
+        "installed_crash_or_anr",
+        "installed_ui_state",
+        "high",
+        1,
+      );
+    }
+  } else if (observationKind === "livekit_experience") {
+    expectedProfile = liveKitProfile(text(metrics.stageFailureCategory));
+    if (!expectedProfile) reasons.add("livekit_classification_rejected");
+  } else if (observationKind === "visual_layout") {
+    const result = deterministicVisualClassification(run, context);
+    expectedProfile = result.profile;
+    if (!expectedProfile) reasons.add(`visual_${result.classification}`);
+  } else if (observationKind === "installed_journey") {
+    expectedProfile = installedJourneyProfile(metrics);
+    if (!expectedProfile) {
+      reasons.add("installed_journey_classification_rejected");
+    }
+  } else {
+    reasons.add("unsupported_observation_kind");
+  }
+  if (
+    expectedProfile &&
+    !candidateMatchesProfile(candidate, expectedProfile)
+  ) {
+    reasons.add("deterministic_finding_profile_mismatch");
+  }
+  return Object.freeze([...reasons].sort());
+};
+
+export const deterministicResolutionReasons = (
+  run,
+  finding,
+  detectionRun,
+  context,
+) => {
+  const reasons = new Set();
+  if (
+    text(finding.id).length === 0 ||
+    finding.current_status !== "open" ||
+    finding.erased_at !== null
+  ) {
+    reasons.add("open_finding_required");
+  }
+  if (
+    run.task_id !== finding.task_id ||
+    run.project_id !== finding.project_id ||
+    run.platform !== finding.platform ||
+    run.environment !== finding.environment ||
+    run.route_or_surface !== finding.route_or_surface ||
+    run.collector_capability_id === null ||
+    run.erased_at !== null
+  ) {
+    reasons.add("resolution_run_binding_mismatch");
+  }
+  if (
+    detectionRun.id !== finding.sentinel_run_id ||
+    detectionRun.task_id !== finding.task_id ||
+    detectionRun.project_id !== finding.project_id ||
+    detectionRun.platform !== finding.platform ||
+    detectionRun.environment !== finding.environment ||
+    detectionRun.route_or_surface !== finding.route_or_surface
+  ) {
+    reasons.add("detection_run_binding_mismatch");
+  }
+  if (
+    run.result_status !== "passed" ||
+    !["installed_ui_observed", "simulator_observed"].includes(
+      run.physical_proof_status,
+    )
+  ) {
+    reasons.add("passing_physical_run_required");
+  }
+  if (
+    run.sentinel_key !== detectionRun.sentinel_key ||
+    text(run.metric_manifest?.observationKind) !==
+      text(detectionRun.metric_manifest?.observationKind)
+  ) {
+    reasons.add("resolution_observation_kind_mismatch");
+  }
+  const observationKind = text(detectionRun.metric_manifest?.observationKind);
+  const resolutionMetrics = metricObject(run);
+  const detectionMetrics = metricObject(detectionRun);
+  if (!resolutionMetrics || !detectionMetrics) {
+    reasons.add("resolution_metric_manifest_missing");
+  } else if (observationKind === "touch_target") {
+    if (
+      text(resolutionMetrics.componentIdentityHash) !==
+        text(detectionMetrics.componentIdentityHash) ||
+      text(resolutionMetrics.routeFamilyMappingHash) !==
+        text(detectionMetrics.routeFamilyMappingHash) ||
+      text(resolutionMetrics.surfaceFamily) !==
+        text(detectionMetrics.surfaceFamily) ||
+      text(resolutionMetrics.platform) !== text(detectionMetrics.platform) ||
+      text(resolutionMetrics.measurementUnit) !==
+        text(detectionMetrics.measurementUnit) ||
+      text(resolutionMetrics.baselineId) !==
+        text(detectionMetrics.baselineId) ||
+      metricNumber(resolutionMetrics, "baselineVersion") !==
+        metricNumber(detectionMetrics, "baselineVersion") ||
+      metricNumber(resolutionMetrics, "preferredThreshold") !==
+        metricNumber(detectionMetrics, "preferredThreshold") ||
+      metricNumber(resolutionMetrics, "applicableMinimumThreshold") !==
+        metricNumber(detectionMetrics, "applicableMinimumThreshold")
+    ) {
+      reasons.add("resolution_measurement_identity_mismatch");
+    }
+    if (
+      deterministicTouchTargetClassification(run, context).classification !==
+        "false_positive"
+    ) {
+      reasons.add("resolution_accessibility_target_not_satisfied");
+    }
+  } else if (observationKind === "visual_layout") {
+    if (
+      text(resolutionMetrics.componentIdentityHash) !==
+        text(detectionMetrics.componentIdentityHash) ||
+      text(resolutionMetrics.routeFamilyMappingHash) !==
+        text(detectionMetrics.routeFamilyMappingHash) ||
+      text(resolutionMetrics.surfaceFamily) !==
+        text(detectionMetrics.surfaceFamily) ||
+      text(resolutionMetrics.platform) !== text(detectionMetrics.platform) ||
+      text(resolutionMetrics.measurementUnit) !==
+        text(detectionMetrics.measurementUnit) ||
+      text(resolutionMetrics.baselineId) !==
+        text(detectionMetrics.baselineId) ||
+      metricNumber(resolutionMetrics, "baselineVersion") !==
+        metricNumber(detectionMetrics, "baselineVersion") ||
+      text(resolutionMetrics.referenceViewport) !==
+        text(detectionMetrics.referenceViewport) ||
+      text(resolutionMetrics.baselineState) !== "approved_baseline" ||
+      text(resolutionMetrics.baselineComparisonHash) !==
+        text(detectionMetrics.baselineComparisonHash)
+    ) {
+      reasons.add("resolution_measurement_identity_mismatch");
+    }
+    if (
+      deterministicVisualClassification(run, {
+        approvedVisualBaselineCount: 1,
+        approvedVisualBaselineHash: APPROVED_OPTION_C_BASELINE_HASH,
+      }).classification !== "false_positive"
+    ) {
+      reasons.add("resolution_visual_baseline_not_satisfied");
+    }
+  } else if (observationKind === "installed_journey") {
+    if (
+      text(resolutionMetrics.expectedState) !==
+        text(detectionMetrics.expectedState) ||
+      text(resolutionMetrics.sourceRuntimeHash) !==
+        text(detectionMetrics.sourceRuntimeHash) ||
+      metricNumber(resolutionMetrics, "journeyStepCount") !==
+        metricNumber(detectionMetrics, "journeyStepCount")
+    ) {
+      reasons.add("resolution_measurement_identity_mismatch");
+    }
+  }
+  return Object.freeze([...reasons].sort());
+};
+
 const evaluatorAssertion = (env) => {
   const assertion =
     typeof env.COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION === "string"
@@ -810,6 +1258,374 @@ const evaluatorAssertion = (env) => {
   if (!assertion) throw new Error("evaluator_configuration_rejected");
   return assertion;
 };
+
+const normalizeDetection = (payload) => {
+  if (
+    !exactKeys(payload, DETECTION_KEYS) ||
+    payload.action !== "evaluate_sentinel_detection" ||
+    typeof payload.sentinelRunId !== "string" ||
+    !UUID.test(payload.sentinelRunId) ||
+    typeof payload.findingClass !== "string" ||
+    !FINDING_CLASS.test(payload.findingClass) ||
+    typeof payload.routeOrSurface !== "string" ||
+    payload.routeOrSurface.length < 1 ||
+    payload.routeOrSurface.length > 160 ||
+    typeof payload.buildRuntimeHash !== "string" ||
+    !HASH.test(payload.buildRuntimeHash) ||
+    !SEVERITIES.has(payload.severity) ||
+    typeof payload.userImpactHash !== "string" ||
+    !HASH.test(payload.userImpactHash) ||
+    !Array.isArray(payload.evidenceHashes) ||
+    payload.evidenceHashes.length < 1 ||
+    payload.evidenceHashes.length > 64 ||
+    payload.evidenceHashes.some((value) =>
+      typeof value !== "string" || !HASH.test(value)
+    ) ||
+    !SUSPECTED_LAYERS.has(payload.suspectedLayer) ||
+    typeof payload.confidence !== "number" ||
+    !Number.isFinite(payload.confidence) ||
+    payload.confidence < 0 ||
+    payload.confidence > 1 ||
+    !REPRODUCTION_STATES.has(payload.reproductionState) ||
+    typeof payload.affectedComponentsHash !== "string" ||
+    !HASH.test(payload.affectedComponentsHash) ||
+    typeof payload.providerBackendStateHash !== "string" ||
+    !HASH.test(payload.providerBackendStateHash) ||
+    typeof payload.proposedNextInvestigationHash !== "string" ||
+    !HASH.test(payload.proposedNextInvestigationHash) ||
+    !PHYSICAL_PROOF_STATUSES.has(payload.physicalProofStatus)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    affectedComponentsHash: payload.affectedComponentsHash,
+    buildRuntimeHash: payload.buildRuntimeHash,
+    confidence: payload.confidence,
+    evidenceHashes: Object.freeze([...payload.evidenceHashes]),
+    findingClass: payload.findingClass,
+    physicalProofStatus: payload.physicalProofStatus,
+    proposedNextInvestigationHash: payload.proposedNextInvestigationHash,
+    providerBackendStateHash: payload.providerBackendStateHash,
+    reproductionState: payload.reproductionState,
+    routeOrSurface: payload.routeOrSurface,
+    sentinelRunId: payload.sentinelRunId,
+    severity: payload.severity,
+    suspectedLayer: payload.suspectedLayer,
+    userImpactHash: payload.userImpactHash,
+  });
+};
+
+const normalizeResolution = (payload) =>
+  exactKeys(payload, RESOLUTION_KEYS) &&
+    payload.action === "evaluate_sentinel_resolution" &&
+    typeof payload.findingId === "string" &&
+    UUID.test(payload.findingId) &&
+    typeof payload.sentinelRunId === "string" &&
+    UUID.test(payload.sentinelRunId) &&
+    typeof payload.resolutionReasonHash === "string" &&
+    HASH.test(payload.resolutionReasonHash)
+    ? Object.freeze({
+      findingId: payload.findingId,
+      resolutionReasonHash: payload.resolutionReasonHash,
+      sentinelRunId: payload.sentinelRunId,
+    })
+    : null;
+
+const validateRun = (run, expectedId, now) => {
+  if (
+    !isRecord(run) ||
+    run.id !== expectedId ||
+    !UUID.test(text(run.id)) ||
+    !UUID.test(text(run.task_id)) ||
+    !UUID.test(text(run.project_id)) ||
+    !["android", "ios", "web"].includes(run.platform) ||
+    run.environment !== "production" ||
+    ![
+      "livekit_experience_sentinel",
+      "visual_product_experience_sentinel",
+      "installed_journey_sentinel",
+    ].includes(run.sentinel_key) ||
+    typeof run.route_or_surface !== "string" ||
+    run.route_or_surface.length < 1 ||
+    run.route_or_surface.length > 160 ||
+    !HASH.test(text(run.source_build_hash)) ||
+    !HASH.test(text(run.evidence_manifest_hash)) ||
+    !isRecord(run.metric_manifest) ||
+    typeof run.metric_manifest.observationKind !== "string" ||
+    !["passed", "finding_created", "blocked", "failed"].includes(
+      run.result_status,
+    ) ||
+    !PHYSICAL_PROOF_STATUSES.has(run.physical_proof_status) ||
+    !UUID.test(text(run.collector_capability_id)) ||
+    run.erased_at !== null
+  ) {
+    return false;
+  }
+  const expiresAt = Date.parse(run.evaluation_expires_at);
+  return Number.isFinite(expiresAt) && expiresAt > now;
+};
+
+const validateFinding = (finding, expectedId) =>
+  isRecord(finding) &&
+  finding.id === expectedId &&
+  UUID.test(text(finding.id)) &&
+  UUID.test(text(finding.sentinel_run_id)) &&
+  UUID.test(text(finding.task_id)) &&
+  UUID.test(text(finding.project_id)) &&
+  ["android", "ios", "web"].includes(finding.platform) &&
+  finding.environment === "production" &&
+  typeof finding.route_or_surface === "string" &&
+  finding.route_or_surface.length >= 1 &&
+  finding.route_or_surface.length <= 160 &&
+  ["open", "resolved"].includes(finding.current_status) &&
+  (finding.erased_at === null || typeof finding.erased_at === "string");
+
+const readSnapshotContext = (snapshot) => {
+  if (!isRecord(snapshot?.activeBaseline)) return null;
+  const baseline = snapshot.activeBaseline;
+  if (baseline.count === 0 && exactKeys(baseline, ["count"])) {
+    return Object.freeze({
+      approvedVisualBaselineCount: 0,
+      approvedVisualBaselineHash: null,
+    });
+  }
+  if (
+    !exactKeys(baseline, [
+      "baselineHash",
+      "baselineId",
+      "count",
+      "selectedOption",
+      "selectedOptionCode",
+      "status",
+    ]) ||
+    baseline.count !== 1 ||
+    baseline.baselineId !== "chillywood-product-experience-baseline-v1" ||
+    baseline.selectedOptionCode !== "C" ||
+    baseline.selectedOption !== "creator_balanced" ||
+    baseline.baselineHash !== APPROVED_OPTION_C_BASELINE_HASH ||
+    baseline.status !== "owner_approved"
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    approvedVisualBaselineCount: 1,
+    approvedVisualBaselineHash: baseline.baselineHash,
+  });
+};
+
+const readDetectionSnapshot = (snapshot, request, now = Date.now()) => {
+  if (
+    !isRecord(snapshot) ||
+    !validateRun(snapshot.run, request.sentinelRunId, now) ||
+    snapshot.finding !== null ||
+    snapshot.detectionRun !== null
+  ) {
+    return null;
+  }
+  const context = readSnapshotContext(snapshot);
+  return context
+    ? Object.freeze({ context, run: snapshot.run })
+    : null;
+};
+
+const readResolutionSnapshot = (snapshot, request, now = Date.now()) => {
+  if (
+    !isRecord(snapshot) ||
+    !validateRun(snapshot.run, request.sentinelRunId, now) ||
+    !validateFinding(snapshot.finding, request.findingId) ||
+    !validateRun(
+      snapshot.detectionRun,
+      snapshot.finding.sentinel_run_id,
+      Number.NEGATIVE_INFINITY,
+    )
+  ) {
+    return null;
+  }
+  const context = readSnapshotContext(snapshot);
+  return context
+    ? Object.freeze({
+      context,
+      detectionRun: snapshot.detectionRun,
+      finding: snapshot.finding,
+      run: snapshot.run,
+    })
+    : null;
+};
+
+const assessmentHashForDetection = async (database, run, candidate) => {
+  const findingKey = `pqf_${
+    (await sha256Hex([
+      run.task_id,
+      run.project_id,
+      run.platform,
+      run.environment,
+      candidate.routeOrSurface,
+      candidate.findingClass,
+    ].join("|"))).slice(0, 48)
+  }`;
+  const result = await database.call("productQualityDetectionAssessmentHash", [
+    run.id,
+    findingKey,
+    candidate.routeOrSurface,
+    candidate.buildRuntimeHash,
+    candidate.severity,
+    candidate.userImpactHash,
+    [...candidate.evidenceHashes],
+    candidate.suspectedLayer,
+    candidate.confidence,
+    candidate.reproductionState,
+    candidate.affectedComponentsHash,
+    candidate.providerBackendStateHash,
+    candidate.proposedNextInvestigationHash,
+    candidate.physicalProofStatus,
+  ]);
+  return typeof result === "string" && HASH.test(result) ? result : null;
+};
+
+const assessmentHashForResolution = async (database, run, candidate) => {
+  const result = await database.call("productQualityResolutionAssessmentHash", [
+    candidate.findingId,
+    run.id,
+    run.evidence_manifest_hash,
+    candidate.resolutionReasonHash,
+  ]);
+  return typeof result === "string" && HASH.test(result) ? result : null;
+};
+
+const recordEvaluatorProof = async ({
+  assessmentHash,
+  assessmentKind,
+  database,
+  env,
+  reasons,
+  run,
+}) => {
+  const verdict = reasons.length === 0 ? "passed" : "rejected";
+  const evaluatorOutputHash = await hashJson({
+    assessmentHash,
+    assessmentKind,
+    observationKind: run.metric_manifest.observationKind,
+    reasons: [...reasons],
+    sentinelRunId: run.id,
+    verdict,
+  });
+  const evaluatorProofHash = await sha256Hex([
+    "product-sentinel-evaluator-v1",
+    SERVICE_IDENTITY,
+    run.id,
+    assessmentHash,
+    run.evidence_manifest_hash,
+    verdict,
+    evaluatorOutputHash,
+  ].join("|"));
+  const result = await database.call("productQualityRecordEvaluatorProof", [
+    run.id,
+    assessmentKind,
+    assessmentHash,
+    run.evidence_manifest_hash,
+    verdict,
+    evaluatorOutputHash,
+    evaluatorProofHash,
+    SERVICE_IDENTITY,
+    evaluatorAssertion(env),
+  ]);
+  if (
+    !isRecord(result) ||
+    !UUID.test(text(result.evaluatorProofId)) ||
+    result.sentinelRunId !== run.id ||
+    result.assessmentKind !== assessmentKind ||
+    result.verdict !== verdict ||
+    !Number.isFinite(Date.parse(result.validUntil)) ||
+    Date.parse(result.validUntil) <= Date.now()
+  ) {
+    throw new Error("sentinel_evaluator_proof_readback_rejected");
+  }
+  return Object.freeze({
+    ...result,
+    assessmentHash,
+    evaluatorOutputHash,
+    evaluatorProofHash,
+    reasons: Object.freeze([...reasons]),
+    selfApproval: false,
+  });
+};
+
+const evaluateDetection = ready(
+  [
+    "read_product_quality_snapshot",
+    "compute_detection_hash",
+    "record_sentinel_evaluator_proof",
+  ],
+  async ({ database, env, payload }) => {
+    const request = normalizeDetection(payload);
+    if (!request) throw new Error("sentinel_detection_payload_rejected");
+    const snapshot = await database.call("productQualityEvaluatorSnapshot", [
+      request.sentinelRunId,
+      null,
+    ]);
+    const selected = readDetectionSnapshot(snapshot, request);
+    if (!selected) throw new Error("sentinel_detection_snapshot_rejected");
+    const assessmentHash = await assessmentHashForDetection(
+      database,
+      selected.run,
+      request,
+    );
+    if (!assessmentHash) {
+      throw new Error("sentinel_detection_assessment_hash_rejected");
+    }
+    return recordEvaluatorProof({
+      assessmentHash,
+      assessmentKind: "finding_detection",
+      database,
+      env,
+      reasons: deterministicDetectionReasons(
+        selected.run,
+        request,
+        selected.context,
+      ),
+      run: selected.run,
+    });
+  },
+);
+
+const evaluateResolution = ready(
+  [
+    "read_product_quality_snapshot",
+    "compute_resolution_hash",
+    "record_sentinel_evaluator_proof",
+  ],
+  async ({ database, env, payload }) => {
+    const request = normalizeResolution(payload);
+    if (!request) throw new Error("sentinel_resolution_payload_rejected");
+    const snapshot = await database.call("productQualityEvaluatorSnapshot", [
+      request.sentinelRunId,
+      request.findingId,
+    ]);
+    const selected = readResolutionSnapshot(snapshot, request);
+    if (!selected) throw new Error("sentinel_resolution_snapshot_rejected");
+    const assessmentHash = await assessmentHashForResolution(
+      database,
+      selected.run,
+      request,
+    );
+    if (!assessmentHash) {
+      throw new Error("sentinel_resolution_assessment_hash_rejected");
+    }
+    return recordEvaluatorProof({
+      assessmentHash,
+      assessmentKind: "finding_resolution",
+      database,
+      env,
+      reasons: deterministicResolutionReasons(
+        selected.run,
+        selected.finding,
+        selected.detectionRun,
+        selected.context,
+      ),
+      run: selected.run,
+    });
+  },
+);
 
 const evaluateBaseline = ready(
   ["evaluate_product_baseline"],
@@ -843,22 +1659,6 @@ const evaluateBaseline = ready(
 
 export const PRODUCT_QUALITY_EVALUATOR_ADAPTERS = Object.freeze({
   evaluate_product_baseline_selection: evaluateBaseline,
-  evaluate_sentinel_detection: blocked(
-    [
-      "read_product_quality_snapshot",
-      "read_active_baseline",
-      "compute_detection_hash",
-      "record_sentinel_evaluator_proof",
-    ],
-    "PRODUCT_QUALITY_COMPLETE_SNAPSHOT_RPC_REQUIRED",
-  ),
-  evaluate_sentinel_resolution: blocked(
-    [
-      "read_product_quality_snapshot",
-      "read_active_baseline",
-      "compute_resolution_hash",
-      "record_sentinel_evaluator_proof",
-    ],
-    "PRODUCT_QUALITY_COMPLETE_SNAPSHOT_RPC_REQUIRED",
-  ),
+  evaluate_sentinel_detection: evaluateDetection,
+  evaluate_sentinel_resolution: evaluateResolution,
 });
