@@ -334,9 +334,19 @@ select ok(
       jsonb_set(
         jsonb_set(
           jsonb_set(
-            (select metrics from option_c_metric_fixture
-             where fixture_key = 'phone_android'),
-            '{surfaceFamily}',to_jsonb('live_streaming_card'::text)
+            jsonb_set(
+              jsonb_set(
+                (select metrics from option_c_metric_fixture
+                 where fixture_key = 'phone_android'),
+                '{surfaceFamily}',to_jsonb('live_streaming_card'::text)
+              ),
+              '{routeFamilyMappingId}',
+              to_jsonb('live_discovery_cards'::text)
+            ),
+            '{routeFamilyMappingHash}',
+            to_jsonb(
+              'cdeb267f422b121bb3d51f0e6d59bad419d65dd21e62b9a87ad39a50e26409af'::text
+            )
           ),
           '{liveContent}','true'::jsonb
         ),

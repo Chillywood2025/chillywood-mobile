@@ -787,7 +787,7 @@ select ok(
       'baselineState','approved_baseline',
       'baselineId','chillywood-product-experience-baseline-v1',
       'baselineComparisonHash',
-      '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+      '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba'
     )
   ),
   'final sentinel boundary locks and resolves the exact active Option C version'
@@ -952,7 +952,7 @@ select ok(
       'baselineState','approved_baseline',
       'baselineId','chillywood-product-experience-baseline-v1',
       'baselineComparisonHash',
-      '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+      '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba'
     )
   ),
   'superseded Option C cannot be reused after the current resolver advances'
@@ -997,7 +997,7 @@ select ok(
       'baselineState','approved_baseline',
       'baselineId','chillywood-product-experience-baseline-v1',
       'baselineComparisonHash',
-      '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+      '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba'
     )
   ),
   'revoked baseline cannot pass a later sentinel or triage lock/recheck'

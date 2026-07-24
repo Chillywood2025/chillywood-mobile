@@ -85,7 +85,8 @@ select is(
     (select task_id from level01_fixture),
     (select project_id from level01_fixture),
     'shared','production','github_draft_pr','configured',
-    repeat('e',64),repeat('f',64),
+    repeat('e',64),
+    'ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554',
     transaction_timestamp()+interval '1 day',
     'capability_and_tool_broker'
   ) is not null,

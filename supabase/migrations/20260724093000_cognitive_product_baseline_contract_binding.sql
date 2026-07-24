@@ -10,7 +10,8 @@ begin
   foreach target in array array[
     'public.governance_stage_product_experience_baseline_v1(uuid,text,text,text,text,text,text,text,text)'::regprocedure,
     'public.governance_evaluate_product_experience_baseline_v1(uuid,text,text,text)'::regprocedure,
-    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure,
+    'public.product_experience_lock_effective_baseline_v1(uuid,uuid,public.cognitive_platform,public.cognitive_environment,jsonb)'::regprocedure
   ] loop
     definition := pg_get_functiondef(target);
     if strpos(definition, '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184') = 0 then
@@ -27,11 +28,13 @@ $$;
 
 do $$
 declare
-  constraint_name text := 'product_experience_baseline_versions_identifier_check';
+  requested_constraint_name text :=
+    'product_experience_baseline_versions_identifier_check';
+  actual_constraint_name text;
   table_name text := 'product_experience_baseline_versions';
   definition text;
 begin
-  for constraint_name, table_name in
+  for requested_constraint_name, table_name in
     select *
     from (values
       ('product_experience_baseline_versions_identifier_check',
@@ -40,23 +43,30 @@ begin
        'product_experience_baseline_execution_stages')
     ) as contracts(constraint_name, table_name)
   loop
-    select pg_get_constraintdef(oid)
-      into definition
+    select constraint_row.conname, pg_get_constraintdef(constraint_row.oid)
+      into actual_constraint_name, definition
       from pg_constraint
-     where conname = constraint_name
-       and conrelid = format('public.%I', table_name)::regclass;
+       as constraint_row
+     where constraint_row.conrelid =
+       format('public.%I', table_name)::regclass
+       and constraint_row.contype = 'c'
+       and strpos(
+         pg_get_constraintdef(constraint_row.oid),
+         '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+       ) > 0;
     if strpos(definition, '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184') = 0 then
-      raise exception 'expected prior baseline hash is absent from %.%', table_name, constraint_name;
+      raise exception 'expected prior baseline hash constraint is absent from %.%',
+        table_name, requested_constraint_name;
     end if;
     execute format(
       'alter table public.%I drop constraint %I',
       table_name,
-      constraint_name
+      actual_constraint_name
     );
     execute format(
       'alter table public.%I add constraint %I %s',
       table_name,
-      constraint_name,
+      requested_constraint_name,
       replace(
         definition,
         '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
@@ -270,7 +280,7 @@ as $$
         then jsonb_set(
           p_metrics,
           '{baselineComparisonHash}',
-          '"0ba4a4ad6d80c0f2aebc588686fb3f7fb420b9f48f5812077a75137164c3184"'::jsonb
+          '"0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184"'::jsonb
         )
         else p_metrics
       end
