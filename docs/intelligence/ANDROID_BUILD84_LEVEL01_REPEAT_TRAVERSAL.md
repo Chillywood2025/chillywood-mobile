@@ -77,3 +77,17 @@ The touch-target observation is eligible for independent evaluation and
 deterministic triage after the reviewed collector/triage runtime is isolated
 and deployed. The resolved routes and accessible Search result must be stored
 as passing/non-finding runs, not converted into defects.
+
+## Option C recalibration status
+
+The Owner later selected the `creator_balanced` Option C source baseline with
+hash
+`0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184`.
+This earlier traversal did not capture the complete Option C media-frame,
+total-container, creator/Live identity, spacing, and surface-family packet, so
+it is not retroactively classified as a layout-density pass or violation.
+
+The Android 48dp touch-target classification is objective and remains eligible
+for evaluation independently of visual-baseline approval. A new installed
+visual run must wait for the authenticated baseline approval and must measure
+Option C without seeding an expected result.
