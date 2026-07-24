@@ -6,9 +6,9 @@ Inventory command:
 
 `npm run sentinel:readiness-inventory`
 
-Owner-approved prerequisite attestation:
+Sanitized operator-provided availability input:
 
-`npm run sentinel:readiness-inventory -- --prerequisite-attestation=/absolute/path/outside-git/sentinel-prerequisites.json`
+`npm run sentinel:readiness-inventory -- --prerequisite-availability=/absolute/path/outside-git/sentinel-prerequisites.json`
 
 Runnable canary commands:
 
@@ -26,50 +26,65 @@ Generated from the local isolated worktree on 2026-07-24T02:11:04Z.
 | Android internal build | Pass | One connected Android device has `com.chillywood.mobile` version `1.0.0`, build `84`, installer `com.android.vending`. The recorded build-84 source contains the in-app runtime/channel/update diagnostics and LiveKit render telemetry. |
 | iOS internal/simulator build | Blocked | One booted simulator has `com.chillywood.mobile` version `1.0.0`, build `1`, runtime `1.0.0`, channel `development`; it is not the expected `ios-qa` / `1.0.0-iosqa1` internal canary candidate. |
 | Runtime/channel proof | Partial | Android has the required installed diagnostics surface, but the active values were not read because no approved synthetic session was available. The iOS simulator is a development-channel build. |
-| Approved synthetic accounts | Blocked | No owner-approved sanitized fixture labels are available locally; no private account identities were read or stored. |
+| Synthetic account availability | Blocked | No sanitized availability declaration is available locally; no private account identities were read or stored. Actual synthetic sign-in remains required even when availability is declared. |
 | Android device/emulator | Pass | `adb` is available; one Android device is online; screenshot capture, UI automation, and log-buffer capability are available. |
 | iOS simulator/device | Partial | `xcrun` is available; one simulator is booted and supports screenshot/log/UI automation capability, but it is not an `ios-qa` canary build. |
-| Two LiveKit participants | Blocked | Two distinct approved participants are not available to this runner. Do not infer participant availability from source fixtures. |
+| LiveKit participant availability | Blocked | Two participant slots are not declared available to this runner. An availability declaration cannot prove distinct connection, publication, subscription, or rendered media. |
 | Screenshot capture | Pass | Capability only. No raw screenshot was captured or committed. |
 | UI automation | Pass | Maestro and platform UI automation capabilities are present. |
 | Log capture | Pass | Capability only. No raw log was captured or committed. |
-| Provider/backend read-only telemetry | Blocked | Local read-only provider/backend credentials are not available; no provider/backend calls were attempted. |
+| Provider/backend telemetry availability | Blocked | Read-only collection is not declared available; no provider/backend calls were attempted. A declaration cannot prove a successful read-only collector result. |
 
-## Sanitized Prerequisite Attestation
+## Sanitized Prerequisite Availability
 
 The readiness runner defaults all three external prerequisites to blocked. It
-can accept them only through the explicit `--prerequisite-attestation=` argument.
+can accept an operator-provided availability declaration only through the
+explicit `--prerequisite-availability=` argument. This same-UID file is not an
+authenticated Owner approval, credential attestation, sign-in result, participant
+proof, media proof, or provider collector result. Valid input is reported only as
+`attested_unverified`.
+
 The file must:
 
 - be an absolute path outside every Git worktree;
 - be a regular, non-symlink file owned by the current user;
 - have exact mode `0600` and be no larger than 32 KiB;
-- carry schema version `1`, `ownerApproved: true`, a SHA-256
-  `ownerApprovalHash`, and an issued/expiry window no longer than six hours;
+- carry schema version `1`, `operatorProvided: true`, a SHA-256
+  `inputEvidenceHash`, and an issued/expiry window no longer than six hours;
 - contain only the exact allowlisted objects and fields below.
 
 The three allowlisted objects are:
 
-- `approvedSyntheticAccounts`: `approved`, bounded `count`, safe `labels`, and
+- `syntheticAccountAvailability`: `available`, bounded `count`, safe `labels`, and
   `evidenceHash`;
-- `twoLiveKitParticipants`: `approved`, bounded `count`, safe `labels`, and
+- `liveKitParticipantAvailability`: `available`, bounded `count`, safe `labels`, and
   `evidenceHash`;
-- `providerBackendReadOnlyTelemetry`: `approvedReadOnly`, safe
+- `providerBackendTelemetryAvailability`: `availableReadOnly`, safe
   `providerFamily`, safe `backendFamily`, and `evidenceHash`.
 
 Safe labels are lowercase alphanumeric, underscore, or hyphen labels. Account
-readiness requires every role label already declared by
+availability requires every role label already declared by
 `approvedSyntheticFixtureContract`. Participant readiness requires at least two
-approved participants, the `installed_app` label, and either
+declared participants, the `installed_app` label, and either
 `second_installed_app` or `headless_sdk`.
 
 No identity, email, password, access token, refresh token, LiveKit token, JWT,
 provider credential, service key, URL, private media, screenshot, or raw log
 field is accepted. Unknown fields, invalid permissions, files inside Git,
-expired/unbounded attestations, malformed counts/labels/hashes, and missing
-approval all fail closed. The report emits only status categories, safe provider
+expired/unbounded inputs, malformed counts/labels/hashes, and missing
+operator declaration all fail closed. The report emits only status categories, safe provider
 family labels, expiry, and a SHA-256 fingerprint of a fully validated
-attestation. It never echoes the file path or raw contents.
+input. It never echoes the file path or raw contents.
+
+The input never creates a `PASS`. It can make a canary at most
+`ready_with_attestation`. A real canary must still independently verify:
+
+- successful synthetic sign-in through the installed product;
+- distinct LiveKit participants plus publication, subscription, and rendered
+  media for LiveKit;
+- a successful read-only collector result before telemetry is marked verified;
+- installed screenshot/measurement or journey-state evidence before visual or
+  journey classification.
 
 ## Artifact Decision
 

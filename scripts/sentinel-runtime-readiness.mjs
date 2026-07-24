@@ -16,14 +16,14 @@ const argv = process.argv.slice(2);
 const args = new Set(argv);
 const writeArtifact = args.has("--write-artifact");
 const markdown = args.has("--markdown");
-const prerequisiteAttestationPath = argv
-  .find((arg) => arg.startsWith("--prerequisite-attestation="))
-  ?.slice("--prerequisite-attestation=".length) ?? "";
+const prerequisiteAvailabilityPath = argv
+  .find((arg) => arg.startsWith("--prerequisite-availability="))
+  ?.slice("--prerequisite-availability=".length) ?? "";
 
 const commandTimeoutMs = 10_000;
-const maxAttestationBytes = 32 * 1024;
-const maxAttestationLifetimeMs = 6 * 60 * 60 * 1000;
-const maxAttestationClockSkewMs = 5 * 60 * 1000;
+const maxAvailabilityInputBytes = 32 * 1024;
+const maxAvailabilityInputLifetimeMs = 6 * 60 * 60 * 1000;
+const maxAvailabilityInputClockSkewMs = 5 * 60 * 1000;
 const safeLabelPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 
@@ -56,15 +56,15 @@ function status(pass, fallback = "blocked") {
   return pass ? "pass" : fallback;
 }
 
-function invalidAttestation(reason) {
+function invalidAvailabilityInput(reason) {
   return {
     status: "invalid",
     reason,
     expiresAt: null,
-    safeAttestationHash: null,
-    approvedSyntheticAccounts: false,
-    twoLiveKitParticipants: false,
-    providerBackendReadOnlyTelemetry: false,
+    safeInputHash: null,
+    syntheticAccountsDeclaredAvailable: false,
+    liveKitParticipantsDeclaredAvailable: false,
+    providerBackendTelemetryDeclaredAvailable: false,
     providerFamily: null,
     backendFamily: null,
   };
@@ -94,38 +94,38 @@ function validCount(value) {
   return Number.isInteger(value) && value >= 0 && value <= 16;
 }
 
-function readPrerequisiteAttestation(inputPath) {
+function readPrerequisiteAvailabilityInput(inputPath) {
   if (!inputPath) {
     return {
-      ...invalidAttestation("explicit_attestation_not_provided"),
+      ...invalidAvailabilityInput("explicit_availability_input_not_provided"),
       status: "absent",
     };
   }
-  if (!path.isAbsolute(inputPath)) return invalidAttestation("attestation_path_must_be_absolute");
+  if (!path.isAbsolute(inputPath)) return invalidAvailabilityInput("availability_input_path_must_be_absolute");
 
   let resolvedPath;
   let fileStat;
   try {
     const linkStat = fs.lstatSync(inputPath);
-    if (linkStat.isSymbolicLink()) return invalidAttestation("attestation_symlink_rejected");
+    if (linkStat.isSymbolicLink()) return invalidAvailabilityInput("availability_input_symlink_rejected");
     resolvedPath = fs.realpathSync(inputPath);
     fileStat = fs.statSync(resolvedPath);
   } catch {
-    return invalidAttestation("attestation_file_unavailable");
+    return invalidAvailabilityInput("availability_input_file_unavailable");
   }
 
-  if (!fileStat.isFile()) return invalidAttestation("attestation_must_be_regular_file");
-  if ((fileStat.mode & 0o777) !== 0o600) return invalidAttestation("attestation_mode_must_be_0600");
+  if (!fileStat.isFile()) return invalidAvailabilityInput("availability_input_must_be_regular_file");
+  if ((fileStat.mode & 0o777) !== 0o600) return invalidAvailabilityInput("availability_input_mode_must_be_0600");
   if (typeof process.getuid === "function" && fileStat.uid !== process.getuid()) {
-    return invalidAttestation("attestation_must_be_owned_by_current_user");
+    return invalidAvailabilityInput("availability_input_must_be_owned_by_current_user");
   }
-  if (fileStat.size <= 0 || fileStat.size > maxAttestationBytes) {
-    return invalidAttestation("attestation_size_out_of_bounds");
+  if (fileStat.size <= 0 || fileStat.size > maxAvailabilityInputBytes) {
+    return invalidAvailabilityInput("availability_input_size_out_of_bounds");
   }
 
   const relativeToRoot = path.relative(root, resolvedPath);
   if (relativeToRoot === "" || (!relativeToRoot.startsWith(`..${path.sep}`) && relativeToRoot !== "..")) {
-    return invalidAttestation("attestation_must_be_outside_repository");
+    return invalidAvailabilityInput("availability_input_must_be_outside_repository");
   }
   const containingRepository = run("git", [
     "-C",
@@ -133,129 +133,129 @@ function readPrerequisiteAttestation(inputPath) {
     "rev-parse",
     "--show-toplevel",
   ]);
-  if (containingRepository.ok) return invalidAttestation("attestation_must_be_outside_git");
+  if (containingRepository.ok) return invalidAvailabilityInput("availability_input_must_be_outside_git");
 
   let raw;
-  let attestation;
+  let availabilityInput;
   try {
     raw = fs.readFileSync(resolvedPath, "utf8");
-    attestation = JSON.parse(raw);
+    availabilityInput = JSON.parse(raw);
   } catch {
-    return invalidAttestation("attestation_json_invalid");
+    return invalidAvailabilityInput("availability_input_json_invalid");
   }
 
-  if (!exactKeys(attestation, [
+  if (!exactKeys(availabilityInput, [
     "schemaVersion",
-    "ownerApproved",
-    "ownerApprovalHash",
+    "operatorProvided",
+    "inputEvidenceHash",
     "issuedAt",
     "expiresAt",
-    "approvedSyntheticAccounts",
-    "twoLiveKitParticipants",
-    "providerBackendReadOnlyTelemetry",
+    "syntheticAccountAvailability",
+    "liveKitParticipantAvailability",
+    "providerBackendTelemetryAvailability",
   ])) {
-    return invalidAttestation("attestation_top_level_schema_invalid");
+    return invalidAvailabilityInput("availability_input_top_level_schema_invalid");
   }
   if (
-    attestation.schemaVersion !== 1
-    || attestation.ownerApproved !== true
-    || typeof attestation.ownerApprovalHash !== "string"
-    || !sha256Pattern.test(attestation.ownerApprovalHash)
+    availabilityInput.schemaVersion !== 1
+    || availabilityInput.operatorProvided !== true
+    || typeof availabilityInput.inputEvidenceHash !== "string"
+    || !sha256Pattern.test(availabilityInput.inputEvidenceHash)
   ) {
-    return invalidAttestation("attestation_owner_approval_invalid");
+    return invalidAvailabilityInput("availability_input_operator_declaration_invalid");
   }
 
-  const issuedAtMs = Date.parse(attestation.issuedAt);
-  const expiresAtMs = Date.parse(attestation.expiresAt);
+  const issuedAtMs = Date.parse(availabilityInput.issuedAt);
+  const expiresAtMs = Date.parse(availabilityInput.expiresAt);
   const now = Date.now();
   if (
-    typeof attestation.issuedAt !== "string"
-    || typeof attestation.expiresAt !== "string"
+    typeof availabilityInput.issuedAt !== "string"
+    || typeof availabilityInput.expiresAt !== "string"
     || !Number.isFinite(issuedAtMs)
     || !Number.isFinite(expiresAtMs)
   ) {
-    return invalidAttestation("attestation_expiry_invalid");
+    return invalidAvailabilityInput("availability_input_expiry_invalid");
   }
-  if (issuedAtMs > now + maxAttestationClockSkewMs || expiresAtMs <= issuedAtMs) {
-    return invalidAttestation("attestation_time_window_invalid");
+  if (issuedAtMs > now + maxAvailabilityInputClockSkewMs || expiresAtMs <= issuedAtMs) {
+    return invalidAvailabilityInput("availability_input_time_window_invalid");
   }
-  if (expiresAtMs - issuedAtMs > maxAttestationLifetimeMs) {
-    return invalidAttestation("attestation_lifetime_exceeds_six_hours");
+  if (expiresAtMs - issuedAtMs > maxAvailabilityInputLifetimeMs) {
+    return invalidAvailabilityInput("availability_input_lifetime_exceeds_six_hours");
   }
   if (expiresAtMs <= now) {
     return {
-      ...invalidAttestation("attestation_expired"),
+      ...invalidAvailabilityInput("availability_input_expired"),
       status: "expired",
     };
   }
 
-  const synthetic = attestation.approvedSyntheticAccounts;
-  const participants = attestation.twoLiveKitParticipants;
-  const telemetry = attestation.providerBackendReadOnlyTelemetry;
-  if (!exactKeys(synthetic, ["approved", "count", "labels", "evidenceHash"])) {
-    return invalidAttestation("synthetic_account_attestation_schema_invalid");
+  const synthetic = availabilityInput.syntheticAccountAvailability;
+  const participants = availabilityInput.liveKitParticipantAvailability;
+  const telemetry = availabilityInput.providerBackendTelemetryAvailability;
+  if (!exactKeys(synthetic, ["available", "count", "labels", "evidenceHash"])) {
+    return invalidAvailabilityInput("synthetic_account_availability_schema_invalid");
   }
-  if (!exactKeys(participants, ["approved", "count", "labels", "evidenceHash"])) {
-    return invalidAttestation("livekit_participant_attestation_schema_invalid");
+  if (!exactKeys(participants, ["available", "count", "labels", "evidenceHash"])) {
+    return invalidAvailabilityInput("livekit_participant_availability_schema_invalid");
   }
   if (!exactKeys(telemetry, [
-    "approvedReadOnly",
+    "availableReadOnly",
     "providerFamily",
     "backendFamily",
     "evidenceHash",
   ])) {
-    return invalidAttestation("telemetry_attestation_schema_invalid");
+    return invalidAvailabilityInput("telemetry_availability_schema_invalid");
   }
   if (
-    typeof synthetic.approved !== "boolean"
+    typeof synthetic.available !== "boolean"
     || !validCount(synthetic.count)
     || !validLabels(synthetic.labels)
-    || !validOptionalHash(synthetic.evidenceHash, synthetic.approved)
+    || !validOptionalHash(synthetic.evidenceHash, synthetic.available)
   ) {
-    return invalidAttestation("synthetic_account_attestation_invalid");
+    return invalidAvailabilityInput("synthetic_account_availability_invalid");
   }
   if (
-    typeof participants.approved !== "boolean"
+    typeof participants.available !== "boolean"
     || !validCount(participants.count)
     || !validLabels(participants.labels)
-    || !validOptionalHash(participants.evidenceHash, participants.approved)
+    || !validOptionalHash(participants.evidenceHash, participants.available)
   ) {
-    return invalidAttestation("livekit_participant_attestation_invalid");
+    return invalidAvailabilityInput("livekit_participant_availability_invalid");
   }
   if (
-    typeof telemetry.approvedReadOnly !== "boolean"
+    typeof telemetry.availableReadOnly !== "boolean"
     || typeof telemetry.providerFamily !== "string"
     || typeof telemetry.backendFamily !== "string"
     || !safeLabelPattern.test(telemetry.providerFamily)
     || !safeLabelPattern.test(telemetry.backendFamily)
-    || !validOptionalHash(telemetry.evidenceHash, telemetry.approvedReadOnly)
+    || !validOptionalHash(telemetry.evidenceHash, telemetry.availableReadOnly)
   ) {
-    return invalidAttestation("telemetry_attestation_invalid");
+    return invalidAvailabilityInput("telemetry_availability_invalid");
   }
 
   const requiredSyntheticLabels = config.approvedSyntheticFixtureContract.requiredLabels;
-  const approvedSyntheticAccounts = synthetic.approved
+  const syntheticAccountsDeclaredAvailable = synthetic.available
     && synthetic.count >= config.approvedSyntheticFixtureContract.minimumAccounts
     && requiredSyntheticLabels.every((label) => synthetic.labels.includes(label));
-  const twoLiveKitParticipants = participants.approved
+  const liveKitParticipantsDeclaredAvailable = participants.available
     && participants.count >= 2
     && participants.labels.includes("installed_app")
     && (
       participants.labels.includes("second_installed_app")
       || participants.labels.includes("headless_sdk")
     );
-  const providerBackendReadOnlyTelemetry = telemetry.approvedReadOnly;
+  const providerBackendTelemetryDeclaredAvailable = telemetry.availableReadOnly;
 
   return {
-    status: "valid",
-    reason: "owner_approved_sanitized_attestation_valid",
+    status: "attested_unverified",
+    reason: "sanitized_operator_availability_input_valid",
     expiresAt: new Date(expiresAtMs).toISOString(),
-    safeAttestationHash: crypto.createHash("sha256").update(raw).digest("hex"),
-    approvedSyntheticAccounts,
-    twoLiveKitParticipants,
-    providerBackendReadOnlyTelemetry,
-    providerFamily: providerBackendReadOnlyTelemetry ? telemetry.providerFamily : null,
-    backendFamily: providerBackendReadOnlyTelemetry ? telemetry.backendFamily : null,
+    safeInputHash: crypto.createHash("sha256").update(raw).digest("hex"),
+    syntheticAccountsDeclaredAvailable,
+    liveKitParticipantsDeclaredAvailable,
+    providerBackendTelemetryDeclaredAvailable,
+    providerFamily: providerBackendTelemetryDeclaredAvailable ? telemetry.providerFamily : null,
+    backendFamily: providerBackendTelemetryDeclaredAvailable ? telemetry.backendFamily : null,
   };
 }
 
@@ -545,37 +545,46 @@ function readIos() {
   };
 }
 
-function evaluateCanaryReadiness(android, ios, prerequisiteAttestation) {
+function evaluateCanaryReadiness(android, ios, prerequisiteAvailabilityInput) {
   const hasAndroidDevice = android.status === "pass"
     && android.artifactDecision === NO_ARTIFACT_CHANGE_REQUIRED;
   const hasIosCandidate = ios.status === "pass"
     && ios.artifactDecision === NO_ARTIFACT_CHANGE_REQUIRED;
   const hasInstalledTarget = hasAndroidDevice || hasIosCandidate;
-  const hasTwoLiveKitParticipants = prerequisiteAttestation.twoLiveKitParticipants;
-  const syntheticAccountsApproved = prerequisiteAttestation.approvedSyntheticAccounts;
-  const providerReadOnlyTelemetry = prerequisiteAttestation.providerBackendReadOnlyTelemetry;
-  const liveKitReady = hasInstalledTarget
-    && syntheticAccountsApproved
-    && hasTwoLiveKitParticipants;
-  const visualReady = hasInstalledTarget && syntheticAccountsApproved;
-  const journeyReady = hasInstalledTarget && syntheticAccountsApproved;
-  const runnableWithoutArtifact = [
-    ...(liveKitReady ? ["livekit_experience"] : []),
-    ...(visualReady ? ["visual_experience_metrics"] : []),
-    ...(journeyReady ? ["installed_journey"] : []),
+  const liveKitParticipantsDeclaredAvailable =
+    prerequisiteAvailabilityInput.liveKitParticipantsDeclaredAvailable;
+  const syntheticAccountsDeclaredAvailable =
+    prerequisiteAvailabilityInput.syntheticAccountsDeclaredAvailable;
+  const providerTelemetryDeclaredAvailable =
+    prerequisiteAvailabilityInput.providerBackendTelemetryDeclaredAvailable;
+  const liveKitEligibleForVerification = hasInstalledTarget
+    && syntheticAccountsDeclaredAvailable
+    && liveKitParticipantsDeclaredAvailable;
+  const visualEligibleForVerification = hasInstalledTarget && syntheticAccountsDeclaredAvailable;
+  const journeyEligibleForVerification = hasInstalledTarget && syntheticAccountsDeclaredAvailable;
+  const eligibleForIndependentVerification = [
+    ...(liveKitEligibleForVerification ? ["livekit_experience"] : []),
+    ...(visualEligibleForVerification ? ["visual_experience_metrics"] : []),
+    ...(journeyEligibleForVerification ? ["installed_journey"] : []),
   ];
-  const nonArtifactBlockers = [
-    ...(!syntheticAccountsApproved ? ["owner_approved_synthetic_account_attestation_required"] : []),
-    ...(!hasTwoLiveKitParticipants ? ["two_distinct_approved_livekit_participants_required"] : []),
+  const availabilityBlockers = [
+    ...(!syntheticAccountsDeclaredAvailable ? ["synthetic_account_availability_input_required"] : []),
+    ...(!liveKitParticipantsDeclaredAvailable ? ["livekit_participant_availability_input_required"] : []),
   ];
   return {
-    approvedSyntheticAccounts: {
-      status: syntheticAccountsApproved ? "pass" : "blocked",
-      blocker: "approved_synthetic_fixture_not_available_locally",
+    syntheticAccountAvailability: {
+      status: syntheticAccountsDeclaredAvailable ? "attested_unverified" : "blocked",
+      blocker: syntheticAccountsDeclaredAvailable
+        ? "actual_synthetic_sign_in_verification_required"
+        : "synthetic_account_availability_input_required",
+      verificationRequired: "actual_synthetic_sign_in",
     },
-    twoLiveKitParticipants: {
-      status: hasTwoLiveKitParticipants ? "pass" : "blocked",
-      blocker: "two_distinct_approved_livekit_participants_required",
+    liveKitParticipantAvailability: {
+      status: liveKitParticipantsDeclaredAvailable ? "attested_unverified" : "blocked",
+      blocker: liveKitParticipantsDeclaredAvailable
+        ? "distinct_participant_and_media_verification_required"
+        : "livekit_participant_availability_input_required",
+      verificationRequired: "distinct_participant_connection_and_media",
     },
     screenshotCapture: {
       status: (android.devices ?? []).some((device) => device.screenshotCaptureAvailable) || ios.screenshotCaptureAvailable ? "pass" : "blocked",
@@ -587,43 +596,55 @@ function evaluateCanaryReadiness(android, ios, prerequisiteAttestation) {
       status: ((android.devices ?? []).some((device) => device.logCaptureAvailable) || ios.logCaptureAvailable) ? "pass" : "blocked",
       rawLogsCaptured: false,
     },
-    providerBackendReadOnlyTelemetry: {
-      status: providerReadOnlyTelemetry ? "pass" : "blocked",
-      blocker: providerReadOnlyTelemetry
-        ? null
-        : "owner_approved_read_only_telemetry_attestation_required",
-      providerFamily: prerequisiteAttestation.providerFamily,
-      backendFamily: prerequisiteAttestation.backendFamily,
+    providerBackendReadOnlyTelemetryAvailability: {
+      status: providerTelemetryDeclaredAvailable ? "attested_unverified" : "blocked",
+      blocker: providerTelemetryDeclaredAvailable
+        ? "read_only_collector_verification_required"
+        : "provider_telemetry_availability_input_required",
+      verificationRequired: "successful_read_only_collector_result",
+      providerFamily: prerequisiteAvailabilityInput.providerFamily,
+      backendFamily: prerequisiteAvailabilityInput.backendFamily,
     },
     livekitExperienceCanary: {
-      status: liveKitReady ? "ready" : "blocked",
+      status: liveKitEligibleForVerification ? "ready_with_attestation" : "blocked",
       blocker: !hasInstalledTarget
         ? NEW_BINARY_OR_OTA_REQUIRED
-        : !syntheticAccountsApproved
-          ? "owner_approved_synthetic_account_attestation_required"
-          : !hasTwoLiveKitParticipants
-            ? "two_distinct_approved_livekit_participants_required"
-            : null,
+        : !syntheticAccountsDeclaredAvailable
+          ? "synthetic_account_availability_input_required"
+          : !liveKitParticipantsDeclaredAvailable
+            ? "livekit_participant_availability_input_required"
+            : "actual_sign_in_distinct_participant_and_media_verification_required",
+      passRequires: "installed_sign_in_distinct_participant_and_media_evidence",
     },
     visualExperienceCanary: {
-      status: visualReady ? "ready" : hasInstalledTarget ? "ready_with_blockers" : "blocked",
-      blocker: visualReady
-        ? "approved_baseline_or_evidence_based_finding_still_required"
+      status: visualEligibleForVerification
+        ? "ready_with_attestation"
         : hasInstalledTarget
-          ? "owner_approved_synthetic_account_attestation_required"
+          ? "ready_with_blockers"
+          : "blocked",
+      blocker: visualEligibleForVerification
+        ? "actual_sign_in_and_sanitized_visual_evidence_required"
+        : hasInstalledTarget
+          ? "synthetic_account_availability_input_required"
           : NEW_BINARY_OR_OTA_REQUIRED,
+      passRequires: "installed_visual_measurement_and_classification_evidence",
     },
     installedJourneyCanary: {
-      status: journeyReady ? "ready" : hasInstalledTarget ? "ready_with_blockers" : "blocked",
+      status: journeyEligibleForVerification
+        ? "ready_with_attestation"
+        : hasInstalledTarget
+          ? "ready_with_blockers"
+          : "blocked",
       blocker: !hasInstalledTarget
         ? NEW_BINARY_OR_OTA_REQUIRED
-        : journeyReady
-          ? "sanitized_journey_evidence_required"
-          : "owner_approved_synthetic_account_attestation_required",
+        : journeyEligibleForVerification
+          ? "actual_sign_in_and_sanitized_journey_evidence_required"
+          : "synthetic_account_availability_input_required",
+      passRequires: "installed_sign_in_and_journey_state_evidence",
     },
     noArtifactInstalledCanarySubset: {
-      status: runnableWithoutArtifact.length > 0
-        ? "ready"
+      status: eligibleForIndependentVerification.length > 0
+        ? "ready_with_attestation"
         : hasInstalledTarget
           ? "blocked_on_non_artifact_prerequisites"
           : "blocked",
@@ -631,16 +652,19 @@ function evaluateCanaryReadiness(android, ios, prerequisiteAttestation) {
       candidateCanaries: hasInstalledTarget
         ? ["livekit_experience", "visual_experience_metrics", "installed_journey"]
         : [],
-      runnableNow: runnableWithoutArtifact,
-      blockers: hasInstalledTarget ? nonArtifactBlockers : [NEW_BINARY_OR_OTA_REQUIRED],
+      eligibleForIndependentVerification,
+      blockers: hasInstalledTarget ? availabilityBlockers : [NEW_BINARY_OR_OTA_REQUIRED],
+      passStateGrantedByAvailabilityInput: false,
     },
   };
 }
 
 const android = readAndroid();
 const ios = readIos();
-const prerequisiteAttestation = readPrerequisiteAttestation(prerequisiteAttestationPath);
-const canaryReadiness = evaluateCanaryReadiness(android, ios, prerequisiteAttestation);
+const prerequisiteAvailabilityInput =
+  readPrerequisiteAvailabilityInput(prerequisiteAvailabilityPath);
+const canaryReadiness =
+  evaluateCanaryReadiness(android, ios, prerequisiteAvailabilityInput);
 
 const report = {
   schemaVersion: 1,
@@ -657,7 +681,7 @@ const report = {
     rawScreenshotsCaptured: false,
   },
   configKey: config.configKey,
-  prerequisiteAttestation,
+  prerequisiteAvailabilityInput,
   android,
   ios,
   canaryReadiness,
@@ -681,13 +705,13 @@ if (markdown) {
     `- iOS artifact decision: ${ios.artifactDecision}`,
     `- Android runtime/channel readback: ${android.canaryRuntimeChannelStatus}`,
     `- iOS runtime/channel readback: ${ios.canaryRuntimeChannelStatus}`,
-    `- Prerequisite attestation: ${prerequisiteAttestation.status}`,
-    `- Approved synthetic accounts: ${canaryReadiness.approvedSyntheticAccounts.status}`,
-    `- Two LiveKit participants: ${canaryReadiness.twoLiveKitParticipants.status}`,
+    `- Prerequisite availability input: ${prerequisiteAvailabilityInput.status}`,
+    `- Synthetic account availability: ${canaryReadiness.syntheticAccountAvailability.status}`,
+    `- LiveKit participant availability: ${canaryReadiness.liveKitParticipantAvailability.status}`,
     `- Screenshot capture: ${canaryReadiness.screenshotCapture.status}`,
     `- UI automation: ${canaryReadiness.uiAutomation.status}`,
     `- Log capture: ${canaryReadiness.logCapture.status}`,
-    `- Provider/backend telemetry: ${canaryReadiness.providerBackendReadOnlyTelemetry.status}`,
+    `- Provider/backend telemetry availability: ${canaryReadiness.providerBackendReadOnlyTelemetryAvailability.status}`,
     `- No-artifact installed canary subset: ${canaryReadiness.noArtifactInstalledCanarySubset.status}`,
   ];
   console.log(lines.join("\n"));

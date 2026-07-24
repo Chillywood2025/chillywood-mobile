@@ -278,14 +278,17 @@ for (const phrase of [
   "INTERNAL_QA_OTA_REQUIRED",
   "INTERNAL_QA_BINARY_REQUIRED",
   "noArtifactInstalledCanarySubset",
-  "const liveKitReady = hasInstalledTarget",
+  "const liveKitEligibleForVerification = hasInstalledTarget",
   "release-diagnostics-runtime-version",
   "emitLiveKitRenderTelemetryEvent",
-  "--prerequisite-attestation=",
-  "attestation_mode_must_be_0600",
-  "attestation_must_be_outside_git",
-  "attestation_lifetime_exceeds_six_hours",
-  "owner_approved_sanitized_attestation_valid",
+  "--prerequisite-availability=",
+  "availability_input_mode_must_be_0600",
+  "availability_input_must_be_outside_git",
+  "availability_input_lifetime_exceeds_six_hours",
+  "sanitized_operator_availability_input_valid",
+  "attested_unverified",
+  "ready_with_attestation",
+  "passStateGrantedByAvailabilityInput: false",
   "hashId(serial)",
   "dumpsys",
   "simctl",
@@ -308,21 +311,21 @@ for (const phrase of [
   "NO_ARTIFACT_CHANGE_REQUIRED",
   "iOS internal/simulator build",
   "INTERNAL_QA_BINARY_REQUIRED",
-  "Approved synthetic accounts",
-  "Two LiveKit participants",
-  "Provider/backend read-only telemetry",
+  "Synthetic account availability",
+  "LiveKit participant availability",
+  "Provider/backend telemetry availability",
   "No build, OTA publish, deployment",
 ]) {
   assert(readinessReport.includes(phrase), `readiness report missing: ${phrase}`);
 }
 
 const fixtureHash = (seed) => crypto.createHash("sha256").update(seed).digest("hex");
-const attestationDir = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-sentinel-attestation-"));
-fs.chmodSync(attestationDir, 0o700);
-const runReadiness = (attestationPath) => {
+const availabilityDir = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-sentinel-availability-"));
+fs.chmodSync(availabilityDir, 0o700);
+const runReadiness = (availabilityPath) => {
   const result = spawnSync(process.execPath, [
     path.join(root, "scripts/sentinel-runtime-readiness.mjs"),
-    `--prerequisite-attestation=${attestationPath}`,
+    `--prerequisite-availability=${availabilityPath}`,
   ], {
     cwd: root,
     encoding: "utf8",
@@ -342,75 +345,76 @@ try {
   const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
   const validFixture = {
     schemaVersion: 1,
-    ownerApproved: true,
-    ownerApprovalHash: fixtureHash("owner-approval"),
+    operatorProvided: true,
+    inputEvidenceHash: fixtureHash("operator-availability-input"),
     issuedAt,
     expiresAt,
-    approvedSyntheticAccounts: {
-      approved: true,
+    syntheticAccountAvailability: {
+      available: true,
       count: 2,
       labels: [...runnerConfig.approvedSyntheticFixtureContract.requiredLabels],
       evidenceHash: fixtureHash("synthetic-account-set"),
     },
-    twoLiveKitParticipants: {
-      approved: true,
+    liveKitParticipantAvailability: {
+      available: true,
       count: 2,
       labels: ["installed_app", "headless_sdk"],
       evidenceHash: fixtureHash("livekit-participant-set"),
     },
-    providerBackendReadOnlyTelemetry: {
-      approvedReadOnly: true,
-      providerFamily: "approved_provider",
-      backendFamily: "approved_backend",
+    providerBackendTelemetryAvailability: {
+      availableReadOnly: true,
+      providerFamily: "provider_family",
+      backendFamily: "backend_family",
       evidenceHash: fixtureHash("read-only-telemetry"),
     },
   };
-  const validPath = path.join(attestationDir, "valid.json");
+  const validPath = path.join(availabilityDir, "valid.json");
   fs.writeFileSync(validPath, `${JSON.stringify(validFixture)}\n`, { mode: 0o600 });
   const validRun = runReadiness(validPath);
-  assert(validRun.result.status === 0, "valid prerequisite attestation inventory did not exit zero");
-  assert(validRun.report?.prerequisiteAttestation?.status === "valid", "valid prerequisite attestation was not accepted");
-  assert(validRun.report?.canaryReadiness?.approvedSyntheticAccounts?.status === "pass", "approved synthetic accounts did not become ready");
-  assert(validRun.report?.canaryReadiness?.twoLiveKitParticipants?.status === "pass", "approved LiveKit participants did not become ready");
-  assert(validRun.report?.canaryReadiness?.providerBackendReadOnlyTelemetry?.status === "pass", "approved read-only telemetry did not become ready");
+  assert(validRun.result.status === 0, "valid prerequisite availability inventory did not exit zero");
+  assert(validRun.report?.prerequisiteAvailabilityInput?.status === "attested_unverified", "valid availability input claimed authenticated verification");
+  assert(validRun.report?.canaryReadiness?.syntheticAccountAvailability?.status === "attested_unverified", "synthetic availability claimed PASS");
+  assert(validRun.report?.canaryReadiness?.liveKitParticipantAvailability?.status === "attested_unverified", "LiveKit participant availability claimed PASS");
+  assert(validRun.report?.canaryReadiness?.providerBackendReadOnlyTelemetryAvailability?.status === "attested_unverified", "telemetry availability claimed PASS");
   const installedTargetAvailable = validRun.report?.android?.artifactDecision === "NO_ARTIFACT_CHANGE_REQUIRED"
     || validRun.report?.ios?.artifactDecision === "NO_ARTIFACT_CHANGE_REQUIRED";
   if (installedTargetAvailable) {
-    assert(validRun.report?.canaryReadiness?.livekitExperienceCanary?.status === "ready", "valid prerequisites did not make the installed-target LiveKit canary ready");
-    assert(validRun.report?.canaryReadiness?.noArtifactInstalledCanarySubset?.runnableNow?.length === 3, "valid prerequisites did not expose the bounded no-artifact canary subset");
+    assert(validRun.report?.canaryReadiness?.livekitExperienceCanary?.status === "ready_with_attestation", "availability input exceeded bounded LiveKit readiness");
+    assert(validRun.report?.canaryReadiness?.noArtifactInstalledCanarySubset?.eligibleForIndependentVerification?.length === 3, "availability input did not expose the bounded independent-verification subset");
+    assert(validRun.report?.canaryReadiness?.noArtifactInstalledCanarySubset?.passStateGrantedByAvailabilityInput === false, "availability input granted a canary PASS");
   } else {
-    assert(validRun.report?.canaryReadiness?.livekitExperienceCanary?.status === "blocked", "attestation bypassed the installed-target requirement");
-    assert(validRun.report?.canaryReadiness?.noArtifactInstalledCanarySubset?.runnableNow?.length === 0, "attestation invented an installed-target canary subset");
+    assert(validRun.report?.canaryReadiness?.livekitExperienceCanary?.status === "blocked", "availability input bypassed the installed-target requirement");
+    assert(validRun.report?.canaryReadiness?.noArtifactInstalledCanarySubset?.eligibleForIndependentVerification?.length === 0, "availability input invented an installed-target canary subset");
   }
   const validReportText = JSON.stringify(validRun.report);
-  assert(!validReportText.includes(validPath), "readiness report exposed the attestation path");
-  assert(!validReportText.includes(validFixture.ownerApprovalHash), "readiness report exposed the owner approval hash");
-  assert(!validReportText.includes(validFixture.approvedSyntheticAccounts.evidenceHash), "readiness report exposed a prerequisite evidence hash");
+  assert(!validReportText.includes(validPath), "readiness report exposed the availability-input path");
+  assert(!validReportText.includes(validFixture.inputEvidenceHash), "readiness report exposed the operator input evidence hash");
+  assert(!validReportText.includes(validFixture.syntheticAccountAvailability.evidenceHash), "readiness report exposed a prerequisite evidence hash");
 
-  const wrongModePath = path.join(attestationDir, "wrong-mode.json");
+  const wrongModePath = path.join(availabilityDir, "wrong-mode.json");
   fs.writeFileSync(wrongModePath, `${JSON.stringify(validFixture)}\n`, { mode: 0o600 });
   fs.chmodSync(wrongModePath, 0o644);
   const wrongModeRun = runReadiness(wrongModePath);
   assert(wrongModeRun.result.status === 0, "wrong-mode prerequisite inventory did not fail closed cleanly");
-  assert(wrongModeRun.report?.prerequisiteAttestation?.status === "invalid", "wrong-mode prerequisite attestation was not rejected");
-  assert(wrongModeRun.report?.prerequisiteAttestation?.reason === "attestation_mode_must_be_0600", "wrong-mode rejection reason changed");
-  assert(wrongModeRun.report?.canaryReadiness?.approvedSyntheticAccounts?.status === "blocked", "wrong-mode attestation enabled synthetic accounts");
-  assert(wrongModeRun.report?.canaryReadiness?.twoLiveKitParticipants?.status === "blocked", "wrong-mode attestation enabled LiveKit participants");
-  assert(wrongModeRun.report?.canaryReadiness?.providerBackendReadOnlyTelemetry?.status === "blocked", "wrong-mode attestation enabled telemetry");
+  assert(wrongModeRun.report?.prerequisiteAvailabilityInput?.status === "invalid", "wrong-mode availability input was not rejected");
+  assert(wrongModeRun.report?.prerequisiteAvailabilityInput?.reason === "availability_input_mode_must_be_0600", "wrong-mode rejection reason changed");
+  assert(wrongModeRun.report?.canaryReadiness?.syntheticAccountAvailability?.status === "blocked", "wrong-mode input enabled synthetic accounts");
+  assert(wrongModeRun.report?.canaryReadiness?.liveKitParticipantAvailability?.status === "blocked", "wrong-mode input enabled LiveKit participants");
+  assert(wrongModeRun.report?.canaryReadiness?.providerBackendReadOnlyTelemetryAvailability?.status === "blocked", "wrong-mode input enabled telemetry");
 
-  const unknownFieldPath = path.join(attestationDir, "unknown-field.json");
+  const unknownFieldPath = path.join(availabilityDir, "unknown-field.json");
   fs.writeFileSync(unknownFieldPath, `${JSON.stringify({
     ...validFixture,
     unexpectedField: "rejected",
   })}\n`, { mode: 0o600 });
   const unknownFieldRun = runReadiness(unknownFieldPath);
   assert(unknownFieldRun.result.status === 0, "unknown-field prerequisite inventory did not fail closed cleanly");
-  assert(unknownFieldRun.report?.prerequisiteAttestation?.status === "invalid", "unknown-field prerequisite attestation was not rejected");
-  assert(unknownFieldRun.report?.prerequisiteAttestation?.reason === "attestation_top_level_schema_invalid", "unknown-field rejection reason changed");
-  assert(unknownFieldRun.report?.canaryReadiness?.approvedSyntheticAccounts?.status === "blocked", "unknown-field attestation enabled synthetic accounts");
+  assert(unknownFieldRun.report?.prerequisiteAvailabilityInput?.status === "invalid", "unknown-field availability input was not rejected");
+  assert(unknownFieldRun.report?.prerequisiteAvailabilityInput?.reason === "availability_input_top_level_schema_invalid", "unknown-field rejection reason changed");
+  assert(unknownFieldRun.report?.canaryReadiness?.syntheticAccountAvailability?.status === "blocked", "unknown-field input enabled synthetic accounts");
   assert(!JSON.stringify(unknownFieldRun.report).includes("rejected"), "invalid prerequisite content was reflected in the report");
 
-  const expiredPath = path.join(attestationDir, "expired.json");
+  const expiredPath = path.join(availabilityDir, "expired.json");
   fs.writeFileSync(expiredPath, `${JSON.stringify({
     ...validFixture,
     issuedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
@@ -418,10 +422,10 @@ try {
   })}\n`, { mode: 0o600 });
   const expiredRun = runReadiness(expiredPath);
   assert(expiredRun.result.status === 0, "expired prerequisite inventory did not fail closed cleanly");
-  assert(expiredRun.report?.prerequisiteAttestation?.status === "expired", "expired prerequisite attestation was not rejected");
-  assert(expiredRun.report?.canaryReadiness?.twoLiveKitParticipants?.status === "blocked", "expired attestation enabled LiveKit participants");
+  assert(expiredRun.report?.prerequisiteAvailabilityInput?.status === "expired", "expired availability input was not rejected");
+  assert(expiredRun.report?.canaryReadiness?.liveKitParticipantAvailability?.status === "blocked", "expired input enabled LiveKit participants");
 } finally {
-  fs.rmSync(attestationDir, { recursive: true, force: true });
+  fs.rmSync(availabilityDir, { recursive: true, force: true });
 }
 
 const classifyLiveKit = (metrics) => {
