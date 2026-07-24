@@ -192,6 +192,17 @@ insert into two_party_target_hashes values (
 );
 grant select on two_party_target_hashes to authenticated, service_role;
 
+create temporary table two_party_disable_target_hashes(
+  switch_target_hash text not null
+);
+insert into two_party_disable_target_hashes values (
+  encode(extensions.digest(convert_to(
+    'set_switch|cognitive_research_enabled|false|two-party-disable-test',
+    'UTF8'
+  ), 'sha256'), 'hex')
+);
+grant select on two_party_disable_target_hashes to authenticated, service_role;
+
 select ok(
   (
     select count(*) = 10
@@ -698,6 +709,174 @@ select throws_ok(
   'completed approval version cannot be revoked after execution'
 );
 reset role;
+
+insert into public.cognitive_governance_switches(
+  task_id, project_id, platform, environment, switch_key, enabled,
+  policy_version, enabled_by, enabled_at, disabled_at, updated_at
+) values
+  (
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','cognitive_collective_deliberation_enabled',
+    true,'two-party-dependent-test',
+    'b2000000-0000-0000-0000-000000000001',
+    transaction_timestamp(),null,transaction_timestamp()
+  ),
+  (
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','cognitive_draft_pr_executor_enabled',
+    true,'two-party-dependent-test',
+    'b2000000-0000-0000-0000-000000000001',
+    transaction_timestamp(),null,transaction_timestamp()
+  ),
+  (
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','cognitive_scheduled_level01_enabled',
+    true,'two-party-dependent-test',
+    'b2000000-0000-0000-0000-000000000001',
+    transaction_timestamp(),null,transaction_timestamp()
+  )
+on conflict (task_id, switch_key) do update
+set enabled = true,
+    policy_version = excluded.policy_version,
+    enabled_by = excluded.enabled_by,
+    enabled_at = excluded.enabled_at,
+    disabled_at = null,
+    updated_at = excluded.updated_at;
+
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','b2000000-0000-0000-0000-000000000001',true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"b2000000-0000-0000-0000-000000000001"}',
+  true
+);
+insert into two_party_liveness_fixture(fixture_key,approval_version_id,approval_hash)
+select
+  'disable-cascade-clear-enabled-at',
+  (result->>'approvalVersionId')::uuid,
+  result->>'approvalHash'
+from (
+  select public.governance_record_owner_approval(
+    'b7000000-0000-0000-0000-000000000001',
+    'disable-parent-cascade-test',
+    repeat('4',64),
+    repeat('6',64),
+    repeat('5',40),
+    repeat('6',64),
+    repeat('4',64),
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'none',
+    'set_switch',
+    (select switch_target_hash from two_party_disable_target_hashes),
+    '{}'::text[],
+    '{}'::text[],
+    '{}'::text[],
+    repeat('9',64),
+    1,
+    1,
+    1024,
+    1,
+    repeat('8',64),
+    array['two-party-test'],
+    repeat('9',64),
+    repeat('3',64),
+    interval '24 hours'
+  ) result
+) approval;
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+update two_party_liveness_fixture
+set execution_id = (result->>'executionId')::uuid
+from (
+  select public.governance_claim_approved_action(
+    (select approval_version_id from two_party_liveness_fixture where fixture_key='disable-cascade-clear-enabled-at'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('5',64),
+    repeat('6',64),
+    (select approval_hash from two_party_liveness_fixture where fixture_key='disable-cascade-clear-enabled-at'),
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-two-party-fixture',
+    'shared','production','none','set_switch',
+    (select switch_target_hash from two_party_disable_target_hashes),repeat('9',64),
+    repeat('8',64),repeat('9',64),repeat('3',64)
+  ) result
+) claim
+where fixture_key='disable-cascade-clear-enabled-at';
+select public.governance_begin_approved_execution(
+  (select execution_id from two_party_liveness_fixture where fixture_key='disable-cascade-clear-enabled-at'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'preflight'
+);
+select public.governance_begin_approved_execution(
+  (select execution_id from two_party_liveness_fixture where fixture_key='disable-cascade-clear-enabled-at'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'executing'
+);
+select public.governance_execute_approved_switch(
+  (select execution_id from two_party_liveness_fixture where fixture_key='disable-cascade-clear-enabled-at'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'cognitive_research_enabled',
+  false,
+  'two-party-disable-test',
+  (select switch_target_hash from two_party_disable_target_hashes)
+);
+select public.governance_begin_approved_execution(
+  (select execution_id from two_party_liveness_fixture where fixture_key='disable-cascade-clear-enabled-at'),
+  'cognitive_approved_action_worker',
+  'synthetic-worker-assertion-000000000000',
+  'evaluating'
+);
+select public.governance_record_approved_execution_evaluator_proof(
+  (select execution_id from two_party_liveness_fixture where fixture_key='disable-cascade-clear-enabled-at'),
+  'cognitive_independent_evaluator',
+  'synthetic-evaluator-assertion-000000000000',
+  repeat('e',64),
+  repeat('f',64),
+  'passed'
+);
+select is(
+  public.governance_complete_approved_execution(
+    (select execution_id from two_party_liveness_fixture where fixture_key='disable-cascade-clear-enabled-at'),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('e',64),
+    repeat('f',64)
+  )->>'state',
+  'completed',
+  'parent switch disable completes after independent evaluator proof'
+);
+reset role;
+
+select is(
+  (
+    select count(*)::integer
+    from public.cognitive_governance_switches switch
+    where switch.task_id = 'b1000000-0000-0000-0000-000000000001'
+      and switch.switch_key in (
+        'cognitive_collective_deliberation_enabled',
+        'cognitive_draft_pr_executor_enabled',
+        'cognitive_scheduled_level01_enabled'
+      )
+      and not switch.enabled
+      and switch.enabled_at is null
+      and switch.disabled_at is not null
+  ),
+  3,
+  'parent switch disable cascades dependents and clears enabled_at'
+);
 
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);

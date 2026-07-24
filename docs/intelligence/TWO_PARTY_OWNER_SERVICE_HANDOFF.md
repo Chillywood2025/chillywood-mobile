@@ -65,7 +65,7 @@ for product-quality activation tasks.
 
 Local proof:
 
-- `supabase test db`: 721/721 pgTAP tests passed.
+- `supabase test db`: 723/723 pgTAP tests passed.
 - `npm run test:cognitive-two-party-handoff`: passed.
 - `deno check` passed for the Owner endpoint, service worker, independent
   evaluator, governance control, and Owner approval request functions.

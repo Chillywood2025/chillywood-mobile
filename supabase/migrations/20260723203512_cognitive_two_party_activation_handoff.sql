@@ -2266,6 +2266,7 @@ begin
     update public.cognitive_governance_switches switch
     set enabled = false,
         enabled_by = null,
+        enabled_at = null,
         disabled_at = now_at,
         updated_at = now_at
     where switch.task_id = execution_value.task_id

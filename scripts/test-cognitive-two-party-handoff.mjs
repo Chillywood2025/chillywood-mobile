@@ -44,6 +44,11 @@ const switchExecutionFunction = between(
   "create function public.governance_execute_approved_switch",
   "create or replace function public.governance_set_level01_switch",
 );
+const completedSwitchFunction = between(
+  migration,
+  "create function public.governance_apply_completed_switch",
+  "create function public.governance_complete_approved_execution",
+);
 
 contains(
   migration,
@@ -199,6 +204,11 @@ notContains(
   switchExecutionFunction,
   "insert into public.cognitive_governance_switches",
   "approved switch execution still writes a live switch before evaluator completion",
+);
+contains(
+  completedSwitchFunction,
+  "enabled_at = null",
+  "dependent switch disable cascade does not clear enabled_at",
 );
 contains(
   migration,
@@ -414,6 +424,11 @@ contains(
   dbTest,
   "independent evaluator proof permits completion and activates staged switch",
   "database suite does not prove evaluator proof gates final switch activation",
+);
+contains(
+  dbTest,
+  "parent switch disable cascades dependents and clears enabled_at",
+  "database suite does not prove safety disable cascades clear enabled_at",
 );
 contains(
   dbTest,
