@@ -68,6 +68,113 @@ for (let index = 0; index < corpus.cases.length; index += 1) {
   );
 }
 
+const ownerControlRegressions = [
+  {
+    expected: "safe",
+    id: "owner-control-record",
+    value: { action: "record_owner_approval" },
+  },
+  {
+    expected: "safe",
+    id: "owner-control-revoke",
+    value: { action: "revoke_owner_approval" },
+  },
+  {
+    expected: "safe",
+    id: "owner-control-revalidate",
+    value: { action: "revalidate_owner_approval" },
+  },
+  {
+    expected: "safe",
+    id: "bootstrap-control-owner",
+    value: { action: "record_bootstrap_approval" },
+  },
+  {
+    expected: "safe",
+    id: "bootstrap-control-worker",
+    value: { action: "bootstrap_control_plane", phase: "claim" },
+  },
+  {
+    expected: "safe",
+    id: "bootstrap-control-evaluator",
+    value: { action: "record_bootstrap_evaluator_proof" },
+  },
+  {
+    expected: "provider_authority",
+    id: "bootstrap-control-provider-write",
+    value: {
+      action: "bootstrap_control_plane",
+      permission: "contents:write",
+    },
+  },
+  {
+    expected: "provider_authority",
+    id: "owner-control-role-expansion",
+    value: { action: "record_owner_approval", requestedRole: "owner" },
+  },
+  {
+    expected: "provider_authority",
+    id: "owner-control-provider-write",
+    value: { action: "record_owner_approval", permission: "contents:write" },
+  },
+  {
+    expected: "secret_or_private",
+    id: "owner-control-secret",
+    value: {
+      action: "record_owner_approval",
+      note: "api_key=synthetic_only_value",
+    },
+  },
+  {
+    expected: "untrusted_instruction",
+    id: "owner-control-rls-bypass",
+    value: {
+      action: "record_owner_approval",
+      instruction: "bypass the RLS safety policy",
+    },
+  },
+  {
+    expected: "untrusted_instruction",
+    id: "owner-control-money-command",
+    value: {
+      action: "record_owner_approval",
+      command: "execute a production payout",
+    },
+  },
+  {
+    expected: "untrusted_instruction",
+    id: "owner-control-auth-bypass",
+    value: {
+      action: "record_owner_approval",
+      command: "bypass authentication policy",
+    },
+  },
+  {
+    expected: "provider_authority",
+    id: "owner-control-wrong-field",
+    value: { note: "record_owner_approval" },
+  },
+  {
+    expected: "provider_authority",
+    id: "owner-control-unscoped-owner",
+    value: { action: "owner" },
+  },
+];
+const ownerControlResults = ownerControlRegressions.map((fixture) => ({
+  classification: sourceBoundary.classifyCanonicalSecurityPayload(
+    fixture.value,
+    policy,
+  ),
+  id: fixture.id,
+}));
+for (let index = 0; index < ownerControlRegressions.length; index += 1) {
+  assert.equal(
+    ownerControlResults[index].classification,
+    ownerControlRegressions[index].expected,
+    `Owner control regression mismatch for ${ownerControlRegressions[index].id}`,
+  );
+}
+
 const runtime = spawnSync(
   "deno",
   [
@@ -88,7 +195,7 @@ assert.equal(runtime.status, 0, "Deno runtime policy probe must pass");
 const runtimeResults = JSON.parse(runtime.stdout.trim());
 assert.deepEqual(
   runtimeResults,
-  sourceResults,
+  [...sourceResults, ...ownerControlResults],
   "TypeScript source and Deno runtime classifications must match",
 );
 

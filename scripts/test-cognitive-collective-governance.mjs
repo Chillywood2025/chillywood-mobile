@@ -844,6 +844,75 @@ await test("canonical sanitizer detects fragments and credentials", () => {
     "secret_or_private",
   );
 });
+await test("canonical sanitizer permits exact Owner controls without widening authority", () => {
+  for (const action of [
+    "record_owner_approval",
+    "revalidate_owner_approval",
+    "revoke_owner_approval",
+    "record_bootstrap_approval",
+    "bootstrap_control_plane",
+    "record_bootstrap_evaluator_proof",
+  ]) {
+    assert.equal(
+      policyEngine.classifyCanonicalSecurityPayload(
+        { action },
+        securityPolicy,
+      ),
+      "safe",
+    );
+  }
+  assert.equal(
+    policyEngine.classifyCanonicalSecurityPayload(
+      { action: "record_owner_approval", requestedRole: "owner" },
+      securityPolicy,
+    ),
+    "provider_authority",
+  );
+  assert.equal(
+    policyEngine.classifyCanonicalSecurityPayload(
+      { action: "record_owner_approval", permission: "contents:write" },
+      securityPolicy,
+    ),
+    "provider_authority",
+  );
+  assert.equal(
+    policyEngine.classifyCanonicalSecurityPayload(
+      { action: "bootstrap_control_plane", permission: "contents:write" },
+      securityPolicy,
+    ),
+    "provider_authority",
+  );
+  assert.equal(
+    policyEngine.classifyCanonicalSecurityPayload(
+      {
+        action: "record_owner_approval",
+        command: "execute a production payout",
+      },
+      securityPolicy,
+    ),
+    "untrusted_instruction",
+  );
+  assert.equal(
+    policyEngine.classifyCanonicalSecurityPayload(
+      {
+        action: "record_owner_approval",
+        instruction: "bypass the RLS safety policy",
+      },
+      securityPolicy,
+    ),
+    "untrusted_instruction",
+  );
+  assert.equal(
+    policyEngine.classifyCanonicalSecurityPayload(
+      {
+        action: "record_owner_approval",
+        command: "bypass authentication policy",
+      },
+      securityPolicy,
+    ),
+    "untrusted_instruction",
+  );
+});
 await test("canonical sanitizer enforces policy labels and object-key byte budget", () => {
   assert.equal(
     policyEngine.classifyCanonicalSecurityPayload(

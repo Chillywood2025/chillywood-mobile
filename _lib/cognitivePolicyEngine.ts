@@ -54,6 +54,18 @@ const INSTRUCTION =
   /\b(?:ignore|override|bypass|disable|weaken|forget)\b[\s\S]{0,80}\b(?:instruction|policy|approval|rls|guard|system|developer|safety)\b|\b(?:merge|deploy|release|execute|run|invoke|read)\b[\s\S]{0,80}\b(?:pull request|production|shell|command|tool|environment|secret|credential)\b/iu;
 const SECRET_ASSIGNMENT =
   /\b(?:access[_ -]?token|api[_ -]?key|authorization|bearer|client[_ -]?secret|cookie|credential|github[_ -]?token|key[_ -]?password|model[_ -]?key|password|passphrase|private[_ -]?key|refresh[_ -]?token|secret|service[_ -]?role|session[_ -]?cookie|token)\b\s*(?::|=|is)\s*[^\s,;]{6,}/iu;
+const SAFE_PROVIDER_AUTHORITY_CONTROL_ACTIONS = new Set([
+  "record_owner_approval",
+  "revalidate_owner_approval",
+  "revoke_owner_approval",
+]);
+const withoutReviewedOpaqueIdentifiers = (value: string): string =>
+  value
+    .replace(
+      /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/giu,
+      " ",
+    )
+    .replace(/[a-f0-9]{40,128}/giu, " ");
 
 const canonicalize = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -142,8 +154,10 @@ const collectBoundedText = (
   valid: boolean;
   sensitiveLabeledValue: boolean;
   texts: readonly string[];
+  authorityTexts: readonly string[];
 }> => {
   const texts: string[] = [];
+  const authorityTexts: string[] = [];
   const seen = new WeakSet<object>();
   let totalBytes = 0;
   let fragments = 0;
@@ -163,14 +177,20 @@ const collectBoundedText = (
   const isSafeStatus = (entry: unknown): boolean =>
     typeof entry === "string" &&
     safeStatuses.has(normalizePolicyLabel(entry, policy));
-  const visit = (entry: unknown, depth: number): boolean => {
+  const visit = (
+    entry: unknown,
+    depth: number,
+    omitFromProviderAuthority = false,
+  ): boolean => {
     if (depth > policy.limits.maximumDepth) return false;
     if (typeof entry === "string") {
       const bytes = new TextEncoder().encode(entry).byteLength;
       if (bytes > policy.limits.maximumStringBytes) return false;
       totalBytes += bytes;
       fragments += 1;
-      texts.push(normalizeSecurityText(entry, policy));
+      const normalizedEntry = normalizeSecurityText(entry, policy);
+      texts.push(normalizedEntry);
+      if (!omitFromProviderAuthority) authorityTexts.push(normalizedEntry);
       return (
         totalBytes <= policy.limits.maximumTotalBytes &&
         fragments <= policy.limits.maximumFragments
@@ -221,14 +241,27 @@ const collectBoundedText = (
           sensitiveLabeledValue = true;
         }
         texts.push(normalizedKey);
-        if (!visit(record[key], depth + 1)) return false;
+        authorityTexts.push(normalizedKey);
+        const value = record[key];
+        const safeProviderControlAction =
+          policyKey === "action" &&
+          typeof value === "string" &&
+          SAFE_PROVIDER_AUTHORITY_CONTROL_ACTIONS.has(
+            normalizeSecurityText(value, policy).toLocaleLowerCase("en-US"),
+          );
+        if (!visit(value, depth + 1, safeProviderControlAction)) return false;
       }
       return true;
     }
     return false;
   };
   const valid = visit(value, 0);
-  return Object.freeze({ valid, sensitiveLabeledValue, texts: Object.freeze(texts) });
+  return Object.freeze({
+    valid,
+    sensitiveLabeledValue,
+    texts: Object.freeze(texts),
+    authorityTexts: Object.freeze(authorityTexts),
+  });
 };
 
 export const classifyCanonicalSecurityPayload = (
@@ -251,10 +284,27 @@ export const classifyCanonicalSecurityPayload = (
   }
   for (const raw of candidates) {
     const text = normalizeSecurityText(raw, policy);
-    if (EMAIL.test(text) || PHONE.test(text) || JWT.test(text) || PEM.test(text) || SIGNED_URL.test(text) || SECRET_ASSIGNMENT.test(text)) {
+    const privateIdentifierText = withoutReviewedOpaqueIdentifiers(text);
+    if (EMAIL.test(text) || PHONE.test(privateIdentifierText) || JWT.test(text) || PEM.test(text) || SIGNED_URL.test(text) || SECRET_ASSIGNMENT.test(text)) {
       return "secret_or_private";
     }
     if (INSTRUCTION.test(text)) return "untrusted_instruction";
+    if (Date.now() - startedAt > policy.limits.maximumClassificationMilliseconds) {
+      return "invalid_or_oversized";
+    }
+  }
+  const authorityCandidates = new Set<string>([
+    collected.authorityTexts.join(" "),
+    collected.authorityTexts.join(""),
+    [...collected.authorityTexts].reverse().join(""),
+  ]);
+  for (const text of [...authorityCandidates]) {
+    for (const decoded of boundedDecode(text, policy)) {
+      authorityCandidates.add(decoded);
+    }
+  }
+  for (const raw of authorityCandidates) {
+    const text = normalizeSecurityText(raw, policy);
     const authority = policy.providerAuthorityTerms.some((term) =>
       text.toLocaleLowerCase("en-US").includes(term.toLocaleLowerCase("en-US")),
     );
