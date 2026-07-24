@@ -152,9 +152,9 @@ insert into public.research_sources(
   id,task_id,project_id,platform,environment,actor_identity,dedupe_key,
   status,summary,evidence_metadata,data_class,retention_until,
   authority_id,canonical_host,ownership_identity,source_reference_hash,
-  canonical_url_hash,content_hash,publisher,publication_date,retrieval_date,
-  freshness_deadline,source_type,is_primary,bounded_excerpt,citation_metadata,
-  trusted_for_tool_execution
+  canonical_url_hash,content_hash,publisher,publication_date,
+  publication_provenance,retrieval_date,freshness_deadline,source_type,
+  is_primary,bounded_excerpt,citation_metadata,trusted_for_tool_execution
 ) values (
   ${literal(ids.source)},${literal(ids.task)},${literal(ids.project)},
   'shared','production','research-retention-concurrency',
@@ -166,6 +166,12 @@ insert into public.research_sources(
   literal(hash(statement))
 },
   'Apple',transaction_timestamp()-interval '2 days',
+  jsonb_build_object(
+    'mode','published_metadata',
+    'machineValue','fixture-published-at',
+    'semanticIdentity','retention-concurrency-fixture',
+    'evidenceHash',repeat('d',64)
+  ),
   transaction_timestamp()-interval '1 day',
   transaction_timestamp()+interval '2 hours',
   'official_documentation',true,${literal(statement)},

@@ -1942,35 +1942,32 @@ select is(
   true,
   'visual sentinel accepts bounded baseline-review finding evidence'
 );
-insert into two_party_visual_passed_run(id)
-select public.product_experience_record_sentinel_run(
-  'b1000000-0000-0000-0000-000000000001',
-  'b0000000-0000-0000-0000-000000000001',
-  'shared','production','visual_product_experience_sentinel','Home',
-  repeat('8',64),repeat('e',64),
-  '{
-    "screenshotEvidenceHash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-    "cardViewportWidthRatio":0.42,
-    "cardsVisibleAboveFold":6,
-    "aspectRatio":"16:9",
-    "densityScore":0.74,
-    "baselineState":"approved_baseline",
-    "baselineComparisonHash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-  }'::jsonb,
-  'passed','installed_ui_observed',
-  'visual_product_experience_sentinel','synthetic-visual-assertion-000000000000'
-);
 select throws_ok(
-  $$select public.product_quality_record_finding(
-    (select id from two_party_visual_passed_run),
-    'visual-passed-run-baseline-fixture','Home',repeat('8',64),'low',repeat('9',64),
-    array[repeat('e',64)],'layout_density',0.6000,'design_baseline_missing',
-    repeat('b',64),repeat('c',64),repeat('d',64),'installed_ui_observed',
-    'product_quality_triage_router','synthetic-triage-assertion-000000000000'
+  $$select public.product_experience_record_sentinel_run(
+    'b1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    'shared','production','visual_product_experience_sentinel','Home',
+    repeat('8',64),repeat('e',64),
+    '{
+      "screenshotEvidenceHash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "cardViewportWidthRatio":0.42,
+      "cardsVisibleAboveFold":6,
+      "aspectRatio":"16:9",
+      "densityScore":0.74,
+      "baselineState":"approved_baseline",
+      "baselineComparisonHash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }'::jsonb,
+    'passed','installed_ui_observed',
+    'visual_product_experience_sentinel','synthetic-visual-assertion-000000000000'
   )$$,
-  'P0001',
-  'product_quality_finding_rejected',
-  'product triage rejects passed visual run as a governance finding'
+  '42501',
+  'product_experience_effective_baseline_required',
+  'visual sentinel rejects a passed run without the current exact approved baseline'
+);
+select is(
+  (select count(*)::integer from two_party_visual_passed_run),
+  0,
+  'rejected visual pass creates no sentinel evidence or triage input'
 );
 select throws_ok(
   $$select public.product_experience_record_sentinel_run(

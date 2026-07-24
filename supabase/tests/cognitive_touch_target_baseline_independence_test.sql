@@ -143,6 +143,27 @@ select ok(
 );
 
 select ok(
+  public.product_experience_objective_touch_target_is_independent(
+    'android','failed',
+    (select metrics from touch_independence_fixture
+     where fixture_key='android_pending_below_floor'),
+    'android_touch_target_below_48dp'
+  )
+  and not public.product_experience_objective_touch_target_is_independent(
+    'android','failed',
+    (select metrics from touch_independence_fixture
+     where fixture_key='android_pending_below_floor'),
+    'visual_option_c_phone_portrait_deviation'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.product_experience_objective_touch_target_is_independent(public.cognitive_platform,text,jsonb,text)',
+    'EXECUTE'
+  ),
+  'only the exact objective touch finding remains baseline-independent'
+);
+
+select ok(
   public.product_experience_detailed_metric_manifest_is_valid(
     'visual_product_experience_sentinel','android','failed',
     jsonb_build_object(

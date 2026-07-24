@@ -102,9 +102,9 @@ insert into public.research_sources(
   id,task_id,project_id,platform,environment,actor_identity,dedupe_key,
   status,summary,evidence_metadata,data_class,retention_until,
   authority_id,canonical_host,ownership_identity,source_reference_hash,
-  canonical_url_hash,content_hash,publisher,publication_date,retrieval_date,
-  freshness_deadline,source_type,is_primary,bounded_excerpt,citation_metadata,
-  trusted_for_tool_execution
+  canonical_url_hash,content_hash,publisher,publication_date,
+  publication_provenance,retrieval_date,freshness_deadline,source_type,
+  is_primary,bounded_excerpt,citation_metadata,trusted_for_tool_execution
 ) values (
   'f3000000-0000-4000-8000-000000000001',
   'f2000000-0000-4000-8000-000000000001',
@@ -123,6 +123,12 @@ insert into public.research_sources(
     'Expired public behavior is documented.','UTF8'
   ),'sha256'),'hex'),
   'Apple',transaction_timestamp()-interval '2 days',
+  jsonb_build_object(
+    'mode','published_metadata',
+    'machineValue','fixture-published-at',
+    'semanticIdentity','expired-public-research-fixture',
+    'evidenceHash',repeat('d',64)
+  ),
   transaction_timestamp()-interval '1 day',
   transaction_timestamp()+interval '1 hour','official_documentation',true,
   'Expired public behavior is documented.',
@@ -195,8 +201,13 @@ select ok(
     'service_role',
     'public.cognitive_record_research_source(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,timestamptz,timestamptz,timestamptz,text,boolean,text,text,text,text[],text)',
     'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.cognitive_record_public_research_source(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,text,text,text,text,text,timestamptz,timestamptz,timestamptz,boolean,text,jsonb,text[],text)',
+    'EXECUTE'
   ),
-  'service role cannot call the superseded caller-authored research RPC'
+  'service role cannot call either superseded research-source RPC'
 );
 
 select ok(
@@ -214,7 +225,7 @@ set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 
 select throws_ok(
-  $$select public.cognitive_record_public_research_source(
+  $$select public.cognitive_record_public_research_source_v2(
     'f2000000-0000-4000-8000-000000000001',
     'f1000000-0000-4000-8000-000000000001',
     'shared','production','chillywood-public-repository','github.com',
@@ -228,7 +239,29 @@ select throws_ok(
     encode(extensions.digest(convert_to(
       'Bounded public repository evidence.','UTF8'
     ),'sha256'),'hex'),
-    transaction_timestamp()-interval '1 day',
+    date_trunc(
+      'milliseconds',transaction_timestamp()-interval '1 day'
+    ),
+    jsonb_build_object(
+      'mode','github_commit_metadata',
+      'machineValue',to_char(
+        date_trunc(
+          'milliseconds',transaction_timestamp()-interval '1 day'
+        ),
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ),
+      'semanticIdentity','github-commit:'||repeat('a',40),
+      'evidenceHash',encode(extensions.digest(convert_to(concat_ws(
+        '|','github_commit_metadata',
+        to_char(
+          date_trunc(
+            'milliseconds',transaction_timestamp()-interval '1 day'
+          ),
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ),
+        'github-commit:'||repeat('a',40)
+      ),'UTF8'),'sha256'),'hex')
+    ),
     transaction_timestamp(),transaction_timestamp()+interval '1 day',
     true,'Bounded public repository evidence.',
     '{"title":"Repository","locator":"https://github.com/another-owner/another-repository"}'::jsonb,
@@ -240,19 +273,34 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$select public.cognitive_record_public_research_source(
+  $$select public.cognitive_record_public_research_source_v2(
     'f2000000-0000-4000-8000-000000000001',
     'f1000000-0000-4000-8000-000000000001',
     'shared','production','apple-docs','developer.apple.com',
     'official_documentation','Apple','apple',
     repeat('4',64),repeat('5',64),repeat('6',64),null,
+    jsonb_build_object(
+      'mode','published_metadata',
+      'machineValue',to_char(
+        date_trunc('milliseconds',transaction_timestamp()),
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ),
+      'semanticIdentity','published-at:missing-publication-date',
+      'evidenceHash',encode(extensions.digest(convert_to(concat_ws(
+        '|','published_metadata',to_char(
+          date_trunc('milliseconds',transaction_timestamp()),
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ),
+        'published-at:missing-publication-date'
+      ),'UTF8'),'sha256'),'hex')
+    ),
     transaction_timestamp(),transaction_timestamp()+interval '1 day',
     true,'Official platform behavior is supported.',
     '{"title":"Official","locator":"https://developer.apple.com/documentation/example"}'::jsonb,
     array[repeat('7',64)],
     'research-broker-test-token-0000000000000000'
   )$$,
-  'P0001','public_research_source_rejected',
+  'P0001','public_research_source_v2_rejected',
   'publication date is mandatory at the database broker boundary'
 );
 
@@ -260,7 +308,7 @@ create temporary table research_source_fixture(source_id uuid);
 insert into research_source_fixture
 select (result->>'source_id')::uuid
 from (
-  select public.cognitive_record_public_research_source(
+  select public.cognitive_record_public_research_source_v2(
     'f2000000-0000-4000-8000-000000000001',
     'f1000000-0000-4000-8000-000000000001',
     'shared','production','apple-docs','developer.apple.com',
@@ -274,7 +322,29 @@ from (
     encode(extensions.digest(convert_to(
       'Official platform behavior is supported.','UTF8'
     ),'sha256'),'hex'),
-    transaction_timestamp()-interval '1 day',
+    date_trunc(
+      'milliseconds',transaction_timestamp()-interval '1 day'
+    ),
+    jsonb_build_object(
+      'mode','published_metadata',
+      'machineValue',to_char(
+        date_trunc(
+          'milliseconds',transaction_timestamp()-interval '1 day'
+        ),
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ),
+      'semanticIdentity','published-at:official-example',
+      'evidenceHash',encode(extensions.digest(convert_to(concat_ws(
+        '|','published_metadata',
+        to_char(
+          date_trunc(
+            'milliseconds',transaction_timestamp()-interval '1 day'
+          ),
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ),
+        'published-at:official-example'
+      ),'UTF8'),'sha256'),'hex')
+    ),
     transaction_timestamp(),transaction_timestamp()+interval '1 day',
     true,'Official platform behavior is supported.',
     jsonb_build_object(

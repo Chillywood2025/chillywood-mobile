@@ -168,15 +168,30 @@ const sourceCall = (suffix) => {
   const retrieved = new Date(Date.now() - 60_000);
   const published = new Date(retrieved.getTime() - 86_400_000);
   const freshUntil = new Date(retrieved.getTime() + 86_400_000);
+  const publicationMachineValue = published.toISOString();
+  const publicationSemanticIdentity = `published-at:${suffix}`;
+  const publicationEvidenceHash = hash(
+    [
+      "published_metadata",
+      publicationMachineValue,
+      publicationSemanticIdentity,
+    ].join("|"),
+  );
   return `
 begin;
 set local role service_role;
 set local "request.jwt.claim.role"='service_role';
-select public.cognitive_record_public_research_source(
+select public.cognitive_record_public_research_source_v2(
   ${literal(ids.task)},${literal(ids.project)},'shared','production',
   'apple-docs','developer.apple.com','official_documentation',
   'Apple','apple',${literal(hash(locator))},${literal(hash(locator))},
   ${literal(hash(excerpt))},${literal(published.toISOString())}::timestamptz,
+  jsonb_build_object(
+    'mode','published_metadata',
+    'machineValue',${literal(publicationMachineValue)},
+    'semanticIdentity',${literal(publicationSemanticIdentity)},
+    'evidenceHash',${literal(publicationEvidenceHash)}
+  ),
   ${literal(retrieved.toISOString())}::timestamptz,
   ${literal(freshUntil.toISOString())}::timestamptz,true,${literal(excerpt)},
   jsonb_build_object('title','Official documentation','locator',${literal(locator)}),
@@ -189,7 +204,7 @@ commit;
 const assertRejectedWithoutPersistence = async (race, suffix) => {
   const result = await runSession(sourceCall(suffix));
   assert.notEqual(result.code, 0, result.stdout);
-  assert.match(result.stderr, /public_research_source_rejected/u);
+  assert.match(result.stderr, /public_research_source_v2_rejected/u);
   assert.equal((await race.result).code, 0);
   assert.equal(
     query(`select count(*) from public.research_sources

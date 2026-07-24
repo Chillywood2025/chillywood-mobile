@@ -111,6 +111,15 @@ select ok(
   'ordinary clients cannot reach research provenance, contradiction, or maintenance writers'
 );
 
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.cognitive_record_public_research_source(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,text,text,text,text,text,timestamptz,timestamptz,timestamptz,boolean,text,jsonb,text[],text)',
+    'EXECUTE'
+  ),
+  'service runtime cannot invoke the superseded provenance-free source writer'
+);
+
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 
@@ -223,6 +232,47 @@ select is(
   'published_metadata',
   'source v2 persists broker-derived publication provenance'
 );
+
+reset role;
+select throws_ok(
+  $$insert into public.research_sources(
+      task_id,project_id,platform,environment,actor_identity,dedupe_key,
+      status,summary,evidence_metadata,data_class,retention_until,
+      authority_id,canonical_host,ownership_identity,source_reference_hash,
+      canonical_url_hash,content_hash,publisher,publication_date,
+      publication_provenance,retrieval_date,freshness_deadline,source_type,
+      is_primary,bounded_excerpt,citation_metadata,trusted_for_tool_execution
+    )
+    select
+      source.task_id,source.project_id,source.platform,source.environment,
+      source.actor_identity,'legacy-provenance-insert-fixture',
+      source.status,source.summary,source.evidence_metadata,source.data_class,
+      source.retention_until,source.authority_id,source.canonical_host,
+      source.ownership_identity,repeat('5',64),repeat('6',64),repeat('7',64),
+      source.publisher,source.publication_date,
+      jsonb_build_object(
+        'mode','legacy_reviewed_metadata',
+        'machineValue','legacy-reviewed-source-v1',
+        'semanticIdentity','legacy-reviewed-source-v1',
+        'evidenceHash',encode(extensions.digest(
+          convert_to('legacy-reviewed-source-v1','UTF8'),'sha256'
+        ),'hex')
+      ),
+      source.retrieval_date,source.freshness_deadline,source.source_type,
+      source.is_primary,source.bounded_excerpt,
+      jsonb_build_object(
+        'title','Legacy insertion fixture',
+        'locator','retained-hash:'||repeat('6',64)
+      ),
+      false
+    from public.research_sources source
+    where source.id=(select support_source_id from research_chain_sources)$$,
+  '42501',
+  'research_source_v2_provenance_required',
+  'new source rows cannot claim the historical legacy provenance marker'
+);
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
 
 create temporary table research_chain_claim(claim_id uuid);
 insert into research_chain_claim

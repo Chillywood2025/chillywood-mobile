@@ -778,6 +778,37 @@ select is(
   '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba',
   'deterministic resolver returns exact active Option C'
 );
+select ok(
+  public.product_experience_lock_effective_baseline_v1(
+    'a2000000-0000-4000-8000-000000000001',
+    'a1000000-0000-4000-8000-000000000001',
+    'android','production',
+    jsonb_build_object(
+      'baselineState','approved_baseline',
+      'baselineId','chillywood-product-experience-baseline-v1',
+      'baselineComparisonHash',
+      '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+    )
+  ),
+  'final sentinel boundary locks and resolves the exact active Option C version'
+);
+select ok(
+  (
+    select count(*)=2
+    from pg_trigger
+    where not tgisinternal
+      and tgname in (
+        'product_experience_sentinel_runs_effective_baseline_required',
+        'product_quality_findings_effective_baseline_required'
+      )
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.product_experience_lock_effective_baseline_v1(uuid,uuid,public.cognitive_platform,public.cognitive_environment,jsonb)',
+    'EXECUTE'
+  ),
+  'collection and triage table boundaries own the non-client baseline recheck'
+);
 select is(
   (
     select count(*)::integer
@@ -911,6 +942,33 @@ select is(
   repeat('8',64),
   'active resolver moves deterministically to the approved replacement'
 );
+reset role;
+select ok(
+  not public.product_experience_lock_effective_baseline_v1(
+    'a2000000-0000-4000-8000-000000000001',
+    'a1000000-0000-4000-8000-000000000001',
+    'android','production',
+    jsonb_build_object(
+      'baselineState','approved_baseline',
+      'baselineId','chillywood-product-experience-baseline-v1',
+      'baselineComparisonHash',
+      '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+    )
+  ),
+  'superseded Option C cannot be reused after the current resolver advances'
+);
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  'a3000000-0000-4000-8000-000000000001',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a3000000-0000-4000-8000-000000000001"}',
+  true
+);
 select is(
   public.governance_owner_revoke_product_experience_baseline(
     'ae000000-0000-4000-8000-000000000001',
@@ -929,6 +987,20 @@ select is(
   ),
   null::jsonb,
   'revoked baseline is rejected by the active resolver'
+);
+select ok(
+  not public.product_experience_lock_effective_baseline_v1(
+    'a2000000-0000-4000-8000-000000000001',
+    'a1000000-0000-4000-8000-000000000001',
+    'android','production',
+    jsonb_build_object(
+      'baselineState','approved_baseline',
+      'baselineId','chillywood-product-experience-baseline-v1',
+      'baselineComparisonHash',
+      '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+    )
+  ),
+  'revoked baseline cannot pass a later sentinel or triage lock/recheck'
 );
 select throws_ok(
   $$update public.product_experience_baseline_lifecycle_events
