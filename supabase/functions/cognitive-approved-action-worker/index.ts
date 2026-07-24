@@ -85,6 +85,22 @@ const switchTargetHash = (switchKey: string, enabled: boolean, policyVersion: st
   sha256Hex(`set_switch|${switchKey}|${enabled ? "true" : "false"}|${policyVersion}`);
 
 const BEGIN_STATES = new Set(["preflight", "executing", "evaluating"]);
+const BOOTSTRAP_PHASES = new Set(["claim", "stage", "complete"]);
+
+export const bootstrapTargetHash = (
+  payload: Record<string, unknown>,
+): Promise<string> =>
+  sha256Hex([
+    "bootstrap_control_plane",
+    toText(payload.repositoryFullName),
+    toText(payload.branchName),
+    toText(payload.sourceCommit),
+    toText(payload.retentionPolicyHash),
+    toText(payload.constitutionHash),
+    toText(payload.rollbackHash),
+    toText(payload.evaluatorRequirementHash),
+    toText(payload.policyVersion),
+  ].join("|"));
 
 const claimApprovedAction = async (
   serviceClient: SupabaseClientLike,
@@ -209,6 +225,70 @@ const releaseOrQuarantineExecution = async (
   return json(200, result.data as JsonObject);
 };
 
+const bootstrapControlPlane = async (
+  serviceClient: SupabaseClientLike,
+  payload: Record<string, unknown>,
+): Promise<Response> => {
+  const phase = toText(payload.phase);
+  if (!BOOTSTRAP_PHASES.has(phase)) {
+    return json(409, { error: "bootstrap_control_plane_phase_rejected" });
+  }
+  if (phase === "claim") {
+    const result = await serviceClient.rpc(
+      "governance_claim_bootstrap_control_plane",
+      {
+        p_approval_hash: toText(payload.approvalHash),
+        p_approval_id: toText(payload.approvalId),
+        p_branch_name: toText(payload.branchName),
+        p_constitution_hash: toText(payload.constitutionHash),
+        p_evaluator_requirement_hash: toText(payload.evaluatorRequirementHash),
+        p_policy_version: toText(payload.policyVersion),
+        p_repository_full_name: toText(payload.repositoryFullName),
+        p_retention_policy_hash: toText(payload.retentionPolicyHash),
+        p_rollback_hash: toText(payload.rollbackHash),
+        p_service_identity: SERVICE_IDENTITY,
+        p_source_commit: toText(payload.sourceCommit),
+        p_target_resource_hash: await bootstrapTargetHash(payload),
+        p_worker_assertion: workerAssertion(),
+      },
+    );
+    if (result.error || !isRecord(result.data)) {
+      return json(409, { error: "bootstrap_control_plane_claim_rejected" });
+    }
+    return json(200, result.data as JsonObject);
+  }
+  if (phase === "stage") {
+    const result = await serviceClient.rpc(
+      "governance_stage_bootstrap_control_plane",
+      {
+        p_approval_hash: toText(payload.approvalHash),
+        p_execution_id: toText(payload.executionId),
+        p_service_identity: SERVICE_IDENTITY,
+        p_target_resource_hash: toText(payload.targetResourceHash),
+        p_worker_assertion: workerAssertion(),
+      },
+    );
+    if (result.error || !isRecord(result.data)) {
+      return json(409, { error: "bootstrap_control_plane_stage_rejected" });
+    }
+    return json(200, result.data as JsonObject);
+  }
+  const result = await serviceClient.rpc(
+    "governance_complete_bootstrap_control_plane",
+    {
+      p_evaluator_proof_hash: toText(payload.evaluatorProofHash),
+      p_execution_id: toText(payload.executionId),
+      p_execution_receipt_hash: toText(payload.executionReceiptHash),
+      p_service_identity: SERVICE_IDENTITY,
+      p_worker_assertion: workerAssertion(),
+    },
+  );
+  if (result.error || !isRecord(result.data)) {
+    return json(409, { error: "bootstrap_control_plane_completion_rejected" });
+  }
+  return json(200, result.data as JsonObject);
+};
+
 export const handler = async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS, status: 200 });
@@ -226,6 +306,9 @@ export const handler = async (request: Request): Promise<Response> => {
     }
     const serviceClient = createServiceClient();
     const action = toText(payload.action);
+    if (action === "bootstrap_control_plane") {
+      return await bootstrapControlPlane(serviceClient, payload);
+    }
     if (action === "claim") return await claimApprovedAction(serviceClient, payload);
     if (action === "begin") return await beginApprovedExecution(serviceClient, payload);
     if (action === "execute_switch") {

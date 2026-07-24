@@ -105,6 +105,27 @@ const recordEvaluatorProof = async (
   return json(200, result.data as JsonObject);
 };
 
+const recordBootstrapEvaluatorProof = async (
+  serviceClient: SupabaseClientLike,
+  payload: Record<string, unknown>,
+): Promise<Response> => {
+  const result = await serviceClient.rpc(
+    "governance_record_bootstrap_evaluator_proof",
+    {
+      p_evaluator_assertion: evaluatorAssertion(),
+      p_evaluator_identity: SERVICE_IDENTITY,
+      p_evaluator_proof_hash: toText(payload.evaluatorProofHash),
+      p_execution_id: toText(payload.executionId),
+      p_execution_receipt_hash: toText(payload.executionReceiptHash),
+      p_verdict: toText(payload.verdict),
+    },
+  );
+  if (result.error || !isRecord(result.data)) {
+    return json(409, { error: "bootstrap_evaluator_proof_rejected" });
+  }
+  return json(200, result.data as JsonObject);
+};
+
 export const handler = async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS, status: 200 });
@@ -120,10 +141,14 @@ export const handler = async (request: Request): Promise<Response> => {
     if (!isRecord(payload) || !safePayload(payload)) {
       return json(400, { error: "independent_evaluator_payload_rejected" });
     }
-    if (toText(payload.action) !== "record_evaluator_proof") {
-      return json(400, { error: "unsupported_action" });
+    const action = toText(payload.action);
+    if (action === "record_bootstrap_evaluator_proof") {
+      return await recordBootstrapEvaluatorProof(createServiceClient(), payload);
     }
-    return await recordEvaluatorProof(createServiceClient(), payload);
+    if (action === "record_evaluator_proof") {
+      return await recordEvaluatorProof(createServiceClient(), payload);
+    }
+    return json(400, { error: "unsupported_action" });
   } catch {
     return json(500, { error: "cognitive_independent_evaluator_failed" });
   }

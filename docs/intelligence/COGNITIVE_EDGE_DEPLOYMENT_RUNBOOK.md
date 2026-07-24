@@ -40,6 +40,43 @@ Do not pass `--no-verify-jwt` to any deployment. The autonomous request function
 is the only function in this set with `verify_jwt=false`, and it authenticates
 inside the handler.
 
+## Zero-state two-party bootstrap
+
+The initial control plane must use the same distinct principals as later
+approved actions. It is not authorized through the legacy
+`cognitive_bootstrap_level01_canary` RPC and must not be initialized with direct
+service-role SQL.
+
+The reviewed request chain is:
+
+1. An authenticated exact Owner calls `record_bootstrap_approval` on
+   `cognitive-owner-approval`. The database derives the canonical target hash
+   and records an immutable, expiring zero-state approval.
+2. The worker calls `bootstrap_control_plane` with phase `claim`, using only its
+   invocation proof and separate worker assertion. The Edge source independently
+   derives the canonical target hash from the exact repository, branch, source
+   commit, retention, constitution, rollback, evaluator-requirement, and policy
+   tuple.
+3. The same worker action with phase `stage` writes only the immutable staged
+   bootstrap execution and returns the database-derived receipt hash. It creates
+   no live task, project, constitution, switch, schedule, or emergency state.
+4. The independent evaluator calls `record_bootstrap_evaluator_proof` using its
+   separate invocation proof and assertion. It cannot claim, stage, or complete.
+5. The worker calls `bootstrap_control_plane` with phase `complete`. The
+   database requires the matching passed evaluator proof and atomically creates
+   the bounded control plane with every switch and schedule off.
+
+The canonical target encoding is the UTF-8 bytes of:
+
+```text
+bootstrap_control_plane|<repository>|<branch>|<sourceCommit>|<retentionHash>|<constitutionHash>|<rollbackHash>|<evaluatorRequirementHash>|<policyVersion>
+```
+
+The target is the lowercase SHA-256 hex digest of those bytes. Caller-supplied
+hashes cannot replace the derived claim target. Replay, revocation, expiration,
+emergency stop, wrong receipt/proof, and concurrent duplicate completion must
+fail closed in the database contract.
+
 ## Exact server secret names
 
 Required for worker/evaluator activation:
@@ -212,6 +249,9 @@ Remote proof still must verify:
 9. Logs contain no secret or request body.
 10. Staged state remains non-live until the separate matching evaluator proof
     exists and the worker completes.
+11. Zero-state bootstrap uses exact Owner approval, worker claim/stage,
+    independent evaluator proof, and worker completion; no legacy bootstrap or
+    direct service-role SQL is used.
 
 ## Rollback
 

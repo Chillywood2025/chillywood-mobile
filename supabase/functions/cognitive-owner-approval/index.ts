@@ -108,6 +108,27 @@ const recordOwnerApproval = async (
   return json(200, result.data as JsonObject);
 };
 
+const recordBootstrapApproval = async (
+  actorClient: SupabaseClientLike,
+  payload: Record<string, unknown>,
+): Promise<Response> => {
+  const result = await actorClient.rpc("governance_record_bootstrap_approval", {
+    p_branch_name: toText(payload.branchName),
+    p_constitution_hash: toText(payload.constitutionHash),
+    p_evaluator_requirement_hash: toText(payload.evaluatorRequirementHash),
+    p_policy_version: toText(payload.policyVersion),
+    p_repository_full_name: toText(payload.repositoryFullName),
+    p_retention_policy_hash: toText(payload.retentionPolicyHash),
+    p_rollback_hash: toText(payload.rollbackHash),
+    p_source_commit: toText(payload.sourceCommit),
+    p_validity_seconds: payload.validitySeconds,
+  });
+  if (result.error || !isRecord(result.data)) {
+    return json(409, { error: "bootstrap_owner_approval_rejected" });
+  }
+  return json(200, result.data as JsonObject);
+};
+
 const revokeOwnerApproval = async (
   actorClient: SupabaseClientLike,
   payload: Record<string, unknown>,
@@ -157,6 +178,9 @@ export const handler = async (request: Request): Promise<Response> => {
       return json(400, { error: "owner_approval_payload_rejected" });
     }
     const action = toText(payload.action);
+    if (action === "record_bootstrap_approval") {
+      return await recordBootstrapApproval(actorClient, payload);
+    }
     if (action === "record_owner_approval") {
       return await recordOwnerApproval(actorClient, payload);
     }
