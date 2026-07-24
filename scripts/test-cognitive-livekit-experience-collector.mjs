@@ -146,6 +146,8 @@ assert.equal(selfTest.status, 0, selfTest.stderr);
 const selfTestResult = JSON.parse(selfTest.stdout);
 assert.equal(selfTestResult.ok, true);
 assert.equal(selfTestResult.headlessOnlyCannotClaimInstalledUi, true);
+assert.equal(selfTestResult.approvedTokenEndpointAccepted, true);
+assert.equal(selfTestResult.unapprovedTokenEndpointRejected, true);
 assert.ok(selfTestResult.stageCount >= 30);
 
 process.stdout.write(JSON.stringify({

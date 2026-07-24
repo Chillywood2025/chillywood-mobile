@@ -660,6 +660,39 @@ const runHeadlessParticipant = async (
 };
 
 const runSelfTest = () => {
+  const privateInputFixture = {
+    routeOrSurface: "live-stage",
+    runtimeIdentityHash: "a".repeat(64),
+    sourceBuildHash: "b".repeat(64),
+    tokenRequest: {
+      apiKey: "synthetic-public-key-000000",
+      authorization: "Bearer synthetic-session-000000",
+      body: { roomName: "synthetic-room" },
+      endpointUrl: `${APPROVED_TOKEN_ORIGIN}${APPROVED_TOKEN_PATH}`,
+    },
+  };
+  try {
+    validatePrivateInput(privateInputFixture);
+  } catch {
+    throw new Error("self_test_approved_endpoint_failed");
+  }
+  let unapprovedTokenEndpointRejected = false;
+  try {
+    validatePrivateInput({
+      ...privateInputFixture,
+      tokenRequest: {
+        ...privateInputFixture.tokenRequest,
+        endpointUrl:
+          "https://example.invalid/functions/v1/livekit-token",
+      },
+    });
+  } catch (error) {
+    unapprovedTokenEndpointRejected =
+      error?.message === "token_endpoint_not_approved";
+  }
+  if (!unapprovedTokenEndpointRejected) {
+    throw new Error("self_test_token_endpoint_policy_failed");
+  }
   const metric = {
     backgroundForegroundRecovery: false,
     backgrounded: false,
@@ -703,9 +736,11 @@ const runSelfTest = () => {
     throw new Error("self_test_contract_failed");
   }
   process.stdout.write(JSON.stringify({
+    approvedTokenEndpointAccepted: true,
     headlessOnlyCannotClaimInstalledUi: metric.installedUiObserved === false,
     ok: true,
     stageCount: METRIC_KEYS.length,
+    unapprovedTokenEndpointRejected,
   }) + "\n");
 };
 
