@@ -97,7 +97,7 @@ type DeterministicVisualAssessment = Readonly<{
   profile: DeterministicFindingProfile | null;
 }>;
 
-const SERVICE_IDENTITY = "cognitive_independent_evaluator";
+const SERVICE_IDENTITY = "cognitive_product_quality_evaluator";
 const INVOCATION_HEADER = "x-cognitive-evaluator-invocation";
 const MAX_REQUEST_BYTES = 32 * 1024;
 export const APPROVED_OPTION_C_BASELINE_HASH =
@@ -1916,7 +1916,7 @@ export const handler = async (request: Request): Promise<Response> => {
         "governance_evaluate_product_experience_baseline_v1",
         {
           p_evaluator_assertion: readRequiredSecret(
-            "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION",
+            "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION",
           ),
           p_evaluator_identity: SERVICE_IDENTITY,
           p_execution_id: String(payload.executionId),
@@ -2001,7 +2001,7 @@ export const handler = async (request: Request): Promise<Response> => {
         p_assessment_hash: assessmentHash,
         p_assessment_kind: assessmentKind,
         p_evaluator_assertion: readRequiredSecret(
-          "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION",
+          "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION",
         ),
         p_evaluator_identity: SERVICE_IDENTITY,
         p_evaluator_output_hash: evaluatorOutputHash,

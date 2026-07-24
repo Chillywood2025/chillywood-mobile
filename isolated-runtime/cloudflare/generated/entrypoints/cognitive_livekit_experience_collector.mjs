@@ -14,9 +14,7 @@ const principal = Object.freeze({
   ],
   "hyperdriveBinding": "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_HYPERDRIVE",
   "maxRequestBytes": 98304,
-  "networkEgress": [
-    "configured_livekit_origin_only"
-  ],
+  "networkEgress": [],
   "operations": {
     "prepare_run": {
       "payloadKeys": [
@@ -47,13 +45,11 @@ const principal = Object.freeze({
       ]
     }
   },
-  "provider": "livekit_read_test",
+  "provider": "none",
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
-    "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION",
-    "LIVEKIT_API_KEY",
-    "LIVEKIT_API_SECRET"
+    "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

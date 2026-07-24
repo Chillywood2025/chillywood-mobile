@@ -171,7 +171,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "product_quality_record_sentinel_evaluator_proof",
         ]),
       },
-      internalSecrets: ["COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION"],
+      internalSecrets: ["COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION"],
       maxRequestBytes: 32_768,
     }),
     principal({
@@ -277,10 +277,8 @@ export const RUNTIME_MANIFEST = Object.freeze({
       id: "cognitive_livekit_experience_collector",
       edgeSource:
         "supabase/functions/cognitive-livekit-experience-collector/index.ts",
-      provider: "livekit_read_test",
+      provider: "none",
       internalSecrets: ["COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"],
-      providerSecrets: ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"],
-      networkEgress: ["configured_livekit_origin_only"],
       operations: {
         prepare_run: operation([
           "action", "evidenceManifestHash", "metricManifest",

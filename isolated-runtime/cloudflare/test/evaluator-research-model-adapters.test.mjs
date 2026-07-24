@@ -72,6 +72,11 @@ test("new database statements are static, parameterized, and role-scoped", async
     new URL("../src/adapters/research-evaluator.mjs", import.meta.url),
     "utf8",
   );
+  assert.equal(MODEL_STATEMENTS.recordModelProviderOverrun.arity, 9);
+  assert.match(
+    MODEL_STATEMENTS.recordModelProviderOverrun.text,
+    /^\s*select cognitive_runtime\.cognitive_model_router_record_provider_overrun\(/u,
+  );
   assert.doesNotMatch(researchText, /COGNITIVE_MODEL_OPENAI_API_KEY/u);
   assert.doesNotMatch(evaluatorText, /COGNITIVE_MODEL_OPENAI_API_KEY/u);
   assert.doesNotMatch(evaluatorText, /\bfetch\s*\(/u);
@@ -105,7 +110,7 @@ test("baseline and complete-snapshot sentinel evaluation adapters are ready", as
         },
       },
       env: {
-        COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
+        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
       },
       payload: {
         action: "evaluate_product_baseline_selection",
@@ -116,7 +121,7 @@ test("baseline and complete-snapshot sentinel evaluation adapters are ready", as
   assert.equal(calls[0].id, "evaluateProductBaseline");
   assert.deepEqual(calls[0].parameters, [
     UUID_A,
-    "cognitive_independent_evaluator",
+    "cognitive_product_quality_evaluator",
     EVALUATOR_TOKEN,
     HASH_A,
   ]);
@@ -522,6 +527,22 @@ const modelDatabase = (calls) => ({
         reservedModelTokens: parameters[18],
       };
     }
+    if (id === "recordModelProviderOverrun") {
+      const reservation = calls.find((entry) =>
+        entry.id === "reserveModelInvocation"
+      );
+      return {
+        authority: "advisory_only",
+        evidenceHash: parameters[6],
+        overrunAuditId: UUID_C,
+        preflightId: parameters[0],
+        quorumEligible: false,
+        reportedModelCost: parameters[2],
+        reportedModelTokens: parameters[1],
+        reservedModelCost: reservation.parameters[19],
+        reservedModelTokens: reservation.parameters[18],
+      };
+    }
     if (id === "settleModelInvocation") {
       return {
         authority: "advisory_only",
@@ -621,6 +642,54 @@ test("model provider failure is settled before the adapter rejects", async () =>
   assert.equal(calls[2].parameters[1], "provider_timeout");
   assert(calls[2].parameters.slice(4, 9).every((value) => value === null));
   assert.match(calls[2].parameters[9], /^[a-f0-9]{64}$/u);
+});
+
+test("model provider overrun records true usage before conservative settlement", async () => {
+  const payload = await createModelPayload();
+  const calls = [];
+  const adapters = createModelRouterAdapters({
+    now: () => 2_000,
+    transport: async () => ({
+      modelVersion: "gpt-5-mini",
+      outputText: "{}",
+      providerResponseId: "response-overrun-unit-test",
+      usage: { inputTokens: 100_000, outputTokens: 50 },
+    }),
+  });
+  await assert.rejects(
+    () =>
+      adapters.assess_sanitized_evidence.execute({
+        database: modelDatabase(calls),
+        env: modelEnvironment,
+        payload,
+      }),
+    /model_budget_postflight_rejected/u,
+  );
+  assert.deepEqual(calls.map((entry) => entry.id), [
+    "recoverModelReservation",
+    "reserveModelInvocation",
+    "recordModelProviderOverrun",
+    "settleModelInvocation",
+  ]);
+  const reservation = calls[1].parameters;
+  const overrun = calls[2].parameters;
+  const settlement = calls[3].parameters;
+  assert.equal(overrun.length, 9);
+  assert.equal(overrun[0], UUID_B);
+  assert.equal(overrun[1], 100_050);
+  assert.equal(overrun[2], 0.1001);
+  assert.equal(overrun[3], "gpt-5-mini");
+  assert.match(overrun[4], /^[a-f0-9]{64}$/u);
+  assert.match(overrun[5], /^[a-f0-9]{64}$/u);
+  assert.match(overrun[6], /^[a-f0-9]{64}$/u);
+  assert.equal(overrun[7], 0);
+  assert.equal(
+    overrun[8],
+    modelEnvironment.COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION,
+  );
+  assert.equal(settlement[1], "provider_rejected");
+  assert.equal(settlement[2], reservation[18]);
+  assert.equal(settlement[3], reservation[19]);
 });
 
 test("model instruction-shaped evidence is rejected before any database call", async () => {

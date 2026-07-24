@@ -67,11 +67,6 @@
     },
     {
       "from": "chillywood-level01-livekit-experience-collector",
-      "kind": "allowlisted_network_egress",
-      "to": "configured_livekit_origin_only"
-    },
-    {
-      "from": "chillywood-level01-livekit-experience-collector",
       "kind": "cache_disabled_hyperdrive",
       "to": "postgres-role:cognitive_livekit_experience_collector"
     },
@@ -160,14 +155,12 @@
       "credentials": [
         "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_HYPERDRIVE",
         "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
-        "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION",
-        "LIVEKIT_API_KEY",
-        "LIVEKIT_API_SECRET"
+        "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"
       ],
       "databaseRole": "cognitive_livekit_experience_collector",
       "id": "chillywood-level01-livekit-experience-collector",
       "kind": "private_service_binding_worker",
-      "provider": "livekit_read_test",
+      "provider": "none",
       "public": false
     },
     {
@@ -199,7 +192,7 @@
       "credentials": [
         "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_HYPERDRIVE",
         "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_INVOKE_SHA256",
-        "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION"
+        "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION"
       ],
       "databaseRole": "cognitive_product_quality_evaluator",
       "id": "chillywood-level01-product-quality-evaluator",

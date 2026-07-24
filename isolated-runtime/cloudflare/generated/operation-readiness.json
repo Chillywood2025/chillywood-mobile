@@ -58,6 +58,7 @@
         "databaseOperations": [
           "recover_model_reservation",
           "reserve_model_invocation",
+          "record_model_provider_overrun",
           "settle_model_invocation"
         ],
         "ready": true,

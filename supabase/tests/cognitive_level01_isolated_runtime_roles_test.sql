@@ -1,6 +1,6 @@
 begin;
 
-select plan(29);
+select plan(37);
 
 create temporary table expected_runtime_roles(
   role_name text primary key
@@ -26,35 +26,35 @@ create temporary table expected_runtime_grants(
 ) on commit drop;
 
 insert into expected_runtime_grants(role_name, schema_name, function_name) values
-  ('cognitive_product_baseline_executor','public','governance_claim_approved_action'),
-  ('cognitive_product_baseline_executor','public','governance_begin_approved_execution'),
-  ('cognitive_product_baseline_executor','public','governance_stage_product_experience_baseline_v1'),
-  ('cognitive_product_baseline_executor','public','governance_complete_approved_execution'),
-  ('cognitive_product_baseline_executor','public','governance_product_baseline_persist_completed_execution'),
-  ('cognitive_product_baseline_executor','public','governance_fail_approved_execution'),
+  ('cognitive_product_baseline_executor','cognitive_runtime','governance_claim_approved_action'),
+  ('cognitive_product_baseline_executor','cognitive_runtime','governance_begin_approved_execution'),
+  ('cognitive_product_baseline_executor','cognitive_runtime','governance_stage_product_experience_baseline_v1'),
+  ('cognitive_product_baseline_executor','cognitive_runtime','governance_complete_approved_execution'),
+  ('cognitive_product_baseline_executor','cognitive_runtime','governance_product_baseline_persist_completed_execution'),
+  ('cognitive_product_baseline_executor','cognitive_runtime','governance_fail_approved_execution'),
   ('cognitive_sentinel_collector','cognitive_runtime','collect_sentinel_run'),
-  ('cognitive_product_quality_evaluator','public','product_experience_resolve_current_active_baseline'),
-  ('cognitive_product_quality_evaluator','public','product_quality_detection_assessment_hash'),
-  ('cognitive_product_quality_evaluator','public','product_quality_resolution_assessment_hash'),
-  ('cognitive_product_quality_evaluator','public','governance_evaluate_product_experience_baseline_v1'),
-  ('cognitive_product_quality_evaluator','public','product_quality_record_sentinel_evaluator_proof'),
+  ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_detection_assessment_hash'),
+  ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_resolution_assessment_hash'),
+  ('cognitive_product_quality_evaluator','cognitive_runtime','governance_evaluate_product_experience_baseline_v1'),
+  ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_record_sentinel_evaluator_proof'),
   ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_evaluator_snapshot'),
-  ('cognitive_product_quality_triage','public','product_quality_triage_detection'),
-  ('cognitive_product_quality_triage','public','product_quality_triage_resolution'),
-  ('cognitive_public_research_broker','public','cognitive_record_public_research_source_v2'),
+  ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_detection'),
+  ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_resolution'),
+  ('cognitive_public_research_broker','cognitive_runtime','cognitive_record_public_research_source_v2'),
   ('cognitive_public_research_broker','cognitive_runtime','record_research_claim_with_readback'),
-  ('cognitive_public_research_broker','public','cognitive_record_public_research_contradiction_detection'),
-  ('cognitive_public_research_broker','public','cognitive_expire_public_research_maintenance'),
+  ('cognitive_public_research_broker','cognitive_runtime','cognitive_record_public_research_contradiction_detection'),
+  ('cognitive_public_research_broker','cognitive_runtime','cognitive_expire_public_research_maintenance'),
   ('cognitive_research_evaluator','cognitive_runtime','derive_research_evaluation_with_readback'),
-  ('cognitive_research_evaluator','public','cognitive_resolve_public_research_contradiction'),
+  ('cognitive_research_evaluator','cognitive_runtime','cognitive_resolve_public_research_contradiction'),
   ('cognitive_research_evaluator','cognitive_runtime','research_evaluator_snapshot'),
-  ('cognitive_model_router','public','cognitive_model_router_recover_expired'),
-  ('cognitive_model_router','public','cognitive_model_router_reserve'),
-  ('cognitive_model_router','public','cognitive_model_router_settle'),
+  ('cognitive_model_router','cognitive_runtime','cognitive_model_router_recover_expired'),
+  ('cognitive_model_router','cognitive_runtime','cognitive_model_router_reserve'),
+  ('cognitive_model_router','cognitive_runtime','cognitive_model_router_record_provider_overrun'),
+  ('cognitive_model_router','cognitive_runtime','cognitive_model_router_settle'),
   ('cognitive_livekit_experience_collector','cognitive_runtime','collect_livekit_sentinel_run'),
-  ('cognitive_github_draft_pr_broker','public','cognitive_record_github_draft_pr_provider_readback'),
-  ('cognitive_github_draft_pr_broker','public','cognitive_consume_github_draft_pr_capability'),
-  ('cognitive_github_draft_pr_broker','public','cognitive_accept_github_draft_pr_tool_result'),
+  ('cognitive_github_draft_pr_broker','cognitive_runtime','cognitive_record_github_draft_pr_provider_readback'),
+  ('cognitive_github_draft_pr_broker','cognitive_runtime','cognitive_consume_github_draft_pr_capability'),
+  ('cognitive_github_draft_pr_broker','cognitive_runtime','cognitive_accept_github_draft_pr_tool_result'),
   ('cognitive_level01_scheduler','cognitive_runtime','scheduler_prerequisite_snapshot'),
   ('cognitive_level01_scheduler','cognitive_runtime','issue_recurring_child_task');
 
@@ -190,6 +190,97 @@ select ok(
 select ok(
   not exists (
     select 1
+    from expected_runtime_roles expected
+    where pg_catalog.has_schema_privilege(
+      expected.role_name,
+      'public',
+      'USAGE'
+    )
+  ),
+  'NOLOGIN runtime roles cannot resolve application-schema objects'
+);
+
+select ok(
+  not cognitive_runtime.runtime_login_provisioning_ready(),
+  'provider-owned pg_net PUBLIC access blocks password-bearing runtime logins'
+);
+
+select ok(
+  pg_catalog.has_schema_privilege('anon', 'public', 'USAGE')
+  and pg_catalog.has_schema_privilege('authenticated', 'public', 'USAGE')
+  and pg_catalog.has_schema_privilege('service_role', 'public', 'USAGE'),
+  'closing the PUBLIC fallback preserves existing Supabase role access'
+);
+
+select ok(
+  not exists (
+    select 1
+    from pg_catalog.pg_namespace namespace
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(
+        namespace.nspacl,
+        pg_catalog.acldefault('n', namespace.nspowner)
+      )
+    ) schema_acl
+    where namespace.nspname = 'public'
+      and schema_acl.grantee = 0
+      and schema_acl.privilege_type = 'USAGE'
+  ),
+  'application schema has no PUBLIC usage fallback'
+);
+
+select ok(
+  not exists (
+    select 1
+    from expected_runtime_roles expected
+    join pg_catalog.pg_roles role_value
+      on role_value.rolname = expected.role_name
+    cross join pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(
+        procedure.proacl,
+        pg_catalog.acldefault('f', procedure.proowner)
+      )
+    ) function_acl
+    where namespace.nspname in ('public', 'net')
+      and function_acl.grantee = role_value.oid
+      and function_acl.privilege_type = 'EXECUTE'
+  ),
+  'runtime roles receive no explicit public or pg_net function grants'
+);
+
+select ok(
+  not exists (
+    select 1
+    from expected_runtime_roles expected
+    join pg_catalog.pg_roles role_value
+      on role_value.rolname = expected.role_name
+    cross join pg_catalog.pg_class relation
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = relation.relnamespace
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(
+        relation.relacl,
+        pg_catalog.acldefault(
+          case
+            when relation.relkind = 'S' then 'S'::"char"
+            else 'r'::"char"
+          end,
+          relation.relowner
+        )
+      )
+    ) relation_acl
+    where namespace.nspname = 'net'
+      and relation_acl.grantee = role_value.oid
+  ),
+  'runtime roles receive no explicit pg_net relation grants'
+);
+
+select ok(
+  not exists (
+    select 1
     from pg_catalog.pg_roles role_value
     join expected_runtime_roles expected
       on expected.role_name = role_value.rolname
@@ -225,6 +316,52 @@ select ok(
     )
   ),
   'every principal can execute its exact reviewed operation set'
+);
+
+select is(
+  (
+    with runtime_roles as (
+      select role_value.oid, role_value.rolname
+      from pg_catalog.pg_roles role_value
+      join expected_runtime_roles expected
+        on expected.role_name = role_value.rolname
+    ),
+    explicit_grants as (
+      select
+        runtime_role.rolname,
+        namespace.nspname,
+        procedure.oid::regprocedure::text as signature
+      from runtime_roles runtime_role
+      cross join pg_catalog.pg_proc procedure
+      join pg_catalog.pg_namespace namespace
+        on namespace.oid = procedure.pronamespace
+      cross join lateral pg_catalog.aclexplode(
+        coalesce(
+          procedure.proacl,
+          pg_catalog.acldefault('f', procedure.proowner)
+        )
+      ) function_acl
+      where function_acl.grantee = runtime_role.oid
+        and function_acl.privilege_type = 'EXECUTE'
+    )
+    select encode(
+      extensions.digest(
+        convert_to(
+          string_agg(
+            rolname || '|' || nspname || '|' || signature,
+            E'\n'
+            order by rolname, nspname, signature
+          ),
+          'UTF8'
+        ),
+        'sha256'
+      ),
+      'hex'
+    )
+    from explicit_grants
+  ),
+  '5f103b3271536d593809c6b61ebd12c1ca5b2427d32f0bd7fb6f19f6c464a494',
+  'exact role-to-function-signature grant manifest is deterministic'
 );
 
 select ok(
@@ -275,29 +412,24 @@ select ok(
 );
 
 select ok(
-  not pg_catalog.has_function_privilege(
+  not pg_catalog.has_schema_privilege(
     'cognitive_level01_scheduler',
-    'public.cognitive_level01_issue_recurring_child_task(uuid,uuid,uuid,uuid,public.cognitive_platform,public.cognitive_environment,timestamptz,text,text,text,text,text,text)',
-    'EXECUTE'
-  )
-  and not pg_catalog.has_function_privilege(
-    'cognitive_level01_scheduler',
-    'public.cognitive_level01_scheduler_task_factory_status(uuid,uuid,public.cognitive_platform,public.cognitive_environment)',
-    'EXECUTE'
+    'public',
+    'USAGE'
   ),
   'scheduler cannot bypass its role-aware wrappers'
 );
 
 select ok(
-  not pg_catalog.has_function_privilege(
+  not pg_catalog.has_schema_privilege(
     'cognitive_sentinel_collector',
-    'public.product_experience_collect_sentinel_run(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,text,text,jsonb,text,text,timestamptz,timestamptz,timestamptz,text,text,text)',
-    'EXECUTE'
+    'public',
+    'USAGE'
   )
-  and not pg_catalog.has_function_privilege(
+  and not pg_catalog.has_schema_privilege(
     'cognitive_livekit_experience_collector',
-    'public.product_experience_collect_sentinel_run(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,text,text,jsonb,text,text,timestamptz,timestamptz,timestamptz,text,text,text)',
-    'EXECUTE'
+    'public',
+    'USAGE'
   ),
   'collectors cannot bypass fixed principal and operation binding'
 );
@@ -308,7 +440,7 @@ select ok(
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'cognitive_runtime'
       and (
         (
           procedure.proname = 'product_quality_record_sentinel_evaluator_proof'
@@ -340,7 +472,7 @@ select ok(
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'cognitive_runtime'
       and (
         (
           procedure.proname in (
@@ -393,7 +525,7 @@ select ok(
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'cognitive_runtime'
       and (
         (
           procedure.proname in (
@@ -430,7 +562,7 @@ select is(
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'cognitive_runtime'
       and procedure.proname = 'cognitive_model_router_reserve'
       and pg_catalog.has_function_privilege(
         'cognitive_model_router',
@@ -520,8 +652,31 @@ select is(
       and procedure.prosecdef
       and procedure.proconfig @> array['search_path=""']
   ),
-  13,
-  'all thirteen runtime boundary helpers and wrappers are security definer with an empty search path'
+  37,
+  'all thirty-seven runtime boundary helpers and wrappers are security definer with an empty search path'
+);
+
+select ok(
+  public.governance_service_identity_allows_operation(
+    'cognitive_product_quality_evaluator',
+    'independent_evaluation'
+  )
+  and not public.governance_service_identity_allows_operation(
+    'cognitive_product_quality_evaluator',
+    'product_quality_triage'
+  )
+  and (
+    select count(*) = 2
+    from pg_catalog.pg_constraint constraint_value
+    where constraint_value.conname in (
+      'product_experience_sentinel_evaluator__evaluator_identity_check',
+      'governance_approved_execution_evaluato_evaluator_identity_check'
+    )
+      and pg_catalog.pg_get_constraintdef(
+        constraint_value.oid
+      ) like '%cognitive_product_quality_evaluator%'
+  ),
+  'product evaluator has a distinct assertion identity limited to independent evaluation'
 );
 
 select ok(

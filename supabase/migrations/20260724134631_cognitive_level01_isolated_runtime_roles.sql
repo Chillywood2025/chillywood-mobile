@@ -8,6 +8,339 @@
 create schema if not exists cognitive_runtime;
 revoke all on schema cognitive_runtime from public;
 
+-- PostgreSQL has no per-role DENY: a privilege inherited from the special
+-- PUBLIC grantee cannot be revoked from one runtime role. Preserve the exact
+-- effective schema access of every role that already exists, then remove the
+-- PUBLIC fallback before creating any isolated runtime role. Existing Supabase
+-- roles therefore retain their prior application-schema access while future
+-- isolated logins receive none. The provider-owned pg_net schema is checked
+-- separately by runtime_login_provisioning_ready(); the migration role cannot
+-- truthfully revoke grants made by supabase_admin.
+do $close_public_schema_fallback$
+declare
+  schema_name text;
+  existing_role record;
+begin
+  foreach schema_name in array array['public']
+  loop
+    if not exists (
+      select 1
+      from pg_catalog.pg_namespace namespace
+      where namespace.nspname = schema_name
+    ) then
+      continue;
+    end if;
+
+    for existing_role in
+      select role.rolname
+      from pg_catalog.pg_roles role
+      where pg_catalog.has_schema_privilege(
+        role.oid,
+        schema_name,
+        'USAGE'
+      )
+      order by role.rolname
+    loop
+      execute format(
+        'grant usage on schema %I to %I',
+        schema_name,
+        existing_role.rolname
+      );
+    end loop;
+
+    execute format('revoke usage on schema %I from public', schema_name);
+  end loop;
+end;
+$close_public_schema_fallback$;
+
+-- The product-quality evaluator is a distinct runtime principal and must not
+-- receive the existing v1 independent-evaluator assertion. Extend only the
+-- reviewed independent-evaluation operation to a new assertion identity while
+-- preserving the original evaluator path.
+alter table public.governance_two_party_service_assertions
+  drop constraint governance_two_party_service_assertions_service_identity_check;
+alter table public.governance_two_party_service_assertions
+  add constraint governance_two_party_service_assertions_service_identity_check
+  check (
+    service_identity = any(array[
+      'cognitive_approved_action_worker',
+      'product_experience_baseline_service',
+      'livekit_experience_sentinel',
+      'visual_product_experience_sentinel',
+      'installed_journey_sentinel',
+      'product_quality_triage_router',
+      'model_independence_attestation_service',
+      'cognitive_independent_evaluator',
+      'cognitive_product_quality_evaluator'
+    ]::text[])
+  );
+
+create or replace function public.governance_service_identity_allows_operation(
+  p_service_identity text,
+  p_operation text
+)
+returns boolean
+language sql
+immutable
+security definer
+set search_path = ''
+as $$
+  select case p_service_identity
+    when 'cognitive_approved_action_worker' then p_operation = any(array[
+      'bootstrap_control_plane','set_switch','public_research_ingest',
+      'collective_deliberation','github_draft_pr','model_advisory'
+    ]::text[])
+    when 'product_experience_baseline_service'
+      then p_operation = 'visual_experience_canary'
+    when 'livekit_experience_sentinel'
+      then p_operation = 'livekit_experience_canary'
+    when 'visual_product_experience_sentinel'
+      then p_operation = 'visual_experience_canary'
+    when 'installed_journey_sentinel'
+      then p_operation = 'installed_journey_canary'
+    when 'product_quality_triage_router'
+      then p_operation = 'product_quality_triage'
+    when 'model_independence_attestation_service'
+      then p_operation = 'model_independence_attestation'
+    when 'cognitive_independent_evaluator'
+      then p_operation = 'independent_evaluation'
+    when 'cognitive_product_quality_evaluator'
+      then p_operation = 'independent_evaluation'
+    else false
+  end;
+$$;
+revoke all on function
+  public.governance_service_identity_allows_operation(text,text)
+  from public,anon,authenticated,service_role;
+
+alter table public.product_experience_sentinel_evaluator_proofs
+  drop constraint
+    product_experience_sentinel_evaluator__evaluator_identity_check;
+alter table public.product_experience_sentinel_evaluator_proofs
+  add constraint
+    product_experience_sentinel_evaluator__evaluator_identity_check
+  check (
+    evaluator_identity in (
+      'cognitive_independent_evaluator',
+      'cognitive_product_quality_evaluator'
+    )
+  );
+
+alter table public.governance_approved_execution_evaluator_proofs
+  drop constraint
+    governance_approved_execution_evaluato_evaluator_identity_check;
+alter table public.governance_approved_execution_evaluator_proofs
+  add constraint
+    governance_approved_execution_evaluato_evaluator_identity_check
+  check (
+    evaluator_identity in (
+      'cognitive_independent_evaluator',
+      'cognitive_product_quality_evaluator'
+    )
+  );
+
+do $extend_product_evaluator_identity$
+declare
+  function_name text;
+  function_count integer;
+  definition text;
+  updated_definition text;
+  identity_guard constant text :=
+    '<> ''cognitive_independent_evaluator''';
+  extended_guard constant text :=
+    'not in (''cognitive_independent_evaluator'',' ||
+    '''cognitive_product_quality_evaluator'')';
+begin
+  foreach function_name in array array[
+    'governance_record_approved_execution_evaluator_proof',
+    'governance_complete_approved_execution',
+    'governance_evaluate_product_experience_baseline_v1',
+    'governance_persist_product_experience_baseline_v1_internal',
+    'product_quality_require_evaluator_for_collected_run',
+    'product_quality_record_sentinel_evaluator_proof',
+    'product_quality_triage_detection',
+    'product_quality_triage_resolution'
+  ]
+  loop
+    select count(*), min(pg_catalog.pg_get_functiondef(procedure.oid))
+    into function_count, definition
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public'
+      and procedure.proname = function_name;
+
+    if function_count <> 1
+       or definition is null
+       or (
+         length(definition) - length(replace(definition, identity_guard, ''))
+       ) / length(identity_guard) <> 1 then
+      raise exception 'cognitive_product_evaluator_identity_patch_rejected:%',
+        function_name
+        using errcode = 'P0001';
+    end if;
+
+    updated_definition := replace(
+      definition,
+      identity_guard,
+      extended_guard
+    );
+    execute updated_definition;
+  end loop;
+end;
+$extend_product_evaluator_identity$;
+
+-- A provider anomaly can report usage above the preflight reservation. The
+-- ordinary settlement contract intentionally rejects values above that
+-- reservation, so retain the exact bounded provider readback in a separate
+-- immutable audit before conservatively settling the failed reservation at its
+-- reserved ceiling. This evidence never expands the authorized budget.
+create table public.cognitive_model_provider_overrun_audits (
+  id uuid primary key default gen_random_uuid(),
+  preflight_id uuid not null unique references
+    public.cognitive_model_router_preflight_audits(id),
+  capability_id uuid not null references
+    public.cognitive_model_router_capabilities(id),
+  budget_id uuid not null references public.intelligence_budgets(id),
+  task_id uuid not null references public.intelligence_tasks(id),
+  project_id uuid not null references public.cognitive_projects(id),
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  reported_model_tokens bigint not null check (
+    reported_model_tokens between 0 and 10000000
+  ),
+  reported_model_cost numeric(12,6) not null check (
+    reported_model_cost between 0 and 100
+  ),
+  reserved_model_tokens bigint not null check (
+    reserved_model_tokens between 128 and 100000
+  ),
+  reserved_model_cost numeric(12,4) not null check (
+    reserved_model_cost between 0.0001 and 5
+  ),
+  provider_model_version text not null check (
+    length(provider_model_version) between 2 and 120
+  ),
+  provider_response_id_hash text not null check (
+    provider_response_id_hash ~ '^[a-f0-9]{64}$'
+  ),
+  failure_reason_hash text not null check (
+    failure_reason_hash ~ '^[a-f0-9]{64}$'
+  ),
+  evidence_hash text not null check (
+    evidence_hash ~ '^[a-f0-9]{64}$'
+  ),
+  latency_ms integer not null check (latency_ms between 0 and 120000),
+  service_identity text not null check (
+    service_identity = 'cognitive_model_router'
+  ),
+  recorded_at timestamptz not null default transaction_timestamp()
+);
+
+alter table public.cognitive_model_provider_overrun_audits enable row level security;
+alter table public.cognitive_model_provider_overrun_audits force row level security;
+revoke all on table public.cognitive_model_provider_overrun_audits
+  from public,anon,authenticated,service_role;
+
+create trigger cognitive_model_provider_overrun_audits_immutable
+before update or delete on public.cognitive_model_provider_overrun_audits
+for each row execute function public.reject_cognitive_evidence_mutation();
+
+create function public.cognitive_model_router_record_provider_overrun(
+  p_preflight_id uuid,
+  p_reported_model_tokens bigint,
+  p_reported_model_cost numeric,
+  p_provider_model_version text,
+  p_provider_response_id_hash text,
+  p_failure_reason_hash text,
+  p_evidence_hash text,
+  p_latency_ms integer,
+  p_service_identity_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  preflight_value public.cognitive_model_router_preflight_audits%rowtype;
+  audit_id_value uuid;
+begin
+  perform public.cognitive_verify_service_token(
+    'cognitive_model_router',
+    p_service_identity_token
+  );
+
+  select * into preflight_value
+  from public.cognitive_model_router_preflight_audits
+  where id = p_preflight_id
+  for share;
+
+  if preflight_value.id is null
+     or exists (
+       select 1
+       from public.cognitive_model_router_result_audits result
+       where result.preflight_id = p_preflight_id
+     )
+     or exists (
+       select 1
+       from public.cognitive_model_provider_overrun_audits audit
+       where audit.preflight_id = p_preflight_id
+     )
+     or p_reported_model_tokens not between 0 and 10000000
+     or p_reported_model_cost not between 0 and 100
+     or (
+       p_reported_model_tokens <= preflight_value.reserved_model_tokens
+       and p_reported_model_cost <= preflight_value.reserved_model_cost
+     )
+     or p_provider_model_version is null
+     or length(p_provider_model_version) not between 2 and 120
+     or p_provider_response_id_hash !~ '^[a-f0-9]{64}$'
+     or p_failure_reason_hash !~ '^[a-f0-9]{64}$'
+     or p_evidence_hash !~ '^[a-f0-9]{64}$'
+     or p_latency_ms not between 0 and 120000 then
+    raise exception 'model_router_provider_overrun_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  insert into public.cognitive_model_provider_overrun_audits(
+    preflight_id,capability_id,budget_id,task_id,project_id,
+    platform,environment,reported_model_tokens,reported_model_cost,
+    reserved_model_tokens,reserved_model_cost,provider_model_version,
+    provider_response_id_hash,failure_reason_hash,evidence_hash,latency_ms,
+    service_identity
+  ) values (
+    preflight_value.id,preflight_value.capability_id,
+    preflight_value.budget_id,preflight_value.task_id,
+    preflight_value.project_id,preflight_value.platform,
+    preflight_value.environment,p_reported_model_tokens,
+    p_reported_model_cost,preflight_value.reserved_model_tokens,
+    preflight_value.reserved_model_cost,p_provider_model_version,
+    p_provider_response_id_hash,p_failure_reason_hash,p_evidence_hash,
+    p_latency_ms,'cognitive_model_router'
+  )
+  returning id into audit_id_value;
+
+  return jsonb_build_object(
+    'overrunAuditId', audit_id_value,
+    'preflightId', preflight_value.id,
+    'reportedModelTokens', p_reported_model_tokens,
+    'reportedModelCost', p_reported_model_cost,
+    'reservedModelTokens', preflight_value.reserved_model_tokens,
+    'reservedModelCost', preflight_value.reserved_model_cost,
+    'evidenceHash', p_evidence_hash,
+    'authority', 'advisory_only',
+    'quorumEligible', false
+  );
+end;
+$$;
+revoke all on function public.cognitive_model_router_record_provider_overrun(
+  uuid,bigint,numeric,text,text,text,text,integer,text
+) from public,anon,authenticated;
+grant execute on function public.cognitive_model_router_record_provider_overrun(
+  uuid,bigint,numeric,text,text,text,text,integer,text
+) to service_role;
+
 do $roles$
 declare
   role_name text;
@@ -26,14 +359,17 @@ begin
     'cognitive_level01_scheduler'
   ]
   loop
-    if not exists (
+    if exists (
       select 1 from pg_catalog.pg_roles where rolname = role_name
     ) then
-      execute format(
-        'create role %I nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls',
-        role_name
-      );
+      raise exception 'cognitive_runtime_preexisting_role_rejected:%', role_name
+        using errcode = '42501';
     end if;
+
+    execute format(
+      'create role %I nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls',
+      role_name
+    );
 
     select * into role_state
     from pg_catalog.pg_roles
@@ -71,14 +407,68 @@ begin
     execute format('revoke all on all tables in schema public from %I', role_name);
     execute format('revoke all on all sequences in schema public from %I', role_name);
     execute format('revoke all on all functions in schema public from %I', role_name);
-    execute format('revoke service_role from %I', role_name);
-    execute format('revoke authenticated from %I', role_name);
-    execute format('revoke anon from %I', role_name);
+    if exists (
+      select 1
+      from pg_catalog.pg_namespace namespace
+      where namespace.nspname = 'net'
+        and namespace.nspowner = (
+          select role_value.oid
+          from pg_catalog.pg_roles role_value
+          where role_value.rolname = current_user
+        )
+    ) then
+      execute format('revoke all on schema net from %I', role_name);
+      execute format('revoke all on all tables in schema net from %I', role_name);
+      execute format('revoke all on all sequences in schema net from %I', role_name);
+      execute format('revoke all on all functions in schema net from %I', role_name);
+    end if;
     execute format('grant connect on database %I to %I', current_database(), role_name);
     execute format('grant usage on schema cognitive_runtime to %I', role_name);
   end loop;
 end;
 $roles$;
+
+create function cognitive_runtime.runtime_login_provisioning_ready()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with expected_roles(role_name) as (
+    values
+      ('cognitive_product_baseline_executor'),
+      ('cognitive_sentinel_collector'),
+      ('cognitive_product_quality_evaluator'),
+      ('cognitive_product_quality_triage'),
+      ('cognitive_public_research_broker'),
+      ('cognitive_research_evaluator'),
+      ('cognitive_model_router'),
+      ('cognitive_livekit_experience_collector'),
+      ('cognitive_github_draft_pr_broker'),
+      ('cognitive_level01_scheduler')
+  )
+  select
+    (select count(*) from expected_roles) = 10
+    and not exists (
+      select 1
+      from expected_roles expected
+      where to_regrole(expected.role_name) is null
+         or exists (
+           select 1
+           from (values ('public'),('net')) schema_value(schema_name)
+           where to_regnamespace(schema_value.schema_name) is not null
+             and pg_catalog.has_schema_privilege(
+               expected.role_name,
+               schema_value.schema_name,
+               'USAGE'
+             )
+         )
+    );
+$$;
+revoke all on function
+  cognitive_runtime.runtime_login_provisioning_ready()
+  from public,anon,authenticated,service_role;
 
 create function cognitive_runtime.runtime_operation_allowed(
   p_principal text,
@@ -115,6 +505,7 @@ as $$
     ('cognitive_research_evaluator', 'read_research_snapshot'),
     ('cognitive_model_router', 'recover_model_reservation'),
     ('cognitive_model_router', 'reserve_model_invocation'),
+    ('cognitive_model_router', 'record_model_provider_overrun'),
     ('cognitive_model_router', 'settle_model_invocation'),
     ('cognitive_livekit_experience_collector', 'collect_livekit_sentinel_run'),
     ('cognitive_github_draft_pr_broker', 'record_github_provider_readback'),
@@ -1409,75 +1800,160 @@ grant execute on function cognitive_runtime.derive_research_evaluation_with_read
   uuid,uuid,text,text,text,uuid,text
 ) to cognitive_research_evaluator;
 
-do $grants$
+-- Runtime logins have no USAGE on public. Expose only same-signature forwarding
+-- wrappers in cognitive_runtime. Each wrapper rechecks the session principal
+-- and its closed operation before invoking the reviewed public RPC as the
+-- migration owner.
+do $domain_wrappers$
 declare
-  grant_row record;
+  wrapper_row record;
   function_count integer;
-  function_value regprocedure;
+  source_function pg_catalog.pg_proc%rowtype;
+  wrapper_function regprocedure;
+  argument_list text;
+  call_list text;
+  result_type text;
+  wrapper_sql text;
 begin
-  for grant_row in
+  perform set_config('search_path', '', true);
+
+  for wrapper_row in
     select * from (values
-      ('cognitive_product_baseline_executor', 'governance_claim_approved_action', null::integer),
-      ('cognitive_product_baseline_executor', 'governance_begin_approved_execution', null),
-      ('cognitive_product_baseline_executor', 'governance_stage_product_experience_baseline_v1', null),
-      ('cognitive_product_baseline_executor', 'governance_complete_approved_execution', null),
-      ('cognitive_product_baseline_executor', 'governance_product_baseline_persist_completed_execution', null),
-      ('cognitive_product_baseline_executor', 'governance_fail_approved_execution', null),
-      ('cognitive_product_quality_evaluator', 'product_experience_resolve_current_active_baseline', null),
-      ('cognitive_product_quality_evaluator', 'product_quality_detection_assessment_hash', null),
-      ('cognitive_product_quality_evaluator', 'product_quality_resolution_assessment_hash', null),
-      ('cognitive_product_quality_evaluator', 'governance_evaluate_product_experience_baseline_v1', null),
-      ('cognitive_product_quality_evaluator', 'product_quality_record_sentinel_evaluator_proof', null),
-      ('cognitive_product_quality_triage', 'product_quality_triage_detection', null),
-      ('cognitive_product_quality_triage', 'product_quality_triage_resolution', null),
-      ('cognitive_public_research_broker', 'cognitive_record_public_research_source_v2', null),
-      ('cognitive_public_research_broker', 'cognitive_record_public_research_contradiction_detection', null),
-      ('cognitive_public_research_broker', 'cognitive_expire_public_research_maintenance', null),
-      ('cognitive_research_evaluator', 'cognitive_resolve_public_research_contradiction', null),
-      ('cognitive_model_router', 'cognitive_model_router_recover_expired', null),
-      ('cognitive_model_router', 'cognitive_model_router_reserve', 21),
-      ('cognitive_model_router', 'cognitive_model_router_settle', null),
-      ('cognitive_github_draft_pr_broker', 'cognitive_record_github_draft_pr_provider_readback', null),
-      ('cognitive_github_draft_pr_broker', 'cognitive_consume_github_draft_pr_capability', null),
-      ('cognitive_github_draft_pr_broker', 'cognitive_accept_github_draft_pr_tool_result', null)
-    ) allowed(role_name, function_name, argument_count)
+      ('cognitive_product_baseline_executor', 'claim_approved_action', 'governance_claim_approved_action', null::integer),
+      ('cognitive_product_baseline_executor', 'begin_approved_execution', 'governance_begin_approved_execution', null),
+      ('cognitive_product_baseline_executor', 'stage_product_baseline', 'governance_stage_product_experience_baseline_v1', null),
+      ('cognitive_product_baseline_executor', 'complete_approved_execution', 'governance_complete_approved_execution', null),
+      ('cognitive_product_baseline_executor', 'persist_product_baseline', 'governance_product_baseline_persist_completed_execution', null),
+      ('cognitive_product_baseline_executor', 'fail_approved_execution', 'governance_fail_approved_execution', null),
+      ('cognitive_product_quality_evaluator', 'compute_detection_hash', 'product_quality_detection_assessment_hash', null),
+      ('cognitive_product_quality_evaluator', 'compute_resolution_hash', 'product_quality_resolution_assessment_hash', null),
+      ('cognitive_product_quality_evaluator', 'evaluate_product_baseline', 'governance_evaluate_product_experience_baseline_v1', null),
+      ('cognitive_product_quality_evaluator', 'record_sentinel_evaluator_proof', 'product_quality_record_sentinel_evaluator_proof', null),
+      ('cognitive_product_quality_triage', 'triage_detection', 'product_quality_triage_detection', null),
+      ('cognitive_product_quality_triage', 'triage_resolution', 'product_quality_triage_resolution', null),
+      ('cognitive_public_research_broker', 'record_research_source', 'cognitive_record_public_research_source_v2', null),
+      ('cognitive_public_research_broker', 'detect_research_contradiction', 'cognitive_record_public_research_contradiction_detection', null),
+      ('cognitive_public_research_broker', 'expire_research', 'cognitive_expire_public_research_maintenance', null),
+      ('cognitive_research_evaluator', 'resolve_research_contradiction', 'cognitive_resolve_public_research_contradiction', null),
+      ('cognitive_model_router', 'recover_model_reservation', 'cognitive_model_router_recover_expired', null),
+      ('cognitive_model_router', 'reserve_model_invocation', 'cognitive_model_router_reserve', 21),
+      ('cognitive_model_router', 'record_model_provider_overrun', 'cognitive_model_router_record_provider_overrun', null),
+      ('cognitive_model_router', 'settle_model_invocation', 'cognitive_model_router_settle', null),
+      ('cognitive_github_draft_pr_broker', 'record_github_provider_readback', 'cognitive_record_github_draft_pr_provider_readback', null),
+      ('cognitive_github_draft_pr_broker', 'consume_github_capability', 'cognitive_consume_github_draft_pr_capability', null),
+      ('cognitive_github_draft_pr_broker', 'accept_github_tool_result', 'cognitive_accept_github_draft_pr_tool_result', null)
+    ) allowed(role_name, operation_name, function_name, argument_count)
   loop
     select count(*) into function_count
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'public'
-      and procedure.proname = grant_row.function_name
+      and procedure.proname = wrapper_row.function_name
       and (
-        grant_row.argument_count is null
-        or procedure.pronargs = grant_row.argument_count
+        wrapper_row.argument_count is null
+        or procedure.pronargs = wrapper_row.argument_count
       );
 
     if function_count <> 1 then
       raise exception 'cognitive_runtime_rpc_manifest_mismatch:%:%',
-        grant_row.function_name,
+        wrapper_row.function_name,
         function_count;
     end if;
 
-    select procedure.oid::regprocedure into function_value
+    select procedure.* into source_function
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'public'
-      and procedure.proname = grant_row.function_name
+      and procedure.proname = wrapper_row.function_name
       and (
-        grant_row.argument_count is null
-        or procedure.pronargs = grant_row.argument_count
+        wrapper_row.argument_count is null
+        or procedure.pronargs = wrapper_row.argument_count
       );
 
+    result_type :=
+      pg_catalog.pg_get_function_result(source_function.oid);
+    select
+      string_agg(
+        format(
+          '%I %s',
+          source_function.proargnames[position],
+          case
+            when type_namespace.nspname = 'public'
+             and argument_type.typname in (
+               'cognitive_platform',
+               'cognitive_environment'
+             )
+              then 'text'
+            else pg_catalog.format_type(argument_type.oid, null)
+          end
+        ),
+        ',' order by position
+      ),
+      string_agg(
+        case
+          when type_namespace.nspname = 'public'
+           and argument_type.typname = 'cognitive_platform'
+            then format('$%s::public.cognitive_platform', position)
+          when type_namespace.nspname = 'public'
+           and argument_type.typname = 'cognitive_environment'
+            then format('$%s::public.cognitive_environment', position)
+          else format('$%s', position)
+        end,
+        ',' order by position
+      )
+    into argument_list, call_list
+    from unnest(source_function.proargtypes::oid[])
+      with ordinality argument(type_oid, position)
+    join pg_catalog.pg_type argument_type
+      on argument_type.oid = argument.type_oid
+    join pg_catalog.pg_namespace type_namespace
+      on type_namespace.oid = argument_type.typnamespace;
+
+    wrapper_sql := format(
+      $wrapper_definition$
+      create function cognitive_runtime.%1$I(%2$s)
+      returns %3$s
+      language plpgsql
+      security definer
+      set search_path = ''
+      as $runtime_wrapper$
+      begin
+        perform cognitive_runtime.assert_runtime_invoker(%4$L, %5$L);
+        return public.%1$I(%6$s);
+      end;
+      $runtime_wrapper$;
+      $wrapper_definition$,
+      wrapper_row.function_name,
+      argument_list,
+      result_type,
+      wrapper_row.role_name,
+      wrapper_row.operation_name,
+      call_list
+    );
+    execute wrapper_sql;
+
+    select procedure.oid::regprocedure into wrapper_function
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'cognitive_runtime'
+      and procedure.proname = wrapper_row.function_name
+      and procedure.pronargs = source_function.pronargs;
+
+    execute format(
+      'revoke all on function %s from public',
+      wrapper_function
+    );
     execute format(
       'grant execute on function %s to %I',
-      function_value,
-      grant_row.role_name
+      wrapper_function,
+      wrapper_row.role_name
     );
   end loop;
 end;
-$grants$;
+$domain_wrappers$;
 
 do $common_grants$
 declare

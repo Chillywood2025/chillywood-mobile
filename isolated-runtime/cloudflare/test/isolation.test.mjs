@@ -114,9 +114,15 @@ test("provider secrets exist only in their exact principal", () => {
     [
       "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
       "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION",
-      "LIVEKIT_API_KEY",
-      "LIVEKIT_API_SECRET",
     ],
+  );
+  assert.equal(
+    byId.get("cognitive_livekit_experience_collector").provider,
+    "none",
+  );
+  assert.deepEqual(
+    byId.get("cognitive_livekit_experience_collector").networkEgress,
+    [],
   );
   assert.deepEqual(
     byId.get("cognitive_github_draft_pr_broker").requiredSecrets,
@@ -166,6 +172,33 @@ test("private worker fails closed on forbidden shared credential injection", asy
     () => handler(makeEnvelope(), TOKEN),
     /credential_domain_rejected/u,
   );
+});
+
+test("private worker rejects every sibling credential domain", async () => {
+  for (
+    const siblingSecret of [
+      "COGNITIVE_MODEL_OPENAI_API_KEY",
+      "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN",
+      "GITHUB_APP_PRIVATE_KEY",
+      "GITHUB_REPOSITORY_ID",
+      "LIVEKIT_API_SECRET",
+    ]
+  ) {
+    const handler = createPrivateInvocationHandler({
+      createDatabase: () => database(),
+      env: await baselineEnv({ [siblingSecret]: "must-not-exist" }),
+      logger: silentLogger,
+      now: () => NOW,
+      principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
+      resolveAdapter: (operation) =>
+        operationAdapter("cognitive_product_baseline_executor", operation),
+    });
+    await assert.rejects(
+      () => handler(makeEnvelope(), TOKEN),
+      /credential_domain_rejected/u,
+      siblingSecret,
+    );
+  }
 });
 
 test("wrong invocation, emergency stop and revocation fail closed", async () => {

@@ -15,8 +15,11 @@ reviewed Supabase Edge contracts.
 - Each private Worker has one unique cache-disabled Hyperdrive configuration,
   one dedicated Postgres login/NOLOGIN role domain, and one unique invocation
   hash.
-- Only the model, LiveKit, and GitHub Workers declare provider secrets. Public
-  research has allowlisted public network egress but no provider credential.
+- Only the model and GitHub Workers declare provider secrets. The LiveKit
+  evidence collector accepts sanitized participant evidence from a separately
+  bounded synthetic participant and owns no LiveKit provider credential.
+  Public research has allowlisted public network egress but no provider
+  credential.
 - No Worker consumes a Supabase service-role or secret key.
 
 Cloudflare documents Service Bindings as non-public Worker-to-Worker calls with
@@ -66,17 +69,24 @@ into a deployment-ready operation.
 
 Before upload, the coordinator must:
 
-1. replace every Hyperdrive configuration ID using an owner-only deployment
+1. require `cognitive_runtime.runtime_login_provisioning_ready()` to return
+   true. Supabase's provider-owned `net` schema currently grants `USAGE` and
+   outbound-network functions through `PUBLIC`; PostgreSQL has no per-role
+   deny, and the ordinary migration role cannot revoke grants made by
+   `supabase_admin`. The owner-only login provisioner therefore stops before
+   creating any password-bearing role until the provider closes that inherited
+   surface or an equivalent isolated Postgres boundary is selected;
+2. replace every Hyperdrive configuration ID using an owner-only deployment
    input;
-2. prove every Hyperdrive configuration was created with
+3. prove every Hyperdrive configuration was created with
    `--caching-disabled` and its matching dedicated login;
-3. create and attach each required secret to only its named Worker;
-4. configure an Access application and Service Auth policy for the gateway
+4. create and attach each required secret to only its named Worker;
+5. configure an Access application and Service Auth policy for the gateway
    `workers.dev` endpoint, then replace the public team-domain and audience
    placeholders;
-5. verify the successor Git commit is supplied as `sourceCommit` and matches
+6. verify the successor Git commit is supplied as `sourceCommit` and matches
    reviewed version metadata;
-6. run the negative isolation suite against deployed Workers.
+7. run the negative isolation suite against deployed Workers.
 
 The templates intentionally provide no gateway route and keep `workers_dev`
 disabled. The gateway `workers.dev` endpoint is enabled only after the Access

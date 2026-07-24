@@ -7,7 +7,7 @@ import { ready } from "./helpers.mjs";
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const HASH = /^[a-f0-9]{64}$/u;
-const SERVICE_IDENTITY = "cognitive_independent_evaluator";
+const SERVICE_IDENTITY = "cognitive_product_quality_evaluator";
 export const APPROVED_OPTION_C_BASELINE_HASH =
   "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba";
 const PLATFORM_UNITS = Object.freeze({
@@ -1252,8 +1252,8 @@ export const deterministicResolutionReasons = (
 
 const evaluatorAssertion = (env) => {
   const assertion =
-    typeof env.COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION === "string"
-      ? env.COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION.trim()
+    typeof env.COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION === "string"
+      ? env.COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION.trim()
       : "";
   if (!assertion) throw new Error("evaluator_configuration_rejected");
   return assertion;
