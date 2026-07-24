@@ -388,7 +388,7 @@ const recordProviderReadback = async (
   const token = readSecret("COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN");
   if (!token) throw new Error("github_draft_pr_broker_identity_required");
   const evidenceHash = await sha256Hex(
-    `${credential.fingerprintHash}|${credential.scopeManifestHash}|configured`,
+    `${credential.fingerprintHash}|${credential.scopeManifestHash}|configured|${credential.expiresAt}`,
   );
   const receipt = await client.rpc(
     "cognitive_record_github_draft_pr_provider_readback",

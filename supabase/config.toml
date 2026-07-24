@@ -210,3 +210,9 @@ verify_jwt = true
 
 [functions.cognitive-livekit-experience-collector]
 verify_jwt = true
+
+[functions.cognitive-github-draft-pr-broker]
+verify_jwt = true
+
+[functions.cognitive-level01-scheduler]
+verify_jwt = true
