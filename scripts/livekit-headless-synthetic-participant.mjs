@@ -17,6 +17,9 @@ const FRAME_DURATION_MS = 10;
 const SAMPLES_PER_FRAME = SAMPLE_RATE / (1_000 / FRAME_DURATION_MS);
 const TEST_TONE_HZ = 440;
 const TEST_TONE_AMPLITUDE = Math.round(0.08 * 32_767);
+const APPROVED_TOKEN_ORIGIN =
+  "https://bmkkhihfbmsnnmcqkoly.supabase.co";
+const APPROVED_TOKEN_PATH = "/functions/v1/livekit-token";
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
 const ICE_STATE_BY_NUMBER = Object.freeze({
@@ -191,8 +194,16 @@ const validatePrivateInput = (value) => {
     throw new Error("private_input_contract_rejected");
   }
   const endpoint = new URL(value.tokenRequest.endpointUrl);
-  if (endpoint.protocol !== "https:") {
-    throw new Error("token_endpoint_https_required");
+  if (
+    endpoint.protocol !== "https:" ||
+    endpoint.origin !== APPROVED_TOKEN_ORIGIN ||
+    endpoint.pathname !== APPROVED_TOKEN_PATH ||
+    endpoint.username !== "" ||
+    endpoint.password !== "" ||
+    endpoint.search !== "" ||
+    endpoint.hash !== ""
+  ) {
+    throw new Error("token_endpoint_not_approved");
   }
   return value;
 };
@@ -380,6 +391,7 @@ const requestParticipantToken = async (input, timeoutMs, state) => {
         "Content-Type": "application/json",
       },
       method: "POST",
+      redirect: "error",
       signal: AbortSignal.timeout(Math.min(timeoutMs, 15_000)),
     });
   } catch (error) {

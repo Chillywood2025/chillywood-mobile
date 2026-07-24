@@ -2,8 +2,14 @@
 
 Status: source review blocker; no deployment or switch activation authorized.
 
-Exact review source:
+Blocker first identified at source:
 `5ef3c876d74158606b47888cdd71620c3ca1b335`
+
+This is a persistent architecture constraint, not an assertion that the hash
+above is the latest integration head. Every deployment review must bind its
+separate review evidence to the exact candidate head and revalidate this
+constraint. The blocker remains applicable to all descendants until an
+isolated runtime and least-privilege credential design is reviewed and attested.
 
 The Level 0/1 collector, triage, research, model, LiveKit, GitHub, and scheduler
 principals require credential-enforced separation. Hosting all of them as Edge

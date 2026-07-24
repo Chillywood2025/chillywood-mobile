@@ -82,6 +82,11 @@ for (const required of [
   "_must_be_0600",
   "_must_be_outside_git",
   "TEST_TONE_HZ = 440",
+  'APPROVED_TOKEN_ORIGIN =\n  "https://bmkkhihfbmsnnmcqkoly.supabase.co"',
+  'APPROVED_TOKEN_PATH = "/functions/v1/livekit-token"',
+  "endpoint.origin !== APPROVED_TOKEN_ORIGIN",
+  "endpoint.pathname !== APPROVED_TOKEN_PATH",
+  'redirect: "error"',
 ]) {
   assert.ok(harness.includes(required), `headless harness missing ${required}`);
 }
