@@ -173,7 +173,6 @@ function classifyVisual(evidence) {
     "interactiveTargetHeight",
     "interactivePreferredThreshold",
     "interactiveApplicableMinimumThreshold",
-    "screenDensityDpi",
   ]) {
     if (!finiteNumber(evidence[key])) throw new Error(`visual_numeric_metric_required:${key}`);
   }
@@ -230,21 +229,32 @@ function classifyVisual(evidence) {
   if (!allowedFamilies.has(evidence.surfaceFamily)) throw new Error("visual_surface_family_invalid");
   if (!["android", "ios", "web"].includes(evidence.platform)) throw new Error("visual_platform_invalid");
   if (!["phone", "tablet"].includes(evidence.deviceClass)) throw new Error("visual_device_class_invalid");
-  if (!["portrait", "landscape", "resizable"].includes(evidence.orientation)) throw new Error("visual_orientation_invalid");
-  if (!["observed", "failed", "wrong_node", "incomplete"].includes(evidence.automationStatus)) throw new Error("visual_automation_status_invalid");
-  if (!["healthy", "blocked", "degraded", "unknown"].includes(evidence.providerState)) throw new Error("visual_provider_state_invalid");
-  if (!["present", "absent", "partial", "unknown"].includes(evidence.contentState)) throw new Error("visual_content_state_invalid");
-  if (!["16:9", "9:16", "4:5", "1:1", "mixed", "unknown"].includes(evidence.aspectRatioClass)) throw new Error("visual_aspect_ratio_not_accepted");
-  if (!["option_c_target", "explicit_exception", "not_applicable", "unknown"].includes(evidence.baselineApplicability)) throw new Error("visual_baseline_applicability_invalid");
+  if (!["portrait", "landscape"].includes(evidence.orientation)) throw new Error("visual_orientation_invalid");
+  if (!["observed", "partial", "failed", "not_available"].includes(evidence.automationStatus)) throw new Error("visual_automation_status_invalid");
+  if (!["healthy", "degraded", "blocked", "unknown", "not_applicable"].includes(evidence.providerState)) throw new Error("visual_provider_state_invalid");
+  if (!["loaded", "partial", "empty", "loading", "error", "not_applicable"].includes(evidence.contentState)) throw new Error("visual_content_state_invalid");
+  if (!["16:9", "9:16", "4:5", "1:1", "not_applicable"].includes(evidence.aspectRatioClass)) throw new Error("visual_aspect_ratio_not_accepted");
+  if (!["option_c_default", "explicit_versioned_exception"].includes(evidence.baselineApplicability)) throw new Error("visual_baseline_applicability_invalid");
   if (!["phone_portrait_390x844", "tablet_portrait_1024x1366", "non_reference"].includes(evidence.referenceViewport)) throw new Error("visual_reference_viewport_invalid");
   if (!["compact", "medium", "expanded"].includes(evidence.windowClass)) throw new Error("visual_window_class_invalid");
-  if (!["peekable_horizontal_row", "two_column", "three_column", "four_column", "featured", "vertical", "compact_list", "non_media"].includes(evidence.layoutMode)) throw new Error("visual_layout_mode_invalid");
-  if (!["complete", "incomplete", "unavailable"].includes(evidence.evidenceQuality)) throw new Error("visual_evidence_quality_invalid");
-  if (!["owner_selected_pending_authenticated_approval", "approved_baseline", "unknown"].includes(evidence.baselineState)) throw new Error("visual_baseline_state_invalid");
+  if (!["horizontal_row", "grid", "full_width", "compact_list", "non_media"].includes(evidence.layoutMode)) throw new Error("visual_layout_mode_invalid");
+  if (!["measured_installed", "measured_simulator", "bounded_source_only", "insufficient"].includes(evidence.evidenceQuality)) throw new Error("visual_evidence_quality_invalid");
+  if (!["needs_product_baseline_review", "approved_baseline"].includes(evidence.baselineState)) throw new Error("visual_baseline_state_invalid");
   if (evidence.baselineId !== selectedBaseline.baselineId) throw new Error("visual_baseline_id_invalid");
-  if (!["none", "featured_hero", "vertical_media", "compact_nonstandard", "non_media"].includes(evidence.exceptionType)) throw new Error("visual_exception_type_invalid");
+  if (!["none", "featured_hero", "vertical_short_form", "compact_media_list", "non_media_surface"].includes(evidence.exceptionType)) throw new Error("visual_exception_type_invalid");
   if (!["first_row", "outside_first_row", "not_applicable"].includes(evidence.featuredPlacement)) throw new Error("visual_featured_placement_invalid");
-  if (typeof evidence.observedClassification !== "string") throw new Error("visual_observed_classification_invalid");
+  if (![
+    "within_baseline",
+    "confirmed_baseline_violation",
+    "accessibility_violation",
+    "route_specific_exception",
+    "content_data_absence",
+    "provider_blocked",
+    "automation_failure",
+    "baseline_ambiguity",
+  ].includes(evidence.observedClassification)) {
+    throw new Error("visual_observed_classification_invalid");
+  }
 
   const platformTarget = {
     android: { applicableMinimum: 48, preferred: 48, unit: "dp" },
@@ -263,12 +273,16 @@ function classifyVisual(evidence) {
   }
   if (
     evidence.platform === "android" &&
-    (evidence.screenDensityDpi < 72 || evidence.screenDensityDpi > 1000)
+    (
+      !finiteNumber(evidence.screenDensityDpi) ||
+      evidence.screenDensityDpi < 72 ||
+      evidence.screenDensityDpi > 1000
+    )
   ) {
     throw new Error("visual_android_density_invalid");
   }
-  if (evidence.platform !== "android" && evidence.screenDensityDpi !== 0) {
-    throw new Error("visual_non_android_density_must_be_zero");
+  if (evidence.platform !== "android" && evidence.screenDensityDpi !== null) {
+    throw new Error("visual_non_android_density_must_be_null");
   }
 
   const baseResult = {
@@ -278,7 +292,7 @@ function classifyVisual(evidence) {
     physicalProofStatus: "installed_proof_available",
     evidenceManifestHash: hashPayload(evidence),
   };
-  if (evidence.evidenceQuality !== "complete") {
+  if (evidence.evidenceQuality !== "measured_installed") {
     return {
       ...baseResult,
       resultStatus: "blocked",
@@ -302,7 +316,7 @@ function classifyVisual(evidence) {
       classification: "provider_block",
     };
   }
-  if (evidence.contentState === "absent") {
+  if (evidence.contentState === "empty") {
     return {
       ...baseResult,
       resultStatus: "blocked",
@@ -332,7 +346,7 @@ function classifyVisual(evidence) {
   ]);
   if (!optionCTargetFamilies.has(evidence.surfaceFamily)) {
     const explicitException =
-      evidence.baselineApplicability === "explicit_exception" &&
+      evidence.baselineApplicability === "explicit_versioned_exception" &&
       evidence.exceptionVersioned &&
       evidence.exceptionType !== "none" &&
       validSha256(evidence.exceptionContractHash) &&
@@ -350,7 +364,7 @@ function classifyVisual(evidence) {
     };
   }
   if (
-    evidence.baselineApplicability !== "option_c_target" ||
+    evidence.baselineApplicability !== "option_c_default" ||
     evidence.exceptionVersioned ||
     evidence.exceptionType !== "none" ||
     evidence.exceptionContractHash !== null
@@ -388,8 +402,10 @@ function classifyVisual(evidence) {
   if (evidence.totalCardContainerHeight < evidence.mediaFrameHeight) {
     deviations.push("container_height_below_media_frame");
   }
-  const measuredWidthRatio = evidence.mediaFrameWidth / evidence.viewportWidth;
-  const measuredHeightRatio = evidence.mediaFrameHeight / evidence.viewportHeight;
+  const measuredWidthRatio =
+    evidence.totalCardContainerWidth / evidence.viewportWidth;
+  const measuredHeightRatio =
+    evidence.totalCardContainerHeight / evidence.viewportHeight;
   if (Math.abs(measuredWidthRatio - evidence.cardViewportWidthRatio) > 0.02) {
     deviations.push("width_ratio_inconsistent");
   }
@@ -597,22 +613,22 @@ function selfTest() {
     orientation: "portrait",
     syntheticAccount: true,
     surfaceFamily: "standard_streaming_card",
-    baselineApplicability: "option_c_target",
+    baselineApplicability: "option_c_default",
     referenceViewport: "phone_portrait_390x844",
     windowClass: "compact",
-    layoutMode: "peekable_horizontal_row",
-    baselineState: "owner_selected_pending_authenticated_approval",
+    layoutMode: "horizontal_row",
+    baselineState: "needs_product_baseline_review",
     baselineComparisonHash: null,
     baselineId: selectedBaseline.baselineId,
     baselineVersion: 1,
-    evidenceQuality: "complete",
+    evidenceQuality: "measured_installed",
     evidenceQualityHash: fixtureHash("visual-quality"),
     componentIdentityHash: fixtureHash("visual-component"),
     routeFamilyMappingHash: fixtureHash("visual-route-family"),
     automationStatus: "observed",
     providerState: "healthy",
-    contentState: "present",
-    observedClassification: "unclassified",
+    contentState: "loaded",
+    observedClassification: "baseline_ambiguity",
     exceptionVersioned: false,
     exceptionType: "none",
     exceptionContractHash: null,
@@ -625,7 +641,7 @@ function selfTest() {
     viewportWidth: 390,
     viewportHeight: 844,
     cardViewportWidthRatio: 252 / 390,
-    cardViewportHeightRatio: 142 / 844,
+    cardViewportHeightRatio: 190 / 844,
     horizontalCardsVisible: 1.42,
     cardsAboveFold: 3,
     aspectRatioClass: "16:9",
