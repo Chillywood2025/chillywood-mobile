@@ -536,6 +536,7 @@
     "guard:cognitive-network-policy-parity": "node ./scripts/guard-cognitive-network-path-policy-parity.mjs",
     "guard:cognitive-credential-path-policy-parity": "node ./scripts/guard-cognitive-network-path-policy-parity.mjs",
     "guard:cognitive-dependency-advisories": "node ./scripts/guard-cognitive-dependency-advisories.mjs",
+    "test:brace-expansion-compat": "node ./scripts/test-brace-expansion-compat.mjs",
     "test:cognitive-collective-governance": "node ./scripts/test-cognitive-collective-governance.mjs",
     "test:cognitive-governance-adversarial": "node ./scripts/test-cognitive-governance-adversarial.mjs",
     "test:cognitive-two-party-handoff": "node ./scripts/test-cognitive-two-party-handoff.mjs",
@@ -588,6 +589,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "2.100.0",
+    "brace-expansion": "file:vendor/brace-expansion-compat",
     "expo": "~54.0.36",
     "expo-application": "~7.0.8",
     "expo-asset": "~12.0.13",
@@ -652,7 +654,7 @@
     }
   },
   "overrides": {
-    "brace-expansion": "5.0.8",
+    "brace-expansion": "$brace-expansion",
     "postcss": "8.5.22"
   },
   "private": true
