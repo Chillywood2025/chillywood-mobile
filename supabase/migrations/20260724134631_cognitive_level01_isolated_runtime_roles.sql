@@ -1,0 +1,816 @@
+-- Isolated database boundary for Cognitive Level 0/1 private runtimes.
+--
+-- This migration intentionally creates NOLOGIN privilege roles only.  Runtime
+-- LOGIN roles and their independent passwords are provisioned out of band after
+-- migration review.  No password, provider credential, or service-role
+-- membership is stored here.
+
+create schema if not exists cognitive_runtime;
+revoke all on schema cognitive_runtime from public;
+
+do $roles$
+declare
+  role_name text;
+begin
+  foreach role_name in array array[
+    'cognitive_product_baseline_executor',
+    'cognitive_sentinel_collector',
+    'cognitive_product_quality_evaluator',
+    'cognitive_product_quality_triage',
+    'cognitive_public_research_broker',
+    'cognitive_research_evaluator',
+    'cognitive_model_router',
+    'cognitive_livekit_experience_collector',
+    'cognitive_github_draft_pr_broker',
+    'cognitive_level01_scheduler'
+  ]
+  loop
+    if not exists (
+      select 1 from pg_catalog.pg_roles where rolname = role_name
+    ) then
+      execute format(
+        'create role %I nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls',
+        role_name
+      );
+    end if;
+
+    execute format(
+      'alter role %I nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls',
+      role_name
+    );
+    execute format(
+      'alter role %I set search_path = cognitive_runtime, pg_catalog',
+      role_name
+    );
+    execute format('alter role %I set statement_timeout = %L', role_name, '15s');
+    execute format(
+      'alter role %I set idle_in_transaction_session_timeout = %L',
+      role_name,
+      '10s'
+    );
+    execute format('alter role %I set lock_timeout = %L', role_name, '3s');
+
+    execute format('revoke all on schema public from %I', role_name);
+    execute format('revoke all on all tables in schema public from %I', role_name);
+    execute format('revoke all on all sequences in schema public from %I', role_name);
+    execute format('revoke all on all functions in schema public from %I', role_name);
+    execute format('revoke service_role from %I', role_name);
+    execute format('revoke authenticated from %I', role_name);
+    execute format('revoke anon from %I', role_name);
+    execute format('grant connect on database %I to %I', current_database(), role_name);
+    execute format('grant usage on schema cognitive_runtime to %I', role_name);
+  end loop;
+end;
+$roles$;
+
+create function cognitive_runtime.runtime_operation_allowed(
+  p_principal text,
+  p_operation text
+)
+returns boolean
+language sql
+immutable
+security definer
+set search_path = ''
+as $$
+  select (p_principal, p_operation) in (
+    ('cognitive_product_baseline_executor', 'claim_approved_action'),
+    ('cognitive_product_baseline_executor', 'begin_approved_execution'),
+    ('cognitive_product_baseline_executor', 'stage_product_baseline'),
+    ('cognitive_product_baseline_executor', 'complete_approved_execution'),
+    ('cognitive_product_baseline_executor', 'persist_product_baseline'),
+    ('cognitive_product_baseline_executor', 'fail_approved_execution'),
+    ('cognitive_sentinel_collector', 'collect_sentinel_run'),
+    ('cognitive_product_quality_evaluator', 'read_active_baseline'),
+    ('cognitive_product_quality_evaluator', 'compute_detection_hash'),
+    ('cognitive_product_quality_evaluator', 'compute_resolution_hash'),
+    ('cognitive_product_quality_evaluator', 'evaluate_product_baseline'),
+    ('cognitive_product_quality_evaluator', 'record_sentinel_evaluator_proof'),
+    ('cognitive_product_quality_evaluator', 'read_product_quality_snapshot'),
+    ('cognitive_product_quality_triage', 'triage_detection'),
+    ('cognitive_product_quality_triage', 'triage_resolution'),
+    ('cognitive_public_research_broker', 'record_research_source'),
+    ('cognitive_public_research_broker', 'record_research_claim'),
+    ('cognitive_public_research_broker', 'detect_research_contradiction'),
+    ('cognitive_public_research_broker', 'expire_research'),
+    ('cognitive_research_evaluator', 'derive_research_evaluation'),
+    ('cognitive_research_evaluator', 'resolve_research_contradiction'),
+    ('cognitive_research_evaluator', 'read_research_snapshot'),
+    ('cognitive_model_router', 'recover_model_reservation'),
+    ('cognitive_model_router', 'reserve_model_invocation'),
+    ('cognitive_model_router', 'settle_model_invocation'),
+    ('cognitive_livekit_experience_collector', 'collect_livekit_sentinel_run'),
+    ('cognitive_github_draft_pr_broker', 'record_github_provider_readback'),
+    ('cognitive_github_draft_pr_broker', 'consume_github_capability'),
+    ('cognitive_github_draft_pr_broker', 'accept_github_tool_result'),
+    ('cognitive_level01_scheduler', 'read_scheduler_status'),
+    ('cognitive_level01_scheduler', 'issue_recurring_child_task')
+  );
+$$;
+
+create function cognitive_runtime.assert_runtime_invoker(
+  p_expected_principal text,
+  p_expected_operation text
+)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  session_role_name text := session_user;
+  selected_role_name text := nullif(current_setting('role', true), 'none');
+  principal_value pg_catalog.pg_roles%rowtype;
+begin
+  if not cognitive_runtime.runtime_operation_allowed(
+    p_expected_principal,
+    p_expected_operation
+  ) then
+    raise exception 'cognitive_runtime_operation_rejected'
+      using errcode = '42501';
+  end if;
+
+  select * into principal_value
+  from pg_catalog.pg_roles
+  where rolname = p_expected_principal;
+
+  if principal_value.rolname is null
+     or principal_value.rolcanlogin
+     or principal_value.rolsuper
+     or principal_value.rolcreatedb
+     or principal_value.rolcreaterole
+     or principal_value.rolreplication
+     or principal_value.rolbypassrls
+     or not (
+       pg_catalog.pg_has_role(
+         session_role_name,
+         p_expected_principal,
+         'member'
+       )
+       or selected_role_name = p_expected_principal
+     ) then
+    raise exception 'cognitive_runtime_principal_rejected'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+revoke all on function cognitive_runtime.runtime_operation_allowed(text,text)
+  from public;
+revoke all on function cognitive_runtime.assert_runtime_invoker(text,text)
+  from public;
+
+create function cognitive_runtime.runtime_role_preflight(
+  p_expected_principal text,
+  p_expected_operation text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    p_expected_principal,
+    p_expected_operation
+  );
+  return jsonb_build_object(
+    'allowed', true,
+    'principal', p_expected_principal,
+    'operation', p_expected_operation,
+    'databaseRoleMode', 'isolated_nologin_membership',
+    'serviceRoleMember', false
+  );
+end;
+$$;
+
+create function cognitive_runtime.runtime_revocation_status(
+  p_expected_principal text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  selected_operation text;
+begin
+  select operation into selected_operation
+  from (
+    values
+      ('cognitive_product_baseline_executor', 'claim_approved_action'),
+      ('cognitive_sentinel_collector', 'collect_sentinel_run'),
+      ('cognitive_product_quality_evaluator', 'read_active_baseline'),
+      ('cognitive_product_quality_triage', 'triage_detection'),
+      ('cognitive_public_research_broker', 'record_research_source'),
+      ('cognitive_research_evaluator', 'derive_research_evaluation'),
+      ('cognitive_model_router', 'recover_model_reservation'),
+      ('cognitive_livekit_experience_collector', 'collect_livekit_sentinel_run'),
+      ('cognitive_github_draft_pr_broker', 'record_github_provider_readback'),
+      ('cognitive_level01_scheduler', 'read_scheduler_status')
+  ) allowed(principal, operation)
+  where principal = p_expected_principal;
+
+  perform cognitive_runtime.assert_runtime_invoker(
+    p_expected_principal,
+    selected_operation
+  );
+
+  return jsonb_build_object(
+    'principal', p_expected_principal,
+    'databaseAccessRevoked', false,
+    'checkedAt', transaction_timestamp()
+  );
+end;
+$$;
+
+revoke all on function cognitive_runtime.runtime_role_preflight(text,text)
+  from public;
+revoke all on function cognitive_runtime.runtime_revocation_status(text)
+  from public;
+
+-- Existing sentinel/scheduler RPCs require a PostgREST service-role claim.  The
+-- isolated direct-Postgres path receives dedicated wrappers that verify the
+-- database principal first, establish the legacy claim for only the nested call,
+-- and restore the prior setting before returning.
+create function cognitive_runtime.collect_sentinel_run(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform text,
+  p_environment text,
+  p_sentinel_key text,
+  p_route_or_surface text,
+  p_runtime_identity_hash text,
+  p_source_build_hash text,
+  p_evidence_manifest_hash text,
+  p_metric_manifest jsonb,
+  p_result_status text,
+  p_physical_proof_status text,
+  p_observation_started_at timestamptz,
+  p_observation_finished_at timestamptz,
+  p_evaluation_expires_at timestamptz,
+  p_collection_idempotency_hash text,
+  p_service_assertion text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  prior_request_role text := current_setting('request.jwt.claim.role', true);
+  result_value jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_sentinel_collector',
+    'collect_sentinel_run'
+  );
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  begin
+    result_value := public.product_experience_collect_sentinel_run(
+      p_task_id,
+      p_project_id,
+      p_platform::public.cognitive_platform,
+      p_environment::public.cognitive_environment,
+      p_sentinel_key,
+      p_route_or_surface,
+      p_runtime_identity_hash,
+      p_source_build_hash,
+      p_evidence_manifest_hash,
+      p_metric_manifest,
+      p_result_status,
+      p_physical_proof_status,
+      p_observation_started_at,
+      p_observation_finished_at,
+      p_evaluation_expires_at,
+      p_collection_idempotency_hash,
+      'cognitive_sentinel_collector',
+      p_service_assertion
+    );
+  exception when others then
+    perform set_config(
+      'request.jwt.claim.role',
+      coalesce(prior_request_role, ''),
+      true
+    );
+    raise;
+  end;
+  perform set_config(
+    'request.jwt.claim.role',
+    coalesce(prior_request_role, ''),
+    true
+  );
+  return result_value;
+end;
+$$;
+
+create function cognitive_runtime.collect_livekit_sentinel_run(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform text,
+  p_environment text,
+  p_route_or_surface text,
+  p_runtime_identity_hash text,
+  p_source_build_hash text,
+  p_evidence_manifest_hash text,
+  p_metric_manifest jsonb,
+  p_result_status text,
+  p_physical_proof_status text,
+  p_observation_started_at timestamptz,
+  p_observation_finished_at timestamptz,
+  p_evaluation_expires_at timestamptz,
+  p_collection_idempotency_hash text,
+  p_service_assertion text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  prior_request_role text := current_setting('request.jwt.claim.role', true);
+  result_value jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_livekit_experience_collector',
+    'collect_livekit_sentinel_run'
+  );
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  begin
+    result_value := public.product_experience_collect_sentinel_run(
+      p_task_id,
+      p_project_id,
+      p_platform::public.cognitive_platform,
+      p_environment::public.cognitive_environment,
+      'livekit_experience_sentinel',
+      p_route_or_surface,
+      p_runtime_identity_hash,
+      p_source_build_hash,
+      p_evidence_manifest_hash,
+      p_metric_manifest,
+      p_result_status,
+      p_physical_proof_status,
+      p_observation_started_at,
+      p_observation_finished_at,
+      p_evaluation_expires_at,
+      p_collection_idempotency_hash,
+      'cognitive_sentinel_collector',
+      p_service_assertion
+    );
+  exception when others then
+    perform set_config(
+      'request.jwt.claim.role',
+      coalesce(prior_request_role, ''),
+      true
+    );
+    raise;
+  end;
+  perform set_config(
+    'request.jwt.claim.role',
+    coalesce(prior_request_role, ''),
+    true
+  );
+  return result_value;
+end;
+$$;
+
+create function cognitive_runtime.scheduler_task_factory_status(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform text,
+  p_environment text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  prior_request_role text := current_setting('request.jwt.claim.role', true);
+  result_value jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_level01_scheduler',
+    'read_scheduler_status'
+  );
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  begin
+    result_value := public.cognitive_level01_scheduler_task_factory_status(
+      p_task_id,
+      p_project_id,
+      p_platform::public.cognitive_platform,
+      p_environment::public.cognitive_environment
+    );
+  exception when others then
+    perform set_config(
+      'request.jwt.claim.role',
+      coalesce(prior_request_role, ''),
+      true
+    );
+    raise;
+  end;
+  perform set_config(
+    'request.jwt.claim.role',
+    coalesce(prior_request_role, ''),
+    true
+  );
+  return result_value;
+end;
+$$;
+
+create function cognitive_runtime.issue_recurring_child_task(
+  p_capability_id uuid,
+  p_schedule_definition_id uuid,
+  p_parent_task_id uuid,
+  p_project_id uuid,
+  p_platform text,
+  p_environment text,
+  p_scheduled_for timestamptz,
+  p_execution_idempotency_hash text,
+  p_objective_hash text,
+  p_work_state text,
+  p_no_work_reason_hash text,
+  p_service_assertion text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  prior_request_role text := current_setting('request.jwt.claim.role', true);
+  result_value jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_level01_scheduler',
+    'issue_recurring_child_task'
+  );
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  begin
+    result_value := public.cognitive_level01_issue_recurring_child_task(
+      p_capability_id,
+      p_schedule_definition_id,
+      p_parent_task_id,
+      p_project_id,
+      p_platform::public.cognitive_platform,
+      p_environment::public.cognitive_environment,
+      p_scheduled_for,
+      p_execution_idempotency_hash,
+      p_objective_hash,
+      p_work_state,
+      p_no_work_reason_hash,
+      'cognitive_level01_scheduler',
+      p_service_assertion
+    );
+  exception when others then
+    perform set_config(
+      'request.jwt.claim.role',
+      coalesce(prior_request_role, ''),
+      true
+    );
+    raise;
+  end;
+  perform set_config(
+    'request.jwt.claim.role',
+    coalesce(prior_request_role, ''),
+    true
+  );
+  return result_value;
+end;
+$$;
+
+-- Read-only, bounded snapshots replace direct table grants used by the
+-- service-role Edge implementations.
+create function cognitive_runtime.product_quality_evaluator_snapshot(
+  p_sentinel_run_id uuid,
+  p_finding_id uuid default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  result_value jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_product_quality_evaluator',
+    'read_product_quality_snapshot'
+  );
+
+  select jsonb_build_object(
+    'run',
+    (
+      select to_jsonb(run_value)
+      from (
+        select
+          id, task_id, project_id, platform, environment, sentinel_key,
+          route_or_surface, source_build_hash, evidence_manifest_hash,
+          metric_manifest, result_status, physical_proof_status,
+          evaluation_expires_at, collector_capability_id, erased_at
+        from public.product_experience_sentinel_runs
+        where id = p_sentinel_run_id
+      ) run_value
+    ),
+    'finding',
+    (
+      select to_jsonb(finding_value)
+      from (
+        select
+          id, sentinel_run_id, task_id, project_id, platform, environment,
+          route_or_surface, current_status, erased_at
+        from public.product_quality_findings
+        where p_finding_id is not null
+          and id = p_finding_id
+          and sentinel_run_id = p_sentinel_run_id
+      ) finding_value
+    )
+  ) into result_value;
+
+  return result_value;
+end;
+$$;
+
+create function cognitive_runtime.research_evaluator_snapshot(
+  p_research_claim_id uuid,
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform text,
+  p_environment text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  result_value jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_research_evaluator',
+    'read_research_snapshot'
+  );
+
+  select jsonb_build_object(
+    'claim',
+    (
+      select to_jsonb(claim_value)
+      from (
+        select
+          id, task_id, project_id, platform, environment, status,
+          bounded_claim, claim_hash, confidence, category,
+          freshness_deadline, contradiction_state, support_state,
+          created_at, retention_until, erased_at
+        from public.research_claims
+        where id = p_research_claim_id
+          and task_id = p_task_id
+          and project_id = p_project_id
+          and platform = p_platform::public.cognitive_platform
+          and environment = p_environment::public.cognitive_environment
+      ) claim_value
+    ),
+    'relations',
+    coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'source_id', relation.source_id,
+          'relationship', relation.relationship
+        )
+        order by relation.source_id
+      )
+      from public.research_claim_sources relation
+      where relation.claim_id = p_research_claim_id
+        and relation.task_id = p_task_id
+        and relation.project_id = p_project_id
+        and relation.platform = p_platform::public.cognitive_platform
+        and relation.environment = p_environment::public.cognitive_environment
+    ), '[]'::jsonb),
+    'sources',
+    coalesce((
+      select jsonb_agg(to_jsonb(source_value) order by source_value.id)
+      from (
+        select
+          source.id, source.source_type, source.is_primary,
+          source.ownership_identity, source.canonical_url_hash,
+          source.content_hash, source.bounded_excerpt,
+          source.citation_metadata, source.publication_date,
+          source.retrieval_date, source.freshness_deadline,
+          source.retention_until, source.erased_at,
+          source.trusted_for_tool_execution
+        from public.research_sources source
+        join public.research_claim_sources relation
+          on relation.source_id = source.id
+        where relation.claim_id = p_research_claim_id
+          and source.task_id = p_task_id
+          and source.project_id = p_project_id
+          and source.platform = p_platform::public.cognitive_platform
+          and source.environment = p_environment::public.cognitive_environment
+        order by source.id
+        limit 8
+      ) source_value
+    ), '[]'::jsonb),
+    'retrievals',
+    coalesce((
+      select jsonb_agg(to_jsonb(retrieval_value) order by retrieval_value.id)
+      from (
+        select
+          retrieval.id, retrieval.source_id, retrieval.request_url_hash,
+          retrieval.resolved_address_hashes, retrieval.response_hash,
+          retrieval.result
+        from public.research_retrieval_events retrieval
+        join public.research_claim_sources relation
+          on relation.source_id = retrieval.source_id
+        where relation.claim_id = p_research_claim_id
+          and retrieval.task_id = p_task_id
+          and retrieval.project_id = p_project_id
+          and retrieval.platform = p_platform::public.cognitive_platform
+          and retrieval.environment = p_environment::public.cognitive_environment
+        order by retrieval.id
+        limit 16
+      ) retrieval_value
+    ), '[]'::jsonb),
+    'contradictions',
+    coalesce((
+      select jsonb_agg(to_jsonb(contradiction_value) order by contradiction_value.id)
+      from (
+        select id, source_id, evidence_hash, resolution_state
+        from public.research_contradictions
+        where claim_id = p_research_claim_id
+          and task_id = p_task_id
+          and project_id = p_project_id
+          and platform = p_platform::public.cognitive_platform
+          and environment = p_environment::public.cognitive_environment
+        order by id
+        limit 16
+      ) contradiction_value
+    ), '[]'::jsonb),
+    'contradictionEvents',
+    coalesce((
+      select jsonb_agg(to_jsonb(event_value) order by event_value.id)
+      from (
+        select
+          id, contradiction_id, event_type, evidence_hash,
+          prior_event_hash, proof_hash, proof_manifest
+        from public.cognitive_research_contradiction_events
+        where claim_id = p_research_claim_id
+          and task_id = p_task_id
+          and project_id = p_project_id
+          and platform = p_platform::public.cognitive_platform
+          and environment = p_environment::public.cognitive_environment
+        order by id
+        limit 32
+      ) event_value
+    ), '[]'::jsonb)
+  ) into result_value;
+
+  return result_value;
+end;
+$$;
+
+revoke all on function cognitive_runtime.collect_sentinel_run(
+  uuid,uuid,text,text,text,text,text,text,text,jsonb,text,text,
+  timestamptz,timestamptz,timestamptz,text,text
+) from public;
+revoke all on function cognitive_runtime.collect_livekit_sentinel_run(
+  uuid,uuid,text,text,text,text,text,text,jsonb,text,text,
+  timestamptz,timestamptz,timestamptz,text,text
+) from public;
+revoke all on function cognitive_runtime.scheduler_task_factory_status(
+  uuid,uuid,text,text
+) from public;
+revoke all on function cognitive_runtime.issue_recurring_child_task(
+  uuid,uuid,uuid,uuid,text,text,timestamptz,text,text,text,text,text
+) from public;
+revoke all on function cognitive_runtime.product_quality_evaluator_snapshot(
+  uuid,uuid
+) from public;
+revoke all on function cognitive_runtime.research_evaluator_snapshot(
+  uuid,uuid,uuid,text,text
+) from public;
+
+grant execute on function cognitive_runtime.collect_sentinel_run(
+  uuid,uuid,text,text,text,text,text,text,text,jsonb,text,text,
+  timestamptz,timestamptz,timestamptz,text,text
+) to cognitive_sentinel_collector;
+grant execute on function cognitive_runtime.collect_livekit_sentinel_run(
+  uuid,uuid,text,text,text,text,text,text,jsonb,text,text,
+  timestamptz,timestamptz,timestamptz,text,text
+) to cognitive_livekit_experience_collector;
+grant execute on function cognitive_runtime.scheduler_task_factory_status(
+  uuid,uuid,text,text
+) to cognitive_level01_scheduler;
+grant execute on function cognitive_runtime.issue_recurring_child_task(
+  uuid,uuid,uuid,uuid,text,text,timestamptz,text,text,text,text,text
+) to cognitive_level01_scheduler;
+grant execute on function cognitive_runtime.product_quality_evaluator_snapshot(
+  uuid,uuid
+) to cognitive_product_quality_evaluator;
+grant execute on function cognitive_runtime.research_evaluator_snapshot(
+  uuid,uuid,uuid,text,text
+) to cognitive_research_evaluator;
+
+do $grants$
+declare
+  grant_row record;
+  function_count integer;
+  function_value regprocedure;
+begin
+  for grant_row in
+    select * from (values
+      ('cognitive_product_baseline_executor', 'governance_claim_approved_action'),
+      ('cognitive_product_baseline_executor', 'governance_begin_approved_execution'),
+      ('cognitive_product_baseline_executor', 'governance_stage_product_experience_baseline_v1'),
+      ('cognitive_product_baseline_executor', 'governance_complete_approved_execution'),
+      ('cognitive_product_baseline_executor', 'governance_product_baseline_persist_completed_execution'),
+      ('cognitive_product_baseline_executor', 'governance_fail_approved_execution'),
+      ('cognitive_product_quality_evaluator', 'product_experience_resolve_current_active_baseline'),
+      ('cognitive_product_quality_evaluator', 'product_quality_detection_assessment_hash'),
+      ('cognitive_product_quality_evaluator', 'product_quality_resolution_assessment_hash'),
+      ('cognitive_product_quality_evaluator', 'governance_evaluate_product_experience_baseline_v1'),
+      ('cognitive_product_quality_evaluator', 'product_quality_record_sentinel_evaluator_proof'),
+      ('cognitive_product_quality_triage', 'product_quality_triage_detection'),
+      ('cognitive_product_quality_triage', 'product_quality_triage_resolution'),
+      ('cognitive_public_research_broker', 'cognitive_record_public_research_source_v2'),
+      ('cognitive_public_research_broker', 'cognitive_record_public_research_claim_evidence'),
+      ('cognitive_public_research_broker', 'cognitive_record_public_research_contradiction_detection'),
+      ('cognitive_public_research_broker', 'cognitive_expire_public_research_maintenance'),
+      ('cognitive_research_evaluator', 'cognitive_derive_public_research_evaluation'),
+      ('cognitive_research_evaluator', 'cognitive_resolve_public_research_contradiction'),
+      ('cognitive_model_router', 'cognitive_model_router_recover_expired'),
+      ('cognitive_model_router', 'cognitive_model_router_reserve'),
+      ('cognitive_model_router', 'cognitive_model_router_settle'),
+      ('cognitive_github_draft_pr_broker', 'cognitive_record_github_draft_pr_provider_readback'),
+      ('cognitive_github_draft_pr_broker', 'cognitive_consume_github_draft_pr_capability'),
+      ('cognitive_github_draft_pr_broker', 'cognitive_accept_github_draft_pr_tool_result')
+    ) allowed(role_name, function_name)
+  loop
+    select count(*) into function_count
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public'
+      and procedure.proname = grant_row.function_name;
+
+    if function_count <> 1 then
+      raise exception 'cognitive_runtime_rpc_manifest_mismatch:%:%',
+        grant_row.function_name,
+        function_count;
+    end if;
+
+    select procedure.oid::regprocedure into function_value
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public'
+      and procedure.proname = grant_row.function_name;
+
+    execute format(
+      'grant execute on function %s to %I',
+      function_value,
+      grant_row.role_name
+    );
+  end loop;
+end;
+$grants$;
+
+do $common_grants$
+declare
+  role_name text;
+begin
+  foreach role_name in array array[
+    'cognitive_product_baseline_executor',
+    'cognitive_sentinel_collector',
+    'cognitive_product_quality_evaluator',
+    'cognitive_product_quality_triage',
+    'cognitive_public_research_broker',
+    'cognitive_research_evaluator',
+    'cognitive_model_router',
+    'cognitive_livekit_experience_collector',
+    'cognitive_github_draft_pr_broker',
+    'cognitive_level01_scheduler'
+  ]
+  loop
+    execute format(
+      'grant execute on function cognitive_runtime.runtime_role_preflight(text,text) to %I',
+      role_name
+    );
+    execute format(
+      'grant execute on function cognitive_runtime.runtime_revocation_status(text) to %I',
+      role_name
+    );
+  end loop;
+end;
+$common_grants$;
+
+comment on schema cognitive_runtime is
+  'Non-exposed RPC boundary for isolated Cognitive Level 0/1 runtime database roles.';
+comment on function cognitive_runtime.runtime_role_preflight(text,text) is
+  'Fail-closed database role and operation attestation; does not replace task, capability, evaluator, expiry, revocation, or emergency checks in domain RPCs.';
+comment on function cognitive_runtime.runtime_revocation_status(text) is
+  'Returns a sanitized active database-membership status. Revoked logins lose EXECUTE before this function can return.';
