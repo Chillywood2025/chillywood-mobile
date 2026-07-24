@@ -149,7 +149,8 @@ export const isStrictBootstrapApprovalPayload = (
     /[a-z0-9]{24,}/u.test(value.branchName) ||
     BOOTSTRAP_BRANCH_FORBIDDEN_FRAGMENTS.some((fragment) =>
       compactBranch.includes(fragment)
-    )
+    ) ||
+    !safePayload(value.branchName)
   ) {
     return false;
   }
