@@ -8,6 +8,10 @@ const migration = fs.readFileSync(
   "supabase/migrations/20260723001845_cognitive_intelligence_foundation.sql",
   "utf8",
 );
+const extensionMigration = fs.readFileSync(
+  "supabase/migrations/20260724053000_cognitive_research_authority_extension.sql",
+  "utf8",
+);
 const between = (source) => source.split("BEGIN GENERATED RESEARCH AUTHORITIES")[1]
   ?.split("END GENERATED RESEARCH AUTHORITIES")[0] ?? "";
 const canonical = registry.authorities.map((entry) => JSON.stringify(entry)).sort();
@@ -20,13 +24,13 @@ const runtimeEntries = [...between(runtime).matchAll(
   publisher: match[4],
   sourceType: match[5],
 })).sort();
-const sqlEntries = [...between(migration).matchAll(
-  /\('([^']+)','([^']+)','([^']+)','([^']+)','([^']+)'\)/gu,
+const sqlEntries = [...`${between(migration)}\n${between(extensionMigration)}`.matchAll(
+  /\('([^']+)','([^']+)','([^']+)','((?:''|[^'])+)','([^']+)'\)/gu,
 )].map((match) => JSON.stringify({
   authorityId: match[1],
   hostname: match[2],
   ownerId: match[5],
-  publisher: match[4],
+  publisher: match[4].replaceAll("''", "'"),
   sourceType: match[3],
 })).sort();
 

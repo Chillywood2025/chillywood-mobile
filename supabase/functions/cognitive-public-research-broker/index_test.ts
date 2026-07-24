@@ -121,6 +121,45 @@ Deno.test("research broker accepts only exact registered public source scope", (
   );
 });
 
+Deno.test("operational canary authorities remain exact-host and source-type bound", () => {
+  for (
+    const source of [
+      {
+        authorityId: "react-native-docs",
+        publisher: "React Native",
+        sourceType: "official_documentation",
+        url: "https://reactnative.dev/docs/accessibility",
+      },
+      {
+        authorityId: "google-play-store-policy",
+        publisher: "Google",
+        sourceType: "store_policy",
+        url:
+          "https://support.google.com/googleplay/android-developer/answer/9859455",
+      },
+      {
+        authorityId: "chillywood-public-repository",
+        publisher: "Chi'llywood",
+        sourceType: "engineering_practice",
+        url: "https://github.com/Chillywood2025/chillywood-mobile",
+      },
+    ]
+  ) {
+    assert(
+      normalizeSourceRequest({ ...sourcePayload(), ...source }) !== null,
+      `${source.authorityId} should accept its exact reviewed public host`,
+    );
+    assert(
+      normalizeSourceRequest({
+        ...sourcePayload(),
+        ...source,
+        url: "https://example.com/unreviewed",
+      }) === null,
+      `${source.authorityId} must reject an unreviewed host`,
+    );
+  }
+});
+
 Deno.test("research URL policy rejects credentials fragments and private targets", () => {
   assert(
     canonicalizeResearchUrl("https://user:password@developer.apple.com/") ===

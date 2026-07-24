@@ -203,6 +203,15 @@ jobs:
           npm run test:cognitive-bootstrap-edge-contract
           npm run test:cognitive-model-independence
           npm run test:cognitive-product-sentinels
+          npm run test:cognitive-livekit-experience-collector
+          deno test --allow-env --allow-net \
+            supabase/functions/cognitive-model-router/index_test.ts \
+            supabase/functions/cognitive-public-research-broker/index_test.ts \
+            supabase/functions/cognitive-research-evaluator/index_test.ts \
+            supabase/functions/cognitive-sentinel-collector/index_test.ts \
+            supabase/functions/cognitive-product-quality-evaluator/index_test.ts \
+            supabase/functions/cognitive-product-quality-triage/index_test.ts \
+            supabase/functions/cognitive-livekit-experience-collector/index_test.ts
           npm run guard:cognitive-admin-truth
           npm run guard:cognitive-ci-supply-chain
           npm run guard:android-native-runtime-compatibility
@@ -244,6 +253,7 @@ jobs:
           supabase db reset
           supabase test db supabase/tests/cognitive_intelligence_foundation_test.sql
           npm run test:cognitive-db-concurrency
+          npm run test:cognitive-product-sentinel-concurrency
 
   supabase-database-integration:
     name: Phase 1 / Supabase Database Integration
