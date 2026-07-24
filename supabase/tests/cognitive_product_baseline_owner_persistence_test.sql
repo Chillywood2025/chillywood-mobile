@@ -102,7 +102,7 @@ insert into public.governance_proposals(
   'a2000000-0000-4000-8000-000000000001',
   'a1000000-0000-4000-8000-000000000001',
   'android', 'production', 'minimal_repair',
-  '29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9',
+  '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
   10, 0, 'full', 0, 'source',
   repeat('4',64)
 );
@@ -189,10 +189,10 @@ insert into public.governance_decision_manifests(
   'a1000000-0000-4000-8000-000000000001',
   'android', 'production', 'baseline-persistence-decision', repeat('6',40),
   repeat('7',64), repeat('8',64), '{}'::text[],
-  '29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9',
+  '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
   array[
     '9e891de1b46cd19405b43178dbd34ed0ea1d96b4eebcc7b404f4f3d9f6ba3dc5',
-    '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+    '29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9'
   ],
   repeat('c',64), repeat('d',64), repeat('e',64), repeat('f',64),
   repeat('1',64), 'low', array['baseline-owner-persistence-test'],
@@ -201,131 +201,224 @@ insert into public.governance_decision_manifests(
   transaction_timestamp()
 );
 
-insert into public.governance_owner_approval_records(
-  id, decision_manifest_id, task_id, project_id, platform, environment,
-  approval_key, objective_hash, owner_user_id, current_version, current_state,
-  maximum_executions, executions_claimed, executions_completed, approval_hash
-) values (
-  'a9000000-0000-4000-8000-000000000001',
-  'a8000000-0000-4000-8000-000000000001',
-  'a2000000-0000-4000-8000-000000000001',
-  'a1000000-0000-4000-8000-000000000001',
-  'android', 'production', 'baseline-owner-persistence-approval',
-  repeat('1',64), 'a3000000-0000-4000-8000-000000000001',
-  1, 'completed', 1, 1, 1, repeat('6',64)
+create temporary table baseline_chain_state(
+  approval_id uuid,
+  approval_version_id uuid,
+  approval_hash text,
+  execution_id uuid,
+  evaluator_proof_hash text
+);
+grant select, insert, update on baseline_chain_state
+  to authenticated, service_role;
+
+select is(
+  (
+    select decision.model_independence_status
+    from public.governance_decision_manifests decision
+    where decision.id = 'a8000000-0000-4000-8000-000000000001'
+  ),
+  'MODEL_INDEPENDENCE_VERIFIED',
+  'baseline decision reaches the real Owner gate with verified independence'
 );
 
-insert into public.governance_owner_approval_versions(
-  id, approval_record_id, decision_manifest_id, task_id, project_id, platform,
-  environment, version_number, owner_user_id, owner_identity_hash,
-  decision_manifest_hash, plan_snapshot_hash, source_commit,
-  architecture_graph_digest, approval_scope_hash, objective_hash,
-  repository_full_name, branch_name, provider, operation, target_resource_hash,
-  path_scope_hashes, table_scope_hashes, function_scope_hashes, budget_hash,
-  maximum_cost, maximum_calls, maximum_bytes, maximum_executions, tests_hash,
-  required_test_ids, evaluator_requirement_hash, rollback_hash, approval_hash,
-  approved_at, valid_from, expires_at
-) values (
-  'aa000000-0000-4000-8000-000000000001',
-  'a9000000-0000-4000-8000-000000000001',
-  'a8000000-0000-4000-8000-000000000001',
-  'a2000000-0000-4000-8000-000000000001',
-  'a1000000-0000-4000-8000-000000000001',
-  'android', 'production', 1,
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
   'a3000000-0000-4000-8000-000000000001',
-  encode(
-    extensions.digest(
-      convert_to('a3000000-0000-4000-8000-000000000001','UTF8'),
-      'sha256'
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a3000000-0000-4000-8000-000000000001"}',
+  true
+);
+select is(
+  public.governance_register_two_party_service_principal(
+    'product_experience_baseline_service',
+    encode(
+      extensions.digest(
+        convert_to('synthetic-baseline-assertion-000000000000','UTF8'),
+        'sha256'
+      ),
+      'hex'
     ),
-    'hex'
-  ),
-  repeat('5',64), repeat('7',64), repeat('6',40), repeat('7',64),
-  repeat('2',64), repeat('1',64),
-  'Chillywood2025/chillywood-mobile',
-  'codex/cognitive-baseline-persistence-fixture',
-  'visual_sentinel', 'visual_experience_canary',
-  '29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9',
-  '{}'::text[], '{}'::text[], '{}'::text[], repeat('a',64),
-  0, 1, 4096, 1, repeat('3',64),
-  array['baseline-owner-persistence-test'], repeat('4',64),
-  repeat('4',64), repeat('6',64),
-  transaction_timestamp() - interval '1 minute',
-  transaction_timestamp() - interval '1 minute',
-  transaction_timestamp() + interval '23 hours'
+    array['visual_experience_canary'],
+    transaction_timestamp() + interval '1 day'
+  )->>'status',
+  'registered',
+  'Owner registers the closed baseline executor assertion'
+);
+select is(
+  public.governance_register_two_party_service_principal(
+    'cognitive_independent_evaluator',
+    encode(
+      extensions.digest(
+        convert_to('synthetic-evaluator-assertion-000000000000','UTF8'),
+        'sha256'
+      ),
+      'hex'
+    ),
+    array['independent_evaluation'],
+    transaction_timestamp() + interval '1 day'
+  )->>'status',
+  'registered',
+  'Owner registers a distinct independent evaluator assertion'
 );
 
-insert into public.governance_owner_approval_version_states(
-  approval_version_id, approval_record_id, task_id, project_id, platform,
-  environment, state, maximum_executions, executions_claimed,
-  executions_completed, completed_at
-) values (
-  'aa000000-0000-4000-8000-000000000001',
-  'a9000000-0000-4000-8000-000000000001',
-  'a2000000-0000-4000-8000-000000000001',
-  'a1000000-0000-4000-8000-000000000001',
-  'android', 'production', 'completed', 1, 1, 1,
-  transaction_timestamp() - interval '10 seconds'
+insert into baseline_chain_state(
+  approval_id, approval_version_id, approval_hash
+)
+select
+  (result->>'approvalId')::uuid,
+  (result->>'approvalVersionId')::uuid,
+  result->>'approvalHash'
+from (
+  select public.governance_record_owner_approval(
+    'a8000000-0000-4000-8000-000000000001',
+    'baseline-owner-persistence-approval',
+    repeat('1',64), repeat('7',64), repeat('6',40), repeat('7',64),
+    repeat('2',64), 'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-baseline-persistence-fixture',
+    'visual_sentinel', 'visual_experience_canary',
+    '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+    '{}'::text[], '{}'::text[], '{}'::text[], repeat('a',64),
+    0, 1, 4096, 1, repeat('3',64),
+    array['baseline-owner-persistence-test'], repeat('4',64),
+    repeat('4',64), interval '23 hours'
+  ) result
+) approval;
+reset role;
+
+select is(
+  (select count(*)::integer from baseline_chain_state),
+  1,
+  'real authenticated Owner records one exact approval version'
 );
 
-insert into public.governance_approved_action_executions(
-  id, approval_record_id, approval_version_id, task_id, project_id,
-  repository_full_name, branch_name, platform, environment, provider,
-  operation, claim_sequence, state, service_identity, service_identity_hash,
-  worker_assertion_hash, decision_manifest_hash, plan_snapshot_hash,
-  approval_hash, target_resource_hash, budget_hash, tests_hash,
-  evaluator_requirement_hash, rollback_hash, execution_receipt_hash,
-  evaluator_proof_hash, claimed_at, began_at, completed_at, updated_at
-) values (
-  'ab000000-0000-4000-8000-000000000001',
-  'a9000000-0000-4000-8000-000000000001',
-  'aa000000-0000-4000-8000-000000000001',
-  'a2000000-0000-4000-8000-000000000001',
-  'a1000000-0000-4000-8000-000000000001',
-  'Chillywood2025/chillywood-mobile',
-  'codex/cognitive-baseline-persistence-fixture',
-  'android', 'production', 'visual_sentinel', 'visual_experience_canary',
-  1, 'completed', 'product_experience_baseline_service',
-  encode(
-    extensions.digest(
-      convert_to('product_experience_baseline_service','UTF8'),
-      'sha256'
-    ),
-    'hex'
-  ),
-  repeat('2',64), repeat('5',64), repeat('7',64), repeat('6',64),
-  '29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9',
-  repeat('a',64), repeat('3',64), repeat('4',64), repeat('4',64),
-  repeat('d',64), repeat('e',64),
-  transaction_timestamp() - interval '1 minute',
-  transaction_timestamp() - interval '50 seconds',
-  transaction_timestamp() - interval '10 seconds',
-  transaction_timestamp() - interval '10 seconds'
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"service_role"}',
+  true
 );
 
-insert into public.governance_approved_execution_evaluator_proofs(
-  id, execution_id, approval_record_id, approval_version_id, task_id,
-  project_id, platform, environment, evaluator_identity,
-  evaluator_identity_hash, execution_receipt_hash, evaluator_proof_hash,
-  evaluator_requirement_hash, verdict, created_at
-) values (
-  'ac000000-0000-4000-8000-000000000001',
-  'ab000000-0000-4000-8000-000000000001',
-  'a9000000-0000-4000-8000-000000000001',
-  'aa000000-0000-4000-8000-000000000001',
-  'a2000000-0000-4000-8000-000000000001',
-  'a1000000-0000-4000-8000-000000000001',
-  'android', 'production', 'cognitive_independent_evaluator',
-  encode(
-    extensions.digest(
-      convert_to('cognitive_independent_evaluator','UTF8'),
-      'sha256'
-    ),
-    'hex'
-  ),
-  repeat('d',64), repeat('e',64), repeat('4',64), 'passed',
-  transaction_timestamp() - interval '20 seconds'
+update baseline_chain_state
+set execution_id = (
+  select (result->>'executionId')::uuid
+  from (
+    select public.governance_claim_approved_action(
+      (select approval_version_id from baseline_chain_state),
+      'product_experience_baseline_service',
+      'synthetic-baseline-assertion-000000000000',
+      repeat('5',64), repeat('7',64),
+      (select approval_hash from baseline_chain_state),
+      'a2000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000001',
+      'Chillywood2025/chillywood-mobile',
+      'codex/cognitive-baseline-persistence-fixture',
+      'android', 'production', 'visual_sentinel',
+      'visual_experience_canary',
+      '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+      repeat('a',64), repeat('3',64), repeat('4',64), repeat('4',64)
+    ) result
+  ) claimed
 );
+
+select is(
+  public.governance_begin_approved_execution(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000',
+    'preflight'
+  )->>'state',
+  'preflight',
+  'baseline executor enters preflight'
+);
+select is(
+  public.governance_begin_approved_execution(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000',
+    'executing'
+  )->>'state',
+  'executing',
+  'baseline executor enters execution'
+);
+select is(
+  public.governance_stage_product_experience_baseline_v1(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000',
+    repeat('6',40),
+    'chillywood-product-experience-baseline-v1',
+    'C', 'creator_balanced',
+    '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+    '7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df'
+  )->>'state',
+  'postflight',
+  'baseline executor stages exact Option C without UI mutation authority'
+);
+select is(
+  public.governance_begin_approved_execution(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000',
+    'evaluating'
+  )->>'state',
+  'evaluating',
+  'staged baseline enters independent evaluation'
+);
+
+select throws_ok(
+  $$select public.governance_complete_approved_execution(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000',
+    repeat('d',64), repeat('e',64)
+  )$$,
+  'P0001',
+  'two_party_execution_completion_rejected',
+  'baseline executor cannot complete before independent proof'
+);
+select throws_ok(
+  $$select public.governance_evaluate_product_experience_baseline_v1(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000',
+    repeat('d',64)
+  )$$,
+  '42501',
+  'two_party_service_principal_required',
+  'baseline executor cannot self-evaluate'
+);
+
+update baseline_chain_state
+set evaluator_proof_hash = (
+  select result->>'evaluatorProofHash'
+  from (
+    select public.governance_evaluate_product_experience_baseline_v1(
+      (select execution_id from baseline_chain_state),
+      'cognitive_independent_evaluator',
+      'synthetic-evaluator-assertion-000000000000',
+      repeat('d',64)
+    ) result
+  ) evaluated
+);
+
+select is(
+  public.governance_complete_approved_execution(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000',
+    repeat('d',64),
+    (select evaluator_proof_hash from baseline_chain_state)
+  )->>'state',
+  'completed',
+  'independently evaluated baseline execution completes'
+);
+reset role;
 
 create temporary table baseline_persistence_result(
   baseline_id uuid,
@@ -334,6 +427,7 @@ create temporary table baseline_persistence_result(
   created boolean
 );
 grant select, insert on baseline_persistence_result to authenticated;
+grant select, insert on baseline_persistence_result to service_role;
 
 select has_column(
   'public',
@@ -352,6 +446,24 @@ select has_column(
   'product_experience_baseline_versions',
   'baseline_option',
   'baseline versions retain the exact Owner-selected option'
+);
+select has_column(
+  'public',
+  'product_experience_baseline_versions',
+  'baseline_identifier',
+  'baseline versions retain the immutable baseline identifier'
+);
+select has_column(
+  'public',
+  'product_experience_baseline_versions',
+  'baseline_option_name',
+  'baseline versions retain the canonical selected option name'
+);
+select has_column(
+  'public',
+  'product_experience_baseline_versions',
+  'source_commit',
+  'baseline versions retain the approved source commit'
 );
 
 select ok(
@@ -374,6 +486,49 @@ select ok(
 );
 
 select ok(
+  has_function_privilege(
+    'service_role',
+    'public.governance_product_baseline_persist_completed_execution(uuid,text,text)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.governance_product_baseline_persist_completed_execution(uuid,text,text)',
+    'EXECUTE'
+  ),
+  'only the asserted baseline service path can service-persist'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.governance_stage_product_experience_baseline_v1(uuid,text,text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  and has_function_privilege(
+    'service_role',
+    'public.governance_evaluate_product_experience_baseline_v1(uuid,text,text,text)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.governance_stage_product_experience_baseline_v1(uuid,text,text,text,text,text,text,text,text)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.governance_evaluate_product_experience_baseline_v1(uuid,text,text,text)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)',
+    'EXECUTE'
+  ),
+  'stage, evaluation, and private persistence boundaries are closed'
+);
+
+select ok(
   not has_table_privilege(
     'authenticated',
     'public.product_experience_baseline_versions',
@@ -382,6 +537,16 @@ select ok(
   and not has_table_privilege(
     'service_role',
     'public.product_experience_baseline_versions',
+    'INSERT'
+  )
+  and not has_table_privilege(
+    'service_role',
+    'public.product_experience_baseline_execution_stages',
+    'INSERT'
+  )
+  and not has_table_privilege(
+    'service_role',
+    'public.product_experience_baseline_lifecycle_events',
     'INSERT'
   ),
   'neither clients nor service_role can bypass the Owner persistence RPC'
@@ -392,32 +557,32 @@ select ok(
     'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
   )) like '%governance_assert_exact_owner()%'
   and lower(pg_get_functiondef(
-    'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
   )) like '%product_experience_baseline_service%'
   and lower(pg_get_functiondef(
-    'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
   )) like '%visual_experience_canary%'
   and lower(pg_get_functiondef(
-    'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
   )) like '%proof_value.verdict <> ''passed''%'
   and lower(pg_get_functiondef(
-    'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
   )) like '%decision_value.selected_option_hash <> option_hash_value%'
   and lower(pg_get_functiondef(
-    'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
   )) like '%approved_execution_count <> 1%',
   'Owner persistence is bound to one completed baseline execution and passed proof'
 );
 
 select ok(
   lower(pg_get_functiondef(
-    'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
   )) not like '%cognitive_governance_switches%'
   and lower(pg_get_functiondef(
-    'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
   )) not like '%cognitive_capabilities%'
   and lower(pg_get_functiondef(
-    'public.governance_owner_persist_product_experience_baseline(uuid,text,text)'::regprocedure
+    'public.governance_persist_product_experience_baseline_v1_internal(uuid,uuid)'::regprocedure
   )) not like '%product_quality_findings%',
   'baseline persistence grants no switch, tool, UI, deploy, or finding authority'
 );
@@ -436,9 +601,9 @@ select set_config(
 );
 select throws_ok(
   $$select public.governance_owner_persist_product_experience_baseline(
-    'ab000000-0000-4000-8000-000000000001',
+    (select execution_id from baseline_chain_state),
     'streaming_mobile_content_density',
-    'A'
+    'C'
   )$$,
   '42501',
   'governance_owner_identity_required',
@@ -448,7 +613,7 @@ select throws_ok(
 reset role;
 update public.governance_approved_action_executions
 set state = 'evaluating'
-where id = 'ab000000-0000-4000-8000-000000000001';
+where id = (select execution_id from baseline_chain_state);
 
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -464,9 +629,9 @@ select set_config(
 );
 select throws_ok(
   $$select public.governance_owner_persist_product_experience_baseline(
-    'ab000000-0000-4000-8000-000000000001',
+    (select execution_id from baseline_chain_state),
     'streaming_mobile_content_density',
-    'A'
+    'C'
   )$$,
   'P0001',
   'product_experience_baseline_persistence_rejected',
@@ -476,7 +641,7 @@ select throws_ok(
 reset role;
 update public.governance_approved_action_executions
 set state = 'completed'
-where id = 'ab000000-0000-4000-8000-000000000001';
+where id = (select execution_id from baseline_chain_state);
 
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -493,9 +658,9 @@ select set_config(
 
 select throws_ok(
   $$select public.governance_owner_persist_product_experience_baseline(
-    'ab000000-0000-4000-8000-000000000001',
+    (select execution_id from baseline_chain_state),
     'unreviewed_baseline_key',
-    'A'
+    'C'
   )$$,
   'P0001',
   'product_experience_baseline_persistence_rejected',
@@ -503,9 +668,9 @@ select throws_ok(
 );
 select throws_ok(
   $$select public.governance_owner_persist_product_experience_baseline(
-    'ab000000-0000-4000-8000-000000000001',
+    (select execution_id from baseline_chain_state),
     'livekit_experience_deadlines',
-    'A'
+    'C'
   )$$,
   'P0001',
   'product_experience_baseline_persistence_rejected',
@@ -513,39 +678,58 @@ select throws_ok(
 );
 select throws_ok(
   $$select public.governance_owner_persist_product_experience_baseline(
-    'ab000000-0000-4000-8000-000000000001',
+    (select execution_id from baseline_chain_state),
+    'streaming_mobile_content_density',
+    'A'
+  )$$,
+  'P0001',
+  'product_experience_baseline_persistence_rejected',
+  'historical Option A cannot be persisted as baseline v1'
+);
+select throws_ok(
+  $$select public.governance_owner_persist_product_experience_baseline(
+    (select execution_id from baseline_chain_state),
     'streaming_mobile_content_density',
     'B'
   )$$,
   'P0001',
   'product_experience_baseline_persistence_rejected',
-  'selection must equal the approval and decision target hash'
+  'historical Option B cannot be persisted as baseline v1'
+);
+
+reset role;
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"service_role"}',
+  true
 );
 
 insert into baseline_persistence_result(
   baseline_id, baseline_version, baseline_hash, created
 )
 select
-  (result->>'baselineId')::uuid,
+  (result->>'baselineVersionId')::uuid,
   (result->>'baselineVersion')::integer,
   result->>'baselineHash',
   (result->>'created')::boolean
 from (
-  select public.governance_owner_persist_product_experience_baseline(
-    'ab000000-0000-4000-8000-000000000001',
-    'streaming_mobile_content_density',
-    'A'
+  select public.governance_product_baseline_persist_completed_execution(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000'
   ) result
 ) persisted;
 
 select is(
-  public.governance_owner_persist_product_experience_baseline(
-    'ab000000-0000-4000-8000-000000000001',
-    'streaming_mobile_content_density',
-    'A'
+  public.governance_product_baseline_persist_completed_execution(
+    (select execution_id from baseline_chain_state),
+    'product_experience_baseline_service',
+    'synthetic-baseline-assertion-000000000000'
   )->>'created',
   'false',
-  'replaying the exact completed execution is idempotent'
+  'replaying the exact service persistence is idempotent'
 );
 
 reset role;
@@ -565,26 +749,50 @@ select ok(
       and baseline.environment = 'production'
       and baseline.baseline_key = 'streaming_mobile_content_density'
       and baseline.baseline_version = 1
-      and baseline.baseline_option = 'A'
+      and baseline.baseline_identifier =
+        'chillywood-product-experience-baseline-v1'
+      and baseline.baseline_option = 'C'
+      and baseline.baseline_option_name = 'creator_balanced'
+      and baseline.source_commit = repeat('6',40)
       and baseline.baseline_manifest_hash =
         '7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df'
       and baseline.baseline_hash =
-        '29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9'
+        '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
       and baseline.status = 'owner_approved'
       and baseline.owner_approval_version_id =
-        'aa000000-0000-4000-8000-000000000001'::uuid
+        (select approval_version_id from baseline_chain_state)
       and baseline.approved_execution_id =
-        'ab000000-0000-4000-8000-000000000001'::uuid
+        (select execution_id from baseline_chain_state)
     from public.product_experience_baseline_versions baseline
   ),
   'persisted baseline is bound to exact scope, approval, execution, and option'
+);
+select is(
+  (
+    public.product_experience_resolve_current_active_baseline(
+      'a2000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000001',
+      'android', 'production', 'streaming_mobile_content_density'
+    )->>'baselineHash'
+  ),
+  '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+  'deterministic resolver returns exact active Option C'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.product_experience_baseline_lifecycle_events
+    where event_type = 'owner_approved'
+  ),
+  1,
+  'approval persistence appends one immutable lifecycle event'
 );
 select ok(
   (
     select result.created
       and result.baseline_version = 1
       and result.baseline_hash =
-        '29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9'
+        '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
     from baseline_persistence_result result
   ),
   'first Owner persistence result reports the canonical created version'
@@ -594,7 +802,7 @@ select throws_ok(
   $$update public.product_experience_baseline_versions
     set baseline_option = 'B'
     where approved_execution_id =
-      'ab000000-0000-4000-8000-000000000001'$$,
+      (select execution_id from baseline_chain_state)$$,
   '42501',
   'immutable_cognitive_evidence',
   'an approved baseline version cannot be rewritten'
@@ -602,10 +810,133 @@ select throws_ok(
 select throws_ok(
   $$delete from public.product_experience_baseline_versions
     where approved_execution_id =
-      'ab000000-0000-4000-8000-000000000001'$$,
+      (select execution_id from baseline_chain_state)$$,
   '42501',
   'immutable_cognitive_evidence',
   'an approved baseline version cannot be deleted'
+);
+
+insert into public.governance_approved_action_executions(
+  id, approval_record_id, approval_version_id, task_id, project_id,
+  repository_full_name, branch_name, platform, environment, provider,
+  operation, claim_sequence, state, service_identity, service_identity_hash,
+  worker_assertion_hash, decision_manifest_hash, plan_snapshot_hash,
+  approval_hash, target_resource_hash, budget_hash, tests_hash,
+  evaluator_requirement_hash, rollback_hash, execution_receipt_hash,
+  evaluator_proof_hash, claimed_at, began_at, completed_at, updated_at
+)
+select
+  'ad000000-0000-4000-8000-000000000001',
+  execution.approval_record_id, execution.approval_version_id,
+  execution.task_id, execution.project_id, execution.repository_full_name,
+  execution.branch_name, execution.platform, execution.environment,
+  execution.provider, execution.operation, 2, 'completed',
+  execution.service_identity, execution.service_identity_hash,
+  execution.worker_assertion_hash, execution.decision_manifest_hash,
+  execution.plan_snapshot_hash, execution.approval_hash, repeat('8',64),
+  execution.budget_hash, execution.tests_hash,
+  execution.evaluator_requirement_hash, execution.rollback_hash,
+  repeat('7',64), repeat('6',64), transaction_timestamp(),
+  transaction_timestamp(), transaction_timestamp(), transaction_timestamp()
+from public.governance_approved_action_executions execution
+where execution.id = (select execution_id from baseline_chain_state);
+
+insert into public.product_experience_baseline_versions(
+  id, task_id, project_id, platform, environment, baseline_key,
+  baseline_version, baseline_hash, status, owner_approval_version_id,
+  approved_execution_id, baseline_manifest_hash, baseline_option,
+  baseline_identifier, baseline_option_name, source_commit,
+  approved_at, created_at
+) values (
+  'ae000000-0000-4000-8000-000000000001',
+  'a2000000-0000-4000-8000-000000000001',
+  'a1000000-0000-4000-8000-000000000001',
+  'android', 'production', 'streaming_mobile_content_density',
+  2, repeat('8',64), 'owner_approved',
+  (select approval_version_id from baseline_chain_state),
+  'ad000000-0000-4000-8000-000000000001',
+  repeat('7',64), 'D',
+  'chillywood-product-experience-baseline-v2',
+  'creator_balanced_v2', repeat('6',40),
+  transaction_timestamp(), transaction_timestamp()
+);
+insert into public.product_experience_baseline_lifecycle_events(
+  baseline_version_id, task_id, project_id, platform, environment,
+  event_sequence, event_type, event_hash, reason_hash, actor_user_id,
+  actor_identity_hash
+) values (
+  'ae000000-0000-4000-8000-000000000001',
+  'a2000000-0000-4000-8000-000000000001',
+  'a1000000-0000-4000-8000-000000000001',
+  'android', 'production', 1, 'owner_approved', repeat('5',64),
+  repeat('8',64), 'a3000000-0000-4000-8000-000000000001',
+  encode(
+    extensions.digest(
+      convert_to('a3000000-0000-4000-8000-000000000001','UTF8'),
+      'sha256'
+    ),
+    'hex'
+  )
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  'a3000000-0000-4000-8000-000000000001',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"a3000000-0000-4000-8000-000000000001"}',
+  true
+);
+select is(
+  public.governance_owner_supersede_product_experience_baseline(
+    (select baseline_id from baseline_persistence_result),
+    'ae000000-0000-4000-8000-000000000001',
+    repeat('4',64)
+  )->>'status',
+  'superseded',
+  'exact Owner appends a versioned supersession event'
+);
+select is(
+  (
+    public.product_experience_resolve_current_active_baseline(
+      'a2000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000001',
+      'android', 'production', 'streaming_mobile_content_density'
+    )->>'baselineHash'
+  ),
+  repeat('8',64),
+  'active resolver moves deterministically to the approved replacement'
+);
+select is(
+  public.governance_owner_revoke_product_experience_baseline(
+    'ae000000-0000-4000-8000-000000000001',
+    repeat('9',64)
+  )->>'status',
+  'revoked',
+  'exact approving Owner appends baseline revocation'
+);
+reset role;
+
+select is(
+  public.product_experience_resolve_current_active_baseline(
+    'a2000000-0000-4000-8000-000000000001',
+    'a1000000-0000-4000-8000-000000000001',
+    'android', 'production', 'streaming_mobile_content_density'
+  ),
+  null::jsonb,
+  'revoked baseline is rejected by the active resolver'
+);
+select throws_ok(
+  $$update public.product_experience_baseline_lifecycle_events
+    set reason_hash = repeat('8',64)
+    where event_type in ('revoked','superseded')$$,
+  '42501',
+  'immutable_cognitive_evidence',
+  'revocation history is append-only'
 );
 
 select * from finish();

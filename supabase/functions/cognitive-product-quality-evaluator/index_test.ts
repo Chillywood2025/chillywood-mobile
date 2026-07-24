@@ -219,6 +219,31 @@ Deno.test("caller cannot supply verdict, assessment hash, or proof hash", () => 
   }
 });
 
+Deno.test("baseline evaluation accepts only receipt-bound execution evidence", () => {
+  const payload = {
+    action: "evaluate_product_baseline_selection",
+    executionId: "11111111-1111-4111-8111-111111111111",
+    executionReceiptHash: "a".repeat(64),
+  };
+  assert(
+    isStrictSentinelEvaluationPayload(payload),
+    "bounded baseline evaluation rejected",
+  );
+  for (
+    const rejected of [
+      { ...payload, selectedOption: "creator_balanced" },
+      { ...payload, verdict: "passed" },
+      { ...payload, evaluatorProofHash: "b".repeat(64) },
+      { ...payload, executionReceiptHash: "a".repeat(63) },
+    ]
+  ) {
+    assert(
+      !isStrictSentinelEvaluationPayload(rejected),
+      "caller-controlled baseline verdict material accepted",
+    );
+  }
+});
+
 Deno.test("sentinel evaluator accepts only exact bounded resolution evidence", () => {
   const payload = {
     action: "evaluate_sentinel_resolution",

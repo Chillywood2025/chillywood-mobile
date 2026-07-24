@@ -126,6 +126,11 @@ const RESOLUTION_KEYS = Object.freeze([
   "resolutionReasonHash",
   "sentinelRunId",
 ]);
+const BASELINE_EVALUATION_KEYS = Object.freeze([
+  "action",
+  "executionId",
+  "executionReceiptHash",
+]);
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
   "confirmed_defect",
@@ -218,6 +223,14 @@ export const isStrictSentinelEvaluationPayload = (
   value: unknown,
 ): value is Record<string, unknown> => {
   if (!isRecord(value)) return false;
+  if (value.action === "evaluate_product_baseline_selection") {
+    return hasExactKeys(value, BASELINE_EVALUATION_KEYS) &&
+      typeof value.executionId === "string" &&
+      UUID.test(value.executionId) &&
+      typeof value.executionReceiptHash === "string" &&
+      LOWER_HEX_64.test(value.executionReceiptHash) &&
+      safePayload({ action: value.action });
+  }
   if (value.action === "evaluate_sentinel_resolution") {
     return hasExactKeys(value, RESOLUTION_KEYS) &&
       typeof value.findingId === "string" &&
@@ -1683,27 +1696,37 @@ const readDetectionEvaluationContext = async (
       return DEFAULT_EVALUATION_CONTEXT;
     }
   }
-  const result = await client
-    .from("product_experience_baseline_versions")
-    .select("baseline_hash,baseline_version")
-    .eq("task_id", run.task_id)
-    .eq("project_id", run.project_id)
-    .eq("platform", run.platform)
-    .eq("environment", run.environment)
-    .eq("baseline_key", "streaming_mobile_content_density")
-    .eq("status", "owner_approved")
-    .not("owner_approval_version_id", "is", null)
-    .not("approved_at", "is", null)
-    .order("baseline_version", { ascending: false })
-    .limit(1);
-  if (result.error || !Array.isArray(result.data)) return null;
-  const hashes = result.data
-    .map((entry: unknown) => isRecord(entry) ? toText(entry.baseline_hash) : "")
-    .filter((hash: string) => LOWER_HEX_64.test(hash));
-  if (hashes.length !== result.data.length) return null;
+  const result = await client.rpc(
+    "product_experience_resolve_current_active_baseline",
+    {
+      p_baseline_key: "streaming_mobile_content_density",
+      p_environment: run.environment,
+      p_platform: run.platform,
+      p_project_id: run.project_id,
+      p_task_id: run.task_id,
+    },
+  );
+  if (result.error) return null;
+  if (result.data === null) {
+    return Object.freeze({
+      approvedVisualBaselineCount: 0,
+      approvedVisualBaselineHash: null,
+    });
+  }
+  if (!isRecord(result.data)) return null;
+  const resolvedHash = toText(result.data.baselineHash);
+  if (
+    result.data.baselineId !== "chillywood-product-experience-baseline-v1" ||
+    result.data.selectedOptionCode !== "C" ||
+    result.data.selectedOption !== "creator_balanced" ||
+    result.data.status !== "owner_approved" ||
+    !LOWER_HEX_64.test(resolvedHash)
+  ) {
+    return null;
+  }
   return Object.freeze({
-    approvedVisualBaselineCount: hashes.length,
-    approvedVisualBaselineHash: hashes.length === 1 ? hashes[0] : null,
+    approvedVisualBaselineCount: 1,
+    approvedVisualBaselineHash: resolvedHash,
   });
 };
 
@@ -1788,6 +1811,23 @@ export const handler = async (request: Request): Promise<Response> => {
       return json(400, { error: "sentinel_evaluation_payload_rejected" });
     }
     const client = createServiceClient();
+    if (payload.action === "evaluate_product_baseline_selection") {
+      const result = await client.rpc(
+        "governance_evaluate_product_experience_baseline_v1",
+        {
+          p_evaluator_assertion: readRequiredSecret(
+            "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION",
+          ),
+          p_evaluator_identity: SERVICE_IDENTITY,
+          p_execution_id: String(payload.executionId),
+          p_execution_receipt_hash: String(payload.executionReceiptHash),
+        },
+      );
+      if (result.error || !isRecord(result.data)) {
+        return json(409, { error: "product_baseline_evaluation_rejected" });
+      }
+      return json(200, result.data as JsonObject);
+    }
     const run = await readStoredRun(client, String(payload.sentinelRunId));
     if (
       !run ||
