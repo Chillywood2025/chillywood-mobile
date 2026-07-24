@@ -11,6 +11,13 @@ const dbTest = read("supabase/tests/cognitive_two_party_activation_handoff_test.
 const constitution = JSON.parse(
   read("config/intelligence/product-experience-constitution.json"),
 );
+const runnerConfig = JSON.parse(
+  read("config/intelligence/sentinel-installed-runner.config.json"),
+);
+const readinessRunner = read("scripts/sentinel-runtime-readiness.mjs");
+const canaryRunner = read("scripts/product-experience-canary-runner.mjs");
+const packageJson = read("package.json");
+const readinessReport = read("docs/intelligence/SENTINEL_RUNTIME_READINESS.md");
 
 const failures = [];
 const assert = (condition, message) => {
@@ -228,6 +235,68 @@ for (const section of [
   "screenshotProvenance",
 ]) {
   assert(section in constitution, `missing constitution section: ${section}`);
+}
+assert(
+  runnerConfig.newBinaryOrOtaRequiredStatus === "NEW_BINARY_OR_OTA_REQUIRED",
+  "sentinel runner config must preserve the exact new binary/OTA blocker label",
+);
+for (const scriptName of [
+  "sentinel:readiness-inventory",
+  "sentinel:canary:self-test",
+  "sentinel:canary:livekit",
+  "sentinel:canary:visual",
+  "sentinel:canary:journey",
+]) {
+  assert(packageJson.includes(scriptName), `missing package script: ${scriptName}`);
+}
+for (const phrase of [
+  "storeRawTesterIdentities",
+  "storeRawDeviceIds",
+  "storeRawLogs",
+  "storeRawScreenshots",
+  "mayBuild",
+  "mayPublishOta",
+  "mayDeploy",
+  "mayChangeProviderProducts",
+  "livekit_experience",
+  "visual_experience_metrics",
+  "installed_journey",
+]) {
+  assert(
+    JSON.stringify(runnerConfig).includes(phrase),
+    `sentinel runner config missing: ${phrase}`,
+  );
+}
+for (const phrase of [
+  "rawLogsCaptured: false",
+  "rawScreenshotsCaptured: false",
+  "NEW_BINARY_OR_OTA_REQUIRED",
+  "hashId(serial)",
+  "dumpsys",
+  "simctl",
+]) {
+  assert(readinessRunner.includes(phrase), `readiness runner missing: ${phrase}`);
+}
+for (const phrase of [
+  "sanitized_installed_evidence_required",
+  "NEW_BINARY_OR_OTA_REQUIRED",
+  "classifyLiveKit",
+  "classifyVisual",
+  "classifyJourney",
+  "unsanitized_sensitive_key",
+  "unsanitized_jwt_value",
+]) {
+  assert(canaryRunner.includes(phrase), `canary runner missing: ${phrase}`);
+}
+for (const phrase of [
+  "Android internal build",
+  "iOS internal/simulator build",
+  "Approved synthetic accounts",
+  "Two LiveKit participants",
+  "Provider/backend read-only telemetry",
+  "No build, OTA publish, deployment",
+]) {
+  assert(readinessReport.includes(phrase), `readiness report missing: ${phrase}`);
 }
 
 const classifyLiveKit = (metrics) => {

@@ -28,3 +28,12 @@ The constitution includes:
 - phone/tablet breakpoints;
 - screenshot provenance requirements;
 - explicit no-production-mutation authority.
+
+Installed sentinel runner configuration:
+
+`config/intelligence/sentinel-installed-runner.config.json`
+
+The installed runner configuration preserves the same authority boundary:
+read-only inventory, sanitized evidence hashes, bounded metrics, no raw private
+evidence, no release mutation, and fail-closed `NEW_BINARY_OR_OTA_REQUIRED`
+when installed telemetry is unavailable.

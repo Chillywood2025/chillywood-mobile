@@ -34,3 +34,13 @@ card and density metrics, an accepted aspect-ratio class, a baseline comparison
 hash, and an explicit baseline state. A visual pass requires an approved baseline;
 before that, the sentinel may create only baseline-review or evidence-based
 finding records.
+
+Runnable canary:
+
+`npm run sentinel:canary:visual -- --evidence <sanitized-evidence.json>`
+
+The evidence file must include sanitized screenshot/runtime hashes and measured
+layout metrics from an installed device or simulator. Raw screenshots are not
+committed. Because the constitution is still `needs_product_baseline_review`, the
+visual canary may create baseline-review findings but must not claim an approved
+visual pass until Owner baseline approval exists.

@@ -40,3 +40,13 @@ Every persisted LiveKit timing metric is typed and bounded. A finding may exceed
 the pass deadlines, but it cannot store unbounded timing evidence. A pass requires
 token issuance, room connection, UI resolution, and first remote media within the
 constitution deadlines.
+
+Runnable canary:
+
+`npm run sentinel:canary:livekit -- --evidence <sanitized-evidence.json>`
+
+The evidence file must come from an installed runner and include stage booleans,
+bounded timings, remote participant/media observation, UI exit from Connecting,
+background/foreground recovery, and cleanup state. If the installed binary cannot
+expose these telemetry points, the runner records `NEW_BINARY_OR_OTA_REQUIRED`;
+source fixtures are not accepted as installed proof.

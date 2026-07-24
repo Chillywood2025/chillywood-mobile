@@ -39,3 +39,13 @@ Initial journeys:
 
 Detected conditions flow to product-quality triage and then collective
 governance. The sentinel cannot silently patch production.
+
+Runnable canary:
+
+`npm run sentinel:canary:journey -- --evidence <sanitized-evidence.json>`
+
+The evidence file must come from an installed runner and include the journey
+name, expected state, observed state, bounded duration, result state, journey
+step count, unresolved-state count, screenshot evidence hash, and source runtime
+hash. If the current app cannot emit that telemetry without a new binary or OTA,
+the canary records `NEW_BINARY_OR_OTA_REQUIRED`.
