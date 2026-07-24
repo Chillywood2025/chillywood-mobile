@@ -32,7 +32,7 @@ export type SourceRequest = Readonly<{
   freshnessSeconds: number;
   platform: "shared";
   projectId: string;
-  publicationDate: string | null;
+  publicationDate: string;
   publisher: string;
   sourceType: string;
   taskId: string;
@@ -65,6 +65,7 @@ export type PinnedResearchResponse = Readonly<{
   canonicalUrl: string;
   connectedAddress: string;
   contentType: string;
+  lastModified: string | null;
   resolvedAddresses: readonly string[];
   retrievalDate: string;
   status: number;
@@ -137,10 +138,10 @@ const MAX_SOURCE_TTL_SECONDS = Object.freeze(
     security_advisory: 14 * 86_400,
     platform_policy: 30 * 86_400,
     store_policy: 30 * 86_400,
-    official_documentation: 90 * 86_400,
+    official_documentation: 30 * 86_400,
     product_research: 30 * 86_400,
     competitor_research: 30 * 86_400,
-    engineering_practice: 90 * 86_400,
+    engineering_practice: 30 * 86_400,
   } as const,
 );
 
@@ -410,18 +411,15 @@ export const normalizeSourceRequest = (
   ) {
     return null;
   }
-  let publicationDate: string | null = null;
-  if (payload.publicationDate !== null) {
-    if (typeof payload.publicationDate !== "string") return null;
-    const publicationTime = Date.parse(payload.publicationDate);
-    if (
-      !Number.isFinite(publicationTime) ||
-      publicationTime > Date.now() + 300_000
-    ) {
-      return null;
-    }
-    publicationDate = new Date(publicationTime).toISOString();
+  if (typeof payload.publicationDate !== "string") return null;
+  const publicationTime = Date.parse(payload.publicationDate);
+  if (
+    !Number.isFinite(publicationTime) ||
+    publicationTime > Date.now() + 300_000
+  ) {
+    return null;
   }
+  const publicationDate = new Date(publicationTime).toISOString();
   const normalized: SourceRequest = Object.freeze({
     action: "retrieve_source",
     authorityId,
@@ -477,7 +475,7 @@ export const normalizeClaimRequest = (
   const freshness = Date.parse(payload.freshnessDeadline);
   if (
     !Number.isFinite(freshness) || freshness <= now.getTime() ||
-    freshness > now.getTime() + 90 * 86_400_000
+    freshness > now.getTime() + 30 * 86_400_000
   ) {
     return null;
   }
@@ -581,4 +579,58 @@ export const extractObservedPublicationDates = (
     }
   }
   return Object.freeze([...new Set(candidates)].sort());
+};
+
+const normalizeExtractiveText = (value: string): string =>
+  value.normalize("NFKC").toLocaleLowerCase("en-US")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+export const claimHasExtractiveSupport = (
+  boundedClaim: string,
+  boundedExcerpt: string,
+): boolean => {
+  const claim = normalizeExtractiveText(boundedClaim);
+  const excerpt = normalizeExtractiveText(boundedExcerpt);
+  return claim.length >= 4 && excerpt.includes(claim);
+};
+
+export type RetrievedCitationMetadata = Readonly<{
+  locator: string;
+  title: string;
+}>;
+
+export const extractRetrievedCitationMetadata = (
+  body: string,
+  contentType: string,
+  canonicalUrl: string,
+  publisher: string,
+  sourceType: string,
+): RetrievedCitationMetadata | null => {
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  let title = "";
+  if (mediaType === "text/html") {
+    const titleMatch = body.match(
+      /<title\b[^>]*>([\s\S]{1,1024}?)<\/title\s*>/iu,
+    );
+    const metaTitleMatch = body.match(
+      /<meta\b[^>]*(?:name|property)\s*=\s*["'](?:og:title|twitter:title)["'][^>]*content\s*=\s*["']([^"']{1,1024})["'][^>]*>/iu,
+    );
+    title = decodeHtmlEntities(
+      (titleMatch?.[1] ?? metaTitleMatch?.[1] ?? "").replace(/<[^>]+>/gu, " "),
+    );
+  } else if (mediaType === "application/json") {
+    const match = body.match(
+      /"(?:headline|title|name)"\s*:\s*"([^"\\]{1,512})"/iu,
+    );
+    title = match?.[1] ?? "";
+  }
+  title = title.replace(/\s+/gu, " ").trim().slice(0, 512);
+  if (!title) {
+    title = `${publisher} ${sourceType.replace(/_/gu, " ")}`.slice(0, 512);
+  }
+  const locator = canonicalUrl.slice(0, 512);
+  const metadata = Object.freeze({ locator, title });
+  return locator && title && isSecuritySafe(metadata) ? metadata : null;
 };

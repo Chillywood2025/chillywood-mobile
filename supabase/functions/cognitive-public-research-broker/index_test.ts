@@ -1,8 +1,10 @@
 import { handler, researchRuntimeGateOpen } from "./index.ts";
 import {
   canonicalizeResearchUrl,
+  claimHasExtractiveSupport,
   extractBoundedExcerpt,
   extractObservedPublicationDates,
+  extractRetrievedCitationMetadata,
   ipAddressKey,
   isPrivateOrReservedIp,
   normalizeClaimRequest,
@@ -30,7 +32,7 @@ const sourcePayload = () => ({
   freshnessSeconds: 86_400,
   platform: "shared",
   projectId: SCOPE.projectId,
-  publicationDate: null,
+  publicationDate: "2026-07-20T15:30:00.000Z",
   publisher: "Apple",
   sourceType: "official_documentation",
   taskId: SCOPE.taskId,
@@ -118,6 +120,13 @@ Deno.test("research broker accepts only exact registered public source scope", (
       publisher: "Caller Publisher",
     }) === null,
     "publisher must match the registry",
+  );
+  assert(
+    normalizeSourceRequest({
+      ...sourcePayload(),
+      publicationDate: null,
+    }) === null,
+    "publication date is mandatory at the broker boundary",
   );
 });
 
@@ -265,6 +274,37 @@ Deno.test("publication dates are derived from retrieved source metadata", () => 
   );
 });
 
+Deno.test("citation metadata and claim support are derived from retrieved evidence", () => {
+  const citation = extractRetrievedCitationMetadata(
+    "<html><head><title>  Platform update | Apple  </title></head></html>",
+    "text/html",
+    "https://developer.apple.com/documentation/example",
+    "Apple",
+    "official_documentation",
+  );
+  assert(citation !== null, "retrieved HTML title should produce a citation");
+  assert(
+    citation.title === "Platform update | Apple" &&
+      citation.locator ===
+        "https://developer.apple.com/documentation/example",
+    "citation title and locator must come from retrieved transport state",
+  );
+  assert(
+    claimHasExtractiveSupport(
+      "Platform update behavior",
+      "The documentation states: Platform update behavior.",
+    ),
+    "normalized exact text should count as bounded extractive support",
+  );
+  assert(
+    !claimHasExtractiveSupport(
+      "A caller-authored conclusion",
+      "Retrieved evidence discusses a different behavior.",
+    ),
+    "unsupported caller conclusions must fail closed",
+  );
+});
+
 Deno.test("claim policy is bounded non-personal and evaluator-required", () => {
   const now = new Date("2026-07-23T12:00:00.000Z");
   const payload = {
@@ -306,6 +346,13 @@ Deno.test("claim policy is bounded non-personal and evaluator-required", () => {
       freshnessDeadline: "2026-07-23T11:59:59.000Z",
     }, now) === null,
     "expired claims must fail closed",
+  );
+  assert(
+    normalizeClaimRequest({
+      ...payload,
+      freshnessDeadline: "2026-08-23T12:00:01.000Z",
+    }, now) === null,
+    "claim retention cannot exceed the 30-day public-research window",
   );
 });
 

@@ -2,7 +2,6 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 import {
-  evaluateStoredResearchClaim,
   type ResearchClaimRecord,
   type ResearchContradictionRecord,
   type ResearchRelationRecord,
@@ -19,7 +18,7 @@ type SupabaseClientLike = ReturnType<typeof createClient<any>>;
 
 const INVOCATION_HEADER = "x-cognitive-research-evaluator-invocation";
 export const SUBJECT_EVALUATION_RPC =
-  "cognitive_derive_subject_evaluation" as const;
+  "cognitive_derive_public_research_evaluation" as const;
 const LOWER_HEX_64 = /^[a-f0-9]{64}$/u;
 const UUID_PATTERN =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -221,7 +220,7 @@ export const loadResearchSnapshot = async (
   const claimResult = await serviceClient
     .from("research_claims")
     .select(
-      "id,task_id,project_id,platform,environment,status,bounded_claim,claim_hash,confidence,category,freshness_deadline,contradiction_state,support_state",
+      "id,task_id,project_id,platform,environment,status,bounded_claim,claim_hash,confidence,category,freshness_deadline,contradiction_state,support_state,created_at,retention_until,erased_at",
     )
     .eq("id", request.researchClaimId)
     .eq("task_id", request.taskId)
@@ -256,7 +255,7 @@ export const loadResearchSnapshot = async (
       serviceClient
         .from("research_sources")
         .select(
-          "id,source_type,is_primary,ownership_identity,canonical_url_hash,content_hash,bounded_excerpt,citation_metadata,freshness_deadline,trusted_for_tool_execution",
+          "id,source_type,is_primary,ownership_identity,canonical_url_hash,content_hash,bounded_excerpt,citation_metadata,publication_date,retrieval_date,freshness_deadline,retention_until,erased_at,trusted_for_tool_execution",
         )
         .in("id", sourceIds)
         .eq("task_id", request.taskId)
@@ -311,11 +310,6 @@ export const evaluateAndRecordResearchClaim = async (
   serviceClient: SupabaseClientLike,
   request: EvaluationRequest,
 ): Promise<Response> => {
-  const snapshot = await loadResearchSnapshot(serviceClient, request);
-  if (!snapshot) {
-    return json(409, { error: "research_evaluation_subject_unavailable" });
-  }
-  const evaluation = await evaluateStoredResearchClaim(snapshot);
   const result = await serviceClient.rpc(
     SUBJECT_EVALUATION_RPC,
     {
@@ -334,7 +328,7 @@ export const evaluateAndRecordResearchClaim = async (
   const readback = await serviceClient
     .from("cognitive_subject_evaluations")
     .select(
-      "id,subject_type,subject_id,evaluation_status,evidence_hash,evaluator_identity_hash,expires_at",
+      "id,subject_type,subject_id,evaluation_status,evidence_hash,evaluator_identity_hash,expires_at,evidence_manifest_id",
     )
     .eq("id", result.data)
     .eq("task_id", request.taskId)
@@ -346,21 +340,43 @@ export const evaluateAndRecordResearchClaim = async (
     readback.error || !readback.data ||
     readback.data.subject_type !== "research_claim" ||
     readback.data.subject_id !== request.researchClaimId ||
-    readback.data.evaluation_status !== evaluation.status ||
     typeof readback.data.evidence_hash !== "string" ||
-    typeof readback.data.evaluator_identity_hash !== "string"
+    !LOWER_HEX_64.test(readback.data.evidence_hash) ||
+    typeof readback.data.evaluator_identity_hash !== "string" ||
+    typeof readback.data.evidence_manifest_id !== "string"
   ) {
     return json(409, { error: "research_evaluation_readback_mismatch" });
   }
+  const manifest = await serviceClient
+    .from("cognitive_subject_evidence_manifests")
+    .select("id,derived_status,evidence_manifest,manifest_hash,expires_at")
+    .eq("id", readback.data.evidence_manifest_id)
+    .eq("task_id", request.taskId)
+    .eq("project_id", request.projectId)
+    .eq("platform", request.platform)
+    .eq("environment", request.environment)
+    .maybeSingle();
+  if (
+    manifest.error || !manifest.data ||
+    manifest.data.derived_status !== readback.data.evaluation_status ||
+    manifest.data.manifest_hash !== readback.data.evidence_hash ||
+    !isRecord(manifest.data.evidence_manifest) ||
+    !Array.isArray(manifest.data.evidence_manifest.reasons) ||
+    manifest.data.evidence_manifest.reasons.some((reason) =>
+      typeof reason !== "string"
+    )
+  ) {
+    return json(409, { error: "research_evaluation_manifest_mismatch" });
+  }
   return json(200, {
     canaryAccepted: false,
-    evaluationEvidenceHash: evaluation.evidenceHash,
-    evaluationStatus: evaluation.status,
+    evaluationEvidenceHash: readback.data.evidence_hash,
+    evaluationStatus: readback.data.evaluation_status,
     evaluatorIdentityHash: readback.data.evaluator_identity_hash,
     evaluatorRecordHash: await sha256Hex(result.data),
     evaluatorRecordId: result.data,
     expiresAt: String(readback.data.expires_at),
-    reasons: [...evaluation.reasons],
+    reasons: [...manifest.data.evidence_manifest.reasons] as Json[],
     researchClaimId: request.researchClaimId,
     selfApproval: false,
   });

@@ -12,11 +12,14 @@ export type ResearchClaimRecord = Readonly<{
   claim_hash: string;
   confidence: number;
   contradiction_state: string;
+  created_at: string;
+  erased_at: string | null;
   environment: string;
   freshness_deadline: string;
   id: string;
   platform: string;
   project_id: string;
+  retention_until: string;
   status: string;
   support_state: string;
   task_id: string;
@@ -27,10 +30,14 @@ export type ResearchSourceRecord = Readonly<{
   canonical_url_hash: string;
   citation_metadata: unknown;
   content_hash: string;
+  erased_at: string | null;
   freshness_deadline: string;
   id: string;
   is_primary: boolean;
   ownership_identity: string;
+  publication_date: string;
+  retention_until: string;
+  retrieval_date: string;
   source_type: string;
   trusted_for_tool_execution: boolean;
 }>;
@@ -105,6 +112,12 @@ const sha256Hex = async (value: string): Promise<string> => {
     .join("");
 };
 
+const normalizeExtractiveText = (value: string): string =>
+  value.normalize("NFKC").toLocaleLowerCase("en-US")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+
 const validCitation = (value: unknown): boolean => {
   if (!isRecord(value)) return false;
   const keys = Object.keys(value).sort();
@@ -124,10 +137,13 @@ const evaluationProjection = (
     category: snapshot.claim.category,
     claimHash: snapshot.claim.claim_hash,
     contradictionState: snapshot.claim.contradiction_state,
+    createdAt: snapshot.claim.created_at,
+    erasedAt: snapshot.claim.erased_at,
     freshnessDeadline: snapshot.claim.freshness_deadline,
     id: snapshot.claim.id,
     status: snapshot.claim.status,
     supportState: snapshot.claim.support_state,
+    retentionUntil: snapshot.claim.retention_until,
   },
   contradictions: snapshot.contradictions.map((entry) => entry.resolution_state)
     .sort(),
@@ -146,6 +162,9 @@ const evaluationProjection = (
     id: entry.id,
     isPrimary: entry.is_primary,
     ownershipIdentity: entry.ownership_identity,
+    publicationDate: entry.publication_date,
+    retentionUntil: entry.retention_until,
+    retrievalDate: entry.retrieval_date,
     sourceType: entry.source_type,
   })).sort((left, right) => left.id.localeCompare(right.id)),
 });
@@ -168,13 +187,29 @@ export const evaluateStoredResearchClaim = async (
     !safe({ claim: claim.bounded_claim })
   ) {
     failReasons.add("claim_contract_invalid");
+  } else if (await sha256Hex(claim.bounded_claim) !== claim.claim_hash) {
+    failReasons.add("claim_hash_mismatch");
   }
   if (claim.status !== "supported" || claim.support_state !== "supported") {
     failReasons.add("claim_not_supported");
   }
   const claimFreshness = Date.parse(claim.freshness_deadline);
+  const claimRetention = Date.parse(claim.retention_until);
+  const claimCreated = Date.parse(claim.created_at);
   if (!Number.isFinite(claimFreshness) || claimFreshness <= now.getTime()) {
     blockedReasons.add("claim_expired");
+  }
+  if (
+    claim.erased_at !== null || !Number.isFinite(claimRetention) ||
+    claimRetention <= now.getTime()
+  ) {
+    blockedReasons.add("claim_retention_expired");
+  }
+  if (
+    !Number.isFinite(claimCreated) ||
+    claimRetention > claimCreated + 30 * 86_400_000
+  ) {
+    failReasons.add("claim_retention_invalid");
   }
   if (!["none", "resolved"].includes(claim.contradiction_state)) {
     blockedReasons.add("claim_contradiction_unresolved");
@@ -213,12 +248,28 @@ export const evaluateStoredResearchClaim = async (
   }
   for (const source of snapshot.sources) {
     const sourceFreshness = Date.parse(source.freshness_deadline);
+    const sourceRetention = Date.parse(source.retention_until);
+    const publicationDate = Date.parse(source.publication_date);
+    const retrievalDate = Date.parse(source.retrieval_date);
     if (
       !Number.isFinite(sourceFreshness) ||
       sourceFreshness <= now.getTime() ||
       (Number.isFinite(claimFreshness) && sourceFreshness < claimFreshness)
     ) {
       blockedReasons.add("source_expired");
+    }
+    if (
+      source.erased_at !== null || !Number.isFinite(sourceRetention) ||
+      sourceRetention <= now.getTime()
+    ) {
+      blockedReasons.add("source_retention_expired");
+    }
+    if (
+      !Number.isFinite(publicationDate) || !Number.isFinite(retrievalDate) ||
+      publicationDate > retrievalDate ||
+      sourceRetention > retrievalDate + 30 * 86_400_000
+    ) {
+      failReasons.add("source_publication_retention_invalid");
     }
     if (
       !LOWER_HEX_64.test(source.canonical_url_hash) ||
@@ -238,6 +289,20 @@ export const evaluateStoredResearchClaim = async (
       await sha256Hex(source.bounded_excerpt) !== source.content_hash
     ) {
       failReasons.add("source_content_hash_mismatch");
+    } else if (
+      await sha256Hex(
+        String((source.citation_metadata as Record<string, unknown>).locator),
+      ) !== source.canonical_url_hash
+    ) {
+      failReasons.add("source_citation_locator_mismatch");
+    }
+    const normalizedClaim = normalizeExtractiveText(claim.bounded_claim);
+    const normalizedExcerpt = normalizeExtractiveText(source.bounded_excerpt);
+    if (
+      normalizedClaim.length < 4 ||
+      !normalizedExcerpt.includes(normalizedClaim)
+    ) {
+      failReasons.add("source_extract_support_missing");
     }
     const retrievals = retrievalsBySource.get(source.id) ?? [];
     if (

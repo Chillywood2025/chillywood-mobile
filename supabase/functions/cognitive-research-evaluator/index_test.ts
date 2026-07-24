@@ -1,4 +1,5 @@
 import {
+  evaluateAndRecordResearchClaim,
   handler,
   researchEvaluationGateOpen,
   SUBJECT_EVALUATION_RPC,
@@ -26,24 +27,28 @@ const hash = async (value: string): Promise<string> => {
 };
 
 const buildSnapshot = async (): Promise<ResearchSnapshot> => {
+  const claim = "Official public documentation supports this claim.";
   const excerpt =
-    "Official public documentation with bounded technical guidance.";
+    `Official public documentation with bounded technical guidance. ${claim}`;
   const contentHash = await hash(excerpt);
+  const locator = "https://developer.apple.com/documentation/example";
+  const locatorHash = await hash(locator);
   const sourceId = "00000000-0000-4000-8000-000000000003";
   return {
     claim: {
-      bounded_claim: "The reviewed public documentation supports this claim.",
+      bounded_claim: claim,
       category: "technical",
-      claim_hash: await hash(
-        "The reviewed public documentation supports this claim.",
-      ),
+      claim_hash: await hash(claim),
       confidence: 0.9,
       contradiction_state: "none",
+      created_at: "2026-07-23T12:00:00.000Z",
+      erased_at: null,
       environment: "production",
       freshness_deadline: "2026-07-25T12:00:00.000Z",
       id: "00000000-0000-4000-8000-000000000004",
       platform: "shared",
       project_id: "00000000-0000-4000-8000-000000000001",
+      retention_until: "2026-07-25T12:00:00.000Z",
       status: "supported",
       support_state: "supported",
       task_id: "00000000-0000-4000-8000-000000000002",
@@ -52,7 +57,7 @@ const buildSnapshot = async (): Promise<ResearchSnapshot> => {
     relations: [{ relationship: "supports", source_id: sourceId }],
     retrievals: [{
       id: "00000000-0000-4000-8000-000000000005",
-      request_url_hash: "b".repeat(64),
+      request_url_hash: locatorHash,
       resolved_address_hashes: ["c".repeat(64)],
       response_hash: contentHash,
       result: "accepted",
@@ -60,16 +65,20 @@ const buildSnapshot = async (): Promise<ResearchSnapshot> => {
     }],
     sources: [{
       bounded_excerpt: excerpt,
-      canonical_url_hash: "b".repeat(64),
+      canonical_url_hash: locatorHash,
       citation_metadata: {
-        locator: "Developer documentation",
+        locator,
         title: "Official documentation",
       },
       content_hash: contentHash,
+      erased_at: null,
       freshness_deadline: "2026-07-25T12:00:00.000Z",
       id: sourceId,
       is_primary: true,
       ownership_identity: "apple",
+      publication_date: "2026-07-20T12:00:00.000Z",
+      retention_until: "2026-07-25T12:00:00.000Z",
+      retrieval_date: "2026-07-23T12:00:00.000Z",
       source_type: "official_documentation",
       trusted_for_tool_execution: false,
     }],
@@ -199,6 +208,56 @@ Deno.test("independent evaluator fails hash and broker-receipt mismatches", asyn
   );
 });
 
+Deno.test("independent evaluator recomputes claim hash and extractive support", async () => {
+  const snapshot = await buildSnapshot();
+  const result = await evaluateStoredResearchClaim(
+    {
+      ...snapshot,
+      claim: {
+        ...snapshot.claim,
+        claim_hash: "f".repeat(64),
+      },
+      sources: [{
+        ...snapshot.sources[0],
+        bounded_excerpt: "A different retrieved statement.",
+        content_hash: await hash("A different retrieved statement."),
+      }],
+    },
+    new Date("2026-07-23T12:00:00.000Z"),
+  );
+  assert(result.status === "fail", "unsupported or rehashed claims must fail");
+  assert(
+    result.reasons.includes("claim_hash_mismatch") &&
+      result.reasons.includes("source_extract_support_missing"),
+    "claim hashing and extractive support must be independently checked",
+  );
+});
+
+Deno.test("independent evaluator requires publication and live 30-day retention", async () => {
+  const snapshot = await buildSnapshot();
+  const result = await evaluateStoredResearchClaim(
+    {
+      ...snapshot,
+      claim: {
+        ...snapshot.claim,
+        retention_until: "2026-09-01T12:00:00.000Z",
+      },
+      sources: [{
+        ...snapshot.sources[0],
+        publication_date: "",
+        retention_until: "2026-09-01T12:00:00.000Z",
+      }],
+    },
+    new Date("2026-07-23T12:00:00.000Z"),
+  );
+  assert(result.status === "fail", "missing publication provenance must fail");
+  assert(
+    result.reasons.includes("claim_retention_invalid") &&
+      result.reasons.includes("source_publication_retention_invalid"),
+    "publication and retention defects must be explicit",
+  );
+});
+
 Deno.test("technical claims require a reviewed official primary source", async () => {
   const snapshot = await buildSnapshot();
   const result = await evaluateStoredResearchClaim(
@@ -250,9 +309,82 @@ Deno.test("research evaluator obeys switch revocation independently", async () =
 
 Deno.test("research evaluator delegates the verdict to the database evidence derivation", () => {
   assert(
-    SUBJECT_EVALUATION_RPC === "cognitive_derive_subject_evaluation",
-    "the evaluator must not persist a caller-selected verdict",
+    SUBJECT_EVALUATION_RPC ===
+      "cognitive_derive_public_research_evaluation",
+    "the evaluator must use the closed research-only derivation",
   );
+});
+
+Deno.test("research evaluator returns the persisted database proof hash", async () => {
+  const persistedHash = "a".repeat(64);
+  const evaluationId = "00000000-0000-4000-8000-000000000006";
+  const manifestId = "00000000-0000-4000-8000-000000000007";
+  const rows: Record<string, unknown> = {
+    cognitive_subject_evaluations: {
+      data: {
+        evidence_hash: persistedHash,
+        evidence_manifest_id: manifestId,
+        evaluation_status: "pass",
+        evaluator_identity_hash: "b".repeat(64),
+        expires_at: "2026-07-24T12:00:00.000Z",
+        id: evaluationId,
+        subject_id: "00000000-0000-4000-8000-000000000004",
+        subject_type: "research_claim",
+      },
+      error: null,
+    },
+    cognitive_subject_evidence_manifests: {
+      data: {
+        derived_status: "pass",
+        evidence_manifest: { reasons: [] },
+        expires_at: "2026-07-24T12:00:00.000Z",
+        id: manifestId,
+        manifest_hash: persistedHash,
+      },
+      error: null,
+    },
+  };
+  const client = {
+    from(table: string) {
+      const builder = {
+        eq: () => builder,
+        maybeSingle: () => Promise.resolve(rows[table]),
+        select: () => builder,
+      };
+      return builder;
+    },
+    rpc: () => Promise.resolve({ data: evaluationId, error: null }),
+  };
+  Deno.env.set(
+    "COGNITIVE_INDEPENDENT_EVALUATOR_SERVICE_TOKEN",
+    "x".repeat(40),
+  );
+  try {
+    const response = await evaluateAndRecordResearchClaim(
+      client as unknown as Parameters<
+        typeof evaluateAndRecordResearchClaim
+      >[0],
+      {
+        action: "evaluate_research_claim",
+        environment: "production",
+        platform: "shared",
+        projectId: "00000000-0000-4000-8000-000000000001",
+        researchClaimId: "00000000-0000-4000-8000-000000000004",
+        taskId: "00000000-0000-4000-8000-000000000002",
+      },
+    );
+    const body = await response.json();
+    assert(
+      response.status === 200,
+      "persisted evaluator proof should read back",
+    );
+    assert(
+      body.evaluationEvidenceHash === persistedHash,
+      "response proof hash must be the database-persisted manifest hash",
+    );
+  } finally {
+    Deno.env.delete("COGNITIVE_INDEPENDENT_EVALUATOR_SERVICE_TOKEN");
+  }
 });
 
 Deno.test("research evaluator HTTP endpoint requires a distinct invocation proof", async () => {

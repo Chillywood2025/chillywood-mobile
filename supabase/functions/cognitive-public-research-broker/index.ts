@@ -5,9 +5,11 @@ import {
   authorityOwnerForId,
   canonicalizeResearchUrl,
   type CanonicalResearchUrl,
+  claimHasExtractiveSupport,
   type ClaimRequest,
   extractBoundedExcerpt,
   extractObservedPublicationDates,
+  extractRetrievedCitationMetadata,
   ipAddressKey,
   isPrivateOrReservedIp,
   isRecord,
@@ -151,6 +153,7 @@ const decodeChunkedBody = (input: Uint8Array): Uint8Array => {
 type ParsedHttpResponse = Readonly<{
   body: string;
   contentType: string;
+  lastModified: string | null;
   location: string | null;
   status: number;
 }>;
@@ -209,6 +212,7 @@ const parseHttpResponse = (wire: Uint8Array): ParsedHttpResponse => {
   return Object.freeze({
     body: new TextDecoder("utf-8", { fatal: true }).decode(bodyBytes),
     contentType: headers.get("content-type") ?? "",
+    lastModified: headers.get("last-modified") ?? null,
     location: headers.get("location") ?? null,
     status,
   });
@@ -398,6 +402,7 @@ export const fetchPinnedPublicResearch = async (
         canonicalUrl: target.canonical,
         connectedAddress,
         contentType: response.contentType,
+        lastModified: response.lastModified,
         resolvedAddresses: Object.freeze([...allResolved]),
         retrievalDate: new Date().toISOString(),
         status: response.status,
@@ -514,18 +519,20 @@ export const retrieveAndRecordSource = async (
     retrieved.body,
     retrieved.contentType,
   );
-  if (
-    payload.publicationDate !== null &&
-    !observedPublicationDates.includes(payload.publicationDate)
-  ) {
+  const headerPublicationTime = retrieved.lastModified === null
+    ? Number.NaN
+    : Date.parse(retrieved.lastModified);
+  const allObservedPublicationDates = [
+    ...observedPublicationDates,
+    ...(Number.isFinite(headerPublicationTime)
+      ? [new Date(headerPublicationTime).toISOString()]
+      : []),
+  ];
+  if (!allObservedPublicationDates.includes(payload.publicationDate)) {
     return json(422, { error: "research_publication_date_unverified" });
   }
-  const publicationDate = payload.publicationDate ??
-    observedPublicationDates[0] ?? null;
-  if (
-    publicationDate !== null &&
-    Date.parse(publicationDate) > retrievalTime
-  ) {
+  const publicationDate = payload.publicationDate;
+  if (Date.parse(publicationDate) > retrievalTime) {
     return json(400, { error: "research_publication_date_rejected" });
   }
   const freshnessDeadline = new Date(
@@ -534,6 +541,16 @@ export const retrieveAndRecordSource = async (
   const finalUrl = canonicalizeResearchUrl(retrieved.canonicalUrl);
   if (!finalUrl || finalUrl.hostname !== authorityUrl.hostname) {
     return json(422, { error: "public_research_redirect_rejected" });
+  }
+  const citationMetadata = extractRetrievedCitationMetadata(
+    retrieved.body,
+    retrieved.contentType,
+    finalUrl.canonical,
+    payload.publisher,
+    payload.sourceType,
+  );
+  if (!citationMetadata) {
+    return json(422, { error: "research_citation_metadata_unavailable" });
   }
   const [sourceReferenceHash, canonicalUrlHash, contentHash] = await Promise
     .all([
@@ -551,10 +568,7 @@ export const retrieveAndRecordSource = async (
       p_bounded_excerpt: excerpt,
       p_canonical_host: finalUrl.hostname,
       p_canonical_url_hash: canonicalUrlHash,
-      p_citation_metadata: {
-        locator: payload.citationLocator,
-        title: payload.citationTitle,
-      },
+      p_citation_metadata: citationMetadata,
       p_content_hash: contentHash,
       p_environment: payload.environment,
       p_freshness_deadline: freshnessDeadline,
@@ -592,6 +606,8 @@ export const retrieveAndRecordSource = async (
   return json(200, {
     canonicalUrlHash,
     contentHash,
+    citationLocatorHash: await sha256Hex(citationMetadata.locator),
+    citationTitle: citationMetadata.title,
     freshnessDeadline,
     privateDataUsed: false,
     publisher: payload.publisher,
@@ -607,6 +623,57 @@ export const recordClaimEvidence = async (
   serviceClient: SupabaseClientLike,
   payload: ClaimRequest,
 ): Promise<Response> => {
+  const now = new Date().toISOString();
+  const sourceResult = await serviceClient
+    .from("research_sources")
+    .select(
+      "id,bounded_excerpt,is_primary,ownership_identity,publication_date,source_type,freshness_deadline,retention_until,erased_at",
+    )
+    .in("id", [...payload.sourceIds])
+    .eq("task_id", payload.taskId)
+    .eq("project_id", payload.projectId)
+    .eq("platform", payload.platform)
+    .eq("environment", payload.environment)
+    .gt("freshness_deadline", now)
+    .gt("retention_until", now)
+    .is("erased_at", null);
+  if (
+    sourceResult.error || !Array.isArray(sourceResult.data) ||
+    sourceResult.data.length !== payload.sourceIds.length ||
+    sourceResult.data.some((source) =>
+      typeof source.bounded_excerpt !== "string" ||
+      typeof source.publication_date !== "string" ||
+      !claimHasExtractiveSupport(
+        payload.boundedClaim,
+        source.bounded_excerpt,
+      )
+    )
+  ) {
+    return json(409, { error: "public_research_claim_support_rejected" });
+  }
+  if (
+    ["technical", "platform_policy", "security"].includes(payload.category) &&
+    !sourceResult.data.some((source) =>
+      source.is_primary === true &&
+      [
+        "official_documentation",
+        "security_advisory",
+        "platform_policy",
+        "store_policy",
+      ].includes(String(source.source_type))
+    )
+  ) {
+    return json(409, { error: "public_research_primary_support_required" });
+  }
+  if (
+    payload.category === "consequential_news" &&
+    new Set(
+        sourceResult.data.map((source) => String(source.ownership_identity)),
+      ).size < 2
+  ) {
+    return json(409, { error: "public_research_corroboration_required" });
+  }
+  const expectedClaimHash = await sha256Hex(payload.boundedClaim);
   const result = await serviceClient.rpc(
     "cognitive_record_public_research_claim_evidence",
     {
@@ -627,10 +694,29 @@ export const recordClaimEvidence = async (
   if (result.error || typeof result.data !== "string") {
     return json(409, { error: "public_research_claim_persistence_rejected" });
   }
+  const readback = await serviceClient
+    .from("research_claims")
+    .select("id,claim_hash,retention_until,erased_at")
+    .eq("id", result.data)
+    .eq("task_id", payload.taskId)
+    .eq("project_id", payload.projectId)
+    .eq("platform", payload.platform)
+    .eq("environment", payload.environment)
+    .maybeSingle();
+  if (
+    readback.error || !readback.data ||
+    readback.data.claim_hash !== expectedClaimHash ||
+    readback.data.erased_at !== null ||
+    typeof readback.data.retention_until !== "string" ||
+    Date.parse(readback.data.retention_until) >
+      Date.now() + 30 * 86_400_000 + 300_000
+  ) {
+    return json(409, { error: "public_research_claim_readback_mismatch" });
+  }
   return json(200, {
     canaryAccepted: false,
     canaryKey: payload.canaryKey,
-    claimHash: await sha256Hex(payload.boundedClaim),
+    claimHash: expectedClaimHash,
     evaluatorRequired: true,
     privateDataUsed: false,
     researchClaimId: result.data,
