@@ -32,6 +32,7 @@ const ALLOWED_SYSTEM_IDS = [
   "privacy_compliance_operator",
   "support_success_operator",
   "search_ranking_integrity_operator",
+  "product_intelligence_operator",
   "owner_command_operator",
 ] as const;
 

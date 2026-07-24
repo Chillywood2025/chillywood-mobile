@@ -14,8 +14,14 @@ const ownerEndpoint = read(
 const workerEndpoint = read(
   "supabase/functions/cognitive-approved-action-worker/index.ts",
 );
+const evaluatorEndpoint = read(
+  "supabase/functions/cognitive-independent-evaluator/index.ts",
+);
 const governanceControl = read(
   "supabase/functions/cognitive-governance-control/index.ts",
+);
+const autonomousApprovalRequest = read(
+  "supabase/functions/autonomous-approval-request/index.ts",
 );
 const dbTest = read("supabase/tests/cognitive_two_party_activation_handoff_test.sql");
 
@@ -27,6 +33,22 @@ const contains = (text, needle, message) =>
   assert(text.includes(needle), message);
 const notContains = (text, needle, message) =>
   assert(!text.includes(needle), message);
+const between = (text, startNeedle, endNeedle) => {
+  const start = text.indexOf(startNeedle);
+  const end = text.indexOf(endNeedle, start + startNeedle.length);
+  if (start === -1 || end === -1 || end <= start) return "";
+  return text.slice(start, end);
+};
+const switchExecutionFunction = between(
+  migration,
+  "create function public.governance_execute_approved_switch",
+  "create or replace function public.governance_set_level01_switch",
+);
+const completedSwitchFunction = between(
+  migration,
+  "create function public.governance_apply_completed_switch",
+  "create function public.governance_complete_approved_execution",
+);
 
 contains(
   migration,
@@ -40,6 +62,11 @@ contains(
 );
 contains(
   migration,
+  "create table public.governance_approved_execution_evaluator_proofs",
+  "missing immutable independent evaluator proof table",
+);
+contains(
+  migration,
   "create function public.governance_service_identity_allows_operation",
   "missing service identity to operation allowlist",
 );
@@ -47,6 +74,31 @@ contains(
   migration,
   "create function public.governance_assert_two_party_service_principal",
   "missing database service-principal verifier",
+);
+contains(
+  migration,
+  "create function public.governance_revoke_two_party_service_principal",
+  "missing explicit service-principal revocation RPC",
+);
+contains(
+  migration,
+  "when 'cognitive_independent_evaluator' then p_operation = 'independent_evaluation'",
+  "independent evaluator service identity is not restricted to evaluation",
+);
+contains(
+  migration,
+  "create function public.governance_record_approved_execution_evaluator_proof",
+  "missing service-only independent evaluator proof RPC",
+);
+contains(
+  migration,
+  "proof_value.verdict <> 'passed'",
+  "execution completion does not require a passed independent evaluator proof",
+);
+contains(
+  migration,
+  "perform public.governance_apply_completed_switch(p_execution_id)",
+  "switch activation is not deferred to completion after evaluator proof",
 );
 contains(
   migration,
@@ -60,6 +112,16 @@ contains(
 );
 contains(
   migration,
+  "from public.governance_two_party_service_assertions assertion",
+  "service-principal verifier does not read the assertion registry",
+);
+contains(
+  migration,
+  "for share;",
+  "service-principal verifier does not lock the matched assertion row",
+);
+contains(
+  migration,
   "create function public.governance_approved_execution_is_live",
   "missing post-claim execution liveness verifier",
 );
@@ -67,6 +129,11 @@ contains(
   migration,
   "create function public.governance_lock_approved_execution_liveness",
   "missing locked service execution liveness verifier",
+);
+contains(
+  migration,
+  "create function public.governance_lock_approved_execution_cleanup_scope",
+  "missing locked service execution cleanup verifier",
 );
 contains(
   migration,
@@ -82,6 +149,21 @@ contains(
   migration,
   "governance_lock_approved_execution_liveness(p_execution_id)",
   "side-effecting service RPCs do not use the locked liveness verifier",
+);
+contains(
+  migration,
+  "governance_lock_approved_execution_cleanup_scope(p_execution_id)",
+  "cleanup service RPCs do not use the locked cleanup verifier",
+);
+contains(
+  migration,
+  "(execution_value.state = 'postflight' and p_next_state = 'evaluating')",
+  "generic begin transitions do not preserve postflight to evaluating handoff",
+);
+notContains(
+  migration,
+  "execution_value.state = 'executing' and p_next_state <> 'postflight'",
+  "generic begin transition still allows executing to postflight",
 );
 contains(
   migration,
@@ -107,6 +189,26 @@ contains(
   migration,
   "p_target_resource_hash <> public.governance_switch_target_hash",
   "approved switch execution does not recompute target hash from switch payload",
+);
+contains(
+  switchExecutionFunction,
+  "pending_switch_key = p_switch_key",
+  "approved switch execution does not stage switch key on the execution row",
+);
+contains(
+  switchExecutionFunction,
+  "'staged', true",
+  "approved switch execution does not report a staged, non-live switch result",
+);
+notContains(
+  switchExecutionFunction,
+  "insert into public.cognitive_governance_switches",
+  "approved switch execution still writes a live switch before evaluator completion",
+);
+contains(
+  completedSwitchFunction,
+  "enabled_at = null",
+  "dependent switch disable cascade does not clear enabled_at",
 );
 contains(
   migration,
@@ -178,10 +280,50 @@ contains(
   "switchTargetHash",
   "worker endpoint does not derive switch target hash from exact switch payload",
 );
+contains(
+  workerEndpoint,
+  'const BEGIN_STATES = new Set(["preflight", "executing", "evaluating"])',
+  "worker endpoint permits postflight as a generic begin transition",
+);
 notContains(
   workerEndpoint,
   "governance_record_owner_approval",
   "worker endpoint can create Owner approval",
+);
+notContains(
+  workerEndpoint,
+  "governance_record_approved_execution_evaluator_proof",
+  "worker endpoint can self-attest independent evaluator proof",
+);
+contains(
+  evaluatorEndpoint,
+  "COGNITIVE_INDEPENDENT_EVALUATOR_INVOKE_SHA256",
+  "independent evaluator endpoint is missing the server-only invocation proof",
+);
+contains(
+  evaluatorEndpoint,
+  "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION",
+  "independent evaluator endpoint is missing the service assertion source",
+);
+contains(
+  evaluatorEndpoint,
+  "governance_record_approved_execution_evaluator_proof",
+  "independent evaluator endpoint cannot record evaluator proof",
+);
+notContains(
+  evaluatorEndpoint,
+  "governance_claim_approved_action",
+  "independent evaluator endpoint can claim service execution",
+);
+notContains(
+  evaluatorEndpoint,
+  "governance_execute_approved_switch",
+  "independent evaluator endpoint can execute a switch",
+);
+notContains(
+  evaluatorEndpoint,
+  "governance_complete_approved_execution",
+  "independent evaluator endpoint can complete service execution",
 );
 contains(
   governanceControl,
@@ -194,6 +336,16 @@ contains(
   "legacy governance control endpoint does not reject direct service writes",
 );
 contains(
+  governanceControl,
+  "product_intelligence_operator",
+  "governance status endpoint does not read product-intelligence emergency state",
+);
+contains(
+  autonomousApprovalRequest,
+  "\"product_intelligence_operator\"",
+  "Owner emergency route does not allow product-intelligence emergency stop",
+);
+contains(
   dbTest,
   "Owner-authenticated requests cannot service-execute an approved action",
   "database suite does not prove Owner cannot service-execute",
@@ -202,6 +354,16 @@ contains(
   dbTest,
   "service principal cannot create Owner approval",
   "database suite does not prove service principal cannot approve",
+);
+contains(
+  dbTest,
+  "Owner can revoke a service-principal assertion through an explicit RPC",
+  "database suite does not prove explicit service-principal assertion revocation",
+);
+contains(
+  dbTest,
+  "revoked service-principal assertion cannot execute",
+  "database suite does not prove revoked service-principal assertions fail closed",
 );
 contains(
   dbTest,
@@ -220,6 +382,11 @@ contains(
 );
 contains(
   dbTest,
+  "generic begin cannot enter postflight before the approved operation-specific executor runs",
+  "database suite does not prove postflight requires the operation-specific executor",
+);
+contains(
+  dbTest,
   "single-use Owner revocation blocks later approved switch execution",
   "database suite does not prove consumed single-use approvals remain revokable while in flight",
 );
@@ -230,8 +397,8 @@ contains(
 );
 contains(
   dbTest,
-  "all side-effecting service RPCs use the locked liveness check",
-  "database suite does not prove service side effects use locked liveness",
+  "side effects and success use locked liveness while cleanup uses locked cleanup scope",
+  "database suite does not prove side-effect liveness and cleanup-scope separation",
 );
 contains(
   dbTest,
@@ -240,13 +407,43 @@ contains(
 );
 contains(
   dbTest,
+  "approved switch execution stages but does not activate before evaluator proof",
+  "database suite does not prove switches stay inactive before evaluator proof",
+);
+contains(
+  dbTest,
+  "completion without an independent evaluator proof is rejected",
+  "database suite does not prove completion requires evaluator proof",
+);
+contains(
+  dbTest,
+  "worker service identity cannot self-attest evaluator proof",
+  "database suite does not prove worker cannot self-attest evaluator proof",
+);
+contains(
+  dbTest,
+  "independent evaluator proof permits completion and activates staged switch",
+  "database suite does not prove evaluator proof gates final switch activation",
+);
+contains(
+  dbTest,
+  "parent switch disable cascades dependents and clears enabled_at",
+  "database suite does not prove safety disable cascades clear enabled_at",
+);
+contains(
+  dbTest,
   "rollback cannot skip directly from executing to rollback_succeeded",
   "database suite does not prove rollback state skips are rejected",
 );
 contains(
   dbTest,
-  "post-claim Owner revocation blocks rollback and quarantine transition",
-  "database suite does not prove rollback/quarantine rechecks liveness",
+  "emergency stop after side effect permits audited quarantine cleanup",
+  "database suite does not prove emergency-stop cleanup after side effects",
+);
+contains(
+  dbTest,
+  "single-use Owner revocation permits quarantine cleanup after execution started",
+  "database suite does not prove revocation still permits terminal cleanup",
 );
 contains(
   dbTest,

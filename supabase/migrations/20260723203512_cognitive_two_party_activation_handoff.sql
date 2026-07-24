@@ -116,7 +116,8 @@ create table public.governance_two_party_service_assertions (
       'visual_product_experience_sentinel',
       'installed_journey_sentinel',
       'product_quality_triage_router',
-      'model_independence_attestation_service'
+      'model_independence_attestation_service',
+      'cognitive_independent_evaluator'
     )
   ),
   assertion_hash text not null unique check (assertion_hash ~ '^[a-f0-9]{64}$'),
@@ -132,7 +133,8 @@ create table public.governance_two_party_service_assertions (
       'visual_experience_canary',
       'installed_journey_canary',
       'product_quality_triage',
-      'github_draft_pr'
+      'github_draft_pr',
+      'independent_evaluation'
     ]::text[]
   ),
   registered_by uuid not null,
@@ -140,9 +142,15 @@ create table public.governance_two_party_service_assertions (
   issued_at timestamptz not null default transaction_timestamp(),
   expires_at timestamptz not null,
   revoked_at timestamptz,
+  revoked_by uuid,
+  revocation_hash text check (revocation_hash is null or revocation_hash ~ '^[a-f0-9]{64}$'),
   created_at timestamptz not null default transaction_timestamp(),
   check (expires_at > issued_at and expires_at <= issued_at + interval '365 days'),
-  check ((status='revoked') = (revoked_at is not null))
+  check ((status='revoked') = (
+    revoked_at is not null
+    and revoked_by is not null
+    and revocation_hash is not null
+  ))
 );
 
 alter table public.governance_two_party_service_assertions enable row level security;
@@ -357,7 +365,8 @@ create table public.governance_approved_action_executions (
       'visual_product_experience_sentinel',
       'installed_journey_sentinel',
       'product_quality_triage_router',
-      'model_independence_attestation_service'
+      'model_independence_attestation_service',
+      'cognitive_independent_evaluator'
     )
   ),
   service_identity_hash text not null check (service_identity_hash ~ '^[a-f0-9]{64}$'),
@@ -373,10 +382,53 @@ create table public.governance_approved_action_executions (
   execution_receipt_hash text check (execution_receipt_hash is null or execution_receipt_hash ~ '^[a-f0-9]{64}$'),
   evaluator_proof_hash text check (evaluator_proof_hash is null or evaluator_proof_hash ~ '^[a-f0-9]{64}$'),
   failure_hash text check (failure_hash is null or failure_hash ~ '^[a-f0-9]{64}$'),
+  pending_switch_key text check (
+    pending_switch_key is null
+    or pending_switch_key in (
+      'cognitive_research_enabled',
+      'cognitive_memory_enabled',
+      'cognitive_collective_deliberation_enabled',
+      'cognitive_draft_pr_executor_enabled',
+      'cognitive_scheduled_level01_enabled',
+      'cognitive_livekit_experience_sentinel_enabled',
+      'cognitive_visual_experience_sentinel_enabled',
+      'cognitive_installed_journey_sentinel_enabled'
+    )
+  ),
+  pending_switch_enabled boolean,
+  pending_switch_policy_version text check (
+    pending_switch_policy_version is null
+    or (
+      length(pending_switch_policy_version) between 1 and 64
+      and not public.cognitive_text_has_secret(pending_switch_policy_version)
+    )
+  ),
+  pending_switch_target_resource_hash text check (
+    pending_switch_target_resource_hash is null
+    or pending_switch_target_resource_hash ~ '^[a-f0-9]{64}$'
+  ),
+  pending_switch_validated_at timestamptz,
   claimed_at timestamptz not null default transaction_timestamp(),
   began_at timestamptz,
   completed_at timestamptz,
   updated_at timestamptz not null default transaction_timestamp(),
+  check (
+    (
+      pending_switch_key is null
+      and pending_switch_enabled is null
+      and pending_switch_policy_version is null
+      and pending_switch_target_resource_hash is null
+      and pending_switch_validated_at is null
+    )
+    or (
+      operation = 'set_switch'
+      and pending_switch_key is not null
+      and pending_switch_enabled is not null
+      and pending_switch_policy_version is not null
+      and pending_switch_target_resource_hash is not null
+      and pending_switch_validated_at is not null
+    )
+  ),
   unique (approval_version_id, claim_sequence),
   unique (approval_version_id, id),
   unique (id, task_id, project_id, platform, environment),
@@ -390,6 +442,33 @@ alter table public.governance_owner_approval_lifecycle_events
   add constraint governance_owner_approval_lifecycle_execution_fk
   foreign key (execution_id, task_id, project_id, platform, environment)
     references public.governance_approved_action_executions(id, task_id, project_id, platform, environment);
+
+create table public.governance_approved_execution_evaluator_proofs (
+  id uuid primary key default gen_random_uuid(),
+  execution_id uuid not null,
+  approval_record_id uuid not null,
+  approval_version_id uuid not null,
+  task_id uuid not null,
+  project_id uuid not null,
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  evaluator_identity text not null check (evaluator_identity = 'cognitive_independent_evaluator'),
+  evaluator_identity_hash text not null check (evaluator_identity_hash ~ '^[a-f0-9]{64}$'),
+  execution_receipt_hash text not null check (execution_receipt_hash ~ '^[a-f0-9]{64}$'),
+  evaluator_proof_hash text not null check (evaluator_proof_hash ~ '^[a-f0-9]{64}$'),
+  evaluator_requirement_hash text not null check (evaluator_requirement_hash ~ '^[a-f0-9]{64}$'),
+  verdict text not null check (verdict in ('passed','failed')),
+  created_at timestamptz not null default transaction_timestamp(),
+  unique (execution_id),
+  unique (execution_id, evaluator_proof_hash),
+  unique (id, task_id, project_id, platform, environment),
+  foreign key (execution_id, task_id, project_id, platform, environment)
+    references public.governance_approved_action_executions(id, task_id, project_id, platform, environment),
+  foreign key (approval_record_id, task_id, project_id, platform, environment)
+    references public.governance_owner_approval_records(id, task_id, project_id, platform, environment),
+  foreign key (approval_version_id, task_id, project_id, platform, environment)
+    references public.governance_owner_approval_versions(id, task_id, project_id, platform, environment)
+);
 
 create table public.governance_model_execution_attestations (
   id uuid primary key default gen_random_uuid(),
@@ -522,7 +601,13 @@ create table public.product_experience_sentinel_runs (
   check (retention_until > created_at),
   check (legal_hold or retention_until <= created_at + interval '365 days'),
   check (legal_hold = (data_class = 'legal_hold')),
-  check (erased_at is null),
+  check (
+    erased_at is null
+    or (
+      legal_hold = false
+      and erased_at >= retention_until
+    )
+  ),
   unique (task_id, sentinel_key, route_or_surface, evidence_manifest_hash),
   unique (id, task_id, project_id, platform, environment),
   foreign key (task_id, project_id, platform, environment)
@@ -596,7 +681,13 @@ create table public.product_quality_findings (
   check (retention_until > created_at),
   check (legal_hold or retention_until <= created_at + interval '365 days'),
   check (legal_hold = (data_class = 'legal_hold')),
-  check (erased_at is null),
+  check (
+    erased_at is null
+    or (
+      legal_hold = false
+      and erased_at >= retention_until
+    )
+  ),
   unique (task_id, finding_key),
   unique (id, task_id, project_id, platform, environment),
   foreign key (sentinel_run_id, task_id, project_id, platform, environment)
@@ -609,6 +700,8 @@ create index governance_owner_approval_versions_expiry_idx
   on public.governance_owner_approval_versions(task_id, expires_at);
 create index governance_approved_action_executions_state_idx
   on public.governance_approved_action_executions(task_id, project_id, platform, environment, state, updated_at desc);
+create index governance_approved_execution_evaluator_proofs_execution_idx
+  on public.governance_approved_execution_evaluator_proofs(execution_id, verdict, created_at desc);
 create index governance_model_execution_attestations_assessment_idx
   on public.governance_model_execution_attestations(task_id, assessment_id, correlation_class);
 create index product_quality_findings_triage_idx
@@ -629,6 +722,7 @@ declare
     'governance_owner_approval_version_states',
     'governance_owner_approval_lifecycle_events',
     'governance_approved_action_executions',
+    'governance_approved_execution_evaluator_proofs',
     'governance_model_execution_attestations',
     'product_experience_baseline_versions',
     'product_experience_sentinel_runs',
@@ -660,6 +754,7 @@ declare
   tables constant text[] := array[
     'governance_owner_approval_versions',
     'governance_owner_approval_lifecycle_events',
+    'governance_approved_execution_evaluator_proofs',
     'governance_model_execution_attestations',
     'product_experience_baseline_versions',
     'product_experience_sentinel_runs',
@@ -676,6 +771,40 @@ begin
   end loop;
 end
 $$;
+
+create function public.product_experience_evidence_mutation_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'immutable_product_experience_evidence' using errcode = '42501';
+  end if;
+  if old.erased_at is null
+     and new.erased_at is not null
+     and old.legal_hold = false
+     and new.erased_at >= old.retention_until
+     and to_jsonb(new) - 'erased_at' = to_jsonb(old) - 'erased_at' then
+    return new;
+  end if;
+  raise exception 'immutable_product_experience_evidence' using errcode = '42501';
+end;
+$$;
+revoke all on function public.product_experience_evidence_mutation_guard()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists product_experience_sentinel_runs_immutable
+  on public.product_experience_sentinel_runs;
+drop trigger if exists product_quality_findings_immutable
+  on public.product_quality_findings;
+create trigger product_experience_sentinel_runs_retention_tombstone_only
+before update or delete on public.product_experience_sentinel_runs
+for each row execute function public.product_experience_evidence_mutation_guard();
+create trigger product_quality_findings_retention_tombstone_only
+before update or delete on public.product_quality_findings
+for each row execute function public.product_experience_evidence_mutation_guard();
 
 create function public.governance_service_identity_allows_operation(
   p_service_identity text,
@@ -698,6 +827,7 @@ as $$
     when 'installed_journey_sentinel' then p_operation = 'installed_journey_canary'
     when 'product_quality_triage_router' then p_operation = 'product_quality_triage'
     when 'model_independence_attestation_service' then p_operation = 'model_independence_attestation'
+    when 'cognitive_independent_evaluator' then p_operation = 'independent_evaluation'
     else false
   end;
 $$;
@@ -711,7 +841,7 @@ create function public.governance_assert_two_party_service_principal(
 )
 returns text
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $$
@@ -721,25 +851,30 @@ declare
     nullif(current_setting('request.jwt.claim.role', true), ''),
     claims->>'role'
   );
+  matched_service_identity text;
 begin
   if request_role <> 'service_role'
      or p_worker_assertion is null
      or octet_length(p_worker_assertion) not between 32 and 1024
      or p_operation is null
-     or not public.governance_service_identity_allows_operation(p_service_identity, p_operation)
-     or not exists (
-       select 1
-       from public.governance_two_party_service_assertions assertion
-       where assertion.service_identity = p_service_identity
-         and assertion.status = 'active'
-         and assertion.revoked_at is null
-         and transaction_timestamp() < assertion.expires_at
-         and p_operation = any(assertion.allowed_operations)
-         and assertion.assertion_hash = encode(
-           extensions.digest(convert_to(p_worker_assertion,'UTF8'),'sha256'),
-           'hex'
-         )
-     ) then
+     or not public.governance_service_identity_allows_operation(p_service_identity, p_operation) then
+    raise exception 'two_party_service_principal_required' using errcode = '42501';
+  end if;
+
+  select assertion.service_identity into matched_service_identity
+  from public.governance_two_party_service_assertions assertion
+  where assertion.service_identity = p_service_identity
+    and assertion.status = 'active'
+    and assertion.revoked_at is null
+    and transaction_timestamp() < assertion.expires_at
+    and p_operation = any(assertion.allowed_operations)
+    and assertion.assertion_hash = encode(
+      extensions.digest(convert_to(p_worker_assertion,'UTF8'),'sha256'),
+      'hex'
+    )
+  for share;
+
+  if matched_service_identity is null then
     raise exception 'two_party_service_principal_required' using errcode = '42501';
   end if;
   return p_service_identity;
@@ -772,7 +907,8 @@ begin
        'visual_product_experience_sentinel',
        'installed_journey_sentinel',
        'product_quality_triage_router',
-       'model_independence_attestation_service'
+       'model_independence_attestation_service',
+       'cognitive_independent_evaluator'
      )
      or p_assertion_hash !~ '^[a-f0-9]{64}$'
      or p_allowed_operations is null
@@ -781,7 +917,8 @@ begin
        'bootstrap_control_plane','set_switch','public_research_ingest',
        'collective_deliberation','model_independence_attestation',
        'livekit_experience_canary','visual_experience_canary',
-       'installed_journey_canary','product_quality_triage','github_draft_pr'
+       'installed_journey_canary','product_quality_triage','github_draft_pr',
+       'independent_evaluation'
      ]::text[]
      or exists (
        select 1
@@ -797,10 +934,10 @@ begin
   end if;
   insert into public.governance_two_party_service_assertions(
     service_identity, assertion_hash, allowed_operations, registered_by,
-    status, issued_at, expires_at, revoked_at
+    status, issued_at, expires_at, revoked_at, revoked_by, revocation_hash
   ) values (
     p_service_identity, p_assertion_hash, p_allowed_operations, owner_id,
-    'active', transaction_timestamp(), p_expires_at, null
+    'active', transaction_timestamp(), p_expires_at, null, null, null
   )
   on conflict (service_identity) do update
     set assertion_hash = excluded.assertion_hash,
@@ -809,7 +946,9 @@ begin
         status = 'active',
         issued_at = transaction_timestamp(),
         expires_at = excluded.expires_at,
-        revoked_at = null;
+        revoked_at = null,
+        revoked_by = null,
+        revocation_hash = null;
 
   evidence_hash_value := encode(extensions.digest(
     convert_to(p_service_identity || ':' || p_assertion_hash,'UTF8'),'sha256'
@@ -839,6 +978,61 @@ $$;
 revoke all on function public.governance_register_two_party_service_principal(text,text,text[],timestamptz)
   from public, anon, service_role;
 grant execute on function public.governance_register_two_party_service_principal(text,text,text[],timestamptz)
+  to authenticated;
+
+create function public.governance_revoke_two_party_service_principal(
+  p_service_identity text,
+  p_revocation_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  owner_id uuid := public.governance_assert_exact_owner();
+  now_at timestamptz := transaction_timestamp();
+begin
+  if p_service_identity not in (
+       'cognitive_approved_action_worker',
+       'product_experience_baseline_service',
+       'livekit_experience_sentinel',
+       'visual_product_experience_sentinel',
+       'installed_journey_sentinel',
+       'product_quality_triage_router',
+       'model_independence_attestation_service',
+       'cognitive_independent_evaluator'
+     )
+     or p_revocation_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'two_party_service_principal_revoke_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  update public.governance_two_party_service_assertions assertion
+  set status = 'revoked',
+      revoked_at = now_at,
+      revoked_by = owner_id,
+      revocation_hash = p_revocation_hash
+  where assertion.service_identity = p_service_identity
+    and assertion.status = 'active'
+    and assertion.revoked_at is null;
+
+  if not found then
+    raise exception 'two_party_service_principal_revoke_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  return jsonb_build_object(
+    'serviceIdentity', p_service_identity,
+    'status', 'revoked',
+    'revocationHash', p_revocation_hash,
+    'revokedAt', now_at
+  );
+end;
+$$;
+revoke all on function public.governance_revoke_two_party_service_principal(text,text)
+  from public, anon, service_role;
+grant execute on function public.governance_revoke_two_party_service_principal(text,text)
   to authenticated;
 
 create function public.governance_approval_event_next_sequence(p_approval_record_id uuid)
@@ -1479,6 +1673,66 @@ $$;
 revoke all on function public.governance_lock_approved_execution_liveness(uuid)
   from public, anon, authenticated, service_role;
 
+create function public.governance_lock_approved_execution_cleanup_scope(
+  p_execution_id uuid
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  if execution_value.id is null then
+    return false;
+  end if;
+
+  perform 1
+  from public.governance_owner_approval_version_states state
+  where state.approval_version_id = execution_value.approval_version_id
+    and state.task_id = execution_value.task_id
+    and state.project_id = execution_value.project_id
+    and state.platform = execution_value.platform
+    and state.environment = execution_value.environment
+  for update;
+  if not found then
+    return false;
+  end if;
+
+  perform 1
+  from public.intelligence_tasks task
+  where task.id = execution_value.task_id
+    and task.project_id = execution_value.project_id
+    and task.platform = execution_value.platform
+    and task.environment = execution_value.environment
+  for share;
+  if not found then
+    return false;
+  end if;
+
+  perform 1
+  from public.autonomous_system_emergency_states state
+  where state.system_id = 'product_intelligence_operator'
+  for share;
+  if not found then
+    return false;
+  end if;
+
+  return execution_value.state in (
+    'claimed','preflight','executing','postflight','evaluating',
+    'rollback_pending','rollback_running'
+  );
+end;
+$$;
+revoke all on function public.governance_lock_approved_execution_cleanup_scope(uuid)
+  from public, anon, authenticated, service_role;
+
 create function public.governance_claim_approved_action(
   p_approval_version_id uuid,
   p_service_identity text,
@@ -1678,19 +1932,11 @@ begin
   );
   if execution_value.service_identity <> service_identity_value
      or not public.governance_lock_approved_execution_liveness(p_execution_id)
-     or (
-       execution_value.state = 'claimed' and p_next_state <> 'preflight'
-     )
-     or (
-       execution_value.state = 'preflight' and p_next_state <> 'executing'
-     )
-     or (
-       execution_value.state = 'executing' and p_next_state <> 'postflight'
-     )
-     or (
-       execution_value.state = 'postflight' and p_next_state <> 'evaluating'
-     )
-     or p_next_state not in ('preflight','executing','postflight','evaluating') then
+     or not (
+       (execution_value.state = 'claimed' and p_next_state = 'preflight')
+       or (execution_value.state = 'preflight' and p_next_state = 'executing')
+       or (execution_value.state = 'postflight' and p_next_state = 'evaluating')
+     ) then
     raise exception 'two_party_execution_transition_rejected'
       using errcode = 'P0001';
   end if;
@@ -1726,12 +1972,13 @@ revoke all on function public.governance_begin_approved_execution(uuid,text,text
 grant execute on function public.governance_begin_approved_execution(uuid,text,text,text)
   to service_role;
 
-create function public.governance_complete_approved_execution(
+create function public.governance_record_approved_execution_evaluator_proof(
   p_execution_id uuid,
-  p_service_identity text,
-  p_worker_assertion text,
+  p_evaluator_identity text,
+  p_evaluator_assertion text,
   p_execution_receipt_hash text,
-  p_evaluator_proof_hash text
+  p_evaluator_proof_hash text,
+  p_verdict text
 )
 returns jsonb
 language plpgsql
@@ -1740,9 +1987,9 @@ set search_path = ''
 as $$
 declare
   execution_value public.governance_approved_action_executions%rowtype;
-  service_identity_value text;
+  evaluator_identity_value text;
   now_at timestamptz := transaction_timestamp();
-  event_sequence_value integer;
+  proof_id uuid;
 begin
   select * into execution_value
   from public.governance_approved_action_executions
@@ -1751,293 +1998,72 @@ begin
   if execution_value.id is null then
     raise exception 'two_party_execution_missing' using errcode = 'P0001';
   end if;
-  service_identity_value := public.governance_assert_two_party_service_principal(
-    p_service_identity, p_worker_assertion, execution_value.operation
+
+  evaluator_identity_value := public.governance_assert_two_party_service_principal(
+    p_evaluator_identity, p_evaluator_assertion, 'independent_evaluation'
   );
-  if execution_value.service_identity <> service_identity_value
-     or not public.governance_lock_approved_execution_liveness(p_execution_id)
+  if evaluator_identity_value <> 'cognitive_independent_evaluator'
+     or evaluator_identity_value = execution_value.service_identity
      or execution_value.state <> 'evaluating'
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
      or p_execution_receipt_hash !~ '^[a-f0-9]{64}$'
-     or p_evaluator_proof_hash !~ '^[a-f0-9]{64}$' then
-    raise exception 'two_party_execution_completion_rejected'
+     or p_evaluator_proof_hash !~ '^[a-f0-9]{64}$'
+     or p_verdict not in ('passed','failed') then
+    raise exception 'two_party_evaluator_proof_rejected'
       using errcode = 'P0001';
   end if;
 
-  update public.governance_approved_action_executions
-  set state = 'completed',
-      execution_receipt_hash = p_execution_receipt_hash,
-      evaluator_proof_hash = p_evaluator_proof_hash,
-      completed_at = now_at,
-      updated_at = now_at
-  where id = p_execution_id;
-  update public.governance_owner_approval_version_states
-  set executions_completed = executions_completed + 1,
-      state = case
-        when executions_completed + 1 >= maximum_executions then 'completed'
-        else state
-      end,
-      completed_at = case
-        when executions_completed + 1 >= maximum_executions then now_at
-        else completed_at
-      end,
-      updated_at = now_at
-  where approval_version_id = execution_value.approval_version_id;
-  update public.governance_owner_approval_records
-  set executions_completed = executions_completed + 1,
-      current_state = case
-        when executions_completed + 1 >= maximum_executions then 'completed'
-        else current_state
-      end,
-      updated_at = now_at
-  where id = execution_value.approval_record_id;
-
-  select public.governance_approval_event_next_sequence(execution_value.approval_record_id)
-    into event_sequence_value;
-  insert into public.governance_owner_approval_lifecycle_events(
-    approval_record_id, approval_version_id, execution_id, task_id, project_id,
-    platform, environment, event_sequence, event_type, event_hash,
-    actor_identity_hash
+  insert into public.governance_approved_execution_evaluator_proofs(
+    execution_id, approval_record_id, approval_version_id, task_id, project_id,
+    platform, environment, evaluator_identity, evaluator_identity_hash,
+    execution_receipt_hash, evaluator_proof_hash, evaluator_requirement_hash,
+    verdict, created_at
   ) values (
-    execution_value.approval_record_id, execution_value.approval_version_id,
-    execution_value.id, execution_value.task_id, execution_value.project_id,
-    execution_value.platform, execution_value.environment, event_sequence_value,
-    'completed', p_execution_receipt_hash,
-    encode(extensions.digest(convert_to(service_identity_value,'UTF8'),'sha256'),'hex')
-  );
+    execution_value.id, execution_value.approval_record_id,
+    execution_value.approval_version_id, execution_value.task_id,
+    execution_value.project_id, execution_value.platform,
+    execution_value.environment, evaluator_identity_value,
+    encode(extensions.digest(convert_to(evaluator_identity_value,'UTF8'),'sha256'),'hex'),
+    p_execution_receipt_hash, p_evaluator_proof_hash,
+    execution_value.evaluator_requirement_hash, p_verdict, now_at
+  )
+  returning id into proof_id;
 
   return jsonb_build_object(
+    'evaluatorProofId', proof_id,
     'executionId', p_execution_id,
-    'state', 'completed',
-    'completedAt', now_at
+    'verdict', p_verdict,
+    'recordedAt', now_at
   );
 end;
 $$;
-revoke all on function public.governance_complete_approved_execution(uuid,text,text,text,text)
-  from public, anon, authenticated;
-grant execute on function public.governance_complete_approved_execution(uuid,text,text,text,text)
-  to service_role;
+revoke all on function public.governance_record_approved_execution_evaluator_proof(
+  uuid,text,text,text,text,text
+) from public, anon, authenticated;
+grant execute on function public.governance_record_approved_execution_evaluator_proof(
+  uuid,text,text,text,text,text
+) to service_role;
 
-create function public.governance_fail_approved_execution(
+create function public.governance_assert_switch_prerequisites(
   p_execution_id uuid,
-  p_service_identity text,
-  p_worker_assertion text,
-  p_failure_hash text
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  execution_value public.governance_approved_action_executions%rowtype;
-  service_identity_value text;
-  now_at timestamptz := transaction_timestamp();
-  event_sequence_value integer;
-begin
-  select * into execution_value
-  from public.governance_approved_action_executions
-  where id = p_execution_id
-  for update;
-  if execution_value.id is null then
-    raise exception 'two_party_execution_missing' using errcode = 'P0001';
-  end if;
-  service_identity_value := public.governance_assert_two_party_service_principal(
-    p_service_identity, p_worker_assertion, execution_value.operation
-  );
-  if execution_value.service_identity <> service_identity_value
-     or not public.governance_lock_approved_execution_liveness(p_execution_id)
-     or execution_value.state not in ('claimed','preflight','executing','postflight','evaluating')
-     or p_failure_hash !~ '^[a-f0-9]{64}$' then
-    raise exception 'two_party_execution_failure_rejected'
-      using errcode = 'P0001';
-  end if;
-  update public.governance_approved_action_executions
-  set state = 'failed', failure_hash = p_failure_hash, completed_at = now_at,
-      updated_at = now_at
-  where id = p_execution_id;
-  update public.governance_owner_approval_version_states
-  set state = 'failed', updated_at = now_at
-  where approval_version_id = execution_value.approval_version_id
-    and state in ('active','consumed');
-  update public.governance_owner_approval_records
-  set current_state = 'failed', updated_at = now_at
-  where id = execution_value.approval_record_id;
-  select public.governance_approval_event_next_sequence(execution_value.approval_record_id)
-    into event_sequence_value;
-  insert into public.governance_owner_approval_lifecycle_events(
-    approval_record_id, approval_version_id, execution_id, task_id, project_id,
-    platform, environment, event_sequence, event_type, event_hash,
-    actor_identity_hash
-  ) values (
-    execution_value.approval_record_id, execution_value.approval_version_id,
-    execution_value.id, execution_value.task_id, execution_value.project_id,
-    execution_value.platform, execution_value.environment, event_sequence_value,
-    'failed', p_failure_hash,
-    encode(extensions.digest(convert_to(service_identity_value,'UTF8'),'sha256'),'hex')
-  );
-  return jsonb_build_object('executionId', p_execution_id, 'state', 'failed');
-end;
-$$;
-revoke all on function public.governance_fail_approved_execution(uuid,text,text,text)
-  from public, anon, authenticated;
-grant execute on function public.governance_fail_approved_execution(uuid,text,text,text)
-  to service_role;
-
-create function public.governance_release_or_quarantine_execution(
-  p_execution_id uuid,
-  p_service_identity text,
-  p_worker_assertion text,
-  p_transition text,
-  p_evidence_hash text
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  execution_value public.governance_approved_action_executions%rowtype;
-  service_identity_value text;
-  now_at timestamptz := transaction_timestamp();
-  event_sequence_value integer;
-  next_version_state text;
-begin
-  select * into execution_value
-  from public.governance_approved_action_executions
-  where id = p_execution_id
-  for update;
-  if execution_value.id is null then
-    raise exception 'two_party_execution_missing' using errcode = 'P0001';
-  end if;
-  service_identity_value := public.governance_assert_two_party_service_principal(
-    p_service_identity, p_worker_assertion, execution_value.operation
-  );
-  if execution_value.service_identity <> service_identity_value
-     or not public.governance_lock_approved_execution_liveness(p_execution_id)
-     or p_transition not in (
-       'rollback_pending','rollback_running','rollback_succeeded',
-       'rollback_failed','quarantined'
-     )
-     or not (
-       (p_transition = 'rollback_pending'
-        and execution_value.state in ('executing','postflight','evaluating'))
-       or (p_transition = 'rollback_running'
-        and execution_value.state = 'rollback_pending')
-       or (p_transition in ('rollback_succeeded','rollback_failed')
-        and execution_value.state = 'rollback_running')
-       or (p_transition = 'quarantined'
-        and execution_value.state in ('executing','postflight','evaluating','rollback_running'))
-     )
-     or p_evidence_hash !~ '^[a-f0-9]{64}$' then
-    raise exception 'two_party_execution_release_rejected'
-      using errcode = 'P0001';
-  end if;
-  next_version_state := case
-    when p_transition = 'rollback_succeeded' then 'rolled_back'
-    when p_transition in ('rollback_failed','quarantined') then 'failed'
-    else null
-  end;
-  update public.governance_approved_action_executions
-  set state = p_transition,
-      failure_hash = case when p_transition in ('rollback_failed','quarantined') then p_evidence_hash else failure_hash end,
-      updated_at = now_at,
-      completed_at = case
-        when p_transition in ('rollback_succeeded','rollback_failed','quarantined') then now_at
-        else completed_at
-      end
-  where id = p_execution_id;
-  if next_version_state is not null then
-    update public.governance_owner_approval_version_states
-    set state = next_version_state,
-        rolled_back_at = case when next_version_state = 'rolled_back' then now_at else rolled_back_at end,
-        updated_at = now_at
-    where approval_version_id = execution_value.approval_version_id;
-    update public.governance_owner_approval_records
-    set current_state = next_version_state,
-        updated_at = now_at
-    where id = execution_value.approval_record_id;
-  end if;
-  select public.governance_approval_event_next_sequence(execution_value.approval_record_id)
-    into event_sequence_value;
-  insert into public.governance_owner_approval_lifecycle_events(
-    approval_record_id, approval_version_id, execution_id, task_id, project_id,
-    platform, environment, event_sequence, event_type, event_hash,
-    actor_identity_hash
-  ) values (
-    execution_value.approval_record_id, execution_value.approval_version_id,
-    execution_value.id, execution_value.task_id, execution_value.project_id,
-    execution_value.platform, execution_value.environment, event_sequence_value,
-    p_transition, p_evidence_hash,
-    encode(extensions.digest(convert_to(service_identity_value,'UTF8'),'sha256'),'hex')
-  );
-  return jsonb_build_object('executionId', p_execution_id, 'state', p_transition);
-end;
-$$;
-revoke all on function public.governance_release_or_quarantine_execution(uuid,text,text,text,text)
-  from public, anon, authenticated;
-grant execute on function public.governance_release_or_quarantine_execution(uuid,text,text,text,text)
-  to service_role;
-
-create function public.governance_execute_approved_switch(
-  p_execution_id uuid,
-  p_service_identity text,
-  p_worker_assertion text,
   p_switch_key text,
-  p_enabled boolean,
-  p_policy_version text,
-  p_target_resource_hash text
+  p_enabled boolean
 )
-returns jsonb
+returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
   execution_value public.governance_approved_action_executions%rowtype;
-  version_value public.governance_owner_approval_versions%rowtype;
-  service_identity_value text;
-  switch_id uuid;
   now_at timestamptz := transaction_timestamp();
-  event_sequence_value integer;
-  schedule_count integer;
 begin
   select * into execution_value
   from public.governance_approved_action_executions
   where id = p_execution_id
-  for update;
+  for share;
   if execution_value.id is null then
     raise exception 'two_party_execution_missing' using errcode = 'P0001';
-  end if;
-  service_identity_value := public.governance_assert_two_party_service_principal(
-    p_service_identity, p_worker_assertion, execution_value.operation
-  );
-  select * into version_value
-  from public.governance_owner_approval_versions
-  where id = execution_value.approval_version_id
-  for share;
-  if execution_value.service_identity <> service_identity_value
-     or execution_value.operation <> 'set_switch'
-     or execution_value.state <> 'executing'
-     or not public.governance_lock_approved_execution_liveness(p_execution_id)
-     or version_value.id is null
-     or version_value.target_resource_hash <> p_target_resource_hash
-     or p_target_resource_hash <> public.governance_switch_target_hash(
-       p_switch_key, p_enabled, p_policy_version
-     )
-     or p_switch_key not in (
-       'cognitive_research_enabled',
-       'cognitive_memory_enabled',
-       'cognitive_collective_deliberation_enabled',
-       'cognitive_draft_pr_executor_enabled',
-       'cognitive_scheduled_level01_enabled',
-       'cognitive_livekit_experience_sentinel_enabled',
-       'cognitive_visual_experience_sentinel_enabled',
-       'cognitive_installed_journey_sentinel_enabled'
-     )
-     or length(p_policy_version) not between 1 and 64
-     or public.cognitive_text_has_secret(p_policy_version) then
-    raise exception 'two_party_switch_execution_rejected'
-      using errcode = 'P0001';
   end if;
 
   if p_enabled
@@ -2131,17 +2157,71 @@ begin
      ) then
     raise exception 'cognitive_schedule_canaries_required' using errcode = 'P0001';
   end if;
+end;
+$$;
+revoke all on function public.governance_assert_switch_prerequisites(uuid,text,boolean)
+  from public, anon, authenticated, service_role;
+
+create function public.governance_apply_completed_switch(p_execution_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+  version_value public.governance_owner_approval_versions%rowtype;
+  switch_id uuid;
+  now_at timestamptz := transaction_timestamp();
+  schedule_count integer;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  select * into version_value
+  from public.governance_owner_approval_versions
+  where id = execution_value.approval_version_id
+  for share;
+
+  if execution_value.id is null
+     or version_value.id is null
+     or execution_value.operation <> 'set_switch'
+     or execution_value.state <> 'evaluating'
+     or execution_value.pending_switch_key is null
+     or execution_value.pending_switch_enabled is null
+     or execution_value.pending_switch_policy_version is null
+     or execution_value.pending_switch_target_resource_hash is null
+     or execution_value.pending_switch_validated_at is null
+     or version_value.target_resource_hash <> execution_value.pending_switch_target_resource_hash
+     or execution_value.target_resource_hash <> execution_value.pending_switch_target_resource_hash
+     or execution_value.pending_switch_target_resource_hash <>
+        public.governance_switch_target_hash(
+          execution_value.pending_switch_key,
+          execution_value.pending_switch_enabled,
+          execution_value.pending_switch_policy_version
+        ) then
+    raise exception 'two_party_switch_completion_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  perform public.governance_assert_switch_prerequisites(
+    p_execution_id,
+    execution_value.pending_switch_key,
+    execution_value.pending_switch_enabled
+  );
 
   insert into public.cognitive_governance_switches(
     task_id, project_id, platform, environment, switch_key, enabled,
     policy_version, enabled_by, enabled_at, disabled_at, updated_at
   ) values (
     execution_value.task_id, execution_value.project_id,
-    execution_value.platform, execution_value.environment, p_switch_key,
-    p_enabled, p_policy_version,
-    case when p_enabled then version_value.owner_user_id else null end,
-    case when p_enabled then now_at else null end,
-    case when p_enabled then null else now_at end,
+    execution_value.platform, execution_value.environment,
+    execution_value.pending_switch_key, execution_value.pending_switch_enabled,
+    execution_value.pending_switch_policy_version,
+    case when execution_value.pending_switch_enabled then version_value.owner_user_id else null end,
+    case when execution_value.pending_switch_enabled then now_at else null end,
+    case when execution_value.pending_switch_enabled then null else now_at end,
     now_at
   )
   on conflict (task_id, switch_key) do update
@@ -2157,13 +2237,13 @@ begin
   returning id into switch_id;
 
   if switch_id is null then
-    raise exception 'two_party_switch_execution_rejected'
+    raise exception 'two_party_switch_completion_rejected'
       using errcode = 'P0001';
   end if;
 
-  if p_switch_key = 'cognitive_scheduled_level01_enabled' then
+  if execution_value.pending_switch_key = 'cognitive_scheduled_level01_enabled' then
     update public.cognitive_level01_schedule_definitions schedule
-    set enabled = p_enabled,
+    set enabled = execution_value.pending_switch_enabled,
         updated_at = now_at
     where schedule.task_id = execution_value.task_id
       and schedule.project_id = execution_value.project_id
@@ -2176,20 +2256,22 @@ begin
     end if;
   end if;
 
-  if not p_enabled and p_switch_key in (
-    'cognitive_research_enabled',
-    'cognitive_memory_enabled',
-    'cognitive_collective_deliberation_enabled',
-    'cognitive_draft_pr_executor_enabled'
-  ) then
+  if not execution_value.pending_switch_enabled
+     and execution_value.pending_switch_key in (
+       'cognitive_research_enabled',
+       'cognitive_memory_enabled',
+       'cognitive_collective_deliberation_enabled',
+       'cognitive_draft_pr_executor_enabled'
+     ) then
     update public.cognitive_governance_switches switch
     set enabled = false,
         enabled_by = null,
+        enabled_at = null,
         disabled_at = now_at,
         updated_at = now_at
     where switch.task_id = execution_value.task_id
       and switch.switch_key = any(
-        case p_switch_key
+        case execution_value.pending_switch_key
           when 'cognitive_research_enabled' then array[
             'cognitive_collective_deliberation_enabled',
             'cognitive_draft_pr_executor_enabled',
@@ -2216,8 +2298,362 @@ begin
       and schedule.environment = execution_value.environment;
   end if;
 
+  return switch_id;
+end;
+$$;
+revoke all on function public.governance_apply_completed_switch(uuid)
+  from public, anon, authenticated, service_role;
+
+create function public.governance_complete_approved_execution(
+  p_execution_id uuid,
+  p_service_identity text,
+  p_worker_assertion text,
+  p_execution_receipt_hash text,
+  p_evaluator_proof_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+  proof_value public.governance_approved_execution_evaluator_proofs%rowtype;
+  service_identity_value text;
+  now_at timestamptz := transaction_timestamp();
+  event_sequence_value integer;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  if execution_value.id is null then
+    raise exception 'two_party_execution_missing' using errcode = 'P0001';
+  end if;
+  service_identity_value := public.governance_assert_two_party_service_principal(
+    p_service_identity, p_worker_assertion, execution_value.operation
+  );
+  if execution_value.service_identity <> service_identity_value
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
+     or execution_value.state <> 'evaluating'
+     or p_execution_receipt_hash !~ '^[a-f0-9]{64}$'
+     or p_evaluator_proof_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'two_party_execution_completion_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  select * into proof_value
+  from public.governance_approved_execution_evaluator_proofs proof
+  where proof.execution_id = p_execution_id
+  for share;
+  if proof_value.id is null
+     or proof_value.approval_record_id <> execution_value.approval_record_id
+     or proof_value.approval_version_id <> execution_value.approval_version_id
+     or proof_value.task_id <> execution_value.task_id
+     or proof_value.project_id <> execution_value.project_id
+     or proof_value.platform <> execution_value.platform
+     or proof_value.environment <> execution_value.environment
+     or proof_value.evaluator_identity <> 'cognitive_independent_evaluator'
+     or proof_value.evaluator_identity_hash = execution_value.service_identity_hash
+     or proof_value.execution_receipt_hash <> p_execution_receipt_hash
+     or proof_value.evaluator_proof_hash <> p_evaluator_proof_hash
+     or proof_value.evaluator_requirement_hash <> execution_value.evaluator_requirement_hash
+     or proof_value.verdict <> 'passed' then
+    raise exception 'two_party_execution_completion_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  if execution_value.operation = 'set_switch' then
+    perform public.governance_apply_completed_switch(p_execution_id);
+  end if;
+
   update public.governance_approved_action_executions
-  set state = 'postflight', updated_at = now_at
+  set state = 'completed',
+      execution_receipt_hash = p_execution_receipt_hash,
+      evaluator_proof_hash = p_evaluator_proof_hash,
+      completed_at = now_at,
+      updated_at = now_at
+  where id = p_execution_id;
+  update public.governance_owner_approval_version_states
+  set executions_completed = executions_completed + 1,
+      state = case
+        when executions_completed + 1 >= maximum_executions then 'completed'
+        else state
+      end,
+      completed_at = case
+        when executions_completed + 1 >= maximum_executions then now_at
+        else completed_at
+      end,
+      updated_at = now_at
+  where approval_version_id = execution_value.approval_version_id;
+  update public.governance_owner_approval_records
+  set executions_completed = executions_completed + 1,
+      current_state = case
+        when executions_completed + 1 >= maximum_executions then 'completed'
+        else current_state
+      end,
+      updated_at = now_at
+  where id = execution_value.approval_record_id;
+
+  select public.governance_approval_event_next_sequence(execution_value.approval_record_id)
+    into event_sequence_value;
+  insert into public.governance_owner_approval_lifecycle_events(
+    approval_record_id, approval_version_id, execution_id, task_id, project_id,
+    platform, environment, event_sequence, event_type, event_hash,
+    actor_identity_hash
+  ) values (
+    execution_value.approval_record_id, execution_value.approval_version_id,
+    execution_value.id, execution_value.task_id, execution_value.project_id,
+    execution_value.platform, execution_value.environment, event_sequence_value,
+    'completed', p_execution_receipt_hash,
+    encode(extensions.digest(convert_to(service_identity_value,'UTF8'),'sha256'),'hex')
+  );
+
+  return jsonb_build_object(
+    'executionId', p_execution_id,
+    'state', 'completed',
+    'completedAt', now_at
+  );
+end;
+$$;
+revoke all on function public.governance_complete_approved_execution(uuid,text,text,text,text)
+  from public, anon, authenticated;
+grant execute on function public.governance_complete_approved_execution(uuid,text,text,text,text)
+  to service_role;
+
+create function public.governance_fail_approved_execution(
+  p_execution_id uuid,
+  p_service_identity text,
+  p_worker_assertion text,
+  p_failure_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+  service_identity_value text;
+  now_at timestamptz := transaction_timestamp();
+  event_sequence_value integer;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  if execution_value.id is null then
+    raise exception 'two_party_execution_missing' using errcode = 'P0001';
+  end if;
+  service_identity_value := public.governance_assert_two_party_service_principal(
+    p_service_identity, p_worker_assertion, execution_value.operation
+  );
+  if execution_value.service_identity <> service_identity_value
+     or not public.governance_lock_approved_execution_cleanup_scope(p_execution_id)
+     or execution_value.state not in ('claimed','preflight','executing','postflight','evaluating')
+     or p_failure_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'two_party_execution_failure_rejected'
+      using errcode = 'P0001';
+  end if;
+  update public.governance_approved_action_executions
+  set state = 'failed', failure_hash = p_failure_hash, completed_at = now_at,
+      updated_at = now_at
+  where id = p_execution_id;
+  update public.governance_owner_approval_version_states
+  set state = 'failed', updated_at = now_at
+  where approval_version_id = execution_value.approval_version_id
+    and state in ('active','consumed');
+  update public.governance_owner_approval_records
+  set current_state = 'failed', updated_at = now_at
+  where id = execution_value.approval_record_id;
+  select public.governance_approval_event_next_sequence(execution_value.approval_record_id)
+    into event_sequence_value;
+  insert into public.governance_owner_approval_lifecycle_events(
+    approval_record_id, approval_version_id, execution_id, task_id, project_id,
+    platform, environment, event_sequence, event_type, event_hash,
+    actor_identity_hash
+  ) values (
+    execution_value.approval_record_id, execution_value.approval_version_id,
+    execution_value.id, execution_value.task_id, execution_value.project_id,
+    execution_value.platform, execution_value.environment, event_sequence_value,
+    'failed', p_failure_hash,
+    encode(extensions.digest(convert_to(service_identity_value,'UTF8'),'sha256'),'hex')
+  );
+  return jsonb_build_object('executionId', p_execution_id, 'state', 'failed');
+end;
+$$;
+revoke all on function public.governance_fail_approved_execution(uuid,text,text,text)
+  from public, anon, authenticated;
+grant execute on function public.governance_fail_approved_execution(uuid,text,text,text)
+  to service_role;
+
+create function public.governance_release_or_quarantine_execution(
+  p_execution_id uuid,
+  p_service_identity text,
+  p_worker_assertion text,
+  p_transition text,
+  p_evidence_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+  service_identity_value text;
+  now_at timestamptz := transaction_timestamp();
+  event_sequence_value integer;
+  next_version_state text;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  if execution_value.id is null then
+    raise exception 'two_party_execution_missing' using errcode = 'P0001';
+  end if;
+  service_identity_value := public.governance_assert_two_party_service_principal(
+    p_service_identity, p_worker_assertion, execution_value.operation
+  );
+  if execution_value.service_identity <> service_identity_value
+     or not public.governance_lock_approved_execution_cleanup_scope(p_execution_id)
+     or p_transition not in (
+       'rollback_pending','rollback_running','rollback_succeeded',
+       'rollback_failed','quarantined'
+     )
+     or not (
+       (p_transition = 'rollback_pending'
+        and execution_value.state in ('executing','postflight','evaluating'))
+       or (p_transition = 'rollback_running'
+        and execution_value.state = 'rollback_pending')
+       or (p_transition in ('rollback_succeeded','rollback_failed')
+        and execution_value.state = 'rollback_running')
+       or (p_transition = 'quarantined'
+        and execution_value.state in ('executing','postflight','evaluating','rollback_running'))
+     )
+     or p_evidence_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'two_party_execution_release_rejected'
+      using errcode = 'P0001';
+  end if;
+  next_version_state := case
+    when p_transition = 'rollback_succeeded' then 'rolled_back'
+    when p_transition in ('rollback_failed','quarantined') then 'failed'
+    else null
+  end;
+  update public.governance_approved_action_executions
+  set state = p_transition,
+      failure_hash = case when p_transition in ('rollback_failed','quarantined') then p_evidence_hash else failure_hash end,
+      updated_at = now_at,
+      completed_at = case
+        when p_transition in ('rollback_succeeded','rollback_failed','quarantined') then now_at
+        else completed_at
+      end
+  where id = p_execution_id;
+  if next_version_state is not null then
+    update public.governance_owner_approval_version_states
+    set state = next_version_state,
+        rolled_back_at = case when next_version_state = 'rolled_back' then now_at else rolled_back_at end,
+        updated_at = now_at
+    where approval_version_id = execution_value.approval_version_id;
+    update public.governance_owner_approval_records
+    set current_state = next_version_state,
+        updated_at = now_at
+    where id = execution_value.approval_record_id;
+  end if;
+  select public.governance_approval_event_next_sequence(execution_value.approval_record_id)
+    into event_sequence_value;
+  insert into public.governance_owner_approval_lifecycle_events(
+    approval_record_id, approval_version_id, execution_id, task_id, project_id,
+    platform, environment, event_sequence, event_type, event_hash,
+    actor_identity_hash
+  ) values (
+    execution_value.approval_record_id, execution_value.approval_version_id,
+    execution_value.id, execution_value.task_id, execution_value.project_id,
+    execution_value.platform, execution_value.environment, event_sequence_value,
+    p_transition, p_evidence_hash,
+    encode(extensions.digest(convert_to(service_identity_value,'UTF8'),'sha256'),'hex')
+  );
+  return jsonb_build_object('executionId', p_execution_id, 'state', p_transition);
+end;
+$$;
+revoke all on function public.governance_release_or_quarantine_execution(uuid,text,text,text,text)
+  from public, anon, authenticated;
+grant execute on function public.governance_release_or_quarantine_execution(uuid,text,text,text,text)
+  to service_role;
+
+create function public.governance_execute_approved_switch(
+  p_execution_id uuid,
+  p_service_identity text,
+  p_worker_assertion text,
+  p_switch_key text,
+  p_enabled boolean,
+  p_policy_version text,
+  p_target_resource_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+  version_value public.governance_owner_approval_versions%rowtype;
+  service_identity_value text;
+  now_at timestamptz := transaction_timestamp();
+  event_sequence_value integer;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  if execution_value.id is null then
+    raise exception 'two_party_execution_missing' using errcode = 'P0001';
+  end if;
+  service_identity_value := public.governance_assert_two_party_service_principal(
+    p_service_identity, p_worker_assertion, execution_value.operation
+  );
+  select * into version_value
+  from public.governance_owner_approval_versions
+  where id = execution_value.approval_version_id
+  for share;
+  if execution_value.service_identity <> service_identity_value
+     or execution_value.operation <> 'set_switch'
+     or execution_value.state <> 'executing'
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
+     or version_value.id is null
+     or version_value.target_resource_hash <> p_target_resource_hash
+     or p_target_resource_hash <> public.governance_switch_target_hash(
+       p_switch_key, p_enabled, p_policy_version
+     )
+     or p_switch_key not in (
+       'cognitive_research_enabled',
+       'cognitive_memory_enabled',
+       'cognitive_collective_deliberation_enabled',
+       'cognitive_draft_pr_executor_enabled',
+       'cognitive_scheduled_level01_enabled',
+       'cognitive_livekit_experience_sentinel_enabled',
+       'cognitive_visual_experience_sentinel_enabled',
+       'cognitive_installed_journey_sentinel_enabled'
+     )
+     or length(p_policy_version) not between 1 and 64
+     or public.cognitive_text_has_secret(p_policy_version) then
+    raise exception 'two_party_switch_execution_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  perform public.governance_assert_switch_prerequisites(
+    p_execution_id, p_switch_key, p_enabled
+  );
+
+  update public.governance_approved_action_executions
+  set state = 'postflight',
+      pending_switch_key = p_switch_key,
+      pending_switch_enabled = p_enabled,
+      pending_switch_policy_version = p_policy_version,
+      pending_switch_target_resource_hash = p_target_resource_hash,
+      pending_switch_validated_at = now_at,
+      updated_at = now_at
   where id = execution_value.id;
 
   select public.governance_approval_event_next_sequence(execution_value.approval_record_id)
@@ -2236,9 +2672,9 @@ begin
 
   return jsonb_build_object(
     'executionId', execution_value.id,
-    'switchId', switch_id,
     'switchKey', p_switch_key,
     'enabled', p_enabled,
+    'staged', true,
     'state', 'postflight'
   );
 end;
@@ -2364,7 +2800,8 @@ as $$
         count(*) filter (where blind_first_round)::integer as blind_count,
         count(distinct council_role)::integer as distinct_roles,
         count(distinct provider_identity_hash)::integer as provider_count,
-        count(distinct provider_identity_hash || ':' || model_family)::integer as family_count,
+        count(distinct model_family)::integer as model_family_count,
+        count(distinct model_family || ':' || model_version)::integer as model_version_count,
         coalesce(bool_or(correlation_class = 'cross_provider'), false) as has_cross_provider_class
     from rows
   ),
@@ -2376,6 +2813,8 @@ as $$
         and blind_count >= p_required_count
         and distinct_roles >= p_required_count
         and provider_count >= 2
+        and model_family_count >= 2
+        and model_version_count >= p_required_count
         and has_cross_provider_class as independence_satisfied
     from aggregate
   )
@@ -2388,7 +2827,8 @@ as $$
       'blindFirstRoundCount', blind_count,
       'distinctCouncilRoles', distinct_roles,
       'providerCount', provider_count,
-    'modelFamilyCount', family_count,
+    'modelFamilyCount', model_family_count,
+    'modelVersionCount', model_version_count,
     'independenceSatisfied', independence_satisfied,
     'status',
       case
@@ -2643,16 +3083,43 @@ begin
          jsonb_typeof(p_metric_manifest->'journeyStepCount') <> 'number'
          or jsonb_typeof(p_metric_manifest->'unresolvedStateCount') <> 'number'
          or jsonb_typeof(p_metric_manifest->'maxDurationMs') <> 'number'
-           or jsonb_typeof(p_metric_manifest->'elapsedDurationMs') <> 'number'
-           or (p_metric_manifest->>'resultState') not in (
-             'success','loading','error','blocked','offline',
-             'permission_denied','blank','crashed'
-           )
-           or (p_metric_manifest->>'maxDurationMs')::integer not between 1 and 10000
-           or (p_metric_manifest->>'elapsedDurationMs')::integer not between 0 and 600000
-           or (
-             p_result_status = 'passed'
-             and (
+         or jsonb_typeof(p_metric_manifest->'elapsedDurationMs') <> 'number'
+         or jsonb_typeof(p_metric_manifest->'expectedState') <> 'string'
+         or jsonb_typeof(p_metric_manifest->'observedState') <> 'string'
+         or jsonb_typeof(p_metric_manifest->'resultState') <> 'string'
+         or jsonb_typeof(p_metric_manifest->'screenshotEvidenceHash') <> 'string'
+         or (p_metric_manifest->>'screenshotEvidenceHash') !~ '^[a-f0-9]{64}$'
+         or jsonb_typeof(p_metric_manifest->'sourceRuntimeHash') <> 'string'
+         or (p_metric_manifest->>'sourceRuntimeHash') !~ '^[a-f0-9]{64}$'
+         or (p_metric_manifest->>'expectedState') not in (
+           'signed_out','signed_in','session_restored','home_feed_visible',
+           'explore_visible','search_visible','library_visible','profile_visible',
+           'settings_visible','content_player_visible','public_profile_visible',
+           'chat_visible','live_surface_visible','watch_party_visible','loading',
+           'empty','error','offline','permission_denied','blank','crashed',
+           'no_state_change','route_unavailable','unknown_blocked'
+         )
+         or (p_metric_manifest->>'observedState') not in (
+           'signed_out','signed_in','session_restored','home_feed_visible',
+           'explore_visible','search_visible','library_visible','profile_visible',
+           'settings_visible','content_player_visible','public_profile_visible',
+           'chat_visible','live_surface_visible','watch_party_visible','loading',
+           'empty','error','offline','permission_denied','blank','crashed',
+           'no_state_change','route_unavailable','unknown_blocked'
+         )
+         or (p_metric_manifest->>'resultState') not in (
+           'success','loading','error','blocked','offline',
+           'permission_denied','blank','crashed'
+         )
+         or (p_metric_manifest->>'journeyStepCount')::integer not between 1 and 256
+         or (p_metric_manifest->>'unresolvedStateCount')::integer not between 0 and 256
+         or (p_metric_manifest->>'unresolvedStateCount')::integer >
+            (p_metric_manifest->>'journeyStepCount')::integer
+         or (p_metric_manifest->>'maxDurationMs')::integer not between 1 and 10000
+         or (p_metric_manifest->>'elapsedDurationMs')::integer not between 0 and 600000
+         or (
+           p_result_status = 'passed'
+           and (
              (p_metric_manifest->>'resultState') <> 'success'
              or (p_metric_manifest->>'unresolvedStateCount')::integer <> 0
              or (p_metric_manifest->>'elapsedDurationMs')::integer >
@@ -2745,12 +3212,27 @@ begin
      or p_evidence_hashes is null
      or not public.governance_hash_array_valid(p_evidence_hashes, 1, 64)
      or not run_value.evidence_manifest_hash = any(p_evidence_hashes)
+     or run_value.result_status not in ('finding_created','failed')
      or (
        p_reproduction_state in ('confirmed_defect','likely_defect')
        and (
-         run_value.result_status not in ('finding_created','failed')
+         p_physical_proof_status not in ('installed_ui_observed','simulator_observed')
+       )
+     )
+     or (
+       p_reproduction_state = 'design_baseline_missing'
+       and (
+         run_value.sentinel_key <> 'visual_product_experience_sentinel'
          or p_physical_proof_status not in ('installed_ui_observed','simulator_observed')
        )
+     )
+     or (
+       p_reproduction_state = 'provider_blocked'
+       and p_physical_proof_status <> 'provider_blocked'
+     )
+     or (
+       p_reproduction_state = 'device_unavailable'
+       and p_physical_proof_status <> 'device_unavailable'
      ) then
     raise exception 'product_quality_finding_rejected' using errcode = 'P0001';
   end if;
@@ -2782,6 +3264,96 @@ revoke all on function public.product_quality_record_finding(
 ) from public, anon, authenticated;
 grant execute on function public.product_quality_record_finding(
   uuid,text,text,text,text,text,text[],text,numeric,text,text,text,text,text,text,text
+) to service_role;
+
+create function public.product_experience_erase_expired_evidence(
+  p_target_table text,
+  p_target_id uuid,
+  p_tombstone_hash text,
+  p_service_identity text,
+  p_worker_assertion text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  run_value public.product_experience_sentinel_runs%rowtype;
+  finding_value public.product_quality_findings%rowtype;
+  now_at timestamptz := transaction_timestamp();
+begin
+  perform public.governance_assert_two_party_service_principal(
+    p_service_identity, p_worker_assertion, 'product_quality_triage'
+  );
+  if p_service_identity <> 'product_quality_triage_router'
+     or p_target_table not in (
+       'product_experience_sentinel_runs',
+       'product_quality_findings'
+     )
+     or p_tombstone_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'product_experience_retention_tombstone_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  if p_target_table = 'product_experience_sentinel_runs' then
+    select * into run_value
+    from public.product_experience_sentinel_runs
+    where id = p_target_id
+    for update;
+    if run_value.id is null
+       or run_value.legal_hold
+       or run_value.erased_at is not null
+       or now_at < run_value.retention_until then
+      raise exception 'product_experience_retention_tombstone_rejected'
+        using errcode = 'P0001';
+    end if;
+    update public.product_experience_sentinel_runs
+    set erased_at = now_at
+    where id = run_value.id;
+    insert into public.cognitive_erasure_events(
+      task_id, project_id, platform, environment, target_table, target_id,
+      prior_data_class, tombstone_hash, legal_hold, erased_at, actor_identity
+    ) values (
+      run_value.task_id, run_value.project_id, run_value.platform,
+      run_value.environment, p_target_table, run_value.id,
+      run_value.data_class, p_tombstone_hash, false, now_at,
+      p_service_identity
+    );
+    return run_value.id;
+  end if;
+
+  select * into finding_value
+  from public.product_quality_findings
+  where id = p_target_id
+  for update;
+  if finding_value.id is null
+     or finding_value.legal_hold
+     or finding_value.erased_at is not null
+     or now_at < finding_value.retention_until then
+    raise exception 'product_experience_retention_tombstone_rejected'
+      using errcode = 'P0001';
+  end if;
+  update public.product_quality_findings
+  set erased_at = now_at
+  where id = finding_value.id;
+  insert into public.cognitive_erasure_events(
+    task_id, project_id, platform, environment, target_table, target_id,
+    prior_data_class, tombstone_hash, legal_hold, erased_at, actor_identity
+  ) values (
+    finding_value.task_id, finding_value.project_id, finding_value.platform,
+    finding_value.environment, p_target_table, finding_value.id,
+    finding_value.data_class, p_tombstone_hash, false, now_at,
+    p_service_identity
+  );
+  return finding_value.id;
+end;
+$$;
+revoke all on function public.product_experience_erase_expired_evidence(
+  text,uuid,text,text,text
+) from public, anon, authenticated;
+grant execute on function public.product_experience_erase_expired_evidence(
+  text,uuid,text,text,text
 ) to service_role;
 
 comment on table public.governance_owner_approval_versions is
