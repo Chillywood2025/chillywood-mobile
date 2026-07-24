@@ -2,7 +2,7 @@ import researchAuthoritiesJson from "../../../../config/intelligence/research-au
   type: "json",
 };
 import { ready } from "./helpers.mjs";
-import { createPinnedResearchTransport } from "./research-socket-transport.mjs";
+import { createMediatedResearchTransport } from "./research-fetch-transport.mjs";
 
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -610,12 +610,12 @@ const retrieveAndRecordSource = (transport, now) =>
         request.platform,
         request.environment,
         request.authorityId,
-        request.publisher,
+        finalUrl.hostname,
         request.sourceType,
+        request.publisher,
+        authorityOwnerForId(request.authorityId),
         sourceReferenceHash,
         canonicalUrlHash,
-        finalUrl.hostname,
-        excerpt,
         contentHash,
         provenance.publicationDate,
         {
@@ -632,7 +632,7 @@ const retrieveAndRecordSource = (transport, now) =>
           "platform_policy",
           "store_policy",
         ].includes(request.sourceType),
-        authorityOwnerForId(request.authorityId),
+        excerpt,
         citation,
         resolvedAddressHashes,
         serviceToken(env),
@@ -790,14 +790,14 @@ const expirePublicMemory = ready(
 );
 
 export const createPublicResearchBrokerAdapters = ({
-  connectSocket,
+  fetcher,
   now = Date.now,
   resolveAddresses,
   totalTimeoutMs,
 } = {}) => {
-  const transport = createPinnedResearchTransport({
+  const transport = createMediatedResearchTransport({
     canonicalizeUrl: canonicalizeResearchUrl,
-    connectSocket,
+    fetcher,
     now,
     resolveAddresses,
     totalTimeoutMs,

@@ -639,6 +639,7 @@ const configuredNumber = (env, name, minimum, maximum) => {
 };
 
 const roundCost = (value) => Math.round(value * 1_000_000) / 1_000_000;
+const ceilingAuditCost = (value) => Math.ceil(value * 1_000_000) / 1_000_000;
 const ceilingCost = (value) => Math.ceil(value * 10_000) / 10_000;
 const usageCost = (usage, inputPrice, outputPrice) =>
   (usage.inputTokens * inputPrice + usage.outputTokens * outputPrice) /
@@ -704,6 +705,24 @@ const validateSettlement = (value, input) => {
   }
 };
 
+const validateProviderOverrun = (value, input) => {
+  if (
+    !isRecord(value) ||
+    typeof value.overrunAuditId !== "string" ||
+    !UUID.test(value.overrunAuditId) ||
+    value.preflightId !== input.preflightId ||
+    value.reportedModelTokens !== input.reportedModelTokens ||
+    value.reportedModelCost !== input.reportedModelCost ||
+    value.reservedModelTokens !== input.reservedModelTokens ||
+    value.reservedModelCost !== input.reservedModelCost ||
+    value.evidenceHash !== input.evidenceHash ||
+    value.authority !== "advisory_only" ||
+    value.quorumEligible !== false
+  ) {
+    throw new Error("model_governance_provider_overrun_rejected");
+  }
+};
+
 export const createModelRouterAdapters = ({
   now = () => Date.now(),
   randomUuid = () => crypto.randomUUID(),
@@ -713,6 +732,7 @@ export const createModelRouterAdapters = ({
     [
       "recover_model_reservation",
       "reserve_model_invocation",
+      "record_model_provider_overrun",
       "settle_model_invocation",
     ],
     async ({ database, env, payload }) => {
@@ -1011,16 +1031,63 @@ export const createModelRouterAdapters = ({
         const knownTokens = providerResult
           ? providerResult.usage.inputTokens + providerResult.usage.outputTokens
           : reservation.reservedModelTokens;
-        const knownCost = providerResult
+        const reportedCost = providerResult
+          ? ceilingAuditCost(
+            usageCost(providerResult.usage, inputPrice, outputPrice),
+          )
+          : reservation.reservedModelCost;
+        const knownAccountingCost = providerResult
           ? ceilingCost(usageCost(providerResult.usage, inputPrice, outputPrice))
           : reservation.reservedModelCost;
-        const actualTokens = Math.min(
-          knownTokens,
-          reservation.reservedModelTokens,
-        );
-        const actualCost = Math.min(knownCost, reservation.reservedModelCost);
         const boundedLatency = Math.min(latencyMs, 120_000);
         const failureReasonHash = await sha256Hex(resultStatus);
+        const providerOverrun = providerResult !== undefined &&
+          (
+            knownTokens > reservation.reservedModelTokens ||
+            reportedCost > reservation.reservedModelCost
+          );
+        if (providerOverrun) {
+          const providerResponseIdHash = await sha256Hex(
+            providerResult.providerResponseId,
+          );
+          const overrunEvidenceHash = await sha256Hex(canonicalJson({
+            failureReasonHash,
+            latencyMs: boundedLatency,
+            preflightId: reservation.preflightId,
+            providerModelVersion: providerResult.modelVersion,
+            providerResponseIdHash,
+            reportedModelCost: reportedCost,
+            reportedModelTokens: knownTokens,
+            reservedModelCost: reservation.reservedModelCost,
+            reservedModelTokens: reservation.reservedModelTokens,
+          }));
+          const overrunInput = {
+            evidenceHash: overrunEvidenceHash,
+            preflightId: reservation.preflightId,
+            reportedModelCost: reportedCost,
+            reportedModelTokens: knownTokens,
+            reservedModelCost: reservation.reservedModelCost,
+            reservedModelTokens: reservation.reservedModelTokens,
+          };
+          const overrun = await database.call("recordModelProviderOverrun", [
+            reservation.preflightId,
+            knownTokens,
+            reportedCost,
+            providerResult.modelVersion,
+            providerResponseIdHash,
+            failureReasonHash,
+            overrunEvidenceHash,
+            boundedLatency,
+            serviceAssertion,
+          ]);
+          validateProviderOverrun(overrun, overrunInput);
+        }
+        const actualTokens = providerOverrun
+          ? reservation.reservedModelTokens
+          : Math.min(knownTokens, reservation.reservedModelTokens);
+        const actualCost = providerOverrun
+          ? reservation.reservedModelCost
+          : Math.min(knownAccountingCost, reservation.reservedModelCost);
         const resultHash = await sha256Hex(canonicalJson({
           actualModelCost: actualCost,
           actualModelTokens: actualTokens,

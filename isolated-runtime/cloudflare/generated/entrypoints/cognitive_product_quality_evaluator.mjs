@@ -69,7 +69,7 @@ const principal = Object.freeze({
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_INVOKE_SHA256",
-    "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION"
+    "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

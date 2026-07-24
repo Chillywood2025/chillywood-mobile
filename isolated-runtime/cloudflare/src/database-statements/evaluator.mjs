@@ -1,13 +1,13 @@
 export const EVALUATOR_STATEMENTS = Object.freeze({
   evaluateProductBaseline: Object.freeze({
     arity: 4,
-    text: `select public.governance_evaluate_product_experience_baseline_v1(
+    text: `select cognitive_runtime.governance_evaluate_product_experience_baseline_v1(
       $1::uuid,$2::text,$3::text,$4::text
     ) as result`,
   }),
   productQualityDetectionAssessmentHash: Object.freeze({
     arity: 14,
-    text: `select public.product_quality_detection_assessment_hash(
+    text: `select cognitive_runtime.product_quality_detection_assessment_hash(
       $1::uuid,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text[],
       $8::text,$9::numeric,$10::text,$11::text,$12::text,$13::text,$14::text
     ) as result`,
@@ -20,14 +20,14 @@ export const EVALUATOR_STATEMENTS = Object.freeze({
   }),
   productQualityRecordEvaluatorProof: Object.freeze({
     arity: 9,
-    text: `select public.product_quality_record_sentinel_evaluator_proof(
+    text: `select cognitive_runtime.product_quality_record_sentinel_evaluator_proof(
       $1::uuid,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text,
       $8::text,$9::text
     ) as result`,
   }),
   productQualityResolutionAssessmentHash: Object.freeze({
     arity: 4,
-    text: `select public.product_quality_resolution_assessment_hash(
+    text: `select cognitive_runtime.product_quality_resolution_assessment_hash(
       $1::uuid,$2::uuid,$3::text,$4::text
     ) as result`,
   }),

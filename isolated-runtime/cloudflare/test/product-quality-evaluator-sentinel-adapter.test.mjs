@@ -162,7 +162,7 @@ test("detection recomputes the Android 23.24dp classification and records a boun
         },
       },
       env: {
-        COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION: ASSERTION,
+        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: ASSERTION,
       },
       payload: detectionPayload(),
     });
@@ -200,7 +200,7 @@ test("detection recomputes the Android 23.24dp classification and records a boun
     "passed",
   ]);
   assert.deepEqual(calls[2].parameters.slice(7), [
-    "cognitive_independent_evaluator",
+    "cognitive_product_quality_evaluator",
     ASSERTION,
   ]);
 });
@@ -238,7 +238,7 @@ test("candidate assertions cannot override the deterministic classification", as
         },
       },
       env: {
-        COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION: ASSERTION,
+        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: ASSERTION,
       },
       payload: detectionPayload({ severity: "high" }),
     });
@@ -298,7 +298,7 @@ test("resolution uses the later passing run plus the original detection run", as
         },
       },
       env: {
-        COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION: ASSERTION,
+        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: ASSERTION,
       },
       payload: {
         action: "evaluate_sentinel_resolution",
@@ -369,7 +369,7 @@ test("resolution fails closed before hashing when the original detection run is 
         },
       },
       env: {
-        COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION: ASSERTION,
+        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: ASSERTION,
       },
       payload: {
         action: "evaluate_sentinel_resolution",

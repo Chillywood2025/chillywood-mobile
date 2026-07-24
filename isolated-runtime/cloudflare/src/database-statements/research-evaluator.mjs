@@ -13,9 +13,9 @@ export const RESEARCH_EVALUATOR_STATEMENTS = Object.freeze({
   }),
   resolvePublicResearchContradiction: Object.freeze({
     arity: 8,
-    text: `select public.cognitive_resolve_public_research_contradiction(
-      $1::uuid,$2::uuid,$3::public.cognitive_platform,
-      $4::public.cognitive_environment,$5::uuid,$6::uuid,$7::text,$8::text
+    text: `select cognitive_runtime.cognitive_resolve_public_research_contradiction(
+      $1::uuid,$2::uuid,$3::text,
+      $4::text,$5::uuid,$6::uuid,$7::text,$8::text
     ) as result`,
   }),
 });
