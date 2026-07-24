@@ -3,6 +3,7 @@ import {
   hashEvidencePacket,
   isStrictAdvisoryOutput,
   isStrictModelRequest,
+  type ModelGovernanceDatabase,
   openAiResponsesTransport,
   promptTemplateVersionHash,
   sha256Hex,
@@ -42,6 +43,8 @@ const validPayload = async () => {
   return {
     action: "assess_sanitized_evidence" as const,
     schemaVersion: "cognitive-model-advisory-v1" as const,
+    capabilityId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    idempotencyKey: await sha256Hex("android-live-advisory-01"),
     assessmentId: "android-live-advisory-01",
     taskId: "11111111-1111-4111-8111-111111111111",
     projectId: "22222222-2222-4222-8222-222222222222",
@@ -80,6 +83,33 @@ const advisory = () => ({
 
 const invocationToken = "bounded-model-router-invocation";
 const invocationHash = await sha256Hex(invocationToken);
+const preflightId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const budgetId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+const governanceDatabase = (
+  onReserve?: (input: Record<string, unknown>) => void,
+  onSettle?: (input: Record<string, unknown>) => void,
+): ModelGovernanceDatabase => ({
+  reserve: (input) => {
+    onReserve?.(input as unknown as Record<string, unknown>);
+    return Promise.resolve({
+      preflightId,
+      capabilityId: input.capabilityId,
+      budgetId,
+      reservedModelTokens: input.reservedModelTokens,
+      reservedModelCost: input.reservedModelCost,
+      providerFamily: input.providerFamily,
+      modelFamily: input.modelFamily,
+      modelName: input.modelName,
+      authority: "advisory_only",
+      quorumEligible: false,
+    });
+  },
+  settle: (input) => {
+    onSettle?.(input as unknown as Record<string, unknown>);
+    return Promise.resolve();
+  },
+});
 
 const testEnv = (overrides: Record<string, string> = {}) => {
   const values: Record<string, string> = {
@@ -204,6 +234,7 @@ Deno.test("handler sends a non-stored tool-free strict structured request and re
   let clock = 1_000;
   const handler = createHandler({
     env: testEnv(),
+    governanceDatabase: governanceDatabase(),
     now: () => {
       const current = clock;
       clock += 25;
@@ -302,6 +333,7 @@ Deno.test("budget postflight compares exact usage cost before display rounding",
       COGNITIVE_MODEL_INPUT_USD_PER_MILLION: "0.0001",
       COGNITIVE_MODEL_OUTPUT_USD_PER_MILLION: "0.0001",
     }),
+    governanceDatabase: governanceDatabase(),
     transport: () =>
       Promise.resolve({
         modelVersion: "gpt-5.6-luna",
@@ -327,6 +359,7 @@ Deno.test("provider-returned model identity must match the configured model", as
   const payload = await validPayload();
   const handler = createHandler({
     env: testEnv(),
+    governanceDatabase: governanceDatabase(),
     transport: () =>
       Promise.resolve({
         modelVersion: "other-model-family",
@@ -401,6 +434,7 @@ Deno.test("invalid provider output cannot become an advisory or quorum evidence"
   const payload = await validPayload();
   const handler = createHandler({
     env: testEnv(),
+    governanceDatabase: governanceDatabase(),
     transport: () =>
       Promise.resolve({
         modelVersion: "gpt-5.6-luna",
@@ -423,4 +457,159 @@ Deno.test("invalid provider output cannot become an advisory or quorum evidence"
     "model_provider_response_rejected",
     "invalid provider output error",
   );
+});
+
+Deno.test("database preflight is required before provider transport and exact settlement", async () => {
+  const payload = await validPayload();
+  const sequence: string[] = [];
+  let reserved: Record<string, unknown> | undefined;
+  let settled: Record<string, unknown> | undefined;
+  const handler = createHandler({
+    env: testEnv(),
+    governanceDatabase: governanceDatabase(
+      (input) => {
+        sequence.push("reserve");
+        reserved = input;
+      },
+      (input) => {
+        sequence.push("settle");
+        settled = input;
+      },
+    ),
+    transport: () => {
+      sequence.push("provider");
+      return Promise.resolve({
+        modelVersion: "gpt-5.6-luna",
+        providerResponseId: "provider-response-fixture",
+        outputText: JSON.stringify(advisory()),
+        usage: { inputTokens: 500, outputTokens: 200 },
+      });
+    },
+  });
+  const response = await handler(requestFor(payload));
+  assertEquals(response.status, 200, "governed response status");
+  assertEquals(sequence.join(","), "reserve,provider,settle", "call ordering");
+  assertEquals(
+    reserved?.capabilityId,
+    payload.capabilityId,
+    "capability binding",
+  );
+  assertEquals(
+    reserved?.idempotencyKey,
+    payload.idempotencyKey,
+    "idempotency binding",
+  );
+  assertEquals(
+    reserved?.councilRole,
+    payload.councilRole,
+    "council binding",
+  );
+  assertEquals(settled?.resultStatus, "completed", "settlement status");
+  assertEquals(
+    settled?.actualModelTokens,
+    700,
+    "cumulative token settlement",
+  );
+});
+
+Deno.test("governance preflight rejection prevents provider invocation", async () => {
+  const payload = await validPayload();
+  let providerCalls = 0;
+  const rejectedDatabase: ModelGovernanceDatabase = {
+    reserve: () => Promise.reject(new Error("revoked_or_replayed")),
+    settle: () => Promise.reject(new Error("settlement_should_not_run")),
+  };
+  const handler = createHandler({
+    env: testEnv(),
+    governanceDatabase: rejectedDatabase,
+    transport: () => {
+      providerCalls += 1;
+      return Promise.reject(new Error("provider_should_not_run"));
+    },
+  });
+  const response = await handler(requestFor(payload));
+  assertEquals(response.status, 409, "governance preflight status");
+  assertEquals(providerCalls, 0, "provider calls after rejected preflight");
+});
+
+Deno.test("provider failure consumes its conservative reservation and is audited", async () => {
+  const payload = await validPayload();
+  let reservedTokens = 0;
+  let reservedCost = 0;
+  let settlement: Record<string, unknown> | undefined;
+  const handler = createHandler({
+    env: testEnv(),
+    governanceDatabase: governanceDatabase(
+      (input) => {
+        reservedTokens = input.reservedModelTokens as number;
+        reservedCost = input.reservedModelCost as number;
+      },
+      (input) => {
+        settlement = input;
+      },
+    ),
+    transport: () => Promise.reject(new Error("provider_unavailable")),
+  });
+  const response = await handler(requestFor(payload));
+  assertEquals(response.status, 502, "provider failure status");
+  assertEquals(
+    settlement?.resultStatus,
+    "provider_failed",
+    "failure audit status",
+  );
+  assertEquals(
+    settlement?.actualModelTokens,
+    reservedTokens,
+    "failed call token accounting",
+  );
+  assertEquals(
+    settlement?.actualModelCost,
+    reservedCost,
+    "failed call cost accounting",
+  );
+});
+
+Deno.test("a provider result is not returned when immutable settlement fails", async () => {
+  const payload = await validPayload();
+  let settlements = 0;
+  const database: ModelGovernanceDatabase = {
+    reserve: governanceDatabase().reserve,
+    settle: () => {
+      settlements += 1;
+      return Promise.reject(new Error("settlement_rejected"));
+    },
+  };
+  const handler = createHandler({
+    env: testEnv(),
+    governanceDatabase: database,
+    transport: () =>
+      Promise.resolve({
+        modelVersion: "gpt-5.6-luna",
+        providerResponseId: "provider-response-fixture",
+        outputText: JSON.stringify(advisory()),
+        usage: { inputTokens: 500, outputTokens: 200 },
+      }),
+  });
+  const response = await handler(requestFor(payload));
+  assertEquals(response.status, 409, "settlement failure status");
+  assert(settlements >= 1, "settlement was not attempted");
+  const result = await response.json();
+  assertEquals(
+    result.error,
+    "model_governance_settlement_rejected",
+    "settlement failure response",
+  );
+});
+
+Deno.test("generic OPENAI_API_KEY fallback is rejected", async () => {
+  const payload = await validPayload();
+  const handler = createHandler({
+    env: testEnv({
+      COGNITIVE_MODEL_OPENAI_API_KEY: "",
+      OPENAI_API_KEY: "generic-key-must-not-be-used",
+    }),
+    governanceDatabase: governanceDatabase(),
+  });
+  const response = await handler(requestFor(payload));
+  assertEquals(response.status, 503, "generic credential fallback status");
 });

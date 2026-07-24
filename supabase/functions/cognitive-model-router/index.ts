@@ -34,11 +34,73 @@ type ModelTransport = (
   }>,
 ) => Promise<ModelTransportResult>;
 
+type ModelGovernancePreflight = Readonly<{
+  capabilityId: string;
+  taskId: string;
+  projectId: string;
+  platform: "shared" | "ios" | "android" | "web";
+  environment: "local" | "ci" | "preview" | "production";
+  councilRole: string;
+  providerFamily: string;
+  modelFamily: string;
+  modelName: string;
+  assessmentId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  evidencePacketHash: string;
+  promptTemplateHash: string;
+  configuredModelIdentityHash: string;
+  reservedModelTokens: number;
+  reservedModelCost: number;
+}>;
+
+type ModelGovernanceReservation = Readonly<{
+  preflightId: string;
+  capabilityId: string;
+  budgetId: string;
+  reservedModelTokens: number;
+  reservedModelCost: number;
+  providerFamily: string;
+  modelFamily: string;
+  modelName: string;
+  authority: "advisory_only";
+  quorumEligible: false;
+}>;
+
+type ModelGovernanceSettlement = Readonly<{
+  preflightId: string;
+  resultStatus:
+    | "completed"
+    | "provider_failed"
+    | "provider_timeout"
+    | "provider_rate_limited"
+    | "provider_rejected"
+    | "governance_rejected";
+  actualModelTokens: number;
+  actualModelCost: number;
+  providerModelVersion?: string;
+  providerResponseIdHash?: string;
+  outputHash?: string;
+  invocationHash?: string;
+  executionIdentityHash?: string;
+  failureReasonHash?: string;
+  resultHash: string;
+  latencyMs: number;
+}>;
+
+export type ModelGovernanceDatabase = Readonly<{
+  reserve: (
+    input: ModelGovernancePreflight,
+  ) => Promise<ModelGovernanceReservation>;
+  settle: (input: ModelGovernanceSettlement) => Promise<void>;
+}>;
+
 type ModelRouterDependencies = Readonly<{
   env?: EnvironmentReader;
   now?: () => number;
   randomUuid?: () => string;
   transport?: ModelTransport;
+  governanceDatabase?: ModelGovernanceDatabase;
 }>;
 
 type EvidenceMetric = Readonly<{
@@ -74,6 +136,8 @@ type ModelBudget = Readonly<{
 type ModelRequest = Readonly<{
   action: "assess_sanitized_evidence";
   schemaVersion: "cognitive-model-advisory-v1";
+  capabilityId: string;
+  idempotencyKey: string;
   assessmentId: string;
   taskId: string;
   projectId: string;
@@ -421,6 +485,8 @@ export const isStrictModelRequest = (value: unknown): value is ModelRequest =>
   hasExactKeys(value, [
     "action",
     "schemaVersion",
+    "capabilityId",
+    "idempotencyKey",
     "assessmentId",
     "taskId",
     "projectId",
@@ -434,6 +500,10 @@ export const isStrictModelRequest = (value: unknown): value is ModelRequest =>
   ]) &&
   value.action === "assess_sanitized_evidence" &&
   value.schemaVersion === "cognitive-model-advisory-v1" &&
+  typeof value.capabilityId === "string" &&
+  UUID_PATTERN.test(value.capabilityId) &&
+  typeof value.idempotencyKey === "string" &&
+  HASH_PATTERN.test(value.idempotencyKey) &&
   validBoundedString(value.assessmentId, 8, 160) &&
   /^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/u.test(value.assessmentId) &&
   typeof value.taskId === "string" &&
@@ -756,6 +826,9 @@ const buildProviderBody = (
 const roundCost = (value: number): number =>
   Math.round(value * 1_000_000) / 1_000_000;
 
+const ceilingAccountingCost = (value: number): number =>
+  Math.ceil(value * 10_000) / 10_000;
+
 const costForUsage = (
   usage: ModelUsage,
   inputUsdPerMillion: number,
@@ -779,6 +852,142 @@ const maximumCallCost = (
   ) / 1_000_000;
 };
 
+const maximumCallTokens = (
+  providerBody: JsonObject,
+  maxOutputTokens: number,
+): number =>
+  new TextEncoder().encode(JSON.stringify(providerBody)).byteLength +
+  maxOutputTokens;
+
+const validGovernanceReservation = (
+  value: unknown,
+  expected: ModelGovernancePreflight,
+): value is ModelGovernanceReservation =>
+  isRecord(value) &&
+  hasExactKeys(value, [
+    "preflightId",
+    "capabilityId",
+    "budgetId",
+    "reservedModelTokens",
+    "reservedModelCost",
+    "providerFamily",
+    "modelFamily",
+    "modelName",
+    "authority",
+    "quorumEligible",
+  ]) &&
+  typeof value.preflightId === "string" &&
+  UUID_PATTERN.test(value.preflightId) &&
+  value.capabilityId === expected.capabilityId &&
+  typeof value.budgetId === "string" &&
+  UUID_PATTERN.test(value.budgetId) &&
+  value.reservedModelTokens === expected.reservedModelTokens &&
+  value.reservedModelCost === expected.reservedModelCost &&
+  value.providerFamily === expected.providerFamily &&
+  value.modelFamily === expected.modelFamily &&
+  value.modelName === expected.modelName &&
+  value.authority === "advisory_only" &&
+  value.quorumEligible === false;
+
+const createGovernanceDatabase = (
+  env: EnvironmentReader,
+): ModelGovernanceDatabase => {
+  const url = readRequiredConfiguration(env, "SUPABASE_URL").replace(
+    /\/+$/u,
+    "",
+  );
+  const serviceRoleKey = readRequiredConfiguration(
+    env,
+    "SUPABASE_SERVICE_ROLE_KEY",
+  );
+  const serviceIdentityToken = readRequiredConfiguration(
+    env,
+    "COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION",
+  );
+
+  const rpc = async (name: string, body: JsonObject): Promise<unknown> => {
+    let response: Response;
+    try {
+      response = await fetch(`${url}/rest/v1/rpc/${name}`, {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          authorization: `Bearer ${serviceRoleKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      throw new Error("model_governance_unavailable");
+    }
+    if (!response.ok) throw new Error("model_governance_rejected");
+    try {
+      return await response.json();
+    } catch {
+      throw new Error("model_governance_invalid");
+    }
+  };
+
+  return Object.freeze({
+    reserve: async (
+      input: ModelGovernancePreflight,
+    ): Promise<ModelGovernanceReservation> => {
+      const value = await rpc("cognitive_model_router_reserve", {
+        p_capability_id: input.capabilityId,
+        p_task_id: input.taskId,
+        p_project_id: input.projectId,
+        p_platform: input.platform,
+        p_environment: input.environment,
+        p_council_role: input.councilRole,
+        p_provider_family: input.providerFamily,
+        p_model_family: input.modelFamily,
+        p_model_name: input.modelName,
+        p_assessment_id: input.assessmentId,
+        p_idempotency_key: input.idempotencyKey,
+        p_request_hash: input.requestHash,
+        p_evidence_packet_hash: input.evidencePacketHash,
+        p_prompt_template_hash: input.promptTemplateHash,
+        p_configured_model_identity_hash: input.configuredModelIdentityHash,
+        p_reserved_model_tokens: input.reservedModelTokens,
+        p_reserved_model_cost: input.reservedModelCost,
+        p_service_identity_token: serviceIdentityToken,
+      });
+      if (!validGovernanceReservation(value, input)) {
+        throw new Error("model_governance_invalid");
+      }
+      return value;
+    },
+    settle: async (input: ModelGovernanceSettlement): Promise<void> => {
+      const value = await rpc("cognitive_model_router_settle", {
+        p_preflight_id: input.preflightId,
+        p_result_status: input.resultStatus,
+        p_actual_model_tokens: input.actualModelTokens,
+        p_actual_model_cost: input.actualModelCost,
+        p_provider_model_version: input.providerModelVersion ?? null,
+        p_provider_response_id_hash: input.providerResponseIdHash ?? null,
+        p_output_hash: input.outputHash ?? null,
+        p_invocation_hash: input.invocationHash ?? null,
+        p_execution_identity_hash: input.executionIdentityHash ?? null,
+        p_failure_reason_hash: input.failureReasonHash ?? null,
+        p_result_hash: input.resultHash,
+        p_latency_ms: input.latencyMs,
+        p_service_identity_token: serviceIdentityToken,
+      });
+      if (
+        !isRecord(value) ||
+        value.preflightId !== input.preflightId ||
+        value.resultStatus !== input.resultStatus ||
+        value.authority !== "advisory_only" ||
+        value.quorumEligible !== false ||
+        value.evaluatorProofPresent !== false
+      ) {
+        throw new Error("model_governance_invalid");
+      }
+    },
+  });
+};
+
 const modelFailure = (error: unknown): Response => {
   const code = error instanceof Error ? error.message : "";
   if (code === "provider_rate_limited") {
@@ -795,6 +1004,9 @@ const modelFailure = (error: unknown): Response => {
     code === "server_configuration_invalid"
   ) {
     return json(503, { error: "model_router_configuration_required" });
+  }
+  if (code.startsWith("model_governance_")) {
+    return json(409, { error: "model_governance_rejected" });
   }
   return json(502, { error: "model_provider_response_rejected" });
 };
@@ -854,9 +1066,7 @@ export const createHandler = (
         throw new Error("server_configuration_invalid");
       }
       const apiKey = (
-        env("COGNITIVE_MODEL_OPENAI_API_KEY") ??
-          env("OPENAI_API_KEY") ??
-          ""
+        env("COGNITIVE_MODEL_OPENAI_API_KEY") ?? ""
       ).trim();
       if (!apiKey) throw new Error("server_configuration_missing");
       const inputUsdPerMillion = readConfiguredNumber(
@@ -872,117 +1082,269 @@ export const createHandler = (
         1_000,
       );
       const providerBody = buildProviderBody(model, payload);
-      if (
-        maximumCallCost(
-          providerBody,
-          payload.budget.maxOutputTokens,
-          inputUsdPerMillion,
-          outputUsdPerMillion,
-        ) > payload.budget.maxCostUsd
-      ) {
-        return json(409, { error: "model_budget_preflight_rejected" });
-      }
-
-      const startedAt = now();
-      const result = await transport({
-        apiKey,
-        body: providerBody,
-        timeoutMs: payload.budget.maxDurationMs,
-      });
-      const latencyMs = Math.max(0, Math.round(now() - startedAt));
-      if (latencyMs > payload.budget.maxDurationMs) {
-        return json(504, { error: "model_provider_timeout" });
-      }
-      if (
-        result.modelVersion !== model &&
-        !result.modelVersion.startsWith(`${model}-`)
-      ) {
-        throw new Error("provider_model_identity_mismatch");
-      }
-      const exactCostUsd = costForUsage(
-        result.usage,
+      const maximumCost = maximumCallCost(
+        providerBody,
+        payload.budget.maxOutputTokens,
         inputUsdPerMillion,
         outputUsdPerMillion,
       );
-      if (exactCostUsd > payload.budget.maxCostUsd) {
-        return json(409, { error: "model_budget_postflight_rejected" });
+      if (maximumCost > payload.budget.maxCostUsd) {
+        return json(409, { error: "model_budget_preflight_rejected" });
       }
-      const costUsd = roundCost(exactCostUsd);
-      let advisory: unknown;
-      try {
-        advisory = JSON.parse(result.outputText);
-      } catch {
-        throw new Error("provider_output_invalid");
-      }
-      const evidenceIds = new Set(
-        payload.evidencePacket.observations.map((entry) => entry.evidenceId),
-      );
-      if (!isStrictAdvisoryOutput(advisory, evidenceIds)) {
-        throw new Error("provider_output_invalid");
-      }
-      const advisoryJson = canonicalJson(advisory as unknown as Json);
-      const outputHash = await sha256Hex(advisoryJson);
-      const executionIdentityHash = await sha256Hex(
-        [
-          SERVICE_IDENTITY,
-          randomUuid(),
-          result.providerResponseId,
-          payload.taskId,
-          payload.assessmentId,
-        ].join("|"),
-      );
-      const providerIdentityHash = await sha256Hex(
-        provider,
-      );
       const templateHash = await promptTemplateVersionHash();
-      const invocationHash = await sha256Hex(canonicalJson({
-        assessmentId: payload.assessmentId,
-        taskId: payload.taskId,
-        evidencePacketHash: payload.evidencePacketHash,
-        outputHash,
-        executionIdentityHash,
-        providerIdentityHash,
+      const configuredModelIdentityHash = await sha256Hex(
+        `${provider}|${modelFamily}|${model}`,
+      );
+      const reservedModelTokens = maximumCallTokens(
+        providerBody,
+        payload.budget.maxOutputTokens,
+      );
+      const reservedModelCost = ceilingAccountingCost(maximumCost);
+      const requestHash = await sha256Hex(canonicalJson({
+        payload: payload as unknown as Json,
+        providerFamily: provider,
         modelFamily,
-        modelVersion: result.modelVersion,
-        promptTemplateVersionHash: templateHash,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
-        latencyMs,
-        costUsd,
+        modelName: model,
+        promptTemplateHash: templateHash,
+        reservedModelTokens,
+        reservedModelCost,
       }));
-
-      return json(200, {
-        schemaVersion: "cognitive-model-advisory-result-v1",
-        serviceIdentity: SERVICE_IDENTITY,
-        authority: "advisory_only",
-        assessmentId: payload.assessmentId,
+      const preflight: ModelGovernancePreflight = Object.freeze({
+        capabilityId: payload.capabilityId,
         taskId: payload.taskId,
         projectId: payload.projectId,
         platform: payload.platform,
         environment: payload.environment,
         councilRole: payload.councilRole,
-        blindFirstRound: true,
-        evidencePacketHash: payload.evidencePacketHash,
-        promptTemplateVersionHash: templateHash,
         providerFamily: provider,
-        providerIdentityHash,
         modelFamily,
-        modelVersion: result.modelVersion,
-        executionIdentityHash,
-        outputHash,
-        invocationHash,
-        usage: {
+        modelName: model,
+        assessmentId: payload.assessmentId,
+        idempotencyKey: payload.idempotencyKey,
+        requestHash,
+        evidencePacketHash: payload.evidencePacketHash,
+        promptTemplateHash: templateHash,
+        configuredModelIdentityHash,
+        reservedModelTokens,
+        reservedModelCost,
+      });
+      const governanceDatabase = dependencies.governanceDatabase ??
+        createGovernanceDatabase(env);
+      let reservation: ModelGovernanceReservation;
+      try {
+        reservation = await governanceDatabase.reserve(preflight);
+      } catch {
+        return json(409, { error: "model_governance_preflight_rejected" });
+      }
+
+      const startedAt = now();
+      let result: ModelTransportResult | undefined;
+      let latencyMs = 0;
+      try {
+        result = await transport({
+          apiKey,
+          body: providerBody,
+          timeoutMs: payload.budget.maxDurationMs,
+        });
+        latencyMs = Math.max(0, Math.round(now() - startedAt));
+        if (latencyMs > payload.budget.maxDurationMs) {
+          throw new Error("provider_timeout");
+        }
+        if (
+          result.modelVersion !== model &&
+          !result.modelVersion.startsWith(`${model}-`)
+        ) {
+          throw new Error("provider_model_identity_mismatch");
+        }
+        const exactCostUsd = costForUsage(
+          result.usage,
+          inputUsdPerMillion,
+          outputUsdPerMillion,
+        );
+        if (exactCostUsd > payload.budget.maxCostUsd) {
+          throw new Error("model_budget_postflight_rejected");
+        }
+        const costUsd = roundCost(exactCostUsd);
+        const accountingCostUsd = ceilingAccountingCost(exactCostUsd);
+        const actualModelTokens = result.usage.inputTokens +
+          result.usage.outputTokens;
+        if (
+          actualModelTokens > reservation.reservedModelTokens ||
+          accountingCostUsd > reservation.reservedModelCost
+        ) {
+          throw new Error("model_budget_postflight_rejected");
+        }
+        let advisory: unknown;
+        try {
+          advisory = JSON.parse(result.outputText);
+        } catch {
+          throw new Error("provider_output_invalid");
+        }
+        const evidenceIds = new Set(
+          payload.evidencePacket.observations.map((entry) => entry.evidenceId),
+        );
+        if (!isStrictAdvisoryOutput(advisory, evidenceIds)) {
+          throw new Error("provider_output_invalid");
+        }
+        const advisoryJson = canonicalJson(advisory as unknown as Json);
+        const outputHash = await sha256Hex(advisoryJson);
+        const executionIdentityHash = await sha256Hex(
+          [
+            SERVICE_IDENTITY,
+            randomUuid(),
+            result.providerResponseId,
+            payload.taskId,
+            payload.assessmentId,
+          ].join("|"),
+        );
+        const providerIdentityHash = await sha256Hex(provider);
+        const providerResponseIdHash = await sha256Hex(
+          result.providerResponseId,
+        );
+        const invocationHash = await sha256Hex(canonicalJson({
+          assessmentId: payload.assessmentId,
+          taskId: payload.taskId,
+          evidencePacketHash: payload.evidencePacketHash,
+          outputHash,
+          executionIdentityHash,
+          providerIdentityHash,
+          modelFamily,
+          modelVersion: result.modelVersion,
+          promptTemplateVersionHash: templateHash,
           inputTokens: result.usage.inputTokens,
           outputTokens: result.usage.outputTokens,
-          costUsd,
           latencyMs,
-        },
-        advisory: advisory as unknown as JsonObject,
-        correlationClass: "same_family_isolated_advisory",
-        quorumEligible: false,
-        independenceStatus: "MODEL_INDEPENDENCE_PROVIDER_REQUIRED",
-        evaluatorProofPresent: false,
-      });
+          costUsd,
+        }));
+        const resultHash = await sha256Hex(canonicalJson({
+          preflightId: reservation.preflightId,
+          resultStatus: "completed",
+          providerModelVersion: result.modelVersion,
+          providerResponseIdHash,
+          outputHash,
+          invocationHash,
+          executionIdentityHash,
+          actualModelTokens,
+          actualModelCost: accountingCostUsd,
+          latencyMs,
+        }));
+        await governanceDatabase.settle({
+          preflightId: reservation.preflightId,
+          resultStatus: "completed",
+          actualModelTokens,
+          actualModelCost: accountingCostUsd,
+          providerModelVersion: result.modelVersion,
+          providerResponseIdHash,
+          outputHash,
+          invocationHash,
+          executionIdentityHash,
+          resultHash,
+          latencyMs,
+        });
+
+        return json(200, {
+          schemaVersion: "cognitive-model-advisory-result-v1",
+          serviceIdentity: SERVICE_IDENTITY,
+          authority: "advisory_only",
+          assessmentId: payload.assessmentId,
+          taskId: payload.taskId,
+          projectId: payload.projectId,
+          platform: payload.platform,
+          environment: payload.environment,
+          councilRole: payload.councilRole,
+          blindFirstRound: true,
+          evidencePacketHash: payload.evidencePacketHash,
+          promptTemplateVersionHash: templateHash,
+          providerFamily: provider,
+          providerIdentityHash,
+          modelFamily,
+          modelVersion: result.modelVersion,
+          executionIdentityHash,
+          outputHash,
+          invocationHash,
+          usage: {
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            costUsd,
+            latencyMs,
+          },
+          governanceAuditHash: await sha256Hex(
+            `${reservation.preflightId}|${resultHash}`,
+          ),
+          advisory: advisory as unknown as JsonObject,
+          correlationClass: "same_family_isolated_advisory",
+          quorumEligible: false,
+          independenceStatus: "MODEL_INDEPENDENCE_PROVIDER_REQUIRED",
+          evaluatorProofPresent: false,
+        });
+      } catch (error) {
+        latencyMs = Math.max(
+          latencyMs,
+          Math.max(0, Math.round(now() - startedAt)),
+        );
+        const code = error instanceof Error ? error.message : "";
+        const resultStatus: ModelGovernanceSettlement["resultStatus"] =
+          code === "provider_timeout"
+            ? "provider_timeout"
+            : code === "provider_rate_limited"
+            ? "provider_rate_limited"
+            : code.startsWith("model_governance_")
+            ? "governance_rejected"
+            : code === "provider_output_invalid" ||
+                code === "provider_refusal" ||
+                code === "provider_model_identity_mismatch" ||
+                code === "model_budget_postflight_rejected"
+            ? "provider_rejected"
+            : "provider_failed";
+        const knownTokens = result
+          ? result.usage.inputTokens + result.usage.outputTokens
+          : reservation.reservedModelTokens;
+        const knownCost = result
+          ? ceilingAccountingCost(
+            costForUsage(
+              result.usage,
+              inputUsdPerMillion,
+              outputUsdPerMillion,
+            ),
+          )
+          : reservation.reservedModelCost;
+        const actualModelTokens = Math.min(
+          knownTokens,
+          reservation.reservedModelTokens,
+        );
+        const actualModelCost = Math.min(
+          knownCost,
+          reservation.reservedModelCost,
+        );
+        const failureReasonHash = await sha256Hex(resultStatus);
+        const resultHash = await sha256Hex(canonicalJson({
+          preflightId: reservation.preflightId,
+          resultStatus,
+          actualModelTokens,
+          actualModelCost,
+          failureReasonHash,
+          latencyMs: Math.min(latencyMs, 120_000),
+        }));
+        try {
+          await governanceDatabase.settle({
+            preflightId: reservation.preflightId,
+            resultStatus,
+            actualModelTokens,
+            actualModelCost,
+            failureReasonHash,
+            resultHash,
+            latencyMs: Math.min(latencyMs, 120_000),
+          });
+        } catch {
+          return json(409, {
+            error: "model_governance_settlement_rejected",
+          });
+        }
+        if (code === "model_budget_postflight_rejected") {
+          return json(409, { error: "model_budget_postflight_rejected" });
+        }
+        return modelFailure(error);
+      }
     } catch (error) {
       return modelFailure(error);
     }
