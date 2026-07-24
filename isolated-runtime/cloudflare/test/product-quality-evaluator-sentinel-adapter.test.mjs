@@ -137,11 +137,16 @@ test("detection recomputes the Android 23.24dp classification and records a boun
     resultStatus: "failed",
   });
   const calls = [];
+  const events = [];
   const result = await PRODUCT_QUALITY_EVALUATOR_ADAPTERS
     .evaluate_sentinel_detection.execute({
+      assertActive: async () => {
+        events.push("assertActive");
+      },
       database: {
         call: async (id, parameters) => {
           calls.push({ id, parameters });
+          events.push(id);
           if (id === "productQualityEvaluatorSnapshot") {
             return {
               activeBaseline,
@@ -178,6 +183,12 @@ test("detection recomputes the Android 23.24dp classification and records a boun
   assert.deepEqual(calls.map(({ id }) => id), [
     "productQualityEvaluatorSnapshot",
     "productQualityDetectionAssessmentHash",
+    "productQualityRecordEvaluatorProof",
+  ]);
+  assert.deepEqual(events, [
+    "productQualityEvaluatorSnapshot",
+    "productQualityDetectionAssessmentHash",
+    "assertActive",
     "productQualityRecordEvaluatorProof",
   ]);
   assert.deepEqual(calls[0].parameters, [UUID_RUN_DETECTION, null]);
@@ -278,11 +289,16 @@ test("resolution uses the later passing run plus the original detection run", as
     task_id: UUID_TASK,
   };
   const calls = [];
+  const events = [];
   const result = await PRODUCT_QUALITY_EVALUATOR_ADAPTERS
     .evaluate_sentinel_resolution.execute({
+      assertActive: async () => {
+        events.push("assertActive");
+      },
       database: {
         call: async (id, parameters) => {
           calls.push({ id, parameters });
+          events.push(id);
           if (id === "productQualityEvaluatorSnapshot") {
             return { activeBaseline, detectionRun, finding, run };
           }
@@ -330,6 +346,12 @@ test("resolution uses the later passing run plus the original detection run", as
     HASH_E,
     HASH_B,
     "passed",
+  ]);
+  assert.deepEqual(events, [
+    "productQualityEvaluatorSnapshot",
+    "productQualityResolutionAssessmentHash",
+    "assertActive",
+    "productQualityRecordEvaluatorProof",
   ]);
 });
 

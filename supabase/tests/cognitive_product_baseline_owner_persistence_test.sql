@@ -172,6 +172,12 @@ insert into public.governance_model_execution_attestations(
     repeat('7',64), true, 'cross_provider', 0.1, 100
   );
 
+-- Preserve the inherited baseline-approval lifecycle as an explicit
+-- database-owner-only legacy decision. Runtime callers cannot disable this
+-- trigger; the activation-gate pgTAP separately proves current model
+-- attestations and independence remain fail closed.
+alter table public.governance_decision_manifests
+  disable trigger governance_decision_model_independence_before_insert;
 insert into public.governance_decision_manifests(
   id, deliberation_id, evidence_packet_id, selected_proposal_id, task_id,
   project_id, platform, environment, decision_key, source_commit,
@@ -179,7 +185,9 @@ insert into public.governance_decision_manifests(
   selected_option_hash, rejected_option_hashes, council_attestation_hash,
   votes_hash, vetoes_hash, dissent_hash, stakeholder_impact_hash, risk_level,
   required_test_ids, capability_scope_hash, budget_hash, maximum_executions,
-  rollback_hash, decision_hash, status, expires_at, finalized_at
+  rollback_hash, decision_hash, model_independence_assessment_id,
+  model_independence_status, model_independence_evidence_hash,
+  status, expires_at, finalized_at
 ) values (
   'a8000000-0000-4000-8000-000000000001',
   'a5000000-0000-4000-8000-000000000001',
@@ -197,9 +205,15 @@ insert into public.governance_decision_manifests(
   repeat('c',64), repeat('d',64), repeat('e',64), repeat('f',64),
   repeat('1',64), 'low', array['baseline-owner-persistence-test'],
   repeat('2',64), repeat('a',64), 1, repeat('4',64), repeat('5',64),
+  ('deliberation-' || encode(extensions.digest(convert_to(
+    'a5000000-0000-4000-8000-000000000001','UTF8'
+  ),'sha256'),'hex')),
+  'MODEL_INDEPENDENCE_VERIFIED',repeat('6',64),
   'finalized', transaction_timestamp() + interval '1 day',
   transaction_timestamp()
 );
+alter table public.governance_decision_manifests
+  enable trigger governance_decision_model_independence_before_insert;
 
 create temporary table baseline_chain_state(
   approval_id uuid,
@@ -218,7 +232,7 @@ select is(
     where decision.id = 'a8000000-0000-4000-8000-000000000001'
   ),
   'MODEL_INDEPENDENCE_VERIFIED',
-  'baseline decision reaches the real Owner gate with verified independence'
+  'explicit legacy decision preserves the downstream Owner lifecycle fixture'
 );
 
 set local role authenticated;

@@ -9,6 +9,20 @@ const migration = fs.readFileSync(
   ),
   "utf8",
 );
+const activationGateMigration = fs.readFileSync(
+  path.join(
+    root,
+    "supabase/migrations/20260724215407_cognitive_model_retention_activation_gates.sql",
+  ),
+  "utf8",
+);
+const activationGateDbTest = fs.readFileSync(
+  path.join(
+    root,
+    "supabase/tests/cognitive_model_retention_activation_gates_test.sql",
+  ),
+  "utf8",
+);
 const twoPartyDbTest = fs.readFileSync(
   path.join(root, "supabase/tests/cognitive_two_party_activation_handoff_test.sql"),
   "utf8",
@@ -146,6 +160,55 @@ assert(
   governanceDbTest.includes("legacy capability binding cannot attach to an unverified decision"),
   "database suite does not prove legacy capability binding is gated by model independence",
 );
+
+for (const requiredGateSource of [
+  "create or replace function public.governance_record_model_execution_attestation",
+  "model_provider_bound_attestation_required",
+  "create or replace function public.governance_model_independence_status_internal",
+  "'independenceSatisfied', false",
+  "'status', 'MODEL_INDEPENDENCE_PROVIDER_REQUIRED'",
+  "create or replace function public.governance_assert_switch_prerequisites",
+  "cognitive_research_retention_processor_required",
+  "model_independence_provider_required",
+  "cognitive_governance_switches_level01_activation_hold",
+]) {
+  assert(
+    activationGateMigration.includes(requiredGateSource),
+    `final model/retention activation gate missing: ${requiredGateSource}`,
+  );
+}
+
+const finalStatusStart = activationGateMigration.indexOf(
+  "create or replace function public.governance_model_independence_status_internal",
+);
+const finalStatusEnd = activationGateMigration.indexOf(
+  "revoke all on function\n  public.governance_model_independence_status_internal",
+  finalStatusStart,
+);
+const finalStatusSql = finalStatusStart >= 0 && finalStatusEnd > finalStatusStart
+  ? activationGateMigration.slice(finalStatusStart, finalStatusEnd)
+  : "";
+assert(
+  !finalStatusSql.includes("governance_model_execution_attestations"),
+  "effective model independence status still trusts legacy attestation rows",
+);
+
+for (const requiredGateProof of [
+  "caller-declared model attestations fail closed",
+  "model independence cannot be satisfied by legacy or fake rows",
+  "research activation requires an automatic reviewed retention processor",
+  "non-personal memory activation requires an automatic reviewed retention processor",
+  "collective deliberation activation requires provider-bound independence",
+  "table boundary rejects direct runtime research activation",
+  "table boundary rejects direct runtime memory activation",
+  "table boundary rejects direct runtime collective activation",
+  "advisory-only model decisions remain available and quorum-ineligible",
+]) {
+  assert(
+    activationGateDbTest.includes(requiredGateProof),
+    `final model/retention activation gate lacks pgTAP proof: ${requiredGateProof}`,
+  );
+}
 
 const independenceSatisfied = (rows, requiredCount) => {
   const distinctExecutions = new Set(rows.map((row) => row.executionIdentity)).size;

@@ -574,6 +574,49 @@ set assessment_hash = public.product_quality_detection_assessment_hash(
 )
 where fixture_key = 'detection-two';
 
+update public.autonomous_system_emergency_states
+set status = 'emergency_stop',
+    reason = 'sentinel evaluator-proof liveness rejection fixture',
+    updated_at = transaction_timestamp()
+where system_id = 'product_intelligence_operator';
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select throws_ok(
+  $$select public.product_quality_record_sentinel_evaluator_proof(
+      run_id, 'finding_detection', assessment_hash, repeat('6',64),
+      'passed', repeat('1',64), repeat('2',64),
+      'cognitive_independent_evaluator',
+      'independent-evaluator-fixture-assertion-01'
+    )
+    from sentinel_triage_fixture
+    where fixture_key = 'detection-two'$$,
+  '42501',
+  'product_quality_evaluator_proof_task_not_live',
+  'emergency stop is rechecked at the evaluator-proof table boundary'
+);
+reset role;
+
+select is(
+  (
+    select count(*)
+    from public.product_experience_sentinel_evaluator_proofs proof
+    where proof.sentinel_run_id = (
+      select run_id
+      from sentinel_triage_fixture
+      where fixture_key = 'detection-two'
+    )
+  ),
+  0::bigint,
+  'emergency-stop rejection leaves no durable evaluator proof'
+);
+
+update public.autonomous_system_emergency_states
+set status = 'active',
+    reason = 'sentinel evaluator-proof fixture resumed',
+    updated_at = transaction_timestamp()
+where system_id = 'product_intelligence_operator';
+
 set local role service_role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 update sentinel_triage_fixture

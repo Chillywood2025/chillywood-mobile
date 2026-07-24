@@ -25,6 +25,7 @@ import {
   normalizeClaimRequest,
   normalizeSourceRequest,
   PUBLIC_RESEARCH_BROKER_ADAPTERS,
+  RESEARCH_PINNED_TRANSPORT_REQUIRED,
 } from "../src/adapters/research-broker.mjs";
 import {
   normalizeContradictionResolutionRequest,
@@ -877,8 +878,11 @@ test("research authority validation is exact and repository paths remain commit-
     }),
     null,
   );
-  assert.equal(PUBLIC_RESEARCH_BROKER_ADAPTERS.retrieve_source.ready, true);
-  assert.equal(PUBLIC_RESEARCH_BROKER_ADAPTERS.retrieve_source.reason, null);
+  assert.equal(PUBLIC_RESEARCH_BROKER_ADAPTERS.retrieve_source.ready, false);
+  assert.equal(
+    PUBLIC_RESEARCH_BROKER_ADAPTERS.retrieve_source.reason,
+    RESEARCH_PINNED_TRANSPORT_REQUIRED,
+  );
 });
 
 test("research claim, contradiction and expiry use bounded wrapper readbacks", async () => {

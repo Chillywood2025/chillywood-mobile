@@ -548,6 +548,8 @@
     "test:cognitive-github-draft-pr-broker": "deno test --node-modules-dir=auto --no-lock --allow-env --allow-net --allow-read supabase/functions/cognitive-github-draft-pr-broker/index_test.ts",
     "test:cognitive-level01-scheduler": "deno test --node-modules-dir=auto --no-lock --allow-env --allow-net --allow-read supabase/functions/cognitive-level01-scheduler/index_test.ts",
     "test:cognitive-level01-child-task-factory-concurrency": "node ./scripts/test-cognitive-level01-child-task-factory-concurrency.mjs",
+    "test:cognitive-activation-hold-security-definer": "node ./scripts/test-cognitive-activation-hold-security-definer.mjs",
+    "test:cognitive-public-research-liveness-concurrency": "node ./scripts/test-cognitive-public-research-liveness-concurrency.mjs",
     "test:cognitive-product-sentinel-concurrency": "node ./scripts/test-cognitive-product-sentinel-concurrency.mjs",
     "sentinel:readiness-inventory": "node ./scripts/sentinel-runtime-readiness.mjs",
     "sentinel:canary:self-test": "node ./scripts/product-experience-canary-runner.mjs --mode=self-test",

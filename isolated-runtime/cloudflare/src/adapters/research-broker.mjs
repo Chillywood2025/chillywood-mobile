@@ -2,8 +2,7 @@ import researchAuthoritiesJson from "../../../../config/intelligence/research-au
   type: "json",
 };
 import { assertInvocationActive } from "../abort.mjs";
-import { ready } from "./helpers.mjs";
-import { createMediatedResearchTransport } from "./research-fetch-transport.mjs";
+import { blocked, ready } from "./helpers.mjs";
 
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -34,6 +33,8 @@ const MAX_SOURCE_TTL_SECONDS = Object.freeze({
   security_advisory: 14 * 86_400,
   store_policy: 30 * 86_400,
 });
+export const RESEARCH_PINNED_TRANSPORT_REQUIRED =
+  "RESEARCH_PINNED_TRANSPORT_REQUIRED";
 const AUTHORITIES = new Map(
   researchAuthoritiesJson.authorities.map((authority) => [
     authority.authorityId,
@@ -793,20 +794,16 @@ const expirePublicMemory = ready(
 );
 
 export const createPublicResearchBrokerAdapters = ({
-  fetcher,
   now = Date.now,
-  resolveAddresses,
-  totalTimeoutMs,
+  transport,
 } = {}) => {
-  const transport = createMediatedResearchTransport({
-    canonicalizeUrl: canonicalizeResearchUrl,
-    fetcher,
-    now,
-    resolveAddresses,
-    totalTimeoutMs,
-  });
   return Object.freeze({
-    retrieve_source: retrieveAndRecordSource(transport, now),
+    retrieve_source: typeof transport === "function"
+      ? retrieveAndRecordSource(transport, now)
+      : blocked(
+        ["record_research_source"],
+        RESEARCH_PINNED_TRANSPORT_REQUIRED,
+      ),
     record_claim: recordClaim,
     detect_contradiction: detectContradiction,
     expire_public_memory: expirePublicMemory,

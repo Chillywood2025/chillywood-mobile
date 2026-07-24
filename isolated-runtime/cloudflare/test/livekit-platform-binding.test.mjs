@@ -173,6 +173,8 @@ test("private Worker propagates the validated envelope platform to LiveKit", asy
       COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256:
         await sha256Hex(invocationToken),
       COGNITIVE_LIVEKIT_SENTINEL_ASSERTION: "assertion",
+      RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
+      SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
       SOURCE_COMMIT: sourceCommit,
       WORKER_VERSION: { id: "test-version" },
     },

@@ -256,6 +256,8 @@ jobs:
           supabase db reset
           supabase test db supabase/tests/cognitive_intelligence_foundation_test.sql
           npm run test:cognitive-db-concurrency
+          npm run test:cognitive-activation-hold-security-definer
+          npm run test:cognitive-public-research-liveness-concurrency
           npm run test:cognitive-product-sentinel-concurrency
 
   supabase-database-integration:

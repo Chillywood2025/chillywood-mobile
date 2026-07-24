@@ -7,6 +7,7 @@ import {
   OPERATION_ADAPTERS,
   operationAdapter,
 } from "../src/operation-adapters.mjs";
+import { RESEARCH_PINNED_TRANSPORT_REQUIRED } from "../src/adapters/research-broker.mjs";
 
 const calls = [];
 const sqlFactory = (_connectionString, options) => ({
@@ -71,14 +72,21 @@ test("ready operation adapters use exact static parameter order", async () => {
   ]);
 });
 
-test("every reviewed operation has an explicit ready adapter and static database plan", () => {
+test("every reviewed operation has an explicit readiness state and static database plan", () => {
   for (const [principal, operations] of Object.entries(OPERATION_ADAPTERS)) {
     for (const [operation, adapter] of Object.entries(operations)) {
-      assert.equal(adapter.ready, true, `${principal}.${operation}`);
-      assert.equal(adapter.reason, null, `${principal}.${operation}`);
+      const isPinnedResearchBlocker =
+        principal === "cognitive_public_research_broker" &&
+        operation === "retrieve_source";
+      assert.equal(adapter.ready, !isPinnedResearchBlocker, `${principal}.${operation}`);
+      assert.equal(
+        adapter.reason,
+        isPinnedResearchBlocker ? RESEARCH_PINNED_TRANSPORT_REQUIRED : null,
+        `${principal}.${operation}`,
+      );
       assert.equal(
         typeof adapter.execute,
-        "function",
+        isPinnedResearchBlocker ? "undefined" : "function",
         `${principal}.${operation}`,
       );
       assert(Array.isArray(adapter.databaseOperations));

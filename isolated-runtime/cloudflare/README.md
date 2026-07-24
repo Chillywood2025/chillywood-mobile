@@ -18,10 +18,13 @@ reviewed Supabase Edge contracts.
 - Only the model and GitHub Workers declare provider secrets. The LiveKit
   evidence collector accepts sanitized participant evidence from a separately
   bounded synthetic participant and owns no LiveKit provider credential.
-  Public research has allowlisted public network egress but no provider
-  credential. Its isolated adapter performs a public-DNS preflight followed by
-  Cloudflare's public-fetch proxy; the preflight addresses are evidence, not a
-  claim that the proxy connection is DNS-pinned to those exact addresses.
+  Public research has no provider credential. Its production
+  `retrieve_source` operation is fail-closed with
+  `RESEARCH_PINNED_TRANSPORT_REQUIRED`: a DNS preflight followed by
+  Cloudflare's public-fetch proxy does not prove that the peer connection is
+  pinned to the approved public addresses. The mediated transport remains
+  injectable only by source-controlled tests or a future reviewed transport;
+  request data and Worker environment bindings cannot enable it.
 - No Worker consumes a Supabase service-role or secret key.
 
 Cloudflare documents Service Bindings as non-public Worker-to-Worker calls with
@@ -45,8 +48,12 @@ Primary runtime references:
 3. The gateway validates an exact, hash-bound request envelope and dispatches
    through one explicit Service Binding.
 4. The private Worker validates its distinct invocation hash, exact operation
-   schema, secret domain, source metadata, deadline, task/project/platform
-   scope, and payload hash.
+   schema, exact generated environment-key allowlist, source metadata,
+   deadline, task/project/platform scope, and payload hash. The gateway applies
+   its own exact allowlist covering only reviewed public configuration, source
+   metadata, version metadata, and the ten Service Bindings. A deployment
+   credential such as `CLOUDFLARE_API_TOKEN` is rejected from every runtime
+   environment.
 5. The dedicated database role executes
    `cognitive_runtime.runtime_role_preflight` and
    `cognitive_runtime.runtime_revocation_status` before the operation RPC.
@@ -67,7 +74,9 @@ private Worker rejects that operation before database or provider access; a
 review must port and parity-test it before changing the flag. The generated
 readiness file, adapter tests, static SQL statement inventory, and exact-head
 review are authoritative; this document never turns an incomplete operation
-into a deployment-ready operation.
+into a deployment-ready operation. In particular, public research activation
+remains externally blocked until a reviewed, peer-pinned transport replaces
+the current hostname-preflight/public-fetch boundary.
 
 Before upload, the coordinator must:
 
@@ -91,6 +100,11 @@ Before upload, the coordinator must:
 6. verify the successor Git commit is supplied as `sourceCommit` and matches
    reviewed version metadata;
 7. run the negative isolation suite against deployed Workers.
+
+Public research and non-personal memory switches must remain off while
+`retrieve_source` reports `RESEARCH_PINNED_TRANSPORT_REQUIRED`. No environment
+variable, request field, or deployment-time caller option may override that
+gate.
 
 The templates intentionally provide no gateway route and keep `workers_dev`
 disabled. The gateway `workers.dev` endpoint is enabled only after the Access

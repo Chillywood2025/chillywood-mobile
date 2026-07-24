@@ -6,28 +6,37 @@ import {
 } from "./contracts.mjs";
 import { writeSanitizedAudit } from "./sanitize.mjs";
 
-const SECRET_DOMAIN_NAME =
-  /^(?:COGNITIVE_[A-Z0-9_]*(?:ASSERTION|INVOKE_SHA256|SERVICE_TOKEN|API_KEY)|GITHUB_APP_(?:ID|INSTALLATION_ID|PRIVATE_KEY)|GITHUB_REPOSITORY_ID|LIVEKIT_API_(?:KEY|SECRET)|SUPABASE_(?:SERVICE_ROLE_KEY|SECRET_KEY))$/u;
-const HYPERDRIVE_BINDING_NAME = /^[A-Z0-9_]+_HYPERDRIVE$/u;
+const COMMON_PRIVATE_ENVIRONMENT_BINDINGS = Object.freeze([
+  "RUNTIME_SCHEMA_VERSION",
+  "SOURCE_BASE_COMMIT",
+  "SOURCE_COMMIT",
+  "WORKER_VERSION",
+]);
+const PINNED_RESEARCH_TRANSPORT_REASON =
+  "RESEARCH_PINNED_TRANSPORT_REQUIRED";
+
+export const privateEnvironmentKeyAllowlist = (principal) =>
+  Object.freeze([
+    ...COMMON_PRIVATE_ENVIRONMENT_BINDINGS,
+    principal.hyperdriveBinding,
+    ...Object.keys(principal.runtimeConfiguration),
+    ...principal.requiredSecrets,
+  ].sort());
 
 const assertCredentialDomain = (env, principal) => {
-  const missing = principal.requiredSecrets.filter((name) => !env[name]);
-  const forbidden = principal.forbiddenSecrets.filter((name) => env[name]);
-  const unexpected = Object.keys(env).filter((name) =>
-    SECRET_DOMAIN_NAME.test(name) && !principal.requiredSecrets.includes(name)
-  );
-  const unexpectedHyperdrive = Object.keys(env).filter((name) =>
-    HYPERDRIVE_BINDING_NAME.test(name) &&
-    name !== principal.hyperdriveBinding
-  );
+  if (env === null || typeof env !== "object" || Array.isArray(env)) {
+    throw new Error("credential_domain_rejected");
+  }
+  const actual = Object.keys(env).sort();
+  const expected = privateEnvironmentKeyAllowlist(principal);
   if (
-    missing.length > 0 ||
-    forbidden.length > 0 ||
-    unexpected.length > 0 ||
-    unexpectedHyperdrive.length > 0
+    actual.length !== expected.length ||
+    actual.some((name, index) => name !== expected[index])
   ) {
     throw new Error("credential_domain_rejected");
   }
+  const missing = principal.requiredSecrets.filter((name) => !env[name]);
+  if (missing.length > 0) throw new Error("credential_domain_rejected");
   if (!env[principal.hyperdriveBinding]?.connectionString) {
     throw new Error("hyperdrive_binding_required");
   }
@@ -125,7 +134,7 @@ export const createPrivateInvocationHandler = ({
   principal,
   resolveAdapter,
 }) => async (envelope, invocationToken) => {
-  const versionId = env.WORKER_VERSION?.id ?? "unknown";
+  const versionId = env?.WORKER_VERSION?.id ?? "unknown";
   let database;
   let deadlineController;
   if (!principal) throw new Error("principal_configuration_rejected");
@@ -162,7 +171,11 @@ export const createPrivateInvocationHandler = ({
     deadlineController = new AbortController();
     const adapter = resolveAdapter(envelope.operation);
     if (!adapter?.ready || typeof adapter.execute !== "function") {
-      throw new Error("operation_adapter_not_ready");
+      throw new Error(
+        adapter?.reason === PINNED_RESEARCH_TRANSPORT_REASON
+          ? PINNED_RESEARCH_TRANSPORT_REASON
+          : "operation_adapter_not_ready",
+      );
     }
     database = createDatabase({
       connectionString: env[principal.hyperdriveBinding].connectionString,
@@ -238,6 +251,7 @@ export const createPrivateInvocationHandler = ({
       "emergency_stop_rejected",
       "invocation_rejected",
       "preflight_rejected",
+      PINNED_RESEARCH_TRANSPORT_REASON,
       "revocation_rejected",
       "source_commit_rejected",
     ].includes(category)
@@ -246,7 +260,9 @@ export const createPrivateInvocationHandler = ({
       ? "database_rejected"
       : "payload_rejected";
     await writeSanitizedAudit({
-      category: safeCategory,
+      category: safeCategory === PINNED_RESEARCH_TRANSPORT_REASON
+        ? "payload_rejected"
+        : safeCategory,
       principal: principal.dbRole,
       requestId:
         envelope && typeof envelope.requestId === "string"
