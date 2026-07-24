@@ -1,14 +1,26 @@
 import {
+  APPROVED_OPTION_C_BASELINE_HASH,
   deterministicDetectionReasons,
   deterministicResolutionReasons,
+  deterministicTouchTargetClassification,
+  deterministicVisualClassification,
   isStrictSentinelEvaluationPayload,
 } from "./index.ts";
+
+type TestJson =
+  | null
+  | boolean
+  | number
+  | string
+  | TestJson[]
+  | { [key: string]: TestJson };
+type TestJsonObject = { [key: string]: TestJson };
 
 const validPayload = () => ({
   action: "evaluate_sentinel_detection",
   affectedComponentsHash: "a".repeat(64),
   buildRuntimeHash: "b".repeat(64),
-  confidence: 0.99,
+  confidence: 1,
   evidenceHashes: ["c".repeat(64)],
   findingClass: "android_touch_target_below_48dp",
   physicalProofStatus: "installed_ui_observed",
@@ -40,6 +52,134 @@ const candidateFromPayload = (
 });
 const assert = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(message);
+};
+
+const approvedContext = Object.freeze({
+  approvedVisualBaselineCount: 1,
+  approvedVisualBaselineHash: APPROVED_OPTION_C_BASELINE_HASH,
+});
+
+const optionCVisualMetrics = (
+  overrides: TestJsonObject = {},
+): TestJsonObject => ({
+  accessibilityNamePresent: true,
+  accessibilityRolePresent: true,
+  aspectRatioClass: "16:9",
+  automationStatus: "observed",
+  baselineApplicability: "option_c_default",
+  baselineComparisonHash: APPROVED_OPTION_C_BASELINE_HASH,
+  baselineId: "chillywood-product-experience-baseline-v1",
+  baselineState: "approved_baseline",
+  baselineVersion: 1,
+  cardsAboveFold: 3,
+  cardViewportHeightRatio: 200 / 844,
+  cardViewportWidthRatio: 252 / 390,
+  columnCount: 1,
+  columnGap: 0,
+  componentIdentityHash: "6".repeat(64),
+  contentState: "loaded",
+  creatorIdentityVisible: true,
+  evidenceQuality: "measured_installed",
+  evidenceQualityHash: "7".repeat(64),
+  exceptionContractHash: null,
+  exceptionType: "none",
+  exceptionVersioned: false,
+  featuredPlacement: "not_applicable",
+  horizontalCardsVisible: 1.42,
+  horizontalGap: 12,
+  horizontalMargin: 16,
+  interactiveApplicableMinimumThreshold: 48,
+  interactivePreferredThreshold: 48,
+  interactiveTargetHeight: 48,
+  interactiveTargetWidth: 48,
+  layoutMode: "horizontal_row",
+  liveContent: false,
+  liveStateVisible: false,
+  mediaFrameHeight: 142,
+  mediaFrameWidth: 252,
+  measurementUnit: "dp",
+  metadataBandHeight: 50,
+  metadataLineCount: 2,
+  observedClassification: "within_baseline",
+  orientation: "portrait",
+  platform: "android",
+  providerState: "healthy",
+  referenceViewport: "phone_portrait_390x844",
+  routeFamilyMappingHash: "8".repeat(64),
+  screenDensityDpi: 420,
+  surfaceFamily: "standard_streaming_card",
+  titleLineCount: 2,
+  totalCardContainerHeight: 200,
+  totalCardContainerWidth: 252,
+  verticalRowGap: 20,
+  viewportHeight: 844,
+  viewportWidth: 390,
+  windowClass: "compact",
+  ...overrides,
+});
+
+const optionCTouchMetrics = (
+  overrides: TestJsonObject = {},
+): TestJsonObject => ({
+  accessibilityNamePresent: true,
+  accessibilityRolePresent: true,
+  applicableMinimumThreshold: 48,
+  automationStatus: "observed",
+  baselineComparisonHash: APPROVED_OPTION_C_BASELINE_HASH,
+  baselineId: "chillywood-product-experience-baseline-v1",
+  baselineState: "approved_baseline",
+  baselineVersion: 1,
+  componentIdentityHash: "6".repeat(64),
+  contentState: "loaded",
+  evidenceQuality: "measured_installed",
+  evidenceQualityHash: "7".repeat(64),
+  exceptionContractHash: null,
+  exceptionType: "none",
+  exceptionVersioned: false,
+  interactiveAncestorHeight: null,
+  interactiveAncestorPresent: false,
+  interactiveAncestorWidth: null,
+  interactiveTargetHeight: 23.24,
+  interactiveTargetWidth: 102.86,
+  isActuallyInteractive: true,
+  measurementUnit: "dp",
+  platform: "android",
+  preferredThreshold: 48,
+  providerState: "healthy",
+  routeFamilyMappingHash: "8".repeat(64),
+  screenDensityDpi: 420,
+  surfaceFamily: "standard_streaming_card",
+  targetClassification: "below_platform_minimum",
+  ...overrides,
+});
+
+const storedRun = (
+  observationKind: string,
+  metrics: TestJsonObject,
+  overrides: TestJsonObject = {},
+) => {
+  const payload = validPayload();
+  return {
+    collector_capability_id: "66666666-6666-4666-8666-666666666666",
+    environment: "production",
+    erased_at: null,
+    evaluation_expires_at: "2026-07-25T00:00:00.000Z",
+    evidence_manifest_hash: payload.evidenceHashes[0],
+    id: payload.sentinelRunId,
+    metric_manifest: {
+      metrics,
+      observationKind,
+    },
+    physical_proof_status: payload.physicalProofStatus,
+    platform: "android",
+    project_id: "22222222-2222-4222-8222-222222222222",
+    result_status: "failed",
+    route_or_surface: payload.routeOrSurface,
+    sentinel_key: "visual_product_experience_sentinel",
+    source_build_hash: payload.buildRuntimeHash,
+    task_id: "33333333-3333-4333-8333-333333333333",
+    ...overrides,
+  };
 };
 
 Deno.test("sentinel evaluator accepts only an exact bounded detection candidate", () => {
@@ -103,86 +243,30 @@ Deno.test("sentinel evaluator accepts only exact bounded resolution evidence", (
 
 Deno.test("Android touch classification is derived from stored run metrics", () => {
   const payload = validPayload();
-  const run = {
-    collector_capability_id: "66666666-6666-4666-8666-666666666666",
-    environment: "production",
-    erased_at: null,
-    evaluation_expires_at: "2026-07-25T00:00:00.000Z",
-    evidence_manifest_hash: payload.evidenceHashes[0],
-    id: payload.sentinelRunId,
-    metric_manifest: {
-      evidenceHashes: payload.evidenceHashes,
-      metrics: {
-        clickableAncestorPresent: false,
-        isActuallyInteractive: true,
-        minimumHeightDp: 23.24,
-        minimumWidthDp: 102.86,
-        thresholdDp: 48,
-      },
-      observationKind: "touch_target",
-      sanitizationVersion: "bounded-nonpersonal-v1",
-      schemaVersion: "product-sentinel-v1",
-    },
-    physical_proof_status: payload.physicalProofStatus,
-    platform: "android",
-    project_id: "22222222-2222-4222-8222-222222222222",
-    result_status: "failed",
-    route_or_surface: payload.routeOrSurface,
-    sentinel_key: "visual_product_experience_sentinel",
-    source_build_hash: payload.buildRuntimeHash,
-    task_id: "33333333-3333-4333-8333-333333333333",
-  };
+  const run = storedRun("touch_target", optionCTouchMetrics());
   const candidate = candidateFromPayload(payload);
   assert(
-    deterministicDetectionReasons(run, candidate).length === 0,
+    deterministicDetectionReasons(run, candidate, approvedContext).length === 0,
     "reproduced 23.24dp installed target should pass deterministic evaluation",
   );
   assert(
-    deterministicDetectionReasons(
-      {
-        ...run,
-        metric_manifest: {
-          ...run.metric_manifest,
-          metrics: {
-            ...run.metric_manifest.metrics,
-            minimumHeightDp: 48,
-          },
-        },
-      },
-      candidate,
-    ).includes("touch_target_classification_rejected"),
+    deterministicTouchTargetClassification(
+      storedRun(
+        "touch_target",
+        optionCTouchMetrics({
+          interactiveTargetHeight: 48,
+          targetClassification: "meets_platform_minimum",
+        }),
+      ),
+      approvedContext,
+    ).classification === "false_positive",
     "48dp target must not be classified as undersized",
   );
 });
 
 Deno.test("stored metrics bind severity confidence and suspected layer", () => {
   const payload = validPayload();
-  const run = {
-    collector_capability_id: "66666666-6666-4666-8666-666666666666",
-    environment: "production",
-    erased_at: null,
-    evaluation_expires_at: "2026-07-25T00:00:00.000Z",
-    evidence_manifest_hash: payload.evidenceHashes[0],
-    id: payload.sentinelRunId,
-    metric_manifest: {
-      metrics: {
-        clickableAncestorPresent: false,
-        isActuallyInteractive: true,
-        minimumHeightDp: 23.24,
-        minimumWidthDp: 102.86,
-        thresholdDp: 48,
-      },
-      observationKind: "touch_target",
-    },
-    physical_proof_status: payload.physicalProofStatus,
-    platform: "android",
-    project_id: "22222222-2222-4222-8222-222222222222",
-    result_status: "failed",
-    route_or_surface: payload.routeOrSurface,
-    sentinel_key: "visual_product_experience_sentinel",
-    source_build_hash: payload.buildRuntimeHash,
-    task_id: "33333333-3333-4333-8333-333333333333",
-  };
+  const run = storedRun("touch_target", optionCTouchMetrics());
   for (
     const candidate of [
       { ...candidateFromPayload(payload), severity: "critical" },
@@ -191,7 +275,7 @@ Deno.test("stored metrics bind severity confidence and suspected layer", () => {
     ]
   ) {
     assert(
-      deterministicDetectionReasons(run, candidate).includes(
+      deterministicDetectionReasons(run, candidate, approvedContext).includes(
         "deterministic_finding_profile_mismatch",
       ),
       "caller-selected profile value must be rejected",
@@ -199,122 +283,251 @@ Deno.test("stored metrics bind severity confidence and suspected layer", () => {
   }
 });
 
-Deno.test("visual findings fail closed around immutable Owner baseline state", () => {
+Deno.test("Option C visual findings require the exact approved baseline hash", () => {
   const payload = validPayload();
-  const baselineHash = "1".repeat(64);
-  const run = {
-    collector_capability_id: "66666666-6666-4666-8666-666666666666",
-    environment: "production",
-    erased_at: null,
-    evaluation_expires_at: "2026-07-25T00:00:00.000Z",
-    evidence_manifest_hash: payload.evidenceHashes[0],
-    id: payload.sentinelRunId,
-    metric_manifest: {
-      metrics: {
-        aspectRatioClass: "16:9",
-        baselineComparisonHash: baselineHash,
-        baselineState: "needs_product_baseline_review",
-        cardsAboveFold: 1,
-        cardViewportHeightRatio: 0.4,
-        cardViewportWidthRatio: 0.9,
-        densityScore: 0.2,
-        minimumTouchTargetPt: 44,
-        titleLineCount: 2,
-      },
-      observationKind: "visual_layout",
-    },
-    physical_proof_status: payload.physicalProofStatus,
-    platform: "android",
-    project_id: "22222222-2222-4222-8222-222222222222",
-    result_status: "failed",
-    route_or_surface: payload.routeOrSurface,
-    sentinel_key: "visual_product_experience_sentinel",
-    source_build_hash: payload.buildRuntimeHash,
-    task_id: "33333333-3333-4333-8333-333333333333",
-  };
-  const missingBaselineCandidate = {
-    ...candidateFromPayload(payload),
-    confidence: 1,
-    findingClass: "visual_product_baseline_missing",
-    reproductionState: "design_baseline_missing",
-    severity: "info",
-  };
+  const compliantRun = storedRun("visual_layout", optionCVisualMetrics());
   assert(
-    deterministicDetectionReasons(
-      run,
-      missingBaselineCandidate,
-      {
-        approvedVisualBaselineCount: 0,
-        approvedVisualBaselineHash: null,
-      },
-    ).length === 0,
-    "only the missing-baseline classification should pass before approval",
+    deterministicVisualClassification(
+      compliantRun,
+      approvedContext,
+    ).classification === "false_positive",
+    "exact compliant Option C evidence must not create a finding",
   );
   assert(
-    deterministicDetectionReasons(
-      run,
-      {
-        ...missingBaselineCandidate,
-        findingClass: "visual_layout_approved_baseline_deviation",
-        reproductionState: "confirmed_defect",
-        severity: "medium",
-      },
-      {
-        approvedVisualBaselineCount: 0,
-        approvedVisualBaselineHash: null,
-      },
-    ).includes("deterministic_finding_profile_mismatch"),
-    "a UI defect must not be inferred before baseline approval",
-  );
-
-  const approvedRun = {
-    ...run,
-    metric_manifest: {
-      ...run.metric_manifest,
-      metrics: {
-        ...run.metric_manifest.metrics,
-        baselineState: "approved_baseline",
-      },
-    },
-  };
-  const approvedCandidate = {
-    ...missingBaselineCandidate,
-    findingClass: "visual_layout_approved_baseline_deviation",
-    reproductionState: "confirmed_defect",
-    severity: "medium",
-  };
-  assert(
-    deterministicDetectionReasons(
-      approvedRun,
-      approvedCandidate,
-      {
-        approvedVisualBaselineCount: 0,
-        approvedVisualBaselineHash: null,
-      },
-    ).includes("visual_layout_approved_baseline_required"),
-    "an approved-baseline finding must fail when no approved row exists",
-  );
-  assert(
-    deterministicDetectionReasons(
-      approvedRun,
-      approvedCandidate,
+    deterministicVisualClassification(
+      compliantRun,
       {
         approvedVisualBaselineCount: 1,
         approvedVisualBaselineHash: "2".repeat(64),
       },
-    ).includes("visual_layout_approved_baseline_required"),
-    "a mismatched baseline hash must fail closed",
+    ).classification === "baseline_ambiguity",
+    "mismatched approved baseline must fail closed",
+  );
+
+  const deviationRun = storedRun(
+    "visual_layout",
+    optionCVisualMetrics({
+      mediaFrameHeight: 146.25,
+      mediaFrameWidth: 260,
+      observedClassification: "confirmed_baseline_violation",
+      totalCardContainerWidth: 260,
+      cardViewportWidthRatio: 260 / 390,
+    }),
+  );
+  const candidate = {
+    ...candidateFromPayload(payload),
+    findingClass: "visual_option_c_phone_portrait_deviation",
+  };
+  const deviationReasons = deterministicDetectionReasons(
+    deviationRun,
+    candidate,
+    approvedContext,
+  );
+  assert(
+    deviationReasons.length === 0,
+    `measured Option C phone deviation should admit its exact derived profile: ${
+      deviationReasons.join(",")
+    }`,
   );
   assert(
     deterministicDetectionReasons(
-      approvedRun,
-      approvedCandidate,
+      deviationRun,
+      { ...candidate, severity: "high" },
+      approvedContext,
+    ).includes("deterministic_finding_profile_mismatch"),
+    "caller-authored severity must not override the evaluator profile",
+  );
+});
+
+Deno.test("visual non-findings remain truthfully distinct", () => {
+  const classifications = [
+    [
+      optionCVisualMetrics({
+        automationStatus: "failed",
+        observedClassification: "automation_failure",
+      }),
+      "automation_failure",
+    ],
+    [
+      optionCVisualMetrics({ automationStatus: "partial" }),
+      "insufficient_evidence",
+    ],
+    [
+      optionCVisualMetrics({
+        baselineComparisonHash: "9".repeat(64),
+        observedClassification: "baseline_ambiguity",
+      }),
+      "baseline_ambiguity",
+    ],
+    [
+      optionCVisualMetrics({
+        contentState: "empty",
+        observedClassification: "content_data_absence",
+      }),
+      "content_data_absent",
+    ],
+    [
+      optionCVisualMetrics({
+        observedClassification: "provider_blocked",
+        providerState: "blocked",
+      }),
+      "provider_blocked",
+    ],
+  ] as const;
+  for (const [metrics, expected] of classifications) {
+    assert(
+      deterministicVisualClassification(
+        storedRun("visual_layout", metrics),
+        approvedContext,
+      ).classification === expected,
+      `${expected} must remain a distinct evidence-derived outcome`,
+    );
+  }
+});
+
+Deno.test("versioned featured surfaces are route exceptions, not Option C cards", () => {
+  const metrics = optionCVisualMetrics({
+    baselineApplicability: "explicit_versioned_exception",
+    exceptionContractHash: "9".repeat(64),
+    exceptionType: "featured_hero",
+    exceptionVersioned: true,
+    featuredPlacement: "first_row",
+    observedClassification: "route_specific_exception",
+    surfaceFamily: "featured_hero_card",
+  });
+  assert(
+    deterministicVisualClassification(
+      storedRun("visual_layout", metrics),
+      approvedContext,
+    ).classification === "route_specific_exception",
+    "first-row featured family must remain an explicit versioned exception",
+  );
+  assert(
+    deterministicVisualClassification(
+      storedRun("visual_layout", {
+        ...metrics,
+        featuredPlacement: "second_row",
+        observedClassification: "confirmed_baseline_violation",
+      }),
+      approvedContext,
+    ).profile?.findingClass === "visual_featured_hero_outside_first_row",
+    "featured content outside the first row must be derived as a violation",
+  );
+  const verticalMetrics = optionCVisualMetrics({
+    aspectRatioClass: "9:16",
+    baselineApplicability: "explicit_versioned_exception",
+    cardViewportHeightRatio: 210 / 844,
+    cardViewportWidthRatio: 90 / 390,
+    exceptionContractHash: "a".repeat(64),
+    exceptionType: "vertical_short_form",
+    exceptionVersioned: true,
+    mediaFrameHeight: 160,
+    mediaFrameWidth: 90,
+    observedClassification: "route_specific_exception",
+    surfaceFamily: "vertical_post_card",
+    totalCardContainerHeight: 210,
+    totalCardContainerWidth: 90,
+  });
+  assert(
+    deterministicVisualClassification(
+      storedRun("visual_layout", verticalMetrics),
+      approvedContext,
+    ).classification === "route_specific_exception",
+    "measured 9:16 vertical media must remain an explicit family exception",
+  );
+});
+
+Deno.test("creator and Live identity are independently evaluated", () => {
+  const creatorMissing = deterministicVisualClassification(
+    storedRun(
+      "visual_layout",
+      optionCVisualMetrics({
+        creatorIdentityVisible: false,
+        observedClassification: "confirmed_baseline_violation",
+      }),
+    ),
+    approvedContext,
+  );
+  assert(
+    creatorMissing.profile?.findingClass === "visual_creator_identity_missing",
+    "creator identity absence must be a measured finding",
+  );
+  const liveMissing = deterministicVisualClassification(
+    storedRun(
+      "visual_layout",
+      optionCVisualMetrics({
+        liveContent: true,
+        liveStateVisible: false,
+        observedClassification: "confirmed_baseline_violation",
+        surfaceFamily: "live_streaming_card",
+      }),
+    ),
+    approvedContext,
+  );
+  assert(
+    liveMissing.profile?.findingClass === "visual_live_state_missing",
+    "live-state absence must be distinct from general density",
+  );
+});
+
+Deno.test("platform-specific touch units and web WCAG tiers are not mixed", () => {
+  const iosRun = storedRun(
+    "touch_target",
+    optionCTouchMetrics({
+      applicableMinimumThreshold: 44,
+      interactiveTargetHeight: 43,
+      interactiveTargetWidth: 44,
+      measurementUnit: "pt",
+      platform: "ios",
+      preferredThreshold: 44,
+      screenDensityDpi: null,
+    }),
+    { platform: "ios" },
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      iosRun,
+      approvedContext,
+    ).profile?.findingClass === "ios_touch_target_below_44pt",
+    "iOS must use the 44pt threshold",
+  );
+  const webMinimumOnly = storedRun(
+    "touch_target",
+    optionCTouchMetrics({
+      applicableMinimumThreshold: 24,
+      interactiveTargetHeight: 24,
+      interactiveTargetWidth: 24,
+      measurementUnit: "css_px",
+      platform: "web",
+      preferredThreshold: 44,
+      screenDensityDpi: null,
+      targetClassification: "meets_wcag_aa_minimum_only",
+    }),
+    { platform: "web" },
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      webMinimumOnly,
+      approvedContext,
+    ).profile?.findingClass ===
+      "web_touch_target_below_preferred_44csspx",
+    "web must distinguish the 24 CSS px WCAG floor from the 44 CSS px preference",
+  );
+  assert(
+    deterministicTouchTargetClassification(
       {
-        approvedVisualBaselineCount: 1,
-        approvedVisualBaselineHash: baselineHash,
+        ...webMinimumOnly,
+        metric_manifest: {
+          ...webMinimumOnly.metric_manifest,
+          metrics: {
+            ...webMinimumOnly.metric_manifest.metrics,
+            measurementUnit: "pt",
+          },
+        },
       },
-    ).length === 0,
-    "an exact immutable approved baseline hash should admit the deviation",
+      approvedContext,
+    ).classification === "baseline_ambiguity",
+    "mixed platform units must fail closed",
   );
 });
 
@@ -553,6 +766,61 @@ Deno.test("journey resolution binds the exact stored measurement identity", () =
   );
 });
 
+Deno.test("visual resolution binds component, family, and Option C baseline", () => {
+  const finding = {
+    current_status: "open",
+    environment: "production",
+    erased_at: null,
+    id: "44444444-4444-4444-8444-444444444444",
+    platform: "android",
+    project_id: "22222222-2222-4222-8222-222222222222",
+    route_or_surface: "home/main-tab-home",
+    sentinel_run_id: "11111111-1111-4111-8111-111111111111",
+    task_id: "33333333-3333-4333-8333-333333333333",
+  };
+  const detectionRun = storedRun(
+    "visual_layout",
+    optionCVisualMetrics({
+      creatorIdentityVisible: false,
+      observedClassification: "confirmed_baseline_violation",
+    }),
+  );
+  const passingRun = {
+    ...detectionRun,
+    evidence_manifest_hash: "9".repeat(64),
+    id: "55555555-5555-4555-8555-555555555555",
+    metric_manifest: {
+      metrics: optionCVisualMetrics(),
+      observationKind: "visual_layout",
+    },
+    result_status: "passed",
+  };
+  assert(
+    deterministicResolutionReasons(
+      passingRun,
+      finding,
+      detectionRun,
+    ).length === 0,
+    "compliant repeat evidence should resolve the exact Option C component",
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          ...passingRun.metric_manifest,
+          metrics: optionCVisualMetrics({
+            componentIdentityHash: "a".repeat(64),
+          }),
+        },
+      },
+      finding,
+      detectionRun,
+    ).includes("resolution_measurement_identity_mismatch"),
+    "a different visual component must not resolve the finding",
+  );
+});
+
 Deno.test("resolution proof requires a matching passing observation", () => {
   const finding = {
     current_status: "open",
@@ -629,13 +897,7 @@ Deno.test("resolution proof requires a matching passing observation", () => {
   const touchDetectionRun = {
     ...detectionRun,
     metric_manifest: {
-      metrics: {
-        clickableAncestorPresent: false,
-        isActuallyInteractive: true,
-        minimumHeightDp: 23.24,
-        minimumWidthDp: 102.86,
-        thresholdDp: 48,
-      },
+      metrics: optionCTouchMetrics(),
       observationKind: "touch_target",
     },
     sentinel_key: "visual_product_experience_sentinel",
@@ -643,13 +905,10 @@ Deno.test("resolution proof requires a matching passing observation", () => {
   const touchPassingRun = {
     ...passingRun,
     metric_manifest: {
-      metrics: {
-        clickableAncestorPresent: false,
-        isActuallyInteractive: true,
-        minimumHeightDp: 48,
-        minimumWidthDp: 102.86,
-        thresholdDp: 48,
-      },
+      metrics: optionCTouchMetrics({
+        interactiveTargetHeight: 48,
+        targetClassification: "meets_platform_minimum",
+      }),
       observationKind: "touch_target",
     },
     sentinel_key: "visual_product_experience_sentinel",
@@ -659,7 +918,24 @@ Deno.test("resolution proof requires a matching passing observation", () => {
       touchPassingRun,
       finding,
       touchDetectionRun,
-    ).includes("resolution_component_identity_unavailable"),
-    "touch-target resolution must fail closed without a component identity",
+    ).length === 0,
+    "touch-target resolution must bind the exact component, family, baseline, and platform unit",
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...touchPassingRun,
+        metric_manifest: {
+          ...touchPassingRun.metric_manifest,
+          metrics: {
+            ...touchPassingRun.metric_manifest.metrics,
+            componentIdentityHash: "a".repeat(64),
+          },
+        },
+      },
+      finding,
+      touchDetectionRun,
+    ).includes("resolution_measurement_identity_mismatch"),
+    "a different component identity must not resolve a touch finding",
   );
 });

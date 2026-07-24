@@ -78,9 +78,27 @@ type DeterministicFindingProfile = Readonly<{
   suspectedLayer: string;
 }>;
 
+export type DeterministicVisualClassification =
+  | "accessibility_violation"
+  | "automation_failure"
+  | "baseline_ambiguity"
+  | "confirmed_baseline_violation"
+  | "content_data_absent"
+  | "false_positive"
+  | "insufficient_evidence"
+  | "provider_blocked"
+  | "route_specific_exception";
+
+type DeterministicVisualAssessment = Readonly<{
+  classification: DeterministicVisualClassification;
+  profile: DeterministicFindingProfile | null;
+}>;
+
 const SERVICE_IDENTITY = "cognitive_independent_evaluator";
 const INVOCATION_HEADER = "x-cognitive-evaluator-invocation";
 const MAX_REQUEST_BYTES = 32 * 1024;
+export const APPROVED_OPTION_C_BASELINE_HASH =
+  "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184";
 const LOWER_HEX_64 = /^[a-f0-9]{64}$/u;
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -141,6 +159,29 @@ const PHYSICAL_PROOF_STATUSES = new Set([
   "device_unavailable",
   "new_binary_or_ota_required",
 ]);
+const SURFACE_FAMILIES = new Set([
+  "standard_streaming_card",
+  "live_streaming_card",
+  "creator_streaming_card",
+  "featured_hero_card",
+  "vertical_post_card",
+  "compact_media_list_item",
+  "non_media_interactive_surface",
+]);
+const OPTION_C_TARGET_FAMILIES = new Set([
+  "standard_streaming_card",
+  "live_streaming_card",
+  "creator_streaming_card",
+]);
+const VERSIONED_EXCEPTION_FAMILIES = new Set([
+  "featured_hero_card",
+  "vertical_post_card",
+]);
+const PLATFORM_MEASUREMENT_UNITS = Object.freeze({
+  android: "dp",
+  ios: "pt",
+  web: "css_px",
+});
 const CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Headers":
     `authorization, x-client-info, apikey, content-type, ${INVOCATION_HEADER}`,
@@ -292,6 +333,836 @@ const candidateMatchesProfile = (
   candidate.severity === expected.severity &&
   candidate.confidence === expected.confidence &&
   candidate.reproductionState === expected.reproductionState;
+
+const visualAssessment = (
+  classification: DeterministicVisualClassification,
+  expectedProfile: DeterministicFindingProfile | null = null,
+): DeterministicVisualAssessment =>
+  Object.freeze({ classification, profile: expectedProfile });
+
+const finiteMetric = (
+  metrics: Record<string, unknown>,
+  key: string,
+  minimum = 0,
+  maximum = 100_000,
+): number | null => {
+  const value = metricNumber(metrics, key);
+  return value !== null && value >= minimum && value <= maximum ? value : null;
+};
+
+const integerMetric = (
+  metrics: Record<string, unknown>,
+  key: string,
+  minimum: number,
+  maximum: number,
+): number | null => {
+  const value = finiteMetric(metrics, key, minimum, maximum);
+  return value !== null && Number.isInteger(value) ? value : null;
+};
+
+const approximately = (
+  value: number,
+  expected: number,
+  tolerance: number,
+): boolean => Math.abs(value - expected) <= tolerance;
+
+const requiredVisualNumber = (
+  metrics: Record<string, unknown>,
+  key: string,
+): number | null => finiteMetric(metrics, key, 0, 10_000);
+
+const visualFinding = (
+  findingClass: string,
+  severity: string,
+): DeterministicVisualAssessment =>
+  visualAssessment(
+    "confirmed_baseline_violation",
+    profile(findingClass, "layout_density", severity, 1),
+  );
+
+const accessibilityFinding = (
+  findingClass: string,
+  severity: string,
+): DeterministicVisualAssessment =>
+  visualAssessment(
+    "accessibility_violation",
+    profile(findingClass, "layout_density", severity, 1),
+  );
+
+export const deterministicVisualClassification = (
+  run: StoredRun,
+  context: DetectionEvaluationContext = DEFAULT_EVALUATION_CONTEXT,
+): DeterministicVisualAssessment => {
+  const metrics = metricObject(run);
+  if (!metrics) return visualAssessment("insufficient_evidence");
+
+  const observedClassification = toText(metrics.observedClassification);
+  const conclude = (
+    assessment: DeterministicVisualAssessment,
+  ): DeterministicVisualAssessment => {
+    const expectedByClassification: Readonly<
+      Partial<Record<DeterministicVisualClassification, string>>
+    > = Object.freeze({
+      accessibility_violation: "accessibility_violation",
+      automation_failure: "automation_failure",
+      baseline_ambiguity: "baseline_ambiguity",
+      confirmed_baseline_violation: "confirmed_baseline_violation",
+      content_data_absent: "content_data_absence",
+      false_positive: "within_baseline",
+      provider_blocked: "provider_blocked",
+      route_specific_exception: "route_specific_exception",
+    });
+    const expectedObservedClassification =
+      expectedByClassification[assessment.classification];
+    return !expectedObservedClassification ||
+        observedClassification === expectedObservedClassification
+      ? assessment
+      : visualAssessment("baseline_ambiguity");
+  };
+
+  const automationStatus = toText(metrics.automationStatus);
+  if (["failed", "not_available"].includes(automationStatus)) {
+    return conclude(visualAssessment("automation_failure"));
+  }
+  if (automationStatus !== "observed") {
+    return visualAssessment("insufficient_evidence");
+  }
+
+  const evidenceQuality = toText(metrics.evidenceQuality);
+  const expectedEvidenceQuality = run.physical_proof_status ===
+      "installed_ui_observed"
+    ? "measured_installed"
+    : run.physical_proof_status === "simulator_observed"
+    ? "measured_simulator"
+    : "";
+  if (
+    evidenceQuality !== expectedEvidenceQuality ||
+    !LOWER_HEX_64.test(toText(metrics.evidenceQualityHash))
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+
+  const providerState = toText(metrics.providerState);
+  const contentState = toText(metrics.contentState);
+  if (providerState === "blocked") {
+    return conclude(visualAssessment("provider_blocked"));
+  }
+  if (["empty", "error"].includes(contentState)) {
+    return conclude(visualAssessment("content_data_absent"));
+  }
+  if (
+    !["healthy", "degraded", "not_applicable"].includes(providerState) ||
+    !["loaded", "partial", "not_applicable"].includes(contentState)
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+
+  const baselineState = toText(metrics.baselineState);
+  const comparisonHash = toText(metrics.baselineComparisonHash);
+  if (
+    baselineState !== "approved_baseline" ||
+    context.approvedVisualBaselineCount !== 1 ||
+    context.approvedVisualBaselineHash !== APPROVED_OPTION_C_BASELINE_HASH ||
+    comparisonHash !== APPROVED_OPTION_C_BASELINE_HASH ||
+    toText(metrics.baselineId) !==
+      "chillywood-product-experience-baseline-v1" ||
+    metricNumber(metrics, "baselineVersion") !== 1
+  ) {
+    return conclude(visualAssessment("baseline_ambiguity"));
+  }
+
+  const platform = toText(metrics.platform);
+  const measurementUnit = toText(metrics.measurementUnit);
+  const expectedMeasurementUnit = PLATFORM_MEASUREMENT_UNITS[
+    run.platform as keyof typeof PLATFORM_MEASUREMENT_UNITS
+  ];
+  const surfaceFamily = toText(metrics.surfaceFamily);
+  const componentIdentityHash = toText(metrics.componentIdentityHash);
+  const routeFamilyMappingHash = toText(metrics.routeFamilyMappingHash);
+  const preferredThreshold = metricNumber(
+    metrics,
+    "interactivePreferredThreshold",
+  );
+  const applicableMinimumThreshold = metricNumber(
+    metrics,
+    "interactiveApplicableMinimumThreshold",
+  );
+  const expectedPreferredThreshold = run.platform === "android" ? 48 : 44;
+  const expectedApplicableMinimum = run.platform === "web"
+    ? 24
+    : expectedPreferredThreshold;
+  if (
+    platform !== run.platform ||
+    !expectedMeasurementUnit ||
+    measurementUnit !== expectedMeasurementUnit ||
+    !SURFACE_FAMILIES.has(surfaceFamily) ||
+    !LOWER_HEX_64.test(componentIdentityHash) ||
+    !LOWER_HEX_64.test(routeFamilyMappingHash) ||
+    preferredThreshold !== expectedPreferredThreshold ||
+    applicableMinimumThreshold !== expectedApplicableMinimum
+  ) {
+    return conclude(visualAssessment("baseline_ambiguity"));
+  }
+  if (
+    !["portrait", "landscape"].includes(toText(metrics.orientation)) ||
+    !["compact", "medium", "expanded"].includes(toText(metrics.windowClass)) ||
+    ![
+      "horizontal_row",
+      "grid",
+      "full_width",
+      "compact_list",
+      "non_media",
+    ].includes(toText(metrics.layoutMode)) ||
+    ![
+      "phone_portrait_390x844",
+      "tablet_portrait_1024x1366",
+      "non_reference",
+    ].includes(toText(metrics.referenceViewport)) ||
+    !["option_c_default", "explicit_versioned_exception"].includes(
+      toText(metrics.baselineApplicability),
+    ) ||
+    !["16:9", "9:16", "4:5", "1:1", "not_applicable"].includes(
+      toText(metrics.aspectRatioClass),
+    ) ||
+    typeof metrics.creatorIdentityVisible !== "boolean" ||
+    typeof metrics.liveStateVisible !== "boolean" ||
+    typeof metrics.liveContent !== "boolean"
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+  const screenDensityDpi = metrics.screenDensityDpi;
+  if (
+    (
+      run.platform === "android" &&
+      (
+        typeof screenDensityDpi !== "number" ||
+        !Number.isFinite(screenDensityDpi) ||
+        screenDensityDpi < 72 ||
+        screenDensityDpi > 1000
+      )
+    ) ||
+    (run.platform !== "android" && screenDensityDpi !== null)
+  ) {
+    return conclude(visualAssessment("baseline_ambiguity"));
+  }
+
+  const interactiveTargetWidth = requiredVisualNumber(
+    metrics,
+    "interactiveTargetWidth",
+  );
+  const interactiveTargetHeight = requiredVisualNumber(
+    metrics,
+    "interactiveTargetHeight",
+  );
+  if (
+    interactiveTargetWidth === null ||
+    interactiveTargetHeight === null
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+  if (
+    typeof metrics.accessibilityNamePresent !== "boolean" ||
+    typeof metrics.accessibilityRolePresent !== "boolean"
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+  if (
+    metrics.accessibilityNamePresent !== true ||
+    metrics.accessibilityRolePresent !== true
+  ) {
+    return conclude(
+      visualAssessment(
+        "accessibility_violation",
+        profile(
+          "visual_accessibility_name_or_role_missing",
+          "installed_ui_state",
+          "medium",
+          1,
+        ),
+      ),
+    );
+  }
+  const minimumInteractiveTarget = Math.min(
+    interactiveTargetWidth,
+    interactiveTargetHeight,
+  );
+  if (run.platform === "android" && minimumInteractiveTarget < 48) {
+    return conclude(
+      accessibilityFinding("android_touch_target_below_48dp", "medium"),
+    );
+  }
+  if (run.platform === "ios" && minimumInteractiveTarget < 44) {
+    return conclude(
+      accessibilityFinding("ios_touch_target_below_44pt", "medium"),
+    );
+  }
+  if (run.platform === "web" && minimumInteractiveTarget < 24) {
+    return conclude(
+      accessibilityFinding(
+        "web_touch_target_below_wcag_24csspx",
+        "medium",
+      ),
+    );
+  }
+  if (run.platform === "web" && minimumInteractiveTarget < 44) {
+    return conclude(
+      accessibilityFinding(
+        "web_touch_target_below_preferred_44csspx",
+        "low",
+      ),
+    );
+  }
+
+  {
+    const mediaWidth = requiredVisualNumber(metrics, "mediaFrameWidth");
+    const mediaHeight = requiredVisualNumber(metrics, "mediaFrameHeight");
+    const containerWidth = requiredVisualNumber(
+      metrics,
+      "totalCardContainerWidth",
+    );
+    const containerHeight = requiredVisualNumber(
+      metrics,
+      "totalCardContainerHeight",
+    );
+    const metadataHeight = requiredVisualNumber(metrics, "metadataBandHeight");
+    const measuredViewportWidth = requiredVisualNumber(
+      metrics,
+      "viewportWidth",
+    );
+    const measuredViewportHeight = requiredVisualNumber(
+      metrics,
+      "viewportHeight",
+    );
+    const measuredWidthRatio = finiteMetric(
+      metrics,
+      "cardViewportWidthRatio",
+      0,
+      2,
+    );
+    const measuredHeightRatio = finiteMetric(
+      metrics,
+      "cardViewportHeightRatio",
+      0,
+      2,
+    );
+    if (
+      mediaWidth === null ||
+      mediaHeight === null ||
+      containerWidth === null ||
+      containerHeight === null ||
+      metadataHeight === null ||
+      measuredViewportWidth === null ||
+      measuredViewportHeight === null ||
+      measuredWidthRatio === null ||
+      measuredHeightRatio === null
+    ) {
+      return visualAssessment("insufficient_evidence");
+    }
+    const nonMedia = surfaceFamily === "non_media_interactive_surface";
+    if (
+      measuredViewportWidth <= 0 ||
+      measuredViewportHeight <= 0 ||
+      containerWidth <= 0 ||
+      containerHeight <= 0 ||
+      (
+        nonMedia &&
+        (
+          mediaWidth !== 0 ||
+          mediaHeight !== 0 ||
+          metadataHeight !== 0 ||
+          toText(metrics.aspectRatioClass) !== "not_applicable"
+        )
+      ) ||
+      (
+        !nonMedia &&
+        (
+          mediaWidth <= 0 ||
+          mediaHeight <= 0 ||
+          containerWidth < mediaWidth ||
+          containerHeight < mediaHeight + metadataHeight
+        )
+      ) ||
+      !approximately(
+        measuredWidthRatio,
+        containerWidth / measuredViewportWidth,
+        0.02,
+      ) ||
+      !approximately(
+        measuredHeightRatio,
+        containerHeight / measuredViewportHeight,
+        0.02,
+      )
+    ) {
+      return conclude(visualAssessment("automation_failure"));
+    }
+  }
+
+  const exceptionVersioned = metrics.exceptionVersioned;
+  if (VERSIONED_EXCEPTION_FAMILIES.has(surfaceFamily)) {
+    const expectedExceptionType = surfaceFamily === "featured_hero_card"
+      ? "featured_hero"
+      : "vertical_short_form";
+    if (
+      exceptionVersioned !== true ||
+      toText(metrics.baselineApplicability) !==
+        "explicit_versioned_exception" ||
+      toText(metrics.exceptionType) !== expectedExceptionType ||
+      !LOWER_HEX_64.test(toText(metrics.exceptionContractHash))
+    ) {
+      return conclude(visualAssessment("baseline_ambiguity"));
+    }
+    if (surfaceFamily === "featured_hero_card") {
+      return toText(metrics.featuredPlacement) === "first_row"
+        ? conclude(visualAssessment("route_specific_exception"))
+        : conclude(
+          visualFinding("visual_featured_hero_outside_first_row", "medium"),
+        );
+    }
+    const aspectRatioClass = toText(metrics.aspectRatioClass);
+    const verticalMediaWidth = requiredVisualNumber(metrics, "mediaFrameWidth");
+    const verticalMediaHeight = requiredVisualNumber(
+      metrics,
+      "mediaFrameHeight",
+    );
+    const expectedVerticalRatio = aspectRatioClass === "9:16"
+      ? 9 / 16
+      : aspectRatioClass === "4:5"
+      ? 4 / 5
+      : null;
+    return expectedVerticalRatio !== null &&
+        verticalMediaWidth !== null &&
+        verticalMediaHeight !== null &&
+        verticalMediaHeight > 0 &&
+        Math.abs(
+            verticalMediaWidth / verticalMediaHeight - expectedVerticalRatio,
+          ) <= 0.02
+      ? conclude(visualAssessment("route_specific_exception"))
+      : conclude(
+        visualFinding("visual_vertical_post_aspect_ratio_deviation", "medium"),
+      );
+  }
+  if (
+    ["compact_media_list_item", "non_media_interactive_surface"].includes(
+      surfaceFamily,
+    )
+  ) {
+    const expectedExceptionType = surfaceFamily === "compact_media_list_item"
+      ? "compact_media_list"
+      : "non_media_surface";
+    return exceptionVersioned === true &&
+        toText(metrics.baselineApplicability) ===
+          "explicit_versioned_exception" &&
+        toText(metrics.exceptionType) === expectedExceptionType &&
+        LOWER_HEX_64.test(toText(metrics.exceptionContractHash)) &&
+        toText(metrics.featuredPlacement) === "not_applicable"
+      ? conclude(visualAssessment("route_specific_exception"))
+      : conclude(visualAssessment("baseline_ambiguity"));
+  }
+  if (
+    !OPTION_C_TARGET_FAMILIES.has(surfaceFamily) ||
+    exceptionVersioned !== false ||
+    toText(metrics.baselineApplicability) !== "option_c_default" ||
+    toText(metrics.exceptionType) !== "none" ||
+    metrics.exceptionContractHash !== null ||
+    toText(metrics.featuredPlacement) !== "not_applicable"
+  ) {
+    return conclude(visualAssessment("baseline_ambiguity"));
+  }
+
+  const mediaFrameWidth = requiredVisualNumber(metrics, "mediaFrameWidth");
+  const mediaFrameHeight = requiredVisualNumber(metrics, "mediaFrameHeight");
+  const totalCardContainerWidth = requiredVisualNumber(
+    metrics,
+    "totalCardContainerWidth",
+  );
+  const totalCardContainerHeight = requiredVisualNumber(
+    metrics,
+    "totalCardContainerHeight",
+  );
+  const metadataBandHeight = requiredVisualNumber(
+    metrics,
+    "metadataBandHeight",
+  );
+  const viewportWidth = requiredVisualNumber(metrics, "viewportWidth");
+  const viewportHeight = requiredVisualNumber(metrics, "viewportHeight");
+  const cardViewportWidthRatio = finiteMetric(
+    metrics,
+    "cardViewportWidthRatio",
+    0,
+    10,
+  );
+  const cardViewportHeightRatio = finiteMetric(
+    metrics,
+    "cardViewportHeightRatio",
+    0,
+    10,
+  );
+  const horizontalCardsVisible = finiteMetric(
+    metrics,
+    "horizontalCardsVisible",
+    0,
+    100,
+  );
+  const cardsAboveFold = integerMetric(metrics, "cardsAboveFold", 0, 100);
+  const horizontalGap = requiredVisualNumber(metrics, "horizontalGap");
+  const verticalRowGap = requiredVisualNumber(metrics, "verticalRowGap");
+  const titleLineCount = integerMetric(metrics, "titleLineCount", 0, 20);
+  const metadataLineCount = integerMetric(metrics, "metadataLineCount", 0, 20);
+  const horizontalMargin = requiredVisualNumber(metrics, "horizontalMargin");
+  const columnGap = requiredVisualNumber(metrics, "columnGap");
+  const columnCount = integerMetric(metrics, "columnCount", 1, 12);
+  if (
+    mediaFrameWidth === null ||
+    mediaFrameHeight === null ||
+    totalCardContainerWidth === null ||
+    totalCardContainerHeight === null ||
+    metadataBandHeight === null ||
+    viewportWidth === null ||
+    viewportHeight === null ||
+    cardViewportWidthRatio === null ||
+    cardViewportHeightRatio === null ||
+    horizontalCardsVisible === null ||
+    cardsAboveFold === null ||
+    horizontalGap === null ||
+    verticalRowGap === null ||
+    titleLineCount === null ||
+    metadataLineCount === null ||
+    horizontalMargin === null ||
+    columnGap === null ||
+    columnCount === null ||
+    typeof metrics.creatorIdentityVisible !== "boolean" ||
+    typeof metrics.liveStateVisible !== "boolean" ||
+    typeof metrics.liveContent !== "boolean"
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+  if (
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    mediaFrameWidth <= 0 ||
+    mediaFrameHeight <= 0 ||
+    totalCardContainerWidth < mediaFrameWidth ||
+    totalCardContainerHeight < mediaFrameHeight + metadataBandHeight ||
+    !approximately(
+      cardViewportWidthRatio,
+      totalCardContainerWidth / viewportWidth,
+      0.02,
+    ) ||
+    !approximately(
+      cardViewportHeightRatio,
+      totalCardContainerHeight / viewportHeight,
+      0.02,
+    )
+  ) {
+    return conclude(visualAssessment("automation_failure"));
+  }
+  if (metrics.creatorIdentityVisible !== true) {
+    return conclude(
+      visualFinding("visual_creator_identity_missing", "medium"),
+    );
+  }
+  if (
+    (
+      surfaceFamily === "live_streaming_card" ||
+      metrics.liveContent === true
+    ) &&
+    metrics.liveStateVisible !== true
+  ) {
+    return conclude(visualFinding("visual_live_state_missing", "medium"));
+  }
+  if (titleLineCount > 2 || metadataLineCount > 2) {
+    return conclude(
+      visualFinding("visual_option_c_text_band_deviation", "medium"),
+    );
+  }
+  if (
+    toText(metrics.aspectRatioClass) !== "16:9" ||
+    Math.abs(mediaFrameWidth / mediaFrameHeight - 16 / 9) > 0.02
+  ) {
+    return conclude(
+      visualFinding("visual_option_c_aspect_ratio_deviation", "medium"),
+    );
+  }
+
+  const referenceViewport = toText(metrics.referenceViewport);
+  const orientation = toText(metrics.orientation);
+  const windowClass = toText(metrics.windowClass);
+  const layoutMode = toText(metrics.layoutMode);
+  if (referenceViewport === "phone_portrait_390x844") {
+    if (
+      viewportWidth !== 390 ||
+      viewportHeight !== 844 ||
+      orientation !== "portrait" ||
+      windowClass !== "compact" ||
+      layoutMode !== "horizontal_row" ||
+      !approximately(mediaFrameWidth, 252, 2) ||
+      !approximately(mediaFrameHeight, 142, 2) ||
+      !approximately(horizontalCardsVisible, 1.42, 0.07) ||
+      cardsAboveFold < 3 ||
+      cardsAboveFold > 4 ||
+      !approximately(horizontalMargin, 16, 2) ||
+      !approximately(horizontalGap, 12, 2) ||
+      !approximately(verticalRowGap, 20, 2) ||
+      columnCount !== 1
+    ) {
+      return conclude(
+        visualFinding(
+          "visual_option_c_phone_portrait_deviation",
+          "medium",
+        ),
+      );
+    }
+  } else if (referenceViewport === "tablet_portrait_1024x1366") {
+    if (
+      viewportWidth !== 1024 ||
+      viewportHeight !== 1366 ||
+      orientation !== "portrait" ||
+      !["medium", "expanded"].includes(windowClass) ||
+      layoutMode !== "grid" ||
+      !approximately(mediaFrameWidth, 307, 2) ||
+      !approximately(mediaFrameHeight, 173, 2) ||
+      !approximately(horizontalCardsVisible, 3, 0.1) ||
+      cardsAboveFold < 6 ||
+      cardsAboveFold > 9 ||
+      !approximately(horizontalMargin, 32, 2) ||
+      !approximately(columnGap, 20, 2) ||
+      !approximately(verticalRowGap, 24, 2) ||
+      columnCount !== 3
+    ) {
+      return conclude(
+        visualFinding(
+          "visual_option_c_tablet_portrait_deviation",
+          "medium",
+        ),
+      );
+    }
+  } else if (referenceViewport === "non_reference") {
+    const responsiveLayoutValid = (
+      windowClass === "compact" &&
+      orientation === "portrait" &&
+      layoutMode === "horizontal_row" &&
+      columnCount === 1
+    ) ||
+      (
+        windowClass === "compact" &&
+        orientation === "landscape" &&
+        layoutMode === "grid" &&
+        columnCount === 2
+      ) ||
+      (
+        ["medium", "expanded"].includes(windowClass) &&
+        layoutMode === "grid" &&
+        [3, 4].includes(columnCount)
+      );
+    if (!responsiveLayoutValid) {
+      return conclude(
+        visualFinding("visual_option_c_responsive_deviation", "medium"),
+      );
+    }
+  } else {
+    return conclude(visualAssessment("baseline_ambiguity"));
+  }
+  return conclude(visualAssessment("false_positive"));
+};
+
+export const deterministicTouchTargetClassification = (
+  run: StoredRun,
+  context: DetectionEvaluationContext = DEFAULT_EVALUATION_CONTEXT,
+): DeterministicVisualAssessment => {
+  const metrics = metricObject(run);
+  if (!metrics) return visualAssessment("insufficient_evidence");
+
+  const automationStatus = toText(metrics.automationStatus);
+  if (["failed", "not_available"].includes(automationStatus)) {
+    return visualAssessment("automation_failure");
+  }
+  if (automationStatus !== "observed") {
+    return visualAssessment("insufficient_evidence");
+  }
+  const expectedEvidenceQuality = run.physical_proof_status ===
+      "installed_ui_observed"
+    ? "measured_installed"
+    : run.physical_proof_status === "simulator_observed"
+    ? "measured_simulator"
+    : "";
+  if (
+    toText(metrics.evidenceQuality) !== expectedEvidenceQuality ||
+    !LOWER_HEX_64.test(toText(metrics.evidenceQualityHash))
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+  if (toText(metrics.providerState) === "blocked") {
+    return visualAssessment("provider_blocked");
+  }
+  if (["empty", "error"].includes(toText(metrics.contentState))) {
+    return visualAssessment("content_data_absent");
+  }
+  if (
+    !["healthy", "degraded", "not_applicable"].includes(
+      toText(metrics.providerState),
+    ) ||
+    !["loaded", "partial", "not_applicable"].includes(
+      toText(metrics.contentState),
+    )
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+
+  const expectedMeasurementUnit = PLATFORM_MEASUREMENT_UNITS[
+    run.platform as keyof typeof PLATFORM_MEASUREMENT_UNITS
+  ];
+  const expectedPreferredThreshold = run.platform === "android" ? 48 : 44;
+  const expectedApplicableMinimum = run.platform === "web"
+    ? 24
+    : expectedPreferredThreshold;
+  if (
+    toText(metrics.platform) !== run.platform ||
+    !expectedMeasurementUnit ||
+    toText(metrics.measurementUnit) !== expectedMeasurementUnit ||
+    !SURFACE_FAMILIES.has(toText(metrics.surfaceFamily)) ||
+    metricNumber(metrics, "preferredThreshold") !==
+      expectedPreferredThreshold ||
+    metricNumber(metrics, "applicableMinimumThreshold") !==
+      expectedApplicableMinimum ||
+    toText(metrics.baselineId) !==
+      "chillywood-product-experience-baseline-v1" ||
+    metricNumber(metrics, "baselineVersion") !== 1 ||
+    toText(metrics.baselineState) !== "approved_baseline" ||
+    toText(metrics.baselineComparisonHash) !==
+      APPROVED_OPTION_C_BASELINE_HASH ||
+    context.approvedVisualBaselineCount !== 1 ||
+    context.approvedVisualBaselineHash !== APPROVED_OPTION_C_BASELINE_HASH ||
+    !LOWER_HEX_64.test(toText(metrics.componentIdentityHash)) ||
+    !LOWER_HEX_64.test(toText(metrics.routeFamilyMappingHash))
+  ) {
+    return visualAssessment("baseline_ambiguity");
+  }
+  const screenDensityDpi = metrics.screenDensityDpi;
+  if (
+    (
+      run.platform === "android" &&
+      (
+        typeof screenDensityDpi !== "number" ||
+        !Number.isFinite(screenDensityDpi) ||
+        screenDensityDpi < 72 ||
+        screenDensityDpi > 1000
+      )
+    ) ||
+    (run.platform !== "android" && screenDensityDpi !== null)
+  ) {
+    return visualAssessment("baseline_ambiguity");
+  }
+
+  const exceptionVersioned = metrics.exceptionVersioned;
+  if (exceptionVersioned === true) {
+    if (
+      ![
+        "featured_hero",
+        "vertical_short_form",
+        "compact_media_list",
+        "non_media_surface",
+      ].includes(toText(metrics.exceptionType)) ||
+      !LOWER_HEX_64.test(toText(metrics.exceptionContractHash))
+    ) {
+      return visualAssessment("baseline_ambiguity");
+    }
+  } else if (
+    exceptionVersioned !== false ||
+    toText(metrics.exceptionType) !== "none" ||
+    metrics.exceptionContractHash !== null
+  ) {
+    return visualAssessment("baseline_ambiguity");
+  }
+
+  const targetWidth = requiredVisualNumber(metrics, "interactiveTargetWidth");
+  const targetHeight = requiredVisualNumber(metrics, "interactiveTargetHeight");
+  if (
+    targetWidth === null ||
+    targetHeight === null ||
+    typeof metrics.interactiveAncestorPresent !== "boolean" ||
+    typeof metrics.isActuallyInteractive !== "boolean" ||
+    typeof metrics.accessibilityNamePresent !== "boolean" ||
+    typeof metrics.accessibilityRolePresent !== "boolean"
+  ) {
+    return visualAssessment("insufficient_evidence");
+  }
+  if (metrics.isActuallyInteractive !== true) {
+    return toText(metrics.targetClassification) === "not_interactive"
+      ? visualAssessment("false_positive")
+      : visualAssessment("automation_failure");
+  }
+  let effectiveWidth = targetWidth;
+  let effectiveHeight = targetHeight;
+  if (metrics.interactiveAncestorPresent === true) {
+    const ancestorWidth = requiredVisualNumber(
+      metrics,
+      "interactiveAncestorWidth",
+    );
+    const ancestorHeight = requiredVisualNumber(
+      metrics,
+      "interactiveAncestorHeight",
+    );
+    if (ancestorWidth === null || ancestorHeight === null) {
+      return visualAssessment("insufficient_evidence");
+    }
+    effectiveWidth = ancestorWidth;
+    effectiveHeight = ancestorHeight;
+  } else if (
+    metrics.interactiveAncestorWidth !== null ||
+    metrics.interactiveAncestorHeight !== null
+  ) {
+    return visualAssessment("automation_failure");
+  }
+
+  const derivedTargetClassification = run.platform === "web"
+    ? effectiveWidth >= 44 && effectiveHeight >= 44
+      ? "meets_platform_preferred"
+      : effectiveWidth >= 24 && effectiveHeight >= 24
+      ? "meets_wcag_aa_minimum_only"
+      : "below_wcag_aa_minimum"
+    : effectiveWidth >= expectedPreferredThreshold &&
+        effectiveHeight >= expectedPreferredThreshold
+    ? "meets_platform_minimum"
+    : "below_platform_minimum";
+  if (toText(metrics.targetClassification) !== derivedTargetClassification) {
+    return visualAssessment("automation_failure");
+  }
+  if (
+    metrics.accessibilityNamePresent !== true ||
+    metrics.accessibilityRolePresent !== true
+  ) {
+    return visualAssessment(
+      "accessibility_violation",
+      profile(
+        "touch_target_accessibility_name_or_role_missing",
+        "installed_ui_state",
+        "medium",
+        1,
+      ),
+    );
+  }
+  if (derivedTargetClassification === "below_platform_minimum") {
+    return accessibilityFinding(
+      run.platform === "android"
+        ? "android_touch_target_below_48dp"
+        : "ios_touch_target_below_44pt",
+      "medium",
+    );
+  }
+  if (derivedTargetClassification === "below_wcag_aa_minimum") {
+    return accessibilityFinding(
+      "web_touch_target_below_wcag_24csspx",
+      "medium",
+    );
+  }
+  if (derivedTargetClassification === "meets_wcag_aa_minimum_only") {
+    return accessibilityFinding(
+      "web_touch_target_below_preferred_44csspx",
+      "low",
+    );
+  }
+  return visualAssessment("false_positive");
+};
 
 const liveKitProfile = (
   failureCategory: string,
@@ -461,26 +1332,10 @@ export const deterministicDetectionReasons = (
   }
 
   if (observationKind === "touch_target") {
-    const threshold = metricNumber(metrics, "thresholdDp");
-    const width = metricNumber(metrics, "minimumWidthDp");
-    const height = metricNumber(metrics, "minimumHeightDp");
-    if (
-      run.platform !== "android" ||
-      threshold !== 48 ||
-      width === null ||
-      height === null ||
-      (width >= threshold && height >= threshold) ||
-      metrics.isActuallyInteractive !== true ||
-      metrics.clickableAncestorPresent !== false
-    ) {
-      reasons.add("touch_target_classification_rejected");
-    } else {
-      expectedProfile = profile(
-        "android_touch_target_below_48dp",
-        "layout_density",
-        "medium",
-        0.99,
-      );
+    const assessment = deterministicTouchTargetClassification(run, context);
+    expectedProfile = assessment.profile;
+    if (!expectedProfile) {
+      reasons.add(`touch_target_${assessment.classification}`);
     }
   } else if (observationKind === "search_accessibility") {
     const confirmedGap = metrics.inputPresent === true &&
@@ -557,32 +1412,10 @@ export const deterministicDetectionReasons = (
       reasons.add("livekit_classification_rejected");
     }
   } else if (observationKind === "visual_layout") {
-    const baselineState = toText(metrics.baselineState);
-    const comparisonHash = toText(metrics.baselineComparisonHash);
-    if (
-      baselineState === "needs_product_baseline_review" &&
-      context.approvedVisualBaselineCount === 0
-    ) {
-      expectedProfile = profile(
-        "visual_product_baseline_missing",
-        "layout_density",
-        "info",
-        1,
-        "design_baseline_missing",
-      );
-    } else if (
-      baselineState === "approved_baseline" &&
-      context.approvedVisualBaselineCount === 1 &&
-      context.approvedVisualBaselineHash === comparisonHash
-    ) {
-      expectedProfile = profile(
-        "visual_layout_approved_baseline_deviation",
-        "layout_density",
-        "medium",
-        1,
-      );
-    } else {
-      reasons.add("visual_layout_approved_baseline_required");
+    const assessment = deterministicVisualClassification(run, context);
+    expectedProfile = assessment.profile;
+    if (!expectedProfile) {
+      reasons.add(`visual_${assessment.classification}`);
     }
   } else if (observationKind === "installed_journey") {
     expectedProfile = installedJourneyProfile(metrics);
@@ -656,14 +1489,69 @@ export const deterministicResolutionReasons = (
   if (!resolutionMetrics || !detectionMetrics) {
     reasons.add("resolution_metric_manifest_missing");
   } else if (observationKind === "touch_target") {
-    reasons.add("resolution_component_identity_unavailable");
+    if (
+      toText(resolutionMetrics.componentIdentityHash) !==
+        toText(detectionMetrics.componentIdentityHash) ||
+      toText(resolutionMetrics.routeFamilyMappingHash) !==
+        toText(detectionMetrics.routeFamilyMappingHash) ||
+      toText(resolutionMetrics.surfaceFamily) !==
+        toText(detectionMetrics.surfaceFamily) ||
+      toText(resolutionMetrics.platform) !==
+        toText(detectionMetrics.platform) ||
+      toText(resolutionMetrics.measurementUnit) !==
+        toText(detectionMetrics.measurementUnit) ||
+      toText(resolutionMetrics.baselineId) !==
+        toText(detectionMetrics.baselineId) ||
+      metricNumber(resolutionMetrics, "baselineVersion") !==
+        metricNumber(detectionMetrics, "baselineVersion") ||
+      toText(resolutionMetrics.baselineComparisonHash) !==
+        toText(detectionMetrics.baselineComparisonHash) ||
+      metricNumber(resolutionMetrics, "preferredThreshold") !==
+        metricNumber(detectionMetrics, "preferredThreshold") ||
+      metricNumber(resolutionMetrics, "applicableMinimumThreshold") !==
+        metricNumber(detectionMetrics, "applicableMinimumThreshold")
+    ) {
+      reasons.add("resolution_measurement_identity_mismatch");
+    }
+    if (
+      deterministicTouchTargetClassification(run, {
+        approvedVisualBaselineCount: 1,
+        approvedVisualBaselineHash: APPROVED_OPTION_C_BASELINE_HASH,
+      }).classification !== "false_positive"
+    ) {
+      reasons.add("resolution_accessibility_target_not_satisfied");
+    }
   } else if (observationKind === "visual_layout") {
     if (
+      toText(resolutionMetrics.componentIdentityHash) !==
+        toText(detectionMetrics.componentIdentityHash) ||
+      toText(resolutionMetrics.routeFamilyMappingHash) !==
+        toText(detectionMetrics.routeFamilyMappingHash) ||
+      toText(resolutionMetrics.surfaceFamily) !==
+        toText(detectionMetrics.surfaceFamily) ||
+      toText(resolutionMetrics.platform) !==
+        toText(detectionMetrics.platform) ||
+      toText(resolutionMetrics.measurementUnit) !==
+        toText(detectionMetrics.measurementUnit) ||
+      toText(resolutionMetrics.baselineId) !==
+        toText(detectionMetrics.baselineId) ||
+      metricNumber(resolutionMetrics, "baselineVersion") !==
+        metricNumber(detectionMetrics, "baselineVersion") ||
+      toText(resolutionMetrics.referenceViewport) !==
+        toText(detectionMetrics.referenceViewport) ||
       toText(resolutionMetrics.baselineState) !== "approved_baseline" ||
       toText(resolutionMetrics.baselineComparisonHash) !==
         toText(detectionMetrics.baselineComparisonHash)
     ) {
       reasons.add("resolution_measurement_identity_mismatch");
+    }
+    if (
+      deterministicVisualClassification(run, {
+        approvedVisualBaselineCount: 1,
+        approvedVisualBaselineHash: APPROVED_OPTION_C_BASELINE_HASH,
+      }).classification !== "false_positive"
+    ) {
+      reasons.add("resolution_visual_baseline_not_satisfied");
     }
   } else if (observationKind === "installed_journey") {
     if (
@@ -778,7 +1666,9 @@ const readDetectionEvaluationContext = async (
   run: StoredRun,
 ): Promise<DetectionEvaluationContext | null> => {
   if (
-    toText(run.metric_manifest.observationKind) !== "visual_layout"
+    !["visual_layout", "touch_target"].includes(
+      toText(run.metric_manifest.observationKind),
+    )
   ) {
     return DEFAULT_EVALUATION_CONTEXT;
   }
