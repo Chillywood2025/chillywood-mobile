@@ -403,6 +403,18 @@ begin
      or p_environment <> 'production'
      or p_provider <> 'github'
      or p_operation <> 'github_open_draft_pr'
+     or not exists (
+       select 1
+       from public.cognitive_level01_credential_attestations attestation
+       where attestation.task_id = p_task_id
+         and attestation.project_id = p_project_id
+         and attestation.platform = p_platform
+         and attestation.environment = p_environment
+         and attestation.credential_kind = 'github_draft_pr'
+         and attestation.state = 'configured'
+         and attestation.verified_at <= now_at
+         and attestation.expires_at > now_at
+     )
      or p_branch_name !~
        '^codex/cognitive-canary/[a-z0-9][a-z0-9/_-]{2,80}$'
      or p_branch_name ~* '(^|/)(main|master|release)(/|$)'

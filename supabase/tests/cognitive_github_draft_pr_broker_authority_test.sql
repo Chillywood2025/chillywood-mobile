@@ -284,5 +284,18 @@ select ok(
   'authorization is bound to exact source state and filename-level protected scopes'
 );
 
+select ok(
+  pg_get_functiondef(
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+  ) like '%cognitive_level01_credential_attestations%'
+  and pg_get_functiondef(
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+  ) like '%credential_kind = ''github_draft_pr''%'
+  and pg_get_functiondef(
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+  ) like '%attestation.expires_at > now_at%',
+  'draft execution requires a current trusted GitHub credential attestation'
+);
+
 select * from finish();
 rollback;
