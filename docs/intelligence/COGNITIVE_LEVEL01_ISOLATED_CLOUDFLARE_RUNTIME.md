@@ -39,7 +39,12 @@ Only sanitized classifications are retained:
 
 The bounded replacement expires on 2026-07-31. Seven days is sufficient for
 this activation window; it remains renewable and is not converted into a
-never-expiring credential.
+never-expiring credential. Future deployments do not depend on this token
+remaining continuously valid: when another bounded deployment is approved,
+reuse it only if it is still `ACTIVE`, `NOT_EXPOSED`, `SCOPE_MATCH`, and
+`EXPIRY_ACCEPTABLE`; otherwise issue or renew a least-privilege deployment
+credential for that deployment window. Expiration while no deployment is in
+progress is an intended fail-closed state, not a runtime outage.
 
 The inherited credential is not being replaced merely because Chi'llywood is
 pre-launch. Replacement is required by the Owner's credential policy because

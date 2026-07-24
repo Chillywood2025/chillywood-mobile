@@ -334,6 +334,30 @@ Deno.test("sentinel evaluator accepts only exact bounded resolution evidence", (
   }
 });
 
+Deno.test("bounded LiveKit failure no-finding attestation accepts only a run identity", () => {
+  const payload = {
+    action: "attest_livekit_bounded_failure_no_finding",
+    sentinelRunId: "55555555-5555-4555-8555-555555555555",
+  };
+  assert(
+    isStrictSentinelEvaluationPayload(payload),
+    "bounded fixture attestation payload rejected",
+  );
+  for (
+    const rejected of [
+      { ...payload, findingCreated: false },
+      { ...payload, derivedFailureCategory: "token_backend_failure" },
+      { ...payload, evaluatorOutputHash: "9".repeat(64) },
+      { ...payload, sentinelRunId: "not-a-uuid" },
+    ]
+  ) {
+    assert(
+      !isStrictSentinelEvaluationPayload(rejected),
+      "caller-controlled fixture attestation material accepted",
+    );
+  }
+});
+
 Deno.test("Android touch classification is derived from stored run metrics", () => {
   const payload = validPayload();
   const run = storedRun("touch_target", optionCTouchMetrics());
@@ -884,6 +908,42 @@ Deno.test("LiveKit failure category is independently recomputed from exact evide
     deterministicDetectionReasons(run, candidate).length === 0,
     "a correctly declared independently derived LiveKit failure must pass",
   );
+  const ordinaryFailureRun = {
+    ...run,
+    metric_manifest: {
+      ...run.metric_manifest,
+      metrics: {
+        ...tokenFailure,
+        backgroundForegroundRecovery: false,
+        backgrounded: false,
+        foregrounded: false,
+        scenarioType: "success_baseline",
+      },
+    },
+  };
+  assert(
+    deterministicDetectionReasons(ordinaryFailureRun, candidate).length === 0,
+    "an ordinary LiveKit failure must remain eligible for a product finding",
+  );
+  const fixtureFailureReasons = deterministicDetectionReasons(
+    {
+      ...ordinaryFailureRun,
+      metric_manifest: {
+        ...ordinaryFailureRun.metric_manifest,
+        metrics: {
+          ...ordinaryFailureRun.metric_manifest.metrics,
+          scenarioType: "bounded_failure_fixture",
+        },
+      },
+    },
+    candidate,
+  );
+  assert(
+    fixtureFailureReasons.length === 1 &&
+      fixtureFailureReasons[0] ===
+        "livekit_synthetic_fixture_not_product_finding",
+    "a synthetic failure fixture must never become a product finding",
+  );
   const mislabeledRun = {
     ...run,
     metric_manifest: {
@@ -1049,6 +1109,39 @@ Deno.test("LiveKit resolution independently revalidates installed stages", () =>
       detectionRun,
     ).includes("resolution_livekit_failure_category_mismatch"),
     "a caller-mislabeled LiveKit pass must not resolve a finding",
+  );
+  const fixtureDetectionRun = {
+    ...detectionRun,
+    metric_manifest: {
+      ...detectionRun.metric_manifest,
+      metrics: {
+        ...detectionRun.metric_manifest.metrics,
+        backgroundForegroundRecovery: false,
+        backgrounded: false,
+        foregrounded: false,
+        scenarioType: "bounded_failure_fixture",
+      },
+    },
+  };
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          ...passingRun.metric_manifest,
+          metrics: {
+            ...passingRun.metric_manifest.metrics,
+            backgroundForegroundRecovery: false,
+            backgrounded: false,
+            foregrounded: false,
+            scenarioType: "bounded_failure_fixture",
+          },
+        },
+      },
+      finding,
+      fixtureDetectionRun,
+    ).includes("livekit_synthetic_fixture_not_product_finding"),
+    "a synthetic fixture must remain outside product-finding resolution",
   );
 });
 

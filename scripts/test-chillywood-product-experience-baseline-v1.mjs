@@ -279,9 +279,9 @@ assert.equal(constitution.selectedBaselineHash, baseline.baselineHash);
 assert.equal(constitution.selectedOption, "creator_balanced");
 
 const platformTarget = {
-  android: { minimum: 48, unit: "dp" },
-  ios: { minimum: 44, unit: "pt" },
-  web: { minimum: 44, unit: "css_px" },
+  android: { applicableMinimum: 48, preferred: 48, unit: "dp" },
+  ios: { applicableMinimum: 44, preferred: 44, unit: "pt" },
+  web: { applicableMinimum: 24, preferred: 44, unit: "css_px" },
 };
 const optionCTargetFamilies = new Set([
   "standard_streaming_card",
@@ -313,10 +313,16 @@ const classifyEvidence = (evidence, approvalState) => {
     return "baseline_ambiguity";
   }
   if (
-    evidence.interactiveTargetWidth < target.minimum ||
-    evidence.interactiveTargetHeight < target.minimum
+    evidence.interactiveTargetWidth < target.applicableMinimum ||
+    evidence.interactiveTargetHeight < target.applicableMinimum
   ) {
     return "accessibility_violation";
+  }
+  if (
+    evidence.interactiveTargetWidth < target.preferred ||
+    evidence.interactiveTargetHeight < target.preferred
+  ) {
+    return "product_preference_deviation";
   }
   const reference = evidence.deviceClass === "tablet"
     ? tablet
@@ -376,6 +382,32 @@ assert.equal(
     {
       ...healthyAndroidEvidence,
       interactiveTargetHeight: 23.24,
+    },
+    "owner_approved",
+  ),
+  "accessibility_violation",
+);
+assert.equal(
+  classifyEvidence(
+    {
+      ...healthyAndroidEvidence,
+      platform: "web",
+      touchTargetUnit: "css_px",
+      interactiveTargetWidth: 30,
+      interactiveTargetHeight: 30,
+    },
+    "owner_approved",
+  ),
+  "product_preference_deviation",
+);
+assert.equal(
+  classifyEvidence(
+    {
+      ...healthyAndroidEvidence,
+      platform: "web",
+      touchTargetUnit: "css_px",
+      interactiveTargetWidth: 23.99,
+      interactiveTargetHeight: 44,
     },
     "owner_approved",
   ),

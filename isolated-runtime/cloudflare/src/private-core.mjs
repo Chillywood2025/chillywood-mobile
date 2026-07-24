@@ -167,6 +167,7 @@ export const createPrivateInvocationHandler = ({
     database = createDatabase({
       connectionString: env[principal.hyperdriveBinding].connectionString,
       principal: principal.dbRole,
+      signal: deadlineController.signal,
     });
     const context = {
       environment: envelope.environment,
