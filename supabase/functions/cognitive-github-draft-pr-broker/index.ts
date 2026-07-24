@@ -27,6 +27,8 @@ const ALLOWED_PERMISSION_MANIFEST = Object.freeze({
   metadata: "read",
   pull_requests: "write",
 });
+export const APPROVED_SCOPE_MANIFEST_HASH =
+  "ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554";
 const EXPLICIT_RUNTIME_DENIES = Object.freeze([
   "actions",
   "administration",
@@ -312,6 +314,20 @@ type InstallationCredential = {
   token: string;
 };
 
+export type DraftPlanContract = {
+  baseBranchHash: string;
+  branchHash: string;
+  commitMessageHash: string;
+  contentHash: string;
+  pathHash: string;
+  planContractHash: string;
+  priorStateHash: string;
+  prBody: string;
+  prBodyHash: string;
+  repositoryHash: string;
+  titleHash: string;
+};
+
 const safeJson = async (
   response: Response,
 ): Promise<Record<string, unknown>> => {
@@ -406,6 +422,9 @@ const readInstallationCredential = async (
     repository: REPOSITORY,
     version: 1,
   }));
+  if (scopeManifestHash !== APPROVED_SCOPE_MANIFEST_HASH) {
+    throw new Error("github_installation_scope_manifest_drift");
+  }
   return { expiresAt, fingerprintHash, scopeManifestHash, token };
 };
 
@@ -509,6 +528,57 @@ export type DraftPlan = {
   title: string;
 };
 
+const draftPrBody = (canaryKey: string): string =>
+  `Governed Chi'llywood Level 0/1 canary: ${canaryKey}. Draft only; evaluator review required. No merge authority.`;
+
+export const deriveDraftPlanContract = async (
+  plan: DraftPlan,
+): Promise<DraftPlanContract> => {
+  const contentHash = await sha256Hex(plan.content);
+  const titleHash = await sha256Hex(plan.title);
+  const commitMessageHash = await sha256Hex(plan.commitMessage);
+  const prBody = draftPrBody(plan.canaryKey);
+  const prBodyHash = await sha256Hex(prBody);
+  const pathHash = await sha256Hex(plan.path);
+  const baseBranchHash = await sha256Hex(ALLOWED_BASE_BRANCH);
+  const branchHash = await sha256Hex(plan.branchName);
+  const repositoryHash = await sha256Hex(REPOSITORY);
+  const priorStateHash = await sha256Hex(
+    `${plan.baseCommit}|${plan.path}|${plan.priorBlobSha}`,
+  );
+  const planContractHash = await sha256Hex([
+    "github-draft-pr-plan-v2",
+    repositoryHash,
+    plan.canaryKey,
+    baseBranchHash,
+    plan.baseCommit,
+    branchHash,
+    pathHash,
+    priorStateHash,
+    contentHash,
+    titleHash,
+    commitMessageHash,
+    prBodyHash,
+    plan.requiredTestsHash,
+    plan.taskId,
+    plan.projectId,
+    plan.approvalScopeHash,
+  ].join("|"));
+  return {
+    baseBranchHash,
+    branchHash,
+    commitMessageHash,
+    contentHash,
+    pathHash,
+    planContractHash,
+    priorStateHash,
+    prBody,
+    prBodyHash,
+    repositoryHash,
+    titleHash,
+  };
+};
+
 export const validateDraftPlan = (
   payload: Record<string, unknown>,
 ): DraftPlan | null => {
@@ -605,6 +675,7 @@ const githubApi = async (
 
 const acceptToolResult = async (
   plan: DraftPlan,
+  credential: InstallationCredential,
   resultEnvelope: JsonObject,
   beforeStateHash: string,
   afterStateHash: string,
@@ -623,6 +694,8 @@ const acceptToolResult = async (
       p_opaque_bearer: plan.capabilityToken,
       p_opaque_nonce: plan.capabilityNonce,
       p_result_envelope: resultEnvelope,
+      p_runtime_public_fingerprint_hash: credential.fingerprintHash,
+      p_runtime_scope_manifest_hash: credential.scopeManifestHash,
       p_service_identity_token: readSecret(
         "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN",
       ),
@@ -646,6 +719,10 @@ const executeDraftPlan = async (
   }
   const contentBytes = new TextEncoder().encode(plan.content).length;
   const credential = await readInstallationCredential(fetcher);
+  const planContract = await deriveDraftPlanContract(plan);
+  if (plan.planSnapshotHash !== planContract.planContractHash) {
+    throw new Error("github_approved_plan_contract_mismatch");
+  }
   const baseRef = await githubApi(
     credential,
     `/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/git/ref/heads/${
@@ -695,21 +772,16 @@ const executeDraftPlan = async (
   if (observedPriorBlobSha !== plan.priorBlobSha) {
     throw new Error("github_approved_path_state_changed");
   }
-  const sourceStateHash = await sha256Hex(
-    `${plan.baseCommit}|${plan.path}|${plan.priorBlobSha}`,
-  );
-  const requestHash = await sha256Hex(JSON.stringify({
-    baseBranch: ALLOWED_BASE_BRANCH,
-    baseCommit: plan.baseCommit,
-    branchName: plan.branchName,
-    canaryKey: plan.canaryKey,
-    contentHash: await sha256Hex(plan.content),
-    path: plan.path,
-    priorBlobSha: plan.priorBlobSha,
-    repository: REPOSITORY,
-    requiredTestsHash: plan.requiredTestsHash,
-    titleHash: await sha256Hex(plan.title),
-  }));
+  const sourceStateHash = planContract.priorStateHash;
+  const requestHash = await sha256Hex([
+    "github-draft-pr-request-v2",
+    planContract.planContractHash,
+    credential.fingerprintHash,
+    credential.scopeManifestHash,
+    plan.approvalScopeHash,
+    plan.capabilityId,
+    plan.callId,
+  ].join("|"));
   const authorization = await createServiceClient().rpc(
     "cognitive_consume_github_draft_pr_capability",
     {
@@ -720,6 +792,18 @@ const executeDraftPlan = async (
       p_call_id: plan.callId,
       p_capability_id: plan.capabilityId,
       p_cost: 0,
+      p_content_hash: planContract.contentHash,
+      p_title_hash: planContract.titleHash,
+      p_commit_message_hash: planContract.commitMessageHash,
+      p_pr_body_hash: planContract.prBodyHash,
+      p_path_hash: planContract.pathHash,
+      p_base_branch_hash: planContract.baseBranchHash,
+      p_branch_hash: planContract.branchHash,
+      p_repository_hash: planContract.repositoryHash,
+      p_prior_state_hash: planContract.priorStateHash,
+      p_plan_contract_hash: planContract.planContractHash,
+      p_runtime_public_fingerprint_hash: credential.fingerprintHash,
+      p_runtime_scope_manifest_hash: credential.scopeManifestHash,
       p_environment: "production",
       p_opaque_bearer: plan.capabilityToken,
       p_opaque_nonce: plan.capabilityNonce,
@@ -819,8 +903,7 @@ const executeDraftPlan = async (
       "POST",
       {
         base: ALLOWED_BASE_BRANCH,
-        body:
-          `Governed Chi'llywood Level 0/1 canary: ${plan.canaryKey}. Draft only; evaluator review required. No merge authority.`,
+        body: planContract.prBody,
         draft: true,
         head: plan.branchName,
         maintainer_can_modify: false,
@@ -842,6 +925,7 @@ const executeDraftPlan = async (
   } catch {
     await acceptToolResult(
       plan,
+      credential,
       {
         baseBranchHash: await sha256Hex(ALLOWED_BASE_BRANCH),
         branchCreated: true,
@@ -878,6 +962,7 @@ const executeDraftPlan = async (
   };
   const auditRecordId = await acceptToolResult(
     plan,
+    credential,
     resultEnvelope,
     beforeStateHash,
     afterStateHash,
@@ -960,6 +1045,7 @@ export const handler = async (request: Request): Promise<Response> => {
     }
     if (
       category === "github_capability_authorization_rejected" ||
+      category === "github_approved_plan_contract_mismatch" ||
       category === "github_canary_branch_not_fresh" ||
       category === "github_approved_base_state_changed" ||
       category === "github_approved_path_state_changed"

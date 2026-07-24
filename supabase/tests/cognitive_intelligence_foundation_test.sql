@@ -809,7 +809,8 @@ insert into public.research_sources(
   id,task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
   data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
   authority_id,canonical_host,ownership_identity,publisher,
-  publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+  publication_date,publication_provenance,retrieval_date,freshness_deadline,
+  source_type,is_primary,
   bounded_excerpt,citation_metadata,trusted_for_tool_execution
 ) values (
   '30000000-0000-0000-0000-000000000001',
@@ -818,7 +819,12 @@ insert into public.research_sources(
   'ios','ci','research-fixture','source-official-fixture','accepted',
   'research_cache',now()+interval '30 days',repeat('1',64),repeat('2',64),repeat('3',64),
   'expo-docs','docs.expo.dev','expo','Expo',
-  now()-interval '2 days',now()-interval '1 day',now()+interval '8 days',
+  now()-interval '2 days',
+  jsonb_build_object(
+    'mode','published_metadata','machineValue','foundation-fixture',
+    'semanticIdentity','expo-official-fixture','evidenceHash',repeat('d',64)
+  ),
+  now()-interval '1 day',now()+interval '8 days',
   'official_documentation',true,'Bounded fixture excerpt.',
   '{"title":"Official fixture","locator":"section-1"}'::jsonb,false
 );
@@ -838,7 +844,8 @@ insert into public.research_sources(
   id,task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
   data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
   authority_id,canonical_host,ownership_identity,publisher,
-  publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+  publication_date,publication_provenance,retrieval_date,freshness_deadline,
+  source_type,is_primary,
   bounded_excerpt,citation_metadata,trusted_for_tool_execution
 ) values (
   '30000000-0000-0000-0000-000000000002',
@@ -847,7 +854,12 @@ insert into public.research_sources(
   'android','ci','research-fixture','source-android-fixture','accepted',
   'research_cache',now()+interval '30 days',repeat('a',64),repeat('b',64),repeat('c',64),
   'android-docs','developer.android.com','google','Google',
-  now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
+  now()-interval '2 days',
+  jsonb_build_object(
+    'mode','published_metadata','machineValue','foundation-fixture',
+    'semanticIdentity','android-official-fixture','evidenceHash',repeat('d',64)
+  ),
+  now()-interval '1 day',now()+interval '7 days',
   'official_documentation',true,'Bounded Android fixture excerpt.',
   '{"title":"Android fixture","locator":"section-1"}'::jsonb,false
 );
@@ -856,7 +868,8 @@ select throws_ok(
     task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
     data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
     authority_id,canonical_host,ownership_identity,publisher,
-    publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+    publication_date,publication_provenance,retrieval_date,freshness_deadline,
+    source_type,is_primary,
     bounded_excerpt,citation_metadata,trusted_for_tool_execution
   ) values (
     '20000000-0000-0000-0000-000000000001',
@@ -864,7 +877,12 @@ select throws_ok(
     'ios','ci','research-fixture','source-forged-authority','accepted',
     'research_cache',now()+interval '30 days',repeat('d',64),repeat('e',64),repeat('f',64),
     'expo-docs','docs.expo.dev','expo','Forged Publisher',
-    now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
+    now()-interval '2 days',
+    jsonb_build_object(
+      'mode','published_metadata','machineValue','foundation-fixture',
+      'semanticIdentity','forged-publisher-fixture','evidenceHash',repeat('d',64)
+    ),
+    now()-interval '1 day',now()+interval '7 days',
     'official_documentation',true,'Bounded fixture excerpt.',
     '{"title":"Forged fixture","locator":"section-1"}'::jsonb,false
   )$$,
@@ -876,7 +894,8 @@ select throws_ok(
     task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
     data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
     authority_id,canonical_host,ownership_identity,publisher,
-    publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+    publication_date,publication_provenance,retrieval_date,freshness_deadline,
+    source_type,is_primary,
     bounded_excerpt,citation_metadata,trusted_for_tool_execution
   ) values (
     '20000000-0000-0000-0000-000000000001',
@@ -884,7 +903,12 @@ select throws_ok(
     'ios','ci','research-fixture','source-invalid-citation','accepted',
     'research_cache',now()+interval '30 days',repeat('d',64),repeat('e',64),repeat('f',64),
     'expo-docs','docs.expo.dev','expo','Expo',
-    now()-interval '2 days',now()-interval '1 day',now()+interval '7 days',
+    now()-interval '2 days',
+    jsonb_build_object(
+      'mode','published_metadata','machineValue','foundation-fixture',
+      'semanticIdentity','invalid-citation-fixture','evidenceHash',repeat('d',64)
+    ),
+    now()-interval '1 day',now()+interval '7 days',
     'official_documentation',true,'Bounded fixture excerpt.',
     '{"title":"Fixture","locator":"section-1","authority":"self-asserted"}'::jsonb,false
   )$$,
@@ -896,7 +920,8 @@ select throws_ok(
     task_id,project_id,platform,environment,actor_identity,dedupe_key,status,
     data_class,retention_until,source_reference_hash,canonical_url_hash,content_hash,
     authority_id,canonical_host,ownership_identity,publisher,
-    publication_date,retrieval_date,freshness_deadline,source_type,is_primary,
+    publication_date,publication_provenance,retrieval_date,freshness_deadline,
+    source_type,is_primary,
     bounded_excerpt,citation_metadata,trusted_for_tool_execution,created_at
   ) values (
     '20000000-0000-0000-0000-000000000001',
@@ -904,7 +929,12 @@ select throws_ok(
     'ios','ci','research-fixture','source-future-time','accepted',
     'research_cache',now()+interval '30 days',repeat('d',64),repeat('e',64),repeat('f',64),
     'expo-docs','docs.expo.dev','expo','Expo',
-    now()-interval '2 days',now(),now()+interval '7 days',
+    now()-interval '2 days',
+    jsonb_build_object(
+      'mode','published_metadata','machineValue','foundation-fixture',
+      'semanticIdentity','future-time-fixture','evidenceHash',repeat('d',64)
+    ),
+    now(),now()+interval '7 days',
     'official_documentation',true,'Bounded fixture excerpt.',
     '{"title":"Fixture","locator":"section-1"}'::jsonb,false,
     now()+interval '1 day'

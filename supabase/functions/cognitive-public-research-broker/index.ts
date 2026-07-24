@@ -2,21 +2,26 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 import {
+  authorityForSource,
   authorityOwnerForId,
   canonicalizeResearchUrl,
   type CanonicalResearchUrl,
   claimHasExtractiveSupport,
   type ClaimRequest,
+  type ContradictionDetectionRequest,
+  derivePublicationProvenance,
   extractBoundedExcerpt,
-  extractObservedPublicationDates,
   extractRetrievedCitationMetadata,
   ipAddressKey,
   isPrivateOrReservedIp,
   isRecord,
   type JsonObject,
   normalizeClaimRequest,
+  normalizeContradictionDetectionRequest,
+  normalizeResearchMaintenanceRequest,
   normalizeSourceRequest,
   type PinnedResearchResponse,
+  type ResearchMaintenanceRequest,
   sha256Hex,
   type SourceRequest,
 } from "./policy.ts";
@@ -153,12 +158,12 @@ const decodeChunkedBody = (input: Uint8Array): Uint8Array => {
 type ParsedHttpResponse = Readonly<{
   body: string;
   contentType: string;
-  lastModified: string | null;
+  lastModifiedHeader: string | null;
   location: string | null;
   status: number;
 }>;
 
-const parseHttpResponse = (wire: Uint8Array): ParsedHttpResponse => {
+export const parseHttpResponse = (wire: Uint8Array): ParsedHttpResponse => {
   const headerEnd = findBytes(wire, [13, 10, 13, 10]);
   if (headerEnd < 0 || headerEnd > 65_536) {
     throw new Error("research_http_headers_rejected");
@@ -212,7 +217,7 @@ const parseHttpResponse = (wire: Uint8Array): ParsedHttpResponse => {
   return Object.freeze({
     body: new TextDecoder("utf-8", { fatal: true }).decode(bodyBytes),
     contentType: headers.get("content-type") ?? "",
-    lastModified: headers.get("last-modified") ?? null,
+    lastModifiedHeader: headers.get("last-modified") ?? null,
     location: headers.get("location") ?? null,
     status,
   });
@@ -402,7 +407,7 @@ export const fetchPinnedPublicResearch = async (
         canonicalUrl: target.canonical,
         connectedAddress,
         contentType: response.contentType,
-        lastModified: response.lastModified,
+        lastModifiedHeader: response.lastModifiedHeader,
         resolvedAddresses: Object.freeze([...allResolved]),
         retrievalDate: new Date().toISOString(),
         status: response.status,
@@ -510,28 +515,25 @@ export const retrieveAndRecordSource = async (
   } catch {
     return json(422, { error: "public_research_transport_blocked" });
   }
-  const excerpt = extractBoundedExcerpt(retrieved.body, retrieved.contentType);
+  const excerpt = extractBoundedExcerpt(
+    retrieved.body,
+    retrieved.contentType,
+    payload.evidenceQuery,
+  );
   if (!excerpt) {
     return json(422, { error: "public_research_content_rejected" });
   }
   const retrievalTime = Date.parse(retrieved.retrievalDate);
-  const observedPublicationDates = extractObservedPublicationDates(
+  const provenance = derivePublicationProvenance(
     retrieved.body,
     retrieved.contentType,
+    authorityUrl,
+    payload.authorityId,
   );
-  const headerPublicationTime = retrieved.lastModified === null
-    ? Number.NaN
-    : Date.parse(retrieved.lastModified);
-  const allObservedPublicationDates = [
-    ...observedPublicationDates,
-    ...(Number.isFinite(headerPublicationTime)
-      ? [new Date(headerPublicationTime).toISOString()]
-      : []),
-  ];
-  if (!allObservedPublicationDates.includes(payload.publicationDate)) {
+  if (!provenance) {
     return json(422, { error: "research_publication_date_unverified" });
   }
-  const publicationDate = payload.publicationDate;
+  const publicationDate = provenance.publicationDate;
   if (Date.parse(publicationDate) > retrievalTime) {
     return json(400, { error: "research_publication_date_rejected" });
   }
@@ -539,7 +541,15 @@ export const retrieveAndRecordSource = async (
     retrievalTime + payload.freshnessSeconds * 1_000,
   ).toISOString();
   const finalUrl = canonicalizeResearchUrl(retrieved.canonicalUrl);
-  if (!finalUrl || finalUrl.hostname !== authorityUrl.hostname) {
+  if (
+    !finalUrl || finalUrl.hostname !== authorityUrl.hostname ||
+    !authorityForSource(
+      payload.authorityId,
+      finalUrl,
+      payload.publisher,
+      payload.sourceType,
+    )
+  ) {
     return json(422, { error: "public_research_redirect_rejected" });
   }
   const citationMetadata = extractRetrievedCitationMetadata(
@@ -552,17 +562,21 @@ export const retrieveAndRecordSource = async (
   if (!citationMetadata) {
     return json(422, { error: "research_citation_metadata_unavailable" });
   }
-  const [sourceReferenceHash, canonicalUrlHash, contentHash] = await Promise
-    .all([
-      sha256Hex(authorityUrl.canonical),
-      sha256Hex(finalUrl.canonical),
-      sha256Hex(excerpt),
-    ]);
+  const [sourceReferenceHash, canonicalUrlHash, contentHash, provenanceHash] =
+    await Promise
+      .all([
+        sha256Hex(authorityUrl.canonical),
+        sha256Hex(finalUrl.canonical),
+        sha256Hex(excerpt),
+        sha256Hex(
+          `${provenance.mode}|${provenance.machineValue}|${provenance.semanticIdentity}`,
+        ),
+      ]);
   const resolvedAddressHashes = await Promise.all(
     retrieved.resolvedAddresses.map((address) => sha256Hex(address)),
   );
   const result = await serviceClient.rpc(
-    "cognitive_record_public_research_source",
+    "cognitive_record_public_research_source_v2",
     {
       p_authority_id: payload.authorityId,
       p_bounded_excerpt: excerpt,
@@ -583,6 +597,12 @@ export const retrieveAndRecordSource = async (
       p_platform: payload.platform,
       p_project_id: payload.projectId,
       p_publication_date: publicationDate,
+      p_publication_provenance: {
+        evidenceHash: provenanceHash,
+        machineValue: provenance.machineValue,
+        mode: provenance.mode,
+        semanticIdentity: provenance.semanticIdentity,
+      },
       p_publisher: payload.publisher,
       p_resolved_address_hashes: resolvedAddressHashes,
       p_retrieval_date: retrieved.retrievalDate,
@@ -611,10 +631,105 @@ export const retrieveAndRecordSource = async (
     freshnessDeadline,
     privateDataUsed: false,
     publisher: payload.publisher,
+    publicationProvenanceMode: provenance.mode,
     retrievalId,
     sourceId,
     sourceType: payload.sourceType,
     trustedForToolExecution: false,
+    userDerivedDataUsed: false,
+  });
+};
+
+export const recordContradictionDetection = async (
+  serviceClient: SupabaseClientLike,
+  payload: ContradictionDetectionRequest,
+): Promise<Response> => {
+  const source = await serviceClient
+    .from("research_sources")
+    .select("id,bounded_excerpt,erased_at,freshness_deadline,retention_until")
+    .eq("id", payload.sourceId)
+    .eq("task_id", payload.taskId)
+    .eq("project_id", payload.projectId)
+    .eq("platform", payload.platform)
+    .eq("environment", payload.environment)
+    .maybeSingle();
+  if (
+    source.error || !source.data ||
+    typeof source.data.bounded_excerpt !== "string" ||
+    !claimHasExtractiveSupport(
+      payload.boundedEvidence,
+      source.data.bounded_excerpt,
+    )
+  ) {
+    return json(409, { error: "research_contradiction_evidence_rejected" });
+  }
+  const result = await serviceClient.rpc(
+    "cognitive_record_public_research_contradiction_detection",
+    {
+      p_bounded_evidence: payload.boundedEvidence,
+      p_claim_id: payload.claimId,
+      p_environment: payload.environment,
+      p_platform: payload.platform,
+      p_project_id: payload.projectId,
+      p_service_identity_token: serviceIdentityToken(),
+      p_source_id: payload.sourceId,
+      p_task_id: payload.taskId,
+    },
+  );
+  if (result.error || !isRecord(result.data)) {
+    return json(409, { error: "research_contradiction_persistence_rejected" });
+  }
+  if (
+    typeof result.data.contradiction_id !== "string" ||
+    typeof result.data.event_id !== "string" ||
+    typeof result.data.evidence_hash !== "string" ||
+    !LOWER_HEX_64.test(result.data.evidence_hash)
+  ) {
+    return json(409, { error: "research_contradiction_readback_mismatch" });
+  }
+  return json(200, {
+    contradictionId: result.data.contradiction_id,
+    evaluatorRequired: true,
+    eventId: result.data.event_id,
+    evidenceHash: result.data.evidence_hash,
+    privateDataUsed: false,
+    state: "detected",
+    userDerivedDataUsed: false,
+  });
+};
+
+export const expirePublicMemory = async (
+  serviceClient: SupabaseClientLike,
+  payload: ResearchMaintenanceRequest,
+): Promise<Response> => {
+  const result = await serviceClient.rpc(
+    "cognitive_expire_public_research_maintenance",
+    {
+      p_environment: payload.environment,
+      p_limit: payload.limit,
+      p_platform: payload.platform,
+      p_project_id: payload.projectId,
+      p_service_identity_token: serviceIdentityToken(),
+      p_task_id: payload.taskId,
+    },
+  );
+  if (
+    result.error || !isRecord(result.data) ||
+    typeof result.data.source_count !== "number" ||
+    typeof result.data.claim_count !== "number" ||
+    typeof result.data.total_count !== "number" ||
+    result.data.source_count + result.data.claim_count !==
+      result.data.total_count ||
+    result.data.total_count < 0 || result.data.total_count > payload.limit
+  ) {
+    return json(409, { error: "public_research_maintenance_rejected" });
+  }
+  return json(200, {
+    claimCount: result.data.claim_count,
+    privateDataUsed: false,
+    retentionPolicyId: "chillywood-cognitive-retention-v1",
+    sourceCount: result.data.source_count,
+    totalCount: result.data.total_count,
     userDerivedDataUsed: false,
   });
 };
@@ -764,6 +879,24 @@ export const handler = async (request: Request): Promise<Response> => {
         return json(409, { error: "research_runtime_gate_closed" });
       }
       return await recordClaimEvidence(serviceClient, normalized);
+    }
+    if (payload.action === "detect_contradiction") {
+      const normalized = normalizeContradictionDetectionRequest(payload);
+      if (!normalized) {
+        return json(400, { error: "research_contradiction_payload_rejected" });
+      }
+      const serviceClient = createServiceClient();
+      if (!await researchRuntimeGateOpen(serviceClient, normalized)) {
+        return json(409, { error: "research_runtime_gate_closed" });
+      }
+      return await recordContradictionDetection(serviceClient, normalized);
+    }
+    if (payload.action === "expire_public_memory") {
+      const normalized = normalizeResearchMaintenanceRequest(payload);
+      if (!normalized) {
+        return json(400, { error: "research_maintenance_payload_rejected" });
+      }
+      return await expirePublicMemory(createServiceClient(), normalized);
     }
     return json(400, { error: "unsupported_action" });
   } catch {

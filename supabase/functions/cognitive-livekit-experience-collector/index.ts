@@ -23,6 +23,9 @@ export type LiveKitMetricManifest = Readonly<{
   firstRemoteMediaElapsedMs: number;
   foregrounded: boolean;
   headlessParticipantUsed: boolean;
+  headlessObservationFinishedAt: string;
+  headlessObservationStartedAt: string;
+  headlessParticipantIdentityHash: string | null;
   iceCheckingObserved: boolean;
   iceGatheringObserved: boolean;
   iceState:
@@ -36,10 +39,17 @@ export type LiveKitMetricManifest = Readonly<{
     | "unknown";
   installedUiEvidenceHash: string | null;
   installedUiObserved: boolean;
+  installedObservationFinishedAt: string | null;
+  installedObservationStartedAt: string | null;
+  installedParticipantIdentityHash: string | null;
+  installedRuntimeIdentityHash: string | null;
+  installedRoomRunCorrelationHash: string | null;
+  installedSourceBuildHash: string | null;
   localMediaSource: "test_tone" | "silent_audio" | "color_bars" | "none";
   localTrackPublished: boolean;
   networkState: "ready" | "interrupted" | "unknown";
   peerConnectionEstablished: boolean;
+  participantIdentityDistinct: boolean;
   permissionState: "granted" | "denied" | "unknown" | "not_applicable";
   providerState: "healthy" | "degraded" | "blocked" | "unknown";
   remoteMediaKind: "audio" | "video" | "audio_video" | "none";
@@ -47,12 +57,19 @@ export type LiveKitMetricManifest = Readonly<{
   remoteTrackSubscribed: boolean;
   roomConnectElapsedMs: number;
   roomConnected: boolean;
+  roomRunCorrelationHash: string;
   stageFailureCategory: LiveKitFailureCategory;
   tokenIssuedElapsedMs: number;
   tokenRequestStarted: boolean;
   tokenRequested: boolean;
-  tokenResultStatus: "success" | "denied" | "error" | "timeout" | "not_attempted";
+  tokenResultStatus:
+    | "success"
+    | "denied"
+    | "error"
+    | "timeout"
+    | "not_attempted";
   tokenReturned: boolean;
+  tokenClaimsValidated: boolean;
   uiStateResolutionElapsedMs: number;
   websocketConnected: boolean;
 }>;
@@ -101,11 +118,15 @@ const TASK_KEY = "cognitive-level01-canary-control";
 const PLATFORM = "shared";
 const ENVIRONMENT = "production";
 const MAX_TIMING_MS = 600_000;
+const MAX_SESSION_OBSERVATION_AGE_MS = 5 * 60 * 1_000;
+const MAX_SESSION_OBSERVATION_WINDOW_MS = 120_000;
 const TOKEN_DEADLINE_MS = 3_000;
 const ROOM_DEADLINE_MS = 12_000;
 const UI_DEADLINE_MS = 15_000;
 const FIRST_MEDIA_DEADLINE_MS = 20_000;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+const BEARER_JWT_PATTERN =
+  /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
 const ICE_STATES = new Set([
   "new",
@@ -139,58 +160,76 @@ const TOKEN_RESULT_STATES = new Set([
   "timeout",
   "not_attempted",
 ]);
-const METRIC_KEYS = Object.freeze([
-  "backgroundForegroundRecovery",
-  "backgrounded",
-  "buildRuntimeMatched",
-  "cleanupDisconnected",
-  "connectingResolved",
-  "firstAudioVideoObserved",
-  "firstRemoteMediaElapsedMs",
-  "foregrounded",
-  "headlessParticipantUsed",
-  "iceCheckingObserved",
-  "iceGatheringObserved",
-  "iceState",
-  "installedUiEvidenceHash",
-  "installedUiObserved",
-  "localMediaSource",
-  "localTrackPublished",
-  "networkState",
-  "peerConnectionEstablished",
-  "permissionState",
-  "providerState",
-  "remoteMediaKind",
-  "remoteParticipantJoined",
-  "remoteTrackSubscribed",
-  "roomConnectElapsedMs",
-  "roomConnected",
-  "stageFailureCategory",
-  "tokenIssuedElapsedMs",
-  "tokenRequestStarted",
-  "tokenRequested",
-  "tokenResultStatus",
-  "tokenReturned",
-  "uiStateResolutionElapsedMs",
-  "websocketConnected",
-] as const);
-const PAYLOAD_KEYS = Object.freeze([
-  "action",
-  "evidenceManifestHash",
-  "metricManifest",
-  "observationFinishedAt",
-  "observationStartedAt",
-  "routeOrSurface",
-  "runtimeIdentityHash",
-  "sourceBuildHash",
-] as const);
-const METRIC_ENVELOPE_KEYS = Object.freeze([
-  "evidenceHashes",
-  "metrics",
-  "observationKind",
-  "sanitizationVersion",
-  "schemaVersion",
-] as const);
+const METRIC_KEYS = Object.freeze(
+  [
+    "backgroundForegroundRecovery",
+    "backgrounded",
+    "buildRuntimeMatched",
+    "cleanupDisconnected",
+    "connectingResolved",
+    "firstAudioVideoObserved",
+    "firstRemoteMediaElapsedMs",
+    "foregrounded",
+    "headlessParticipantUsed",
+    "headlessObservationFinishedAt",
+    "headlessObservationStartedAt",
+    "headlessParticipantIdentityHash",
+    "iceCheckingObserved",
+    "iceGatheringObserved",
+    "iceState",
+    "installedUiEvidenceHash",
+    "installedUiObserved",
+    "installedObservationFinishedAt",
+    "installedObservationStartedAt",
+    "installedParticipantIdentityHash",
+    "installedRuntimeIdentityHash",
+    "installedRoomRunCorrelationHash",
+    "installedSourceBuildHash",
+    "localMediaSource",
+    "localTrackPublished",
+    "networkState",
+    "peerConnectionEstablished",
+    "participantIdentityDistinct",
+    "permissionState",
+    "providerState",
+    "remoteMediaKind",
+    "remoteParticipantJoined",
+    "remoteTrackSubscribed",
+    "roomConnectElapsedMs",
+    "roomConnected",
+    "roomRunCorrelationHash",
+    "stageFailureCategory",
+    "tokenIssuedElapsedMs",
+    "tokenRequestStarted",
+    "tokenRequested",
+    "tokenResultStatus",
+    "tokenReturned",
+    "tokenClaimsValidated",
+    "uiStateResolutionElapsedMs",
+    "websocketConnected",
+  ] as const,
+);
+const PAYLOAD_KEYS = Object.freeze(
+  [
+    "action",
+    "evidenceManifestHash",
+    "metricManifest",
+    "observationFinishedAt",
+    "observationStartedAt",
+    "routeOrSurface",
+    "runtimeIdentityHash",
+    "sourceBuildHash",
+  ] as const,
+);
+const METRIC_ENVELOPE_KEYS = Object.freeze(
+  [
+    "evidenceHashes",
+    "metrics",
+    "observationKind",
+    "sanitizationVersion",
+    "schemaVersion",
+  ] as const,
+);
 const SECURITY_POLICY = securityPolicyJson as CanonicalSecurityPolicy;
 
 const CORS_HEADERS = Object.freeze({
@@ -223,6 +262,30 @@ const hasExactKeys = (
 const isBoundedTiming = (value: unknown): value is number =>
   Number.isInteger(value) && Number(value) >= 0 &&
   Number(value) <= MAX_TIMING_MS;
+
+const parseCanonicalTimestamp = (value: unknown): number | null => {
+  if (typeof value !== "string") return null;
+  const millis = Date.parse(value);
+  if (
+    !Number.isFinite(millis) ||
+    new Date(millis).toISOString() !== value
+  ) {
+    return null;
+  }
+  return millis;
+};
+
+const nullableSha256 = (value: unknown): value is string | null =>
+  value === null ||
+  (typeof value === "string" && SHA256_PATTERN.test(value));
+
+const nullableTimestamp = (value: unknown): value is string | null =>
+  value === null || parseCanonicalTimestamp(value) !== null;
+
+const hasBearerAuthorization = (request: Request): boolean =>
+  BEARER_JWT_PATTERN.test(
+    request.headers.get("authorization")?.trim() ?? "",
+  );
 
 const readRequiredSecret = (name: string): string => {
   const value = Deno.env.get(name)?.trim() ?? "";
@@ -351,6 +414,7 @@ const parseMetricManifest = (
       "iceGatheringObserved",
       "installedUiObserved",
       "localTrackPublished",
+      "participantIdentityDistinct",
       "peerConnectionEstablished",
       "remoteParticipantJoined",
       "remoteTrackSubscribed",
@@ -358,6 +422,7 @@ const parseMetricManifest = (
       "tokenRequestStarted",
       "tokenRequested",
       "tokenReturned",
+      "tokenClaimsValidated",
       "websocketConnected",
     ]
   ) {
@@ -381,14 +446,87 @@ const parseMetricManifest = (
   if (!REMOTE_MEDIA_KINDS.has(toText(value.remoteMediaKind))) return null;
   if (!TOKEN_RESULT_STATES.has(toText(value.tokenResultStatus))) return null;
   if (
-    value.installedUiEvidenceHash !== null &&
-    !SHA256_PATTERN.test(toText(value.installedUiEvidenceHash))
+    !SHA256_PATTERN.test(toText(value.roomRunCorrelationHash)) ||
+    !nullableSha256(value.headlessParticipantIdentityHash) ||
+    !nullableSha256(value.installedUiEvidenceHash) ||
+    !nullableSha256(value.installedParticipantIdentityHash) ||
+    !nullableSha256(value.installedRuntimeIdentityHash) ||
+    !nullableSha256(value.installedRoomRunCorrelationHash) ||
+    !nullableSha256(value.installedSourceBuildHash) ||
+    !nullableTimestamp(value.installedObservationStartedAt) ||
+    !nullableTimestamp(value.installedObservationFinishedAt)
+  ) {
+    return null;
+  }
+  const headlessStartedAtMillis = parseCanonicalTimestamp(
+    value.headlessObservationStartedAt,
+  );
+  const headlessFinishedAtMillis = parseCanonicalTimestamp(
+    value.headlessObservationFinishedAt,
+  );
+  const installedStartedAtMillis = parseCanonicalTimestamp(
+    value.installedObservationStartedAt,
+  );
+  const installedFinishedAtMillis = parseCanonicalTimestamp(
+    value.installedObservationFinishedAt,
+  );
+  if (
+    headlessStartedAtMillis === null ||
+    headlessFinishedAtMillis === null ||
+    headlessStartedAtMillis > headlessFinishedAtMillis ||
+    headlessFinishedAtMillis - headlessStartedAtMillis >
+      MAX_SESSION_OBSERVATION_WINDOW_MS ||
+    (
+      value.installedUiObserved &&
+      (
+        installedStartedAtMillis === null ||
+        installedFinishedAtMillis === null ||
+        installedStartedAtMillis > installedFinishedAtMillis ||
+        installedFinishedAtMillis - installedStartedAtMillis >
+          MAX_SESSION_OBSERVATION_WINDOW_MS
+      )
+    )
   ) {
     return null;
   }
   const metric = value as unknown as LiveKitMetricManifest;
+  const hasInstalledBinding = metric.installedUiObserved;
+  const hasHeadlessIdentity = metric.headlessParticipantIdentityHash !== null;
+  const hasInstalledIdentity = metric.installedParticipantIdentityHash !== null;
+  const identitiesDiffer = hasHeadlessIdentity && hasInstalledIdentity &&
+    metric.headlessParticipantIdentityHash !==
+      metric.installedParticipantIdentityHash;
   if (
     metric.installedUiObserved !== (metric.installedUiEvidenceHash !== null) ||
+    hasInstalledBinding !== (metric.installedObservationStartedAt !== null) ||
+    hasInstalledBinding !== (metric.installedObservationFinishedAt !== null) ||
+    hasInstalledBinding !== hasInstalledIdentity ||
+    hasInstalledBinding !== (metric.installedRuntimeIdentityHash !== null) ||
+    hasInstalledBinding !==
+      (metric.installedRoomRunCorrelationHash !== null) ||
+    hasInstalledBinding !== (metric.installedSourceBuildHash !== null) ||
+    (
+      hasInstalledBinding &&
+      metric.installedRoomRunCorrelationHash !==
+        metric.roomRunCorrelationHash
+    ) ||
+    metric.participantIdentityDistinct !== identitiesDiffer ||
+    (
+      metric.tokenReturned &&
+      (
+        !metric.tokenClaimsValidated ||
+        !hasHeadlessIdentity
+      )
+    ) ||
+    (
+      !metric.tokenReturned &&
+      (metric.tokenClaimsValidated || hasHeadlessIdentity)
+    ) ||
+    (
+      metric.tokenReturned &&
+      hasInstalledBinding &&
+      !metric.participantIdentityDistinct
+    ) ||
     metric.firstAudioVideoObserved !== (metric.remoteMediaKind !== "none") ||
     metric.tokenReturned !== (metric.tokenResultStatus === "success") ||
     metric.tokenRequested !== metric.tokenRequestStarted
@@ -499,17 +637,53 @@ const preparePacket = async (
     payload.metricManifest,
     suppliedEvidenceHash,
   );
+  const metric = metricManifest?.metrics;
+  const headlessStartedAtMillis = metric
+    ? parseCanonicalTimestamp(metric.headlessObservationStartedAt)
+    : null;
+  const headlessFinishedAtMillis = metric
+    ? parseCanonicalTimestamp(metric.headlessObservationFinishedAt)
+    : null;
+  const installedStartedAtMillis = metric
+    ? parseCanonicalTimestamp(metric.installedObservationStartedAt)
+    : null;
+  const installedFinishedAtMillis = metric
+    ? parseCanonicalTimestamp(metric.installedObservationFinishedAt)
+    : null;
+  const expectedStartedAtMillis = headlessStartedAtMillis === null
+    ? null
+    : installedStartedAtMillis === null
+    ? headlessStartedAtMillis
+    : Math.min(headlessStartedAtMillis, installedStartedAtMillis);
+  const expectedFinishedAtMillis = headlessFinishedAtMillis === null
+    ? null
+    : installedFinishedAtMillis === null
+    ? headlessFinishedAtMillis
+    : Math.max(headlessFinishedAtMillis, installedFinishedAtMillis);
   if (
     !ROUTES.has(routeOrSurface) ||
     !SHA256_PATTERN.test(runtimeIdentityHash) ||
     !SHA256_PATTERN.test(sourceBuildHash) ||
     !SHA256_PATTERN.test(suppliedEvidenceHash) ||
     !metricManifest ||
+    !metric ||
     !Number.isFinite(startedAtMillis) ||
     !Number.isFinite(finishedAtMillis) ||
+    expectedStartedAtMillis === null ||
+    expectedFinishedAtMillis === null ||
+    startedAtMillis !== expectedStartedAtMillis ||
+    finishedAtMillis !== expectedFinishedAtMillis ||
+    (
+      metric.installedUiObserved &&
+      (
+        metric.installedRuntimeIdentityHash !== runtimeIdentityHash ||
+        metric.installedSourceBuildHash !== sourceBuildHash
+      )
+    ) ||
     startedAtMillis > finishedAtMillis ||
-    finishedAtMillis - startedAtMillis > 120_000 ||
-    nowMillis - startedAtMillis > 6 * 60 * 60 * 1_000 ||
+    finishedAtMillis - startedAtMillis >
+      MAX_SESSION_OBSERVATION_WINDOW_MS ||
+    nowMillis - finishedAtMillis > MAX_SESSION_OBSERVATION_AGE_MS ||
     finishedAtMillis > nowMillis + 60_000
   ) {
     return null;
@@ -538,6 +712,9 @@ export const handler = async (request: Request): Promise<Response> => {
   }
   if (request.method !== "POST") {
     return json(405, { error: "method_not_allowed" });
+  }
+  if (!hasBearerAuthorization(request)) {
+    return json(401, { error: "bearer_authorization_required" });
   }
   if (!await authenticateInvocation(request)) {
     return json(401, { error: "livekit_sentinel_invocation_required" });
@@ -620,7 +797,9 @@ export const handler = async (request: Request): Promise<Response> => {
       runIdHash: await sha256Hex(sentinelRunId),
     });
   } catch {
-    return json(500, { error: "cognitive_livekit_experience_collector_failed" });
+    return json(500, {
+      error: "cognitive_livekit_experience_collector_failed",
+    });
   }
 };
 

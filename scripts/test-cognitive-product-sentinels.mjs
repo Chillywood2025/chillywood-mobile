@@ -17,6 +17,12 @@ const constitution = JSON.parse(
 const runnerConfig = JSON.parse(
   read("config/intelligence/sentinel-installed-runner.config.json"),
 );
+const baselineOptions = JSON.parse(
+  read("config/intelligence/product-experience-baseline-options-v1.json"),
+);
+const baselineOptionsDoc = read(
+  "docs/intelligence/CHILLYWOOD_PRODUCT_EXPERIENCE_BASELINE_OPTIONS_V1.md",
+);
 const readinessRunner = read("scripts/sentinel-runtime-readiness.mjs");
 const canaryRunner = read("scripts/product-experience-canary-runner.mjs");
 const packageJson = read("package.json");
@@ -26,6 +32,25 @@ const failures = [];
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
 };
+const canonicalize = (value) => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, canonicalize(entry)]),
+  );
+};
+const canonicalSelectionHash = (option) =>
+  crypto.createHash("sha256")
+    .update(JSON.stringify(canonicalize({
+      schemaVersion: baselineOptions.schemaVersion,
+      optionsVersion: baselineOptions.optionsVersion,
+      scope: baselineOptions.scope,
+      commonRequirements: baselineOptions.commonRequirements,
+      selectedOption: option,
+    })))
+    .digest("hex");
 const contains = (needle, message) => assert(migration.includes(needle), message);
 
 for (const switchKey of [
@@ -191,7 +216,12 @@ assert(
   "database suite does not accept complete installed-journey evidence",
 );
 assert(
-  dbTest.includes("product triage rejects passed visual run as a governance finding"),
+  dbTest.includes(
+    "visual sentinel rejects a passed run without the current exact approved baseline",
+  ) &&
+    dbTest.includes(
+      "rejected visual pass creates no sentinel evidence or triage input",
+    ),
   "database suite does not reject findings from passed sentinel runs",
 );
 assert(
@@ -221,13 +251,46 @@ contains(
   "sentinel evidence does not preserve new-binary/OTA blocker status",
 );
 assert(
-  constitution.status === "needs_product_baseline_review",
-  "constitution must not silently approve the current visual baseline",
+  constitution.status === "owner_selected_pending_authenticated_approval",
+  "constitution must distinguish Owner selection from authenticated baseline approval",
 );
 assert(
-  constitution.ownerApprovalVersion === "not_approved_yet",
-  "constitution must not fabricate Owner baseline approval",
+  constitution.ownerApprovalVersion === null &&
+    constitution.approvedBaselineHash === null,
+  "constitution must not fabricate an authenticated Owner approval version",
 );
+assert(
+  constitution.selectedOption === "creator_balanced" &&
+    constitution.selectedBaselineHash ===
+      "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba",
+  "constitution does not bind the exact Owner-selected Option C hash",
+);
+const expectedBaselineSelectionHashes = {
+  A: "29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9",
+  B: "9e891de1b46cd19405b43178dbd34ed0ea1d96b4eebcc7b404f4f3d9f6ba3dc5",
+  C: "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184",
+};
+assert(
+  baselineOptions.status === "owner_selection_required",
+  "baseline alternatives must remain pending exact Owner selection",
+);
+assert(
+  baselineOptions.options.length === 3,
+  "baseline alternatives must contain exactly A, B, and C",
+);
+for (const option of baselineOptions.options) {
+  const expectedHash = expectedBaselineSelectionHashes[option.option];
+  assert(!!expectedHash, `unexpected baseline option: ${option.option}`);
+  if (!expectedHash) continue;
+  assert(
+    canonicalSelectionHash(option) === expectedHash,
+    `canonical baseline selection hash changed for option ${option.option}`,
+  );
+  assert(
+    baselineOptionsDoc.includes(expectedHash),
+    `baseline Owner approval request omits option ${option.option} hash`,
+  );
+}
 for (const section of [
   "mobileFirstPrinciples",
   "streamingContentDensity",
@@ -444,10 +507,14 @@ const classifyLiveKit = (metrics) => {
 };
 
 const classifyVisual = (metrics) => {
-  const max = constitution.cardMetrics.maximumCardViewportWidthRatio.phone;
-  if (metrics.cardViewportWidthRatio > max) {
+  const referenceRatio =
+    constitution.streamingContentDensity.phonePortraitReference.mediaFrameWidth /
+    constitution.streamingContentDensity.phonePortraitReference.viewportWidth;
+  const ratioDelta =
+    constitution.allowedBaselineVariance.referenceMediaViewportRatioDelta;
+  if (Math.abs(metrics.cardViewportWidthRatio - referenceRatio) > ratioDelta) {
     return {
-      reproductionState: constitution.status === "needs_product_baseline_review"
+      reproductionState: constitution.status !== "owner_approved"
         ? "design_baseline_missing"
         : "likely_defect",
       suspectedLayer: "layout_density",

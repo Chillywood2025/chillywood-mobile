@@ -19,6 +19,7 @@ type ResearchAuthority = Readonly<{
   authorityId: string;
   hostname: string;
   ownerId: string;
+  pathPrefix?: string;
   publisher: string;
   sourceType: string;
 }>;
@@ -28,11 +29,11 @@ export type SourceRequest = Readonly<{
   authorityId: string;
   citationLocator: string;
   citationTitle: string;
+  evidenceQuery: string;
   environment: "production";
   freshnessSeconds: number;
   platform: "shared";
   projectId: string;
-  publicationDate: string;
   publisher: string;
   sourceType: string;
   taskId: string;
@@ -54,10 +55,31 @@ export type ClaimRequest = Readonly<{
   taskId: string;
 }>;
 
+export type ContradictionDetectionRequest = Readonly<{
+  action: "detect_contradiction";
+  boundedEvidence: string;
+  claimId: string;
+  environment: "production";
+  platform: "shared";
+  projectId: string;
+  sourceId: string;
+  taskId: string;
+}>;
+
+export type ResearchMaintenanceRequest = Readonly<{
+  action: "expire_public_memory";
+  environment: "production";
+  limit: number;
+  platform: "shared";
+  projectId: string;
+  taskId: string;
+}>;
+
 export type CanonicalResearchUrl = Readonly<{
   canonical: string;
   hostname: string;
   pathAndQuery: string;
+  pathname: string;
 }>;
 
 export type PinnedResearchResponse = Readonly<{
@@ -65,7 +87,7 @@ export type PinnedResearchResponse = Readonly<{
   canonicalUrl: string;
   connectedAddress: string;
   contentType: string;
-  lastModified: string | null;
+  lastModifiedHeader: string | null;
   resolvedAddresses: readonly string[];
   retrievalDate: string;
   status: number;
@@ -90,11 +112,11 @@ const SOURCE_KEYS = Object.freeze([
   "authorityId",
   "citationLocator",
   "citationTitle",
+  "evidenceQuery",
   "environment",
   "freshnessSeconds",
   "platform",
   "projectId",
-  "publicationDate",
   "publisher",
   "sourceType",
   "taskId",
@@ -114,6 +136,24 @@ const CLAIM_KEYS = Object.freeze([
   "sourceIds",
   "taskId",
 ]);
+const CONTRADICTION_DETECTION_KEYS = Object.freeze([
+  "action",
+  "boundedEvidence",
+  "claimId",
+  "environment",
+  "platform",
+  "projectId",
+  "sourceId",
+  "taskId",
+]);
+const MAINTENANCE_KEYS = Object.freeze([
+  "action",
+  "environment",
+  "limit",
+  "platform",
+  "projectId",
+  "taskId",
+]);
 const CANARY_KEYS = new Set([
   "platform_policy_research",
   "repository_architecture_ux",
@@ -125,12 +165,6 @@ const CLAIM_CATEGORIES = new Set([
   "consequential_news",
   "product",
   "security",
-]);
-const CONTRADICTION_STATES = new Set([
-  "none",
-  "detected",
-  "unresolved",
-  "resolved",
 ]);
 const MAX_SOURCE_TTL_SECONDS = Object.freeze(
   {
@@ -220,6 +254,7 @@ export const canonicalizeResearchUrl = (
     canonical,
     hostname,
     pathAndQuery: `${parsed.pathname}${parsed.search}`,
+    pathname: parsed.pathname,
   });
 };
 
@@ -355,14 +390,17 @@ export const isPrivateOrReservedIp = (raw: string): boolean => {
 
 export const authorityForSource = (
   authorityId: string,
-  hostname: string,
+  target: CanonicalResearchUrl,
   publisher: string,
   sourceType: string,
 ): ResearchAuthority | null => {
   const authority = AUTHORITY_BY_ID.get(authorityId);
   if (
-    !authority || authority.hostname !== hostname ||
-    authority.publisher !== publisher || authority.sourceType !== sourceType
+    !authority || authority.hostname !== target.hostname ||
+    authority.publisher !== publisher || authority.sourceType !== sourceType ||
+    (authority.pathPrefix !== undefined &&
+      target.pathname !== authority.pathPrefix &&
+      !target.pathname.startsWith(`${authority.pathPrefix}/`))
   ) {
     return null;
   }
@@ -391,12 +429,13 @@ export const normalizeSourceRequest = (
   const sourceType = toBoundedText(payload.sourceType, 2, 80);
   const citationTitle = toBoundedText(payload.citationTitle, 1, 512);
   const citationLocator = toBoundedText(payload.citationLocator, 1, 512);
+  const evidenceQuery = toBoundedText(payload.evidenceQuery, 4, 512);
   const url = canonicalizeResearchUrl(payload.url);
   if (
     !authorityId || !SAFE_IDENTIFIER.test(authorityId) || !publisher ||
     !sourceType || !SAFE_IDENTIFIER.test(sourceType) || !citationTitle ||
-    !citationLocator || !url ||
-    !authorityForSource(authorityId, url.hostname, publisher, sourceType) ||
+    !citationLocator || !evidenceQuery || !url ||
+    !authorityForSource(authorityId, url, publisher, sourceType) ||
     !Number.isSafeInteger(payload.freshnessSeconds)
   ) {
     return null;
@@ -411,25 +450,24 @@ export const normalizeSourceRequest = (
   ) {
     return null;
   }
-  if (typeof payload.publicationDate !== "string") return null;
-  const publicationTime = Date.parse(payload.publicationDate);
   if (
-    !Number.isFinite(publicationTime) ||
-    publicationTime > Date.now() + 300_000
+    authorityId === "chillywood-public-repository" &&
+    !/^\/Chillywood2025\/chillywood-mobile\/commit\/[a-f0-9]{40}$/u.test(
+      url.pathname,
+    )
   ) {
     return null;
   }
-  const publicationDate = new Date(publicationTime).toISOString();
   const normalized: SourceRequest = Object.freeze({
     action: "retrieve_source",
     authorityId,
     citationLocator,
     citationTitle,
+    evidenceQuery,
     environment: "production",
     freshnessSeconds: Number(payload.freshnessSeconds),
     platform: "shared",
     projectId: payload.projectId,
-    publicationDate,
     publisher,
     sourceType,
     taskId: payload.taskId,
@@ -454,8 +492,7 @@ export const normalizeClaimRequest = (
     !CANARY_KEYS.has(payload.canaryKey) ||
     typeof payload.category !== "string" ||
     !CLAIM_CATEGORIES.has(payload.category) ||
-    typeof payload.contradictionState !== "string" ||
-    !CONTRADICTION_STATES.has(payload.contradictionState) ||
+    payload.contradictionState !== "none" ||
     typeof payload.confidence !== "number" ||
     !Number.isFinite(payload.confidence) ||
     payload.confidence < 0 || payload.confidence > 1 ||
@@ -496,6 +533,64 @@ export const normalizeClaimRequest = (
   return isSecuritySafe(normalized) ? normalized : null;
 };
 
+export const normalizeContradictionDetectionRequest = (
+  payload: unknown,
+): ContradictionDetectionRequest | null => {
+  if (
+    !isRecord(payload) ||
+    !hasExactKeys(payload, CONTRADICTION_DETECTION_KEYS) ||
+    payload.action !== "detect_contradiction" ||
+    payload.platform !== "shared" || payload.environment !== "production" ||
+    typeof payload.taskId !== "string" || !UUID_PATTERN.test(payload.taskId) ||
+    typeof payload.projectId !== "string" ||
+    !UUID_PATTERN.test(payload.projectId) ||
+    typeof payload.claimId !== "string" ||
+    !UUID_PATTERN.test(payload.claimId) ||
+    typeof payload.sourceId !== "string" ||
+    !UUID_PATTERN.test(payload.sourceId)
+  ) {
+    return null;
+  }
+  const boundedEvidence = toBoundedText(payload.boundedEvidence, 4, 2_000);
+  if (!boundedEvidence) return null;
+  const normalized: ContradictionDetectionRequest = Object.freeze({
+    action: "detect_contradiction",
+    boundedEvidence,
+    claimId: payload.claimId,
+    environment: "production",
+    platform: "shared",
+    projectId: payload.projectId,
+    sourceId: payload.sourceId,
+    taskId: payload.taskId,
+  });
+  return isSecuritySafe({ boundedEvidence }) ? normalized : null;
+};
+
+export const normalizeResearchMaintenanceRequest = (
+  payload: unknown,
+): ResearchMaintenanceRequest | null => {
+  if (
+    !isRecord(payload) || !hasExactKeys(payload, MAINTENANCE_KEYS) ||
+    payload.action !== "expire_public_memory" ||
+    payload.platform !== "shared" || payload.environment !== "production" ||
+    typeof payload.taskId !== "string" || !UUID_PATTERN.test(payload.taskId) ||
+    typeof payload.projectId !== "string" ||
+    !UUID_PATTERN.test(payload.projectId) ||
+    !Number.isSafeInteger(payload.limit) ||
+    Number(payload.limit) < 1 || Number(payload.limit) > 100
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    action: "expire_public_memory",
+    environment: "production",
+    limit: Number(payload.limit),
+    platform: "shared",
+    projectId: payload.projectId,
+    taskId: payload.taskId,
+  });
+};
+
 export const sha256Hex = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -518,6 +613,7 @@ const decodeHtmlEntities = (value: string): string =>
 export const extractBoundedExcerpt = (
   body: string,
   contentType: string,
+  evidenceQuery?: string,
 ): string | null => {
   const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
   if (!["text/html", "text/plain", "application/json"].includes(mediaType)) {
@@ -535,7 +631,23 @@ export const extractBoundedExcerpt = (
       .replace(/<[^>]+>/gu, " ");
     text = decodeHtmlEntities(text);
   }
-  const bounded = text.replace(/\s+/gu, " ").trim().slice(0, 2_000);
+  text = text.replace(/\s+/gu, " ").trim();
+  let bounded = text.slice(0, 2_000);
+  if (evidenceQuery !== undefined) {
+    const query = evidenceQuery.replace(/\s+/gu, " ").trim();
+    if (
+      query.length < 4 || query.length > 512 ||
+      !isSecuritySafe({ evidenceQuery: query })
+    ) {
+      return null;
+    }
+    const matchAt = text.toLocaleLowerCase("en-US").indexOf(
+      query.toLocaleLowerCase("en-US"),
+    );
+    if (matchAt < 0) return null;
+    const start = Math.max(0, Math.min(matchAt - 600, text.length - 2_000));
+    bounded = text.slice(start, start + 2_000).trim();
+  }
   if (!bounded || !isSecuritySafe({ excerpt: bounded })) return null;
   return bounded;
 };
@@ -579,6 +691,55 @@ export const extractObservedPublicationDates = (
     }
   }
   return Object.freeze([...new Set(candidates)].sort());
+};
+
+export type PublicationProvenance = Readonly<{
+  machineValue: string;
+  mode: "github_commit_metadata" | "published_metadata";
+  publicationDate: string;
+  semanticIdentity: string;
+}>;
+
+export const derivePublicationProvenance = (
+  body: string,
+  contentType: string,
+  target: CanonicalResearchUrl,
+  authorityId: string,
+): PublicationProvenance | null => {
+  if (authorityId === "chillywood-public-repository") {
+    const commit = target.pathname.match(
+      /^\/Chillywood2025\/chillywood-mobile\/commit\/([a-f0-9]{40})$/u,
+    )?.[1];
+    if (!commit || !contentType.toLowerCase().startsWith("text/html")) {
+      return null;
+    }
+    const rawDate = body.match(
+      /"(?:committedDate|authoredDate)"\s*:\s*"([^"]{4,80})"/iu,
+    )?.[1] ??
+      body.match(
+        /<relative-time\b[^>]*\bdatetime=["']([^"']{4,80})["'][^>]*>/iu,
+      )?.[1];
+    const parsed = rawDate === undefined ? Number.NaN : Date.parse(rawDate);
+    if (!Number.isFinite(parsed) || parsed > Date.now() + 300_000) {
+      return null;
+    }
+    const publicationDate = new Date(parsed).toISOString();
+    return Object.freeze({
+      machineValue: publicationDate,
+      mode: "github_commit_metadata",
+      publicationDate,
+      semanticIdentity: `github-commit:${commit}`,
+    });
+  }
+  const observed = extractObservedPublicationDates(body, contentType);
+  if (observed.length < 1) return null;
+  const publicationDate = observed[0];
+  return Object.freeze({
+    machineValue: publicationDate,
+    mode: "published_metadata",
+    publicationDate,
+    semanticIdentity: `published-at:${publicationDate}`,
+  });
 };
 
 const normalizeExtractiveText = (value: string): string =>

@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 import {
   type ResearchClaimRecord,
+  type ResearchContradictionEventRecord,
   type ResearchContradictionRecord,
   type ResearchRelationRecord,
   type ResearchRetrievalRecord,
@@ -28,6 +29,16 @@ const REQUEST_KEYS = Object.freeze([
   "platform",
   "projectId",
   "researchClaimId",
+  "taskId",
+]);
+const RESOLUTION_REQUEST_KEYS = Object.freeze([
+  "action",
+  "boundedEvidence",
+  "contradictionId",
+  "environment",
+  "platform",
+  "projectId",
+  "resolutionSourceId",
   "taskId",
 ]);
 const CORS_HEADERS = Object.freeze({
@@ -122,6 +133,17 @@ type EvaluationRequest = Readonly<{
   taskId: string;
 }>;
 
+type ContradictionResolutionRequest = Readonly<{
+  action: "evaluate_contradiction_resolution";
+  boundedEvidence: string;
+  contradictionId: string;
+  environment: "production";
+  platform: "shared";
+  projectId: string;
+  resolutionSourceId: string;
+  taskId: string;
+}>;
+
 const normalizeRequest = (value: unknown): EvaluationRequest | null => {
   if (
     !isRecord(value) || !hasExactKeys(value, REQUEST_KEYS) ||
@@ -145,9 +167,41 @@ const normalizeRequest = (value: unknown): EvaluationRequest | null => {
   });
 };
 
+const normalizeContradictionResolutionRequest = (
+  value: unknown,
+): ContradictionResolutionRequest | null => {
+  if (
+    !isRecord(value) || !hasExactKeys(value, RESOLUTION_REQUEST_KEYS) ||
+    value.action !== "evaluate_contradiction_resolution" ||
+    value.platform !== "shared" || value.environment !== "production" ||
+    typeof value.taskId !== "string" || !UUID_PATTERN.test(value.taskId) ||
+    typeof value.projectId !== "string" ||
+    !UUID_PATTERN.test(value.projectId) ||
+    typeof value.contradictionId !== "string" ||
+    !UUID_PATTERN.test(value.contradictionId) ||
+    typeof value.resolutionSourceId !== "string" ||
+    !UUID_PATTERN.test(value.resolutionSourceId) ||
+    typeof value.boundedEvidence !== "string" ||
+    value.boundedEvidence.trim().length < 4 ||
+    value.boundedEvidence.length > 2_000
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    action: "evaluate_contradiction_resolution",
+    boundedEvidence: value.boundedEvidence.trim(),
+    contradictionId: value.contradictionId,
+    environment: "production",
+    platform: "shared",
+    projectId: value.projectId,
+    resolutionSourceId: value.resolutionSourceId,
+    taskId: value.taskId,
+  });
+};
+
 export const researchEvaluationGateOpen = async (
   serviceClient: SupabaseClientLike,
-  request: EvaluationRequest,
+  request: EvaluationRequest | ContradictionResolutionRequest,
 ): Promise<boolean> => {
   const now = new Date().toISOString();
   const [switches, retention, task, emergency] = await Promise.all([
@@ -250,7 +304,12 @@ export const loadResearchSnapshot = async (
   ) {
     return null;
   }
-  const [sourcesResult, retrievalsResult, contradictionsResult] = await Promise
+  const [
+    sourcesResult,
+    retrievalsResult,
+    contradictionsResult,
+    contradictionEventsResult,
+  ] = await Promise
     .all([
       serviceClient
         .from("research_sources")
@@ -274,7 +333,17 @@ export const loadResearchSnapshot = async (
         .eq("environment", request.environment),
       serviceClient
         .from("research_contradictions")
-        .select("resolution_state")
+        .select("id,source_id,evidence_hash,resolution_state")
+        .eq("claim_id", request.researchClaimId)
+        .eq("task_id", request.taskId)
+        .eq("project_id", request.projectId)
+        .eq("platform", request.platform)
+        .eq("environment", request.environment),
+      serviceClient
+        .from("cognitive_research_contradiction_events")
+        .select(
+          "contradiction_id,event_type,evidence_hash,prior_event_hash,proof_hash,proof_manifest",
+        )
         .eq("claim_id", request.researchClaimId)
         .eq("task_id", request.taskId)
         .eq("project_id", request.projectId)
@@ -284,15 +353,20 @@ export const loadResearchSnapshot = async (
   if (
     sourcesResult.error || retrievalsResult.error ||
     contradictionsResult.error ||
+    contradictionEventsResult.error ||
     !Array.isArray(sourcesResult.data) ||
     sourcesResult.data.length !== sourceIds.length ||
     !Array.isArray(retrievalsResult.data) ||
-    !Array.isArray(contradictionsResult.data)
+    !Array.isArray(contradictionsResult.data) ||
+    !Array.isArray(contradictionEventsResult.data)
   ) {
     return null;
   }
   return Object.freeze({
     claim: claimResult.data as ResearchClaimRecord,
+    contradictionEvents: Object.freeze(
+      contradictionEventsResult.data as ResearchContradictionEventRecord[],
+    ),
     contradictions: Object.freeze(
       contradictionsResult.data as ResearchContradictionRecord[],
     ),
@@ -382,6 +456,46 @@ export const evaluateAndRecordResearchClaim = async (
   });
 };
 
+export const evaluateContradictionResolution = async (
+  serviceClient: SupabaseClientLike,
+  request: ContradictionResolutionRequest,
+): Promise<Response> => {
+  const result = await serviceClient.rpc(
+    "cognitive_resolve_public_research_contradiction",
+    {
+      p_bounded_evidence: request.boundedEvidence,
+      p_contradiction_id: request.contradictionId,
+      p_environment: request.environment,
+      p_platform: request.platform,
+      p_project_id: request.projectId,
+      p_resolution_source_id: request.resolutionSourceId,
+      p_service_identity_token: evaluatorServiceToken(),
+      p_task_id: request.taskId,
+    },
+  );
+  if (
+    result.error || !isRecord(result.data) ||
+    typeof result.data.event_id !== "string" ||
+    typeof result.data.proof_hash !== "string" ||
+    !LOWER_HEX_64.test(result.data.proof_hash) ||
+    typeof result.data.evidence_hash !== "string" ||
+    !LOWER_HEX_64.test(result.data.evidence_hash)
+  ) {
+    return json(409, { error: "research_resolution_persistence_rejected" });
+  }
+  return json(200, {
+    contradictionId: request.contradictionId,
+    eventId: result.data.event_id,
+    evidenceHash: result.data.evidence_hash,
+    evaluatorIdentity: "independent_evaluation_judge",
+    privateDataUsed: false,
+    proofHash: result.data.proof_hash,
+    resolutionState: "resolved",
+    selfApproval: false,
+    userDerivedDataUsed: false,
+  });
+};
+
 export const handler = async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS, status: 200 });
@@ -393,13 +507,22 @@ export const handler = async (request: Request): Promise<Response> => {
     return json(401, { error: "research_evaluator_invocation_required" });
   }
   try {
-    const payload = normalizeRequest(await request.json().catch(() => null));
+    const raw = await request.json().catch(() => null);
+    if (!isRecord(raw)) {
+      return json(400, { error: "research_evaluator_payload_rejected" });
+    }
+    const payload = raw.action === "evaluate_contradiction_resolution"
+      ? normalizeContradictionResolutionRequest(raw)
+      : normalizeRequest(raw);
     if (!payload) {
       return json(400, { error: "research_evaluator_payload_rejected" });
     }
     const serviceClient = createServiceClient();
     if (!await researchEvaluationGateOpen(serviceClient, payload)) {
       return json(409, { error: "research_runtime_gate_closed" });
+    }
+    if (payload.action === "evaluate_contradiction_resolution") {
+      return await evaluateContradictionResolution(serviceClient, payload);
     }
     return await evaluateAndRecordResearchClaim(
       serviceClient,

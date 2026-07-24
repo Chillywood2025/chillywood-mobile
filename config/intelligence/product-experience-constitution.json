@@ -1,28 +1,78 @@
 {
   "constitutionKey": "product-experience-constitution-v1",
-  "status": "needs_product_baseline_review",
-  "ownerApprovalVersion": "not_approved_yet",
+  "status": "owner_selected_pending_authenticated_approval",
+  "ownerDecisionStatus": "option_c_selected",
+  "ownerApprovalVersion": null,
   "approvedBaselineHash": null,
+  "selectedBaselineId": "chillywood-product-experience-baseline-v1",
+  "selectedBaselineHash": "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba",
+  "selectedOption": "creator_balanced",
+  "baselineRecord": "config/intelligence/chillywood-product-experience-baseline-v1.json",
+  "approvalGate": {
+    "promptIntentIsDatabaseSignature": false,
+    "requiresAuthenticatedOwner": true,
+    "requiresCompletedBaselineWorkerExecution": true,
+    "requiresIndependentEvaluatorPass": true,
+    "requiresExactSourceCommitBinding": true,
+    "requiresExactBaselineHashBinding": true,
+    "requiresSingleSelection": true,
+    "replayProtected": true,
+    "revocable": true
+  },
   "allowedBaselineVariance": {
-    "cardRatioDelta": 0.08,
-    "spacingDeltaPx": 4,
+    "referenceMediaDimensionLogicalUnits": 4,
+    "referenceMediaViewportRatioDelta": 0.03,
+    "spacingLogicalUnits": 4,
     "typographyScaleDelta": 0.1,
-    "densityDelta": 0.15
+    "densityDelta": 0.15,
+    "aspectRatioRelativeError": 0.02,
+    "accessibilityTargetFloorVariance": 0
   },
   "mobileFirstPrinciples": [
     "Primary journeys must resolve on small phones before tablet refinements are accepted.",
     "Controls must be reachable with one hand where the route is designed for feed or live use.",
-    "Touch targets must be at least 44 by 44 points unless the control is informational only."
+    "Android interactive targets use dp and must be at least 48 by 48 dp.",
+    "iOS interactive targets use points and must be at least 44 by 44 pt.",
+    "Web targets use CSS pixels: 44 by 44 CSS px is preferred and the applicable WCAG 2.2 AA 24 CSS px rule and exceptions are classified separately."
   ],
   "streamingContentDensity": {
-    "minimumCardsAboveFold": {
-      "phonePortrait": 2,
-      "phoneLandscape": 3,
-      "tabletPortrait": 4,
-      "tabletLandscape": 6
+    "baselineFamily": "standard_streaming_card",
+    "phonePortraitReference": {
+      "viewportWidth": 390,
+      "viewportHeight": 844,
+      "mediaFrameWidth": 252,
+      "mediaFrameHeight": 142,
+      "mediaAspectRatio": "16:9",
+      "horizontalMargin": 16,
+      "horizontalGap": 12,
+      "verticalRowGap": 20,
+      "horizontalCardsVisiblePerRow": 1.42,
+      "minimumCardsAboveFold": 3,
+      "maximumCardsAboveFold": 4,
+      "unit": "logical"
     },
-    "maximumEmptyViewportRatio": 0.35,
-    "maximumScrollDistanceToMeaningfulContentPx": 640
+    "tabletPortraitReference": {
+      "viewportWidth": 1024,
+      "viewportHeight": 1366,
+      "mediaFrameWidth": 307,
+      "mediaFrameHeight": 173,
+      "mediaAspectRatio": "16:9",
+      "columns": 3,
+      "horizontalMargin": 32,
+      "columnGap": 20,
+      "rowGap": 24,
+      "minimumCardsAboveFold": 6,
+      "maximumCardsAboveFold": 9,
+      "unit": "logical"
+    },
+    "responsiveBehavior": {
+      "compactPhone": "peekable_horizontal_rows",
+      "compactLandscape": "two_balanced_columns_allowed",
+      "mediumAndExpanded": "three_or_four_columns",
+      "orientationLocked": false,
+      "artworkStretchAllowed": false,
+      "featuredContentDefaultMaximumRows": 1
+    }
   },
   "routeCompletionExpectations": {
     "requiredCoreRoutes": [
@@ -53,58 +103,112 @@
     "emptyStateRequiresAction": true,
     "errorStateRequiresRetryOrExit": true,
     "offlineStateRequiresConnectionStatus": true,
+    "permissionStateRequiresRecoveryOrExit": true,
     "silentFailureMaximumMs": 3000
   },
   "cardMetrics": {
-    "maximumCardViewportWidthRatio": {
-      "phone": 0.88,
-      "tablet": 0.46
+    "measurementSemantics": {
+      "mediaFrameIsNotTotalCardContainer": true,
+      "metadataBandMeasuredSeparately": true,
+      "totalCardContainerMeasuredSeparately": true
     },
-    "maximumCardViewportHeightRatio": {
-      "phone": 0.58,
-      "tablet": 0.42
-    },
-    "acceptedAspectRatios": [
-      "16:9",
-      "4:5",
-      "1:1"
+    "optionCTargetFamilies": [
+      "standard_streaming_card",
+      "live_streaming_card",
+      "creator_streaming_card"
     ],
-    "minimumHorizontalSpacingPx": 8,
-    "maximumHorizontalSpacingPx": 24,
+    "acceptedStandardStreamingAspectRatios": [
+      "16:9"
+    ],
+    "explicitExceptionAspectRatios": [
+      "9:16",
+      "4:5"
+    ],
+    "genericSafetyFloors": {
+      "minimumHorizontalSpacingLogicalUnits": 8,
+      "maximumTitleLines": 2,
+      "maximumMetadataLines": 2
+    },
     "maximumTitleLines": 2,
-    "metadataMaximumHeightRatio": 0.28
+    "maximumMetadataLines": 2
+  },
+  "surfaceTaxonomy": {
+    "requiredFamilies": [
+      "standard_streaming_card",
+      "live_streaming_card",
+      "creator_streaming_card",
+      "featured_hero_card",
+      "vertical_post_card",
+      "compact_media_list_item",
+      "non_media_interactive_surface"
+    ],
+    "routeComponentMappingsSource": "config/intelligence/chillywood-product-experience-baseline-v1.json",
+    "routeLocalSilentOverrideAllowed": false,
+    "exceptionsMustBeExplicitMeasuredDocumentedVersioned": true
+  },
+  "creatorAndLiveIdentity": {
+    "creatorAvatarAndNameFirstClass": true,
+    "secondaryLineAllowed": true,
+    "liveBadgeViewerStateAndCreatorIdentityVisible": true,
+    "liveIndicatorsMayReduceOrObscureInteractiveTarget": false,
+    "artworkMayDisplaceCreatorIdentity": false
   },
   "typography": {
-    "minimumBodySizePt": 13,
-    "maximumCardTitleSizePt": 18,
+    "minimumBodySizeIsPlatformReviewed": true,
     "negativeLetterSpacingAllowed": false,
-    "dynamicTypeMustNotClip": true
+    "dynamicTypeMustNotClip": true,
+    "textScalingMustPreservePrimaryActions": true,
+    "maximumCardTitleLines": 2,
+    "maximumMetadataLines": 2
   },
   "breakpoints": {
-    "smallPhoneMaxWidth": 374,
-    "phoneMaxWidth": 767,
-    "tabletMinWidth": 768,
-    "landscapeMinAspectRatio": 1.3
+    "compactMaximumWidthExclusive": 600,
+    "mediumMinimumWidth": 600,
+    "expandedMinimumWidth": 840,
+    "unit": "logical",
+    "physicalDeviceNameUsedAsBreakpoint": false
   },
   "accessibility": {
-    "minimumTouchTargetPt": 44,
+    "android": {
+      "minimumInteractiveTarget": 48,
+      "unit": "dp"
+    },
+    "ios": {
+      "minimumInteractiveTarget": 44,
+      "unit": "pt"
+    },
+    "web": {
+      "preferredInteractiveTarget": 44,
+      "wcag22AaMinimumTarget": 24,
+      "unit": "CSS px",
+      "wcagExceptionsMustBeClassified": true
+    },
     "increasedTextSizeMustPreservePrimaryAction": true,
-    "screenReaderCriticalControlsMustHaveLabels": true
+    "screenReaderCriticalControlsRequireNameRoleValue": true,
+    "focusOrderMatchesVisualOrder": true
   },
   "screenshotProvenance": {
     "requiresRuntimeIdentityHash": true,
     "requiresDeviceClass": true,
     "requiresOrientation": true,
     "requiresSyntheticAccountFlag": true,
+    "requiresPlatformAndMeasurementUnit": true,
     "allowsPrivateUserData": false
   },
   "sentinelAuthority": {
     "mayObserve": true,
-    "mayCollectScreenshots": true,
-    "mayCreateFindings": true,
+    "mayCollectScreenshotsOutsideGit": true,
+    "mayPersistSanitizedEvidenceHashes": true,
+    "mayCreateFindingsAfterIndependentEvaluation": true,
     "mayProposeAlternatives": true,
     "mayMutateProduction": false,
     "mayApproveBaseline": false,
     "mayPublishRelease": false
+  },
+  "amendmentPolicy": {
+    "silentRewriteAllowed": false,
+    "requiresNewBaselineVersion": true,
+    "requiresNewCanonicalHash": true,
+    "requiresAuthenticatedOwnerWorkerEvaluatorChain": true
   }
 }

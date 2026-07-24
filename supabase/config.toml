@@ -205,6 +205,9 @@ verify_jwt = true
 [functions.cognitive-product-quality-evaluator]
 verify_jwt = true
 
+[functions.cognitive-product-baseline-executor]
+verify_jwt = true
+
 [functions.cognitive-product-quality-triage]
 verify_jwt = true
 

@@ -1,14 +1,25 @@
 # Chi'llywood Product-Experience Baseline Options V1
 
-Status: Owner selection required. These options are measurement baselines only.
-They do not authorize a production UI change, deployment, release, or automatic
-repair.
+Status: historical alternatives preserved. The Owner selected Option C
+(`creator_balanced`) on 2026-07-24. The immutable source selection record is
+`config/intelligence/chillywood-product-experience-baseline-v1.json`; its
+authenticated Owner → worker → evaluator database approval remains pending.
+These options are measurement baselines only. They do not authorize a
+production UI change, deployment, release, or automatic repair.
 
 Canonical options manifest:
 `config/intelligence/product-experience-baseline-options-v1.json`
 
 Manifest SHA-256:
 `7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df`
+
+Canonical selection hashes bind the manifest schema/version, scope, common
+requirements, and exactly one selected option after recursively sorting JSON
+object keys and encoding the result as compact UTF-8 JSON:
+
+- A: `29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9`
+- B: `9e891de1b46cd19405b43178dbd34ed0ea1d96b4eebcc7b404f4f3d9f6ba3dc5`
+- C: `0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184`
 
 ## First-party guidance used
 
@@ -131,13 +142,19 @@ than B.
 - No option locks orientation or treats a physical tablet name as a breakpoint.
 - No option stretches media to fill an incompatible container.
 
-## Exact Owner approval request
+## Exact authenticated approval request
 
-Select exactly one of `A`, `B`, or `C` for
-`chillywood-product-experience-baseline-v1`.
+Record exactly Option `C` (`creator_balanced`) for
+`chillywood-product-experience-baseline-v1`; Options A and B remain historical
+alternatives and are not selected.
 
 The approval must name manifest SHA-256
-`7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df`.
+`7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df`
+and canonical selection hash
+`34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba`.
+The selected Option C contract hash, not the three-option manifest hash or
+the historical option-only hash, is the
+immutable `baseline_hash`.
 
 Approval scope:
 

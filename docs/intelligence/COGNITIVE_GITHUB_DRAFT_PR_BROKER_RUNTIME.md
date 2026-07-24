@@ -72,16 +72,37 @@ Every execution requires, in this order:
 7. An immutable trusted-runner preflight receipt for the exact content and
    required-test hash.
 8. A fresh installation token with exact repository/permission readback.
-9. Read-only verification that the approved base commit and prior file/blob
+9. The runtime installation fingerprint and immutable least-privilege
+   scope-manifest hash must exactly match the current Owner-accepted
+   attestation and the credential identity stamped onto the capability.
+10. Read-only verification that the approved base commit and prior file/blob
    state still match.
-10. Atomic database capability consumption, locked approval liveness, and an
+11. Atomic database capability consumption, locked approval liveness, and an
     approval target hash over that exact source state before any GitHub
     mutation.
-11. One exact file and one new `codex/cognitive-canary/*` branch.
-12. A draft PR based on `codex/cognitive-level01-operationalization`.
-13. An immutable trusted-tool result with locked approval liveness before the
+12. One exact file and one new `codex/cognitive-canary/*` branch.
+13. A draft PR based on `codex/cognitive-level01-operationalization`.
+14. An immutable trusted-tool result with locked approval liveness before the
     result is accepted.
-14. Independent evaluation before a canary can pass.
+15. Independent evaluation before a canary can pass.
+
+The plan snapshot is not a caller-selected opaque label. It is the
+domain-separated SHA-256 contract over the exact repository, canary, base
+branch and commit, target branch, path, prior-state hash, content hash, title
+hash, commit-message hash, deterministic PR-body hash, required-tests hash,
+task, project, and approval scope. The Edge runtime derives these values from
+the actual request. The database recomputes the same contract while holding
+the capability lock and requires it to equal both the capability and approved
+execution plan snapshot. Any content, title, commit message, PR body, path,
+base, prior state, branch, or tests substitution fails before mutation.
+
+The accepted credential binding stores only the safe installation identity
+fingerprint, the reviewed scope-manifest hash
+`ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554`,
+the immutable attestation ID, and its expiry. It never hashes or stores the
+private key or installation token. A newer accepted installation attestation,
+fingerprint change, scope change, revocation, or expiry invalidates an older
+capability; a new Owner-approved capability is required.
 
 The function never accepts a merge field, arbitrary base branch, existing
 branch update, file deletion, multiple-file tree, or caller-authored GitHub
@@ -130,6 +151,12 @@ The undeployed forward-only migration:
   `github_open_draft_pr`, the exact canary branch grammar, and an exact write
   lease, exact approved base commit and prior blob state, and a passing trusted
   preflight receipt for the exact content hash and required-test hash;
+- adds an immutable authorization-to-plan binding containing only canonical
+  hashes for content, title, commit message, deterministic body, path, base,
+  prior state, branch, repository, tests, and accepted credential identity;
+- binds every newly issued GitHub capability to the current Owner-accepted
+  installation fingerprint and exact permission-scope manifest, then
+  revalidates that binding at consumption and postflight;
 - adds `cognitive_record_github_draft_pr_provider_readback(...)`, producing only
   a GitHub draft-PR provider readback/evidence pair;
 - adds `cognitive_accept_github_draft_pr_tool_result(...)`, delegating only after

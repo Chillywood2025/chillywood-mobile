@@ -226,7 +226,7 @@ select ok(
   'route failure rejects an inferred timeout'
 );
 select ok(
-  public.product_experience_detailed_metric_manifest_is_valid(
+  not public.product_experience_detailed_metric_manifest_is_valid(
     'visual_product_experience_sentinel','android','failed',
     '{
       "observationKind":"touch_target",
@@ -240,7 +240,7 @@ select ok(
       }
     }'::jsonb
   ),
-  'Android touch target uses the reviewed 48dp threshold and both dimensions'
+  'obsolete Android touch target shape cannot bypass the reviewed metric contract'
 );
 select ok(
   not public.product_experience_detailed_metric_manifest_is_valid(

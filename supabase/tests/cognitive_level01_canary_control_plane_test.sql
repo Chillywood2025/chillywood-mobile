@@ -85,7 +85,8 @@ select is(
     (select task_id from level01_fixture),
     (select project_id from level01_fixture),
     'shared','production','github_draft_pr','configured',
-    repeat('e',64),repeat('f',64),
+    repeat('e',64),
+    'ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554',
     transaction_timestamp()+interval '1 day',
     'capability_and_tool_broker'
   ) is not null,
@@ -248,25 +249,60 @@ select pg_temp.set_level01_test_actor('research_source_broker');
 
 create temporary table level01_source(source_id uuid);
 insert into level01_source
-select public.cognitive_record_research_source(
-  (select task_id from level01_fixture),
-  (select project_id from level01_fixture),
-  'shared',
-  'production',
-  'expo-docs',
-  'https://docs.expo.dev/versions/latest/',
-  'Expo',
-  transaction_timestamp() - interval '1 day',
-  transaction_timestamp(),
-  transaction_timestamp() + interval '30 days',
-  'official_documentation',
-  true,
-  'Official Expo documentation was retrieved for the bounded platform review.',
-  'Expo documentation',
-  'official-source-reference',
-  array[repeat('e',64)],
-  'research_source_broker'
-);
+select (
+  public.cognitive_record_public_research_source_v2(
+    (select task_id from level01_fixture),
+    (select project_id from level01_fixture),
+    'shared',
+    'production',
+    'expo-docs',
+    'docs.expo.dev',
+    'official_documentation',
+    'Expo',
+    'expo',
+    encode(extensions.digest(convert_to(
+      'https://docs.expo.dev/versions/latest/','UTF8'
+    ),'sha256'),'hex'),
+    encode(extensions.digest(convert_to(
+      'https://docs.expo.dev/versions/latest/','UTF8'
+    ),'sha256'),'hex'),
+    encode(extensions.digest(convert_to(
+      'Official Expo documentation was retrieved for the bounded platform review.',
+      'UTF8'
+    ),'sha256'),'hex'),
+    date_trunc(
+      'milliseconds',transaction_timestamp()-interval '1 day'
+    ),
+    jsonb_build_object(
+      'mode','published_metadata',
+      'machineValue',to_char(
+        date_trunc(
+          'milliseconds',transaction_timestamp()-interval '1 day'
+        ),
+        'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+      ),
+      'semanticIdentity','published-at:expo-canary',
+      'evidenceHash',encode(extensions.digest(convert_to(concat_ws(
+        '|','published_metadata',to_char(
+          date_trunc(
+            'milliseconds',transaction_timestamp()-interval '1 day'
+          ),
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ),'published-at:expo-canary'
+      ),'UTF8'),'sha256'),'hex')
+    ),
+    transaction_timestamp(),
+    transaction_timestamp()+interval '30 days',
+    true,
+    'Official Expo documentation was retrieved for the bounded platform review.',
+    jsonb_build_object(
+      'title','Expo documentation',
+      'locator','https://docs.expo.dev/versions/latest/'
+    ),
+    array[repeat('e',64)],
+    'synthetic-test-credential-for-research_source_broker-0000000000000000'
+  )->>'source_id'
+)::uuid;
 grant select on level01_source to authenticated;
 select is(
   (select count(*)::integer from level01_source),

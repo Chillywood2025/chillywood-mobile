@@ -35,6 +35,7 @@ type ModelTransport = (
 ) => Promise<ModelTransportResult>;
 
 type ModelGovernancePreflight = Readonly<{
+  approvalTargetHash: string;
   capabilityId: string;
   taskId: string;
   projectId: string;
@@ -49,7 +50,9 @@ type ModelGovernancePreflight = Readonly<{
   requestHash: string;
   evidencePacketHash: string;
   promptTemplateHash: string;
+  scopeHash: string;
   configuredModelIdentityHash: string;
+  runtimeCredentialFingerprintHash: string;
   reservedModelTokens: number;
   reservedModelCost: number;
 }>;
@@ -89,6 +92,16 @@ type ModelGovernanceSettlement = Readonly<{
 }>;
 
 export type ModelGovernanceDatabase = Readonly<{
+  recover: (
+    input: Readonly<{
+      capabilityId: string;
+      recoveryBatchHash: string;
+    }>,
+  ) => Promise<Readonly<{
+    capabilityId: string;
+    recoveredCount: number;
+    recoveryBatchHash: string;
+  }>>;
   reserve: (
     input: ModelGovernancePreflight,
   ) => Promise<ModelGovernanceReservation>;
@@ -136,6 +149,7 @@ type ModelBudget = Readonly<{
 type ModelRequest = Readonly<{
   action: "assess_sanitized_evidence";
   schemaVersion: "cognitive-model-advisory-v1";
+  approvalTargetHash: string;
   capabilityId: string;
   idempotencyKey: string;
   assessmentId: string;
@@ -156,6 +170,7 @@ type ModelRequest = Readonly<{
   blindFirstRound: true;
   evidencePacketHash: string;
   evidencePacket: EvidencePacket;
+  scopeHash: string;
   budget: ModelBudget;
 }>;
 
@@ -420,6 +435,28 @@ export const sha256Hex = async (value: string): Promise<string> => {
 export const hashEvidencePacket = (packet: EvidencePacket): Promise<string> =>
   sha256Hex(canonicalJson(packet as unknown as Json));
 
+export const hashModelAssessmentScope = (
+  value: Readonly<{
+    assessmentId: string;
+    councilRole: string;
+    environment: string;
+    evidencePacketHash: string;
+    platform: string;
+    projectId: string;
+    taskId: string;
+  }>,
+): Promise<string> =>
+  sha256Hex([
+    "cognitive-model-assessment-scope-v1",
+    value.taskId,
+    value.projectId,
+    value.platform,
+    value.environment,
+    value.councilRole,
+    value.assessmentId,
+    value.evidencePacketHash,
+  ].join("|"));
+
 export const promptTemplateVersionHash = (): Promise<string> =>
   sha256Hex(PROMPT_TEMPLATE);
 
@@ -485,6 +522,7 @@ export const isStrictModelRequest = (value: unknown): value is ModelRequest =>
   hasExactKeys(value, [
     "action",
     "schemaVersion",
+    "approvalTargetHash",
     "capabilityId",
     "idempotencyKey",
     "assessmentId",
@@ -496,10 +534,13 @@ export const isStrictModelRequest = (value: unknown): value is ModelRequest =>
     "blindFirstRound",
     "evidencePacketHash",
     "evidencePacket",
+    "scopeHash",
     "budget",
   ]) &&
   value.action === "assess_sanitized_evidence" &&
   value.schemaVersion === "cognitive-model-advisory-v1" &&
+  typeof value.approvalTargetHash === "string" &&
+  HASH_PATTERN.test(value.approvalTargetHash) &&
   typeof value.capabilityId === "string" &&
   UUID_PATTERN.test(value.capabilityId) &&
   typeof value.idempotencyKey === "string" &&
@@ -520,6 +561,8 @@ export const isStrictModelRequest = (value: unknown): value is ModelRequest =>
   typeof value.evidencePacketHash === "string" &&
   HASH_PATTERN.test(value.evidencePacketHash) &&
   validEvidencePacket(value.evidencePacket) &&
+  typeof value.scopeHash === "string" &&
+  HASH_PATTERN.test(value.scopeHash) &&
   validBudget(value.budget);
 
 const isSanitizedModelRequest = (value: ModelRequest): boolean =>
@@ -767,6 +810,7 @@ export const openAiResponsesTransport: ModelTransport = async ({
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      redirect: "error",
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
@@ -779,9 +823,40 @@ export const openAiResponsesTransport: ModelTransport = async ({
     if (response.status === 429) throw new Error("provider_rate_limited");
     throw new Error("provider_request_failed");
   }
-  const raw = await response.text();
-  if (new TextEncoder().encode(raw).byteLength > MAX_PROVIDER_RESPONSE_BYTES) {
-    throw new Error("provider_response_too_large");
+  if (!response.body) throw new Error("provider_response_invalid");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let raw = "";
+  let receivedBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        raw += decoder.decode();
+        break;
+      }
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_PROVIDER_RESPONSE_BYTES) {
+        await reader.cancel("provider_response_too_large");
+        throw new Error("provider_response_too_large");
+      }
+      raw += decoder.decode(value, { stream: true });
+    }
+  } catch (error) {
+    try {
+      await reader.cancel("provider_response_rejected");
+    } catch {
+      // The stream may already be closed or cancelled.
+    }
+    if (
+      error instanceof Error &&
+      error.message === "provider_response_too_large"
+    ) {
+      throw error;
+    }
+    throw new Error("provider_response_invalid");
+  } finally {
+    reader.releaseLock();
   }
   let providerPayload: unknown;
   try {
@@ -930,10 +1005,32 @@ const createGovernanceDatabase = (
   };
 
   return Object.freeze({
+    recover: async (input) => {
+      const value = await rpc("cognitive_model_router_recover_expired", {
+        p_capability_id: input.capabilityId,
+        p_limit: 10,
+        p_recovery_batch_hash: input.recoveryBatchHash,
+        p_service_identity_token: serviceIdentityToken,
+      });
+      if (
+        !isRecord(value) ||
+        value.capabilityId !== input.capabilityId ||
+        value.recoveryBatchHash !== input.recoveryBatchHash ||
+        !validFiniteInteger(value.recoveredCount, 0, 10)
+      ) {
+        throw new Error("model_governance_invalid");
+      }
+      return Object.freeze({
+        capabilityId: value.capabilityId,
+        recoveredCount: value.recoveredCount,
+        recoveryBatchHash: value.recoveryBatchHash,
+      });
+    },
     reserve: async (
       input: ModelGovernancePreflight,
     ): Promise<ModelGovernanceReservation> => {
       const value = await rpc("cognitive_model_router_reserve", {
+        p_approval_target_hash: input.approvalTargetHash,
         p_capability_id: input.capabilityId,
         p_task_id: input.taskId,
         p_project_id: input.projectId,
@@ -948,7 +1045,10 @@ const createGovernanceDatabase = (
         p_request_hash: input.requestHash,
         p_evidence_packet_hash: input.evidencePacketHash,
         p_prompt_template_hash: input.promptTemplateHash,
+        p_scope_hash: input.scopeHash,
         p_configured_model_identity_hash: input.configuredModelIdentityHash,
+        p_runtime_credential_fingerprint_hash:
+          input.runtimeCredentialFingerprintHash,
         p_reserved_model_tokens: input.reservedModelTokens,
         p_reserved_model_cost: input.reservedModelCost,
         p_service_identity_token: serviceIdentityToken,
@@ -1043,6 +1143,22 @@ export const createHandler = (
     ) {
       return json(409, { error: "evidence_packet_hash_mismatch" });
     }
+    if (
+      !constantTimeEqual(
+        await hashModelAssessmentScope({
+          assessmentId: payload.assessmentId,
+          councilRole: payload.councilRole,
+          environment: payload.environment,
+          evidencePacketHash: payload.evidencePacketHash,
+          platform: payload.platform,
+          projectId: payload.projectId,
+          taskId: payload.taskId,
+        }),
+        payload.scopeHash,
+      )
+    ) {
+      return json(409, { error: "model_scope_hash_mismatch" });
+    }
 
     try {
       const provider = readRequiredConfiguration(
@@ -1095,6 +1211,7 @@ export const createHandler = (
       const configuredModelIdentityHash = await sha256Hex(
         `${provider}|${modelFamily}|${model}`,
       );
+      const runtimeCredentialFingerprintHash = await sha256Hex(apiKey);
       const reservedModelTokens = maximumCallTokens(
         providerBody,
         payload.budget.maxOutputTokens,
@@ -1106,10 +1223,12 @@ export const createHandler = (
         modelFamily,
         modelName: model,
         promptTemplateHash: templateHash,
+        runtimeCredentialFingerprintHash,
         reservedModelTokens,
         reservedModelCost,
       }));
       const preflight: ModelGovernancePreflight = Object.freeze({
+        approvalTargetHash: payload.approvalTargetHash,
         capabilityId: payload.capabilityId,
         taskId: payload.taskId,
         projectId: payload.projectId,
@@ -1124,7 +1243,9 @@ export const createHandler = (
         requestHash,
         evidencePacketHash: payload.evidencePacketHash,
         promptTemplateHash: templateHash,
+        scopeHash: payload.scopeHash,
         configuredModelIdentityHash,
+        runtimeCredentialFingerprintHash,
         reservedModelTokens,
         reservedModelCost,
       });
@@ -1132,6 +1253,12 @@ export const createHandler = (
         createGovernanceDatabase(env);
       let reservation: ModelGovernanceReservation;
       try {
+        await governanceDatabase.recover({
+          capabilityId: payload.capabilityId,
+          recoveryBatchHash: await sha256Hex(
+            `${payload.idempotencyKey}|${payload.scopeHash}|recover`,
+          ),
+        });
         reservation = await governanceDatabase.reserve(preflight);
       } catch {
         return json(409, { error: "model_governance_preflight_rejected" });

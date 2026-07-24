@@ -22,6 +22,13 @@ register or revoke its own capability. Owner revocation locks the same capabilit
 row used by preflight, so revocation and a new reservation have one database
 winner.
 
+When only one provider family is configured, an exact Owner may authorize one
+`model_advisory` execution through a dedicated immutable decision record. That
+record remains `MODEL_INDEPENDENCE_PROVIDER_REQUIRED`, advisory-only,
+quorum-ineligible, single-execution, and independently evaluated. It cannot
+satisfy a collective-governance or non-advisory independence gate; every other
+operation retains the existing verified-independence requirement.
+
 Provider requests use:
 
 - `store: false`;
@@ -38,6 +45,13 @@ capability expiry/revocation, prerequisite switch, concurrency, and exact scope
 are checked under database row locks. A capability/assessment/idempotency replay
 is denied. The provider is never called when reservation fails.
 
+The Edge runtime computes SHA-256 over the actual configured API key and sends
+only that fingerprint to reservation. Under the same capability/attestation row
+locks, the database requires it to match the current accepted credential
+attestation and stores the fingerprint in immutable proof and preflight rows.
+Credential rotation or a runtime/attestation mismatch fails before provider
+transport. Raw provider credential material never crosses this boundary.
+
 After a provider call, the router atomically replaces the reservation with actual
 bounded usage and writes an immutable sanitized result audit. A completed result
 is accepted only if task, emergency, execution, capability, switch, and exact
@@ -48,10 +62,11 @@ stop, but it cannot create a completed result. The Edge response is withheld if
 settlement fails.
 
 Preflight and result audits contain hashes and bounded operational metrics only:
-no evidence body, model output, provider response identifier, credential, token,
-or private identifier is stored. The returned result contains only the bounded
-advisory, usage/cost, safe model metadata, and SHA-256 hashes suitable for later
-independent attestation. It never writes an attestation itself. The provider
+no evidence body, model output, raw provider response identifier, raw credential,
+token, or private identifier is stored. The returned result contains only the
+bounded advisory, usage/cost, safe model metadata, and SHA-256 hashes suitable
+for later independent attestation. It never writes an attestation itself. The
+provider
 identity hash is derived from the provider family, not the model family, so two
 OpenAI model families cannot be miscounted as two providers. Every result is
 explicitly:
