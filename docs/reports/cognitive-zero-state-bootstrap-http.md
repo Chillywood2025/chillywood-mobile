@@ -1,6 +1,6 @@
 # Cognitive zero-state bootstrap HTTP proof
 
-Status: **BLOCKED**
+Status: **PASS**
 
 This report records the bounded local run of
 `scripts/test-cognitive-zero-state-bootstrap-http.mjs` against the integrated
@@ -12,66 +12,69 @@ cognitive Owner, worker, and evaluator Edge contracts.
 - Disposable local Supabase project: `chillywood-bootstrap-http-local`
 - Test source: coordinator worktree at
   `/Users/loverslane/chillywood-mobile`
-- Integrated bootstrap source entered testing at
-  `7186ccf642951ce717af18560e62d18f143cfd01`
-- Coordinator head observed after the bounded run:
-  `e62c1c3feb10577b3a421706fe92b15ad556f8ed`
-- The bootstrap migration, three cognitive Edge functions, canonical policy
-  engine, and security policy did not change between those two commits.
+- Exact integrated source head:
+  `a1d257bf4fb970909bd49601ac66e9067be1137d`
 - The harness verifies that its `_lib`, `config`, `supabase/functions`, and
   `supabase/migrations` paths resolve to the selected source root.
+- The harness requires the expected 40-character source head before starting
+  and proves that the source head is unchanged after the HTTP chain.
 - No remote database, function, secret, account, schedule, switch, or product
   state was read or mutated.
 
-The final positive-chain rerun must pin and verify one stable source head. This
-blocked run is not represented as exact-head positive proof.
-
 ## Sanitized result
 
-- Assertions: **31 PASS / 23 FAIL / 54 total**
-- Required gate: **22 PASS / 18 FAIL / 0 missing / 40 total**
+- Assertions: **57 PASS / 0 FAIL / 57 total**
+- Required gate: **43 PASS / 0 FAIL / 0 missing / 43 total**
 - Local Supabase reset/start: **PASS**
 - Edge target readiness: **PASS**
-- Positive Owner approval: **BLOCKED**
+- Exact source head stability: **PASS**
+- Malformed and extra-key bootstrap approval rejection: **PASS**
+- Positive Owner approval: **PASS**
+- Worker claim and stage: **PASS**
+- Independent evaluator proof: **PASS**
+- Completion and immutable receipt binding: **PASS**
+- Completion replay denial: **PASS**
 
-Passing evidence includes:
+The real HTTP chain proved:
 
 - zero project, task, switch, and schedule rows before approval;
-- zero project, task, switch, and schedule rows after the attempted Owner
-  approval;
-- zero project, task, switch, and schedule rows after the attempted stage and
+- zero project, task, switch, and schedule rows after Owner approval;
+- zero project, task, switch, and schedule rows after worker stage and after
   evaluator proof;
+- an exact Owner could record the immutable bootstrap approval;
+- malformed and extra-key Owner bootstrap payloads were rejected;
+- the worker could claim and stage only the exact approval and target tuple;
+- the independent evaluator could record only the matching receipt-bound
+  evaluator proof;
+- completion succeeded only with the matching receipt and evaluator proof;
+- completion created exactly one project, one bounded control task, ten
+  reviewed switches, and five bounded schedules;
+- all ten switches and all five schedules remained off;
+- Level 2 repair, user-derived memory, and production authority remained off;
 - legacy direct bootstrap RPC denial;
 - service credential denial at the Owner function;
 - Owner/worker/evaluator invocation crossover denial;
 - evaluator claim and worker self-evaluation denial;
 - wrong stage target, evaluator receipt, completion receipt, and evaluator
-  proof denial.
+  proof denial;
+- claim and completion replay denial.
 
-## Exact blocker
+## Resolved local blocker
 
-Authenticated requests to `cognitive-owner-approval` returned a sanitized HTTP
-5xx before the bootstrap approval RPC was reached. A fixed-category inspection
-of the disposable Edge runtime logs reported:
+The first bounded attempt exposed an Edge CPU limit in the authenticated Owner
+bootstrap path before the approval RPC. The valid hash-heavy bootstrap payload
+was safe, but the general canonical classifier consumed approximately 4.6
+seconds locally. The integrated source fixed this without changing the general
+classifier: `record_bootstrap_approval` now uses a strict exact-key bootstrap
+schema gate before the normal action dispatch. The final run proved valid
+approval plus malformed and extra-key rejection over the real Edge endpoint.
 
-- `CPU_LIMIT=PRESENT`
-- wall-clock timeout, worker termination, boot error, and memory-limit
-  categories: `MISSING`
-
-The valid bootstrap approval payload classified as `safe`, but a direct local
-measurement of `classifyCanonicalSecurityPayload` took approximately 4.6
-seconds. The local Edge worker therefore crossed its CPU budget on the
-authenticated payload path.
-
-Because no approval was created, the positive worker claim, stage, evaluator
-proof, completion, receipt, replay-after-completion, and final ten-switch /
-five-schedule readback assertions failed consequentially. No database or RPC
-defect was established.
+No database or RPC correction was required.
 
 ## Safety
 
-- The run stopped after one classifier-payload correction and one bounded
-  confirmation rerun.
+- After the exact source fix was integrated, the harness ran one bounded
+  exact-head confirmation pass.
 - No migration or Edge source was edited by this lane.
 - No key, token, assertion, password, cookie, private row, or request body was
   printed or committed.

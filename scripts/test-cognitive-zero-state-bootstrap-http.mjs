@@ -20,6 +20,10 @@ const rawSupabaseWorkdir =
 if (!rawSupabaseWorkdir.trim()) throw new Error("supabase_workdir_required");
 const SUPABASE_WORKDIR = path.resolve(rawSupabaseWorkdir);
 const SKIP_RESET = process.argv.includes("--skip-reset");
+const EXPECTED_SOURCE_HEAD = argument("--expected-source-head");
+if (!/^[a-f0-9]{40}$/u.test(EXPECTED_SOURCE_HEAD)) {
+  throw new Error("expected_source_head_required");
+}
 const requiredMigration = path.join(
   SOURCE_ROOT,
   "supabase/migrations/20260724023712_cognitive_zero_state_two_party_bootstrap.sql",
@@ -55,6 +59,21 @@ const SAFE_ENV = {
   HOME: process.env.HOME ?? "",
   PATH: process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin",
 };
+const readSourceHead = () => {
+  const result = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: SOURCE_ROOT,
+    encoding: "utf8",
+    env: SAFE_ENV,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const head = result.status === 0 ? result.stdout.trim() : "";
+  if (!/^[a-f0-9]{40}$/u.test(head)) throw new Error("source_head_unavailable");
+  return head;
+};
+const sourceHeadAtStart = readSourceHead();
+if (sourceHeadAtStart !== EXPECTED_SOURCE_HEAD) {
+  throw new Error("source_head_mismatch");
+}
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const FUNCTIONS = Object.freeze({
   evaluator: "cognitive-independent-evaluator",
@@ -69,6 +88,8 @@ const REQUIRED_CASE_NAMES = Object.freeze([
   "legacy direct bootstrap RPC is denied",
   "non-Owner cannot record bootstrap approval",
   "worker service credential cannot act as Owner",
+  "malformed Owner bootstrap approval is denied",
+  "extra-key Owner bootstrap approval is denied",
   "exact Owner records zero-state bootstrap approval through Edge",
   "Owner approval target hash matches reviewed tuple",
   "zero state after Owner approval: task rows",
@@ -102,6 +123,7 @@ const REQUIRED_CASE_NAMES = Object.freeze([
   "user-derived memory remains off",
   "project production authority remains false",
   "completed bootstrap receipt replay is denied",
+  "selected source head remains exact",
 ]);
 const runId = Array.from(
   crypto.randomBytes(16),
@@ -553,6 +575,28 @@ try {
         serviceEdgeHeaders(status),
       ),
   );
+  await expectHttp(
+    "malformed Owner bootstrap approval is denied",
+    [400],
+    () =>
+      edgeCall(
+        status,
+        FUNCTIONS.owner,
+        { ...bootstrapApprovalPayload, sourceCommit: "not-a-commit" },
+        ownerEdgeHeaders(status, owner.token),
+      ),
+  );
+  await expectHttp(
+    "extra-key Owner bootstrap approval is denied",
+    [400],
+    () =>
+      edgeCall(
+        status,
+        FUNCTIONS.owner,
+        { ...bootstrapApprovalPayload, unexpected: "bounded" },
+        ownerEdgeHeaders(status, owner.token),
+      ),
+  );
 
   await expectHttp(
     "exact Owner registers bootstrap worker over PostgREST",
@@ -894,6 +938,11 @@ try {
         },
         workerHeaders,
       ),
+  );
+  expectBody(
+    "selected source head remains exact",
+    readSourceHead(),
+    sourceHeadAtStart,
   );
 } catch (error) {
   record("bootstrap harness setup/runtime", false, "PASS", `FAIL:${scrub(error.message)}`);
