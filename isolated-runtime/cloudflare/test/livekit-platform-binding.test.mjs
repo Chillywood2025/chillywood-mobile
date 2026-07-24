@@ -53,6 +53,7 @@ const packetFixture = async (platform = "android") => {
     roomConnectElapsedMs: 1_000,
     roomConnected: true,
     roomRunCorrelationHash: HASH_A,
+    scenarioType: "background_foreground_recovery",
     stageFailureCategory: "none",
     tokenIssuedElapsedMs: 500,
     tokenRequestStarted: true,

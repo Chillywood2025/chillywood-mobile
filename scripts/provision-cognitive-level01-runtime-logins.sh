@@ -235,6 +235,34 @@ select format(
 grant "${principal}" to "${login_role}" with admin false;
 grant "${principal}" to "${login_role}" with inherit true;
 grant "${principal}" to "${login_role}" with set false;
+select 'select 1 / 0'
+where not pg_catalog.has_schema_privilege(
+            '${login_role}',
+            'cognitive_runtime',
+            'USAGE'
+          )
+   or pg_catalog.has_schema_privilege(
+        '${login_role}',
+        'cognitive_runtime',
+        'CREATE'
+      )
+   or exists (
+        select 1
+        from pg_catalog.pg_namespace namespace
+        where namespace.nspname not in (
+                'cognitive_runtime',
+                'information_schema',
+                'pg_catalog'
+              )
+          and namespace.nspname not like 'pg_temp_%'
+          and namespace.nspname not like 'pg_toast_temp_%'
+          and pg_catalog.has_schema_privilege(
+            '${login_role}',
+            namespace.oid,
+            'USAGE'
+          )
+      )
+\gexec
 SQL
     done
     printf '%s\n' 'commit;'

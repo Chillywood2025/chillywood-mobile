@@ -21,6 +21,14 @@ test("runtime login provisioner remains Bash 3.2 compatible and fail-closed", as
   assert.match(source, /with admin false/u);
   assert.match(source, /with inherit true/u);
   assert.match(source, /with set false/u);
+  assert.match(
+    source,
+    /namespace\.nspname not in \(\s*'cognitive_runtime',\s*'information_schema',\s*'pg_catalog'/u,
+  );
+  assert.match(
+    source,
+    /pg_catalog\.has_schema_privilege\(\s*'\$\{login_role\}'/u,
+  );
 
   const result = spawnSync("/bin/bash", [scriptPath, "provision"], {
     encoding: "utf8",

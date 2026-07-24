@@ -41,14 +41,14 @@ const liveKitMetrics = ({
     ? new Date(nowMillis - 4_000).toISOString()
     : null;
   return {
-    backgroundForegroundRecovery: installed,
-    backgrounded: installed,
+    backgroundForegroundRecovery: false,
+    backgrounded: false,
     buildRuntimeMatched: true,
     cleanupDisconnected: true,
     connectingResolved: true,
     firstAudioVideoObserved: true,
     firstRemoteMediaElapsedMs: 1_000,
-    foregrounded: installed,
+    foregrounded: false,
     headlessParticipantUsed: true,
     headlessObservationFinishedAt: headlessFinished,
     headlessObservationStartedAt: headlessStarted,
@@ -77,6 +77,7 @@ const liveKitMetrics = ({
     roomConnectElapsedMs: 1_000,
     roomConnected: true,
     roomRunCorrelationHash: HASH_A,
+    scenarioType: "success_baseline",
     stageFailureCategory: "none",
     tokenIssuedElapsedMs: 500,
     tokenRequestStarted: true,
@@ -124,6 +125,24 @@ test("LiveKit headless-only evidence can never become an installed pass", async 
   });
   assert.equal(packet.stages.installedEvidence, "headless_only");
   assert.equal(packet.stages.installedPassEligible, false);
+});
+
+test("LiveKit recovery is scenario-bound and does not poison a baseline", () => {
+  const ordinary = liveKitMetrics();
+  assert.deepEqual(classifyLiveKitEvidence(ordinary), {
+    failureCategory: "none",
+    physicalProofStatus: "installed_ui_observed",
+    resultStatus: "passed",
+  });
+  const recovery = {
+    ...ordinary,
+    scenarioType: "background_foreground_recovery",
+  };
+  assert.deepEqual(classifyLiveKitEvidence(recovery), {
+    failureCategory: "background_foreground_recovery_failed",
+    physicalProofStatus: "installed_ui_observed",
+    resultStatus: "failed",
+  });
 });
 
 test("LiveKit record validates the packet then uses only its isolated RPC", async () => {

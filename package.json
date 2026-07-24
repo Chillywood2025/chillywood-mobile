@@ -555,6 +555,7 @@
     "sentinel:canary:visual": "node ./scripts/product-experience-canary-runner.mjs --mode=visual",
     "sentinel:canary:journey": "node ./scripts/product-experience-canary-runner.mjs --mode=journey",
     "test:cognitive-db-concurrency": "node ./scripts/test-cognitive-db-concurrency.mjs",
+    "test:cognitive-runtime-login-integration": "bash ./scripts/test-cognitive-runtime-login-integration.sh",
     "test:cognitive-budget-cancellation": "node ./scripts/test-cognitive-hardening.mjs budget",
     "test:cognitive-conflict-rollback": "node ./scripts/test-cognitive-hardening.mjs conflict",
     "guard:cognitive-admin-truth": "node ./scripts/test-cognitive-hardening.mjs admin",

@@ -207,6 +207,7 @@ const liveKitMetrics = (
   roomConnectElapsedMs: 1_000,
   roomConnected: true,
   roomRunCorrelationHash: "5".repeat(64),
+  scenarioType: "background_foreground_recovery",
   stageFailureCategory: "none",
   tokenIssuedElapsedMs: 500,
   tokenRequestStarted: true,
@@ -241,6 +242,7 @@ const storedRun = (
     project_id: "22222222-2222-4222-8222-222222222222",
     result_status: "failed",
     route_or_surface: payload.routeOrSurface,
+    runtime_identity_hash: "4".repeat(64),
     sentinel_key: "visual_product_experience_sentinel",
     source_build_hash: payload.buildRuntimeHash,
     task_id: "33333333-3333-4333-8333-333333333333",
@@ -921,6 +923,100 @@ Deno.test("LiveKit failure category is independently recomputed from exact evide
   );
 });
 
+Deno.test("LiveKit resolution independently revalidates installed stages", () => {
+  const finding = {
+    current_status: "open",
+    environment: "production",
+    erased_at: null,
+    id: "44444444-4444-4444-8444-444444444444",
+    platform: "android",
+    project_id: "22222222-2222-4222-8222-222222222222",
+    route_or_surface: "live-stage",
+    sentinel_run_id: "11111111-1111-4111-8111-111111111111",
+    task_id: "33333333-3333-4333-8333-333333333333",
+  };
+  const detectionRun = storedRun(
+    "livekit_experience",
+    liveKitMetrics({
+      connectingResolved: false,
+      stageFailureCategory: "installed_ui_connecting_stuck",
+    }),
+    {
+      id: finding.sentinel_run_id,
+      route_or_surface: finding.route_or_surface,
+      sentinel_key: "livekit_experience_sentinel",
+      source_build_hash: "6".repeat(64),
+    },
+  );
+  const passingRun = {
+    ...detectionRun,
+    evidence_manifest_hash: "9".repeat(64),
+    id: "55555555-5555-4555-8555-555555555555",
+    metric_manifest: {
+      metrics: liveKitMetrics(),
+      observationKind: "livekit_experience",
+    },
+    result_status: "passed",
+  };
+  assert(
+    deterministicResolutionReasons(
+      passingRun,
+      finding,
+      detectionRun,
+    ).length === 0,
+    "healthy same-scenario installed evidence should support resolution",
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          metrics: {},
+          observationKind: "livekit_experience",
+        },
+      },
+      finding,
+      detectionRun,
+    ).includes("resolution_livekit_metric_manifest_rejected"),
+    "malformed LiveKit evidence must not resolve a finding",
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          metrics: {
+            ...liveKitMetrics(),
+            connectingResolved: false,
+            stageFailureCategory: "installed_ui_connecting_stuck",
+          },
+          observationKind: "livekit_experience",
+        },
+      },
+      finding,
+      detectionRun,
+    ).includes("resolution_livekit_experience_not_satisfied"),
+    "an internally failing LiveKit run must not resolve a finding",
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          metrics: {
+            ...liveKitMetrics(),
+            stageFailureCategory: "token_backend_failure",
+          },
+          observationKind: "livekit_experience",
+        },
+      },
+      finding,
+      detectionRun,
+    ).includes("resolution_livekit_failure_category_mismatch"),
+    "a caller-mislabeled LiveKit pass must not resolve a finding",
+  );
+});
+
 Deno.test("installed journey failure classes are derived only from stored metrics", () => {
   const payload = validPayload();
   const baseRun = {
@@ -949,6 +1045,7 @@ Deno.test("installed journey failure classes are derived only from stored metric
     project_id: "22222222-2222-4222-8222-222222222222",
     result_status: "failed",
     route_or_surface: payload.routeOrSurface,
+    runtime_identity_hash: "4".repeat(64),
     sentinel_key: "installed_journey_sentinel",
     source_build_hash: payload.buildRuntimeHash,
     task_id: "33333333-3333-4333-8333-333333333333",
@@ -1109,6 +1206,7 @@ Deno.test("journey resolution binds the exact stored measurement identity", () =
     project_id: finding.project_id,
     result_status: "failed",
     route_or_surface: finding.route_or_surface,
+    runtime_identity_hash: "4".repeat(64),
     sentinel_key: "installed_journey_sentinel",
     source_build_hash: "8".repeat(64),
     task_id: finding.task_id,
@@ -1243,6 +1341,7 @@ Deno.test("resolution proof requires a matching passing observation", () => {
     project_id: finding.project_id,
     result_status: "failed",
     route_or_surface: finding.route_or_surface,
+    runtime_identity_hash: "4".repeat(64),
     sentinel_key: "installed_journey_sentinel",
     source_build_hash: "8".repeat(64),
     task_id: finding.task_id,

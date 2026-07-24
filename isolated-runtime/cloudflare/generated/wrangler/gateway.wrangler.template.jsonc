@@ -51,6 +51,7 @@
   ],
   "vars": {
     "CF_ACCESS_AUD": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+    "CF_ACCESS_SERVICE_TOKEN_COMMON_NAME": "REPLACE_WITH_ACCESS_SERVICE_TOKEN_CLIENT_ID",
     "CF_ACCESS_TEAM_DOMAIN": "https://replace-with-team.cloudflareaccess.com",
     "RUNTIME_SCHEMA_VERSION": "cognitive-level01-isolated-runtime-v1",
     "SOURCE_COMMIT": "REPLACE_WITH_REVIEWED_SUCCESSOR_COMMIT",

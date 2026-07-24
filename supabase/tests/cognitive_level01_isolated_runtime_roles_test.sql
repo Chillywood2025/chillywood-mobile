@@ -1,6 +1,6 @@
 begin;
 
-select plan(43);
+select plan(48);
 
 create temporary table expected_runtime_roles(
   role_name text primary key
@@ -236,6 +236,25 @@ select ok(
 select ok(
   not cognitive_runtime.runtime_login_provisioning_ready(),
   'provider-owned pg_net PUBLIC access blocks password-bearing runtime logins'
+);
+
+select ok(
+  cognitive_runtime.runtime_schema_set_is_valid(
+    array['pg_catalog', 'cognitive_runtime', 'information_schema']
+  ),
+  'runtime login readiness accepts only the exact runtime and system schema set'
+);
+
+select ok(
+  not cognitive_runtime.runtime_schema_set_is_valid(
+    array[
+      'cognitive_runtime',
+      'information_schema',
+      'net',
+      'pg_catalog'
+    ]
+  ),
+  'any additional effective schema access blocks password-bearing runtime logins'
 );
 
 select ok(
@@ -725,8 +744,8 @@ select is(
       and procedure.prosecdef
       and procedure.proconfig @> array['search_path=""']
   ),
-  37,
-  'all thirty-seven runtime boundary helpers and wrappers are security definer with an empty search path'
+  38,
+  'all thirty-eight runtime boundary helpers and wrappers are security definer with an empty search path'
 );
 
 select ok(
@@ -808,6 +827,86 @@ select ok(
     where login_role.rolcanlogin
   ),
   'migration creates no password-bearing runtime login roles'
+);
+
+select ok(
+  (
+    select count(*) = 23
+       and bool_and(
+         pg_catalog.pg_get_functiondef(procedure.oid) like
+           '%set_config(''request.jwt.claim.role'', ''service_role'', true)%'
+         and pg_catalog.pg_get_functiondef(procedure.oid) like
+           '%coalesce(prior_request_role, '''')%'
+       )
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'cognitive_runtime'
+      and procedure.proname = any(array[
+        'governance_claim_approved_action',
+        'governance_begin_approved_execution',
+        'governance_stage_product_experience_baseline_v1',
+        'governance_complete_approved_execution',
+        'governance_product_baseline_persist_completed_execution',
+        'governance_fail_approved_execution',
+        'governance_evaluate_product_experience_baseline_v1',
+        'product_quality_record_sentinel_evaluator_proof',
+        'product_quality_triage_detection',
+        'product_quality_triage_resolution',
+        'cognitive_record_public_research_source_v2',
+        'cognitive_record_public_research_contradiction_detection',
+        'cognitive_expire_public_research_maintenance',
+        'cognitive_resolve_public_research_contradiction',
+        'cognitive_model_router_recover_expired',
+        'cognitive_model_router_reserve',
+        'cognitive_model_router_settle',
+        'cognitive_record_github_draft_pr_provider_readback',
+        'cognitive_consume_github_draft_pr_capability',
+        'cognitive_accept_github_draft_pr_tool_result',
+        'record_research_claim_with_readback',
+        'derive_research_evaluation_with_readback',
+        'cognitive_model_router_settle_provider_overrun'
+      ])
+  ),
+  'all legacy service-role RPC wrappers bridge and restore only after isolated invoker proof'
+);
+
+select ok(
+  (
+    select count(*) = 2
+       and bool_and(
+         pg_catalog.pg_get_functiondef(procedure.oid) not like
+           '%request.jwt.claim.role%'
+       )
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'cognitive_runtime'
+      and procedure.proname in (
+        'product_quality_detection_assessment_hash',
+        'product_quality_resolution_assessment_hash'
+      )
+  ),
+  'pure deterministic hash wrappers never receive a legacy service-role claim'
+);
+
+select ok(
+  (
+    select pg_catalog.pg_get_functiondef(procedure.oid) like
+             '%login_value.rolvaliduntil <= transaction_timestamp()%'
+       and pg_catalog.pg_get_functiondef(procedure.oid) like
+             '%cardinality(coalesce(login_value.rolconfig%'
+       and pg_catalog.pg_get_functiondef(procedure.oid) like
+             '%membership.inherit_option%'
+       and pg_catalog.pg_get_functiondef(procedure.oid) like
+             '%runtime_schema_set_is_valid(%'
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'cognitive_runtime'
+      and procedure.proname = 'assert_runtime_invoker'
+  ),
+  'every invocation revalidates login expiry, exact config, membership, and schema reach'
 );
 
 select ok(

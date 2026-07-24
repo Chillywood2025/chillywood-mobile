@@ -27,6 +27,11 @@ const BEARER_JWT_PATTERN =
   /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
 const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"]);
+const SCENARIO_TYPES = new Set([
+  "success_baseline",
+  "bounded_failure_fixture",
+  "background_foreground_recovery",
+]);
 const ICE_STATE_BY_NUMBER = Object.freeze({
   0: "new",
   1: "checking",
@@ -74,6 +79,7 @@ const METRIC_KEYS = Object.freeze([
   "roomConnectElapsedMs",
   "roomConnected",
   "roomRunCorrelationHash",
+  "scenarioType",
   "stageFailureCategory",
   "tokenIssuedElapsedMs",
   "tokenRequestStarted",
@@ -309,6 +315,7 @@ const validatePrivateInput = (value) => {
       "runtimeIdentityHash",
       "sessionCorrelationNonce",
       "roomRunCorrelationHash",
+      "scenarioType",
       "sourceBuildHash",
       "tokenRequest",
     ]) ||
@@ -317,6 +324,7 @@ const validatePrivateInput = (value) => {
     !SHA256_PATTERN.test(value.runtimeIdentityHash) ||
     !SESSION_NONCE_PATTERN.test(value.sessionCorrelationNonce) ||
     !SHA256_PATTERN.test(value.roomRunCorrelationHash) ||
+    !SCENARIO_TYPES.has(value.scenarioType) ||
     !SHA256_PATTERN.test(value.sourceBuildHash) ||
     !exactKeys(value.tokenRequest, [
       "apiKey",
@@ -451,6 +459,7 @@ const deriveFailureCategory = (metric) => {
     return "installed_ui_connecting_stuck";
   }
   if (
+    metric.scenarioType === "background_foreground_recovery" &&
     metric.installedUiObserved &&
     (
       !metric.backgrounded || !metric.foregrounded ||
@@ -859,6 +868,7 @@ const runHeadlessParticipant = async (
     roomConnectElapsedMs: state.roomConnectElapsedMs,
     roomConnected: state.roomConnected,
     roomRunCorrelationHash: input.roomRunCorrelationHash,
+    scenarioType: input.scenarioType,
     stageFailureCategory: "none",
     tokenIssuedElapsedMs: state.tokenIssuedElapsedMs,
     tokenRequestStarted: state.tokenRequestStarted,
@@ -870,6 +880,16 @@ const runHeadlessParticipant = async (
       boundedElapsed(overallStartedAt),
     websocketConnected: state.websocketConnected,
   };
+  if (
+    metric.scenarioType !== "background_foreground_recovery" &&
+    (
+      metric.backgrounded ||
+      metric.foregrounded ||
+      metric.backgroundForegroundRecovery
+    )
+  ) {
+    throw new Error("livekit_scenario_evidence_mismatch");
+  }
   metric.stageFailureCategory = deriveFailureCategory(metric);
   if (!exactKeys(metric, METRIC_KEYS)) {
     throw new Error("internal_metric_contract_mismatch");
@@ -926,6 +946,7 @@ const runSelfTest = () => {
       sessionCorrelationNonce,
       selfTestRoom,
     ),
+    scenarioType: "success_baseline",
     sourceBuildHash: "b".repeat(64),
     tokenRequest: {
       apiKey: "synthetic-public-key-000000",
@@ -1032,6 +1053,7 @@ const runSelfTest = () => {
     roomConnectElapsedMs: 500,
     roomConnected: true,
     roomRunCorrelationHash: privateInputFixture.roomRunCorrelationHash,
+    scenarioType: "success_baseline",
     stageFailureCategory: "none",
     tokenIssuedElapsedMs: 100,
     tokenRequestStarted: true,

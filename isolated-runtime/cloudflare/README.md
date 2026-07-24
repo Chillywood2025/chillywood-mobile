@@ -84,8 +84,10 @@ Before upload, the coordinator must:
    `--caching-disabled` and its matching dedicated login;
 4. create and attach each required secret to only its named Worker;
 5. configure an Access application and Service Auth policy for the gateway
-   `workers.dev` endpoint, then replace the public team-domain and audience
-   placeholders;
+   `workers.dev` endpoint, then replace the public team-domain, audience, and
+   exact service-token Client ID placeholders. The gateway independently
+   rejects identity-auth JWTs and service-token JWTs whose `common_name` does
+   not match that configured Client ID;
 6. verify the successor Git commit is supplied as `sourceCommit` and matches
    reviewed version metadata;
 7. run the negative isolation suite against deployed Workers.

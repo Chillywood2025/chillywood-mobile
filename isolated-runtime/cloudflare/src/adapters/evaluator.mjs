@@ -151,6 +151,7 @@ const LIVEKIT_METRIC_KEYS = Object.freeze([
   "providerState",
   "remoteMediaKind",
   "roomRunCorrelationHash",
+  "scenarioType",
   "stageFailureCategory",
   "tokenResultStatus",
 ]);
@@ -182,6 +183,11 @@ const LIVEKIT_PROVIDER_STATES = new Set([
   "degraded",
   "blocked",
   "unknown",
+]);
+const LIVEKIT_SCENARIO_TYPES = new Set([
+  "success_baseline",
+  "bounded_failure_fixture",
+  "background_foreground_recovery",
 ]);
 const LIVEKIT_REMOTE_MEDIA_KINDS = new Set([
   "audio",
@@ -1040,6 +1046,7 @@ const liveKitMetricContractIsValid = (metrics) => {
     !LIVEKIT_NETWORK_STATES.has(metrics.networkState) ||
     !LIVEKIT_PERMISSION_STATES.has(metrics.permissionState) ||
     !LIVEKIT_PROVIDER_STATES.has(metrics.providerState) ||
+    !LIVEKIT_SCENARIO_TYPES.has(metrics.scenarioType) ||
     !LIVEKIT_REMOTE_MEDIA_KINDS.has(metrics.remoteMediaKind) ||
     !LIVEKIT_TOKEN_RESULT_STATES.has(metrics.tokenResultStatus) ||
     !HASH.test(text(metrics.roomRunCorrelationHash)) ||
@@ -1129,6 +1136,15 @@ const liveKitMetricContractIsValid = (metrics) => {
       (metrics.remoteMediaKind !== "none") &&
     metrics.tokenReturned === (metrics.tokenResultStatus === "success") &&
     metrics.tokenRequested === metrics.tokenRequestStarted &&
+    metrics.headlessParticipantUsed &&
+    (
+      metrics.scenarioType === "background_foreground_recovery" ||
+      (
+        !metrics.backgrounded &&
+        !metrics.foregrounded &&
+        !metrics.backgroundForegroundRecovery
+      )
+    ) &&
     (!metrics.websocketConnected || metrics.tokenReturned) &&
     (!metrics.peerConnectionEstablished || metrics.websocketConnected) &&
     (!metrics.roomConnected || metrics.peerConnectionEstablished) &&
@@ -1170,6 +1186,7 @@ export const deriveIndependentLiveKitFailureCategory = (metrics) => {
     return "installed_ui_connecting_stuck";
   }
   if (
+    metrics.scenarioType === "background_foreground_recovery" &&
     metrics.installedUiObserved &&
     (
       !metrics.backgrounded ||
@@ -1477,6 +1494,9 @@ export const deterministicResolutionReasons = (
   const detectionMetrics = metricObject(detectionRun);
   if (!resolutionMetrics || !detectionMetrics) {
     reasons.add("resolution_metric_manifest_missing");
+    if (observationKind === "livekit_experience") {
+      reasons.add("resolution_livekit_metric_manifest_rejected");
+    }
   } else if (observationKind === "touch_target") {
     if (
       text(resolutionMetrics.componentIdentityHash) !==
@@ -1504,6 +1524,30 @@ export const deterministicResolutionReasons = (
         "false_positive"
     ) {
       reasons.add("resolution_accessibility_target_not_satisfied");
+    }
+  } else if (observationKind === "livekit_experience") {
+    if (
+      text(resolutionMetrics.scenarioType) !==
+        text(detectionMetrics.scenarioType) ||
+      text(resolutionMetrics.localMediaSource) !==
+        text(detectionMetrics.localMediaSource) ||
+      text(resolutionMetrics.installedRuntimeIdentityHash) !==
+        text(run.runtime_identity_hash) ||
+      text(resolutionMetrics.installedSourceBuildHash) !==
+        text(run.source_build_hash)
+    ) {
+      reasons.add("resolution_measurement_identity_mismatch");
+    }
+    const failureCategory =
+      deriveIndependentLiveKitFailureCategory(resolutionMetrics);
+    if (!failureCategory) {
+      reasons.add("resolution_livekit_metric_manifest_rejected");
+    } else if (
+      text(resolutionMetrics.stageFailureCategory) !== failureCategory
+    ) {
+      reasons.add("resolution_livekit_failure_category_mismatch");
+    } else if (failureCategory !== "none") {
+      reasons.add("resolution_livekit_experience_not_satisfied");
     }
   } else if (observationKind === "visual_layout") {
     if (

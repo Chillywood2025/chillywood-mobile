@@ -42,6 +42,14 @@ Collector results are only `passed`, `failed`, or `blocked`. A failed run is
 not itself a finding; the independently evaluated triage path owns that later
 decision.
 
+Every packet declares exactly one scenario: `success_baseline`,
+`bounded_failure_fixture`, or `background_foreground_recovery`. Ordinary
+baseline and bounded-failure packets must not imply that a background cycle
+occurred. A passing recovery packet must contain a real installed observation
+with background, foreground, and recovery evidence. This keeps the three
+required sessions distinct and prevents an ordinary healthy session from
+being mislabeled as a recovery failure.
+
 ## Headless synthetic participant
 
 `scripts/livekit-headless-synthetic-participant.mjs` provides a distinct,
@@ -57,7 +65,7 @@ the exact installed-observer platform (`android` or `ios`), the app
 token-request endpoint, ephemeral authorization material, the existing app
 request body, a one-run correlation nonce, the resulting domain-separated
 session/room correlation hash, the safe source/build and runtime hashes, and
-the reviewed surface. When installed evidence is supplied, its observer kind
+the reviewed surface and scenario. When installed evidence is supplied, its observer kind
 must match that platform. The collector persists that platform and rejects
 `shared` or `web`; it never substitutes the control-plane platform for the
 installed observer. The nonce and raw room remain owner-only. The harness never

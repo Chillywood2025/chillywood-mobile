@@ -579,7 +579,25 @@ begin
         || '       and sentinel_scope.project_id = run.project_id'
         || chr(10)
         || '       and sentinel_scope.platform = run.platform' || chr(10)
-        || '       and sentinel_scope.environment = run.environment';
+        || '       and sentinel_scope.environment = run.environment'
+        || chr(10)
+        || '      join public.cognitive_governance_switches sentinel_switch'
+        || chr(10)
+        || '        on sentinel_switch.task_id = run.task_id' || chr(10)
+        || '       and sentinel_switch.project_id = run.project_id'
+        || chr(10)
+        || '       and sentinel_switch.platform = run.platform' || chr(10)
+        || '       and sentinel_switch.environment = run.environment'
+        || chr(10)
+        || '       and sentinel_switch.switch_key = case run.sentinel_key'
+        || chr(10)
+        || '         when ''installed_journey_sentinel'' then '
+        || '''cognitive_installed_journey_sentinel_enabled''' || chr(10)
+        || '         when ''visual_product_experience_sentinel'' then '
+        || '''cognitive_visual_experience_sentinel_enabled''' || chr(10)
+        || '         else null' || chr(10)
+        || '       end' || chr(10)
+        || '       and sentinel_switch.enabled';
     else
       prior_join :=
         'join public.intelligence_tasks sentinel_task' || chr(10)
@@ -593,7 +611,24 @@ begin
         || '      on sentinel_scope.platform_task_id = run.task_id' || chr(10)
         || '     and sentinel_scope.project_id = run.project_id' || chr(10)
         || '     and sentinel_scope.platform = run.platform' || chr(10)
-        || '     and sentinel_scope.environment = run.environment';
+        || '     and sentinel_scope.environment = run.environment'
+        || chr(10)
+        || '    join public.cognitive_governance_switches sentinel_switch'
+        || chr(10)
+        || '      on sentinel_switch.task_id = run.task_id' || chr(10)
+        || '     and sentinel_switch.project_id = run.project_id' || chr(10)
+        || '     and sentinel_switch.platform = run.platform' || chr(10)
+        || '     and sentinel_switch.environment = run.environment'
+        || chr(10)
+        || '     and sentinel_switch.switch_key = case run.sentinel_key'
+        || chr(10)
+        || '       when ''installed_journey_sentinel'' then '
+        || '''cognitive_installed_journey_sentinel_enabled''' || chr(10)
+        || '       when ''visual_product_experience_sentinel'' then '
+        || '''cognitive_visual_experience_sentinel_enabled''' || chr(10)
+        || '       else null' || chr(10)
+        || '     end' || chr(10)
+        || '     and sentinel_switch.enabled';
     end if;
 
     if definition is null

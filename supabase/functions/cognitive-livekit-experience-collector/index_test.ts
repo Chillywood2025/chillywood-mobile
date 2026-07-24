@@ -21,14 +21,14 @@ const AUTHORIZATION = "Bearer synthetic.header.signature";
 const baseline = (): LiveKitMetricManifest => {
   const now = Date.now();
   return {
-    backgroundForegroundRecovery: true,
-    backgrounded: true,
+    backgroundForegroundRecovery: false,
+    backgrounded: false,
     buildRuntimeMatched: true,
     cleanupDisconnected: true,
     connectingResolved: true,
     firstAudioVideoObserved: true,
     firstRemoteMediaElapsedMs: 1_800,
-    foregrounded: true,
+    foregrounded: false,
     headlessParticipantUsed: true,
     headlessObservationFinishedAt: new Date(now).toISOString(),
     headlessObservationStartedAt: new Date(now - 1_000).toISOString(),
@@ -57,6 +57,7 @@ const baseline = (): LiveKitMetricManifest => {
     roomConnectElapsedMs: 900,
     roomConnected: true,
     roomRunCorrelationHash: "d".repeat(64),
+    scenarioType: "success_baseline",
     stageFailureCategory: "none",
     tokenClaimsValidated: true,
     tokenIssuedElapsedMs: 120,
@@ -142,6 +143,23 @@ Deno.test("LiveKit collector separates healthy media and installed UI proof", ()
   }
   if (classification.physicalProofStatus !== "installed_ui_observed") {
     throw new Error("expected installed UI proof status");
+  }
+});
+
+Deno.test("LiveKit recovery evidence is required only for the recovery scenario", () => {
+  const ordinary = baseline();
+  if (deriveLiveKitFailureCategory(ordinary) !== "none") {
+    throw new Error("ordinary baseline incorrectly required recovery");
+  }
+  const recoveryFailure = {
+    ...ordinary,
+    scenarioType: "background_foreground_recovery" as const,
+  };
+  if (
+    deriveLiveKitFailureCategory(recoveryFailure) !==
+      "background_foreground_recovery_failed"
+  ) {
+    throw new Error("recovery scenario did not enforce recovery evidence");
   }
 });
 

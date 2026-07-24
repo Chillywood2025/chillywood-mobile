@@ -15,6 +15,11 @@ const MAX_OBSERVATION_WINDOW_MS = 120_000;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
 const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"]);
+const SCENARIO_TYPES = new Set([
+  "success_baseline",
+  "bounded_failure_fixture",
+  "background_foreground_recovery",
+]);
 const ICE_STATES = new Set([
   "new",
   "checking",
@@ -84,6 +89,7 @@ const METRIC_KEYS = Object.freeze([
   "roomConnectElapsedMs",
   "roomConnected",
   "roomRunCorrelationHash",
+  "scenarioType",
   "stageFailureCategory",
   "tokenIssuedElapsedMs",
   "tokenRequestStarted",
@@ -193,6 +199,7 @@ export const deriveLiveKitFailureCategory = (metric) => {
     return "installed_ui_connecting_stuck";
   }
   if (
+    metric.scenarioType === "background_foreground_recovery" &&
     metric.installedUiObserved &&
     (
       !metric.backgrounded || !metric.foregrounded ||
@@ -248,6 +255,7 @@ const parseMetricManifest = (value) => {
     !PROVIDER_STATES.has(value.providerState) ||
     !REMOTE_MEDIA_KINDS.has(value.remoteMediaKind) ||
     !TOKEN_RESULT_STATES.has(value.tokenResultStatus) ||
+    !SCENARIO_TYPES.has(value.scenarioType) ||
     !SHA256.test(value.roomRunCorrelationHash) ||
     !nullableHash(value.headlessParticipantIdentityHash) ||
     !nullableHash(value.installedUiEvidenceHash) ||
@@ -329,6 +337,15 @@ const parseMetricManifest = (value) => {
     value.firstAudioVideoObserved !== (value.remoteMediaKind !== "none") ||
     value.tokenReturned !== (value.tokenResultStatus === "success") ||
     value.tokenRequested !== value.tokenRequestStarted ||
+    value.headlessParticipantUsed !== true ||
+    (
+      value.scenarioType !== "background_foreground_recovery" &&
+      (
+        value.backgrounded ||
+        value.foregrounded ||
+        value.backgroundForegroundRecovery
+      )
+    ) ||
     value.stageFailureCategory !== deriveLiveKitFailureCategory(value)
   ) {
     return null;
