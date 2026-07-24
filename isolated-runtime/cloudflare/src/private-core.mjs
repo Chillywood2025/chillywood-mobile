@@ -28,18 +28,21 @@ const assertCredentialDomain = (env, principal) => {
 };
 
 const withDeadline = async (
-  promise,
+  run,
   deadlineAt,
   now,
   abortController,
   cleanupGraceMs = 1_000,
 ) => {
   const remaining = Date.parse(deadlineAt) - now();
-  if (remaining <= 0) throw new Error("deadline_rejected");
+  if (remaining <= 0) {
+    abortController?.abort(new Error("deadline_rejected"));
+    throw new Error("deadline_rejected");
+  }
   let timer;
   let cleanupTimer;
   const deadlineReached = Symbol("deadline_reached");
-  const outcome = Promise.resolve(promise).then(
+  const outcome = Promise.resolve().then(run).then(
     (value) => ({ ok: true, value }),
     (error) => ({ error, ok: false }),
   );
@@ -169,7 +172,7 @@ export const createPrivateInvocationHandler = ({
       taskId: envelope.taskId,
     };
     await withDeadline(
-      assertDatabaseState({
+      () => assertDatabaseState({
         database,
         databaseOperations: adapter.databaseOperations,
         principal,
@@ -187,7 +190,7 @@ export const createPrivateInvocationHandler = ({
         signal: deadlineController.signal,
       });
     const result = await withDeadline(
-      adapter.execute({
+      () => adapter.execute({
         assertActive,
         context,
         database,

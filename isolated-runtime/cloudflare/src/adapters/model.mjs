@@ -1058,6 +1058,32 @@ export const createModelRouterAdapters = ({
             knownTokens > reservation.reservedModelTokens ||
             reportedCost > reservation.reservedModelCost
           );
+        const actualTokens = providerOverrun
+          ? reservation.reservedModelTokens
+          : Math.min(knownTokens, reservation.reservedModelTokens);
+        const actualCost = providerOverrun
+          ? reservation.reservedModelCost
+          : Math.min(knownAccountingCost, reservation.reservedModelCost);
+        const settlementResultStatus = providerOverrun
+          ? "provider_rejected"
+          : resultStatus;
+        const resultHash = await sha256Hex(canonicalJson({
+          actualModelCost: actualCost,
+          actualModelTokens: actualTokens,
+          failureReasonHash,
+          latencyMs: boundedLatency,
+          preflightId: reservation.preflightId,
+          resultStatus: settlementResultStatus,
+        }));
+        const settlementInput = {
+          actualModelCost: actualCost,
+          actualModelTokens: actualTokens,
+          failureReasonHash,
+          latencyMs: boundedLatency,
+          preflightId: reservation.preflightId,
+          resultHash,
+          resultStatus: settlementResultStatus,
+        };
         if (providerOverrun) {
           const providerResponseIdHash = await sha256Hex(
             providerResult.providerResponseId,
@@ -1081,58 +1107,44 @@ export const createModelRouterAdapters = ({
             reservedModelCost: reservation.reservedModelCost,
             reservedModelTokens: reservation.reservedModelTokens,
           };
-          const overrun = await database.call("recordModelProviderOverrun", [
+          const atomicResult = await database.call(
+            "settleModelProviderOverrun",
+            [
+              reservation.preflightId,
+              knownTokens,
+              reportedCost,
+              providerResult.modelVersion,
+              providerResponseIdHash,
+              failureReasonHash,
+              overrunEvidenceHash,
+              boundedLatency,
+              resultHash,
+              serviceAssertion,
+            ],
+          );
+          if (!isRecord(atomicResult)) {
+            throw new Error("model_governance_overrun_settlement_rejected");
+          }
+          validateProviderOverrun(atomicResult.overrun, overrunInput);
+          validateSettlement(atomicResult.settlement, settlementInput);
+        } else {
+          const settlement = await database.call("settleModelInvocation", [
             reservation.preflightId,
-            knownTokens,
-            reportedCost,
-            providerResult.modelVersion,
-            providerResponseIdHash,
+            settlementResultStatus,
+            actualTokens,
+            actualCost,
+            null,
+            null,
+            null,
+            null,
+            null,
             failureReasonHash,
-            overrunEvidenceHash,
+            resultHash,
             boundedLatency,
             serviceAssertion,
           ]);
-          validateProviderOverrun(overrun, overrunInput);
+          validateSettlement(settlement, settlementInput);
         }
-        const actualTokens = providerOverrun
-          ? reservation.reservedModelTokens
-          : Math.min(knownTokens, reservation.reservedModelTokens);
-        const actualCost = providerOverrun
-          ? reservation.reservedModelCost
-          : Math.min(knownAccountingCost, reservation.reservedModelCost);
-        const resultHash = await sha256Hex(canonicalJson({
-          actualModelCost: actualCost,
-          actualModelTokens: actualTokens,
-          failureReasonHash,
-          latencyMs: boundedLatency,
-          preflightId: reservation.preflightId,
-          resultStatus,
-        }));
-        const settlementInput = {
-          actualModelCost: actualCost,
-          actualModelTokens: actualTokens,
-          failureReasonHash,
-          latencyMs: boundedLatency,
-          preflightId: reservation.preflightId,
-          resultHash,
-          resultStatus,
-        };
-        const settlement = await database.call("settleModelInvocation", [
-          reservation.preflightId,
-          resultStatus,
-          actualTokens,
-          actualCost,
-          null,
-          null,
-          null,
-          null,
-          null,
-          failureReasonHash,
-          resultHash,
-          boundedLatency,
-          serviceAssertion,
-        ]);
-        validateSettlement(settlement, settlementInput);
         throw error;
       }
     },

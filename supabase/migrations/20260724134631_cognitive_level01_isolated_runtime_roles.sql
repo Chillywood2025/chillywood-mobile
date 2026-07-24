@@ -455,7 +455,17 @@ begin
       'cognitive_model_router',
       'cognitive_livekit_experience_collector',
       'cognitive_github_draft_pr_broker',
-      'cognitive_level01_scheduler'
+      'cognitive_level01_scheduler',
+      'cognitive_product_baseline_executor_login',
+      'cognitive_sentinel_collector_login',
+      'cognitive_product_quality_evaluator_login',
+      'cognitive_product_quality_triage_login',
+      'cognitive_public_research_broker_login',
+      'cognitive_research_evaluator_login',
+      'cognitive_model_router_login',
+      'cognitive_livekit_experience_collector_login',
+      'cognitive_github_draft_pr_broker_login',
+      'cognitive_level01_scheduler_login'
     ])
   loop
     execute format(
@@ -1973,7 +1983,6 @@ begin
       ('cognitive_research_evaluator', 'resolve_research_contradiction', 'cognitive_resolve_public_research_contradiction', null),
       ('cognitive_model_router', 'recover_model_reservation', 'cognitive_model_router_recover_expired', null),
       ('cognitive_model_router', 'reserve_model_invocation', 'cognitive_model_router_reserve', 21),
-      ('cognitive_model_router', 'record_model_provider_overrun', 'cognitive_model_router_record_provider_overrun', null),
       ('cognitive_model_router', 'settle_model_invocation', 'cognitive_model_router_settle', null),
       ('cognitive_github_draft_pr_broker', 'record_github_provider_readback', 'cognitive_record_github_draft_pr_provider_readback', null),
       ('cognitive_github_draft_pr_broker', 'consume_github_capability', 'cognitive_consume_github_draft_pr_capability', null),
@@ -2090,6 +2099,81 @@ begin
   end loop;
 end;
 $domain_wrappers$;
+
+create function cognitive_runtime.cognitive_model_router_settle_provider_overrun(
+  p_preflight_id uuid,
+  p_reported_model_tokens bigint,
+  p_reported_model_cost numeric,
+  p_provider_model_version text,
+  p_provider_response_id_hash text,
+  p_failure_reason_hash text,
+  p_evidence_hash text,
+  p_latency_ms integer,
+  p_result_hash text,
+  p_service_identity_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  overrun_result jsonb;
+  settlement_result jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_model_router',
+    'record_model_provider_overrun'
+  );
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_model_router',
+    'settle_model_invocation'
+  );
+
+  overrun_result := public.cognitive_model_router_record_provider_overrun(
+    p_preflight_id,
+    p_reported_model_tokens,
+    p_reported_model_cost,
+    p_provider_model_version,
+    p_provider_response_id_hash,
+    p_failure_reason_hash,
+    p_evidence_hash,
+    p_latency_ms,
+    p_service_identity_token
+  );
+
+  settlement_result := public.cognitive_model_router_settle(
+    p_preflight_id,
+    'provider_rejected',
+    (overrun_result->>'reservedModelTokens')::bigint,
+    (overrun_result->>'reservedModelCost')::numeric,
+    null,
+    null,
+    null,
+    null,
+    null,
+    p_failure_reason_hash,
+    p_result_hash,
+    p_latency_ms,
+    p_service_identity_token
+  );
+
+  return jsonb_build_object(
+    'overrun', overrun_result,
+    'settlement', settlement_result
+  );
+end;
+$$;
+revoke all on function
+  cognitive_runtime.cognitive_model_router_settle_provider_overrun(
+    uuid,bigint,numeric,text,text,text,text,integer,text,text
+  )
+  from public,anon,authenticated,service_role;
+grant execute on function
+  cognitive_runtime.cognitive_model_router_settle_provider_overrun(
+    uuid,bigint,numeric,text,text,text,text,integer,text,text
+  )
+  to cognitive_model_router;
 
 do $common_grants$
 declare

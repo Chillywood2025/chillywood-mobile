@@ -116,7 +116,7 @@ test("model adapter, statement, and manifest RPC inventories remain exact", () =
   assert.deepEqual(manifestRpcs, [
     "cognitive_model_router_recover_expired",
     "cognitive_model_router_reserve",
-    "cognitive_runtime.cognitive_model_router_record_provider_overrun",
+    "cognitive_runtime.cognitive_model_router_settle_provider_overrun",
     "cognitive_model_router_settle",
   ]);
   assert.deepEqual(

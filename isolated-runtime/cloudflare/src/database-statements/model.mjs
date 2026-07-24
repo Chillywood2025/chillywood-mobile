@@ -5,12 +5,12 @@ export const MODEL_STATEMENTS = Object.freeze({
       $1::uuid,$2::integer,$3::text,$4::text
     ) as result`,
   }),
-  recordModelProviderOverrun: Object.freeze({
-    arity: 9,
+  settleModelProviderOverrun: Object.freeze({
+    arity: 10,
     text:
-      `select cognitive_runtime.cognitive_model_router_record_provider_overrun(
+      `select cognitive_runtime.cognitive_model_router_settle_provider_overrun(
         $1::uuid,$2::bigint,$3::numeric,$4::text,$5::text,$6::text,$7::text,
-        $8::integer,$9::text
+        $8::integer,$9::text,$10::text
       ) as result`,
   }),
   reserveModelInvocation: Object.freeze({

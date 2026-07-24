@@ -123,7 +123,7 @@ const migrationManifest = [
   },
   {
     path: "20260724134631_cognitive_level01_isolated_runtime_roles.sql",
-    sha256: "fd9d0243a08cb4289b3bbb9bce00742934fe74ff726094d1981d84942fe9706f",
+    sha256: "90d244625622b4ee5ab31eb055fe6043604a2a9e875afc5331e0e4a0660d3322",
     requiredMarkers: [
       "create function cognitive_runtime.record_research_claim_with_readback",
       "to cognitive_public_research_broker",

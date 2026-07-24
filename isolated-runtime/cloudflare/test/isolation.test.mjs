@@ -330,6 +330,56 @@ test("deadline cancellation aborts provider work and closes the database", async
   assert.equal(closed, true);
 });
 
+test("expired boundaries never start preflight or adapter execution", async () => {
+  for (const expireAtCall of [2, 3]) {
+    let executeCount = 0;
+    let nowCalls = 0;
+    let preflightCount = 0;
+    const handler = createPrivateInvocationHandler({
+      createDatabase: () =>
+        database({
+          preflight: async (principal, operation) => {
+            preflightCount += 1;
+            return {
+              allowed: true,
+              assertionExpired: false,
+              emergencyStopActive: false,
+              operation,
+              principal,
+              serviceRoleMember: false,
+            };
+          },
+        }),
+      env: await baselineEnv(),
+      logger: silentLogger,
+      now: () => {
+        nowCalls += 1;
+        return nowCalls >= expireAtCall ? NOW + 31_000 : NOW;
+      },
+      principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
+      resolveAdapter: () => ({
+        databaseOperations: ["persist_product_baseline"],
+        execute: async () => {
+          executeCount += 1;
+          return { result: "must_not_execute" };
+        },
+        ready: true,
+      }),
+    });
+
+    await assert.rejects(
+      async () => handler(await makeEnvelope(), TOKEN),
+      /deadline_rejected/u,
+    );
+    assert.equal(
+      preflightCount,
+      expireAtCall === 2 ? 0 : 1,
+      `preflight boundary ${expireAtCall}`,
+    );
+    assert.equal(executeCount, 0, `execute boundary ${expireAtCall}`);
+  }
+});
+
 test("provider checkpoints stop mutations after emergency stop or revocation", async () => {
   for (const blocker of ["emergency", "revocation"]) {
     let mutationCount = 0;

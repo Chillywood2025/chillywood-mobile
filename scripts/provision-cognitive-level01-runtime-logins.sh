@@ -38,7 +38,7 @@ principals=(
 if [[ "$action" == "provision" ]]; then
   # Validate the complete credential set before the first database mutation so
   # a missing later password cannot leave a partially provisioned role set.
-  declare -A observed_passwords=()
+  observed_passwords=()
   for principal in "${principals[@]}"; do
     password_env="$(printf '%s' "${principal}_password" | tr '[:lower:]' '[:upper:]')"
     runtime_password="${!password_env:-}"
@@ -46,11 +46,13 @@ if [[ "$action" == "provision" ]]; then
       echo "MISSING" >&2
       exit 1
     fi
-    if [[ -n "${observed_passwords[$runtime_password]:-}" ]]; then
-      echo "MISMATCH" >&2
-      exit 1
-    fi
-    observed_passwords["$runtime_password"]=1
+    for observed_password in "${observed_passwords[@]}"; do
+      if [[ "$runtime_password" == "$observed_password" ]]; then
+        echo "MISMATCH" >&2
+        exit 1
+      fi
+    done
+    observed_passwords+=("$runtime_password")
     unset runtime_password
   done
 
@@ -86,6 +88,12 @@ where not exists (
   select 1 from pg_catalog.pg_roles where rolname = '${login_role}'
 )
 \gexec
+select format(
+  'revoke create, temporary on database %I from %I',
+  current_database(),
+  '${login_role}'
+)
+\gexec
 select 'select 1 / 0'
 where exists (
   select 1
@@ -97,6 +105,16 @@ where exists (
       or rolcreaterole
       or rolreplication
       or rolbypassrls
+      or pg_catalog.has_database_privilege(
+        rolname,
+        current_database(),
+        'CREATE'
+      )
+      or pg_catalog.has_database_privilege(
+        rolname,
+        current_database(),
+        'TEMPORARY'
+      )
       or exists (
         select 1
         from pg_catalog.pg_namespace namespace

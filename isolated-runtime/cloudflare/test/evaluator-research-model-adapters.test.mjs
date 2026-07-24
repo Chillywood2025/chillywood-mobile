@@ -72,10 +72,10 @@ test("new database statements are static, parameterized, and role-scoped", async
     new URL("../src/adapters/research-evaluator.mjs", import.meta.url),
     "utf8",
   );
-  assert.equal(MODEL_STATEMENTS.recordModelProviderOverrun.arity, 9);
+  assert.equal(MODEL_STATEMENTS.settleModelProviderOverrun.arity, 10);
   assert.match(
-    MODEL_STATEMENTS.recordModelProviderOverrun.text,
-    /^\s*select cognitive_runtime\.cognitive_model_router_record_provider_overrun\(/u,
+    MODEL_STATEMENTS.settleModelProviderOverrun.text,
+    /^\s*select cognitive_runtime\.cognitive_model_router_settle_provider_overrun\(/u,
   );
   assert.doesNotMatch(researchText, /COGNITIVE_MODEL_OPENAI_API_KEY/u);
   assert.doesNotMatch(evaluatorText, /COGNITIVE_MODEL_OPENAI_API_KEY/u);
@@ -527,20 +527,29 @@ const modelDatabase = (calls) => ({
         reservedModelTokens: parameters[18],
       };
     }
-    if (id === "recordModelProviderOverrun") {
+    if (id === "settleModelProviderOverrun") {
       const reservation = calls.find((entry) =>
         entry.id === "reserveModelInvocation"
       );
       return {
-        authority: "advisory_only",
-        evidenceHash: parameters[6],
-        overrunAuditId: UUID_C,
-        preflightId: parameters[0],
-        quorumEligible: false,
-        reportedModelCost: parameters[2],
-        reportedModelTokens: parameters[1],
-        reservedModelCost: reservation.parameters[19],
-        reservedModelTokens: reservation.parameters[18],
+        overrun: {
+          authority: "advisory_only",
+          evidenceHash: parameters[6],
+          overrunAuditId: UUID_C,
+          preflightId: parameters[0],
+          quorumEligible: false,
+          reportedModelCost: parameters[2],
+          reportedModelTokens: parameters[1],
+          reservedModelCost: reservation.parameters[19],
+          reservedModelTokens: reservation.parameters[18],
+        },
+        settlement: {
+          authority: "advisory_only",
+          evaluatorProofPresent: false,
+          preflightId: parameters[0],
+          quorumEligible: false,
+          resultStatus: "provider_rejected",
+        },
       };
     }
     if (id === "settleModelInvocation") {
@@ -706,13 +715,10 @@ test("model provider overrun records true usage before conservative settlement",
   assert.deepEqual(calls.map((entry) => entry.id), [
     "recoverModelReservation",
     "reserveModelInvocation",
-    "recordModelProviderOverrun",
-    "settleModelInvocation",
+    "settleModelProviderOverrun",
   ]);
-  const reservation = calls[1].parameters;
   const overrun = calls[2].parameters;
-  const settlement = calls[3].parameters;
-  assert.equal(overrun.length, 9);
+  assert.equal(overrun.length, 10);
   assert.equal(overrun[0], UUID_B);
   assert.equal(overrun[1], 100_050);
   assert.equal(overrun[2], 0.1001);
@@ -722,12 +728,43 @@ test("model provider overrun records true usage before conservative settlement",
   assert.match(overrun[6], /^[a-f0-9]{64}$/u);
   assert.equal(overrun[7], 0);
   assert.equal(
-    overrun[8],
+    overrun[9],
     modelEnvironment.COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION,
   );
-  assert.equal(settlement[1], "provider_rejected");
-  assert.equal(settlement[2], reservation[18]);
-  assert.equal(settlement[3], reservation[19]);
+  assert.match(overrun[8], /^[a-f0-9]{64}$/u);
+});
+
+test("late provider overrun settles atomically as provider_rejected", async () => {
+  const payload = await createModelPayload();
+  let tick = 2_000;
+  const calls = [];
+  const adapters = createModelRouterAdapters({
+    now: () => {
+      tick += 6_000;
+      return tick;
+    },
+    transport: async () => ({
+      modelVersion: "gpt-5-mini",
+      outputText: "{}",
+      providerResponseId: "response-late-overrun-unit-test",
+      usage: { inputTokens: 100_000, outputTokens: 50 },
+    }),
+  });
+  await assert.rejects(
+    () =>
+      adapters.assess_sanitized_evidence.execute({
+        database: modelDatabase(calls),
+        env: modelEnvironment,
+        payload,
+      }),
+    /provider_timeout/u,
+  );
+  assert.deepEqual(calls.map((entry) => entry.id), [
+    "recoverModelReservation",
+    "reserveModelInvocation",
+    "settleModelProviderOverrun",
+  ]);
+  assert.match(calls[2].parameters[5], /^[a-f0-9]{64}$/u);
 });
 
 test("model instruction-shaped evidence is rejected before any database call", async () => {

@@ -1,6 +1,6 @@
 begin;
 
-select plan(42);
+select plan(43);
 
 create temporary table expected_runtime_roles(
   role_name text primary key
@@ -49,7 +49,7 @@ insert into expected_runtime_grants(role_name, schema_name, function_name) value
   ('cognitive_research_evaluator','cognitive_runtime','research_evaluator_snapshot'),
   ('cognitive_model_router','cognitive_runtime','cognitive_model_router_recover_expired'),
   ('cognitive_model_router','cognitive_runtime','cognitive_model_router_reserve'),
-  ('cognitive_model_router','cognitive_runtime','cognitive_model_router_record_provider_overrun'),
+  ('cognitive_model_router','cognitive_runtime','cognitive_model_router_settle_provider_overrun'),
   ('cognitive_model_router','cognitive_runtime','cognitive_model_router_settle'),
   ('cognitive_livekit_experience_collector','cognitive_runtime','collect_livekit_sentinel_run'),
   ('cognitive_github_draft_pr_broker','cognitive_runtime','cognitive_record_github_draft_pr_provider_readback'),
@@ -393,7 +393,7 @@ select is(
     )
     from explicit_grants
   ),
-  '5f103b3271536d593809c6b61ebd12c1ca5b2427d32f0bd7fb6f19f6c464a494',
+  '6d8ce362090d90b485ccb27dd7ec2314e6fcb005ba05fd1291fb2f4fee62734e',
   'exact role-to-function-signature grant manifest is deterministic'
 );
 
@@ -633,6 +633,37 @@ select ok(
     'EXECUTE'
   ),
   'generic service_role cannot record isolated model provider overruns'
+);
+
+select ok(
+  pg_catalog.has_function_privilege(
+    'cognitive_model_router',
+    'cognitive_runtime.cognitive_model_router_settle_provider_overrun(uuid,bigint,numeric,text,text,text,text,integer,text,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'service_role',
+    'cognitive_runtime.cognitive_model_router_settle_provider_overrun(uuid,bigint,numeric,text,text,text,text,integer,text,text)',
+    'EXECUTE'
+  )
+  and strpos(
+    pg_catalog.pg_get_functiondef(
+      'cognitive_runtime.cognitive_model_router_settle_provider_overrun(uuid,bigint,numeric,text,text,text,text,integer,text,text)'::regprocedure
+    ),
+    'public.cognitive_model_router_record_provider_overrun'
+  ) > 0
+  and strpos(
+    pg_catalog.pg_get_functiondef(
+      'cognitive_runtime.cognitive_model_router_settle_provider_overrun(uuid,bigint,numeric,text,text,text,text,integer,text,text)'::regprocedure
+    ),
+    'public.cognitive_model_router_settle'
+  ) > strpos(
+    pg_catalog.pg_get_functiondef(
+      'cognitive_runtime.cognitive_model_router_settle_provider_overrun(uuid,bigint,numeric,text,text,text,text,integer,text,text)'::regprocedure
+    ),
+    'public.cognitive_model_router_record_provider_overrun'
+  ),
+  'provider overrun evidence and conservative settlement share one isolated transaction'
 );
 
 select ok(

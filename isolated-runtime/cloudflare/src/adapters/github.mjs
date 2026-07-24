@@ -234,6 +234,9 @@ const responseJson = async (response, signal) => {
     declared !== null &&
     (!/^[0-9]+$/u.test(declared) || Number(declared) > maximumBytes)
   ) {
+    await response.body?.cancel("github_response_rejected").catch(
+      () => undefined,
+    );
     throw new Error("github_response_rejected");
   }
   if (!response.body) throw new Error("github_response_rejected");
@@ -320,7 +323,10 @@ const createCredentialReader = ({ fetcher, now }) =>
         signal: providerSignal(invocation.signal, 10_000),
       },
     );
-    if (!response.ok) throw new Error("github_installation_token_rejected");
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error("github_installation_token_rejected");
+    }
     const payload = await responseJson(response, invocation.signal);
     const token = text(payload.token);
     const expiresAt = text(payload.expires_at);
@@ -525,7 +531,10 @@ const createGithubApi = ({ fetcher }) =>
       redirect: "error",
       signal: providerSignal(invocation.signal, 10_000),
     });
-    if (!response.ok) throw new Error(`github_api_${response.status}`);
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error(`github_api_${response.status}`);
+    }
     return responseJson(response, invocation.signal);
   };
 
