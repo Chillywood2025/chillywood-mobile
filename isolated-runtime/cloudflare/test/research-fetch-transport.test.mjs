@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canonicalizeResearchUrl,
   createPublicResearchBrokerAdapters,
+  RESEARCH_PINNED_TRANSPORT_REQUIRED,
 } from "../src/adapters/research-broker.mjs";
 import {
   createMediatedResearchTransport,
@@ -36,7 +38,26 @@ const html = (body) =>
   '<meta property="article:published_time" content="2026-04-23T00:00:00.000Z">' +
   `</head><body>${body}</body></html>`;
 
-test("retrieve_source uses mediated fetch and binds every SQL argument by signature", async () => {
+test("production retrieve_source remains blocked without an explicitly injected transport", () => {
+  for (
+    const adapters of [
+      createPublicResearchBrokerAdapters(),
+      createPublicResearchBrokerAdapters({
+        fetcher: async () => new Response("must not enable"),
+        resolveAddresses: async () => [PUBLIC_ADDRESS],
+      }),
+    ]
+  ) {
+    assert.equal(adapters.retrieve_source.ready, false);
+    assert.equal(
+      adapters.retrieve_source.reason,
+      RESEARCH_PINNED_TRANSPORT_REQUIRED,
+    );
+    assert.equal(adapters.retrieve_source.execute, undefined);
+  }
+});
+
+test("explicit test transport uses mediated fetch and binds every SQL argument by signature", async () => {
   const requests = [];
   const resolutions = [];
   const responses = [
@@ -49,7 +70,8 @@ test("retrieve_source uses mediated fetch and binds every SQL argument by signat
       { headers: { "Content-Type": "text/html; charset=utf-8" }, status: 200 },
     ),
   ];
-  const adapters = createPublicResearchBrokerAdapters({
+  const transport = createMediatedResearchTransport({
+    canonicalizeUrl: canonicalizeResearchUrl,
     fetcher: async (url, options) => {
       requests.push({ options, url });
       return responses.shift();
@@ -59,6 +81,10 @@ test("retrieve_source uses mediated fetch and binds every SQL argument by signat
       resolutions.push(hostname);
       return [PUBLIC_ADDRESS];
     },
+  });
+  const adapters = createPublicResearchBrokerAdapters({
+    now: () => NOW,
+    transport,
   });
   const calls = [];
   const result = await adapters.retrieve_source.execute({

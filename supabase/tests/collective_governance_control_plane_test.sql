@@ -673,7 +673,7 @@ insert into public.governance_model_execution_attestations(
     'family-c','model-c',repeat('d',64),repeat('e',64),repeat('f',64),
     repeat('a',64),true,'cross_provider',0.1,100
   );
-select lives_ok(
+select throws_ok(
   $$select public.governance_finalize_decision(
     'a2000000-0000-0000-0000-000000000001',
     'a4000000-0000-0000-0000-000000000002',
@@ -681,8 +681,63 @@ select lives_ok(
     repeat('7',64),repeat('8',64),1,repeat('9',64),false,
     'decision_manifest_authority'
   )$$,
-  'a fresh evidence packet, criticism, quorum, stakeholder review, and no veto finalize a decision'
+  'P0001',
+  'governance_model_independence_required',
+  'caller-declared cross-provider rows cannot finalize a current decision'
 );
+
+-- Preserve the inherited approval/capability lifecycle as an explicit
+-- database-owner-only legacy fixture. Runtime callers cannot disable the exact
+-- model-independence trigger, and current finalization above remains fail
+-- closed even when old attestation rows exist.
+alter table public.governance_decision_manifests
+  disable trigger governance_decision_model_independence_before_insert;
+insert into public.governance_decision_manifests(
+  id,deliberation_id,evidence_packet_id,selected_proposal_id,task_id,
+  project_id,platform,environment,decision_key,source_commit,
+  architecture_graph_digest,evidence_manifest_hash,research_claim_hashes,
+  selected_option_hash,rejected_option_hashes,council_attestation_hash,
+  votes_hash,vetoes_hash,dissent_hash,stakeholder_impact_hash,risk_level,
+  required_test_ids,capability_scope_hash,budget_hash,maximum_executions,
+  rollback_hash,external_confirmation_required,decision_hash,
+  model_independence_assessment_id,model_independence_status,
+  model_independence_evidence_hash,status,expires_at,finalized_at
+) values (
+  'af000000-0000-0000-0000-000000000001',
+  'a2000000-0000-0000-0000-000000000001',
+  'a3000000-0000-0000-0000-000000000001',
+  'a4000000-0000-0000-0000-000000000002',
+  'a1000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'shared','ci','governance-decision-fixture',repeat('4',40),
+  repeat('5',64),repeat('6',64),array[repeat('7',64)],repeat('d',64),
+  array[repeat('c',64),repeat('e',64)],repeat('1',64),repeat('2',64),
+  repeat('3',64),repeat('4',64),repeat('5',64),'low',
+  array['governance-red-team'],repeat('7',64),repeat('8',64),1,
+  repeat('9',64),false,repeat('a',64),
+  ('deliberation-' || encode(extensions.digest(convert_to(
+    'a2000000-0000-0000-0000-000000000001','UTF8'
+  ),'sha256'),'hex')),
+  'MODEL_INDEPENDENCE_VERIFIED',repeat('b',64),'finalized',
+  transaction_timestamp()+interval '2 days',transaction_timestamp()
+);
+alter table public.governance_decision_manifests
+  enable trigger governance_decision_model_independence_before_insert;
+insert into public.governance_decision_manifest_events(
+  decision_manifest_id,task_id,project_id,platform,environment,event_sequence,
+  event_type,event_hash,actor_identity
+) values (
+  'af000000-0000-0000-0000-000000000001',
+  'a1000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'shared','ci',1,'finalized',repeat('a',64),
+  'decision_manifest_authority'
+);
+update public.governance_deliberations
+set status='decided',decided_at=transaction_timestamp(),
+    updated_at=transaction_timestamp()
+where id='a2000000-0000-0000-0000-000000000001';
+
 select is(
   (select status::text from public.governance_deliberations where id='a2000000-0000-0000-0000-000000000001'),
   'decided',

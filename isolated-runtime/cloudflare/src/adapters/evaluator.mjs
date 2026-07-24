@@ -1863,12 +1863,14 @@ const assessmentHashForResolution = async (database, run, candidate) => {
 };
 
 const recordEvaluatorProof = async ({
+  assertActive,
   assessmentHash,
   assessmentKind,
   database,
   env,
   reasons,
   run,
+  signal,
 }) => {
   const verdict = reasons.length === 0 ? "passed" : "rejected";
   const evaluatorOutputHash = await hashJson({
@@ -1888,6 +1890,7 @@ const recordEvaluatorProof = async ({
     verdict,
     evaluatorOutputHash,
   ].join("|"));
+  await assertInvocationActive({ assertActive, signal });
   const result = await database.call("productQualityRecordEvaluatorProof", [
     run.id,
     assessmentKind,
@@ -1926,7 +1929,7 @@ const evaluateDetection = ready(
     "compute_detection_hash",
     "record_sentinel_evaluator_proof",
   ],
-  async ({ database, env, payload }) => {
+  async ({ assertActive, database, env, payload, signal }) => {
     const request = normalizeDetection(payload);
     if (!request) throw new Error("sentinel_detection_payload_rejected");
     const snapshot = await database.call("productQualityEvaluatorSnapshot", [
@@ -1944,6 +1947,7 @@ const evaluateDetection = ready(
       throw new Error("sentinel_detection_assessment_hash_rejected");
     }
     return recordEvaluatorProof({
+      assertActive,
       assessmentHash,
       assessmentKind: "finding_detection",
       database,
@@ -1954,6 +1958,7 @@ const evaluateDetection = ready(
         selected.context,
       ),
       run: selected.run,
+      signal,
     });
   },
 );
@@ -1964,7 +1969,7 @@ const evaluateResolution = ready(
     "compute_resolution_hash",
     "record_sentinel_evaluator_proof",
   ],
-  async ({ database, env, payload }) => {
+  async ({ assertActive, database, env, payload, signal }) => {
     const request = normalizeResolution(payload);
     if (!request) throw new Error("sentinel_resolution_payload_rejected");
     const snapshot = await database.call("productQualityEvaluatorSnapshot", [
@@ -1982,6 +1987,7 @@ const evaluateResolution = ready(
       throw new Error("sentinel_resolution_assessment_hash_rejected");
     }
     return recordEvaluatorProof({
+      assertActive,
       assessmentHash,
       assessmentKind: "finding_resolution",
       database,
@@ -1993,6 +1999,7 @@ const evaluateResolution = ready(
         selected.context,
       ),
       run: selected.run,
+      signal,
     });
   },
 );

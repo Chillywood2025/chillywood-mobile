@@ -49,10 +49,13 @@ progress is an intended fail-closed state, not a runtime outage.
 The inherited credential is not being replaced merely because Chi'llywood is
 pre-launch. Replacement is required by the Owner's credential policy because
 the sanitized verification classified it as `EXPOSED` and
-`SCOPE_TOO_BROAD`. The old credential must remain available until the
-replacement successfully deploys and verifies the reviewed bounded resources;
-only then must the old credential be revoked. Neither deployment credential may
-be installed into a cognitive runtime Worker.
+`SCOPE_TOO_BROAD`. The bounded replacement has already been provider-verified
+as `ACTIVE`, `NOT_EXPOSED`, `SCOPE_MATCH`, and `EXPIRY_ACCEPTABLE`.
+Provider-confirmed revocation of the inherited credential is therefore a hard
+predeployment gate: no Level 0/1 Cloudflare resource may be deployed while the
+inherited credential remains active. The inherited raw value is not retrieved
+or printed during confirmation. Neither deployment credential may be installed
+into a cognitive runtime Worker.
 
 The replacement credential is account-bound and limited to Workers Scripts,
 Hyperdrive, Access Apps and Policies, and Access Service Tokens. Billing,
@@ -89,10 +92,22 @@ at:
 Private Workers keep `workers_dev` and Preview URLs disabled and have no public
 routes. The gateway is published only after its Access Service Auth policy
 exists, and it independently validates the Access JWT audience and issuer. The
-research, model, and GitHub Workers have separate allowlisted egress. The
-LiveKit collector receives only sanitized output from a separately bounded
-synthetic participant and has no provider credential or provider egress; all
-other private Workers also have no provider egress.
+model and GitHub Workers have separate allowlisted egress. Public research
+remains fail-closed with `RESEARCH_PINNED_TRANSPORT_REQUIRED`: the existing DNS
+preflight plus public-fetch proxy cannot attest that the connected peer is
+pinned to the approved public addresses. Its mediated transport is available
+only through an explicit source-level test/future-transport injection and
+cannot be enabled by a request or environment variable. The LiveKit collector
+receives only sanitized output from a separately bounded synthetic participant
+and has no provider credential or provider egress; all other private Workers
+also have no provider egress.
+
+The gateway and every private Worker reject any environment key outside their
+exact generated allowlist. This includes a synthetic
+`CLOUDFLARE_API_TOKEN`, arbitrary bindings, sibling Service Bindings,
+Hyperdrive bindings, provider secrets, and database credentials. The
+deployment token exists only in the bounded owner-controlled deployment
+environment.
 
 Rollback is ordered and recoverable:
 
@@ -104,8 +119,9 @@ Rollback is ordered and recoverable:
 5. detach the gateway route;
 6. delete only the ten isolated Worker services and their ten Hyperdrive
    configurations after evidence capture; and
-7. revoke the deployment credential only after replacement or teardown is
-   verified.
+7. allow the bounded replacement deployment credential to expire after
+   replacement or teardown is verified, or revoke it earlier when no approved
+   deployment remains.
 
 Database migrations are forward-only and are never rolled back or rewritten.
 User-derived memory and Level 2 production repair remain off.

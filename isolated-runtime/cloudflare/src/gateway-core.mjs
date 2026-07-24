@@ -6,9 +6,32 @@ const JSON_HEADERS = Object.freeze({
   "content-type": "application/json",
 });
 const MAX_GATEWAY_BODY_BYTES = 131_072;
+const COMMON_GATEWAY_ENVIRONMENT_BINDINGS = Object.freeze([
+  "RUNTIME_SCHEMA_VERSION",
+  "SOURCE_BASE_COMMIT",
+  "SOURCE_COMMIT",
+  "WORKER_VERSION",
+]);
 
 const json = (status, body) =>
   new Response(JSON.stringify(body), { headers: JSON_HEADERS, status });
+
+export const gatewayEnvironmentKeyAllowlist = () =>
+  Object.freeze([
+    ...COMMON_GATEWAY_ENVIRONMENT_BINDINGS,
+    ...RUNTIME_MANIFEST.gateway.requiredPublicConfiguration,
+    ...RUNTIME_MANIFEST.principals.map((principal) => principal.binding),
+  ].sort());
+
+const hasExactGatewayEnvironment = (env) => {
+  if (env === null || typeof env !== "object" || Array.isArray(env)) {
+    return false;
+  }
+  const actual = Object.keys(env).sort();
+  const expected = gatewayEnvironmentKeyAllowlist();
+  return actual.length === expected.length &&
+    actual.every((name, index) => name === expected[index]);
+};
 
 const readBoundedJson = async (request) => {
   const declaredLength = request.headers.get("content-length");
@@ -59,7 +82,11 @@ export const createGatewayHandler = ({
     if (request.method !== "POST") {
       return json(405, { error: "method_not_allowed" });
     }
-    if (RUNTIME_MANIFEST.gateway.databaseBindings.length !== 0) {
+    if (
+      RUNTIME_MANIFEST.gateway.databaseBindings.length !== 0 ||
+      RUNTIME_MANIFEST.gateway.providerSecrets.length !== 0 ||
+      !hasExactGatewayEnvironment(env)
+    ) {
       return json(503, { error: "gateway_credential_domain_invalid" });
     }
     const access = await verifyAccess(request, env);

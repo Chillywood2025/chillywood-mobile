@@ -141,6 +141,11 @@ insert into public.governance_model_execution_attestations(
     repeat('a',64),true,'cross_provider',0.1,100
   );
 
+-- Preserve the inherited two-party lifecycle fixture as a database-owner-only
+-- legacy decision. Runtime callers cannot disable triggers, and the dedicated
+-- activation-gate pgTAP proves new attestations/statuses fail closed.
+alter table public.governance_decision_manifests
+  disable trigger governance_decision_model_independence_before_insert;
 insert into public.governance_decision_manifests(
   id, deliberation_id, evidence_packet_id, selected_proposal_id, task_id,
   project_id, platform, environment, decision_key, source_commit,
@@ -148,7 +153,9 @@ insert into public.governance_decision_manifests(
   selected_option_hash, rejected_option_hashes, council_attestation_hash,
   votes_hash, vetoes_hash, dissent_hash, stakeholder_impact_hash, risk_level,
   required_test_ids, capability_scope_hash, budget_hash, maximum_executions,
-  rollback_hash, decision_hash, status, expires_at, finalized_at
+  rollback_hash, decision_hash, model_independence_assessment_id,
+  model_independence_status, model_independence_evidence_hash,
+  status, expires_at, finalized_at
 ) values (
   'b7000000-0000-0000-0000-000000000001',
   'b4000000-0000-0000-0000-000000000001',
@@ -161,9 +168,15 @@ insert into public.governance_decision_manifests(
   '{}'::text[],repeat('e',64),repeat('f',64),repeat('1',64),
   repeat('2',64),repeat('3',64),'low',array['two-party-test'],
   repeat('4',64),repeat('9',64),2,repeat('3',64),repeat('5',64),
+  ('deliberation-' || encode(extensions.digest(convert_to(
+    'b4000000-0000-0000-0000-000000000001','UTF8'
+  ),'sha256'),'hex')),
+  'MODEL_INDEPENDENCE_VERIFIED',repeat('7',64),
   'finalized',transaction_timestamp()+interval '1 day',
   transaction_timestamp()
 );
+alter table public.governance_decision_manifests
+  enable trigger governance_decision_model_independence_before_insert;
 
 create temporary table two_party_fixture(
   approval_id uuid,
@@ -1509,9 +1522,9 @@ select throws_ok(
     'model_independence_attestation_service',
     'synthetic-worker-assertion-000000000000'
   )$$,
-  '42501',
-  null,
-  'unregistered model attestation service cannot write attestations'
+  'P0001',
+  'model_provider_bound_attestation_required',
+  'model attestations fail closed before principal registration can matter'
 );
 reset role;
 
@@ -1581,8 +1594,8 @@ select throws_ok(
   'two_party_service_principal_required',
   'revoked service-principal assertion cannot execute'
 );
-select is(
-  public.governance_record_model_execution_attestation(
+select throws_ok(
+  $$select public.governance_record_model_execution_attestation(
     'two-party-assessment',
     'b1000000-0000-0000-0000-000000000001',
     'b0000000-0000-0000-0000-000000000001',
@@ -1591,9 +1604,10 @@ select is(
     repeat('5',64),true,'same_family_isolated_advisory',0.1,100,
     'model_independence_attestation_service',
     'synthetic-model-assertion-000000000000'
-  ) is not null,
-  true,
-  'registered model attestation service records sanitized execution attestation'
+  )$$,
+  'P0001',
+  'model_provider_bound_attestation_required',
+  'registered legacy assertion cannot create a provider-bound attestation'
 );
 select is(
   public.governance_model_independence_status(
@@ -1602,27 +1616,7 @@ select is(
     2
   )->>'status',
   'MODEL_INDEPENDENCE_PROVIDER_REQUIRED',
-  'single model execution cannot claim independent quorum'
-);
-select public.governance_record_model_execution_attestation(
-  'same-provider-assessment',
-  'b1000000-0000-0000-0000-000000000001',
-  'b0000000-0000-0000-0000-000000000001',
-  'shared','production','architecture_engineering',repeat('a',64),
-  'family-a','model-a',repeat('b',64),repeat('c',64),repeat('d',64),
-  repeat('e',64),true,'same_provider_distinct_model_family',0.1,100,
-  'model_independence_attestation_service',
-  'synthetic-model-assertion-000000000000'
-);
-select public.governance_record_model_execution_attestation(
-  'same-provider-assessment',
-  'b1000000-0000-0000-0000-000000000001',
-  'b0000000-0000-0000-0000-000000000001',
-  'shared','production','security_privacy',repeat('a',64),
-  'family-b','model-b',repeat('c',64),repeat('d',64),repeat('e',64),
-  repeat('f',64),true,'same_provider_distinct_model_family',0.1,100,
-  'model_independence_attestation_service',
-  'synthetic-model-assertion-000000000000'
+  'model status remains provider-required when no provider-bound path exists'
 );
 select is(
   public.governance_model_independence_status(
@@ -1633,64 +1627,16 @@ select is(
   'MODEL_INDEPENDENCE_PROVIDER_REQUIRED',
   'same-provider distinct-model attestations cannot claim independent quorum'
 );
-select public.governance_record_model_execution_attestation(
-  'cross-provider-same-family-assessment',
-  'b1000000-0000-0000-0000-000000000001',
-  'b0000000-0000-0000-0000-000000000001',
-  'shared','production','architecture_engineering',repeat('1',64),
-  'family-a','model-a',repeat('2',64),repeat('3',64),repeat('4',64),
-  repeat('5',64),true,'cross_provider',0.1,100,
-  'model_independence_attestation_service',
-  'synthetic-model-assertion-000000000000'
-);
-select public.governance_record_model_execution_attestation(
-  'cross-provider-same-family-assessment',
-  'b1000000-0000-0000-0000-000000000001',
-  'b0000000-0000-0000-0000-000000000001',
-  'shared','production','security_privacy',repeat('2',64),
-  'family-a','model-a',repeat('3',64),repeat('4',64),repeat('5',64),
-  repeat('6',64),true,'cross_provider',0.1,100,
-  'model_independence_attestation_service',
-  'synthetic-model-assertion-000000000000'
-);
 select is(
   public.governance_model_independence_status(
     'b1000000-0000-0000-0000-000000000001',
-    'cross-provider-same-family-assessment',
+    ('deliberation-' || encode(extensions.digest(convert_to(
+      'b4000000-0000-0000-0000-000000000001','UTF8'
+    ),'sha256'),'hex')),
     2
   )->>'status',
   'MODEL_INDEPENDENCE_PROVIDER_REQUIRED',
   'cross-provider same-family attestations cannot claim independent model quorum'
-);
-select public.governance_record_model_execution_attestation(
-  'duplicate-role-assessment',
-  'b1000000-0000-0000-0000-000000000001',
-  'b0000000-0000-0000-0000-000000000001',
-  'shared','production','product_user_experience',repeat('a',64),
-  'family-a','model-a',repeat('b',64),repeat('c',64),repeat('d',64),
-  repeat('e',64),true,'cross_provider',0.1,100,
-  'model_independence_attestation_service',
-  'synthetic-model-assertion-000000000000'
-);
-select public.governance_record_model_execution_attestation(
-  'duplicate-role-assessment',
-  'b1000000-0000-0000-0000-000000000001',
-  'b0000000-0000-0000-0000-000000000001',
-  'shared','production','product_user_experience',repeat('b',64),
-  'family-b','model-b',repeat('c',64),repeat('d',64),repeat('e',64),
-  repeat('f',64),true,'cross_provider',0.1,100,
-  'model_independence_attestation_service',
-  'synthetic-model-assertion-000000000000'
-);
-select public.governance_record_model_execution_attestation(
-  'duplicate-role-assessment',
-  'b1000000-0000-0000-0000-000000000001',
-  'b0000000-0000-0000-0000-000000000001',
-  'shared','production','product_user_experience',repeat('c',64),
-  'family-c','model-c',repeat('d',64),repeat('e',64),repeat('f',64),
-  repeat('a',64),true,'cross_provider',0.1,100,
-  'model_independence_attestation_service',
-  'synthetic-model-assertion-000000000000'
 );
 select is(
   public.governance_model_independence_status(

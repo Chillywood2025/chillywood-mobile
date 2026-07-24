@@ -2,11 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { hashJson, sha256Hex } from "../src/contracts.mjs";
 import { createScopedDatabasePort } from "../src/database-core.mjs";
-import { createGatewayHandler } from "../src/gateway-core.mjs";
+import {
+  createGatewayHandler,
+  gatewayEnvironmentKeyAllowlist,
+} from "../src/gateway-core.mjs";
 import { isExactAccessServiceToken } from "../src/gateway.mjs";
 import { PRINCIPAL_BY_ID, RUNTIME_MANIFEST } from "../src/manifest.mjs";
 import { operationAdapter } from "../src/operation-adapters.mjs";
-import { createPrivateInvocationHandler } from "../src/private-core.mjs";
+import {
+  createPrivateInvocationHandler,
+  privateEnvironmentKeyAllowlist,
+} from "../src/private-core.mjs";
+import { RESEARCH_PINNED_TRANSPORT_REQUIRED } from "../src/adapters/research-broker.mjs";
 
 const UUID_A = "10000000-0000-4000-8000-000000000001";
 const UUID_B = "20000000-0000-4000-8000-000000000002";
@@ -44,12 +51,30 @@ const baselineEnv = async (changes = {}) => {
     COGNITIVE_PRODUCT_BASELINE_EXECUTOR_INVOKE_SHA256:
       await sha256Hex(TOKEN),
     COGNITIVE_PRODUCT_BASELINE_SERVICE_ASSERTION: "a".repeat(64),
-    PRINCIPAL_ID: principal.dbRole,
+    RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
+    SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
     SOURCE_COMMIT: "a".repeat(40),
     WORKER_VERSION: { id: "version-safe-id" },
     ...changes,
   };
 };
+
+const gatewayEnv = (changes = {}) => ({
+  CF_ACCESS_AUD: "a".repeat(64),
+  CF_ACCESS_SERVICE_TOKEN_COMMON_NAME: `${"b".repeat(32)}.access`,
+  CF_ACCESS_TEAM_DOMAIN: "https://chillywood.cloudflareaccess.com",
+  RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
+  SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
+  SOURCE_COMMIT: "a".repeat(40),
+  WORKER_VERSION: { id: "version-safe-id" },
+  ...Object.fromEntries(
+    RUNTIME_MANIFEST.principals.map((principal) => [
+      principal.binding,
+      { invoke: async () => ({ status: "completed" }) },
+    ]),
+  ),
+  ...changes,
+});
 
 const database = (overrides = {}) => ({
   call: async () => ({ dispatchDecision: "no_work" }),
@@ -149,6 +174,44 @@ test("ten private principals have unique Worker, role, Hyperdrive and invocation
   }
 });
 
+test("gateway and every private Worker use exact generated environment-key allowlists", () => {
+  assert.deepEqual(
+    gatewayEnvironmentKeyAllowlist(),
+    [
+      "CF_ACCESS_AUD",
+      "CF_ACCESS_SERVICE_TOKEN_COMMON_NAME",
+      "CF_ACCESS_TEAM_DOMAIN",
+      ...RUNTIME_MANIFEST.principals.map((principal) => principal.binding),
+      "RUNTIME_SCHEMA_VERSION",
+      "SOURCE_BASE_COMMIT",
+      "SOURCE_COMMIT",
+      "WORKER_VERSION",
+    ].sort(),
+  );
+  for (const principal of RUNTIME_MANIFEST.principals) {
+    assert.deepEqual(
+      privateEnvironmentKeyAllowlist(principal),
+      [
+        principal.hyperdriveBinding,
+        ...principal.requiredSecrets,
+        ...Object.keys(principal.runtimeConfiguration),
+        "RUNTIME_SCHEMA_VERSION",
+        "SOURCE_BASE_COMMIT",
+        "SOURCE_COMMIT",
+        "WORKER_VERSION",
+      ].sort(),
+      principal.dbRole,
+    );
+    assert.equal(
+      privateEnvironmentKeyAllowlist(principal).includes(
+        "CLOUDFLARE_API_TOKEN",
+      ),
+      false,
+      principal.dbRole,
+    );
+  }
+});
+
 test("provider secrets exist only in their exact principal", () => {
   const byId = PRINCIPAL_BY_ID;
   assert.deepEqual(
@@ -208,6 +271,65 @@ test("provider secrets exist only in their exact principal", () => {
   }
 });
 
+test("production research retrieval fails closed with the stable pinned-transport reason", async () => {
+  const principal = PRINCIPAL_BY_ID.get("cognitive_public_research_broker");
+  const invocationToken = "bounded-research-invocation-token-0001";
+  const sourceCommit = "c".repeat(40);
+  const researchPayload = {
+    action: "retrieve_source",
+    authorityId: "cloudflare-docs",
+    citationLocator: "Workers docs",
+    citationTitle: "Workers docs",
+    environment: "production",
+    evidenceQuery: "Workers service binding documentation",
+    freshnessSeconds: 86_400,
+    platform: "shared",
+    projectId: UUID_C,
+    publisher: "Cloudflare",
+    sourceType: "official_documentation",
+    taskId: UUID_B,
+    url: "https://developers.cloudflare.com/workers/",
+  };
+  const envelope = {
+    deadlineAt: "2026-07-24T12:00:30.000Z",
+    environment: "production",
+    operation: "retrieve_source",
+    payload: researchPayload,
+    payloadHash: await hashJson(researchPayload),
+    platform: "shared",
+    principal: principal.dbRole,
+    projectId: UUID_C,
+    requestId: UUID_A,
+    schemaVersion: RUNTIME_MANIFEST.schemaVersion,
+    sourceCommit,
+    taskId: UUID_B,
+  };
+  const handler = createPrivateInvocationHandler({
+    createDatabase: () => assert.fail("database must not be created"),
+    env: {
+      COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE: {
+        connectionString: "postgres://isolated.invalid/db",
+      },
+      COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256:
+        await sha256Hex(invocationToken),
+      COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN: "r".repeat(40),
+      RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
+      SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
+      SOURCE_COMMIT: sourceCommit,
+      WORKER_VERSION: { id: "version-safe-id" },
+    },
+    logger: silentLogger,
+    now: () => NOW,
+    principal,
+    resolveAdapter: (operation) =>
+      operationAdapter(principal.dbRole, operation),
+  });
+  await assert.rejects(
+    () => handler(envelope, invocationToken),
+    new RegExp(RESEARCH_PINNED_TRANSPORT_REQUIRED, "u"),
+  );
+});
+
 test("private worker fails closed on forbidden shared credential injection", async () => {
   const handler = createPrivateInvocationHandler({
     createDatabase: () => database(),
@@ -222,6 +344,93 @@ test("private worker fails closed on forbidden shared credential injection", asy
     () => handler(makeEnvelope(), TOKEN),
     /credential_domain_rejected/u,
   );
+});
+
+test("gateway and private Worker reject malformed environment objects", async () => {
+  const gateway = createGatewayHandler({
+    now: () => NOW,
+    verifyAccess: async () => assert.fail("Access must not be evaluated"),
+  });
+  const response = await gateway(
+    new Request("https://gateway.invalid/v1", {
+      body: "{}",
+      method: "POST",
+    }),
+    null,
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "gateway_credential_domain_invalid",
+  });
+
+  const principal = PRINCIPAL_BY_ID.get(
+    "cognitive_product_baseline_executor",
+  );
+  const privateHandler = createPrivateInvocationHandler({
+    createDatabase: () => assert.fail("database must not be created"),
+    env: null,
+    logger: silentLogger,
+    now: () => NOW,
+    principal,
+    resolveAdapter: () => assert.fail("adapter must not be resolved"),
+  });
+  await assert.rejects(
+    () => privateHandler(null, ""),
+    /credential_domain_rejected/u,
+  );
+});
+
+test("private worker rejects every unexpected binding including deployment credentials", async () => {
+  for (
+    const binding of [
+      "CLOUDFLARE_API_TOKEN",
+      "UNEXPECTED_BINDING",
+      "PRINCIPAL_ID",
+    ]
+  ) {
+    const handler = createPrivateInvocationHandler({
+      createDatabase: () => database(),
+      env: await baselineEnv({ [binding]: "must-not-exist" }),
+      logger: silentLogger,
+      now: () => NOW,
+      principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
+      resolveAdapter: (operation) =>
+        operationAdapter("cognitive_product_baseline_executor", operation),
+    });
+    await assert.rejects(
+      () => handler(makeEnvelope(), TOKEN),
+      /credential_domain_rejected/u,
+      binding,
+    );
+  }
+});
+
+test("all ten private Worker handlers reject a deployment credential binding", async () => {
+  for (const principal of RUNTIME_MANIFEST.principals) {
+    const env = Object.fromEntries(
+      privateEnvironmentKeyAllowlist(principal).map((name) => [
+        name,
+        "present",
+      ]),
+    );
+    env[principal.hyperdriveBinding] = {
+      connectionString: "postgres://isolated.invalid/db",
+    };
+    env.CLOUDFLARE_API_TOKEN = "must-not-exist";
+    const handler = createPrivateInvocationHandler({
+      createDatabase: () => assert.fail("database must not be created"),
+      env,
+      logger: silentLogger,
+      now: () => NOW,
+      principal,
+      resolveAdapter: () => assert.fail("adapter must not be resolved"),
+    });
+    await assert.rejects(
+      () => handler(null, ""),
+      /credential_domain_rejected/u,
+      principal.dbRole,
+    );
+  }
 });
 
 test("private worker rejects every sibling credential domain", async () => {
@@ -602,7 +811,7 @@ test("gateway rejects unauthenticated, wrong-principal and absent binding calls"
       body: JSON.stringify(envelope),
       method: "POST",
     }),
-    {},
+    gatewayEnv(),
   );
   assert.equal(response.status, 401);
 
@@ -616,9 +825,42 @@ test("gateway rejects unauthenticated, wrong-principal and absent binding calls"
       headers: { "x-cognitive-principal-invocation": TOKEN },
       method: "POST",
     }),
-    {},
+    gatewayEnv({
+      COGNITIVE_PRODUCT_BASELINE_EXECUTOR: undefined,
+    }),
   );
   assert.equal(response.status, 503);
+});
+
+test("gateway rejects deployment credentials and every unexpected binding before Access verification", async () => {
+  let verificationCount = 0;
+  const authenticated = createGatewayHandler({
+    now: () => NOW,
+    verifyAccess: async () => {
+      verificationCount += 1;
+      return true;
+    },
+  });
+  for (
+    const binding of [
+      "CLOUDFLARE_API_TOKEN",
+      "UNEXPECTED_BINDING",
+      "SUPABASE_SERVICE_ROLE_KEY",
+    ]
+  ) {
+    const response = await authenticated(
+      new Request("https://gateway.invalid/v1", {
+        body: "{}",
+        method: "POST",
+      }),
+      gatewayEnv({ [binding]: "must-not-exist" }),
+    );
+    assert.equal(response.status, 503, binding);
+    assert.deepEqual(await response.json(), {
+      error: "gateway_credential_domain_invalid",
+    });
+  }
+  assert.equal(verificationCount, 0);
 });
 
 test("gateway rejects oversized and malformed request bodies before dispatch", async () => {
@@ -635,7 +877,7 @@ test("gateway rejects oversized and malformed request bodies before dispatch", a
       },
       method: "POST",
     }),
-    {},
+    gatewayEnv(),
   );
   assert.equal(response.status, 413);
   assert.deepEqual(await response.json(), { error: "request_body_too_large" });
@@ -646,7 +888,7 @@ test("gateway rejects oversized and malformed request bodies before dispatch", a
       headers: { "x-cognitive-principal-invocation": TOKEN },
       method: "POST",
     }),
-    {},
+    gatewayEnv(),
   );
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: "request_body_invalid" });
