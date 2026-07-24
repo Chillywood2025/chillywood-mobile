@@ -77,7 +77,7 @@ test("new database statements are static, parameterized, and role-scoped", async
   assert.doesNotMatch(evaluatorText, /\bfetch\s*\(/u);
 });
 
-test("baseline evaluation is ready while incomplete sentinel snapshots fail closed", async () => {
+test("baseline and complete-snapshot sentinel evaluation adapters are ready", async () => {
   assert.equal(
     PRODUCT_QUALITY_EVALUATOR_ADAPTERS
       .evaluate_product_baseline_selection.ready,
@@ -85,15 +85,15 @@ test("baseline evaluation is ready while incomplete sentinel snapshots fail clos
   );
   assert.equal(
     PRODUCT_QUALITY_EVALUATOR_ADAPTERS.evaluate_sentinel_detection.ready,
-    false,
+    true,
   );
   assert.equal(
     PRODUCT_QUALITY_EVALUATOR_ADAPTERS.evaluate_sentinel_resolution.ready,
-    false,
+    true,
   );
-  assert.match(
+  assert.equal(
     PRODUCT_QUALITY_EVALUATOR_ADAPTERS.evaluate_sentinel_resolution.reason,
-    /COMPLETE_SNAPSHOT_RPC_REQUIRED$/u,
+    null,
   );
   const calls = [];
   const result = await PRODUCT_QUALITY_EVALUATOR_ADAPTERS
