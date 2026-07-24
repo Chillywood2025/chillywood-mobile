@@ -71,12 +71,17 @@ Every execution requires, in this order:
    approval-scope hash.
 7. An immutable trusted-runner preflight receipt for the exact content and
    required-test hash.
-8. Atomic database capability consumption before any GitHub mutation.
-9. A fresh installation token with exact repository/permission readback.
-10. One exact file and one new `codex/cognitive-canary/*` branch.
-11. A draft PR based on `codex/cognitive-level01-operationalization`.
-12. An immutable trusted-tool result before the result is accepted.
-13. Independent evaluation before a canary can pass.
+8. A fresh installation token with exact repository/permission readback.
+9. Read-only verification that the approved base commit and prior file/blob
+   state still match.
+10. Atomic database capability consumption, locked approval liveness, and an
+    approval target hash over that exact source state before any GitHub
+    mutation.
+11. One exact file and one new `codex/cognitive-canary/*` branch.
+12. A draft PR based on `codex/cognitive-level01-operationalization`.
+13. An immutable trusted-tool result with locked approval liveness before the
+    result is accepted.
+14. Independent evaluation before a canary can pass.
 
 The function never accepts a merge field, arbitrary base branch, existing
 branch update, file deletion, multiple-file tree, or caller-authored GitHub
@@ -94,8 +99,12 @@ Documentation and test canaries require a path that does not exist on the base
 branch. A low-risk source canary requires an existing base-branch file, so it
 cannot smuggle a new runtime component into the repository.
 
-Native, migration, workflow, auth/RLS, role, money, payout, release, secret,
-package-manifest, lockfile, and parent-traversal paths are denied.
+Native, migration, workflow, auth/RLS, role, rights, money, payment, payout,
+pricing, provider, entitlement, moderation, ranking, legal, release, secret,
+package-manifest, lockfile, and parent-traversal directories and filenames are
+denied. Content, title, commit message, path, and branch are screened through
+the canonical secret/private/authority classifier; provider-key, JWT, and
+unlabeled high-entropy credential forms are rejected before persistence.
 
 Each GitHub request has a ten-second timeout. A canary uses a fixed maximum of
 ten provider calls, no automatic retries, one file, 12 KiB for documentation
@@ -105,29 +114,31 @@ If GitHub accepts a branch but the audit receipt fails, the broker reports
 `github_audit_record_rejected_external_branch_quarantined`. It does not delete
 the branch because branch deletion is outside its authority.
 
-## Required forward database contract
+## Forward database contract
 
 The deployed control plane registers the generic
 `capability_and_tool_broker`; it does not yet register the narrower
 `cognitive_github_draft_pr_broker`. Giving the GitHub runtime the generic
 broker token would violate least privilege.
 
-Before deployment, a reviewed forward-only migration must:
+The undeployed forward-only migration:
 
-- register `cognitive_github_draft_pr_broker` with revocation and expiry;
-- add
+- registers `cognitive_github_draft_pr_broker` with revocation and expiry;
+- adds
   `cognitive_consume_github_draft_pr_capability(...)`, restricted to repository
   `Chillywood2025/chillywood-mobile`, provider `github`, operation
   `github_open_draft_pr`, the exact canary branch grammar, and an exact write
-  lease, and requiring a passing trusted preflight receipt for the exact
-  content hash and required-test hash;
-- add `cognitive_record_github_draft_pr_provider_readback(...)`, producing only
+  lease, exact approved base commit and prior blob state, and a passing trusted
+  preflight receipt for the exact content hash and required-test hash;
+- adds `cognitive_record_github_draft_pr_provider_readback(...)`, producing only
   a GitHub draft-PR provider readback/evidence pair;
-- add `cognitive_accept_github_draft_pr_tool_result(...)`, delegating only after
+- adds `cognitive_accept_github_draft_pr_tool_result(...)`, delegating only after
   the capability event exists and the exact service token passes;
-- revoke all three RPCs from `public`, `anon`, and `authenticated`;
-- grant execution only to `service_role`;
-- add pgTAP, concurrency, replay, revocation, expiry, RLS, and real HTTP tests.
+- locks Owner-approval liveness during both capability consumption and
+  postflight;
+- revokes all three RPCs from `public`, `anon`, and `authenticated`;
+- grants execution only to `service_role`;
+- adds pgTAP, concurrency, replay, revocation, expiry, RLS, and real HTTP tests.
 
 Until that reviewed contract and the GitHub App credential both exist, the
 runtime returns `GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED` or

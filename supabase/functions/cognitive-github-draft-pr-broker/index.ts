@@ -1,6 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
+import {
+  type CanonicalSecurityPolicy,
+  classifyCanonicalSecurityPayload,
+} from "../../../_lib/cognitivePolicyEngine.ts";
+import securityPolicyJson from "../../../config/intelligence/cognitive-security-classification-policy.json" with {
+  type: "json",
+};
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -44,6 +51,7 @@ const CANARY_KEYS = new Set([
 const EXACT_PAYLOAD_KEYS = new Set([
   "action",
   "approvalScopeHash",
+  "baseCommit",
   "branchName",
   "callId",
   "canaryKey",
@@ -55,6 +63,7 @@ const EXACT_PAYLOAD_KEYS = new Set([
   "path",
   "planSnapshotHash",
   "preflightReceiptId",
+  "priorBlobSha",
   "projectId",
   "requiredTestsHash",
   "resourceLeaseId",
@@ -69,9 +78,11 @@ const SAFE_PATH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{2,180}$/;
 const SAFE_TITLE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 .,:;()/_'-]{7,120}$/;
 const SAFE_COMMIT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 .,:;()/_'-]{7,120}$/;
 const FORBIDDEN_PATH_PATTERN =
-  /(^|\/)(?:\.github|android|ios|supabase\/migrations|auth|rls|roles?|money|payments?|payouts?|releases?|secrets?|workflows?)(?:\/|$)|^(?:app\.json|app\.config\.[^/]+|eas\.json|package(?:-lock)?\.json|deno\.lock)$/i;
-const SECRET_PATTERN =
-  /(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:access|refresh|service[_-]?role|private)[_-]?(?:token|key|secret)\s*[:=]\s*["']?[A-Za-z0-9+/_=-]{20,})/i;
+  /(^|\/)(?:\.github|android|ios|supabase\/migrations)(?:\/|$)|(^|\/)(?:auth|billing|entitlements?|legal|moderation|money|payments?|payouts?|pricing|providers?|ranking|releases?|rights?|rls|roles?|secrets?|transfers?|withdrawals?|workflows?)(?:[._/-]|$)|^(?:app\.json|app\.config\.[^/]+|eas\.json|package(?:-lock)?\.json|deno\.lock)$/i;
+const EXPLICIT_SECRET_PATTERN =
+  /(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16}|xox[baprs]-[A-Za-z0-9-]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:access|refresh|service[_-]?role|private|api|model|github|client)[_-]?(?:token|key|secret)\s*[:=]\s*["']?[A-Za-z0-9+/_=-]{20,})/i;
+const HIGH_ENTROPY_CANDIDATE = /[A-Za-z0-9+/_=-]{32,}/g;
+const SECURITY_POLICY = securityPolicyJson as CanonicalSecurityPolicy;
 
 const CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Headers":
@@ -106,6 +117,36 @@ const sha256Hex = async (value: string): Promise<string> => {
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 };
+
+const hasUnlabeledHighEntropyCredential = (value: string): boolean => {
+  const candidates = value.match(HIGH_ENTROPY_CANDIDATE) ?? [];
+  return candidates.some((candidate) => {
+    if (
+      /^[a-f0-9]{40,128}$/i.test(candidate) ||
+      /^([A-Za-z0-9])\1{31,}$/.test(candidate)
+    ) {
+      return false;
+    }
+    const categories = [
+      /[a-z]/.test(candidate),
+      /[A-Z]/.test(candidate),
+      /[0-9]/.test(candidate),
+      /[+/_=-]/.test(candidate),
+    ].filter(Boolean).length;
+    const diversity = new Set(candidate).size / candidate.length;
+    return categories >= 3 && diversity >= 0.32;
+  });
+};
+
+const hasSafePersistedGitHubText = (values: Record<string, string>): boolean =>
+  classifyCanonicalSecurityPayload(values, SECURITY_POLICY) === "safe" &&
+  Object.entries(values).every(([key, value]) =>
+    !EXPLICIT_SECRET_PATTERN.test(value) &&
+    (
+      ["branchName", "path"].includes(key) ||
+      !hasUnlabeledHighEntropyCredential(value)
+    )
+  );
 
 const constantTimeEqual = (left: string, right: string): boolean => {
   const maxLength = Math.max(left.length, right.length);
@@ -448,6 +489,7 @@ const pathMatchesCanary = (canaryKey: string, path: string): boolean => {
 
 export type DraftPlan = {
   approvalScopeHash: string;
+  baseCommit: string;
   branchName: string;
   callId: string;
   canaryKey: string;
@@ -459,6 +501,7 @@ export type DraftPlan = {
   path: string;
   planSnapshotHash: string;
   preflightReceiptId: string;
+  priorBlobSha: string;
   projectId: string;
   requiredTestsHash: string;
   resourceLeaseId: string;
@@ -472,6 +515,7 @@ export const validateDraftPlan = (
   if (!hasExactKeys(payload, EXACT_PAYLOAD_KEYS)) return null;
   const plan: DraftPlan = {
     approvalScopeHash: toText(payload.approvalScopeHash),
+    baseCommit: toText(payload.baseCommit),
     branchName: toText(payload.branchName),
     callId: toText(payload.callId),
     canaryKey: toText(payload.canaryKey),
@@ -483,6 +527,7 @@ export const validateDraftPlan = (
     path: toText(payload.path),
     planSnapshotHash: toText(payload.planSnapshotHash),
     preflightReceiptId: toText(payload.preflightReceiptId),
+    priorBlobSha: toText(payload.priorBlobSha),
     projectId: toText(payload.projectId),
     requiredTestsHash: toText(payload.requiredTestsHash),
     resourceLeaseId: toText(payload.resourceLeaseId),
@@ -500,6 +545,16 @@ export const validateDraftPlan = (
     !pathMatchesCanary(plan.canaryKey, plan.path) ||
     !SAFE_TITLE_PATTERN.test(plan.title) ||
     !SAFE_COMMIT_PATTERN.test(plan.commitMessage) ||
+    !/^[a-f0-9]{40}$/.test(plan.baseCommit) ||
+    !(
+      plan.priorBlobSha === "absent" ||
+      /^[a-f0-9]{40}$/.test(plan.priorBlobSha)
+    ) ||
+    (
+      plan.canaryKey === "low_risk_source_draft_pr"
+        ? plan.priorBlobSha === "absent"
+        : plan.priorBlobSha !== "absent"
+    ) ||
     !HASH_PATTERN.test(plan.approvalScopeHash) ||
     !HASH_PATTERN.test(plan.planSnapshotHash) ||
     !HASH_PATTERN.test(plan.requiredTestsHash) ||
@@ -515,7 +570,13 @@ export const validateDraftPlan = (
     plan.capabilityNonce.length > 512 ||
     contentBytes < 1 ||
     contentBytes > maximumBytes ||
-    SECRET_PATTERN.test(plan.content)
+    !hasSafePersistedGitHubText({
+      branchName: plan.branchName,
+      commitMessage: plan.commitMessage,
+      content: plan.content,
+      path: plan.path,
+      title: plan.title,
+    })
   ) {
     return null;
   }
@@ -584,53 +645,6 @@ const executeDraftPlan = async (
     throw new Error("GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED");
   }
   const contentBytes = new TextEncoder().encode(plan.content).length;
-  const requestHash = await sha256Hex(JSON.stringify({
-    baseBranch: ALLOWED_BASE_BRANCH,
-    branchName: plan.branchName,
-    canaryKey: plan.canaryKey,
-    contentHash: await sha256Hex(plan.content),
-    path: plan.path,
-    repository: REPOSITORY,
-    requiredTestsHash: plan.requiredTestsHash,
-    titleHash: await sha256Hex(plan.title),
-  }));
-  const authorization = await createServiceClient().rpc(
-    "cognitive_consume_github_draft_pr_capability",
-    {
-      p_approval_scope_hash: plan.approvalScopeHash,
-      p_branch_name: plan.branchName,
-      p_bytes: contentBytes,
-      p_call_id: plan.callId,
-      p_capability_id: plan.capabilityId,
-      p_cost: 0,
-      p_environment: "production",
-      p_opaque_bearer: plan.capabilityToken,
-      p_opaque_nonce: plan.capabilityNonce,
-      p_operation: "github_open_draft_pr",
-      p_path: plan.path,
-      p_plan_snapshot_hash: plan.planSnapshotHash,
-      p_platform: "shared",
-      p_project_id: plan.projectId,
-      p_provider: "github",
-      p_repository_full_name: REPOSITORY,
-      p_request_hash: requestHash,
-      p_preflight_receipt_id: plan.preflightReceiptId,
-      p_resource_lease_id: plan.resourceLeaseId,
-      p_required_tests_hash: plan.requiredTestsHash,
-      p_service_identity_token: readSecret(
-        "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN",
-      ),
-      p_task_id: plan.taskId,
-    },
-  );
-  if (
-    authorization.error ||
-    !Number.isInteger(authorization.data) ||
-    authorization.data < 1
-  ) {
-    throw new Error("github_capability_authorization_rejected");
-  }
-
   const credential = await readInstallationCredential(fetcher);
   const baseRef = await githubApi(
     credential,
@@ -643,8 +657,8 @@ const executeDraftPlan = async (
   );
   const baseObject = isRecord(baseRef.object) ? baseRef.object : {};
   const baseCommit = toText(baseObject.sha);
-  if (!/^[a-f0-9]{40}$/.test(baseCommit)) {
-    throw new Error("github_base_ref_rejected");
+  if (baseCommit !== plan.baseCommit) {
+    throw new Error("github_approved_base_state_changed");
   }
   const branchLookup = await fetcher(
     `${API_ROOT}/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/git/ref/heads/${
@@ -662,25 +676,80 @@ const executeDraftPlan = async (
   const pathLookup = await fetcher(
     `${API_ROOT}/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/contents/${
       plan.path.split("/").map(encodeURIComponent).join("/")
-    }?ref=${encodeURIComponent(ALLOWED_BASE_BRANCH)}`,
+    }?ref=${encodeURIComponent(plan.baseCommit)}`,
     {
       headers: githubHeaders(`Bearer ${credential.token}`),
       method: "GET",
       signal: AbortSignal.timeout(10_000),
     },
   );
-  if (
-    (
-      plan.canaryKey === "low_risk_source_draft_pr" &&
-      pathLookup.status !== 200
-    ) ||
-    (
-      plan.canaryKey !== "low_risk_source_draft_pr" &&
-      pathLookup.status !== 404
-    )
-  ) {
-    throw new Error("github_canary_path_state_rejected");
+  let observedPriorBlobSha = "absent";
+  if (pathLookup.status === 200) {
+    const pathState = await safeJson(pathLookup);
+    observedPriorBlobSha = pathState.type === "file"
+      ? toText(pathState.sha)
+      : "";
+  } else if (pathLookup.status !== 404) {
+    throw new Error("github_canary_path_readback_rejected");
   }
+  if (observedPriorBlobSha !== plan.priorBlobSha) {
+    throw new Error("github_approved_path_state_changed");
+  }
+  const sourceStateHash = await sha256Hex(
+    `${plan.baseCommit}|${plan.path}|${plan.priorBlobSha}`,
+  );
+  const requestHash = await sha256Hex(JSON.stringify({
+    baseBranch: ALLOWED_BASE_BRANCH,
+    baseCommit: plan.baseCommit,
+    branchName: plan.branchName,
+    canaryKey: plan.canaryKey,
+    contentHash: await sha256Hex(plan.content),
+    path: plan.path,
+    priorBlobSha: plan.priorBlobSha,
+    repository: REPOSITORY,
+    requiredTestsHash: plan.requiredTestsHash,
+    titleHash: await sha256Hex(plan.title),
+  }));
+  const authorization = await createServiceClient().rpc(
+    "cognitive_consume_github_draft_pr_capability",
+    {
+      p_approval_scope_hash: plan.approvalScopeHash,
+      p_base_commit: plan.baseCommit,
+      p_branch_name: plan.branchName,
+      p_bytes: contentBytes,
+      p_call_id: plan.callId,
+      p_capability_id: plan.capabilityId,
+      p_cost: 0,
+      p_environment: "production",
+      p_opaque_bearer: plan.capabilityToken,
+      p_opaque_nonce: plan.capabilityNonce,
+      p_operation: "github_open_draft_pr",
+      p_path: plan.path,
+      p_plan_snapshot_hash: plan.planSnapshotHash,
+      p_platform: "shared",
+      p_prior_blob_sha: plan.priorBlobSha,
+      p_project_id: plan.projectId,
+      p_provider: "github",
+      p_repository_full_name: REPOSITORY,
+      p_request_hash: requestHash,
+      p_preflight_receipt_id: plan.preflightReceiptId,
+      p_resource_lease_id: plan.resourceLeaseId,
+      p_required_tests_hash: plan.requiredTestsHash,
+      p_source_state_hash: sourceStateHash,
+      p_service_identity_token: readSecret(
+        "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN",
+      ),
+      p_task_id: plan.taskId,
+    },
+  );
+  if (
+    authorization.error ||
+    !Number.isInteger(authorization.data) ||
+    authorization.data < 1
+  ) {
+    throw new Error("github_capability_authorization_rejected");
+  }
+
   const baseCommitRecord = await githubApi(
     credential,
     `/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/git/commits/${baseCommit}`,
@@ -737,7 +806,7 @@ const executeDraftPlan = async (
     { ref: `refs/heads/${plan.branchName}`, sha: commitSha },
     fetcher,
   );
-  const beforeStateHash = await sha256Hex(baseCommit);
+  const beforeStateHash = sourceStateHash;
   const afterStateHash = await sha256Hex(commitSha);
   const diffHash = await sha256Hex(
     `${baseCommit}|${commitSha}|${plan.path}|${blobSha}`,
@@ -891,7 +960,9 @@ export const handler = async (request: Request): Promise<Response> => {
     }
     if (
       category === "github_capability_authorization_rejected" ||
-      category === "github_canary_branch_not_fresh"
+      category === "github_canary_branch_not_fresh" ||
+      category === "github_approved_base_state_changed" ||
+      category === "github_approved_path_state_changed"
     ) {
       return json(409, { error: category });
     }

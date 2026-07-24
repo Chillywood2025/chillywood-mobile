@@ -86,7 +86,53 @@ insert into public.cognitive_governance_switches(
     'cognitive_level2_production_repairs_enabled',
     false, 'scheduler-factory-test',
     null, null, transaction_timestamp()
+  ),
+  (
+    'd2000000-0000-4000-8000-000000000001',
+    'd1000000-0000-4000-8000-000000000001',
+    'shared', 'production',
+    'cognitive_research_enabled',
+    true, 'scheduler-factory-test',
+    'd0000000-0000-4000-8000-000000000001',
+    transaction_timestamp(), transaction_timestamp()
+  ),
+  (
+    'd2000000-0000-4000-8000-000000000001',
+    'd1000000-0000-4000-8000-000000000001',
+    'shared', 'production',
+    'cognitive_memory_enabled',
+    true, 'scheduler-factory-test',
+    'd0000000-0000-4000-8000-000000000001',
+    transaction_timestamp(), transaction_timestamp()
   );
+
+insert into public.cognitive_level01_canary_runs(
+  task_id, project_id, platform, environment, canary_key, canary_type,
+  result_status, source_manifest, result_manifest, source_commit,
+  evidence_hash, evaluator_state, completed_at
+)
+select
+  'd2000000-0000-4000-8000-000000000001'::uuid,
+  'd1000000-0000-4000-8000-000000000001'::uuid,
+  'shared'::public.cognitive_platform,
+  'production'::public.cognitive_environment,
+  key,
+  'research',
+  'passed',
+  '[]'::jsonb,
+  jsonb_build_object('fixture', 'scheduler-research-prerequisite'),
+  repeat('a', 40),
+  encode(
+    extensions.digest(convert_to(key, 'UTF8'), 'sha256'),
+    'hex'
+  ),
+  'pass',
+  transaction_timestamp()
+from unnest(array[
+  'platform_policy_research',
+  'repository_architecture_ux',
+  'dependency_security_research'
+]) key;
 
 insert into public.cognitive_level01_schedule_definitions(
   id, task_id, project_id, platform, environment, schedule_key,
@@ -297,6 +343,7 @@ select is(
     from public.cognitive_level01_scheduler_capabilities
     where service_identity = 'cognitive_level01_scheduler'
       and operation = 'issue_recurring_child_task'
+      and parent_task_id = 'd2000000-0000-4000-8000-000000000001'
   ),
   2::bigint,
   'exact Owner registers distinct exact-schedule scheduler capabilities'
@@ -466,6 +513,32 @@ select ok(
 select ok(
   (
     select
+      budget.task_id = task.id
+      and budget.max_model_cost = 5.0000
+      and budget.max_tool_calls = 30
+      and budget.max_child_tasks = 3
+      and budget.deadline_at = task.deadman_at
+      and budget.used_model_cost = 0
+      and budget.used_tool_calls = 0
+      and budget.used_child_tasks = 0
+    from public.cognitive_level01_scheduled_task_issuances issuance
+    join public.intelligence_tasks task
+      on task.id = issuance.child_task_id
+    join public.intelligence_budgets budget
+      on budget.id = issuance.child_budget_id
+     and budget.task_id = task.id
+    where issuance.id = (
+      select (result->>'schedulerIssuanceId')::uuid
+      from scheduler_factory_fixture
+      where fixture_key = 'work'
+    )
+  ),
+  'each scheduled child has a dedicated exact-ceiling cost and call budget'
+);
+
+select ok(
+  (
+    select
       issuance.maximum_tasks_snapshot = 3
       and issuance.maximum_cost_snapshot = 5.0000
       and issuance.timeout_seconds_snapshot = 300
@@ -578,7 +651,8 @@ select ok(
   and (
     select count(*) = 1
     from public.cognitive_level01_scheduled_task_issuances
-    where work_state = 'no_work'
+    where parent_task_id = 'd2000000-0000-4000-8000-000000000001'
+      and work_state = 'no_work'
       and child_task_id is null
   ),
   'no-work occurrence exits without a child and preserves immutable audit'
@@ -633,6 +707,7 @@ select is(
   (
     select count(*)
     from public.cognitive_level01_scheduled_task_issuances
+    where parent_task_id = 'd2000000-0000-4000-8000-000000000001'
   ),
   2::bigint,
   'one task issuance and one no-work exit preserve complete audit history'

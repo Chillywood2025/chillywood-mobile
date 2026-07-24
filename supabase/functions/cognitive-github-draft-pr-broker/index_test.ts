@@ -17,6 +17,7 @@ const assertEquals = (
 const basePlan = (): Record<string, unknown> => ({
   action: "execute_canary",
   approvalScopeHash: "a".repeat(64),
+  baseCommit: "d".repeat(40),
   branchName: "codex/cognitive-canary/documentation-proof",
   callId: "canary-call-001",
   canaryKey: "documentation_draft_pr",
@@ -28,6 +29,7 @@ const basePlan = (): Record<string, unknown> => ({
   path: "docs/intelligence/canaries/documentation-proof.md",
   planSnapshotHash: "b".repeat(64),
   preflightReceiptId: "00000000-0000-4000-8000-000000000004",
+  priorBlobSha: "absent",
   projectId: "00000000-0000-4000-8000-000000000002",
   requiredTestsHash: "c".repeat(64),
   resourceLeaseId: "00000000-0000-4000-8000-000000000003",
@@ -60,6 +62,7 @@ Deno.test("GitHub broker supports bounded test-only and low-risk source canaries
     canaryKey: "low_risk_source_draft_pr",
     content: "export const boundedPresentationValue = true;\n",
     path: "components/presentation/BoundedValue.ts",
+    priorBlobSha: "e".repeat(40),
     title: "Add bounded low-risk source canary",
   });
   assert(testPlan, "test-only plan rejected");
@@ -74,6 +77,10 @@ Deno.test("GitHub broker rejects privilege and scope expansion paths", () => {
     { path: "ios/ChiLlywood/Info.plist" },
     { path: "package.json" },
     { path: "src/auth/session.ts" },
+    { path: "src/auth.ts" },
+    { path: "app/payments.ts" },
+    { path: "components/moderation.tsx" },
+    { path: "src/provider-client.ts" },
     { path: "../docs/intelligence/canaries/escape.md" },
     { branchName: "main" },
     { branchName: "codex/cognitive-level01-operationalization" },
@@ -109,6 +116,22 @@ Deno.test("GitHub broker rejects secret-shaped content and oversized packets", (
   assert(
     validateDraftPlan({
       ...basePlan(),
+      title: "Add aZ1_Bc2-De3_Fg4-Hi5_Jk6-Lm7_Np8_Qr9 canary",
+    }) === null,
+    "high-entropy title accepted",
+  );
+  assert(
+    validateDraftPlan({
+      ...basePlan(),
+      commitMessage: `Add bearer eyJ${"a".repeat(12)}.${"b".repeat(12)}.${
+        "c".repeat(12)
+      }`,
+    }) === null,
+    "JWT-shaped commit message accepted",
+  );
+  assert(
+    validateDraftPlan({
+      ...basePlan(),
       content: `github_pat_${"x".repeat(40)}`,
     }) === null,
     "secret-shaped content accepted",
@@ -119,6 +142,26 @@ Deno.test("GitHub broker rejects secret-shaped content and oversized packets", (
       content: "x".repeat(12289),
     }) === null,
     "oversized documentation content accepted",
+  );
+});
+
+Deno.test("GitHub broker binds each canary to exact base and prior blob state", () => {
+  assert(
+    validateDraftPlan({ ...basePlan(), baseCommit: "not-a-commit" }) === null,
+    "invalid base commit accepted",
+  );
+  assert(
+    validateDraftPlan({ ...basePlan(), priorBlobSha: "f".repeat(40) }) === null,
+    "documentation canary accepted an existing prior blob",
+  );
+  assert(
+    validateDraftPlan({
+      ...basePlan(),
+      canaryKey: "low_risk_source_draft_pr",
+      path: "components/presentation/BoundedValue.ts",
+      priorBlobSha: "absent",
+    }) === null,
+    "source canary accepted an absent prior blob",
   );
 });
 

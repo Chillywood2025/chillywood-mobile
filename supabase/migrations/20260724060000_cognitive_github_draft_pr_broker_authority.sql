@@ -49,6 +49,13 @@ create table public.cognitive_github_draft_pr_authorizations (
   call_id text not null,
   branch_name text not null,
   path text not null,
+  base_commit text not null check (base_commit ~ '^[a-f0-9]{40}$'),
+  prior_blob_sha text not null check (
+    prior_blob_sha = 'absent' or prior_blob_sha ~ '^[a-f0-9]{40}$'
+  ),
+  source_state_hash text not null check (
+    source_state_hash ~ '^[a-f0-9]{64}$'
+  ),
   required_tests_hash text not null check (
     required_tests_hash ~ '^[a-f0-9]{64}$'
   ),
@@ -299,6 +306,9 @@ create function public.cognitive_consume_github_draft_pr_capability(
   p_request_hash text,
   p_preflight_receipt_id uuid,
   p_required_tests_hash text,
+  p_source_state_hash text,
+  p_base_commit text,
+  p_prior_blob_sha text,
   p_service_identity_token text
 )
 returns integer
@@ -406,7 +416,7 @@ begin
          '^(src|components|app)/[A-Za-z0-9][A-Za-z0-9._/-]{2,160}\.(ts|tsx|js|jsx)$'
      )
      or p_path ~*
-       '(^|/)(auth|rls|roles?|money|payments?|payouts?|releases?|secrets?|workflows?)(/|$)'
+       '(^|/)(auth|billing|entitlements?|legal|moderation|money|payments?|payouts?|pricing|providers?|ranking|releases?|rights?|rls|roles?|secrets?|transfers?|withdrawals?|workflows?)([._/-]|$)'
      or not exists (
        select 1
        from unnest(capability_value.path_scopes) scope
@@ -420,6 +430,30 @@ begin
      or p_cost > capability_value.remaining_cost
      or p_request_hash !~ '^[a-f0-9]{64}$'
      or p_required_tests_hash !~ '^[a-f0-9]{64}$'
+     or p_source_state_hash !~ '^[a-f0-9]{64}$'
+     or p_base_commit !~ '^[a-f0-9]{40}$'
+     or not (
+       p_prior_blob_sha = 'absent'
+       or p_prior_blob_sha ~ '^[a-f0-9]{40}$'
+     )
+     or (
+       p_path ~ '^(docs/intelligence/canaries|scripts/cognitive-canaries)/'
+       and p_prior_blob_sha <> 'absent'
+     )
+     or (
+       p_path ~ '^(src|components|app)/'
+       and p_prior_blob_sha = 'absent'
+     )
+     or p_source_state_hash <> encode(
+       extensions.digest(
+         convert_to(
+           concat_ws('|', p_base_commit, p_path, p_prior_blob_sha),
+           'UTF8'
+         ),
+         'sha256'
+       ),
+       'hex'
+     )
      or lease_value.id is null
      or lease_value.task_id <> p_task_id
      or lease_value.project_id <> p_project_id
@@ -442,9 +476,10 @@ begin
      or execution_value.operation <> 'github_draft_pr'
      or execution_value.service_identity <> 'cognitive_approved_action_worker'
      or execution_value.state <> 'executing'
+     or execution_value.target_resource_hash <> p_source_state_hash
      or execution_value.plan_snapshot_hash <> p_plan_snapshot_hash
      or execution_value.tests_hash <> p_required_tests_hash
-     or not public.governance_approved_execution_is_live(
+     or not public.governance_lock_approved_execution_liveness(
        execution_value.id
      ) then
     raise exception 'github_draft_pr_capability_authorization_rejected'
@@ -492,12 +527,14 @@ begin
   insert into public.cognitive_github_draft_pr_authorizations(
     capability_event_id, approved_execution_id, capability_id,
     task_id, project_id, platform, environment, call_id,
-    branch_name, path, required_tests_hash, request_hash,
+    branch_name, path, base_commit, prior_blob_sha, source_state_hash,
+    required_tests_hash, request_hash,
     service_identity
   ) values (
     capability_event_id_value, execution_value.id, capability_value.id,
     p_task_id, p_project_id, p_platform, p_environment, p_call_id,
-    p_branch_name, p_path, p_required_tests_hash, p_request_hash,
+    p_branch_name, p_path, p_base_commit, p_prior_blob_sha,
+    p_source_state_hash, p_required_tests_hash, p_request_hash,
     'cognitive_github_draft_pr_broker'
   );
 
@@ -508,12 +545,12 @@ $$;
 revoke all on function public.cognitive_consume_github_draft_pr_capability(
   text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,
   public.cognitive_environment,text,text,text,uuid,bigint,numeric,
-  text,text,text,uuid,text,text
+  text,text,text,uuid,text,text,text,text,text
 ) from public, anon, authenticated;
 grant execute on function public.cognitive_consume_github_draft_pr_capability(
   text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,
   public.cognitive_environment,text,text,text,uuid,bigint,numeric,
-  text,text,text,uuid,text,text
+  text,text,text,uuid,text,text,text,text,text
 ) to service_role;
 
 create function public.cognitive_accept_github_draft_pr_tool_result(
@@ -594,7 +631,7 @@ begin
      or authorization_value.id is null
      or execution_value.id is null
      or execution_value.state <> 'executing'
-     or not public.governance_approved_execution_is_live(
+     or not public.governance_lock_approved_execution_liveness(
        execution_value.id
      )
      or p_result_envelope is null
@@ -678,7 +715,7 @@ grant execute on function public.cognitive_accept_github_draft_pr_tool_result(
 comment on function public.cognitive_consume_github_draft_pr_capability(
   text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,
   public.cognitive_environment,text,text,text,uuid,bigint,numeric,
-  text,text,text,uuid,text,text
+  text,text,text,uuid,text,text,text,text,text
 ) is
   'Consumes one exact GitHub draft-PR capability only when a live, distinct Owner-approved two-party execution and write lease match.';
 

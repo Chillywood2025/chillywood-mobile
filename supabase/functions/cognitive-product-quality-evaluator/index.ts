@@ -288,7 +288,7 @@ export const deterministicDetectionReasons = (
       reasons.add("crash_anr_classification_rejected");
     }
   } else if (observationKind === "livekit_experience") {
-    const failureCategory = toText(metrics.failureCategory);
+    const failureCategory = toText(metrics.stageFailureCategory);
     if (
       !failureCategory ||
       failureCategory === "none" ||

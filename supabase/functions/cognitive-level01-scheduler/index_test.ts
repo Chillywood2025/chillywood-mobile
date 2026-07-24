@@ -1,5 +1,6 @@
 import {
   evaluateScheduleSnapshot,
+  exactDispatchPayload,
   handler,
   type ScheduleSnapshot,
 } from "./index.ts";
@@ -261,4 +262,47 @@ Deno.test("scheduler HTTP handler requires gateway and invocation authentication
     }),
   );
   assertEquals(response.status, 401, "unauthenticated request status");
+});
+
+Deno.test("scheduler dispatch packet is exact, bounded, and no-work aware", () => {
+  const base = {
+    action: "dispatch_occurrence",
+    capabilityId: "00000000-0000-4000-8000-000000000006",
+    executionIdempotencyHash: "a".repeat(64),
+    noWorkReasonHash: null,
+    objectiveHash: "b".repeat(64),
+    projectId: "00000000-0000-4000-8000-000000000002",
+    scheduleDefinitionId: "00000000-0000-4000-8000-000000000005",
+    scheduleKey: "daily_platform_policy_security",
+    scheduledFor: "2026-07-24T14:00:00.000Z",
+    taskId: "00000000-0000-4000-8000-000000000001",
+    workState: "work_available",
+  };
+  assert(exactDispatchPayload(base), "valid dispatch rejected");
+  assert(
+    exactDispatchPayload({
+      ...base,
+      noWorkReasonHash: "c".repeat(64),
+      workState: "no_work",
+    }),
+    "valid no-work dispatch rejected",
+  );
+  assert(
+    !exactDispatchPayload({ ...base, merge: true }),
+    "dispatch accepted authority expansion",
+  );
+  assert(
+    !exactDispatchPayload({
+      ...base,
+      noWorkReasonHash: "c".repeat(64),
+    }),
+    "work dispatch accepted no-work reason",
+  );
+  assert(
+    !exactDispatchPayload({
+      ...base,
+      scheduledFor: "2026-07-24T14:00:01.000Z",
+    }),
+    "non-minute occurrence accepted",
+  );
 });

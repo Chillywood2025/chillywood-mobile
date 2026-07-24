@@ -75,6 +75,7 @@ create table public.cognitive_level01_scheduled_task_issuances (
   schedule_definition_id uuid not null,
   parent_task_id uuid not null,
   child_task_id uuid,
+  child_budget_id uuid,
   project_id uuid not null,
   platform public.cognitive_platform not null,
   environment public.cognitive_environment not null,
@@ -155,11 +156,18 @@ create table public.cognitive_level01_scheduled_task_issuances (
     references public.intelligence_tasks(
       id, project_id, platform, environment
     ),
+  foreign key (
+    child_budget_id, child_task_id, project_id, platform, environment
+  )
+    references public.intelligence_budgets(
+      id, task_id, project_id, platform, environment
+    ),
   check (
     (
       work_state = 'work_available'
       and result_status = 'task_created'
       and child_task_id is not null
+      and child_budget_id is not null
       and child_deadman_at is not null
       and no_work_reason_hash is null
     )
@@ -167,6 +175,7 @@ create table public.cognitive_level01_scheduled_task_issuances (
       work_state = 'no_work'
       and result_status = 'no_work'
       and child_task_id is null
+      and child_budget_id is null
       and child_deadman_at is null
       and no_work_reason_hash is not null
     )
@@ -366,6 +375,247 @@ grant execute on function public.cognitive_level01_revoke_scheduler_capability(
   uuid,text
 ) to authenticated;
 
+create function public.cognitive_level01_schedule_prerequisites_pass(
+  p_schedule_definition_id uuid,
+  p_parent_task_id uuid,
+  p_project_id uuid,
+  p_platform public.cognitive_platform,
+  p_environment public.cognitive_environment
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  schedule_value public.cognitive_level01_schedule_definitions%rowtype;
+  now_at timestamptz := transaction_timestamp();
+  required_count integer;
+begin
+  select * into schedule_value
+  from public.cognitive_level01_schedule_definitions schedule
+  where schedule.id = p_schedule_definition_id
+    and schedule.task_id = p_parent_task_id
+    and schedule.project_id = p_project_id
+    and schedule.platform = p_platform
+    and schedule.environment = p_environment;
+
+  if schedule_value.id is null
+     or not schedule_value.enabled
+     or p_platform <> 'shared'
+     or p_environment <> 'production'
+     or not public.governance_task_writes_allowed(
+       p_parent_task_id, p_project_id, p_platform, p_environment
+     )
+     or not public.governance_approval_emergency_active()
+     or (
+       select count(*)
+       from public.cognitive_governance_switches switch
+       where switch.task_id = p_parent_task_id
+         and switch.project_id = p_project_id
+         and switch.platform = p_platform
+         and switch.environment = p_environment
+         and switch.switch_key in (
+           'cognitive_research_enabled',
+           'cognitive_memory_enabled',
+           'cognitive_scheduled_level01_enabled'
+         )
+         and switch.enabled
+     ) <> 3
+     or (
+       select count(*)
+       from public.cognitive_governance_switches switch
+       where switch.task_id = p_parent_task_id
+         and switch.project_id = p_project_id
+         and switch.platform = p_platform
+         and switch.environment = p_environment
+         and switch.switch_key in (
+           'cognitive_user_derived_memory_enabled',
+           'cognitive_level2_production_repairs_enabled'
+         )
+         and not switch.enabled
+     ) <> 2
+     or not (
+       case schedule_value.schedule_key
+       when 'daily_platform_policy_security' then
+         schedule_value.cadence = '0 14 * * *'
+         and schedule_value.maximum_tasks = 3
+         and schedule_value.maximum_cost = 5
+         and schedule_value.timeout_seconds = 300
+       when 'daily_non_personal_support_observability' then
+         schedule_value.cadence = '30 14 * * *'
+         and schedule_value.maximum_tasks = 2
+         and schedule_value.maximum_cost = 3
+         and schedule_value.timeout_seconds = 300
+       when 'weekly_ux_route_dead_control' then
+         schedule_value.cadence = '0 15 * * 1'
+         and schedule_value.maximum_tasks = 3
+         and schedule_value.maximum_cost = 5
+         and schedule_value.timeout_seconds = 600
+       when 'weekly_architecture_dependency' then
+         schedule_value.cadence = '30 15 * * 1'
+         and schedule_value.maximum_tasks = 3
+         and schedule_value.maximum_cost = 5
+         and schedule_value.timeout_seconds = 600
+       when 'weekly_experiment_outcome' then
+         schedule_value.cadence = '0 16 * * 1'
+         and schedule_value.maximum_tasks = 2
+         and schedule_value.maximum_cost = 3
+         and schedule_value.timeout_seconds = 300
+       else false
+       end
+     ) then
+    return false;
+  end if;
+
+  if schedule_value.schedule_key in (
+    'daily_platform_policy_security',
+    'daily_non_personal_support_observability'
+  ) then
+    required_count := case
+      when schedule_value.schedule_key = 'daily_platform_policy_security'
+      then 3 else 2
+    end;
+    return (
+      select count(distinct run.canary_key) = required_count
+      from public.cognitive_level01_canary_runs run
+      where run.task_id = p_parent_task_id
+        and run.project_id = p_project_id
+        and run.platform = p_platform
+        and run.environment = p_environment
+        and run.canary_type = 'research'
+        and run.canary_key = any(
+          case
+          when schedule_value.schedule_key =
+            'daily_platform_policy_security'
+          then array[
+            'platform_policy_research',
+            'repository_architecture_ux',
+            'dependency_security_research'
+          ]
+          else array[
+            'platform_policy_research',
+            'repository_architecture_ux'
+          ]
+          end
+        )
+        and run.result_status = 'passed'
+        and run.evaluator_state = 'pass'
+        and run.completed_at >= now_at - interval '7 days'
+        and run.completed_at <= now_at
+    );
+  end if;
+
+  if schedule_value.schedule_key = 'weekly_architecture_dependency' then
+    return (
+      select count(distinct run.canary_key) = 2
+      from public.cognitive_level01_canary_runs run
+      where run.task_id = p_parent_task_id
+        and run.project_id = p_project_id
+        and run.platform = p_platform
+        and run.environment = p_environment
+        and run.canary_key in (
+          'repository_architecture_ux',
+          'dependency_security_research'
+        )
+        and run.canary_type = 'research'
+        and run.result_status = 'passed'
+        and run.evaluator_state = 'pass'
+        and run.completed_at >= now_at - interval '7 days'
+        and run.completed_at <= now_at
+    );
+  end if;
+
+  if schedule_value.schedule_key = 'weekly_ux_route_dead_control' then
+    return (
+      select count(*) = 2
+      from public.cognitive_governance_switches switch
+      where switch.task_id = p_parent_task_id
+        and switch.project_id = p_project_id
+        and switch.platform = p_platform
+        and switch.environment = p_environment
+        and switch.switch_key in (
+          'cognitive_installed_journey_sentinel_enabled',
+          'cognitive_visual_experience_sentinel_enabled'
+        )
+        and switch.enabled
+    ) and (
+      select count(distinct run.sentinel_key) = 2
+      from public.product_experience_sentinel_runs run
+      join public.intelligence_tasks sentinel_task
+        on sentinel_task.id = run.task_id
+       and sentinel_task.project_id = run.project_id
+       and sentinel_task.platform = run.platform
+       and sentinel_task.environment = run.environment
+      join public.product_experience_sentinel_evaluator_proofs proof
+        on proof.sentinel_run_id = run.id
+       and proof.task_id = run.task_id
+       and proof.project_id = run.project_id
+       and proof.platform = run.platform
+       and proof.environment = run.environment
+      where run.project_id = p_project_id
+        and sentinel_task.parent_task_id = p_parent_task_id
+        and run.platform in ('android', 'ios')
+        and run.environment = p_environment
+        and run.sentinel_key in (
+          'installed_journey_sentinel',
+          'visual_product_experience_sentinel'
+        )
+        and run.result_status in ('passed', 'failed')
+        and run.erased_at is null
+        and run.observation_finished_at >= now_at - interval '7 days'
+        and proof.verdict = 'passed'
+        and proof.valid_until > now_at
+    );
+  end if;
+
+  if schedule_value.schedule_key = 'weekly_experiment_outcome' then
+    return (
+      select count(*) = 2
+      from public.cognitive_governance_switches switch
+      where switch.task_id = p_parent_task_id
+        and switch.project_id = p_project_id
+        and switch.platform = p_platform
+        and switch.environment = p_environment
+        and switch.switch_key in (
+          'cognitive_collective_deliberation_enabled',
+          'cognitive_draft_pr_executor_enabled'
+        )
+        and switch.enabled
+    ) and exists (
+      select 1
+      from public.cognitive_level01_credential_attestations attestation
+      where attestation.task_id = p_parent_task_id
+        and attestation.project_id = p_project_id
+        and attestation.platform = p_platform
+        and attestation.environment = p_environment
+        and attestation.credential_kind = 'github_draft_pr'
+        and attestation.state = 'configured'
+        and attestation.verified_at <= now_at
+        and attestation.expires_at > now_at
+    ) and (
+      select count(distinct run.canary_key) = 3
+      from public.cognitive_level01_canary_runs run
+      where run.task_id = p_parent_task_id
+        and run.project_id = p_project_id
+        and run.platform = p_platform
+        and run.environment = p_environment
+        and run.canary_type = 'draft_pr'
+        and run.result_status = 'passed'
+        and run.evaluator_state = 'pass'
+        and run.completed_at >= now_at - interval '30 days'
+        and run.completed_at <= now_at
+    );
+  end if;
+
+  return false;
+end;
+$$;
+revoke all on function public.cognitive_level01_schedule_prerequisites_pass(
+  uuid,uuid,uuid,public.cognitive_platform,public.cognitive_environment
+) from public, anon, authenticated, service_role;
+
 create function public.cognitive_level01_issue_recurring_child_task(
   p_capability_id uuid,
   p_schedule_definition_id uuid,
@@ -401,6 +651,7 @@ declare
   project_value public.cognitive_projects%rowtype;
   existing_value public.cognitive_level01_scheduled_task_issuances%rowtype;
   child_task_id_value uuid;
+  child_budget_id_value uuid;
   child_key_token text;
   issuance_id uuid;
   issued_count integer;
@@ -408,6 +659,7 @@ declare
   retention_value timestamptz;
   result_status_value text;
   audit_event_hash_value text;
+  budget_ceiling_hash_value text;
   now_at timestamptz := transaction_timestamp();
   scheduled_hour integer;
   scheduled_minute integer;
@@ -485,29 +737,10 @@ begin
      )
      or project_value.id is null
      or project_value.production_authority
-     or not exists (
-       select 1
-       from public.cognitive_governance_switches switch
-       where switch.task_id = p_parent_task_id
-         and switch.project_id = p_project_id
-         and switch.platform = p_platform
-         and switch.environment = p_environment
-         and switch.switch_key = 'cognitive_scheduled_level01_enabled'
-         and switch.enabled
-     )
-     or (
-       select count(*)
-       from public.cognitive_governance_switches switch
-       where switch.task_id = p_parent_task_id
-         and switch.project_id = p_project_id
-         and switch.platform = p_platform
-         and switch.environment = p_environment
-         and switch.switch_key in (
-           'cognitive_user_derived_memory_enabled',
-           'cognitive_level2_production_repairs_enabled'
-         )
-         and not switch.enabled
-     ) <> 2 then
+     or not public.cognitive_level01_schedule_prerequisites_pass(
+       p_schedule_definition_id, p_parent_task_id, p_project_id,
+       p_platform, p_environment
+     ) then
     raise exception 'cognitive_level01_schedule_gate_rejected'
       using errcode = 'P0001';
   end if;
@@ -607,6 +840,7 @@ begin
       'scheduleDefinitionId', existing_value.schedule_definition_id,
       'parentTaskId', existing_value.parent_task_id,
       'childTaskId', existing_value.child_task_id,
+      'childBudgetId', existing_value.child_budget_id,
       'resultStatus', existing_value.result_status,
       'deduplicated', true,
       'maximumTasks', existing_value.maximum_tasks_snapshot,
@@ -676,10 +910,65 @@ begin
       p_parent_task_id
     )
     returning id into child_task_id_value;
+
+    budget_ceiling_hash_value := encode(
+      extensions.digest(
+        convert_to(
+          concat_ws(
+            '|',
+            child_task_id_value::text,
+            schedule_value.schedule_key,
+            schedule_value.maximum_tasks::text,
+            schedule_value.maximum_cost::text,
+            schedule_value.timeout_seconds::text,
+            p_execution_idempotency_hash
+          ),
+          'UTF8'
+        ),
+        'sha256'
+      ),
+      'hex'
+    );
+    insert into public.intelligence_budgets(
+      task_id, project_id, platform, environment, actor_identity,
+      dedupe_key, status, summary, evidence_metadata, data_class,
+      retention_until, legal_hold, immutable_ceiling_hash,
+      max_model_tokens, used_model_tokens, max_model_cost,
+      used_model_cost, max_tool_calls, used_tool_calls,
+      max_tool_bytes, used_tool_bytes, max_child_tasks,
+      used_child_tasks, max_recursion_depth, max_retries,
+      max_concurrent_calls, active_concurrent_calls,
+      repeated_action_count, repeated_plan_count, deadline_at
+    ) values (
+      child_task_id_value, p_project_id, p_platform, p_environment,
+      'cognitive_level01_scheduler',
+      'scheduled-budget-' || child_key_token,
+      'active',
+      jsonb_build_object(
+        'schedule_key', schedule_value.schedule_key,
+        'bounded', true
+      ),
+      jsonb_build_object(
+        'execution_idempotency_hash', p_execution_idempotency_hash,
+        'schedule_policy_version', schedule_value.policy_version
+      ),
+      'operational_metadata', retention_value, false,
+      budget_ceiling_hash_value,
+      least(
+        10000000,
+        (schedule_value.maximum_cost * 250000)::bigint
+      ),
+      0, schedule_value.maximum_cost, 0,
+      least(100, schedule_value.maximum_tasks * 10), 0,
+      1000000, 0, schedule_value.maximum_tasks, 0,
+      1, 1, 1, 0, 0, 0, child_deadman_value
+    )
+    returning id into child_budget_id_value;
     result_status_value := 'task_created';
   else
     child_deadman_value := null;
     child_task_id_value := null;
+    child_budget_id_value := null;
     result_status_value := 'no_work';
   end if;
 
@@ -710,7 +999,8 @@ begin
 
   insert into public.cognitive_level01_scheduled_task_issuances(
     capability_id, schedule_definition_id, parent_task_id,
-    child_task_id, project_id, platform, environment, scheduled_for,
+    child_task_id, child_budget_id, project_id, platform, environment,
+    scheduled_for,
     execution_idempotency_hash, objective_hash, work_state,
     result_status, no_work_reason_hash, maximum_tasks_snapshot,
     maximum_cost_snapshot, timeout_seconds_snapshot,
@@ -718,8 +1008,9 @@ begin
     audit_event_hash, retention_until
   ) values (
     capability_value.id, schedule_value.id, p_parent_task_id,
-    child_task_id_value, p_project_id, p_platform, p_environment,
-    p_scheduled_for, p_execution_idempotency_hash, p_objective_hash,
+    child_task_id_value, child_budget_id_value, p_project_id, p_platform,
+    p_environment, p_scheduled_for, p_execution_idempotency_hash,
+    p_objective_hash,
     p_work_state, result_status_value, p_no_work_reason_hash,
     schedule_value.maximum_tasks, schedule_value.maximum_cost,
     schedule_value.timeout_seconds, schedule_value.policy_version,
@@ -733,6 +1024,7 @@ begin
     'scheduleDefinitionId', schedule_value.id,
     'parentTaskId', p_parent_task_id,
     'childTaskId', child_task_id_value,
+    'childBudgetId', child_budget_id_value,
     'resultStatus', result_status_value,
     'deduplicated', false,
     'maximumTasks', schedule_value.maximum_tasks,

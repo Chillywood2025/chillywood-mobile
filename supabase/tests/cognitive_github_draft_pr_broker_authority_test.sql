@@ -87,7 +87,7 @@ select ok(
   )
   and not has_function_privilege(
     'authenticated',
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text)',
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)',
     'EXECUTE'
   )
   and not has_function_privilege(
@@ -175,6 +175,9 @@ select throws_ok(
     repeat('7',64),
     'e4000000-0000-4000-8000-000000000001',
     repeat('8',64),
+    repeat('9',64),
+    repeat('a',40),
+    'absent',
     'github-broker-service-token-test-only'
   )$$,
   'P0001',
@@ -259,6 +262,26 @@ select ok(
         'cognitive_service_identities_service_identity_check'
   ),
   'service identity registry explicitly recognizes the dedicated broker'
+);
+
+select ok(
+  pg_get_functiondef(
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+  ) like '%governance_lock_approved_execution_liveness%'
+  and pg_get_functiondef(
+    'public.cognitive_accept_github_draft_pr_tool_result(text,text,text,text,jsonb,text,text,text,text,text)'::regprocedure
+  ) like '%governance_lock_approved_execution_liveness%',
+  'capability consumption and postflight both lock approval liveness'
+);
+
+select ok(
+  pg_get_functiondef(
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+  ) like '%execution_value.target_resource_hash <> p_source_state_hash%'
+  and pg_get_functiondef(
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+  ) like '%moderation%providers%ranking%rights%',
+  'authorization is bound to exact source state and filename-level protected scopes'
 );
 
 select * from finish();

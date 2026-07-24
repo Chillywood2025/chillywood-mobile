@@ -138,6 +138,7 @@ type CanaryEvidence = {
 type ScheduleDefinition = {
   cadence: string;
   enabled: boolean;
+  id?: string;
   key: string;
   maximumCost: number;
   maximumTasks: number;
@@ -392,7 +393,7 @@ const readSnapshot = async (
       "canary_key,canary_type,result_status,evaluator_state,created_at",
     ).eq("task_id", taskId).eq("project_id", projectId),
     client.from("cognitive_level01_schedule_definitions").select(
-      "schedule_key,cadence,enabled,maximum_tasks,maximum_cost,timeout_seconds",
+      "id,schedule_key,cadence,enabled,maximum_tasks,maximum_cost,timeout_seconds",
     ).eq("task_id", taskId).eq("project_id", projectId),
     client.from("cognitive_level01_credential_attestations").select(
       "state,verified_at,expires_at",
@@ -441,6 +442,7 @@ const readSnapshot = async (
         ? [{
           cadence: toText(row.cadence),
           enabled: row.enabled === true,
+          id: toText(row.id),
           key: toText(row.schedule_key),
           maximumCost: Number(row.maximum_cost),
           maximumTasks: Number(row.maximum_tasks),
@@ -507,6 +509,105 @@ const sanitizedSummary = async (
   };
 };
 
+const DISPATCH_KEYS = Object.freeze([
+  "action",
+  "capabilityId",
+  "executionIdempotencyHash",
+  "noWorkReasonHash",
+  "objectiveHash",
+  "projectId",
+  "scheduleDefinitionId",
+  "scheduleKey",
+  "scheduledFor",
+  "taskId",
+  "workState",
+]);
+const SORTED_DISPATCH_KEYS = Object.freeze([...DISPATCH_KEYS].sort());
+
+export const exactDispatchPayload = (
+  value: Record<string, unknown>,
+): boolean => {
+  const keys = Object.keys(value).sort();
+  const scheduledForText = toText(value.scheduledFor);
+  const scheduledFor = Date.parse(scheduledForText);
+  return keys.length === SORTED_DISPATCH_KEYS.length &&
+    keys.every((key, index) => key === SORTED_DISPATCH_KEYS[index]) &&
+    toText(value.action) === "dispatch_occurrence" &&
+    UUID_PATTERN.test(toText(value.capabilityId)) &&
+    UUID_PATTERN.test(toText(value.scheduleDefinitionId)) &&
+    UUID_PATTERN.test(toText(value.taskId)) &&
+    UUID_PATTERN.test(toText(value.projectId)) &&
+    Object.hasOwn(REQUIRED_SCHEDULES, toText(value.scheduleKey)) &&
+    HASH_PATTERN.test(toText(value.executionIdempotencyHash)) &&
+    HASH_PATTERN.test(toText(value.objectiveHash)) &&
+    ["work_available", "no_work"].includes(toText(value.workState)) &&
+    (
+      toText(value.workState) === "work_available"
+        ? value.noWorkReasonHash === null
+        : HASH_PATTERN.test(toText(value.noWorkReasonHash))
+    ) &&
+    Number.isFinite(scheduledFor) &&
+    new Date(scheduledFor).toISOString() === scheduledForText &&
+    new Date(scheduledFor).getUTCSeconds() === 0 &&
+    new Date(scheduledFor).getUTCMilliseconds() === 0;
+};
+
+const dispatchOccurrence = async (
+  client: SupabaseClientLike,
+  payload: Record<string, unknown>,
+  snapshot: ScheduleSnapshot,
+): Promise<JsonObject> => {
+  const scheduleKey = toText(payload.scheduleKey);
+  const decision = evaluateScheduleSnapshot(snapshot).find((entry) =>
+    entry.scheduleKey === scheduleKey
+  );
+  const definition = snapshot.schedules.find((entry) =>
+    entry.key === scheduleKey
+  );
+  if (
+    !decision?.dispatchEligible ||
+    definition?.id !== toText(payload.scheduleDefinitionId)
+  ) {
+    throw new Error("schedule_occurrence_prerequisites_rejected");
+  }
+  const assertion = readSecret("COGNITIVE_LEVEL01_SCHEDULER_ASSERTION");
+  if (!assertion) {
+    throw new Error("COGNITIVE_LEVEL01_SCHEDULER_ASSERTION_REQUIRED");
+  }
+  const result = await client.rpc(
+    "cognitive_level01_issue_recurring_child_task",
+    {
+      p_capability_id: toText(payload.capabilityId),
+      p_environment: "production",
+      p_execution_idempotency_hash: toText(
+        payload.executionIdempotencyHash,
+      ),
+      p_no_work_reason_hash: payload.noWorkReasonHash,
+      p_objective_hash: toText(payload.objectiveHash),
+      p_parent_task_id: toText(payload.taskId),
+      p_platform: "shared",
+      p_project_id: toText(payload.projectId),
+      p_schedule_definition_id: toText(payload.scheduleDefinitionId),
+      p_scheduled_for: toText(payload.scheduledFor),
+      p_service_assertion: assertion,
+      p_service_identity: "cognitive_level01_scheduler",
+      p_work_state: toText(payload.workState),
+    },
+  );
+  if (result.error || !isRecord(result.data)) {
+    throw new Error("schedule_occurrence_issue_rejected");
+  }
+  return {
+    childBudgetCreated: typeof result.data.childBudgetId === "string",
+    childTaskCreated: typeof result.data.childTaskId === "string",
+    deduplicated: result.data.deduplicated === true,
+    resultStatus: toText(result.data.resultStatus),
+    scheduleKey,
+    schedulerIssuanceRecorded:
+      typeof result.data.schedulerIssuanceId === "string",
+  };
+};
+
 export const handler = async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS, status: 200 });
@@ -522,24 +623,43 @@ export const handler = async (request: Request): Promise<Response> => {
   const payload = await request.json().catch(() => null);
   if (
     !isRecord(payload) ||
-    Object.keys(payload).sort().join(",") !== "action,projectId,taskId" ||
-    toText(payload.action) !== "evaluate_prerequisites" ||
     !UUID_PATTERN.test(toText(payload.taskId)) ||
     !UUID_PATTERN.test(toText(payload.projectId))
   ) {
     return json(400, { error: "schedule_scope_rejected" });
   }
   try {
+    const action = toText(payload.action);
+    const evaluationPayload = Object.keys(payload).sort().join(",") ===
+        "action,projectId,taskId" &&
+      action === "evaluate_prerequisites";
+    if (!evaluationPayload && !exactDispatchPayload(payload)) {
+      return json(400, { error: "schedule_scope_rejected" });
+    }
+    const client = createServiceClient();
     const snapshot = await readSnapshot(
-      createServiceClient(),
+      client,
       toText(payload.taskId),
       toText(payload.projectId),
     );
+    if (action === "dispatch_occurrence") {
+      return json(200, await dispatchOccurrence(client, payload, snapshot));
+    }
     return json(
       200,
       await sanitizedSummary(evaluateScheduleSnapshot(snapshot)),
     );
-  } catch {
+  } catch (error) {
+    const category = error instanceof Error ? error.message : "";
+    if (category === "COGNITIVE_LEVEL01_SCHEDULER_ASSERTION_REQUIRED") {
+      return json(503, { error: category });
+    }
+    if (
+      category === "schedule_occurrence_prerequisites_rejected" ||
+      category === "schedule_occurrence_issue_rejected"
+    ) {
+      return json(409, { error: category });
+    }
     return json(503, {
       blockers: ["SCHEDULE_PREREQUISITE_READBACK_REQUIRED"],
       dispatchDecision: "no_work",
