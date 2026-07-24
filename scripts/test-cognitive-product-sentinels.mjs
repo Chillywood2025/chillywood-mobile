@@ -216,7 +216,12 @@ assert(
   "database suite does not accept complete installed-journey evidence",
 );
 assert(
-  dbTest.includes("product triage rejects passed visual run as a governance finding"),
+  dbTest.includes(
+    "visual sentinel rejects a passed run without the current exact approved baseline",
+  ) &&
+    dbTest.includes(
+      "rejected visual pass creates no sentinel evidence or triage input",
+    ),
   "database suite does not reject findings from passed sentinel runs",
 );
 assert(
