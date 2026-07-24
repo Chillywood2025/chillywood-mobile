@@ -17,8 +17,10 @@ if [[ -z "${PGSERVICE:-}" ]]; then
 fi
 
 action="${1:-}"
-if [[ "$action" != "provision" && "$action" != "revoke" ]]; then
-  echo "usage: $0 provision|revoke" >&2
+if [[ "$action" != "provision" \
+   && "$action" != "revoke" \
+   && "$action" != "revoke-one" ]]; then
+  echo "usage: $0 provision|revoke|revoke-one <principal>" >&2
   exit 2
 fi
 
@@ -35,7 +37,64 @@ principals=(
   cognitive_level01_scheduler
 )
 
+principal_is_allowed() {
+  local requested_principal="$1"
+  local principal
+
+  for principal in "${principals[@]}"; do
+    if [[ "$principal" == "$requested_principal" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+revoke_principal() {
+  local principal="$1"
+  local login_role="${principal}_login"
+
+  psql --no-psqlrc --quiet --set=ON_ERROR_STOP=1 >/dev/null <<SQL
+begin;
+select format(
+  'alter role %I nologin valid until %L',
+  '${login_role}',
+  transaction_timestamp()
+)
+where exists (
+  select 1 from pg_catalog.pg_roles where rolname = '${login_role}'
+)
+\gexec
+select format('revoke %I from %I', '${principal}', '${login_role}')
+where exists (
+  select 1
+  from pg_catalog.pg_auth_members membership
+  join pg_catalog.pg_roles granted_role
+    on granted_role.oid = membership.roleid
+  join pg_catalog.pg_roles member_role
+    on member_role.oid = membership.member
+  where granted_role.rolname = '${principal}'
+    and member_role.rolname = '${login_role}'
+)
+\gexec
+select format('alter role %I reset all', '${login_role}')
+where exists (
+  select 1 from pg_catalog.pg_roles where rolname = '${login_role}'
+)
+\gexec
+select pg_catalog.pg_terminate_backend(activity.pid)
+from pg_catalog.pg_stat_activity activity
+where activity.usename = '${login_role}'
+  and activity.pid <> pg_catalog.pg_backend_pid();
+commit;
+SQL
+}
+
 if [[ "$action" == "provision" ]]; then
+  if [[ "$#" -ne 1 ]]; then
+    echo "MISMATCH" >&2
+    exit 1
+  fi
+
   # Validate the complete credential set before the first database mutation so
   # a missing later password cannot leave a partially provisioned role set.
   observed_passwords=()
@@ -272,42 +331,30 @@ SQL
   exit 0
 fi
 
+if [[ "$action" == "revoke-one" ]]; then
+  requested_principal="${2:-}"
+  if [[ -z "$requested_principal" ]] \
+     || ! principal_is_allowed "$requested_principal"; then
+    echo "MISMATCH" >&2
+    exit 1
+  fi
+  if [[ "$#" -ne 2 ]]; then
+    echo "MISMATCH" >&2
+    exit 1
+  fi
+
+  revoke_principal "$requested_principal"
+  echo "PRESENT"
+  exit 0
+fi
+
+if [[ "$#" -ne 1 ]]; then
+  echo "MISMATCH" >&2
+  exit 1
+fi
+
 for principal in "${principals[@]}"; do
-  login_role="${principal}_login"
-    psql --no-psqlrc --quiet --set=ON_ERROR_STOP=1 >/dev/null <<SQL
-begin;
-select format(
-  'alter role %I nologin valid until %L',
-  '${login_role}',
-  transaction_timestamp()
-)
-where exists (
-  select 1 from pg_catalog.pg_roles where rolname = '${login_role}'
-)
-\gexec
-select format('revoke %I from %I', '${principal}', '${login_role}')
-where exists (
-  select 1
-  from pg_catalog.pg_auth_members membership
-  join pg_catalog.pg_roles granted_role
-    on granted_role.oid = membership.roleid
-  join pg_catalog.pg_roles member_role
-    on member_role.oid = membership.member
-  where granted_role.rolname = '${principal}'
-    and member_role.rolname = '${login_role}'
-)
-\gexec
-select format('alter role %I reset all', '${login_role}')
-where exists (
-  select 1 from pg_catalog.pg_roles where rolname = '${login_role}'
-)
-\gexec
-select pg_catalog.pg_terminate_backend(activity.pid)
-from pg_catalog.pg_stat_activity activity
-where activity.usename = '${login_role}'
-  and activity.pid <> pg_catalog.pg_backend_pid();
-commit;
-SQL
+  revoke_principal "$principal"
 done
 
 echo "PRESENT"

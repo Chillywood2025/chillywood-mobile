@@ -163,6 +163,17 @@ Deno.test("LiveKit recovery evidence is required only for the recovery scenario"
   }
 });
 
+Deno.test("a healthy run cannot satisfy the bounded failure fixture", async () => {
+  const evidence = {
+    ...baseline(),
+    scenarioType: "bounded_failure_fixture" as const,
+  } satisfies LiveKitMetricManifest;
+  const response = await invokePrepare(await packet(evidence));
+  if (response.status !== 400) {
+    throw new Error("collector accepted an untriggered bounded failure fixture");
+  }
+});
+
 Deno.test("headless-only evidence never claims installed UI pass", () => {
   const evidence = {
     ...baseline(),

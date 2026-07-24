@@ -556,7 +556,15 @@ const parseMetricManifest = (
     return null;
   }
   const derivedFailure = deriveLiveKitFailureCategory(metric);
-  if (metric.stageFailureCategory !== derivedFailure) return null;
+  if (
+    metric.stageFailureCategory !== derivedFailure ||
+    (
+      metric.scenarioType === "bounded_failure_fixture" &&
+      derivedFailure === "none"
+    )
+  ) {
+    return null;
+  }
   return metric;
 };
 

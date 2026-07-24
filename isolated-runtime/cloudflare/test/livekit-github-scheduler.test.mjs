@@ -145,6 +145,16 @@ test("LiveKit recovery is scenario-bound and does not poison a baseline", () => 
   });
 });
 
+test("a healthy run cannot satisfy the bounded failure fixture", async () => {
+  const payload = await liveKitPayload();
+  payload.metricManifest.metrics.scenarioType = "bounded_failure_fixture";
+  payload.evidenceManifestHash = await hashJson(
+    payload.metricManifest.metrics,
+  );
+  payload.metricManifest.evidenceHashes = [payload.evidenceManifestHash];
+  assert.equal(await prepareLiveKitPacket(payload), null);
+});
+
 test("LiveKit record validates the packet then uses only its isolated RPC", async () => {
   const payload = await liveKitPayload();
   payload.action = "record_run";

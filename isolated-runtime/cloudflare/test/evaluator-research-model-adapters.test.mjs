@@ -487,6 +487,17 @@ test("LiveKit evaluator independently derives stages and rejects a claimed categ
     ),
     "installed_ui_connecting_stuck",
   );
+  assert.equal(
+    deriveIndependentLiveKitFailureCategory(
+      liveKitMetrics({
+        backgroundForegroundRecovery: false,
+        backgrounded: false,
+        foregrounded: false,
+        scenarioType: "bounded_failure_fixture",
+      }),
+    ),
+    null,
+  );
 });
 
 test("LiveKit resolution independently requires a healthy bound installed session", () => {

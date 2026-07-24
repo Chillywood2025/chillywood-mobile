@@ -29,6 +29,22 @@ test("runtime login provisioner remains Bash 3.2 compatible and fail-closed", as
     source,
     /pg_catalog\.has_schema_privilege\(\s*'\$\{login_role\}'/u,
   );
+  assert.match(
+    source,
+    /revoke-one <principal>/u,
+  );
+  assert.match(
+    source,
+    /principal_is_allowed "\$requested_principal"/u,
+  );
+  assert.match(
+    source,
+    /revoke_principal "\$requested_principal"/u,
+  );
+  assert.match(
+    source,
+    /for principal in "\$\{principals\[@\]\}"; do\s+revoke_principal "\$principal"/u,
+  );
 
   const result = spawnSync("/bin/bash", [scriptPath, "provision"], {
     encoding: "utf8",
@@ -40,4 +56,34 @@ test("runtime login provisioner remains Bash 3.2 compatible and fail-closed", as
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
   assert.equal(result.stderr.trim(), "MISSING");
+
+  const extraProvisionOperand = spawnSync(
+    "/bin/bash",
+    [scriptPath, "provision", "unexpected"],
+    {
+      encoding: "utf8",
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        PGSERVICE: "not-used",
+      },
+    },
+  );
+  assert.equal(extraProvisionOperand.status, 1);
+  assert.equal(extraProvisionOperand.stdout, "");
+  assert.equal(extraProvisionOperand.stderr.trim(), "MISMATCH");
+
+  const invalidSingleRevoke = spawnSync(
+    "/bin/bash",
+    [scriptPath, "revoke-one", "not_a_reviewed_principal"],
+    {
+      encoding: "utf8",
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        PGSERVICE: "not-used",
+      },
+    },
+  );
+  assert.equal(invalidSingleRevoke.status, 1);
+  assert.equal(invalidSingleRevoke.stdout, "");
+  assert.equal(invalidSingleRevoke.stderr.trim(), "MISMATCH");
 });

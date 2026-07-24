@@ -346,7 +346,11 @@ const parseMetricManifest = (value) => {
         value.backgroundForegroundRecovery
       )
     ) ||
-    value.stageFailureCategory !== deriveLiveKitFailureCategory(value)
+    value.stageFailureCategory !== deriveLiveKitFailureCategory(value) ||
+    (
+      value.scenarioType === "bounded_failure_fixture" &&
+      value.stageFailureCategory === "none"
+    )
   ) {
     return null;
   }

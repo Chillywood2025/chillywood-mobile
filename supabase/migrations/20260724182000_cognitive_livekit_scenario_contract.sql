@@ -42,7 +42,15 @@ begin
     return false;
   end if;
 
-  if scenario_type <> 'background_foreground_recovery' then
+  if scenario_type = 'bounded_failure_fixture' then
+    return p_result_status = 'failed'
+      and p_metrics->>'stageFailureCategory' <> 'none'
+      and p_metrics->'backgrounded' = 'false'::jsonb
+      and p_metrics->'foregrounded' = 'false'::jsonb
+      and p_metrics->'backgroundForegroundRecovery' = 'false'::jsonb;
+  end if;
+
+  if scenario_type = 'success_baseline' then
     return p_metrics->'backgrounded' = 'false'::jsonb
       and p_metrics->'foregrounded' = 'false'::jsonb
       and p_metrics->'backgroundForegroundRecovery' = 'false'::jsonb;
@@ -125,7 +133,7 @@ revoke all on function
 
 comment on function
   public.product_experience_livekit_scenario_is_valid(text,jsonb) is
-  'Fail-closed LiveKit scenario contract: ordinary and bounded-failure sessions do not imply recovery, while a passing recovery session requires exact background/foreground evidence.';
+  'Fail-closed LiveKit scenario contract: a bounded-failure canary must contain a real failed stage, ordinary sessions do not imply recovery, and a passing recovery session requires exact background/foreground evidence.';
 
 comment on function
   public.product_experience_detailed_metric_manifest_is_valid(

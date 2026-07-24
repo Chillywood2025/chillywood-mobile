@@ -250,6 +250,26 @@ test("private worker rejects every sibling credential domain", async () => {
   }
 });
 
+test("private worker rejects every sibling Hyperdrive binding", async () => {
+  const handler = createPrivateInvocationHandler({
+    createDatabase: () => database(),
+    env: await baselineEnv({
+      COGNITIVE_MODEL_ROUTER_HYPERDRIVE: {
+        connectionString: "postgres://sibling.invalid/db",
+      },
+    }),
+    logger: silentLogger,
+    now: () => NOW,
+    principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
+    resolveAdapter: (operation) =>
+      operationAdapter("cognitive_product_baseline_executor", operation),
+  });
+  await assert.rejects(
+    () => handler(makeEnvelope(), TOKEN),
+    /credential_domain_rejected/u,
+  );
+});
+
 test("wrong invocation, emergency stop and revocation fail closed", async () => {
   const envelope = await makeEnvelope();
   const wrong = createPrivateInvocationHandler({

@@ -79,6 +79,7 @@
         "runtimeIdentityHash",
         "observationStartedAt",
         "observationFinishedAt",
+        "scenarioType",
         "roomRequested",
         "tokenRequested",
         "tokenReturned",
@@ -88,6 +89,8 @@
         "remoteParticipantObserved",
         "remoteMediaObserved",
         "uiExitedConnecting",
+        "backgrounded",
+        "foregrounded",
         "backgroundForegroundRecovery",
         "cleanupDisconnected"
       ],
