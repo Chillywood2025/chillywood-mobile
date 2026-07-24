@@ -39,36 +39,87 @@ that directory.
 
 ## Bounded HTTP result
 
-The best bounded run reached `46 PASS / 2 FAIL / 48 TOTAL`. It proved the real
-worker claim, preflight, executing, non-live staging, evaluator handoff,
-passed proof, completion, live switch activation, replay denial, revocation,
-expiry, renewal, and emergency-stop claim denial over HTTP.
+The final isolated run reached `66 PASS / 0 FAIL / 66 TOTAL` real HTTP
+assertions. Its explicit numbered scenario result was
+`35 PASS / 0 FAIL / 5 NOT_RUN / 40 TOTAL`.
 
-The final diagnostic run reached `36 PASS / 13 FAIL / 49 TOTAL` because random
-fixture identifiers can themselves be rejected by the canonical payload
-classifier. This makes the harness outcome nondeterministic until fixture
-identifiers are made classification-stable.
+The run proves the exact Owner approval, worker claim and stage, non-live
+staging, evaluator separation and proof, completion, live switch activation,
+replay denial, exact binding rejection, revocation, expiry, renewal,
+emergency-stop-before-claim, cancellation-after-claim, and a concurrent
+single-winner claim through PostgREST or locally served Edge Functions.
 
-The suite is not a complete pass and does not cover every requested scenario
-as an independent real-request case.
+The five `NOT_RUN` cases are not described as passing. They require the
+post-side-effect cleanup/rollback paths or a distinct widened-renewal payload
+that this bounded harness does not yet construct.
 
-## Exact blockers
+## Required 40-scenario matrix
 
-1. `cognitive-owner-approval` rejects the required
-   `action=record_owner_approval` payload with HTTP 400
-   `owner_approval_payload_rejected`, including for the exact Owner.
-   Direct classification of `{action: "record_owner_approval"}` returns
-   `provider_authority` because the canonical policy treats `owner` as a
-   provider-authority term.
-2. Canonical classification can reject otherwise synthetic random hashes or
-   UUID-derived payloads, producing nondeterministic HTTP 400 results between
-   resets.
-3. Local fixture seeding is not bootstrap proof. The reviewed worker endpoint
-   exposes `claim`, `begin`, `execute_switch`, `complete`, `fail`, and
-   `release_or_quarantine`; it exposes no `bootstrap_control_plane` action.
-   Owner approval also requires an already-finalized
-   `MODEL_INDEPENDENCE_VERIFIED` decision.
+| # | Scenario | Result |
+|---:|---|---|
+| 1 | Exact Owner records immutable approval | PASS |
+| 2 | Exact Owner cannot worker-execute | PASS |
+| 3 | Worker cannot record Owner approval | PASS |
+| 4 | Worker claims a valid approval | PASS |
+| 5 | Worker stages an operation | PASS |
+| 6 | Staged operation remains non-live | PASS |
+| 7 | Worker cannot self-attest evaluator proof | PASS |
+| 8 | Evaluator records evaluator proof | PASS |
+| 9 | Evaluator cannot claim | PASS |
+| 10 | Evaluator cannot execute | PASS |
+| 11 | Evaluator cannot complete | PASS |
+| 12 | Completion without evaluator proof fails | PASS |
+| 13 | Completion with matching passed proof succeeds | PASS |
+| 14 | Wrong receipt hash fails | PASS |
+| 15 | Wrong evaluator-requirement hash fails | PASS |
+| 16 | Wrong proof hash fails | PASS |
+| 17 | Non-Owner approval fails | PASS |
+| 18 | Scoped Admin approval fails | PASS |
+| 19 | Anonymous approval/execution fails | PASS |
+| 20 | Recycled-email authority fails | PASS |
+| 21 | Missing approval fails | PASS |
+| 22 | Expired approval fails | PASS |
+| 23 | Revoked approval fails | PASS |
+| 24 | Superseded approval fails | PASS |
+| 25 | Consumed approval replay fails | PASS |
+| 26 | Wrong manifest fails | PASS |
+| 27 | Wrong snapshot fails | PASS |
+| 28 | Wrong task/project/repository/branch/platform/environment/provider/operation/target fails | PASS |
+| 29 | Owner revocation before claim blocks execution | PASS |
+| 30 | Owner revocation after side effect blocks success but allows cleanup | NOT_RUN |
+| 31 | Emergency stop before claim blocks execution | PASS |
+| 32 | Emergency stop after side effect blocks success but allows cleanup | NOT_RUN |
+| 33 | Concurrent duplicate worker claim yields exactly one winner | PASS |
+| 34 | Late result after cancellation fails | PASS |
+| 35 | Equivalent capability renewal remains within scope | PASS |
+| 36 | Widened renewal fails | NOT_RUN |
+| 37 | Reinstatement creates a new immutable approval version | PASS |
+| 38 | Material plan change requires amended approval | PASS |
+| 39 | Successful rollback revokes old write authority | NOT_RUN |
+| 40 | Failed rollback quarantines and escalates | NOT_RUN |
 
-Therefore the live Owner → worker → evaluator bootstrap must remain
-`BLOCKED_NOT_PROVEN`. Local fixture setup must not be represented as remote or
-live bootstrap.
+## Bootstrap second-phase hook
+
+The harness names and classification-tests the reviewed bootstrap actions:
+
+- `record_bootstrap_approval`;
+- `bootstrap_control_plane`;
+- `record_bootstrap_evaluator_proof`.
+
+It prints `BOOTSTRAP_SECOND_PHASE NOT_RUN` until the coordinator integrates the
+bootstrap database and Edge commit into the exact frozen head. Local fixture
+seeding is prerequisite setup, not live bootstrap proof, and is never reported
+as the remote Owner → worker → evaluator bootstrap.
+
+## Safety and remaining scope
+
+- The classifier correction is structural: only exact reviewed Owner-control
+  action values are omitted from provider-authority term matching. Attached
+  provider write authority, secrets, production money instructions, auth
+  bypass, and RLS bypass continue to be rejected.
+- Random run identifiers use letters only and the nonexistent-approval fixture
+  uses a fixed nonnumeric UUID, preventing private-identifier false positives
+  without weakening classification.
+- No deployed migration was edited or reapplied.
+- No remote database, secret, function, schedule, switch, build, OTA, or PR was
+  mutated by this lane.

@@ -35,7 +35,10 @@ const FUNCTIONS = [
   "cognitive-independent-evaluator",
 ];
 
-const runId = crypto.randomBytes(8).toString("hex");
+const runId = Array.from(
+  crypto.randomBytes(16),
+  (byte) => "abcdef"[byte % 6],
+).join("");
 const hash = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
 const hex = (char, length) => char.repeat(length);
 const uuidFrom = (label) => {
@@ -74,6 +77,76 @@ const record = (name, ok, expected, observed, detail = {}) => {
     ...detail,
   });
 };
+
+const REQUIRED_HTTP_SCENARIOS = Object.freeze([
+  [1, "Exact Owner records immutable approval", ["exact Owner records approval through Edge Function"]],
+  [2, "Exact Owner cannot worker-execute", ["Owner-authenticated PostgREST caller cannot execute approved action"]],
+  [3, "Worker cannot record Owner approval", ["worker/service-role PostgREST caller cannot record Owner approval"]],
+  [4, "Worker claims a valid approval", ["approved-action worker claims approval through Edge Function"]],
+  [5, "Worker stages an operation", ["worker stages switch but does not make it live"]],
+  [6, "Staged operation remains non-live", ["staged switch is not live before evaluator proof"]],
+  [7, "Worker cannot self-attest evaluator proof", ["worker cannot record evaluator proof via worker endpoint"]],
+  [8, "Evaluator records evaluator proof", ["independent evaluator records passed proof"]],
+  [9, "Evaluator cannot claim", ["independent evaluator cannot claim through evaluator endpoint"]],
+  [10, "Evaluator cannot execute", ["independent evaluator cannot execute through evaluator endpoint"]],
+  [11, "Evaluator cannot complete", ["independent evaluator cannot complete through evaluator endpoint"]],
+  [12, "Completion without evaluator proof fails", ["worker cannot complete before evaluator proof"]],
+  [13, "Completion with matching passed proof succeeds", ["worker completes after passed independent proof"]],
+  [14, "Wrong receipt hash fails", ["completion with wrong receipt hash is rejected"]],
+  [15, "Wrong evaluator-requirement hash fails", ["wrong evaluator-requirement hash claim is rejected"]],
+  [16, "Wrong proof hash fails", ["completion with wrong proof hash is rejected"]],
+  [17, "Non-Owner approval fails", ["non-owner authenticated user cannot record Owner approval"]],
+  [18, "Scoped Admin approval fails", ["scoped Admin/operator cannot record Owner approval"]],
+  [19, "Anonymous approval/execution fails", [
+    "anon owner approval denied by Edge JWT gate",
+    "anonymous worker execution is rejected",
+  ]],
+  [20, "Recycled-email authority fails", ["recycled email without matching owner user_id cannot approve"]],
+  [21, "Missing approval fails", ["no-approval claim is rejected"]],
+  [22, "Expired approval fails", ["expired approval cannot be claimed"]],
+  [23, "Revoked approval fails", ["revoked approval cannot be claimed"]],
+  [24, "Superseded approval fails", ["superseded/old approval version cannot be claimed after renewal"]],
+  [25, "Consumed approval replay fails", ["consumed approval replay claim is rejected"]],
+  [26, "Wrong manifest fails", ["wrong decision manifest hash claim is rejected"]],
+  [27, "Wrong snapshot fails", ["wrong plan snapshot hash claim is rejected"]],
+  [28, "Wrong exact scope tuple fails", [
+    "wrong task binding claim is rejected",
+    "wrong project binding claim is rejected",
+    "wrong repository binding claim is rejected",
+    "wrong branch binding claim is rejected",
+    "wrong platform binding claim is rejected",
+    "wrong environment binding claim is rejected",
+    "wrong provider binding claim is rejected",
+    "wrong operation binding claim is rejected",
+    "wrong target binding claim is rejected",
+  ]],
+  [29, "Owner revocation before claim blocks execution", [
+    "Owner revokes approval through PostgREST",
+    "revoked approval cannot be claimed",
+  ]],
+  [30, "Owner revocation after side effect blocks success but allows cleanup", null],
+  [31, "Emergency stop before claim blocks execution", ["emergency stop blocks worker claim"]],
+  [32, "Emergency stop after side effect blocks success but allows cleanup", null],
+  [33, "Concurrent duplicate worker claim yields exactly one winner", [
+    "concurrent claim on single-use approval yields one success and one rejection",
+  ]],
+  [34, "Late result after cancellation fails", ["cancelled task blocks claimed execution result"]],
+  [35, "Equivalent capability renewal remains within scope", ["renewed approval version can be claimed once"]],
+  [36, "Widened renewal fails", null],
+  [37, "Reinstatement creates a new immutable approval version", [
+    "reinstatement creates a distinct immutable approval version",
+  ]],
+  [38, "Material plan change requires amended approval", [
+    "amended-scope/material-delta revalidation is rejected",
+  ]],
+  [39, "Successful rollback revokes old write authority", null],
+  [40, "Failed rollback quarantines and escalates", null],
+]);
+const BOOTSTRAP_SECOND_PHASE_ACTIONS = Object.freeze([
+  "record_bootstrap_approval",
+  "bootstrap_control_plane",
+  "record_bootstrap_evaluator_proof",
+]);
 
 const spawnChecked = (command, args, options = {}) => {
   const result = spawnSync(command, args, {
@@ -600,6 +673,8 @@ try {
 
   await expectHttp("anon owner approval denied by Edge JWT gate", [401, 403], () =>
     edgeCall(status, FUNCTIONS[0], approvalPayload(`anon-${runId}`), { apikey: status.anonKey }));
+  await expectHttp("anonymous worker execution is rejected", [401], () =>
+    edgeCall(status, FUNCTIONS[1], { action: "claim" }, { apikey: status.anonKey }));
   await expectHttp("non-owner authenticated user cannot record Owner approval", [400, 409], () =>
     edgeCall(status, FUNCTIONS[0], approvalPayload(`nonowner-${runId}`), edgeHeaders(status, nonOwner.token)));
   await expectHttp("scoped Admin/operator cannot record Owner approval", [400, 409], () =>
@@ -630,6 +705,20 @@ try {
       p_allowed_operations: ["set_switch"],
       p_expires_at: nowPlus(1440),
     }, restHeaders(status, admin.token)));
+  for (const [name, action] of [
+    ["independent evaluator cannot claim through evaluator endpoint", "claim"],
+    ["independent evaluator cannot execute through evaluator endpoint", "execute_switch"],
+    ["independent evaluator cannot complete through evaluator endpoint", "complete"],
+  ]) {
+    await expectHttp(name, [400], () =>
+      edgeCall(status, FUNCTIONS[2], {
+        action,
+        executionId: uuidFrom(`evaluator-${action}`),
+      }, {
+        ...serviceEdgeHeaders(status),
+        "x-cognitive-evaluator-invocation": evaluatorInvoke,
+      }));
+  }
 
   const approvalResponse = await expectHttp("exact Owner records approval through Edge Function", [200], () =>
     edgeCall(status, FUNCTIONS[0], approvalPayload(`main-${runId}`), edgeHeaders(status, owner.token)));
@@ -677,19 +766,37 @@ try {
     }));
   await expectHttp("no-approval claim is rejected", [409], () =>
     edgeCall(status, FUNCTIONS[1], {
-      ...claimPayload({ approvalVersionId: uuidFrom("no-approval"), approvalHash: hex("a", 64) }),
+      ...claimPayload({
+        approvalVersionId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        approvalHash: hex("a", 64),
+      }),
     }, {
       ...serviceEdgeHeaders(status),
       "x-cognitive-worker-invocation": workerInvoke,
     }));
-  await expectHttp("wrong-scope claim is rejected", [409], () =>
-    edgeCall(status, FUNCTIONS[1], {
-      ...claimPayload(approval),
-      branchName: `codex/wrong-scope-${runId}`,
-    }, {
-      ...serviceEdgeHeaders(status),
-      "x-cognitive-worker-invocation": workerInvoke,
-    }));
+  for (const [name, changedBinding] of [
+    ["wrong evaluator-requirement hash claim is rejected", { evaluatorRequirementHash: hex("a", 64) }],
+    ["wrong decision manifest hash claim is rejected", { decisionManifestHash: hex("a", 64) }],
+    ["wrong plan snapshot hash claim is rejected", { planSnapshotHash: hex("a", 64) }],
+    ["wrong task binding claim is rejected", { taskId: uuidFrom("wrong-task") }],
+    ["wrong project binding claim is rejected", { projectId: uuidFrom("wrong-project") }],
+    ["wrong repository binding claim is rejected", { repositoryFullName: "Chillywood2025/not-mobile" }],
+    ["wrong branch binding claim is rejected", { branchName: `codex/wrong-scope-${runId}` }],
+    ["wrong platform binding claim is rejected", { platform: "android" }],
+    ["wrong environment binding claim is rejected", { environment: "preview" }],
+    ["wrong provider binding claim is rejected", { provider: "internal" }],
+    ["wrong operation binding claim is rejected", { operation: "read_switch" }],
+    ["wrong target binding claim is rejected", { targetResourceHash: hex("a", 64) }],
+  ]) {
+    await expectHttp(name, [409], () =>
+      edgeCall(status, FUNCTIONS[1], {
+        ...claimPayload(approval),
+        ...changedBinding,
+      }, {
+        ...serviceEdgeHeaders(status),
+        "x-cognitive-worker-invocation": workerInvoke,
+      }));
+  }
   await expectHttp("wrong approval hash claim is rejected", [409], () =>
     edgeCall(status, FUNCTIONS[1], {
       ...claimPayload(approval),
@@ -919,6 +1026,11 @@ try {
       p_current_plan_snapshot_hash: planSnapshotHash,
       p_material_delta: false,
     }, restHeaders(status, owner.token)));
+  expectBody(
+    "reinstatement creates a distinct immutable approval version",
+    renewal.data?.approvalVersionId !== expiredApproval.approvalVersionId,
+    true,
+  );
   await expectHttp("superseded/old approval version cannot be claimed after renewal", [409], () => claim(expiredApproval));
   await expectHttp("renewed approval version can be claimed once", [200], () => claim({
     ...expiredApproval,
@@ -948,6 +1060,53 @@ try {
     where id = ${quote(ids.task)};
   `);
   await expectHttp("cancelled task blocks worker claim", [409], () => claim(cancellationApproval));
+  psql(status.dbUrl, `
+    update public.intelligence_tasks
+    set cancelled_at = null
+    where id = ${quote(ids.task)};
+  `);
+
+  const lateCancellationApproval = await approve("late-cancelled");
+  const lateCancellationClaim = await requireSetupHttp(
+    "late_cancellation_claim_fixture",
+    () => claim(lateCancellationApproval),
+    [200],
+  );
+  const lateCancellationExecutionId = lateCancellationClaim.data?.executionId;
+  await requireSetupHttp("late_cancellation_preflight_fixture", () =>
+    edgeCall(status, FUNCTIONS[1], {
+      action: "begin",
+      executionId: lateCancellationExecutionId,
+      nextState: "preflight",
+    }, {
+      ...serviceEdgeHeaders(status),
+      "x-cognitive-worker-invocation": workerInvoke,
+    }), [200]);
+  await requireSetupHttp("late_cancellation_executing_fixture", () =>
+    edgeCall(status, FUNCTIONS[1], {
+      action: "begin",
+      executionId: lateCancellationExecutionId,
+      nextState: "executing",
+    }, {
+      ...serviceEdgeHeaders(status),
+      "x-cognitive-worker-invocation": workerInvoke,
+    }), [200]);
+  psql(status.dbUrl, `
+    update public.intelligence_tasks
+    set cancelled_at = transaction_timestamp()
+    where id = ${quote(ids.task)};
+  `);
+  await expectHttp("cancelled task blocks claimed execution result", [409], () =>
+    edgeCall(status, FUNCTIONS[1], {
+      action: "execute_switch",
+      executionId: lateCancellationExecutionId,
+      switchKey,
+      enabled: true,
+      policyVersion,
+    }, {
+      ...serviceEdgeHeaders(status),
+      "x-cognitive-worker-invocation": workerInvoke,
+    }));
   psql(status.dbUrl, `
     update public.intelligence_tasks
     set cancelled_at = null
@@ -984,4 +1143,34 @@ for (const testCase of cases) {
   console.log(`${testCase.result} ${testCase.name} expected=${testCase.expected} observed=${testCase.observed}${suffix}`);
 }
 console.log(`SUMMARY PASS=${passed} FAIL=${failed} TOTAL=${passed + failed}`);
-process.exitCode = failed === 0 ? 0 : 1;
+let scenarioPassed = 0;
+let scenarioFailed = 0;
+let scenarioNotRun = 0;
+const casesByName = new Map(cases.map((testCase) => [testCase.name, testCase]));
+for (const [id, description, requiredCaseNames] of REQUIRED_HTTP_SCENARIOS) {
+  if (!requiredCaseNames) {
+    scenarioNotRun += 1;
+    console.log(`SCENARIO NOT_RUN ${String(id).padStart(2, "0")} ${description}`);
+    continue;
+  }
+  const requiredCases = requiredCaseNames.map((name) => casesByName.get(name));
+  if (requiredCases.some((testCase) => !testCase)) {
+    scenarioNotRun += 1;
+    console.log(`SCENARIO NOT_RUN ${String(id).padStart(2, "0")} ${description}`);
+    continue;
+  }
+  if (requiredCases.every((testCase) => testCase.result === "PASS")) {
+    scenarioPassed += 1;
+    console.log(`SCENARIO PASS ${String(id).padStart(2, "0")} ${description}`);
+  } else {
+    scenarioFailed += 1;
+    console.log(`SCENARIO FAIL ${String(id).padStart(2, "0")} ${description}`);
+  }
+}
+console.log(
+  `SCENARIO_SUMMARY PASS=${scenarioPassed} FAIL=${scenarioFailed} NOT_RUN=${scenarioNotRun} TOTAL=${REQUIRED_HTTP_SCENARIOS.length}`,
+);
+console.log(
+  `BOOTSTRAP_SECOND_PHASE NOT_RUN reason=coordinator_integration_required actions=${BOOTSTRAP_SECOND_PHASE_ACTIONS.join(",")}`,
+);
+process.exitCode = failed === 0 && scenarioFailed === 0 ? 0 : 1;
