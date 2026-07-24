@@ -14,16 +14,22 @@ This topology uses the existing account and current plan. It does not authorize
 a plan upgrade. Cloudflare documents that Service Bindings can reach a private
 Worker without a public URL and do not add Service Binding charges. The current
 Free limits include 100 Workers, 100,000 requests per day, and exactly ten
-Hyperdrive configurations; the ten-principal design deliberately consumes no
-more than that configuration limit. Hyperdrive caching is disabled because
-authorization, revocation, audit, emergency-stop, capability, mutable, and
-liveness reads require fresh results.
+Hyperdrive configurations. The Free execution ceiling is 10 ms CPU per HTTP
+invocation. Hyperdrive additionally allows 100,000 database statements per day
+and approximately 20 origin connections per configuration. The ten-principal
+design deliberately consumes no more than the configuration limit, but Service
+Binding fan-out, CPU time, statement count, and origin-pool occupancy must be
+measured during canaries. Schedule activation remains blocked if a canary
+approaches a limit or would produce repeated quota failures. Hyperdrive caching
+is disabled because authorization, revocation, audit, emergency-stop,
+capability, mutable, and liveness reads require fresh results.
 
 Primary provider references:
 
 - [Service Bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
 - [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [Hyperdrive limits](https://developers.cloudflare.com/hyperdrive/platform/limits/)
+- [Hyperdrive pricing and daily query quota](https://developers.cloudflare.com/hyperdrive/platform/pricing/)
 - [Hyperdrive caching](https://developers.cloudflare.com/hyperdrive/reference/faq/)
 - [Protecting workers.dev with Access](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
 
