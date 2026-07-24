@@ -236,7 +236,6 @@ export const RUNTIME_MANIFEST = Object.freeze({
           ...scope, "boundedEvidence", "contradictionId",
           "resolutionSourceId",
         ], [
-          "cognitive_runtime.research_evaluator_snapshot",
           "cognitive_resolve_public_research_contradiction",
         ]),
       },
@@ -268,6 +267,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
         ], [
           "cognitive_model_router_recover_expired",
           "cognitive_model_router_reserve",
+          "cognitive_runtime.cognitive_model_router_settle_provider_overrun",
           "cognitive_model_router_settle",
         ]),
       },

@@ -37,12 +37,16 @@ Only sanitized classifications are retained:
 | bounded replacement deployment credential | PRESENT | ACTIVE | NOT_EXPOSED | SCOPE_MATCH | EXPIRY_ACCEPTABLE |
 | replacement Access API path | PRESENT | INACTIVE | NOT_EXPOSED | SCOPE_MATCH | EXPIRY_ACCEPTABLE |
 
-The inherited credential is not being replaced because Chi'llywood is
+The bounded replacement expires on 2026-07-31. Seven days is sufficient for
+this activation window; it remains renewable and is not converted into a
+never-expiring credential.
+
+The inherited credential is not being replaced merely because Chi'llywood is
 pre-launch. Replacement is required by the Owner's credential policy because
 the sanitized verification classified it as `EXPOSED` and
 `SCOPE_TOO_BROAD`. The old credential must remain available until the
 replacement successfully deploys and verifies the reviewed bounded resources;
-only then may the old credential be revoked. Neither deployment credential may
+only then must the old credential be revoked. Neither deployment credential may
 be installed into a cognitive runtime Worker.
 
 The replacement credential is account-bound and limited to Workers Scripts,
@@ -64,7 +68,7 @@ through bounded owner-authenticated tooling.
 | `cognitive_public_research_broker` | no | same-name dedicated role | none |
 | `cognitive_research_evaluator` | no | same-name dedicated role | none |
 | `cognitive_model_router` | no | same-name dedicated role | approved model only |
-| `cognitive_livekit_experience_collector` | no | same-name dedicated role | bounded LiveKit read/test only |
+| `cognitive_livekit_experience_collector` | no | same-name dedicated role | none; sanitized evidence only |
 | `cognitive_github_draft_pr_broker` | no | same-name dedicated role | repository-specific GitHub App only |
 | `cognitive_level01_scheduler` | no | same-name dedicated role | none |
 
@@ -80,8 +84,10 @@ at:
 Private Workers keep `workers_dev` and Preview URLs disabled and have no public
 routes. The gateway is published only after its Access Service Auth policy
 exists, and it independently validates the Access JWT audience and issuer. The
-research, model, LiveKit, and GitHub Workers have separate allowlisted egress;
-all other private Workers have no provider egress.
+research, model, and GitHub Workers have separate allowlisted egress. The
+LiveKit collector receives only sanitized output from a separately bounded
+synthetic participant and has no provider credential or provider egress; all
+other private Workers also have no provider egress.
 
 Rollback is ordered and recoverable:
 

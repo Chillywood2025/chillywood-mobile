@@ -198,3 +198,82 @@ test("transport enforces total timeout and streamed response byte bounds", async
     /research_response_size_rejected/u,
   );
 });
+
+test("transport rejects a pre-aborted invocation before DNS or fetch", async () => {
+  let resolutions = 0;
+  let fetches = 0;
+  const canonicalizeUrl = (raw) => {
+    const url = new URL(raw);
+    return {
+      canonical: url.toString(),
+      hostname: url.hostname,
+      pathAndQuery: `${url.pathname}${url.search}`,
+    };
+  };
+  const transport = createMediatedResearchTransport({
+    canonicalizeUrl,
+    fetcher: async () => {
+      fetches += 1;
+      return new Response("must not fetch");
+    },
+    resolveAddresses: async () => {
+      resolutions += 1;
+      return [PUBLIC_ADDRESS];
+    },
+  });
+  const controller = new AbortController();
+  controller.abort(new Error("deadline_rejected"));
+
+  await assert.rejects(
+    transport(
+      "https://developers.cloudflare.com/reference",
+      controller.signal,
+    ),
+    /research_cancelled/u,
+  );
+  assert.equal(resolutions, 0);
+  assert.equal(fetches, 0);
+});
+
+test("transport aborts during DNS and never begins provider fetch", async () => {
+  let observedAbort = false;
+  let fetches = 0;
+  let resolverStarted;
+  const started = new Promise((resolve) => {
+    resolverStarted = resolve;
+  });
+  const canonicalizeUrl = (raw) => {
+    const url = new URL(raw);
+    return {
+      canonical: url.toString(),
+      hostname: url.hostname,
+      pathAndQuery: `${url.pathname}${url.search}`,
+    };
+  };
+  const transport = createMediatedResearchTransport({
+    canonicalizeUrl,
+    fetcher: async () => {
+      fetches += 1;
+      return new Response("must not fetch");
+    },
+    resolveAddresses: async (_hostname, signal) =>
+      new Promise((_resolve, reject) => {
+        resolverStarted();
+        signal.addEventListener("abort", () => {
+          observedAbort = true;
+          reject(signal.reason);
+        }, { once: true });
+      }),
+  });
+  const controller = new AbortController();
+  const result = transport(
+    "https://developers.cloudflare.com/reference",
+    controller.signal,
+  );
+  await started;
+  controller.abort(new Error("deadline_rejected"));
+
+  await assert.rejects(result, /research_cancelled/u);
+  assert.equal(observedAbort, true);
+  assert.equal(fetches, 0);
+});

@@ -110,8 +110,12 @@ export const isPrivateOrReservedIp = (raw) => {
   );
 };
 
-const withAbort = (promise, signal) =>
-  new Promise((resolve, reject) => {
+const withAbort = (promise, signal) => {
+  if (signal.aborted) {
+    Promise.resolve(promise).catch(() => undefined);
+    return Promise.reject(new Error("research_cancelled"));
+  }
+  return new Promise((resolve, reject) => {
     const abort = () => reject(new Error("research_cancelled"));
     signal.addEventListener("abort", abort, { once: true });
     Promise.resolve(promise).then(
@@ -125,6 +129,7 @@ const withAbort = (promise, signal) =>
       },
     );
   });
+};
 
 const defaultResolveAddresses = async (hostname, signal) => {
   const dns = await import("node:dns/promises");
@@ -142,7 +147,9 @@ const resolvePublicAddresses = async (
   signal,
   resolveAddresses,
 ) => {
+  signal.throwIfAborted();
   const addresses = await withAbort(resolveAddresses(hostname, signal), signal);
+  signal.throwIfAborted();
   const unique = [...new Set(addresses)];
   if (
     unique.length < 1 ||
@@ -214,7 +221,11 @@ export const createMediatedResearchTransport = ({
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), totalTimeoutMs);
     const cancel = () => controller.abort();
-    callerSignal?.addEventListener("abort", cancel, { once: true });
+    if (callerSignal?.aborted) {
+      controller.abort(callerSignal.reason);
+    } else {
+      callerSignal?.addEventListener("abort", cancel, { once: true });
+    }
     let target = initial;
     const allResolved = new Set();
     try {

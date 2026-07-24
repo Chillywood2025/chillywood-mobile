@@ -289,14 +289,15 @@ test("wrong invocation, emergency stop and revocation fail closed", async () => 
   }
 });
 
-test("deadline cancellation closes the isolated database connection", async () => {
+test("deadline cancellation aborts provider work and closes the database", async () => {
   let closed = false;
+  let continued = false;
+  let observedAbort = false;
   const input = await makeEnvelope();
   input.deadlineAt = "2026-07-24T12:00:00.005Z";
   const handler = createPrivateInvocationHandler({
     createDatabase: () =>
       database({
-        call: async () => new Promise(() => {}),
         close: async () => {
           closed = true;
         },
@@ -305,11 +306,133 @@ test("deadline cancellation closes the isolated database connection", async () =
     logger: silentLogger,
     now: () => NOW,
     principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
-    resolveAdapter: (operation) =>
-      operationAdapter("cognitive_product_baseline_executor", operation),
+    resolveAdapter: () => ({
+      databaseOperations: [],
+      execute: async ({ signal }) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            continued = true;
+            resolve({ result: "continued" });
+          }, 50);
+          signal.addEventListener("abort", () => {
+            observedAbort = true;
+            clearTimeout(timer);
+            reject(signal.reason);
+          }, { once: true });
+        }),
+      ready: true,
+    }),
   });
   await assert.rejects(() => handler(input, TOKEN), /deadline_rejected/u);
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(observedAbort, true);
+  assert.equal(continued, false);
   assert.equal(closed, true);
+});
+
+test("expired boundaries never start preflight or adapter execution", async () => {
+  for (const expireAtCall of [2, 3]) {
+    let executeCount = 0;
+    let nowCalls = 0;
+    let preflightCount = 0;
+    const handler = createPrivateInvocationHandler({
+      createDatabase: () =>
+        database({
+          preflight: async (principal, operation) => {
+            preflightCount += 1;
+            return {
+              allowed: true,
+              assertionExpired: false,
+              emergencyStopActive: false,
+              operation,
+              principal,
+              serviceRoleMember: false,
+            };
+          },
+        }),
+      env: await baselineEnv(),
+      logger: silentLogger,
+      now: () => {
+        nowCalls += 1;
+        return nowCalls >= expireAtCall ? NOW + 31_000 : NOW;
+      },
+      principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
+      resolveAdapter: () => ({
+        databaseOperations: ["persist_product_baseline"],
+        execute: async () => {
+          executeCount += 1;
+          return { result: "must_not_execute" };
+        },
+        ready: true,
+      }),
+    });
+
+    await assert.rejects(
+      async () => handler(await makeEnvelope(), TOKEN),
+      /deadline_rejected/u,
+    );
+    assert.equal(
+      preflightCount,
+      expireAtCall === 2 ? 0 : 1,
+      `preflight boundary ${expireAtCall}`,
+    );
+    assert.equal(executeCount, 0, `execute boundary ${expireAtCall}`);
+  }
+});
+
+test("provider checkpoints stop mutations after emergency stop or revocation", async () => {
+  for (const blocker of ["emergency", "revocation"]) {
+    let mutationCount = 0;
+    let preflightCount = 0;
+    let revocationCount = 0;
+    const handler = createPrivateInvocationHandler({
+      createDatabase: () =>
+        database({
+          preflight: async (principal, operation) => {
+            preflightCount += 1;
+            return {
+              allowed: true,
+              assertionExpired: false,
+              emergencyStopActive:
+                blocker === "emergency" && preflightCount > 1,
+              operation,
+              principal,
+              serviceRoleMember: false,
+            };
+          },
+          revocationStatus: async (principal) => {
+            revocationCount += 1;
+            return {
+              databaseAccessRevoked:
+                blocker === "revocation" && revocationCount > 1,
+              principal,
+              revoked: false,
+            };
+          },
+        }),
+      env: await baselineEnv(),
+      logger: silentLogger,
+      now: () => NOW,
+      principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
+      resolveAdapter: () => ({
+        databaseOperations: ["persist_product_baseline"],
+        execute: async ({ assertActive, signal }) => {
+          signal.throwIfAborted();
+          await assertActive();
+          mutationCount += 1;
+          return { result: "mutated" };
+        },
+        ready: true,
+      }),
+    });
+    await assert.rejects(
+      async () => handler(await makeEnvelope(), TOKEN),
+      blocker === "emergency"
+        ? /emergency_stop_rejected/u
+        : /revocation_rejected/u,
+    );
+    assert.equal(mutationCount, 0, blocker);
+  }
 });
 
 test("successful audit contains no invocation token, assertion or payload", async () => {

@@ -1,6 +1,7 @@
 import researchAuthoritiesJson from "../../../../config/intelligence/research-authorities.json" with {
   type: "json",
 };
+import { assertInvocationActive } from "../abort.mjs";
 import { ready } from "./helpers.mjs";
 import { createMediatedResearchTransport } from "./research-fetch-transport.mjs";
 
@@ -529,14 +530,16 @@ export const extractRetrievedCitationMetadata = (
 const retrieveAndRecordSource = (transport, now) =>
   ready(
     ["record_research_source"],
-    async ({ database, env, payload }) => {
+    async ({ assertActive, database, env, payload, signal }) => {
       const request = normalizeSourceRequest(payload);
       if (!request) throw new Error("research_source_payload_rejected");
       const authorityUrl = canonicalizeResearchUrl(request.url);
       let retrieved;
       try {
-        retrieved = await transport(request.url);
+        await assertInvocationActive({ assertActive, signal });
+        retrieved = await transport(request.url, signal);
       } catch {
+        signal?.throwIfAborted();
         throw new Error("public_research_transport_blocked");
       }
       const excerpt = extractBoundedExcerpt(

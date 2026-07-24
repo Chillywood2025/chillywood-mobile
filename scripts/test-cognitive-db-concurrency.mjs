@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -1356,5 +1357,197 @@ where approval_id=${sqlLiteral(bootstrapApproval.id)}
 );
 recordPass("bootstrap completion race", "1 atomic completion / 1 replay rejection / all authority off");
 
-assert.equal(results.length, 17, "all requested database concurrency races must run");
-console.log(`cognitive database concurrency verified (${results.length}/17 races passed)`);
+// 18. Model provider overruns and ordinary settlements serialize on the same
+// preflight row. Reuse the canonical governed-model setup instead of copying a
+// second authority fixture into this harness.
+const modelFixtureSource = readFileSync(
+  path.join(
+    process.cwd(),
+    "supabase/tests/cognitive_model_router_governance_test.sql",
+  ),
+  "utf8",
+);
+const modelFixtureMatch = modelFixtureSource.match(
+  /-- MODEL_ROUTER_FIXTURE_BEGIN\n(?<fixture>[\s\S]*?)\n-- MODEL_ROUTER_FIXTURE_END/u,
+);
+assert.ok(modelFixtureMatch?.groups?.fixture, "canonical model fixture is missing");
+
+const modelIds = new Map([
+  ["d2000000-0000-4000-8000-000000000001", randomUUID()],
+  ["d1000000-0000-4000-8000-000000000001", randomUUID()],
+  ["d3000000-0000-4000-8000-000000000001", randomUUID()],
+  ["d4000000-0000-4000-8000-000000000001", randomUUID()],
+  ["d4000000-0000-4000-8000-000000000002", randomUUID()],
+  ["d5000000-0000-4000-8000-000000000001", randomUUID()],
+  ["d6000000-0000-4000-8000-000000000001", randomUUID()],
+  ["d7000000-0000-4000-8000-000000000001", randomUUID()],
+  ["dc000000-0000-4000-8000-000000000001", randomUUID()],
+  ["de000000-0000-4000-8000-000000000001", randomUUID()],
+]);
+const modelOwnerId = modelIds.get("d2000000-0000-4000-8000-000000000001");
+const modelProjectId = modelIds.get("d1000000-0000-4000-8000-000000000001");
+const modelTaskId = modelIds.get("d3000000-0000-4000-8000-000000000001");
+const modelBudgetId = modelIds.get("dc000000-0000-4000-8000-000000000001");
+const modelServiceAssertion = opaqueProof();
+const modelWorkerAssertion = opaqueProof();
+const modelEvaluatorAssertion = opaqueProof();
+const modelSuffix = modelTaskId.slice(0, 8);
+
+let modelFixture = modelFixtureMatch.groups.fixture;
+for (const [fixedId, generatedId] of modelIds) {
+  modelFixture = modelFixture.replaceAll(fixedId, generatedId);
+}
+modelFixture = modelFixture
+  .replaceAll(
+    "model-router-service-token-test-only-0001",
+    modelServiceAssertion,
+  )
+  .replaceAll(
+    "model-worker-assertion-test-only-000000000000",
+    modelWorkerAssertion,
+  )
+  .replaceAll(
+    "model-evaluator-assertion-test-only-000000000",
+    modelEvaluatorAssertion,
+  )
+  .replaceAll(
+    "codex/cognitive-model-router-test",
+    `codex/cognitive-model-router-concurrency-${modelSuffix}`,
+  )
+  .replaceAll(
+    "cognitive-model-router-governance-test",
+    `cognitive-model-router-concurrency-${modelSuffix}`,
+  )
+  .replaceAll(
+    "model-router-budget-fixture",
+    `model-router-budget-${modelSuffix}`,
+  );
+query(`begin;\n${modelFixture}\ncommit;`);
+
+const modelScopeHash = hash([
+  "cognitive-model-assessment-scope-v1",
+  modelTaskId,
+  modelProjectId,
+  "shared",
+  "production",
+  "research_futures",
+  "model-router-assessment-0001",
+  "e".repeat(64),
+].join("|"));
+const modelIdentityHash = hash([
+  "openai",
+  "gpt-5.6",
+  "gpt-5.6-luna",
+].join("|"));
+const modelCapabilityId = query(`
+begin;
+${ownerRoleSql(modelOwnerId)}
+select public.governance_owner_register_model_router_capability(
+  (
+    select id
+    from public.governance_approved_action_executions
+    where task_id=${sqlLiteral(modelTaskId)}
+      and provider='model'
+      and operation='model_advisory'
+      and state='executing'
+    limit 1
+  ),
+  ${sqlLiteral(modelBudgetId)},'research_futures',
+  'cognitive_research_enabled','openai','gpt-5.6','gpt-5.6-luna',
+  3,10000,1,${sqlLiteral(modelScopeHash)},
+  transaction_timestamp()+interval '12 hours'
+)::text;
+commit;
+`).split("\n").at(-1);
+assert.match(modelCapabilityId, /^[0-9a-f-]{36}$/u);
+
+const modelPreflight = JSON.parse(query(`
+begin;
+${serviceRoleSql()}
+select public.cognitive_model_router_reserve(
+  ${sqlLiteral(modelCapabilityId)},${sqlLiteral(modelTaskId)},
+  ${sqlLiteral(modelProjectId)},'shared','production','research_futures',
+  'openai','gpt-5.6','gpt-5.6-luna','model-router-assessment-0001',
+  repeat('c',64),repeat('d',64),repeat('e',64),repeat('f',64),
+  ${sqlLiteral(modelIdentityHash)},repeat('8',64),${sqlLiteral(modelScopeHash)},
+  repeat('b',64),1000,0.1,${sqlLiteral(modelServiceAssertion)}
+)::text;
+commit;
+`).split("\n").at(-1));
+const modelPreflightId = modelPreflight.preflightId;
+assert.match(modelPreflightId, /^[0-9a-f-]{36}$/u);
+
+const modelOverrunSql = (delaySeconds = 0) => `
+begin;
+select public.cognitive_model_router_record_provider_overrun(
+  ${sqlLiteral(modelPreflightId)},100050,0.1001,'gpt-5.6-luna',
+  repeat('2',64),repeat('3',64),repeat('4',64),250,
+  ${sqlLiteral(modelServiceAssertion)}
+);
+${delaySeconds > 0 ? `select pg_sleep(${delaySeconds});` : ""}
+select public.cognitive_model_router_settle(
+  ${sqlLiteral(modelPreflightId)},'provider_rejected',1000,0.1,
+  null,null,null,null,null,repeat('3',64),repeat('a',64),250,
+  ${sqlLiteral(modelServiceAssertion)}
+);
+commit;
+`;
+const modelCompletedSql = (delaySeconds = 0) => `
+begin;
+${delaySeconds > 0 ? `select pg_sleep(${delaySeconds});` : ""}
+select public.cognitive_model_router_settle(
+  ${sqlLiteral(modelPreflightId)},'completed',700,0.05,
+  'gpt-5.6-luna',repeat('2',64),repeat('5',64),repeat('6',64),
+  repeat('7',64),null,repeat('6',64),250,
+  ${sqlLiteral(modelServiceAssertion)}
+);
+commit;
+`;
+const modelOverrunRace = await runRace(
+  modelOverrunSql(0.35),
+  modelCompletedSql(0.08),
+);
+assertRace(
+  "model overrun settlement",
+  modelOverrunRace,
+  1,
+  /model_router_(settlement_replay_denied|overrun_settlement_rejected)/u,
+);
+assert.deepEqual(
+  query(`
+select count(*)::text
+from public.cognitive_model_provider_overrun_audits
+where preflight_id=${sqlLiteral(modelPreflightId)};
+select count(*)::text
+from public.cognitive_model_router_result_audits
+where preflight_id=${sqlLiteral(modelPreflightId)}
+  and result_status='provider_rejected'
+  and actual_model_tokens=1000
+  and actual_model_cost=0.1;
+select count(*)::text
+from public.cognitive_model_router_recovery_audits
+where preflight_id=${sqlLiteral(modelPreflightId)};
+select concat_ws(
+  '|',reserved_calls,settled_calls,reserved_model_tokens,
+  reserved_model_cost
+)
+from public.cognitive_model_router_capabilities
+where id=${sqlLiteral(modelCapabilityId)};
+select active_concurrent_calls::text
+from public.intelligence_budgets
+where id=${sqlLiteral(modelBudgetId)};
+select count(*)::text
+from public.cognitive_budget_events
+where budget_id=${sqlLiteral(modelBudgetId)}
+  and event_type in ('reserved','settled');
+`).split("\n"),
+  ["1", "1", "0", "0|1|0|0.0000", "0", "2"],
+  "model overrun race must commit one conservative terminal result",
+);
+recordPass(
+  "model provider overrun race",
+  "1 provider_rejected winner / 1 concurrent settlement rejection",
+);
+
+assert.equal(results.length, 18, "all requested database concurrency races must run");
+console.log(`cognitive database concurrency verified (${results.length}/18 races passed)`);

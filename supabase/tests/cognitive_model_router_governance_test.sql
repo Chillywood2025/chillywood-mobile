@@ -762,6 +762,18 @@ select throws_ok(
 );
 
 savepoint model_provider_overrun_contract;
+select throws_ok(
+  $$select public.cognitive_model_router_record_provider_overrun(
+    (select preflight_id from model_router_fixture),
+    100050,0.1001,'gpt-5.6-luna',repeat('2',64),
+    repeat('3',64),repeat('4',64),250,
+    'model-router-service-token-test-only-0001'
+  )$$,
+  '42501',
+  'permission denied for function cognitive_model_router_record_provider_overrun',
+  'generic service_role cannot record isolated provider overruns'
+);
+reset role;
 select is(
   public.cognitive_model_router_record_provider_overrun(
     (select preflight_id from model_router_fixture),
@@ -788,8 +800,26 @@ select ok(
   ),
   'immutable overrun audit separates reported usage from the ceiling'
 );
-set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$insert into public.cognitive_model_router_recovery_audits(
+    preflight_id,capability_id,budget_id,task_id,project_id,platform,
+    environment,recovery_batch_hash,recovery_hash,accounting_state,
+    recovered_model_tokens,recovered_model_cost,service_identity
+  )
+  select
+    preflight.id,preflight.capability_id,preflight.budget_id,
+    preflight.task_id,preflight.project_id,preflight.platform,
+    preflight.environment,repeat('8',64),repeat('9',64),
+    'conservative_reservation_charged',
+    preflight.reserved_model_tokens,preflight.reserved_model_cost,
+    'cognitive_model_router'
+  from public.cognitive_model_router_preflight_audits preflight
+  where preflight.id=(select preflight_id from model_router_fixture)$$,
+  'P0001',
+  'model_router_overrun_recovery_rejected',
+  'provider overrun cannot be followed by contradictory recovery evidence'
+);
+reset role;
 select throws_ok(
   $$select public.cognitive_model_router_record_provider_overrun(
     (select preflight_id from model_router_fixture),
@@ -801,7 +831,42 @@ select throws_ok(
   'model_router_provider_overrun_rejected',
   'provider overrun replay is denied'
 );
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select throws_ok(
+  $$select public.cognitive_model_router_settle(
+    (select preflight_id from model_router_fixture),
+    'completed',1000,0.1,'gpt-5.6-luna',repeat('2',64),
+    repeat('5',64),repeat('6',64),repeat('7',64),null,
+    repeat('7',64),250,'model-router-service-token-test-only-0001'
+  )$$,
+  'P0001',
+  'model_router_overrun_settlement_rejected',
+  'provider overrun cannot be followed by a contradictory completed result'
+);
+select is(
+  public.cognitive_model_router_settle(
+    (select preflight_id from model_router_fixture),
+    'provider_rejected',1000,0.1,null,null,null,null,null,repeat('3',64),
+    repeat('a',64),250,'model-router-service-token-test-only-0001'
+  )->>'resultStatus',
+  'provider_rejected',
+  'provider overrun permits only the bounded conservative failure settlement'
+);
 reset role;
+select ok(
+  (
+    select result.result_status='provider_rejected'
+      and result.actual_model_tokens=overrun.reserved_model_tokens
+      and result.actual_model_cost=overrun.reserved_model_cost
+      and result.failure_reason_hash=overrun.failure_reason_hash
+    from public.cognitive_model_router_result_audits result
+    join public.cognitive_model_provider_overrun_audits overrun
+      on overrun.preflight_id=result.preflight_id
+    where result.preflight_id=(select preflight_id from model_router_fixture)
+  ),
+  'overrun and result evidence remain mutually consistent'
+);
 select throws_ok(
   $$delete from public.cognitive_model_provider_overrun_audits
     where preflight_id=(select preflight_id from model_router_fixture)$$,
@@ -810,6 +875,35 @@ select throws_ok(
   'provider overrun audit is immutable'
 );
 rollback to savepoint model_provider_overrun_contract;
+reset role;
+
+savepoint model_recovery_overrun_contract;
+insert into public.cognitive_model_router_recovery_audits(
+  preflight_id,capability_id,budget_id,task_id,project_id,platform,
+  environment,recovery_batch_hash,recovery_hash,accounting_state,
+  recovered_model_tokens,recovered_model_cost,service_identity
+)
+select
+  preflight.id,preflight.capability_id,preflight.budget_id,
+  preflight.task_id,preflight.project_id,preflight.platform,
+  preflight.environment,repeat('8',64),repeat('9',64),
+  'conservative_reservation_charged',
+  preflight.reserved_model_tokens,preflight.reserved_model_cost,
+  'cognitive_model_router'
+from public.cognitive_model_router_preflight_audits preflight
+where preflight.id=(select preflight_id from model_router_fixture);
+select throws_ok(
+  $$select public.cognitive_model_router_record_provider_overrun(
+    (select preflight_id from model_router_fixture),
+    100050,0.1001,'gpt-5.6-luna',repeat('2',64),
+    repeat('3',64),repeat('4',64),250,
+    'model-router-service-token-test-only-0001'
+  )$$,
+  'P0001',
+  'model_router_provider_overrun_rejected',
+  'recovered reservation cannot later acquire provider overrun evidence'
+);
+rollback to savepoint model_recovery_overrun_contract;
 
 select is(
   public.cognitive_model_router_settle(

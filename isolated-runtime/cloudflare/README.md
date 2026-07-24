@@ -19,7 +19,9 @@ reviewed Supabase Edge contracts.
   evidence collector accepts sanitized participant evidence from a separately
   bounded synthetic participant and owns no LiveKit provider credential.
   Public research has allowlisted public network egress but no provider
-  credential.
+  credential. Its isolated adapter performs a public-DNS preflight followed by
+  Cloudflare's public-fetch proxy; the preflight addresses are evidence, not a
+  claim that the proxy connection is DNS-pinned to those exact addresses.
 - No Worker consumes a Supabase service-role or secret key.
 
 Cloudflare documents Service Bindings as non-public Worker-to-Worker calls with
@@ -92,6 +94,24 @@ The templates intentionally provide no gateway route and keep `workers_dev`
 disabled. The gateway `workers.dev` endpoint is enabled only after the Access
 application and Service Auth policy exist. Private Workers remain unreachable
 from the public Internet.
+
+## Rollback order
+
+Rollback is fail-closed and proceeds in this order:
+
+1. disable the gateway route and its Access Service Auth policy;
+2. revoke each private Worker's invocation and provider secrets;
+3. run the owner-only database revocation action, which sets every runtime
+   login to `NOLOGIN`, removes principal membership, resets role
+   configuration, and terminates existing sessions;
+4. detach and delete the per-principal Hyperdrive configurations after
+   database revocation is verified;
+5. retire the private Worker versions, then retire the gateway version.
+
+The deployment credential is never installed in a Worker. If rollback stops
+partway through, the earlier gateway, secret, and database revocations remain
+in force; restoration requires a new reviewed deployment and fresh runtime
+credentials.
 
 ## Commands
 

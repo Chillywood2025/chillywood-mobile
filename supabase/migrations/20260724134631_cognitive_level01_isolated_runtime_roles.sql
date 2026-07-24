@@ -274,7 +274,7 @@ begin
   select * into preflight_value
   from public.cognitive_model_router_preflight_audits
   where id = p_preflight_id
-  for share;
+  for update;
 
   if preflight_value.id is null
      or exists (
@@ -286,6 +286,11 @@ begin
        select 1
        from public.cognitive_model_provider_overrun_audits audit
        where audit.preflight_id = p_preflight_id
+     )
+     or exists (
+       select 1
+       from public.cognitive_model_router_recovery_audits recovery
+       where recovery.preflight_id = p_preflight_id
      )
      or p_reported_model_tokens not between 0 and 10000000
      or p_reported_model_cost not between 0 and 100
@@ -336,10 +341,141 @@ end;
 $$;
 revoke all on function public.cognitive_model_router_record_provider_overrun(
   uuid,bigint,numeric,text,text,text,text,integer,text
-) from public,anon,authenticated;
-grant execute on function public.cognitive_model_router_record_provider_overrun(
-  uuid,bigint,numeric,text,text,text,text,integer,text
-) to service_role;
+) from public,anon,authenticated,service_role;
+
+create function public.cognitive_model_router_enforce_overrun_settlement()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  overrun_value public.cognitive_model_provider_overrun_audits%rowtype;
+begin
+  select * into overrun_value
+  from public.cognitive_model_provider_overrun_audits
+  where preflight_id = new.preflight_id;
+
+  if overrun_value.id is not null
+     and (
+       new.result_status <> 'provider_rejected'
+       or new.actual_model_tokens <> overrun_value.reserved_model_tokens
+       or new.actual_model_cost <> overrun_value.reserved_model_cost
+       or new.provider_model_version is not null
+       or new.provider_response_id_hash is not null
+       or new.output_hash is not null
+       or new.invocation_hash is not null
+       or new.execution_identity_hash is not null
+       or new.failure_reason_hash is distinct from
+         overrun_value.failure_reason_hash
+     ) then
+    raise exception 'model_router_overrun_settlement_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$$;
+revoke all on function
+  public.cognitive_model_router_enforce_overrun_settlement()
+  from public,anon,authenticated,service_role;
+
+create trigger cognitive_model_router_overrun_settlement_guard
+before insert on public.cognitive_model_router_result_audits
+for each row execute function
+  public.cognitive_model_router_enforce_overrun_settlement();
+
+create function public.cognitive_model_router_enforce_overrun_recovery_exclusion()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform 1
+  from public.cognitive_model_router_preflight_audits preflight
+  where preflight.id = new.preflight_id
+  for update;
+
+  if tg_relid =
+       'public.cognitive_model_provider_overrun_audits'::regclass
+     and exists (
+       select 1
+       from public.cognitive_model_router_recovery_audits recovery
+       where recovery.preflight_id = new.preflight_id
+     ) then
+    raise exception 'model_router_overrun_recovery_rejected'
+      using errcode = 'P0001';
+  elsif tg_relid =
+          'public.cognitive_model_router_recovery_audits'::regclass
+        and exists (
+          select 1
+          from public.cognitive_model_provider_overrun_audits overrun
+          where overrun.preflight_id = new.preflight_id
+        ) then
+    raise exception 'model_router_overrun_recovery_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$$;
+revoke all on function
+  public.cognitive_model_router_enforce_overrun_recovery_exclusion()
+  from public,anon,authenticated,service_role;
+
+create trigger cognitive_model_provider_overrun_recovery_guard
+before insert on public.cognitive_model_provider_overrun_audits
+for each row execute function
+  public.cognitive_model_router_enforce_overrun_recovery_exclusion();
+
+create trigger cognitive_model_recovery_provider_overrun_guard
+before insert on public.cognitive_model_router_recovery_audits
+for each row execute function
+  public.cognitive_model_router_enforce_overrun_recovery_exclusion();
+
+do $database_temp$
+declare
+  preserved_role text;
+begin
+  execute format(
+    'revoke temporary on database %I from public',
+    current_database()
+  );
+  for preserved_role in
+    select role_value.rolname
+    from pg_catalog.pg_roles role_value
+    where role_value.rolname <> all(array[
+      'cognitive_product_baseline_executor',
+      'cognitive_sentinel_collector',
+      'cognitive_product_quality_evaluator',
+      'cognitive_product_quality_triage',
+      'cognitive_public_research_broker',
+      'cognitive_research_evaluator',
+      'cognitive_model_router',
+      'cognitive_livekit_experience_collector',
+      'cognitive_github_draft_pr_broker',
+      'cognitive_level01_scheduler',
+      'cognitive_product_baseline_executor_login',
+      'cognitive_sentinel_collector_login',
+      'cognitive_product_quality_evaluator_login',
+      'cognitive_product_quality_triage_login',
+      'cognitive_public_research_broker_login',
+      'cognitive_research_evaluator_login',
+      'cognitive_model_router_login',
+      'cognitive_livekit_experience_collector_login',
+      'cognitive_github_draft_pr_broker_login',
+      'cognitive_level01_scheduler_login'
+    ])
+  loop
+    execute format(
+      'grant temporary on database %I to %I',
+      current_database(),
+      preserved_role
+    );
+  end loop;
+end;
+$database_temp$;
 
 do $roles$
 declare
@@ -423,6 +559,11 @@ begin
       execute format('revoke all on all functions in schema net from %I', role_name);
     end if;
     execute format('grant connect on database %I to %I', current_database(), role_name);
+    execute format(
+      'revoke temporary on database %I from %I',
+      current_database(),
+      role_name
+    );
     execute format('grant usage on schema cognitive_runtime to %I', role_name);
   end loop;
 end;
@@ -454,6 +595,11 @@ as $$
       select 1
       from expected_roles expected
       where to_regrole(expected.role_name) is null
+         or pg_catalog.has_database_privilege(
+           expected.role_name,
+           current_database(),
+           'TEMPORARY'
+         )
          or exists (
            select 1
            from (values ('public'),('net')) schema_value(schema_name)
@@ -1837,7 +1983,6 @@ begin
       ('cognitive_research_evaluator', 'resolve_research_contradiction', 'cognitive_resolve_public_research_contradiction', null),
       ('cognitive_model_router', 'recover_model_reservation', 'cognitive_model_router_recover_expired', null),
       ('cognitive_model_router', 'reserve_model_invocation', 'cognitive_model_router_reserve', 21),
-      ('cognitive_model_router', 'record_model_provider_overrun', 'cognitive_model_router_record_provider_overrun', null),
       ('cognitive_model_router', 'settle_model_invocation', 'cognitive_model_router_settle', null),
       ('cognitive_github_draft_pr_broker', 'record_github_provider_readback', 'cognitive_record_github_draft_pr_provider_readback', null),
       ('cognitive_github_draft_pr_broker', 'consume_github_capability', 'cognitive_consume_github_draft_pr_capability', null),
@@ -1954,6 +2099,81 @@ begin
   end loop;
 end;
 $domain_wrappers$;
+
+create function cognitive_runtime.cognitive_model_router_settle_provider_overrun(
+  p_preflight_id uuid,
+  p_reported_model_tokens bigint,
+  p_reported_model_cost numeric,
+  p_provider_model_version text,
+  p_provider_response_id_hash text,
+  p_failure_reason_hash text,
+  p_evidence_hash text,
+  p_latency_ms integer,
+  p_result_hash text,
+  p_service_identity_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  overrun_result jsonb;
+  settlement_result jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_model_router',
+    'record_model_provider_overrun'
+  );
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_model_router',
+    'settle_model_invocation'
+  );
+
+  overrun_result := public.cognitive_model_router_record_provider_overrun(
+    p_preflight_id,
+    p_reported_model_tokens,
+    p_reported_model_cost,
+    p_provider_model_version,
+    p_provider_response_id_hash,
+    p_failure_reason_hash,
+    p_evidence_hash,
+    p_latency_ms,
+    p_service_identity_token
+  );
+
+  settlement_result := public.cognitive_model_router_settle(
+    p_preflight_id,
+    'provider_rejected',
+    (overrun_result->>'reservedModelTokens')::bigint,
+    (overrun_result->>'reservedModelCost')::numeric,
+    null,
+    null,
+    null,
+    null,
+    null,
+    p_failure_reason_hash,
+    p_result_hash,
+    p_latency_ms,
+    p_service_identity_token
+  );
+
+  return jsonb_build_object(
+    'overrun', overrun_result,
+    'settlement', settlement_result
+  );
+end;
+$$;
+revoke all on function
+  cognitive_runtime.cognitive_model_router_settle_provider_overrun(
+    uuid,bigint,numeric,text,text,text,text,integer,text,text
+  )
+  from public,anon,authenticated,service_role;
+grant execute on function
+  cognitive_runtime.cognitive_model_router_settle_provider_overrun(
+    uuid,bigint,numeric,text,text,text,text,integer,text,text
+  )
+  to cognitive_model_router;
 
 do $common_grants$
 declare

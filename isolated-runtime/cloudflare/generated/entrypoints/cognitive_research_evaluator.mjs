@@ -42,7 +42,6 @@ const principal = Object.freeze({
         "taskId"
       ],
       "rpcEntrypoints": [
-        "cognitive_runtime.research_evaluator_snapshot",
         "cognitive_resolve_public_research_contradiction"
       ]
     }

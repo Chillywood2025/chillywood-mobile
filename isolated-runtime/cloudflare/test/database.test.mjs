@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createDatabasePort, STATEMENT_INVENTORY } from "../src/database.mjs";
+import { MODEL_STATEMENTS } from "../src/database-statements/model.mjs";
+import { RUNTIME_MANIFEST } from "../src/manifest.mjs";
 import {
   OPERATION_ADAPTERS,
   operationAdapter,
@@ -87,4 +89,40 @@ test("every reviewed operation has an explicit ready adapter and static database
       );
     }
   }
+});
+
+test("model adapter, statement, and manifest RPC inventories remain exact", () => {
+  const principal = RUNTIME_MANIFEST.principals.find(
+    ({ dbRole }) => dbRole === "cognitive_model_router",
+  );
+  const adapter =
+    OPERATION_ADAPTERS.cognitive_model_router.assess_sanitized_evidence;
+  const manifestRpcs =
+    principal.operations.assess_sanitized_evidence.rpcEntrypoints;
+  const statementRpcs = Object.values(MODEL_STATEMENTS).map(({ text }) => {
+    const match = text.match(
+      /cognitive_runtime\.(cognitive_model_router_[a-z_]+)\(/u,
+    );
+    assert(match, "model statement must call one cognitive_runtime RPC");
+    return match[1];
+  });
+
+  assert.deepEqual(adapter.databaseOperations, [
+    "recover_model_reservation",
+    "reserve_model_invocation",
+    "record_model_provider_overrun",
+    "settle_model_invocation",
+  ]);
+  assert.deepEqual(manifestRpcs, [
+    "cognitive_model_router_recover_expired",
+    "cognitive_model_router_reserve",
+    "cognitive_runtime.cognitive_model_router_settle_provider_overrun",
+    "cognitive_model_router_settle",
+  ]);
+  assert.deepEqual(
+    [...new Set(statementRpcs)].sort(),
+    manifestRpcs.map((entry) =>
+      entry.replace(/^cognitive_runtime\./u, "")
+    ).sort(),
+  );
 });

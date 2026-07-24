@@ -193,7 +193,6 @@
       },
       "evaluate_contradiction_resolution": {
         "databaseOperations": [
-          "read_research_snapshot",
           "resolve_research_contradiction"
         ],
         "ready": true,

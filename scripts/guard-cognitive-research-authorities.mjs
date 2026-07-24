@@ -51,6 +51,24 @@ const migrationManifest = [
     ],
   },
   {
+    path: "20260723163359_cognitive_level01_canary_control_plane.sql",
+    sha256: "304f1538ab295b7f96ea992000cb0d661fc6bb6f3ef16ca33604c40aec1af154",
+    requiredMarkers: [
+      "create or replace function public.cognitive_record_research_source",
+      "create function public.cognitive_record_public_research_claim",
+      "cognitive_public_research_claim_rejected",
+    ],
+  },
+  {
+    path: "20260723184340_cognitive_collective_authority_closeout.sql",
+    sha256: "0631e2ea59304969734f04d64d67574829a36325d909a2b12404bc043f30f681",
+    requiredMarkers: [
+      "create function public.cognitive_record_public_research_source",
+      "create function public.cognitive_record_public_research_claim_evidence",
+      "public_research_claim_provenance_rejected",
+    ],
+  },
+  {
     path: "20260724053000_cognitive_research_authority_extension.sql",
     sha256: "89de4d2f71f8722f3c2f4223103810cbad2d2282f93f30abfcbed3bf7119efa0",
     authorityIds: [
@@ -101,6 +119,15 @@ const migrationManifest = [
       "cognitive_research_require_v2_publication_provenance",
       "research_sources_v2_publication_provenance_required",
       "Superseded public-research source writer",
+    ],
+  },
+  {
+    path: "20260724134631_cognitive_level01_isolated_runtime_roles.sql",
+    sha256: "90d244625622b4ee5ab31eb055fe6043604a2a9e875afc5331e0e4a0660d3322",
+    requiredMarkers: [
+      "create function cognitive_runtime.record_research_claim_with_readback",
+      "to cognitive_public_research_broker",
+      "to cognitive_research_evaluator",
     ],
   },
 ];
@@ -184,6 +211,19 @@ assert.deepEqual(
 const migrationFiles = fs.readdirSync(migrationDirectory)
   .filter((file) => /^\d+_.+\.sql$/u.test(file))
   .sort();
+const authorityBearingMigrations = migrationFiles.filter((file) => {
+  const source = fs.readFileSync(`${migrationDirectory}/${file}`, "utf8");
+  return [
+    "cognitive_research_authorities",
+    "cognitive_record_public_research",
+    "cognitive_runtime.record_research",
+  ].some((marker) => source.includes(marker));
+});
+assert.deepEqual(
+  authorityBearingMigrations,
+  manifestPaths,
+  "authority-bearing migration set is missing, stale, duplicated, or reordered",
+);
 let priorManifestIndex = -1;
 const manifestSources = new Map();
 for (const entry of migrationManifest) {

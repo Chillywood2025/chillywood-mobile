@@ -226,7 +226,7 @@ const evaluateResearchClaim = ready(
 );
 
 const resolveContradiction = ready(
-  ["read_research_snapshot", "resolve_research_contradiction"],
+  ["resolve_research_contradiction"],
   async ({ database, env, payload }) => {
     const request = normalizeContradictionResolutionRequest(payload);
     if (!request) {
