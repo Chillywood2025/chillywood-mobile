@@ -1,5 +1,12 @@
 # Cognitive Level 0/1 live activation sprint report
 
+Status: **PRE-DEPLOYMENT EXACT-SOURCE GATE IN PROGRESS**
+
+This document records the source, local proof, and fail-closed runtime state at
+the deployment gate. Remote activation is not claimed here. Deployment,
+bootstrap, installed-product canaries, switch changes, and schedule changes
+remain pending until exact-head review and CI pass.
+
 ## Sprint identity
 
 - `SPRINT_STARTED_AT`: `2026-07-24T02:00:29Z`
@@ -8,12 +15,8 @@
 - continuation branch: `codex/cognitive-live-activation-finalize`
 - continuation draft PR: `#24`
 - stacked base: `codex/cognitive-activation-accelerated-closeout`
-- implementation freeze before this report:
-  `316bbf85ff70d1c3bfda38e552e383102dc0a5ac`
-
-The sprint stopped activation work before its six-hour deadline because the
-reviewed source remains fail-closed behind deployment-blocking P1 findings.
-No production workaround was attempted.
+- latest reviewed runtime-source fix:
+  `af2a4ca4967f0b68ebc9aa7178fd1c7eacad9995`
 
 ## Preservation and lineage
 
@@ -23,144 +26,141 @@ No production workaround was attempted.
   `7d4e822c87d95594d11d7ee06d5e72e185abc8cc` remains in ancestry.
 - PRs `#21`, `#22`, and `#23` were not modified.
 - No deployed migration was edited, renamed, squashed, deleted, or reapplied.
-- The five immutable migration file hashes still match the preservation
-  readback:
+- The five immutable migration file hashes still match preservation readback:
   - `20260723001845`: `e4e51a840d3e7e0f77a06dfe5b1f1042bc134f377d534e51f4885da5ecbf14c6`
   - `20260723160911`: `4d0705b4e32d5917fd0ab79123bfaacc11ccd186641abd29e1591449f2ae1b7a`
   - `20260723163359`: `304f1538ab295b7f96ea992000cb0d661fc6bb6f3ef16ca33604c40aec1af154`
   - `20260723184340`: `0631e2ea59304969734f04d64d67574829a36325d909a2b12404bc043f30f681`
   - `20260723203512`: `7ed2114cd1515b7201462be39578a160fea9772cbe533a519117f95f495de7c8`
-- No new migration was required or deployed.
-- `deno.lock` remained untracked and unstaged.
+- `deno.lock` remains untracked and unstaged.
 - No generated Android or iOS directory was added. The only tracked Android
   paths remain the six pre-existing raw sound assets.
 
 ## Agent deliveries
 
-| Lane | Agent branch | Delivery | Result |
+| Lane | Branch | Integrated delivery | Result |
 | --- | --- | --- | --- |
-| Local Supabase and HTTP | `agent/cognitive-http-environment` | `78d578206e204a9dbec84985d268ade49e16623b` | isolated stack recovered; real HTTP best run 46/48; blocked |
-| Database concurrency | `agent/cognitive-database-concurrency-final` | `bd6195c2bbe56db4874758ad40073105ea33699e` | pgTAP 723/723; real races 13/13 |
-| Edge deployment prep | `agent/cognitive-edge-deployment-prep` | `82b076f03532999330d0abd4e65682e2d0d5bcc9` | source audit/helper/runbook pass; no deploy |
-| Sentinel artifact | `agent/cognitive-sentinel-artifact` | `89535ca172be1c1607a4277fdb1847d43405296f` | Android no artifact change; iOS binary required; canaries blocked |
-| Provider/readiness | `agent/cognitive-provider-credential-readiness` | no-change proof | provider, runtime GitHub identity, accounts, and telemetry missing |
-| Exact review | `agent/cognitive-final-exact-review` | review-only | zero-state bootstrap P1 independently confirmed; final frozen-head review pending |
+| Local Supabase and HTTP | `agent/cognitive-http-environment` | `316bbf85`, `9d0ee64f`, `097edb33`, `aee9841d` | isolated stack recovered; two-party 89/89 and required 40/40; zero-state bootstrap 57/57 and required 43/43 |
+| Database concurrency | `agent/cognitive-database-concurrency-final` | `bc01397b`, `7186ccf6` | clean pgTAP 769/769; real parallel-session matrix 17/17 |
+| Edge deployment prep | `agent/cognitive-edge-deployment-prep` | `faab1e71`, `127b84ca`, `5184dbc0`, `a1d257bf`, `af2a4ca4` | source audit/helper/runbook pass; zero-state Edge chain and bounded Owner validator complete; no deploy |
+| Sentinel artifact | `agent/cognitive-sentinel-artifact` | `235f9b59`, `ec30c78c`, `e62c1c3f` | Android no artifact change; iOS binary required; input remains attested-unverified and cannot grant a pass |
+| Provider/readiness | `agent/cognitive-provider-credential-readiness` | no-change proof | provider, runtime GitHub identity, approved accounts, and telemetry remain missing |
+| Exact review | `agent/cognitive-final-exact-review` | review-only | implementation P1 findings fixed; final frozen-head result pending |
 
-Only the coordinator cherry-picked passing, non-overlapping deliveries. No
-agent pushed directly to the continuation branch.
+Only the coordinator integrated passing, non-overlapping deliveries. No agent
+pushed directly to the continuation branch.
 
-## Test and environment results
+## Source corrections
 
-- Disposable local Supabase recovery: `PASS`.
-  - A separate local project and nonconflicting ports were used for HTTP.
-  - All tracked migrations through `20260723203512` applied.
-  - The CLI showed one transient post-reset service restart failure and then
-    recovered to a clean reset.
-- Full pgTAP on a clean local reset: `723/723 PASS`.
-- Database parallel-session matrix: `13/13 PASS`.
-- Canonical cognitive attacks: `40/40 PASS`.
-- Governance attacks: `33/33 PASS`.
-- Collective governance: `38/38 PASS`.
-- Hardening variants: `104/104 PASS`.
-- Runtime authority: `11/11 PASS`.
-- Two-party source contract: `PASS`.
-- Model independence source contract: `PASS`.
-- Product sentinel source contract: `PASS`.
-- Real HTTP best bounded run: `46 PASS / 2 FAIL / 48 TOTAL`.
-- Real HTTP diagnostic run: `36 PASS / 13 FAIL / 49 TOTAL`.
-- Real HTTP acceptance: `FAIL/BLOCKED`, not a complete 40-scenario pass.
+One new forward-only migration was added:
 
-The best real HTTP run proved worker claim, preflight, executing, non-live
-staging, independent evaluator proof, completion, live switch activation,
-replay denial, revocation, expiry, renewal, and emergency-stop claim denial.
-It used a disposable Owner PostgREST fixture approval and is explicitly not
-live bootstrap proof.
+- version:
+  `20260724023712_cognitive_zero_state_two_party_bootstrap.sql`
+- SHA-256:
+  `9b378bdc19c8ce4fbfcf27434f2554b6b3fe0ac03033729d5271501a937d338d`
 
-## Deployment-blocking findings
+It adds a governed pre-task Owner/worker/evaluator bootstrap chain. Project,
+task, switches, and schedules materialize atomically only after a matching
+passed evaluator proof. All ten switches and all five schedules start off. The
+legacy direct bootstrap RPC is revoked from public, anonymous,
+authenticated, and service-role callers. No deployed migration was changed.
 
-### P1: exact Owner Edge approval is rejected
+The Owner Edge function now uses an exact ten-key bootstrap schema with bounded
+field formats and canonical branch-name classification. This avoids the
+general nine-string permutation cost without bypassing the canonical policy.
+Malformed, extra-key, unsafe-branch, secret-like, and authority-like inputs are
+rejected. Other Owner actions continue through the general canonical
+classifier.
 
-`cognitive-owner-approval` rejects the required
-`action=record_owner_approval` request with HTTP 400
-`owner_approval_payload_rejected`. The canonical classifier categorizes the
-required action as `provider_authority` because the action name contains
-`owner`. Random fixture identifiers can also trigger classifier false
-positives, so the HTTP result is not deterministic.
+The Edge secret helper rejects output paths in any Git worktree and rejects
+symlink parents or targets. Sentinel availability inputs remain explicitly
+unverified until an installed collector independently observes the product.
 
-### P1: zero-state two-party bootstrap is unreachable
+## Local proof
 
-The only zero-row creator is the legacy service-role-only
-`cognitive_bootstrap_level01_canary` path. Owner approval requires a finalized
-`MODEL_INDEPENDENCE_VERIFIED` decision that is already scoped to a task and
-project, while the reviewed worker endpoint has no
-`bootstrap_control_plane` side effect. Starting from the remote zero-row
-state, the required Owner → worker → evaluator bootstrap cannot be reached
-without the forbidden direct legacy service-role bootstrap.
+- Disposable local Supabase recovery: **PASS**
+- Full pgTAP after clean reset: **769/769 PASS**
+- Database parallel-session matrix: **17/17 PASS**
+- Existing real two-party HTTP assertions: **89/89 PASS**
+- Existing required HTTP scenarios: **40/40 PASS**
+- Zero-state real bootstrap HTTP assertions: **57/57 PASS**
+- Zero-state required bootstrap HTTP gate: **43/43 PASS**
+- Canonical cognitive attacks: **40/40 PASS**
+- Governance attacks: **33/33 PASS**
+- Collective governance: **39/39 PASS**
+- Hardening variants: **104/104 PASS**
+- Runtime authority: **11/11 PASS**
+- Policy parity: **20/20 plus 256 fixed-seed PASS**
+- Two-party source contract: **PASS**
+- Bootstrap Edge contract: **PASS**
+- Model-independence source contract: **PASS**
+- Product-sentinel source contract: **PASS**
+- Edge source audit and helper self-test: **PASS**
+- Strict bootstrap validator tests: **4/4 PASS**
 
-### Functional activation gaps
+The zero-state HTTP proof used real PostgREST and locally served Edge
+endpoints. It proved exact Owner approval, worker claim and non-live staging,
+independent evaluator proof, evaluator-gated completion, immutable receipt
+binding, and replay denial. It also proved denial of malformed/extra-key
+approval, identity crossover, wrong target/receipt/proof, and legacy direct
+bootstrap. Ten switches and five schedules were created only at completion and
+all remained off.
 
-- The installed sentinel readiness runner defaults the synthetic-account,
-  two-participant, and provider-telemetry attestations to false and has no
-  sanitized approved attestation input.
-- No cognitive model-provider runtime client exists.
-- No cognitive GitHub draft-PR broker/API client exists.
-- No source path produces the required provider-credential receipt and
-  evaluator chain.
-- The current installed sentinel classifier consumes sanitized evidence but
-  does not independently collect the full installed-product evidence.
-- ICE and distinct remote-subscription evidence are not yet complete in the
-  installed LiveKit collector.
+## Resolved review findings
 
-These gaps were not bypassed or weakened.
+- Owner action classification false positive: fixed with exact action routing
+  while preserving canonical payload classification.
+- Circular zero-state bootstrap dependency: fixed by the new forward-only
+  pre-task evidence chain.
+- Legacy service-role direct bootstrap bypass: execute authority revoked.
+- Hash-heavy bootstrap Edge CPU exhaustion: fixed by the bounded exact schema.
+- Unsafe bootstrap branch semantic bypass: fixed by canonical classification
+  of the validated branch field with regressions.
+- Secret helper output escaping another worktree: rejected.
+- Sentinel availability input granting a pass: rejected; availability is
+  attested-unverified only.
 
-## Secrets, functions, and remote state
+No finding was hidden in the review branch.
 
-- Worker invocation/assertion secret names: discovered; remote values
-  `MISSING`.
-- Evaluator invocation/assertion secret names: discovered; remote values
-  `MISSING`.
-- Independent candidate values were generated in an owner-only temporary
-  directory, never printed or committed, never stored remotely, and deleted
-  after deployment was blocked. They can be regenerated.
-- Cognitive Edge Functions deployed by this sprint: none.
-- Existing `autonomous-approval-request`: preserved; no secret rotation or
-  redeployment.
-- Remote migration alignment: unchanged at the five reviewed additive
-  migrations.
-- Remote cognitive/governance/product-quality table readback: 65 present, 65
-  RLS enabled, 65 FORCE RLS enabled, anonymous grants 0, authenticated write
-  grants 0.
-- Remote switch rows: 0.
-- Remote schedule rows: 0.
-- Owner approval result: `BLOCKED_NOT_RECORDED`.
-- Worker claim/stage result: local fixture proof only; remote `NOT_RUN`.
-- Evaluator result: local fixture proof only; remote `NOT_RUN`.
-- Completion/receipt result: local fixture proof only; remote `NOT_RUN`.
-- Remote replay/concurrency/revocation/emergency proof: `NOT_RUN`.
+## Remote state at this gate
 
-## Provider, accounts, artifact, and sentinel status
+- New migration deployed: **NO**
+- Cognitive Edge Functions deployed by this sprint: **NONE**
+- Worker invocation/assertion secrets: **MISSING**
+- Evaluator invocation/assertion secrets: **MISSING**
+- Existing `autonomous-approval-request`: preserved and not redeployed
+- Remote migrations: unchanged at the five reviewed deployed versions
+- Remote readback: 65 expected tables, 65 RLS, 65 FORCE RLS, anonymous grants
+  0, authenticated write grants 0
+- Remote switches: 0 rows
+- Remote schedules: 0 rows
+- Remote Owner approval/worker/evaluator/completion chain: **NOT RUN**
 
-- Approved synthetic accounts: `MISSING`; none created.
-- Two approved LiveKit participants: `MISSING`.
-- Provider/backend read-only telemetry: `MISSING`.
+The deployment gate remains fail-closed until the frozen continuation head has
+green CI and independent review reports `P0=0/P1=0`.
+
+## Provider, accounts, artifacts, and sentinels
+
+- Approved synthetic accounts: **MISSING**
+- Two approved LiveKit participants: **MISSING**
+- Provider/backend read-only telemetry: **MISSING**
 - Provider-backed model independence:
-  `MODEL_INDEPENDENCE_PROVIDER_REQUIRED`.
-- Deliberation/quorum: `NOT_ENABLED`; advisory-only source readiness.
+  `MODEL_INDEPENDENCE_PROVIDER_REQUIRED`
+- Deliberation/quorum: **OFF**
 - Cognitive GitHub runtime:
-  `GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED`.
-- The developer GitHub credential was not accepted or installed as a
-  cognitive runtime identity.
-- Android artifact decision: `NO_ARTIFACT_CHANGE_REQUIRED`.
-- iOS artifact decision: `INTERNAL_QA_BINARY_REQUIRED`.
-- OTA decision: no OTA used on either platform.
-- Build decision: no build started on either platform.
-- LiveKit installed sentinel: `NOT_RUN/BLOCKED`.
-- Visual installed sentinel: `NOT_RUN/BLOCKED`.
-- Installed journey sentinel: `NOT_RUN/BLOCKED`.
-- Research and non-personal memory canaries: `NOT_RUN/BLOCKED`.
-- Governed draft-PR canaries: `NOT_RUN/BLOCKED`.
-- Draft fixes/findings in Collective Governance: none created because the
-  real bootstrap was unavailable.
+  `GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED`
+- Android artifact decision: `NO_ARTIFACT_CHANGE_REQUIRED`
+- iOS artifact decision: `INTERNAL_QA_BINARY_REQUIRED`; first preference is
+  the existing internal build when available
+- OTA: none
+- New build: none
+- LiveKit installed sentinel: **NOT RUN**
+- Visual installed sentinel: **NOT RUN**
+- Installed journey sentinel: **NOT RUN**
+- Research/non-personal memory canaries: **NOT RUN**
+- Governed draft-PR canaries: **NOT RUN**
+
+No local readiness self-test is represented as an installed-product canary.
 
 ## Switches and schedules
 
@@ -168,58 +168,40 @@ Active schedules: none.
 
 Enabled cognitive switches: none.
 
-The following remain off:
+Research, non-personal memory, user-derived memory, collective deliberation,
+all sentinels, the draft-PR executor, every Level 0/1 schedule, and Level 2
+production repair remain off.
 
-- public/non-personal research;
-- non-personal memory;
-- user-derived memory;
-- collective deliberation;
-- LiveKit, visual, and installed-journey sentinels;
-- draft-PR executor;
-- all Level 0/1 schedules;
-- Level 2 production repair.
+## Sanitization incident
 
-## Safety incident
+A broad read-only provider-lane search emitted an already-committed device
+identifier into internal command output. It was not repeated. No credential,
+token, key, cookie, private media, or remote state was exposed or changed.
+Broad-output searches stopped immediately. No secret or private evidence was
+added by this sprint.
 
-A broad read-only search in the provider lane emitted an already-committed
-device identifier from a tracked historical readiness document into internal
-command output. It was not repeated. No credential, token, key, cookie,
-private media, or remote state was exposed or changed. Broad-output searches
-were stopped immediately. This violated the sprint's device-identifier output
-rule and is recorded as a sanitization incident. No secret or private evidence
-was added by this sprint.
+## Rollback truth
 
-## Rollback and continuation
+At this gate there is no production rollback to perform because no migration,
+function, secret, switch, schedule, OTA, or binary has been deployed or
+changed. The continuation branch can be discarded without affecting
+production.
 
-There is no production rollback to perform: the sprint deployed no migration,
-function, secret, switch, schedule, OTA, or binary and created no live
-approval/execution/evaluator rows.
-
-The continuation branch can be discarded without affecting production.
-Before any later activation:
-
-1. add a new forward-only correction for the zero-state bootstrap only if the
-   schema must change;
-2. correct the Owner payload classification with exact regressions;
-3. make real HTTP fixtures classification-stable and pass the full required
-   matrix;
-4. add sanitized sentinel prerequisite attestations and a real evidence
-   collector;
-5. implement and attest the model and GitHub runtime brokers;
-6. refreeze and obtain `P0=0/P1=0`;
-7. only then generate fresh secrets, deploy, bootstrap, canary, and enable
-   bounded schedules.
+If deployment later passes review, rollback must remain forward-only: disable
+switches and schedules, activate the emergency guard, revoke outstanding
+approvals/assertions, and deploy a separately reviewed corrective migration or
+prior reviewed Edge source. Never edit or down-migrate deployed history.
 
 ## Explicit confirmations
 
 - PRs `#21`, `#22`, and `#23` history was preserved.
 - No deployed migration was rewritten.
-- No hard reset, rebase, clean, force-push, or destructive down migration
-  occurred.
+- No hard reset, rebase, clean, restore-all, force-push, or destructive down
+  migration occurred.
 - No test was deleted or weakened to get green.
 - Owner, worker, and evaluator remain distinct.
-- No live state mutation occurred before evaluator proof.
-- No self-approval was introduced.
+- No live state mutation occurs before evaluator proof.
+- No self-approval exists.
 - No unrestricted credential was used by the cognitive runtime.
 - No public build, OTA, store release, or track mutation occurred.
 - No merge occurred.
@@ -228,7 +210,6 @@ Before any later activation:
   provider-product mutation occurred.
 - User-derived memory remains off.
 - Level 2 production repair remains off.
-- No secret/private evidence was committed by this sprint.
+- No secret or private evidence was committed.
 - No generated Android/iOS directory was committed.
 - `deno.lock` remained unstaged.
-
