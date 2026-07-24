@@ -87,12 +87,12 @@ select ok(
   )
   and not has_function_privilege(
     'authenticated',
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)',
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.cognitive_accept_github_draft_pr_tool_result(text,text,text,text,jsonb,text,text,text,text,text)',
+    'public.cognitive_accept_github_draft_pr_tool_result(text,text,text,text,jsonb,text,text,text,text,text,text,text)',
     'EXECUTE'
   ),
   'ordinary authenticated clients cannot call GitHub broker mutation RPCs'
@@ -110,6 +110,117 @@ select ok(
     'INSERT'
   ),
   'service role has no direct GitHub broker audit-table write path'
+);
+
+select throws_ok(
+  $$insert into public.cognitive_level01_credential_attestations(
+      id,task_id,project_id,platform,environment,credential_kind,state,
+      public_fingerprint_hash,scope_manifest_hash,verified_at,expires_at
+    ) values (
+      'e5000000-0000-4000-8000-000000000000',
+      'e2000000-0000-4000-8000-000000000001',
+      'e1000000-0000-4000-8000-000000000001',
+      'shared','production','github_draft_pr','configured',
+      repeat('1',64),repeat('2',64),
+      transaction_timestamp() - interval '3 minutes',
+      transaction_timestamp() + interval '20 minutes'
+    )$$,
+  'P0001',
+  'github_draft_pr_attestation_scope_rejected',
+  'GitHub attestation rejects a substituted permission-scope manifest'
+);
+
+insert into public.cognitive_level01_credential_attestations(
+  id,task_id,project_id,platform,environment,credential_kind,state,
+  public_fingerprint_hash,scope_manifest_hash,verified_at,expires_at
+) values (
+  'e5000000-0000-4000-8000-000000000001',
+  'e2000000-0000-4000-8000-000000000001',
+  'e1000000-0000-4000-8000-000000000001',
+  'shared','production','github_draft_pr','configured',
+  repeat('1',64),
+  'ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554',
+  transaction_timestamp() - interval '2 minutes',
+  transaction_timestamp() + interval '20 minutes'
+);
+
+select ok(
+  public.cognitive_github_draft_pr_runtime_attestation_is_current(
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001',
+    'shared','production',
+    'e5000000-0000-4000-8000-000000000001',
+    repeat('1',64),
+    'ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554',
+    transaction_timestamp()
+  ),
+  'accepted GitHub installation fingerprint is current before rotation'
+);
+
+select is(
+  public.cognitive_github_draft_pr_plan_contract_hash(
+    repeat('1',64),'documentation_draft_pr',repeat('2',64),repeat('a',40),
+    repeat('3',64),repeat('4',64),repeat('5',64),repeat('6',64),
+    repeat('7',64),repeat('8',64),repeat('9',64),repeat('b',64),
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001',repeat('c',64)
+  ),
+  '097820b3d149b20dc1a8a69404286e2b923a7ed6913acec823cbf31f93c47703',
+  'database plan hash matches the deterministic cross-runtime contract'
+);
+
+select isnt(
+  public.cognitive_github_draft_pr_plan_contract_hash(
+    repeat('1',64),'documentation_draft_pr',repeat('2',64),repeat('a',40),
+    repeat('3',64),repeat('4',64),repeat('5',64),repeat('6',64),
+    repeat('7',64),repeat('8',64),repeat('9',64),repeat('b',64),
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001',repeat('c',64)
+  ),
+  public.cognitive_github_draft_pr_plan_contract_hash(
+    repeat('1',64),'documentation_draft_pr',repeat('2',64),repeat('a',40),
+    repeat('3',64),repeat('4',64),repeat('5',64),repeat('d',64),
+    repeat('7',64),repeat('8',64),repeat('9',64),repeat('b',64),
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001',repeat('c',64)
+  ),
+  'content substitution changes the immutable approved plan hash'
+);
+
+insert into public.cognitive_level01_credential_attestations(
+  id,task_id,project_id,platform,environment,credential_kind,state,
+  public_fingerprint_hash,scope_manifest_hash,verified_at,expires_at
+) values (
+  'e5000000-0000-4000-8000-000000000002',
+  'e2000000-0000-4000-8000-000000000001',
+  'e1000000-0000-4000-8000-000000000001',
+  'shared','production','github_draft_pr','configured',
+  repeat('2',64),
+  'ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554',
+  transaction_timestamp() - interval '1 minute',
+  transaction_timestamp() + interval '20 minutes'
+);
+
+select ok(
+  not public.cognitive_github_draft_pr_runtime_attestation_is_current(
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001',
+    'shared','production',
+    'e5000000-0000-4000-8000-000000000001',
+    repeat('1',64),
+    'ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554',
+    transaction_timestamp()
+  )
+  and public.cognitive_github_draft_pr_runtime_attestation_is_current(
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001',
+    'shared','production',
+    'e5000000-0000-4000-8000-000000000002',
+    repeat('2',64),
+    'ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554',
+    transaction_timestamp()
+  ),
+  'installation rotation invalidates the earlier capability fingerprint'
 );
 
 set local role service_role;
@@ -178,10 +289,22 @@ select throws_ok(
     repeat('9',64),
     repeat('a',40),
     'absent',
+    repeat('b',64),
+    repeat('c',64),
+    repeat('d',64),
+    repeat('e',64),
+    repeat('f',64),
+    repeat('1',64),
+    repeat('2',64),
+    repeat('3',64),
+    repeat('4',64),
+    repeat('5',64),
+    repeat('6',64),
+    'ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554',
     'github-broker-service-token-test-only'
   )$$,
   'P0001',
-  'github_draft_pr_capability_authorization_rejected',
+  'github_draft_pr_exact_binding_rejected',
   'broker cannot act without an exact capability, lease, and approved execution'
 );
 
@@ -266,35 +389,35 @@ select ok(
 
 select ok(
   pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+    'public.cognitive_consume_github_draft_pr_capability_pre_exact_binding(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
   ) like '%governance_lock_approved_execution_liveness%'
   and pg_get_functiondef(
-    'public.cognitive_accept_github_draft_pr_tool_result(text,text,text,text,jsonb,text,text,text,text,text)'::regprocedure
+    'public.cognitive_accept_github_draft_pr_tool_result_pre_exact_binding(text,text,text,text,jsonb,text,text,text,text,text)'::regprocedure
   ) like '%governance_lock_approved_execution_liveness%',
   'capability consumption and postflight both lock approval liveness'
 );
 
 select ok(
   pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+    'public.cognitive_consume_github_draft_pr_capability_pre_exact_binding(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
   ) like '%execution_value.target_resource_hash <> p_source_state_hash%'
   and pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
+    'public.cognitive_consume_github_draft_pr_capability_pre_exact_binding(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
   ) like '%moderation%providers%ranking%rights%',
   'authorization is bound to exact source state and filename-level protected scopes'
 );
 
 select ok(
   pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
-  ) like '%cognitive_level01_credential_attestations%'
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
+  ) like '%cognitive_github_draft_pr_runtime_attestation_is_current%'
   and pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
-  ) like '%credential_kind = ''github_draft_pr''%'
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
+  ) like '%cognitive_github_draft_pr_plan_contract_hash%'
   and pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text)'::regprocedure
-  ) like '%attestation.expires_at > now_at%',
-  'draft execution requires a current trusted GitHub credential attestation'
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
+  ) like '%ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554%',
+  'draft execution binds exact plan and current least-privilege credential'
 );
 
 select * from finish();

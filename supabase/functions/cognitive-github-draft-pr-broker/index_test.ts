@@ -1,4 +1,9 @@
-import { handler, validateDraftPlan } from "./index.ts";
+import {
+  APPROVED_SCOPE_MANIFEST_HASH,
+  deriveDraftPlanContract,
+  handler,
+  validateDraftPlan,
+} from "./index.ts";
 
 const assert = (condition: unknown, message: string): void => {
   if (!condition) throw new Error(message);
@@ -169,6 +174,57 @@ Deno.test("GitHub broker rejects extra caller-authored fields", () => {
   assert(
     validateDraftPlan({ ...basePlan(), merge: true }) === null,
     "caller-authored merge field accepted",
+  );
+});
+
+Deno.test("approved plan contract detects every mutable GitHub substitution", async () => {
+  const validated = validateDraftPlan(basePlan());
+  assert(validated, "valid plan was not available for contract derivation");
+  if (!validated) return;
+  const approved = await deriveDraftPlanContract(validated);
+  assertEquals(
+    approved.planContractHash,
+    "6191bf740d757f16cac96e71ac9c34a09014d822366d9e7d278b2058fb2b1b2b",
+    "cross-runtime canonical plan hash",
+  );
+  const mutations: Record<string, unknown>[] = [
+    { content: `${validated.content}\nSubstituted content.\n` },
+    { title: "Substitute governed documentation canary" },
+    { commitMessage: "Substitute bounded documentation canary" },
+    { path: "docs/intelligence/canaries/substituted-proof.md" },
+    { baseCommit: "e".repeat(40) },
+    { priorBlobSha: "f".repeat(40) },
+    { requiredTestsHash: "d".repeat(64) },
+    {
+      branchName: "codex/cognitive-canary/substituted-proof",
+    },
+    {
+      canaryKey: "test_only_draft_pr",
+      path: "scripts/cognitive-canaries/substituted-proof.mjs",
+    },
+  ];
+  for (const mutation of mutations) {
+    const changed = await deriveDraftPlanContract({
+      ...validated,
+      ...mutation,
+    });
+    assert(
+      changed.planContractHash !== approved.planContractHash,
+      `plan substitution retained approval hash: ${Object.keys(mutation)}`,
+    );
+  }
+  assertEquals(
+    approved.prBodyHash.length,
+    64,
+    "deterministic draft body hash",
+  );
+});
+
+Deno.test("GitHub runtime pins the reviewed least-privilege scope manifest", () => {
+  assertEquals(
+    APPROVED_SCOPE_MANIFEST_HASH,
+    "ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554",
+    "reviewed GitHub App scope manifest",
   );
 });
 
