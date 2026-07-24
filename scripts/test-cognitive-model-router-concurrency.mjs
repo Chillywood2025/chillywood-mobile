@@ -129,8 +129,8 @@ const fixtureMatch = fixtureSource.match(
 assert.ok(fixtureMatch?.groups?.fixture, "model router SQL fixture markers missing");
 const capabilityId = randomUUID();
 const serviceToken = "model-router-service-token-test-only-0001";
-const assessmentId = "model-router-concurrency-same-scope";
-const evidencePacketHash = hash(`evidence-${capabilityId}`);
+const assessmentId = "model-router-assessment-0001";
+const evidencePacketHash = "e".repeat(64);
 const scopeHash = hash(
   [
     "cognitive-model-assessment-scope-v1",
@@ -192,6 +192,7 @@ select public.cognitive_model_router_reserve(
   ${sqlLiteral(configuredModelIdentityHash)},
   repeat('8',64),
   ${sqlLiteral(scopeHash)},
+  repeat('b',64),
   1000,0.1,${sqlLiteral(serviceToken)}
 )::text;
 commit;
@@ -275,6 +276,27 @@ set reserved_calls=2,
     reserved_model_tokens=2000,
     reserved_model_cost=0.2
 where id=${sqlLiteral(capabilityId)};
+insert into public.cognitive_model_router_runtime_credential_proofs(
+  capability_id,idempotency_key,request_hash,task_id,project_id,platform,
+  environment,credential_attestation_id,runtime_credential_fingerprint_hash,
+  credential_scope_manifest_hash,service_identity
+) values
+(
+  ${sqlLiteral(capabilityId)},${sqlLiteral(recoveredReservationKey)},
+  ${sqlLiteral(hash(`request-recovered-${capabilityId}`))},
+  'd3000000-0000-4000-8000-000000000001',
+  'd1000000-0000-4000-8000-000000000001','shared','production',
+  'de000000-0000-4000-8000-000000000001',repeat('b',64),repeat('c',64),
+  'cognitive_model_router'
+),
+(
+  ${sqlLiteral(capabilityId)},${sqlLiteral(otherReservationKey)},
+  ${sqlLiteral(hash(`request-other-${capabilityId}`))},
+  'd3000000-0000-4000-8000-000000000001',
+  'd1000000-0000-4000-8000-000000000001','shared','production',
+  'de000000-0000-4000-8000-000000000001',repeat('b',64),repeat('c',64),
+  'cognitive_model_router'
+);
 insert into public.cognitive_model_router_preflight_audits(
   id,capability_id,approved_execution_id,task_id,project_id,platform,
   environment,council_role,required_switch_key,provider_family,model_family,

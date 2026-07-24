@@ -615,6 +615,15 @@ Deno.test("database preflight is required before provider transport and exact se
     "approval target binding",
   );
   assertEquals(reserved?.scopeHash, payload.scopeHash, "scope hash binding");
+  assertEquals(
+    reserved?.runtimeCredentialFingerprintHash,
+    await sha256Hex("test-only-provider-value"),
+    "actual runtime credential fingerprint binding",
+  );
+  assert(
+    !JSON.stringify(reserved).includes("test-only-provider-value"),
+    "raw provider credential crossed the governance boundary",
+  );
   assertEquals(settled?.resultStatus, "completed", "settlement status");
   assertEquals(
     settled?.actualModelTokens,

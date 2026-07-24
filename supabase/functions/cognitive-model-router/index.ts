@@ -52,6 +52,7 @@ type ModelGovernancePreflight = Readonly<{
   promptTemplateHash: string;
   scopeHash: string;
   configuredModelIdentityHash: string;
+  runtimeCredentialFingerprintHash: string;
   reservedModelTokens: number;
   reservedModelCost: number;
 }>;
@@ -1046,6 +1047,8 @@ const createGovernanceDatabase = (
         p_prompt_template_hash: input.promptTemplateHash,
         p_scope_hash: input.scopeHash,
         p_configured_model_identity_hash: input.configuredModelIdentityHash,
+        p_runtime_credential_fingerprint_hash:
+          input.runtimeCredentialFingerprintHash,
         p_reserved_model_tokens: input.reservedModelTokens,
         p_reserved_model_cost: input.reservedModelCost,
         p_service_identity_token: serviceIdentityToken,
@@ -1208,6 +1211,7 @@ export const createHandler = (
       const configuredModelIdentityHash = await sha256Hex(
         `${provider}|${modelFamily}|${model}`,
       );
+      const runtimeCredentialFingerprintHash = await sha256Hex(apiKey);
       const reservedModelTokens = maximumCallTokens(
         providerBody,
         payload.budget.maxOutputTokens,
@@ -1219,6 +1223,7 @@ export const createHandler = (
         modelFamily,
         modelName: model,
         promptTemplateHash: templateHash,
+        runtimeCredentialFingerprintHash,
         reservedModelTokens,
         reservedModelCost,
       }));
@@ -1240,6 +1245,7 @@ export const createHandler = (
         promptTemplateHash: templateHash,
         scopeHash: payload.scopeHash,
         configuredModelIdentityHash,
+        runtimeCredentialFingerprintHash,
         reservedModelTokens,
         reservedModelCost,
       });
