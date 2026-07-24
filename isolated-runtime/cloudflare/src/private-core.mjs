@@ -165,6 +165,7 @@ export const createPrivateInvocationHandler = ({
     const context = {
       environment: envelope.environment,
       operation: envelope.operation,
+      platform: envelope.platform,
       principal: envelope.principal,
       projectId: envelope.projectId,
       requestId: envelope.requestId,

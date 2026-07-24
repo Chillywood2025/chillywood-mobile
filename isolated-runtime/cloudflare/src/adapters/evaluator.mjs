@@ -99,6 +99,103 @@ const PHYSICAL_PROOF_STATUSES = new Set([
   "device_unavailable",
   "new_binary_or_ota_required",
 ]);
+const LIVEKIT_MAX_TIMING_MS = 600_000;
+const LIVEKIT_MAX_OBSERVATION_WINDOW_MS = 120_000;
+const LIVEKIT_BOOLEAN_METRICS = Object.freeze([
+  "backgroundForegroundRecovery",
+  "backgrounded",
+  "buildRuntimeMatched",
+  "cleanupDisconnected",
+  "connectingResolved",
+  "firstAudioVideoObserved",
+  "foregrounded",
+  "headlessParticipantUsed",
+  "iceCheckingObserved",
+  "iceGatheringObserved",
+  "installedUiObserved",
+  "localTrackPublished",
+  "participantIdentityDistinct",
+  "peerConnectionEstablished",
+  "remoteParticipantJoined",
+  "remoteTrackSubscribed",
+  "roomConnected",
+  "tokenRequestStarted",
+  "tokenRequested",
+  "tokenReturned",
+  "tokenClaimsValidated",
+  "websocketConnected",
+]);
+const LIVEKIT_TIMING_METRICS = Object.freeze([
+  "firstRemoteMediaElapsedMs",
+  "roomConnectElapsedMs",
+  "tokenIssuedElapsedMs",
+  "uiStateResolutionElapsedMs",
+]);
+const LIVEKIT_METRIC_KEYS = Object.freeze([
+  ...LIVEKIT_BOOLEAN_METRICS,
+  ...LIVEKIT_TIMING_METRICS,
+  "headlessObservationFinishedAt",
+  "headlessObservationStartedAt",
+  "headlessParticipantIdentityHash",
+  "iceState",
+  "installedUiEvidenceHash",
+  "installedObservationFinishedAt",
+  "installedObservationStartedAt",
+  "installedParticipantIdentityHash",
+  "installedRuntimeIdentityHash",
+  "installedRoomRunCorrelationHash",
+  "installedSourceBuildHash",
+  "localMediaSource",
+  "networkState",
+  "permissionState",
+  "providerState",
+  "remoteMediaKind",
+  "roomRunCorrelationHash",
+  "stageFailureCategory",
+  "tokenResultStatus",
+]);
+const LIVEKIT_ICE_STATES = new Set([
+  "new",
+  "checking",
+  "connected",
+  "completed",
+  "failed",
+  "disconnected",
+  "closed",
+  "unknown",
+]);
+const LIVEKIT_LOCAL_MEDIA_SOURCES = new Set([
+  "test_tone",
+  "silent_audio",
+  "color_bars",
+  "none",
+]);
+const LIVEKIT_NETWORK_STATES = new Set(["ready", "interrupted", "unknown"]);
+const LIVEKIT_PERMISSION_STATES = new Set([
+  "granted",
+  "denied",
+  "unknown",
+  "not_applicable",
+]);
+const LIVEKIT_PROVIDER_STATES = new Set([
+  "healthy",
+  "degraded",
+  "blocked",
+  "unknown",
+]);
+const LIVEKIT_REMOTE_MEDIA_KINDS = new Set([
+  "audio",
+  "video",
+  "audio_video",
+  "none",
+]);
+const LIVEKIT_TOKEN_RESULT_STATES = new Set([
+  "success",
+  "denied",
+  "error",
+  "timeout",
+  "not_attempted",
+]);
 
 const isRecord = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -206,7 +303,14 @@ export const deterministicVisualClassification = (
   });
   const conclude = (result) => {
     const expected = expectedObserved[result.classification];
-    return !expected || observedClassification === expected
+    const observedMatches = result.classification ===
+        "confirmed_baseline_violation"
+      ? [
+        "confirmed_baseline_violation",
+        "product_preference_deviation",
+      ].includes(observedClassification)
+      : observedClassification === expected;
+    return !expected || observedMatches
       ? result
       : assessment("baseline_ambiguity");
   };
@@ -358,7 +462,7 @@ export const deterministicVisualClassification = (
   }
   if (run.platform === "web" && minimumTarget < 44) {
     return conclude(
-      accessibilityFinding(
+      visualFinding(
         "web_touch_target_below_preferred_44csspx",
         "low",
       ),
@@ -852,10 +956,14 @@ export const deterministicTouchTargetClassification = (
     );
   }
   if (derived === "meets_wcag_aa_minimum_only") {
-    return assessment(
-      "accessibility_violation",
-      findingProfile("web_touch_target_below_preferred_44csspx", "low"),
-    );
+    return baselineState === "approved_baseline" &&
+        text(metrics.baselineComparisonHash) ===
+          APPROVED_OPTION_C_BASELINE_HASH &&
+        context.approvedVisualBaselineCount === 1 &&
+        context.approvedVisualBaselineHash ===
+          APPROVED_OPTION_C_BASELINE_HASH
+      ? visualFinding("web_touch_target_below_preferred_44csspx", "low")
+      : assessment("baseline_ambiguity");
   }
   return assessment("false_positive");
 };
@@ -898,6 +1006,192 @@ const liveKitProfile = (failureCategory) => {
   return expected
     ? profile(normalizedClass, expected[0], expected[1], expected[2])
     : null;
+};
+
+const canonicalLiveKitTimestamp = (value) => {
+  if (typeof value !== "string") return null;
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) &&
+      new Date(milliseconds).toISOString() === value
+    ? milliseconds
+    : null;
+};
+
+const nullableLiveKitHash = (value) =>
+  value === null || (typeof value === "string" && HASH.test(value));
+
+const nullableLiveKitTimestamp = (value) =>
+  value === null || canonicalLiveKitTimestamp(value) !== null;
+
+const liveKitMetricContractIsValid = (metrics) => {
+  if (
+    !exactKeys(metrics, LIVEKIT_METRIC_KEYS) ||
+    LIVEKIT_BOOLEAN_METRICS.some(
+      (key) => typeof metrics[key] !== "boolean",
+    ) ||
+    LIVEKIT_TIMING_METRICS.some((key) => {
+      const value = metrics[key];
+      return !Number.isInteger(value) ||
+        value < 0 ||
+        value > LIVEKIT_MAX_TIMING_MS;
+    }) ||
+    !LIVEKIT_ICE_STATES.has(metrics.iceState) ||
+    !LIVEKIT_LOCAL_MEDIA_SOURCES.has(metrics.localMediaSource) ||
+    !LIVEKIT_NETWORK_STATES.has(metrics.networkState) ||
+    !LIVEKIT_PERMISSION_STATES.has(metrics.permissionState) ||
+    !LIVEKIT_PROVIDER_STATES.has(metrics.providerState) ||
+    !LIVEKIT_REMOTE_MEDIA_KINDS.has(metrics.remoteMediaKind) ||
+    !LIVEKIT_TOKEN_RESULT_STATES.has(metrics.tokenResultStatus) ||
+    !HASH.test(text(metrics.roomRunCorrelationHash)) ||
+    !nullableLiveKitHash(metrics.headlessParticipantIdentityHash) ||
+    !nullableLiveKitHash(metrics.installedUiEvidenceHash) ||
+    !nullableLiveKitHash(metrics.installedParticipantIdentityHash) ||
+    !nullableLiveKitHash(metrics.installedRuntimeIdentityHash) ||
+    !nullableLiveKitHash(metrics.installedRoomRunCorrelationHash) ||
+    !nullableLiveKitHash(metrics.installedSourceBuildHash) ||
+    !nullableLiveKitTimestamp(metrics.installedObservationStartedAt) ||
+    !nullableLiveKitTimestamp(metrics.installedObservationFinishedAt)
+  ) {
+    return false;
+  }
+  const headlessStarted = canonicalLiveKitTimestamp(
+    metrics.headlessObservationStartedAt,
+  );
+  const headlessFinished = canonicalLiveKitTimestamp(
+    metrics.headlessObservationFinishedAt,
+  );
+  const installedStarted = canonicalLiveKitTimestamp(
+    metrics.installedObservationStartedAt,
+  );
+  const installedFinished = canonicalLiveKitTimestamp(
+    metrics.installedObservationFinishedAt,
+  );
+  if (
+    headlessStarted === null ||
+    headlessFinished === null ||
+    headlessStarted > headlessFinished ||
+    headlessFinished - headlessStarted >
+      LIVEKIT_MAX_OBSERVATION_WINDOW_MS ||
+    (
+      metrics.installedUiObserved &&
+      (
+        installedStarted === null ||
+        installedFinished === null ||
+        installedStarted > installedFinished ||
+        installedFinished - installedStarted >
+          LIVEKIT_MAX_OBSERVATION_WINDOW_MS
+      )
+    )
+  ) {
+    return false;
+  }
+  const installedBound = metrics.installedUiObserved;
+  const identitiesDiffer =
+    metrics.headlessParticipantIdentityHash !== null &&
+    metrics.installedParticipantIdentityHash !== null &&
+    metrics.headlessParticipantIdentityHash !==
+      metrics.installedParticipantIdentityHash;
+  return (
+    installedBound === (metrics.installedUiEvidenceHash !== null) &&
+    installedBound === (metrics.installedObservationStartedAt !== null) &&
+    installedBound === (metrics.installedObservationFinishedAt !== null) &&
+    installedBound === (metrics.installedParticipantIdentityHash !== null) &&
+    installedBound === (metrics.installedRuntimeIdentityHash !== null) &&
+    installedBound ===
+      (metrics.installedRoomRunCorrelationHash !== null) &&
+    installedBound === (metrics.installedSourceBuildHash !== null) &&
+    (
+      !installedBound ||
+      metrics.installedRoomRunCorrelationHash ===
+        metrics.roomRunCorrelationHash
+    ) &&
+    metrics.participantIdentityDistinct === identitiesDiffer &&
+    (
+      !metrics.tokenReturned ||
+      (
+        metrics.tokenClaimsValidated &&
+        metrics.headlessParticipantIdentityHash !== null
+      )
+    ) &&
+    (
+      metrics.tokenReturned ||
+      (
+        !metrics.tokenClaimsValidated &&
+        metrics.headlessParticipantIdentityHash === null
+      )
+    ) &&
+    (
+      !metrics.tokenReturned ||
+      !installedBound ||
+      metrics.participantIdentityDistinct
+    ) &&
+    metrics.firstAudioVideoObserved ===
+      (metrics.remoteMediaKind !== "none") &&
+    metrics.tokenReturned === (metrics.tokenResultStatus === "success") &&
+    metrics.tokenRequested === metrics.tokenRequestStarted &&
+    (!metrics.websocketConnected || metrics.tokenReturned) &&
+    (!metrics.peerConnectionEstablished || metrics.websocketConnected) &&
+    (!metrics.roomConnected || metrics.peerConnectionEstablished) &&
+    (!metrics.localTrackPublished || metrics.roomConnected) &&
+    (!metrics.remoteParticipantJoined || metrics.roomConnected) &&
+    (!metrics.remoteTrackSubscribed || metrics.remoteParticipantJoined) &&
+    (!metrics.firstAudioVideoObserved || metrics.remoteTrackSubscribed) &&
+    (
+      !metrics.backgroundForegroundRecovery ||
+      (
+        installedBound &&
+        metrics.backgrounded &&
+        metrics.foregrounded
+      )
+    )
+  );
+};
+
+export const deriveIndependentLiveKitFailureCategory = (metrics) => {
+  if (!liveKitMetricContractIsValid(metrics)) return null;
+  if (metrics.permissionState === "denied") return "permission_failure";
+  if (!metrics.buildRuntimeMatched) return "build_runtime_mismatch";
+  if (metrics.networkState === "interrupted") return "network_interruption";
+  if (!metrics.tokenReturned) return "token_backend_failure";
+  if (!metrics.websocketConnected) return "websocket_failure";
+  if (["failed", "disconnected", "closed"].includes(metrics.iceState)) {
+    return "ice_turn_failure";
+  }
+  if (!metrics.roomConnected) {
+    return metrics.iceCheckingObserved
+      ? "ice_turn_failure"
+      : "room_connection_failure";
+  }
+  if (!metrics.localTrackPublished) return "local_publish_failure";
+  if (!metrics.remoteParticipantJoined) return "remote_participant_missing";
+  if (!metrics.remoteTrackSubscribed) return "remote_subscription_failure";
+  if (!metrics.firstAudioVideoObserved) return "first_media_missing";
+  if (metrics.installedUiObserved && !metrics.connectingResolved) {
+    return "installed_ui_connecting_stuck";
+  }
+  if (
+    metrics.installedUiObserved &&
+    (
+      !metrics.backgrounded ||
+      !metrics.foregrounded ||
+      !metrics.backgroundForegroundRecovery
+    )
+  ) {
+    return "background_foreground_recovery_failed";
+  }
+  if (!metrics.cleanupDisconnected) return "cleanup_failure";
+  if (["blocked", "degraded"].includes(metrics.providerState)) {
+    return "provider_degradation";
+  }
+  if (
+    metrics.tokenIssuedElapsedMs > 3_000 ||
+    metrics.roomConnectElapsedMs > 12_000 ||
+    metrics.uiStateResolutionElapsedMs > 15_000 ||
+    metrics.firstRemoteMediaElapsedMs > 20_000
+  ) {
+    return "deadline_exceeded";
+  }
+  return "none";
 };
 
 const installedJourneyProfile = (metrics) => {
@@ -1098,8 +1392,15 @@ export const deterministicDetectionReasons = (
       );
     }
   } else if (observationKind === "livekit_experience") {
-    expectedProfile = liveKitProfile(text(metrics.stageFailureCategory));
-    if (!expectedProfile) reasons.add("livekit_classification_rejected");
+    const failureCategory = deriveIndependentLiveKitFailureCategory(metrics);
+    if (!failureCategory) {
+      reasons.add("livekit_metric_manifest_rejected");
+    } else if (text(metrics.stageFailureCategory) !== failureCategory) {
+      reasons.add("livekit_failure_category_mismatch");
+    } else {
+      expectedProfile = liveKitProfile(failureCategory);
+      if (!expectedProfile) reasons.add("livekit_classification_rejected");
+    }
   } else if (observationKind === "visual_layout") {
     const result = deterministicVisualClassification(run, context);
     expectedProfile = result.profile;

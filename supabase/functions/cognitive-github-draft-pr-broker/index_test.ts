@@ -283,3 +283,87 @@ Deno.test("GitHub broker reports missing credential without external mutation", 
     }
   }
 });
+
+Deno.test("GitHub broker fails closed until provider no-merge proof exists", async () => {
+  const names = [
+    "COGNITIVE_GITHUB_DRAFT_PR_BROKER_INVOKE_SHA256",
+    "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN",
+    "GITHUB_APP_ID",
+    "GITHUB_APP_INSTALLATION_ID",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_REPOSITORY_ID",
+  ];
+  const previous = new Map(names.map((name) => [name, Deno.env.get(name)]));
+  const invocation = "bounded-github-broker-provider-proof-test";
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(invocation),
+  );
+  const hash = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  const requestHeaders = {
+    authorization: `Bearer ${"a".repeat(40)}`,
+    "x-cognitive-github-broker-invocation": invocation,
+  };
+  try {
+    Deno.env.set("COGNITIVE_GITHUB_DRAFT_PR_BROKER_INVOKE_SHA256", hash);
+    Deno.env.set(
+      "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN",
+      "bounded-service-identity",
+    );
+    Deno.env.set("GITHUB_APP_ID", "123");
+    Deno.env.set("GITHUB_APP_INSTALLATION_ID", "456");
+    Deno.env.set("GITHUB_APP_PRIVATE_KEY", "not-read-by-blocked-operation");
+    Deno.env.set("GITHUB_REPOSITORY_ID", "1159469393");
+
+    const statusResponse = await handler(
+      new Request("https://example.invalid", {
+        body: JSON.stringify({ action: "status" }),
+        headers: requestHeaders,
+        method: "POST",
+      }),
+    );
+    const statusBody = await statusResponse.json();
+    assertEquals(statusResponse.status, 200, "status response");
+    assertEquals(
+      statusBody.blocker,
+      "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED",
+      "provider proof blocker",
+    );
+    assertEquals(
+      statusBody.providerTokenCapability,
+      "CONTENTS_WRITE_MERGE_CAPABLE",
+      "provider token capability",
+    );
+    assertEquals(
+      statusBody.providerMergeEnforcement,
+      "UNPROVED",
+      "provider merge enforcement",
+    );
+    assertEquals(statusBody.runtimeAuthority, "blocked", "runtime authority");
+
+    const attestationResponse = await handler(
+      new Request("https://example.invalid", {
+        body: JSON.stringify({
+          action: "attest_provider_readback",
+          projectId: "00000000-0000-4000-8000-000000000002",
+          taskId: "00000000-0000-4000-8000-000000000001",
+        }),
+        headers: requestHeaders,
+        method: "POST",
+      }),
+    );
+    assertEquals(attestationResponse.status, 503, "attestation response");
+    assertEquals(
+      (await attestationResponse.json()).error,
+      "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED",
+      "attestation blocker",
+    );
+  } finally {
+    for (const [name, value] of previous) {
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    }
+  }
+});

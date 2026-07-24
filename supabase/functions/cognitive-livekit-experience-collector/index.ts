@@ -115,7 +115,6 @@ const SERVICE_IDENTITY = "cognitive_sentinel_collector";
 const SENTINEL_KEY = "livekit_experience_sentinel";
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const TASK_KEY = "cognitive-level01-canary-control";
-const PLATFORM = "shared";
 const ENVIRONMENT = "production";
 const MAX_TIMING_MS = 600_000;
 const MAX_SESSION_OBSERVATION_AGE_MS = 5 * 60 * 1_000;
@@ -128,6 +127,7 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const BEARER_JWT_PATTERN =
   /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
+const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"]);
 const ICE_STATES = new Set([
   "new",
   "checking",
@@ -216,6 +216,7 @@ const PAYLOAD_KEYS = Object.freeze(
     "metricManifest",
     "observationFinishedAt",
     "observationStartedAt",
+    "platform",
     "routeOrSurface",
     "runtimeIdentityHash",
     "sourceBuildHash",
@@ -587,13 +588,14 @@ const createServiceClient = (): SupabaseClientLike => {
 
 const readCanaryScope = async (
   serviceClient: SupabaseClientLike,
+  platform: "android" | "ios",
 ): Promise<{ projectId: string; taskId: string } | null> => {
   const task = await serviceClient
     .from("intelligence_tasks")
     .select("id,project_id")
     .eq("repository_full_name", REPOSITORY)
     .eq("task_key", TASK_KEY)
-    .eq("platform", PLATFORM)
+    .eq("platform", platform)
     .eq("environment", ENVIRONMENT)
     .limit(1)
     .maybeSingle();
@@ -610,6 +612,7 @@ const preparePacket = async (
     metricManifest: LiveKitMetricEnvelope;
     observationFinishedAt: string;
     observationStartedAt: string;
+    platform: "android" | "ios";
     routeOrSurface: string;
     runtimeIdentityHash: string;
     sourceBuildHash: string;
@@ -630,6 +633,7 @@ const preparePacket = async (
   const suppliedEvidenceHash = toText(payload.evidenceManifestHash);
   const observationStartedAt = toText(payload.observationStartedAt);
   const observationFinishedAt = toText(payload.observationFinishedAt);
+  const platform = toText(payload.platform);
   const startedAtMillis = Date.parse(observationStartedAt);
   const finishedAtMillis = Date.parse(observationFinishedAt);
   const nowMillis = Date.now();
@@ -661,6 +665,7 @@ const preparePacket = async (
     ? headlessFinishedAtMillis
     : Math.max(headlessFinishedAtMillis, installedFinishedAtMillis);
   if (
+    !INSTALLED_OBSERVER_PLATFORMS.has(platform) ||
     !ROUTES.has(routeOrSurface) ||
     !SHA256_PATTERN.test(runtimeIdentityHash) ||
     !SHA256_PATTERN.test(sourceBuildHash) ||
@@ -700,6 +705,7 @@ const preparePacket = async (
     metricManifest,
     observationFinishedAt: new Date(finishedAtMillis).toISOString(),
     observationStartedAt: new Date(startedAtMillis).toISOString(),
+    platform: platform as "android" | "ios",
     routeOrSurface,
     runtimeIdentityHash,
     sourceBuildHash,
@@ -739,7 +745,7 @@ export const handler = async (request: Request): Promise<Response> => {
     }
 
     const serviceClient = createServiceClient();
-    const scope = await readCanaryScope(serviceClient);
+    const scope = await readCanaryScope(serviceClient, packet.platform);
     if (!scope) {
       return json(409, { error: "level01_canary_not_bootstrapped" });
     }
@@ -751,6 +757,7 @@ export const handler = async (request: Request): Promise<Response> => {
           TASK_KEY,
           SERVICE_IDENTITY,
           SENTINEL_KEY,
+          packet.platform,
           packet.routeOrSurface,
           packet.runtimeIdentityHash,
           packet.sourceBuildHash,
@@ -767,7 +774,7 @@ export const handler = async (request: Request): Promise<Response> => {
         p_observation_finished_at: packet.observationFinishedAt,
         p_observation_started_at: packet.observationStartedAt,
         p_physical_proof_status: packet.classification.physicalProofStatus,
-        p_platform: PLATFORM,
+        p_platform: packet.platform,
         p_project_id: scope.projectId,
         p_result_status: packet.classification.resultStatus,
         p_route_or_surface: packet.routeOrSurface,

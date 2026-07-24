@@ -10,6 +10,12 @@ const read = (relativePath) =>
 const migration = read(
   "supabase/migrations/20260723203512_cognitive_two_party_activation_handoff.sql",
 );
+const platformScopeMigration = read(
+  "supabase/migrations/20260724174836_cognitive_product_sentinel_platform_scopes.sql",
+);
+const platformScopeDbTest = read(
+  "supabase/tests/cognitive_product_sentinel_platform_scopes_test.sql",
+);
 const dbTest = read("supabase/tests/cognitive_two_party_activation_handoff_test.sql");
 const constitution = JSON.parse(
   read("config/intelligence/product-experience-constitution.json"),
@@ -52,6 +58,68 @@ const canonicalSelectionHash = (option) =>
     })))
     .digest("hex");
 const contains = (needle, message) => assert(migration.includes(needle), message);
+
+for (const requiredContract of [
+  "create table public.cognitive_product_sentinel_platform_scopes",
+  "create function public.governance_materialize_product_sentinel_platform_scopes",
+  "public.governance_assert_exact_owner()",
+  "pg_advisory_xact_lock",
+  "task.parent_task_id is null",
+  "platform in ('android', 'ios')",
+  "'cognitive_installed_journey_sentinel_enabled'",
+  "'cognitive_livekit_experience_sentinel_enabled'",
+  "'cognitive_visual_experience_sentinel_enabled'",
+  "join public.cognitive_product_sentinel_platform_scopes sentinel_scope",
+]) {
+  assert(
+    platformScopeMigration.includes(requiredContract),
+    `platform-scope migration lacks ${requiredContract}`,
+  );
+}
+for (const forbiddenContract of [
+  "'cognitive_level2_production_repairs_enabled',",
+  "'cognitive_user_derived_memory_enabled',",
+  "insert into public.cognitive_level01_schedule_definitions",
+  "insert into public.cognitive_product_quality_service_capabilities",
+]) {
+  assert(
+    !platformScopeMigration.includes(forbiddenContract),
+    `platform-scope migration adds forbidden authority: ${forbiddenContract}`,
+  );
+}
+assert(
+  platformScopeMigration.includes(
+    "foreign key (\n    shared_task_id, project_id, shared_platform, environment",
+  ) &&
+    platformScopeMigration.includes(
+      "foreign key (\n    platform_task_id, project_id, platform, environment",
+    ),
+  "platform scopes do not bind both shared and installed-platform task identities",
+);
+assert(
+  platformScopeMigration.includes(
+    "parent_task_id\n    ) values",
+  ) &&
+    platformScopeMigration.includes(
+      "'cognitive-exact-owner-sentinel-scope'",
+    ),
+  "platform task creation does not preserve the same-platform parent constraint",
+);
+assert(
+  platformScopeDbTest.includes(
+    "existing same-platform intelligence-task parent FK remains intact",
+  ) &&
+    platformScopeDbTest.includes(
+      "each platform task receives exactly three disabled sentinel switches",
+    ) &&
+    platformScopeDbTest.includes(
+      "materialization does not auto-issue a live service capability",
+    ) &&
+    platformScopeDbTest.includes(
+      "scheduler prerequisite and readback paths consume immutable platform mapping",
+    ),
+  "platform-scope pgTAP coverage is incomplete",
+);
 
 for (const switchKey of [
   "cognitive_livekit_experience_sentinel_enabled",

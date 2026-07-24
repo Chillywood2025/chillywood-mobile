@@ -21,6 +21,8 @@ const INVOCATION_HEADER = "x-cognitive-github-broker-invocation";
 const API_ROOT = "https://api.github.com";
 const API_VERSION = "2026-03-10";
 const USER_AGENT = "chillywood-cognitive-github-draft-pr-broker";
+const PROVIDER_MERGE_DENIAL_BLOCKER =
+  "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED";
 
 const ALLOWED_PERMISSION_MANIFEST = Object.freeze({
   contents: "write",
@@ -189,6 +191,8 @@ const brokerServiceCredentialState = (): "PRESENT" | "MISSING" =>
   readSecret("COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN")
     ? "PRESENT"
     : "MISSING";
+
+const hasProviderMergeDenialProof = (): boolean => false;
 
 const base64Url = (bytes: Uint8Array): string => {
   let binary = "";
@@ -1002,16 +1006,19 @@ export const handler = async (request: Request): Promise<Response> => {
       return json(400, { error: "github_broker_payload_rejected" });
     }
     const credentialState = configuredCredentialState();
+    const identityState = brokerServiceCredentialState();
     return json(200, {
       blocker: credentialState === "PRESENT"
-        ? brokerServiceCredentialState() === "PRESENT"
-          ? null
+        ? identityState === "PRESENT"
+          ? PROVIDER_MERGE_DENIAL_BLOCKER
           : "GITHUB_DRAFT_PR_BROKER_IDENTITY_REQUIRED"
         : "GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED",
-      brokerServiceIdentity: brokerServiceCredentialState(),
+      brokerServiceIdentity: identityState,
       credential: credentialState,
+      providerMergeEnforcement: "UNPROVED",
+      providerTokenCapability: "CONTENTS_WRITE_MERGE_CAPABLE",
       repositoryScopeHash: await sha256Hex(REPOSITORY),
-      runtimeAuthority: "draft_pr_only",
+      runtimeAuthority: "blocked",
     });
   }
   try {
@@ -1021,6 +1028,9 @@ export const handler = async (request: Request): Promise<Response> => {
         !validScope(payload)
       ) {
         return json(400, { error: "github_scope_rejected" });
+      }
+      if (!hasProviderMergeDenialProof()) {
+        throw new Error(PROVIDER_MERGE_DENIAL_BLOCKER);
       }
       const credential = await readInstallationCredential();
       return json(
@@ -1035,6 +1045,9 @@ export const handler = async (request: Request): Promise<Response> => {
     if (action === "execute_canary") {
       const plan = validateDraftPlan(payload);
       if (!plan) return json(400, { error: "github_draft_plan_rejected" });
+      if (!hasProviderMergeDenialProof()) {
+        throw new Error(PROVIDER_MERGE_DENIAL_BLOCKER);
+      }
       return json(200, await executeDraftPlan(plan));
     }
     return json(400, { error: "unsupported_action" });
@@ -1042,6 +1055,9 @@ export const handler = async (request: Request): Promise<Response> => {
     const category = error instanceof Error ? error.message : "";
     if (category === "GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED") {
       return json(503, { error: "GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED" });
+    }
+    if (category === PROVIDER_MERGE_DENIAL_BLOCKER) {
+      return json(503, { error: PROVIDER_MERGE_DENIAL_BLOCKER });
     }
     if (
       category === "github_capability_authorization_rejected" ||

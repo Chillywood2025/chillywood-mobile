@@ -106,6 +106,7 @@ const liveKitPayload = async ({ installed = true } = {}) => {
       ? metrics.installedObservationFinishedAt
       : metrics.headlessObservationFinishedAt,
     observationStartedAt: metrics.headlessObservationStartedAt,
+    platform: "android",
     routeOrSurface: "live-stage",
     runtimeIdentityHash: HASH_B,
     sourceBuildHash: HASH_C,
@@ -130,7 +131,11 @@ test("LiveKit record validates the packet then uses only its isolated RPC", asyn
   payload.action = "record_run";
   const calls = [];
   const result = await LIVEKIT_COLLECTOR_ADAPTERS.record_run.execute({
-    context: { projectId: PROJECT_ID, taskId: TASK_ID },
+    context: {
+      platform: "android",
+      projectId: PROJECT_ID,
+      taskId: TASK_ID,
+    },
     database: {
       call: async (statement, parameters) => {
         calls.push({ parameters, statement });
@@ -147,7 +152,7 @@ test("LiveKit record validates the packet then uses only its isolated RPC", asyn
     ["collectLiveKitSentinelRun"],
   );
   assert.equal(calls[0].parameters.length, 16);
-  assert.equal(calls[0].parameters[2], "shared");
+  assert.equal(calls[0].parameters[2], "android");
   assert.equal(calls[0].parameters[3], "production");
   assert.equal(calls[0].parameters[9], "passed");
 });
@@ -250,6 +255,7 @@ const createFakeGitHub = ({ pullFails = false } = {}) => {
   };
   return { events, fetcher };
 };
+const verifyProviderMergeDenial = async () => true;
 
 const draftPayload = async () => {
   const payload = {
@@ -306,6 +312,7 @@ test("GitHub App adapter is exact-repository, draft-only, and postflight-bound",
   const adapters = createGitHubBrokerAdapters({
     fetcher: fake.fetcher,
     now: () => GITHUB_NOW,
+    verifyProviderMergeDenial,
   });
   const result = await adapters.execute_canary.execute({
     database,
@@ -339,6 +346,7 @@ test("GitHub provider attestation stores hashes and bounded readback only", asyn
   const adapters = createGitHubBrokerAdapters({
     fetcher: fake.fetcher,
     now: () => GITHUB_NOW,
+    verifyProviderMergeDenial,
   });
   const result = await adapters.attest_provider_readback.execute({
     context: { projectId: PROJECT_ID, taskId: TASK_ID },
@@ -359,6 +367,7 @@ test("GitHub draft failure after branch creation records a failed postflight", a
   const adapters = createGitHubBrokerAdapters({
     fetcher: fake.fetcher,
     now: () => GITHUB_NOW,
+    verifyProviderMergeDenial,
   });
   await assert.rejects(
     adapters.execute_canary.execute({
@@ -381,6 +390,7 @@ test("GitHub rechecks liveness before every repository mutation", async () => {
   const adapters = createGitHubBrokerAdapters({
     fetcher: fake.fetcher,
     now: () => GITHUB_NOW,
+    verifyProviderMergeDenial,
   });
   let checkpoints = 0;
   await assert.rejects(
@@ -413,6 +423,7 @@ test("GitHub rejects an oversized streamed response before buffering it", async 
         status: 200,
       }),
     now: () => GITHUB_NOW,
+    verifyProviderMergeDenial,
   });
   await assert.rejects(
     adapters.attest_provider_readback.execute({
@@ -422,6 +433,33 @@ test("GitHub rejects an oversized streamed response before buffering it", async 
     }),
     /github_response_rejected/u,
   );
+});
+
+test("GitHub broker stays blocked without provider-enforced merge denial", async () => {
+  let providerCalls = 0;
+  const adapters = createGitHubBrokerAdapters({
+    fetcher: async () => {
+      providerCalls += 1;
+      throw new Error("provider_call_not_expected");
+    },
+    now: () => GITHUB_NOW,
+  });
+  const status = await adapters.status.execute({ env: githubEnv() });
+  assert.equal(
+    status.blocker,
+    "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED",
+  );
+  assert.equal(status.providerMergeDenial, "MISSING");
+  assert.equal(status.runtimeAuthority, "blocked");
+  await assert.rejects(
+    adapters.attest_provider_readback.execute({
+      context: { projectId: PROJECT_ID, taskId: TASK_ID },
+      database: createGithubDatabase([]),
+      env: githubEnv(),
+    }),
+    /GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED/u,
+  );
+  assert.equal(providerCalls, 0);
 });
 
 test("GitHub plans reject forbidden paths and credential-shaped content", async () => {

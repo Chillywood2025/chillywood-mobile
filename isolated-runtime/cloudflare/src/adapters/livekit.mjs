@@ -14,6 +14,7 @@ const MAX_OBSERVATION_AGE_MS = 5 * 60_000;
 const MAX_OBSERVATION_WINDOW_MS = 120_000;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
+const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"]);
 const ICE_STATES = new Set([
   "new",
   "checking",
@@ -106,6 +107,7 @@ const PAYLOAD_KEYS = Object.freeze([
   "metricManifest",
   "observationFinishedAt",
   "observationStartedAt",
+  "platform",
   "routeOrSurface",
   "runtimeIdentityHash",
   "sourceBuildHash",
@@ -366,6 +368,7 @@ export const prepareLiveKitPacket = async (
   if (
     !exactKeys(payload, PAYLOAD_KEYS) ||
     !["prepare_run", "record_run"].includes(payload.action) ||
+    !INSTALLED_OBSERVER_PLATFORMS.has(payload.platform) ||
     !ROUTES.has(payload.routeOrSurface)
   ) {
     return null;
@@ -452,6 +455,7 @@ export const prepareLiveKitPacket = async (
     }),
     observationFinishedAt: new Date(outerFinished).toISOString(),
     observationStartedAt: new Date(outerStarted).toISOString(),
+    platform: payload.platform,
     routeOrSurface: payload.routeOrSurface,
     runtimeIdentityHash: payload.runtimeIdentityHash,
     sourceBuildHash: payload.sourceBuildHash,
@@ -459,9 +463,11 @@ export const prepareLiveKitPacket = async (
   });
 };
 
-const executePrepare = async ({ payload }) => {
+const executePrepare = async ({ context, payload }) => {
   const packet = await prepareLiveKitPacket(payload);
-  if (!packet) throw new Error("livekit_sentinel_payload_rejected");
+  if (!packet || packet.platform !== context.platform) {
+    throw new Error("livekit_sentinel_payload_rejected");
+  }
   return Object.freeze({
     classification: packet.classification,
     evidenceManifestHash: packet.evidenceManifestHash,
@@ -474,12 +480,15 @@ const executePrepare = async ({ payload }) => {
 
 const executeRecord = async ({ context, database, env, payload }) => {
   const packet = await prepareLiveKitPacket(payload);
-  if (!packet) throw new Error("livekit_sentinel_payload_rejected");
+  if (!packet || packet.platform !== context.platform) {
+    throw new Error("livekit_sentinel_payload_rejected");
+  }
   const collectionIdempotencyHash = await sha256Hex([
     REPOSITORY,
     TASK_KEY,
     SERVICE_IDENTITY,
     SENTINEL_KEY,
+    packet.platform,
     packet.routeOrSurface,
     packet.runtimeIdentityHash,
     packet.sourceBuildHash,
@@ -490,7 +499,7 @@ const executeRecord = async ({ context, database, env, payload }) => {
   const result = await database.call("collectLiveKitSentinelRun", [
     context.taskId,
     context.projectId,
-    "shared",
+    packet.platform,
     "production",
     packet.routeOrSurface,
     packet.runtimeIdentityHash,
