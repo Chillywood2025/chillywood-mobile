@@ -1,4 +1,8 @@
-import { handler, researchEvaluationGateOpen } from "./index.ts";
+import {
+  handler,
+  researchEvaluationGateOpen,
+  SUBJECT_EVALUATION_RPC,
+} from "./index.ts";
 import {
   evaluateStoredResearchClaim,
   type ResearchSnapshot,
@@ -241,6 +245,13 @@ Deno.test("research evaluator obeys switch revocation independently", async () =
       request,
     ),
     "research switch revocation must stop evaluation",
+  );
+});
+
+Deno.test("research evaluator delegates the verdict to the database evidence derivation", () => {
+  assert(
+    SUBJECT_EVALUATION_RPC === "cognitive_derive_subject_evaluation",
+    "the evaluator must not persist a caller-selected verdict",
   );
 });
 

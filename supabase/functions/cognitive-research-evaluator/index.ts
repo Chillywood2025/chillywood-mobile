@@ -18,6 +18,8 @@ type JsonObject = { [key: string]: Json };
 type SupabaseClientLike = ReturnType<typeof createClient<any>>;
 
 const INVOCATION_HEADER = "x-cognitive-research-evaluator-invocation";
+export const SUBJECT_EVALUATION_RPC =
+  "cognitive_derive_subject_evaluation" as const;
 const LOWER_HEX_64 = /^[a-f0-9]{64}$/u;
 const UUID_PATTERN =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -315,10 +317,9 @@ export const evaluateAndRecordResearchClaim = async (
   }
   const evaluation = await evaluateStoredResearchClaim(snapshot);
   const result = await serviceClient.rpc(
-    "cognitive_record_subject_evaluation",
+    SUBJECT_EVALUATION_RPC,
     {
       p_environment: request.environment,
-      p_evaluation_status: evaluation.status,
       p_platform: request.platform,
       p_project_id: request.projectId,
       p_service_identity_token: evaluatorServiceToken(),
