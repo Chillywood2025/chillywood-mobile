@@ -97,17 +97,70 @@ function validSha256(value) {
   return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
 }
 
+function classifyInteractiveTarget(evidence, platformTarget) {
+  if (
+    !evidence.accessibilityNamePresent ||
+    !evidence.accessibilityRolePresent ||
+    evidence.interactiveTargetWidth < platformTarget.applicableMinimum ||
+    evidence.interactiveTargetHeight < platformTarget.applicableMinimum
+  ) {
+    return "accessibility_violation";
+  }
+  if (
+    evidence.interactiveTargetWidth < platformTarget.preferred ||
+    evidence.interactiveTargetHeight < platformTarget.preferred
+  ) {
+    return "product_preference_deviation";
+  }
+  return "within_platform_and_product_targets";
+}
+
 function classifyLiveKit(evidence) {
   const required = runnerConfig.canaries.livekit_experience.requiredInstalledEvidence;
   const timings = runnerConfig.canaries.livekit_experience.requiredTimingMetrics;
   requireKeys(evidence, [...required, ...timings]);
-  const missingBoolean = required.filter((key) => typeof evidence[key] !== "boolean");
+  const booleanMetrics = [
+    "roomRequested",
+    "tokenRequested",
+    "tokenReturned",
+    "websocketConnected",
+    "roomConnected",
+    "localTrackPublished",
+    "remoteParticipantObserved",
+    "remoteMediaObserved",
+    "uiExitedConnecting",
+    "backgroundForegroundRecovery",
+    "cleanupDisconnected",
+  ];
+  const missingBoolean = booleanMetrics.filter(
+    (key) => typeof evidence[key] !== "boolean",
+  );
   if (missingBoolean.length > 0) throw new Error(`livekit_boolean_metric_required:${missingBoolean.join(",")}`);
   const invalidTiming = timings.filter((key) => !finiteNumber(evidence[key]) || evidence[key] < 0 || evidence[key] > 600_000);
   if (invalidTiming.length > 0) throw new Error(`livekit_timing_out_of_bounds:${invalidTiming.join(",")}`);
+  for (const key of [
+    "roomRunCorrelationHash",
+    "installedParticipantIdentityHash",
+    "sourceBuildHash",
+    "runtimeIdentityHash",
+  ]) {
+    if (!validSha256(evidence[key])) {
+      throw new Error(`livekit_hash_required:${key}`);
+    }
+  }
+  const observationStartedAt = Date.parse(evidence.observationStartedAt);
+  const observationFinishedAt = Date.parse(evidence.observationFinishedAt);
+  if (
+    !Number.isFinite(observationStartedAt) ||
+    !Number.isFinite(observationFinishedAt) ||
+    observationFinishedAt < observationStartedAt ||
+    observationFinishedAt - observationStartedAt > 600_000
+  ) {
+    throw new Error("livekit_observation_window_invalid");
+  }
 
   const deadlines = constitution.loadingStateDeadlines;
-  const pass = required.every((key) => bool(evidence[key]))
+  const pass = booleanMetrics.every((key) => bool(evidence[key]))
     && evidence.tokenIssuedElapsedMs <= deadlines.livekitTokenMs
     && evidence.roomConnectElapsedMs <= deadlines.livekitRoomConnectMs
     && evidence.uiStateResolutionElapsedMs <= deadlines.livekitUiStateResolutionMs
@@ -320,6 +373,8 @@ function classifyVisual(evidence) {
     sentinelKey: runnerConfig.canaries.visual_experience_metrics.sentinelKey,
     physicalProofStatus: "installed_proof_available",
     evidenceManifestHash: hashPayload(evidence),
+    classificationAuthority: "preliminary_local_only",
+    remoteGovernedFindingMutationAllowed: false,
   };
   if (evidence.evidenceQuality !== "measured_installed") {
     return {
@@ -337,6 +392,24 @@ function classifyVisual(evidence) {
       classification: "automation_failure",
     };
   }
+  const interactiveTargetClassification = classifyInteractiveTarget(
+    evidence,
+    platformTarget,
+  );
+  if (interactiveTargetClassification === "accessibility_violation") {
+    return {
+      ...baseResult,
+      resultStatus: "finding_created",
+      suspectedLayer: "accessibility",
+      classification: "accessibility_violation",
+      deviationCount: [
+        evidence.interactiveTargetWidth < platformTarget.applicableMinimum ||
+          evidence.interactiveTargetHeight < platformTarget.applicableMinimum,
+        !evidence.accessibilityNamePresent,
+        !evidence.accessibilityRolePresent,
+      ].filter(Boolean).length,
+    };
+  }
   if (evidence.providerState === "blocked") {
     return {
       ...baseResult,
@@ -351,25 +424,6 @@ function classifyVisual(evidence) {
       resultStatus: "blocked",
       suspectedLayer: "empty_error_offline",
       classification: "content_data_absence",
-    };
-  }
-  const objectiveAccessibilityViolation =
-    evidence.interactiveTargetWidth < platformTarget.preferred ||
-    evidence.interactiveTargetHeight < platformTarget.preferred ||
-    !evidence.accessibilityNamePresent ||
-    !evidence.accessibilityRolePresent;
-  if (objectiveAccessibilityViolation) {
-    return {
-      ...baseResult,
-      resultStatus: "finding_created",
-      suspectedLayer: "accessibility",
-      classification: "accessibility_violation",
-      deviationCount: [
-        evidence.interactiveTargetWidth < platformTarget.preferred ||
-          evidence.interactiveTargetHeight < platformTarget.preferred,
-        !evidence.accessibilityNamePresent,
-        !evidence.accessibilityRolePresent,
-      ].filter(Boolean).length,
     };
   }
   const baselineApproved =
@@ -426,16 +480,10 @@ function classifyVisual(evidence) {
   }
 
   const deviations = [];
-  if (
-    evidence.interactiveTargetWidth < platformTarget.applicableMinimum ||
-    evidence.interactiveTargetHeight < platformTarget.applicableMinimum
-  ) {
+  if (interactiveTargetClassification === "accessibility_violation") {
     deviations.push("interactive_target_below_platform_floor");
   }
-  if (
-    evidence.interactiveTargetWidth < platformTarget.preferred ||
-    evidence.interactiveTargetHeight < platformTarget.preferred
-  ) {
+  if (interactiveTargetClassification === "product_preference_deviation") {
     deviations.push("interactive_target_below_product_preference");
   }
   if (!evidence.accessibilityNamePresent) {
@@ -634,6 +682,12 @@ function fixtureHash(seed) {
 
 function selfTest() {
   const livekitPass = classifyLiveKit({
+    roomRunCorrelationHash: fixtureHash("livekit-room-run"),
+    installedParticipantIdentityHash: fixtureHash("livekit-installed-participant"),
+    sourceBuildHash: fixtureHash("livekit-source-build"),
+    runtimeIdentityHash: fixtureHash("livekit-runtime"),
+    observationStartedAt: "2026-07-24T10:00:00.000Z",
+    observationFinishedAt: "2026-07-24T10:00:02.000Z",
     roomRequested: true,
     tokenRequested: true,
     tokenReturned: true,
@@ -732,6 +786,121 @@ function selfTest() {
   assert.equal(visualAccessibilityFinding.resultStatus, "finding_created");
   assert.equal(
     visualAccessibilityFinding.classification,
+    "accessibility_violation",
+  );
+  assert.equal(
+    classifyInteractiveTarget(
+      {
+        ...visualEvidence,
+        interactiveTargetHeight: 47.99,
+      },
+      { applicableMinimum: 48, preferred: 48 },
+    ),
+    "accessibility_violation",
+  );
+  assert.equal(
+    classifyInteractiveTarget(
+      {
+        ...visualEvidence,
+        interactiveTargetHeight: 43.99,
+      },
+      { applicableMinimum: 44, preferred: 44 },
+    ),
+    "accessibility_violation",
+  );
+  assert.equal(
+    classifyInteractiveTarget(
+      {
+        ...visualEvidence,
+        interactiveTargetHeight: 23.99,
+      },
+      { applicableMinimum: 24, preferred: 44 },
+    ),
+    "accessibility_violation",
+  );
+  assert.equal(
+    classifyInteractiveTarget(
+      {
+        ...visualEvidence,
+        interactiveTargetWidth: 30,
+        interactiveTargetHeight: 30,
+      },
+      { applicableMinimum: 24, preferred: 44 },
+    ),
+    "product_preference_deviation",
+  );
+  assert.equal(
+    classifyInteractiveTarget(
+      {
+        ...visualEvidence,
+        accessibilityNamePresent: false,
+      },
+      { applicableMinimum: 24, preferred: 44 },
+    ),
+    "accessibility_violation",
+  );
+  const webPreferencePendingApproval = classifyVisual({
+    ...visualEvidence,
+    platform: "web",
+    measurementUnit: "css_px",
+    screenDensityDpi: null,
+    interactiveTargetWidth: 30,
+    interactiveTargetHeight: 30,
+    interactivePreferredThreshold: 44,
+    interactiveApplicableMinimumThreshold: 24,
+    observedClassification: "baseline_ambiguity",
+  });
+  assert.equal(webPreferencePendingApproval.resultStatus, "blocked");
+  assert.equal(webPreferencePendingApproval.classification, "baseline_ambiguity");
+  assert.equal(
+    webPreferencePendingApproval.classificationAuthority,
+    "preliminary_local_only",
+  );
+  assert.equal(
+    webPreferencePendingApproval.remoteGovernedFindingMutationAllowed,
+    false,
+  );
+  const webWcagFinding = classifyVisual({
+    ...visualEvidence,
+    platform: "web",
+    measurementUnit: "css_px",
+    screenDensityDpi: null,
+    interactiveTargetWidth: 23.99,
+    interactiveTargetHeight: 23.99,
+    interactivePreferredThreshold: 44,
+    interactiveApplicableMinimumThreshold: 24,
+    observedClassification: "accessibility_violation",
+  });
+  assert.equal(webWcagFinding.resultStatus, "finding_created");
+  assert.equal(webWcagFinding.classification, "accessibility_violation");
+  const iosTargetFinding = classifyVisual({
+    ...visualEvidence,
+    platform: "ios",
+    measurementUnit: "pt",
+    screenDensityDpi: null,
+    interactiveTargetWidth: 44,
+    interactiveTargetHeight: 43.99,
+    interactivePreferredThreshold: 44,
+    interactiveApplicableMinimumThreshold: 44,
+    observedClassification: "accessibility_violation",
+  });
+  assert.equal(iosTargetFinding.resultStatus, "finding_created");
+  assert.equal(iosTargetFinding.classification, "accessibility_violation");
+  const missingAccessibleNameFinding = classifyVisual({
+    ...visualEvidence,
+    platform: "web",
+    measurementUnit: "css_px",
+    screenDensityDpi: null,
+    interactiveTargetWidth: 44,
+    interactiveTargetHeight: 44,
+    interactivePreferredThreshold: 44,
+    interactiveApplicableMinimumThreshold: 24,
+    accessibilityNamePresent: false,
+    observedClassification: "accessibility_violation",
+  });
+  assert.equal(missingAccessibleNameFinding.resultStatus, "finding_created");
+  assert.equal(
+    missingAccessibleNameFinding.classification,
     "accessibility_violation",
   );
 

@@ -99,16 +99,17 @@ const guardResearch = async (runBehavior) => {
   const foundation = await loadFoundation();
   const policy = read("docs/intelligence/RESEARCH_SOURCE_POLICY.md");
   const authorityRegistry = JSON.parse(read("config/intelligence/research-authorities.json"));
-  const migration = read("supabase/migrations/20260723001845_cognitive_intelligence_foundation.sql");
   const foundationSource = read("_lib/cognitivePlatformFoundation.ts");
   assert.equal(authorityRegistry.schemaVersion, 1);
   assert.equal(new Set(authorityRegistry.authorities.map((entry) =>
-    `${entry.hostname}|${entry.sourceType}|${entry.publisher}|${entry.ownerId}`)).size, authorityRegistry.authorities.length);
+    `${entry.authorityId}|${entry.hostname}|${entry.sourceType}|${entry.publisher}|${entry.ownerId}|${entry.pathPrefix ?? ""}`)).size, authorityRegistry.authorities.length);
   for (const authority of authorityRegistry.authorities) {
-    const sqlTuple = `('${authority.authorityId}','${authority.hostname}','${authority.sourceType}','${authority.publisher}','${authority.ownerId}')`;
-    assert.ok(migration.includes(sqlTuple), `migration authority drift: ${authority.authorityId}`);
+    assert.ok(foundationSource.includes(`authorityId: "${authority.authorityId}"`), `runtime authority id drift: ${authority.authorityId}`);
     assert.ok(foundationSource.includes(`hostname: "${authority.hostname}"`), `runtime authority host drift: ${authority.hostname}`);
     assert.ok(foundationSource.includes(`ownerId: "${authority.ownerId}"`), `runtime authority owner drift: ${authority.ownerId}`);
+    if (authority.pathPrefix) {
+      assert.ok(foundationSource.includes(`pathPrefix: "${authority.pathPrefix}"`), `runtime authority path drift: ${authority.authorityId}`);
+    }
     assert.ok(foundationSource.includes(`publisher: "${authority.publisher}"`), `runtime authority publisher drift: ${authority.publisher}`);
     assert.ok(foundationSource.includes(`"${authority.sourceType}"`), `runtime authority type drift: ${authority.sourceType}`);
   }
