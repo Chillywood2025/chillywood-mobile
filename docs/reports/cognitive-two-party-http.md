@@ -39,19 +39,21 @@ that directory.
 
 ## Bounded HTTP result
 
-The final isolated run reached `66 PASS / 0 FAIL / 66 TOTAL` real HTTP
+The final isolated run reached `89 PASS / 0 FAIL / 89 TOTAL` real HTTP
 assertions. Its explicit numbered scenario result was
-`35 PASS / 0 FAIL / 5 NOT_RUN / 40 TOTAL`.
+`40 PASS / 0 FAIL / 0 NOT_RUN / 40 TOTAL`.
 
 The run proves the exact Owner approval, worker claim and stage, non-live
 staging, evaluator separation and proof, completion, live switch activation,
 replay denial, exact binding rejection, revocation, expiry, renewal,
-emergency-stop-before-claim, cancellation-after-claim, and a concurrent
+emergency-stop-before-claim, post-side-effect revocation and emergency cleanup,
+cancellation-after-claim, widened-renewal rejection, rollback-success authority
+revocation, rollback-failure quarantine and Owner escalation, and a concurrent
 single-winner claim through PostgREST or locally served Edge Functions.
 
-The five `NOT_RUN` cases are not described as passing. They require the
-post-side-effect cleanup/rollback paths or a distinct widened-renewal payload
-that this bounded harness does not yet construct.
+The acceptance gate fails closed when any assertion fails, any required
+scenario fails, or any required scenario remains `NOT_RUN`. The bounded
+`--self-test-required-scenario-gate` regression proves all four gate outcomes.
 
 ## Required 40-scenario matrix
 
@@ -86,17 +88,17 @@ that this bounded harness does not yet construct.
 | 27 | Wrong snapshot fails | PASS |
 | 28 | Wrong task/project/repository/branch/platform/environment/provider/operation/target fails | PASS |
 | 29 | Owner revocation before claim blocks execution | PASS |
-| 30 | Owner revocation after side effect blocks success but allows cleanup | NOT_RUN |
+| 30 | Owner revocation after side effect blocks success but allows cleanup | PASS |
 | 31 | Emergency stop before claim blocks execution | PASS |
-| 32 | Emergency stop after side effect blocks success but allows cleanup | NOT_RUN |
+| 32 | Emergency stop after side effect blocks success but allows cleanup | PASS |
 | 33 | Concurrent duplicate worker claim yields exactly one winner | PASS |
 | 34 | Late result after cancellation fails | PASS |
 | 35 | Equivalent capability renewal remains within scope | PASS |
-| 36 | Widened renewal fails | NOT_RUN |
+| 36 | Widened renewal fails | PASS |
 | 37 | Reinstatement creates a new immutable approval version | PASS |
 | 38 | Material plan change requires amended approval | PASS |
-| 39 | Successful rollback revokes old write authority | NOT_RUN |
-| 40 | Failed rollback quarantines and escalates | NOT_RUN |
+| 39 | Successful rollback revokes old write authority | PASS |
+| 40 | Failed rollback quarantines and escalates | PASS |
 
 ## Bootstrap second-phase hook
 
@@ -120,6 +122,10 @@ as the remote Owner → worker → evaluator bootstrap.
 - Random run identifiers use letters only and the nonexistent-approval fixture
   uses a fixed nonnumeric UUID, preventing private-identifier false positives
   without weakening classification.
+- The rollback-failure proof registers a disposable local cognitive service
+  identity by digest, constructs its short-lived signed local assertion only in
+  process memory, and uses the existing PostgREST transition RPC to prove the
+  quarantined task, P1 finding, and pending Owner-review request.
 - No deployed migration was edited or reapplied.
 - No remote database, secret, function, schedule, switch, build, OTA, or PR was
   mutated by this lane.

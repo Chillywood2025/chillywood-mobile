@@ -40,6 +40,17 @@ const runId = Array.from(
   (byte) => "abcdef"[byte % 6],
 ).join("");
 const hash = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
+const base64UrlJson = (value) =>
+  Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+const signLocalServiceJwt = (secret, claims) => {
+  const header = base64UrlJson({ alg: "HS256", typ: "JWT" });
+  const payload = base64UrlJson(claims);
+  const signature = crypto
+    .createHmac("sha256", secret)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
+  return `${header}.${payload}.${signature}`;
+};
 const hex = (char, length) => char.repeat(length);
 const uuidFrom = (label) => {
   const value = hash(`${runId}:${label}`);
@@ -124,23 +135,51 @@ const REQUIRED_HTTP_SCENARIOS = Object.freeze([
     "Owner revokes approval through PostgREST",
     "revoked approval cannot be claimed",
   ]],
-  [30, "Owner revocation after side effect blocks success but allows cleanup", null],
+  [30, "Owner revocation after side effect blocks success but allows cleanup", [
+    "post-side-effect Owner revocation stages an operation",
+    "Owner revokes approval after staged side effect",
+    "post-side-effect Owner revocation blocks completion",
+    "post-side-effect Owner revocation permits quarantine cleanup",
+  ]],
   [31, "Emergency stop before claim blocks execution", ["emergency stop blocks worker claim"]],
-  [32, "Emergency stop after side effect blocks success but allows cleanup", null],
+  [32, "Emergency stop after side effect blocks success but allows cleanup", [
+    "post-side-effect emergency stop stages an operation",
+    "emergency stop activates after staged side effect",
+    "post-side-effect emergency stop blocks completion",
+    "post-side-effect emergency stop permits quarantine cleanup",
+  ]],
   [33, "Concurrent duplicate worker claim yields exactly one winner", [
     "concurrent claim on single-use approval yields one success and one rejection",
   ]],
   [34, "Late result after cancellation fails", ["cancelled task blocks claimed execution result"]],
   [35, "Equivalent capability renewal remains within scope", ["renewed approval version can be claimed once"]],
-  [36, "Widened renewal fails", null],
+  [36, "Widened renewal fails", [
+    "widened renewal with changed plan snapshot is rejected",
+  ]],
   [37, "Reinstatement creates a new immutable approval version", [
     "reinstatement creates a distinct immutable approval version",
   ]],
   [38, "Material plan change requires amended approval", [
     "amended-scope/material-delta revalidation is rejected",
   ]],
-  [39, "Successful rollback revokes old write authority", null],
-  [40, "Failed rollback quarantines and escalates", null],
+  [39, "Successful rollback revokes old write authority", [
+    "successful rollback stages an operation",
+    "successful rollback enters rollback pending",
+    "successful rollback enters rollback running",
+    "successful rollback completes",
+    "successful rollback marks approval authority rolled back",
+    "successful rollback blocks old write authority",
+  ]],
+  [40, "Failed rollback quarantines and escalates", [
+    "failed rollback stages an operation",
+    "failed rollback enters rollback pending",
+    "failed rollback enters rollback running",
+    "worker records failed rollback evidence",
+    "failed rollback transition quarantines task",
+    "failed rollback task readback is quarantined",
+    "failed rollback creates P1 finding",
+    "failed rollback creates pending Owner escalation",
+  ]],
 ]);
 const BOOTSTRAP_SECOND_PHASE_ACTIONS = Object.freeze([
   "record_bootstrap_approval",
@@ -182,13 +221,22 @@ const readSupabaseStatus = () => {
     dbUrl: get("db", "url"),
     anonKey: get("anon", "key"),
     serviceRoleKey: get("service", "role", "key"),
+    jwtSecret: get("jwt", "secret"),
   };
 };
 
 const ensureSupabase = () => {
   try {
     const status = readSupabaseStatus();
-    if (status.apiUrl && status.anonKey && status.serviceRoleKey && status.dbUrl) return status;
+    if (
+      status.apiUrl &&
+      status.anonKey &&
+      status.serviceRoleKey &&
+      status.dbUrl &&
+      status.jwtSecret
+    ) {
+      return status;
+    }
   } catch {
     // Start below.
   }
@@ -251,6 +299,32 @@ const setupLocalAuthUser = async ({ apiUrl, anonKey, serviceRoleKey }, email, pa
   }
   return { id: signIn.data.user.id, token: signIn.data.access_token };
 };
+
+const acceptanceExitCode = ({
+  assertionFailures,
+  scenarioFailures,
+  scenarioNotRun,
+}) =>
+  assertionFailures === 0 && scenarioFailures === 0 && scenarioNotRun === 0
+    ? 0
+    : 1;
+
+if (process.argv.includes("--self-test-required-scenario-gate")) {
+  const gateCases = [
+    [{ assertionFailures: 0, scenarioFailures: 0, scenarioNotRun: 0 }, 0],
+    [{ assertionFailures: 1, scenarioFailures: 0, scenarioNotRun: 0 }, 1],
+    [{ assertionFailures: 0, scenarioFailures: 1, scenarioNotRun: 0 }, 1],
+    [{ assertionFailures: 0, scenarioFailures: 0, scenarioNotRun: 1 }, 1],
+  ];
+  for (const [input, expected] of gateCases) {
+    if (acceptanceExitCode(input) !== expected) {
+      throw new Error("required_scenario_gate_regression");
+    }
+  }
+  fs.rmSync(privateDirectory, { recursive: true, force: true });
+  console.log("HTTP required-scenario gate: 4/4 passed");
+  process.exit(0);
+}
 
 const localConfig = fs.readFileSync(
   path.join(SUPABASE_WORKDIR, "supabase", "config.toml"),
@@ -480,6 +554,17 @@ try {
   const modelAssertion = `local-model-assertion-${runId}-0000000000000000000`;
   const workerInvoke = `local-worker-invoke-${runId}-00000000000000000000`;
   const evaluatorInvoke = `local-evaluator-invoke-${runId}-000000000000000000`;
+  const cognitiveOperatorCredential =
+    `local-cognitive-operator-${runId}-000000000000000000`;
+  const cognitiveOperatorToken = signLocalServiceJwt(status.jwtSecret, {
+    aud: "authenticated",
+    cognitive_actor: "product_intelligence_operator",
+    cognitive_service_credential: cognitiveOperatorCredential,
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    iat: Math.floor(Date.now() / 1000),
+    iss: "supabase-demo",
+    role: "service_role",
+  });
   const functionEnvironmentFile = path.join(privateDirectory, "function.env");
   fs.writeFileSync(
     functionEnvironmentFile,
@@ -556,6 +641,14 @@ try {
     )
     on conflict (system_id) do update
     set status=excluded.status, updated_at=excluded.updated_at, metadata=excluded.metadata;
+    insert into public.cognitive_service_identities(
+      service_identity, credential_hash, status, expires_at
+    ) values (
+      'product_intelligence_operator',
+      ${quote(hash(cognitiveOperatorCredential))},
+      'active',
+      transaction_timestamp()+interval '1 day'
+    );
     insert into public.governance_constitutions(
       id, task_id, project_id, platform, environment, constitution_key, title,
       current_version, status, created_by_identity
@@ -989,6 +1082,71 @@ try {
     ...serviceEdgeHeaders(status),
     "x-cognitive-worker-invocation": workerInvoke,
   });
+  const workerCall = (payload) => edgeCall(status, FUNCTIONS[1], payload, {
+    ...serviceEdgeHeaders(status),
+    "x-cognitive-worker-invocation": workerInvoke,
+  });
+  const evaluatorCall = (payload) => edgeCall(status, FUNCTIONS[2], payload, {
+    ...serviceEdgeHeaders(status),
+    "x-cognitive-evaluator-invocation": evaluatorInvoke,
+  });
+  const prepareStagedExecution = async (label, stageCaseName) => {
+    const approvalValue = await approve(label);
+    const claimResponseValue = await requireSetupHttp(
+      `${label}_claim_fixture`,
+      () => claim(approvalValue),
+      [200],
+    );
+    const executionIdValue = claimResponseValue.data?.executionId;
+    await requireSetupHttp(`${label}_preflight_fixture`, () =>
+      workerCall({
+        action: "begin",
+        executionId: executionIdValue,
+        nextState: "preflight",
+      }), [200]);
+    await requireSetupHttp(`${label}_executing_fixture`, () =>
+      workerCall({
+        action: "begin",
+        executionId: executionIdValue,
+        nextState: "executing",
+      }), [200]);
+    await expectHttp(stageCaseName, [200], () =>
+      workerCall({
+        action: "execute_switch",
+        executionId: executionIdValue,
+        switchKey,
+        enabled: true,
+        policyVersion,
+      }));
+    return { approval: approvalValue, executionId: executionIdValue };
+  };
+  const prepareEvaluatedSideEffect = async (label, stageCaseName) => {
+    const staged = await prepareStagedExecution(label, stageCaseName);
+    await requireSetupHttp(`${label}_evaluating_fixture`, () =>
+      workerCall({
+        action: "begin",
+        executionId: staged.executionId,
+        nextState: "evaluating",
+      }), [200]);
+    const executionReceiptHash = hash(`${label}:receipt:${runId}`);
+    const evaluatorProofHash = hash(`${label}:proof:${runId}`);
+    await requireSetupHttp(`${label}_evaluator_fixture`, () =>
+      evaluatorCall({
+        action: "record_evaluator_proof",
+        executionId: staged.executionId,
+        executionReceiptHash,
+        evaluatorProofHash,
+        verdict: "passed",
+      }), [200]);
+    return { ...staged, evaluatorProofHash, executionReceiptHash };
+  };
+  const rollbackTransition = (executionIdValue, transition, evidenceHash) =>
+    workerCall({
+      action: "release_or_quarantine",
+      executionId: executionIdValue,
+      transition,
+      evidenceHash,
+    });
 
   const revokedApproval = await approve("revoked");
   await expectHttp("Owner revokes approval through PostgREST", [200], () =>
@@ -1008,6 +1166,15 @@ try {
   const expiredApproval = expiredResponse.data;
   await new Promise((resolve) => setTimeout(resolve, 1_100));
   await expectHttp("expired approval cannot be claimed", [409], () => claim(expiredApproval));
+  await expectHttp("widened renewal with changed plan snapshot is rejected", [400, 409], () =>
+    restRpc(status, "governance_revalidate_owner_approval", {
+      p_expired_version_id: expiredApproval.approvalVersionId,
+      p_revalidation_hash: hash(`widened-renewal:${runId}`),
+      p_current_decision_manifest_hash: decisionHash,
+      p_current_source_commit: sourceCommit,
+      p_current_plan_snapshot_hash: hex("a", 64),
+      p_material_delta: false,
+    }, restHeaders(status, owner.token)));
   await expectHttp("amended-scope/material-delta revalidation is rejected", [400, 409], () =>
     restRpc(status, "governance_revalidate_owner_approval", {
       p_expired_version_id: expiredApproval.approvalVersionId,
@@ -1124,6 +1291,173 @@ try {
     concurrent2xx === 1 && concurrent409 === 1 ? "MATCH" : "MISMATCH",
     { observedCategory: `success_${concurrent2xx}_reject_${concurrent409}` },
   );
+
+  const revokedAfterSideEffect = await prepareEvaluatedSideEffect(
+    "revoked-after-side-effect",
+    "post-side-effect Owner revocation stages an operation",
+  );
+  await expectHttp("Owner revokes approval after staged side effect", [200], () =>
+    restRpc(status, "governance_revoke_owner_approval", {
+      p_approval_version_id: revokedAfterSideEffect.approval.approvalVersionId,
+      p_reason_hash: hash(`revoked-after-side-effect:${runId}`),
+    }, restHeaders(status, owner.token)));
+  await expectHttp("post-side-effect Owner revocation blocks completion", [409], () =>
+    workerCall({
+      action: "complete",
+      executionId: revokedAfterSideEffect.executionId,
+      executionReceiptHash: revokedAfterSideEffect.executionReceiptHash,
+      evaluatorProofHash: revokedAfterSideEffect.evaluatorProofHash,
+    }));
+  await expectHttp("post-side-effect Owner revocation permits quarantine cleanup", [200], () =>
+    rollbackTransition(
+      revokedAfterSideEffect.executionId,
+      "quarantined",
+      hash(`revocation-cleanup:${runId}`),
+    ));
+
+  const emergencyAfterSideEffect = await prepareEvaluatedSideEffect(
+    "emergency-after-side-effect",
+    "post-side-effect emergency stop stages an operation",
+  );
+  await expectHttp("emergency stop activates after staged side effect", [200, 204], () =>
+    restUpdate(
+      status,
+      "autonomous_system_emergency_states?system_id=eq.product_intelligence_operator",
+      { status: "emergency_stop", updated_at: new Date().toISOString() },
+    ));
+  await expectHttp("post-side-effect emergency stop blocks completion", [409], () =>
+    workerCall({
+      action: "complete",
+      executionId: emergencyAfterSideEffect.executionId,
+      executionReceiptHash: emergencyAfterSideEffect.executionReceiptHash,
+      evaluatorProofHash: emergencyAfterSideEffect.evaluatorProofHash,
+    }));
+  await expectHttp("post-side-effect emergency stop permits quarantine cleanup", [200], () =>
+    rollbackTransition(
+      emergencyAfterSideEffect.executionId,
+      "quarantined",
+      hash(`emergency-cleanup:${runId}`),
+    ));
+  await requireSetupHttp("post_side_effect_emergency_reset_fixture", () =>
+    restUpdate(
+      status,
+      "autonomous_system_emergency_states?system_id=eq.product_intelligence_operator",
+      { status: "active", updated_at: new Date().toISOString() },
+    ), [200, 204]);
+
+  const successfulRollback = await prepareStagedExecution(
+    "successful-rollback",
+    "successful rollback stages an operation",
+  );
+  await expectHttp("successful rollback enters rollback pending", [200], () =>
+    rollbackTransition(
+      successfulRollback.executionId,
+      "rollback_pending",
+      hash(`successful-rollback-pending:${runId}`),
+    ));
+  await expectHttp("successful rollback enters rollback running", [200], () =>
+    rollbackTransition(
+      successfulRollback.executionId,
+      "rollback_running",
+      hash(`successful-rollback-running:${runId}`),
+    ));
+  await expectHttp("successful rollback completes", [200], () =>
+    rollbackTransition(
+      successfulRollback.executionId,
+      "rollback_succeeded",
+      hash(`successful-rollback-complete:${runId}`),
+    ));
+  const successfulRollbackAuthority = await restSelect(
+    status,
+    `governance_owner_approval_version_states?approval_version_id=eq.${successfulRollback.approval.approvalVersionId}&select=state`,
+    serviceRestHeaders(status),
+  );
+  expectBody(
+    "successful rollback marks approval authority rolled back",
+    successfulRollbackAuthority.data?.[0]?.state,
+    "rolled_back",
+  );
+  await expectHttp("successful rollback blocks old write authority", [409], () =>
+    workerCall({
+      action: "execute_switch",
+      executionId: successfulRollback.executionId,
+      switchKey,
+      enabled: true,
+      policyVersion,
+    }));
+
+  const failedRollback = await prepareStagedExecution(
+    "failed-rollback",
+    "failed rollback stages an operation",
+  );
+  await expectHttp("failed rollback enters rollback pending", [200], () =>
+    rollbackTransition(
+      failedRollback.executionId,
+      "rollback_pending",
+      hash(`failed-rollback-pending:${runId}`),
+    ));
+  await expectHttp("failed rollback enters rollback running", [200], () =>
+    rollbackTransition(
+      failedRollback.executionId,
+      "rollback_running",
+      hash(`failed-rollback-running:${runId}`),
+    ));
+  const failedRollbackEvidenceHash = hash(`failed-rollback-evidence:${runId}`);
+  await expectHttp("worker records failed rollback evidence", [200], () =>
+    rollbackTransition(
+      failedRollback.executionId,
+      "rollback_failed",
+      failedRollbackEvidenceHash,
+    ));
+  psql(status.dbUrl, `
+    update public.intelligence_tasks
+    set status = 'rollback_running',
+        cancelled_at = null,
+        quarantined_at = null,
+        updated_at = transaction_timestamp()
+    where id = ${quote(ids.task)};
+  `);
+  const failedRollbackTaskTransition = await expectHttp(
+    "failed rollback transition quarantines task",
+    [200],
+    () => restRpc(status, "cognitive_transition_task", {
+      p_task_id: ids.task,
+      p_project_id: ids.project,
+      p_platform: "shared",
+      p_environment: "production",
+      p_expected: "rollback_running",
+      p_next: "rollback_failed",
+      p_actor_identity: "product_intelligence_operator",
+      p_transition_hash: failedRollbackEvidenceHash,
+      p_approval_request_id: null,
+      p_snapshot_hash: null,
+    }, restHeaders(status, cognitiveOperatorToken)),
+  );
+  expectBody(
+    "failed rollback task readback is quarantined",
+    failedRollbackTaskTransition.data,
+    "quarantined",
+  );
+  const failedRollbackFindings = await restSelect(
+    status,
+    `cognitive_current_findings?task_id=eq.${ids.task}&finding_key=eq.rollback-failed-quarantine&select=severity,current_status`,
+    serviceRestHeaders(status),
+  );
+  expectBody(
+    "failed rollback creates P1 finding",
+    failedRollbackFindings.data?.[0]?.severity,
+    "p1",
+  );
+  const failedRollbackEscalations = await restSelect(
+    status,
+    `cognitive_owner_review_requests?task_id=eq.${ids.task}&request_type=eq.rollback_failed&select=request_status`,
+    serviceRestHeaders(status),
+  );
+  expectBody(
+    "failed rollback creates pending Owner escalation",
+    failedRollbackEscalations.data?.[0]?.request_status,
+    "pending",
+  );
 } catch (error) {
   record("harness setup/runtime", false, "PASS", `FAIL:${scrub(error.message)}`);
 } finally {
@@ -1173,4 +1507,8 @@ console.log(
 console.log(
   `BOOTSTRAP_SECOND_PHASE NOT_RUN reason=coordinator_integration_required actions=${BOOTSTRAP_SECOND_PHASE_ACTIONS.join(",")}`,
 );
-process.exitCode = failed === 0 && scenarioFailed === 0 ? 0 : 1;
+process.exitCode = acceptanceExitCode({
+  assertionFailures: failed,
+  scenarioFailures: scenarioFailed,
+  scenarioNotRun,
+});
