@@ -11,6 +11,7 @@ revoke all on schema cognitive_runtime from public;
 do $roles$
 declare
   role_name text;
+  role_state pg_catalog.pg_roles%rowtype;
 begin
   foreach role_name in array array[
     'cognitive_product_baseline_executor',
@@ -34,10 +35,26 @@ begin
       );
     end if;
 
-    execute format(
-      'alter role %I nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls',
-      role_name
-    );
+    select * into role_state
+    from pg_catalog.pg_roles
+    where rolname = role_name;
+
+    if role_state.rolname is null
+       or role_state.rolcanlogin
+       or role_state.rolsuper
+       or role_state.rolcreatedb
+       or role_state.rolcreaterole
+       or role_state.rolinherit
+       or role_state.rolreplication
+       or role_state.rolbypassrls then
+      raise exception 'cognitive_runtime_role_state_rejected:%', role_name
+        using errcode = '42501';
+    end if;
+
+    -- Do not issue ALTER ROLE ... NOSUPERUSER/NOREPLICATION/NOBYPASSRLS
+    -- here. Supabase's migration role can create a least-privilege role but is
+    -- intentionally not allowed to alter superuser-only attributes. Existing
+    -- roles therefore fail closed above instead of being silently rewritten.
     execute format(
       'alter role %I set search_path = cognitive_runtime, pg_catalog',
       role_name
@@ -120,7 +137,6 @@ set search_path = ''
 as $$
 declare
   session_role_name text := session_user;
-  selected_role_name text := nullif(current_setting('role', true), 'none');
   principal_value pg_catalog.pg_roles%rowtype;
 begin
   if not cognitive_runtime.runtime_operation_allowed(
@@ -142,13 +158,11 @@ begin
      or principal_value.rolcreaterole
      or principal_value.rolreplication
      or principal_value.rolbypassrls
-     or not (
-       pg_catalog.pg_has_role(
-         session_role_name,
-         p_expected_principal,
-         'member'
-       )
-       or selected_role_name = p_expected_principal
+     or session_role_name <> p_expected_principal || '_login'
+     or not pg_catalog.pg_has_role(
+       session_role_name,
+       p_expected_principal,
+       'member'
      ) then
     raise exception 'cognitive_runtime_principal_rejected'
       using errcode = '42501';
@@ -181,7 +195,9 @@ begin
     'principal', p_expected_principal,
     'operation', p_expected_operation,
     'databaseRoleMode', 'isolated_nologin_membership',
-    'serviceRoleMember', false
+    'serviceRoleMember', false,
+    'emergencyStopActive',
+      not public.governance_approval_emergency_active()
   );
 end;
 $$;
@@ -422,6 +438,454 @@ begin
 end;
 $$;
 
+create function cognitive_runtime.scheduler_prerequisite_snapshot(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform text,
+  p_environment text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  now_at timestamptz := transaction_timestamp();
+  task_value public.intelligence_tasks%rowtype;
+  project_value public.cognitive_projects%rowtype;
+  emergency_status text;
+  switch_count integer;
+  schedule_count integer;
+  switch_values jsonb;
+  factory_ready boolean;
+  github_value public.cognitive_level01_credential_attestations%rowtype;
+  github_current boolean := false;
+  canary_values jsonb;
+  schedule_values jsonb;
+  sentinel_ready boolean := false;
+  sentinel_keys jsonb := '[]'::jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_level01_scheduler',
+    'read_scheduler_status'
+  );
+
+  if p_platform <> 'shared' or p_environment <> 'production' then
+    raise exception 'cognitive_runtime_scheduler_scope_rejected'
+      using errcode = '42501';
+  end if;
+
+  select * into task_value
+  from public.intelligence_tasks task
+  where task.id = p_task_id
+    and task.project_id = p_project_id
+    and task.platform = p_platform::public.cognitive_platform
+    and task.environment = p_environment::public.cognitive_environment;
+
+  select * into project_value
+  from public.cognitive_projects project
+  where project.id = p_project_id;
+
+  if task_value.id is null
+     or project_value.id is null
+     or task_value.repository_full_name <>
+       'Chillywood2025/chillywood-mobile'
+     or project_value.repository_full_name <>
+       task_value.repository_full_name
+     or task_value.task_key <> 'cognitive-level01-canary-control'
+     or task_value.parent_task_id is not null
+     or task_value.data_class = 'user_derived'
+     or project_value.production_authority then
+    raise exception 'cognitive_runtime_scheduler_control_task_rejected'
+      using errcode = '42501';
+  end if;
+
+  select emergency.status into emergency_status
+  from public.autonomous_system_emergency_states emergency
+  where emergency.system_id = 'product_intelligence_operator';
+
+  if emergency_status is null then
+    raise exception 'cognitive_runtime_scheduler_emergency_state_missing'
+      using errcode = 'P0001';
+  end if;
+
+  with required_switches(switch_key) as (
+    values
+      ('cognitive_collective_deliberation_enabled'),
+      ('cognitive_draft_pr_executor_enabled'),
+      ('cognitive_installed_journey_sentinel_enabled'),
+      ('cognitive_memory_enabled'),
+      ('cognitive_research_enabled'),
+      ('cognitive_scheduled_level01_enabled'),
+      ('cognitive_user_derived_memory_enabled'),
+      ('cognitive_visual_experience_sentinel_enabled'),
+      ('cognitive_level2_production_repairs_enabled')
+  ),
+  scoped_switches as (
+    select switch.switch_key, switch.enabled
+    from public.cognitive_governance_switches switch
+    join required_switches required
+      on required.switch_key = switch.switch_key
+    where switch.task_id = p_task_id
+      and switch.project_id = p_project_id
+      and switch.platform = p_platform::public.cognitive_platform
+      and switch.environment = p_environment::public.cognitive_environment
+  )
+  select
+    count(*)::integer,
+    jsonb_object_agg(switch_key, enabled order by switch_key)
+  into switch_count, switch_values
+  from scoped_switches;
+
+  if switch_count <> 9 then
+    raise exception 'cognitive_runtime_scheduler_switch_manifest_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  select count(*)::integer into schedule_count
+  from public.cognitive_level01_schedule_definitions schedule
+  where schedule.task_id = p_task_id
+    and schedule.project_id = p_project_id
+    and schedule.platform = p_platform::public.cognitive_platform
+    and schedule.environment = p_environment::public.cognitive_environment
+    and schedule.schedule_key in (
+      'daily_platform_policy_security',
+      'daily_non_personal_support_observability',
+      'weekly_ux_route_dead_control',
+      'weekly_architecture_dependency',
+      'weekly_experiment_outcome'
+    );
+
+  if schedule_count <> 5 then
+    raise exception 'cognitive_runtime_scheduler_definition_manifest_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  factory_ready :=
+    task_value.cancelled_at is null
+    and task_value.quarantined_at is null
+    and task_value.deadman_at > now_at;
+
+  select * into github_value
+  from public.cognitive_level01_credential_attestations attestation
+  where attestation.task_id = p_task_id
+    and attestation.project_id = p_project_id
+    and attestation.platform = p_platform::public.cognitive_platform
+    and attestation.environment = p_environment::public.cognitive_environment
+    and attestation.credential_kind = 'github_draft_pr'
+  order by attestation.verified_at desc
+  limit 1;
+
+  github_current :=
+    github_value.id is not null
+    and github_value.state = 'configured'
+    and github_value.verified_at <= now_at
+    and github_value.expires_at > now_at;
+
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'key', canary.canary_key,
+      'type', canary.canary_type,
+      'resultStatus', canary.result_status,
+      'evaluatorState', canary.evaluator_state,
+      'completedAt', canary.completed_at
+    )
+    order by canary.canary_key
+  ), '[]'::jsonb)
+  into canary_values
+  from (
+    select distinct on (run.canary_key) *
+    from public.cognitive_level01_canary_runs run
+    where run.task_id = p_task_id
+      and run.project_id = p_project_id
+      and run.platform = p_platform::public.cognitive_platform
+      and run.environment = p_environment::public.cognitive_environment
+      and run.canary_key in (
+        'platform_policy_research',
+        'repository_architecture_ux',
+        'dependency_security_research',
+        'documentation_draft_pr',
+        'test_only_draft_pr',
+        'low_risk_source_draft_pr'
+      )
+      and run.result_status = 'passed'
+      and run.evaluator_state = 'pass'
+      and run.completed_at between
+        now_at - case
+          when run.canary_type = 'draft_pr' then interval '30 days'
+          else interval '7 days'
+        end
+        and now_at
+    order by run.canary_key, run.completed_at desc, run.id
+  ) canary;
+
+  select
+    count(*) = 2,
+    coalesce(jsonb_agg(sentinel_key order by sentinel_key), '[]'::jsonb)
+  into sentinel_ready, sentinel_keys
+  from (
+    select distinct run.sentinel_key
+    from public.product_experience_sentinel_runs run
+    join public.intelligence_tasks sentinel_task
+      on sentinel_task.id = run.task_id
+     and sentinel_task.project_id = run.project_id
+     and sentinel_task.platform = run.platform
+     and sentinel_task.environment = run.environment
+    join public.product_experience_sentinel_evaluator_proofs proof
+      on proof.sentinel_run_id = run.id
+     and proof.task_id = run.task_id
+     and proof.project_id = run.project_id
+     and proof.platform = run.platform
+     and proof.environment = run.environment
+    where run.project_id = p_project_id
+      and sentinel_task.parent_task_id = p_task_id
+      and run.platform in ('android', 'ios')
+      and run.environment = p_environment::public.cognitive_environment
+      and run.sentinel_key in (
+        'installed_journey_sentinel',
+        'visual_product_experience_sentinel'
+      )
+      and run.result_status in ('passed', 'failed')
+      and run.erased_at is null
+      and run.observation_finished_at >= now_at - interval '7 days'
+      and run.observation_finished_at <= now_at
+      and proof.verdict = 'passed'
+      and proof.valid_until > now_at
+  ) evaluated_sentinel;
+
+  with definition_state as (
+    select
+      schedule.*,
+      case schedule.schedule_key
+      when 'daily_platform_policy_security' then
+        array[
+          'platform_policy_research',
+          'repository_architecture_ux',
+          'dependency_security_research'
+        ]::text[]
+      when 'daily_non_personal_support_observability' then
+        array[
+          'platform_policy_research',
+          'repository_architecture_ux'
+        ]::text[]
+      when 'weekly_architecture_dependency' then
+        array[
+          'repository_architecture_ux',
+          'dependency_security_research'
+        ]::text[]
+      when 'weekly_ux_route_dead_control' then
+        array[
+          'installed_journey_sentinel',
+          'visual_product_experience_sentinel'
+        ]::text[]
+      when 'weekly_experiment_outcome' then
+        array[
+          'documentation_draft_pr',
+          'test_only_draft_pr',
+          'low_risk_source_draft_pr'
+        ]::text[]
+      else '{}'::text[]
+      end as required_keys,
+      case
+        when schedule.schedule_key = 'weekly_ux_route_dead_control'
+          then 'evaluated_installed_sentinel'
+        when schedule.schedule_key = 'weekly_experiment_outcome'
+          then 'draft_pr'
+        else 'research'
+      end as canary_kind,
+      case
+        when schedule.schedule_key = 'weekly_experiment_outcome'
+          then 30
+        else 7
+      end as maximum_age_days,
+      case schedule.schedule_key
+      when 'daily_platform_policy_security' then
+        schedule.cadence = '0 14 * * *'
+        and schedule.maximum_tasks = 3
+        and schedule.maximum_cost = 5
+        and schedule.timeout_seconds = 300
+      when 'daily_non_personal_support_observability' then
+        schedule.cadence = '30 14 * * *'
+        and schedule.maximum_tasks = 2
+        and schedule.maximum_cost = 3
+        and schedule.timeout_seconds = 300
+      when 'weekly_ux_route_dead_control' then
+        schedule.cadence = '0 15 * * 1'
+        and schedule.maximum_tasks = 3
+        and schedule.maximum_cost = 5
+        and schedule.timeout_seconds = 600
+      when 'weekly_architecture_dependency' then
+        schedule.cadence = '30 15 * * 1'
+        and schedule.maximum_tasks = 3
+        and schedule.maximum_cost = 5
+        and schedule.timeout_seconds = 600
+      when 'weekly_experiment_outcome' then
+        schedule.cadence = '0 16 * * 1'
+        and schedule.maximum_tasks = 2
+        and schedule.maximum_cost = 3
+        and schedule.timeout_seconds = 300
+      else false
+      end as definition_valid
+    from public.cognitive_level01_schedule_definitions schedule
+    where schedule.task_id = p_task_id
+      and schedule.project_id = p_project_id
+      and schedule.platform = p_platform::public.cognitive_platform
+      and schedule.environment = p_environment::public.cognitive_environment
+  ),
+  passing_state as (
+    select
+      definition.*,
+      case
+        when definition.schedule_key = 'weekly_ux_route_dead_control'
+          then sentinel_keys
+        else coalesce((
+          select jsonb_agg(key_value order by key_value)
+          from (
+            select distinct run.canary_key as key_value
+            from public.cognitive_level01_canary_runs run
+            where run.task_id = p_task_id
+              and run.project_id = p_project_id
+              and run.platform = p_platform::public.cognitive_platform
+              and run.environment =
+                p_environment::public.cognitive_environment
+              and run.canary_key = any(definition.required_keys)
+              and run.result_status = 'passed'
+              and run.evaluator_state = 'pass'
+              and run.completed_at between
+                now_at - make_interval(
+                  days => definition.maximum_age_days
+                )
+                and now_at
+          ) passing
+        ), '[]'::jsonb)
+      end as passing_keys
+    from definition_state definition
+  ),
+  prerequisite_state as (
+    select
+      passing.*,
+      (
+        passing.definition_valid
+        and factory_ready
+        and emergency_status = 'active'
+        and (switch_values->>'cognitive_research_enabled')::boolean
+        and (switch_values->>'cognitive_memory_enabled')::boolean
+        and not (
+          switch_values->>'cognitive_user_derived_memory_enabled'
+        )::boolean
+        and not (
+          switch_values->>'cognitive_level2_production_repairs_enabled'
+        )::boolean
+        and jsonb_array_length(passing.passing_keys) =
+          cardinality(passing.required_keys)
+        and case passing.schedule_key
+          when 'weekly_ux_route_dead_control' then
+            (switch_values->>
+              'cognitive_installed_journey_sentinel_enabled')::boolean
+            and (switch_values->>
+              'cognitive_visual_experience_sentinel_enabled')::boolean
+            and sentinel_ready
+          when 'weekly_experiment_outcome' then
+            (switch_values->>
+              'cognitive_collective_deliberation_enabled')::boolean
+            and (switch_values->>
+              'cognitive_draft_pr_executor_enabled')::boolean
+            and github_current
+          else true
+        end
+      ) as activation_pass,
+      public.cognitive_level01_schedule_prerequisites_pass(
+        passing.id,
+        p_task_id,
+        p_project_id,
+        p_platform::public.cognitive_platform,
+        p_environment::public.cognitive_environment
+      ) as dispatch_pass
+    from passing_state passing
+  )
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'id', schedule.id,
+      'key', schedule.schedule_key,
+      'cadence', schedule.cadence,
+      'enabled', schedule.enabled,
+      'maximumTasks', schedule.maximum_tasks,
+      'maximumCost', schedule.maximum_cost,
+      'timeoutSeconds', schedule.timeout_seconds,
+      'definitionValid', schedule.definition_valid,
+      'canaryState', jsonb_build_object(
+        'kind', schedule.canary_kind,
+        'requiredKeys', to_jsonb(schedule.required_keys),
+        'passingKeys', schedule.passing_keys,
+        'requiredCount', cardinality(schedule.required_keys),
+        'passingCount', jsonb_array_length(schedule.passing_keys),
+        'current',
+          jsonb_array_length(schedule.passing_keys) =
+            cardinality(schedule.required_keys),
+        'maximumAgeDays', schedule.maximum_age_days
+      ),
+      'activationPrerequisitesPass', schedule.activation_pass,
+      'dispatchPrerequisitesPass', schedule.dispatch_pass,
+      'currentState', case
+        when schedule.enabled and schedule.dispatch_pass
+          then 'enabled_ready'
+        when schedule.enabled then 'enabled_blocked'
+        when schedule.activation_pass then 'disabled_eligible'
+        else 'disabled_blocked'
+      end
+    )
+    order by schedule.schedule_key
+  ), '[]'::jsonb)
+  into schedule_values
+  from prerequisite_state schedule;
+
+  return jsonb_build_object(
+    'snapshotVersion', 'v1',
+    'scope', jsonb_build_object(
+      'taskId', task_value.id,
+      'projectId', task_value.project_id,
+      'platform', task_value.platform,
+      'environment', task_value.environment,
+      'repository', task_value.repository_full_name,
+      'taskKey', task_value.task_key,
+      'controlTask', task_value.task_key =
+        'cognitive-level01-canary-control',
+      'cancelled', task_value.cancelled_at is not null,
+      'quarantined', task_value.quarantined_at is not null,
+      'deadmanCurrent', task_value.deadman_at > now_at,
+      'dataClassAllowed', task_value.data_class <> 'user_derived',
+      'productionAuthority', project_value.production_authority
+    ),
+    'emergency', jsonb_build_object(
+      'systemId', 'product_intelligence_operator',
+      'status', emergency_status,
+      'active', emergency_status = 'active'
+    ),
+    'switches', switch_values,
+    'freshTaskFactory', jsonb_build_object(
+      'ready', factory_ready,
+      'factoryIdentity', case when factory_ready
+        then 'cognitive_level01_scheduler' else 'unavailable' end,
+      'freshTaskPerExecution', factory_ready,
+      'controlTaskReuseAllowed', false,
+      'deadmanBounded', factory_ready,
+      'retentionBounded', factory_ready,
+      'version', case when factory_ready then 'v1' else 'unavailable' end
+    ),
+    'githubCredential', jsonb_build_object(
+      'state', coalesce(github_value.state, 'missing'),
+      'configured', github_value.state = 'configured',
+      'current', github_current,
+      'verifiedAt', github_value.verified_at,
+      'expiresAt', github_value.expires_at
+    ),
+    'canaries', canary_values,
+    'schedules', schedule_values
+  );
+end;
+$$;
+
 create function cognitive_runtime.issue_recurring_child_task(
   p_capability_id uuid,
   p_schedule_definition_id uuid,
@@ -496,12 +960,48 @@ security definer
 set search_path = ''
 as $$
 declare
+  selected_run public.product_experience_sentinel_runs%rowtype;
+  selected_finding public.product_quality_findings%rowtype;
+  active_baseline jsonb;
   result_value jsonb;
 begin
   perform cognitive_runtime.assert_runtime_invoker(
     'cognitive_product_quality_evaluator',
     'read_product_quality_snapshot'
   );
+
+  select * into selected_run
+  from public.product_experience_sentinel_runs run
+  where run.id = p_sentinel_run_id;
+
+  if selected_run.id is null then
+    return jsonb_build_object(
+      'run', null,
+      'finding', null,
+      'detectionRun', null,
+      'activeBaseline', jsonb_build_object('count', 0)
+    );
+  end if;
+
+  if p_finding_id is not null then
+    select * into selected_finding
+    from public.product_quality_findings finding
+    where finding.id = p_finding_id
+      and finding.task_id = selected_run.task_id
+      and finding.project_id = selected_run.project_id
+      and finding.platform = selected_run.platform
+      and finding.environment = selected_run.environment
+      and finding.route_or_surface = selected_run.route_or_surface;
+  end if;
+
+  active_baseline :=
+    public.product_experience_resolve_current_active_baseline(
+      selected_run.task_id,
+      selected_run.project_id,
+      selected_run.platform,
+      selected_run.environment,
+      'streaming_mobile_content_density'
+    );
 
   select jsonb_build_object(
     'run',
@@ -514,7 +1014,7 @@ begin
           metric_manifest, result_status, physical_proof_status,
           evaluation_expires_at, collector_capability_id, erased_at
         from public.product_experience_sentinel_runs
-        where id = p_sentinel_run_id
+        where id = selected_run.id
       ) run_value
     ),
     'finding',
@@ -523,14 +1023,193 @@ begin
       from (
         select
           id, sentinel_run_id, task_id, project_id, platform, environment,
-          route_or_surface, current_status, erased_at
+          route_or_surface, finding_key, finding_class, finding_scope_hash,
+          current_status, current_evaluator_proof_id, resolution_hash,
+          occurrence_count, evidence_hashes, erased_at
         from public.product_quality_findings
-        where p_finding_id is not null
-          and id = p_finding_id
-          and sentinel_run_id = p_sentinel_run_id
+        where id = selected_finding.id
       ) finding_value
-    )
+    ),
+    'detectionRun',
+    (
+      select to_jsonb(detection_run_value)
+      from (
+        select
+          id, task_id, project_id, platform, environment, sentinel_key,
+          route_or_surface, source_build_hash, evidence_manifest_hash,
+          metric_manifest, result_status, physical_proof_status,
+          evaluation_expires_at, collector_capability_id, erased_at
+        from public.product_experience_sentinel_runs
+        where id = selected_finding.sentinel_run_id
+          and task_id = selected_run.task_id
+          and project_id = selected_run.project_id
+          and platform = selected_run.platform
+          and environment = selected_run.environment
+          and route_or_surface = selected_run.route_or_surface
+      ) detection_run_value
+    ),
+    'activeBaseline',
+    case
+      when active_baseline is null then jsonb_build_object('count', 0)
+      else jsonb_build_object(
+        'count', 1,
+        'baselineId', active_baseline->>'baselineId',
+        'selectedOptionCode', active_baseline->>'selectedOptionCode',
+        'selectedOption', active_baseline->>'selectedOption',
+        'baselineHash', active_baseline->>'baselineHash',
+        'status', active_baseline->>'status'
+      )
+    end
   ) into result_value;
+
+  return result_value;
+end;
+$$;
+
+create function cognitive_runtime.record_research_claim_with_readback(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform text,
+  p_environment text,
+  p_canary_key text,
+  p_bounded_claim text,
+  p_category text,
+  p_confidence numeric,
+  p_freshness_deadline timestamptz,
+  p_contradiction_state text,
+  p_source_ids uuid[],
+  p_service_identity_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  claim_id_value uuid;
+  result_value jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_public_research_broker',
+    'record_research_claim'
+  );
+
+  claim_id_value := public.cognitive_record_public_research_claim_evidence(
+    p_task_id,
+    p_project_id,
+    p_platform::public.cognitive_platform,
+    p_environment::public.cognitive_environment,
+    p_canary_key,
+    p_bounded_claim,
+    p_category,
+    p_confidence,
+    p_freshness_deadline,
+    p_contradiction_state,
+    p_source_ids,
+    p_service_identity_token
+  );
+
+  select jsonb_build_object(
+    'research_claim_id', claim.id,
+    'claim_hash', claim.claim_hash,
+    'retention_until', claim.retention_until,
+    'erased_at', claim.erased_at
+  )
+  into result_value
+  from public.research_claims claim
+  where claim.id = claim_id_value
+    and claim.task_id = p_task_id
+    and claim.project_id = p_project_id
+    and claim.platform = p_platform::public.cognitive_platform
+    and claim.environment = p_environment::public.cognitive_environment;
+
+  if result_value is null then
+    raise exception 'cognitive_runtime_research_claim_readback_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  return result_value;
+end;
+$$;
+
+create function cognitive_runtime.derive_research_evaluation_with_readback(
+  p_task_id uuid,
+  p_project_id uuid,
+  p_platform text,
+  p_environment text,
+  p_subject_type text,
+  p_subject_id uuid,
+  p_service_identity_token text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  evaluation_id_value uuid;
+  result_value jsonb;
+begin
+  perform cognitive_runtime.assert_runtime_invoker(
+    'cognitive_research_evaluator',
+    'derive_research_evaluation'
+  );
+
+  evaluation_id_value :=
+    public.cognitive_derive_public_research_evaluation(
+      p_task_id,
+      p_project_id,
+      p_platform::public.cognitive_platform,
+      p_environment::public.cognitive_environment,
+      p_subject_type,
+      p_subject_id,
+      p_service_identity_token
+    );
+
+  select jsonb_build_object(
+    'evaluation_id', evaluation.id,
+    'subject_type', evaluation.subject_type,
+    'subject_id', evaluation.subject_id,
+    'evaluation_status', evaluation.evaluation_status,
+    'evidence_hash', evaluation.evidence_hash,
+    'evaluator_identity_hash', evaluation.evaluator_identity_hash,
+    'expires_at', evaluation.expires_at,
+    'evidence_manifest_id', manifest.id,
+    'manifest_derived_status', manifest.derived_status,
+    'manifest_hash', manifest.manifest_hash,
+    'manifest_expires_at', manifest.expires_at,
+    'reasons', manifest.evidence_manifest->'reasons'
+  )
+  into result_value
+  from public.cognitive_subject_evaluations evaluation
+  join public.cognitive_subject_evidence_manifests manifest
+    on manifest.id = evaluation.evidence_manifest_id
+   and manifest.task_id = evaluation.task_id
+   and manifest.project_id = evaluation.project_id
+   and manifest.platform = evaluation.platform
+   and manifest.environment = evaluation.environment
+  where evaluation.id = evaluation_id_value
+    and evaluation.task_id = p_task_id
+    and evaluation.project_id = p_project_id
+    and evaluation.platform = p_platform::public.cognitive_platform
+    and evaluation.environment = p_environment::public.cognitive_environment
+    and evaluation.subject_type = p_subject_type
+    and evaluation.subject_id = p_subject_id
+    and manifest.subject_type = evaluation.subject_type
+    and manifest.subject_id = evaluation.subject_id
+    and manifest.derived_status = evaluation.evaluation_status
+    and manifest.manifest_hash = evaluation.evidence_hash
+    and jsonb_typeof(manifest.evidence_manifest->'reasons') = 'array'
+    and not exists (
+      select 1
+      from jsonb_array_elements(manifest.evidence_manifest->'reasons') reason
+      where jsonb_typeof(reason) <> 'string'
+    );
+
+  if result_value is null then
+    raise exception 'cognitive_runtime_research_evaluation_readback_rejected'
+      using errcode = 'P0001';
+  end if;
 
   return result_value;
 end;
@@ -684,6 +1363,9 @@ revoke all on function cognitive_runtime.collect_livekit_sentinel_run(
 revoke all on function cognitive_runtime.scheduler_task_factory_status(
   uuid,uuid,text,text
 ) from public;
+revoke all on function cognitive_runtime.scheduler_prerequisite_snapshot(
+  uuid,uuid,text,text
+) from public;
 revoke all on function cognitive_runtime.issue_recurring_child_task(
   uuid,uuid,uuid,uuid,text,text,timestamptz,text,text,text,text,text
 ) from public;
@@ -692,6 +1374,12 @@ revoke all on function cognitive_runtime.product_quality_evaluator_snapshot(
 ) from public;
 revoke all on function cognitive_runtime.research_evaluator_snapshot(
   uuid,uuid,uuid,text,text
+) from public;
+revoke all on function cognitive_runtime.record_research_claim_with_readback(
+  uuid,uuid,text,text,text,text,text,numeric,timestamptz,text,uuid[],text
+) from public;
+revoke all on function cognitive_runtime.derive_research_evaluation_with_readback(
+  uuid,uuid,text,text,text,uuid,text
 ) from public;
 
 grant execute on function cognitive_runtime.collect_sentinel_run(
@@ -702,7 +1390,7 @@ grant execute on function cognitive_runtime.collect_livekit_sentinel_run(
   uuid,uuid,text,text,text,text,text,text,jsonb,text,text,
   timestamptz,timestamptz,timestamptz,text,text
 ) to cognitive_livekit_experience_collector;
-grant execute on function cognitive_runtime.scheduler_task_factory_status(
+grant execute on function cognitive_runtime.scheduler_prerequisite_snapshot(
   uuid,uuid,text,text
 ) to cognitive_level01_scheduler;
 grant execute on function cognitive_runtime.issue_recurring_child_task(
@@ -714,6 +1402,12 @@ grant execute on function cognitive_runtime.product_quality_evaluator_snapshot(
 grant execute on function cognitive_runtime.research_evaluator_snapshot(
   uuid,uuid,uuid,text,text
 ) to cognitive_research_evaluator;
+grant execute on function cognitive_runtime.record_research_claim_with_readback(
+  uuid,uuid,text,text,text,text,text,numeric,timestamptz,text,uuid[],text
+) to cognitive_public_research_broker;
+grant execute on function cognitive_runtime.derive_research_evaluation_with_readback(
+  uuid,uuid,text,text,text,uuid,text
+) to cognitive_research_evaluator;
 
 do $grants$
 declare
@@ -723,39 +1417,41 @@ declare
 begin
   for grant_row in
     select * from (values
-      ('cognitive_product_baseline_executor', 'governance_claim_approved_action'),
-      ('cognitive_product_baseline_executor', 'governance_begin_approved_execution'),
-      ('cognitive_product_baseline_executor', 'governance_stage_product_experience_baseline_v1'),
-      ('cognitive_product_baseline_executor', 'governance_complete_approved_execution'),
-      ('cognitive_product_baseline_executor', 'governance_product_baseline_persist_completed_execution'),
-      ('cognitive_product_baseline_executor', 'governance_fail_approved_execution'),
-      ('cognitive_product_quality_evaluator', 'product_experience_resolve_current_active_baseline'),
-      ('cognitive_product_quality_evaluator', 'product_quality_detection_assessment_hash'),
-      ('cognitive_product_quality_evaluator', 'product_quality_resolution_assessment_hash'),
-      ('cognitive_product_quality_evaluator', 'governance_evaluate_product_experience_baseline_v1'),
-      ('cognitive_product_quality_evaluator', 'product_quality_record_sentinel_evaluator_proof'),
-      ('cognitive_product_quality_triage', 'product_quality_triage_detection'),
-      ('cognitive_product_quality_triage', 'product_quality_triage_resolution'),
-      ('cognitive_public_research_broker', 'cognitive_record_public_research_source_v2'),
-      ('cognitive_public_research_broker', 'cognitive_record_public_research_claim_evidence'),
-      ('cognitive_public_research_broker', 'cognitive_record_public_research_contradiction_detection'),
-      ('cognitive_public_research_broker', 'cognitive_expire_public_research_maintenance'),
-      ('cognitive_research_evaluator', 'cognitive_derive_public_research_evaluation'),
-      ('cognitive_research_evaluator', 'cognitive_resolve_public_research_contradiction'),
-      ('cognitive_model_router', 'cognitive_model_router_recover_expired'),
-      ('cognitive_model_router', 'cognitive_model_router_reserve'),
-      ('cognitive_model_router', 'cognitive_model_router_settle'),
-      ('cognitive_github_draft_pr_broker', 'cognitive_record_github_draft_pr_provider_readback'),
-      ('cognitive_github_draft_pr_broker', 'cognitive_consume_github_draft_pr_capability'),
-      ('cognitive_github_draft_pr_broker', 'cognitive_accept_github_draft_pr_tool_result')
-    ) allowed(role_name, function_name)
+      ('cognitive_product_baseline_executor', 'governance_claim_approved_action', null::integer),
+      ('cognitive_product_baseline_executor', 'governance_begin_approved_execution', null),
+      ('cognitive_product_baseline_executor', 'governance_stage_product_experience_baseline_v1', null),
+      ('cognitive_product_baseline_executor', 'governance_complete_approved_execution', null),
+      ('cognitive_product_baseline_executor', 'governance_product_baseline_persist_completed_execution', null),
+      ('cognitive_product_baseline_executor', 'governance_fail_approved_execution', null),
+      ('cognitive_product_quality_evaluator', 'product_experience_resolve_current_active_baseline', null),
+      ('cognitive_product_quality_evaluator', 'product_quality_detection_assessment_hash', null),
+      ('cognitive_product_quality_evaluator', 'product_quality_resolution_assessment_hash', null),
+      ('cognitive_product_quality_evaluator', 'governance_evaluate_product_experience_baseline_v1', null),
+      ('cognitive_product_quality_evaluator', 'product_quality_record_sentinel_evaluator_proof', null),
+      ('cognitive_product_quality_triage', 'product_quality_triage_detection', null),
+      ('cognitive_product_quality_triage', 'product_quality_triage_resolution', null),
+      ('cognitive_public_research_broker', 'cognitive_record_public_research_source_v2', null),
+      ('cognitive_public_research_broker', 'cognitive_record_public_research_contradiction_detection', null),
+      ('cognitive_public_research_broker', 'cognitive_expire_public_research_maintenance', null),
+      ('cognitive_research_evaluator', 'cognitive_resolve_public_research_contradiction', null),
+      ('cognitive_model_router', 'cognitive_model_router_recover_expired', null),
+      ('cognitive_model_router', 'cognitive_model_router_reserve', 21),
+      ('cognitive_model_router', 'cognitive_model_router_settle', null),
+      ('cognitive_github_draft_pr_broker', 'cognitive_record_github_draft_pr_provider_readback', null),
+      ('cognitive_github_draft_pr_broker', 'cognitive_consume_github_draft_pr_capability', null),
+      ('cognitive_github_draft_pr_broker', 'cognitive_accept_github_draft_pr_tool_result', null)
+    ) allowed(role_name, function_name, argument_count)
   loop
     select count(*) into function_count
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'public'
-      and procedure.proname = grant_row.function_name;
+      and procedure.proname = grant_row.function_name
+      and (
+        grant_row.argument_count is null
+        or procedure.pronargs = grant_row.argument_count
+      );
 
     if function_count <> 1 then
       raise exception 'cognitive_runtime_rpc_manifest_mismatch:%:%',
@@ -768,7 +1464,11 @@ begin
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'public'
-      and procedure.proname = grant_row.function_name;
+      and procedure.proname = grant_row.function_name
+      and (
+        grant_row.argument_count is null
+        or procedure.pronargs = grant_row.argument_count
+      );
 
     execute format(
       'grant execute on function %s to %I',

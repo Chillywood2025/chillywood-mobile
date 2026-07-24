@@ -55,8 +55,22 @@ where not exists (
   select 1 from pg_catalog.pg_roles where rolname = '${login_role}'
 )
 \gexec
+select 'select 1 / 0'
+where exists (
+  select 1
+  from pg_catalog.pg_roles
+  where rolname = '${login_role}'
+    and (
+      rolsuper
+      or rolcreatedb
+      or rolcreaterole
+      or rolreplication
+      or rolbypassrls
+    )
+)
+\gexec
 alter role "${login_role}"
-  login nosuperuser nocreatedb nocreaterole inherit noreplication nobypassrls
+  login inherit
   password :'runtime_password';
 revoke service_role from "${login_role}";
 revoke authenticated from "${login_role}";

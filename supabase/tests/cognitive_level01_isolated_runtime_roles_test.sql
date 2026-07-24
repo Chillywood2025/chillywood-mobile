@@ -1,6 +1,6 @@
 begin;
 
-select plan(28);
+select plan(29);
 
 create temporary table expected_runtime_roles(
   role_name text primary key
@@ -42,10 +42,10 @@ insert into expected_runtime_grants(role_name, schema_name, function_name) value
   ('cognitive_product_quality_triage','public','product_quality_triage_detection'),
   ('cognitive_product_quality_triage','public','product_quality_triage_resolution'),
   ('cognitive_public_research_broker','public','cognitive_record_public_research_source_v2'),
-  ('cognitive_public_research_broker','public','cognitive_record_public_research_claim_evidence'),
+  ('cognitive_public_research_broker','cognitive_runtime','record_research_claim_with_readback'),
   ('cognitive_public_research_broker','public','cognitive_record_public_research_contradiction_detection'),
   ('cognitive_public_research_broker','public','cognitive_expire_public_research_maintenance'),
-  ('cognitive_research_evaluator','public','cognitive_derive_public_research_evaluation'),
+  ('cognitive_research_evaluator','cognitive_runtime','derive_research_evaluation_with_readback'),
   ('cognitive_research_evaluator','public','cognitive_resolve_public_research_contradiction'),
   ('cognitive_research_evaluator','cognitive_runtime','research_evaluator_snapshot'),
   ('cognitive_model_router','public','cognitive_model_router_recover_expired'),
@@ -55,7 +55,7 @@ insert into expected_runtime_grants(role_name, schema_name, function_name) value
   ('cognitive_github_draft_pr_broker','public','cognitive_record_github_draft_pr_provider_readback'),
   ('cognitive_github_draft_pr_broker','public','cognitive_consume_github_draft_pr_capability'),
   ('cognitive_github_draft_pr_broker','public','cognitive_accept_github_draft_pr_tool_result'),
-  ('cognitive_level01_scheduler','cognitive_runtime','scheduler_task_factory_status'),
+  ('cognitive_level01_scheduler','cognitive_runtime','scheduler_prerequisite_snapshot'),
   ('cognitive_level01_scheduler','cognitive_runtime','issue_recurring_child_task');
 
 select is(
@@ -366,6 +366,22 @@ select ok(
             'EXECUTE'
           )
         )
+        or (
+          procedure.proname = 'cognitive_record_public_research_claim_evidence'
+          and pg_catalog.has_function_privilege(
+            'cognitive_public_research_broker',
+            procedure.oid,
+            'EXECUTE'
+          )
+        )
+        or (
+          procedure.proname = 'cognitive_derive_public_research_evaluation'
+          and pg_catalog.has_function_privilege(
+            'cognitive_research_evaluator',
+            procedure.oid,
+            'EXECUTE'
+          )
+        )
       )
   ),
   'research broker and evaluator mutation authorities remain separated'
@@ -406,6 +422,24 @@ select ok(
       )
   ),
   'model and GitHub broker database authorities remain separated'
+);
+
+select is(
+  (
+    select pg_catalog.array_agg(procedure.pronargs order by procedure.pronargs)
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public'
+      and procedure.proname = 'cognitive_model_router_reserve'
+      and pg_catalog.has_function_privilege(
+        'cognitive_model_router',
+        procedure.oid,
+        'EXECUTE'
+      )
+  ),
+  array[21]::smallint[],
+  'model router can execute only the 21-argument credential-bound reserve overload'
 );
 
 select ok(
@@ -486,8 +520,8 @@ select is(
       and procedure.prosecdef
       and procedure.proconfig @> array['search_path=""']
   ),
-  10,
-  'all ten runtime boundary helpers and wrappers are security definer with an empty search path'
+  13,
+  'all thirteen runtime boundary helpers and wrappers are security definer with an empty search path'
 );
 
 select ok(
@@ -540,17 +574,10 @@ select throws_ok(
 select ok(
   not exists (
     select 1
-    from pg_catalog.pg_roles login_role
+    from expected_runtime_roles expected
+    join pg_catalog.pg_roles login_role
+      on login_role.rolname = expected.role_name || '_login'
     where login_role.rolcanlogin
-      and exists (
-        select 1
-        from expected_runtime_roles expected
-        where pg_catalog.pg_has_role(
-          login_role.rolname,
-          expected.role_name,
-          'member'
-        )
-      )
   ),
   'migration creates no password-bearing runtime login roles'
 );
