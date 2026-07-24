@@ -17,6 +17,12 @@ const constitution = JSON.parse(
 const runnerConfig = JSON.parse(
   read("config/intelligence/sentinel-installed-runner.config.json"),
 );
+const baselineOptions = JSON.parse(
+  read("config/intelligence/product-experience-baseline-options-v1.json"),
+);
+const baselineOptionsDoc = read(
+  "docs/intelligence/CHILLYWOOD_PRODUCT_EXPERIENCE_BASELINE_OPTIONS_V1.md",
+);
 const readinessRunner = read("scripts/sentinel-runtime-readiness.mjs");
 const canaryRunner = read("scripts/product-experience-canary-runner.mjs");
 const packageJson = read("package.json");
@@ -26,6 +32,25 @@ const failures = [];
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
 };
+const canonicalize = (value) => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, canonicalize(entry)]),
+  );
+};
+const canonicalSelectionHash = (option) =>
+  crypto.createHash("sha256")
+    .update(JSON.stringify(canonicalize({
+      schemaVersion: baselineOptions.schemaVersion,
+      optionsVersion: baselineOptions.optionsVersion,
+      scope: baselineOptions.scope,
+      commonRequirements: baselineOptions.commonRequirements,
+      selectedOption: option,
+    })))
+    .digest("hex");
 const contains = (needle, message) => assert(migration.includes(needle), message);
 
 for (const switchKey of [
@@ -228,6 +253,32 @@ assert(
   constitution.ownerApprovalVersion === "not_approved_yet",
   "constitution must not fabricate Owner baseline approval",
 );
+const expectedBaselineSelectionHashes = {
+  A: "29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9",
+  B: "9e891de1b46cd19405b43178dbd34ed0ea1d96b4eebcc7b404f4f3d9f6ba3dc5",
+  C: "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184",
+};
+assert(
+  baselineOptions.status === "owner_selection_required",
+  "baseline alternatives must remain pending exact Owner selection",
+);
+assert(
+  baselineOptions.options.length === 3,
+  "baseline alternatives must contain exactly A, B, and C",
+);
+for (const option of baselineOptions.options) {
+  const expectedHash = expectedBaselineSelectionHashes[option.option];
+  assert(!!expectedHash, `unexpected baseline option: ${option.option}`);
+  if (!expectedHash) continue;
+  assert(
+    canonicalSelectionHash(option) === expectedHash,
+    `canonical baseline selection hash changed for option ${option.option}`,
+  );
+  assert(
+    baselineOptionsDoc.includes(expectedHash),
+    `baseline Owner approval request omits option ${option.option} hash`,
+  );
+}
 for (const section of [
   "mobileFirstPrinciples",
   "streamingContentDensity",
