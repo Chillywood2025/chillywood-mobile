@@ -90,6 +90,7 @@ const REQUIRED_CASE_NAMES = Object.freeze([
   "worker service credential cannot act as Owner",
   "malformed Owner bootstrap approval is denied",
   "extra-key Owner bootstrap approval is denied",
+  "unsafe canonical branch text is denied",
   "exact Owner records zero-state bootstrap approval through Edge",
   "Owner approval target hash matches reviewed tuple",
   "zero state after Owner approval: task rows",
@@ -594,6 +595,17 @@ try {
         status,
         FUNCTIONS.owner,
         { ...bootstrapApprovalPayload, unexpected: "bounded" },
+        ownerEdgeHeaders(status, owner.token),
+      ),
+  );
+  await expectHttp(
+    "unsafe canonical branch text is denied",
+    [400],
+    () =>
+      edgeCall(
+        status,
+        FUNCTIONS.owner,
+        { ...bootstrapApprovalPayload, branchName: "codex/bypass-rls" },
         ownerEdgeHeaders(status, owner.token),
       ),
   );

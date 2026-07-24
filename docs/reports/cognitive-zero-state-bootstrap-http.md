@@ -13,7 +13,7 @@ cognitive Owner, worker, and evaluator Edge contracts.
 - Test source: coordinator worktree at
   `/Users/loverslane/chillywood-mobile`
 - Exact integrated source head:
-  `a1d257bf4fb970909bd49601ac66e9067be1137d`
+  `61964375b7ead3ce5eb250766811246d7d63f4b5`
 - The harness verifies that its `_lib`, `config`, `supabase/functions`, and
   `supabase/migrations` paths resolve to the selected source root.
 - The harness requires the expected 40-character source head before starting
@@ -23,12 +23,13 @@ cognitive Owner, worker, and evaluator Edge contracts.
 
 ## Sanitized result
 
-- Assertions: **57 PASS / 0 FAIL / 57 total**
-- Required gate: **43 PASS / 0 FAIL / 0 missing / 43 total**
+- Assertions: **58 PASS / 0 FAIL / 58 total**
+- Required gate: **44 PASS / 0 FAIL / 0 missing / 44 total**
 - Local Supabase reset/start: **PASS**
 - Edge target readiness: **PASS**
 - Exact source head stability: **PASS**
 - Malformed and extra-key bootstrap approval rejection: **PASS**
+- Unsafe canonical branch-text rejection: **PASS**
 - Positive Owner approval: **PASS**
 - Worker claim and stage: **PASS**
 - Independent evaluator proof: **PASS**
@@ -43,6 +44,7 @@ The real HTTP chain proved:
   evaluator proof;
 - an exact Owner could record the immutable bootstrap approval;
 - malformed and extra-key Owner bootstrap payloads were rejected;
+- canonical instruction-bearing branch text was rejected;
 - the worker could claim and stage only the exact approval and target tuple;
 - the independent evaluator could record only the matching receipt-bound
   evaluator proof;
