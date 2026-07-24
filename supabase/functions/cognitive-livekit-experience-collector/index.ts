@@ -58,6 +58,10 @@ export type LiveKitMetricManifest = Readonly<{
   roomConnectElapsedMs: number;
   roomConnected: boolean;
   roomRunCorrelationHash: string;
+  scenarioType:
+    | "success_baseline"
+    | "bounded_failure_fixture"
+    | "background_foreground_recovery";
   stageFailureCategory: LiveKitFailureCategory;
   tokenIssuedElapsedMs: number;
   tokenRequestStarted: boolean;
@@ -128,6 +132,11 @@ const BEARER_JWT_PATTERN =
   /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
 const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
 const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"]);
+const SCENARIO_TYPES = new Set([
+  "success_baseline",
+  "bounded_failure_fixture",
+  "background_foreground_recovery",
+]);
 const ICE_STATES = new Set([
   "new",
   "checking",
@@ -198,6 +207,7 @@ const METRIC_KEYS = Object.freeze(
     "roomConnectElapsedMs",
     "roomConnected",
     "roomRunCorrelationHash",
+    "scenarioType",
     "stageFailureCategory",
     "tokenIssuedElapsedMs",
     "tokenRequestStarted",
@@ -354,6 +364,7 @@ export const deriveLiveKitFailureCategory = (
     return "installed_ui_connecting_stuck";
   }
   if (
+    metric.scenarioType === "background_foreground_recovery" &&
     metric.installedUiObserved &&
     (
       !metric.backgrounded || !metric.foregrounded ||
@@ -446,6 +457,7 @@ const parseMetricManifest = (
   if (!PROVIDER_STATES.has(toText(value.providerState))) return null;
   if (!REMOTE_MEDIA_KINDS.has(toText(value.remoteMediaKind))) return null;
   if (!TOKEN_RESULT_STATES.has(toText(value.tokenResultStatus))) return null;
+  if (!SCENARIO_TYPES.has(toText(value.scenarioType))) return null;
   if (
     !SHA256_PATTERN.test(toText(value.roomRunCorrelationHash)) ||
     !nullableSha256(value.headlessParticipantIdentityHash) ||
@@ -530,7 +542,16 @@ const parseMetricManifest = (
     ) ||
     metric.firstAudioVideoObserved !== (metric.remoteMediaKind !== "none") ||
     metric.tokenReturned !== (metric.tokenResultStatus === "success") ||
-    metric.tokenRequested !== metric.tokenRequestStarted
+    metric.tokenRequested !== metric.tokenRequestStarted ||
+    metric.headlessParticipantUsed !== true ||
+    (
+      metric.scenarioType !== "background_foreground_recovery" &&
+      (
+        metric.backgrounded ||
+        metric.foregrounded ||
+        metric.backgroundForegroundRecovery
+      )
+    )
   ) {
     return null;
   }

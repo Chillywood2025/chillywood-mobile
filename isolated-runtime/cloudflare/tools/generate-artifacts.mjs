@@ -119,6 +119,8 @@ const gatewayConfig = {
   })),
   vars: {
     CF_ACCESS_AUD: "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+    CF_ACCESS_SERVICE_TOKEN_COMMON_NAME:
+      "REPLACE_WITH_ACCESS_SERVICE_TOKEN_CLIENT_ID",
     CF_ACCESS_TEAM_DOMAIN:
       "https://replace-with-team.cloudflareaccess.com",
     RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,

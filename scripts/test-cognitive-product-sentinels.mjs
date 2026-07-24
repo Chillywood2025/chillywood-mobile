@@ -116,7 +116,7 @@ assert(
       "materialization does not auto-issue a live service capability",
     ) &&
     platformScopeDbTest.includes(
-      "scheduler prerequisite and readback paths consume immutable platform mapping",
+      "scheduler paths require immutable mapping and the current platform switch",
     ),
   "platform-scope pgTAP coverage is incomplete",
 );

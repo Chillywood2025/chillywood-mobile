@@ -569,6 +569,36 @@ begin
 end;
 $roles$;
 
+create function cognitive_runtime.runtime_schema_set_is_valid(
+  p_schema_names text[]
+)
+returns boolean
+language sql
+immutable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    (
+      select pg_catalog.array_agg(schema_name order by schema_name)
+      from (
+        select distinct schema_name
+        from pg_catalog.unnest(
+          coalesce(p_schema_names, '{}'::text[])
+        ) schema_value(schema_name)
+      ) canonical_schemas
+    ) = array[
+      'cognitive_runtime',
+      'information_schema',
+      'pg_catalog'
+    ]::text[],
+    false
+  );
+$$;
+revoke all on function
+  cognitive_runtime.runtime_schema_set_is_valid(text[])
+  from public,anon,authenticated,service_role;
+
 create function cognitive_runtime.runtime_login_provisioning_ready()
 returns boolean
 language sql
@@ -576,6 +606,10 @@ stable
 security definer
 set search_path = ''
 as $$
+  -- PostgreSQL has no DENY that can offset access inherited from PUBLIC.
+  -- Permit only the reviewed runtime schema and catalog schemas; any current
+  -- or future provider/application schema reachable by an isolated role keeps
+  -- password-bearing LOGIN provisioning fail-closed.
   with expected_roles(role_name) as (
     values
       ('cognitive_product_baseline_executor'),
@@ -600,15 +634,19 @@ as $$
            current_database(),
            'TEMPORARY'
          )
-         or exists (
-           select 1
-           from (values ('public'),('net')) schema_value(schema_name)
-           where to_regnamespace(schema_value.schema_name) is not null
-             and pg_catalog.has_schema_privilege(
-               expected.role_name,
-               schema_value.schema_name,
-               'USAGE'
-             )
+         or not cognitive_runtime.runtime_schema_set_is_valid(
+           array(
+             select namespace.nspname
+             from pg_catalog.pg_namespace namespace
+             where namespace.nspname not like 'pg_temp_%'
+               and namespace.nspname not like 'pg_toast_temp_%'
+               and pg_catalog.has_schema_privilege(
+                 expected.role_name,
+                 namespace.oid,
+                 'USAGE'
+               )
+             order by namespace.nspname
+           )
          )
     );
 $$;
@@ -675,6 +713,7 @@ as $$
 declare
   session_role_name text := session_user;
   principal_value pg_catalog.pg_roles%rowtype;
+  login_value pg_catalog.pg_roles%rowtype;
 begin
   if not cognitive_runtime.runtime_operation_allowed(
     p_expected_principal,
@@ -688,18 +727,95 @@ begin
   from pg_catalog.pg_roles
   where rolname = p_expected_principal;
 
+  select * into login_value
+  from pg_catalog.pg_roles
+  where rolname = session_role_name;
+
   if principal_value.rolname is null
      or principal_value.rolcanlogin
      or principal_value.rolsuper
      or principal_value.rolcreatedb
      or principal_value.rolcreaterole
+     or principal_value.rolinherit
      or principal_value.rolreplication
      or principal_value.rolbypassrls
      or session_role_name <> p_expected_principal || '_login'
+     or login_value.rolname is null
+     or not login_value.rolcanlogin
+     or login_value.rolsuper
+     or login_value.rolcreatedb
+     or login_value.rolcreaterole
+     or not login_value.rolinherit
+     or login_value.rolreplication
+     or login_value.rolbypassrls
+     or login_value.rolvaliduntil is null
+     or login_value.rolvaliduntil <= transaction_timestamp()
+     or (
+       coalesce(login_value.rolconfig, '{}'::text[]) @> array[
+         'search_path=cognitive_runtime, pg_catalog',
+         'statement_timeout=15s',
+         'idle_in_transaction_session_timeout=10s',
+         'lock_timeout=3s'
+       ]::text[]
+     ) is not true
+     or cardinality(coalesce(login_value.rolconfig, '{}'::text[])) <> 4
      or not pg_catalog.pg_has_role(
        session_role_name,
        p_expected_principal,
        'member'
+     )
+     or (
+       select count(*) <> 1
+       from pg_catalog.pg_auth_members membership
+       where membership.member = login_value.oid
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_auth_members membership
+       where membership.member = login_value.oid
+         and membership.roleid = principal_value.oid
+         and not membership.admin_option
+         and membership.inherit_option
+         and not membership.set_option
+     )
+     or not pg_catalog.has_database_privilege(
+       login_value.oid,
+       current_database(),
+       'CONNECT'
+     )
+     or pg_catalog.has_database_privilege(
+       login_value.oid,
+       current_database(),
+       'CREATE'
+     )
+     or pg_catalog.has_database_privilege(
+       login_value.oid,
+       current_database(),
+       'TEMPORARY'
+     )
+     or not pg_catalog.has_schema_privilege(
+       login_value.oid,
+       'cognitive_runtime',
+       'USAGE'
+     )
+     or pg_catalog.has_schema_privilege(
+       login_value.oid,
+       'cognitive_runtime',
+       'CREATE'
+     )
+     or not cognitive_runtime.runtime_schema_set_is_valid(
+       array(
+         select namespace.nspname
+         from pg_catalog.pg_namespace namespace
+         where namespace.nspname not like 'pg_temp_%'
+           and namespace.nspname not like 'pg_toast_temp_%'
+           and pg_catalog.has_schema_privilege(
+             login_value.oid,
+             namespace.oid,
+             'USAGE'
+           )
+         order by namespace.nspname
+       )
      ) then
     raise exception 'cognitive_runtime_principal_rejected'
       using errcode = '42501';
@@ -1547,7 +1663,8 @@ begin
       from (
         select
           id, task_id, project_id, platform, environment, sentinel_key,
-          route_or_surface, source_build_hash, evidence_manifest_hash,
+          route_or_surface, runtime_identity_hash, source_build_hash,
+          evidence_manifest_hash,
           metric_manifest, result_status, physical_proof_status,
           evaluation_expires_at, collector_capability_id, erased_at
         from public.product_experience_sentinel_runs
@@ -1573,7 +1690,8 @@ begin
       from (
         select
           id, task_id, project_id, platform, environment, sentinel_key,
-          route_or_surface, source_build_hash, evidence_manifest_hash,
+          route_or_surface, runtime_identity_hash, source_build_hash,
+          evidence_manifest_hash,
           metric_manifest, result_status, physical_proof_status,
           evaluation_expires_at, collector_capability_id, erased_at
         from public.product_experience_sentinel_runs
@@ -1624,6 +1742,8 @@ set search_path = ''
 as $$
 declare
   claim_id_value uuid;
+  prior_request_role text :=
+    current_setting('request.jwt.claim.role', true);
   result_value jsonb;
 begin
   perform cognitive_runtime.assert_runtime_invoker(
@@ -1631,19 +1751,35 @@ begin
     'record_research_claim'
   );
 
-  claim_id_value := public.cognitive_record_public_research_claim_evidence(
-    p_task_id,
-    p_project_id,
-    p_platform::public.cognitive_platform,
-    p_environment::public.cognitive_environment,
-    p_canary_key,
-    p_bounded_claim,
-    p_category,
-    p_confidence,
-    p_freshness_deadline,
-    p_contradiction_state,
-    p_source_ids,
-    p_service_identity_token
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  begin
+    claim_id_value := public.cognitive_record_public_research_claim_evidence(
+      p_task_id,
+      p_project_id,
+      p_platform::public.cognitive_platform,
+      p_environment::public.cognitive_environment,
+      p_canary_key,
+      p_bounded_claim,
+      p_category,
+      p_confidence,
+      p_freshness_deadline,
+      p_contradiction_state,
+      p_source_ids,
+      p_service_identity_token
+    );
+  exception
+    when others then
+      perform set_config(
+        'request.jwt.claim.role',
+        coalesce(prior_request_role, ''),
+        true
+      );
+      raise;
+  end;
+  perform set_config(
+    'request.jwt.claim.role',
+    coalesce(prior_request_role, ''),
+    true
   );
 
   select jsonb_build_object(
@@ -1685,6 +1821,8 @@ set search_path = ''
 as $$
 declare
   evaluation_id_value uuid;
+  prior_request_role text :=
+    current_setting('request.jwt.claim.role', true);
   result_value jsonb;
 begin
   perform cognitive_runtime.assert_runtime_invoker(
@@ -1692,16 +1830,32 @@ begin
     'derive_research_evaluation'
   );
 
-  evaluation_id_value :=
-    public.cognitive_derive_public_research_evaluation(
-      p_task_id,
-      p_project_id,
-      p_platform::public.cognitive_platform,
-      p_environment::public.cognitive_environment,
-      p_subject_type,
-      p_subject_id,
-      p_service_identity_token
-    );
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  begin
+    evaluation_id_value :=
+      public.cognitive_derive_public_research_evaluation(
+        p_task_id,
+        p_project_id,
+        p_platform::public.cognitive_platform,
+        p_environment::public.cognitive_environment,
+        p_subject_type,
+        p_subject_id,
+        p_service_identity_token
+      );
+  exception
+    when others then
+      perform set_config(
+        'request.jwt.claim.role',
+        coalesce(prior_request_role, ''),
+        true
+      );
+      raise;
+  end;
+  perform set_config(
+    'request.jwt.claim.role',
+    coalesce(prior_request_role, ''),
+    true
+  );
 
   select jsonb_build_object(
     'evaluation_id', evaluation.id,
@@ -1965,29 +2119,32 @@ begin
 
   for wrapper_row in
     select * from (values
-      ('cognitive_product_baseline_executor', 'claim_approved_action', 'governance_claim_approved_action', null::integer),
-      ('cognitive_product_baseline_executor', 'begin_approved_execution', 'governance_begin_approved_execution', null),
-      ('cognitive_product_baseline_executor', 'stage_product_baseline', 'governance_stage_product_experience_baseline_v1', null),
-      ('cognitive_product_baseline_executor', 'complete_approved_execution', 'governance_complete_approved_execution', null),
-      ('cognitive_product_baseline_executor', 'persist_product_baseline', 'governance_product_baseline_persist_completed_execution', null),
-      ('cognitive_product_baseline_executor', 'fail_approved_execution', 'governance_fail_approved_execution', null),
-      ('cognitive_product_quality_evaluator', 'compute_detection_hash', 'product_quality_detection_assessment_hash', null),
-      ('cognitive_product_quality_evaluator', 'compute_resolution_hash', 'product_quality_resolution_assessment_hash', null),
-      ('cognitive_product_quality_evaluator', 'evaluate_product_baseline', 'governance_evaluate_product_experience_baseline_v1', null),
-      ('cognitive_product_quality_evaluator', 'record_sentinel_evaluator_proof', 'product_quality_record_sentinel_evaluator_proof', null),
-      ('cognitive_product_quality_triage', 'triage_detection', 'product_quality_triage_detection', null),
-      ('cognitive_product_quality_triage', 'triage_resolution', 'product_quality_triage_resolution', null),
-      ('cognitive_public_research_broker', 'record_research_source', 'cognitive_record_public_research_source_v2', null),
-      ('cognitive_public_research_broker', 'detect_research_contradiction', 'cognitive_record_public_research_contradiction_detection', null),
-      ('cognitive_public_research_broker', 'expire_research', 'cognitive_expire_public_research_maintenance', null),
-      ('cognitive_research_evaluator', 'resolve_research_contradiction', 'cognitive_resolve_public_research_contradiction', null),
-      ('cognitive_model_router', 'recover_model_reservation', 'cognitive_model_router_recover_expired', null),
-      ('cognitive_model_router', 'reserve_model_invocation', 'cognitive_model_router_reserve', 21),
-      ('cognitive_model_router', 'settle_model_invocation', 'cognitive_model_router_settle', null),
-      ('cognitive_github_draft_pr_broker', 'record_github_provider_readback', 'cognitive_record_github_draft_pr_provider_readback', null),
-      ('cognitive_github_draft_pr_broker', 'consume_github_capability', 'cognitive_consume_github_draft_pr_capability', null),
-      ('cognitive_github_draft_pr_broker', 'accept_github_tool_result', 'cognitive_accept_github_draft_pr_tool_result', null)
-    ) allowed(role_name, operation_name, function_name, argument_count)
+      ('cognitive_product_baseline_executor', 'claim_approved_action', 'governance_claim_approved_action', null::integer, true),
+      ('cognitive_product_baseline_executor', 'begin_approved_execution', 'governance_begin_approved_execution', null, true),
+      ('cognitive_product_baseline_executor', 'stage_product_baseline', 'governance_stage_product_experience_baseline_v1', null, true),
+      ('cognitive_product_baseline_executor', 'complete_approved_execution', 'governance_complete_approved_execution', null, true),
+      ('cognitive_product_baseline_executor', 'persist_product_baseline', 'governance_product_baseline_persist_completed_execution', null, true),
+      ('cognitive_product_baseline_executor', 'fail_approved_execution', 'governance_fail_approved_execution', null, true),
+      ('cognitive_product_quality_evaluator', 'compute_detection_hash', 'product_quality_detection_assessment_hash', null, false),
+      ('cognitive_product_quality_evaluator', 'compute_resolution_hash', 'product_quality_resolution_assessment_hash', null, false),
+      ('cognitive_product_quality_evaluator', 'evaluate_product_baseline', 'governance_evaluate_product_experience_baseline_v1', null, true),
+      ('cognitive_product_quality_evaluator', 'record_sentinel_evaluator_proof', 'product_quality_record_sentinel_evaluator_proof', null, true),
+      ('cognitive_product_quality_triage', 'triage_detection', 'product_quality_triage_detection', null, true),
+      ('cognitive_product_quality_triage', 'triage_resolution', 'product_quality_triage_resolution', null, true),
+      ('cognitive_public_research_broker', 'record_research_source', 'cognitive_record_public_research_source_v2', null, true),
+      ('cognitive_public_research_broker', 'detect_research_contradiction', 'cognitive_record_public_research_contradiction_detection', null, true),
+      ('cognitive_public_research_broker', 'expire_research', 'cognitive_expire_public_research_maintenance', null, true),
+      ('cognitive_research_evaluator', 'resolve_research_contradiction', 'cognitive_resolve_public_research_contradiction', null, true),
+      ('cognitive_model_router', 'recover_model_reservation', 'cognitive_model_router_recover_expired', null, true),
+      ('cognitive_model_router', 'reserve_model_invocation', 'cognitive_model_router_reserve', 21, true),
+      ('cognitive_model_router', 'settle_model_invocation', 'cognitive_model_router_settle', null, true),
+      ('cognitive_github_draft_pr_broker', 'record_github_provider_readback', 'cognitive_record_github_draft_pr_provider_readback', null, true),
+      ('cognitive_github_draft_pr_broker', 'consume_github_capability', 'cognitive_consume_github_draft_pr_capability', null, true),
+      ('cognitive_github_draft_pr_broker', 'accept_github_tool_result', 'cognitive_accept_github_draft_pr_tool_result', null, true)
+    ) allowed(
+      role_name, operation_name, function_name, argument_count,
+      legacy_service_role_bridge
+    )
   loop
     select count(*) into function_count
     from pg_catalog.pg_proc procedure
@@ -2056,27 +2213,72 @@ begin
     join pg_catalog.pg_namespace type_namespace
       on type_namespace.oid = argument_type.typnamespace;
 
-    wrapper_sql := format(
-      $wrapper_definition$
-      create function cognitive_runtime.%1$I(%2$s)
-      returns %3$s
-      language plpgsql
-      security definer
-      set search_path = ''
-      as $runtime_wrapper$
-      begin
-        perform cognitive_runtime.assert_runtime_invoker(%4$L, %5$L);
-        return public.%1$I(%6$s);
-      end;
-      $runtime_wrapper$;
-      $wrapper_definition$,
-      wrapper_row.function_name,
-      argument_list,
-      result_type,
-      wrapper_row.role_name,
-      wrapper_row.operation_name,
-      call_list
-    );
+    if wrapper_row.legacy_service_role_bridge then
+      wrapper_sql := format(
+        $wrapper_definition$
+        create function cognitive_runtime.%1$I(%2$s)
+        returns %3$s
+        language plpgsql
+        security definer
+        set search_path = ''
+        as $runtime_wrapper$
+        declare
+          prior_request_role text :=
+            current_setting('request.jwt.claim.role', true);
+          result_value %3$s;
+        begin
+          perform cognitive_runtime.assert_runtime_invoker(%4$L, %5$L);
+          perform set_config('request.jwt.claim.role', 'service_role', true);
+          begin
+            result_value := public.%1$I(%6$s);
+          exception
+            when others then
+              perform set_config(
+                'request.jwt.claim.role',
+                coalesce(prior_request_role, ''),
+                true
+              );
+              raise;
+          end;
+          perform set_config(
+            'request.jwt.claim.role',
+            coalesce(prior_request_role, ''),
+            true
+          );
+          return result_value;
+        end;
+        $runtime_wrapper$;
+        $wrapper_definition$,
+        wrapper_row.function_name,
+        argument_list,
+        result_type,
+        wrapper_row.role_name,
+        wrapper_row.operation_name,
+        call_list
+      );
+    else
+      wrapper_sql := format(
+        $wrapper_definition$
+        create function cognitive_runtime.%1$I(%2$s)
+        returns %3$s
+        language plpgsql
+        security definer
+        set search_path = ''
+        as $runtime_wrapper$
+        begin
+          perform cognitive_runtime.assert_runtime_invoker(%4$L, %5$L);
+          return public.%1$I(%6$s);
+        end;
+        $runtime_wrapper$;
+        $wrapper_definition$,
+        wrapper_row.function_name,
+        argument_list,
+        result_type,
+        wrapper_row.role_name,
+        wrapper_row.operation_name,
+        call_list
+      );
+    end if;
     execute wrapper_sql;
 
     select procedure.oid::regprocedure into wrapper_function
@@ -2119,6 +2321,8 @@ set search_path = ''
 as $$
 declare
   overrun_result jsonb;
+  prior_request_role text :=
+    current_setting('request.jwt.claim.role', true);
   settlement_result jsonb;
 begin
   perform cognitive_runtime.assert_runtime_invoker(
@@ -2130,32 +2334,48 @@ begin
     'settle_model_invocation'
   );
 
-  overrun_result := public.cognitive_model_router_record_provider_overrun(
-    p_preflight_id,
-    p_reported_model_tokens,
-    p_reported_model_cost,
-    p_provider_model_version,
-    p_provider_response_id_hash,
-    p_failure_reason_hash,
-    p_evidence_hash,
-    p_latency_ms,
-    p_service_identity_token
-  );
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  begin
+    overrun_result := public.cognitive_model_router_record_provider_overrun(
+      p_preflight_id,
+      p_reported_model_tokens,
+      p_reported_model_cost,
+      p_provider_model_version,
+      p_provider_response_id_hash,
+      p_failure_reason_hash,
+      p_evidence_hash,
+      p_latency_ms,
+      p_service_identity_token
+    );
 
-  settlement_result := public.cognitive_model_router_settle(
-    p_preflight_id,
-    'provider_rejected',
-    (overrun_result->>'reservedModelTokens')::bigint,
-    (overrun_result->>'reservedModelCost')::numeric,
-    null,
-    null,
-    null,
-    null,
-    null,
-    p_failure_reason_hash,
-    p_result_hash,
-    p_latency_ms,
-    p_service_identity_token
+    settlement_result := public.cognitive_model_router_settle(
+      p_preflight_id,
+      'provider_rejected',
+      (overrun_result->>'reservedModelTokens')::bigint,
+      (overrun_result->>'reservedModelCost')::numeric,
+      null,
+      null,
+      null,
+      null,
+      null,
+      p_failure_reason_hash,
+      p_result_hash,
+      p_latency_ms,
+      p_service_identity_token
+    );
+  exception
+    when others then
+      perform set_config(
+        'request.jwt.claim.role',
+        coalesce(prior_request_role, ''),
+        true
+      );
+      raise;
+  end;
+  perform set_config(
+    'request.jwt.claim.role',
+    coalesce(prior_request_role, ''),
+    true
   );
 
   return jsonb_build_object(

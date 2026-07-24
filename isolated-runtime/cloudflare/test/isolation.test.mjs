@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { hashJson, sha256Hex } from "../src/contracts.mjs";
 import { createGatewayHandler } from "../src/gateway-core.mjs";
+import { isExactAccessServiceToken } from "../src/gateway.mjs";
 import { PRINCIPAL_BY_ID, RUNTIME_MANIFEST } from "../src/manifest.mjs";
 import { operationAdapter } from "../src/operation-adapters.mjs";
 import { createPrivateInvocationHandler } from "../src/private-core.mjs";
@@ -70,6 +71,54 @@ const database = (overrides = {}) => ({
 test("gateway has no database/provider credential domain", () => {
   assert.deepEqual(RUNTIME_MANIFEST.gateway.databaseBindings, []);
   assert.deepEqual(RUNTIME_MANIFEST.gateway.providerSecrets, []);
+});
+
+test("gateway accepts only the exact Cloudflare Access service-token identity", () => {
+  const commonName = `${"a".repeat(32)}.access`;
+  assert.equal(
+    isExactAccessServiceToken(
+      {
+        common_name: commonName,
+        sub: "",
+        type: "app",
+      },
+      commonName,
+    ),
+    true,
+  );
+  assert.equal(
+    isExactAccessServiceToken(
+      {
+        email: "owner@example.invalid",
+        sub: "identity-subject",
+        type: "app",
+      },
+      commonName,
+    ),
+    false,
+  );
+  assert.equal(
+    isExactAccessServiceToken(
+      {
+        common_name: `${"b".repeat(32)}.access`,
+        sub: "",
+        type: "app",
+      },
+      commonName,
+    ),
+    false,
+  );
+  assert.equal(
+    isExactAccessServiceToken(
+      {
+        common_name: commonName,
+        sub: "",
+        type: "app",
+      },
+      "invalid",
+    ),
+    false,
+  );
 });
 
 test("ten private principals have unique Worker, role, Hyperdrive and invocation domains", () => {

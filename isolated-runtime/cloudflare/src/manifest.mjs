@@ -84,6 +84,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
     providerSecrets: Object.freeze([]),
     requiredPublicConfiguration: Object.freeze([
       "CF_ACCESS_AUD",
+      "CF_ACCESS_SERVICE_TOKEN_COMMON_NAME",
       "CF_ACCESS_TEAM_DOMAIN",
     ]),
     workerName: "chillywood-cognitive-level01-gateway",

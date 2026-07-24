@@ -476,16 +476,27 @@ select ok(
   )) like
     '%join public.cognitive_product_sentinel_platform_scopes sentinel_scope%'
   and lower(pg_catalog.pg_get_functiondef(
+    'public.cognitive_level01_schedule_prerequisites_base(uuid,uuid,uuid,public.cognitive_platform,public.cognitive_environment)'::regprocedure
+  )) like
+    '%join public.cognitive_governance_switches sentinel_switch%'
+  and lower(pg_catalog.pg_get_functiondef(
     'cognitive_runtime.scheduler_prerequisite_snapshot(uuid,uuid,text,text)'::regprocedure
   )) like
     '%join public.cognitive_product_sentinel_platform_scopes sentinel_scope%'
+  and lower(pg_catalog.pg_get_functiondef(
+    'cognitive_runtime.scheduler_prerequisite_snapshot(uuid,uuid,text,text)'::regprocedure
+  )) like
+    '%join public.cognitive_governance_switches sentinel_switch%'
+  and lower(pg_catalog.pg_get_functiondef(
+    'cognitive_runtime.scheduler_prerequisite_snapshot(uuid,uuid,text,text)'::regprocedure
+  )) like '%and sentinel_switch.enabled%'
   and lower(pg_catalog.pg_get_functiondef(
     'public.cognitive_level01_schedule_prerequisites_base(uuid,uuid,uuid,public.cognitive_platform,public.cognitive_environment)'::regprocedure
   )) not like '%sentinel_task.parent_task_id = p_parent_task_id%'
   and lower(pg_catalog.pg_get_functiondef(
     'cognitive_runtime.scheduler_prerequisite_snapshot(uuid,uuid,text,text)'::regprocedure
   )) not like '%sentinel_task.parent_task_id = p_task_id%',
-  'scheduler prerequisite and readback paths consume immutable platform mapping'
+  'scheduler paths require immutable mapping and the current platform switch'
 );
 
 set local role authenticated;

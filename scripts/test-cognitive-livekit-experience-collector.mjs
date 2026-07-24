@@ -55,6 +55,9 @@ for (
     "installedParticipantIdentityHash",
     "participantIdentityDistinct",
     "tokenClaimsValidated",
+    "scenarioType",
+    "success_baseline",
+    "bounded_failure_fixture",
     "MAX_SESSION_OBSERVATION_WINDOW_MS",
     "MAX_SESSION_OBSERVATION_AGE_MS",
     'const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"])',
@@ -114,6 +117,7 @@ for (
     "installed_evidence_stale_or_unbounded",
     "value.observerKind !== `${input.platform}_installed_app`",
     "platform: input.platform",
+    "livekit_scenario_evidence_mismatch",
   ]
 ) {
   assert.ok(harness.includes(required), `headless harness missing ${required}`);
@@ -159,6 +163,7 @@ for (
     "rejects same-identity participants",
     "rejects installed source/runtime mismatch",
     "binds runs to Android or iOS, never shared",
+    "recovery evidence is required only for the recovery scenario",
   ]
 ) {
   assert.ok(

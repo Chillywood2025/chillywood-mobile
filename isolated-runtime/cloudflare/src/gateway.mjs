@@ -3,6 +3,18 @@ import { createGatewayHandler } from "./gateway-core.mjs";
 
 const jwksByDomain = new Map();
 
+export const isExactAccessServiceToken = (
+  payload,
+  expectedCommonName,
+) =>
+  payload !== null &&
+  typeof payload === "object" &&
+  payload.type === "app" &&
+  payload.sub === "" &&
+  typeof payload.common_name === "string" &&
+  /^[a-f0-9]{32}\.access$/u.test(expectedCommonName) &&
+  payload.common_name === expectedCommonName;
+
 const verifyAccess = async (request, env) => {
   const token = request.headers.get("cf-access-jwt-assertion")?.trim() ?? "";
   const teamDomain = typeof env.CF_ACCESS_TEAM_DOMAIN === "string"
@@ -10,10 +22,15 @@ const verifyAccess = async (request, env) => {
     : "";
   const audience =
     typeof env.CF_ACCESS_AUD === "string" ? env.CF_ACCESS_AUD : "";
+  const expectedCommonName =
+    typeof env.CF_ACCESS_SERVICE_TOKEN_COMMON_NAME === "string"
+      ? env.CF_ACCESS_SERVICE_TOKEN_COMMON_NAME
+      : "";
   if (
     !token ||
     !/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/u.test(teamDomain) ||
-    !/^[a-f0-9]{64}$/u.test(audience)
+    !/^[a-f0-9]{64}$/u.test(audience) ||
+    !/^[a-f0-9]{32}\.access$/u.test(expectedCommonName)
   ) {
     return false;
   }
@@ -25,12 +42,12 @@ const verifyAccess = async (request, env) => {
     jwksByDomain.set(teamDomain, jwks);
   }
   try {
-    await jwtVerify(token, jwks, {
+    const { payload } = await jwtVerify(token, jwks, {
       algorithms: ["RS256"],
       audience,
       issuer: teamDomain,
     });
-    return true;
+    return isExactAccessServiceToken(payload, expectedCommonName);
   } catch {
     return false;
   }

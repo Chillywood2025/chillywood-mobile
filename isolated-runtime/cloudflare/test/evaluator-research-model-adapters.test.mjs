@@ -8,6 +8,7 @@ import {
   APPROVED_OPTION_C_BASELINE_HASH,
   deriveIndependentLiveKitFailureCategory,
   deterministicDetectionReasons,
+  deterministicResolutionReasons,
   deterministicTouchTargetClassification,
   deterministicVisualClassification,
   PRODUCT_QUALITY_EVALUATOR_ADAPTERS,
@@ -274,6 +275,7 @@ const liveKitMetrics = (changes = {}) => ({
   roomConnectElapsedMs: 1_000,
   roomConnected: true,
   roomRunCorrelationHash: HASH_A,
+  scenarioType: "background_foreground_recovery",
   stageFailureCategory: "none",
   tokenIssuedElapsedMs: 500,
   tokenRequestStarted: true,
@@ -484,6 +486,104 @@ test("LiveKit evaluator independently derives stages and rejects a claimed categ
       }),
     ),
     "installed_ui_connecting_stuck",
+  );
+});
+
+test("LiveKit resolution independently requires a healthy bound installed session", () => {
+  const finding = {
+    current_status: "open",
+    environment: "production",
+    erased_at: null,
+    id: UUID_D,
+    platform: "android",
+    project_id: UUID_B,
+    route_or_surface: "live-stage",
+    sentinel_run_id: UUID_A,
+    task_id: UUID_C,
+  };
+  const failedMetrics = liveKitMetrics({
+    connectingResolved: false,
+    stageFailureCategory: "installed_ui_connecting_stuck",
+  });
+  const detectionRun = {
+    collector_capability_id: UUID_A,
+    environment: "production",
+    erased_at: null,
+    evidence_manifest_hash: HASH_A,
+    id: UUID_A,
+    metric_manifest: {
+      metrics: failedMetrics,
+      observationKind: "livekit_experience",
+    },
+    physical_proof_status: "installed_ui_observed",
+    platform: "android",
+    project_id: UUID_B,
+    result_status: "failed",
+    route_or_surface: "live-stage",
+    runtime_identity_hash: HASH_B,
+    sentinel_key: "livekit_experience_sentinel",
+    source_build_hash: HASH_C,
+    task_id: UUID_C,
+  };
+  const passingRun = {
+    ...detectionRun,
+    evidence_manifest_hash: HASH_B,
+    id: UUID_D,
+    metric_manifest: {
+      metrics: liveKitMetrics(),
+      observationKind: "livekit_experience",
+    },
+    result_status: "passed",
+  };
+  assert.deepEqual(
+    deterministicResolutionReasons(passingRun, finding, detectionRun),
+    [],
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          metrics: {},
+          observationKind: "livekit_experience",
+        },
+      },
+      finding,
+      detectionRun,
+    ).includes("resolution_livekit_metric_manifest_rejected"),
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          metrics: {
+            ...liveKitMetrics(),
+            connectingResolved: false,
+            stageFailureCategory: "installed_ui_connecting_stuck",
+          },
+          observationKind: "livekit_experience",
+        },
+      },
+      finding,
+      detectionRun,
+    ).includes("resolution_livekit_experience_not_satisfied"),
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          metrics: {
+            ...liveKitMetrics(),
+            stageFailureCategory: "token_backend_failure",
+          },
+          observationKind: "livekit_experience",
+        },
+      },
+      finding,
+      detectionRun,
+    ).includes("resolution_livekit_failure_category_mismatch"),
   );
 });
 
