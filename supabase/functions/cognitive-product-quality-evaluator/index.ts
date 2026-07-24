@@ -135,6 +135,10 @@ const BASELINE_EVALUATION_KEYS = Object.freeze([
   "executionId",
   "executionReceiptHash",
 ]);
+const LIVEKIT_FIXTURE_ATTESTATION_KEYS = Object.freeze([
+  "action",
+  "sentinelRunId",
+]);
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
   "confirmed_defect",
@@ -382,6 +386,12 @@ export const isStrictSentinelEvaluationPayload = (
       UUID.test(value.sentinelRunId) &&
       typeof value.resolutionReasonHash === "string" &&
       LOWER_HEX_64.test(value.resolutionReasonHash) &&
+      safePayload({ action: value.action });
+  }
+  if (value.action === "attest_livekit_bounded_failure_no_finding") {
+    return hasExactKeys(value, LIVEKIT_FIXTURE_ATTESTATION_KEYS) &&
+      typeof value.sentinelRunId === "string" &&
+      UUID.test(value.sentinelRunId) &&
       safePayload({ action: value.action });
   }
   if (!hasExactKeys(value, DETECTION_KEYS)) return false;
@@ -1885,12 +1895,15 @@ export const deterministicDetectionReasons = (
       reasons.add("livekit_metric_manifest_rejected");
     } else if (toText(metrics.stageFailureCategory) !== failureCategory) {
       reasons.add("livekit_failure_category_mismatch");
+    } else if (toText(metrics.scenarioType) === "bounded_failure_fixture") {
+      reasons.add("livekit_synthetic_fixture_not_product_finding");
     } else {
       expectedProfile = liveKitProfile(failureCategory);
     }
     if (
       failureCategory &&
       toText(metrics.stageFailureCategory) === failureCategory &&
+      toText(metrics.scenarioType) !== "bounded_failure_fixture" &&
       !expectedProfile
     ) {
       reasons.add("livekit_classification_rejected");
@@ -2006,6 +2019,12 @@ export const deterministicResolutionReasons = (
       reasons.add("resolution_accessibility_target_not_satisfied");
     }
   } else if (observationKind === "livekit_experience") {
+    if (
+      toText(detectionMetrics.scenarioType) === "bounded_failure_fixture" ||
+      toText(resolutionMetrics.scenarioType) === "bounded_failure_fixture"
+    ) {
+      reasons.add("livekit_synthetic_fixture_not_product_finding");
+    }
     if (
       toText(resolutionMetrics.scenarioType) !==
         toText(detectionMetrics.scenarioType) ||
@@ -2314,6 +2333,11 @@ export const handler = async (request: Request): Promise<Response> => {
         return json(409, { error: "product_baseline_evaluation_rejected" });
       }
       return json(200, result.data as JsonObject);
+    }
+    if (payload.action === "attest_livekit_bounded_failure_no_finding") {
+      return json(409, {
+        error: "isolated_product_quality_evaluator_runtime_required",
+      });
     }
     const run = await readStoredRun(client, String(payload.sentinelRunId));
     if (

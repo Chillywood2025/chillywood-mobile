@@ -35,6 +35,7 @@ import { EVALUATOR_STATEMENTS } from "../src/database-statements/evaluator.mjs";
 import { MODEL_STATEMENTS } from "../src/database-statements/model.mjs";
 import { RESEARCH_BROKER_STATEMENTS } from "../src/database-statements/research-broker.mjs";
 import { RESEARCH_EVALUATOR_STATEMENTS } from "../src/database-statements/research-evaluator.mjs";
+import { hashJson, sha256Hex } from "../src/contracts.mjs";
 
 const UUID_A = "10000000-0000-4000-8000-000000000001";
 const UUID_B = "20000000-0000-4000-8000-000000000002";
@@ -288,6 +289,169 @@ const liveKitMetrics = (changes = {}) => ({
   ...changes,
 });
 
+test("bounded LiveKit fixture attestation records an independently derived no-finding result", async () => {
+  const metrics = liveKitMetrics({
+    backgroundForegroundRecovery: false,
+    backgrounded: false,
+    firstAudioVideoObserved: false,
+    foregrounded: false,
+    headlessParticipantIdentityHash: null,
+    iceCheckingObserved: false,
+    iceGatheringObserved: false,
+    iceState: "new",
+    localTrackPublished: false,
+    participantIdentityDistinct: false,
+    peerConnectionEstablished: false,
+    remoteMediaKind: "none",
+    remoteParticipantJoined: false,
+    remoteTrackSubscribed: false,
+    roomConnected: false,
+    scenarioType: "bounded_failure_fixture",
+    stageFailureCategory: "token_backend_failure",
+    tokenClaimsValidated: false,
+    tokenResultStatus: "error",
+    tokenReturned: false,
+    websocketConnected: false,
+  });
+  const run = {
+    collector_capability_id: UUID_A,
+    environment: "production",
+    erased_at: null,
+    evaluation_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    evidence_manifest_hash: HASH_A,
+    id: UUID_A,
+    metric_manifest: {
+      metrics,
+      observationKind: "livekit_experience",
+    },
+    physical_proof_status: "installed_ui_observed",
+    platform: "android",
+    project_id: UUID_B,
+    result_status: "failed",
+    route_or_surface: "live-stage",
+    runtime_identity_hash: HASH_B,
+    sentinel_key: "livekit_experience_sentinel",
+    source_build_hash: HASH_C,
+    task_id: UUID_C,
+  };
+  const expectedEvaluatorOutputHash = await hashJson({
+    derivedFailureCategory: "token_backend_failure",
+    findingCreated: false,
+    findingRecurrence: false,
+    resolutionRequired: false,
+    scenarioType: "bounded_failure_fixture",
+    schemaVersion: "livekit-bounded-failure-no-finding-evaluator-v1",
+    sentinelRunId: UUID_A,
+  });
+  const expectedAttestationHash = await sha256Hex([
+    "livekit-bounded-failure-no-finding-attestation-v1",
+    UUID_A,
+    UUID_C,
+    UUID_B,
+    "android",
+    "production",
+    "bounded_failure_fixture",
+    HASH_A,
+    HASH_C,
+    "token_backend_failure",
+    expectedEvaluatorOutputHash,
+  ].join("|"));
+  const calls = [];
+  const result = await PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+    .attest_livekit_bounded_failure_no_finding.execute({
+      database: {
+        call: async (id, parameters) => {
+          calls.push({ id, parameters });
+          if (id === "productQualityEvaluatorSnapshot") {
+            return {
+              activeBaseline: { count: 0 },
+              detectionRun: null,
+              finding: null,
+              run,
+            };
+          }
+          if (
+            id === "productQualityAttestLiveKitBoundedFailureNoFinding"
+          ) {
+            return {
+              attestationHash: parameters[3],
+              attestationId: UUID_D,
+              derivedFailureCategory: parameters[1],
+              findingCreated: false,
+              findingRecurrence: false,
+              recordedAt: "2026-07-24T12:00:21.000Z",
+              resolutionRequired: false,
+              scenarioType: "bounded_failure_fixture",
+              sentinelRunId: parameters[0],
+            };
+          }
+          throw new Error(`unexpected:${id}`);
+        },
+      },
+      env: {
+        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
+      },
+      payload: {
+        action: "attest_livekit_bounded_failure_no_finding",
+        sentinelRunId: UUID_A,
+      },
+    });
+
+  assert.equal(
+    PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+      .attest_livekit_bounded_failure_no_finding.ready,
+    true,
+  );
+  assert.deepEqual(calls.map(({ id }) => id), [
+    "productQualityEvaluatorSnapshot",
+    "productQualityAttestLiveKitBoundedFailureNoFinding",
+  ]);
+  assert.deepEqual(calls[1].parameters, [
+    UUID_A,
+    "token_backend_failure",
+    expectedEvaluatorOutputHash,
+    expectedAttestationHash,
+    EVALUATOR_TOKEN,
+  ]);
+  assert.equal(result.evaluatorOutputHash, expectedEvaluatorOutputHash);
+  assert.equal(result.attestationHash, expectedAttestationHash);
+  assert.equal(result.findingCreated, false);
+  assert.equal(result.findingRecurrence, false);
+  assert.equal(result.resolutionRequired, false);
+  assert.equal(result.selfApproval, false);
+
+  await assert.rejects(
+    PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+      .attest_livekit_bounded_failure_no_finding.execute({
+        database: {
+          call: async () => ({
+            activeBaseline: { count: 0 },
+            detectionRun: null,
+            finding: null,
+            run: {
+              ...run,
+              metric_manifest: {
+                ...run.metric_manifest,
+                metrics: {
+                  ...metrics,
+                  scenarioType: "success_baseline",
+                },
+              },
+            },
+          }),
+        },
+        env: {
+          COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
+        },
+        payload: {
+          action: "attest_livekit_bounded_failure_no_finding",
+          sentinelRunId: UUID_A,
+        },
+      }),
+    /livekit_fixture_attestation_snapshot_rejected/u,
+  );
+});
+
 test("authoritative touch-target port preserves Android 23.24dp finding", () => {
   const run = {
     metric_manifest: { metrics: touchTargetMetrics() },
@@ -455,6 +619,39 @@ test("LiveKit evaluator independently derives stages and rejects a claimed categ
     suspectedLayer: "backend_token",
   };
   assert.deepEqual(deterministicDetectionReasons(run, candidate), []);
+  const ordinaryFailureRun = {
+    ...run,
+    metric_manifest: {
+      ...run.metric_manifest,
+      metrics: {
+        ...tokenFailure,
+        backgroundForegroundRecovery: false,
+        backgrounded: false,
+        foregrounded: false,
+        scenarioType: "success_baseline",
+      },
+    },
+  };
+  assert.deepEqual(
+    deterministicDetectionReasons(ordinaryFailureRun, candidate),
+    [],
+  );
+  assert.deepEqual(
+    deterministicDetectionReasons(
+      {
+        ...ordinaryFailureRun,
+        metric_manifest: {
+          ...ordinaryFailureRun.metric_manifest,
+          metrics: {
+            ...ordinaryFailureRun.metric_manifest.metrics,
+            scenarioType: "bounded_failure_fixture",
+          },
+        },
+      },
+      candidate,
+    ),
+    ["livekit_synthetic_fixture_not_product_finding"],
+  );
   const mislabeled = {
     ...run,
     metric_manifest: {
@@ -595,6 +792,38 @@ test("LiveKit resolution independently requires a healthy bound installed sessio
       finding,
       detectionRun,
     ).includes("resolution_livekit_failure_category_mismatch"),
+  );
+  const fixtureDetectionRun = {
+    ...detectionRun,
+    metric_manifest: {
+      ...detectionRun.metric_manifest,
+      metrics: {
+        ...detectionRun.metric_manifest.metrics,
+        backgroundForegroundRecovery: false,
+        backgrounded: false,
+        foregrounded: false,
+        scenarioType: "bounded_failure_fixture",
+      },
+    },
+  };
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...passingRun,
+        metric_manifest: {
+          ...passingRun.metric_manifest,
+          metrics: {
+            ...passingRun.metric_manifest.metrics,
+            backgroundForegroundRecovery: false,
+            backgrounded: false,
+            foregrounded: false,
+            scenarioType: "bounded_failure_fixture",
+          },
+        },
+      },
+      finding,
+      fixtureDetectionRun,
+    ).includes("livekit_synthetic_fixture_not_product_finding"),
   );
 });
 

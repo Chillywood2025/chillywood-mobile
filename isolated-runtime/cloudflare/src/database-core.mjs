@@ -16,6 +16,7 @@ const COMMON_STATEMENTS = Object.freeze({
 export const createScopedDatabasePort = ({
   connectionString,
   domainStatements,
+  signal,
   sqlFactory = postgres,
 }) => {
   if (
@@ -38,6 +39,7 @@ export const createScopedDatabasePort = ({
     ssl: "require",
   });
   const call = async (statementId, parameters) => {
+    signal?.throwIfAborted();
     const statement = statements[statementId];
     if (
       !statement ||
@@ -46,11 +48,30 @@ export const createScopedDatabasePort = ({
     ) {
       throw new Error("rpc_allowlist_rejected");
     }
-    const rows = await sql.unsafe(statement.text, parameters);
-    if (!Array.isArray(rows) || rows.length !== 1) {
-      throw new Error("database_response_rejected");
+    const query = sql.unsafe(statement.text, parameters);
+    const cancel = () => {
+      try {
+        query?.cancel?.();
+      } catch {
+        // The invocation remains aborted even when the driver's best-effort
+        // protocol cancellation cannot be initiated.
+      }
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) cancel();
+    try {
+      const rows = await query;
+      signal?.throwIfAborted();
+      if (!Array.isArray(rows) || rows.length !== 1) {
+        throw new Error("database_response_rejected");
+      }
+      return rows[0].result;
+    } catch (error) {
+      signal?.throwIfAborted();
+      throw error;
+    } finally {
+      signal?.removeEventListener("abort", cancel);
     }
-    return rows[0].result;
   };
   return Object.freeze({
     call,

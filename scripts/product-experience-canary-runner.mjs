@@ -35,6 +35,8 @@ function failClosed(mode, reason, detail = {}) {
     physicalProofStatus: NEW_BINARY_OR_OTA_REQUIRED,
     reason,
     ...detail,
+    classificationAuthority: "preliminary_local_only",
+    remoteGovernedFindingMutationAllowed: false,
   };
 }
 
@@ -204,6 +206,8 @@ function classifyLiveKit(evidence) {
       physicalProofStatus: "installed_proof_available",
       reason: "livekit_failure_fixture_not_triggered",
       evidenceManifestHash: hashPayload(evidence),
+      classificationAuthority: "preliminary_local_only",
+      remoteGovernedFindingMutationAllowed: false,
     };
   }
 
@@ -223,6 +227,8 @@ function classifyLiveKit(evidence) {
     physicalProofStatus: "installed_proof_available",
     suspectedLayer,
     evidenceManifestHash: hashPayload(evidence),
+    classificationAuthority: "preliminary_local_only",
+    remoteGovernedFindingMutationAllowed: false,
   };
 }
 
@@ -709,6 +715,8 @@ function classifyJourney(evidence) {
     physicalProofStatus: "installed_proof_available",
     suspectedLayer: pass ? "none" : "installed_journey_state",
     evidenceManifestHash: hashPayload(evidence),
+    classificationAuthority: "preliminary_local_only",
+    remoteGovernedFindingMutationAllowed: false,
   };
 }
 
@@ -753,6 +761,8 @@ function selfTest() {
   };
   const livekitPass = classifyLiveKit(livekitEvidence);
   assert.equal(livekitPass.resultStatus, "passed");
+  assert.equal(livekitPass.classificationAuthority, "preliminary_local_only");
+  assert.equal(livekitPass.remoteGovernedFindingMutationAllowed, false);
   const healthyFailureFixture = classifyLiveKit({
     ...livekitEvidence,
     scenarioType: "bounded_failure_fixture",
@@ -761,6 +771,14 @@ function selfTest() {
   assert.equal(
     healthyFailureFixture.reason,
     "livekit_failure_fixture_not_triggered",
+  );
+  assert.equal(
+    healthyFailureFixture.classificationAuthority,
+    "preliminary_local_only",
+  );
+  assert.equal(
+    healthyFailureFixture.remoteGovernedFindingMutationAllowed,
+    false,
   );
 
   const visualEvidence = {
@@ -974,6 +992,11 @@ function selfTest() {
     sourceRuntimeHash: fixtureHash("journey-runtime"),
   });
   assert.equal(journeyFinding.resultStatus, "finding_created");
+  assert.equal(
+    journeyFinding.classificationAuthority,
+    "preliminary_local_only",
+  );
+  assert.equal(journeyFinding.remoteGovernedFindingMutationAllowed, false);
 
   return {
     ok: true,

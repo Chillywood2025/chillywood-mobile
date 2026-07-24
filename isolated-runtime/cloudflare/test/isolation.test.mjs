@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { hashJson, sha256Hex } from "../src/contracts.mjs";
+import { createScopedDatabasePort } from "../src/database-core.mjs";
 import { createGatewayHandler } from "../src/gateway-core.mjs";
 import { isExactAccessServiceToken } from "../src/gateway.mjs";
 import { PRINCIPAL_BY_ID, RUNTIME_MANIFEST } from "../src/manifest.mjs";
@@ -397,6 +398,73 @@ test("deadline cancellation aborts provider work and closes the database", async
   assert.equal(observedAbort, true);
   assert.equal(continued, false);
   assert.equal(closed, true);
+});
+
+test("deadline cancellation cancels a pending database mutation", async () => {
+  let cancelCount = 0;
+  let closeCount = 0;
+  let mutationCompleted = false;
+  const input = await makeEnvelope();
+  input.deadlineAt = "2026-07-24T12:00:00.020Z";
+  const sqlFactory = () => ({
+    end: async () => {
+      closeCount += 1;
+    },
+    unsafe: (text, parameters) => {
+      if (text.includes("runtime_revocation_status")) {
+        const query = Promise.resolve([{
+          result: {
+            databaseAccessRevoked: false,
+            principal: parameters[0],
+          },
+        }]);
+        query.cancel = () => undefined;
+        return query;
+      }
+      assert.equal(text, "select cognitive_runtime.pending_mutation() as result");
+      let rejectQuery;
+      const timer = setTimeout(() => {
+        mutationCompleted = true;
+      }, 100);
+      const query = new Promise((_resolve, reject) => {
+        rejectQuery = reject;
+      });
+      query.cancel = () => {
+        cancelCount += 1;
+        clearTimeout(timer);
+        rejectQuery(new Error("query_cancelled"));
+      };
+      return query;
+    },
+  });
+  const handler = createPrivateInvocationHandler({
+    createDatabase: (options) =>
+      createScopedDatabasePort({
+        ...options,
+        domainStatements: {
+          pendingMutation: {
+            arity: 0,
+            text: "select cognitive_runtime.pending_mutation() as result",
+          },
+        },
+        sqlFactory,
+      }),
+    env: await baselineEnv(),
+    logger: silentLogger,
+    now: () => NOW,
+    principal: PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor"),
+    resolveAdapter: () => ({
+      databaseOperations: [],
+      execute: ({ database }) => database.call("pendingMutation", []),
+      ready: true,
+    }),
+  });
+
+  await assert.rejects(() => handler(input, TOKEN), /deadline_rejected/u);
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(cancelCount, 1);
+  assert.equal(mutationCompleted, false);
+  assert.equal(closeCount, 1);
 });
 
 test("expired boundaries never start preflight or adapter execution", async () => {

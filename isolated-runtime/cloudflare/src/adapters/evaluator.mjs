@@ -65,6 +65,10 @@ const RESOLUTION_KEYS = Object.freeze([
   "resolutionReasonHash",
   "sentinelRunId",
 ]);
+const LIVEKIT_FIXTURE_ATTESTATION_KEYS = Object.freeze([
+  "action",
+  "sentinelRunId",
+]);
 const FINDING_CLASS = /^[a-z0-9][a-z0-9._-]{2,80}$/u;
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
@@ -1418,6 +1422,8 @@ export const deterministicDetectionReasons = (
       reasons.add("livekit_metric_manifest_rejected");
     } else if (text(metrics.stageFailureCategory) !== failureCategory) {
       reasons.add("livekit_failure_category_mismatch");
+    } else if (text(metrics.scenarioType) === "bounded_failure_fixture") {
+      reasons.add("livekit_synthetic_fixture_not_product_finding");
     } else {
       expectedProfile = liveKitProfile(failureCategory);
       if (!expectedProfile) reasons.add("livekit_classification_rejected");
@@ -1530,6 +1536,12 @@ export const deterministicResolutionReasons = (
       reasons.add("resolution_accessibility_target_not_satisfied");
     }
   } else if (observationKind === "livekit_experience") {
+    if (
+      text(detectionMetrics.scenarioType) === "bounded_failure_fixture" ||
+      text(resolutionMetrics.scenarioType) === "bounded_failure_fixture"
+    ) {
+      reasons.add("livekit_synthetic_fixture_not_product_finding");
+    }
     if (
       text(resolutionMetrics.scenarioType) !==
         text(detectionMetrics.scenarioType) ||
@@ -1678,6 +1690,14 @@ const normalizeResolution = (payload) =>
       resolutionReasonHash: payload.resolutionReasonHash,
       sentinelRunId: payload.sentinelRunId,
     })
+    : null;
+
+const normalizeLiveKitFixtureAttestation = (payload) =>
+  exactKeys(payload, LIVEKIT_FIXTURE_ATTESTATION_KEYS) &&
+    payload.action === "attest_livekit_bounded_failure_no_finding" &&
+    typeof payload.sentinelRunId === "string" &&
+    UUID.test(payload.sentinelRunId)
+    ? Object.freeze({ sentinelRunId: payload.sentinelRunId })
     : null;
 
 const validateRun = (run, expectedId, now) => {
@@ -1976,6 +1996,101 @@ const evaluateResolution = ready(
   },
 );
 
+const attestLiveKitBoundedFailureNoFinding = ready(
+  [
+    "read_product_quality_snapshot",
+    "attest_livekit_bounded_failure_no_finding",
+  ],
+  async ({ database, env, payload }) => {
+    const request = normalizeLiveKitFixtureAttestation(payload);
+    if (!request) {
+      throw new Error("livekit_fixture_attestation_payload_rejected");
+    }
+    const snapshot = await database.call("productQualityEvaluatorSnapshot", [
+      request.sentinelRunId,
+      null,
+    ]);
+    const selected = readDetectionSnapshot(snapshot, request);
+    const metrics = selected ? metricObject(selected.run) : null;
+    const derivedFailureCategory = metrics
+      ? deriveIndependentLiveKitFailureCategory(metrics)
+      : null;
+    if (
+      !selected ||
+      selected.run.metric_manifest.observationKind !== "livekit_experience" ||
+      selected.run.result_status !== "failed" ||
+      !metrics ||
+      metrics.scenarioType !== "bounded_failure_fixture" ||
+      !derivedFailureCategory ||
+      derivedFailureCategory === "none" ||
+      metrics.stageFailureCategory !== derivedFailureCategory
+    ) {
+      throw new Error("livekit_fixture_attestation_snapshot_rejected");
+    }
+    const evaluatorOutputHash = await hashJson({
+      derivedFailureCategory,
+      findingCreated: false,
+      findingRecurrence: false,
+      resolutionRequired: false,
+      scenarioType: "bounded_failure_fixture",
+      schemaVersion: "livekit-bounded-failure-no-finding-evaluator-v1",
+      sentinelRunId: selected.run.id,
+    });
+    const attestationHash = await sha256Hex([
+      "livekit-bounded-failure-no-finding-attestation-v1",
+      selected.run.id,
+      selected.run.task_id,
+      selected.run.project_id,
+      selected.run.platform,
+      selected.run.environment,
+      "bounded_failure_fixture",
+      selected.run.evidence_manifest_hash,
+      selected.run.source_build_hash,
+      derivedFailureCategory,
+      evaluatorOutputHash,
+    ].join("|"));
+    const result = await database.call(
+      "productQualityAttestLiveKitBoundedFailureNoFinding",
+      [
+        selected.run.id,
+        derivedFailureCategory,
+        evaluatorOutputHash,
+        attestationHash,
+        evaluatorAssertion(env),
+      ],
+    );
+    if (
+      !exactKeys(result, [
+        "attestationHash",
+        "attestationId",
+        "derivedFailureCategory",
+        "findingCreated",
+        "findingRecurrence",
+        "recordedAt",
+        "resolutionRequired",
+        "scenarioType",
+        "sentinelRunId",
+      ]) ||
+      !UUID.test(text(result.attestationId)) ||
+      result.sentinelRunId !== selected.run.id ||
+      result.scenarioType !== "bounded_failure_fixture" ||
+      result.derivedFailureCategory !== derivedFailureCategory ||
+      result.attestationHash !== attestationHash ||
+      !Number.isFinite(Date.parse(result.recordedAt)) ||
+      result.findingCreated !== false ||
+      result.findingRecurrence !== false ||
+      result.resolutionRequired !== false
+    ) {
+      throw new Error("livekit_fixture_attestation_readback_rejected");
+    }
+    return Object.freeze({
+      ...result,
+      evaluatorOutputHash,
+      selfApproval: false,
+    });
+  },
+);
+
 const evaluateBaseline = ready(
   ["evaluate_product_baseline"],
   async ({ database, env, payload }) => {
@@ -2007,6 +2122,8 @@ const evaluateBaseline = ready(
 );
 
 export const PRODUCT_QUALITY_EVALUATOR_ADAPTERS = Object.freeze({
+  attest_livekit_bounded_failure_no_finding:
+    attestLiveKitBoundedFailureNoFinding,
   evaluate_product_baseline_selection: evaluateBaseline,
   evaluate_sentinel_detection: evaluateDetection,
   evaluate_sentinel_resolution: evaluateResolution,

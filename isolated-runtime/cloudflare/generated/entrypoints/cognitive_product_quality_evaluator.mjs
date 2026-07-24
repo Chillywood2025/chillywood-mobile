@@ -16,6 +16,16 @@ const principal = Object.freeze({
   "maxRequestBytes": 32768,
   "networkEgress": [],
   "operations": {
+    "attest_livekit_bounded_failure_no_finding": {
+      "payloadKeys": [
+        "action",
+        "sentinelRunId"
+      ],
+      "rpcEntrypoints": [
+        "cognitive_runtime.product_quality_evaluator_snapshot",
+        "cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding"
+      ]
+    },
     "evaluate_product_baseline_selection": {
       "payloadKeys": [
         "action",
