@@ -249,11 +249,8 @@ test("research authority validation is exact and repository paths remain commit-
     }),
     null,
   );
-  assert.equal(PUBLIC_RESEARCH_BROKER_ADAPTERS.retrieve_source.ready, false);
-  assert.equal(
-    PUBLIC_RESEARCH_BROKER_ADAPTERS.retrieve_source.reason,
-    "CLOUDFLARE_FETCH_CONNECTED_PEER_PROOF_UNAVAILABLE",
-  );
+  assert.equal(PUBLIC_RESEARCH_BROKER_ADAPTERS.retrieve_source.ready, true);
+  assert.equal(PUBLIC_RESEARCH_BROKER_ADAPTERS.retrieve_source.reason, null);
 });
 
 test("research claim, contradiction and expiry use bounded wrapper readbacks", async () => {

@@ -1,7 +1,8 @@
 import researchAuthoritiesJson from "../../../../config/intelligence/research-authorities.json" with {
   type: "json",
 };
-import { blocked, ready } from "./helpers.mjs";
+import { ready } from "./helpers.mjs";
+import { createPinnedResearchTransport } from "./research-socket-transport.mjs";
 
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -116,6 +117,7 @@ export const canonicalizeResearchUrl = (raw) => {
     ? Object.freeze({
       canonical,
       hostname,
+      pathAndQuery: `${parsed.pathname}${parsed.search}`,
       pathname: parsed.pathname,
     })
     : null;
@@ -143,6 +145,9 @@ export const authorityForSource = (
   }
   return authority;
 };
+
+const authorityOwnerForId = (authorityId) =>
+  AUTHORITIES.get(authorityId)?.ownerId ?? null;
 
 const normalizeScope = (payload) =>
   payload.platform === "shared" &&
@@ -347,6 +352,320 @@ const sha256Hex = async (value) => {
     .join("");
 };
 
+const decodeHtmlEntities = (value) =>
+  value
+    .replace(/&nbsp;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .replace(/&lt;/giu, "<")
+    .replace(/&gt;/giu, ">")
+    .replace(/&quot;/giu, '"')
+    .replace(/&#39;|&apos;/giu, "'");
+
+export const extractBoundedExcerpt = (
+  body,
+  contentType,
+  evidenceQuery,
+) => {
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  if (!["text/html", "text/plain", "application/json"].includes(mediaType)) {
+    return null;
+  }
+  let text = body;
+  if (mediaType === "text/html") {
+    text = text
+      .replace(/<!--[\s\S]*?-->/gu, " ")
+      .replace(/<(script|style|form|noscript|svg)\b[\s\S]*?<\/\1\s*>/giu, " ")
+      .replace(
+        /<[^>]+(?:hidden|display\s*:\s*none)[^>]*>[\s\S]*?<\/[^>]+>/giu,
+        " ",
+      )
+      .replace(/<[^>]+>/gu, " ");
+    text = decodeHtmlEntities(text);
+  }
+  text = text.replace(/\s+/gu, " ").trim();
+  const query = evidenceQuery?.replace(/\s+/gu, " ").trim();
+  if (
+    query !== undefined &&
+    (
+      query.length < 4 ||
+      query.length > 512 ||
+      !isSecuritySafeText(query)
+    )
+  ) {
+    return null;
+  }
+  const matchAt = query === undefined
+    ? 0
+    : text.toLocaleLowerCase("en-US").indexOf(
+      query.toLocaleLowerCase("en-US"),
+    );
+  if (matchAt < 0) return null;
+  const start = query === undefined
+    ? 0
+    : Math.max(0, Math.min(matchAt - 600, text.length - 2_000));
+  const bounded = text.slice(start, start + 2_000).trim();
+  return bounded && isSecuritySafeText(bounded) ? bounded : null;
+};
+
+const extractObservedPublicationDates = (
+  body,
+  contentType,
+  now,
+) => {
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  if (!["text/html", "text/plain", "application/json"].includes(mediaType)) {
+    return Object.freeze([]);
+  }
+  const candidates = [];
+  const append = (raw) => {
+    const parsed = Date.parse(decodeHtmlEntities(raw.trim()));
+    if (Number.isFinite(parsed) && parsed <= now + 300_000) {
+      candidates.push(new Date(parsed).toISOString());
+    }
+  };
+  for (
+    const match of body.matchAll(
+      /"(?:datePublished|publicationDate|published_at)"\s*:\s*"([^"]{4,80})"/giu,
+    )
+  ) {
+    append(match[1]);
+  }
+  if (mediaType === "text/html") {
+    for (
+      const match of body.matchAll(
+        /<meta\b[^>]*(?:name|property)\s*=\s*["'](?:article:published_time|datePublished|publication_date|publish-date)["'][^>]*content\s*=\s*["']([^"']{4,80})["'][^>]*>/giu,
+      )
+    ) {
+      append(match[1]);
+    }
+    for (
+      const match of body.matchAll(
+        /<meta\b[^>]*content\s*=\s*["']([^"']{4,80})["'][^>]*(?:name|property)\s*=\s*["'](?:article:published_time|datePublished|publication_date|publish-date)["'][^>]*>/giu,
+      )
+    ) {
+      append(match[1]);
+    }
+  }
+  return Object.freeze([...new Set(candidates)].sort());
+};
+
+export const derivePublicationProvenance = (
+  body,
+  contentType,
+  target,
+  authorityId,
+  now,
+) => {
+  if (authorityId === "chillywood-public-repository") {
+    const commit = target.pathname.match(
+      /^\/Chillywood2025\/chillywood-mobile\/commit\/([a-f0-9]{40})$/u,
+    )?.[1];
+    if (!commit || !contentType.toLowerCase().startsWith("text/html")) {
+      return null;
+    }
+    const rawDate = body.match(
+      /"(?:committedDate|authoredDate)"\s*:\s*"([^"]{4,80})"/iu,
+    )?.[1] ??
+      body.match(
+        /<relative-time\b[^>]*\bdatetime=["']([^"']{4,80})["'][^>]*>/iu,
+      )?.[1];
+    const parsed = rawDate === undefined ? Number.NaN : Date.parse(rawDate);
+    if (!Number.isFinite(parsed) || parsed > now + 300_000) return null;
+    const publicationDate = new Date(parsed).toISOString();
+    return Object.freeze({
+      machineValue: publicationDate,
+      mode: "github_commit_metadata",
+      publicationDate,
+      semanticIdentity: `github-commit:${commit}`,
+    });
+  }
+  const observed = extractObservedPublicationDates(body, contentType, now);
+  if (observed.length < 1) return null;
+  const publicationDate = observed[0];
+  return Object.freeze({
+    machineValue: publicationDate,
+    mode: "published_metadata",
+    publicationDate,
+    semanticIdentity: `published-at:${publicationDate}`,
+  });
+};
+
+export const extractRetrievedCitationMetadata = (
+  body,
+  contentType,
+  canonicalUrl,
+  publisher,
+  sourceType,
+) => {
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  let title = "";
+  if (mediaType === "text/html") {
+    const titleMatch = body.match(
+      /<title\b[^>]*>([\s\S]{1,1024}?)<\/title\s*>/iu,
+    );
+    const metaTitleMatch = body.match(
+      /<meta\b[^>]*(?:name|property)\s*=\s*["'](?:og:title|twitter:title)["'][^>]*content\s*=\s*["']([^"']{1,1024})["'][^>]*>/iu,
+    );
+    title = decodeHtmlEntities(
+      (titleMatch?.[1] ?? metaTitleMatch?.[1] ?? "").replace(/<[^>]+>/gu, " "),
+    );
+  } else if (mediaType === "application/json") {
+    const match = body.match(
+      /"(?:headline|title|name)"\s*:\s*"([^"\\]{1,512})"/iu,
+    );
+    title = match?.[1] ?? "";
+  }
+  title = title.replace(/\s+/gu, " ").trim().slice(0, 512);
+  if (!title) {
+    title = `${publisher} ${sourceType.replace(/_/gu, " ")}`.slice(0, 512);
+  }
+  const locator = canonicalUrl.slice(0, 512);
+  return locator && title && isSecuritySafeText(locator) &&
+      isSecuritySafeText(title)
+    ? Object.freeze({ locator, title })
+    : null;
+};
+
+const retrieveAndRecordSource = (transport, now) =>
+  ready(
+    ["record_research_source"],
+    async ({ database, env, payload }) => {
+      const request = normalizeSourceRequest(payload);
+      if (!request) throw new Error("research_source_payload_rejected");
+      const authorityUrl = canonicalizeResearchUrl(request.url);
+      let retrieved;
+      try {
+        retrieved = await transport(request.url);
+      } catch {
+        throw new Error("public_research_transport_blocked");
+      }
+      const excerpt = extractBoundedExcerpt(
+        retrieved.body,
+        retrieved.contentType,
+        request.evidenceQuery,
+      );
+      if (!excerpt) throw new Error("public_research_content_rejected");
+      const retrievalTime = Date.parse(retrieved.retrievalDate);
+      const provenance = derivePublicationProvenance(
+        retrieved.body,
+        retrieved.contentType,
+        authorityUrl,
+        request.authorityId,
+        now(),
+      );
+      if (!provenance) {
+        throw new Error("research_publication_date_unverified");
+      }
+      if (
+        !Number.isFinite(retrievalTime) ||
+        Date.parse(provenance.publicationDate) > retrievalTime
+      ) {
+        throw new Error("research_publication_date_rejected");
+      }
+      const freshnessDeadline = new Date(
+        retrievalTime + request.freshnessSeconds * 1_000,
+      ).toISOString();
+      const finalUrl = canonicalizeResearchUrl(retrieved.canonicalUrl);
+      if (
+        !finalUrl ||
+        finalUrl.hostname !== authorityUrl.hostname ||
+        !authorityForSource(
+          request.authorityId,
+          finalUrl,
+          request.publisher,
+          request.sourceType,
+        )
+      ) {
+        throw new Error("public_research_redirect_rejected");
+      }
+      const citation = extractRetrievedCitationMetadata(
+        retrieved.body,
+        retrieved.contentType,
+        finalUrl.canonical,
+        request.publisher,
+        request.sourceType,
+      );
+      if (!citation) {
+        throw new Error("research_citation_metadata_unavailable");
+      }
+      const [
+        sourceReferenceHash,
+        canonicalUrlHash,
+        contentHash,
+        provenanceHash,
+      ] = await Promise.all([
+        sha256Hex(authorityUrl.canonical),
+        sha256Hex(finalUrl.canonical),
+        sha256Hex(excerpt),
+        sha256Hex(
+          `${provenance.mode}|${provenance.machineValue}|${provenance.semanticIdentity}`,
+        ),
+      ]);
+      const resolvedAddressHashes = await Promise.all(
+        retrieved.resolvedAddresses.map((address) => sha256Hex(address)),
+      );
+      const result = await database.call("recordPublicResearchSource", [
+        request.taskId,
+        request.projectId,
+        request.platform,
+        request.environment,
+        request.authorityId,
+        request.publisher,
+        request.sourceType,
+        sourceReferenceHash,
+        canonicalUrlHash,
+        finalUrl.hostname,
+        excerpt,
+        contentHash,
+        provenance.publicationDate,
+        {
+          evidenceHash: provenanceHash,
+          machineValue: provenance.machineValue,
+          mode: provenance.mode,
+          semanticIdentity: provenance.semanticIdentity,
+        },
+        retrieved.retrievalDate,
+        freshnessDeadline,
+        [
+          "official_documentation",
+          "security_advisory",
+          "platform_policy",
+          "store_policy",
+        ].includes(request.sourceType),
+        authorityOwnerForId(request.authorityId),
+        citation,
+        resolvedAddressHashes,
+        serviceToken(env),
+      ]);
+      if (
+        !isRecord(result) ||
+        typeof result.source_id !== "string" ||
+        !UUID.test(result.source_id) ||
+        typeof result.retrieval_id !== "string" ||
+        !UUID.test(result.retrieval_id) ||
+        result.content_hash !== contentHash
+      ) {
+        throw new Error("public_research_source_readback_mismatch");
+      }
+      return Object.freeze({
+        canonicalUrlHash,
+        citationLocatorHash: await sha256Hex(citation.locator),
+        citationTitle: citation.title,
+        contentHash,
+        evaluatorRequired: true,
+        freshnessDeadline,
+        privateDataUsed: false,
+        publicationProvenanceMode: provenance.mode,
+        publisher: request.publisher,
+        retrievalId: result.retrieval_id,
+        sourceId: result.source_id,
+        sourceType: request.sourceType,
+        trustedForToolExecution: false,
+        userDerivedDataUsed: false,
+      });
+    },
+  );
+
 const recordClaim = ready(
   ["record_research_claim"],
   async ({ database, env, payload }) => {
@@ -470,12 +789,26 @@ const expirePublicMemory = ready(
   },
 );
 
-export const PUBLIC_RESEARCH_BROKER_ADAPTERS = Object.freeze({
-  retrieve_source: blocked(
-    ["record_research_source"],
-    "CLOUDFLARE_FETCH_CONNECTED_PEER_PROOF_UNAVAILABLE",
-  ),
-  record_claim: recordClaim,
-  detect_contradiction: detectContradiction,
-  expire_public_memory: expirePublicMemory,
-});
+export const createPublicResearchBrokerAdapters = ({
+  connectSocket,
+  now = Date.now,
+  resolveAddresses,
+  totalTimeoutMs,
+} = {}) => {
+  const transport = createPinnedResearchTransport({
+    canonicalizeUrl: canonicalizeResearchUrl,
+    connectSocket,
+    now,
+    resolveAddresses,
+    totalTimeoutMs,
+  });
+  return Object.freeze({
+    retrieve_source: retrieveAndRecordSource(transport, now),
+    record_claim: recordClaim,
+    detect_contradiction: detectContradiction,
+    expire_public_memory: expirePublicMemory,
+  });
+};
+
+export const PUBLIC_RESEARCH_BROKER_ADAPTERS =
+  createPublicResearchBrokerAdapters();
