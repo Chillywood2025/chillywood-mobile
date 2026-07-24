@@ -199,6 +199,10 @@ jobs:
           npm run guard:cognitive-dependency-advisories
           npm run test:cognitive-collective-governance
           npm run test:cognitive-governance-adversarial
+          npm run test:cognitive-two-party-handoff
+          npm run test:cognitive-bootstrap-edge-contract
+          npm run test:cognitive-model-independence
+          npm run test:cognitive-product-sentinels
           npm run guard:cognitive-admin-truth
           npm run guard:cognitive-ci-supply-chain
           npm run guard:android-native-runtime-compatibility
