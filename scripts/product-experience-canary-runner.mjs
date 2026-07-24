@@ -6,6 +6,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const constitution = JSON.parse(fs.readFileSync(path.join(root, "config/intelligence/product-experience-constitution.json"), "utf8"));
+const selectedBaseline = JSON.parse(fs.readFileSync(path.join(root, "config/intelligence/chillywood-product-experience-baseline-v1.json"), "utf8"));
 const runnerConfig = JSON.parse(fs.readFileSync(path.join(root, "config/intelligence/sentinel-installed-runner.config.json"), "utf8"));
 const NEW_BINARY_OR_OTA_REQUIRED = runnerConfig.newBinaryOrOtaRequiredStatus;
 
@@ -133,32 +134,388 @@ function classifyVisual(evidence) {
   requireKeys(evidence, runnerConfig.canaries.visual_experience_metrics.requiredMetrics);
   if (!validSha256(evidence.screenshotEvidenceHash)) throw new Error("visual_screenshot_hash_required");
   if (!validSha256(evidence.sourceRuntimeHash)) throw new Error("visual_runtime_hash_required");
-  if (!validSha256(evidence.baselineComparisonHash)) throw new Error("visual_baseline_hash_required");
-  for (const key of ["cardViewportWidthRatio", "cardViewportHeightRatio", "densityScore", "minimumTouchTargetPt"]) {
+  if (
+    evidence.baselineComparisonHash !== null &&
+    !validSha256(evidence.baselineComparisonHash)
+  ) {
+    throw new Error("visual_baseline_hash_invalid");
+  }
+  for (const key of [
+    "evidenceQualityHash",
+    "componentIdentityHash",
+    "routeFamilyMappingHash",
+  ]) {
+    if (!validSha256(evidence[key])) throw new Error(`visual_hash_required:${key}`);
+  }
+  if (
+    evidence.exceptionContractHash !== null &&
+    !validSha256(evidence.exceptionContractHash)
+  ) {
+    throw new Error("visual_exception_contract_hash_invalid");
+  }
+  for (const key of [
+    "mediaFrameWidth",
+    "mediaFrameHeight",
+    "totalCardContainerWidth",
+    "totalCardContainerHeight",
+    "metadataBandHeight",
+    "viewportWidth",
+    "viewportHeight",
+    "cardViewportWidthRatio",
+    "cardViewportHeightRatio",
+    "horizontalCardsVisible",
+    "horizontalMargin",
+    "horizontalGap",
+    "columnGap",
+    "verticalRowGap",
+    "columnCount",
+    "interactiveTargetWidth",
+    "interactiveTargetHeight",
+    "interactivePreferredThreshold",
+    "interactiveApplicableMinimumThreshold",
+    "screenDensityDpi",
+  ]) {
     if (!finiteNumber(evidence[key])) throw new Error(`visual_numeric_metric_required:${key}`);
+  }
+  for (const key of [
+    "mediaFrameWidth",
+    "mediaFrameHeight",
+    "totalCardContainerWidth",
+    "totalCardContainerHeight",
+    "viewportWidth",
+    "viewportHeight",
+    "interactiveTargetWidth",
+    "interactiveTargetHeight",
+  ]) {
+    if (evidence[key] <= 0 || evidence[key] > 10_000) {
+      throw new Error(`visual_dimension_out_of_bounds:${key}`);
+    }
+  }
+  for (const key of [
+    "metadataBandHeight",
+    "horizontalMargin",
+    "horizontalGap",
+    "columnGap",
+    "verticalRowGap",
+  ]) {
+    if (evidence[key] < 0 || evidence[key] > 1_000) {
+      throw new Error(`visual_spacing_out_of_bounds:${key}`);
+    }
+  }
+  for (const key of [
+    "cardViewportWidthRatio",
+    "cardViewportHeightRatio",
+  ]) {
+    if (evidence[key] < 0 || evidence[key] > 2) {
+      throw new Error(`visual_ratio_out_of_bounds:${key}`);
+    }
   }
   if (!Number.isInteger(evidence.cardsAboveFold) || evidence.cardsAboveFold < 0) throw new Error("visual_cards_above_fold_invalid");
   if (!Number.isInteger(evidence.titleLineCount) || evidence.titleLineCount < 0) throw new Error("visual_title_line_count_invalid");
-  if (!constitution.cardMetrics.acceptedAspectRatios.includes(evidence.aspectRatioClass)) throw new Error("visual_aspect_ratio_not_accepted");
+  if (!Number.isInteger(evidence.metadataLineCount) || evidence.metadataLineCount < 0) throw new Error("visual_metadata_line_count_invalid");
+  if (!Number.isInteger(evidence.columnCount) || evidence.columnCount < 0) throw new Error("visual_column_count_invalid");
+  if (!Number.isInteger(evidence.baselineVersion) || evidence.baselineVersion !== 1) throw new Error("visual_baseline_version_invalid");
+  for (const key of [
+    "creatorIdentityVisible",
+    "liveStateVisible",
+    "liveContent",
+    "accessibilityNamePresent",
+    "accessibilityRolePresent",
+    "syntheticAccount",
+    "exceptionVersioned",
+  ]) {
+    if (typeof evidence[key] !== "boolean") throw new Error(`visual_boolean_metric_required:${key}`);
+  }
+  const allowedFamilies = new Set(Object.keys(selectedBaseline.surfaceFamilies));
+  if (!allowedFamilies.has(evidence.surfaceFamily)) throw new Error("visual_surface_family_invalid");
+  if (!["android", "ios", "web"].includes(evidence.platform)) throw new Error("visual_platform_invalid");
+  if (!["phone", "tablet"].includes(evidence.deviceClass)) throw new Error("visual_device_class_invalid");
+  if (!["portrait", "landscape", "resizable"].includes(evidence.orientation)) throw new Error("visual_orientation_invalid");
+  if (!["observed", "failed", "wrong_node", "incomplete"].includes(evidence.automationStatus)) throw new Error("visual_automation_status_invalid");
+  if (!["healthy", "blocked", "degraded", "unknown"].includes(evidence.providerState)) throw new Error("visual_provider_state_invalid");
+  if (!["present", "absent", "partial", "unknown"].includes(evidence.contentState)) throw new Error("visual_content_state_invalid");
+  if (!["16:9", "9:16", "4:5", "1:1", "mixed", "unknown"].includes(evidence.aspectRatioClass)) throw new Error("visual_aspect_ratio_not_accepted");
+  if (!["option_c_target", "explicit_exception", "not_applicable", "unknown"].includes(evidence.baselineApplicability)) throw new Error("visual_baseline_applicability_invalid");
+  if (!["phone_portrait_390x844", "tablet_portrait_1024x1366", "non_reference"].includes(evidence.referenceViewport)) throw new Error("visual_reference_viewport_invalid");
+  if (!["compact", "medium", "expanded"].includes(evidence.windowClass)) throw new Error("visual_window_class_invalid");
+  if (!["peekable_horizontal_row", "two_column", "three_column", "four_column", "featured", "vertical", "compact_list", "non_media"].includes(evidence.layoutMode)) throw new Error("visual_layout_mode_invalid");
+  if (!["complete", "incomplete", "unavailable"].includes(evidence.evidenceQuality)) throw new Error("visual_evidence_quality_invalid");
+  if (!["owner_selected_pending_authenticated_approval", "approved_baseline", "unknown"].includes(evidence.baselineState)) throw new Error("visual_baseline_state_invalid");
+  if (evidence.baselineId !== selectedBaseline.baselineId) throw new Error("visual_baseline_id_invalid");
+  if (!["none", "featured_hero", "vertical_media", "compact_nonstandard", "non_media"].includes(evidence.exceptionType)) throw new Error("visual_exception_type_invalid");
+  if (!["first_row", "outside_first_row", "not_applicable"].includes(evidence.featuredPlacement)) throw new Error("visual_featured_placement_invalid");
+  if (typeof evidence.observedClassification !== "string") throw new Error("visual_observed_classification_invalid");
 
-  const deviceClass = String(evidence.deviceClass ?? "").includes("tablet") ? "tablet" : "phone";
-  const widthMax = constitution.cardMetrics.maximumCardViewportWidthRatio[deviceClass];
-  const heightMax = constitution.cardMetrics.maximumCardViewportHeightRatio[deviceClass];
-  const densityOk = evidence.densityScore >= 0 && evidence.densityScore <= 1;
-  const cardOk = evidence.cardViewportWidthRatio <= widthMax && evidence.cardViewportHeightRatio <= heightMax;
-  const typographyOk = evidence.titleLineCount <= constitution.cardMetrics.maximumTitleLines;
-  const touchOk = evidence.minimumTouchTargetPt >= constitution.accessibility.minimumTouchTargetPt;
-  const baselineApproved = constitution.status === "approved" && evidence.baselineState === "approved_current";
-  const pass = baselineApproved && densityOk && cardOk && typographyOk && touchOk;
+  const platformTarget = {
+    android: { applicableMinimum: 48, preferred: 48, unit: "dp" },
+    ios: { applicableMinimum: 44, preferred: 44, unit: "pt" },
+    web: { applicableMinimum: 24, preferred: 44, unit: "css_px" },
+  }[evidence.platform];
+  if (evidence.measurementUnit !== platformTarget.unit) {
+    throw new Error("visual_platform_unit_mismatch");
+  }
+  if (
+    evidence.interactivePreferredThreshold !== platformTarget.preferred ||
+    evidence.interactiveApplicableMinimumThreshold !==
+      platformTarget.applicableMinimum
+  ) {
+    throw new Error("visual_platform_threshold_mismatch");
+  }
+  if (
+    evidence.platform === "android" &&
+    (evidence.screenDensityDpi < 72 || evidence.screenDensityDpi > 1000)
+  ) {
+    throw new Error("visual_android_density_invalid");
+  }
+  if (evidence.platform !== "android" && evidence.screenDensityDpi !== 0) {
+    throw new Error("visual_non_android_density_must_be_zero");
+  }
 
-  return {
+  const baseResult = {
     ok: true,
     mode: "visual",
     sentinelKey: runnerConfig.canaries.visual_experience_metrics.sentinelKey,
-    resultStatus: pass ? "passed" : "finding_created",
     physicalProofStatus: "installed_proof_available",
-    suspectedLayer: baselineApproved ? (pass ? "none" : "layout_density") : "design_baseline_missing",
     evidenceManifestHash: hashPayload(evidence),
+  };
+  if (evidence.evidenceQuality !== "complete") {
+    return {
+      ...baseResult,
+      resultStatus: "blocked",
+      suspectedLayer: "unknown",
+      classification: "insufficient_evidence",
+    };
+  }
+  if (evidence.automationStatus !== "observed") {
+    return {
+      ...baseResult,
+      resultStatus: "blocked",
+      suspectedLayer: "automation",
+      classification: "automation_failure",
+    };
+  }
+  if (evidence.providerState === "blocked") {
+    return {
+      ...baseResult,
+      resultStatus: "blocked",
+      suspectedLayer: "provider_degradation",
+      classification: "provider_block",
+    };
+  }
+  if (evidence.contentState === "absent") {
+    return {
+      ...baseResult,
+      resultStatus: "blocked",
+      suspectedLayer: "empty_error_offline",
+      classification: "content_data_absence",
+    };
+  }
+  const baselineApproved =
+    constitution.status === "owner_approved" &&
+    constitution.ownerApprovalVersion !== null &&
+    constitution.approvedBaselineHash === selectedBaseline.baselineHash &&
+    evidence.baselineState === "approved_baseline" &&
+    evidence.baselineComparisonHash === selectedBaseline.baselineHash;
+  if (!baselineApproved) {
+    return {
+      ...baseResult,
+      resultStatus: "blocked",
+      suspectedLayer: "layout_density",
+      classification: "baseline_ambiguity",
+    };
+  }
+
+  const optionCTargetFamilies = new Set([
+    "standard_streaming_card",
+    "live_streaming_card",
+    "creator_streaming_card",
+  ]);
+  if (!optionCTargetFamilies.has(evidence.surfaceFamily)) {
+    const explicitException =
+      evidence.baselineApplicability === "explicit_exception" &&
+      evidence.exceptionVersioned &&
+      evidence.exceptionType !== "none" &&
+      validSha256(evidence.exceptionContractHash) &&
+      (
+        evidence.surfaceFamily !== "featured_hero_card" ||
+        evidence.featuredPlacement === "first_row"
+      );
+    return {
+      ...baseResult,
+      resultStatus: explicitException ? "passed" : "blocked",
+      suspectedLayer: explicitException ? "none" : "layout_density",
+      classification: explicitException
+        ? "route_specific_exception"
+        : "baseline_ambiguity",
+    };
+  }
+  if (
+    evidence.baselineApplicability !== "option_c_target" ||
+    evidence.exceptionVersioned ||
+    evidence.exceptionType !== "none" ||
+    evidence.exceptionContractHash !== null
+  ) {
+    return {
+      ...baseResult,
+      resultStatus: "blocked",
+      suspectedLayer: "layout_density",
+      classification: "baseline_ambiguity",
+    };
+  }
+
+  const deviations = [];
+  if (
+    evidence.interactiveTargetWidth < platformTarget.applicableMinimum ||
+    evidence.interactiveTargetHeight < platformTarget.applicableMinimum
+  ) {
+    deviations.push("interactive_target_below_platform_floor");
+  }
+  if (
+    evidence.interactiveTargetWidth < platformTarget.preferred ||
+    evidence.interactiveTargetHeight < platformTarget.preferred
+  ) {
+    deviations.push("interactive_target_below_product_preference");
+  }
+  if (!evidence.accessibilityNamePresent) {
+    deviations.push("accessibility_name_missing");
+  }
+  if (!evidence.accessibilityRolePresent) {
+    deviations.push("accessibility_role_missing");
+  }
+  if (evidence.totalCardContainerWidth < evidence.mediaFrameWidth) {
+    deviations.push("container_width_below_media_frame");
+  }
+  if (evidence.totalCardContainerHeight < evidence.mediaFrameHeight) {
+    deviations.push("container_height_below_media_frame");
+  }
+  const measuredWidthRatio = evidence.mediaFrameWidth / evidence.viewportWidth;
+  const measuredHeightRatio = evidence.mediaFrameHeight / evidence.viewportHeight;
+  if (Math.abs(measuredWidthRatio - evidence.cardViewportWidthRatio) > 0.02) {
+    deviations.push("width_ratio_inconsistent");
+  }
+  if (Math.abs(measuredHeightRatio - evidence.cardViewportHeightRatio) > 0.02) {
+    deviations.push("height_ratio_inconsistent");
+  }
+  if (evidence.aspectRatioClass !== "16:9") {
+    deviations.push("standard_streaming_aspect_ratio");
+  }
+  if (evidence.titleLineCount > 2) deviations.push("title_line_limit");
+  if (evidence.metadataLineCount > 2) deviations.push("metadata_line_limit");
+  if (!evidence.creatorIdentityVisible) deviations.push("creator_identity_missing");
+  if (
+    evidence.surfaceFamily === "live_streaming_card" &&
+    !evidence.liveStateVisible
+  ) {
+    deviations.push("live_state_missing");
+  }
+  const reference = evidence.deviceClass === "tablet"
+    ? selectedBaseline.canonicalMetrics.tabletPortraitStandardStreamingMedia
+    : selectedBaseline.canonicalMetrics.phonePortraitStandardStreamingMedia;
+  const referenceViewport = evidence.deviceClass === "tablet"
+    ? selectedBaseline.referenceViewports.tabletPortrait
+    : selectedBaseline.referenceViewports.phonePortrait;
+  const atReferenceViewport =
+    evidence.referenceViewport !== "non_reference" &&
+    evidence.orientation === "portrait" &&
+    Math.abs(evidence.viewportWidth - referenceViewport.width) <= 4 &&
+    Math.abs(evidence.viewportHeight - referenceViewport.height) <= 4;
+  if (
+    evidence.referenceViewport ===
+      (evidence.deviceClass === "tablet"
+        ? "tablet_portrait_1024x1366"
+        : "phone_portrait_390x844") &&
+    !atReferenceViewport
+  ) {
+    deviations.push("reference_viewport_mismatch");
+  }
+  if (atReferenceViewport) {
+    const dimensionDelta =
+      selectedBaseline.allowedVariance.referenceMediaDimensionLogicalUnits;
+    if (Math.abs(evidence.mediaFrameWidth - reference.mediaFrameWidth) > dimensionDelta) {
+      deviations.push("reference_media_width");
+    }
+    if (Math.abs(evidence.mediaFrameHeight - reference.mediaFrameHeight) > dimensionDelta) {
+      deviations.push("reference_media_height");
+    }
+    if (
+      evidence.cardsAboveFold <
+        reference.expectedCardsVisibleAboveFold.minimum ||
+      evidence.cardsAboveFold >
+        reference.expectedCardsVisibleAboveFold.maximum
+    ) {
+      deviations.push("cards_above_fold");
+    }
+    const expectedHorizontal = evidence.deviceClass === "tablet"
+      ? reference.columns
+      : reference.horizontalCardsVisiblePerRow;
+    if (
+      Math.abs(evidence.horizontalCardsVisible - expectedHorizontal) >
+        selectedBaseline.allowedVariance.densityDelta
+    ) {
+      deviations.push("horizontal_cards_visible");
+    }
+    const expectedHorizontalGap = evidence.deviceClass === "tablet"
+      ? reference.columnGap
+      : reference.horizontalGap;
+    const expectedVerticalGap = evidence.deviceClass === "tablet"
+      ? reference.rowGap
+      : reference.verticalRowGap;
+    if (
+      Math.abs(evidence.horizontalGap - expectedHorizontalGap) >
+        selectedBaseline.allowedVariance.spacingLogicalUnits
+    ) {
+      deviations.push("horizontal_gap");
+    }
+    if (
+      Math.abs(evidence.verticalRowGap - expectedVerticalGap) >
+        selectedBaseline.allowedVariance.spacingLogicalUnits
+    ) {
+      deviations.push("vertical_row_gap");
+    }
+    const expectedMargin = reference.horizontalMargin;
+    if (
+      Math.abs(evidence.horizontalMargin - expectedMargin) >
+        selectedBaseline.allowedVariance.spacingLogicalUnits
+    ) {
+      deviations.push("horizontal_margin");
+    }
+    const expectedColumns = evidence.deviceClass === "tablet" ? 3 : 1;
+    if (evidence.columnCount !== expectedColumns) {
+      deviations.push("column_count");
+    }
+    if (
+      evidence.deviceClass === "tablet" &&
+      Math.abs(evidence.columnGap - reference.columnGap) >
+        selectedBaseline.allowedVariance.spacingLogicalUnits
+    ) {
+      deviations.push("column_gap");
+    }
+  }
+
+  const accessibilityViolation = deviations.some((deviation) =>
+    [
+      "interactive_target_below_platform_floor",
+      "accessibility_name_missing",
+      "accessibility_role_missing",
+    ].includes(deviation)
+  );
+  const pass = deviations.length === 0;
+
+  return {
+    ...baseResult,
+    resultStatus: pass ? "passed" : "finding_created",
+    suspectedLayer: pass
+      ? "none"
+      : accessibilityViolation
+      ? "accessibility"
+      : "layout_density",
+    classification: pass
+      ? "false_positive"
+      : accessibilityViolation
+      ? "accessibility_violation"
+      : "confirmed_baseline_violation",
+    deviationCount: deviations.length,
+    deviationManifestHash: hashPayload(deviations),
   };
 }
 
@@ -231,24 +588,67 @@ function selfTest() {
   });
   assert.equal(livekitPass.resultStatus, "passed");
 
-  const visualFinding = classifyVisual({
+  const visualPendingApproval = classifyVisual({
     screenshotEvidenceHash: fixtureHash("visual-shot"),
     sourceRuntimeHash: fixtureHash("visual-runtime"),
+    platform: "android",
+    measurementUnit: "dp",
     deviceClass: "phone",
     orientation: "portrait",
     syntheticAccount: true,
-    baselineState: "needs_review",
-    baselineComparisonHash: fixtureHash("visual-baseline"),
-    cardViewportWidthRatio: 0.94,
-    cardViewportHeightRatio: 0.5,
-    cardsAboveFold: 1,
-    densityScore: 0.72,
+    surfaceFamily: "standard_streaming_card",
+    baselineApplicability: "option_c_target",
+    referenceViewport: "phone_portrait_390x844",
+    windowClass: "compact",
+    layoutMode: "peekable_horizontal_row",
+    baselineState: "owner_selected_pending_authenticated_approval",
+    baselineComparisonHash: null,
+    baselineId: selectedBaseline.baselineId,
+    baselineVersion: 1,
+    evidenceQuality: "complete",
+    evidenceQualityHash: fixtureHash("visual-quality"),
+    componentIdentityHash: fixtureHash("visual-component"),
+    routeFamilyMappingHash: fixtureHash("visual-route-family"),
+    automationStatus: "observed",
+    providerState: "healthy",
+    contentState: "present",
+    observedClassification: "unclassified",
+    exceptionVersioned: false,
+    exceptionType: "none",
+    exceptionContractHash: null,
+    featuredPlacement: "not_applicable",
+    mediaFrameWidth: 252,
+    mediaFrameHeight: 142,
+    totalCardContainerWidth: 252,
+    totalCardContainerHeight: 190,
+    metadataBandHeight: 48,
+    viewportWidth: 390,
+    viewportHeight: 844,
+    cardViewportWidthRatio: 252 / 390,
+    cardViewportHeightRatio: 142 / 844,
+    horizontalCardsVisible: 1.42,
+    cardsAboveFold: 3,
     aspectRatioClass: "16:9",
+    horizontalMargin: 16,
+    horizontalGap: 12,
+    columnGap: 12,
+    verticalRowGap: 20,
+    columnCount: 1,
+    creatorIdentityVisible: true,
+    liveStateVisible: false,
+    liveContent: false,
     titleLineCount: 2,
-    minimumTouchTargetPt: 44,
+    metadataLineCount: 2,
+    interactiveTargetWidth: 48,
+    interactiveTargetHeight: 48,
+    interactivePreferredThreshold: 48,
+    interactiveApplicableMinimumThreshold: 48,
+    accessibilityNamePresent: true,
+    accessibilityRolePresent: true,
+    screenDensityDpi: 420,
   });
-  assert.equal(visualFinding.resultStatus, "finding_created");
-  assert.equal(visualFinding.suspectedLayer, "design_baseline_missing");
+  assert.equal(visualPendingApproval.resultStatus, "blocked");
+  assert.equal(visualPendingApproval.classification, "baseline_ambiguity");
 
   const journeyFinding = classifyJourney({
     journeyName: "home",
