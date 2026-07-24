@@ -10,6 +10,14 @@ Canonical options manifest:
 Manifest SHA-256:
 `7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df`
 
+Canonical selection hashes bind the manifest schema/version, scope, common
+requirements, and exactly one selected option after recursively sorting JSON
+object keys and encoding the result as compact UTF-8 JSON:
+
+- A: `29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9`
+- B: `9e891de1b46cd19405b43178dbd34ed0ea1d96b4eebcc7b404f4f3d9f6ba3dc5`
+- C: `0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184`
+
 ## First-party guidance used
 
 - Apple recommends a button hit region of at least 44 by 44 points, preserving
@@ -137,7 +145,10 @@ Select exactly one of `A`, `B`, or `C` for
 `chillywood-product-experience-baseline-v1`.
 
 The approval must name manifest SHA-256
-`7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df`.
+`7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df`
+and the canonical selection hash for the chosen option above. The selected
+option hash, not the three-option manifest hash, is the immutable
+`baseline_hash`.
 
 Approval scope:
 
