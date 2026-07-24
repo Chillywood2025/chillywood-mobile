@@ -6,6 +6,10 @@ Inventory command:
 
 `npm run sentinel:readiness-inventory`
 
+Owner-approved prerequisite attestation:
+
+`npm run sentinel:readiness-inventory -- --prerequisite-attestation=/absolute/path/outside-git/sentinel-prerequisites.json`
+
 Runnable canary commands:
 
 - `npm run sentinel:canary:livekit -- --evidence <sanitized-evidence.json>`
@@ -30,6 +34,42 @@ Generated from the local isolated worktree on 2026-07-24T02:11:04Z.
 | UI automation | Pass | Maestro and platform UI automation capabilities are present. |
 | Log capture | Pass | Capability only. No raw log was captured or committed. |
 | Provider/backend read-only telemetry | Blocked | Local read-only provider/backend credentials are not available; no provider/backend calls were attempted. |
+
+## Sanitized Prerequisite Attestation
+
+The readiness runner defaults all three external prerequisites to blocked. It
+can accept them only through the explicit `--prerequisite-attestation=` argument.
+The file must:
+
+- be an absolute path outside every Git worktree;
+- be a regular, non-symlink file owned by the current user;
+- have exact mode `0600` and be no larger than 32 KiB;
+- carry schema version `1`, `ownerApproved: true`, a SHA-256
+  `ownerApprovalHash`, and an issued/expiry window no longer than six hours;
+- contain only the exact allowlisted objects and fields below.
+
+The three allowlisted objects are:
+
+- `approvedSyntheticAccounts`: `approved`, bounded `count`, safe `labels`, and
+  `evidenceHash`;
+- `twoLiveKitParticipants`: `approved`, bounded `count`, safe `labels`, and
+  `evidenceHash`;
+- `providerBackendReadOnlyTelemetry`: `approvedReadOnly`, safe
+  `providerFamily`, safe `backendFamily`, and `evidenceHash`.
+
+Safe labels are lowercase alphanumeric, underscore, or hyphen labels. Account
+readiness requires every role label already declared by
+`approvedSyntheticFixtureContract`. Participant readiness requires at least two
+approved participants, the `installed_app` label, and either
+`second_installed_app` or `headless_sdk`.
+
+No identity, email, password, access token, refresh token, LiveKit token, JWT,
+provider credential, service key, URL, private media, screenshot, or raw log
+field is accepted. Unknown fields, invalid permissions, files inside Git,
+expired/unbounded attestations, malformed counts/labels/hashes, and missing
+approval all fail closed. The report emits only status categories, safe provider
+family labels, expiry, and a SHA-256 fingerprint of a fully validated
+attestation. It never echoes the file path or raw contents.
 
 ## Artifact Decision
 

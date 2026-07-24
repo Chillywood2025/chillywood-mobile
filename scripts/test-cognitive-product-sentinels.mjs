@@ -1,4 +1,7 @@
+import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const root = process.cwd();
@@ -275,9 +278,14 @@ for (const phrase of [
   "INTERNAL_QA_OTA_REQUIRED",
   "INTERNAL_QA_BINARY_REQUIRED",
   "noArtifactInstalledCanarySubset",
-  "hasInstalledTarget && hasTwoLiveKitParticipants",
+  "const liveKitReady = hasInstalledTarget",
   "release-diagnostics-runtime-version",
   "emitLiveKitRenderTelemetryEvent",
+  "--prerequisite-attestation=",
+  "attestation_mode_must_be_0600",
+  "attestation_must_be_outside_git",
+  "attestation_lifetime_exceeds_six_hours",
+  "owner_approved_sanitized_attestation_valid",
   "hashId(serial)",
   "dumpsys",
   "simctl",
@@ -306,6 +314,114 @@ for (const phrase of [
   "No build, OTA publish, deployment",
 ]) {
   assert(readinessReport.includes(phrase), `readiness report missing: ${phrase}`);
+}
+
+const fixtureHash = (seed) => crypto.createHash("sha256").update(seed).digest("hex");
+const attestationDir = fs.mkdtempSync(path.join(os.tmpdir(), "chillywood-sentinel-attestation-"));
+fs.chmodSync(attestationDir, 0o700);
+const runReadiness = (attestationPath) => {
+  const result = spawnSync(process.execPath, [
+    path.join(root, "scripts/sentinel-runtime-readiness.mjs"),
+    `--prerequisite-attestation=${attestationPath}`,
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+    timeout: 30_000,
+  });
+  if (result.status !== 0) return { result, report: null };
+  try {
+    return { result, report: JSON.parse(result.stdout) };
+  } catch {
+    return { result, report: null };
+  }
+};
+
+try {
+  const issuedAt = new Date(Date.now() - 60_000).toISOString();
+  const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+  const validFixture = {
+    schemaVersion: 1,
+    ownerApproved: true,
+    ownerApprovalHash: fixtureHash("owner-approval"),
+    issuedAt,
+    expiresAt,
+    approvedSyntheticAccounts: {
+      approved: true,
+      count: 2,
+      labels: [...runnerConfig.approvedSyntheticFixtureContract.requiredLabels],
+      evidenceHash: fixtureHash("synthetic-account-set"),
+    },
+    twoLiveKitParticipants: {
+      approved: true,
+      count: 2,
+      labels: ["installed_app", "headless_sdk"],
+      evidenceHash: fixtureHash("livekit-participant-set"),
+    },
+    providerBackendReadOnlyTelemetry: {
+      approvedReadOnly: true,
+      providerFamily: "approved_provider",
+      backendFamily: "approved_backend",
+      evidenceHash: fixtureHash("read-only-telemetry"),
+    },
+  };
+  const validPath = path.join(attestationDir, "valid.json");
+  fs.writeFileSync(validPath, `${JSON.stringify(validFixture)}\n`, { mode: 0o600 });
+  const validRun = runReadiness(validPath);
+  assert(validRun.result.status === 0, "valid prerequisite attestation inventory did not exit zero");
+  assert(validRun.report?.prerequisiteAttestation?.status === "valid", "valid prerequisite attestation was not accepted");
+  assert(validRun.report?.canaryReadiness?.approvedSyntheticAccounts?.status === "pass", "approved synthetic accounts did not become ready");
+  assert(validRun.report?.canaryReadiness?.twoLiveKitParticipants?.status === "pass", "approved LiveKit participants did not become ready");
+  assert(validRun.report?.canaryReadiness?.providerBackendReadOnlyTelemetry?.status === "pass", "approved read-only telemetry did not become ready");
+  const installedTargetAvailable = validRun.report?.android?.artifactDecision === "NO_ARTIFACT_CHANGE_REQUIRED"
+    || validRun.report?.ios?.artifactDecision === "NO_ARTIFACT_CHANGE_REQUIRED";
+  if (installedTargetAvailable) {
+    assert(validRun.report?.canaryReadiness?.livekitExperienceCanary?.status === "ready", "valid prerequisites did not make the installed-target LiveKit canary ready");
+    assert(validRun.report?.canaryReadiness?.noArtifactInstalledCanarySubset?.runnableNow?.length === 3, "valid prerequisites did not expose the bounded no-artifact canary subset");
+  } else {
+    assert(validRun.report?.canaryReadiness?.livekitExperienceCanary?.status === "blocked", "attestation bypassed the installed-target requirement");
+    assert(validRun.report?.canaryReadiness?.noArtifactInstalledCanarySubset?.runnableNow?.length === 0, "attestation invented an installed-target canary subset");
+  }
+  const validReportText = JSON.stringify(validRun.report);
+  assert(!validReportText.includes(validPath), "readiness report exposed the attestation path");
+  assert(!validReportText.includes(validFixture.ownerApprovalHash), "readiness report exposed the owner approval hash");
+  assert(!validReportText.includes(validFixture.approvedSyntheticAccounts.evidenceHash), "readiness report exposed a prerequisite evidence hash");
+
+  const wrongModePath = path.join(attestationDir, "wrong-mode.json");
+  fs.writeFileSync(wrongModePath, `${JSON.stringify(validFixture)}\n`, { mode: 0o600 });
+  fs.chmodSync(wrongModePath, 0o644);
+  const wrongModeRun = runReadiness(wrongModePath);
+  assert(wrongModeRun.result.status === 0, "wrong-mode prerequisite inventory did not fail closed cleanly");
+  assert(wrongModeRun.report?.prerequisiteAttestation?.status === "invalid", "wrong-mode prerequisite attestation was not rejected");
+  assert(wrongModeRun.report?.prerequisiteAttestation?.reason === "attestation_mode_must_be_0600", "wrong-mode rejection reason changed");
+  assert(wrongModeRun.report?.canaryReadiness?.approvedSyntheticAccounts?.status === "blocked", "wrong-mode attestation enabled synthetic accounts");
+  assert(wrongModeRun.report?.canaryReadiness?.twoLiveKitParticipants?.status === "blocked", "wrong-mode attestation enabled LiveKit participants");
+  assert(wrongModeRun.report?.canaryReadiness?.providerBackendReadOnlyTelemetry?.status === "blocked", "wrong-mode attestation enabled telemetry");
+
+  const unknownFieldPath = path.join(attestationDir, "unknown-field.json");
+  fs.writeFileSync(unknownFieldPath, `${JSON.stringify({
+    ...validFixture,
+    unexpectedField: "rejected",
+  })}\n`, { mode: 0o600 });
+  const unknownFieldRun = runReadiness(unknownFieldPath);
+  assert(unknownFieldRun.result.status === 0, "unknown-field prerequisite inventory did not fail closed cleanly");
+  assert(unknownFieldRun.report?.prerequisiteAttestation?.status === "invalid", "unknown-field prerequisite attestation was not rejected");
+  assert(unknownFieldRun.report?.prerequisiteAttestation?.reason === "attestation_top_level_schema_invalid", "unknown-field rejection reason changed");
+  assert(unknownFieldRun.report?.canaryReadiness?.approvedSyntheticAccounts?.status === "blocked", "unknown-field attestation enabled synthetic accounts");
+  assert(!JSON.stringify(unknownFieldRun.report).includes("rejected"), "invalid prerequisite content was reflected in the report");
+
+  const expiredPath = path.join(attestationDir, "expired.json");
+  fs.writeFileSync(expiredPath, `${JSON.stringify({
+    ...validFixture,
+    issuedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+  })}\n`, { mode: 0o600 });
+  const expiredRun = runReadiness(expiredPath);
+  assert(expiredRun.result.status === 0, "expired prerequisite inventory did not fail closed cleanly");
+  assert(expiredRun.report?.prerequisiteAttestation?.status === "expired", "expired prerequisite attestation was not rejected");
+  assert(expiredRun.report?.canaryReadiness?.twoLiveKitParticipants?.status === "blocked", "expired attestation enabled LiveKit participants");
+} finally {
+  fs.rmSync(attestationDir, { recursive: true, force: true });
 }
 
 const classifyLiveKit = (metrics) => {
