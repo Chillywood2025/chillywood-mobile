@@ -18,6 +18,10 @@ insert into touch_independence_fixture(fixture_key, metrics) values
     "interactiveAncestorPresent":false,
     "interactiveAncestorWidth":null,
     "interactiveAncestorHeight":null,
+    "interactiveAncestorActuallyInteractive":false,
+    "interactiveAncestorRolePresent":false,
+    "interactiveAncestorClickActionPresent":false,
+    "interactiveAncestorIsTargetContainer":false,
     "isActuallyInteractive":true,
     "preferredThreshold":48,
     "applicableMinimumThreshold":48,
@@ -32,13 +36,15 @@ insert into touch_independence_fixture(fixture_key, metrics) values
     "evidenceQuality":"measured_installed",
     "evidenceQualityHash":"1111111111111111111111111111111111111111111111111111111111111111",
     "componentIdentityHash":"2222222222222222222222222222222222222222222222222222222222222222",
-    "routeFamilyMappingHash":"3333333333333333333333333333333333333333333333333333333333333333",
+    "routeFamilyMappingId":"watch_party_entry_controls",
+    "routeFamilyMappingHash":"900ec3a06999a1a7afcb88da0580d829902a1839cf26b54446cfa99e87aa2300",
     "automationStatus":"observed",
     "providerState":"not_applicable",
     "contentState":"not_applicable",
     "exceptionVersioned":true,
     "exceptionType":"non_media_surface",
-    "exceptionContractHash":"4444444444444444444444444444444444444444444444444444444444444444"
+    "exceptionContractId":"non_streaming_discovery_route_v1",
+    "exceptionContractHash":"18a3bb4c47a9f78849f15249776daea979abf11b9446f3773dc59d1a74f9894e"
   }'::jsonb
 ),
 (
@@ -52,6 +58,10 @@ insert into touch_independence_fixture(fixture_key, metrics) values
     "interactiveAncestorPresent":false,
     "interactiveAncestorWidth":null,
     "interactiveAncestorHeight":null,
+    "interactiveAncestorActuallyInteractive":false,
+    "interactiveAncestorRolePresent":false,
+    "interactiveAncestorClickActionPresent":false,
+    "interactiveAncestorIsTargetContainer":false,
     "isActuallyInteractive":true,
     "preferredThreshold":44,
     "applicableMinimumThreshold":44,
@@ -66,12 +76,14 @@ insert into touch_independence_fixture(fixture_key, metrics) values
     "evidenceQuality":"measured_simulator",
     "evidenceQualityHash":"5555555555555555555555555555555555555555555555555555555555555555",
     "componentIdentityHash":"6666666666666666666666666666666666666666666666666666666666666666",
-    "routeFamilyMappingHash":"7777777777777777777777777777777777777777777777777777777777777777",
+    "routeFamilyMappingId":"home_standard_discovery_rows",
+    "routeFamilyMappingHash":"1da877c4587ae6389b78f5c57dd212b473fbeae22a9db4885000a8b961f6a44d",
     "automationStatus":"observed",
     "providerState":"not_applicable",
     "contentState":"loaded",
     "exceptionVersioned":false,
     "exceptionType":"none",
+    "exceptionContractId":null,
     "exceptionContractHash":null
   }'::jsonb
 ),
@@ -86,6 +98,10 @@ insert into touch_independence_fixture(fixture_key, metrics) values
     "interactiveAncestorPresent":false,
     "interactiveAncestorWidth":null,
     "interactiveAncestorHeight":null,
+    "interactiveAncestorActuallyInteractive":false,
+    "interactiveAncestorRolePresent":false,
+    "interactiveAncestorClickActionPresent":false,
+    "interactiveAncestorIsTargetContainer":false,
     "isActuallyInteractive":true,
     "preferredThreshold":44,
     "applicableMinimumThreshold":24,
@@ -100,12 +116,14 @@ insert into touch_independence_fixture(fixture_key, metrics) values
     "evidenceQuality":"measured_installed",
     "evidenceQualityHash":"8888888888888888888888888888888888888888888888888888888888888888",
     "componentIdentityHash":"9999999999999999999999999999999999999999999999999999999999999999",
-    "routeFamilyMappingHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "routeFamilyMappingId":"home_standard_discovery_rows",
+    "routeFamilyMappingHash":"1da877c4587ae6389b78f5c57dd212b473fbeae22a9db4885000a8b961f6a44d",
     "automationStatus":"observed",
     "providerState":"not_applicable",
     "contentState":"loaded",
     "exceptionVersioned":false,
     "exceptionType":"none",
+    "exceptionContractId":null,
     "exceptionContractHash":null
   }'::jsonb
 );
@@ -381,12 +399,45 @@ select ok(
         ),
         '{baselineComparisonHash}',
         to_jsonb(
-          '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'::text
+          '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba'::text
         )
       )
     )
   ),
   'approved baseline may still evaluate the 44 CSS-pixel preferred policy'
+);
+
+select ok(
+  not public.product_experience_option_c_touch_target_is_valid(
+    'android',
+    'failed',
+    jsonb_set(
+      (select metrics from touch_independence_fixture
+       where fixture_key = 'android_pending_below_floor'),
+      '{routeFamilyMappingHash}',
+      to_jsonb(repeat('f',64))
+    )
+  ),
+  'an arbitrary well-formed route mapping hash is rejected'
+);
+
+select ok(
+  not public.product_experience_option_c_touch_target_is_valid(
+    'android',
+    'failed',
+    (select metrics from touch_independence_fixture
+     where fixture_key = 'android_pending_below_floor')
+      || '{
+        "interactiveAncestorPresent":true,
+        "interactiveAncestorWidth":102.86,
+        "interactiveAncestorHeight":48,
+        "interactiveAncestorActuallyInteractive":false,
+        "interactiveAncestorRolePresent":true,
+        "interactiveAncestorClickActionPresent":true,
+        "interactiveAncestorIsTargetContainer":true
+      }'::jsonb
+  ),
+  'ancestor bounds cannot substitute without actual interactivity proof'
 );
 
 select ok(

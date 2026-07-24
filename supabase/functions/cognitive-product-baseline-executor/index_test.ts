@@ -5,7 +5,7 @@ const assert = (condition: boolean, message: string): void => {
 };
 const hash = (value: string): string => value.repeat(64);
 const baselineHash =
-  "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184";
+  "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba";
 const manifestHash =
   "7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df";
 const executionId = "11111111-1111-4111-8111-111111111111";
@@ -37,7 +37,10 @@ const claimPayload = () => ({
 });
 
 Deno.test("baseline executor claim is exact Option C only", () => {
-  assert(isStrictBaselineExecutorPayload(claimPayload()), "valid claim rejected");
+  assert(
+    isStrictBaselineExecutorPayload(claimPayload()),
+    "valid claim rejected",
+  );
   for (
     const rejected of [
       { ...claimPayload(), selectedOptionCode: "A" },

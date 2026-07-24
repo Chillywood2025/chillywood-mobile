@@ -102,7 +102,7 @@ insert into public.governance_proposals(
   'a2000000-0000-4000-8000-000000000001',
   'a1000000-0000-4000-8000-000000000001',
   'android', 'production', 'minimal_repair',
-  '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+  '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba',
   10, 0, 'full', 0, 'source',
   repeat('4',64)
 );
@@ -189,7 +189,7 @@ insert into public.governance_decision_manifests(
   'a1000000-0000-4000-8000-000000000001',
   'android', 'production', 'baseline-persistence-decision', repeat('6',40),
   repeat('7',64), repeat('8',64), '{}'::text[],
-  '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+  '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba',
   array[
     '9e891de1b46cd19405b43178dbd34ed0ea1d96b4eebcc7b404f4f3d9f6ba3dc5',
     '29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9'
@@ -281,7 +281,7 @@ from (
     repeat('2',64), 'Chillywood2025/chillywood-mobile',
     'codex/cognitive-baseline-persistence-fixture',
     'visual_sentinel', 'visual_experience_canary',
-    '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+    '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba',
     '{}'::text[], '{}'::text[], '{}'::text[], repeat('a',64),
     0, 1, 4096, 1, repeat('3',64),
     array['baseline-owner-persistence-test'], repeat('4',64),
@@ -320,7 +320,7 @@ set execution_id = (
       'codex/cognitive-baseline-persistence-fixture',
       'android', 'production', 'visual_sentinel',
       'visual_experience_canary',
-      '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+      '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba',
       repeat('a',64), repeat('3',64), repeat('4',64), repeat('4',64)
     ) result
   ) claimed
@@ -354,7 +354,7 @@ select is(
     repeat('6',40),
     'chillywood-product-experience-baseline-v1',
     'C', 'creator_balanced',
-    '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+    '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba',
     '7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df'
   )->>'state',
   'postflight',
@@ -757,7 +757,7 @@ select ok(
       and baseline.baseline_manifest_hash =
         '7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df'
       and baseline.baseline_hash =
-        '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+        '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba'
       and baseline.status = 'owner_approved'
       and baseline.owner_approval_version_id =
         (select approval_version_id from baseline_chain_state)
@@ -775,7 +775,7 @@ select is(
       'android', 'production', 'streaming_mobile_content_density'
     )->>'baselineHash'
   ),
-  '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184',
+  '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba',
   'deterministic resolver returns exact active Option C'
 );
 select is(
@@ -792,7 +792,7 @@ select ok(
     select result.created
       and result.baseline_version = 1
       and result.baseline_hash =
-        '0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184'
+        '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba'
     from baseline_persistence_result result
   ),
   'first Owner persistence result reports the canonical created version'

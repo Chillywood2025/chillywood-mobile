@@ -15,6 +15,9 @@ const options = JSON.parse(
 const constitution = JSON.parse(
   read("config/intelligence/product-experience-constitution.json"),
 );
+const contractBindingMigration = read(
+  "supabase/migrations/20260724093000_cognitive_product_baseline_contract_binding.sql",
+);
 
 const canonicalize = (value) => {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -61,14 +64,64 @@ assert.deepEqual(
     scope: options.scope,
     commonRequirements: options.commonRequirements,
     selectedOption: optionC,
+    contractHashes: baseline.canonicalBaselinePayload.contractHashes,
   },
   "selection payload is not exact Option C",
 );
 assert.equal(
   canonicalHash(baseline.canonicalBaselinePayload),
-  "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184",
+  "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba",
   "Option C canonical hash changed",
 );
+for (const [field, value] of Object.entries({
+  measurementSemantics: baseline.measurementSemantics,
+  referenceViewports: baseline.referenceViewports,
+  canonicalMetrics: baseline.canonicalMetrics,
+  surfaceFamilies: baseline.surfaceFamilies,
+  routeComponentMappings: baseline.routeComponentMappings,
+  explicitExceptions: baseline.explicitExceptions,
+  exceptionContracts: baseline.exceptionContracts,
+  allowedVariance: baseline.allowedVariance,
+  creatorAndLiveIdentity: baseline.creatorAndLiveIdentity,
+  effectiveScope: baseline.effectiveScope,
+})) {
+  assert.equal(
+    baseline.canonicalBaselinePayload.contractHashes[field],
+    canonicalHash(value),
+    `canonical payload does not bind ${field}`,
+  );
+}
+for (const mapping of baseline.routeComponentMappings) {
+  assert.equal(
+    baseline.routeComponentMappingHashes[mapping.mappingId],
+    canonicalHash(mapping),
+    `mapping hash mismatch: ${mapping.mappingId}`,
+  );
+  assert.ok(
+    contractBindingMigration.includes(
+      `when '${mapping.mappingId}' then '${JSON.stringify({
+        family: mapping.family,
+        hash: baseline.routeComponentMappingHashes[mapping.mappingId],
+        exceptionContractId: mapping.exceptionContractId,
+      })}'::jsonb`,
+    ),
+    `database mapping allowlist mismatch: ${mapping.mappingId}`,
+  );
+}
+for (const exception of baseline.exceptionContracts) {
+  assert.equal(
+    baseline.exceptionContractHashes[exception.exceptionContractId],
+    canonicalHash(exception),
+    `exception hash mismatch: ${exception.exceptionContractId}`,
+  );
+  assert.ok(
+    contractBindingMigration.includes(exception.exceptionContractId) &&
+      contractBindingMigration.includes(
+        baseline.exceptionContractHashes[exception.exceptionContractId],
+      ),
+    `database exception allowlist mismatch: ${exception.exceptionContractId}`,
+  );
+}
 assert.equal(
   baseline.baselineHash,
   canonicalHash(baseline.canonicalBaselinePayload),

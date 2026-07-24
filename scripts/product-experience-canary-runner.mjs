@@ -153,6 +153,30 @@ function classifyVisual(evidence) {
   ) {
     throw new Error("visual_exception_contract_hash_invalid");
   }
+  const mapping = selectedBaseline.routeComponentMappings.find(
+    (candidate) => candidate.mappingId === evidence.routeFamilyMappingId,
+  );
+  if (
+    !mapping ||
+    selectedBaseline.routeComponentMappingHashes[evidence.routeFamilyMappingId] !==
+      evidence.routeFamilyMappingHash ||
+    mapping.family !== evidence.surfaceFamily
+  ) {
+    throw new Error("visual_route_family_mapping_contract_mismatch");
+  }
+  if (
+    mapping.exceptionContractId !== evidence.exceptionContractId ||
+    (
+      mapping.exceptionContractId === null
+        ? evidence.exceptionContractHash !== null ||
+          evidence.exceptionVersioned !== false
+        : selectedBaseline.exceptionContractHashes[mapping.exceptionContractId] !==
+            evidence.exceptionContractHash ||
+          evidence.exceptionVersioned !== true
+    )
+  ) {
+    throw new Error("visual_exception_contract_mismatch");
+  }
   for (const key of [
     "mediaFrameWidth",
     "mediaFrameHeight",
@@ -222,6 +246,11 @@ function classifyVisual(evidence) {
     "accessibilityRolePresent",
     "syntheticAccount",
     "exceptionVersioned",
+    "interactiveAncestorPresent",
+    "interactiveAncestorActuallyInteractive",
+    "interactiveAncestorRolePresent",
+    "interactiveAncestorClickActionPresent",
+    "interactiveAncestorIsTargetContainer",
   ]) {
     if (typeof evidence[key] !== "boolean") throw new Error(`visual_boolean_metric_required:${key}`);
   }
@@ -643,13 +672,16 @@ function selfTest() {
     evidenceQuality: "measured_installed",
     evidenceQualityHash: fixtureHash("visual-quality"),
     componentIdentityHash: fixtureHash("visual-component"),
-    routeFamilyMappingHash: fixtureHash("visual-route-family"),
+    routeFamilyMappingId: "home_standard_discovery_rows",
+    routeFamilyMappingHash:
+      selectedBaseline.routeComponentMappingHashes.home_standard_discovery_rows,
     automationStatus: "observed",
     providerState: "healthy",
     contentState: "loaded",
     observedClassification: "baseline_ambiguity",
     exceptionVersioned: false,
     exceptionType: "none",
+    exceptionContractId: null,
     exceptionContractHash: null,
     featuredPlacement: "not_applicable",
     mediaFrameWidth: 252,
@@ -678,6 +710,13 @@ function selfTest() {
     interactiveTargetHeight: 48,
     interactivePreferredThreshold: 48,
     interactiveApplicableMinimumThreshold: 48,
+    interactiveAncestorPresent: false,
+    interactiveAncestorWidth: null,
+    interactiveAncestorHeight: null,
+    interactiveAncestorActuallyInteractive: false,
+    interactiveAncestorRolePresent: false,
+    interactiveAncestorClickActionPresent: false,
+    interactiveAncestorIsTargetContainer: false,
     accessibilityNamePresent: true,
     accessibilityRolePresent: true,
     screenDensityDpi: 420,

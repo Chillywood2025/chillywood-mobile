@@ -86,6 +86,7 @@ const optionCVisualMetrics = (
   evidenceQuality: "measured_installed",
   evidenceQualityHash: "7".repeat(64),
   exceptionContractHash: null,
+  exceptionContractId: null,
   exceptionType: "none",
   exceptionVersioned: false,
   featuredPlacement: "not_applicable",
@@ -109,7 +110,9 @@ const optionCVisualMetrics = (
   platform: "android",
   providerState: "healthy",
   referenceViewport: "phone_portrait_390x844",
-  routeFamilyMappingHash: "8".repeat(64),
+  routeFamilyMappingId: "home_standard_discovery_rows",
+  routeFamilyMappingHash:
+    "1da877c4587ae6389b78f5c57dd212b473fbeae22a9db4885000a8b961f6a44d",
   screenDensityDpi: 420,
   surfaceFamily: "standard_streaming_card",
   titleLineCount: 2,
@@ -138,11 +141,16 @@ const optionCTouchMetrics = (
   evidenceQuality: "measured_installed",
   evidenceQualityHash: "7".repeat(64),
   exceptionContractHash: null,
+  exceptionContractId: null,
   exceptionType: "none",
   exceptionVersioned: false,
   interactiveAncestorHeight: null,
   interactiveAncestorPresent: false,
   interactiveAncestorWidth: null,
+  interactiveAncestorActuallyInteractive: false,
+  interactiveAncestorRolePresent: false,
+  interactiveAncestorClickActionPresent: false,
+  interactiveAncestorIsTargetContainer: false,
   interactiveTargetHeight: 23.24,
   interactiveTargetWidth: 102.86,
   isActuallyInteractive: true,
@@ -150,7 +158,9 @@ const optionCTouchMetrics = (
   platform: "android",
   preferredThreshold: 48,
   providerState: "healthy",
-  routeFamilyMappingHash: "8".repeat(64),
+  routeFamilyMappingId: "home_standard_discovery_rows",
+  routeFamilyMappingHash:
+    "1da877c4587ae6389b78f5c57dd212b473fbeae22a9db4885000a8b961f6a44d",
   screenDensityDpi: 420,
   surfaceFamily: "standard_streaming_card",
   targetClassification: "below_platform_minimum",
@@ -372,6 +382,37 @@ Deno.test("touch baseline state is validated without trusting the caller", () =>
   );
 });
 
+Deno.test("mapping contracts and ancestor target proof fail closed", () => {
+  assert(
+    deterministicTouchTargetClassification(
+      storedRun(
+        "touch_target",
+        optionCTouchMetrics({ routeFamilyMappingHash: "f".repeat(64) }),
+      ),
+      approvedContext,
+    ).classification === "baseline_ambiguity",
+    "arbitrary well-formed mapping hashes must not be accepted",
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      storedRun(
+        "touch_target",
+        optionCTouchMetrics({
+          interactiveAncestorActuallyInteractive: false,
+          interactiveAncestorClickActionPresent: true,
+          interactiveAncestorHeight: 48,
+          interactiveAncestorIsTargetContainer: true,
+          interactiveAncestorPresent: true,
+          interactiveAncestorRolePresent: true,
+          interactiveAncestorWidth: 102.86,
+        }),
+      ),
+      approvedContext,
+    ).classification === "insufficient_evidence",
+    "ancestor bounds must not substitute without actual interactivity proof",
+  );
+});
+
 Deno.test("stored metrics bind severity confidence and suspected layer", () => {
   const payload = validPayload();
   const run = storedRun("touch_target", optionCTouchMetrics());
@@ -510,11 +551,16 @@ Deno.test("visual non-findings remain truthfully distinct", () => {
 Deno.test("versioned featured surfaces are route exceptions, not Option C cards", () => {
   const metrics = optionCVisualMetrics({
     baselineApplicability: "explicit_versioned_exception",
-    exceptionContractHash: "9".repeat(64),
+    exceptionContractId: "full_width_featured_banner_v1",
+    exceptionContractHash:
+      "731a0b271122e60b5576c3d04729ab1866334ebb9827a84b8cfe9a19ccf4d5ac",
     exceptionType: "featured_hero",
     exceptionVersioned: true,
     featuredPlacement: "first_row",
     observedClassification: "route_specific_exception",
+    routeFamilyMappingId: "home_featured_hero",
+    routeFamilyMappingHash:
+      "9d813e473c5eeca5965812fcbc4cc2f8cf3e07871325a4ac95fb51258fd9af41",
     surfaceFamily: "featured_hero_card",
   });
   assert(
@@ -540,12 +586,17 @@ Deno.test("versioned featured surfaces are route exceptions, not Option C cards"
     baselineApplicability: "explicit_versioned_exception",
     cardViewportHeightRatio: 210 / 844,
     cardViewportWidthRatio: 90 / 390,
-    exceptionContractHash: "a".repeat(64),
+    exceptionContractId: "vertical_short_form_v1",
+    exceptionContractHash:
+      "66909a7e1aa9f993d57b15f98cf68c58d953e595849a0c9b53739027d3e248a3",
     exceptionType: "vertical_short_form",
     exceptionVersioned: true,
     mediaFrameHeight: 160,
     mediaFrameWidth: 90,
     observedClassification: "route_specific_exception",
+    routeFamilyMappingId: "vertical_social_attachment",
+    routeFamilyMappingHash:
+      "960ee0ec5a901e1d7887d84cfdb862725c732abede1904eac0ad5b01e8fc415a",
     surfaceFamily: "vertical_post_card",
     totalCardContainerHeight: 210,
     totalCardContainerWidth: 90,
@@ -581,6 +632,9 @@ Deno.test("creator and Live identity are independently evaluated", () => {
         liveContent: true,
         liveStateVisible: false,
         observedClassification: "confirmed_baseline_violation",
+        routeFamilyMappingId: "live_discovery_cards",
+        routeFamilyMappingHash:
+          "cdeb267f422b121bb3d51f0e6d59bad419d65dd21e62b9a87ad39a50e26409af",
         surfaceFamily: "live_streaming_card",
       }),
     ),

@@ -8,6 +8,9 @@ import {
 import securityPolicyJson from "../../../config/intelligence/cognitive-security-classification-policy.json" with {
   type: "json",
 };
+import productBaselineJson from "../../../config/intelligence/chillywood-product-experience-baseline-v1.json" with {
+  type: "json",
+};
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -98,7 +101,7 @@ const SERVICE_IDENTITY = "cognitive_independent_evaluator";
 const INVOCATION_HEADER = "x-cognitive-evaluator-invocation";
 const MAX_REQUEST_BYTES = 32 * 1024;
 export const APPROVED_OPTION_C_BASELINE_HASH =
-  "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184";
+  "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba";
 const LOWER_HEX_64 = /^[a-f0-9]{64}$/u;
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -178,6 +181,42 @@ const OPTION_C_TARGET_FAMILIES = new Set([
   "live_streaming_card",
   "creator_streaming_card",
 ]);
+const ROUTE_MAPPING_HASHES = productBaselineJson
+  .routeComponentMappingHashes as Record<string, string>;
+const EXCEPTION_CONTRACT_HASHES = productBaselineJson
+  .exceptionContractHashes as Record<string, string>;
+const ROUTE_MAPPINGS = new Map(
+  productBaselineJson.routeComponentMappings.map((mapping) => [
+    mapping.mappingId,
+    mapping,
+  ]),
+);
+const BASELINE_VARIANCE = productBaselineJson.allowedVariance;
+
+const baselineContractBindingIsValid = (
+  metrics: Record<string, unknown>,
+): boolean => {
+  const mappingId = toText(metrics.routeFamilyMappingId);
+  const mapping = ROUTE_MAPPINGS.get(mappingId);
+  if (
+    !mapping ||
+    toText(metrics.routeFamilyMappingHash) !==
+      ROUTE_MAPPING_HASHES[mappingId] ||
+    toText(metrics.surfaceFamily) !== mapping.family
+  ) {
+    return false;
+  }
+  const exceptionId = mapping.exceptionContractId;
+  if (exceptionId === null) {
+    return metrics.exceptionContractId === null &&
+      metrics.exceptionContractHash === null &&
+      metrics.exceptionVersioned === false;
+  }
+  return toText(metrics.exceptionContractId) === exceptionId &&
+    toText(metrics.exceptionContractHash) ===
+      EXCEPTION_CONTRACT_HASHES[exceptionId] &&
+    metrics.exceptionVersioned === true;
+};
 const VERSIONED_EXCEPTION_FAMILIES = new Set([
   "featured_hero_card",
   "vertical_post_card",
@@ -511,6 +550,7 @@ export const deterministicVisualClassification = (
     !SURFACE_FAMILIES.has(surfaceFamily) ||
     !LOWER_HEX_64.test(componentIdentityHash) ||
     !LOWER_HEX_64.test(routeFamilyMappingHash) ||
+    !baselineContractBindingIsValid(metrics) ||
     preferredThreshold !== expectedPreferredThreshold ||
     applicableMinimumThreshold !== expectedApplicableMinimum
   ) {
@@ -908,14 +948,38 @@ export const deterministicVisualClassification = (
       orientation !== "portrait" ||
       windowClass !== "compact" ||
       layoutMode !== "horizontal_row" ||
-      !approximately(mediaFrameWidth, 252, 2) ||
-      !approximately(mediaFrameHeight, 142, 2) ||
-      !approximately(horizontalCardsVisible, 1.42, 0.07) ||
+      !approximately(
+        mediaFrameWidth,
+        252,
+        BASELINE_VARIANCE.referenceMediaDimensionLogicalUnits,
+      ) ||
+      !approximately(
+        mediaFrameHeight,
+        142,
+        BASELINE_VARIANCE.referenceMediaDimensionLogicalUnits,
+      ) ||
+      !approximately(
+        horizontalCardsVisible,
+        1.42,
+        BASELINE_VARIANCE.densityDelta,
+      ) ||
       cardsAboveFold < 3 ||
       cardsAboveFold > 4 ||
-      !approximately(horizontalMargin, 16, 2) ||
-      !approximately(horizontalGap, 12, 2) ||
-      !approximately(verticalRowGap, 20, 2) ||
+      !approximately(
+        horizontalMargin,
+        16,
+        BASELINE_VARIANCE.spacingLogicalUnits,
+      ) ||
+      !approximately(
+        horizontalGap,
+        12,
+        BASELINE_VARIANCE.spacingLogicalUnits,
+      ) ||
+      !approximately(
+        verticalRowGap,
+        20,
+        BASELINE_VARIANCE.spacingLogicalUnits,
+      ) ||
       columnCount !== 1
     ) {
       return conclude(
@@ -932,14 +996,34 @@ export const deterministicVisualClassification = (
       orientation !== "portrait" ||
       !["medium", "expanded"].includes(windowClass) ||
       layoutMode !== "grid" ||
-      !approximately(mediaFrameWidth, 307, 2) ||
-      !approximately(mediaFrameHeight, 173, 2) ||
-      !approximately(horizontalCardsVisible, 3, 0.1) ||
+      !approximately(
+        mediaFrameWidth,
+        307,
+        BASELINE_VARIANCE.referenceMediaDimensionLogicalUnits,
+      ) ||
+      !approximately(
+        mediaFrameHeight,
+        173,
+        BASELINE_VARIANCE.referenceMediaDimensionLogicalUnits,
+      ) ||
+      !approximately(
+        horizontalCardsVisible,
+        3,
+        BASELINE_VARIANCE.densityDelta,
+      ) ||
       cardsAboveFold < 6 ||
       cardsAboveFold > 9 ||
-      !approximately(horizontalMargin, 32, 2) ||
-      !approximately(columnGap, 20, 2) ||
-      !approximately(verticalRowGap, 24, 2) ||
+      !approximately(
+        horizontalMargin,
+        32,
+        BASELINE_VARIANCE.spacingLogicalUnits,
+      ) ||
+      !approximately(columnGap, 20, BASELINE_VARIANCE.spacingLogicalUnits) ||
+      !approximately(
+        verticalRowGap,
+        24,
+        BASELINE_VARIANCE.spacingLogicalUnits,
+      ) ||
       columnCount !== 3
     ) {
       return conclude(
@@ -1057,7 +1141,8 @@ export const deterministicTouchTargetClassification = (
     metricNumber(metrics, "baselineVersion") !== 1 ||
     !touchTargetBaselineBindingIsValid(metrics, context) ||
     !LOWER_HEX_64.test(toText(metrics.componentIdentityHash)) ||
-    !LOWER_HEX_64.test(toText(metrics.routeFamilyMappingHash))
+    !LOWER_HEX_64.test(toText(metrics.routeFamilyMappingHash)) ||
+    !baselineContractBindingIsValid(metrics)
   ) {
     return visualAssessment("baseline_ambiguity");
   }
@@ -1104,6 +1189,10 @@ export const deterministicTouchTargetClassification = (
     targetWidth === null ||
     targetHeight === null ||
     typeof metrics.interactiveAncestorPresent !== "boolean" ||
+    typeof metrics.interactiveAncestorActuallyInteractive !== "boolean" ||
+    typeof metrics.interactiveAncestorRolePresent !== "boolean" ||
+    typeof metrics.interactiveAncestorClickActionPresent !== "boolean" ||
+    typeof metrics.interactiveAncestorIsTargetContainer !== "boolean" ||
     typeof metrics.isActuallyInteractive !== "boolean" ||
     typeof metrics.accessibilityNamePresent !== "boolean" ||
     typeof metrics.accessibilityRolePresent !== "boolean"
@@ -1126,14 +1215,25 @@ export const deterministicTouchTargetClassification = (
       metrics,
       "interactiveAncestorHeight",
     );
-    if (ancestorWidth === null || ancestorHeight === null) {
+    if (
+      ancestorWidth === null ||
+      ancestorHeight === null ||
+      metrics.interactiveAncestorActuallyInteractive !== true ||
+      metrics.interactiveAncestorRolePresent !== true ||
+      metrics.interactiveAncestorClickActionPresent !== true ||
+      metrics.interactiveAncestorIsTargetContainer !== true
+    ) {
       return visualAssessment("insufficient_evidence");
     }
     effectiveWidth = ancestorWidth;
     effectiveHeight = ancestorHeight;
   } else if (
     metrics.interactiveAncestorWidth !== null ||
-    metrics.interactiveAncestorHeight !== null
+    metrics.interactiveAncestorHeight !== null ||
+    metrics.interactiveAncestorActuallyInteractive !== false ||
+    metrics.interactiveAncestorRolePresent !== false ||
+    metrics.interactiveAncestorClickActionPresent !== false ||
+    metrics.interactiveAncestorIsTargetContainer !== false
   ) {
     return visualAssessment("automation_failure");
   }

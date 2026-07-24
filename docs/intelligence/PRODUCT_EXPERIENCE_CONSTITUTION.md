@@ -11,7 +11,7 @@ The constitution is intentionally marked:
 
 - `status`: `owner_selected_pending_authenticated_approval`
 - `selectedBaselineHash`:
-  `0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184`
+  `34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba`
 - `ownerApprovalVersion`: `null`
 - `approvedBaselineHash`: `null`
 

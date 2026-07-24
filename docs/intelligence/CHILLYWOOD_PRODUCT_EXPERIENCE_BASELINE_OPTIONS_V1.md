@@ -151,8 +151,9 @@ alternatives and are not selected.
 The approval must name manifest SHA-256
 `7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df`
 and canonical selection hash
-`0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184`.
-The selected Option C hash, not the three-option manifest hash, is the
+`34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba`.
+The selected Option C contract hash, not the three-option manifest hash or
+the historical option-only hash, is the
 immutable `baseline_hash`.
 
 Approval scope:

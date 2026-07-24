@@ -29,7 +29,7 @@ include:
 - phone/tablet and portrait/landscape behavior.
 
 The selected baseline hash is
-`0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184`.
+`34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba`.
 The source record remains
 `owner_selected_pending_authenticated_approval`, so the sentinel must classify
 comparison as baseline ambiguity until the authenticated approval version

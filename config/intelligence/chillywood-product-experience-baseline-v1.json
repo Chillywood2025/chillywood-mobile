@@ -6,7 +6,7 @@
   "selectedOption": "creator_balanced",
   "sourceOptionsVersion": "chillywood-product-experience-baseline-options-v1",
   "sourceOptionsManifestHash": "7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df",
-  "baselineHash": "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184",
+  "baselineHash": "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba",
   "canonicalBaselinePayload": {
     "schemaVersion": 1,
     "optionsVersion": "chillywood-product-experience-baseline-options-v1",
@@ -65,8 +65,21 @@
       "liveState": "Live badge, viewer state, and creator identity remain visible without reducing the interactive card target.",
       "expectedImpact": "Streaming-style density while preserving creator identity and live-state prominence.",
       "tradeoffs": "More layout rules than the other options and less artwork emphasis than the cinematic option."
+    },
+    "contractHashes": {
+      "measurementSemantics": "05f5990480506775ca14e9ce6e43d837e562ba8edc34327e28ad72ddec256f68",
+      "referenceViewports": "1b26f254dac876eee58170a41dd0e08fce96de35046fd586c89fa2948083b78b",
+      "canonicalMetrics": "0adefb9a0d35d7df6a8231468243aabcfe65e7a054c6484d8f9bbac90b9efdd3",
+      "surfaceFamilies": "806c30b8380dacd7cee558f7419f62700ad96e57a4ec2de6ff240e3007046656",
+      "routeComponentMappings": "2564e90ed2d96bad4b42c80c4ebd04da8fc2231e976193b1705a570dd1ad4a7a",
+      "explicitExceptions": "218487c2e2cfb4e2d0bfbd26269c6475ecba6b05f9e33a50b31d76c9fabf25c0",
+      "exceptionContracts": "3fdb9377f2688e0d22750dd78da7cfd5157e96ee00ca4e01ee19ccad2cb120aa",
+      "allowedVariance": "a9d2da65c115dcc32cd410ea38db373ab7a4dbaefdbb6962d15a7d4d327616b0",
+      "creatorAndLiveIdentity": "6eff3a500ccc4f1d233e02246001f0a9e34f5bcbd9420f56ef1bf4e26389949a",
+      "effectiveScope": "5ec9259effe9f9e20a92d822e16280abb194aab3b43980e0ac6ff100bf115108"
     }
   },
+  "contractHashAlgorithm": "sha256-sorted-json-v1",
   "measurementSemantics": {
     "referenceLogicalUnit": "platform-independent layout unit",
     "mediaFrameDimensionsExcludeMetadata": true,
@@ -172,118 +185,204 @@
   },
   "routeComponentMappings": [
     {
+      "mappingId": "home_standard_discovery_rows",
       "route": "Home",
       "source": "app/(tabs)/index.tsx",
       "family": "standard_streaming_card",
-      "appliesTo": "standard discovery rows"
+      "appliesTo": "standard discovery rows",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "home_featured_hero",
       "route": "Home",
       "source": "app/(tabs)/index.tsx#home-hero",
       "family": "featured_hero_card",
-      "appliesTo": "first-row featured hero"
+      "appliesTo": "first-row featured hero",
+      "exceptionContractId": "full_width_featured_banner_v1"
     },
     {
+      "mappingId": "home_creator_media_rows",
       "route": "Home",
       "source": "components/creator-media/creator-video-card.tsx",
       "family": "creator_streaming_card",
-      "appliesTo": "creator media rows"
+      "appliesTo": "creator media rows",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "home_activity_discovery_cards",
+      "route": "Home",
+      "source": "app/(tabs)/index.tsx#renderFeedItemCard",
+      "family": "standard_streaming_card",
+      "appliesTo": "public-safe discovery activity cards",
+      "exceptionContractId": null
+    },
+    {
+      "mappingId": "explore_title_discovery_rows",
       "route": "Explore",
       "source": "app/(tabs)/explore.tsx",
       "family": "standard_streaming_card",
-      "appliesTo": "title discovery and media search results"
+      "appliesTo": "title discovery and media search results",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "explore_creator_video_results",
       "route": "Explore",
       "source": "app/(tabs)/explore.tsx#creator-video-results",
       "family": "creator_streaming_card",
-      "appliesTo": "public creator media results"
+      "appliesTo": "public creator media results",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "explore_live_discovery_rows",
+      "route": "Explore",
+      "source": "app/(tabs)/explore.tsx#live-discovery-items",
+      "family": "live_streaming_card",
+      "appliesTo": "live discovery items and live event cards",
+      "exceptionContractId": null
+    },
+    {
+      "mappingId": "search_media_results",
       "route": "Search",
       "source": "app/(tabs)/explore.tsx#home-explore-search-input",
       "family": "standard_streaming_card",
-      "appliesTo": "media result rows"
+      "appliesTo": "media result rows",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "search_people_results",
       "route": "Search",
       "source": "app/(tabs)/explore.tsx#explore-people-search-section",
       "family": "non_media_interactive_surface",
-      "appliesTo": "people results"
+      "appliesTo": "people results",
+      "exceptionContractId": "non_streaming_discovery_route_v1"
     },
     {
+      "mappingId": "library_title_media_rows",
       "route": "Library",
       "source": "app/(tabs)/my-list.tsx",
       "family": "standard_streaming_card",
-      "appliesTo": "saved and continue-watching media"
+      "appliesTo": "saved and continue-watching media",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "library_creator_media_rows",
+      "route": "Library",
+      "source": "app/(tabs)/my-list.tsx#platform-card",
+      "family": "creator_streaming_card",
+      "appliesTo": "saved public creator and platform media",
+      "exceptionContractId": null
+    },
+    {
+      "mappingId": "library_redirect_shell",
       "route": "Library",
       "source": "app/library.tsx",
       "family": "non_media_interactive_surface",
-      "appliesTo": "redirect-only route shell"
+      "appliesTo": "redirect-only route shell",
+      "exceptionContractId": "non_streaming_discovery_route_v1"
     },
     {
+      "mappingId": "title_primary_artwork",
       "route": "Title",
       "source": "app/title/[id].tsx",
       "family": "featured_hero_card",
-      "appliesTo": "title detail primary artwork"
+      "appliesTo": "title detail primary artwork",
+      "exceptionContractId": "full_width_featured_banner_v1"
     },
     {
+      "mappingId": "player_full_surface",
       "route": "Player",
       "source": "app/player/[id].tsx",
       "family": "non_media_interactive_surface",
-      "appliesTo": "full player surface; recommendation rows remain standard_streaming_card when rendered"
+      "appliesTo": "full player surface",
+      "exceptionContractId": "full_player_surface_v1"
     },
     {
+      "mappingId": "player_recommendation_rows",
+      "route": "Player",
+      "source": "app/player/[id].tsx#recommendation-rows",
+      "family": "standard_streaming_card",
+      "appliesTo": "title and player recommendation rows when rendered",
+      "exceptionContractId": null
+    },
+    {
+      "mappingId": "public_channel_featured_media",
+      "route": "PublicChannel",
+      "source": "app/channel/[userId].tsx#renderFeaturedVideoCard",
+      "family": "featured_hero_card",
+      "appliesTo": "first-row featured creator media",
+      "exceptionContractId": "full_width_featured_banner_v1"
+    },
+    {
+      "mappingId": "public_channel_creator_media_rows",
       "route": "PublicChannel",
       "source": "app/channel/[userId].tsx#platform-content-card",
       "family": "creator_streaming_card",
-      "appliesTo": "public creator/channel media rows"
+      "appliesTo": "public creator/channel media rows",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "public_profile_creator_media_rows",
       "route": "PublicProfile",
       "source": "app/profile/[userId].tsx",
       "family": "creator_streaming_card",
-      "appliesTo": "public creator media rows"
+      "appliesTo": "public creator media rows",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "live_discovery_cards",
       "route": "Live",
       "source": "app/(tabs)/live.tsx",
       "family": "live_streaming_card",
-      "appliesTo": "Live discovery cards"
+      "appliesTo": "Live discovery cards",
+      "exceptionContractId": null
     },
     {
+      "mappingId": "watch_party_discovery_rows",
+      "route": "WatchParty",
+      "source": "app/watch-party/index.tsx#discovery-rows",
+      "family": "standard_streaming_card",
+      "appliesTo": "Watch Party discovery cards when rendered",
+      "exceptionContractId": null
+    },
+    {
+      "mappingId": "watch_party_entry_controls",
       "route": "WatchParty",
       "source": "app/watch-party/index.tsx",
       "family": "non_media_interactive_surface",
-      "appliesTo": "room creation and join controls"
+      "appliesTo": "room creation and join controls",
+      "exceptionContractId": "non_streaming_discovery_route_v1"
     },
     {
+      "mappingId": "watch_party_room_controls",
       "route": "WatchParty",
       "source": "app/watch-party/[partyId].tsx",
       "family": "non_media_interactive_surface",
-      "appliesTo": "room controls and participant surfaces"
+      "appliesTo": "room controls and participant surfaces",
+      "exceptionContractId": "non_streaming_discovery_route_v1"
     },
     {
+      "mappingId": "watch_party_live_stage_surface",
       "route": "WatchPartyLiveStage",
       "source": "app/watch-party/live-stage/[partyId].tsx",
       "family": "non_media_interactive_surface",
-      "appliesTo": "full Live Stage and participant controls"
+      "appliesTo": "full Live Stage and participant controls",
+      "exceptionContractId": "full_player_surface_v1"
     },
     {
+      "mappingId": "vertical_social_attachment",
       "route": "VerticalPost",
       "source": "components/social/social-attachment-card.tsx",
       "family": "vertical_post_card",
-      "appliesTo": "social media attachments with vertical source aspect"
+      "appliesTo": "social media attachments with vertical source aspect",
+      "exceptionContractId": "vertical_short_form_v1"
     },
     {
+      "mappingId": "compact_communication_media_preview",
       "route": "CompactMedia",
       "source": "components/communication/communication-preview-card.tsx",
       "family": "compact_media_list_item",
-      "appliesTo": "compact communication media previews"
+      "appliesTo": "compact communication media previews",
+      "exceptionContractId": "chat_attachment_v1"
     }
   ],
   "explicitExceptions": [
@@ -298,6 +397,107 @@
     "administrative controls",
     "routes that do not represent streaming or discovery media"
   ],
+  "exceptionContracts": [
+    {
+      "exceptionContractId": "full_width_featured_banner_v1",
+      "exceptionType": "featured_hero",
+      "description": "full-width hero or featured banners",
+      "allowedFamilies": ["featured_hero_card"]
+    },
+    {
+      "exceptionContractId": "vertical_short_form_v1",
+      "exceptionType": "vertical_short_form",
+      "description": "vertical 9:16 or 4:5 short-form media",
+      "allowedFamilies": ["vertical_post_card"]
+    },
+    {
+      "exceptionContractId": "creator_profile_header_v1",
+      "exceptionType": "non_media_surface",
+      "description": "creator profile headers",
+      "allowedFamilies": ["non_media_interactive_surface"]
+    },
+    {
+      "exceptionContractId": "full_player_surface_v1",
+      "exceptionType": "non_media_surface",
+      "description": "full player surfaces",
+      "allowedFamilies": ["non_media_interactive_surface"]
+    },
+    {
+      "exceptionContractId": "comments_social_body_v1",
+      "exceptionType": "non_media_surface",
+      "description": "comments and social-post bodies",
+      "allowedFamilies": ["non_media_interactive_surface"]
+    },
+    {
+      "exceptionContractId": "chat_attachment_v1",
+      "exceptionType": "compact_media_list",
+      "description": "chat attachments",
+      "allowedFamilies": ["compact_media_list_item"]
+    },
+    {
+      "exceptionContractId": "settings_form_v1",
+      "exceptionType": "non_media_surface",
+      "description": "settings and forms",
+      "allowedFamilies": ["non_media_interactive_surface"]
+    },
+    {
+      "exceptionContractId": "compact_notification_v1",
+      "exceptionType": "compact_media_list",
+      "description": "compact notifications",
+      "allowedFamilies": ["compact_media_list_item"]
+    },
+    {
+      "exceptionContractId": "administrative_control_v1",
+      "exceptionType": "non_media_surface",
+      "description": "administrative controls",
+      "allowedFamilies": ["non_media_interactive_surface"]
+    },
+    {
+      "exceptionContractId": "non_streaming_discovery_route_v1",
+      "exceptionType": "non_media_surface",
+      "description": "routes that do not represent streaming or discovery media",
+      "allowedFamilies": ["non_media_interactive_surface"]
+    }
+  ],
+  "routeComponentMappingHashes": {
+    "home_standard_discovery_rows": "1da877c4587ae6389b78f5c57dd212b473fbeae22a9db4885000a8b961f6a44d",
+    "home_featured_hero": "9d813e473c5eeca5965812fcbc4cc2f8cf3e07871325a4ac95fb51258fd9af41",
+    "home_creator_media_rows": "f0a9eeec1e2c67a79d4255b0a4eb985e3ce088a4672c2bd65139880f1bd2f889",
+    "home_activity_discovery_cards": "9ac317a44dfa63a9b64f16dfbdd67456c0f135de850cb2da8c5eae80a584ab41",
+    "explore_title_discovery_rows": "c4cb312b420c50c283e61535f8501d6ae38d8660dfb288c395e7b1739b138e3d",
+    "explore_creator_video_results": "6465e5e2462267e58b7fd039daeebf3dc3804f5379a198ff9e5d883aec9f4ad8",
+    "explore_live_discovery_rows": "089d3ce12c9653fd111445088fc4ba523365477d607077f5048a68a3c1f0fcd6",
+    "search_media_results": "1ceb014492cc4d5dfb6a1f4a20afbd3615bcb4cded2278264f234e10d00361f6",
+    "search_people_results": "e2c331739df710de85372804072e891431090e34d409ecd260fe6783461d0156",
+    "library_title_media_rows": "8046bc353d060459f17f0f57ab96463d6ad6d86102185c5adfc205485e51efd5",
+    "library_creator_media_rows": "5b342920eacd19b57f197d9e5113ada20b4b6c05e7020efb7e08440a97181d26",
+    "library_redirect_shell": "99814605e9a2a35885134af23cac46f3543f56b89985c7a56935327eb6d45200",
+    "title_primary_artwork": "9eced75aea5d4ffe87a862f7c4f21fb5eacfcfcfdac833f0949cb4aae198d3b4",
+    "player_full_surface": "a1fc4f2f5b6f31c253aba2dc2c2716d699e318af91f4d3d38faf4d8041541ba1",
+    "player_recommendation_rows": "38a361f46260b6884d4c2b01193bed5d053b21fdb7383e6e2e79c6d5eb9f019f",
+    "public_channel_featured_media": "966fea9ea7383c337377bae8de876fea9b71854cd1ff5503f5a2d184a48628f1",
+    "public_channel_creator_media_rows": "69f52715d516c3bfbaf8292f610b87432ce0e9bec37f0e57a47ae1f81c949cd0",
+    "public_profile_creator_media_rows": "0a61815e9858fefa4cc93a3322cc0634bc62a497001125900ce8f1e58a97475a",
+    "live_discovery_cards": "cdeb267f422b121bb3d51f0e6d59bad419d65dd21e62b9a87ad39a50e26409af",
+    "watch_party_discovery_rows": "7720387c7c2a880a63cca0271bd02ba5e8d0db765b5c95536ce93dfa2075cd9b",
+    "watch_party_entry_controls": "900ec3a06999a1a7afcb88da0580d829902a1839cf26b54446cfa99e87aa2300",
+    "watch_party_room_controls": "60454ac2a7f8a31712551c025fbadd4e5ae516538fbc5df0b7c878f0792757d9",
+    "watch_party_live_stage_surface": "fb7661728d122c2ee79bee532387a50b22ff4e7897acbcfc254120fe31d2c306",
+    "vertical_social_attachment": "960ee0ec5a901e1d7887d84cfdb862725c732abede1904eac0ad5b01e8fc415a",
+    "compact_communication_media_preview": "a57fc5c80cff280ab998a925aec96b5d0c3bfd5d37f48b2f979e5b35e0e11030"
+  },
+  "exceptionContractHashes": {
+    "full_width_featured_banner_v1": "731a0b271122e60b5576c3d04729ab1866334ebb9827a84b8cfe9a19ccf4d5ac",
+    "vertical_short_form_v1": "66909a7e1aa9f993d57b15f98cf68c58d953e595849a0c9b53739027d3e248a3",
+    "creator_profile_header_v1": "a48975689c6b4d98130713b8bd73f6ef8d9eec0c24bb537c9f1e92b847784775",
+    "full_player_surface_v1": "a9f9ac09d7b709f3e8bda5774bc939e29bce7e99619e7c075a152c12cbb9960d",
+    "comments_social_body_v1": "b6242baedb4f693d592442b95a43570cad67b03c97800f2e4b9dbd4e60bee6b0",
+    "chat_attachment_v1": "63e14f8920a9a455263c7f2e15a29a2d6458583a62c84d6913b17819df61aed6",
+    "settings_form_v1": "a76e448d0ffdc899a3c336a376ed59cc28c61ddce1706c0efa73269ad614ea3b",
+    "compact_notification_v1": "cef466a647a5bad9b6b5a1ef1bf22c0f4e92b04e576a789a7ecb1b09c2ee04e2",
+    "administrative_control_v1": "f3c72ec50ed7210f3e7284d5dcd6601d1c7306d2f1352296ddb131c2126edabe",
+    "non_streaming_discovery_route_v1": "18a3bb4c47a9f78849f15249776daea979abf11b9446f3773dc59d1a74f9894e"
+  },
   "allowedVariance": {
     "referenceMediaDimensionLogicalUnits": 4,
     "referenceMediaViewportRatioDelta": 0.03,
