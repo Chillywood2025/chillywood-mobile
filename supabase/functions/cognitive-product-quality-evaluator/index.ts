@@ -65,6 +65,19 @@ type StoredRun = Readonly<{
   task_id: string;
 }>;
 
+export type DetectionEvaluationContext = Readonly<{
+  approvedVisualBaselineCount: number;
+  approvedVisualBaselineHash: string | null;
+}>;
+
+type DeterministicFindingProfile = Readonly<{
+  confidence: number;
+  findingClass: string;
+  reproductionState: string;
+  severity: string;
+  suspectedLayer: string;
+}>;
+
 const SERVICE_IDENTITY = "cognitive_independent_evaluator";
 const INVOCATION_HEADER = "x-cognitive-evaluator-invocation";
 const MAX_REQUEST_BYTES = 32 * 1024;
@@ -250,13 +263,182 @@ const metricNumber = (
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 };
 
+const DEFAULT_EVALUATION_CONTEXT: DetectionEvaluationContext = Object.freeze({
+  approvedVisualBaselineCount: 0,
+  approvedVisualBaselineHash: null,
+});
+
+const profile = (
+  findingClass: string,
+  suspectedLayer: string,
+  severity: string,
+  confidence: number,
+  reproductionState = "confirmed_defect",
+): DeterministicFindingProfile =>
+  Object.freeze({
+    confidence,
+    findingClass,
+    reproductionState,
+    severity,
+    suspectedLayer,
+  });
+
+const candidateMatchesProfile = (
+  candidate: DetectionCandidate,
+  expected: DeterministicFindingProfile,
+): boolean =>
+  candidate.findingClass === expected.findingClass &&
+  candidate.suspectedLayer === expected.suspectedLayer &&
+  candidate.severity === expected.severity &&
+  candidate.confidence === expected.confidence &&
+  candidate.reproductionState === expected.reproductionState;
+
+const liveKitProfile = (
+  failureCategory: string,
+): DeterministicFindingProfile | null => {
+  const normalizedClass = `livekit_${failureCategory}`.replace(
+    /[^a-z0-9._-]/gu,
+    "_",
+  );
+  const byFailure: Readonly<
+    Record<string, readonly [string, string, number]>
+  > = Object.freeze({
+    background_foreground_recovery_failed: [
+      "installed_ui_state",
+      "high",
+      0.99,
+    ],
+    build_runtime_mismatch: ["platform_drift", "high", 1],
+    cleanup_failure: ["installed_ui_state", "medium", 0.99],
+    deadline_exceeded: ["loading_state", "medium", 0.99],
+    first_media_missing: ["media_subscribe", "high", 0.99],
+    ice_turn_failure: ["ice_turn", "high", 0.99],
+    installed_ui_connecting_stuck: ["react_state", "high", 0.99],
+    local_publish_failure: ["media_publish", "high", 0.99],
+    network_interruption: ["websocket", "medium", 0.95],
+    permission_failure: ["permission", "medium", 1],
+    provider_degradation: ["provider_degradation", "low", 0.95],
+    remote_participant_missing: ["media_subscribe", "medium", 0.99],
+    remote_subscription_failure: ["media_subscribe", "high", 0.99],
+    room_connection_failure: ["websocket", "high", 0.99],
+    token_backend_failure: ["backend_token", "high", 0.99],
+    websocket_failure: ["websocket", "high", 0.99],
+  });
+  const expected = byFailure[failureCategory];
+  return expected
+    ? profile(normalizedClass, expected[0], expected[1], expected[2])
+    : null;
+};
+
+const installedJourneyProfile = (
+  metrics: Record<string, unknown>,
+): DeterministicFindingProfile | null => {
+  const expectedState = toText(metrics.expectedState);
+  const observedState = toText(metrics.observedState);
+  const resultState = toText(metrics.resultState);
+  const unresolvedStateCount = metricNumber(metrics, "unresolvedStateCount");
+  if (
+    !expectedState ||
+    !observedState ||
+    expectedState === observedState ||
+    unresolvedStateCount === null ||
+    unresolvedStateCount < 1
+  ) {
+    return null;
+  }
+  if (resultState === "loading" && observedState === "loading") {
+    const elapsedDurationMs = metricNumber(metrics, "elapsedDurationMs");
+    const maxDurationMs = metricNumber(metrics, "maxDurationMs");
+    return elapsedDurationMs !== null &&
+        maxDurationMs !== null &&
+        elapsedDurationMs >= maxDurationMs
+      ? profile(
+        "installed_journey_unresolved_loading",
+        "loading_state",
+        "medium",
+        1,
+      )
+      : null;
+  }
+  if (resultState === "error" && observedState === "error") {
+    return profile(
+      "installed_journey_error_state",
+      "empty_error_offline",
+      "medium",
+      1,
+    );
+  }
+  if (resultState === "offline" && observedState === "offline") {
+    return profile(
+      "installed_journey_offline_state",
+      "empty_error_offline",
+      "low",
+      1,
+    );
+  }
+  if (
+    resultState === "permission_denied" &&
+    observedState === "permission_denied"
+  ) {
+    return profile(
+      "installed_journey_permission_denied",
+      "permission",
+      "medium",
+      1,
+    );
+  }
+  if (resultState === "blank" && observedState === "blank") {
+    return profile(
+      "installed_journey_blank_state",
+      "installed_ui_state",
+      "high",
+      1,
+    );
+  }
+  if (resultState === "crashed" && observedState === "crashed") {
+    return profile(
+      "installed_journey_crashed",
+      "installed_ui_state",
+      "high",
+      1,
+    );
+  }
+  if (resultState !== "blocked") return null;
+  if (observedState === "no_state_change") {
+    return profile(
+      "installed_journey_no_state_change",
+      "route_navigation",
+      "medium",
+      1,
+    );
+  }
+  if (observedState === "route_unavailable") {
+    return profile(
+      "installed_journey_route_unavailable",
+      "route_navigation",
+      "high",
+      1,
+    );
+  }
+  return observedState === "unknown_blocked"
+    ? profile(
+      "installed_journey_blocked",
+      "unknown",
+      "medium",
+      1,
+    )
+    : null;
+};
+
 export const deterministicDetectionReasons = (
   run: StoredRun,
   candidate: DetectionCandidate,
+  context: DetectionEvaluationContext = DEFAULT_EVALUATION_CONTEXT,
 ): readonly string[] => {
   const reasons = new Set<string>();
   const metrics = metricObject(run);
   const observationKind = toText(run.metric_manifest.observationKind);
+  let expectedProfile: DeterministicFindingProfile | null = null;
   if (
     run.route_or_surface !== candidate.routeOrSurface ||
     run.source_build_hash !== candidate.buildRuntimeHash ||
@@ -289,12 +471,16 @@ export const deterministicDetectionReasons = (
       height === null ||
       (width >= threshold && height >= threshold) ||
       metrics.isActuallyInteractive !== true ||
-      metrics.clickableAncestorPresent !== false ||
-      candidate.findingClass !== "android_touch_target_below_48dp" ||
-      candidate.suspectedLayer !== "layout_density" ||
-      candidate.reproductionState !== "confirmed_defect"
+      metrics.clickableAncestorPresent !== false
     ) {
       reasons.add("touch_target_classification_rejected");
+    } else {
+      expectedProfile = profile(
+        "android_touch_target_below_48dp",
+        "layout_density",
+        "medium",
+        0.99,
+      );
     }
   } else if (observationKind === "search_accessibility") {
     const confirmedGap = metrics.inputPresent === true &&
@@ -306,44 +492,111 @@ export const deterministicDetectionReasons = (
         metrics.clearSucceeded !== true
       );
     if (
-      !confirmedGap ||
-      candidate.findingClass !== "search_accessibility_interactivity_gap" ||
-      candidate.suspectedLayer !== "installed_ui_state"
+      !confirmedGap
     ) {
       reasons.add("search_accessibility_classification_rejected");
+    } else {
+      expectedProfile = profile(
+        "search_accessibility_interactivity_gap",
+        "installed_ui_state",
+        "medium",
+        0.99,
+      );
     }
   } else if (observationKind === "route_timing") {
-    if (
-      metrics.timeoutObserved !== true ||
-      candidate.findingClass !== "route_unresolved_or_error_state" ||
-      !["loading_state", "route_navigation", "empty_error_offline"].includes(
-        candidate.suspectedLayer,
-      )
-    ) {
+    if (metrics.timeoutObserved !== true) {
       reasons.add("route_timing_classification_rejected");
+    } else {
+      const networkState = toText(metrics.networkState);
+      expectedProfile = networkState === "offline"
+        ? profile(
+          "route_unresolved_or_error_state",
+          "empty_error_offline",
+          "low",
+          1,
+        )
+        : networkState === "provider_blocked"
+        ? profile(
+          "route_unresolved_or_error_state",
+          "provider_degradation",
+          "low",
+          0.95,
+          "provider_blocked",
+        )
+        : ["ready", "degraded", "unknown"].includes(networkState)
+        ? profile(
+          "route_unresolved_or_error_state",
+          "loading_state",
+          "medium",
+          0.99,
+        )
+        : null;
+      if (!expectedProfile) {
+        reasons.add("route_timing_classification_rejected");
+      }
     }
   } else if (observationKind === "crash_anr") {
     const fatalCount = metricNumber(metrics, "fatalExceptionCount") ?? 0;
     const anrCount = metricNumber(metrics, "anrCount") ?? 0;
     if (
-      fatalCount + anrCount < 1 ||
-      candidate.findingClass !== "installed_crash_or_anr" ||
-      candidate.suspectedLayer !== "installed_ui_state"
+      fatalCount + anrCount < 1
     ) {
       reasons.add("crash_anr_classification_rejected");
+    } else {
+      expectedProfile = profile(
+        "installed_crash_or_anr",
+        "installed_ui_state",
+        "high",
+        1,
+      );
     }
   } else if (observationKind === "livekit_experience") {
     const failureCategory = toText(metrics.stageFailureCategory);
-    if (
-      !failureCategory ||
-      failureCategory === "none" ||
-      candidate.findingClass !==
-        `livekit_${failureCategory}`.replace(/[^a-z0-9._-]/gu, "_")
-    ) {
+    expectedProfile = liveKitProfile(failureCategory);
+    if (!expectedProfile) {
       reasons.add("livekit_classification_rejected");
+    }
+  } else if (observationKind === "visual_layout") {
+    const baselineState = toText(metrics.baselineState);
+    const comparisonHash = toText(metrics.baselineComparisonHash);
+    if (
+      baselineState === "needs_product_baseline_review" &&
+      context.approvedVisualBaselineCount === 0
+    ) {
+      expectedProfile = profile(
+        "visual_product_baseline_missing",
+        "layout_density",
+        "info",
+        1,
+        "design_baseline_missing",
+      );
+    } else if (
+      baselineState === "approved_baseline" &&
+      context.approvedVisualBaselineCount === 1 &&
+      context.approvedVisualBaselineHash === comparisonHash
+    ) {
+      expectedProfile = profile(
+        "visual_layout_approved_baseline_deviation",
+        "layout_density",
+        "medium",
+        1,
+      );
+    } else {
+      reasons.add("visual_layout_approved_baseline_required");
+    }
+  } else if (observationKind === "installed_journey") {
+    expectedProfile = installedJourneyProfile(metrics);
+    if (!expectedProfile) {
+      reasons.add("installed_journey_classification_rejected");
     }
   } else {
     reasons.add("unsupported_observation_kind");
+  }
+  if (
+    expectedProfile &&
+    !candidateMatchesProfile(candidate, expectedProfile)
+  ) {
+    reasons.add("deterministic_finding_profile_mismatch");
   }
   return Object.freeze([...reasons].sort());
 };
@@ -396,6 +649,33 @@ export const deterministicResolutionReasons = (
       toText(detectionRun.metric_manifest.observationKind)
   ) {
     reasons.add("resolution_observation_kind_mismatch");
+  }
+  const observationKind = toText(detectionRun.metric_manifest.observationKind);
+  const resolutionMetrics = metricObject(run);
+  const detectionMetrics = metricObject(detectionRun);
+  if (!resolutionMetrics || !detectionMetrics) {
+    reasons.add("resolution_metric_manifest_missing");
+  } else if (observationKind === "touch_target") {
+    reasons.add("resolution_component_identity_unavailable");
+  } else if (observationKind === "visual_layout") {
+    if (
+      toText(resolutionMetrics.baselineState) !== "approved_baseline" ||
+      toText(resolutionMetrics.baselineComparisonHash) !==
+        toText(detectionMetrics.baselineComparisonHash)
+    ) {
+      reasons.add("resolution_measurement_identity_mismatch");
+    }
+  } else if (observationKind === "installed_journey") {
+    if (
+      toText(resolutionMetrics.expectedState) !==
+        toText(detectionMetrics.expectedState) ||
+      toText(resolutionMetrics.sourceRuntimeHash) !==
+        toText(detectionMetrics.sourceRuntimeHash) ||
+      metricNumber(resolutionMetrics, "journeyStepCount") !==
+        metricNumber(detectionMetrics, "journeyStepCount")
+    ) {
+      reasons.add("resolution_measurement_identity_mismatch");
+    }
   }
   return Object.freeze([...reasons].sort());
 };
@@ -491,6 +771,39 @@ const readStoredFinding = async (
   return !result.error && isRecord(result.data)
     ? result.data as unknown as StoredFinding
     : null;
+};
+
+const readDetectionEvaluationContext = async (
+  client: SupabaseClientLike,
+  run: StoredRun,
+): Promise<DetectionEvaluationContext | null> => {
+  if (
+    toText(run.metric_manifest.observationKind) !== "visual_layout"
+  ) {
+    return DEFAULT_EVALUATION_CONTEXT;
+  }
+  const result = await client
+    .from("product_experience_baseline_versions")
+    .select("baseline_hash,baseline_version")
+    .eq("task_id", run.task_id)
+    .eq("project_id", run.project_id)
+    .eq("platform", run.platform)
+    .eq("environment", run.environment)
+    .eq("baseline_key", "streaming_mobile_content_density")
+    .eq("status", "owner_approved")
+    .not("owner_approval_version_id", "is", null)
+    .not("approved_at", "is", null)
+    .order("baseline_version", { ascending: false })
+    .limit(1);
+  if (result.error || !Array.isArray(result.data)) return null;
+  const hashes = result.data
+    .map((entry: unknown) => isRecord(entry) ? toText(entry.baseline_hash) : "")
+    .filter((hash: string) => LOWER_HEX_64.test(hash));
+  if (hashes.length !== result.data.length) return null;
+  return Object.freeze({
+    approvedVisualBaselineCount: hashes.length,
+    approvedVisualBaselineHash: hashes.length === 1 ? hashes[0] : null,
+  });
 };
 
 const prepareAssessmentHash = async (
@@ -603,8 +916,12 @@ export const handler = async (request: Request): Promise<Response> => {
       assessmentKind = "finding_resolution";
     } else {
       const candidate = toCandidate(payload);
+      const context = await readDetectionEvaluationContext(client, run);
+      if (!context) {
+        return json(409, { error: "sentinel_baseline_read_rejected" });
+      }
       assessmentHash = await prepareAssessmentHash(client, run, candidate);
-      reasons = deterministicDetectionReasons(run, candidate);
+      reasons = deterministicDetectionReasons(run, candidate, context);
       assessmentKind = "finding_detection";
     }
     if (!assessmentHash) {
