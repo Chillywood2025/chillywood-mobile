@@ -1,0 +1,363 @@
+{
+  "schemaVersion": 1,
+  "baselineId": "chillywood-product-experience-baseline-v1",
+  "status": "owner_selected_pending_authenticated_approval",
+  "selectedOptionCode": "C",
+  "selectedOption": "creator_balanced",
+  "sourceOptionsVersion": "chillywood-product-experience-baseline-options-v1",
+  "sourceOptionsManifestHash": "7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df",
+  "baselineHash": "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184",
+  "canonicalBaselinePayload": {
+    "schemaVersion": 1,
+    "optionsVersion": "chillywood-product-experience-baseline-options-v1",
+    "scope": [
+      "android_installed_visual_sentinel",
+      "ios_installed_visual_sentinel",
+      "responsive_product_experience_review"
+    ],
+    "commonRequirements": {
+      "androidMinimumInteractiveTargetDp": 48,
+      "iosMinimumInteractiveTargetPt": 44,
+      "webPreferredInteractiveTargetCssPx": 44,
+      "webWcag22AaMinimumTargetCssPx": 24,
+      "preserveMediaAspectRatio": true,
+      "dynamicTypeRequired": true,
+      "screenReaderNameRoleValueRequired": true,
+      "focusOrderMatchesVisualOrder": true,
+      "loadingEmptyErrorOfflinePermissionStatesRequired": true,
+      "portraitLandscapeAndResizableWindowEvidenceRequired": true,
+      "maximumTitleLines": 2,
+      "maximumMetadataLines": 2
+    },
+    "selectedOption": {
+      "option": "C",
+      "name": "creator_balanced",
+      "phone": {
+        "cardWidth": 252,
+        "cardHeight": 142,
+        "aspectRatio": "16:9",
+        "columns": 1,
+        "horizontalMargin": 16,
+        "columnGap": 12,
+        "rowGap": 20,
+        "expectedCardsVisibleAboveFold": {
+          "minimum": 3,
+          "maximum": 4
+        },
+        "horizontalCardsVisiblePerRow": 1.42
+      },
+      "tablet": {
+        "cardWidth": 307,
+        "cardHeight": 173,
+        "aspectRatio": "16:9",
+        "columns": 3,
+        "horizontalMargin": 32,
+        "columnGap": 20,
+        "rowGap": 24,
+        "expectedCardsVisibleAboveFold": {
+          "minimum": 6,
+          "maximum": 9
+        }
+      },
+      "rowGridBehavior": "Peekable horizontal rows on compact phones and a three-column tablet grid; featured content is limited to the first row.",
+      "portraitLandscapeBehavior": "Compact landscape uses two balanced columns; medium and expanded windows use three or four columns without changing the 16:9 media ratio.",
+      "creatorIdentity": "Creator avatar and name are first-class; a compact secondary line may show category or recency.",
+      "liveState": "Live badge, viewer state, and creator identity remain visible without reducing the interactive card target.",
+      "expectedImpact": "Streaming-style density while preserving creator identity and live-state prominence.",
+      "tradeoffs": "More layout rules than the other options and less artwork emphasis than the cinematic option."
+    }
+  },
+  "measurementSemantics": {
+    "referenceLogicalUnit": "platform-independent layout unit",
+    "mediaFrameDimensionsExcludeMetadata": true,
+    "totalCardContainerMeasuredSeparately": true,
+    "metadataBandMeasuredSeparately": true,
+    "platformUnits": {
+      "androidInteractiveTarget": "dp",
+      "iosInteractiveTarget": "pt",
+      "webInteractiveTarget": "CSS px",
+      "webWcag22AaMinimum": "CSS px with WCAG-defined exceptions"
+    },
+    "genericSafetyFloorsAreNotOptionCTargets": true
+  },
+  "referenceViewports": {
+    "phonePortrait": {
+      "width": 390,
+      "height": 844,
+      "unit": "logical"
+    },
+    "tabletPortrait": {
+      "width": 1024,
+      "height": 1366,
+      "unit": "logical"
+    }
+  },
+  "canonicalMetrics": {
+    "phonePortraitStandardStreamingMedia": {
+      "mediaFrameWidth": 252,
+      "mediaFrameHeight": 142,
+      "mediaAspectRatio": "16:9",
+      "horizontalMargin": 16,
+      "horizontalGap": 12,
+      "verticalRowGap": 20,
+      "expectedCardsVisibleAboveFold": {
+        "minimum": 3,
+        "maximum": 4
+      },
+      "horizontalCardsVisiblePerRow": 1.42,
+      "maximumTitleLines": 2,
+      "maximumMetadataLines": 2
+    },
+    "tabletPortraitStandardStreamingMedia": {
+      "mediaFrameWidth": 307,
+      "mediaFrameHeight": 173,
+      "mediaAspectRatio": "16:9",
+      "columns": 3,
+      "horizontalMargin": 32,
+      "columnGap": 20,
+      "rowGap": 24,
+      "expectedCardsVisibleAboveFold": {
+        "minimum": 6,
+        "maximum": 9
+      },
+      "maximumTitleLines": 2,
+      "maximumMetadataLines": 2
+    },
+    "responsiveBehavior": {
+      "compactPhone": "peekable_horizontal_rows",
+      "compactLandscape": "two_balanced_columns_allowed",
+      "mediumExpanded": "three_or_four_columns",
+      "standardStreamingAspectRatio": "16:9",
+      "orientationLocked": false,
+      "artworkStretchAllowed": false,
+      "featuredContentDefaultMaximumRows": 1
+    }
+  },
+  "surfaceFamilies": {
+    "standard_streaming_card": {
+      "usesOptionCTargets": true,
+      "requiresCreatorIdentity": true,
+      "requiresLiveState": false
+    },
+    "live_streaming_card": {
+      "usesOptionCTargets": true,
+      "requiresCreatorIdentity": true,
+      "requiresLiveState": true
+    },
+    "creator_streaming_card": {
+      "usesOptionCTargets": true,
+      "requiresCreatorIdentity": true,
+      "requiresLiveStateWhenApplicable": true
+    },
+    "featured_hero_card": {
+      "usesOptionCTargets": false,
+      "requiresExplicitMeasuredException": true,
+      "mayAppearOutsideFirstRow": false
+    },
+    "vertical_post_card": {
+      "usesOptionCTargets": false,
+      "allowedAspectRatios": [
+        "9:16",
+        "4:5"
+      ]
+    },
+    "compact_media_list_item": {
+      "usesOptionCTargets": false,
+      "requiresPlatformTargetFloor": true
+    },
+    "non_media_interactive_surface": {
+      "usesOptionCTargets": false,
+      "requiresPlatformTargetFloor": true
+    }
+  },
+  "routeComponentMappings": [
+    {
+      "route": "Home",
+      "source": "app/(tabs)/index.tsx",
+      "family": "standard_streaming_card",
+      "appliesTo": "standard discovery rows"
+    },
+    {
+      "route": "Home",
+      "source": "app/(tabs)/index.tsx#home-hero",
+      "family": "featured_hero_card",
+      "appliesTo": "first-row featured hero"
+    },
+    {
+      "route": "Home",
+      "source": "components/creator-media/creator-video-card.tsx",
+      "family": "creator_streaming_card",
+      "appliesTo": "creator media rows"
+    },
+    {
+      "route": "Explore",
+      "source": "app/(tabs)/explore.tsx",
+      "family": "standard_streaming_card",
+      "appliesTo": "title discovery and media search results"
+    },
+    {
+      "route": "Explore",
+      "source": "app/(tabs)/explore.tsx#creator-video-results",
+      "family": "creator_streaming_card",
+      "appliesTo": "public creator media results"
+    },
+    {
+      "route": "Search",
+      "source": "app/(tabs)/explore.tsx#home-explore-search-input",
+      "family": "standard_streaming_card",
+      "appliesTo": "media result rows"
+    },
+    {
+      "route": "Search",
+      "source": "app/(tabs)/explore.tsx#explore-people-search-section",
+      "family": "non_media_interactive_surface",
+      "appliesTo": "people results"
+    },
+    {
+      "route": "Library",
+      "source": "app/(tabs)/my-list.tsx",
+      "family": "standard_streaming_card",
+      "appliesTo": "saved and continue-watching media"
+    },
+    {
+      "route": "Library",
+      "source": "app/library.tsx",
+      "family": "non_media_interactive_surface",
+      "appliesTo": "redirect-only route shell"
+    },
+    {
+      "route": "Title",
+      "source": "app/title/[id].tsx",
+      "family": "featured_hero_card",
+      "appliesTo": "title detail primary artwork"
+    },
+    {
+      "route": "Player",
+      "source": "app/player/[id].tsx",
+      "family": "non_media_interactive_surface",
+      "appliesTo": "full player surface; recommendation rows remain standard_streaming_card when rendered"
+    },
+    {
+      "route": "PublicChannel",
+      "source": "app/channel/[userId].tsx#platform-content-card",
+      "family": "creator_streaming_card",
+      "appliesTo": "public creator/channel media rows"
+    },
+    {
+      "route": "PublicProfile",
+      "source": "app/profile/[userId].tsx",
+      "family": "creator_streaming_card",
+      "appliesTo": "public creator media rows"
+    },
+    {
+      "route": "Live",
+      "source": "app/(tabs)/live.tsx",
+      "family": "live_streaming_card",
+      "appliesTo": "Live discovery cards"
+    },
+    {
+      "route": "WatchParty",
+      "source": "app/watch-party/index.tsx",
+      "family": "non_media_interactive_surface",
+      "appliesTo": "room creation and join controls"
+    },
+    {
+      "route": "WatchParty",
+      "source": "app/watch-party/[partyId].tsx",
+      "family": "non_media_interactive_surface",
+      "appliesTo": "room controls and participant surfaces"
+    },
+    {
+      "route": "WatchPartyLiveStage",
+      "source": "app/watch-party/live-stage/[partyId].tsx",
+      "family": "non_media_interactive_surface",
+      "appliesTo": "full Live Stage and participant controls"
+    },
+    {
+      "route": "VerticalPost",
+      "source": "components/social/social-attachment-card.tsx",
+      "family": "vertical_post_card",
+      "appliesTo": "social media attachments with vertical source aspect"
+    },
+    {
+      "route": "CompactMedia",
+      "source": "components/communication/communication-preview-card.tsx",
+      "family": "compact_media_list_item",
+      "appliesTo": "compact communication media previews"
+    }
+  ],
+  "explicitExceptions": [
+    "full-width hero or featured banners",
+    "vertical 9:16 or 4:5 short-form media",
+    "creator profile headers",
+    "full player surfaces",
+    "comments and social-post bodies",
+    "chat attachments",
+    "settings and forms",
+    "compact notifications",
+    "administrative controls",
+    "routes that do not represent streaming or discovery media"
+  ],
+  "allowedVariance": {
+    "referenceMediaDimensionLogicalUnits": 4,
+    "referenceMediaViewportRatioDelta": 0.03,
+    "spacingLogicalUnits": 4,
+    "typographyScaleDelta": 0.1,
+    "densityDelta": 0.15,
+    "aspectRatioRelativeError": 0.02,
+    "accessibilityTargetFloorVariance": 0
+  },
+  "creatorAndLiveIdentity": {
+    "creatorAvatarAndNameFirstClass": true,
+    "secondaryLineMayShow": [
+      "category",
+      "recency",
+      "schedule",
+      "relevant_context"
+    ],
+    "liveBadgeViewerStateAndCreatorIdentityVisible": true,
+    "liveIndicatorsMayReduceInteractiveTarget": false,
+    "artworkMayDisplaceCreatorIdentity": false
+  },
+  "effectiveScope": [
+    "Home standard content rows",
+    "Explore discovery rows",
+    "Search media results",
+    "Library media rows",
+    "title and player recommendation rows when rendered",
+    "public creator and channel media rows",
+    "Live discovery cards",
+    "Watch Party discovery cards when rendered",
+    "similar streaming-content carousels or grids found by inventory"
+  ],
+  "ownerDecision": {
+    "decisionTimestamp": "2026-07-24T08:00:04Z",
+    "intentRecorded": true,
+    "databaseSignatureRecorded": false,
+    "ownerImmutableUserIdReference": null,
+    "ownerIdentityBinding": "must be supplied by the authenticated governance approval version",
+    "ownerApprovalVersion": null,
+    "sourceCommitAtDecisionIntegrationStart": "e5e7d284f7762e71bb5377a3de7b5650e2a21d63"
+  },
+  "authority": {
+    "mayMeasure": true,
+    "mayCompareSentinelEvidence": true,
+    "mayCreateGovernedFindingAfterEvaluation": true,
+    "mayPlanBoundedDraftFix": true,
+    "mayMutateProductionUi": false,
+    "mayPublishOta": false,
+    "mayBuild": false,
+    "mayMerge": false,
+    "mayRelease": false,
+    "mayChangeProviderProduct": false,
+    "mayChangeMoneyRolesRightsAuthRlsModerationRanking": false
+  },
+  "supersedes": null,
+  "amendmentProcedure": {
+    "rewriteThisRecord": false,
+    "requiresNewVersion": true,
+    "requiresAuthenticatedOwnerWorkerEvaluatorChain": true,
+    "requiresNewCanonicalHash": true,
+    "requiresSourceCommitBinding": true
+  }
+}

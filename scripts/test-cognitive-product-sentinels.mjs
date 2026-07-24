@@ -246,12 +246,19 @@ contains(
   "sentinel evidence does not preserve new-binary/OTA blocker status",
 );
 assert(
-  constitution.status === "needs_product_baseline_review",
-  "constitution must not silently approve the current visual baseline",
+  constitution.status === "owner_selected_pending_authenticated_approval",
+  "constitution must distinguish Owner selection from authenticated baseline approval",
 );
 assert(
-  constitution.ownerApprovalVersion === "not_approved_yet",
-  "constitution must not fabricate Owner baseline approval",
+  constitution.ownerApprovalVersion === null &&
+    constitution.approvedBaselineHash === null,
+  "constitution must not fabricate an authenticated Owner approval version",
+);
+assert(
+  constitution.selectedOption === "creator_balanced" &&
+    constitution.selectedBaselineHash ===
+      "0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184",
+  "constitution does not bind the exact Owner-selected Option C hash",
 );
 const expectedBaselineSelectionHashes = {
   A: "29b2c09ded4add3fba577e1195d3da20d0e1015ba81e88f73b1319593f0c27c9",
@@ -495,10 +502,14 @@ const classifyLiveKit = (metrics) => {
 };
 
 const classifyVisual = (metrics) => {
-  const max = constitution.cardMetrics.maximumCardViewportWidthRatio.phone;
-  if (metrics.cardViewportWidthRatio > max) {
+  const referenceRatio =
+    constitution.streamingContentDensity.phonePortraitReference.mediaFrameWidth /
+    constitution.streamingContentDensity.phonePortraitReference.viewportWidth;
+  const ratioDelta =
+    constitution.allowedBaselineVariance.referenceMediaViewportRatioDelta;
+  if (Math.abs(metrics.cardViewportWidthRatio - referenceRatio) > ratioDelta) {
     return {
-      reproductionState: constitution.status === "needs_product_baseline_review"
+      reproductionState: constitution.status !== "owner_approved"
         ? "design_baseline_missing"
         : "likely_defect",
       suspectedLayer: "layout_density",

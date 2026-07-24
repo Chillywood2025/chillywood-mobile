@@ -1,8 +1,11 @@
 # Chi'llywood Product-Experience Baseline Options V1
 
-Status: Owner selection required. These options are measurement baselines only.
-They do not authorize a production UI change, deployment, release, or automatic
-repair.
+Status: historical alternatives preserved. The Owner selected Option C
+(`creator_balanced`) on 2026-07-24. The immutable source selection record is
+`config/intelligence/chillywood-product-experience-baseline-v1.json`; its
+authenticated Owner → worker → evaluator database approval remains pending.
+These options are measurement baselines only. They do not authorize a
+production UI change, deployment, release, or automatic repair.
 
 Canonical options manifest:
 `config/intelligence/product-experience-baseline-options-v1.json`
@@ -139,16 +142,18 @@ than B.
 - No option locks orientation or treats a physical tablet name as a breakpoint.
 - No option stretches media to fill an incompatible container.
 
-## Exact Owner approval request
+## Exact authenticated approval request
 
-Select exactly one of `A`, `B`, or `C` for
-`chillywood-product-experience-baseline-v1`.
+Record exactly Option `C` (`creator_balanced`) for
+`chillywood-product-experience-baseline-v1`; Options A and B remain historical
+alternatives and are not selected.
 
 The approval must name manifest SHA-256
 `7b751a8875b98eb113fda57b9db595aca8e29ca8a970d5b90ac98d2d10dcd8df`
-and the canonical selection hash for the chosen option above. The selected
-option hash, not the three-option manifest hash, is the immutable
-`baseline_hash`.
+and canonical selection hash
+`0ba4a4ad6d80c0f2aebc588686fb3f7fbf420b9f48f5812077a75137164c3184`.
+The selected Option C hash, not the three-option manifest hash, is the
+immutable `baseline_hash`.
 
 Approval scope:
 
