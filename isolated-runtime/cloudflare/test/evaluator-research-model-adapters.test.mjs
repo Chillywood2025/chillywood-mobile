@@ -357,11 +357,18 @@ test("bounded LiveKit fixture attestation records an independently derived no-fi
     expectedEvaluatorOutputHash,
   ].join("|"));
   const calls = [];
+  const events = [];
+  let activeChecks = 0;
   const result = await PRODUCT_QUALITY_EVALUATOR_ADAPTERS
     .attest_livekit_bounded_failure_no_finding.execute({
+      assertActive: async () => {
+        activeChecks += 1;
+        events.push("assertActive");
+      },
       database: {
         call: async (id, parameters) => {
           calls.push({ id, parameters });
+          events.push(id);
           if (id === "productQualityEvaluatorSnapshot") {
             return {
               activeBaseline: { count: 0 },
@@ -404,6 +411,12 @@ test("bounded LiveKit fixture attestation records an independently derived no-fi
   );
   assert.deepEqual(calls.map(({ id }) => id), [
     "productQualityEvaluatorSnapshot",
+    "productQualityAttestLiveKitBoundedFailureNoFinding",
+  ]);
+  assert.equal(activeChecks, 1);
+  assert.deepEqual(events, [
+    "productQualityEvaluatorSnapshot",
+    "assertActive",
     "productQualityAttestLiveKitBoundedFailureNoFinding",
   ]);
   assert.deepEqual(calls[1].parameters, [

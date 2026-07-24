@@ -1,6 +1,7 @@
 import productBaselineJson from "../../../../config/intelligence/chillywood-product-experience-baseline-v1.json" with {
   type: "json",
 };
+import { assertInvocationActive } from "../abort.mjs";
 import { hashJson, sha256Hex } from "../contracts.mjs";
 import { ready } from "./helpers.mjs";
 
@@ -2001,7 +2002,7 @@ const attestLiveKitBoundedFailureNoFinding = ready(
     "read_product_quality_snapshot",
     "attest_livekit_bounded_failure_no_finding",
   ],
-  async ({ database, env, payload }) => {
+  async ({ assertActive, database, env, payload, signal }) => {
     const request = normalizeLiveKitFixtureAttestation(payload);
     if (!request) {
       throw new Error("livekit_fixture_attestation_payload_rejected");
@@ -2049,6 +2050,7 @@ const attestLiveKitBoundedFailureNoFinding = ready(
       derivedFailureCategory,
       evaluatorOutputHash,
     ].join("|"));
+    await assertInvocationActive({ assertActive, signal });
     const result = await database.call(
       "productQualityAttestLiveKitBoundedFailureNoFinding",
       [
