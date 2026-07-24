@@ -324,6 +324,25 @@ function classifyVisual(evidence) {
       classification: "content_data_absence",
     };
   }
+  const objectiveAccessibilityViolation =
+    evidence.interactiveTargetWidth < platformTarget.preferred ||
+    evidence.interactiveTargetHeight < platformTarget.preferred ||
+    !evidence.accessibilityNamePresent ||
+    !evidence.accessibilityRolePresent;
+  if (objectiveAccessibilityViolation) {
+    return {
+      ...baseResult,
+      resultStatus: "finding_created",
+      suspectedLayer: "accessibility",
+      classification: "accessibility_violation",
+      deviationCount: [
+        evidence.interactiveTargetWidth < platformTarget.preferred ||
+          evidence.interactiveTargetHeight < platformTarget.preferred,
+        !evidence.accessibilityNamePresent,
+        !evidence.accessibilityRolePresent,
+      ].filter(Boolean).length,
+    };
+  }
   const baselineApproved =
     constitution.status === "owner_approved" &&
     constitution.ownerApprovalVersion !== null &&
@@ -604,7 +623,7 @@ function selfTest() {
   });
   assert.equal(livekitPass.resultStatus, "passed");
 
-  const visualPendingApproval = classifyVisual({
+  const visualEvidence = {
     screenshotEvidenceHash: fixtureHash("visual-shot"),
     sourceRuntimeHash: fixtureHash("visual-runtime"),
     platform: "android",
@@ -662,9 +681,20 @@ function selfTest() {
     accessibilityNamePresent: true,
     accessibilityRolePresent: true,
     screenDensityDpi: 420,
-  });
+  };
+  const visualPendingApproval = classifyVisual(visualEvidence);
   assert.equal(visualPendingApproval.resultStatus, "blocked");
   assert.equal(visualPendingApproval.classification, "baseline_ambiguity");
+  const visualAccessibilityFinding = classifyVisual({
+    ...visualEvidence,
+    interactiveTargetHeight: 23.24,
+    observedClassification: "accessibility_violation",
+  });
+  assert.equal(visualAccessibilityFinding.resultStatus, "finding_created");
+  assert.equal(
+    visualAccessibilityFinding.classification,
+    "accessibility_violation",
+  );
 
   const journeyFinding = classifyJourney({
     journeyName: "home",
