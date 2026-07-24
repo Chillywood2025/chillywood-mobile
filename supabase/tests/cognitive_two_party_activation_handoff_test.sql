@@ -194,7 +194,7 @@ grant select on two_party_target_hashes to authenticated, service_role;
 
 select ok(
   (
-    select count(*) = 9
+    select count(*) = 10
     from pg_class
     where oid in (
       'public.governance_owner_approval_records'::regclass,
@@ -202,6 +202,7 @@ select ok(
       'public.governance_owner_approval_version_states'::regclass,
       'public.governance_owner_approval_lifecycle_events'::regclass,
       'public.governance_approved_action_executions'::regclass,
+      'public.governance_approved_execution_evaluator_proofs'::regclass,
       'public.governance_model_execution_attestations'::regclass,
       'public.product_experience_baseline_versions'::regclass,
       'public.product_experience_sentinel_runs'::regclass,
@@ -424,6 +425,16 @@ select is(
   'registered',
   'exact Owner registers only the service worker assertion hash'
 );
+select is(
+  public.governance_register_two_party_service_principal(
+    'cognitive_independent_evaluator',
+    encode(extensions.digest(convert_to('synthetic-evaluator-assertion-000000000000','UTF8'),'sha256'),'hex'),
+    array['independent_evaluation'],
+    transaction_timestamp()+interval '1 day'
+  )->>'status',
+  'registered',
+  'exact Owner registers the independent evaluator assertion hash separately'
+);
 reset role;
 
 set local role service_role;
@@ -585,9 +596,19 @@ select is(
     true,
     'two-party-test',
     (select switch_target_hash from two_party_target_hashes)
-  )->>'enabled',
+  )->>'staged',
   'true',
-  'service worker executes a switch change only after exact approval'
+  'approved switch execution stages but does not activate before evaluator proof'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.cognitive_governance_switches
+    where switch_key='cognitive_livekit_experience_sentinel_enabled'
+      and enabled
+  ),
+  0,
+  'staged approved switch is not live before evaluator proof'
 );
 select is(
   public.governance_begin_approved_execution(
@@ -599,6 +620,43 @@ select is(
   'evaluating',
   'service worker enters evaluating after postflight'
 );
+select throws_ok(
+  $$select public.governance_complete_approved_execution(
+    (select execution_id from two_party_fixture where execution_id is not null),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('b',64),
+    repeat('c',64)
+  )$$,
+  'P0001',
+  'two_party_execution_completion_rejected',
+  'completion without an independent evaluator proof is rejected'
+);
+select throws_ok(
+  $$select public.governance_record_approved_execution_evaluator_proof(
+    (select execution_id from two_party_fixture where execution_id is not null),
+    'cognitive_approved_action_worker',
+    'synthetic-worker-assertion-000000000000',
+    repeat('b',64),
+    repeat('c',64),
+    'passed'
+  )$$,
+  '42501',
+  null,
+  'worker service identity cannot self-attest evaluator proof'
+);
+select is(
+  public.governance_record_approved_execution_evaluator_proof(
+    (select execution_id from two_party_fixture where execution_id is not null),
+    'cognitive_independent_evaluator',
+    'synthetic-evaluator-assertion-000000000000',
+    repeat('b',64),
+    repeat('c',64),
+    'passed'
+  )->>'verdict',
+  'passed',
+  'independent evaluator records proof for the staged execution'
+);
 select is(
   public.governance_complete_approved_execution(
     (select execution_id from two_party_fixture where execution_id is not null),
@@ -608,7 +666,7 @@ select is(
     repeat('c',64)
   )->>'state',
   'completed',
-  'service worker completes only with evaluator proof hash'
+  'independent evaluator proof permits completion and activates staged switch'
 );
 reset role;
 

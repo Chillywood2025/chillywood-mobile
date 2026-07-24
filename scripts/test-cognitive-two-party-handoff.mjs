@@ -14,6 +14,9 @@ const ownerEndpoint = read(
 const workerEndpoint = read(
   "supabase/functions/cognitive-approved-action-worker/index.ts",
 );
+const evaluatorEndpoint = read(
+  "supabase/functions/cognitive-independent-evaluator/index.ts",
+);
 const governanceControl = read(
   "supabase/functions/cognitive-governance-control/index.ts",
 );
@@ -30,6 +33,17 @@ const contains = (text, needle, message) =>
   assert(text.includes(needle), message);
 const notContains = (text, needle, message) =>
   assert(!text.includes(needle), message);
+const between = (text, startNeedle, endNeedle) => {
+  const start = text.indexOf(startNeedle);
+  const end = text.indexOf(endNeedle, start + startNeedle.length);
+  if (start === -1 || end === -1 || end <= start) return "";
+  return text.slice(start, end);
+};
+const switchExecutionFunction = between(
+  migration,
+  "create function public.governance_execute_approved_switch",
+  "create or replace function public.governance_set_level01_switch",
+);
 
 contains(
   migration,
@@ -40,6 +54,11 @@ contains(
   migration,
   "create table public.governance_approved_action_executions",
   "missing service execution receipt table",
+);
+contains(
+  migration,
+  "create table public.governance_approved_execution_evaluator_proofs",
+  "missing immutable independent evaluator proof table",
 );
 contains(
   migration,
@@ -55,6 +74,26 @@ contains(
   migration,
   "create function public.governance_revoke_two_party_service_principal",
   "missing explicit service-principal revocation RPC",
+);
+contains(
+  migration,
+  "when 'cognitive_independent_evaluator' then p_operation = 'independent_evaluation'",
+  "independent evaluator service identity is not restricted to evaluation",
+);
+contains(
+  migration,
+  "create function public.governance_record_approved_execution_evaluator_proof",
+  "missing service-only independent evaluator proof RPC",
+);
+contains(
+  migration,
+  "proof_value.verdict <> 'passed'",
+  "execution completion does not require a passed independent evaluator proof",
+);
+contains(
+  migration,
+  "perform public.governance_apply_completed_switch(p_execution_id)",
+  "switch activation is not deferred to completion after evaluator proof",
 );
 contains(
   migration,
@@ -147,6 +186,21 @@ contains(
   "approved switch execution does not recompute target hash from switch payload",
 );
 contains(
+  switchExecutionFunction,
+  "pending_switch_key = p_switch_key",
+  "approved switch execution does not stage switch key on the execution row",
+);
+contains(
+  switchExecutionFunction,
+  "'staged', true",
+  "approved switch execution does not report a staged, non-live switch result",
+);
+notContains(
+  switchExecutionFunction,
+  "insert into public.cognitive_governance_switches",
+  "approved switch execution still writes a live switch before evaluator completion",
+);
+contains(
   migration,
   "raise exception 'two_party_owner_approval_required'",
   "legacy direct Owner switch RPC does not fail closed",
@@ -225,6 +279,41 @@ notContains(
   workerEndpoint,
   "governance_record_owner_approval",
   "worker endpoint can create Owner approval",
+);
+notContains(
+  workerEndpoint,
+  "governance_record_approved_execution_evaluator_proof",
+  "worker endpoint can self-attest independent evaluator proof",
+);
+contains(
+  evaluatorEndpoint,
+  "COGNITIVE_INDEPENDENT_EVALUATOR_INVOKE_SHA256",
+  "independent evaluator endpoint is missing the server-only invocation proof",
+);
+contains(
+  evaluatorEndpoint,
+  "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION",
+  "independent evaluator endpoint is missing the service assertion source",
+);
+contains(
+  evaluatorEndpoint,
+  "governance_record_approved_execution_evaluator_proof",
+  "independent evaluator endpoint cannot record evaluator proof",
+);
+notContains(
+  evaluatorEndpoint,
+  "governance_claim_approved_action",
+  "independent evaluator endpoint can claim service execution",
+);
+notContains(
+  evaluatorEndpoint,
+  "governance_execute_approved_switch",
+  "independent evaluator endpoint can execute a switch",
+);
+notContains(
+  evaluatorEndpoint,
+  "governance_complete_approved_execution",
+  "independent evaluator endpoint can complete service execution",
 );
 contains(
   governanceControl,
@@ -305,6 +394,26 @@ contains(
   dbTest,
   "approved switch execution rejects a different switch key",
   "database suite does not prove switch target payload binding",
+);
+contains(
+  dbTest,
+  "approved switch execution stages but does not activate before evaluator proof",
+  "database suite does not prove switches stay inactive before evaluator proof",
+);
+contains(
+  dbTest,
+  "completion without an independent evaluator proof is rejected",
+  "database suite does not prove completion requires evaluator proof",
+);
+contains(
+  dbTest,
+  "worker service identity cannot self-attest evaluator proof",
+  "database suite does not prove worker cannot self-attest evaluator proof",
+);
+contains(
+  dbTest,
+  "independent evaluator proof permits completion and activates staged switch",
+  "database suite does not prove evaluator proof gates final switch activation",
 );
 contains(
   dbTest,

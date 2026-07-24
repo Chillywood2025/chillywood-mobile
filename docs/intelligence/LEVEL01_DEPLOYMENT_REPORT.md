@@ -5,7 +5,7 @@ Status: not deployed from this branch.
 Completed locally:
 
 - additive successor migration applies with `supabase db reset`;
-- full local pgTAP passed 716/716;
+- full local pgTAP passed 721/721;
 - new and modified Edge Functions pass `deno check`;
 - source-contract scripts for two-party handoff, model independence, and
   sentinels pass.

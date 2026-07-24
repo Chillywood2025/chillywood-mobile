@@ -116,7 +116,8 @@ create table public.governance_two_party_service_assertions (
       'visual_product_experience_sentinel',
       'installed_journey_sentinel',
       'product_quality_triage_router',
-      'model_independence_attestation_service'
+      'model_independence_attestation_service',
+      'cognitive_independent_evaluator'
     )
   ),
   assertion_hash text not null unique check (assertion_hash ~ '^[a-f0-9]{64}$'),
@@ -132,7 +133,8 @@ create table public.governance_two_party_service_assertions (
       'visual_experience_canary',
       'installed_journey_canary',
       'product_quality_triage',
-      'github_draft_pr'
+      'github_draft_pr',
+      'independent_evaluation'
     ]::text[]
   ),
   registered_by uuid not null,
@@ -363,7 +365,8 @@ create table public.governance_approved_action_executions (
       'visual_product_experience_sentinel',
       'installed_journey_sentinel',
       'product_quality_triage_router',
-      'model_independence_attestation_service'
+      'model_independence_attestation_service',
+      'cognitive_independent_evaluator'
     )
   ),
   service_identity_hash text not null check (service_identity_hash ~ '^[a-f0-9]{64}$'),
@@ -379,10 +382,53 @@ create table public.governance_approved_action_executions (
   execution_receipt_hash text check (execution_receipt_hash is null or execution_receipt_hash ~ '^[a-f0-9]{64}$'),
   evaluator_proof_hash text check (evaluator_proof_hash is null or evaluator_proof_hash ~ '^[a-f0-9]{64}$'),
   failure_hash text check (failure_hash is null or failure_hash ~ '^[a-f0-9]{64}$'),
+  pending_switch_key text check (
+    pending_switch_key is null
+    or pending_switch_key in (
+      'cognitive_research_enabled',
+      'cognitive_memory_enabled',
+      'cognitive_collective_deliberation_enabled',
+      'cognitive_draft_pr_executor_enabled',
+      'cognitive_scheduled_level01_enabled',
+      'cognitive_livekit_experience_sentinel_enabled',
+      'cognitive_visual_experience_sentinel_enabled',
+      'cognitive_installed_journey_sentinel_enabled'
+    )
+  ),
+  pending_switch_enabled boolean,
+  pending_switch_policy_version text check (
+    pending_switch_policy_version is null
+    or (
+      length(pending_switch_policy_version) between 1 and 64
+      and not public.cognitive_text_has_secret(pending_switch_policy_version)
+    )
+  ),
+  pending_switch_target_resource_hash text check (
+    pending_switch_target_resource_hash is null
+    or pending_switch_target_resource_hash ~ '^[a-f0-9]{64}$'
+  ),
+  pending_switch_validated_at timestamptz,
   claimed_at timestamptz not null default transaction_timestamp(),
   began_at timestamptz,
   completed_at timestamptz,
   updated_at timestamptz not null default transaction_timestamp(),
+  check (
+    (
+      pending_switch_key is null
+      and pending_switch_enabled is null
+      and pending_switch_policy_version is null
+      and pending_switch_target_resource_hash is null
+      and pending_switch_validated_at is null
+    )
+    or (
+      operation = 'set_switch'
+      and pending_switch_key is not null
+      and pending_switch_enabled is not null
+      and pending_switch_policy_version is not null
+      and pending_switch_target_resource_hash is not null
+      and pending_switch_validated_at is not null
+    )
+  ),
   unique (approval_version_id, claim_sequence),
   unique (approval_version_id, id),
   unique (id, task_id, project_id, platform, environment),
@@ -396,6 +442,33 @@ alter table public.governance_owner_approval_lifecycle_events
   add constraint governance_owner_approval_lifecycle_execution_fk
   foreign key (execution_id, task_id, project_id, platform, environment)
     references public.governance_approved_action_executions(id, task_id, project_id, platform, environment);
+
+create table public.governance_approved_execution_evaluator_proofs (
+  id uuid primary key default gen_random_uuid(),
+  execution_id uuid not null,
+  approval_record_id uuid not null,
+  approval_version_id uuid not null,
+  task_id uuid not null,
+  project_id uuid not null,
+  platform public.cognitive_platform not null,
+  environment public.cognitive_environment not null,
+  evaluator_identity text not null check (evaluator_identity = 'cognitive_independent_evaluator'),
+  evaluator_identity_hash text not null check (evaluator_identity_hash ~ '^[a-f0-9]{64}$'),
+  execution_receipt_hash text not null check (execution_receipt_hash ~ '^[a-f0-9]{64}$'),
+  evaluator_proof_hash text not null check (evaluator_proof_hash ~ '^[a-f0-9]{64}$'),
+  evaluator_requirement_hash text not null check (evaluator_requirement_hash ~ '^[a-f0-9]{64}$'),
+  verdict text not null check (verdict in ('passed','failed')),
+  created_at timestamptz not null default transaction_timestamp(),
+  unique (execution_id),
+  unique (execution_id, evaluator_proof_hash),
+  unique (id, task_id, project_id, platform, environment),
+  foreign key (execution_id, task_id, project_id, platform, environment)
+    references public.governance_approved_action_executions(id, task_id, project_id, platform, environment),
+  foreign key (approval_record_id, task_id, project_id, platform, environment)
+    references public.governance_owner_approval_records(id, task_id, project_id, platform, environment),
+  foreign key (approval_version_id, task_id, project_id, platform, environment)
+    references public.governance_owner_approval_versions(id, task_id, project_id, platform, environment)
+);
 
 create table public.governance_model_execution_attestations (
   id uuid primary key default gen_random_uuid(),
@@ -627,6 +700,8 @@ create index governance_owner_approval_versions_expiry_idx
   on public.governance_owner_approval_versions(task_id, expires_at);
 create index governance_approved_action_executions_state_idx
   on public.governance_approved_action_executions(task_id, project_id, platform, environment, state, updated_at desc);
+create index governance_approved_execution_evaluator_proofs_execution_idx
+  on public.governance_approved_execution_evaluator_proofs(execution_id, verdict, created_at desc);
 create index governance_model_execution_attestations_assessment_idx
   on public.governance_model_execution_attestations(task_id, assessment_id, correlation_class);
 create index product_quality_findings_triage_idx
@@ -647,6 +722,7 @@ declare
     'governance_owner_approval_version_states',
     'governance_owner_approval_lifecycle_events',
     'governance_approved_action_executions',
+    'governance_approved_execution_evaluator_proofs',
     'governance_model_execution_attestations',
     'product_experience_baseline_versions',
     'product_experience_sentinel_runs',
@@ -678,6 +754,7 @@ declare
   tables constant text[] := array[
     'governance_owner_approval_versions',
     'governance_owner_approval_lifecycle_events',
+    'governance_approved_execution_evaluator_proofs',
     'governance_model_execution_attestations',
     'product_experience_baseline_versions',
     'product_experience_sentinel_runs',
@@ -750,6 +827,7 @@ as $$
     when 'installed_journey_sentinel' then p_operation = 'installed_journey_canary'
     when 'product_quality_triage_router' then p_operation = 'product_quality_triage'
     when 'model_independence_attestation_service' then p_operation = 'model_independence_attestation'
+    when 'cognitive_independent_evaluator' then p_operation = 'independent_evaluation'
     else false
   end;
 $$;
@@ -829,7 +907,8 @@ begin
        'visual_product_experience_sentinel',
        'installed_journey_sentinel',
        'product_quality_triage_router',
-       'model_independence_attestation_service'
+       'model_independence_attestation_service',
+       'cognitive_independent_evaluator'
      )
      or p_assertion_hash !~ '^[a-f0-9]{64}$'
      or p_allowed_operations is null
@@ -838,7 +917,8 @@ begin
        'bootstrap_control_plane','set_switch','public_research_ingest',
        'collective_deliberation','model_independence_attestation',
        'livekit_experience_canary','visual_experience_canary',
-       'installed_journey_canary','product_quality_triage','github_draft_pr'
+       'installed_journey_canary','product_quality_triage','github_draft_pr',
+       'independent_evaluation'
      ]::text[]
      or exists (
        select 1
@@ -920,7 +1000,8 @@ begin
        'visual_product_experience_sentinel',
        'installed_journey_sentinel',
        'product_quality_triage_router',
-       'model_independence_attestation_service'
+       'model_independence_attestation_service',
+       'cognitive_independent_evaluator'
      )
      or p_revocation_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'two_party_service_principal_revoke_rejected'
@@ -1891,6 +1972,337 @@ revoke all on function public.governance_begin_approved_execution(uuid,text,text
 grant execute on function public.governance_begin_approved_execution(uuid,text,text,text)
   to service_role;
 
+create function public.governance_record_approved_execution_evaluator_proof(
+  p_execution_id uuid,
+  p_evaluator_identity text,
+  p_evaluator_assertion text,
+  p_execution_receipt_hash text,
+  p_evaluator_proof_hash text,
+  p_verdict text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+  evaluator_identity_value text;
+  now_at timestamptz := transaction_timestamp();
+  proof_id uuid;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  if execution_value.id is null then
+    raise exception 'two_party_execution_missing' using errcode = 'P0001';
+  end if;
+
+  evaluator_identity_value := public.governance_assert_two_party_service_principal(
+    p_evaluator_identity, p_evaluator_assertion, 'independent_evaluation'
+  );
+  if evaluator_identity_value <> 'cognitive_independent_evaluator'
+     or evaluator_identity_value = execution_value.service_identity
+     or execution_value.state <> 'evaluating'
+     or not public.governance_lock_approved_execution_liveness(p_execution_id)
+     or p_execution_receipt_hash !~ '^[a-f0-9]{64}$'
+     or p_evaluator_proof_hash !~ '^[a-f0-9]{64}$'
+     or p_verdict not in ('passed','failed') then
+    raise exception 'two_party_evaluator_proof_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  insert into public.governance_approved_execution_evaluator_proofs(
+    execution_id, approval_record_id, approval_version_id, task_id, project_id,
+    platform, environment, evaluator_identity, evaluator_identity_hash,
+    execution_receipt_hash, evaluator_proof_hash, evaluator_requirement_hash,
+    verdict, created_at
+  ) values (
+    execution_value.id, execution_value.approval_record_id,
+    execution_value.approval_version_id, execution_value.task_id,
+    execution_value.project_id, execution_value.platform,
+    execution_value.environment, evaluator_identity_value,
+    encode(extensions.digest(convert_to(evaluator_identity_value,'UTF8'),'sha256'),'hex'),
+    p_execution_receipt_hash, p_evaluator_proof_hash,
+    execution_value.evaluator_requirement_hash, p_verdict, now_at
+  )
+  returning id into proof_id;
+
+  return jsonb_build_object(
+    'evaluatorProofId', proof_id,
+    'executionId', p_execution_id,
+    'verdict', p_verdict,
+    'recordedAt', now_at
+  );
+end;
+$$;
+revoke all on function public.governance_record_approved_execution_evaluator_proof(
+  uuid,text,text,text,text,text
+) from public, anon, authenticated;
+grant execute on function public.governance_record_approved_execution_evaluator_proof(
+  uuid,text,text,text,text,text
+) to service_role;
+
+create function public.governance_assert_switch_prerequisites(
+  p_execution_id uuid,
+  p_switch_key text,
+  p_enabled boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+  now_at timestamptz := transaction_timestamp();
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for share;
+  if execution_value.id is null then
+    raise exception 'two_party_execution_missing' using errcode = 'P0001';
+  end if;
+
+  if p_enabled
+     and p_switch_key in ('cognitive_research_enabled','cognitive_memory_enabled')
+     and not exists (
+       select 1
+       from public.cognitive_retention_policy_states policy
+       where policy.task_id = execution_value.task_id
+         and policy.project_id = execution_value.project_id
+         and policy.platform = execution_value.platform
+         and policy.environment = execution_value.environment
+         and policy.policy_state = 'owner_counsel_decision_required'
+         and not policy.user_derived_memory_allowed
+         and not policy.raw_user_reports_allowed
+         and not policy.raw_private_messages_allowed
+         and not policy.raw_private_media_allowed
+         and not policy.raw_user_analytics_allowed
+         and not policy.private_model_input_allowed
+     ) then
+    raise exception 'cognitive_retention_gate_required' using errcode = 'P0001';
+  end if;
+
+  if p_enabled and p_switch_key = 'cognitive_collective_deliberation_enabled'
+     and (
+       select count(distinct run.canary_key)
+       from public.cognitive_level01_canary_runs run
+       where run.task_id = execution_value.task_id
+         and run.project_id = execution_value.project_id
+         and run.platform = execution_value.platform
+         and run.environment = execution_value.environment
+         and run.canary_type = 'research'
+         and run.result_status = 'passed'
+         and run.evaluator_state = 'pass'
+     ) <> 3 then
+    raise exception 'cognitive_research_canaries_required' using errcode = 'P0001';
+  end if;
+
+  if p_enabled and p_switch_key = 'cognitive_draft_pr_executor_enabled'
+     and (
+       (
+         select count(distinct run.canary_key)
+         from public.cognitive_level01_canary_runs run
+         where run.task_id = execution_value.task_id
+           and run.project_id = execution_value.project_id
+           and run.platform = execution_value.platform
+           and run.environment = execution_value.environment
+           and run.canary_type = 'deliberation'
+           and run.result_status = 'passed'
+           and run.evaluator_state = 'pass'
+       ) <> 3
+       or not exists (
+         select 1
+         from public.cognitive_level01_credential_attestations attestation
+         where attestation.task_id = execution_value.task_id
+           and attestation.project_id = execution_value.project_id
+           and attestation.platform = execution_value.platform
+           and attestation.environment = execution_value.environment
+           and attestation.credential_kind = 'github_draft_pr'
+           and attestation.state = 'configured'
+           and attestation.verified_at <= now_at
+           and now_at < attestation.expires_at
+         order by attestation.verified_at desc
+         limit 1
+       )
+     ) then
+    raise exception 'cognitive_draft_pr_canary_prerequisites_required'
+      using errcode = 'P0001';
+  end if;
+
+  if p_enabled and p_switch_key = 'cognitive_scheduled_level01_enabled'
+     and (
+       (
+         select count(distinct run.canary_key)
+         from public.cognitive_level01_canary_runs run
+         where run.task_id = execution_value.task_id
+           and run.project_id = execution_value.project_id
+           and run.platform = execution_value.platform
+           and run.environment = execution_value.environment
+           and run.canary_type = 'draft_pr'
+           and run.result_status = 'passed'
+           and run.evaluator_state = 'pass'
+       ) <> 3
+       or (
+         select count(*)
+         from public.cognitive_level01_schedule_definitions schedule
+         where schedule.task_id = execution_value.task_id
+           and schedule.project_id = execution_value.project_id
+           and schedule.platform = execution_value.platform
+           and schedule.environment = execution_value.environment
+       ) <> 5
+     ) then
+    raise exception 'cognitive_schedule_canaries_required' using errcode = 'P0001';
+  end if;
+end;
+$$;
+revoke all on function public.governance_assert_switch_prerequisites(uuid,text,boolean)
+  from public, anon, authenticated, service_role;
+
+create function public.governance_apply_completed_switch(p_execution_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  execution_value public.governance_approved_action_executions%rowtype;
+  version_value public.governance_owner_approval_versions%rowtype;
+  switch_id uuid;
+  now_at timestamptz := transaction_timestamp();
+  schedule_count integer;
+begin
+  select * into execution_value
+  from public.governance_approved_action_executions
+  where id = p_execution_id
+  for update;
+  select * into version_value
+  from public.governance_owner_approval_versions
+  where id = execution_value.approval_version_id
+  for share;
+
+  if execution_value.id is null
+     or version_value.id is null
+     or execution_value.operation <> 'set_switch'
+     or execution_value.state <> 'evaluating'
+     or execution_value.pending_switch_key is null
+     or execution_value.pending_switch_enabled is null
+     or execution_value.pending_switch_policy_version is null
+     or execution_value.pending_switch_target_resource_hash is null
+     or execution_value.pending_switch_validated_at is null
+     or version_value.target_resource_hash <> execution_value.pending_switch_target_resource_hash
+     or execution_value.target_resource_hash <> execution_value.pending_switch_target_resource_hash
+     or execution_value.pending_switch_target_resource_hash <>
+        public.governance_switch_target_hash(
+          execution_value.pending_switch_key,
+          execution_value.pending_switch_enabled,
+          execution_value.pending_switch_policy_version
+        ) then
+    raise exception 'two_party_switch_completion_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  perform public.governance_assert_switch_prerequisites(
+    p_execution_id,
+    execution_value.pending_switch_key,
+    execution_value.pending_switch_enabled
+  );
+
+  insert into public.cognitive_governance_switches(
+    task_id, project_id, platform, environment, switch_key, enabled,
+    policy_version, enabled_by, enabled_at, disabled_at, updated_at
+  ) values (
+    execution_value.task_id, execution_value.project_id,
+    execution_value.platform, execution_value.environment,
+    execution_value.pending_switch_key, execution_value.pending_switch_enabled,
+    execution_value.pending_switch_policy_version,
+    case when execution_value.pending_switch_enabled then version_value.owner_user_id else null end,
+    case when execution_value.pending_switch_enabled then now_at else null end,
+    case when execution_value.pending_switch_enabled then null else now_at end,
+    now_at
+  )
+  on conflict (task_id, switch_key) do update
+  set enabled = excluded.enabled,
+      policy_version = excluded.policy_version,
+      enabled_by = excluded.enabled_by,
+      enabled_at = excluded.enabled_at,
+      disabled_at = excluded.disabled_at,
+      updated_at = now_at
+  where cognitive_governance_switches.project_id = excluded.project_id
+    and cognitive_governance_switches.platform = excluded.platform
+    and cognitive_governance_switches.environment = excluded.environment
+  returning id into switch_id;
+
+  if switch_id is null then
+    raise exception 'two_party_switch_completion_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  if execution_value.pending_switch_key = 'cognitive_scheduled_level01_enabled' then
+    update public.cognitive_level01_schedule_definitions schedule
+    set enabled = execution_value.pending_switch_enabled,
+        updated_at = now_at
+    where schedule.task_id = execution_value.task_id
+      and schedule.project_id = execution_value.project_id
+      and schedule.platform = execution_value.platform
+      and schedule.environment = execution_value.environment;
+    get diagnostics schedule_count = row_count;
+    if schedule_count <> 5 then
+      raise exception 'cognitive_level01_schedule_scope_rejected'
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  if not execution_value.pending_switch_enabled
+     and execution_value.pending_switch_key in (
+       'cognitive_research_enabled',
+       'cognitive_memory_enabled',
+       'cognitive_collective_deliberation_enabled',
+       'cognitive_draft_pr_executor_enabled'
+     ) then
+    update public.cognitive_governance_switches switch
+    set enabled = false,
+        enabled_by = null,
+        disabled_at = now_at,
+        updated_at = now_at
+    where switch.task_id = execution_value.task_id
+      and switch.switch_key = any(
+        case execution_value.pending_switch_key
+          when 'cognitive_research_enabled' then array[
+            'cognitive_collective_deliberation_enabled',
+            'cognitive_draft_pr_executor_enabled',
+            'cognitive_scheduled_level01_enabled'
+          ]
+          when 'cognitive_memory_enabled' then array[
+            'cognitive_collective_deliberation_enabled',
+            'cognitive_draft_pr_executor_enabled',
+            'cognitive_scheduled_level01_enabled'
+          ]
+          when 'cognitive_collective_deliberation_enabled' then array[
+            'cognitive_draft_pr_executor_enabled',
+            'cognitive_scheduled_level01_enabled'
+          ]
+          else array['cognitive_scheduled_level01_enabled']
+        end
+      );
+    update public.cognitive_level01_schedule_definitions schedule
+    set enabled = false,
+        updated_at = now_at
+    where schedule.task_id = execution_value.task_id
+      and schedule.project_id = execution_value.project_id
+      and schedule.platform = execution_value.platform
+      and schedule.environment = execution_value.environment;
+  end if;
+
+  return switch_id;
+end;
+$$;
+revoke all on function public.governance_apply_completed_switch(uuid)
+  from public, anon, authenticated, service_role;
+
 create function public.governance_complete_approved_execution(
   p_execution_id uuid,
   p_service_identity text,
@@ -1905,6 +2317,7 @@ set search_path = ''
 as $$
 declare
   execution_value public.governance_approved_action_executions%rowtype;
+  proof_value public.governance_approved_execution_evaluator_proofs%rowtype;
   service_identity_value text;
   now_at timestamptz := transaction_timestamp();
   event_sequence_value integer;
@@ -1926,6 +2339,31 @@ begin
      or p_evaluator_proof_hash !~ '^[a-f0-9]{64}$' then
     raise exception 'two_party_execution_completion_rejected'
       using errcode = 'P0001';
+  end if;
+
+  select * into proof_value
+  from public.governance_approved_execution_evaluator_proofs proof
+  where proof.execution_id = p_execution_id
+  for share;
+  if proof_value.id is null
+     or proof_value.approval_record_id <> execution_value.approval_record_id
+     or proof_value.approval_version_id <> execution_value.approval_version_id
+     or proof_value.task_id <> execution_value.task_id
+     or proof_value.project_id <> execution_value.project_id
+     or proof_value.platform <> execution_value.platform
+     or proof_value.environment <> execution_value.environment
+     or proof_value.evaluator_identity <> 'cognitive_independent_evaluator'
+     or proof_value.evaluator_identity_hash = execution_value.service_identity_hash
+     or proof_value.execution_receipt_hash <> p_execution_receipt_hash
+     or proof_value.evaluator_proof_hash <> p_evaluator_proof_hash
+     or proof_value.evaluator_requirement_hash <> execution_value.evaluator_requirement_hash
+     or proof_value.verdict <> 'passed' then
+    raise exception 'two_party_execution_completion_rejected'
+      using errcode = 'P0001';
+  end if;
+
+  if execution_value.operation = 'set_switch' then
+    perform public.governance_apply_completed_switch(p_execution_id);
   end if;
 
   update public.governance_approved_action_executions
@@ -2161,10 +2599,8 @@ declare
   execution_value public.governance_approved_action_executions%rowtype;
   version_value public.governance_owner_approval_versions%rowtype;
   service_identity_value text;
-  switch_id uuid;
   now_at timestamptz := transaction_timestamp();
   event_sequence_value integer;
-  schedule_count integer;
 begin
   select * into execution_value
   from public.governance_approved_action_executions
@@ -2205,184 +2641,18 @@ begin
       using errcode = 'P0001';
   end if;
 
-  if p_enabled
-     and p_switch_key in ('cognitive_research_enabled','cognitive_memory_enabled')
-     and not exists (
-       select 1
-       from public.cognitive_retention_policy_states policy
-       where policy.task_id = execution_value.task_id
-         and policy.project_id = execution_value.project_id
-         and policy.platform = execution_value.platform
-         and policy.environment = execution_value.environment
-         and policy.policy_state = 'owner_counsel_decision_required'
-         and not policy.user_derived_memory_allowed
-         and not policy.raw_user_reports_allowed
-         and not policy.raw_private_messages_allowed
-         and not policy.raw_private_media_allowed
-         and not policy.raw_user_analytics_allowed
-         and not policy.private_model_input_allowed
-     ) then
-    raise exception 'cognitive_retention_gate_required' using errcode = 'P0001';
-  end if;
-
-  if p_enabled and p_switch_key = 'cognitive_collective_deliberation_enabled'
-     and (
-       select count(distinct run.canary_key)
-       from public.cognitive_level01_canary_runs run
-       where run.task_id = execution_value.task_id
-         and run.project_id = execution_value.project_id
-         and run.platform = execution_value.platform
-         and run.environment = execution_value.environment
-         and run.canary_type = 'research'
-         and run.result_status = 'passed'
-         and run.evaluator_state = 'pass'
-     ) <> 3 then
-    raise exception 'cognitive_research_canaries_required' using errcode = 'P0001';
-  end if;
-
-  if p_enabled and p_switch_key = 'cognitive_draft_pr_executor_enabled'
-     and (
-       (
-         select count(distinct run.canary_key)
-         from public.cognitive_level01_canary_runs run
-         where run.task_id = execution_value.task_id
-           and run.project_id = execution_value.project_id
-           and run.platform = execution_value.platform
-           and run.environment = execution_value.environment
-           and run.canary_type = 'deliberation'
-           and run.result_status = 'passed'
-           and run.evaluator_state = 'pass'
-       ) <> 3
-       or not exists (
-         select 1
-         from public.cognitive_level01_credential_attestations attestation
-         where attestation.task_id = execution_value.task_id
-           and attestation.project_id = execution_value.project_id
-           and attestation.platform = execution_value.platform
-           and attestation.environment = execution_value.environment
-           and attestation.credential_kind = 'github_draft_pr'
-           and attestation.state = 'configured'
-           and attestation.verified_at <= now_at
-           and now_at < attestation.expires_at
-         order by attestation.verified_at desc
-         limit 1
-       )
-     ) then
-    raise exception 'cognitive_draft_pr_canary_prerequisites_required'
-      using errcode = 'P0001';
-  end if;
-
-  if p_enabled and p_switch_key = 'cognitive_scheduled_level01_enabled'
-     and (
-       (
-         select count(distinct run.canary_key)
-         from public.cognitive_level01_canary_runs run
-         where run.task_id = execution_value.task_id
-           and run.project_id = execution_value.project_id
-           and run.platform = execution_value.platform
-           and run.environment = execution_value.environment
-           and run.canary_type = 'draft_pr'
-           and run.result_status = 'passed'
-           and run.evaluator_state = 'pass'
-       ) <> 3
-       or (
-         select count(*)
-         from public.cognitive_level01_schedule_definitions schedule
-         where schedule.task_id = execution_value.task_id
-           and schedule.project_id = execution_value.project_id
-           and schedule.platform = execution_value.platform
-           and schedule.environment = execution_value.environment
-       ) <> 5
-     ) then
-    raise exception 'cognitive_schedule_canaries_required' using errcode = 'P0001';
-  end if;
-
-  insert into public.cognitive_governance_switches(
-    task_id, project_id, platform, environment, switch_key, enabled,
-    policy_version, enabled_by, enabled_at, disabled_at, updated_at
-  ) values (
-    execution_value.task_id, execution_value.project_id,
-    execution_value.platform, execution_value.environment, p_switch_key,
-    p_enabled, p_policy_version,
-    case when p_enabled then version_value.owner_user_id else null end,
-    case when p_enabled then now_at else null end,
-    case when p_enabled then null else now_at end,
-    now_at
-  )
-  on conflict (task_id, switch_key) do update
-  set enabled = excluded.enabled,
-      policy_version = excluded.policy_version,
-      enabled_by = excluded.enabled_by,
-      enabled_at = excluded.enabled_at,
-      disabled_at = excluded.disabled_at,
-      updated_at = now_at
-  where cognitive_governance_switches.project_id = excluded.project_id
-    and cognitive_governance_switches.platform = excluded.platform
-    and cognitive_governance_switches.environment = excluded.environment
-  returning id into switch_id;
-
-  if switch_id is null then
-    raise exception 'two_party_switch_execution_rejected'
-      using errcode = 'P0001';
-  end if;
-
-  if p_switch_key = 'cognitive_scheduled_level01_enabled' then
-    update public.cognitive_level01_schedule_definitions schedule
-    set enabled = p_enabled,
-        updated_at = now_at
-    where schedule.task_id = execution_value.task_id
-      and schedule.project_id = execution_value.project_id
-      and schedule.platform = execution_value.platform
-      and schedule.environment = execution_value.environment;
-    get diagnostics schedule_count = row_count;
-    if schedule_count <> 5 then
-      raise exception 'cognitive_level01_schedule_scope_rejected'
-        using errcode = 'P0001';
-    end if;
-  end if;
-
-  if not p_enabled and p_switch_key in (
-    'cognitive_research_enabled',
-    'cognitive_memory_enabled',
-    'cognitive_collective_deliberation_enabled',
-    'cognitive_draft_pr_executor_enabled'
-  ) then
-    update public.cognitive_governance_switches switch
-    set enabled = false,
-        enabled_by = null,
-        disabled_at = now_at,
-        updated_at = now_at
-    where switch.task_id = execution_value.task_id
-      and switch.switch_key = any(
-        case p_switch_key
-          when 'cognitive_research_enabled' then array[
-            'cognitive_collective_deliberation_enabled',
-            'cognitive_draft_pr_executor_enabled',
-            'cognitive_scheduled_level01_enabled'
-          ]
-          when 'cognitive_memory_enabled' then array[
-            'cognitive_collective_deliberation_enabled',
-            'cognitive_draft_pr_executor_enabled',
-            'cognitive_scheduled_level01_enabled'
-          ]
-          when 'cognitive_collective_deliberation_enabled' then array[
-            'cognitive_draft_pr_executor_enabled',
-            'cognitive_scheduled_level01_enabled'
-          ]
-          else array['cognitive_scheduled_level01_enabled']
-        end
-      );
-    update public.cognitive_level01_schedule_definitions schedule
-    set enabled = false,
-        updated_at = now_at
-    where schedule.task_id = execution_value.task_id
-      and schedule.project_id = execution_value.project_id
-      and schedule.platform = execution_value.platform
-      and schedule.environment = execution_value.environment;
-  end if;
+  perform public.governance_assert_switch_prerequisites(
+    p_execution_id, p_switch_key, p_enabled
+  );
 
   update public.governance_approved_action_executions
-  set state = 'postflight', updated_at = now_at
+  set state = 'postflight',
+      pending_switch_key = p_switch_key,
+      pending_switch_enabled = p_enabled,
+      pending_switch_policy_version = p_policy_version,
+      pending_switch_target_resource_hash = p_target_resource_hash,
+      pending_switch_validated_at = now_at,
+      updated_at = now_at
   where id = execution_value.id;
 
   select public.governance_approval_event_next_sequence(execution_value.approval_record_id)
@@ -2401,9 +2671,9 @@ begin
 
   return jsonb_build_object(
     'executionId', execution_value.id,
-    'switchId', switch_id,
     'switchKey', p_switch_key,
     'enabled', p_enabled,
+    'staged', true,
     'state', 'postflight'
   );
 end;
