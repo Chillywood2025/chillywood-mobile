@@ -94,7 +94,8 @@ type LiveKitMetricEnvelope = Readonly<{
 }>;
 
 const INVOCATION_HEADER = "x-cognitive-livekit-sentinel-invocation";
-const SERVICE_IDENTITY = "livekit_experience_sentinel";
+const SERVICE_IDENTITY = "cognitive_sentinel_collector";
+const SENTINEL_KEY = "livekit_experience_sentinel";
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const TASK_KEY = "cognitive-level01-canary-control";
 const PLATFORM = "shared";
@@ -572,6 +573,7 @@ export const handler = async (request: Request): Promise<Response> => {
           REPOSITORY,
           TASK_KEY,
           SERVICE_IDENTITY,
+          SENTINEL_KEY,
           packet.routeOrSurface,
           packet.runtimeIdentityHash,
           packet.sourceBuildHash,
@@ -593,7 +595,7 @@ export const handler = async (request: Request): Promise<Response> => {
         p_result_status: packet.classification.resultStatus,
         p_route_or_surface: packet.routeOrSurface,
         p_runtime_identity_hash: packet.runtimeIdentityHash,
-        p_sentinel_key: SERVICE_IDENTITY,
+        p_sentinel_key: SENTINEL_KEY,
         p_service_assertion: readRequiredSecret(
           "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION",
         ),

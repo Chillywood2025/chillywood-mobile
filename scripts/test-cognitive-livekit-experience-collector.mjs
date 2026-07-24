@@ -20,6 +20,8 @@ const runtimeDoc = read(
 );
 
 for (const required of [
+  'const SERVICE_IDENTITY = "cognitive_sentinel_collector"',
+  'const SENTINEL_KEY = "livekit_experience_sentinel"',
   "livekit_experience_sentinel",
   "COGNITIVE_LIVEKIT_SENTINEL_INVOKE_SHA256",
   "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION",

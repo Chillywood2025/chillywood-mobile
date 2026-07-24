@@ -4,7 +4,8 @@ Status: source implemented; no deployment, switch activation, provider mutation,
 or remote sentinel run was performed in this lane.
 
 The `cognitive-livekit-experience-collector` function is a server-only adapter
-for the already registered `livekit_experience_sentinel` identity. It accepts
+for the `cognitive_sentinel_collector` principal operating the already
+registered `livekit_experience_sentinel` sentinel key. It accepts
 only one fixed repository/task scope, three reviewed surfaces (`live-stage`,
 `watch-party-live`, and `chat-call`), a private invocation proof, a bounded
 canonical metric manifest, and safe SHA-256 evidence/runtime identities. It
