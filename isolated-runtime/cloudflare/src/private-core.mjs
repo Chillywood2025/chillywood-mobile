@@ -27,22 +27,84 @@ const assertCredentialDomain = (env, principal) => {
   }
 };
 
-const withDeadline = async (promise, deadlineAt, now) => {
+const withDeadline = async (
+  promise,
+  deadlineAt,
+  now,
+  abortController,
+  cleanupGraceMs = 1_000,
+) => {
   const remaining = Date.parse(deadlineAt) - now();
   if (remaining <= 0) throw new Error("deadline_rejected");
   let timer;
+  let cleanupTimer;
+  const deadlineReached = Symbol("deadline_reached");
+  const outcome = Promise.resolve(promise).then(
+    (value) => ({ ok: true, value }),
+    (error) => ({ error, ok: false }),
+  );
   try {
-    return await Promise.race([
-      promise,
+    const first = await Promise.race([
+      outcome,
       new Promise((_, reject) => {
         timer = setTimeout(
-          () => reject(new Error("deadline_rejected")),
+          () => {
+            abortController?.abort(new Error("deadline_rejected"));
+            reject(deadlineReached);
+          },
           remaining,
         );
       }),
     ]);
+    if (!first.ok) throw first.error;
+    return first.value;
+  } catch (error) {
+    if (error !== deadlineReached) throw error;
+    await Promise.race([
+      outcome,
+      new Promise((resolve) => {
+        cleanupTimer = setTimeout(resolve, cleanupGraceMs);
+      }),
+    ]);
+    throw new Error("deadline_rejected");
   } finally {
     clearTimeout(timer);
+    clearTimeout(cleanupTimer);
+  }
+};
+
+const assertDatabaseState = async ({
+  database,
+  databaseOperations,
+  principal,
+  signal,
+}) => {
+  signal?.throwIfAborted();
+  for (const databaseOperation of databaseOperations) {
+    const preflight = await database.preflight(
+      principal.dbRole,
+      databaseOperation,
+    );
+    signal?.throwIfAborted();
+    if (preflight?.emergencyStopActive === true) {
+      throw new Error("emergency_stop_rejected");
+    }
+    if (
+      preflight?.allowed !== true || preflight?.assertionExpired === true ||
+      preflight?.principal !== principal.dbRole ||
+      preflight?.operation !== databaseOperation ||
+      preflight?.serviceRoleMember !== false
+    ) {
+      throw new Error("preflight_rejected");
+    }
+  }
+  const revocation = await database.revocationStatus(principal.dbRole);
+  signal?.throwIfAborted();
+  if (
+    revocation?.principal !== principal.dbRole ||
+    revocation?.databaseAccessRevoked !== false
+  ) {
+    throw new Error("revocation_rejected");
   }
 };
 
@@ -56,6 +118,7 @@ export const createPrivateInvocationHandler = ({
 }) => async (envelope, invocationToken) => {
   const versionId = env.WORKER_VERSION?.id ?? "unknown";
   let database;
+  let deadlineController;
   if (!principal) throw new Error("principal_configuration_rejected");
   try {
     assertCredentialDomain(env, principal);
@@ -87,6 +150,7 @@ export const createPrivateInvocationHandler = ({
     if (!validation.ok || validation.principal !== principal) {
       throw new Error(validation.error ?? "payload_rejected");
     }
+    deadlineController = new AbortController();
     const adapter = resolveAdapter(envelope.operation);
     if (!adapter?.ready || typeof adapter.execute !== "function") {
       throw new Error("operation_adapter_not_ready");
@@ -104,44 +168,36 @@ export const createPrivateInvocationHandler = ({
       sourceCommit: envelope.sourceCommit,
       taskId: envelope.taskId,
     };
-    for (const databaseOperation of adapter.databaseOperations) {
-      const preflight = await withDeadline(
-        database.preflight(principal.dbRole, databaseOperation),
-        envelope.deadlineAt,
-        now,
-      );
-      if (preflight?.emergencyStopActive === true) {
-        throw new Error("emergency_stop_rejected");
-      }
-      if (
-        preflight?.allowed !== true || preflight?.assertionExpired === true ||
-        preflight?.principal !== principal.dbRole ||
-        preflight?.operation !== databaseOperation ||
-        preflight?.serviceRoleMember !== false
-      ) {
-        throw new Error("preflight_rejected");
-      }
-    }
-    const revocation = await withDeadline(
-      database.revocationStatus(principal.dbRole),
+    await withDeadline(
+      assertDatabaseState({
+        database,
+        databaseOperations: adapter.databaseOperations,
+        principal,
+        signal: deadlineController.signal,
+      }),
       envelope.deadlineAt,
       now,
+      deadlineController,
     );
-    if (
-      revocation?.principal !== principal.dbRole ||
-      revocation?.databaseAccessRevoked !== false
-    ) {
-      throw new Error("revocation_rejected");
-    }
+    const assertActive = () =>
+      assertDatabaseState({
+        database,
+        databaseOperations: adapter.databaseOperations,
+        principal,
+        signal: deadlineController.signal,
+      });
     const result = await withDeadline(
       adapter.execute({
+        assertActive,
         context,
         database,
         env,
         payload: envelope.payload,
+        signal: deadlineController.signal,
       }),
       envelope.deadlineAt,
       now,
+      deadlineController,
     );
     const response = await makeResponse({
       envelope,
@@ -190,6 +246,7 @@ export const createPrivateInvocationHandler = ({
     }, logger);
     throw new Error(safeCategory);
   } finally {
+    deadlineController?.abort(new Error("invocation_closed"));
     await database?.close?.().catch(() => undefined);
   }
 };

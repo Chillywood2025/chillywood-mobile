@@ -376,6 +376,54 @@ test("GitHub draft failure after branch creation records a failed postflight", a
   );
 });
 
+test("GitHub rechecks liveness before every repository mutation", async () => {
+  const fake = createFakeGitHub();
+  const adapters = createGitHubBrokerAdapters({
+    fetcher: fake.fetcher,
+    now: () => GITHUB_NOW,
+  });
+  let checkpoints = 0;
+  await assert.rejects(
+    adapters.execute_canary.execute({
+      assertActive: async () => {
+        checkpoints += 1;
+        if (checkpoints >= 3) throw new Error("emergency_stop_rejected");
+      },
+      database: createGithubDatabase(fake.events),
+      env: githubEnv(),
+      payload: await draftPayload(),
+    }),
+    /emergency_stop_rejected/u,
+  );
+  assert.equal(
+    fake.events.some((event) =>
+      event ===
+        "provider:POST:/repos/Chillywood2025/chillywood-mobile/git/blobs"
+    ),
+    false,
+  );
+});
+
+test("GitHub rejects an oversized streamed response before buffering it", async () => {
+  const oversized = new Uint8Array(131_073).fill(0x61);
+  const adapters = createGitHubBrokerAdapters({
+    fetcher: async () =>
+      new Response(oversized, {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }),
+    now: () => GITHUB_NOW,
+  });
+  await assert.rejects(
+    adapters.attest_provider_readback.execute({
+      context: { projectId: PROJECT_ID, taskId: TASK_ID },
+      database: createGithubDatabase([]),
+      env: githubEnv(),
+    }),
+    /github_response_rejected/u,
+  );
+});
+
 test("GitHub plans reject forbidden paths and credential-shaped content", async () => {
   const payload = await draftPayload();
   assert.equal(validateDraftPlan({ ...payload, path: ".github/workflows/a.yml" }), null);

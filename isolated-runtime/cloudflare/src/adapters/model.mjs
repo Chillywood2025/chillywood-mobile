@@ -1,3 +1,7 @@
+import {
+  assertInvocationActive,
+  providerSignal,
+} from "../abort.mjs";
 import { ready } from "./helpers.mjs";
 
 const SERVICE_IDENTITY = "cognitive_model_router";
@@ -562,6 +566,7 @@ const extractOutput = (providerPayload) => {
 export const openAiResponsesTransport = async ({
   apiKey,
   body,
+  signal,
   timeoutMs,
 }) => {
   let response;
@@ -574,9 +579,10 @@ export const openAiResponsesTransport = async ({
       },
       method: "POST",
       redirect: "error",
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: providerSignal(signal, timeoutMs),
     });
   } catch (error) {
+    signal?.throwIfAborted();
     if (
       (error instanceof DOMException && error.name === "TimeoutError") ||
       error?.name === "TimeoutError"
@@ -600,7 +606,9 @@ export const openAiResponsesTransport = async ({
   let received = 0;
   try {
     while (true) {
+      signal?.throwIfAborted();
       const { done, value } = await reader.read();
+      signal?.throwIfAborted();
       if (done) {
         raw += decoder.decode();
         break;
@@ -676,7 +684,9 @@ const validReservation = (value, expected) =>
 
 const settlementStatus = (error) => {
   const code = error instanceof Error ? error.message : "";
-  if (code === "provider_timeout") return "provider_timeout";
+  if (code === "provider_timeout" || code === "deadline_rejected") {
+    return "provider_timeout";
+  }
   if (code === "provider_rate_limited") return "provider_rate_limited";
   if (code.startsWith("model_governance_")) return "governance_rejected";
   if (
@@ -735,7 +745,7 @@ export const createModelRouterAdapters = ({
       "record_model_provider_overrun",
       "settle_model_invocation",
     ],
-    async ({ database, env, payload }) => {
+    async ({ assertActive, database, env, payload, signal }) => {
       if (!isStrictModelRequest(payload)) {
         throw new Error("model_router_payload_rejected");
       }
@@ -878,9 +888,11 @@ export const createModelRouterAdapters = ({
       let providerResult;
       let latencyMs = 0;
       try {
+        await assertInvocationActive({ assertActive, signal });
         providerResult = await transport({
           apiKey,
           body,
+          signal,
           timeoutMs: payload.budget.maxDurationMs,
         });
         latencyMs = Math.max(0, Math.round(now() - startedAt));

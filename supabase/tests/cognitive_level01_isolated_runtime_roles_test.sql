@@ -1,6 +1,6 @@
 begin;
 
-select plan(37);
+select plan(42);
 
 create temporary table expected_runtime_roles(
   role_name text primary key
@@ -185,6 +185,39 @@ select ok(
        )
   ),
   'runtime roles have only the required database connection and runtime schema access'
+);
+
+select ok(
+  not pg_catalog.has_database_privilege(
+    'public',
+    current_database(),
+    'TEMPORARY'
+  )
+  and not exists (
+    select 1
+    from expected_runtime_roles expected
+    where pg_catalog.has_database_privilege(
+            expected.role_name,
+            current_database(),
+            'TEMPORARY'
+          )
+       or pg_catalog.has_database_privilege(
+            expected.role_name,
+            current_database(),
+            'CREATE'
+          )
+  )
+  and pg_catalog.has_database_privilege(
+    'authenticated',
+    current_database(),
+    'TEMPORARY'
+  )
+  and pg_catalog.has_database_privilege(
+    'service_role',
+    current_database(),
+    'TEMPORARY'
+  ),
+  'runtime roles cannot create database or temporary objects while existing product roles retain prior access'
 );
 
 select ok(
@@ -594,6 +627,15 @@ select ok(
 );
 
 select ok(
+  not pg_catalog.has_function_privilege(
+    'service_role',
+    'public.cognitive_model_router_record_provider_overrun(uuid,bigint,numeric,text,text,text,text,integer,text)',
+    'EXECUTE'
+  ),
+  'generic service_role cannot record isolated model provider overruns'
+);
+
+select ok(
   not exists (
     select 1
     from pg_catalog.pg_proc procedure
@@ -767,6 +809,57 @@ select ok(
       )
   ),
   'no isolated runtime role receives the generic switch execution authority'
+);
+
+select ok(
+  pg_catalog.pg_get_functiondef(
+    'public.cognitive_model_router_record_provider_overrun(uuid,bigint,numeric,text,text,text,text,integer,text)'::regprocedure
+  ) ~* 'for[[:space:]]+update'
+  and pg_catalog.pg_get_functiondef(
+    'public.cognitive_model_router_settle(uuid,text,bigint,numeric,text,text,text,text,text,text,text,integer,text)'::regprocedure
+  ) ~* 'for[[:space:]]+update',
+  'concurrent overrun and settlement paths serialize on the same preflight row'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_catalog.pg_trigger trigger_value
+    where trigger_value.tgrelid =
+      'public.cognitive_model_router_result_audits'::regclass
+      and trigger_value.tgname =
+        'cognitive_model_router_overrun_settlement_guard'
+      and trigger_value.tgenabled <> 'D'
+  )
+  and lower(pg_catalog.pg_get_functiondef(
+    'public.cognitive_model_router_enforce_overrun_settlement()'::regprocedure
+  )) like '%new.result_status <> ''provider_rejected''%'
+  and lower(pg_catalog.pg_get_functiondef(
+    'public.cognitive_model_router_enforce_overrun_settlement()'::regprocedure
+  )) like '%new.actual_model_tokens <> overrun_value.reserved_model_tokens%'
+  and pg_catalog.pg_get_functiondef(
+    'public.cognitive_model_router_enforce_overrun_settlement()'::regprocedure
+  ) ~* 'new\.failure_reason_hash[[:space:]]+is[[:space:]]+distinct[[:space:]]+from[[:space:]]+overrun_value\.failure_reason_hash',
+  'overrun settlement trigger rejects contradictory result evidence'
+);
+
+select ok(
+  (
+    select count(*) = 2
+    from pg_catalog.pg_trigger trigger_value
+    where trigger_value.tgname in (
+      'cognitive_model_provider_overrun_recovery_guard',
+      'cognitive_model_recovery_provider_overrun_guard'
+    )
+      and trigger_value.tgenabled <> 'D'
+  )
+  and pg_catalog.pg_get_functiondef(
+    'public.cognitive_model_router_enforce_overrun_recovery_exclusion()'::regprocedure
+  ) ~* 'for[[:space:]]+update'
+  and pg_catalog.pg_get_functiondef(
+    'public.cognitive_model_router_enforce_overrun_recovery_exclusion()'::regprocedure
+  ) like '%model_router_overrun_recovery_rejected%',
+  'overrun and recovery evidence are mutually exclusive under one preflight lock'
 );
 
 select * from finish();

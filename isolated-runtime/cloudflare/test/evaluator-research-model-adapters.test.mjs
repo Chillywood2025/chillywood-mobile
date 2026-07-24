@@ -644,6 +644,44 @@ test("model provider failure is settled before the adapter rejects", async () =>
   assert.match(calls[2].parameters[9], /^[a-f0-9]{64}$/u);
 });
 
+test("model deadline abort retains cleanup-only settlement", async () => {
+  const payload = await createModelPayload();
+  const calls = [];
+  const controller = new AbortController();
+  const adapters = createModelRouterAdapters({
+    now: () => 2_000,
+    transport: async ({ signal }) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve({}), 100);
+        signal.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(signal.reason);
+        }, { once: true });
+        setTimeout(
+          () => controller.abort(new Error("deadline_rejected")),
+          5,
+        );
+      }),
+  });
+  await assert.rejects(
+    () =>
+      adapters.assess_sanitized_evidence.execute({
+        assertActive: async () => undefined,
+        database: modelDatabase(calls),
+        env: modelEnvironment,
+        payload,
+        signal: controller.signal,
+      }),
+    /deadline_rejected/u,
+  );
+  assert.deepEqual(calls.map((entry) => entry.id), [
+    "recoverModelReservation",
+    "reserveModelInvocation",
+    "settleModelInvocation",
+  ]);
+  assert.equal(calls[2].parameters[1], "provider_timeout");
+});
+
 test("model provider overrun records true usage before conservative settlement", async () => {
   const payload = await createModelPayload();
   const calls = [];

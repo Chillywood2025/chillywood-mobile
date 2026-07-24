@@ -1,4 +1,8 @@
 import { importPKCS8, SignJWT } from "jose";
+import {
+  assertInvocationActive,
+  providerSignal,
+} from "../abort.mjs";
 import { sha256Hex } from "../contracts.mjs";
 import { ready } from "./helpers.mjs";
 
@@ -223,11 +227,46 @@ const signAppJwt = async (appId, privateKey, nowSeconds) => {
     .sign(key);
 };
 
-const responseJson = async (response) => {
-  const body = await response.text();
-  if (body.length < 2 || body.length > 131_072) {
+const responseJson = async (response, signal) => {
+  const maximumBytes = 131_072;
+  const declared = response.headers.get("content-length");
+  if (
+    declared !== null &&
+    (!/^[0-9]+$/u.test(declared) || Number(declared) > maximumBytes)
+  ) {
     throw new Error("github_response_rejected");
   }
+  if (!response.body) throw new Error("github_response_rejected");
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      signal?.throwIfAborted();
+      const result = await reader.read();
+      signal?.throwIfAborted();
+      if (result.done) break;
+      const chunk = result.value instanceof Uint8Array
+        ? result.value
+        : new Uint8Array(result.value);
+      total += chunk.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel("github_response_rejected");
+        throw new Error("github_response_rejected");
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (total < 2) throw new Error("github_response_rejected");
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const body = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   const parsed = JSON.parse(body);
   if (!isRecord(parsed)) throw new Error("github_response_rejected");
   return parsed;
@@ -241,7 +280,7 @@ const githubHeaders = (authorization) => ({
 });
 
 const createCredentialReader = ({ fetcher, now }) =>
-  async (env) => {
+  async (env, invocation = {}) => {
     if (credentialState(env) !== "PRESENT") {
       throw new Error("GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED");
     }
@@ -264,6 +303,7 @@ const createCredentialReader = ({ fetcher, now }) =>
       env.GITHUB_APP_PRIVATE_KEY,
       Math.floor(nowMillis / 1_000),
     );
+    await assertInvocationActive(invocation);
     const response = await fetcher(
       `${API_ROOT}/app/installations/${installationId}/access_tokens`,
       {
@@ -277,11 +317,11 @@ const createCredentialReader = ({ fetcher, now }) =>
         },
         method: "POST",
         redirect: "error",
-        signal: AbortSignal.timeout(10_000),
+        signal: providerSignal(invocation.signal, 10_000),
       },
     );
     if (!response.ok) throw new Error("github_installation_token_rejected");
-    const payload = await responseJson(response);
+    const payload = await responseJson(response, invocation.signal);
     const token = text(payload.token);
     const expiresAt = text(payload.expires_at);
     const repositories = Array.isArray(payload.repositories)
@@ -465,7 +505,7 @@ export const deriveDraftPlanContract = async (plan) => {
 };
 
 const createGithubApi = ({ fetcher }) =>
-  async (credential, path, method, body) => {
+  async (credential, path, method, body, invocation = {}) => {
     if (
       !path.startsWith(
         `/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/`,
@@ -473,6 +513,8 @@ const createGithubApi = ({ fetcher }) =>
     ) {
       throw new Error("github_endpoint_rejected");
     }
+    if (method === "GET") invocation.signal?.throwIfAborted();
+    else await assertInvocationActive(invocation);
     const response = await fetcher(`${API_ROOT}${path}`, {
       body: body === undefined ? undefined : JSON.stringify(body),
       headers: {
@@ -481,10 +523,10 @@ const createGithubApi = ({ fetcher }) =>
       },
       method,
       redirect: "error",
-      signal: AbortSignal.timeout(10_000),
+      signal: providerSignal(invocation.signal, 10_000),
     });
     if (!response.ok) throw new Error(`github_api_${response.status}`);
-    return responseJson(response);
+    return responseJson(response, invocation.signal);
   };
 
 const acceptToolResult = async (
@@ -541,8 +583,15 @@ export const createGitHubBrokerAdapters = ({
     });
   };
 
-  const attest = async ({ context, database, env }) => {
-    const credential = await readInstallationCredential(env);
+  const attest = async ({
+    assertActive,
+    context,
+    database,
+    env,
+    signal,
+  }) => {
+    const invocation = { assertActive, signal };
+    const credential = await readInstallationCredential(env, invocation);
     const evidenceHash = await sha256Hex(
       `${credential.fingerprintHash}|${credential.scopeManifestHash}|configured|${credential.expiresAt}`,
     );
@@ -573,7 +622,13 @@ export const createGitHubBrokerAdapters = ({
     });
   };
 
-  const execute = async ({ database, env, payload }) => {
+  const execute = async ({
+    assertActive,
+    database,
+    env,
+    payload,
+    signal,
+  }) => {
     if (
       credentialState(env) !== "PRESENT" ||
       serviceIdentityState(env) !== "PRESENT"
@@ -582,7 +637,8 @@ export const createGitHubBrokerAdapters = ({
     }
     const plan = validateDraftPlan(payload);
     if (!plan) throw new Error("github_draft_plan_rejected");
-    const credential = await readInstallationCredential(env);
+    const invocation = { assertActive, signal };
+    const credential = await readInstallationCredential(env, invocation);
     const contract = await deriveDraftPlanContract(plan);
     if (plan.planSnapshotHash !== contract.planContractHash) {
       throw new Error("github_approved_plan_contract_mismatch");
@@ -592,6 +648,8 @@ export const createGitHubBrokerAdapters = ({
       credential,
       `/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/git/ref/heads/${encodedBase}`,
       "GET",
+      undefined,
+      invocation,
     );
     const baseObject = isRecord(baseRef.object) ? baseRef.object : {};
     const baseCommit = text(baseObject.sha);
@@ -606,12 +664,14 @@ export const createGitHubBrokerAdapters = ({
         headers: githubHeaders(`Bearer ${credential.token}`),
         method: "GET",
         redirect: "error",
-        signal: AbortSignal.timeout(10_000),
+        signal: providerSignal(signal, 10_000),
       },
     );
     if (branchResponse.status !== 404) {
+      await branchResponse.body?.cancel().catch(() => undefined);
       throw new Error("github_canary_branch_not_fresh");
     }
+    await branchResponse.body?.cancel().catch(() => undefined);
     const encodedPath = plan.path.split("/").map(encodeURIComponent).join("/");
     const pathResponse = await fetcher(
       `${API_ROOT}/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/contents/${encodedPath}?ref=${
@@ -621,19 +681,23 @@ export const createGitHubBrokerAdapters = ({
         headers: githubHeaders(`Bearer ${credential.token}`),
         method: "GET",
         redirect: "error",
-        signal: AbortSignal.timeout(10_000),
+        signal: providerSignal(signal, 10_000),
       },
     );
     let priorBlobSha = "absent";
     if (pathResponse.status === 200) {
-      const pathState = await responseJson(pathResponse);
+      const pathState = await responseJson(pathResponse, signal);
       priorBlobSha = pathState.type === "file" ? text(pathState.sha) : "";
     } else if (pathResponse.status !== 404) {
+      await pathResponse.body?.cancel().catch(() => undefined);
       throw new Error("github_canary_path_readback_rejected");
+    } else {
+      await pathResponse.body?.cancel().catch(() => undefined);
     }
     if (priorBlobSha !== plan.priorBlobSha) {
       throw new Error("github_approved_path_state_changed");
     }
+    await assertInvocationActive(invocation);
     const requestHash = await sha256Hex([
       "github-draft-pr-request-v2",
       contract.planContractHash,
@@ -690,6 +754,8 @@ export const createGitHubBrokerAdapters = ({
       credential,
       `/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/git/commits/${baseCommit}`,
       "GET",
+      undefined,
+      invocation,
     );
     const baseTree = isRecord(baseCommitRecord.tree)
       ? text(baseCommitRecord.tree.sha)
@@ -702,6 +768,7 @@ export const createGitHubBrokerAdapters = ({
       `/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/git/blobs`,
       "POST",
       { content: plan.content, encoding: "utf-8" },
+      invocation,
     );
     const blobSha = text(blob.sha);
     if (!/^[a-f0-9]{40}$/u.test(blobSha)) {
@@ -720,6 +787,7 @@ export const createGitHubBrokerAdapters = ({
           type: "blob",
         }],
       },
+      invocation,
     );
     const treeSha = text(tree.sha);
     if (!/^[a-f0-9]{40}$/u.test(treeSha)) {
@@ -730,6 +798,7 @@ export const createGitHubBrokerAdapters = ({
       `/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/git/commits`,
       "POST",
       { message: plan.commitMessage, parents: [baseCommit], tree: treeSha },
+      invocation,
     );
     const commitSha = text(commit.sha);
     if (!/^[a-f0-9]{40}$/u.test(commitSha)) {
@@ -740,6 +809,7 @@ export const createGitHubBrokerAdapters = ({
       `/repos/${REPOSITORY_OWNER}/${REPOSITORY_NAME}/git/refs`,
       "POST",
       { ref: `refs/heads/${plan.branchName}`, sha: commitSha },
+      invocation,
     );
     const beforeStateHash = contract.priorStateHash;
     const afterStateHash = await sha256Hex(commitSha);
@@ -760,6 +830,7 @@ export const createGitHubBrokerAdapters = ({
           maintainer_can_modify: false,
           title: plan.title,
         },
+        invocation,
       );
       const pullBase = isRecord(pull.base) ? text(pull.base.ref) : "";
       const pullHead = isRecord(pull.head) ? text(pull.head.ref) : "";
