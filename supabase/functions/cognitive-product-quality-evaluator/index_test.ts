@@ -58,6 +58,10 @@ const approvedContext = Object.freeze({
   approvedVisualBaselineCount: 1,
   approvedVisualBaselineHash: APPROVED_OPTION_C_BASELINE_HASH,
 });
+const pendingContext = Object.freeze({
+  approvedVisualBaselineCount: 0,
+  approvedVisualBaselineHash: null,
+});
 
 const optionCVisualMetrics = (
   overrides: TestJsonObject = {},
@@ -264,6 +268,85 @@ Deno.test("Android touch classification is derived from stored run metrics", () 
   );
 });
 
+Deno.test("objective touch findings do not require visual baseline approval", () => {
+  const payload = validPayload();
+  const pendingMetrics = optionCTouchMetrics({
+    baselineComparisonHash: null,
+    baselineState: "needs_product_baseline_review",
+  });
+  const pendingRun = storedRun("touch_target", pendingMetrics);
+  assert(
+    deterministicDetectionReasons(
+      pendingRun,
+      candidateFromPayload(payload),
+      pendingContext,
+    ).length === 0,
+    "a measured Android target below 48dp must remain reachable before visual approval",
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      storedRun(
+        "touch_target",
+        optionCTouchMetrics({
+          baselineComparisonHash: null,
+          baselineState: "needs_product_baseline_review",
+          interactiveTargetHeight: 48,
+          targetClassification: "meets_platform_minimum",
+        }),
+      ),
+      pendingContext,
+    ).classification === "false_positive",
+    "a compliant pending-baseline target must remain a deterministic false positive",
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      storedRun(
+        "touch_target",
+        optionCTouchMetrics({
+          accessibilityNamePresent: false,
+          baselineComparisonHash: null,
+          baselineState: "needs_product_baseline_review",
+          interactiveTargetHeight: 48,
+          targetClassification: "meets_platform_minimum",
+        }),
+      ),
+      pendingContext,
+    ).profile?.findingClass ===
+      "touch_target_accessibility_name_or_role_missing",
+    "objective name-role gaps must remain reachable before visual approval",
+  );
+});
+
+Deno.test("touch baseline state is validated without trusting the caller", () => {
+  assert(
+    deterministicTouchTargetClassification(
+      storedRun(
+        "touch_target",
+        optionCTouchMetrics({
+          baselineComparisonHash: APPROVED_OPTION_C_BASELINE_HASH,
+          baselineState: "needs_product_baseline_review",
+        }),
+      ),
+      pendingContext,
+    ).classification === "baseline_ambiguity",
+    "pending baseline state must carry a null comparison hash",
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      storedRun("touch_target", optionCTouchMetrics()),
+      pendingContext,
+    ).classification === "baseline_ambiguity",
+    "caller-claimed approval must require the authenticated approved context",
+  );
+  assert(
+    deterministicTouchTargetClassification(
+      storedRun("touch_target", optionCTouchMetrics()),
+      approvedContext,
+    ).profile?.findingClass === "android_touch_target_below_48dp",
+    "exact approved Option C touch evidence must remain accepted",
+  );
+});
+
 Deno.test("stored metrics bind severity confidence and suspected layer", () => {
   const payload = validPayload();
   const run = storedRun("touch_target", optionCTouchMetrics());
@@ -302,6 +385,20 @@ Deno.test("Option C visual findings require the exact approved baseline hash", (
       },
     ).classification === "baseline_ambiguity",
     "mismatched approved baseline must fail closed",
+  );
+  assert(
+    deterministicVisualClassification(
+      storedRun(
+        "visual_layout",
+        optionCVisualMetrics({
+          baselineComparisonHash: null,
+          baselineState: "needs_product_baseline_review",
+          observedClassification: "baseline_ambiguity",
+        }),
+      ),
+      pendingContext,
+    ).classification === "baseline_ambiguity",
+    "visual layout must still require authenticated Option C approval",
   );
 
   const deviationRun = storedRun(
@@ -897,7 +994,10 @@ Deno.test("resolution proof requires a matching passing observation", () => {
   const touchDetectionRun = {
     ...detectionRun,
     metric_manifest: {
-      metrics: optionCTouchMetrics(),
+      metrics: optionCTouchMetrics({
+        baselineComparisonHash: null,
+        baselineState: "needs_product_baseline_review",
+      }),
       observationKind: "touch_target",
     },
     sentinel_key: "visual_product_experience_sentinel",
@@ -906,6 +1006,8 @@ Deno.test("resolution proof requires a matching passing observation", () => {
     ...passingRun,
     metric_manifest: {
       metrics: optionCTouchMetrics({
+        baselineComparisonHash: null,
+        baselineState: "needs_product_baseline_review",
         interactiveTargetHeight: 48,
         targetClassification: "meets_platform_minimum",
       }),
@@ -919,7 +1021,25 @@ Deno.test("resolution proof requires a matching passing observation", () => {
       finding,
       touchDetectionRun,
     ).length === 0,
-    "touch-target resolution must bind the exact component, family, baseline, and platform unit",
+    "pending-baseline touch resolution must bind the exact component, family, and platform unit",
+  );
+  assert(
+    deterministicResolutionReasons(
+      {
+        ...touchPassingRun,
+        metric_manifest: {
+          ...touchPassingRun.metric_manifest,
+          metrics: optionCTouchMetrics({
+            interactiveTargetHeight: 48,
+            targetClassification: "meets_platform_minimum",
+          }),
+        },
+      },
+      finding,
+      touchDetectionRun,
+      approvedContext,
+    ).length === 0,
+    "later visual approval must not invalidate an objective touch resolution",
   );
   assert(
     deterministicResolutionReasons(

@@ -965,6 +965,21 @@ export const deterministicVisualClassification = (
   return conclude(visualAssessment("false_positive"));
 };
 
+const touchTargetBaselineBindingIsValid = (
+  metrics: Record<string, unknown>,
+  context: DetectionEvaluationContext,
+): boolean => {
+  const baselineState = toText(metrics.baselineState);
+  if (baselineState === "needs_product_baseline_review") {
+    return metrics.baselineComparisonHash === null;
+  }
+  return baselineState === "approved_baseline" &&
+    toText(metrics.baselineComparisonHash) ===
+      APPROVED_OPTION_C_BASELINE_HASH &&
+    context.approvedVisualBaselineCount === 1 &&
+    context.approvedVisualBaselineHash === APPROVED_OPTION_C_BASELINE_HASH;
+};
+
 export const deterministicTouchTargetClassification = (
   run: StoredRun,
   context: DetectionEvaluationContext = DEFAULT_EVALUATION_CONTEXT,
@@ -1027,11 +1042,7 @@ export const deterministicTouchTargetClassification = (
     toText(metrics.baselineId) !==
       "chillywood-product-experience-baseline-v1" ||
     metricNumber(metrics, "baselineVersion") !== 1 ||
-    toText(metrics.baselineState) !== "approved_baseline" ||
-    toText(metrics.baselineComparisonHash) !==
-      APPROVED_OPTION_C_BASELINE_HASH ||
-    context.approvedVisualBaselineCount !== 1 ||
-    context.approvedVisualBaselineHash !== APPROVED_OPTION_C_BASELINE_HASH ||
+    !touchTargetBaselineBindingIsValid(metrics, context) ||
     !LOWER_HEX_64.test(toText(metrics.componentIdentityHash)) ||
     !LOWER_HEX_64.test(toText(metrics.routeFamilyMappingHash))
   ) {
@@ -1438,6 +1449,7 @@ export const deterministicResolutionReasons = (
   run: StoredRun,
   finding: StoredFinding,
   detectionRun: StoredRun,
+  context: DetectionEvaluationContext = DEFAULT_EVALUATION_CONTEXT,
 ): readonly string[] => {
   const reasons = new Set<string>();
   if (
@@ -1504,8 +1516,6 @@ export const deterministicResolutionReasons = (
         toText(detectionMetrics.baselineId) ||
       metricNumber(resolutionMetrics, "baselineVersion") !==
         metricNumber(detectionMetrics, "baselineVersion") ||
-      toText(resolutionMetrics.baselineComparisonHash) !==
-        toText(detectionMetrics.baselineComparisonHash) ||
       metricNumber(resolutionMetrics, "preferredThreshold") !==
         metricNumber(detectionMetrics, "preferredThreshold") ||
       metricNumber(resolutionMetrics, "applicableMinimumThreshold") !==
@@ -1514,10 +1524,8 @@ export const deterministicResolutionReasons = (
       reasons.add("resolution_measurement_identity_mismatch");
     }
     if (
-      deterministicTouchTargetClassification(run, {
-        approvedVisualBaselineCount: 1,
-        approvedVisualBaselineHash: APPROVED_OPTION_C_BASELINE_HASH,
-      }).classification !== "false_positive"
+      deterministicTouchTargetClassification(run, context).classification !==
+        "false_positive"
     ) {
       reasons.add("resolution_accessibility_target_not_satisfied");
     }
@@ -1665,12 +1673,15 @@ const readDetectionEvaluationContext = async (
   client: SupabaseClientLike,
   run: StoredRun,
 ): Promise<DetectionEvaluationContext | null> => {
-  if (
-    !["visual_layout", "touch_target"].includes(
-      toText(run.metric_manifest.observationKind),
-    )
-  ) {
+  const observationKind = toText(run.metric_manifest.observationKind);
+  if (!["visual_layout", "touch_target"].includes(observationKind)) {
     return DEFAULT_EVALUATION_CONTEXT;
+  }
+  if (observationKind === "touch_target") {
+    const metrics = metricObject(run);
+    if (toText(metrics?.baselineState) !== "approved_baseline") {
+      return DEFAULT_EVALUATION_CONTEXT;
+    }
   }
   const result = await client
     .from("product_experience_baseline_versions")
@@ -1802,7 +1813,16 @@ export const handler = async (request: Request): Promise<Response> => {
         run,
         candidate,
       );
-      reasons = deterministicResolutionReasons(run, finding, detectionRun);
+      const context = await readDetectionEvaluationContext(client, run);
+      if (!context) {
+        return json(409, { error: "sentinel_baseline_read_rejected" });
+      }
+      reasons = deterministicResolutionReasons(
+        run,
+        finding,
+        detectionRun,
+        context,
+      );
       assessmentKind = "finding_resolution";
     } else {
       const candidate = toCandidate(payload);
