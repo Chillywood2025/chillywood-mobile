@@ -809,6 +809,7 @@ export const openAiResponsesTransport: ModelTransport = async ({
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      redirect: "error",
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
@@ -821,9 +822,40 @@ export const openAiResponsesTransport: ModelTransport = async ({
     if (response.status === 429) throw new Error("provider_rate_limited");
     throw new Error("provider_request_failed");
   }
-  const raw = await response.text();
-  if (new TextEncoder().encode(raw).byteLength > MAX_PROVIDER_RESPONSE_BYTES) {
-    throw new Error("provider_response_too_large");
+  if (!response.body) throw new Error("provider_response_invalid");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let raw = "";
+  let receivedBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        raw += decoder.decode();
+        break;
+      }
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_PROVIDER_RESPONSE_BYTES) {
+        await reader.cancel("provider_response_too_large");
+        throw new Error("provider_response_too_large");
+      }
+      raw += decoder.decode(value, { stream: true });
+    }
+  } catch (error) {
+    try {
+      await reader.cancel("provider_response_rejected");
+    } catch {
+      // The stream may already be closed or cancelled.
+    }
+    if (
+      error instanceof Error &&
+      error.message === "provider_response_too_large"
+    ) {
+      throw error;
+    }
+    throw new Error("provider_response_invalid");
+  } finally {
+    reader.releaseLock();
   }
   let providerPayload: unknown;
   try {

@@ -426,6 +426,7 @@ Deno.test("provider-returned model identity must match the configured model", as
 
 Deno.test("OpenAI transport accepts only a completed assistant structured response", async () => {
   const originalFetch = globalThis.fetch;
+  let observedRedirect: RequestRedirect | undefined;
   const responseFixture = {
     id: "provider-response-fixture",
     status: "completed",
@@ -444,16 +445,20 @@ Deno.test("OpenAI transport accepts only a completed assistant structured respon
     usage: { input_tokens: 500, output_tokens: 200 },
   };
   try {
-    globalThis.fetch = (() =>
-      Promise.resolve(
+    globalThis.fetch = ((_input, init) => {
+      observedRedirect = (init as { redirect?: RequestRedirect } | undefined)
+        ?.redirect;
+      return Promise.resolve(
         new Response(JSON.stringify(responseFixture), { status: 200 }),
-      )) as typeof fetch;
+      );
+    }) as typeof fetch;
     const completed = await openAiResponsesTransport({
       apiKey: "test-only-provider-value",
       body: { model: "gpt-5.6-luna" },
       timeoutMs: 1_000,
     });
     assertEquals(completed.modelVersion, "gpt-5.6-luna", "completed model");
+    assertEquals(observedRedirect, "error", "redirect handling");
 
     globalThis.fetch = (() =>
       Promise.resolve(
@@ -477,6 +482,49 @@ Deno.test("OpenAI transport accepts only a completed assistant structured respon
       rejected = true;
     }
     assert(rejected, "incomplete provider response was accepted");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("OpenAI transport cancels a streamed response above 32 KiB", async () => {
+  const originalFetch = globalThis.fetch;
+  let cancelled = false;
+  const firstChunk = new Uint8Array(20_000);
+  const secondChunk = new Uint8Array(13_000);
+  try {
+    globalThis.fetch = ((_input, init) => {
+      assertEquals(
+        (init as { redirect?: RequestRedirect } | undefined)?.redirect,
+        "error",
+        "oversize redirect handling",
+      );
+      return Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(firstChunk);
+          controller.enqueue(secondChunk);
+        },
+        cancel() {
+          cancelled = true;
+        },
+      }), { status: 200 }));
+    }) as typeof fetch;
+    let errorCode = "";
+    try {
+      await openAiResponsesTransport({
+        apiKey: "test-only-provider-value",
+        body: { model: "gpt-5.6-luna" },
+        timeoutMs: 1_000,
+      });
+    } catch (error) {
+      errorCode = error instanceof Error ? error.message : "";
+    }
+    assertEquals(
+      errorCode,
+      "provider_response_too_large",
+      "oversize response code",
+    );
+    assert(cancelled, "oversize provider response stream was not cancelled");
   } finally {
     globalThis.fetch = originalFetch;
   }

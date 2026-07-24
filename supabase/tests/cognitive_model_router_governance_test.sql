@@ -226,92 +226,86 @@ insert into public.governance_decision_manifests(
   transaction_timestamp()
 );
 
-insert into public.governance_owner_approval_records(
-  id, decision_manifest_id, task_id, project_id, platform, environment,
-  approval_key, objective_hash, owner_user_id, current_version,
-  current_state, maximum_executions, executions_claimed,
-  executions_completed, approval_hash
-) values (
-  'd9000000-0000-4000-8000-000000000001',
-  'd8000000-0000-4000-8000-000000000001',
-  'd3000000-0000-4000-8000-000000000001',
-  'd1000000-0000-4000-8000-000000000001',
-  'shared','production','model-router-owner-approval',repeat('5',64),
+create temporary table model_owner_chain_fixture(
+  approval_id uuid,
+  approval_version_id uuid,
+  approval_hash text,
+  execution_id uuid
+);
+grant select,insert,update on model_owner_chain_fixture
+  to authenticated,service_role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config(
+  'request.jwt.claim.sub',
   'd2000000-0000-4000-8000-000000000001',
-  1,'active',1,1,0,repeat('7',64)
+  true
 );
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"d2000000-0000-4000-8000-000000000001"}',
+  true
+);
+select public.governance_register_two_party_service_principal(
+  'cognitive_approved_action_worker',
+  encode(extensions.digest(convert_to(
+    'model-worker-assertion-test-only-000000000000','UTF8'
+  ),'sha256'),'hex'),
+  array['model_advisory'],
+  transaction_timestamp()+interval '1 day'
+);
+insert into model_owner_chain_fixture(
+  approval_id,approval_version_id,approval_hash
+)
+select
+  (result->>'approvalId')::uuid,
+  (result->>'approvalVersionId')::uuid,
+  result->>'approvalHash'
+from (
+  select public.governance_record_owner_approval(
+    'd8000000-0000-4000-8000-000000000001',
+    'model-router-owner-approval',
+    repeat('5',64),repeat('7',64),repeat('6',40),repeat('7',64),
+    repeat('5',64),'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-model-router-test','model','model_advisory',
+    repeat('8',64),'{}'::text[],'{}'::text[],'{}'::text[],
+    repeat('a',64),1,3,16384,1,repeat('9',64),
+    array['model-router-test'],repeat('a',64),repeat('4',64),
+    interval '24 hours'
+  ) result
+) owner_approval;
+reset role;
 
-insert into public.governance_owner_approval_versions(
-  id, approval_record_id, decision_manifest_id, task_id, project_id,
-  platform, environment, version_number, owner_user_id,
-  owner_identity_hash, decision_manifest_hash, plan_snapshot_hash,
-  source_commit, architecture_graph_digest, approval_scope_hash,
-  objective_hash, repository_full_name, branch_name, provider, operation,
-  target_resource_hash, path_scope_hashes, table_scope_hashes,
-  function_scope_hashes, budget_hash, maximum_cost, maximum_calls,
-  maximum_bytes, maximum_executions, tests_hash, required_test_ids,
-  evaluator_requirement_hash, rollback_hash, approval_hash,
-  approved_at, valid_from, expires_at
-) values (
-  'da000000-0000-4000-8000-000000000001',
-  'd9000000-0000-4000-8000-000000000001',
-  'd8000000-0000-4000-8000-000000000001',
-  'd3000000-0000-4000-8000-000000000001',
-  'd1000000-0000-4000-8000-000000000001',
-  'shared','production',1,
-  'd2000000-0000-4000-8000-000000000001',
-  encode(extensions.digest(
-    convert_to('d2000000-0000-4000-8000-000000000001','UTF8'),
-    'sha256'
-  ),'hex'),
-  repeat('6',64),repeat('7',64),repeat('6',40),repeat('7',64),
-  repeat('5',64),repeat('5',64),
-  'Chillywood2025/chillywood-mobile',
-  'codex/cognitive-model-router-test',
-  'model','model_advisory',repeat('8',64),
-  '{}'::text[],'{}'::text[],'{}'::text[],repeat('a',64),
-  1,3,16384,1,repeat('9',64),array['model-router-test'],
-  repeat('a',64),repeat('4',64),repeat('7',64),
-  transaction_timestamp()-interval '1 minute',
-  transaction_timestamp()-interval '1 minute',
-  transaction_timestamp()+interval '23 hours'
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+update model_owner_chain_fixture
+set execution_id = (
+  public.governance_claim_approved_action(
+    approval_version_id,'cognitive_approved_action_worker',
+    'model-worker-assertion-test-only-000000000000',
+    repeat('6',64),repeat('7',64),approval_hash,
+    'd3000000-0000-4000-8000-000000000001',
+    'd1000000-0000-4000-8000-000000000001',
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-model-router-test','shared','production',
+    'model','model_advisory',repeat('8',64),repeat('a',64),
+    repeat('9',64),repeat('a',64),repeat('4',64)
+  )->>'executionId'
+)::uuid;
+select public.governance_begin_approved_execution(
+  (select execution_id from model_owner_chain_fixture),
+  'cognitive_approved_action_worker',
+  'model-worker-assertion-test-only-000000000000',
+  'preflight'
 );
-
-insert into public.governance_owner_approval_version_states(
-  approval_version_id, approval_record_id, task_id, project_id,
-  platform, environment, state, maximum_executions,
-  executions_claimed
-) values (
-  'da000000-0000-4000-8000-000000000001',
-  'd9000000-0000-4000-8000-000000000001',
-  'd3000000-0000-4000-8000-000000000001',
-  'd1000000-0000-4000-8000-000000000001',
-  'shared','production','consumed',1,1
+select public.governance_begin_approved_execution(
+  (select execution_id from model_owner_chain_fixture),
+  'cognitive_approved_action_worker',
+  'model-worker-assertion-test-only-000000000000',
+  'executing'
 );
-
-insert into public.governance_approved_action_executions(
-  id, approval_record_id, approval_version_id, task_id, project_id,
-  repository_full_name, branch_name, platform, environment, provider,
-  operation, claim_sequence, state, service_identity,
-  service_identity_hash, worker_assertion_hash, decision_manifest_hash,
-  plan_snapshot_hash, approval_hash, target_resource_hash, budget_hash,
-  tests_hash, evaluator_requirement_hash, rollback_hash, claimed_at,
-  began_at
-) values (
-  'db000000-0000-4000-8000-000000000001',
-  'd9000000-0000-4000-8000-000000000001',
-  'da000000-0000-4000-8000-000000000001',
-  'd3000000-0000-4000-8000-000000000001',
-  'd1000000-0000-4000-8000-000000000001',
-  'Chillywood2025/chillywood-mobile',
-  'codex/cognitive-model-router-test',
-  'shared','production','model','model_advisory',1,
-  'executing','cognitive_approved_action_worker',
-  repeat('1',64),repeat('2',64),repeat('6',64),repeat('7',64),
-  repeat('7',64),repeat('8',64),repeat('a',64),repeat('9',64),
-  repeat('a',64),repeat('4',64),transaction_timestamp(),
-  transaction_timestamp()
-);
+reset role;
 
 insert into public.cognitive_governance_switches(
   task_id, project_id, platform, environment, switch_key, enabled,
@@ -341,7 +335,38 @@ insert into public.intelligence_budgets(
   repeat('a',64),100000,5,0,0,0,0,0,1,
   transaction_timestamp()+interval '1 day'
 );
+
+insert into public.cognitive_level01_credential_attestations(
+  id,task_id,project_id,platform,environment,credential_kind,state,
+  public_fingerprint_hash,scope_manifest_hash,private_material_stored,
+  verified_at,expires_at
+) values (
+  'de000000-0000-4000-8000-000000000001',
+  'd3000000-0000-4000-8000-000000000001',
+  'd1000000-0000-4000-8000-000000000001',
+  'shared','production','model_provider','configured',
+  repeat('b',64),repeat('c',64),false,transaction_timestamp(),
+  transaction_timestamp()+interval '1 day'
+);
 -- MODEL_ROUTER_FIXTURE_END
+
+select ok(
+  exists (
+    select 1
+    from public.governance_owner_approval_versions version
+    join public.governance_approved_action_executions execution
+      on execution.approval_version_id = version.id
+    where version.provider = 'model'
+      and version.operation = 'model_advisory'
+      and execution.provider = 'model'
+      and execution.operation = 'model_advisory'
+      and execution.state = 'executing'
+      and execution.id = (
+        select execution_id from model_owner_chain_fixture
+      )
+  ),
+  'real Owner approval and worker handoff accept exact bounded model_advisory'
+);
 
 select ok(
   (
@@ -375,8 +400,13 @@ select ok(
     'authenticated',
     'public.cognitive_model_router_recover_expired(uuid,integer,text,text)',
     'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.cognitive_model_router_sweep_expired(integer,text,text)',
+    'EXECUTE'
   ),
-  'ordinary authenticated clients cannot reserve, recover, or settle model calls'
+  'ordinary authenticated clients cannot reserve, recover, sweep, or settle model calls'
 );
 
 select ok(
@@ -426,7 +456,7 @@ select set_config(
 
 insert into model_router_fixture(capability_id)
 select public.governance_owner_register_model_router_capability(
-  'db000000-0000-4000-8000-000000000001',
+  (select execution_id from model_owner_chain_fixture),
   'dc000000-0000-4000-8000-000000000001',
   'research_futures',
   'cognitive_research_enabled',
@@ -461,6 +491,11 @@ select ok(
       and provider_family = 'openai'
       and model_family = 'gpt-5.6'
       and model_name = 'gpt-5.6-luna'
+      and credential_attestation_id =
+        'de000000-0000-4000-8000-000000000001'
+      and credential_public_fingerprint_hash = repeat('b',64)
+      and credential_scope_manifest_hash = repeat('c',64)
+      and credential_expires_at > transaction_timestamp()
     from public.cognitive_model_router_capabilities
     where id = (select capability_id from model_router_fixture)
   ),
@@ -468,6 +503,46 @@ select ok(
 );
 
 reset role;
+create function pg_temp.reserve_after_model_credential_supersession()
+returns jsonb
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claim.role','service_role',true);
+  insert into public.cognitive_level01_credential_attestations(
+    id,task_id,project_id,platform,environment,credential_kind,state,
+    public_fingerprint_hash,scope_manifest_hash,private_material_stored,
+    verified_at,expires_at
+  ) values (
+    'df000000-0000-4000-8000-000000000001',
+    'd3000000-0000-4000-8000-000000000001',
+    'd1000000-0000-4000-8000-000000000001',
+    'shared','production','model_provider','configured',
+    repeat('1',64),repeat('2',64),false,
+    transaction_timestamp()+interval '1 microsecond',
+    transaction_timestamp()+interval '1 day'
+  );
+  return public.cognitive_model_router_reserve(
+    (select capability_id from model_router_fixture),
+    'd3000000-0000-4000-8000-000000000001',
+    'd1000000-0000-4000-8000-000000000001',
+    'shared','production','research_futures',
+    'openai','gpt-5.6','gpt-5.6-luna',
+    'model-router-assessment-0001',repeat('0',64),
+    repeat('d',64),repeat('e',64),repeat('f',64),
+    (select model_identity_hash from model_router_fixture),
+    (select approval_target_hash from model_router_fixture),
+    (select scope_hash from model_router_fixture),
+    1000,0.1,'model-router-service-token-test-only-0001'
+  );
+end;
+$$;
+select throws_ok(
+  $$select pg_temp.reserve_after_model_credential_supersession()$$,
+  'P0001',
+  'model_router_credential_attestation_rejected',
+  'superseding accepted credential fingerprint blocks an old capability'
+);
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 
@@ -604,6 +679,10 @@ select ok(
       and preflight.lease_expires_at > preflight.created_at
       and preflight.lease_expires_at <=
         preflight.created_at + interval '2 minutes'
+      and preflight.credential_attestation_id =
+        'de000000-0000-4000-8000-000000000001'
+      and preflight.credential_public_fingerprint_hash = repeat('b',64)
+      and preflight.credential_scope_manifest_hash = repeat('c',64)
     from public.cognitive_model_router_preflight_audits preflight
     where preflight.id = (select preflight_id from model_router_fixture)
   ),
@@ -773,12 +852,11 @@ insert into public.cognitive_budget_events(
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select is(
-  public.cognitive_model_router_recover_expired(
-    (select capability_id from model_router_recovery_fixture),
+  public.cognitive_model_router_sweep_expired(
     10,repeat('3',64),'model-router-service-token-test-only-0001'
   )->>'recoveredCount',
   '1',
-  'expired reservation lease is recovered exactly once'
+  'bounded maintenance sweep reaches and recovers an expired reservation'
 );
 select is(
   public.cognitive_model_router_recover_expired(
