@@ -237,7 +237,7 @@
     "proof:ios-push-platform": "node ./scripts/proof-ios-push-platform.mjs",
     "proof:ios-voip-policy": "node ./scripts/proof-ios-voip-policy.mjs",
     "proof:ios-voip-token-lifecycle": "node ./scripts/proof-ios-voip-token-lifecycle.mjs",
-    "lint": "expo lint",
+    "lint": "expo lint -- --concurrency off",
     "guard:refresh-policy": "node ./scripts/guard-refresh-policy.mjs",
     "guard:creator-monetization-policy": "node ./scripts/guard-creator-monetization-policy.mjs",
     "guard:payment-rail-policy": "node ./scripts/guard-payment-rail-policy.mjs",
