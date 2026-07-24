@@ -319,7 +319,7 @@ insert into public.governance_two_party_service_assertions(
 ) values
   (
     'cognitive_approved_action_worker',${sqlLiteral(hash(workerAssertion))},
-    array['set_switch'],${sqlLiteral(ids.owner)},'active',
+    array['set_switch','bootstrap_control_plane'],${sqlLiteral(ids.owner)},'active',
     transaction_timestamp(),transaction_timestamp()+interval '4 hours',
     null,null,null
   ),
@@ -479,6 +479,119 @@ ${delaySeconds > 0 ? `select pg_sleep(${delaySeconds});` : ""}
 select public.governance_release_or_quarantine_execution(
   ${sqlLiteral(executionId)},'cognitive_approved_action_worker',
   ${sqlLiteral(workerAssertion)},${sqlLiteral(transition)},${sqlLiteral(evidenceHash)}
+);
+commit;
+`;
+
+const createBootstrapApproval = (suffix) => {
+  const bootstrapBranch = `codex/bootstrap-concurrency-${suffix}`;
+  const retentionHash = "a".repeat(64);
+  const constitutionHash = "b".repeat(64);
+  const rollbackHash = "c".repeat(64);
+  const evaluatorRequirementHash = "d".repeat(64);
+  const policyVersion = "collective-governance-v1";
+  const targetHash = hash([
+    "bootstrap_control_plane",
+    repository,
+    bootstrapBranch,
+    sourceCommit,
+    retentionHash,
+    constitutionHash,
+    rollbackHash,
+    evaluatorRequirementHash,
+    policyVersion,
+  ].join("|"));
+  const output = query(`
+begin;
+${ownerRoleSql(ids.owner)}
+select public.governance_record_bootstrap_approval(
+  ${sqlLiteral(repository)},${sqlLiteral(bootstrapBranch)},
+  ${sqlLiteral(sourceCommit)},${sqlLiteral(retentionHash)},
+  ${sqlLiteral(constitutionHash)},${sqlLiteral(rollbackHash)},
+  ${sqlLiteral(evaluatorRequirementHash)},${sqlLiteral(policyVersion)},3600
+)::text;
+commit;
+`);
+  const result = JSON.parse(output.split("\n").at(-1));
+  assert.equal(
+    result.targetResourceHash,
+    targetHash,
+    "database and harness must derive the same canonical bootstrap target hash",
+  );
+  return {
+    id: result.approvalId,
+    approvalHash: result.approvalHash,
+    targetHash,
+    branch: bootstrapBranch,
+    retentionHash,
+    constitutionHash,
+    rollbackHash,
+    evaluatorRequirementHash,
+    policyVersion,
+  };
+};
+
+const bootstrapClaimSql = (approval, delaySeconds = 0) => `
+begin;
+${serviceRoleSql()}
+${delaySeconds > 0 ? `select pg_sleep(${delaySeconds});` : ""}
+select public.governance_claim_bootstrap_control_plane(
+  ${sqlLiteral(approval.id)},${sqlLiteral(approval.approvalHash)},
+  ${sqlLiteral(approval.targetHash)},${sqlLiteral(repository)},
+  ${sqlLiteral(approval.branch)},${sqlLiteral(sourceCommit)},
+  ${sqlLiteral(approval.retentionHash)},${sqlLiteral(approval.constitutionHash)},
+  ${sqlLiteral(approval.rollbackHash)},
+  ${sqlLiteral(approval.evaluatorRequirementHash)},
+  ${sqlLiteral(approval.policyVersion)},'cognitive_approved_action_worker',
+  ${sqlLiteral(workerAssertion)}
+)::text;
+commit;
+`;
+
+const bootstrapStage = (executionId, approval) => {
+  const output = query(`
+begin;
+${serviceRoleSql()}
+select public.governance_stage_bootstrap_control_plane(
+  ${sqlLiteral(executionId)},${sqlLiteral(approval.approvalHash)},
+  ${sqlLiteral(approval.targetHash)},'cognitive_approved_action_worker',
+  ${sqlLiteral(workerAssertion)}
+)::text;
+commit;
+`);
+  return JSON.parse(output.split("\n").at(-1)).executionReceiptHash;
+};
+
+const bootstrapEvaluatorSql = (
+  executionId,
+  receiptHash,
+  proofHash,
+  delaySeconds = 0,
+) => `
+begin;
+${serviceRoleSql()}
+${delaySeconds > 0 ? `select pg_sleep(${delaySeconds});` : ""}
+select public.governance_record_bootstrap_evaluator_proof(
+  ${sqlLiteral(executionId)},${sqlLiteral(receiptHash)},
+  ${sqlLiteral(proofHash)},'passed','cognitive_independent_evaluator',
+  ${sqlLiteral(evaluatorAssertion)}
+);
+commit;
+`;
+
+const bootstrapCompleteSql = (
+  executionId,
+  receiptHash,
+  proofHash,
+  delaySeconds = 0,
+) => `
+begin;
+${serviceRoleSql()}
+${delaySeconds > 0 ? `select pg_sleep(${delaySeconds});` : ""}
+select public.governance_complete_bootstrap_control_plane(
+  ${sqlLiteral(executionId)},${sqlLiteral(receiptHash)},
+  ${sqlLiteral(proofHash)},'cognitive_approved_action_worker',
+  ${sqlLiteral(workerAssertion)}
 );
 commit;
 `;
@@ -1028,5 +1141,220 @@ where approval_version_id=${sqlLiteral(replayApproval.id)};
 );
 recordPass("single-use replay race", "1 winner / 1 replay rejection");
 
-assert.equal(results.length, 13, "all requested database concurrency races must run");
-console.log(`cognitive database concurrency verified (${results.length}/13 races passed)`);
+// 14. Zero-state bootstrap claim: the pre-task approval-state row serializes
+// duplicate worker claims and preserves a single execution.
+const bootstrapApproval = createBootstrapApproval("claim");
+const bootstrapClaimRace = await runRace(
+  bootstrapClaimSql(bootstrapApproval, 0.05),
+  bootstrapClaimSql(bootstrapApproval, 0.05),
+);
+assertRace(
+  "bootstrap claim",
+  bootstrapClaimRace,
+  1,
+  /governance_bootstrap_claim_rejected/u,
+);
+const bootstrapExecution = query(`
+select id::text
+from public.governance_bootstrap_executions
+where approval_id=${sqlLiteral(bootstrapApproval.id)};
+`);
+assert.match(bootstrapExecution, /^[a-f0-9-]{36}$/u, "bootstrap claim must persist one execution");
+assert.deepEqual(
+  query(`
+select state
+from public.governance_bootstrap_approval_states
+where approval_id=${sqlLiteral(bootstrapApproval.id)};
+select count(*)::text
+from public.governance_bootstrap_executions
+where approval_id=${sqlLiteral(bootstrapApproval.id)};
+select count(*)::text
+from public.intelligence_tasks
+where task_key='cognitive-level01-canary-control'
+  and platform='shared' and environment='production';
+`).split("\n"),
+  ["claimed", "1", "0"],
+  "bootstrap claim must be single-use and remain pre-task",
+);
+recordPass("bootstrap claim race", "1 worker claim / 1 replay rejection / 0 live tasks");
+
+// 15. Bootstrap revocation after staging: Owner revocation holds the approval
+// state lock; the evaluator waits and then rejects without producing proof.
+const revokedBootstrapApproval = createBootstrapApproval("revocation");
+query(bootstrapClaimSql(revokedBootstrapApproval));
+const revokedBootstrapExecution = query(`
+select id::text
+from public.governance_bootstrap_executions
+where approval_id=${sqlLiteral(revokedBootstrapApproval.id)};
+`);
+const revokedBootstrapReceipt = bootstrapStage(
+  revokedBootstrapExecution,
+  revokedBootstrapApproval,
+);
+const bootstrapRevocationRace = await runRace(
+  `
+begin;
+${ownerRoleSql(ids.owner)}
+select public.governance_revoke_bootstrap_approval(
+  ${sqlLiteral(revokedBootstrapApproval.id)},${sqlLiteral("e".repeat(64))}
+);
+select pg_sleep(0.35);
+commit;
+`,
+  bootstrapEvaluatorSql(
+    revokedBootstrapExecution,
+    revokedBootstrapReceipt,
+    "f".repeat(64),
+    0.08,
+  ),
+);
+assert.equal(bootstrapRevocationRace[0].code, 0, "bootstrap revocation must commit");
+assert.notEqual(
+  bootstrapRevocationRace[1].code,
+  0,
+  "evaluator progression must fail behind bootstrap revocation",
+);
+assert.match(
+  bootstrapRevocationRace[1].stderr,
+  /governance_bootstrap_evaluator_proof_rejected/u,
+  "revoked bootstrap must reject evaluator progression",
+);
+assert.deepEqual(
+  query(`
+select state
+from public.governance_bootstrap_approval_states
+where approval_id=${sqlLiteral(revokedBootstrapApproval.id)};
+select count(*)::text
+from public.governance_bootstrap_evaluator_proofs
+where execution_id=${sqlLiteral(revokedBootstrapExecution)};
+select count(*)::text
+from public.intelligence_tasks
+where task_key='cognitive-level01-canary-control'
+  and platform='shared' and environment='production';
+`).split("\n"),
+  ["revoked", "0", "0"],
+  "revocation must leave staged bootstrap non-live and proof-free",
+);
+recordPass("bootstrap revocation race", "Owner revocation wins / evaluator rejected / 0 live tasks");
+
+const bootstrapReceipt = bootstrapStage(bootstrapExecution, bootstrapApproval);
+const bootstrapProof = "7".repeat(64);
+query(bootstrapEvaluatorSql(
+  bootstrapExecution,
+  bootstrapReceipt,
+  bootstrapProof,
+));
+
+// 16. Bootstrap emergency stop: the stop writer owns the emergency row first;
+// completion blocks, rechecks, and rejects with no partial materialization.
+const bootstrapEmergencyRace = await runRace(
+  `
+begin;
+${ownerRoleSql(ids.owner)}
+select public.governance_set_cognitive_emergency_state(
+  'emergency_stop',${sqlLiteral("8".repeat(64))}
+);
+select pg_sleep(0.35);
+commit;
+`,
+  bootstrapCompleteSql(
+    bootstrapExecution,
+    bootstrapReceipt,
+    bootstrapProof,
+    0.08,
+  ),
+);
+assert.equal(bootstrapEmergencyRace[0].code, 0, "bootstrap emergency stop must commit");
+assert.notEqual(
+  bootstrapEmergencyRace[1].code,
+  0,
+  "bootstrap completion must fail behind emergency stop",
+);
+assert.match(
+  bootstrapEmergencyRace[1].stderr,
+  /governance_bootstrap_completion_rejected/u,
+  "emergency-stopped bootstrap must reject completion",
+);
+assert.deepEqual(
+  query(`
+select state
+from public.governance_bootstrap_approval_states
+where approval_id=${sqlLiteral(bootstrapApproval.id)};
+select count(*)::text
+from public.intelligence_tasks
+where task_key='cognitive-level01-canary-control'
+  and platform='shared' and environment='production';
+select count(*)::text
+from public.cognitive_governance_switches switch
+join public.intelligence_tasks task on task.id=switch.task_id
+where task.task_key='cognitive-level01-canary-control'
+  and task.platform='shared' and task.environment='production';
+`).split("\n"),
+  ["evaluated", "0", "0"],
+  "emergency race must leave evaluated staging with no partial task or switch",
+);
+query(`
+begin;
+${ownerRoleSql(ids.owner)}
+select public.governance_set_cognitive_emergency_state(
+  'active',${sqlLiteral("9".repeat(64))}
+);
+commit;
+`);
+recordPass("bootstrap emergency race", "completion rejected / 0 partial rows");
+
+// 17. Bootstrap completion: the advisory lock plus approval/execution locks
+// permit one atomic materialization and reject the concurrent replay.
+const bootstrapCompletionRace = await runRace(
+  bootstrapCompleteSql(bootstrapExecution, bootstrapReceipt, bootstrapProof, 0.05),
+  bootstrapCompleteSql(bootstrapExecution, bootstrapReceipt, bootstrapProof, 0.05),
+);
+assertRace(
+  "bootstrap completion",
+  bootstrapCompletionRace,
+  1,
+  /governance_bootstrap_completion_rejected/u,
+);
+assert.deepEqual(
+  query(`
+select state
+from public.governance_bootstrap_approval_states
+where approval_id=${sqlLiteral(bootstrapApproval.id)};
+select count(*)::text
+from public.intelligence_tasks
+where task_key='cognitive-level01-canary-control'
+  and platform='shared' and environment='production';
+select count(*)::text
+from public.cognitive_governance_switches switch
+join public.intelligence_tasks task on task.id=switch.task_id
+where task.task_key='cognitive-level01-canary-control'
+  and task.platform='shared' and task.environment='production';
+select count(*)::text
+from public.cognitive_governance_switches switch
+join public.intelligence_tasks task on task.id=switch.task_id
+where task.task_key='cognitive-level01-canary-control'
+  and task.platform='shared' and task.environment='production'
+  and switch.enabled;
+select count(*)::text
+from public.cognitive_level01_schedule_definitions schedule
+join public.intelligence_tasks task on task.id=schedule.task_id
+where task.task_key='cognitive-level01-canary-control'
+  and task.platform='shared' and task.environment='production';
+select count(*)::text
+from public.cognitive_level01_schedule_definitions schedule
+join public.intelligence_tasks task on task.id=schedule.task_id
+where task.task_key='cognitive-level01-canary-control'
+  and task.platform='shared' and task.environment='production'
+  and schedule.enabled;
+select count(*)::text
+from public.governance_bootstrap_events
+where approval_id=${sqlLiteral(bootstrapApproval.id)}
+  and event_type='completed';
+`).split("\n"),
+  ["completed", "1", "10", "0", "5", "0", "1"],
+  "bootstrap completion must materialize exactly once with all authority off",
+);
+recordPass("bootstrap completion race", "1 atomic completion / 1 replay rejection / all authority off");
+
+assert.equal(results.length, 17, "all requested database concurrency races must run");
+console.log(`cognitive database concurrency verified (${results.length}/17 races passed)`);
