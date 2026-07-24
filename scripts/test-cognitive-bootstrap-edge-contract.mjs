@@ -35,6 +35,23 @@ contains(
   'action === "record_bootstrap_approval"',
   "Owner endpoint is missing the closed bootstrap approval action",
 );
+contains(
+  owner,
+  "isStrictBootstrapApprovalPayload",
+  "Owner endpoint is missing the strict bootstrap payload validator",
+);
+const bootstrapDispatch = owner.indexOf(
+  'if (action === "record_bootstrap_approval")',
+);
+const canonicalClassification = owner.indexOf(
+  "if (!safePayload(payload))",
+);
+assert(
+  bootstrapDispatch >= 0 &&
+    canonicalClassification >= 0 &&
+    bootstrapDispatch < canonicalClassification,
+  "bootstrap approval still enters the expensive canonical classifier",
+);
 notContains(
   owner,
   "SUPABASE_SERVICE_ROLE_KEY",

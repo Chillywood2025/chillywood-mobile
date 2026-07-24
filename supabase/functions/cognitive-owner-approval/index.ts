@@ -40,6 +40,122 @@ const readRequiredSecret = (name: string): string => {
 const safePayload = (value: unknown): boolean =>
   classifyCanonicalSecurityPayload(value, SECURITY_POLICY) === "safe";
 
+const BOOTSTRAP_APPROVAL_KEYS = Object.freeze([
+  "action",
+  "branchName",
+  "constitutionHash",
+  "evaluatorRequirementHash",
+  "policyVersion",
+  "repositoryFullName",
+  "retentionPolicyHash",
+  "rollbackHash",
+  "sourceCommit",
+  "validitySeconds",
+]);
+const BOOTSTRAP_BRANCH_PATTERN =
+  /^codex\/[a-z0-9][a-z0-9/_-]{2,120}$/u;
+const BOOTSTRAP_BRANCH_FORBIDDEN_PATH =
+  /(^|\/)(main|master|release)(\/|$)/u;
+const LOWER_HEX_40 = /^[a-f0-9]{40}$/u;
+const LOWER_HEX_64 = /^[a-f0-9]{64}$/u;
+const BOOTSTRAP_BRANCH_FORBIDDEN_FRAGMENTS = Object.freeze([
+  "admin",
+  "administrator",
+  "anthropic",
+  "apikey",
+  "authorization",
+  "aws",
+  "azure",
+  "bearer",
+  "bypassguard",
+  "credential",
+  "developerinstruction",
+  "developermessage",
+  "eas",
+  "expo",
+  "gcp",
+  "gemini",
+  "ghp",
+  "github",
+  "githubpat",
+  "iam",
+  "ignoreallinstructions",
+  "ignoreinstructions",
+  "ignoreprevious",
+  "jailbreak",
+  "livekit",
+  "openai",
+  "overridepolicy",
+  "owner",
+  "passwd",
+  "password",
+  "permission",
+  "privatekey",
+  "privilege",
+  "promptinjection",
+  "provider",
+  "root",
+  "secret",
+  "serviceaccount",
+  "servicerole",
+  "sessioncookie",
+  "stripe",
+  "sudo",
+  "superuser",
+  "supabase",
+  "systeminstruction",
+  "systemprompt",
+  "token",
+]);
+
+export const isStrictBootstrapApprovalPayload = (
+  value: unknown,
+): value is Record<string, unknown> => {
+  if (!isRecord(value)) return false;
+  const keys = Object.keys(value);
+  if (
+    keys.length !== BOOTSTRAP_APPROVAL_KEYS.length ||
+    BOOTSTRAP_APPROVAL_KEYS.some((key) =>
+      !Object.prototype.hasOwnProperty.call(value, key)
+    )
+  ) {
+    return false;
+  }
+  if (
+    value.action !== "record_bootstrap_approval" ||
+    value.repositoryFullName !== "Chillywood2025/chillywood-mobile" ||
+    value.policyVersion !== "collective-governance-v1" ||
+    typeof value.branchName !== "string" ||
+    !BOOTSTRAP_BRANCH_PATTERN.test(value.branchName) ||
+    BOOTSTRAP_BRANCH_FORBIDDEN_PATH.test(value.branchName) ||
+    typeof value.sourceCommit !== "string" ||
+    !LOWER_HEX_40.test(value.sourceCommit) ||
+    typeof value.retentionPolicyHash !== "string" ||
+    !LOWER_HEX_64.test(value.retentionPolicyHash) ||
+    typeof value.constitutionHash !== "string" ||
+    !LOWER_HEX_64.test(value.constitutionHash) ||
+    typeof value.rollbackHash !== "string" ||
+    !LOWER_HEX_64.test(value.rollbackHash) ||
+    typeof value.evaluatorRequirementHash !== "string" ||
+    !LOWER_HEX_64.test(value.evaluatorRequirementHash) ||
+    !Number.isSafeInteger(value.validitySeconds) ||
+    Number(value.validitySeconds) < 60 ||
+    Number(value.validitySeconds) > 86400
+  ) {
+    return false;
+  }
+  const compactBranch = value.branchName.replace(/[\/_-]/gu, "");
+  if (
+    /[a-z0-9]{24,}/u.test(value.branchName) ||
+    BOOTSTRAP_BRANCH_FORBIDDEN_FRAGMENTS.some((fragment) =>
+      compactBranch.includes(fragment)
+    )
+  ) {
+    return false;
+  }
+  return true;
+};
+
 const createActorClient = (authorization: string): SupabaseClientLike => {
   const supabaseUrl = readRequiredSecret("SUPABASE_URL");
   const anonKey = readRequiredSecret("SUPABASE_ANON_KEY");
@@ -174,12 +290,18 @@ export const handler = async (request: Request): Promise<Response> => {
     const authError = await requireAuthenticatedUser(request, actorClient);
     if (authError) return authError;
     const payload = await request.json().catch(() => null);
-    if (!isRecord(payload) || !safePayload(payload)) {
+    if (!isRecord(payload)) {
       return json(400, { error: "owner_approval_payload_rejected" });
     }
     const action = toText(payload.action);
     if (action === "record_bootstrap_approval") {
+      if (!isStrictBootstrapApprovalPayload(payload)) {
+        return json(400, { error: "owner_approval_payload_rejected" });
+      }
       return await recordBootstrapApproval(actorClient, payload);
+    }
+    if (!safePayload(payload)) {
+      return json(400, { error: "owner_approval_payload_rejected" });
     }
     if (action === "record_owner_approval") {
       return await recordOwnerApproval(actorClient, payload);
