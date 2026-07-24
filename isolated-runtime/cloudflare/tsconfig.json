@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "target": "ES2022"
+  },
+  "include": [
+    "src/**/*.mjs",
+    "test/**/*.mjs",
+    "tools/**/*.mjs"
+  ]
+}

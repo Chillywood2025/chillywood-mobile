@@ -1,0 +1,30 @@
+{
+  "compatibility_date": "2026-07-24",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "preview_urls": false,
+  "workers_dev": false,
+  "hyperdrive": [
+    {
+      "binding": "COGNITIVE_SENTINEL_COLLECTOR_HYPERDRIVE",
+      "id": "REPLACE_WITH_COGNITIVE_SENTINEL_COLLECTOR_HYPERDRIVE_ID"
+    }
+  ],
+  "main": "../entrypoints/cognitive_sentinel_collector.mjs",
+  "name": "chillywood-level01-sentinel-collector",
+  "secrets": {
+    "required": [
+      "COGNITIVE_SENTINEL_COLLECTOR_INVOKE_SHA256",
+      "COGNITIVE_SENTINEL_COLLECTOR_ASSERTION"
+    ]
+  },
+  "vars": {
+    "RUNTIME_SCHEMA_VERSION": "cognitive-level01-isolated-runtime-v1",
+    "SOURCE_COMMIT": "REPLACE_WITH_REVIEWED_SUCCESSOR_COMMIT",
+    "SOURCE_BASE_COMMIT": "8660558a9cf360f033246a404dfc5812d522da88"
+  },
+  "version_metadata": {
+    "binding": "WORKER_VERSION"
+  }
+}

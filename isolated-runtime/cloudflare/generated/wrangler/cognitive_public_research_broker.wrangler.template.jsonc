@@ -1,0 +1,30 @@
+{
+  "compatibility_date": "2026-07-24",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "preview_urls": false,
+  "workers_dev": false,
+  "hyperdrive": [
+    {
+      "binding": "COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE",
+      "id": "REPLACE_WITH_COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE_ID"
+    }
+  ],
+  "main": "../entrypoints/cognitive_public_research_broker.mjs",
+  "name": "chillywood-level01-public-research-broker",
+  "secrets": {
+    "required": [
+      "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
+      "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN"
+    ]
+  },
+  "vars": {
+    "RUNTIME_SCHEMA_VERSION": "cognitive-level01-isolated-runtime-v1",
+    "SOURCE_COMMIT": "REPLACE_WITH_REVIEWED_SUCCESSOR_COMMIT",
+    "SOURCE_BASE_COMMIT": "8660558a9cf360f033246a404dfc5812d522da88"
+  },
+  "version_metadata": {
+    "binding": "WORKER_VERSION"
+  }
+}

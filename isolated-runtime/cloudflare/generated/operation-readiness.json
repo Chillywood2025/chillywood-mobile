@@ -1,0 +1,215 @@
+{
+  "principals": {
+    "cognitive_github_draft_pr_broker": {
+      "status": {
+        "databaseOperations": [],
+        "ready": false,
+        "reason": "GITHUB_PROVIDER_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "attest_provider_readback": {
+        "databaseOperations": [
+          "record_github_provider_readback"
+        ],
+        "ready": false,
+        "reason": "GITHUB_PROVIDER_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "execute_canary": {
+        "databaseOperations": [
+          "consume_github_capability",
+          "accept_github_tool_result"
+        ],
+        "ready": false,
+        "reason": "GITHUB_PROVIDER_PURE_CORE_EXTRACTION_REQUIRED"
+      }
+    },
+    "cognitive_level01_scheduler": {
+      "evaluate_prerequisites": {
+        "databaseOperations": [
+          "read_scheduler_status"
+        ],
+        "ready": false,
+        "reason": "SCHEDULER_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "dispatch_occurrence": {
+        "databaseOperations": [
+          "read_scheduler_status",
+          "issue_recurring_child_task"
+        ],
+        "ready": false,
+        "reason": "SCHEDULER_PURE_CORE_EXTRACTION_REQUIRED"
+      }
+    },
+    "cognitive_livekit_experience_collector": {
+      "prepare_run": {
+        "databaseOperations": [],
+        "ready": false,
+        "reason": "LIVEKIT_CLASSIFIER_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "record_run": {
+        "databaseOperations": [
+          "collect_livekit_sentinel_run"
+        ],
+        "ready": false,
+        "reason": "LIVEKIT_CLASSIFIER_PURE_CORE_EXTRACTION_REQUIRED"
+      }
+    },
+    "cognitive_model_router": {
+      "assess_sanitized_evidence": {
+        "databaseOperations": [
+          "recover_model_reservation",
+          "reserve_model_invocation",
+          "settle_model_invocation"
+        ],
+        "ready": false,
+        "reason": "MODEL_PROVIDER_PURE_CORE_EXTRACTION_REQUIRED"
+      }
+    },
+    "cognitive_product_baseline_executor": {
+      "claim": {
+        "databaseOperations": [
+          "claim_approved_action"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "transition": {
+        "databaseOperations": [
+          "begin_approved_execution"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "stage_selection": {
+        "databaseOperations": [
+          "stage_product_baseline"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "complete": {
+        "databaseOperations": [
+          "complete_approved_execution"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "persist": {
+        "databaseOperations": [
+          "persist_product_baseline"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "fail": {
+        "databaseOperations": [
+          "fail_approved_execution"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_product_quality_evaluator": {
+      "evaluate_product_baseline_selection": {
+        "databaseOperations": [
+          "evaluate_product_baseline"
+        ],
+        "ready": false,
+        "reason": "EVALUATOR_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "evaluate_sentinel_detection": {
+        "databaseOperations": [
+          "read_product_quality_snapshot",
+          "read_active_baseline",
+          "compute_detection_hash",
+          "record_sentinel_evaluator_proof"
+        ],
+        "ready": false,
+        "reason": "EVALUATOR_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "evaluate_sentinel_resolution": {
+        "databaseOperations": [
+          "read_product_quality_snapshot",
+          "read_active_baseline",
+          "compute_resolution_hash",
+          "record_sentinel_evaluator_proof"
+        ],
+        "ready": false,
+        "reason": "EVALUATOR_PURE_CORE_EXTRACTION_REQUIRED"
+      }
+    },
+    "cognitive_product_quality_triage": {
+      "triage_detection": {
+        "databaseOperations": [
+          "triage_detection"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "triage_resolution": {
+        "databaseOperations": [
+          "triage_resolution"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_public_research_broker": {
+      "retrieve_source": {
+        "databaseOperations": [
+          "record_research_source"
+        ],
+        "ready": false,
+        "reason": "RESEARCH_NETWORK_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "record_claim": {
+        "databaseOperations": [
+          "record_research_claim"
+        ],
+        "ready": false,
+        "reason": "RESEARCH_NETWORK_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "detect_contradiction": {
+        "databaseOperations": [
+          "detect_research_contradiction"
+        ],
+        "ready": false,
+        "reason": "RESEARCH_NETWORK_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "expire_public_memory": {
+        "databaseOperations": [
+          "expire_research"
+        ],
+        "ready": false,
+        "reason": "RESEARCH_NETWORK_PURE_CORE_EXTRACTION_REQUIRED"
+      }
+    },
+    "cognitive_research_evaluator": {
+      "evaluate_research_claim": {
+        "databaseOperations": [
+          "read_research_snapshot",
+          "derive_research_evaluation"
+        ],
+        "ready": false,
+        "reason": "RESEARCH_EVALUATOR_PURE_CORE_EXTRACTION_REQUIRED"
+      },
+      "evaluate_contradiction_resolution": {
+        "databaseOperations": [
+          "read_research_snapshot",
+          "resolve_research_contradiction"
+        ],
+        "ready": false,
+        "reason": "RESEARCH_EVALUATOR_PURE_CORE_EXTRACTION_REQUIRED"
+      }
+    },
+    "cognitive_sentinel_collector": {
+      "collect_sentinel_run": {
+        "databaseOperations": [
+          "collect_sentinel_run"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    }
+  },
+  "schemaVersion": "cognitive-level01-isolated-runtime-v1"
+}

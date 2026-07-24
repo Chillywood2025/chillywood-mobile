@@ -1,0 +1,66 @@
+{
+  "caching": "disabled",
+  "configurations": [
+    {
+      "binding": "COGNITIVE_PRODUCT_BASELINE_EXECUTOR_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_product_baseline_executor",
+      "principal": "cognitive_product_baseline_executor"
+    },
+    {
+      "binding": "COGNITIVE_SENTINEL_COLLECTOR_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_sentinel_collector",
+      "principal": "cognitive_sentinel_collector"
+    },
+    {
+      "binding": "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_product_quality_evaluator",
+      "principal": "cognitive_product_quality_evaluator"
+    },
+    {
+      "binding": "COGNITIVE_PRODUCT_QUALITY_TRIAGE_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_product_quality_triage",
+      "principal": "cognitive_product_quality_triage"
+    },
+    {
+      "binding": "COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_public_research_broker",
+      "principal": "cognitive_public_research_broker"
+    },
+    {
+      "binding": "COGNITIVE_RESEARCH_EVALUATOR_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_research_evaluator",
+      "principal": "cognitive_research_evaluator"
+    },
+    {
+      "binding": "COGNITIVE_MODEL_ROUTER_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_model_router",
+      "principal": "cognitive_model_router"
+    },
+    {
+      "binding": "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_livekit_experience_collector",
+      "principal": "cognitive_livekit_experience_collector"
+    },
+    {
+      "binding": "COGNITIVE_GITHUB_DRAFT_PR_BROKER_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_github_draft_pr_broker",
+      "principal": "cognitive_github_draft_pr_broker"
+    },
+    {
+      "binding": "COGNITIVE_LEVEL01_SCHEDULER_HYPERDRIVE",
+      "configurationId": null,
+      "databaseRole": "cognitive_level01_scheduler",
+      "principal": "cognitive_level01_scheduler"
+    }
+  ],
+  "schemaVersion": "cognitive-level01-isolated-runtime-v1"
+}
