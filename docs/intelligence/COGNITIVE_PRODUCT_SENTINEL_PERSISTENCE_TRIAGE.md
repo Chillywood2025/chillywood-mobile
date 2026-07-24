@@ -16,6 +16,14 @@ The flow is deliberately separated:
    proof.
 3. `cognitive_product_quality_triage` applies a proof-bound finding transition.
 
+The detection evaluator accepts the bounded candidate fields, reads the stored
+sanitized run itself, derives the verdict, assessment hash, output hash, and
+proof hash, and rejects unsupported metric/classification combinations. The
+caller cannot supply its own verdict or proof. The initial Android touch-target
+policy, for example, requires a real Android interactive target below the exact
+48 dp threshold with no surrounding clickable ancestor before it can produce a
+passing detection proof.
+
 The run must exist before it can be evaluated. Recording a run does not create a
 finding. Every detection, recurrence, and resolution requires a fresh passing
 evaluator proof, and each proof can be consumed only once.
