@@ -19,6 +19,7 @@ type ResearchAuthority = Readonly<{
   authorityId: string;
   hostname: string;
   ownerId: string;
+  pathPrefix?: string;
   publisher: string;
   sourceType: string;
 }>;
@@ -58,6 +59,7 @@ export type CanonicalResearchUrl = Readonly<{
   canonical: string;
   hostname: string;
   pathAndQuery: string;
+  pathname: string;
 }>;
 
 export type PinnedResearchResponse = Readonly<{
@@ -65,7 +67,7 @@ export type PinnedResearchResponse = Readonly<{
   canonicalUrl: string;
   connectedAddress: string;
   contentType: string;
-  lastModified: string | null;
+  lastModifiedHeader: string | null;
   resolvedAddresses: readonly string[];
   retrievalDate: string;
   status: number;
@@ -220,6 +222,7 @@ export const canonicalizeResearchUrl = (
     canonical,
     hostname,
     pathAndQuery: `${parsed.pathname}${parsed.search}`,
+    pathname: parsed.pathname,
   });
 };
 
@@ -355,14 +358,17 @@ export const isPrivateOrReservedIp = (raw: string): boolean => {
 
 export const authorityForSource = (
   authorityId: string,
-  hostname: string,
+  target: CanonicalResearchUrl,
   publisher: string,
   sourceType: string,
 ): ResearchAuthority | null => {
   const authority = AUTHORITY_BY_ID.get(authorityId);
   if (
-    !authority || authority.hostname !== hostname ||
-    authority.publisher !== publisher || authority.sourceType !== sourceType
+    !authority || authority.hostname !== target.hostname ||
+    authority.publisher !== publisher || authority.sourceType !== sourceType ||
+    (authority.pathPrefix !== undefined &&
+      target.pathname !== authority.pathPrefix &&
+      !target.pathname.startsWith(`${authority.pathPrefix}/`))
   ) {
     return null;
   }
@@ -396,7 +402,7 @@ export const normalizeSourceRequest = (
     !authorityId || !SAFE_IDENTIFIER.test(authorityId) || !publisher ||
     !sourceType || !SAFE_IDENTIFIER.test(sourceType) || !citationTitle ||
     !citationLocator || !url ||
-    !authorityForSource(authorityId, url.hostname, publisher, sourceType) ||
+    !authorityForSource(authorityId, url, publisher, sourceType) ||
     !Number.isSafeInteger(payload.freshnessSeconds)
   ) {
     return null;

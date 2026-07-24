@@ -89,6 +89,23 @@ const fixtureMatch = fixtureSource.match(
 assert.ok(fixtureMatch?.groups?.fixture, "model router SQL fixture markers missing");
 const capabilityId = randomUUID();
 const serviceToken = "model-router-service-token-test-only-0001";
+const assessmentId = "model-router-concurrency-same-scope";
+const evidencePacketHash = hash(`evidence-${capabilityId}`);
+const scopeHash = hash(
+  [
+    "cognitive-model-assessment-scope-v1",
+    "d3000000-0000-4000-8000-000000000001",
+    "d1000000-0000-4000-8000-000000000001",
+    "shared",
+    "production",
+    "research_futures",
+    assessmentId,
+    evidencePacketHash,
+  ].join("|"),
+);
+const configuredModelIdentityHash = hash(
+  ["openai", "gpt-5.6", "gpt-5.6-luna"].join("|"),
+);
 
 query(`
 begin;
@@ -106,7 +123,7 @@ insert into public.cognitive_model_router_capabilities(
   'shared','production','research_futures','cognitive_research_enabled',
   'openai','gpt-5.6','gpt-5.6-luna',
   'dc000000-0000-4000-8000-000000000001',
-  3,10000,1,repeat('8',64),${sqlLiteral(hash(capabilityId))},
+  3,10000,1,repeat('8',64),${sqlLiteral(scopeHash)},
   'd2000000-0000-4000-8000-000000000001',
   transaction_timestamp()+interval '12 hours'
 );
@@ -123,12 +140,14 @@ select public.cognitive_model_router_reserve(
   'd1000000-0000-4000-8000-000000000001',
   'shared','production','research_futures',
   'openai','gpt-5.6','gpt-5.6-luna',
-  ${sqlLiteral(`model-router-concurrency-${suffix}`)},
+  ${sqlLiteral(assessmentId)},
   ${sqlLiteral(hash(`idempotency-${capabilityId}-${suffix}`))},
   ${sqlLiteral(hash(`request-${capabilityId}-${suffix}`))},
-  ${sqlLiteral(hash(`evidence-${capabilityId}-${suffix}`))},
+  ${sqlLiteral(evidencePacketHash)},
   ${sqlLiteral(hash(`template-${capabilityId}-${suffix}`))},
-  ${sqlLiteral(hash(`model-${capabilityId}-${suffix}`))},
+  ${sqlLiteral(configuredModelIdentityHash)},
+  repeat('8',64),
+  ${sqlLiteral(scopeHash)},
   1000,0.1,${sqlLiteral(serviceToken)}
 )::text;
 commit;
@@ -144,7 +163,7 @@ assert.equal(winners.length, 1, "concurrent model reservation must have one winn
 assert.equal(losers.length, 1, "concurrent model reservation must reject one caller");
 assert.match(
   losers[0].stderr,
-  /model_router_capability_rejected/u,
+  /model_router_replay_denied/u,
   "concurrency loser failed for an unexpected reason",
 );
 

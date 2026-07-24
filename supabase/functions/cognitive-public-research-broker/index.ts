@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 import {
   authorityOwnerForId,
+  authorityForSource,
   canonicalizeResearchUrl,
   type CanonicalResearchUrl,
   claimHasExtractiveSupport,
@@ -153,12 +154,12 @@ const decodeChunkedBody = (input: Uint8Array): Uint8Array => {
 type ParsedHttpResponse = Readonly<{
   body: string;
   contentType: string;
-  lastModified: string | null;
+  lastModifiedHeader: string | null;
   location: string | null;
   status: number;
 }>;
 
-const parseHttpResponse = (wire: Uint8Array): ParsedHttpResponse => {
+export const parseHttpResponse = (wire: Uint8Array): ParsedHttpResponse => {
   const headerEnd = findBytes(wire, [13, 10, 13, 10]);
   if (headerEnd < 0 || headerEnd > 65_536) {
     throw new Error("research_http_headers_rejected");
@@ -212,7 +213,7 @@ const parseHttpResponse = (wire: Uint8Array): ParsedHttpResponse => {
   return Object.freeze({
     body: new TextDecoder("utf-8", { fatal: true }).decode(bodyBytes),
     contentType: headers.get("content-type") ?? "",
-    lastModified: headers.get("last-modified") ?? null,
+    lastModifiedHeader: headers.get("last-modified") ?? null,
     location: headers.get("location") ?? null,
     status,
   });
@@ -402,7 +403,7 @@ export const fetchPinnedPublicResearch = async (
         canonicalUrl: target.canonical,
         connectedAddress,
         contentType: response.contentType,
-        lastModified: response.lastModified,
+        lastModifiedHeader: response.lastModifiedHeader,
         resolvedAddresses: Object.freeze([...allResolved]),
         retrievalDate: new Date().toISOString(),
         status: response.status,
@@ -519,16 +520,9 @@ export const retrieveAndRecordSource = async (
     retrieved.body,
     retrieved.contentType,
   );
-  const headerPublicationTime = retrieved.lastModified === null
-    ? Number.NaN
-    : Date.parse(retrieved.lastModified);
-  const allObservedPublicationDates = [
-    ...observedPublicationDates,
-    ...(Number.isFinite(headerPublicationTime)
-      ? [new Date(headerPublicationTime).toISOString()]
-      : []),
-  ];
-  if (!allObservedPublicationDates.includes(payload.publicationDate)) {
+  // Last-Modified is cache/resource metadata, not publication provenance.
+  // It is kept distinct on the transport receipt and cannot satisfy this gate.
+  if (!observedPublicationDates.includes(payload.publicationDate)) {
     return json(422, { error: "research_publication_date_unverified" });
   }
   const publicationDate = payload.publicationDate;
@@ -539,7 +533,15 @@ export const retrieveAndRecordSource = async (
     retrievalTime + payload.freshnessSeconds * 1_000,
   ).toISOString();
   const finalUrl = canonicalizeResearchUrl(retrieved.canonicalUrl);
-  if (!finalUrl || finalUrl.hostname !== authorityUrl.hostname) {
+  if (
+    !finalUrl || finalUrl.hostname !== authorityUrl.hostname ||
+    !authorityForSource(
+      payload.authorityId,
+      finalUrl,
+      payload.publisher,
+      payload.sourceType,
+    )
+  ) {
     return json(422, { error: "public_research_redirect_rejected" });
   }
   const citationMetadata = extractRetrievedCitationMetadata(

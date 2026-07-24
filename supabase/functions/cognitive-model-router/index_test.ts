@@ -1,6 +1,7 @@
 import {
   createHandler,
   hashEvidencePacket,
+  hashModelAssessmentScope,
   isStrictAdvisoryOutput,
   isStrictModelRequest,
   type ModelGovernanceDatabase,
@@ -40,20 +41,37 @@ const evidencePacket = () => ({
 
 const validPayload = async () => {
   const packet = evidencePacket();
+  const assessmentId = "android-live-advisory-01";
+  const taskId = "11111111-1111-4111-8111-111111111111";
+  const projectId = "22222222-2222-4222-8222-222222222222";
+  const platform = "android" as const;
+  const environment = "production" as const;
+  const councilRole = "product_user_experience" as const;
+  const evidencePacketHash = await hashEvidencePacket(packet);
   return {
     action: "assess_sanitized_evidence" as const,
     schemaVersion: "cognitive-model-advisory-v1" as const,
+    approvalTargetHash: await sha256Hex("approved-model-target"),
     capabilityId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     idempotencyKey: await sha256Hex("android-live-advisory-01"),
-    assessmentId: "android-live-advisory-01",
-    taskId: "11111111-1111-4111-8111-111111111111",
-    projectId: "22222222-2222-4222-8222-222222222222",
-    platform: "android" as const,
-    environment: "production" as const,
-    councilRole: "product_user_experience" as const,
+    assessmentId,
+    taskId,
+    projectId,
+    platform,
+    environment,
+    councilRole,
     blindFirstRound: true as const,
-    evidencePacketHash: await hashEvidencePacket(packet),
+    evidencePacketHash,
     evidencePacket: packet,
+    scopeHash: await hashModelAssessmentScope({
+      assessmentId,
+      councilRole,
+      environment,
+      evidencePacketHash,
+      platform,
+      projectId,
+      taskId,
+    }),
     budget: {
       maxCostUsd: 0.5,
       maxDurationMs: 10_000,
@@ -89,7 +107,16 @@ const budgetId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const governanceDatabase = (
   onReserve?: (input: Record<string, unknown>) => void,
   onSettle?: (input: Record<string, unknown>) => void,
+  onRecover?: (input: Record<string, unknown>) => void,
 ): ModelGovernanceDatabase => ({
+  recover: (input) => {
+    onRecover?.(input as unknown as Record<string, unknown>);
+    return Promise.resolve({
+      capabilityId: input.capabilityId,
+      recoveredCount: 0,
+      recoveryBatchHash: input.recoveryBatchHash,
+    });
+  },
   reserve: (input) => {
     onReserve?.(input as unknown as Record<string, unknown>);
     return Promise.resolve({
@@ -305,6 +332,31 @@ Deno.test("handler binds and verifies the canonical evidence packet hash", async
   );
 });
 
+Deno.test("handler binds assessment scope to council and evidence", async () => {
+  const payload = await validPayload();
+  let providerCalls = 0;
+  const handler = createHandler({
+    env: testEnv(),
+    governanceDatabase: governanceDatabase(),
+    transport: () => {
+      providerCalls += 1;
+      return Promise.reject(new Error("provider_should_not_run"));
+    },
+  });
+  const response = await handler(requestFor({
+    ...payload,
+    assessmentId: "materially-different-assessment",
+  }));
+  assertEquals(response.status, 409, "scope hash mismatch status");
+  const result = await response.json();
+  assertEquals(
+    result.error,
+    "model_scope_hash_mismatch",
+    "scope hash mismatch error",
+  );
+  assertEquals(providerCalls, 0, "provider calls after scope mismatch");
+});
+
 Deno.test("budget preflight rejects a call before provider transport", async () => {
   const payload = await validPayload();
   let calls = 0;
@@ -475,6 +527,7 @@ Deno.test("database preflight is required before provider transport and exact se
         sequence.push("settle");
         settled = input;
       },
+      () => sequence.push("recover"),
     ),
     transport: () => {
       sequence.push("provider");
@@ -488,7 +541,11 @@ Deno.test("database preflight is required before provider transport and exact se
   });
   const response = await handler(requestFor(payload));
   assertEquals(response.status, 200, "governed response status");
-  assertEquals(sequence.join(","), "reserve,provider,settle", "call ordering");
+  assertEquals(
+    sequence.join(","),
+    "recover,reserve,provider,settle",
+    "call ordering",
+  );
   assertEquals(
     reserved?.capabilityId,
     payload.capabilityId,
@@ -504,6 +561,12 @@ Deno.test("database preflight is required before provider transport and exact se
     payload.councilRole,
     "council binding",
   );
+  assertEquals(
+    reserved?.approvalTargetHash,
+    payload.approvalTargetHash,
+    "approval target binding",
+  );
+  assertEquals(reserved?.scopeHash, payload.scopeHash, "scope hash binding");
   assertEquals(settled?.resultStatus, "completed", "settlement status");
   assertEquals(
     settled?.actualModelTokens,
@@ -516,6 +579,7 @@ Deno.test("governance preflight rejection prevents provider invocation", async (
   const payload = await validPayload();
   let providerCalls = 0;
   const rejectedDatabase: ModelGovernanceDatabase = {
+    recover: governanceDatabase().recover,
     reserve: () => Promise.reject(new Error("revoked_or_replayed")),
     settle: () => Promise.reject(new Error("settlement_should_not_run")),
   };
@@ -573,6 +637,7 @@ Deno.test("a provider result is not returned when immutable settlement fails", a
   const payload = await validPayload();
   let settlements = 0;
   const database: ModelGovernanceDatabase = {
+    recover: governanceDatabase().recover,
     reserve: governanceDatabase().reserve,
     settle: () => {
       settlements += 1;

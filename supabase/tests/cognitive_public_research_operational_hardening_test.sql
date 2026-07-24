@@ -190,8 +190,54 @@ select ok(
   'ordinary clients cannot call research broker, evaluator, or expiry mutations'
 );
 
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.cognitive_record_research_source(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,timestamptz,timestamptz,timestamptz,text,boolean,text,text,text,text[],text)',
+    'EXECUTE'
+  ),
+  'service role cannot call the superseded caller-authored research RPC'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.cognitive_research_authorities authority
+    where authority.authority_id='chillywood-public-repository'
+      and authority.canonical_host='github.com'
+      and authority.path_prefix='/Chillywood2025/chillywood-mobile'
+  ),
+  'shared GitHub authority is bound to the exact Chi’llywood repository path'
+);
+
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
+
+select throws_ok(
+  $$select public.cognitive_record_public_research_source(
+    'f2000000-0000-4000-8000-000000000001',
+    'f1000000-0000-4000-8000-000000000001',
+    'shared','production','chillywood-public-repository','github.com',
+    'engineering_practice','Chi''llywood','chillywood',
+    encode(extensions.digest(convert_to(
+      'https://github.com/another-owner/another-repository','UTF8'
+    ),'sha256'),'hex'),
+    encode(extensions.digest(convert_to(
+      'https://github.com/another-owner/another-repository','UTF8'
+    ),'sha256'),'hex'),
+    encode(extensions.digest(convert_to(
+      'Bounded public repository evidence.','UTF8'
+    ),'sha256'),'hex'),
+    transaction_timestamp()-interval '1 day',
+    transaction_timestamp(),transaction_timestamp()+interval '1 day',
+    true,'Bounded public repository evidence.',
+    '{"title":"Repository","locator":"https://github.com/another-owner/another-repository"}'::jsonb,
+    array[repeat('3',64)],
+    'research-broker-test-token-0000000000000000'
+  )$$,
+  'P0001','research_authority_path_rejected',
+  'database persistence rejects another repository on the shared GitHub host'
+);
 
 select throws_ok(
   $$select public.cognitive_record_public_research_source(

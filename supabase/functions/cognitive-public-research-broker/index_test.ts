@@ -1,4 +1,8 @@
-import { handler, researchRuntimeGateOpen } from "./index.ts";
+import {
+  handler,
+  parseHttpResponse,
+  researchRuntimeGateOpen,
+} from "./index.ts";
 import {
   canonicalizeResearchUrl,
   claimHasExtractiveSupport,
@@ -167,6 +171,27 @@ Deno.test("operational canary authorities remain exact-host and source-type boun
       `${source.authorityId} must reject an unreviewed host`,
     );
   }
+  assert(
+    normalizeSourceRequest({
+      ...sourcePayload(),
+      authorityId: "chillywood-public-repository",
+      publisher: "Chi'llywood",
+      sourceType: "engineering_practice",
+      url: "https://github.com/another-owner/another-repository",
+    }) === null,
+    "the shared GitHub host must not widen Chi'llywood repository ownership",
+  );
+  assert(
+    normalizeSourceRequest({
+      ...sourcePayload(),
+      authorityId: "chillywood-public-repository",
+      publisher: "Chi'llywood",
+      sourceType: "engineering_practice",
+      url:
+        "https://github.com/Chillywood2025/chillywood-mobile/tree/main/docs",
+    }) !== null,
+    "reviewed repository descendants should remain in scope",
+  );
 });
 
 Deno.test("research URL policy rejects credentials fragments and private targets", () => {
@@ -271,6 +296,27 @@ Deno.test("publication dates are derived from retrieved source metadata", () => 
       "text/plain",
     ).length === 0,
     "caller prose must not mint a publication date",
+  );
+  assert(
+    !dates.includes("2026-07-21T15:30:00.000Z"),
+    "unobserved dates must not be minted",
+  );
+  const body = "<html><head><title>Public source</title></head></html>";
+  const parsed = parseHttpResponse(
+    new TextEncoder().encode(
+      `HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: ${
+        new TextEncoder().encode(body).byteLength
+      }\r\nLast-Modified: Tue, 21 Jul 2026 15:30:00 GMT\r\n\r\n${body}`,
+    ),
+  );
+  assert(
+    parsed.lastModifiedHeader === "Tue, 21 Jul 2026 15:30:00 GMT",
+    "Last-Modified should remain bounded transport metadata",
+  );
+  assert(
+    extractObservedPublicationDates(parsed.body, parsed.contentType).length ===
+      0,
+    "Last-Modified transport metadata must not become publication provenance",
   );
 });
 

@@ -17,7 +17,7 @@
     {"authorityId":"supabase-security","hostname":"supabase.com","ownerId":"supabase","publisher":"Supabase","sourceType":"security_advisory"},
     {"authorityId":"github-docs","hostname":"docs.github.com","ownerId":"github","publisher":"GitHub","sourceType":"official_documentation"},
     {"authorityId":"github-security","hostname":"docs.github.com","ownerId":"github","publisher":"GitHub","sourceType":"security_advisory"},
-    {"authorityId":"chillywood-public-repository","hostname":"github.com","ownerId":"chillywood","publisher":"Chi'llywood","sourceType":"engineering_practice"},
+    {"authorityId":"chillywood-public-repository","hostname":"github.com","ownerId":"chillywood","pathPrefix":"/Chillywood2025/chillywood-mobile","publisher":"Chi'llywood","sourceType":"engineering_practice"},
     {"authorityId":"google-play-store-policy","hostname":"support.google.com","ownerId":"google","publisher":"Google","sourceType":"store_policy"},
     {"authorityId":"react-native-docs","hostname":"reactnative.dev","ownerId":"meta","publisher":"React Native","sourceType":"official_documentation"},
     {"authorityId":"revenuecat-docs","hostname":"revenuecat.com","ownerId":"revenuecat","publisher":"RevenueCat","sourceType":"official_documentation"},

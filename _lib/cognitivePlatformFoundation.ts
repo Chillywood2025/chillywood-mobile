@@ -1836,7 +1836,7 @@ const COGNITIVE_SOURCE_AUTHORITY_REGISTRY = [
   { authorityId: "supabase-security", hostname: "supabase.com", ownerId: "supabase", publisher: "Supabase", sourceType: "security_advisory" },
   { authorityId: "github-docs", hostname: "docs.github.com", ownerId: "github", publisher: "GitHub", sourceType: "official_documentation" },
   { authorityId: "github-security", hostname: "docs.github.com", ownerId: "github", publisher: "GitHub", sourceType: "security_advisory" },
-  { authorityId: "chillywood-public-repository", hostname: "github.com", ownerId: "chillywood", publisher: "Chi'llywood", sourceType: "engineering_practice" },
+  { authorityId: "chillywood-public-repository", hostname: "github.com", ownerId: "chillywood", pathPrefix: "/Chillywood2025/chillywood-mobile", publisher: "Chi'llywood", sourceType: "engineering_practice" },
   { authorityId: "google-play-store-policy", hostname: "support.google.com", ownerId: "google", publisher: "Google", sourceType: "store_policy" },
   { authorityId: "react-native-docs", hostname: "reactnative.dev", ownerId: "meta", publisher: "React Native", sourceType: "official_documentation" },
   { authorityId: "revenuecat-docs", hostname: "revenuecat.com", ownerId: "revenuecat", publisher: "RevenueCat", sourceType: "official_documentation" },
@@ -1854,17 +1854,22 @@ const COGNITIVE_SOURCE_AUTHORITY_REGISTRY = [
 // END GENERATED RESEARCH AUTHORITIES
 const registeredResearchAuthority = (source: CognitiveResearchSource) => {
   let hostname = "";
+  let pathname = "";
   try {
     const parsed = new URL(source.reference);
     if (parsed.protocol !== "https:" || parsed.username || parsed.password
       || (parsed.port && parsed.port !== "443")) return null;
     hostname = parsed.hostname.toLowerCase().replace(/\.$/u, "");
+    pathname = parsed.pathname;
   } catch {
     return null;
   }
   const entry = COGNITIVE_SOURCE_AUTHORITY_REGISTRY.find((candidate) =>
-    (hostname === candidate.hostname || hostname.endsWith(`.${candidate.hostname}`))
-    && candidate.sourceType === source.sourceType);
+    hostname === candidate.hostname
+    && candidate.sourceType === source.sourceType
+    && (!("pathPrefix" in candidate)
+      || pathname === candidate.pathPrefix
+      || pathname.startsWith(`${candidate.pathPrefix}/`)));
   if (!entry
     || entry.publisher.toLowerCase() !== source.publisher.trim().toLowerCase()) return null;
   return { hostname, ownerId: entry.ownerId };
