@@ -113,9 +113,11 @@ node scripts/cognitive-edge-deployment-prep.mjs self-test
 ```
 
 Choose a new absolute directory outside every Git worktree. Its parent must
-already be Owner-controlled. The helper refuses a path inside the current
-repository, creates a mode-700 directory, creates mode-600 files, and refuses
-to overwrite any existing path:
+already exist and be Owner-controlled. The helper resolves the existing parent
+physically, rejects symlinked-parent or symlink-target redirection, asks Git
+whether either the real parent or an existing target belongs to any worktree,
+refuses a path inside the current repository, creates a mode-700 directory,
+creates mode-600 files, and refuses to overwrite any existing path:
 
 ```sh
 node scripts/cognitive-edge-deployment-prep.mjs generate-secrets \

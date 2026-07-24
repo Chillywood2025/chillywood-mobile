@@ -2,11 +2,14 @@
 
 import {
   chmodSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
@@ -335,17 +338,67 @@ const parseArgs = (values) => {
   return parsed;
 };
 
+const assertOutsideAnyGitWorktree = (candidate) => {
+  const gitResult = spawnSync(
+    "git",
+    ["-C", candidate, "rev-parse", "--show-toplevel"],
+    {
+      encoding: "utf8",
+      env: process.env,
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  if (gitResult.error) throw new Error("output_dir_git_check_failed");
+  if (gitResult.status === 0) {
+    throw new Error("output_dir_must_be_outside_any_git_worktree");
+  }
+  if (gitResult.status !== 128) {
+    throw new Error("output_dir_git_check_failed");
+  }
+};
+
 const assertSafeOutputDirectory = (outputDir) => {
   if (!path.isAbsolute(outputDir)) throw new Error("output_dir_must_be_absolute");
   const resolved = path.resolve(outputDir);
-  const repo = path.resolve(root);
+  const repo = realpathSync(root);
   if (resolved === repo || resolved.startsWith(`${repo}${path.sep}`)) {
     throw new Error("output_dir_must_be_outside_git");
   }
   if (resolved === path.parse(resolved).root) {
     throw new Error("output_dir_too_broad");
   }
-  return resolved;
+
+  const lexicalParent = path.dirname(resolved);
+  const realParent = realpathSync(lexicalParent);
+  if (realParent !== lexicalParent) {
+    throw new Error("output_dir_symlink_parent_rejected");
+  }
+  const realTarget = path.join(realParent, path.basename(resolved));
+  if (realTarget === repo || realTarget.startsWith(`${repo}${path.sep}`)) {
+    throw new Error("output_dir_must_be_outside_git");
+  }
+
+  let targetExists = false;
+  try {
+    const target = lstatSync(realTarget);
+    targetExists = true;
+    if (target.isSymbolicLink()) {
+      throw new Error("output_dir_symlink_target_rejected");
+    }
+    if (!target.isDirectory()) {
+      throw new Error("output_dir_already_exists");
+    }
+    const existingTarget = realpathSync(realTarget);
+    if (existingTarget !== realTarget) {
+      throw new Error("output_dir_symlink_target_rejected");
+    }
+    assertOutsideAnyGitWorktree(existingTarget);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  assertOutsideAnyGitWorktree(realParent);
+  if (targetExists) throw new Error("output_dir_already_exists");
+  return realTarget;
 };
 
 const writeOwnerOnlyFile = (filePath, value) => {
@@ -353,16 +406,20 @@ const writeOwnerOnlyFile = (filePath, value) => {
   chmodSync(filePath, 0o600);
 };
 
-const generateSecrets = ({ includeBroker = false, outputDir }) => {
+const generateSecrets = ({
+  includeBroker = false,
+  outputDir,
+  secretFactory = randomSecret,
+}) => {
   const safeDir = assertSafeOutputDirectory(outputDir);
   mkdirSync(safeDir, { mode: 0o700, recursive: false });
   chmodSync(safeDir, 0o700);
 
-  const workerInvocation = randomSecret();
-  const workerAssertion = randomSecret();
-  const evaluatorInvocation = randomSecret();
-  const evaluatorAssertion = randomSecret();
-  const brokerInvocation = includeBroker ? randomSecret() : null;
+  const workerInvocation = secretFactory();
+  const workerAssertion = secretFactory();
+  const evaluatorInvocation = secretFactory();
+  const evaluatorAssertion = secretFactory();
+  const brokerInvocation = includeBroker ? secretFactory() : null;
   const plaintext = [
     workerInvocation,
     workerAssertion,
@@ -497,38 +554,83 @@ const selfTest = () => {
   const failures = auditSource({ quiet: true });
   if (failures.length > 0) throw new Error("source_audit_failed");
 
-  const testDir = mkdtempSync(
-    path.join(tmpdir(), "cognitive-edge-prep-self-test-"),
+  const testDir = realpathSync(
+    mkdtempSync(
+      path.join(tmpdir(), "cognitive-edge-prep-self-test-"),
+    ),
   );
   chmodSync(testDir, 0o700);
-  const generatedDir = path.join(testDir, "generated");
-  const originalWrite = process.stdout.write;
-  process.stdout.write = () => true;
   try {
-    generateSecrets({ includeBroker: true, outputDir: generatedDir });
-  } finally {
-    process.stdout.write = originalWrite;
-  }
-  if ((statSync(generatedDir).mode & 0o777) !== 0o700) {
-    throw new Error("directory_mode_failed");
-  }
-  for (const fileName of [
-    "supabase-edge-secrets.env",
-    "cognitive-invocation-secrets.env",
-    "cognitive-owner-registration.env",
-  ]) {
-    if ((statSync(path.join(generatedDir, fileName)).mode & 0o777) !== 0o600) {
-      throw new Error("file_mode_failed");
+    const otherRepo = path.join(testDir, "other-repo");
+    mkdirSync(otherRepo, { mode: 0o700 });
+    const gitInit = spawnSync("git", ["init", "--quiet", otherRepo], {
+      encoding: "utf8",
+      env: process.env,
+      maxBuffer: 1024 * 1024,
+    });
+    if (gitInit.status !== 0) throw new Error("self_test_git_init_failed");
+    try {
+      assertSafeOutputDirectory(path.join(otherRepo, "generated"));
+      throw new Error("other_git_worktree_not_rejected");
+    } catch (error) {
+      if (error?.message !== "output_dir_must_be_outside_any_git_worktree") {
+        throw error;
+      }
     }
+
+    const physicalParent = path.join(testDir, "physical-parent");
+    const symlinkParent = path.join(testDir, "symlink-parent");
+    mkdirSync(physicalParent, { mode: 0o700 });
+    symlinkSync(physicalParent, symlinkParent, "dir");
+    try {
+      assertSafeOutputDirectory(path.join(symlinkParent, "generated"));
+      throw new Error("symlink_parent_not_rejected");
+    } catch (error) {
+      if (error?.message !== "output_dir_symlink_parent_rejected") {
+        throw error;
+      }
+    }
+
+    const generatedDir = path.join(testDir, "generated");
+    let syntheticSequence = 0;
+    const originalWrite = process.stdout.write;
+    process.stdout.write = () => true;
+    try {
+      generateSecrets({
+        includeBroker: true,
+        outputDir: generatedDir,
+        secretFactory: () => {
+          syntheticSequence += 1;
+          return `synthetic-self-test-${syntheticSequence}-${"x".repeat(48)}`;
+        },
+      });
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+    if ((statSync(generatedDir).mode & 0o777) !== 0o700) {
+      throw new Error("directory_mode_failed");
+    }
+    for (const fileName of [
+      "supabase-edge-secrets.env",
+      "cognitive-invocation-secrets.env",
+      "cognitive-owner-registration.env",
+    ]) {
+      if ((statSync(path.join(generatedDir, fileName)).mode & 0o777) !== 0o600) {
+        throw new Error("file_mode_failed");
+      }
+    }
+    const remoteFile = readFileSync(
+      path.join(generatedDir, "supabase-edge-secrets.env"),
+      "utf8",
+    );
+    for (const name of [...requiredCognitiveSecretNames, brokerSecretName]) {
+      if (!remoteFile.includes(`${name}=`)) {
+        throw new Error("secret_name_missing");
+      }
+    }
+  } finally {
+    rmSync(testDir, { force: true, recursive: true });
   }
-  const remoteFile = readFileSync(
-    path.join(generatedDir, "supabase-edge-secrets.env"),
-    "utf8",
-  );
-  for (const name of [...requiredCognitiveSecretNames, brokerSecretName]) {
-    if (!remoteFile.includes(`${name}=`)) throw new Error("secret_name_missing");
-  }
-  rmSync(testDir, { recursive: true });
   process.stdout.write("SELF_TEST PASS\n");
 };
 
