@@ -293,11 +293,29 @@ select is(
         'pq_bounded_fixture_finding_recurrence_guard',
         'pq_bounded_fixture_event_guard',
         'pq_bounded_fixture_proof_guard',
-        'product_experience_livekit_no_finding_attestations_immutable'
+        'product_experience_livekit_no_finding_attestations_immutable',
+        'product_experience_livekit_no_finding_current_task_live'
       )
   ),
-  5::bigint,
-  'finding, recurrence, event, proof, and immutability guards exist'
+  6::bigint,
+  'finding, recurrence, event, proof, immutability, and liveness guards exist'
+);
+
+select ok(
+  (
+    select
+      pg_catalog.pg_get_functiondef(procedure.oid) like
+        '%cognitive_lock_task_writes_allowed%'
+      and pg_catalog.pg_get_functiondef(procedure.oid) like
+        '%livekit_bounded_failure_no_finding_attestation_task_not_live%'
+    from pg_catalog.pg_proc procedure
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public'
+      and procedure.proname =
+        'product_experience_livekit_no_finding_require_live_task'
+  ),
+  'attestation table boundary locks and rechecks task and emergency liveness'
 );
 
 select ok(
@@ -391,6 +409,220 @@ select is(
     'hex'
   ),
   'attestation hash uses the reviewed ordered pipe preimage'
+);
+
+insert into public.cognitive_projects(
+  id,
+  repository_full_name,
+  source_state,
+  activation_state,
+  scheduler_state,
+  production_authority
+) values (
+  'cf000000-0000-4000-8000-000000000001',
+  'Chillywood2025/chillywood-mobile',
+  'collective_governance_source_complete_not_deployed',
+  'off',
+  'none',
+  false
+);
+
+insert into public.intelligence_tasks(
+  id,
+  project_id,
+  platform,
+  environment,
+  repository_full_name,
+  branch_name,
+  task_key,
+  objective_hash,
+  actor_identity,
+  deadman_at
+) values (
+  'cf100000-0000-4000-8000-000000000001',
+  'cf000000-0000-4000-8000-000000000001',
+  'android',
+  'production',
+  'Chillywood2025/chillywood-mobile',
+  'codex/livekit-no-finding-liveness-test',
+  'livekit-no-finding-liveness-test',
+  repeat('1',64),
+  'livekit-no-finding-liveness-fixture',
+  transaction_timestamp() + interval '1 day'
+);
+
+insert into public.autonomous_system_emergency_states(
+  system_id,
+  status,
+  reason,
+  updated_at,
+  metadata
+) values (
+  'product_intelligence_operator',
+  'active',
+  'livekit no-finding liveness fixture',
+  transaction_timestamp(),
+  '{"fixture":true}'::jsonb
+)
+on conflict (system_id) do update
+set
+  status = excluded.status,
+  reason = excluded.reason,
+  updated_at = excluded.updated_at,
+  metadata = excluded.metadata;
+
+insert into public.cognitive_governance_switches(
+  task_id,
+  project_id,
+  platform,
+  environment,
+  switch_key,
+  enabled,
+  policy_version,
+  enabled_by,
+  enabled_at,
+  updated_at
+) values (
+  'cf100000-0000-4000-8000-000000000001',
+  'cf000000-0000-4000-8000-000000000001',
+  'android',
+  'production',
+  'cognitive_livekit_experience_sentinel_enabled',
+  true,
+  'livekit-no-finding-liveness-test',
+  'cf200000-0000-4000-8000-000000000001',
+  transaction_timestamp(),
+  transaction_timestamp()
+);
+
+insert into public.cognitive_product_quality_service_capabilities(
+  id,
+  service_identity,
+  operation,
+  task_id,
+  project_id,
+  platform,
+  environment,
+  assertion_hash,
+  allowed_sentinel_keys,
+  registered_by,
+  expires_at
+) values (
+  'cf300000-0000-4000-8000-000000000001',
+  'cognitive_sentinel_collector',
+  'collect_sentinel_run',
+  'cf100000-0000-4000-8000-000000000001',
+  'cf000000-0000-4000-8000-000000000001',
+  'android',
+  'production',
+  repeat('2',64),
+  array['livekit_experience_sentinel'],
+  'cf200000-0000-4000-8000-000000000001',
+  transaction_timestamp() + interval '1 hour'
+);
+
+insert into public.product_experience_sentinel_runs(
+  id,
+  task_id,
+  project_id,
+  platform,
+  environment,
+  sentinel_key,
+  route_or_surface,
+  runtime_identity_hash,
+  source_build_hash,
+  evidence_manifest_hash,
+  metric_manifest,
+  result_status,
+  physical_proof_status,
+  collector_capability_id,
+  collection_idempotency_hash,
+  observation_started_at,
+  observation_finished_at,
+  evaluation_expires_at
+) values (
+  'cf400000-0000-4000-8000-000000000001',
+  'cf100000-0000-4000-8000-000000000001',
+  'cf000000-0000-4000-8000-000000000001',
+  'android',
+  'production',
+  'livekit_experience_sentinel',
+  'live-stage',
+  repeat('3',64),
+  repeat('4',64),
+  repeat('5',64),
+  (select metric_manifest from livekit_fixture),
+  'failed',
+  'installed_ui_observed',
+  'cf300000-0000-4000-8000-000000000001',
+  repeat('6',64),
+  transaction_timestamp() - interval '2 minutes',
+  transaction_timestamp() - interval '1 minute',
+  transaction_timestamp() + interval '1 hour'
+);
+
+update public.autonomous_system_emergency_states
+set
+  status = 'emergency_stop',
+  reason = 'livekit no-finding liveness rejection fixture',
+  updated_at = transaction_timestamp()
+where system_id = 'product_intelligence_operator';
+
+select throws_ok(
+  $sql$
+    insert into
+      public.product_experience_livekit_no_finding_attestations(
+        sentinel_run_id,
+        task_id,
+        project_id,
+        platform,
+        environment,
+        scenario_type,
+        derived_failure_category,
+        evidence_manifest_hash,
+        source_build_hash,
+        evaluator_output_hash,
+        attestation_hash,
+        evaluator_identity
+      )
+    values (
+      'cf400000-0000-4000-8000-000000000001',
+      'cf100000-0000-4000-8000-000000000001',
+      'cf000000-0000-4000-8000-000000000001',
+      'android',
+      'production',
+      'bounded_failure_fixture',
+      'websocket_failure',
+      repeat('5',64),
+      repeat('4',64),
+      repeat('7',64),
+      public.product_experience_livekit_no_finding_attestation_hash(
+        'cf400000-0000-4000-8000-000000000001',
+        'cf100000-0000-4000-8000-000000000001',
+        'cf000000-0000-4000-8000-000000000001',
+        'android',
+        'production',
+        repeat('5',64),
+        repeat('4',64),
+        'websocket_failure',
+        repeat('7',64)
+      ),
+      'cognitive_product_quality_evaluator'
+    )
+  $sql$,
+  '42501',
+  'livekit_bounded_failure_no_finding_attestation_task_not_live',
+  'table boundary rejects no-finding attestation after emergency stop'
+);
+
+select is(
+  (
+    select count(*)
+    from public.product_experience_livekit_no_finding_attestations
+    where sentinel_run_id = 'cf400000-0000-4000-8000-000000000001'
+  ),
+  0::bigint,
+  'emergency-stop rejection leaves no immutable attestation'
 );
 
 select * from finish();
