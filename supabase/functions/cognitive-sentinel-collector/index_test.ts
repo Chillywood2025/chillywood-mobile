@@ -12,7 +12,11 @@ const validPayload = () => ({
     sanitizationVersion: "bounded-nonpersonal-v1",
     observationKind: "route_timing",
     evidenceHashes: [hash("b")],
-    metrics: { elapsedDurationMs: 9000 },
+    metrics: {
+      elapsedDurationMs: 9000,
+      networkState: "ready",
+      timeoutObserved: true,
+    },
   },
   observationFinishedAt: "2026-07-24T05:05:00.000Z",
   observationStartedAt: "2026-07-24T05:00:00.000Z",

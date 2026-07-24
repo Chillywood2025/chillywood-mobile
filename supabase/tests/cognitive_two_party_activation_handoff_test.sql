@@ -1729,6 +1729,29 @@ insert into public.cognitive_governance_switches(
   true,'two-party-visual-test','b2000000-0000-0000-0000-000000000001',
   transaction_timestamp(),transaction_timestamp()
 );
+-- Preserve the inherited detailed sentinel/triage contract assertions against
+-- their original RPC implementations. The successor test suite exercises the
+-- protected collector/evaluator/triage path. These test-only grants and trigger
+-- changes are transaction-local because this file always rolls back.
+grant execute on function public.product_experience_record_sentinel_run(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,
+  text,text,jsonb,text,text,text,text
+) to service_role;
+grant execute on function public.product_quality_record_finding(
+  uuid,text,text,text,text,text,text[],text,numeric,text,text,text,text,text,text,text
+) to service_role;
+alter table public.product_experience_sentinel_runs
+  disable trigger product_experience_sentinel_runs_collector_capability_required;
+alter table public.product_quality_findings
+  disable trigger product_quality_findings_collected_run_evaluator_required;
+alter table public.product_quality_findings
+  disable trigger product_quality_findings_evaluated_state_only;
+alter table public.product_quality_findings
+  disable trigger product_quality_findings_current_task_live;
+alter table public.product_quality_findings
+  alter column finding_class drop not null;
+alter table public.product_quality_findings
+  alter column finding_scope_hash drop not null;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select throws_ok(
@@ -2069,6 +2092,22 @@ with inserted as (
 )
 insert into two_party_expired_sentinel_run(id)
 select id from inserted;
+
+alter table public.product_experience_sentinel_runs
+  enable trigger product_experience_sentinel_runs_collector_capability_required;
+alter table public.product_quality_findings
+  enable trigger product_quality_findings_collected_run_evaluator_required;
+alter table public.product_quality_findings
+  enable trigger product_quality_findings_evaluated_state_only;
+alter table public.product_quality_findings
+  enable trigger product_quality_findings_current_task_live;
+revoke execute on function public.product_experience_record_sentinel_run(
+  uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,
+  text,text,jsonb,text,text,text,text
+) from service_role;
+revoke execute on function public.product_quality_record_finding(
+  uuid,text,text,text,text,text,text[],text,numeric,text,text,text,text,text,text,text
+) from service_role;
 
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);

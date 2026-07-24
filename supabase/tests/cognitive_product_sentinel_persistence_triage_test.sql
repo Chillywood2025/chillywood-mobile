@@ -201,6 +201,65 @@ select ok(
   'deployed predecessor creation RPCs are closed to the service runtime'
 );
 
+select ok(
+  public.product_experience_detailed_metric_manifest_is_valid(
+    'installed_journey_sentinel','android','failed',
+    '{
+      "observationKind":"route_timing",
+      "metrics":{
+        "elapsedDurationMs":12000,
+        "networkState":"ready",
+        "timeoutObserved":true
+      }
+    }'::jsonb
+  ),
+  'route failure requires explicit bounded timeout evidence'
+);
+select ok(
+  not public.product_experience_detailed_metric_manifest_is_valid(
+    'installed_journey_sentinel','android','failed',
+    '{
+      "observationKind":"route_timing",
+      "metrics":{"elapsedDurationMs":12000,"networkState":"ready"}
+    }'::jsonb
+  ),
+  'route failure rejects an inferred timeout'
+);
+select ok(
+  public.product_experience_detailed_metric_manifest_is_valid(
+    'visual_product_experience_sentinel','android','failed',
+    '{
+      "observationKind":"touch_target",
+      "metrics":{
+        "thresholdDp":48,
+        "minimumWidthDp":102.86,
+        "minimumHeightDp":23.24,
+        "isActuallyInteractive":true,
+        "clickableAncestorPresent":false,
+        "screenDensityDpi":420
+      }
+    }'::jsonb
+  ),
+  'Android touch target uses the reviewed 48dp threshold and both dimensions'
+);
+select ok(
+  not public.product_experience_detailed_metric_manifest_is_valid(
+    'visual_product_experience_sentinel','ios','failed',
+    '{
+      "observationKind":"touch_target",
+      "metrics":{
+        "thresholdDp":48,
+        "minimumWidthDp":102.86,
+        "minimumHeightDp":23.24,
+        "isActuallyInteractive":true,
+        "clickableAncestorPresent":false,
+        "screenDensityDpi":420
+      }
+    }'::jsonb
+  ),
+  'Android dp evidence cannot be reclassified as an iOS point measurement'
+);
+
 select throws_ok(
   $$insert into public.product_experience_sentinel_runs(
       task_id, project_id, platform, environment, sentinel_key,
@@ -232,7 +291,7 @@ select throws_ok(
       "sanitizationVersion":"bounded-nonpersonal-v1",
       "observationKind":"route_timing",
       "evidenceHashes":["5555555555555555555555555555555555555555555555555555555555555555"],
-      "metrics":{"elapsedDurationMs":12000,"networkState":"ready"}
+      "metrics":{"elapsedDurationMs":12000,"networkState":"ready","timeoutObserved":true}
     }'::jsonb,
     'failed','installed_ui_observed',
     transaction_timestamp()-interval '2 minutes',
@@ -261,7 +320,7 @@ select
         "sanitizationVersion":"bounded-nonpersonal-v1",
         "observationKind":"route_timing",
         "evidenceHashes":["5555555555555555555555555555555555555555555555555555555555555555"],
-        "metrics":{"elapsedDurationMs":12000,"networkState":"ready"}
+        "metrics":{"elapsedDurationMs":12000,"networkState":"ready","timeoutObserved":true}
       }'::jsonb,
       'failed','installed_ui_observed',
       transaction_timestamp()-interval '2 minutes',
@@ -488,7 +547,7 @@ select
         "sanitizationVersion":"bounded-nonpersonal-v1",
         "observationKind":"route_timing",
         "evidenceHashes":["6666666666666666666666666666666666666666666666666666666666666666"],
-        "metrics":{"elapsedDurationMs":11800,"networkState":"ready"}
+        "metrics":{"elapsedDurationMs":11800,"networkState":"ready","timeoutObserved":true}
       }'::jsonb,
       'failed','installed_ui_observed',
       transaction_timestamp()-interval '2 minutes',
@@ -582,7 +641,7 @@ select
         "sanitizationVersion":"bounded-nonpersonal-v1",
         "observationKind":"route_timing",
         "evidenceHashes":["7777777777777777777777777777777777777777777777777777777777777777"],
-        "metrics":{"elapsedDurationMs":2400,"networkState":"ready"}
+        "metrics":{"elapsedDurationMs":2400,"networkState":"ready","timeoutObserved":false}
       }'::jsonb,
       'passed','installed_ui_observed',
       transaction_timestamp()-interval '2 minutes',

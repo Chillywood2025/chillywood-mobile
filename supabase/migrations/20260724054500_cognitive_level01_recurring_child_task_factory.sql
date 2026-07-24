@@ -945,7 +945,13 @@ begin
       'scheduled-budget-' || child_key_token,
       'active',
       jsonb_build_object(
-        'schedule_key', schedule_value.schedule_key,
+        'scheduleScopeHash', encode(
+          extensions.digest(
+            convert_to(schedule_value.schedule_key, 'UTF8'),
+            'sha256'
+          ),
+          'hex'
+        ),
         'bounded', true
       ),
       jsonb_build_object(

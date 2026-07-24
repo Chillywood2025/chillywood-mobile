@@ -193,7 +193,11 @@ commit;
 const metricManifest = (evidenceHash, elapsedDurationMs) =>
   JSON.stringify({
     evidenceHashes: [evidenceHash],
-    metrics: { elapsedDurationMs, networkState: "ready" },
+    metrics: {
+      elapsedDurationMs,
+      networkState: "ready",
+      timeoutObserved: true,
+    },
     observationKind: "route_timing",
     sanitizationVersion: "bounded-nonpersonal-v1",
     schemaVersion: "product-sentinel-v1",
