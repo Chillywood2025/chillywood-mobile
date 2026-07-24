@@ -787,7 +787,7 @@ begin
   select * into capability_value
   from public.cognitive_product_quality_service_capabilities
   where id = p_capability_id
-  for share;
+  for update;
 
   if capability_value.id is null
      or p_revocation_hash !~ '^[a-f0-9]{64}$' then

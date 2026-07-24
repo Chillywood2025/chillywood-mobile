@@ -188,17 +188,35 @@ select ok(
 );
 
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'service_role',
     'public.product_experience_record_sentinel_run(uuid,uuid,public.cognitive_platform,public.cognitive_environment,text,text,text,text,jsonb,text,text,text,text)',
     'EXECUTE'
   )
-  and has_function_privilege(
+  and not has_function_privilege(
     'service_role',
     'public.product_quality_record_finding(uuid,text,text,text,text,text,text[],text,numeric,text,text,text,text,text,text,text)',
     'EXECUTE'
   ),
-  'deployed predecessor RPC grants remain preserved for inherited compatibility'
+  'deployed predecessor creation RPCs are closed to the service runtime'
+);
+
+select throws_ok(
+  $$insert into public.product_experience_sentinel_runs(
+      task_id, project_id, platform, environment, sentinel_key,
+      route_or_surface, runtime_identity_hash, evidence_manifest_hash,
+      metric_manifest, result_status, physical_proof_status
+    ) values (
+      'c1000000-0000-4000-8000-000000000001',
+      'c0000000-0000-4000-8000-000000000001',
+      'android','production','installed_journey_sentinel','legacy-direct',
+      repeat('8',64),repeat('5',64),
+      '{"schemaVersion":"legacy-direct-fixture"}'::jsonb,
+      'failed','installed_ui_observed'
+    )$$,
+  '42501',
+  'product_experience_collector_capability_required',
+  'every new run requires a non-null live collector capability'
 );
 
 set local role service_role;
@@ -284,8 +302,8 @@ select throws_ok(
     'legacy-triage-fixture-assertion-0000001'
   )$$,
   '42501',
-  'product_quality_evaluator_proof_required',
-  'table guard blocks legacy RPC bypass for operational collector runs'
+  null,
+  'service runtime cannot execute the legacy finding-creation RPC'
 );
 reset role;
 
@@ -336,6 +354,69 @@ set proof_id = (
 )::uuid
 where fixture_key = 'detection-one';
 
+reset role;
+select throws_ok(
+  $$insert into public.product_quality_findings(
+      sentinel_run_id, task_id, project_id, platform, environment,
+      finding_key, finding_class, finding_scope_hash, route_or_surface,
+      build_runtime_hash, severity, user_impact_hash, evidence_hashes,
+      suspected_layer, confidence, reproduction_state,
+      affected_components_hash, provider_backend_state_hash,
+      proposed_next_investigation_hash, physical_proof_status,
+      governance_status, current_evaluator_proof_id
+    )
+    select
+      fixture.run_id,
+      'c1000000-0000-4000-8000-000000000001',
+      'c0000000-0000-4000-8000-000000000001',
+      'android','production',
+      'forged_finding_key','route.loading.unresolved',repeat('0',64),
+      'home',repeat('4',64),'medium',repeat('9',64),
+      array[repeat('5',64)],'loading_state',0.9500,
+      'confirmed_defect',repeat('a',64),repeat('b',64),
+      repeat('c',64),'installed_ui_observed',
+      'entered_collective_governance',fixture.proof_id
+    from sentinel_triage_fixture fixture
+    where fixture.fixture_key='detection-one'$$,
+  '42501',
+  'product_quality_evaluator_proof_required',
+  'table guard binds a new finding to the exact deterministic assessed payload'
+);
+
+update public.autonomous_system_emergency_states
+set status = 'emergency_stop',
+    reason = 'sentinel detection liveness rejection fixture',
+    updated_at = transaction_timestamp()
+where system_id = 'product_intelligence_operator';
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select throws_ok(
+  $$select public.product_quality_triage_detection(
+    run_id, proof_id, repeat('e',64), 'route.loading.unresolved',
+    'home', repeat('4',64), 'medium', repeat('9',64),
+    array[repeat('5',64)], 'loading_state', 0.9500,
+    'confirmed_defect', repeat('a',64), repeat('b',64),
+    repeat('c',64), 'installed_ui_observed',
+    'cognitive_product_quality_triage',
+    'product-triage-fixture-assertion-0000001'
+  )
+  from sentinel_triage_fixture
+  where fixture_key='detection-one'$$,
+  '42501',
+  'product_quality_task_not_live',
+  'emergency stop is rechecked under lock at the finding write boundary'
+);
+
+reset role;
+update public.autonomous_system_emergency_states
+set status = 'active',
+    reason = 'sentinel persistence fixture resumed',
+    updated_at = transaction_timestamp()
+where system_id = 'product_intelligence_operator';
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
 update sentinel_triage_fixture
 set finding_id = (
   public.product_quality_triage_detection(
@@ -537,6 +618,33 @@ set proof_id = (
 )::uuid
 where fixture_key='resolution';
 
+reset role;
+update public.intelligence_tasks
+set cancelled_at = transaction_timestamp()
+where id = 'c1000000-0000-4000-8000-000000000001';
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select throws_ok(
+  $$select public.product_quality_triage_resolution(
+      finding_id, run_id, proof_id, repeat('5',64), repeat('3',64),
+      'cognitive_product_quality_triage',
+      'product-triage-fixture-assertion-0000001'
+    )
+    from sentinel_triage_fixture
+    where fixture_key='resolution'$$,
+  '42501',
+  'product_quality_task_not_live',
+  'task cancellation is rechecked under lock at the resolution write boundary'
+);
+
+reset role;
+update public.intelligence_tasks
+set cancelled_at = null
+where id = 'c1000000-0000-4000-8000-000000000001';
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
 select is(
   (
     public.product_quality_triage_resolution(

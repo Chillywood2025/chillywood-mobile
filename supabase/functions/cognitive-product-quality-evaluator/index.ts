@@ -29,8 +29,28 @@ type DetectionCandidate = Readonly<{
   userImpactHash: string;
 }>;
 
-type StoredRun = Readonly<{
+type ResolutionCandidate = Readonly<{
+  findingId: string;
+  resolutionReasonHash: string;
+  sentinelRunId: string;
+}>;
+
+type StoredFinding = Readonly<{
+  current_status: string;
   environment: string;
+  erased_at: string | null;
+  id: string;
+  platform: string;
+  project_id: string;
+  route_or_surface: string;
+  sentinel_run_id: string;
+  task_id: string;
+}>;
+
+type StoredRun = Readonly<{
+  collector_capability_id: string | null;
+  environment: string;
+  erased_at: string | null;
   evaluation_expires_at: string;
   evidence_manifest_hash: string;
   id: string;
@@ -52,7 +72,7 @@ const LOWER_HEX_64 = /^[a-f0-9]{64}$/u;
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const FINDING_CLASS = /^[a-z0-9][a-z0-9._-]{2,80}$/u;
-const KEYS = Object.freeze([
+const DETECTION_KEYS = Object.freeze([
   "action",
   "affectedComponentsHash",
   "buildRuntimeHash",
@@ -68,6 +88,12 @@ const KEYS = Object.freeze([
   "severity",
   "suspectedLayer",
   "userImpactHash",
+]);
+const RESOLUTION_KEYS = Object.freeze([
+  "action",
+  "findingId",
+  "resolutionReasonHash",
+  "sentinelRunId",
 ]);
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
@@ -137,7 +163,18 @@ const hashesAreBounded = (value: unknown): value is string[] =>
 export const isStrictSentinelEvaluationPayload = (
   value: unknown,
 ): value is Record<string, unknown> => {
-  if (!isRecord(value) || !hasExactKeys(value, KEYS)) return false;
+  if (!isRecord(value)) return false;
+  if (value.action === "evaluate_sentinel_resolution") {
+    return hasExactKeys(value, RESOLUTION_KEYS) &&
+      typeof value.findingId === "string" &&
+      UUID.test(value.findingId) &&
+      typeof value.sentinelRunId === "string" &&
+      UUID.test(value.sentinelRunId) &&
+      typeof value.resolutionReasonHash === "string" &&
+      LOWER_HEX_64.test(value.resolutionReasonHash) &&
+      safePayload({ action: value.action });
+  }
+  if (!hasExactKeys(value, DETECTION_KEYS)) return false;
   return value.action === "evaluate_sentinel_detection" &&
     typeof value.sentinelRunId === "string" &&
     UUID.test(value.sentinelRunId) &&
@@ -190,6 +227,14 @@ const toCandidate = (payload: Record<string, unknown>): DetectionCandidate => ({
   severity: String(payload.severity),
   suspectedLayer: String(payload.suspectedLayer),
   userImpactHash: String(payload.userImpactHash),
+});
+
+const toResolutionCandidate = (
+  payload: Record<string, unknown>,
+): ResolutionCandidate => ({
+  findingId: String(payload.findingId),
+  resolutionReasonHash: String(payload.resolutionReasonHash),
+  sentinelRunId: String(payload.sentinelRunId),
 });
 
 const metricObject = (run: StoredRun): Record<string, unknown> | null => {
@@ -303,6 +348,58 @@ export const deterministicDetectionReasons = (
   return Object.freeze([...reasons].sort());
 };
 
+export const deterministicResolutionReasons = (
+  run: StoredRun,
+  finding: StoredFinding,
+  detectionRun: StoredRun,
+): readonly string[] => {
+  const reasons = new Set<string>();
+  if (
+    finding.id.length === 0 ||
+    finding.current_status !== "open" ||
+    finding.erased_at !== null
+  ) {
+    reasons.add("open_finding_required");
+  }
+  if (
+    run.task_id !== finding.task_id ||
+    run.project_id !== finding.project_id ||
+    run.platform !== finding.platform ||
+    run.environment !== finding.environment ||
+    run.route_or_surface !== finding.route_or_surface ||
+    run.collector_capability_id === null ||
+    run.erased_at !== null
+  ) {
+    reasons.add("resolution_run_binding_mismatch");
+  }
+  if (
+    detectionRun.id !== finding.sentinel_run_id ||
+    detectionRun.task_id !== finding.task_id ||
+    detectionRun.project_id !== finding.project_id ||
+    detectionRun.platform !== finding.platform ||
+    detectionRun.environment !== finding.environment ||
+    detectionRun.route_or_surface !== finding.route_or_surface
+  ) {
+    reasons.add("detection_run_binding_mismatch");
+  }
+  if (
+    run.result_status !== "passed" ||
+    !["installed_ui_observed", "simulator_observed"].includes(
+      run.physical_proof_status,
+    )
+  ) {
+    reasons.add("passing_physical_run_required");
+  }
+  if (
+    run.sentinel_key !== detectionRun.sentinel_key ||
+    toText(run.metric_manifest.observationKind) !==
+      toText(detectionRun.metric_manifest.observationKind)
+  ) {
+    reasons.add("resolution_observation_kind_mismatch");
+  }
+  return Object.freeze([...reasons].sort());
+};
+
 const readRequiredSecret = (name: string): string => {
   const value = Deno.env.get(name)?.trim() ?? "";
   if (!value) throw new Error("server_configuration_missing");
@@ -371,13 +468,29 @@ const readStoredRun = async (
   const result = await client
     .from("product_experience_sentinel_runs")
     .select(
-      "id,task_id,project_id,platform,environment,sentinel_key,route_or_surface,source_build_hash,evidence_manifest_hash,metric_manifest,result_status,physical_proof_status,evaluation_expires_at",
+      "id,task_id,project_id,platform,environment,sentinel_key,route_or_surface,source_build_hash,evidence_manifest_hash,metric_manifest,result_status,physical_proof_status,evaluation_expires_at,collector_capability_id,erased_at",
     )
     .eq("id", sentinelRunId)
     .maybeSingle();
   if (result.error || !isRecord(result.data)) return null;
   if (!isRecord(result.data.metric_manifest)) return null;
   return result.data as unknown as StoredRun;
+};
+
+const readStoredFinding = async (
+  client: SupabaseClientLike,
+  findingId: string,
+): Promise<StoredFinding | null> => {
+  const result = await client
+    .from("product_quality_findings")
+    .select(
+      "id,sentinel_run_id,task_id,project_id,platform,environment,route_or_surface,current_status,erased_at",
+    )
+    .eq("id", findingId)
+    .maybeSingle();
+  return !result.error && isRecord(result.data)
+    ? result.data as unknown as StoredFinding
+    : null;
 };
 
 const prepareAssessmentHash = async (
@@ -421,6 +534,26 @@ const prepareAssessmentHash = async (
     : null;
 };
 
+const prepareResolutionAssessmentHash = async (
+  client: SupabaseClientLike,
+  run: StoredRun,
+  candidate: ResolutionCandidate,
+): Promise<string | null> => {
+  const result = await client.rpc(
+    "product_quality_resolution_assessment_hash",
+    {
+      p_finding_id: candidate.findingId,
+      p_resolution_evidence_hash: run.evidence_manifest_hash,
+      p_resolution_reason_hash: candidate.resolutionReasonHash,
+      p_sentinel_run_id: run.id,
+    },
+  );
+  return !result.error && typeof result.data === "string" &&
+      LOWER_HEX_64.test(result.data)
+    ? result.data
+    : null;
+};
+
 export const handler = async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS, status: 200 });
@@ -448,14 +581,38 @@ export const handler = async (request: Request): Promise<Response> => {
     ) {
       return json(409, { error: "sentinel_evaluation_run_rejected" });
     }
-    const candidate = toCandidate(payload);
-    const assessmentHash = await prepareAssessmentHash(client, run, candidate);
+    const isResolution = payload.action === "evaluate_sentinel_resolution";
+    let assessmentHash: string | null;
+    let reasons: readonly string[];
+    let assessmentKind: "finding_detection" | "finding_resolution";
+    if (isResolution) {
+      const candidate = toResolutionCandidate(payload);
+      const finding = await readStoredFinding(client, candidate.findingId);
+      const detectionRun = finding
+        ? await readStoredRun(client, finding.sentinel_run_id)
+        : null;
+      if (!finding || !detectionRun) {
+        return json(409, { error: "sentinel_resolution_finding_rejected" });
+      }
+      assessmentHash = await prepareResolutionAssessmentHash(
+        client,
+        run,
+        candidate,
+      );
+      reasons = deterministicResolutionReasons(run, finding, detectionRun);
+      assessmentKind = "finding_resolution";
+    } else {
+      const candidate = toCandidate(payload);
+      assessmentHash = await prepareAssessmentHash(client, run, candidate);
+      reasons = deterministicDetectionReasons(run, candidate);
+      assessmentKind = "finding_detection";
+    }
     if (!assessmentHash) {
       return json(409, { error: "sentinel_evaluation_hash_rejected" });
     }
-    const reasons = deterministicDetectionReasons(run, candidate);
     const verdict = reasons.length === 0 ? "passed" : "rejected";
     const evaluatorOutputHash = await sha256Hex(stableJson({
+      assessmentKind,
       assessmentHash,
       observationKind: String(run.metric_manifest.observationKind),
       reasons: [...reasons],
@@ -475,7 +632,7 @@ export const handler = async (request: Request): Promise<Response> => {
       "product_quality_record_sentinel_evaluator_proof",
       {
         p_assessment_hash: assessmentHash,
-        p_assessment_kind: "finding_detection",
+        p_assessment_kind: assessmentKind,
         p_evaluator_assertion: readRequiredSecret(
           "COGNITIVE_INDEPENDENT_EVALUATOR_ASSERTION",
         ),

@@ -95,18 +95,22 @@ const buildHash = hash("sentinel-concurrency-build");
 const evidenceHashes = [
   hash("sentinel-concurrency-evidence-one"),
   hash("sentinel-concurrency-evidence-two"),
+  hash("sentinel-concurrency-evidence-stop-race"),
 ];
 const idempotencyHashes = [
   hash("sentinel-concurrency-idempotency-one"),
   hash("sentinel-concurrency-idempotency-two"),
+  hash("sentinel-concurrency-idempotency-stop-race"),
 ];
 const proofHashes = [
-  hash("sentinel-concurrency-proof-one"),
-  hash("sentinel-concurrency-proof-two"),
+  hash(`sentinel-concurrency-proof-one-${ids.task}`),
+  hash(`sentinel-concurrency-proof-two-${ids.task}`),
+  hash(`sentinel-concurrency-proof-stop-race-${ids.task}`),
 ];
 const outputHashes = [
   hash("sentinel-concurrency-output-one"),
   hash("sentinel-concurrency-output-two"),
+  hash("sentinel-concurrency-output-stop-race"),
 ];
 const runtimeHash = hash("sentinel-concurrency-runtime");
 const userImpactHash = hash("sentinel-concurrency-impact");
@@ -130,7 +134,7 @@ insert into public.intelligence_tasks(
   ${sqlLiteral(ids.task)},${sqlLiteral(ids.project)},'android','production',
   'Chillywood2025/chillywood-mobile',
   'codex/cognitive-product-sentinel-concurrency',
-  ${sqlLiteral(`sentinel-concurrency-${ids.task}`)},${sqlLiteral(hash("objective"))},
+  ${sqlLiteral(`sentinel-concurrency-${hash(ids.task).slice(0, 16)}`)},${sqlLiteral(hash("objective"))},
   'sentinel-concurrency-fixture',transaction_timestamp()+interval '4 hours'
 );
 insert into public.autonomous_system_emergency_states(
@@ -293,4 +297,46 @@ assert.equal(
   "concurrent detections must produce one current finding, occurrence count two, two immutable event types, and two proof consumptions",
 );
 
-console.log("cognitive product sentinel concurrency: 1/1 passed");
+const cancellationSession = runSession(`
+begin;
+update public.intelligence_tasks
+set cancelled_at=transaction_timestamp()
+where id=${sqlLiteral(ids.task)};
+select pg_sleep(1);
+commit;
+`);
+await new Promise((resolve) => setTimeout(resolve, 150));
+const stoppedTriage = await runSession(triageSql(2));
+const cancellationResult = await cancellationSession;
+assert.equal(
+  cancellationResult.code,
+  0,
+  `task cancellation fixture failed: ${cancellationResult.stderr}`,
+);
+assert.notEqual(
+  stoppedTriage.code,
+  0,
+  "triage must not commit after a concurrent task cancellation wins the task lock",
+);
+assert.match(
+  stoppedTriage.stderr,
+  /product_quality_task_not_live/u,
+  "cancelled-task triage must fail at the lock-safe write boundary",
+);
+assert.equal(
+  query(`
+select concat_ws(
+  '|',
+  (select occurrence_count from public.product_quality_findings
+   where task_id=${sqlLiteral(ids.task)}),
+  (select count(*) from public.product_quality_finding_events
+   where task_id=${sqlLiteral(ids.task)}),
+  (select count(*) from public.product_experience_sentinel_evaluator_proof_consumptions
+   where task_id=${sqlLiteral(ids.task)})
+);
+`),
+  "2|2|2",
+  "a cancellation-winning race must leave finding state, events, and proof consumption unchanged",
+);
+
+console.log("cognitive product sentinel concurrency: 2/2 passed");
