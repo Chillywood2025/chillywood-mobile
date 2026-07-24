@@ -57,12 +57,25 @@ export type ResearchRetrievalRecord = Readonly<{
 }>;
 
 export type ResearchContradictionRecord = Readonly<{
+  evidence_hash: string;
+  id: string;
   resolution_state: string;
+  source_id: string;
+}>;
+
+export type ResearchContradictionEventRecord = Readonly<{
+  contradiction_id: string;
+  event_type: string;
+  evidence_hash: string;
+  prior_event_hash: string | null;
+  proof_hash: string | null;
+  proof_manifest: unknown;
 }>;
 
 export type ResearchSnapshot = Readonly<{
   claim: ResearchClaimRecord;
   contradictions: readonly ResearchContradictionRecord[];
+  contradictionEvents: readonly ResearchContradictionEventRecord[];
   relations: readonly ResearchRelationRecord[];
   retrievals: readonly ResearchRetrievalRecord[];
   sources: readonly ResearchSourceRecord[];
@@ -145,8 +158,24 @@ const evaluationProjection = (
     supportState: snapshot.claim.support_state,
     retentionUntil: snapshot.claim.retention_until,
   },
-  contradictions: snapshot.contradictions.map((entry) => entry.resolution_state)
-    .sort(),
+  contradictionEvents: snapshot.contradictionEvents.map((entry) => ({
+    contradictionId: entry.contradiction_id,
+    eventType: entry.event_type,
+    evidenceHash: entry.evidence_hash,
+    priorEventHash: entry.prior_event_hash,
+    proofHash: entry.proof_hash,
+    proofManifest: entry.proof_manifest,
+  })).sort((left, right) =>
+    `${left.contradictionId}:${left.eventType}`.localeCompare(
+      `${right.contradictionId}:${right.eventType}`,
+    )
+  ),
+  contradictions: snapshot.contradictions.map((entry) => ({
+    evidenceHash: entry.evidence_hash,
+    id: entry.id,
+    resolutionState: entry.resolution_state,
+    sourceId: entry.source_id,
+  })).sort((left, right) => left.id.localeCompare(right.id)),
   reasons: [...reasons].sort(),
   retrievals: snapshot.retrievals.map((entry) => ({
     id: entry.id,
@@ -214,8 +243,60 @@ export const evaluateStoredResearchClaim = async (
   if (!["none", "resolved"].includes(claim.contradiction_state)) {
     blockedReasons.add("claim_contradiction_unresolved");
   }
+  const eventsByContradiction = new Map<
+    string,
+    ResearchContradictionEventRecord[]
+  >();
+  for (const event of snapshot.contradictionEvents) {
+    eventsByContradiction.set(event.contradiction_id, [
+      ...(eventsByContradiction.get(event.contradiction_id) ?? []),
+      event,
+    ]);
+  }
   if (
-    snapshot.contradictions.some((entry) => entry.resolution_state === "open")
+    claim.contradiction_state === "none" &&
+    (snapshot.contradictions.length > 0 ||
+      snapshot.contradictionEvents.length > 0)
+  ) {
+    failReasons.add("contradiction_state_proof_mismatch");
+  }
+  if (claim.contradiction_state === "resolved") {
+    if (snapshot.contradictions.length < 1) {
+      failReasons.add("contradiction_resolution_proof_missing");
+    }
+    for (const contradiction of snapshot.contradictions) {
+      const events = eventsByContradiction.get(contradiction.id) ?? [];
+      const detected = events.find((entry) => entry.event_type === "detected");
+      const resolved = events.find((entry) => entry.event_type === "resolved");
+      if (
+        contradiction.resolution_state !== "resolved" ||
+        !LOWER_HEX_64.test(contradiction.evidence_hash) ||
+        !detected || detected.evidence_hash !== contradiction.evidence_hash ||
+        detected.prior_event_hash !== null || detected.proof_hash !== null ||
+        detected.proof_manifest !== null ||
+        !resolved || resolved.prior_event_hash !== detected.evidence_hash ||
+        !LOWER_HEX_64.test(resolved.evidence_hash) ||
+        typeof resolved.proof_hash !== "string" ||
+        !LOWER_HEX_64.test(resolved.proof_hash) ||
+        !isRecord(resolved.proof_manifest) ||
+        Object.keys(resolved.proof_manifest).sort().join(",") !==
+          "detectionEvidenceHash,evaluatorIdentityHash,resolutionEvidenceHash,resolutionSourceContentHash" ||
+        resolved.proof_manifest.detectionEvidenceHash !==
+          detected.evidence_hash ||
+        resolved.proof_manifest.resolutionEvidenceHash !==
+          resolved.evidence_hash ||
+        !safe({ proof: resolved.proof_manifest })
+      ) {
+        failReasons.add("contradiction_resolution_proof_invalid");
+      }
+    }
+  } else if (
+    snapshot.contradictions.length > 0 &&
+    snapshot.contradictions.some((entry) =>
+      !(eventsByContradiction.get(entry.id) ?? []).some((event) =>
+        event.event_type === "resolved"
+      )
+    )
   ) {
     blockedReasons.add("open_contradiction_exists");
   }

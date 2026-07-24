@@ -53,6 +53,7 @@ const buildSnapshot = async (): Promise<ResearchSnapshot> => {
       support_state: "supported",
       task_id: "00000000-0000-4000-8000-000000000002",
     },
+    contradictionEvents: [],
     contradictions: [],
     relations: [{ relationship: "supports", source_id: sourceId }],
     retrievals: [{
@@ -169,7 +170,20 @@ Deno.test("independent evaluator blocks stale or unresolved research", async () 
         contradiction_state: "unresolved",
         freshness_deadline: "2026-07-22T12:00:00.000Z",
       },
-      contradictions: [{ resolution_state: "open" }],
+      contradictionEvents: [{
+        contradiction_id: "00000000-0000-4000-8000-000000000006",
+        event_type: "detected",
+        evidence_hash: "a".repeat(64),
+        prior_event_hash: null,
+        proof_hash: null,
+        proof_manifest: null,
+      }],
+      contradictions: [{
+        evidence_hash: "a".repeat(64),
+        id: "00000000-0000-4000-8000-000000000006",
+        resolution_state: "open",
+        source_id: "00000000-0000-4000-8000-000000000003",
+      }],
     },
     new Date("2026-07-23T12:00:00.000Z"),
   );
@@ -181,6 +195,63 @@ Deno.test("independent evaluator blocks stale or unresolved research", async () 
     result.reasons.includes("claim_expired") &&
       result.reasons.includes("open_contradiction_exists"),
     "blockers must be explicit",
+  );
+});
+
+Deno.test("independent evaluator requires an immutable resolution proof chain", async () => {
+  const snapshot = await buildSnapshot();
+  const contradictionId = "00000000-0000-4000-8000-000000000006";
+  const detectionHash = "a".repeat(64);
+  const resolutionHash = "b".repeat(64);
+  const resolved: ResearchSnapshot = {
+    ...snapshot,
+    claim: {
+      ...snapshot.claim,
+      contradiction_state: "resolved",
+    },
+    contradictionEvents: [{
+      contradiction_id: contradictionId,
+      event_type: "detected",
+      evidence_hash: detectionHash,
+      prior_event_hash: null,
+      proof_hash: null,
+      proof_manifest: null,
+    }, {
+      contradiction_id: contradictionId,
+      event_type: "resolved",
+      evidence_hash: resolutionHash,
+      prior_event_hash: detectionHash,
+      proof_hash: "c".repeat(64),
+      proof_manifest: {
+        detectionEvidenceHash: detectionHash,
+        evaluatorIdentityHash: "d".repeat(64),
+        resolutionEvidenceHash: resolutionHash,
+        resolutionSourceContentHash: "e".repeat(64),
+      },
+    }],
+    contradictions: [{
+      evidence_hash: detectionHash,
+      id: contradictionId,
+      resolution_state: "resolved",
+      source_id: snapshot.sources[0].id,
+    }],
+  };
+  const pass = await evaluateStoredResearchClaim(
+    resolved,
+    new Date("2026-07-23T12:00:00.000Z"),
+  );
+  assert(pass.status === "pass", "complete resolution proof should pass");
+  const missingProof = await evaluateStoredResearchClaim(
+    {
+      ...resolved,
+      contradictionEvents: resolved.contradictionEvents.slice(0, 1),
+    },
+    new Date("2026-07-23T12:00:00.000Z"),
+  );
+  assert(
+    missingProof.status === "fail" &&
+      missingProof.reasons.includes("contradiction_resolution_proof_invalid"),
+    "caller-asserted resolved state without proof must fail",
   );
 });
 
