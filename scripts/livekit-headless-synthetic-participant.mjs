@@ -891,6 +891,12 @@ const runHeadlessParticipant = async (
     throw new Error("livekit_scenario_evidence_mismatch");
   }
   metric.stageFailureCategory = deriveFailureCategory(metric);
+  if (
+    metric.scenarioType === "bounded_failure_fixture" &&
+    metric.stageFailureCategory === "none"
+  ) {
+    throw new Error("livekit_failure_fixture_not_triggered");
+  }
   if (!exactKeys(metric, METRIC_KEYS)) {
     throw new Error("internal_metric_contract_mismatch");
   }

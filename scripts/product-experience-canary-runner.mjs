@@ -129,9 +129,22 @@ function classifyLiveKit(evidence) {
     "remoteParticipantObserved",
     "remoteMediaObserved",
     "uiExitedConnecting",
-    "backgroundForegroundRecovery",
+    "backgrounded",
+    "foregrounded",
     "cleanupDisconnected",
   ];
+  if (
+    ![
+      "success_baseline",
+      "bounded_failure_fixture",
+      "background_foreground_recovery",
+    ].includes(evidence.scenarioType)
+  ) {
+    throw new Error("livekit_scenario_type_required");
+  }
+  if (typeof evidence.backgroundForegroundRecovery !== "boolean") {
+    throw new Error("livekit_boolean_metric_required:backgroundForegroundRecovery");
+  }
   const missingBoolean = booleanMetrics.filter(
     (key) => typeof evidence[key] !== "boolean",
   );
@@ -160,11 +173,42 @@ function classifyLiveKit(evidence) {
   }
 
   const deadlines = constitution.loadingStateDeadlines;
-  const pass = booleanMetrics.every((key) => bool(evidence[key]))
-    && evidence.tokenIssuedElapsedMs <= deadlines.livekitTokenMs
+  const stagesHealthy = booleanMetrics
+    .filter((key) => !["backgrounded", "foregrounded"].includes(key))
+    .every((key) => bool(evidence[key]));
+  const timingsHealthy =
+    evidence.tokenIssuedElapsedMs <= deadlines.livekitTokenMs
     && evidence.roomConnectElapsedMs <= deadlines.livekitRoomConnectMs
     && evidence.uiStateResolutionElapsedMs <= deadlines.livekitUiStateResolutionMs
     && evidence.firstRemoteMediaElapsedMs <= deadlines.livekitFirstRemoteMediaMs;
+  const recoveryStateHealthy =
+    evidence.scenarioType === "background_foreground_recovery"
+      ? evidence.backgrounded &&
+        evidence.foregrounded &&
+        evidence.backgroundForegroundRecovery
+      : !evidence.backgrounded &&
+        !evidence.foregrounded &&
+        !evidence.backgroundForegroundRecovery;
+  const healthyObservation =
+    stagesHealthy && timingsHealthy && recoveryStateHealthy;
+
+  if (
+    evidence.scenarioType === "bounded_failure_fixture" &&
+    healthyObservation
+  ) {
+    return {
+      ok: false,
+      mode: "livekit",
+      sentinelKey: runnerConfig.canaries.livekit_experience.sentinelKey,
+      resultStatus: "blocked",
+      physicalProofStatus: "installed_proof_available",
+      reason: "livekit_failure_fixture_not_triggered",
+      evidenceManifestHash: hashPayload(evidence),
+    };
+  }
+
+  const pass = evidence.scenarioType !== "bounded_failure_fixture" &&
+    healthyObservation;
 
   let suspectedLayer = "unknown";
   if (evidence.tokenReturned && evidence.roomConnected && !evidence.uiExitedConnecting) suspectedLayer = "installed_ui_state";
@@ -681,13 +725,14 @@ function fixtureHash(seed) {
 }
 
 function selfTest() {
-  const livekitPass = classifyLiveKit({
+  const livekitEvidence = {
     roomRunCorrelationHash: fixtureHash("livekit-room-run"),
     installedParticipantIdentityHash: fixtureHash("livekit-installed-participant"),
     sourceBuildHash: fixtureHash("livekit-source-build"),
     runtimeIdentityHash: fixtureHash("livekit-runtime"),
     observationStartedAt: "2026-07-24T10:00:00.000Z",
     observationFinishedAt: "2026-07-24T10:00:02.000Z",
+    scenarioType: "success_baseline",
     roomRequested: true,
     tokenRequested: true,
     tokenReturned: true,
@@ -697,14 +742,26 @@ function selfTest() {
     remoteParticipantObserved: true,
     remoteMediaObserved: true,
     uiExitedConnecting: true,
-    backgroundForegroundRecovery: true,
+    backgrounded: false,
+    foregrounded: false,
+    backgroundForegroundRecovery: false,
     cleanupDisconnected: true,
     tokenIssuedElapsedMs: 120,
     roomConnectElapsedMs: 900,
     uiStateResolutionElapsedMs: 1100,
     firstRemoteMediaElapsedMs: 1800,
-  });
+  };
+  const livekitPass = classifyLiveKit(livekitEvidence);
   assert.equal(livekitPass.resultStatus, "passed");
+  const healthyFailureFixture = classifyLiveKit({
+    ...livekitEvidence,
+    scenarioType: "bounded_failure_fixture",
+  });
+  assert.equal(healthyFailureFixture.resultStatus, "blocked");
+  assert.equal(
+    healthyFailureFixture.reason,
+    "livekit_failure_fixture_not_triggered",
+  );
 
   const visualEvidence = {
     screenshotEvidenceHash: fixtureHash("visual-shot"),

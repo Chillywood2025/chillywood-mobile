@@ -1138,6 +1138,10 @@ const liveKitMetricContractIsValid = (metrics) => {
     metrics.tokenRequested === metrics.tokenRequestStarted &&
     metrics.headlessParticipantUsed &&
     (
+      metrics.scenarioType !== "bounded_failure_fixture" ||
+      metrics.stageFailureCategory !== "none"
+    ) &&
+    (
       metrics.scenarioType === "background_foreground_recovery" ||
       (
         !metrics.backgrounded &&

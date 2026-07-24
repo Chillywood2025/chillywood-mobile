@@ -8,6 +8,7 @@ import { writeSanitizedAudit } from "./sanitize.mjs";
 
 const SECRET_DOMAIN_NAME =
   /^(?:COGNITIVE_[A-Z0-9_]*(?:ASSERTION|INVOKE_SHA256|SERVICE_TOKEN|API_KEY)|GITHUB_APP_(?:ID|INSTALLATION_ID|PRIVATE_KEY)|GITHUB_REPOSITORY_ID|LIVEKIT_API_(?:KEY|SECRET)|SUPABASE_(?:SERVICE_ROLE_KEY|SECRET_KEY))$/u;
+const HYPERDRIVE_BINDING_NAME = /^[A-Z0-9_]+_HYPERDRIVE$/u;
 
 const assertCredentialDomain = (env, principal) => {
   const missing = principal.requiredSecrets.filter((name) => !env[name]);
@@ -15,10 +16,15 @@ const assertCredentialDomain = (env, principal) => {
   const unexpected = Object.keys(env).filter((name) =>
     SECRET_DOMAIN_NAME.test(name) && !principal.requiredSecrets.includes(name)
   );
+  const unexpectedHyperdrive = Object.keys(env).filter((name) =>
+    HYPERDRIVE_BINDING_NAME.test(name) &&
+    name !== principal.hyperdriveBinding
+  );
   if (
     missing.length > 0 ||
     forbidden.length > 0 ||
-    unexpected.length > 0
+    unexpected.length > 0 ||
+    unexpectedHyperdrive.length > 0
   ) {
     throw new Error("credential_domain_rejected");
   }

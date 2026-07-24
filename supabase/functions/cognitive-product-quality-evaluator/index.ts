@@ -1566,6 +1566,10 @@ const liveKitMetricContractIsValid = (
     metrics.tokenRequested === metrics.tokenRequestStarted &&
     metrics.headlessParticipantUsed === true &&
     (
+      metrics.scenarioType !== "bounded_failure_fixture" ||
+      metrics.stageFailureCategory !== "none"
+    ) &&
+    (
       metrics.scenarioType === "background_foreground_recovery" ||
       (
         metrics.backgrounded === false &&
@@ -1640,13 +1644,13 @@ export const deriveIndependentLiveKitFailureCategory = (
   }
   if (metrics.firstAudioVideoObserved !== true) return "first_media_missing";
   if (
-    metrics.scenarioType === "background_foreground_recovery" &&
     metrics.installedUiObserved === true &&
     metrics.connectingResolved !== true
   ) {
     return "installed_ui_connecting_stuck";
   }
   if (
+    metrics.scenarioType === "background_foreground_recovery" &&
     metrics.installedUiObserved === true &&
     (
       metrics.backgrounded !== true ||

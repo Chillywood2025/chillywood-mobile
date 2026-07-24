@@ -921,6 +921,41 @@ Deno.test("LiveKit failure category is independently recomputed from exact evide
     ) === "installed_ui_connecting_stuck",
     "installed UI state must be independently evaluated after media succeeds",
   );
+  assert(
+    deriveIndependentLiveKitFailureCategory(
+      liveKitMetrics({
+        backgroundForegroundRecovery: false,
+        backgrounded: false,
+        foregrounded: false,
+        scenarioType: "success_baseline",
+      }),
+    ) === "none",
+    "a healthy baseline does not require background and foreground evidence",
+  );
+  assert(
+    deriveIndependentLiveKitFailureCategory(
+      liveKitMetrics({
+        backgroundForegroundRecovery: false,
+        backgrounded: false,
+        connectingResolved: false,
+        foregrounded: false,
+        scenarioType: "success_baseline",
+        stageFailureCategory: "installed_ui_connecting_stuck",
+      }),
+    ) === "installed_ui_connecting_stuck",
+    "a stuck baseline remains an installed UI failure",
+  );
+  assert(
+    deriveIndependentLiveKitFailureCategory(
+      liveKitMetrics({
+        backgroundForegroundRecovery: false,
+        backgrounded: false,
+        foregrounded: false,
+        scenarioType: "bounded_failure_fixture",
+      }),
+    ) === null,
+    "a healthy run cannot satisfy the bounded failure fixture",
+  );
 });
 
 Deno.test("LiveKit resolution independently revalidates installed stages", () => {

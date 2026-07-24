@@ -1,6 +1,6 @@
 begin;
 
-select plan(7);
+select plan(8);
 
 select ok(
   public.product_experience_livekit_scenario_is_valid(
@@ -21,6 +21,7 @@ select ok(
     'failed',
     '{
       "scenarioType":"bounded_failure_fixture",
+      "stageFailureCategory":"deadline_exceeded",
       "headlessParticipantUsed":true,
       "backgrounded":false,
       "foregrounded":false,
@@ -28,6 +29,21 @@ select ok(
     }'::jsonb
   ),
   'bounded failure fixture remains a distinct reviewed scenario'
+);
+
+select ok(
+  not public.product_experience_livekit_scenario_is_valid(
+    'passed',
+    '{
+      "scenarioType":"bounded_failure_fixture",
+      "stageFailureCategory":"none",
+      "headlessParticipantUsed":true,
+      "backgrounded":false,
+      "foregrounded":false,
+      "backgroundForegroundRecovery":false
+    }'::jsonb
+  ),
+  'a healthy run cannot satisfy the bounded failure fixture'
 );
 
 select ok(

@@ -1,6 +1,7 @@
 # Cognitive Model Router Runtime
 
-Status: source implemented; not deployed or activated by this branch.
+Status: legacy Supabase Edge adapter and isolated Cloudflare adapter implemented;
+neither is deployed or activated by this branch.
 
 `cognitive-model-router` is an internal, server-side, advisory-only Edge Function.
 It accepts a strict bounded packet of already-sanitized evidence, verifies the
@@ -81,7 +82,7 @@ Cross-provider quorum, when available, must be established by distinct execution
 and the existing independent attestation/evaluation control plane. Repeated calls
 to this broker cannot satisfy quorum.
 
-Required server-only configuration names:
+Required model-specific server-only configuration names:
 
 - `COGNITIVE_MODEL_ROUTER_INVOKE_SHA256`;
 - `COGNITIVE_MODEL_PROVIDER=openai`;
@@ -90,9 +91,13 @@ Required server-only configuration names:
 - `COGNITIVE_MODEL_OPENAI_API_KEY` (no generic credential fallback);
 - `COGNITIVE_MODEL_INPUT_USD_PER_MILLION`;
 - `COGNITIVE_MODEL_OUTPUT_USD_PER_MILLION`.
-- `SUPABASE_URL`;
-- `SUPABASE_SERVICE_ROLE_KEY`;
 - `COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION`.
+
+The legacy Supabase Edge adapter additionally requires `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` inside that existing Edge environment. The isolated
+Cloudflare activation path explicitly forbids both shared Supabase credentials;
+it uses only the model router's dedicated Postgres LOGIN/Hyperdrive binding and
+its own Worker-specific secrets.
 
 No credential value belongs in source, test output, deployment evidence, or the
 mobile application. Deployment, secret configuration, activation, live canaries,
