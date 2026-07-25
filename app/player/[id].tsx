@@ -167,6 +167,9 @@ import {
   resolveIdentityName,
 } from "../../_lib/watch-party/room-shared";
 import {
+  shouldAutoStartAuthorizedNativeLiveKitMedia,
+} from "../../_lib/watch-party/live-stage-presentation";
+import {
   applyWatchPartySeatRequestEvent,
   buildWatchPartyLiveParticipantRoster,
   canUseWatchPartyLiveRenderableContract,
@@ -1189,7 +1192,6 @@ export default function PlayerScreen() {
   const [watchPartyLocalMediaIntent, setWatchPartyLocalMediaIntent] = useState(false);
   const [watchPartyLocalMediaPermissionBusy, setWatchPartyLocalMediaPermissionBusy] = useState(false);
   const [watchPartyCameraPermissionGranted, setWatchPartyCameraPermissionGranted] = useState(false);
-  const [watchPartyMicrophonePermissionGranted, setWatchPartyMicrophonePermissionGranted] = useState(false);
   const [watchPartySelfMuteBusy, setWatchPartySelfMuteBusy] = useState(false);
   const [watchPartySelfMuteError, setWatchPartySelfMuteError] = useState("");
   const [watchPartyMenuOpen, setWatchPartyMenuOpen] = useState(false);
@@ -1220,6 +1222,7 @@ export default function PlayerScreen() {
   const watchPartyLiveKitContractRequestKeyRef = useRef("");
   const watchPartyLiveKitAuthorityRetryKeyRef = useRef("");
   const watchPartyLiveKitAuthorityRetryAttemptsRef = useRef<Record<string, number>>({});
+  const watchPartyLiveKitAutoStartedLocalMediaKeyRef = useRef("");
   const watchPartyLiveKitAuthorityRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchPartyLiveKitMountedRef = useRef(true);
   const lastPartyMembershipRosterRefreshAtRef = useRef(0);
@@ -1260,7 +1263,6 @@ export default function PlayerScreen() {
     setWatchPartyLocalMediaIntent(false);
     setWatchPartyLocalMediaPermissionBusy(false);
     setWatchPartyCameraPermissionGranted(false);
-    setWatchPartyMicrophonePermissionGranted(false);
   }, [partyId]);
 
   useEffect(() => {
@@ -2258,7 +2260,6 @@ export default function PlayerScreen() {
       setWatchPartyLocalMediaIntent((current) => (current ? false : current));
       setWatchPartyLocalMediaPermissionBusy((current) => (current ? false : current));
       setWatchPartyCameraPermissionGranted((current) => (current ? false : current));
-      setWatchPartyMicrophonePermissionGranted((current) => (current ? false : current));
       setWatchPartySelfMuteBusy((current) => (current ? false : current));
       setWatchPartySelfMuteError((current) => (current ? "" : current));
       setPartyOverlayMessages((current) => (current.length === 0 ? current : []));
@@ -5767,7 +5768,6 @@ export default function PlayerScreen() {
       const cameraGranted = cameraResult?.granted === true;
       const microphoneGranted = microphoneResult?.granted === true;
       setWatchPartyCameraPermissionGranted(cameraGranted);
-      setWatchPartyMicrophonePermissionGranted(microphoneGranted);
 
       if (cameraGranted && microphoneGranted) {
         setWatchPartyLocalMediaIntent(true);
@@ -5820,29 +5820,6 @@ export default function PlayerScreen() {
     return enabled;
   }, [requestWatchPartyLocalMediaPermissions, showLivePresenceEvent, watchPartyLocalMediaIntent]);
 
-  useEffect(() => {
-    if (!watchPartyLocalMediaIntent || playerAppState !== "active") return undefined;
-    let cancelled = false;
-
-    Promise.all([
-      getCameraPermission().catch(() => null),
-      Audio.getPermissionsAsync().catch(() => null),
-    ]).then(([nextCameraPermission, nextMicrophonePermission]) => {
-      if (cancelled) return;
-      const cameraGranted = nextCameraPermission?.granted === true;
-      const microphoneGranted = nextMicrophonePermission?.granted === true;
-      setWatchPartyCameraPermissionGranted(cameraGranted);
-      setWatchPartyMicrophonePermissionGranted(microphoneGranted);
-      if (!cameraGranted || !microphoneGranted) {
-        setWatchPartyLocalMediaIntent(false);
-        setWatchPartyCameraRequestError("Camera or microphone access changed. Tap Start Camera & Mic to review permissions.");
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [getCameraPermission, playerAppState, watchPartyLocalMediaIntent]);
   const watchPartyLiveKitJoinContractExpiryState = useMemo(
     () => watchPartyLiveKitJoinContract
       ? getLiveKitParticipantTokenExpiryState(watchPartyLiveKitJoinContract.participantToken)
@@ -6145,14 +6122,32 @@ export default function PlayerScreen() {
   const watchPartyLiveKitCanPublish = watchPartyLiveKitContractMatchesDesired
     && !!watchPartyLiveKitJoinContract?.requestedGrants.canPublish
     && watchPartyLiveKitJoinContract.participantRole !== "viewer";
+  useEffect(() => {
+    if (
+      !isSharedPartyPlayback
+      || !watchPartyLiveKitCanPublish
+      || !shouldAutoStartAuthorizedNativeLiveKitMedia(Platform.OS)
+    ) {
+      return;
+    }
+
+    const autoStartKey = `${partyId}:${trackedUserId}`;
+    if (!trackedUserId || watchPartyLiveKitAutoStartedLocalMediaKeyRef.current === autoStartKey) return;
+    watchPartyLiveKitAutoStartedLocalMediaKeyRef.current = autoStartKey;
+    setWatchPartyCameraRequestError("");
+    setWatchPartyLocalMediaIntent(true);
+  }, [
+    isSharedPartyPlayback,
+    partyId,
+    trackedUserId,
+    watchPartyLiveKitCanPublish,
+  ]);
   const publishWatchPartyLiveKitAudio = watchPartyLocalMediaIntent
     && playerMediaIsInteractive
-    && watchPartyMicrophonePermissionGranted
     && watchPartyLiveKitCanPublish
     && !currentWatchPartyParticipantMuted;
   const publishWatchPartyLiveKitVideo = watchPartyLocalMediaIntent
     && playerMediaIsInteractive
-    && watchPartyCameraPermissionGranted
     && watchPartyLiveKitCanPublish
     && !currentWatchPartyParticipantMuted;
   const watchPartyLiveKitLocalParticipantFallback = (

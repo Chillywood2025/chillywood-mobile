@@ -156,10 +156,10 @@ assertIncludes(liveStagePresentation, "applyLiveStageSeatRequestEvent", "Live St
 assertIncludes(liveStagePresentation, "closeLiveStageSeatRequestSheet", "Live Stage presentation helper must own X close suppression");
 assertIncludes(liveStagePresentation, "liveKitContractMatchesDesiredAuthority", "Live Stage presentation helper must own contract authority matching");
 assertIncludes(liveStagePresentation, '["android", "ios"].includes', "Live Stage native platforms must share automatic authorized local media startup");
-assertIncludes(liveStagePresentation, "shouldAutoStartLiveStageLocalMedia", "Live Stage presentation helper must own native local media startup policy");
+assertIncludes(liveStagePresentation, "shouldAutoStartAuthorizedNativeLiveKitMedia", "shared presentation helper must own native LiveKit local media startup policy");
 assertIncludes(liveStagePresentation, "canRenderParticipantSpecificLiveKitTrack", "Live Stage presentation helper must own identity-safe track rendering");
 
-assertIncludes(liveStage, "const DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT = shouldAutoStartLiveStageLocalMedia(Platform.OS);", "Live Stage platform-local media default");
+assertIncludes(liveStage, "const DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT = shouldAutoStartAuthorizedNativeLiveKitMedia(Platform.OS);", "Live Stage platform-local media default");
 assertIncludes(liveStage, "useState(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage local media state must use the platform default");
 assertIncludes(liveStage, "useRef(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage local media ref must use the platform default");
 assertIncludes(liveStage, "setStageLocalMediaIntent(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage room reset must restore the platform default");

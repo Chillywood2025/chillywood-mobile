@@ -154,7 +154,7 @@ for (
   const required of [
     "headless-only evidence never claims installed UI pass",
     "media flow with unresolved Connecting is an installed UI failure",
-    "connected native room with a persistent camera placeholder is an installed UI failure",
+    "connected Watch-Party Live shared player with a persistent camera placeholder is an installed UI failure",
     "ICE failure is distinct from room and token failure",
     "canonical evidence hashes ignore object insertion order",
     "requires its private invocation",

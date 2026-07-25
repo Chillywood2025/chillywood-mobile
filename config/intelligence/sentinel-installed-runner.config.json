@@ -72,7 +72,13 @@
     "livekit_experience": {
       "script": "npm run sentinel:canary:livekit -- --evidence <sanitized-evidence.json>",
       "sentinelKey": "livekit_experience_sentinel",
+      "reviewedSurfaces": [
+        "live-stage",
+        "watch-party-live",
+        "chat-call"
+      ],
       "requiredInstalledEvidence": [
+        "routeOrSurface",
         "roomRunCorrelationHash",
         "installedParticipantIdentityHash",
         "sourceBuildHash",
