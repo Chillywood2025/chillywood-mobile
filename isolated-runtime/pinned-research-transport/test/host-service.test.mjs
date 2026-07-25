@@ -401,7 +401,7 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
   assert.doesNotMatch(rollback, /rollback=ACTIVE/u);
   assert.match(readiness, /127\.0\.0\.1:4319\/healthz/u);
   assert.match(readiness, /external_attestation=REQUIRED/u);
-  assert.match(deploy, /verify-bundle/u);
+  assert.match(deploy, /verify-deployable-bundle/u);
   assert.match(deploy, /verify-extracted/u);
   assert.match(
     deploy,
@@ -409,7 +409,8 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
   );
   assert.match(deploy, /\.deployment-rollback\.lock/u);
   assert.match(deploy, /automatic_rollback=/u);
-  assert.match(rollback, /verify-release/u);
+  assert.match(rollback, /verify-active-release/u);
+  assert.match(readiness, /verify-active-release/u);
   assert.match(rollback, /\.deployment-rollback\.lock/u);
   assert.doesNotMatch(
     rollback,
@@ -492,9 +493,14 @@ test("systemd RuntimeDirectory interpretation stays outside its credential names
   assert.match(
     server,
     new RegExp(
-      `credentialDirectory !== "${credentialDirectory}"`,
+      `credentialDirectoryPath\\s*!==\\s*"${credentialDirectory}"`,
       "u",
     ),
+  );
+  assert.match(server, /credentialDirectory !== credentialDirectoryPath/u);
+  assert.match(
+    server,
+    /COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI/u,
   );
 });
 

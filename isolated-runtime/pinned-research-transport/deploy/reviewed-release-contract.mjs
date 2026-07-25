@@ -10,8 +10,14 @@ import {
 } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 
-export const REVIEWED_RELEASE_CONTRACT =
+export const LEGACY_REVIEWED_RELEASE_CONTRACT =
   "chillywood-reviewed-research-transport-release-v1";
+export const REVIEWED_RELEASE_CONTRACT =
+  "chillywood-reviewed-research-transport-release-v2";
+export const CURRENT_CREDENTIAL_DIRECTORY_ABI =
+  "chillywood-systemd-fixed-user-ephemeral-0400-v1";
+export const CURRENT_CREDENTIAL_DIRECTORY_PATH =
+  "/run/chillywood-research-transport-runtime";
 
 const LEGACY_V1_RUNTIME_MODULE_PATHS = Object.freeze([
   "config/intelligence/research-authorities.json",
@@ -45,16 +51,32 @@ export const RESEARCH_HOST_RUNTIME_MODULE_PATHS = Object.freeze([
 export const REVIEWED_RELEASE_PROFILES = Object.freeze([
   Object.freeze({
     id: "chillywood-pinned-research-host-runtime-v1-legacy-10",
+    contract: LEGACY_REVIEWED_RELEASE_CONTRACT,
+    credentialDirectoryAbi: null,
+    credentialDirectoryPath: null,
     modulePaths: LEGACY_V1_RUNTIME_MODULE_PATHS,
+    runtimeActivationAllowed: false,
   }),
   Object.freeze({
-    id: "chillywood-pinned-research-host-runtime-v2-current-13",
+    id: "chillywood-pinned-research-host-runtime-v2-legacy-13",
+    contract: LEGACY_REVIEWED_RELEASE_CONTRACT,
+    credentialDirectoryAbi: null,
+    credentialDirectoryPath: null,
     modulePaths: RESEARCH_HOST_RUNTIME_MODULE_PATHS,
+    runtimeActivationAllowed: false,
+  }),
+  Object.freeze({
+    id: "chillywood-pinned-research-host-runtime-v3-current-13",
+    contract: REVIEWED_RELEASE_CONTRACT,
+    credentialDirectoryAbi: CURRENT_CREDENTIAL_DIRECTORY_ABI,
+    credentialDirectoryPath: CURRENT_CREDENTIAL_DIRECTORY_PATH,
+    modulePaths: RESEARCH_HOST_RUNTIME_MODULE_PATHS,
+    runtimeActivationAllowed: true,
   }),
 ]);
 
 export const CURRENT_REVIEWED_RELEASE_PROFILE =
-  REVIEWED_RELEASE_PROFILES[1];
+  REVIEWED_RELEASE_PROFILES[2];
 
 const SHA1 = /^[a-f0-9]{40}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
@@ -81,15 +103,21 @@ const sha256 = (value) =>
 const canonicalModuleGraph = (modules) =>
   `${JSON.stringify(modules)}\n`;
 
-const canonicalManifest = (manifest) =>
-  `${JSON.stringify({
+const canonicalManifest = (manifest) => {
+  const value = {
     archiveSha256: manifest.archiveSha256,
     contract: manifest.contract,
-    moduleGraphSha256: manifest.moduleGraphSha256,
-    modules: manifest.modules,
-    sourceCommit: manifest.sourceCommit,
-    sourceTree: manifest.sourceTree,
-  }, null, 2)}\n`;
+  };
+  if (manifest.contract === REVIEWED_RELEASE_CONTRACT) {
+    value.credentialDirectoryAbi = manifest.credentialDirectoryAbi;
+    value.credentialDirectoryPath = manifest.credentialDirectoryPath;
+  }
+  value.moduleGraphSha256 = manifest.moduleGraphSha256;
+  value.modules = manifest.modules;
+  value.sourceCommit = manifest.sourceCommit;
+  value.sourceTree = manifest.sourceTree;
+  return `${JSON.stringify(value, null, 2)}\n`;
+};
 
 const assertSafeModulePath = (value) => {
   if (
@@ -104,9 +132,11 @@ const assertSafeModulePath = (value) => {
   return value;
 };
 
-const reviewedReleaseProfile = (paths) => {
+const reviewedReleaseProfile = (paths, contract) => {
   const profile = REVIEWED_RELEASE_PROFILES.find(
-    ({ modulePaths }) => modulePaths.join("\n") === paths.join("\n"),
+    ({ contract: profileContract, modulePaths }) =>
+      profileContract === contract &&
+      modulePaths.join("\n") === paths.join("\n"),
   );
   if (!profile) {
     throw new Error("reviewed_release_profile_rejected");
@@ -126,21 +156,45 @@ const allowedDirectoryEntries = (modulePaths) => {
 };
 
 const normalizeManifest = (value) => {
+  const isLegacy =
+    value?.contract === LEGACY_REVIEWED_RELEASE_CONTRACT;
+  const isCurrent = value?.contract === REVIEWED_RELEASE_CONTRACT;
+  const expectedKeys = isCurrent
+    ? [
+        "archiveSha256",
+        "contract",
+        "credentialDirectoryAbi",
+        "credentialDirectoryPath",
+        "moduleGraphSha256",
+        "modules",
+        "sourceCommit",
+        "sourceTree",
+      ]
+    : [
+        "archiveSha256",
+        "contract",
+        "moduleGraphSha256",
+        "modules",
+        "sourceCommit",
+        "sourceTree",
+      ];
   if (
-    !exactKeys(value, [
-      "archiveSha256",
-      "contract",
-      "moduleGraphSha256",
-      "modules",
-      "sourceCommit",
-      "sourceTree",
-    ]) ||
-    value.contract !== REVIEWED_RELEASE_CONTRACT ||
+    (!isLegacy && !isCurrent) ||
+    !exactKeys(value, expectedKeys) ||
     !SHA1.test(value.sourceCommit) ||
     !SHA1.test(value.sourceTree) ||
     !SHA256.test(value.archiveSha256) ||
     !SHA256.test(value.moduleGraphSha256) ||
-    !Array.isArray(value.modules)
+    !Array.isArray(value.modules) ||
+    (
+      isCurrent &&
+      (
+        value.credentialDirectoryAbi !==
+          CURRENT_CREDENTIAL_DIRECTORY_ABI ||
+        value.credentialDirectoryPath !==
+          CURRENT_CREDENTIAL_DIRECTORY_PATH
+      )
+    )
   ) {
     throw new Error("reviewed_release_manifest_rejected");
   }
@@ -161,7 +215,7 @@ const normalizeManifest = (value) => {
     });
   });
   const paths = modules.map(({ path }) => path);
-  const profile = reviewedReleaseProfile(paths);
+  const profile = reviewedReleaseProfile(paths, value.contract);
   if (
     new Set(paths).size !== paths.length ||
     sha256(canonicalModuleGraph(modules)) !== value.moduleGraphSha256
@@ -171,12 +225,32 @@ const normalizeManifest = (value) => {
   return Object.freeze({
     archiveSha256: value.archiveSha256,
     contract: value.contract,
+    credentialDirectoryAbi:
+      isCurrent ? value.credentialDirectoryAbi : null,
+    credentialDirectoryPath:
+      isCurrent ? value.credentialDirectoryPath : null,
     moduleGraphSha256: value.moduleGraphSha256,
     modules: Object.freeze(modules),
     releaseProfile: profile.id,
+    runtimeActivationAllowed: profile.runtimeActivationAllowed,
     sourceCommit: value.sourceCommit,
     sourceTree: value.sourceTree,
   });
+};
+
+export const requireCurrentRuntimeAbi = (manifest) => {
+  if (
+    manifest?.contract !== REVIEWED_RELEASE_CONTRACT ||
+    manifest?.releaseProfile !== CURRENT_REVIEWED_RELEASE_PROFILE.id ||
+    manifest?.runtimeActivationAllowed !== true ||
+    manifest?.credentialDirectoryAbi !==
+      CURRENT_CREDENTIAL_DIRECTORY_ABI ||
+    manifest?.credentialDirectoryPath !==
+      CURRENT_CREDENTIAL_DIRECTORY_PATH
+  ) {
+    throw new Error("reviewed_release_runtime_abi_rejected");
+  }
+  return true;
 };
 
 const readValidatedManifest = async (manifestPath, expectedManifestSha256) => {
@@ -241,6 +315,9 @@ export const buildReviewedRelease = async ({
   );
   if (
     !selectedProfile ||
+    selectedProfile.id !== CURRENT_REVIEWED_RELEASE_PROFILE.id ||
+    selectedProfile.contract !== REVIEWED_RELEASE_CONTRACT ||
+    selectedProfile.runtimeActivationAllowed !== true ||
     !Array.isArray(releaseProfile?.modulePaths) ||
     releaseProfile.modulePaths.join("\n") !==
       selectedProfile.modulePaths.join("\n")
@@ -254,6 +331,32 @@ export const buildReviewedRelease = async ({
   ).trim();
   if (!SHA1.test(sourceTree)) {
     throw new Error("reviewed_release_source_tree_rejected");
+  }
+  const selectedEntrypoint = readGit(
+    repository,
+    [
+      "show",
+      `${sourceCommit}:isolated-runtime/pinned-research-transport/bin/server.mjs`,
+    ],
+    "utf8",
+  );
+  if (
+    !selectedEntrypoint.includes(
+      "COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI",
+    ) ||
+    !new RegExp(
+      `credentialDirectoryAbi\\s*!==\\s*"${CURRENT_CREDENTIAL_DIRECTORY_ABI}"`,
+      "u",
+    ).test(selectedEntrypoint) ||
+    !new RegExp(
+      `credentialDirectoryPath\\s*!==\\s*"${CURRENT_CREDENTIAL_DIRECTORY_PATH}"`,
+      "u",
+    ).test(selectedEntrypoint) ||
+    !selectedEntrypoint.includes(
+      "credentialDirectory !== credentialDirectoryPath",
+    )
+  ) {
+    throw new Error("reviewed_release_runtime_abi_source_rejected");
   }
   const modules = selectedProfile.modulePaths.map((modulePath) => {
     const treeEntry = readGit(
@@ -290,6 +393,8 @@ export const buildReviewedRelease = async ({
   const manifest = Object.freeze({
     archiveSha256: sha256(archive),
     contract: REVIEWED_RELEASE_CONTRACT,
+    credentialDirectoryAbi: CURRENT_CREDENTIAL_DIRECTORY_ABI,
+    credentialDirectoryPath: CURRENT_CREDENTIAL_DIRECTORY_PATH,
     moduleGraphSha256: sha256(canonicalModuleGraph(modules)),
     modules,
     sourceCommit,
@@ -406,6 +511,14 @@ const releaseEnvironment = (manifest, manifestSha256) =>
     `COGNITIVE_RESEARCH_TRANSPORT_SOURCE_COMMIT=${manifest.sourceCommit}`,
     `COGNITIVE_RESEARCH_TRANSPORT_SOURCE_TREE=${manifest.sourceTree}`,
     `COGNITIVE_RESEARCH_TRANSPORT_RELEASE_MANIFEST_SHA256=${manifestSha256}`,
+    ...(
+      manifest.contract === REVIEWED_RELEASE_CONTRACT
+        ? [
+            `COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI=${manifest.credentialDirectoryAbi}`,
+            `COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_PATH=${manifest.credentialDirectoryPath}`,
+          ]
+        : []
+    ),
     "",
   ].join("\n");
 
@@ -494,12 +607,7 @@ export const verifyCredentialOverlaySource = async ({
     expectedManifestSha256,
     expectedSourceCommit,
   });
-  if (
-    release.manifest.releaseProfile !==
-      CURRENT_REVIEWED_RELEASE_PROFILE.id
-  ) {
-    throw new Error("reviewed_release_overlay_profile_rejected");
-  }
+  requireCurrentRuntimeAbi(release.manifest);
   const module = release.manifest.modules.find(
     ({ path }) => path === CREDENTIAL_OVERLAY_MODULE_PATH,
   );
@@ -507,9 +615,27 @@ export const verifyCredentialOverlaySource = async ({
     throw new Error("reviewed_release_overlay_module_rejected");
   }
   return Object.freeze({
+    credentialDirectoryAbi:
+      release.manifest.credentialDirectoryAbi,
+    credentialDirectoryPath:
+      release.manifest.credentialDirectoryPath,
     releaseProfile: release.manifest.releaseProfile,
     sha256: module.sha256,
   });
+};
+
+export const verifyActiveInstalledRelease = async ({
+  directory,
+  expectedManifestSha256 = null,
+  expectedSourceCommit = null,
+}) => {
+  const release = await verifyInstalledRelease({
+    directory,
+    expectedManifestSha256,
+    expectedSourceCommit,
+  });
+  requireCurrentRuntimeAbi(release.manifest);
+  return release;
 };
 
 export const verifyInstalledCredentialOverlay = async ({
@@ -575,6 +701,19 @@ const main = async () => {
     );
     return;
   }
+  if (command === "verify-deployable-bundle" && args.length === 3) {
+    const [archivePath, manifestPath, expectedManifestSha256] = args;
+    const { manifest } = await verifyReviewedBundle({
+      archivePath,
+      expectedManifestSha256,
+      manifestPath,
+    });
+    requireCurrentRuntimeAbi(manifest);
+    process.stdout.write(
+      `${manifest.sourceCommit} ${manifest.sourceTree} ${manifest.archiveSha256} ${manifest.moduleGraphSha256} ${manifest.releaseProfile}\n`,
+    );
+    return;
+  }
   if (command === "verify-extracted" && args.length === 2) {
     const [directory, manifestPath] = args;
     const raw = await readFile(manifestPath, "utf8");
@@ -599,6 +738,21 @@ const main = async () => {
   ) {
     const [directory, expectedSourceCommit, expectedManifestSha256] = args;
     const result = await verifyInstalledRelease({
+      directory,
+      expectedManifestSha256: expectedManifestSha256 ?? null,
+      expectedSourceCommit: expectedSourceCommit ?? null,
+    });
+    process.stdout.write(
+      `${result.manifest.sourceCommit} ${result.manifest.sourceTree} ${result.manifestSha256}\n`,
+    );
+    return;
+  }
+  if (
+    command === "verify-active-release" &&
+    (args.length === 1 || args.length === 3)
+  ) {
+    const [directory, expectedSourceCommit, expectedManifestSha256] = args;
+    const result = await verifyActiveInstalledRelease({
       directory,
       expectedManifestSha256: expectedManifestSha256 ?? null,
       expectedSourceCommit: expectedSourceCommit ?? null,

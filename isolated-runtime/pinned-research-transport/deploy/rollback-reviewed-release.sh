@@ -62,6 +62,12 @@ if [ "${#expected_manifest_sha256}" -ne 64 ] ||
   echo "manifest_hash_rejected" >&2
   exit 65
 fi
+if [ "$source_commit" != "$overlay_source_commit" ] ||
+   [ "$expected_manifest_sha256" != \
+     "$overlay_source_manifest_sha256" ]; then
+  echo "rollback_overlay_binding_rejected" >&2
+  exit 65
+fi
 
 transport_root="$host_prefix/opt/chillywood/research-transport"
 release_root="$transport_root/releases"
@@ -73,7 +79,7 @@ operation_lock="$transport_root/.deployment-rollback.lock"
 credential_drop_in_target="$host_prefix/etc/systemd/system/chillywood-research-transport.service.d/10-credential-compat.conf"
 contract_script=$(realpath "$(dirname "$0")/reviewed-release-contract.mjs")
 if [ ! -d "$release_directory" ] ||
-   ! node "$contract_script" verify-release \
+   ! node "$contract_script" verify-active-release \
      "$release_directory" \
      "$source_commit" \
      "$expected_manifest_sha256" >/dev/null; then
@@ -103,6 +109,8 @@ lock_acquired=1
 next_link_created=0
 transaction_open=0
 previous_target=
+previous_runtime_compatible=0
+previous_overlay_sha256=
 
 run_systemctl() {
   "$systemctl_command" "$@"
@@ -136,7 +144,12 @@ cleanup_operation() {
     set +e
     restore_current_link
     run_systemctl daemon-reload
-    if [ -n "$previous_target" ]; then
+    if [ "$previous_runtime_compatible" -eq 1 ] &&
+       node "$contract_script" verify-installed-overlay \
+         "$credential_drop_in_target" \
+         "$previous_overlay_sha256" \
+         "$expected_overlay_uid" \
+         "$expected_overlay_gid" >/dev/null 2>&1; then
       if ! run_systemctl restart chillywood-research-transport.service ||
          ! run_readiness; then
         run_systemctl stop chillywood-research-transport.service
@@ -190,6 +203,30 @@ if ! node "$contract_script" verify-installed-overlay \
   echo "installed_credential_overlay_rejected" >&2
   exit 65
 fi
+if [ -n "$previous_target" ] &&
+   previous_release_metadata=$(
+     node "$contract_script" verify-active-release \
+       "$previous_target" 2>/dev/null
+   ); then
+  set -- $previous_release_metadata
+  if [ "$#" -eq 3 ]; then
+    previous_source_commit=$1
+    previous_manifest_sha256=$3
+    if previous_overlay_sha256=$(
+      node "$contract_script" verify-overlay-source \
+        "$previous_target" \
+        "$previous_source_commit" \
+        "$previous_manifest_sha256" 2>/dev/null
+    ) &&
+       node "$contract_script" verify-installed-overlay \
+         "$credential_drop_in_target" \
+         "$previous_overlay_sha256" \
+         "$expected_overlay_uid" \
+         "$expected_overlay_gid" >/dev/null 2>&1; then
+      previous_runtime_compatible=1
+    fi
+  fi
+fi
 
 transaction_open=1
 ln -s "$release_directory" "$next_link"
@@ -207,8 +244,17 @@ fi
 restore_current_link
 run_systemctl daemon-reload || true
 if [ -n "$previous_target" ]; then
-  if ! run_systemctl restart chillywood-research-transport.service ||
-     ! run_readiness; then
+  if [ "$previous_runtime_compatible" -eq 1 ] &&
+     node "$contract_script" verify-installed-overlay \
+       "$credential_drop_in_target" \
+       "$previous_overlay_sha256" \
+       "$expected_overlay_uid" \
+       "$expected_overlay_gid" >/dev/null 2>&1; then
+    if ! run_systemctl restart chillywood-research-transport.service ||
+       ! run_readiness; then
+      run_systemctl stop chillywood-research-transport.service || true
+    fi
+  else
     run_systemctl stop chillywood-research-transport.service || true
   fi
 else
