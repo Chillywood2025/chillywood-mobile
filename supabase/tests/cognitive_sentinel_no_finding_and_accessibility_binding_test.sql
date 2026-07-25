@@ -69,27 +69,46 @@ insert into public.cognitive_product_quality_service_capabilities(
   id, service_identity, operation, task_id, project_id, platform,
   environment, assertion_hash, allowed_sentinel_keys, registered_by,
   expires_at
-) values (
-  'd3000000-0000-4000-8000-000000000001',
-  'cognitive_sentinel_collector',
-  'collect_sentinel_run',
-  'd1000000-0000-4000-8000-000000000001',
-  'd0000000-0000-4000-8000-000000000001',
-  'android', 'production',
-  encode(
-    extensions.digest(
-      convert_to('sentinel-no-finding-collector-assertion', 'UTF8'),
-      'sha256'
+) values
+  (
+    'd3000000-0000-4000-8000-000000000001',
+    'cognitive_sentinel_collector',
+    'collect_sentinel_run',
+    'd1000000-0000-4000-8000-000000000001',
+    'd0000000-0000-4000-8000-000000000001',
+    'android', 'production',
+    encode(
+      extensions.digest(
+        convert_to('sentinel-no-finding-collector-assertion', 'UTF8'),
+        'sha256'
+      ),
+      'hex'
     ),
-    'hex'
+    array[
+      'installed_journey_sentinel',
+      'visual_product_experience_sentinel'
+    ],
+    'd2000000-0000-4000-8000-000000000001',
+    transaction_timestamp() + interval '1 day'
   ),
-  array[
-    'installed_journey_sentinel',
-    'visual_product_experience_sentinel'
-  ],
-  'd2000000-0000-4000-8000-000000000001',
-  transaction_timestamp() + interval '1 day'
-);
+  (
+    'd3000000-0000-4000-8000-000000000002',
+    'cognitive_product_quality_triage',
+    'triage_product_quality',
+    'd1000000-0000-4000-8000-000000000001',
+    'd0000000-0000-4000-8000-000000000001',
+    'android', 'production',
+    encode(
+      extensions.digest(
+        convert_to('product-quality-triage-no-finding-assertion', 'UTF8'),
+        'sha256'
+      ),
+      'hex'
+    ),
+    '{}'::text[],
+    'd2000000-0000-4000-8000-000000000001',
+    transaction_timestamp() + interval '1 day'
+  );
 
 insert into public.governance_two_party_service_assertions(
   service_identity, assertion_hash, allowed_operations, registered_by,
@@ -115,6 +134,59 @@ create temporary table no_finding_fixture(
   proof_id uuid
 ) on commit drop;
 grant select, insert, update on no_finding_fixture to service_role;
+
+create function pg_temp.route_timing_manifest(
+  p_route text,
+  p_evidence_hash text,
+  p_elapsed_duration_ms integer,
+  p_maximum_duration_ms integer
+)
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'schemaVersion', 'product-sentinel-v1',
+    'sanitizationVersion', 'bounded-nonpersonal-v1',
+    'observationKind', 'route_timing',
+    'evidenceHashes', jsonb_build_array(p_evidence_hash),
+    'metrics', jsonb_build_object(
+      'appVersion', '1.0.0',
+      'appBuild', '84',
+      'runtimeVersion', '1.0.0-android84',
+      'channel', 'play-internal',
+      'platform', 'android',
+      'routeOrSurface', p_route,
+      'routeFamilyId', lower(p_route) || '.main',
+      'routeFamilyBindingHash',
+        public.product_experience_route_family_binding_hash(
+          'android', p_route, lower(p_route) || '.main'
+        ),
+      'runtimeIdentityHash', repeat('c',64),
+      'buildRuntimeHash', repeat('d',64),
+      'syntheticAccount', true,
+      'networkReadyBeforeNavigation', true,
+      'networkState', 'ready',
+      'navigationStartMonotonicMs', 1000,
+      'firstRenderedMonotonicMs', 1100,
+      'firstInteractiveMonotonicMs', 1200,
+      'resolvedStateMonotonicMs', 1000 + p_elapsed_duration_ms,
+      'resolutionKind', 'content_state',
+      'finalObservedState', 'content_loaded',
+      'reviewedErrorState', false,
+      'unresolvedStateCount', 0,
+      'timeoutObserved', false,
+      'maximumDurationMs', p_maximum_duration_ms,
+      'elapsedDurationMs', p_elapsed_duration_ms,
+      'interactionEvidenceKind', 'both',
+      'interactionEvidenceHash', repeat('b',64),
+      'sanitizedEvidenceHash', p_evidence_hash,
+      'installedProofStatus', 'installed_ui_observed',
+      'findingDisposition', 'no_finding'
+    )
+  )
+$$;
 
 select ok(
   has_function_privilege(
@@ -157,18 +229,8 @@ select
       'd1000000-0000-4000-8000-000000000001',
       'd0000000-0000-4000-8000-000000000001',
       'android','production','installed_journey_sentinel','Home',
-      repeat('8',64),repeat('4',64),repeat('5',64),
-      '{
-        "schemaVersion":"product-sentinel-v1",
-        "sanitizationVersion":"bounded-nonpersonal-v1",
-        "observationKind":"route_timing",
-        "evidenceHashes":["5555555555555555555555555555555555555555555555555555555555555555"],
-        "metrics":{
-          "elapsedDurationMs":2400,
-          "networkState":"ready",
-          "timeoutObserved":false
-        }
-      }'::jsonb,
+      repeat('c',64),repeat('d',64),repeat('5',64),
+      pg_temp.route_timing_manifest('Home', repeat('5',64), 2400, 10000),
       'passed','installed_ui_observed',
       transaction_timestamp()-interval '2 minutes',
       transaction_timestamp()-interval '1 minute',
@@ -187,18 +249,8 @@ select
       'd1000000-0000-4000-8000-000000000001',
       'd0000000-0000-4000-8000-000000000001',
       'android','production','installed_journey_sentinel','Explore',
-      repeat('8',64),repeat('4',64),repeat('6',64),
-      '{
-        "schemaVersion":"product-sentinel-v1",
-        "sanitizationVersion":"bounded-nonpersonal-v1",
-        "observationKind":"route_timing",
-        "evidenceHashes":["6666666666666666666666666666666666666666666666666666666666666666"],
-        "metrics":{
-          "elapsedDurationMs":2600,
-          "networkState":"ready",
-          "timeoutObserved":false
-        }
-      }'::jsonb,
+      repeat('c',64),repeat('d',64),repeat('6',64),
+      pg_temp.route_timing_manifest('Explore', repeat('6',64), 2600, 10000),
       'passed','installed_ui_observed',
       transaction_timestamp()-interval '2 minutes',
       transaction_timestamp()-interval '1 minute',
@@ -209,26 +261,17 @@ select
     )->>'sentinelRunId'
   )::uuid;
 
-insert into no_finding_fixture(fixture_key, run_id)
-select
-  'slow-route',
-  (
-    public.product_experience_collect_sentinel_run(
+insert into no_finding_fixture(fixture_key) values ('slow-route');
+
+select throws_ok(
+  $$select public.product_experience_collect_sentinel_run(
       'd1000000-0000-4000-8000-000000000001',
       'd0000000-0000-4000-8000-000000000001',
       'android','production','installed_journey_sentinel','Library',
-      repeat('8',64),repeat('4',64),repeat('7',64),
-      '{
-        "schemaVersion":"product-sentinel-v1",
-        "sanitizationVersion":"bounded-nonpersonal-v1",
-        "observationKind":"route_timing",
-        "evidenceHashes":["7777777777777777777777777777777777777777777777777777777777777777"],
-        "metrics":{
-          "elapsedDurationMs":10001,
-          "networkState":"ready",
-          "timeoutObserved":false
-        }
-      }'::jsonb,
+      repeat('c',64),repeat('d',64),repeat('7',64),
+      pg_temp.route_timing_manifest(
+        'Library', repeat('7',64), 10001, 10001
+      ),
       'passed','installed_ui_observed',
       transaction_timestamp()-interval '2 minutes',
       transaction_timestamp()-interval '1 minute',
@@ -236,8 +279,11 @@ select
       repeat('3',64),
       'cognitive_sentinel_collector',
       'sentinel-no-finding-collector-assertion'
-    )->>'sentinelRunId'
-  )::uuid;
+    )$$,
+  'P0001',
+  'product_experience_sentinel_collection_rejected',
+  'passed route collection fails closed above the approved maximum'
+);
 reset role;
 
 update no_finding_fixture
@@ -255,23 +301,27 @@ select ok(
 
 select ok(
   public.product_experience_route_timing_no_finding_is_valid(
-    '{"observationKind":"route_timing","metrics":{"elapsedDurationMs":10000,"networkState":"ready","timeoutObserved":false}}'::jsonb
+    pg_temp.route_timing_manifest('Home', repeat('5',64), 10000, 10000)
   ),
-  'route no-finding accepts the reviewed ten-second ready-network bound'
+  'route no-finding accepts rich monotonic evidence at the approved bound'
 );
 
 select ok(
   not public.product_experience_route_timing_no_finding_is_valid(
-    '{"observationKind":"route_timing","metrics":{"elapsedDurationMs":10001,"networkState":"ready","timeoutObserved":false}}'::jsonb
+    pg_temp.route_timing_manifest('Home', repeat('5',64), 10001, 10001)
   ),
   'route no-finding rejects elapsed time above the reviewed bound'
 );
 
 select ok(
   not public.product_experience_route_timing_no_finding_is_valid(
-    '{"observationKind":"route_timing","metrics":{"elapsedDurationMs":500,"networkState":"degraded","timeoutObserved":false}}'::jsonb
+    jsonb_set(
+      pg_temp.route_timing_manifest('Home', repeat('5',64), 500, 10000),
+      '{metrics,networkReadyBeforeNavigation}',
+      'false'::jsonb
+    )
   ),
-  'route no-finding rejects degraded-network evidence'
+  'route no-finding rejects navigation before network readiness'
 );
 
 select is(
@@ -338,6 +388,101 @@ where fixture_key = 'rejected-route';
 reset role;
 
 select ok(
+  not public.product_experience_scheduler_evaluation_is_ready(
+    (
+      select run_id
+      from no_finding_fixture
+      where fixture_key = 'passing-route'
+    )
+  ),
+  'a route no-finding proof is not scheduler-ready before triage consumption'
+);
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select public.product_quality_triage_no_finding(
+  run_id,
+  proof_id,
+  repeat('8',64),
+  'cognitive_product_quality_triage',
+  'product-quality-triage-no-finding-assertion'
+)
+from no_finding_fixture
+where fixture_key = 'passing-route';
+
+select throws_ok(
+  $$select public.product_quality_triage_no_finding(
+      run_id,
+      proof_id,
+      repeat('8',64),
+      'cognitive_product_quality_triage',
+      'product-quality-triage-no-finding-assertion'
+    )
+    from no_finding_fixture
+    where fixture_key = 'passing-route'$$,
+  'P0001',
+  'product_quality_no_finding_triage_replay_rejected',
+  'triage consumption is single-use and replay protected'
+);
+
+select throws_ok(
+  $$select public.product_quality_triage_no_finding(
+      run_id,
+      proof_id,
+      repeat('c',64),
+      'cognitive_product_quality_triage',
+      'product-quality-triage-no-finding-assertion'
+    )
+    from no_finding_fixture
+    where fixture_key = 'rejected-route'$$,
+  'P0001',
+  'product_quality_no_finding_triage_rejected',
+  'triage cannot consume a rejected evaluator proof'
+);
+reset role;
+
+select ok(
+  public.product_experience_scheduler_evaluation_is_ready(
+    (
+      select run_id
+      from no_finding_fixture
+      where fixture_key = 'passing-route'
+    )
+  ),
+  'scheduler accepts rich route evidence only after immutable triage consumption'
+);
+
+select ok(
+  (
+    select event.disposition = 'no_finding'
+      and event.finding_id is null
+      and event.assessment_hash = proof.assessment_hash
+      and event.evidence_manifest_hash = run.evidence_manifest_hash
+      and consumption.event_hash = event.event_hash
+      and consumption.consumed_by_identity =
+        'cognitive_product_quality_triage'
+    from public.product_experience_sentinel_no_finding_events event
+    join public.product_experience_sentinel_evaluator_proof_consumptions
+      consumption on consumption.id = event.proof_consumption_id
+    join public.product_experience_sentinel_evaluator_proofs proof
+      on proof.id = event.evaluator_proof_id
+    join public.product_experience_sentinel_runs run
+      on run.id = event.sentinel_run_id
+    join no_finding_fixture fixture on fixture.run_id = run.id
+    where fixture.fixture_key = 'passing-route'
+  ),
+  'immutable no-finding event binds run, proof, consumption, evidence, and null finding'
+);
+
+select throws_ok(
+  $$update public.product_experience_sentinel_no_finding_events
+    set disposition = 'no_finding'$$,
+  '42501',
+  null,
+  'no-finding disposition events are immutable'
+);
+
+select ok(
   (
     select proof.verdict = 'passed'
       and proof.assessment_kind = 'run_no_finding'
@@ -359,6 +504,39 @@ select ok(
     where fixture.fixture_key = 'rejected-route'
   ),
   'a rejected no-finding assessment remains auditable but cannot satisfy readiness'
+);
+
+select ok(
+  not public.product_experience_route_timing_no_finding_is_valid(
+    jsonb_set(
+      pg_temp.route_timing_manifest('Home', repeat('5',64), 2400, 10000),
+      '{metrics,routeOrSurface}',
+      '"Explore"'::jsonb
+    )
+  ),
+  'route-family binding tampering fails closed'
+);
+
+select ok(
+  not public.product_experience_route_timing_no_finding_is_valid(
+    (
+      pg_temp.route_timing_manifest('Home', repeat('5',64), 2400, 10000)
+    ) #- '{metrics,firstInteractiveMonotonicMs}'
+  ),
+  'missing monotonic stage evidence fails closed'
+);
+
+select ok(
+  pg_get_functiondef(
+    'public.product_experience_scheduler_evaluation_is_ready(uuid)'::regprocedure
+  ) like '%run.evaluation_expires_at > transaction_timestamp()%'
+  and pg_get_functiondef(
+    'public.product_experience_scheduler_evaluation_is_ready(uuid)'::regprocedure
+  ) like '%proof.valid_until > transaction_timestamp()%'
+  and pg_get_functiondef(
+    'public.product_experience_scheduler_evaluation_is_ready(uuid)'::regprocedure
+  ) like '%transaction_timestamp() - interval ''7 days''%',
+  'scheduler retains explicit stale-run and stale-proof rejection'
 );
 
 select ok(

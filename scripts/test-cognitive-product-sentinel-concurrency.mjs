@@ -117,6 +117,18 @@ const userImpactHash = hash("sentinel-concurrency-impact");
 const affectedHash = hash("sentinel-concurrency-affected");
 const providerHash = hash("sentinel-concurrency-provider");
 const investigationHash = hash("sentinel-concurrency-investigation");
+const noFindingEvidenceHash = hash(
+  "sentinel-concurrency-no-finding-evidence",
+);
+const noFindingIdempotencyHash = hash(
+  "sentinel-concurrency-no-finding-idempotency",
+);
+const noFindingProofHash = hash(
+  `sentinel-concurrency-no-finding-proof-${ids.task}`,
+);
+const noFindingOutputHash = hash(
+  "sentinel-concurrency-no-finding-output",
+);
 
 query(`
 begin;
@@ -206,6 +218,52 @@ const serviceRoleSql = `
 set local role service_role;
 set local "request.jwt.claim.role"='service_role';
 `;
+const routeFamilyBindingHash = query(`
+select public.product_experience_route_family_binding_hash(
+  'android','home','home.main'
+);
+`);
+assert.match(routeFamilyBindingHash, /^[a-f0-9]{64}$/u);
+
+const noFindingMetricManifest = JSON.stringify({
+  evidenceHashes: [noFindingEvidenceHash],
+  metrics: {
+    appBuild: "84",
+    appVersion: "1.0.0",
+    buildRuntimeHash: buildHash,
+    channel: "play-internal",
+    elapsedDurationMs: 2400,
+    finalObservedState: "content_loaded",
+    findingDisposition: "no_finding",
+    firstInteractiveMonotonicMs: 1200,
+    firstRenderedMonotonicMs: 1100,
+    installedProofStatus: "installed_ui_observed",
+    interactionEvidenceHash: hash(
+      "sentinel-concurrency-no-finding-interaction",
+    ),
+    interactionEvidenceKind: "both",
+    maximumDurationMs: 10000,
+    navigationStartMonotonicMs: 1000,
+    networkReadyBeforeNavigation: true,
+    networkState: "ready",
+    platform: "android",
+    resolutionKind: "content_state",
+    resolvedStateMonotonicMs: 3400,
+    reviewedErrorState: false,
+    routeFamilyBindingHash,
+    routeFamilyId: "home.main",
+    routeOrSurface: "home",
+    runtimeIdentityHash: runtimeHash,
+    runtimeVersion: "1.0.0-android84",
+    sanitizedEvidenceHash: noFindingEvidenceHash,
+    syntheticAccount: true,
+    timeoutObserved: false,
+    unresolvedStateCount: 0,
+  },
+  observationKind: "route_timing",
+  sanitizationVersion: "bounded-nonpersonal-v1",
+  schemaVersion: "product-sentinel-v1",
+});
 
 const runIds = evidenceHashes.map((evidenceHash, index) =>
   query(`
@@ -301,6 +359,97 @@ assert.equal(
   "concurrent detections must produce one current finding, occurrence count two, two immutable event types, and two proof consumptions",
 );
 
+const noFindingRunId = query(`
+begin;
+${serviceRoleSql}
+select public.product_experience_collect_sentinel_run(
+  ${sqlLiteral(ids.task)},${sqlLiteral(ids.project)},'android','production',
+  'installed_journey_sentinel','home',${sqlLiteral(runtimeHash)},
+  ${sqlLiteral(buildHash)},${sqlLiteral(noFindingEvidenceHash)},
+  ${sqlLiteral(noFindingMetricManifest)}::jsonb,
+  'passed','installed_ui_observed',
+  transaction_timestamp()-interval '2 minutes',
+  transaction_timestamp()-interval '1 minute',
+  transaction_timestamp()+interval '1 hour',
+  ${sqlLiteral(noFindingIdempotencyHash)},'cognitive_sentinel_collector',
+  ${sqlLiteral(collectorAssertion)}
+)->>'sentinelRunId';
+commit;
+`);
+assert.match(noFindingRunId, /^[a-f0-9-]{36}$/u);
+
+const noFindingAssessmentHash = query(`
+select public.product_quality_no_finding_assessment_hash(
+  ${sqlLiteral(noFindingRunId)}
+);
+`);
+assert.match(noFindingAssessmentHash, /^[a-f0-9]{64}$/u);
+
+const noFindingProofId = query(`
+begin;
+${serviceRoleSql}
+select public.product_quality_record_sentinel_evaluator_proof(
+  ${sqlLiteral(noFindingRunId)},'run_no_finding',
+  ${sqlLiteral(noFindingAssessmentHash)},
+  ${sqlLiteral(noFindingEvidenceHash)},'passed',
+  ${sqlLiteral(noFindingOutputHash)},${sqlLiteral(noFindingProofHash)},
+  'cognitive_independent_evaluator',${sqlLiteral(evaluatorAssertion)}
+)->>'evaluatorProofId';
+commit;
+`);
+assert.match(noFindingProofId, /^[a-f0-9-]{36}$/u);
+
+const noFindingTriageSql = `
+begin;
+${serviceRoleSql}
+select public.product_quality_triage_no_finding(
+  ${sqlLiteral(noFindingRunId)},${sqlLiteral(noFindingProofId)},
+  ${sqlLiteral(noFindingProofHash)},'cognitive_product_quality_triage',
+  ${sqlLiteral(triageAssertion)}
+);
+commit;
+`;
+const noFindingRaceResults = await Promise.all([
+  runSession(noFindingTriageSql),
+  runSession(noFindingTriageSql),
+]);
+assert.equal(
+  noFindingRaceResults.filter((result) => result.code === 0).length,
+  1,
+  "concurrent no-finding triage must produce exactly one winner",
+);
+const noFindingRaceLosers = noFindingRaceResults.filter(
+  (result) => result.code !== 0,
+);
+assert.equal(
+  noFindingRaceLosers.length,
+  1,
+  "concurrent no-finding triage must reject exactly one replay",
+);
+assert.match(
+  noFindingRaceLosers[0].stderr,
+  /product_quality_no_finding_triage_replay_rejected/u,
+  "the losing concurrent no-finding triage must fail as a replay",
+);
+assert.equal(
+  query(`
+select concat_ws(
+  '|',
+  (select count(*)
+   from public.product_experience_sentinel_no_finding_events
+   where sentinel_run_id=${sqlLiteral(noFindingRunId)}),
+  (select count(*)
+   from public.product_experience_sentinel_evaluator_proof_consumptions
+   where evaluator_proof_id=${sqlLiteral(noFindingProofId)}),
+  public.product_experience_scheduler_evaluation_is_ready(
+    ${sqlLiteral(noFindingRunId)}
+  )
+);
+`),
+  "1|1|t",
+  "one concurrent no-finding winner must create one event, consume one proof, and satisfy scheduler readiness",
+);
+
 const cancellationSession = runSession(`
 begin;
 update public.intelligence_tasks
@@ -339,8 +488,8 @@ select concat_ws(
    where task_id=${sqlLiteral(ids.task)})
 );
 `),
-  "2|2|2",
-  "a cancellation-winning race must leave finding state, events, and proof consumption unchanged",
+  "2|2|3",
+  "a cancellation-winning race must leave finding state, events, and all prior proof consumptions unchanged",
 );
 
-console.log("cognitive product sentinel concurrency: 2/2 passed");
+console.log("cognitive product sentinel concurrency: 3/3 passed");

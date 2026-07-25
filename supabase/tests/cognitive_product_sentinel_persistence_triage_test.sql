@@ -1,6 +1,58 @@
 begin;
 select no_plan();
 
+create function pg_temp.rich_route_timing_manifest(
+  p_route text,
+  p_evidence_hash text,
+  p_elapsed_duration_ms integer
+)
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'schemaVersion', 'product-sentinel-v1',
+    'sanitizationVersion', 'bounded-nonpersonal-v1',
+    'observationKind', 'route_timing',
+    'evidenceHashes', jsonb_build_array(p_evidence_hash),
+    'metrics', jsonb_build_object(
+      'appVersion', '1.0.0',
+      'appBuild', '84',
+      'runtimeVersion', '1.0.0-android84',
+      'channel', 'play-internal',
+      'platform', 'android',
+      'routeOrSurface', p_route,
+      'routeFamilyId', lower(p_route) || '.main',
+      'routeFamilyBindingHash',
+        public.product_experience_route_family_binding_hash(
+          'android', p_route, lower(p_route) || '.main'
+        ),
+      'runtimeIdentityHash', repeat('c',64),
+      'buildRuntimeHash', repeat('d',64),
+      'syntheticAccount', true,
+      'networkReadyBeforeNavigation', true,
+      'networkState', 'ready',
+      'navigationStartMonotonicMs', 1000,
+      'firstRenderedMonotonicMs', 1100,
+      'firstInteractiveMonotonicMs', 1200,
+      'resolvedStateMonotonicMs', 1000 + p_elapsed_duration_ms,
+      'resolutionKind', 'content_state',
+      'finalObservedState', 'content_loaded',
+      'reviewedErrorState', false,
+      'unresolvedStateCount', 0,
+      'timeoutObserved', false,
+      'maximumDurationMs', 10000,
+      'elapsedDurationMs', p_elapsed_duration_ms,
+      'interactionEvidenceKind', 'both',
+      'interactionEvidenceHash', repeat('b',64),
+      'sanitizedEvidenceHash', p_evidence_hash,
+      'installedProofStatus', 'installed_ui_observed',
+      'findingDisposition', 'no_finding'
+    )
+  )
+$$;
+
 insert into public.cognitive_projects(
   id, repository_full_name, source_state, activation_state,
   scheduler_state, production_authority
@@ -678,14 +730,8 @@ select
       'c1000000-0000-4000-8000-000000000001',
       'c0000000-0000-4000-8000-000000000001',
       'android','production','installed_journey_sentinel','home',
-      repeat('8',64),repeat('4',64),repeat('7',64),
-      '{
-        "schemaVersion":"product-sentinel-v1",
-        "sanitizationVersion":"bounded-nonpersonal-v1",
-        "observationKind":"route_timing",
-        "evidenceHashes":["7777777777777777777777777777777777777777777777777777777777777777"],
-        "metrics":{"elapsedDurationMs":2400,"networkState":"ready","timeoutObserved":false}
-      }'::jsonb,
+      repeat('c',64),repeat('d',64),repeat('7',64),
+      pg_temp.rich_route_timing_manifest('home', repeat('7',64), 2400),
       'passed','installed_ui_observed',
       transaction_timestamp()-interval '2 minutes',
       transaction_timestamp()-interval '1 minute',

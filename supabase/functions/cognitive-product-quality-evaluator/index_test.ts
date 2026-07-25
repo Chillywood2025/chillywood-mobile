@@ -269,6 +269,7 @@ const storedRun = (
     evidence_manifest_hash: payload.evidenceHashes[0],
     id: payload.sentinelRunId,
     metric_manifest: {
+      evidenceHashes: [payload.evidenceHashes[0]],
       metrics,
       observationKind,
     },
@@ -286,6 +287,41 @@ const storedRun = (
     ...overrides,
   };
 };
+
+const routeTimingNoFindingMetrics = (
+  overrides: TestJsonObject = {},
+): TestJsonObject => ({
+  appBuild: "84",
+  appVersion: "1.0.0",
+  buildRuntimeHash: validPayload().buildRuntimeHash,
+  channel: "play-internal",
+  elapsedDurationMs: 10_000,
+  finalObservedState: "content_loaded",
+  findingDisposition: "no_finding",
+  firstInteractiveMonotonicMs: 8_000,
+  firstRenderedMonotonicMs: 2_000,
+  installedProofStatus: "installed_ui_observed",
+  interactionEvidenceHash: "c".repeat(64),
+  interactionEvidenceKind: "both",
+  maximumDurationMs: 10_000,
+  navigationStartMonotonicMs: 0,
+  networkReadyBeforeNavigation: true,
+  networkState: "ready",
+  platform: "android",
+  resolutionKind: "content_state",
+  resolvedStateMonotonicMs: 10_000,
+  reviewedErrorState: false,
+  routeFamilyBindingHash: "5".repeat(64),
+  routeFamilyId: "home.main",
+  routeOrSurface: OBJECTIVE_BINDING.routeOrSurface,
+  runtimeIdentityHash: "4".repeat(64),
+  runtimeVersion: "1.0.0-android84",
+  sanitizedEvidenceHash: validPayload().evidenceHashes[0],
+  syntheticAccount: true,
+  timeoutObserved: false,
+  unresolvedStateCount: 0,
+  ...overrides,
+});
 
 Deno.test("sentinel evaluator accepts only an exact bounded detection candidate", () => {
   assert(
@@ -428,11 +464,7 @@ Deno.test("no-finding evaluation is derived from one passing physical run", () =
 
   const boundedRoute = storedRun(
     "route_timing",
-    {
-      elapsedDurationMs: 10000,
-      networkState: "ready",
-      timeoutObserved: false,
-    },
+    routeTimingNoFindingMetrics(),
     { result_status: "passed" },
   );
   assert(
@@ -441,24 +473,28 @@ Deno.test("no-finding evaluation is derived from one passing physical run", () =
   );
   for (
     const metrics of [
-      {
+      routeTimingNoFindingMetrics({
         elapsedDurationMs: 10001,
-        networkState: "ready",
-        timeoutObserved: false,
-      },
-      {
-        elapsedDurationMs: 500,
+        maximumDurationMs: 10001,
+        resolvedStateMonotonicMs: 10001,
+      }),
+      routeTimingNoFindingMetrics({
         networkState: "degraded",
-        timeoutObserved: false,
-      },
+      }),
+      routeTimingNoFindingMetrics({
+        firstInteractiveMonotonicMs: 1000,
+      }),
+      routeTimingNoFindingMetrics({
+        routeOrSurface: "Explore",
+      }),
     ]
   ) {
     assert(
       deterministicNoFindingReasons(
         storedRun("route_timing", metrics, { result_status: "passed" }),
         approvedContext,
-      ).includes("resolved_route_timing_required"),
-      "slow or degraded route evidence cannot be certified as no-finding",
+      ).length > 0,
+      "slow, degraded, or unbound route evidence cannot be certified as no-finding",
     );
   }
 });
@@ -1587,11 +1623,18 @@ Deno.test("resolution proof requires a matching passing observation", () => {
     evidence_manifest_hash: "9".repeat(64),
     id: "55555555-5555-4555-8555-555555555555",
     metric_manifest: {
-      metrics: {
+      evidenceHashes: ["9".repeat(64)],
+      metrics: routeTimingNoFindingMetrics({
+        buildRuntimeHash: "8".repeat(64),
         elapsedDurationMs: 500,
-        networkState: "ready",
-        timeoutObserved: false,
-      },
+        firstInteractiveMonotonicMs: 300,
+        firstRenderedMonotonicMs: 100,
+        interactionEvidenceHash: "9".repeat(64),
+        maximumDurationMs: 10_000,
+        resolvedStateMonotonicMs: 500,
+        routeOrSurface: finding.route_or_surface,
+        sanitizedEvidenceHash: "9".repeat(64),
+      }),
       observationKind: "route_timing",
     },
     result_status: "passed",

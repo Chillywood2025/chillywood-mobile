@@ -13,4 +13,10 @@ export const TRIAGE_STATEMENTS = Object.freeze({
       $1::uuid,$2::uuid,$3::uuid,$4::text,$5::text,$6::text,$7::text
     ) as result`,
   }),
+  triageNoFinding: Object.freeze({
+    arity: 5,
+    text: `select cognitive_runtime.product_quality_triage_no_finding(
+      $1::uuid,$2::uuid,$3::text,$4::text,$5::text
+    ) as result`,
+  }),
 });

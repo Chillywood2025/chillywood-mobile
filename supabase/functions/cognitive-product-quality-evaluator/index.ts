@@ -502,6 +502,126 @@ const metricNumber = (
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 };
 
+const ROUTE_IDENTITY = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$/u;
+const ROUTE_FAMILY_ID = /^[a-z0-9][a-z0-9._/-]{1,79}$/u;
+const ROUTE_RESOLUTION_STATES = Object.freeze({
+  content_state: "content_loaded",
+  empty_state: "empty_state",
+  reviewed_error_state: "reviewed_error_state",
+} as const);
+const ROUTE_INTERACTION_EVIDENCE = new Set([
+  "accessibility_tree",
+  "direct_interaction",
+  "both",
+]);
+
+export const routeTimingNoFindingReasons = (
+  run: StoredRun,
+  metrics: Record<string, unknown>,
+): readonly string[] => {
+  const reasons = new Set<string>();
+  const navigationStarted = metricNumber(
+    metrics,
+    "navigationStartMonotonicMs",
+  );
+  const firstRendered = metricNumber(metrics, "firstRenderedMonotonicMs");
+  const firstInteractive = metricNumber(
+    metrics,
+    "firstInteractiveMonotonicMs",
+  );
+  const resolvedAt = metricNumber(metrics, "resolvedStateMonotonicMs");
+  const elapsedDuration = metricNumber(metrics, "elapsedDurationMs");
+  const maximumDuration = metricNumber(metrics, "maximumDurationMs");
+  const resolutionKind = toText(metrics.resolutionKind);
+  const expectedFinalState =
+    ROUTE_RESOLUTION_STATES[
+      resolutionKind as keyof typeof ROUTE_RESOLUTION_STATES
+    ];
+  const evidenceHashes = run.metric_manifest.evidenceHashes;
+
+  if (
+    !ROUTE_IDENTITY.test(toText(metrics.appVersion)) ||
+    !ROUTE_IDENTITY.test(toText(metrics.appBuild)) ||
+    !ROUTE_IDENTITY.test(toText(metrics.runtimeVersion)) ||
+    !ROUTE_IDENTITY.test(toText(metrics.channel))
+  ) {
+    reasons.add("route_timing_app_identity_required");
+  }
+  if (
+    toText(metrics.platform) !== run.platform ||
+    toText(metrics.routeOrSurface) !== run.route_or_surface ||
+    !ROUTE_FAMILY_ID.test(toText(metrics.routeFamilyId)) ||
+    !LOWER_HEX_64.test(toText(metrics.routeFamilyBindingHash))
+  ) {
+    reasons.add("route_timing_route_family_binding_required");
+  }
+  if (
+    toText(metrics.runtimeIdentityHash) !== run.runtime_identity_hash ||
+    toText(metrics.buildRuntimeHash) !== run.source_build_hash ||
+    toText(metrics.sanitizedEvidenceHash) !== run.evidence_manifest_hash ||
+    !Array.isArray(evidenceHashes) ||
+    !evidenceHashes.includes(run.evidence_manifest_hash)
+  ) {
+    reasons.add("route_timing_evidence_binding_required");
+  }
+  if (
+    toText(metrics.installedProofStatus) !== run.physical_proof_status ||
+    !["installed_ui_observed", "simulator_observed"].includes(
+      run.physical_proof_status,
+    ) ||
+    metrics.syntheticAccount !== true
+  ) {
+    reasons.add("route_timing_installed_synthetic_proof_required");
+  }
+  if (
+    metrics.networkReadyBeforeNavigation !== true ||
+    toText(metrics.networkState) !== "ready" ||
+    metrics.timeoutObserved !== false ||
+    metricNumber(metrics, "unresolvedStateCount") !== 0
+  ) {
+    reasons.add("resolved_route_timing_required");
+  }
+  if (
+    navigationStarted === null ||
+    firstRendered === null ||
+    firstInteractive === null ||
+    resolvedAt === null ||
+    navigationStarted < 0 ||
+    firstRendered < navigationStarted ||
+    firstInteractive < firstRendered ||
+    resolvedAt < firstInteractive ||
+    elapsedDuration === null ||
+    maximumDuration === null ||
+    maximumDuration < 1 ||
+    maximumDuration > DEFAULT_ROUTE_RESOLUTION_MS ||
+    elapsedDuration < 0 ||
+    elapsedDuration > maximumDuration ||
+    resolvedAt - navigationStarted !== elapsedDuration
+  ) {
+    reasons.add("route_timing_monotonic_stages_required");
+  }
+  if (
+    !expectedFinalState ||
+    toText(metrics.finalObservedState) !== expectedFinalState ||
+    (resolutionKind === "reviewed_error_state") !==
+      (metrics.reviewedErrorState === true)
+  ) {
+    reasons.add("route_timing_resolved_state_required");
+  }
+  if (
+    !ROUTE_INTERACTION_EVIDENCE.has(
+      toText(metrics.interactionEvidenceKind),
+    ) ||
+    !LOWER_HEX_64.test(toText(metrics.interactionEvidenceHash))
+  ) {
+    reasons.add("route_timing_interaction_evidence_required");
+  }
+  if (toText(metrics.findingDisposition) !== "no_finding") {
+    reasons.add("route_timing_no_finding_linkage_required");
+  }
+  return Object.freeze([...reasons].sort());
+};
+
 const DEFAULT_EVALUATION_CONTEXT: DetectionEvaluationContext = Object.freeze({
   approvedVisualBaselineCount: 0,
   approvedVisualBaselineHash: null,
@@ -2002,15 +2122,8 @@ export const deterministicNoFindingReasons = (
       }
     }
   } else if (observationKind === "route_timing") {
-    const elapsedDurationMs = metricNumber(metrics, "elapsedDurationMs");
-    if (
-      metrics.timeoutObserved !== false ||
-      toText(metrics.networkState) !== "ready" ||
-      elapsedDurationMs === null ||
-      elapsedDurationMs < 0 ||
-      elapsedDurationMs > DEFAULT_ROUTE_RESOLUTION_MS
-    ) {
-      reasons.add("resolved_route_timing_required");
+    for (const reason of routeTimingNoFindingReasons(run, metrics)) {
+      reasons.add(reason);
     }
   } else if (observationKind === "crash_anr") {
     if (
@@ -2224,18 +2337,10 @@ export const deterministicResolutionReasons = (
       reasons.add("resolution_measurement_identity_mismatch");
     }
   } else if (observationKind === "route_timing") {
-    const elapsedDurationMs = metricNumber(
-      resolutionMetrics,
-      "elapsedDurationMs",
-    );
-    if (
-      resolutionMetrics.timeoutObserved !== false ||
-      toText(resolutionMetrics.networkState) !== "ready" ||
-      elapsedDurationMs === null ||
-      elapsedDurationMs < 0 ||
-      elapsedDurationMs > DEFAULT_ROUTE_RESOLUTION_MS
+    for (
+      const reason of routeTimingNoFindingReasons(run, resolutionMetrics)
     ) {
-      reasons.add("resolved_route_timing_required");
+      reasons.add(reason);
     }
   }
   return Object.freeze([...reasons].sort());

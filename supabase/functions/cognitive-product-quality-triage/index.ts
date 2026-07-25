@@ -55,6 +55,12 @@ const RESOLUTION_KEYS = Object.freeze([
   "resolutionReasonHash",
   "sentinelRunId",
 ]);
+const NO_FINDING_KEYS = Object.freeze([
+  "action",
+  "evaluatorProofHash",
+  "evaluatorProofId",
+  "sentinelRunId",
+]);
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
   "confirmed_defect",
@@ -176,6 +182,20 @@ export const isStrictProductQualityResolutionPayload = (
     safePayload({ action: value.action });
 };
 
+export const isStrictProductQualityNoFindingPayload = (
+  value: unknown,
+): value is Record<string, unknown> => {
+  if (!isRecord(value) || !hasExactKeys(value, NO_FINDING_KEYS)) return false;
+  return value.action === "triage_no_finding" &&
+    typeof value.sentinelRunId === "string" &&
+    UUID.test(value.sentinelRunId) &&
+    typeof value.evaluatorProofId === "string" &&
+    UUID.test(value.evaluatorProofId) &&
+    typeof value.evaluatorProofHash === "string" &&
+    LOWER_HEX_64.test(value.evaluatorProofHash) &&
+    safePayload({ action: value.action });
+};
+
 const readRequiredSecret = (name: string): string => {
   const value = Deno.env.get(name)?.trim() ?? "";
   if (!value) throw new Error("server_configuration_missing");
@@ -285,6 +305,22 @@ export const handler = async (request: Request): Promise<Response> => {
       );
       if (result.error || !isRecord(result.data)) {
         return json(409, { error: "product_quality_resolution_rejected" });
+      }
+      return json(200, result.data as JsonObject);
+    }
+    if (isStrictProductQualityNoFindingPayload(payload)) {
+      const result = await serviceClient.rpc(
+        "product_quality_triage_no_finding",
+        {
+          p_evaluator_proof_hash: payload.evaluatorProofHash,
+          p_evaluator_proof_id: payload.evaluatorProofId,
+          p_sentinel_run_id: payload.sentinelRunId,
+          p_service_assertion: triageAssertion(),
+          p_service_identity: SERVICE_IDENTITY,
+        },
+      );
+      if (result.error || !isRecord(result.data)) {
+        return json(409, { error: "product_quality_no_finding_rejected" });
       }
       return json(200, result.data as JsonObject);
     }

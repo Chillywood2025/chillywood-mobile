@@ -40,4 +40,15 @@ export const PRODUCT_QUALITY_TRIAGE_ADAPTERS = Object.freeze({
         env.COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION,
       ]),
   ),
+  triage_no_finding: ready(
+    ["triage_no_finding"],
+    ({ database, env, payload }) =>
+      database.call("triageNoFinding", [
+        payload.sentinelRunId,
+        payload.evaluatorProofId,
+        payload.evaluatorProofHash,
+        SERVICE_IDENTITY,
+        env.COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION,
+      ]),
+  ),
 });

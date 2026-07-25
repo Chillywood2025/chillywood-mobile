@@ -386,7 +386,7 @@ test("authoritative touch-target port preserves Android 23.24dp finding", () => 
 });
 
 test("route timing no-finding uses the reviewed ten-second ready-network bound", () => {
-  const routeRun = (metrics) => ({
+  const routeRun = (overrides = {}) => ({
     collector_capability_id: UUID_A,
     environment: "production",
     erased_at: null,
@@ -394,7 +394,39 @@ test("route timing no-finding uses the reviewed ten-second ready-network bound",
     evidence_manifest_hash: HASH_A,
     id: UUID_A,
     metric_manifest: {
-      metrics,
+      evidenceHashes: [HASH_A],
+      metrics: {
+        appBuild: "84",
+        appVersion: "1.0.0",
+        buildRuntimeHash: HASH_C,
+        channel: "play-internal",
+        elapsedDurationMs: 10_000,
+        finalObservedState: "content_loaded",
+        findingDisposition: "no_finding",
+        firstInteractiveMonotonicMs: 8_000,
+        firstRenderedMonotonicMs: 2_000,
+        installedProofStatus: "installed_ui_observed",
+        interactionEvidenceHash: HASH_A,
+        interactionEvidenceKind: "both",
+        maximumDurationMs: 10_000,
+        navigationStartMonotonicMs: 0,
+        networkReadyBeforeNavigation: true,
+        networkState: "ready",
+        platform: "android",
+        resolutionKind: "content_state",
+        resolvedStateMonotonicMs: 10_000,
+        reviewedErrorState: false,
+        routeFamilyBindingHash: HASH_C,
+        routeFamilyId: "home.main",
+        routeOrSurface: "Home",
+        runtimeIdentityHash: HASH_B,
+        runtimeVersion: "1.0.0-android84",
+        sanitizedEvidenceHash: HASH_A,
+        syntheticAccount: true,
+        timeoutObserved: false,
+        unresolvedStateCount: 0,
+        ...overrides,
+      },
       observationKind: "route_timing",
     },
     physical_proof_status: "installed_ui_observed",
@@ -408,41 +440,32 @@ test("route timing no-finding uses the reviewed ten-second ready-network bound",
     task_id: UUID_C,
   });
   assert.deepEqual(
-    deterministicNoFindingReasons(
-      routeRun({
-        elapsedDurationMs: 10_000,
-        networkState: "ready",
-        timeoutObserved: false,
-      }),
-      {
+    deterministicNoFindingReasons(routeRun(), {
         approvedVisualBaselineCount: 0,
         approvedVisualBaselineHash: null,
-      },
-    ),
+      }),
     [],
   );
-  for (
-    const metrics of [
+  for (const overrides of [
       {
         elapsedDurationMs: 10_001,
-        networkState: "ready",
-        timeoutObserved: false,
+        maximumDurationMs: 10_001,
+        resolvedStateMonotonicMs: 10_001,
       },
-      {
-        elapsedDurationMs: 500,
-        networkState: "degraded",
-        timeoutObserved: false,
-      },
+      { networkState: "degraded" },
+      { firstInteractiveMonotonicMs: 1_000 },
+      { routeOrSurface: "Explore" },
+      { interactionEvidenceKind: "not_observed" },
     ]
   ) {
     assert(
       deterministicNoFindingReasons(
-        routeRun(metrics),
+        routeRun(overrides),
         {
           approvedVisualBaselineCount: 0,
           approvedVisualBaselineHash: null,
         },
-      ).includes("resolved_route_timing_required"),
+      ).length > 0,
     );
   }
 });

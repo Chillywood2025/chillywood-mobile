@@ -52,6 +52,17 @@ const principal = Object.freeze({
       "rpcEntrypoints": [
         "product_quality_triage_resolution"
       ]
+    },
+    "triage_no_finding": {
+      "payloadKeys": [
+        "action",
+        "evaluatorProofHash",
+        "evaluatorProofId",
+        "sentinelRunId"
+      ],
+      "rpcEntrypoints": [
+        "product_quality_triage_no_finding"
+      ]
     }
   },
   "provider": "none",

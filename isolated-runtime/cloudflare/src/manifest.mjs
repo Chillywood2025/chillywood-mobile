@@ -196,6 +196,10 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "action", "evaluatorProofHash", "evaluatorProofId", "findingId",
           "resolutionReasonHash", "sentinelRunId",
         ], ["product_quality_triage_resolution"]),
+        triage_no_finding: operation([
+          "action", "evaluatorProofHash", "evaluatorProofId",
+          "sentinelRunId",
+        ], ["product_quality_triage_no_finding"]),
       },
       internalSecrets: ["COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION"],
       maxRequestBytes: 32_768,
