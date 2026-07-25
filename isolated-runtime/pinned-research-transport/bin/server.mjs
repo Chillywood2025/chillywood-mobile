@@ -13,7 +13,7 @@ const releaseManifestSha256 =
   process.env.COGNITIVE_RESEARCH_TRANSPORT_RELEASE_MANIFEST_SHA256;
 if (
   typeof credentialDirectory !== "string" ||
-  !credentialDirectory.startsWith("/run/credentials/") ||
+  credentialDirectory !== "/run/chillywood-research-transport-runtime" ||
   typeof sourceCommit !== "string" ||
   !/^[a-f0-9]{40}$/u.test(sourceCommit) ||
   typeof sourceTree !== "string" ||

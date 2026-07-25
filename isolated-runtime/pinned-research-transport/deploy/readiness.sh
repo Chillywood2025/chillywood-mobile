@@ -22,7 +22,7 @@ release_manifest_sha256=$3
 
 service_identity=chillywood-research-transport
 persistent_credential=/etc/chillywood/research-transport/research_transport_hmac
-runtime_directory=/run/credentials/chillywood-research-transport-runtime
+runtime_directory=/run/chillywood-research-transport-runtime
 runtime_credential="$runtime_directory/research_transport_hmac"
 service_uid=$(id -u "$service_identity")
 service_gid=$(id -g "$service_identity")

@@ -358,20 +358,20 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
   assert.match(credentialCompatibility, /^LoadCredential=$/mu);
   assert.match(
     credentialCompatibility,
-    /^RuntimeDirectory=credentials\/chillywood-research-transport-runtime$/mu,
+    /^RuntimeDirectory=chillywood-research-transport-runtime$/mu,
   );
   assert.match(credentialCompatibility, /^RuntimeDirectoryMode=0700$/mu);
   assert.match(
     credentialCompatibility,
-    /^ExecStartPre=\+\/usr\/bin\/install -o chillywood-research-transport -g chillywood-research-transport -m 0400 \/etc\/chillywood\/research-transport\/research_transport_hmac \/run\/credentials\/chillywood-research-transport-runtime\/research_transport_hmac$/mu,
+    /^ExecStartPre=\+\/usr\/bin\/install -o chillywood-research-transport -g chillywood-research-transport -m 0400 \/etc\/chillywood\/research-transport\/research_transport_hmac \/run\/chillywood-research-transport-runtime\/research_transport_hmac$/mu,
   );
   assert.match(
     credentialCompatibility,
-    /^ExecStopPost=\+\/usr\/bin\/rm -f -- \/run\/credentials\/chillywood-research-transport-runtime\/research_transport_hmac$/mu,
+    /^ExecStopPost=\+\/usr\/bin\/rm -f -- \/run\/chillywood-research-transport-runtime\/research_transport_hmac$/mu,
   );
   assert.match(
     credentialCompatibility,
-    /^Environment=CREDENTIALS_DIRECTORY=\/run\/credentials\/chillywood-research-transport-runtime$/mu,
+    /^Environment=CREDENTIALS_DIRECTORY=\/run\/chillywood-research-transport-runtime$/mu,
   );
   assert.doesNotMatch(
     credentialCompatibility,
@@ -425,16 +425,85 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
   }
 });
 
-test("systemd compatibility delta leaves the reviewed Node credential boundary unchanged", async () => {
+test("systemd RuntimeDirectory interpretation stays outside its credential namespace", async () => {
+  const packageRoot = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+  );
+  const [credentialCompatibility, readiness, server] = await Promise.all([
+    readFile(
+      resolve(
+        packageRoot,
+        "deploy/chillywood-research-transport-credential-compat.conf.template",
+      ),
+      "utf8",
+    ),
+    readFile(resolve(packageRoot, "deploy/readiness.sh"), "utf8"),
+    readFile(resolve(packageRoot, "bin/server.mjs"), "utf8"),
+  ]);
+  const runtimeDirectory = /^RuntimeDirectory=(.+)$/mu.exec(
+    credentialCompatibility,
+  )?.[1];
+  const runtimeDirectoryMode = /^RuntimeDirectoryMode=(.+)$/mu.exec(
+    credentialCompatibility,
+  )?.[1];
+  const credentialDirectory =
+    /^Environment=CREDENTIALS_DIRECTORY=(.+)$/mu.exec(
+      credentialCompatibility,
+    )?.[1];
+
+  assert.deepEqual(
+    {
+      RuntimeDirectory: runtimeDirectory,
+      RuntimeDirectoryMode: runtimeDirectoryMode,
+    },
+    {
+      RuntimeDirectory: "chillywood-research-transport-runtime",
+      RuntimeDirectoryMode: "0700",
+    },
+  );
+  assert.doesNotMatch(runtimeDirectory, /\//u);
+  assert.equal(credentialDirectory, `/run/${runtimeDirectory}`);
+  assert.doesNotMatch(credentialDirectory, /^\/run\/credentials(?:\/|$)/u);
+  for (const source of [credentialCompatibility, readiness, server]) {
+    assert.doesNotMatch(
+      source,
+      /\/run\/credentials\/chillywood-research-transport-runtime/u,
+    );
+  }
+  assert.match(
+    credentialCompatibility,
+    new RegExp(
+      `^ExecStartPre=.* ${credentialDirectory}/research_transport_hmac$`,
+      "mu",
+    ),
+  );
+  assert.match(
+    credentialCompatibility,
+    new RegExp(
+      `^ExecStopPost=.* ${credentialDirectory}/research_transport_hmac$`,
+      "mu",
+    ),
+  );
+  assert.match(
+    readiness,
+    new RegExp(`^runtime_directory=${credentialDirectory}$`, "mu"),
+  );
+  assert.match(
+    server,
+    new RegExp(
+      `credentialDirectory !== "${credentialDirectory}"`,
+      "u",
+    ),
+  );
+});
+
+test("systemd compatibility delta leaves the reviewed Node auth and network bytes unchanged", async () => {
   const packageRoot = resolve(
     dirname(fileURLToPath(import.meta.url)),
     "..",
   );
   const expected = new Map([
-    [
-      "bin/server.mjs",
-      "fb61e3ee9901e7ae143cb79bf8948ce4d3208f800a5f9e35db00da75183a307b",
-    ],
     [
       "src/host-auth.mjs",
       "a48f8456e56cdd66ba3fe485b0151df93d6df57d88767b5889bcef86c22467a3",
@@ -442,6 +511,10 @@ test("systemd compatibility delta leaves the reviewed Node credential boundary u
     [
       "src/host-service.mjs",
       "5ebd79563104167f7c60914e56f2f7f33a5743eb10d715bce17981aa0eebdcaa",
+    ],
+    [
+      "src/pinned-public-research-transport.mjs",
+      "9b21d088e2d5387e3b178baa7148ec1682ec5fb875777206effb6c785ddd44bd",
     ],
   ]);
   for (const [relative, expectedHash] of expected) {
