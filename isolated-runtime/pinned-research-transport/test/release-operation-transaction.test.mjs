@@ -31,6 +31,7 @@ import {
   verifyReviewedBundle,
 } from "../deploy/reviewed-release-contract.mjs";
 import {
+  buildCompatibleV2Fixture,
   buildLegacyV1Fixture,
 } from "./release-fixture-helpers.mjs";
 
@@ -53,6 +54,8 @@ const legacySourceCommit =
   "132a2022acc4ad83618e77652c7a554637599aeb";
 const legacyThirteenModuleSourceCommit =
   "607dda39f18d3c65149717ae157a0667a5eef691";
+const priorCompatibleV3SourceCommit =
+  "1770d3e9d9d6e7b8351d3f984b3cdd8a398b68cf";
 
 const currentCommit = () =>
   execFileSync("git", ["-C", repository, "rev-parse", "HEAD"], {
@@ -78,11 +81,19 @@ const buildBundle = async ({
   const artifactName = `${profile.id}-${sourceCommit}`;
   const archivePath = resolve(directory, `${artifactName}.tar`);
   const manifestPath = resolve(directory, `${artifactName}.manifest.json`);
-  const built = profile.runtimeActivationAllowed
+  const built = profile.currentDeployable
     ? await buildReviewedRelease({
         archivePath,
         manifestPath,
         releaseProfile: profile,
+        repository: sourceRepository,
+        sourceCommit,
+      })
+    : profile.runtimeActivationAllowed
+    ? await buildCompatibleV2Fixture({
+        archivePath,
+        manifestPath,
+        profile,
         repository: sourceRepository,
         sourceCommit,
       })
@@ -408,6 +419,76 @@ test("failed v2 deployment restores an exact legacy v1 release and overlay inact
   }
 });
 
+test("failed current deployment automatically restores and readies the exact prior v3 compatible release", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-prior-v3-auto-rollback-"),
+  );
+  try {
+    const harness = await createHarness(temporary);
+    const prior = await buildBundle({
+      directory: temporary,
+      profile: REVIEWED_RELEASE_PROFILES[2],
+      sourceCommit: priorCompatibleV3SourceCommit,
+    });
+    const current = await buildBundle({
+      directory: temporary,
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
+      sourceCommit: currentCommit(),
+    });
+    const priorDirectory = await installBundle({
+      bundle: prior,
+      releaseRoot: harness.releaseRoot,
+    });
+    await symlink(
+      priorDirectory,
+      resolve(harness.transportRoot, "current"),
+    );
+    await mkdir(dirname(harness.dropIn), { recursive: true });
+    const priorOverlay = await readFile(
+      resolve(priorDirectory, compatibilityTemplateRelative),
+    );
+    await writeFile(harness.dropIn, priorOverlay);
+    const currentDirectory = resolve(
+      await realpath(harness.releaseRoot),
+      current.sourceCommit,
+    );
+    await writeFile(
+      harness.readinessMode,
+      `fail-current-once:${currentDirectory}\n`,
+    );
+
+    const result = run(
+      deployScript,
+      [
+        current.archivePath,
+        current.manifestPath,
+        current.manifestSha256,
+      ],
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(
+      result.stderr,
+      /automatic_rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION/u,
+    );
+    assert.doesNotMatch(result.stderr, /INACTIVE_ONLY_ABI_INCOMPATIBLE/u);
+    assert.equal(
+      await realpath(resolve(harness.transportRoot, "current")),
+      await realpath(priorDirectory),
+    );
+    assert.deepEqual(await readFile(harness.dropIn), priorOverlay);
+    assert.deepEqual(
+      (await readFile(harness.readinessLog, "utf8"))
+        .trim()
+        .split("\n"),
+      [currentDirectory, await realpath(priorDirectory)],
+    );
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
 test("failed future compatible v2 deployment automatically restores and readies the exact prior v2 ABI and overlay", async () => {
   const temporary = await mkdtemp(
     resolve(tmpdir(), "chillywood-release-compatible-auto-rollback-"),
@@ -619,6 +700,43 @@ test("direct deployment rejects exact legacy ten- and prior thirteen-module v1 r
   }
 });
 
+test("direct deployment rejects the exact prior v3 compatible profile before host mutation", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-prior-v3-deploy-"),
+  );
+  try {
+    const harness = await createHarness(temporary);
+    const prior = await buildBundle({
+      directory: temporary,
+      profile: REVIEWED_RELEASE_PROFILES[2],
+      sourceCommit: priorCompatibleV3SourceCommit,
+    });
+    const result = run(
+      deployScript,
+      [
+        prior.archivePath,
+        prior.manifestPath,
+        prior.manifestSha256,
+      ],
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 65, result.stderr);
+    assert.match(
+      result.stderr,
+      /reviewed_release_current_deployable_rejected/u,
+    );
+    assert.match(result.stderr, /release_bundle_rejected/u);
+    assert.equal(
+      await exists(resolve(harness.transportRoot, "current")),
+      false,
+    );
+    assert.equal(await exists(harness.dropIn), false);
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
 test("standalone rollback rejects a legacy v1 target before link or overlay mutation", async () => {
   const temporary = await mkdtemp(
     resolve(tmpdir(), "chillywood-release-standalone-rollback-"),
@@ -667,6 +785,65 @@ test("standalone rollback rejects a legacy v1 target before link or overlay muta
     );
     assert.deepEqual(await readFile(harness.dropIn), stableOverlay);
     assert.equal(await exists(harness.readinessLog), false);
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
+test("standalone rollback activates the exact prior v3 compatible target with its reviewed overlay", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-prior-v3-rollback-"),
+  );
+  try {
+    const harness = await createHarness(temporary);
+    const prior = await buildBundle({
+      directory: temporary,
+      profile: REVIEWED_RELEASE_PROFILES[2],
+      sourceCommit: priorCompatibleV3SourceCommit,
+    });
+    const current = await buildBundle({
+      directory: temporary,
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
+      sourceCommit: currentCommit(),
+    });
+    const priorDirectory = await installBundle({
+      bundle: prior,
+      releaseRoot: harness.releaseRoot,
+    });
+    const currentDirectory = await installBundle({
+      bundle: current,
+      releaseRoot: harness.releaseRoot,
+    });
+    await symlink(
+      currentDirectory,
+      resolve(harness.transportRoot, "current"),
+    );
+    await mkdir(dirname(harness.dropIn), { recursive: true });
+    const priorOverlay = await readFile(
+      resolve(priorDirectory, compatibilityTemplateRelative),
+    );
+    await writeFile(harness.dropIn, priorOverlay);
+
+    const result = run(
+      rollbackScript,
+      rollbackArguments(prior, prior),
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(
+      result.stdout,
+      /rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION/u,
+    );
+    assert.equal(
+      await realpath(resolve(harness.transportRoot, "current")),
+      await realpath(priorDirectory),
+    );
+    assert.deepEqual(await readFile(harness.dropIn), priorOverlay);
+    assert.equal(
+      (await readFile(harness.readinessLog, "utf8")).trim(),
+      await realpath(priorDirectory),
+    );
     await assertCleanOperationState(harness);
   } finally {
     await removeTemporary(temporary);
