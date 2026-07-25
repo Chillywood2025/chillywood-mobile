@@ -5,9 +5,35 @@ if [ "$#" -ne 3 ]; then
   echo "usage: deploy-reviewed-release.sh SOURCE_ARCHIVE REVIEWED_MANIFEST EXPECTED_MANIFEST_SHA256" >&2
   exit 64
 fi
-if [ "$(id -u)" -ne 0 ]; then
-  echo "root_required" >&2
-  exit 77
+
+test_root=${CHILLYWOOD_RESEARCH_TRANSPORT_TEST_ROOT:-}
+if [ -n "$test_root" ]; then
+  test_root=$(realpath "$test_root")
+  test_marker="$test_root/.chillywood-reviewed-host-test-root"
+  if [ -L "$test_marker" ] ||
+     [ ! -f "$test_marker" ] ||
+     [ "$(cat "$test_marker")" != "chillywood-reviewed-host-shell-harness-v1" ]; then
+    echo "test_root_rejected" >&2
+    exit 77
+  fi
+  host_prefix=$test_root
+  systemctl_command="$test_root/.chillywood-reviewed-host-test-systemctl"
+  readiness_command="$test_root/.chillywood-reviewed-host-test-readiness"
+  if [ -L "$systemctl_command" ] ||
+     [ ! -x "$systemctl_command" ] ||
+     [ -L "$readiness_command" ] ||
+     [ ! -x "$readiness_command" ]; then
+    echo "test_command_rejected" >&2
+    exit 77
+  fi
+else
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "root_required" >&2
+    exit 77
+  fi
+  host_prefix=
+  systemctl_command=systemctl
+  readiness_command=
 fi
 
 source_archive=$(realpath "$1")
@@ -21,7 +47,14 @@ if [ "${#expected_manifest_sha256}" -ne 64 ]; then
   exit 65
 fi
 
-contract_script=$(realpath "$(dirname "$0")/reviewed-release-contract.mjs")
+script_directory=$(realpath "$(dirname "$0")")
+contract_script="$script_directory/reviewed-release-contract.mjs"
+credential_drop_in_source="$script_directory/chillywood-research-transport-credential-compat.conf.template"
+if [ ! -f "$credential_drop_in_source" ] ||
+   [ -L "$credential_drop_in_source" ]; then
+  echo "credential_drop_in_source_rejected" >&2
+  exit 65
+fi
 bundle_metadata=$(
   node "$contract_script" verify-bundle \
     "$source_archive" \
@@ -29,7 +62,7 @@ bundle_metadata=$(
     "$expected_manifest_sha256"
 )
 set -- $bundle_metadata
-if [ "$#" -ne 4 ]; then
+if [ "$#" -ne 5 ]; then
   echo "release_bundle_rejected" >&2
   exit 65
 fi
@@ -37,6 +70,7 @@ source_commit=$1
 source_tree=$2
 source_archive_sha256=$3
 module_graph_sha256=$4
+release_profile=$5
 case "$source_commit:$source_tree:$source_archive_sha256:$module_graph_sha256" in
   *[!0-9a-f:]*|'') echo "release_bundle_rejected" >&2; exit 65 ;;
 esac
@@ -47,35 +81,142 @@ if [ "${#source_commit}" -ne 40 ] ||
   echo "release_bundle_rejected" >&2
   exit 65
 fi
+case "$release_profile" in
+  chillywood-pinned-research-host-runtime-v1-legacy-10|\
+  chillywood-pinned-research-host-runtime-v2-current-13) ;;
+  *) echo "release_profile_rejected" >&2; exit 65 ;;
+esac
 
-release_root=/opt/chillywood/research-transport/releases
+transport_root="$host_prefix/opt/chillywood/research-transport"
+release_root="$transport_root/releases"
 expected_directory="$release_root/$source_commit"
-credential_drop_in_relative=isolated-runtime/pinned-research-transport/deploy/chillywood-research-transport-credential-compat.conf.template
-credential_drop_in_directory=/etc/systemd/system/chillywood-research-transport.service.d
+current_link="$transport_root/current"
+next_link="$transport_root/.current.next"
+operation_lock="$transport_root/.deployment-rollback.lock"
+credential_drop_in_directory="$host_prefix/etc/systemd/system/chillywood-research-transport.service.d"
 credential_drop_in_target="$credential_drop_in_directory/10-credential-compat.conf"
-install_credential_drop_in() {
-  selected_release=$(realpath "$1")
-  case "$selected_release" in
+credential_drop_in_next="$credential_drop_in_target.next"
+
+if ! mkdir "$operation_lock" 2>/dev/null; then
+  echo "deployment_lock_rejected" >&2
+  exit 73
+fi
+
+lock_acquired=1
+staging_directory=
+next_link_created=0
+drop_in_next_created=0
+transaction_open=0
+previous_target=
+previous_drop_in_state=absent
+previous_drop_in_backup=
+
+run_systemctl() {
+  "$systemctl_command" "$@"
+}
+
+run_readiness() {
+  if [ -n "$readiness_command" ]; then
+    "$readiness_command" "$current_link"
+  else
+    "$current_link/isolated-runtime/pinned-research-transport/deploy/readiness.sh"
+  fi
+}
+
+restore_current_link() {
+  rm -f -- "$next_link"
+  next_link_created=0
+  if [ -n "$previous_target" ]; then
+    ln -s "$previous_target" "$next_link"
+    next_link_created=1
+    mv -Tf "$next_link" "$current_link"
+    next_link_created=0
+  elif [ -L "$current_link" ]; then
+    rm -f -- "$current_link"
+  fi
+}
+
+restore_credential_drop_in() {
+  rm -f -- "$credential_drop_in_next"
+  drop_in_next_created=0
+  if [ "$previous_drop_in_state" = present ]; then
+    mv -Tf "$previous_drop_in_backup" "$credential_drop_in_target"
+    previous_drop_in_backup=
+  else
+    rm -f -- "$credential_drop_in_target"
+  fi
+}
+
+cleanup_operation() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  if [ "$status" -ne 0 ] && [ "$transaction_open" -eq 1 ]; then
+    set +e
+    restore_current_link
+    restore_credential_drop_in
+    run_systemctl daemon-reload
+    run_systemctl stop chillywood-research-transport.service
+    set -e
+  fi
+  if [ "$next_link_created" -eq 1 ]; then
+    rm -f -- "$next_link"
+  fi
+  if [ "$drop_in_next_created" -eq 1 ]; then
+    rm -f -- "$credential_drop_in_next"
+  fi
+  if [ -n "$staging_directory" ] &&
+     [ -d "$staging_directory" ]; then
+    if [ -n "$test_root" ]; then
+      chmod -R u+w "$staging_directory"
+    fi
+    rm -rf -- "$staging_directory"
+  fi
+  if [ -n "$previous_drop_in_backup" ] &&
+     [ -f "$previous_drop_in_backup" ]; then
+    rm -f -- "$previous_drop_in_backup"
+  fi
+  if [ "$lock_acquired" -eq 1 ]; then
+    rmdir "$operation_lock"
+  fi
+  exit "$status"
+}
+trap cleanup_operation EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if [ -e "$next_link" ] || [ -L "$next_link" ] ||
+   [ -e "$credential_drop_in_next" ] ||
+   [ -L "$credential_drop_in_next" ]; then
+  echo "stale_operation_state_rejected" >&2
+  exit 73
+fi
+
+if [ -e "$current_link" ] && [ ! -L "$current_link" ]; then
+  echo "current_release_link_rejected" >&2
+  exit 65
+fi
+if [ -L "$current_link" ]; then
+  previous_target=$(readlink -f "$current_link")
+  case "$previous_target" in
     "$release_root"/*) ;;
-    *) echo "credential_drop_in_release_rejected" >&2; exit 65 ;;
+    *) echo "current_release_target_rejected" >&2; exit 65 ;;
   esac
-  selected_drop_in="$selected_release/$credential_drop_in_relative"
-  if [ ! -f "$selected_drop_in" ] || [ -L "$selected_drop_in" ]; then
-    echo "credential_drop_in_source_rejected" >&2
+  node "$contract_script" verify-release "$previous_target" >/dev/null
+fi
+
+if [ -e "$credential_drop_in_target" ] ||
+   [ -L "$credential_drop_in_target" ]; then
+  if [ -L "$credential_drop_in_target" ] ||
+     [ ! -f "$credential_drop_in_target" ]; then
+    echo "credential_drop_in_target_rejected" >&2
     exit 65
   fi
-  install -d -o root -g root -m 0755 "$credential_drop_in_directory"
-  credential_drop_in_next="$credential_drop_in_target.next"
-  if [ -e "$credential_drop_in_next" ] ||
-     [ -L "$credential_drop_in_next" ]; then
-    echo "credential_drop_in_lock_rejected" >&2
-    exit 73
-  fi
-  install -o root -g root -m 0644 \
-    "$selected_drop_in" \
-    "$credential_drop_in_next"
-  mv -Tf "$credential_drop_in_next" "$credential_drop_in_target"
-}
+  previous_drop_in_backup=$(mktemp "$transport_root/.credential-overlay.previous.XXXXXX")
+  cp -p -- "$credential_drop_in_target" "$previous_drop_in_backup"
+  previous_drop_in_state=present
+fi
+
 if [ -e "$expected_directory" ]; then
   node "$contract_script" verify-release \
     "$expected_directory" \
@@ -83,13 +224,6 @@ if [ -e "$expected_directory" ]; then
     "$expected_manifest_sha256" >/dev/null
 else
   staging_directory=$(mktemp -d "$release_root/.release.$source_commit.XXXXXX")
-  cleanup_staging() {
-    if [ -n "${staging_directory:-}" ] &&
-       [ -d "$staging_directory" ]; then
-      rm -rf -- "$staging_directory"
-    fi
-  }
-  trap cleanup_staging EXIT HUP INT TERM
   tar --extract \
     --file "$source_archive" \
     --directory "$staging_directory" \
@@ -110,45 +244,54 @@ else
     "$expected_manifest_sha256" >/dev/null
   mv "$staging_directory" "$expected_directory"
   staging_directory=
-  trap - EXIT HUP INT TERM
 fi
 
-install_credential_drop_in "$expected_directory"
-current_link=/opt/chillywood/research-transport/current
-previous_target=
-if [ -L "$current_link" ]; then
-  previous_target=$(readlink -f "$current_link")
+transaction_open=1
+if [ -n "$test_root" ]; then
+  install -d -m 0755 "$credential_drop_in_directory"
+  install -m 0644 \
+    "$credential_drop_in_source" \
+    "$credential_drop_in_next"
+else
+  install -d -o root -g root -m 0755 "$credential_drop_in_directory"
+  install -o root -g root -m 0644 \
+    "$credential_drop_in_source" \
+    "$credential_drop_in_next"
 fi
-next_link=/opt/chillywood/research-transport/.current.next
-if [ -e "$next_link" ] || [ -L "$next_link" ]; then
-  echo "deployment_lock_rejected" >&2
-  exit 73
-fi
+drop_in_next_created=1
+mv -Tf "$credential_drop_in_next" "$credential_drop_in_target"
+drop_in_next_created=0
+
 ln -s "$expected_directory" "$next_link"
+next_link_created=1
 mv -Tf "$next_link" "$current_link"
+next_link_created=0
 
-systemctl daemon-reload
-if systemctl restart chillywood-research-transport.service &&
-   /opt/chillywood/research-transport/current/isolated-runtime/pinned-research-transport/deploy/readiness.sh; then
+run_systemctl daemon-reload
+if run_systemctl restart chillywood-research-transport.service &&
+   run_readiness; then
+  transaction_open=0
   echo "deployment=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION"
   exit 0
 fi
 
-if [ -n "$previous_target" ] &&
-   case "$previous_target" in
-     /opt/chillywood/research-transport/releases/*) true ;;
-     *) false ;;
-   esac; then
+if [ -n "$previous_target" ]; then
   node "$contract_script" verify-release "$previous_target" >/dev/null
-  if [ -e "$next_link" ] || [ -L "$next_link" ]; then
-    echo "rollback_lock_rejected" >&2
-    exit 73
+  restore_current_link
+  if run_systemctl daemon-reload &&
+     run_systemctl restart chillywood-research-transport.service &&
+     run_readiness; then
+    transaction_open=0
+    echo "automatic_rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION" >&2
+    echo "deployment=INACTIVE" >&2
+    exit 1
   fi
-  ln -s "$previous_target" "$next_link"
-  mv -Tf "$next_link" "$current_link"
-  install_credential_drop_in "$previous_target"
-  systemctl daemon-reload
-  systemctl restart chillywood-research-transport.service || true
 fi
+
+restore_current_link
+restore_credential_drop_in
+run_systemctl daemon-reload || true
+run_systemctl stop chillywood-research-transport.service || true
+transaction_open=0
 echo "deployment=INACTIVE" >&2
 exit 1

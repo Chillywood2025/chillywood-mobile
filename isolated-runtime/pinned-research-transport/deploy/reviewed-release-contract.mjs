@@ -13,6 +13,19 @@ import { resolve, sep } from "node:path";
 export const REVIEWED_RELEASE_CONTRACT =
   "chillywood-reviewed-research-transport-release-v1";
 
+const LEGACY_V1_RUNTIME_MODULE_PATHS = Object.freeze([
+  "config/intelligence/research-authorities.json",
+  "isolated-runtime/cloudflare/src/adapters/research-fetch-transport.mjs",
+  "isolated-runtime/pinned-research-transport/bin/server.mjs",
+  "isolated-runtime/pinned-research-transport/deploy/readiness.sh",
+  "isolated-runtime/pinned-research-transport/deploy/reviewed-release-contract.mjs",
+  "isolated-runtime/pinned-research-transport/src/authority-policy.mjs",
+  "isolated-runtime/pinned-research-transport/src/host-auth.mjs",
+  "isolated-runtime/pinned-research-transport/src/host-service.mjs",
+  "isolated-runtime/pinned-research-transport/src/invocation-contract.mjs",
+  "isolated-runtime/pinned-research-transport/src/pinned-public-research-transport.mjs",
+]);
+
 export const RESEARCH_HOST_RUNTIME_MODULE_PATHS = Object.freeze([
   "config/intelligence/research-authorities.json",
   "isolated-runtime/cloudflare/src/adapters/research-fetch-transport.mjs",
@@ -28,6 +41,20 @@ export const RESEARCH_HOST_RUNTIME_MODULE_PATHS = Object.freeze([
   "isolated-runtime/pinned-research-transport/src/invocation-contract.mjs",
   "isolated-runtime/pinned-research-transport/src/pinned-public-research-transport.mjs",
 ]);
+
+export const REVIEWED_RELEASE_PROFILES = Object.freeze([
+  Object.freeze({
+    id: "chillywood-pinned-research-host-runtime-v1-legacy-10",
+    modulePaths: LEGACY_V1_RUNTIME_MODULE_PATHS,
+  }),
+  Object.freeze({
+    id: "chillywood-pinned-research-host-runtime-v2-current-13",
+    modulePaths: RESEARCH_HOST_RUNTIME_MODULE_PATHS,
+  }),
+]);
+
+export const CURRENT_REVIEWED_RELEASE_PROFILE =
+  REVIEWED_RELEASE_PROFILES[1];
 
 const SHA1 = /^[a-f0-9]{40}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
@@ -53,7 +80,14 @@ const canonicalModuleGraph = (modules) =>
   `${JSON.stringify(modules)}\n`;
 
 const canonicalManifest = (manifest) =>
-  `${JSON.stringify(manifest, null, 2)}\n`;
+  `${JSON.stringify({
+    archiveSha256: manifest.archiveSha256,
+    contract: manifest.contract,
+    moduleGraphSha256: manifest.moduleGraphSha256,
+    modules: manifest.modules,
+    sourceCommit: manifest.sourceCommit,
+    sourceTree: manifest.sourceTree,
+  }, null, 2)}\n`;
 
 const assertSafeModulePath = (value) => {
   if (
@@ -68,9 +102,19 @@ const assertSafeModulePath = (value) => {
   return value;
 };
 
-const allowedDirectoryEntries = () => {
+const reviewedReleaseProfile = (paths) => {
+  const profile = REVIEWED_RELEASE_PROFILES.find(
+    ({ modulePaths }) => modulePaths.join("\n") === paths.join("\n"),
+  );
+  if (!profile) {
+    throw new Error("reviewed_release_profile_rejected");
+  }
+  return profile;
+};
+
+const allowedDirectoryEntries = (modulePaths) => {
   const entries = new Set();
-  for (const modulePath of RESEARCH_HOST_RUNTIME_MODULE_PATHS) {
+  for (const modulePath of modulePaths) {
     const parts = modulePath.split("/");
     for (let index = 1; index < parts.length; index += 1) {
       entries.add(`${parts.slice(0, index).join("/")}/`);
@@ -94,8 +138,7 @@ const normalizeManifest = (value) => {
     !SHA1.test(value.sourceTree) ||
     !SHA256.test(value.archiveSha256) ||
     !SHA256.test(value.moduleGraphSha256) ||
-    !Array.isArray(value.modules) ||
-    value.modules.length !== RESEARCH_HOST_RUNTIME_MODULE_PATHS.length
+    !Array.isArray(value.modules)
   ) {
     throw new Error("reviewed_release_manifest_rejected");
   }
@@ -116,8 +159,8 @@ const normalizeManifest = (value) => {
     });
   });
   const paths = modules.map(({ path }) => path);
+  const profile = reviewedReleaseProfile(paths);
   if (
-    paths.join("\n") !== RESEARCH_HOST_RUNTIME_MODULE_PATHS.join("\n") ||
     new Set(paths).size !== paths.length ||
     sha256(canonicalModuleGraph(modules)) !== value.moduleGraphSha256
   ) {
@@ -128,6 +171,7 @@ const normalizeManifest = (value) => {
     contract: value.contract,
     moduleGraphSha256: value.moduleGraphSha256,
     modules: Object.freeze(modules),
+    releaseProfile: profile.id,
     sourceCommit: value.sourceCommit,
     sourceTree: value.sourceTree,
   });
@@ -174,6 +218,7 @@ const requireAbsent = async (path) => {
 export const buildReviewedRelease = async ({
   archivePath,
   manifestPath,
+  releaseProfile = CURRENT_REVIEWED_RELEASE_PROFILE,
   repository,
   sourceCommit,
 }) => {
@@ -189,6 +234,17 @@ export const buildReviewedRelease = async ({
   if (canonicalCommit !== sourceCommit) {
     throw new Error("reviewed_release_source_commit_mismatch");
   }
+  const selectedProfile = REVIEWED_RELEASE_PROFILES.find(
+    ({ id }) => id === releaseProfile?.id,
+  );
+  if (
+    !selectedProfile ||
+    !Array.isArray(releaseProfile?.modulePaths) ||
+    releaseProfile.modulePaths.join("\n") !==
+      selectedProfile.modulePaths.join("\n")
+  ) {
+    throw new Error("reviewed_release_profile_rejected");
+  }
   const sourceTree = readGit(
     repository,
     ["rev-parse", `${sourceCommit}^{tree}`],
@@ -197,7 +253,7 @@ export const buildReviewedRelease = async ({
   if (!SHA1.test(sourceTree)) {
     throw new Error("reviewed_release_source_tree_rejected");
   }
-  const modules = RESEARCH_HOST_RUNTIME_MODULE_PATHS.map((modulePath) => {
+  const modules = selectedProfile.modulePaths.map((modulePath) => {
     const treeEntry = readGit(
       repository,
       ["ls-tree", sourceCommit, "--", modulePath],
@@ -226,7 +282,7 @@ export const buildReviewedRelease = async ({
     `--output=${archivePath}`,
     sourceCommit,
     "--",
-    ...RESEARCH_HOST_RUNTIME_MODULE_PATHS,
+    ...selectedProfile.modulePaths,
   ]);
   const archive = await readFile(archivePath);
   const manifest = Object.freeze({
@@ -264,7 +320,8 @@ export const verifyReviewedBundle = async ({
     stdio: ["ignore", "pipe", "pipe"],
   }).split("\n").filter(Boolean);
   const fileEntries = [];
-  const permittedDirectories = allowedDirectoryEntries();
+  const modulePaths = manifest.modules.map(({ path }) => path);
+  const permittedDirectories = allowedDirectoryEntries(modulePaths);
   for (const entry of rawEntries) {
     if (
       entry.startsWith("/") ||
@@ -282,7 +339,7 @@ export const verifyReviewedBundle = async ({
     }
   }
   if (
-    fileEntries.join("\n") !== RESEARCH_HOST_RUNTIME_MODULE_PATHS.join("\n") ||
+    fileEntries.join("\n") !== modulePaths.join("\n") ||
     new Set(fileEntries).size !== fileEntries.length
   ) {
     throw new Error("reviewed_release_archive_inventory_rejected");
@@ -455,7 +512,7 @@ const main = async () => {
       manifestPath,
     });
     process.stdout.write(
-      `${manifest.sourceCommit} ${manifest.sourceTree} ${manifest.archiveSha256} ${manifest.moduleGraphSha256}\n`,
+      `${manifest.sourceCommit} ${manifest.sourceTree} ${manifest.archiveSha256} ${manifest.moduleGraphSha256} ${manifest.releaseProfile}\n`,
     );
     return;
   }
