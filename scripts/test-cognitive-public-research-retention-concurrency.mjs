@@ -85,8 +85,27 @@ const ids = {
   source: randomUUID(),
   claim: randomUUID(),
   owner: randomUUID(),
+  constitution: randomUUID(),
+  constitutionVersion: randomUUID(),
+  deliberation: randomUUID(),
+  evidencePacket: randomUUID(),
+  proposal: randomUUID(),
+  budget: randomUUID(),
+  modelCredential: randomUUID(),
+  approval: randomUUID(),
+  approvalVersion: randomUUID(),
+  execution: randomUUID(),
+  evaluatorProof: randomUUID(),
+  maintenanceRun: randomUUID(),
+  heartbeat: randomUUID(),
+};
+const fixtureHashes = {
+  approval: hash(`retention-approval:${ids.task}`),
+  heartbeat: hash(`retention-heartbeat:${ids.task}`),
 };
 const brokerToken = "research-retention-concurrency-token-000000000000";
+const workerAssertion =
+  "research-retention-concurrency-worker-assertion-000000000000";
 const locator = "https://developer.apple.com/documentation/concurrency";
 const statement = "Concurrent public research expiry is bounded.";
 
@@ -148,6 +167,301 @@ insert into public.cognitive_governance_switches(
   'cognitive_user_derived_memory_enabled',false,'collective-governance-v1',
   null,null
 );
+insert into public.autonomous_system_emergency_states(
+  system_id,status,reason,updated_by,metadata
+) values (
+  'product_intelligence_operator','active',
+  'retention concurrency fixture',${literal(ids.owner)},'{}'::jsonb
+) on conflict (system_id) do update set
+  status='active',reason=excluded.reason,updated_by=excluded.updated_by,
+  updated_at=transaction_timestamp(),metadata=excluded.metadata;
+insert into auth.users(id,is_sso_user,is_anonymous)
+values (${literal(ids.owner)},false,false);
+insert into public.platform_role_memberships(user_id,email,role,status)
+values (${literal(ids.owner)},null,'owner','active');
+
+-- Build a complete, current production activation fixture without disabling
+-- any trigger or constraint. The immutable decision is backed by real
+-- constitution/deliberation/evidence/proposal rows and the three independent
+-- attestations required by the finalized-decision trigger.
+create temporary table retention_activation_fixture as
+select
+  transaction_timestamp()-interval '12 minutes' as provider_verified_at,
+  transaction_timestamp()+interval '30 minutes' as expires_at,
+  null::text as activation_hash,
+  null::jsonb as owner_decision_result,
+  null::jsonb as activation_result;
+update retention_activation_fixture set activation_hash =
+  public.governance_research_retention_activation_hash(
+    ${literal("4fb0853be0e7017e7c369a7281300a8d59a317ab")},
+    repeat('b',64),repeat('c',64),repeat('d',64),repeat('2',64),
+    provider_verified_at,expires_at
+  );
+grant select,update on retention_activation_fixture
+  to authenticated,service_role;
+
+insert into public.governance_constitutions(
+  id,task_id,project_id,platform,environment,constitution_key,title,
+  current_version,status,self_amendment_allowed,created_by_identity,created_at
+) values (
+  ${literal(ids.constitution)},${literal(ids.task)},${literal(ids.project)},
+  'shared','production',
+  ${literal(`retention-concurrency-${ids.task.slice(0, 8)}`)},
+  'Retention concurrency fixture',1,'reviewed_not_active',false,
+  'retention-concurrency-fixture',
+  transaction_timestamp()-interval '14 minutes'
+);
+insert into public.governance_constitution_versions(
+  id,constitution_id,task_id,project_id,platform,environment,version_number,
+  constitution_hash,policy_snapshot,status,proposed_by_identity,
+  independent_review_hash,rollback_hash,created_at
+) values (
+  ${literal(ids.constitutionVersion)},${literal(ids.constitution)},
+  ${literal(ids.task)},${literal(ids.project)},'shared','production',1,
+  repeat('0',64),'{}'::jsonb,'reviewed','retention-concurrency-fixture',
+  repeat('1',64),repeat('f',64),
+  transaction_timestamp()-interval '13 minutes 45 seconds'
+);
+insert into public.governance_deliberations(
+  id,task_id,project_id,platform,environment,constitution_version_id,
+  deliberation_key,objective_hash,source_commit,architecture_graph_digest,
+  risk_level,status,required_quorum,budget_ceiling,deadline_at,decided_at,
+  created_at,updated_at
+) values (
+  ${literal(ids.deliberation)},${literal(ids.task)},${literal(ids.project)},
+  'shared','production',${literal(ids.constitutionVersion)},
+  ${literal(`retention-activation-${ids.task.slice(0, 8)}`)},repeat('1',64),
+  ${literal("4fb0853be0e7017e7c369a7281300a8d59a317ab")},repeat('1',64),
+  'low','decided',3,0,transaction_timestamp()+interval '1 hour',
+  transaction_timestamp()-interval '10 minutes 45 seconds',
+  transaction_timestamp()-interval '13 minutes 30 seconds',
+  transaction_timestamp()-interval '10 minutes 45 seconds'
+);
+insert into public.governance_evidence_packets(
+  id,deliberation_id,task_id,project_id,platform,environment,packet_hash,
+  source_commit,architecture_graph_digest,research_claim_hashes,
+  provider_state_hash,known_unknowns,approval_level,budget_hash,
+  rollback_requirements_hash,freshness_deadline,untrusted_text_labeled,
+  created_at
+) values (
+  ${literal(ids.evidencePacket)},${literal(ids.deliberation)},
+  ${literal(ids.task)},${literal(ids.project)},'shared','production',
+  repeat('2',64),
+  ${literal("4fb0853be0e7017e7c369a7281300a8d59a317ab")},repeat('1',64),
+  '{}'::text[],repeat('d',64),'{}'::jsonb,'owner',repeat('1',64),
+  repeat('f',64),transaction_timestamp()+interval '1 hour',true,
+  transaction_timestamp()-interval '13 minutes'
+);
+insert into public.governance_proposals(
+  id,deliberation_id,task_id,project_id,platform,environment,option_kind,
+  proposal_hash,user_value_score,risk_score,reversibility,cost_estimate,
+  proof_burden,rollback_hash,created_at
+) select
+  ${literal(ids.proposal)},${literal(ids.deliberation)},${literal(ids.task)},
+  ${literal(ids.project)},'shared','production','no_action',activation_hash,
+  100,0,'full',0,'provider',repeat('f',64),
+  transaction_timestamp()-interval '12 minutes 45 seconds'
+from retention_activation_fixture;
+insert into public.intelligence_budgets(
+  id,task_id,project_id,platform,environment,actor_identity,dedupe_key,
+  status,summary,evidence_metadata,data_class,retention_until,
+  immutable_ceiling_hash,max_model_tokens,max_model_cost,max_tool_calls,
+  max_tool_bytes,max_child_tasks,max_recursion_depth,max_retries,
+  max_concurrent_calls,deadline_at
+) values (
+  ${literal(ids.budget)},${literal(ids.task)},${literal(ids.project)},
+  'shared','production','cognitive_model_router',
+  ${literal(`retention-budget-${ids.task.slice(0, 8)}`)},'received',
+  '{}'::jsonb,'{}'::jsonb,'operational_metadata',
+  transaction_timestamp()+interval '30 days',repeat('1',64),
+  1000,0,0,0,0,0,0,1,transaction_timestamp()+interval '1 hour'
+);
+insert into public.cognitive_level01_credential_attestations(
+  id,task_id,project_id,platform,environment,credential_kind,state,
+  public_fingerprint_hash,scope_manifest_hash,private_material_stored,
+  verified_at,expires_at
+) values (
+  ${literal(ids.modelCredential)},${literal(ids.task)},
+  ${literal(ids.project)},'shared','production','model_provider',
+  'configured',repeat('a',64),repeat('b',64),false,
+  transaction_timestamp(),transaction_timestamp()+interval '1 hour'
+);
+
+-- Use the reviewed single-provider Owner-advisory exception. It is
+-- deliberately quorum-ineligible; the active decision trigger records
+-- MODEL_INDEPENDENCE_PROVIDER_REQUIRED instead of accepting synthetic quorum.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub',${literal(ids.owner)},true);
+select set_config(
+  'request.jwt.claims',
+  ${literal(JSON.stringify({ role: "authenticated", sub: ids.owner }))},
+  true
+);
+update retention_activation_fixture set owner_decision_result =
+  public.governance_owner_prepare_model_advisory_decision(
+    ${literal(ids.deliberation)},${literal(ids.proposal)},
+    ${literal(`retention-owner-decision-${ids.task.slice(0, 8)}`)},
+    array['cognitive-model-advisory-independent-evaluation'],
+    repeat('8',64),${literal(ids.budget)},repeat('1',64),repeat('f',64),
+    interval '1 hour'
+  );
+reset role;
+commit;
+
+insert into public.governance_owner_approval_records(
+  id,decision_manifest_id,task_id,project_id,platform,environment,
+  approval_key,objective_hash,owner_user_id,current_version,current_state,
+  maximum_executions,executions_claimed,executions_completed,approval_hash,
+  created_at,updated_at
+) select
+  ${literal(ids.approval)},
+  (owner_decision_result->>'decisionManifestId')::uuid,
+  ${literal(ids.task)},
+  ${literal(ids.project)},'shared','production',
+  ${literal(`retention-approval-${ids.task.slice(0, 8)}`)},repeat('9',64),
+  ${literal(ids.owner)},1,'completed',1,1,1,
+  ${literal(fixtureHashes.approval)},
+  transaction_timestamp(),transaction_timestamp()
+from retention_activation_fixture;
+insert into public.governance_owner_approval_versions(
+  id,approval_record_id,decision_manifest_id,task_id,project_id,
+  platform,environment,version_number,prior_version_id,owner_user_id,
+  owner_identity_hash,decision_manifest_hash,plan_snapshot_hash,
+  source_commit,architecture_graph_digest,approval_scope_hash,objective_hash,
+  repository_full_name,branch_name,provider,operation,target_resource_hash,
+  path_scope_hashes,table_scope_hashes,function_scope_hashes,budget_hash,
+  maximum_cost,maximum_calls,maximum_bytes,maximum_executions,tests_hash,
+  required_test_ids,evaluator_requirement_hash,rollback_hash,approval_hash,
+  material_delta,approved_at,valid_from,expires_at,created_at
+) select
+  ${literal(ids.approvalVersion)},${literal(ids.approval)},
+  (owner_decision_result->>'decisionManifestId')::uuid,
+  ${literal(ids.task)},${literal(ids.project)},
+  'shared','production',1,null,${literal(ids.owner)},repeat('7',64),
+  owner_decision_result->>'decisionHash',repeat('2',64),
+  ${literal("4fb0853be0e7017e7c369a7281300a8d59a317ab")},repeat('1',64),
+  repeat('8',64),repeat('9',64),'Chillywood2025/chillywood-mobile',
+  'codex/cognitive-public-research-retention-concurrency','public_research',
+  'public_research_ingest',activation_hash,'{}'::text[],'{}'::text[],
+  '{}'::text[],repeat('1',64),0,1,4096,1,repeat('a',64),
+  array['cognitive-model-advisory-independent-evaluation'],
+  repeat('5',64),repeat('f',64),
+  ${literal(fixtureHashes.approval)},false,
+  transaction_timestamp(),transaction_timestamp(),
+  transaction_timestamp()+interval '45 minutes',
+  transaction_timestamp()
+from retention_activation_fixture;
+insert into public.governance_owner_approval_version_states(
+  approval_version_id,approval_record_id,task_id,project_id,platform,
+  environment,state,maximum_executions,executions_claimed,
+  executions_completed,completed_at
+) values (
+  ${literal(ids.approvalVersion)},${literal(ids.approval)},
+  ${literal(ids.task)},${literal(ids.project)},'shared','production',
+  'completed',1,1,1,transaction_timestamp()
+);
+insert into public.governance_approved_action_executions(
+  id,approval_record_id,approval_version_id,task_id,project_id,
+  repository_full_name,branch_name,platform,environment,provider,operation,
+  claim_sequence,state,service_identity,service_identity_hash,
+  worker_assertion_hash,decision_manifest_hash,plan_snapshot_hash,
+  approval_hash,target_resource_hash,budget_hash,tests_hash,
+  evaluator_requirement_hash,rollback_hash,execution_receipt_hash,
+  evaluator_proof_hash,claimed_at,began_at,completed_at,updated_at
+) select
+  ${literal(ids.execution)},${literal(ids.approval)},
+  ${literal(ids.approvalVersion)},${literal(ids.task)},${literal(ids.project)},
+  'Chillywood2025/chillywood-mobile',
+  'codex/cognitive-public-research-retention-concurrency',
+  'shared','production','public_research','public_research_ingest',1,
+  'completed','cognitive_approved_action_worker',repeat('8',64),
+  ${literal(hash(workerAssertion))},
+  owner_decision_result->>'decisionHash',
+  repeat('2',64),${literal(fixtureHashes.approval)},activation_hash,
+  repeat('1',64),repeat('a',64),
+  repeat('5',64),repeat('f',64),repeat('6',64),repeat('7',64),
+  transaction_timestamp(),transaction_timestamp(),
+  transaction_timestamp(),transaction_timestamp()
+from retention_activation_fixture;
+insert into public.governance_approved_execution_evaluator_proofs(
+  id,execution_id,approval_record_id,approval_version_id,task_id,project_id,
+  platform,environment,evaluator_identity,evaluator_identity_hash,
+  execution_receipt_hash,evaluator_proof_hash,evaluator_requirement_hash,
+  verdict,created_at
+) values (
+  ${literal(ids.evaluatorProof)},${literal(ids.execution)},
+  ${literal(ids.approval)},${literal(ids.approvalVersion)},
+  ${literal(ids.task)},${literal(ids.project)},'shared','production',
+  'cognitive_independent_evaluator',repeat('9',64),repeat('6',64),
+  repeat('7',64),repeat('5',64),'passed',
+  (
+    select completed_at
+    from public.governance_approved_action_executions
+    where id=${literal(ids.execution)}
+  )
+);
+insert into public.governance_two_party_service_assertions(
+  service_identity,assertion_hash,allowed_operations,registered_by,
+  status,issued_at,expires_at
+) values (
+  'cognitive_approved_action_worker',${literal(hash(workerAssertion))},
+  array['public_research_ingest'],${literal(ids.owner)},'active',
+  transaction_timestamp()-interval '10 minutes',
+  transaction_timestamp()+interval '1 day'
+) on conflict (service_identity) do update set
+  assertion_hash=excluded.assertion_hash,
+  allowed_operations=excluded.allowed_operations,
+  registered_by=excluded.registered_by,status='active',
+  issued_at=excluded.issued_at,expires_at=excluded.expires_at,
+  revoked_at=null,revoked_by=null,revocation_hash=null;
+
+begin;
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+update retention_activation_fixture set activation_result =
+  public.governance_persist_research_retention_activation(
+    ${literal(ids.execution)},
+    ${literal("4fb0853be0e7017e7c369a7281300a8d59a317ab")},
+    repeat('b',64),repeat('c',64),repeat('d',64),provider_verified_at,
+    repeat('2',64),expires_at,'cognitive_approved_action_worker',
+    ${literal(workerAssertion)}
+  );
+reset role;
+commit;
+
+insert into public.cognitive_research_maintenance_runs(
+  id,task_id,project_id,platform,environment,requested_limit,source_count,
+  claim_count,total_count,retention_policy_id,processor_identity_hash
+) values (
+  ${literal(ids.maintenanceRun)},${literal(ids.task)},${literal(ids.project)},
+  'shared','production',100,0,0,0,'chillywood-cognitive-retention-v1',
+  ${literal(hash("research_source_broker:expire_public_memory"))}
+);
+insert into public.cognitive_research_retention_processor_heartbeats(
+  id,processor_attestation_id,maintenance_run_id,task_id,project_id,
+  platform,environment,scheduled_at,source_count,claim_count,total_count,
+  no_work,attestation_hash,event_hash,completed_at,created_at
+) select
+  ${literal(ids.heartbeat)},
+  (activation_result->>'processor_attestation_id')::uuid,
+  ${literal(ids.maintenanceRun)},${literal(ids.task)},${literal(ids.project)},
+  'shared','production',
+  date_trunc('hour',transaction_timestamp())-interval '43 minutes',
+  0,0,0,true,activation_hash,${literal(fixtureHashes.heartbeat)},
+  transaction_timestamp(),transaction_timestamp()
+from retention_activation_fixture;
+do $$
+begin
+  if not public.cognitive_research_retention_processor_ready(
+    ${literal(ids.task)},${literal(ids.project)},'shared','production'
+  ) then
+    raise exception 'retention_concurrency_processor_not_ready';
+  end if;
+end
+$$;
 insert into public.research_sources(
   id,task_id,project_id,platform,environment,actor_identity,dedupe_key,
   status,summary,evidence_metadata,data_class,retention_until,
