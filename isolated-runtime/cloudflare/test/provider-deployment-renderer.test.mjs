@@ -304,6 +304,16 @@ test("Access identifiers match the gateway verifier exactly", async () => {
   const malformedAudience = activeInput();
   malformedAudience.access.applicationAudience = `${"a".repeat(63)}-`;
   await rejects(malformedAudience, "access_contract_invalid");
+
+  const uppercaseTeamDomain = activeInput();
+  uppercaseTeamDomain.access.teamDomain =
+    "https://Example-team.cloudflareaccess.com";
+  await rejects(uppercaseTeamDomain, "access_contract_invalid");
+
+  const nestedTeamDomain = activeInput();
+  nestedTeamDomain.access.teamDomain =
+    "https://nested.example-team.cloudflareaccess.com";
+  await rejects(nestedTeamDomain, "access_contract_invalid");
 });
 
 test("wrong source, base, cross-principal bindings, and cache ambiguity fail", async () => {

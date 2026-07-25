@@ -88,6 +88,8 @@ const treePattern = /^[a-f0-9]{40}$/u;
 const hyperdriveIdPattern = /^[a-f0-9]{32}$/u;
 const accessAudiencePattern = /^[a-f0-9]{64}$/u;
 const accessServiceTokenCommonNamePattern = /^[a-f0-9]{32}\.access$/u;
+const accessTeamDomainPattern =
+  /^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/u;
 const safeNamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const safeModelIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
 const safeGitPathPattern =
@@ -494,7 +496,7 @@ const validateAccess = (access) => {
     parsedTeamDomain.pathname !== "/" ||
     parsedTeamDomain.search !== "" ||
     parsedTeamDomain.hash !== "" ||
-    !parsedTeamDomain.hostname.endsWith(".cloudflareaccess.com") ||
+    !accessTeamDomainPattern.test(access.teamDomain) ||
     !accessAudiencePattern.test(access.applicationAudience) ||
     !accessServiceTokenCommonNamePattern.test(access.serviceTokenClientId) ||
     access.gatewayExposure !== "access_protected_workers_dev"
