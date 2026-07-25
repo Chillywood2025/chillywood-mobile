@@ -3,9 +3,11 @@
 import assert from "node:assert/strict";
 import {
   ANDROID_RELEASE_PATH,
+  POST_INTEGRATION_CORRECTION_KIND,
   V1_MANIFEST_PATH,
   V2_MANIFEST_PATH,
   buildImportPlan,
+  buildPostIntegrationEntry,
   buildV2FromV1,
   computeManifestHash,
   readJson,
@@ -43,7 +45,13 @@ test("canonical v2 validates", () => {
   );
 });
 test("v2 deterministically rebuilds from v1 and release identity", () => {
-  assert.deepEqual(buildV2FromV1({ release, v1 }), v2);
+  const rebuilt = buildV2FromV1({ release, v1 });
+  const currentHistoricalPrefix = {
+    ...v2,
+    entries: v2.entries.slice(0, v1.entries.length),
+    manifestHash: rebuilt.manifestHash,
+  };
+  assert.deepEqual(rebuilt, currentHistoricalPrefix);
 });
 test("v2 deterministic manifest hash verifies", () => {
   assert.equal(v2.manifestHash, computeManifestHash(v2));
@@ -169,6 +177,69 @@ test("original observation time remains distinct from import time", () => {
         entry.importTime === null &&
         entry.preserveOriginalObservedAt,
     ),
+  );
+});
+test("a post-OTA observation appends without rewriting historical entries", () => {
+  const candidate = clone(v2);
+  const evidenceKey = "a".repeat(64);
+  const entry = buildPostIntegrationEntry({
+    evidence: {
+      evaluatorResult: "accepted",
+      evidenceKey,
+      evidenceType: "android_post_ota_after_state",
+      expiresAt: "2026-08-24T20:00:00.000Z",
+      findingKey: null,
+      importEligibility: "audit_only",
+      importStatus: "not_imported",
+      metricHashes: ["b".repeat(64)],
+      observedAt: "2026-07-25T20:00:00.000Z",
+      platform: "android",
+      retentionClass: "sanitized_nonpersonal_30d",
+      sourceCommit: "c".repeat(40),
+      synthetic: false,
+    },
+    release,
+  });
+  candidate.entries.push(entry);
+  candidate.manifestHash = computeManifestHash(candidate);
+  const summary = validateCanonicalV2({
+    manifest: candidate,
+    release,
+    v1,
+  });
+  assert.equal(summary.entries, v1.entries.length + 1);
+  assert.equal(entry.correctionKind, POST_INTEGRATION_CORRECTION_KIND);
+  assert.deepEqual(
+    candidate.entries.slice(0, v1.entries.length),
+    v2.entries.slice(0, v1.entries.length),
+  );
+});
+test("a post-OTA observation with release identity drift fails", () => {
+  const candidate = clone(v2);
+  const entry = buildPostIntegrationEntry({
+    evidence: {
+      evaluatorResult: "accepted",
+      evidenceKey: "d".repeat(64),
+      evidenceType: "android_post_ota_after_state",
+      expiresAt: "2026-08-24T20:00:00.000Z",
+      findingKey: null,
+      importEligibility: "audit_only",
+      importStatus: "not_imported",
+      metricHashes: ["e".repeat(64)],
+      observedAt: "2026-07-25T20:00:00.000Z",
+      platform: "android",
+      retentionClass: "sanitized_nonpersonal_30d",
+      sourceCommit: "f".repeat(40),
+      synthetic: false,
+    },
+    release,
+  });
+  entry.appRuntime = "1.0.0";
+  candidate.entries.push(entry);
+  candidate.manifestHash = computeManifestHash(candidate);
+  assert.throws(
+    () => validateCanonicalV2({ manifest: candidate, release, v1 }),
+    /appRuntime release identity mismatch/u,
   );
 });
 test("duplicate evidence fails", () => {

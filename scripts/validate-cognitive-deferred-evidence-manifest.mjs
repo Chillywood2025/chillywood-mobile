@@ -22,6 +22,8 @@ export const ANDROID_RELEASE_PATH = path.join(
 export const V1_SCHEMA = "chillywood-cognitive-deferred-evidence-v1";
 export const V2_SCHEMA = "chillywood-cognitive-deferred-evidence-v2";
 export const SOURCE_CORRECTION_TIMESTAMP = "2026-07-25T15:29:25.000Z";
+export const POST_INTEGRATION_CORRECTION_KIND =
+  "new_android_build84_post_ota_observation";
 
 const SHA256 = /^[a-f0-9]{64}$/u;
 const COMMIT = /^[a-f0-9]{40}$/u;
@@ -241,6 +243,39 @@ const futureImportMaterialFor = (entry) => ({
   schemaVersion: V2_SCHEMA,
   sourceCommit: entry.sourceCommit,
 });
+const postIntegrationAmendmentMaterialFor = (entry) => ({
+  appBuild: entry.appBuild,
+  appChannel: entry.appChannel,
+  appRuntime: entry.appRuntime,
+  appVersion: entry.appVersion,
+  correctionKind: entry.correctionKind,
+  distributionSource: entry.distributionSource,
+  evidenceKey: entry.evidenceKey,
+  evidenceType: entry.evidenceType,
+  observedAt: entry.observedAt,
+  schemaVersion: V2_SCHEMA,
+  sourceCommit: entry.sourceCommit,
+});
+
+export const buildPostIntegrationEntry = ({ evidence, release }) => {
+  const entry = {
+    ...evidence,
+    amendmentKey: "",
+    amendsFutureImportKey: null,
+    amendsManifestVersion: V2_SCHEMA,
+    appBuild: release.nativeBuild,
+    appChannel: release.channel,
+    appRuntime: release.runtimeVersion,
+    appVersion: release.appVersion,
+    correctionKind: POST_INTEGRATION_CORRECTION_KIND,
+    distributionSource: release.distributionSource,
+    futureImportKey: "",
+    originalEvidenceKey: evidence.evidenceKey,
+  };
+  entry.amendmentKey = hashJson(postIntegrationAmendmentMaterialFor(entry));
+  entry.futureImportKey = hashJson(futureImportMaterialFor(entry));
+  return entry;
+};
 
 export const buildV2FromV1 = ({
   release,
@@ -349,63 +384,80 @@ export const validateCanonicalV2 = ({ manifest, release, v1 }) => {
     manifest.originalEvidenceKeys,
     v1.entries.map((entry) => entry.evidenceKey),
   );
-  assert.equal(manifest.entries.length, v1.entries.length);
+  assert.ok(
+    manifest.entries.length >= v1.entries.length,
+    "canonical v2 cannot drop historical entries",
+  );
 
   const evidenceKeys = new Set();
   const importKeys = new Set();
   const amendmentKeys = new Set();
   let priorObservedAt = 0;
   for (const [index, entry] of manifest.entries.entries()) {
-    const original = v1.entries[index];
     assert.ok(exactKeys(entry, V2_ENTRY_KEYS), "canonical v2 entry shape drift");
     validateCommonEntry(entry);
-    assert.equal(entry.originalEvidenceKey, original.evidenceKey);
-    assert.equal(entry.evidenceKey, original.evidenceKey);
-    assert.equal(entry.amendsManifestVersion, V1_SCHEMA);
-    assert.equal(entry.amendsFutureImportKey, original.futureImportKey);
-    for (const key of IMMUTABLE_ENTRY_KEYS) {
-      assert.deepEqual(
-        entry[key],
-        original[key],
-        `${entry.evidenceType} historical ${key} changed`,
-      );
-    }
     assert.match(entry.amendmentKey, SHA256);
     assert.ok(!evidenceKeys.has(entry.evidenceKey), "duplicate evidence key");
     assert.ok(!importKeys.has(entry.futureImportKey), "duplicate import key");
     assert.ok(!amendmentKeys.has(entry.amendmentKey), "duplicate amendment key");
-    assert.notEqual(
-      entry.futureImportKey,
-      original.futureImportKey,
-      "v2 future import key was not regenerated",
-    );
     evidenceKeys.add(entry.evidenceKey);
     importKeys.add(entry.futureImportKey);
     amendmentKeys.add(entry.amendmentKey);
-    const expectedIdentity = correctedIdentityFor(original, release);
-    assert.equal(entry.correctionKind, expectedIdentity.correctionKind);
-    if (CORRECTED_ANDROID_EVIDENCE_TYPES.has(entry.evidenceType)) {
-      assert.equal(
-        entry.correctionKind,
-        "corrected_android_build84_release_identity",
+    if (index < v1.entries.length) {
+      const original = v1.entries[index];
+      assert.equal(entry.originalEvidenceKey, original.evidenceKey);
+      assert.equal(entry.evidenceKey, original.evidenceKey);
+      assert.equal(entry.amendsManifestVersion, V1_SCHEMA);
+      assert.equal(entry.amendsFutureImportKey, original.futureImportKey);
+      for (const key of IMMUTABLE_ENTRY_KEYS) {
+        assert.deepEqual(
+          entry[key],
+          original[key],
+          `${entry.evidenceType} historical ${key} changed`,
+        );
+      }
+      assert.notEqual(
+        entry.futureImportKey,
+        original.futureImportKey,
+        "v2 future import key was not regenerated",
       );
-      assertReleaseIdentity(entry, release);
+      const expectedIdentity = correctedIdentityFor(original, release);
+      assert.equal(entry.correctionKind, expectedIdentity.correctionKind);
+      if (CORRECTED_ANDROID_EVIDENCE_TYPES.has(entry.evidenceType)) {
+        assert.equal(
+          entry.correctionKind,
+          "corrected_android_build84_release_identity",
+        );
+        assertReleaseIdentity(entry, release);
+      } else {
+        assert.equal(entry.appVersion, null);
+        assert.equal(entry.distributionSource, null);
+        assert.equal(entry.appBuild, original.appBuild);
+        assert.equal(entry.appRuntime, original.appRuntime);
+        assert.equal(entry.appChannel, original.appChannel);
+      }
+      assert.equal(
+        entry.amendmentKey,
+        hashJson(amendmentMaterialFor({
+          entry: original,
+          identity: expectedIdentity,
+          supersedesManifestHash: manifest.supersedesManifestHash,
+        })),
+        `${entry.evidenceType} amendment linkage mismatch`,
+      );
     } else {
-      assert.equal(entry.appVersion, null);
-      assert.equal(entry.distributionSource, null);
-      assert.equal(entry.appBuild, original.appBuild);
-      assert.equal(entry.appRuntime, original.appRuntime);
-      assert.equal(entry.appChannel, original.appChannel);
+      assert.equal(entry.correctionKind, POST_INTEGRATION_CORRECTION_KIND);
+      assert.equal(entry.originalEvidenceKey, entry.evidenceKey);
+      assert.equal(entry.amendsManifestVersion, V2_SCHEMA);
+      assert.equal(entry.amendsFutureImportKey, null);
+      assert.equal(entry.platform, "android");
+      assertReleaseIdentity(entry, release);
+      assert.equal(
+        entry.amendmentKey,
+        hashJson(postIntegrationAmendmentMaterialFor(entry)),
+        `${entry.evidenceType} post-integration linkage mismatch`,
+      );
     }
-    assert.equal(
-      entry.amendmentKey,
-      hashJson(amendmentMaterialFor({
-        entry: original,
-        identity: expectedIdentity,
-        supersedesManifestHash: manifest.supersedesManifestHash,
-      })),
-      `${entry.evidenceType} amendment linkage mismatch`,
-    );
     assert.equal(
       entry.futureImportKey,
       hashJson(futureImportMaterialFor(entry)),
