@@ -49,12 +49,6 @@ fi
 
 script_directory=$(realpath "$(dirname "$0")")
 contract_script="$script_directory/reviewed-release-contract.mjs"
-credential_drop_in_source="$script_directory/chillywood-research-transport-credential-compat.conf.template"
-if [ ! -f "$credential_drop_in_source" ] ||
-   [ -L "$credential_drop_in_source" ]; then
-  echo "credential_drop_in_source_rejected" >&2
-  exit 65
-fi
 bundle_metadata=$(
   node "$contract_script" verify-bundle \
     "$source_archive" \
@@ -81,11 +75,11 @@ if [ "${#source_commit}" -ne 40 ] ||
   echo "release_bundle_rejected" >&2
   exit 65
 fi
-case "$release_profile" in
-  chillywood-pinned-research-host-runtime-v1-legacy-10|\
-  chillywood-pinned-research-host-runtime-v2-current-13) ;;
-  *) echo "release_profile_rejected" >&2; exit 65 ;;
-esac
+if [ "$release_profile" != \
+  "chillywood-pinned-research-host-runtime-v2-current-13" ]; then
+  echo "release_profile_rejected" >&2
+  exit 65
+fi
 
 transport_root="$host_prefix/opt/chillywood/research-transport"
 release_root="$transport_root/releases"
@@ -96,6 +90,7 @@ operation_lock="$transport_root/.deployment-rollback.lock"
 credential_drop_in_directory="$host_prefix/etc/systemd/system/chillywood-research-transport.service.d"
 credential_drop_in_target="$credential_drop_in_directory/10-credential-compat.conf"
 credential_drop_in_next="$credential_drop_in_target.next"
+credential_drop_in_relative=isolated-runtime/pinned-research-transport/deploy/chillywood-research-transport-credential-compat.conf.template
 
 if ! mkdir "$operation_lock" 2>/dev/null; then
   echo "deployment_lock_rejected" >&2
@@ -246,6 +241,26 @@ else
   staging_directory=
 fi
 
+credential_drop_in_source="$expected_directory/$credential_drop_in_relative"
+if [ ! -f "$credential_drop_in_source" ] ||
+   [ -L "$credential_drop_in_source" ]; then
+  echo "credential_drop_in_source_rejected" >&2
+  exit 65
+fi
+expected_overlay_sha256=$(
+  node "$contract_script" verify-overlay-source \
+    "$expected_directory" \
+    "$source_commit" \
+    "$expected_manifest_sha256"
+)
+case "$expected_overlay_sha256" in
+  *[!0-9a-f]*|'') echo "credential_drop_in_source_rejected" >&2; exit 65 ;;
+esac
+if [ "${#expected_overlay_sha256}" -ne 64 ]; then
+  echo "credential_drop_in_source_rejected" >&2
+  exit 65
+fi
+
 transaction_open=1
 if [ -n "$test_root" ]; then
   install -d -m 0755 "$credential_drop_in_directory"
@@ -261,6 +276,21 @@ fi
 drop_in_next_created=1
 mv -Tf "$credential_drop_in_next" "$credential_drop_in_target"
 drop_in_next_created=0
+if [ -n "$test_root" ]; then
+  expected_overlay_uid=$(id -u)
+  expected_overlay_gid=$(id -g)
+else
+  expected_overlay_uid=0
+  expected_overlay_gid=0
+fi
+if ! node "$contract_script" verify-installed-overlay \
+  "$credential_drop_in_target" \
+  "$expected_overlay_sha256" \
+  "$expected_overlay_uid" \
+  "$expected_overlay_gid" >/dev/null; then
+  echo "installed_credential_overlay_rejected" >&2
+  exit 65
+fi
 
 ln -s "$expected_directory" "$next_link"
 next_link_created=1
