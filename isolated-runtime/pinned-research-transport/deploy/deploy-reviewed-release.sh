@@ -50,6 +50,32 @@ fi
 
 release_root=/opt/chillywood/research-transport/releases
 expected_directory="$release_root/$source_commit"
+credential_drop_in_relative=isolated-runtime/pinned-research-transport/deploy/chillywood-research-transport-credential-compat.conf.template
+credential_drop_in_directory=/etc/systemd/system/chillywood-research-transport.service.d
+credential_drop_in_target="$credential_drop_in_directory/10-credential-compat.conf"
+install_credential_drop_in() {
+  selected_release=$(realpath "$1")
+  case "$selected_release" in
+    "$release_root"/*) ;;
+    *) echo "credential_drop_in_release_rejected" >&2; exit 65 ;;
+  esac
+  selected_drop_in="$selected_release/$credential_drop_in_relative"
+  if [ ! -f "$selected_drop_in" ] || [ -L "$selected_drop_in" ]; then
+    echo "credential_drop_in_source_rejected" >&2
+    exit 65
+  fi
+  install -d -o root -g root -m 0755 "$credential_drop_in_directory"
+  credential_drop_in_next="$credential_drop_in_target.next"
+  if [ -e "$credential_drop_in_next" ] ||
+     [ -L "$credential_drop_in_next" ]; then
+    echo "credential_drop_in_lock_rejected" >&2
+    exit 73
+  fi
+  install -o root -g root -m 0644 \
+    "$selected_drop_in" \
+    "$credential_drop_in_next"
+  mv -Tf "$credential_drop_in_next" "$credential_drop_in_target"
+}
 if [ -e "$expected_directory" ]; then
   node "$contract_script" verify-release \
     "$expected_directory" \
@@ -87,6 +113,7 @@ else
   trap - EXIT HUP INT TERM
 fi
 
+install_credential_drop_in "$expected_directory"
 current_link=/opt/chillywood/research-transport/current
 previous_target=
 if [ -L "$current_link" ]; then
@@ -119,6 +146,8 @@ if [ -n "$previous_target" ] &&
   fi
   ln -s "$previous_target" "$next_link"
   mv -Tf "$next_link" "$current_link"
+  install_credential_drop_in "$previous_target"
+  systemctl daemon-reload
   systemctl restart chillywood-research-transport.service || true
 fi
 echo "deployment=INACTIVE" >&2

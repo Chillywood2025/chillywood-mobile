@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
@@ -323,9 +324,24 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
     "..",
     "deploy",
   );
-  const [unit, caddy, sysusers, deploy, rollback, readiness] =
+  const [
+    unit,
+    credentialCompatibility,
+    caddy,
+    sysusers,
+    deploy,
+    rollback,
+    readiness,
+  ] =
     await Promise.all([
       readFile(resolve(root, "chillywood-research-transport.service.template"), "utf8"),
+      readFile(
+        resolve(
+          root,
+          "chillywood-research-transport-credential-compat.conf.template",
+        ),
+        "utf8",
+      ),
       readFile(resolve(root, "Caddyfile.snippet.template"), "utf8"),
       readFile(resolve(root, "chillywood-research-transport.sysusers.conf"), "utf8"),
       readFile(resolve(root, "deploy-reviewed-release.sh"), "utf8"),
@@ -339,6 +355,28 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
   assert.match(unit, /^ProtectSystem=strict$/mu);
   assert.match(unit, /^CapabilityBoundingSet=$/mu);
   assert.match(unit, /LoadCredential=research_transport_hmac:/u);
+  assert.match(credentialCompatibility, /^LoadCredential=$/mu);
+  assert.match(
+    credentialCompatibility,
+    /^RuntimeDirectory=credentials\/chillywood-research-transport-runtime$/mu,
+  );
+  assert.match(credentialCompatibility, /^RuntimeDirectoryMode=0700$/mu);
+  assert.match(
+    credentialCompatibility,
+    /^ExecStartPre=\+\/usr\/bin\/install -o chillywood-research-transport -g chillywood-research-transport -m 0400 \/etc\/chillywood\/research-transport\/research_transport_hmac \/run\/credentials\/chillywood-research-transport-runtime\/research_transport_hmac$/mu,
+  );
+  assert.match(
+    credentialCompatibility,
+    /^ExecStopPost=\+\/usr\/bin\/rm -f -- \/run\/credentials\/chillywood-research-transport-runtime\/research_transport_hmac$/mu,
+  );
+  assert.match(
+    credentialCompatibility,
+    /^Environment=CREDENTIALS_DIRECTORY=\/run\/credentials\/chillywood-research-transport-runtime$/mu,
+  );
+  assert.doesNotMatch(
+    credentialCompatibility,
+    /echo|printf|logger|journal|set -x|printenv|export -p/u,
+  );
   assert.match(
     unit,
     /^EnvironmentFile=\/opt\/chillywood\/research-transport\/current\/\.release-environment$/mu,
@@ -365,8 +403,50 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
   assert.match(readiness, /external_attestation=REQUIRED/u);
   assert.match(deploy, /verify-bundle/u);
   assert.match(deploy, /verify-extracted/u);
+  assert.match(
+    deploy,
+    /chillywood-research-transport-credential-compat\.conf\.template/u,
+  );
+  assert.match(deploy, /install_credential_drop_in "\$previous_target"/u);
   assert.match(rollback, /verify-release/u);
+  assert.match(
+    rollback,
+    /chillywood-research-transport-credential-compat\.conf\.template/u,
+  );
+  assert.match(readiness, /credential_boundary=MISMATCH/u);
+  assert.match(readiness, /credential_boundary=MATCH/u);
+  assert.match(readiness, /0:0:600/u);
+  assert.match(readiness, /\$service_uid:\$service_gid:400/u);
+  assert.match(readiness, /cmp -s "\$persistent_credential" "\$runtime_credential"/u);
   for (const value of [deploy, rollback, readiness]) {
     assert.doesNotMatch(value, /set -x|printenv|export -p/u);
+  }
+});
+
+test("systemd compatibility delta leaves the reviewed Node credential boundary unchanged", async () => {
+  const packageRoot = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+  );
+  const expected = new Map([
+    [
+      "bin/server.mjs",
+      "fb61e3ee9901e7ae143cb79bf8948ce4d3208f800a5f9e35db00da75183a307b",
+    ],
+    [
+      "src/host-auth.mjs",
+      "a48f8456e56cdd66ba3fe485b0151df93d6df57d88767b5889bcef86c22467a3",
+    ],
+    [
+      "src/host-service.mjs",
+      "5ebd79563104167f7c60914e56f2f7f33a5743eb10d715bce17981aa0eebdcaa",
+    ],
+  ]);
+  for (const [relative, expectedHash] of expected) {
+    const source = await readFile(resolve(packageRoot, relative));
+    assert.equal(
+      createHash("sha256").update(source).digest("hex"),
+      expectedHash,
+    );
   }
 });
