@@ -179,6 +179,7 @@ jobs:
         run: npm ci
       - name: Test bounded execution and evaluator independence
         run: |
+          npm run test:brace-expansion-compat
           npm run guard:cognitive-execution-safety
           npm run proof:cognitive-execution-safety
           npm run test:cognitive-execution-safety
@@ -196,7 +197,6 @@ jobs:
           npm run guard:cognitive-policy-parity
           npm run guard:cognitive-network-policy-parity
           npm run guard:cognitive-credential-path-policy-parity
-          npm run test:brace-expansion-compat
           npm run guard:cognitive-dependency-advisories
           npm run test:cognitive-collective-governance
           npm run test:cognitive-governance-adversarial
