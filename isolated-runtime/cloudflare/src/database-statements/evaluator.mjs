@@ -1,11 +1,4 @@
 export const EVALUATOR_STATEMENTS = Object.freeze({
-  productQualityAttestLiveKitBoundedFailureNoFinding: Object.freeze({
-    arity: 5,
-    text:
-      `select cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding(
-        $1::uuid,$2::text,$3::text,$4::text,$5::text
-      ) as result`,
-  }),
   evaluateProductBaseline: Object.freeze({
     arity: 4,
     text: `select cognitive_runtime.governance_evaluate_product_experience_baseline_v1(
@@ -24,6 +17,13 @@ export const EVALUATOR_STATEMENTS = Object.freeze({
     text: `select cognitive_runtime.product_quality_evaluator_snapshot(
       $1::uuid,$2::uuid
     ) as result`,
+  }),
+  productQualityNoFindingAssessmentHash: Object.freeze({
+    arity: 1,
+    text:
+      `select cognitive_runtime.product_quality_no_finding_assessment_hash(
+        $1::uuid
+      ) as result`,
   }),
   productQualityRecordEvaluatorProof: Object.freeze({
     arity: 9,

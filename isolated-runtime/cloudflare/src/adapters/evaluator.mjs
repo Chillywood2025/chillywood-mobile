@@ -1,6 +1,9 @@
 import productBaselineJson from "../../../../config/intelligence/chillywood-product-experience-baseline-v1.json" with {
   type: "json",
 };
+import objectiveAccessibilityBindingsJson from "../../../../config/intelligence/product-experience-objective-accessibility-surface-bindings-v1.json" with {
+  type: "json",
+};
 import { assertInvocationActive } from "../abort.mjs";
 import { hashJson, sha256Hex } from "../contracts.mjs";
 import { ready } from "./helpers.mjs";
@@ -33,6 +36,13 @@ const ROUTE_MAPPINGS = new Map(
 );
 const ROUTE_MAPPING_HASHES = productBaselineJson.routeComponentMappingHashes;
 const EXCEPTION_CONTRACT_HASHES = productBaselineJson.exceptionContractHashes;
+const OBJECTIVE_ACCESSIBILITY_BINDINGS = new Map(
+  objectiveAccessibilityBindingsJson.canonicalBindingPayload.bindings.map(
+    (binding) => [binding.bindingId, binding],
+  ),
+);
+const OBJECTIVE_ACCESSIBILITY_COMPONENT_SET_HASH =
+  objectiveAccessibilityBindingsJson.canonicalBindingPayload.componentSetHash;
 const BASELINE_VARIANCE = productBaselineJson.allowedVariance;
 const OPTION_C_TARGET_FAMILIES = new Set([
   "standard_streaming_card",
@@ -66,10 +76,7 @@ const RESOLUTION_KEYS = Object.freeze([
   "resolutionReasonHash",
   "sentinelRunId",
 ]);
-const LIVEKIT_FIXTURE_ATTESTATION_KEYS = Object.freeze([
-  "action",
-  "sentinelRunId",
-]);
+const NO_FINDING_KEYS = Object.freeze(["action", "sentinelRunId"]);
 const FINDING_CLASS = /^[a-z0-9][a-z0-9._-]{2,80}$/u;
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
@@ -104,6 +111,7 @@ const PHYSICAL_PROOF_STATUSES = new Set([
   "device_unavailable",
   "new_binary_or_ota_required",
 ]);
+const DEFAULT_ROUTE_RESOLUTION_MS = 10_000;
 const LIVEKIT_MAX_TIMING_MS = 600_000;
 const LIVEKIT_MAX_OBSERVATION_WINDOW_MS = 120_000;
 const LIVEKIT_BOOLEAN_METRICS = Object.freeze([
@@ -251,11 +259,12 @@ const profile = (
 const findingProfile = (findingClass, severity) =>
   profile(findingClass, "layout_density", severity, 1);
 
-const baselineBindingIsValid = (metrics) => {
+const baselineBindingIsValid = (run, metrics) => {
   const mappingId = text(metrics.routeFamilyMappingId);
   const mapping = ROUTE_MAPPINGS.get(mappingId);
   if (
     !mapping ||
+    text(run.route_or_surface) !== mapping.route ||
     text(metrics.routeFamilyMappingHash) !== ROUTE_MAPPING_HASHES[mappingId] ||
     text(metrics.surfaceFamily) !== mapping.family
   ) {
@@ -269,7 +278,27 @@ const baselineBindingIsValid = (metrics) => {
   return text(metrics.exceptionContractId) === mapping.exceptionContractId &&
     text(metrics.exceptionContractHash) ===
       EXCEPTION_CONTRACT_HASHES[mapping.exceptionContractId] &&
-    metrics.exceptionVersioned === true;
+      metrics.exceptionVersioned === true;
+};
+
+const objectiveAccessibilityBindingIsValid = (run, metrics) => {
+  const binding = OBJECTIVE_ACCESSIBILITY_BINDINGS.get(
+    text(metrics.routeFamilyMappingId),
+  );
+  return !!binding &&
+    binding.objectiveAccessibilityOnly === true &&
+    binding.allowsVisualDensityComparison === false &&
+    text(run.route_or_surface) === binding.routeOrSurface &&
+    text(metrics.routeFamilyMappingHash) === binding.bindingHash &&
+    text(metrics.componentIdentityHash) ===
+      OBJECTIVE_ACCESSIBILITY_COMPONENT_SET_HASH &&
+    text(metrics.surfaceFamily) === binding.surfaceFamily &&
+    text(metrics.exceptionContractId) === binding.exceptionContractId &&
+    text(metrics.exceptionContractHash) ===
+      EXCEPTION_CONTRACT_HASHES[binding.exceptionContractId] &&
+    metrics.exceptionVersioned === true &&
+    text(metrics.exceptionType) === "non_media_surface" &&
+    text(metrics.targetClassification) !== "meets_wcag_aa_minimum_only";
 };
 
 const approximately = (value, expected, tolerance) =>
@@ -379,7 +408,7 @@ export const deterministicVisualClassification = (
     !SURFACE_FAMILIES.has(family) ||
     !HASH.test(text(metrics.componentIdentityHash)) ||
     !HASH.test(text(metrics.routeFamilyMappingHash)) ||
-    !baselineBindingIsValid(metrics) ||
+    !baselineBindingIsValid(run, metrics) ||
     metricNumber(metrics, "interactivePreferredThreshold") !== preferred ||
     metricNumber(metrics, "interactiveApplicableMinimumThreshold") !==
       applicable
@@ -833,7 +862,10 @@ export const deterministicTouchTargetClassification = (
     !baselineValid ||
     !HASH.test(text(metrics.componentIdentityHash)) ||
     !HASH.test(text(metrics.routeFamilyMappingHash)) ||
-    !baselineBindingIsValid(metrics)
+    !(
+      baselineBindingIsValid(run, metrics) ||
+      objectiveAccessibilityBindingIsValid(run, metrics)
+    )
   ) {
     return assessment("baseline_ambiguity");
   }
@@ -1450,6 +1482,103 @@ export const deterministicDetectionReasons = (
   return Object.freeze([...reasons].sort());
 };
 
+export const deterministicNoFindingReasons = (
+  run,
+  context,
+) => {
+  const reasons = new Set();
+  const metrics = metricObject(run);
+  const observationKind = text(run.metric_manifest?.observationKind);
+  if (
+    run.result_status !== "passed" ||
+    !["installed_ui_observed", "simulator_observed"].includes(
+      run.physical_proof_status,
+    )
+  ) {
+    reasons.add("passing_physical_run_required");
+  }
+  if (!metrics) {
+    reasons.add("metric_manifest_missing");
+    return Object.freeze([...reasons].sort());
+  }
+  if (observationKind === "search_accessibility") {
+    for (
+      const key of [
+        "inputPresent",
+        "inputFocusable",
+        "inputClickable",
+        "accessibilityLabelPresent",
+        "queryAccepted",
+        "clearSucceeded",
+        "keyboardDismissed",
+      ]
+    ) {
+      if (metrics[key] !== true) {
+        reasons.add(`search_accessibility_${key}_required`);
+      }
+    }
+  } else if (observationKind === "route_timing") {
+    const elapsedDurationMs = metricNumber(metrics, "elapsedDurationMs");
+    if (
+      metrics.timeoutObserved !== false ||
+      text(metrics.networkState) !== "ready" ||
+      elapsedDurationMs === null ||
+      elapsedDurationMs < 0 ||
+      elapsedDurationMs > DEFAULT_ROUTE_RESOLUTION_MS
+    ) {
+      reasons.add("resolved_route_timing_required");
+    }
+  } else if (observationKind === "crash_anr") {
+    if (
+      metricNumber(metrics, "fatalExceptionCount") !== 0 ||
+      metricNumber(metrics, "anrCount") !== 0
+    ) {
+      reasons.add("zero_crash_anr_observation_required");
+    }
+  } else if (observationKind === "installed_journey") {
+    const elapsedDuration = metricNumber(metrics, "elapsedDurationMs");
+    const maximumDuration = metricNumber(metrics, "maxDurationMs");
+    if (
+      text(metrics.resultState) !== "success" ||
+      text(metrics.expectedState) !== text(metrics.observedState) ||
+      metricNumber(metrics, "unresolvedStateCount") !== 0 ||
+      elapsedDuration === null ||
+      maximumDuration === null ||
+      elapsedDuration > maximumDuration
+    ) {
+      reasons.add("resolved_installed_journey_required");
+    }
+  } else if (observationKind === "touch_target") {
+    if (
+      deterministicTouchTargetClassification(run, context).classification !==
+        "false_positive"
+    ) {
+      reasons.add("compliant_touch_target_required");
+    }
+  } else if (observationKind === "visual_layout") {
+    if (
+      !["false_positive", "route_specific_exception"].includes(
+        deterministicVisualClassification(run, context).classification,
+      )
+    ) {
+      reasons.add("compliant_visual_layout_required");
+    }
+  } else if (observationKind === "livekit_experience") {
+    const failureCategory = deriveIndependentLiveKitFailureCategory(metrics);
+    if (
+      text(metrics.scenarioType) === "bounded_failure_fixture" ||
+      failureCategory !== "none" ||
+      metrics.installedUiObserved !== true ||
+      metrics.connectingResolved !== true
+    ) {
+      reasons.add("healthy_installed_livekit_experience_required");
+    }
+  } else {
+    reasons.add("unsupported_observation_kind");
+  }
+  return Object.freeze([...reasons].sort());
+};
+
 export const deterministicResolutionReasons = (
   run,
   finding,
@@ -1608,6 +1737,20 @@ export const deterministicResolutionReasons = (
     ) {
       reasons.add("resolution_measurement_identity_mismatch");
     }
+  } else if (observationKind === "route_timing") {
+    const elapsedDurationMs = metricNumber(
+      resolutionMetrics,
+      "elapsedDurationMs",
+    );
+    if (
+      resolutionMetrics.timeoutObserved !== false ||
+      text(resolutionMetrics.networkState) !== "ready" ||
+      elapsedDurationMs === null ||
+      elapsedDurationMs < 0 ||
+      elapsedDurationMs > DEFAULT_ROUTE_RESOLUTION_MS
+    ) {
+      reasons.add("resolved_route_timing_required");
+    }
   }
   return Object.freeze([...reasons].sort());
 };
@@ -1693,9 +1836,9 @@ const normalizeResolution = (payload) =>
     })
     : null;
 
-const normalizeLiveKitFixtureAttestation = (payload) =>
-  exactKeys(payload, LIVEKIT_FIXTURE_ATTESTATION_KEYS) &&
-    payload.action === "attest_livekit_bounded_failure_no_finding" &&
+const normalizeNoFinding = (payload) =>
+  exactKeys(payload, NO_FINDING_KEYS) &&
+    payload.action === "evaluate_sentinel_no_finding" &&
     typeof payload.sentinelRunId === "string" &&
     UUID.test(payload.sentinelRunId)
     ? Object.freeze({ sentinelRunId: payload.sentinelRunId })
@@ -1862,6 +2005,14 @@ const assessmentHashForResolution = async (database, run, candidate) => {
   return typeof result === "string" && HASH.test(result) ? result : null;
 };
 
+const assessmentHashForNoFinding = async (database, run) => {
+  const result = await database.call(
+    "productQualityNoFindingAssessmentHash",
+    [run.id],
+  );
+  return typeof result === "string" && HASH.test(result) ? result : null;
+};
+
 const recordEvaluatorProof = async ({
   assertActive,
   assessmentHash,
@@ -2004,98 +2155,40 @@ const evaluateResolution = ready(
   },
 );
 
-const attestLiveKitBoundedFailureNoFinding = ready(
+const evaluateNoFinding = ready(
   [
     "read_product_quality_snapshot",
-    "attest_livekit_bounded_failure_no_finding",
+    "compute_no_finding_hash",
+    "record_sentinel_evaluator_proof",
   ],
   async ({ assertActive, database, env, payload, signal }) => {
-    const request = normalizeLiveKitFixtureAttestation(payload);
-    if (!request) {
-      throw new Error("livekit_fixture_attestation_payload_rejected");
-    }
+    const request = normalizeNoFinding(payload);
+    if (!request) throw new Error("sentinel_no_finding_payload_rejected");
     const snapshot = await database.call("productQualityEvaluatorSnapshot", [
       request.sentinelRunId,
       null,
     ]);
     const selected = readDetectionSnapshot(snapshot, request);
-    const metrics = selected ? metricObject(selected.run) : null;
-    const derivedFailureCategory = metrics
-      ? deriveIndependentLiveKitFailureCategory(metrics)
-      : null;
-    if (
-      !selected ||
-      selected.run.metric_manifest.observationKind !== "livekit_experience" ||
-      selected.run.result_status !== "failed" ||
-      !metrics ||
-      metrics.scenarioType !== "bounded_failure_fixture" ||
-      !derivedFailureCategory ||
-      derivedFailureCategory === "none" ||
-      metrics.stageFailureCategory !== derivedFailureCategory
-    ) {
-      throw new Error("livekit_fixture_attestation_snapshot_rejected");
-    }
-    const evaluatorOutputHash = await hashJson({
-      derivedFailureCategory,
-      findingCreated: false,
-      findingRecurrence: false,
-      resolutionRequired: false,
-      scenarioType: "bounded_failure_fixture",
-      schemaVersion: "livekit-bounded-failure-no-finding-evaluator-v1",
-      sentinelRunId: selected.run.id,
-    });
-    const attestationHash = await sha256Hex([
-      "livekit-bounded-failure-no-finding-attestation-v1",
-      selected.run.id,
-      selected.run.task_id,
-      selected.run.project_id,
-      selected.run.platform,
-      selected.run.environment,
-      "bounded_failure_fixture",
-      selected.run.evidence_manifest_hash,
-      selected.run.source_build_hash,
-      derivedFailureCategory,
-      evaluatorOutputHash,
-    ].join("|"));
-    await assertInvocationActive({ assertActive, signal });
-    const result = await database.call(
-      "productQualityAttestLiveKitBoundedFailureNoFinding",
-      [
-        selected.run.id,
-        derivedFailureCategory,
-        evaluatorOutputHash,
-        attestationHash,
-        evaluatorAssertion(env),
-      ],
+    if (!selected) throw new Error("sentinel_no_finding_snapshot_rejected");
+    const assessmentHash = await assessmentHashForNoFinding(
+      database,
+      selected.run,
     );
-    if (
-      !exactKeys(result, [
-        "attestationHash",
-        "attestationId",
-        "derivedFailureCategory",
-        "findingCreated",
-        "findingRecurrence",
-        "recordedAt",
-        "resolutionRequired",
-        "scenarioType",
-        "sentinelRunId",
-      ]) ||
-      !UUID.test(text(result.attestationId)) ||
-      result.sentinelRunId !== selected.run.id ||
-      result.scenarioType !== "bounded_failure_fixture" ||
-      result.derivedFailureCategory !== derivedFailureCategory ||
-      result.attestationHash !== attestationHash ||
-      !Number.isFinite(Date.parse(result.recordedAt)) ||
-      result.findingCreated !== false ||
-      result.findingRecurrence !== false ||
-      result.resolutionRequired !== false
-    ) {
-      throw new Error("livekit_fixture_attestation_readback_rejected");
+    if (!assessmentHash) {
+      throw new Error("sentinel_no_finding_assessment_hash_rejected");
     }
-    return Object.freeze({
-      ...result,
-      evaluatorOutputHash,
-      selfApproval: false,
+    return recordEvaluatorProof({
+      assertActive,
+      assessmentHash,
+      assessmentKind: "run_no_finding",
+      database,
+      env,
+      reasons: deterministicNoFindingReasons(
+        selected.run,
+        selected.context,
+      ),
+      run: selected.run,
+      signal,
     });
   },
 );
@@ -2131,9 +2224,8 @@ const evaluateBaseline = ready(
 );
 
 export const PRODUCT_QUALITY_EVALUATOR_ADAPTERS = Object.freeze({
-  attest_livekit_bounded_failure_no_finding:
-    attestLiveKitBoundedFailureNoFinding,
   evaluate_product_baseline_selection: evaluateBaseline,
   evaluate_sentinel_detection: evaluateDetection,
+  evaluate_sentinel_no_finding: evaluateNoFinding,
   evaluate_sentinel_resolution: evaluateResolution,
 });

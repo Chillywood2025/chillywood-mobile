@@ -4,10 +4,14 @@ import test from "node:test";
 import productBaseline from "../../../config/intelligence/chillywood-product-experience-baseline-v1.json" with {
   type: "json",
 };
+import objectiveAccessibilityBindings from "../../../config/intelligence/product-experience-objective-accessibility-surface-bindings-v1.json" with {
+  type: "json",
+};
 import {
   APPROVED_OPTION_C_BASELINE_HASH,
   deriveIndependentLiveKitFailureCategory,
   deterministicDetectionReasons,
+  deterministicNoFindingReasons,
   deterministicResolutionReasons,
   deterministicTouchTargetClassification,
   deterministicVisualClassification,
@@ -36,7 +40,6 @@ import { EVALUATOR_STATEMENTS } from "../src/database-statements/evaluator.mjs";
 import { MODEL_STATEMENTS } from "../src/database-statements/model.mjs";
 import { RESEARCH_BROKER_STATEMENTS } from "../src/database-statements/research-broker.mjs";
 import { RESEARCH_EVALUATOR_STATEMENTS } from "../src/database-statements/research-evaluator.mjs";
-import { hashJson, sha256Hex } from "../src/contracts.mjs";
 
 const UUID_A = "10000000-0000-4000-8000-000000000001";
 const UUID_B = "20000000-0000-4000-8000-000000000002";
@@ -47,6 +50,10 @@ const HASH_B = "b".repeat(64);
 const HASH_C = "c".repeat(64);
 const RESEARCH_TOKEN = "r".repeat(40);
 const EVALUATOR_TOKEN = "e".repeat(40);
+const OBJECTIVE_BINDING =
+  objectiveAccessibilityBindings.canonicalBindingPayload.bindings[0];
+const OBJECTIVE_COMPONENT_SET_HASH =
+  objectiveAccessibilityBindings.canonicalBindingPayload.componentSetHash;
 
 test("new database statements are static, parameterized, and role-scoped", async () => {
   for (
@@ -99,6 +106,10 @@ test("baseline and complete-snapshot sentinel evaluation adapters are ready", as
     true,
   );
   assert.equal(
+    PRODUCT_QUALITY_EVALUATOR_ADAPTERS.evaluate_sentinel_no_finding.ready,
+    true,
+  );
+  assert.equal(
     PRODUCT_QUALITY_EVALUATOR_ADAPTERS.evaluate_sentinel_resolution.ready,
     true,
   );
@@ -135,7 +146,6 @@ test("baseline and complete-snapshot sentinel evaluation adapters are ready", as
 });
 
 const touchTargetMetrics = (changes = {}) => {
-  const mappingId = "home_standard_discovery_rows";
   return {
     accessibilityNamePresent: true,
     accessibilityRolePresent: true,
@@ -145,14 +155,17 @@ const touchTargetMetrics = (changes = {}) => {
     baselineId: "chillywood-product-experience-baseline-v1",
     baselineState: "approved_baseline",
     baselineVersion: 1,
-    componentIdentityHash: HASH_A,
-    contentState: "loaded",
+    componentIdentityHash: OBJECTIVE_COMPONENT_SET_HASH,
+    contentState: "not_applicable",
     evidenceQuality: "measured_installed",
     evidenceQualityHash: HASH_B,
-    exceptionContractHash: null,
-    exceptionContractId: null,
-    exceptionType: "none",
-    exceptionVersioned: false,
+    exceptionContractHash:
+      productBaseline.exceptionContractHashes[
+        OBJECTIVE_BINDING.exceptionContractId
+      ],
+    exceptionContractId: OBJECTIVE_BINDING.exceptionContractId,
+    exceptionType: "non_media_surface",
+    exceptionVersioned: true,
     interactiveAncestorActuallyInteractive: false,
     interactiveAncestorClickActionPresent: false,
     interactiveAncestorHeight: null,
@@ -167,11 +180,10 @@ const touchTargetMetrics = (changes = {}) => {
     platform: "android",
     preferredThreshold: 48,
     providerState: "healthy",
-    routeFamilyMappingHash:
-      productBaseline.routeComponentMappingHashes[mappingId],
-    routeFamilyMappingId: mappingId,
+    routeFamilyMappingHash: OBJECTIVE_BINDING.bindingHash,
+    routeFamilyMappingId: OBJECTIVE_BINDING.bindingId,
     screenDensityDpi: 420,
-    surfaceFamily: "standard_streaming_card",
+    surfaceFamily: OBJECTIVE_BINDING.surfaceFamily,
     targetClassification: "below_platform_minimum",
     ...changes,
   };
@@ -290,7 +302,7 @@ const liveKitMetrics = (changes = {}) => ({
   ...changes,
 });
 
-test("bounded LiveKit fixture attestation records an independently derived no-finding result", async () => {
+test("caller-labelled LiveKit fixtures have no evaluator authority", () => {
   const metrics = liveKitMetrics({
     backgroundForegroundRecovery: false,
     backgrounded: false,
@@ -328,141 +340,32 @@ test("bounded LiveKit fixture attestation records an independently derived no-fi
     physical_proof_status: "installed_ui_observed",
     platform: "android",
     project_id: UUID_B,
-    result_status: "failed",
+    result_status: "passed",
     route_or_surface: "live-stage",
     runtime_identity_hash: HASH_B,
     sentinel_key: "livekit_experience_sentinel",
     source_build_hash: HASH_C,
     task_id: UUID_C,
   };
-  const expectedEvaluatorOutputHash = await hashJson({
-    derivedFailureCategory: "token_backend_failure",
-    findingCreated: false,
-    findingRecurrence: false,
-    resolutionRequired: false,
-    scenarioType: "bounded_failure_fixture",
-    schemaVersion: "livekit-bounded-failure-no-finding-evaluator-v1",
-    sentinelRunId: UUID_A,
-  });
-  const expectedAttestationHash = await sha256Hex([
-    "livekit-bounded-failure-no-finding-attestation-v1",
-    UUID_A,
-    UUID_C,
-    UUID_B,
-    "android",
-    "production",
-    "bounded_failure_fixture",
-    HASH_A,
-    HASH_C,
-    "token_backend_failure",
-    expectedEvaluatorOutputHash,
-  ].join("|"));
-  const calls = [];
-  const events = [];
-  let activeChecks = 0;
-  const result = await PRODUCT_QUALITY_EVALUATOR_ADAPTERS
-    .attest_livekit_bounded_failure_no_finding.execute({
-      assertActive: async () => {
-        activeChecks += 1;
-        events.push("assertActive");
-      },
-      database: {
-        call: async (id, parameters) => {
-          calls.push({ id, parameters });
-          events.push(id);
-          if (id === "productQualityEvaluatorSnapshot") {
-            return {
-              activeBaseline: { count: 0 },
-              detectionRun: null,
-              finding: null,
-              run,
-            };
-          }
-          if (
-            id === "productQualityAttestLiveKitBoundedFailureNoFinding"
-          ) {
-            return {
-              attestationHash: parameters[3],
-              attestationId: UUID_D,
-              derivedFailureCategory: parameters[1],
-              findingCreated: false,
-              findingRecurrence: false,
-              recordedAt: "2026-07-24T12:00:21.000Z",
-              resolutionRequired: false,
-              scenarioType: "bounded_failure_fixture",
-              sentinelRunId: parameters[0],
-            };
-          }
-          throw new Error(`unexpected:${id}`);
-        },
-      },
-      env: {
-        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
-      },
-      payload: {
-        action: "attest_livekit_bounded_failure_no_finding",
-        sentinelRunId: UUID_A,
-      },
-    });
-
   assert.equal(
     PRODUCT_QUALITY_EVALUATOR_ADAPTERS
-      .attest_livekit_bounded_failure_no_finding.ready,
-    true,
+      .attest_livekit_bounded_failure_no_finding,
+    undefined,
   );
-  assert.deepEqual(calls.map(({ id }) => id), [
-    "productQualityEvaluatorSnapshot",
-    "productQualityAttestLiveKitBoundedFailureNoFinding",
-  ]);
-  assert.equal(activeChecks, 1);
-  assert.deepEqual(events, [
-    "productQualityEvaluatorSnapshot",
-    "assertActive",
-    "productQualityAttestLiveKitBoundedFailureNoFinding",
-  ]);
-  assert.deepEqual(calls[1].parameters, [
-    UUID_A,
+  assert.equal(
+    EVALUATOR_STATEMENTS.productQualityAttestLiveKitBoundedFailureNoFinding,
+    undefined,
+  );
+  assert.equal(
+    deriveIndependentLiveKitFailureCategory(metrics),
     "token_backend_failure",
-    expectedEvaluatorOutputHash,
-    expectedAttestationHash,
-    EVALUATOR_TOKEN,
-  ]);
-  assert.equal(result.evaluatorOutputHash, expectedEvaluatorOutputHash);
-  assert.equal(result.attestationHash, expectedAttestationHash);
-  assert.equal(result.findingCreated, false);
-  assert.equal(result.findingRecurrence, false);
-  assert.equal(result.resolutionRequired, false);
-  assert.equal(result.selfApproval, false);
-
-  await assert.rejects(
-    PRODUCT_QUALITY_EVALUATOR_ADAPTERS
-      .attest_livekit_bounded_failure_no_finding.execute({
-        database: {
-          call: async () => ({
-            activeBaseline: { count: 0 },
-            detectionRun: null,
-            finding: null,
-            run: {
-              ...run,
-              metric_manifest: {
-                ...run.metric_manifest,
-                metrics: {
-                  ...metrics,
-                  scenarioType: "success_baseline",
-                },
-              },
-            },
-          }),
-        },
-        env: {
-          COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
-        },
-        payload: {
-          action: "attest_livekit_bounded_failure_no_finding",
-          sentinelRunId: UUID_A,
-        },
-      }),
-    /livekit_fixture_attestation_snapshot_rejected/u,
+  );
+  assert.deepEqual(
+    deterministicNoFindingReasons(run, {
+      approvedVisualBaselineCount: 0,
+      approvedVisualBaselineHash: null,
+    }),
+    ["healthy_installed_livekit_experience_required"],
   );
 });
 
@@ -471,6 +374,7 @@ test("authoritative touch-target port preserves Android 23.24dp finding", () => 
     metric_manifest: { metrics: touchTargetMetrics() },
     physical_proof_status: "installed_ui_observed",
     platform: "android",
+    route_or_surface: OBJECTIVE_BINDING.routeOrSurface,
   };
   const result = deterministicTouchTargetClassification(run, {
     approvedVisualBaselineCount: 1,
@@ -481,8 +385,82 @@ test("authoritative touch-target port preserves Android 23.24dp finding", () => 
   assert.equal(result.profile.severity, "medium");
 });
 
+test("route timing no-finding uses the reviewed ten-second ready-network bound", () => {
+  const routeRun = (metrics) => ({
+    collector_capability_id: UUID_A,
+    environment: "production",
+    erased_at: null,
+    evaluation_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    evidence_manifest_hash: HASH_A,
+    id: UUID_A,
+    metric_manifest: {
+      metrics,
+      observationKind: "route_timing",
+    },
+    physical_proof_status: "installed_ui_observed",
+    platform: "android",
+    project_id: UUID_B,
+    result_status: "passed",
+    route_or_surface: "Home",
+    runtime_identity_hash: HASH_B,
+    sentinel_key: "installed_journey_sentinel",
+    source_build_hash: HASH_C,
+    task_id: UUID_C,
+  });
+  assert.deepEqual(
+    deterministicNoFindingReasons(
+      routeRun({
+        elapsedDurationMs: 10_000,
+        networkState: "ready",
+        timeoutObserved: false,
+      }),
+      {
+        approvedVisualBaselineCount: 0,
+        approvedVisualBaselineHash: null,
+      },
+    ),
+    [],
+  );
+  for (
+    const metrics of [
+      {
+        elapsedDurationMs: 10_001,
+        networkState: "ready",
+        timeoutObserved: false,
+      },
+      {
+        elapsedDurationMs: 500,
+        networkState: "degraded",
+        timeoutObserved: false,
+      },
+    ]
+  ) {
+    assert(
+      deterministicNoFindingReasons(
+        routeRun(metrics),
+        {
+          approvedVisualBaselineCount: 0,
+          approvedVisualBaselineHash: null,
+        },
+      ).includes("resolved_route_timing_required"),
+    );
+  }
+});
+
 test("touch-target port separates web WCAG floor from preferred target", () => {
   const mappingId = "home_standard_discovery_rows";
+  const baselineMapping = {
+    componentIdentityHash: HASH_A,
+    contentState: "loaded",
+    exceptionContractHash: null,
+    exceptionContractId: null,
+    exceptionType: "none",
+    exceptionVersioned: false,
+    routeFamilyMappingHash:
+      productBaseline.routeComponentMappingHashes[mappingId],
+    routeFamilyMappingId: mappingId,
+    surfaceFamily: "standard_streaming_card",
+  };
   const run = {
     metric_manifest: {
       metrics: touchTargetMetrics({
@@ -492,14 +470,14 @@ test("touch-target port separates web WCAG floor from preferred target", () => {
         measurementUnit: "css_px",
         platform: "web",
         preferredThreshold: 44,
-        routeFamilyMappingHash:
-          productBaseline.routeComponentMappingHashes[mappingId],
         screenDensityDpi: null,
         targetClassification: "meets_wcag_aa_minimum_only",
+        ...baselineMapping,
       }),
     },
     physical_proof_status: "installed_ui_observed",
     platform: "web",
+    route_or_surface: "Home",
   };
   const result = deterministicTouchTargetClassification(run, {
     approvedVisualBaselineCount: 1,
@@ -533,6 +511,7 @@ test("touch-target port separates web WCAG floor from preferred target", () => {
           preferredThreshold: 44,
           screenDensityDpi: null,
           targetClassification: "below_wcag_aa_minimum",
+          ...baselineMapping,
         }),
       },
     },
@@ -553,6 +532,7 @@ test("visual classification treats the web preferred tier as a baseline deviatio
     metric_manifest: { metrics: visualMetrics() },
     physical_proof_status: "installed_ui_observed",
     platform: "web",
+    route_or_surface: "Home",
   };
   const result = deterministicVisualClassification(run, {
     approvedVisualBaselineCount: 1,

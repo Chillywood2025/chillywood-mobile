@@ -3,6 +3,9 @@ import test from "node:test";
 import productBaseline from "../../../config/intelligence/chillywood-product-experience-baseline-v1.json" with {
   type: "json",
 };
+import objectiveAccessibilityBindings from "../../../config/intelligence/product-experience-objective-accessibility-surface-bindings-v1.json" with {
+  type: "json",
+};
 import {
   APPROVED_OPTION_C_BASELINE_HASH,
   PRODUCT_QUALITY_EVALUATOR_ADAPTERS,
@@ -22,7 +25,11 @@ const HASH_D = "d".repeat(64);
 const HASH_E = "e".repeat(64);
 const ASSERTION = "independent-evaluator-assertion-not-logged";
 const ROUTE = "Home main tab";
-const MAPPING_ID = "home_standard_discovery_rows";
+const OBJECTIVE_BINDING =
+  objectiveAccessibilityBindings.canonicalBindingPayload.bindings[0];
+const OBJECTIVE_COMPONENT_SET_HASH =
+  objectiveAccessibilityBindings.canonicalBindingPayload.componentSetHash;
+const MAPPING_ID = OBJECTIVE_BINDING.bindingId;
 
 const future = (offsetMs = 3_600_000) =>
   new Date(Date.now() + offsetMs).toISOString();
@@ -36,14 +43,17 @@ const touchTargetMetrics = (changes = {}) => ({
   baselineId: "chillywood-product-experience-baseline-v1",
   baselineState: "approved_baseline",
   baselineVersion: 1,
-  componentIdentityHash: HASH_A,
-  contentState: "loaded",
+  componentIdentityHash: OBJECTIVE_COMPONENT_SET_HASH,
+  contentState: "not_applicable",
   evidenceQuality: "measured_installed",
   evidenceQualityHash: HASH_B,
-  exceptionContractHash: null,
-  exceptionContractId: null,
-  exceptionType: "none",
-  exceptionVersioned: false,
+  exceptionContractHash:
+    productBaseline.exceptionContractHashes[
+      OBJECTIVE_BINDING.exceptionContractId
+    ],
+  exceptionContractId: OBJECTIVE_BINDING.exceptionContractId,
+  exceptionType: "non_media_surface",
+  exceptionVersioned: true,
   interactiveAncestorActuallyInteractive: false,
   interactiveAncestorClickActionPresent: false,
   interactiveAncestorHeight: null,
@@ -58,11 +68,10 @@ const touchTargetMetrics = (changes = {}) => ({
   platform: "android",
   preferredThreshold: 48,
   providerState: "healthy",
-  routeFamilyMappingHash:
-    productBaseline.routeComponentMappingHashes[MAPPING_ID],
+  routeFamilyMappingHash: OBJECTIVE_BINDING.bindingHash,
   routeFamilyMappingId: MAPPING_ID,
   screenDensityDpi: 420,
-  surfaceFamily: "standard_streaming_card",
+  surfaceFamily: OBJECTIVE_BINDING.surfaceFamily,
   targetClassification: "below_platform_minimum",
   ...changes,
 });
@@ -213,6 +222,72 @@ test("detection recomputes the Android 23.24dp classification and records a boun
   assert.deepEqual(calls[2].parameters.slice(7), [
     "cognitive_product_quality_evaluator",
     ASSERTION,
+  ]);
+});
+
+test("a compliant physical run records one independently derived no-finding proof", async () => {
+  const run = storedRun({
+    evidenceHash: HASH_B,
+    id: UUID_RUN_RESOLUTION,
+    metrics: touchTargetMetrics({
+      interactiveTargetHeight: 48,
+      targetClassification: "meets_platform_minimum",
+    }),
+    resultStatus: "passed",
+  });
+  const calls = [];
+  const result = await PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+    .evaluate_sentinel_no_finding.execute({
+      assertActive: async () => {},
+      database: {
+        call: async (id, parameters) => {
+          calls.push({ id, parameters });
+          if (id === "productQualityEvaluatorSnapshot") {
+            return {
+              activeBaseline,
+              detectionRun: null,
+              finding: null,
+              run,
+            };
+          }
+          if (id === "productQualityNoFindingAssessmentHash") return HASH_D;
+          if (id === "productQualityRecordEvaluatorProof") {
+            return proofReadback(
+              "run_no_finding",
+              UUID_RUN_RESOLUTION,
+              "passed",
+            );
+          }
+          throw new Error(`unexpected:${id}`);
+        },
+      },
+      env: {
+        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: ASSERTION,
+      },
+      payload: {
+        action: "evaluate_sentinel_no_finding",
+        sentinelRunId: UUID_RUN_RESOLUTION,
+      },
+    });
+
+  assert.equal(
+    PRODUCT_QUALITY_EVALUATOR_ADAPTERS.evaluate_sentinel_no_finding.ready,
+    true,
+  );
+  assert.deepEqual(result.reasons, []);
+  assert.equal(result.verdict, "passed");
+  assert.deepEqual(calls.map(({ id }) => id), [
+    "productQualityEvaluatorSnapshot",
+    "productQualityNoFindingAssessmentHash",
+    "productQualityRecordEvaluatorProof",
+  ]);
+  assert.deepEqual(calls[1].parameters, [UUID_RUN_RESOLUTION]);
+  assert.deepEqual(calls[2].parameters.slice(0, 5), [
+    UUID_RUN_RESOLUTION,
+    "run_no_finding",
+    HASH_D,
+    HASH_B,
+    "passed",
   ]);
 });
 

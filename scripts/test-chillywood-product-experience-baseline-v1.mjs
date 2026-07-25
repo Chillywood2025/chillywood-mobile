@@ -15,6 +15,11 @@ const options = JSON.parse(
 const constitution = JSON.parse(
   read("config/intelligence/product-experience-constitution.json"),
 );
+const objectiveAccessibilityBindings = JSON.parse(
+  read(
+    "config/intelligence/product-experience-objective-accessibility-surface-bindings-v1.json",
+  ),
+);
 const contractBindingMigration = read(
   "supabase/migrations/20260724093000_cognitive_product_baseline_contract_binding.sql",
 );
@@ -32,6 +37,50 @@ const sha256 = (value) =>
   crypto.createHash("sha256").update(value).digest("hex");
 const canonicalHash = (value) =>
   sha256(JSON.stringify(canonicalize(value)));
+
+assert.equal(
+  objectiveAccessibilityBindings.bindingSetId,
+  "product-experience-objective-accessibility-surface-bindings-v1",
+);
+assert.equal(
+  objectiveAccessibilityBindings.baselineHash,
+  "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba",
+);
+assert.equal(
+  canonicalHash(objectiveAccessibilityBindings.canonicalBindingPayload),
+  objectiveAccessibilityBindings.bindingSetHash,
+  "objective accessibility binding-set hash changed",
+);
+const homeMainTabBinding =
+  objectiveAccessibilityBindings.canonicalBindingPayload.bindings.find(
+    (binding) => binding.bindingId === "home_main_tab_navigation_control",
+  );
+assert.ok(homeMainTabBinding, "Home main-tab accessibility binding is missing");
+const { bindingHash: homeMainTabBindingHash, ...homeMainTabBindingPayload } =
+  homeMainTabBinding;
+assert.equal(
+  canonicalHash(homeMainTabBindingPayload),
+  homeMainTabBindingHash,
+  "Home main-tab accessibility binding hash changed",
+);
+assert.equal(
+  homeMainTabBinding.surfaceFamily,
+  "non_media_interactive_surface",
+);
+assert.equal(
+  homeMainTabBinding.objectiveAccessibilityOnly,
+  true,
+);
+assert.equal(homeMainTabBinding.allowsVisualDensityComparison, false);
+assert.equal(homeMainTabBinding.allowsWebPreferredOnlyFinding, false);
+assert.match(
+  read("components/haptic-tab.tsx"),
+  /export function HapticTab/u,
+);
+assert.match(
+  read("app/(tabs)/_layout.tsx"),
+  /tabBarButtonTestID:\s*['"]main-tab-home['"]/u,
+);
 
 const optionCodes = options.options.map((option) => option.option);
 assert.deepEqual(optionCodes, ["A", "B", "C"], "A/B/C history changed");

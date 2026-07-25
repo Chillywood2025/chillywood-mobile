@@ -149,13 +149,6 @@ export const RUNTIME_MANIFEST = Object.freeze({
       edgeSource:
         "supabase/functions/cognitive-product-quality-evaluator/index.ts",
       operations: {
-        attest_livekit_bounded_failure_no_finding: operation(
-          ["action", "sentinelRunId"],
-          [
-            "cognitive_runtime.product_quality_evaluator_snapshot",
-            "cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding",
-          ],
-        ),
         evaluate_product_baseline_selection: operation(
           ["action", "executionId", "executionReceiptHash"],
           [
@@ -168,6 +161,14 @@ export const RUNTIME_MANIFEST = Object.freeze({
           [
             "cognitive_runtime.product_quality_evaluator_snapshot",
             "product_quality_detection_assessment_hash",
+            "product_quality_record_sentinel_evaluator_proof",
+          ],
+        ),
+        evaluate_sentinel_no_finding: operation(
+          ["action", "sentinelRunId"],
+          [
+            "cognitive_runtime.product_quality_evaluator_snapshot",
+            "cognitive_runtime.product_quality_no_finding_assessment_hash",
             "product_quality_record_sentinel_evaluator_proof",
           ],
         ),

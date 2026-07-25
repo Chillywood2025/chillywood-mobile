@@ -419,6 +419,9 @@ export const prepareLiveKitPacket = async (
   }
   const metrics = parseMetricManifest(envelope.metrics);
   if (!metrics) return null;
+  if (metrics.scenarioType === "bounded_failure_fixture") {
+    throw new Error("livekit_fixture_plan_required");
+  }
   const outerStarted = canonicalTimestamp(payload.observationStartedAt);
   const outerFinished = canonicalTimestamp(payload.observationFinishedAt);
   const headlessStarted = canonicalTimestamp(

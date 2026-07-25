@@ -2,11 +2,18 @@ import {
   APPROVED_OPTION_C_BASELINE_HASH,
   deriveIndependentLiveKitFailureCategory,
   deterministicDetectionReasons,
+  deterministicNoFindingReasons,
   deterministicResolutionReasons,
   deterministicTouchTargetClassification,
   deterministicVisualClassification,
   isStrictSentinelEvaluationPayload,
 } from "./index.ts";
+import productBaselineJson from "../../../config/intelligence/chillywood-product-experience-baseline-v1.json" with {
+  type: "json",
+};
+import objectiveAccessibilityBindingsJson from "../../../config/intelligence/product-experience-objective-accessibility-surface-bindings-v1.json" with {
+  type: "json",
+};
 
 type TestJson =
   | null
@@ -16,6 +23,20 @@ type TestJson =
   | TestJson[]
   | { [key: string]: TestJson };
 type TestJsonObject = { [key: string]: TestJson };
+const OBJECTIVE_BINDING =
+  objectiveAccessibilityBindingsJson.canonicalBindingPayload.bindings[0];
+const OBJECTIVE_COMPONENT_SET_HASH =
+  objectiveAccessibilityBindingsJson.canonicalBindingPayload.componentSetHash;
+const ROUTES_BY_MAPPING = new Map(
+  productBaselineJson.routeComponentMappings.map((mapping) => [
+    mapping.mappingId,
+    mapping.route,
+  ]),
+);
+ROUTES_BY_MAPPING.set(
+  OBJECTIVE_BINDING.bindingId,
+  OBJECTIVE_BINDING.routeOrSurface,
+);
 
 const validPayload = () => ({
   action: "evaluate_sentinel_detection",
@@ -28,7 +49,7 @@ const validPayload = () => ({
   proposedNextInvestigationHash: "d".repeat(64),
   providerBackendStateHash: "e".repeat(64),
   reproductionState: "confirmed_defect",
-  routeOrSurface: "home/main-tab-home",
+  routeOrSurface: OBJECTIVE_BINDING.routeOrSurface,
   sentinelRunId: "11111111-1111-4111-8111-111111111111",
   severity: "medium",
   suspectedLayer: "layout_density",
@@ -137,14 +158,16 @@ const optionCTouchMetrics = (
   baselineId: "chillywood-product-experience-baseline-v1",
   baselineState: "approved_baseline",
   baselineVersion: 1,
-  componentIdentityHash: "6".repeat(64),
-  contentState: "loaded",
+  componentIdentityHash: OBJECTIVE_COMPONENT_SET_HASH,
+  contentState: "not_applicable",
   evidenceQuality: "measured_installed",
   evidenceQualityHash: "7".repeat(64),
-  exceptionContractHash: null,
-  exceptionContractId: null,
-  exceptionType: "none",
-  exceptionVersioned: false,
+  exceptionContractHash:
+    productBaselineJson.exceptionContractHashes
+      .non_streaming_discovery_route_v1,
+  exceptionContractId: OBJECTIVE_BINDING.exceptionContractId,
+  exceptionType: "non_media_surface",
+  exceptionVersioned: true,
   interactiveAncestorHeight: null,
   interactiveAncestorPresent: false,
   interactiveAncestorWidth: null,
@@ -159,13 +182,25 @@ const optionCTouchMetrics = (
   platform: "android",
   preferredThreshold: 48,
   providerState: "healthy",
-  routeFamilyMappingId: "home_standard_discovery_rows",
-  routeFamilyMappingHash:
-    "1da877c4587ae6389b78f5c57dd212b473fbeae22a9db4885000a8b961f6a44d",
+  routeFamilyMappingId: OBJECTIVE_BINDING.bindingId,
+  routeFamilyMappingHash: OBJECTIVE_BINDING.bindingHash,
   screenDensityDpi: 420,
-  surfaceFamily: "standard_streaming_card",
+  surfaceFamily: OBJECTIVE_BINDING.surfaceFamily,
   targetClassification: "below_platform_minimum",
   ...overrides,
+});
+
+const STANDARD_HOME_TOUCH_BINDING: TestJsonObject = Object.freeze({
+  componentIdentityHash: "6".repeat(64),
+  contentState: "loaded",
+  exceptionContractHash: null,
+  exceptionContractId: null,
+  exceptionType: "none",
+  exceptionVersioned: false,
+  routeFamilyMappingHash:
+    "1da877c4587ae6389b78f5c57dd212b473fbeae22a9db4885000a8b961f6a44d",
+  routeFamilyMappingId: "home_standard_discovery_rows",
+  surfaceFamily: "standard_streaming_card",
 });
 
 const liveKitMetrics = (
@@ -241,7 +276,9 @@ const storedRun = (
     platform: "android",
     project_id: "22222222-2222-4222-8222-222222222222",
     result_status: "failed",
-    route_or_surface: payload.routeOrSurface,
+    route_or_surface:
+      ROUTES_BY_MAPPING.get(String(metrics.routeFamilyMappingId)) ??
+      payload.routeOrSurface,
     runtime_identity_hash: "4".repeat(64),
     sentinel_key: "visual_product_experience_sentinel",
     source_build_hash: payload.buildRuntimeHash,
@@ -334,14 +371,14 @@ Deno.test("sentinel evaluator accepts only exact bounded resolution evidence", (
   }
 });
 
-Deno.test("bounded LiveKit failure no-finding attestation accepts only a run identity", () => {
+Deno.test("general no-finding evaluation accepts only a run identity", () => {
   const payload = {
-    action: "attest_livekit_bounded_failure_no_finding",
+    action: "evaluate_sentinel_no_finding",
     sentinelRunId: "55555555-5555-4555-8555-555555555555",
   };
   assert(
     isStrictSentinelEvaluationPayload(payload),
-    "bounded fixture attestation payload rejected",
+    "no-finding evaluation payload rejected",
   );
   for (
     const rejected of [
@@ -353,7 +390,75 @@ Deno.test("bounded LiveKit failure no-finding attestation accepts only a run ide
   ) {
     assert(
       !isStrictSentinelEvaluationPayload(rejected),
-      "caller-controlled fixture attestation material accepted",
+      "caller-controlled no-finding material accepted",
+    );
+  }
+  assert(
+    !isStrictSentinelEvaluationPayload({
+      action: "attest_livekit_bounded_failure_no_finding",
+      sentinelRunId: payload.sentinelRunId,
+    }),
+    "retired caller-labelled fixture attestation action accepted",
+  );
+});
+
+Deno.test("no-finding evaluation is derived from one passing physical run", () => {
+  const passingTouch = storedRun(
+    "touch_target",
+    optionCTouchMetrics({
+      interactiveTargetHeight: 48,
+      targetClassification: "meets_platform_minimum",
+    }),
+    { result_status: "passed" },
+  );
+  assert(
+    deterministicNoFindingReasons(
+      passingTouch,
+      approvedContext,
+    ).length === 0,
+    "a compliant physical touch run should admit one no-finding proof",
+  );
+  assert(
+    deterministicNoFindingReasons(
+      { ...passingTouch, result_status: "failed" },
+      approvedContext,
+    ).includes("passing_physical_run_required"),
+    "failed runs cannot be relabelled as no-finding evidence",
+  );
+
+  const boundedRoute = storedRun(
+    "route_timing",
+    {
+      elapsedDurationMs: 10000,
+      networkState: "ready",
+      timeoutObserved: false,
+    },
+    { result_status: "passed" },
+  );
+  assert(
+    deterministicNoFindingReasons(boundedRoute, approvedContext).length === 0,
+    "a network-ready route resolving at the reviewed bound should pass",
+  );
+  for (
+    const metrics of [
+      {
+        elapsedDurationMs: 10001,
+        networkState: "ready",
+        timeoutObserved: false,
+      },
+      {
+        elapsedDurationMs: 500,
+        networkState: "degraded",
+        timeoutObserved: false,
+      },
+    ]
+  ) {
+    assert(
+      deterministicNoFindingReasons(
+        storedRun("route_timing", metrics, { result_status: "passed" }),
+        approvedContext,
+      ).includes("resolved_route_timing_required"),
+      "slow or degraded route evidence cannot be certified as no-finding",
     );
   }
 });
@@ -558,6 +663,7 @@ Deno.test("Option C visual findings require the exact approved baseline hash", (
   const candidate = {
     ...candidateFromPayload(payload),
     findingClass: "visual_option_c_phone_portrait_deviation",
+    routeOrSurface: "Home",
   };
   const deviationReasons = deterministicDetectionReasons(
     deviationRun,
@@ -756,6 +862,7 @@ Deno.test("platform-specific touch units and web WCAG tiers are not mixed", () =
       preferredThreshold: 44,
       screenDensityDpi: null,
       targetClassification: "meets_wcag_aa_minimum_only",
+      ...STANDARD_HOME_TOUCH_BINDING,
     }),
     { platform: "web" },
   );
@@ -794,6 +901,7 @@ Deno.test("platform-specific touch units and web WCAG tiers are not mixed", () =
       preferredThreshold: 44,
       screenDensityDpi: null,
       targetClassification: "below_wcag_aa_minimum",
+      ...STANDARD_HOME_TOUCH_BINDING,
     }),
     { platform: "web" },
   );
@@ -1390,7 +1498,7 @@ Deno.test("visual resolution binds component, family, and Option C baseline", ()
     id: "44444444-4444-4444-8444-444444444444",
     platform: "android",
     project_id: "22222222-2222-4222-8222-222222222222",
-    route_or_surface: "home/main-tab-home",
+    route_or_surface: "Home",
     sentinel_run_id: "11111111-1111-4111-8111-111111111111",
     task_id: "33333333-3333-4333-8333-333333333333",
   };
@@ -1520,6 +1628,7 @@ Deno.test("resolution proof requires a matching passing observation", () => {
       }),
       observationKind: "touch_target",
     },
+    route_or_surface: OBJECTIVE_BINDING.routeOrSurface,
     sentinel_key: "visual_product_experience_sentinel",
   };
   const touchPassingRun = {
@@ -1533,12 +1642,17 @@ Deno.test("resolution proof requires a matching passing observation", () => {
       }),
       observationKind: "touch_target",
     },
+    route_or_surface: OBJECTIVE_BINDING.routeOrSurface,
     sentinel_key: "visual_product_experience_sentinel",
+  };
+  const touchFinding = {
+    ...finding,
+    route_or_surface: OBJECTIVE_BINDING.routeOrSurface,
   };
   assert(
     deterministicResolutionReasons(
       touchPassingRun,
-      finding,
+      touchFinding,
       touchDetectionRun,
     ).length === 0,
     "pending-baseline touch resolution must bind the exact component, family, and platform unit",
@@ -1555,7 +1669,7 @@ Deno.test("resolution proof requires a matching passing observation", () => {
           }),
         },
       },
-      finding,
+      touchFinding,
       touchDetectionRun,
       approvedContext,
     ).length === 0,
@@ -1573,7 +1687,7 @@ Deno.test("resolution proof requires a matching passing observation", () => {
           },
         },
       },
-      finding,
+      touchFinding,
       touchDetectionRun,
     ).includes("resolution_measurement_identity_mismatch"),
     "a different component identity must not resolve a touch finding",

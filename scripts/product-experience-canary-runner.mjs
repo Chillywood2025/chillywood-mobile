@@ -117,6 +117,29 @@ function classifyInteractiveTarget(evidence, platformTarget) {
   return "within_platform_and_product_targets";
 }
 
+function classifyVisualDeviations(deviations) {
+  if (
+    deviations.some((deviation) =>
+      [
+        "interactive_target_below_platform_floor",
+        "accessibility_name_missing",
+        "accessibility_role_missing",
+      ].includes(deviation)
+    )
+  ) {
+    return "accessibility_violation";
+  }
+  if (
+    deviations.length === 1 &&
+    deviations[0] === "interactive_target_below_product_preference"
+  ) {
+    return "product_preference_deviation";
+  }
+  return deviations.length === 0
+    ? "false_positive"
+    : "confirmed_baseline_violation";
+}
+
 function classifyLiveKit(evidence) {
   const required = runnerConfig.canaries.livekit_experience.requiredInstalledEvidence;
   const timings = runnerConfig.canaries.livekit_experience.requiredTimingMetrics;
@@ -194,17 +217,14 @@ function classifyLiveKit(evidence) {
   const healthyObservation =
     stagesHealthy && timingsHealthy && recoveryStateHealthy;
 
-  if (
-    evidence.scenarioType === "bounded_failure_fixture" &&
-    healthyObservation
-  ) {
+  if (evidence.scenarioType === "bounded_failure_fixture") {
     return {
       ok: false,
       mode: "livekit",
       sentinelKey: runnerConfig.canaries.livekit_experience.sentinelKey,
       resultStatus: "blocked",
       physicalProofStatus: "installed_proof_available",
-      reason: "livekit_failure_fixture_not_triggered",
+      reason: "livekit_fixture_plan_required",
       evidenceManifestHash: hashPayload(evidence),
       classificationAuthority: "preliminary_local_only",
       remoteGovernedFindingMutationAllowed: false,
@@ -378,6 +398,7 @@ function classifyVisual(evidence) {
   if (![
     "within_baseline",
     "confirmed_baseline_violation",
+    "product_preference_deviation",
     "accessibility_violation",
     "route_specific_exception",
     "content_data_absence",
@@ -654,28 +675,19 @@ function classifyVisual(evidence) {
     }
   }
 
-  const accessibilityViolation = deviations.some((deviation) =>
-    [
-      "interactive_target_below_platform_floor",
-      "accessibility_name_missing",
-      "accessibility_role_missing",
-    ].includes(deviation)
-  );
   const pass = deviations.length === 0;
+  const finalClassification = classifyVisualDeviations(deviations);
 
   return {
     ...baseResult,
     resultStatus: pass ? "passed" : "finding_created",
-    suspectedLayer: pass
-      ? "none"
-      : accessibilityViolation
-      ? "accessibility"
-      : "layout_density",
-    classification: pass
-      ? "false_positive"
-      : accessibilityViolation
-      ? "accessibility_violation"
-      : "confirmed_baseline_violation",
+    suspectedLayer:
+      finalClassification === "false_positive"
+        ? "none"
+        : finalClassification === "accessibility_violation"
+        ? "accessibility"
+        : "layout_density",
+    classification: finalClassification,
     deviationCount: deviations.length,
     deviationManifestHash: hashPayload(deviations),
   };
@@ -770,7 +782,7 @@ function selfTest() {
   assert.equal(healthyFailureFixture.resultStatus, "blocked");
   assert.equal(
     healthyFailureFixture.reason,
-    "livekit_failure_fixture_not_triggered",
+    "livekit_fixture_plan_required",
   );
   assert.equal(
     healthyFailureFixture.classificationAuthority,
@@ -905,6 +917,19 @@ function selfTest() {
     "product_preference_deviation",
   );
   assert.equal(
+    classifyVisualDeviations([
+      "interactive_target_below_product_preference",
+    ]),
+    "product_preference_deviation",
+  );
+  assert.equal(
+    classifyVisualDeviations([
+      "interactive_target_below_product_preference",
+      "media_frame_width",
+    ]),
+    "confirmed_baseline_violation",
+  );
+  assert.equal(
     classifyInteractiveTarget(
       {
         ...visualEvidence,
@@ -1024,6 +1049,8 @@ try {
     mode: parsed.mode,
     resultStatus: "blocked",
     physicalProofStatus: NEW_BINARY_OR_OTA_REQUIRED,
+    classificationAuthority: "preliminary_local_only",
+    remoteGovernedFindingMutationAllowed: false,
     reason: error instanceof Error ? error.message : "unknown_error",
   }, null, 2));
   process.exit(2);
