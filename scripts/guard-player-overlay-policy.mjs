@@ -85,7 +85,12 @@ assertIncludes(player, "zIndex: 46", "standalone top chrome remains above gestur
 assertIncludes(player, "zIndex: 90", "standalone bottom chrome remains above gesture target");
 assertIncludes(player, "playerFrameworkFullscreenBackground", "standalone fullscreen must use plain background");
 assertIncludes(player, "isStandaloneFullscreen ? (\n          <View style={styles.playerFrameworkFullscreenBackground} />", "standalone fullscreen must not render poster blur/background wash");
-assertIncludes(player, "!isStandaloneFullscreen ? (\n          <>", "standalone fullscreen must suppress framework depth overlays");
+assertIncludes(
+  player,
+  "const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);",
+  "player fullscreen must cover both standalone and shared-party playback",
+);
+assertIncludes(player, "!isPlayerFullscreen ? (\n          <>", "player fullscreen must suppress framework depth overlays");
 assertNotIncludes(player, "standaloneVideoBottomMatte", "standalone Player bottom matte");
 assertNotIncludes(player, "StandalonePlaybackMenu", "standalone Playback sheet");
 assertNotIncludes(player, "Speed and quality", "standalone Playback sheet visible copy");
