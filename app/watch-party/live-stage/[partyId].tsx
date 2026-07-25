@@ -174,7 +174,7 @@ import {
   liveKitContractMatchesDesiredAuthority,
   resolveActualVisualHeroParticipantId,
   resolveDesiredLiveKitAuthority,
-  shouldAutoStartLiveStageLocalMedia,
+  shouldAutoStartAuthorizedNativeLiveKitMedia,
   shouldAutoOpenLiveStageSeatRequest,
   shouldShowLiveStageJoinUnavailable,
   type LiveStageSeatRequestState,
@@ -284,7 +284,7 @@ type CommunicationRTCViewComponent = React.ComponentType<{
 
 const HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 30_000;
 const HYBRID_LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS = 4_500;
-const DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT = shouldAutoStartLiveStageLocalMedia(Platform.OS);
+const DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT = shouldAutoStartAuthorizedNativeLiveKitMedia(Platform.OS);
 
 type LiveKitStageFallbackReason = "connection_timeout" | "disconnected" | "room_error";
 

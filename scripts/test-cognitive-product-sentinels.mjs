@@ -393,6 +393,7 @@ for (const phrase of [
   "mayDeploy",
   "mayChangeProviderProducts",
   "livekit_experience",
+  "watch-party-live",
   "visual_experience_metrics",
   "installed_journey",
 ]) {
@@ -430,6 +431,7 @@ for (const phrase of [
   "sanitized_installed_evidence_required",
   "NEW_BINARY_OR_OTA_REQUIRED",
   "classifyLiveKit",
+  "livekit_route_or_surface_invalid",
   "classifyVisual",
   "classifyJourney",
   "unsanitized_sensitive_key",

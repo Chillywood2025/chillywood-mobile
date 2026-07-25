@@ -122,7 +122,9 @@ assertIncludes(player, "Reset Zoom", "Reset Zoom control");
 assertIncludes(player, "watchPartyAudioMixPanel", "Watch-Party Live shared Audio Mix remains");
 assertIncludes(player, "Audio Mix", "Watch-Party Live shared Audio Mix label remains");
 assertNotIncludes(standaloneTopChrome, "Audio Mix", "standalone top chrome");
-assertIncludes(player, "const publishWatchPartyLiveKitAudio = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted", "LiveKit audio publish guard unchanged");
+assertIncludes(player, "shouldAutoStartAuthorizedNativeLiveKitMedia(Platform.OS)", "shared Player uses the Android/iOS LiveKit auto-start policy");
+assertIncludes(player, "const publishWatchPartyLiveKitAudio = watchPartyLocalMediaIntent", "LiveKit audio publish remains local-intent gated");
+assertIncludes(player, "&& watchPartyLiveKitCanPublish", "LiveKit local publish remains backend-authority gated");
 assertIncludes(watchPartyLiveKitGuard, "Player Watch-Party LiveKit", "Watch-Party LiveKit guard still tracks Player route");
 assertIncludes(oldRoomGuard, "isWatchPartyRoomActive", "old-room handling guard remains present");
 

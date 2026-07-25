@@ -144,6 +144,9 @@ function classifyLiveKit(evidence) {
   const required = runnerConfig.canaries.livekit_experience.requiredInstalledEvidence;
   const timings = runnerConfig.canaries.livekit_experience.requiredTimingMetrics;
   requireKeys(evidence, [...required, ...timings]);
+  if (!runnerConfig.canaries.livekit_experience.reviewedSurfaces.includes(evidence.routeOrSurface)) {
+    throw new Error("livekit_route_or_surface_invalid");
+  }
   const booleanMetrics = [
     "roomRequested",
     "tokenRequested",
@@ -746,6 +749,7 @@ function fixtureHash(seed) {
 
 function selfTest() {
   const livekitEvidence = {
+    routeOrSurface: "live-stage",
     roomRunCorrelationHash: fixtureHash("livekit-room-run"),
     installedParticipantIdentityHash: fixtureHash("livekit-installed-participant"),
     sourceBuildHash: fixtureHash("livekit-source-build"),
@@ -775,8 +779,13 @@ function selfTest() {
   assert.equal(livekitPass.resultStatus, "passed");
   assert.equal(livekitPass.classificationAuthority, "preliminary_local_only");
   assert.equal(livekitPass.remoteGovernedFindingMutationAllowed, false);
+  assert.throws(
+    () => classifyLiveKit({ ...livekitEvidence, routeOrSurface: "unreviewed-live-surface" }),
+    /livekit_route_or_surface_invalid/u,
+  );
   const connectedNativeCameraPlaceholder = classifyLiveKit({
     ...livekitEvidence,
+    routeOrSurface: "watch-party-live",
     uiExitedConnecting: false,
   });
   assert.equal(

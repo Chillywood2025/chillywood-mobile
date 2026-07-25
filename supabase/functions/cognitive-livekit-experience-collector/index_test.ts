@@ -211,7 +211,7 @@ Deno.test("media flow with unresolved Connecting is an installed UI failure", ()
   }
 });
 
-Deno.test("connected native room with a persistent camera placeholder is an installed UI failure", () => {
+Deno.test("connected Watch-Party Live shared player with a persistent camera placeholder is an installed UI failure", async () => {
   const evidence = {
     ...baseline(),
     connectingResolved: false,
@@ -231,6 +231,13 @@ Deno.test("connected native room with a persistent camera placeholder is an inst
   }
   if (classification.physicalProofStatus !== "installed_ui_observed") {
     throw new Error("native camera placeholder requires installed UI proof");
+  }
+  const response = await invokePrepare({
+    ...await packet(evidence),
+    routeOrSurface: "watch-party-live",
+  });
+  if (response.status !== 200) {
+    throw new Error("Watch-Party Live camera placeholder packet was not accepted for governed classification");
   }
 });
 
