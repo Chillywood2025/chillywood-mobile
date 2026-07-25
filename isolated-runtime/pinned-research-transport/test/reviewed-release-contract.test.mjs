@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
@@ -162,6 +163,53 @@ test("reviewed bundle and installed release reject archive, module, and metadata
         manifest: verified.manifest,
       }),
       /reviewed_release_extracted_module_mismatch/u,
+    );
+  } finally {
+    await rm(temporary, { force: true, recursive: true });
+  }
+});
+
+test("release profile selection accepts only the exact allowlisted ordered module inventories", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-reviewed-research-profile-"),
+  );
+  try {
+    const archivePath = resolve(temporary, "release.tar");
+    const manifestPath = resolve(temporary, "release.manifest.json");
+    const sourceCommit = currentCommit();
+    const built = await buildReviewedRelease({
+      archivePath,
+      manifestPath,
+      repository,
+      sourceCommit,
+    });
+    const verified = await verifyReviewedBundle({
+      archivePath,
+      expectedManifestSha256: built.manifestSha256,
+      manifestPath,
+    });
+    assert.equal(
+      verified.manifest.releaseProfile,
+      "chillywood-pinned-research-host-runtime-v2-current-13",
+    );
+
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.modules.splice(4, 1);
+    manifest.moduleGraphSha256 = createHash("sha256")
+      .update(`${JSON.stringify(manifest.modules)}\n`)
+      .digest("hex");
+    const arbitraryManifest = `${JSON.stringify(manifest, null, 2)}\n`;
+    await writeFile(manifestPath, arbitraryManifest);
+    const arbitraryHash = createHash("sha256")
+      .update(arbitraryManifest)
+      .digest("hex");
+    await assert.rejects(
+      verifyReviewedBundle({
+        archivePath,
+        expectedManifestSha256: arbitraryHash,
+        manifestPath,
+      }),
+      /reviewed_release_profile_rejected/u,
     );
   } finally {
     await rm(temporary, { force: true, recursive: true });

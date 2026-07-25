@@ -407,9 +407,11 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
     deploy,
     /chillywood-research-transport-credential-compat\.conf\.template/u,
   );
-  assert.match(deploy, /install_credential_drop_in "\$previous_target"/u);
+  assert.match(deploy, /\.deployment-rollback\.lock/u);
+  assert.match(deploy, /automatic_rollback=/u);
   assert.match(rollback, /verify-release/u);
-  assert.match(
+  assert.match(rollback, /\.deployment-rollback\.lock/u);
+  assert.doesNotMatch(
     rollback,
     /chillywood-research-transport-credential-compat\.conf\.template/u,
   );
