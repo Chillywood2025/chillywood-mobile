@@ -29,6 +29,8 @@ import { createHmac } from "node:crypto";
 const KEY = "a".repeat(64);
 const REQUEST_ID = "10000000-0000-4000-8000-000000000001";
 const SOURCE_COMMIT = "b".repeat(40);
+const SOURCE_TREE = "c".repeat(40);
+const RELEASE_MANIFEST_SHA256 = "d".repeat(64);
 const SOURCE_URL = "https://developers.cloudflare.com/workers/";
 const PUBLIC_ADDRESS = "93.184.216.34";
 const NOW = Date.parse("2026-07-24T18:00:00.000Z");
@@ -107,7 +109,9 @@ const listen = async (options = {}) => {
   const server = createPinnedResearchHostServer({
     hmacKey: KEY,
     now: () => NOW,
+    releaseManifestSha256: RELEASE_MANIFEST_SHA256,
     sourceCommit: SOURCE_COMMIT,
+    sourceTree: SOURCE_TREE,
     transport: async () => makeTransportResult(),
     ...options,
   });
@@ -173,7 +177,9 @@ test("loopback host returns only signed attested evidence and a local readiness 
     assert.deepEqual(await health.json(), {
       contract: PINNED_RESEARCH_HOST_SCHEMA_VERSION,
       providerReadiness: "ACTIVE",
+      releaseManifestSha256: RELEASE_MANIFEST_SHA256,
       sourceCommit: SOURCE_COMMIT,
+      sourceTree: SOURCE_TREE,
     });
 
     const body = JSON.stringify(invocation());
@@ -333,16 +339,33 @@ test("deployment templates bind a separate identity, loopback listener, exact ro
   assert.match(unit, /^ProtectSystem=strict$/mu);
   assert.match(unit, /^CapabilityBoundingSet=$/mu);
   assert.match(unit, /LoadCredential=research_transport_hmac:/u);
+  assert.match(
+    unit,
+    /^EnvironmentFile=\/opt\/chillywood\/research-transport\/current\/\.release-environment$/mu,
+  );
+  assert.doesNotMatch(unit, /REPLACE_WITH_REVIEWED_SOURCE_COMMIT/u);
   assert.match(caddy, /127\.0\.0\.1:4319/u);
   assert.match(
     caddy,
     /\/internal\/cognitive-research-transport\/v1\/retrieve/u,
   );
   assert.doesNotMatch(caddy, /healthz/u);
-  assert.match(deploy, /deployment=ACTIVE/u);
+  assert.match(
+    deploy,
+    /deployment=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION/u,
+  );
+  assert.doesNotMatch(deploy, /deployment=ACTIVE/u);
   assert.match(deploy, /deployment=INACTIVE/u);
-  assert.match(rollback, /rollback=ACTIVE/u);
+  assert.match(
+    rollback,
+    /rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION/u,
+  );
+  assert.doesNotMatch(rollback, /rollback=ACTIVE/u);
   assert.match(readiness, /127\.0\.0\.1:4319\/healthz/u);
+  assert.match(readiness, /external_attestation=REQUIRED/u);
+  assert.match(deploy, /verify-bundle/u);
+  assert.match(deploy, /verify-extracted/u);
+  assert.match(rollback, /verify-release/u);
   for (const value of [deploy, rollback, readiness]) {
     assert.doesNotMatch(value, /set -x|printenv|export -p/u);
   }

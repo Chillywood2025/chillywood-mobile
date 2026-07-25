@@ -7,11 +7,19 @@ import {
 const credentialDirectory = process.env.CREDENTIALS_DIRECTORY;
 const sourceCommit =
   process.env.COGNITIVE_RESEARCH_TRANSPORT_SOURCE_COMMIT;
+const sourceTree =
+  process.env.COGNITIVE_RESEARCH_TRANSPORT_SOURCE_TREE;
+const releaseManifestSha256 =
+  process.env.COGNITIVE_RESEARCH_TRANSPORT_RELEASE_MANIFEST_SHA256;
 if (
   typeof credentialDirectory !== "string" ||
   !credentialDirectory.startsWith("/run/credentials/") ||
   typeof sourceCommit !== "string" ||
-  !/^[a-f0-9]{40}$/u.test(sourceCommit)
+  !/^[a-f0-9]{40}$/u.test(sourceCommit) ||
+  typeof sourceTree !== "string" ||
+  !/^[a-f0-9]{40}$/u.test(sourceTree) ||
+  typeof releaseManifestSha256 !== "string" ||
+  !/^[a-f0-9]{64}$/u.test(releaseManifestSha256)
 ) {
   throw new Error("research_host_configuration_rejected");
 }
@@ -24,7 +32,9 @@ const hmacKey = (await readFile(keyPath, "utf8")).trim();
 const server = createPinnedResearchHostServer({
   hmacKey,
   logger: console,
+  releaseManifestSha256,
   sourceCommit,
+  sourceTree,
 });
 server.listen(4319, "127.0.0.1");
 

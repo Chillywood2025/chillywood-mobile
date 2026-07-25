@@ -1,32 +1,43 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 1 ]; then
-  echo "usage: readiness.sh SOURCE_COMMIT" >&2
+if [ "$#" -ne 0 ]; then
+  echo "usage: readiness.sh" >&2
   exit 64
 fi
-source_commit=$1
-case "$source_commit" in
-  *[!0-9a-f]*|'') echo "source_commit_rejected" >&2; exit 65 ;;
-esac
-if [ "${#source_commit}" -ne 40 ]; then
-  echo "source_commit_rejected" >&2
+
+release_directory=$(realpath "$(dirname "$0")/../../..")
+contract_script="$release_directory/isolated-runtime/pinned-research-transport/deploy/reviewed-release-contract.mjs"
+release_metadata=$(
+  node "$contract_script" verify-release "$release_directory"
+)
+set -- $release_metadata
+if [ "$#" -ne 3 ]; then
+  echo "release_metadata_rejected" >&2
   exit 65
 fi
+source_commit=$1
+source_tree=$2
+release_manifest_sha256=$3
 
 body=$(curl --fail --silent --show-error \
   --connect-timeout 2 \
   --max-time 5 \
   http://127.0.0.1:4319/healthz)
 node -e '
-const expected = process.argv[1];
-const value = JSON.parse(process.argv[2]);
+const [sourceCommit, sourceTree, releaseManifestSha256, body] =
+  process.argv.slice(1);
+const value = JSON.parse(body);
 const keys = Object.keys(value).sort().join(",");
 if (
-  keys !== "contract,providerReadiness,sourceCommit" ||
+  keys !== "contract,providerReadiness,releaseManifestSha256,sourceCommit,sourceTree" ||
   value.contract !== "chillywood-pinned-research-host-v1" ||
   value.providerReadiness !== "ACTIVE" ||
-  value.sourceCommit !== expected
+  value.sourceCommit !== sourceCommit ||
+  value.sourceTree !== sourceTree ||
+  value.releaseManifestSha256 !== releaseManifestSha256
 ) process.exit(1);
-process.stdout.write("readiness=ACTIVE\\n");
-' "$source_commit" "$body"
+process.stdout.write(
+  "local_readiness=ACTIVE\\nexternal_attestation=REQUIRED\\n",
+);
+' "$source_commit" "$source_tree" "$release_manifest_sha256" "$body"

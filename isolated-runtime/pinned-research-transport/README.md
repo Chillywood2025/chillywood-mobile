@@ -28,11 +28,33 @@ media type, and transport attestation hash. Public page content remains
 untrusted data and no raw page archive is retained.
 
 `deploy/` contains the separate Linux identity, hardened systemd unit, exact
-Caddy route, reviewed-release switch, rollback and loopback readiness
-templates. These files do not mutate a provider. Deployment status remains
+Caddy route, reviewed-release builder, switch, rollback and loopback readiness
+templates. The builder reads only an exact Git commit and emits a source archive
+plus a canonical sidecar manifest. Deployment requires the independently
+recorded sidecar hash, then verifies the archive hash, exact runtime-module graph,
+extracted file hashes and executable modes before installing a read-only release.
+The systemd unit reads source commit, source tree and release-manifest hash from
+the selected release, so a verified rollback cannot retain metadata from a newer
+release. These files do not mutate a provider. Deployment status remains
 `PINNED_RESEARCH_TRANSPORT_REQUIRES_PROVIDER` until an exact reviewed commit is
 installed, the one Worker-specific HMAC credential is attached at both ends,
 the HTTPS origin is bound, and remote readiness/negative tests pass.
+
+Build an artifact from the reviewed Git object, not from mutable working-tree
+files:
+
+```sh
+node isolated-runtime/pinned-research-transport/deploy/reviewed-release-contract.mjs \
+  build /path/to/repository REVIEWED_COMMIT \
+  /owner-only/path/research-transport.tar \
+  /owner-only/path/research-transport.manifest.json
+```
+
+Record the printed `release_manifest_sha256` with the exact-head review. Deploy
+with the archive, sidecar, and that reviewed hash. A successful loopback check
+reports `LOCAL_READY_PENDING_EXTERNAL_ATTESTATION`; it is not an activation
+claim. Production activation still requires the external Caddy/HMAC/replay and
+negative-path attestation.
 
 Focused validation:
 

@@ -138,7 +138,9 @@ export const createPinnedResearchHostServer = ({
   now = Date.now,
   replayGuard = createInvocationReplayGuard({ now }),
   requireForwardedHttps = true,
+  releaseManifestSha256,
   sourceCommit,
+  sourceTree,
   transport = createPinnedPublicResearchTransport(),
 } = {}) => {
   const key = normalizeHostHmacKey(hmacKey);
@@ -148,7 +150,11 @@ export const createPinnedResearchHostServer = ({
     typeof now !== "function" ||
     typeof transport !== "function" ||
     typeof sourceCommit !== "string" ||
-    !/^[a-f0-9]{40}$/u.test(sourceCommit)
+    !/^[a-f0-9]{40}$/u.test(sourceCommit) ||
+    typeof sourceTree !== "string" ||
+    !/^[a-f0-9]{40}$/u.test(sourceTree) ||
+    typeof releaseManifestSha256 !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(releaseManifestSha256)
   ) {
     throw new Error("research_host_configuration_rejected");
   }
@@ -161,7 +167,9 @@ export const createPinnedResearchHostServer = ({
       jsonResponse(response, 200, {
         contract: PINNED_RESEARCH_HOST_SCHEMA_VERSION,
         providerReadiness: PINNED_RESEARCH_PROVIDER_ACTIVE,
+        releaseManifestSha256,
         sourceCommit,
+        sourceTree,
       });
       return;
     }
