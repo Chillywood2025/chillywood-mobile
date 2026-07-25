@@ -95,6 +95,66 @@ insert into public.cognitive_governance_switches(
   'collective-governance-v1',null,null
 );
 
+set local session_replication_role=replica;
+insert into public.cognitive_research_backup_retention_attestations(
+  id,execution_id,evaluator_proof_id,task_id,project_id,platform,environment,
+  provider,provider_plan,backup_state,backup_window_days,restore_available,
+  point_in_time_recovery,restored_data_requires_tombstone_replay,
+  provider_evidence_hash,provider_verified_at,expires_at
+) values (
+  'fa000000-0000-4000-8000-000000000001',
+  'fa000000-0000-4000-8000-000000000002',
+  'fa000000-0000-4000-8000-000000000003',
+  'f2000000-0000-4000-8000-000000000001',
+  'f1000000-0000-4000-8000-000000000001',
+  'shared','production','supabase','free',
+  'provider_project_backups_absent',0,false,false,true,repeat('a',64),
+  transaction_timestamp(),transaction_timestamp()+interval '1 day'
+);
+insert into public.cognitive_research_retention_processor_attestations(
+  id,execution_id,evaluator_proof_id,backup_attestation_id,task_id,project_id,
+  platform,environment,repository_full_name,source_commit,runtime_provider,
+  worker_name,runtime_principal,database_role,schedule_cron,
+  schedule_timezone,batch_limit,maximum_batches,timeout_ms,
+  maximum_lag_seconds,retention_policy_id,retention_policy_hash,
+  worker_version_hash,provider_configuration_hash,attestation_hash,expires_at
+) values (
+  'fb000000-0000-4000-8000-000000000001',
+  'fa000000-0000-4000-8000-000000000002',
+  'fa000000-0000-4000-8000-000000000003',
+  'fa000000-0000-4000-8000-000000000001',
+  'f2000000-0000-4000-8000-000000000001',
+  'f1000000-0000-4000-8000-000000000001',
+  'shared','production','Chillywood2025/chillywood-mobile',repeat('a',40),
+  'cloudflare_workers','chillywood-level01-public-research-broker',
+  'cognitive_public_research_broker','cognitive_public_research_broker',
+  '17 * * * *','UTC',100,1,50000,7200,
+  'chillywood-cognitive-retention-v1',repeat('2',64),
+  repeat('b',64),repeat('c',64),repeat('d',64),
+  transaction_timestamp()+interval '1 day'
+);
+insert into public.cognitive_research_retention_processor_heartbeats(
+  id,processor_attestation_id,maintenance_run_id,task_id,project_id,
+  platform,environment,scheduled_at,source_count,claim_count,total_count,
+  no_work,attestation_hash,event_hash,completed_at,created_at
+) values (
+  'fc000000-0000-4000-8000-000000000001',
+  'fb000000-0000-4000-8000-000000000001',
+  'fc000000-0000-4000-8000-000000000002',
+  'f2000000-0000-4000-8000-000000000001',
+  'f1000000-0000-4000-8000-000000000001',
+  'shared','production',
+  case
+    when date_trunc('hour',transaction_timestamp())+interval '17 minutes'
+      <= transaction_timestamp()
+    then date_trunc('hour',transaction_timestamp())+interval '17 minutes'
+    else date_trunc('hour',transaction_timestamp())-interval '43 minutes'
+  end,
+  0,0,0,true,repeat('d',64),repeat('e',64),
+  transaction_timestamp(),transaction_timestamp()
+);
+set local session_replication_role=origin;
+
 -- Seed one already-expired, non-personal source/claim pair. This bypasses no
 -- runtime path: it is a postgres-only fixture used solely to prove one-way
 -- expiry, idempotency, and immutable tombstone auditing.

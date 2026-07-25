@@ -244,6 +244,69 @@ set enabled = excluded.enabled,
     enabled_by = excluded.enabled_by,
     enabled_at = excluded.enabled_at,
     updated_at = excluded.updated_at;
+set local session_replication_role=replica;
+insert into public.cognitive_research_backup_retention_attestations(
+  id,execution_id,evaluator_proof_id,task_id,project_id,platform,environment,
+  provider,provider_plan,backup_state,backup_window_days,restore_available,
+  point_in_time_recovery,restored_data_requires_tombstone_replay,
+  provider_evidence_hash,provider_verified_at,expires_at
+)
+select
+  'ca000000-0000-4000-8000-000000000001',
+  'ca000000-0000-4000-8000-000000000002',
+  'ca000000-0000-4000-8000-000000000003',
+  fixture.task_id,fixture.project_id,'shared','production',
+  'supabase','free','provider_project_backups_absent',0,false,false,true,
+  repeat('a',64),transaction_timestamp(),
+  transaction_timestamp()+interval '1 day'
+from level01_fixture fixture;
+insert into public.cognitive_research_retention_processor_attestations(
+  id,execution_id,evaluator_proof_id,backup_attestation_id,task_id,project_id,
+  platform,environment,repository_full_name,source_commit,runtime_provider,
+  worker_name,runtime_principal,database_role,schedule_cron,
+  schedule_timezone,batch_limit,maximum_batches,timeout_ms,
+  maximum_lag_seconds,retention_policy_id,retention_policy_hash,
+  worker_version_hash,provider_configuration_hash,attestation_hash,expires_at
+)
+select
+  'cb000000-0000-4000-8000-000000000001',
+  'ca000000-0000-4000-8000-000000000002',
+  'ca000000-0000-4000-8000-000000000003',
+  'ca000000-0000-4000-8000-000000000001',
+  fixture.task_id,fixture.project_id,'shared','production',
+  'Chillywood2025/chillywood-mobile',repeat('a',40),
+  'cloudflare_workers','chillywood-level01-public-research-broker',
+  'cognitive_public_research_broker','cognitive_public_research_broker',
+  '17 * * * *','UTC',100,1,50000,7200,
+  'chillywood-cognitive-retention-v1',policy.policy_hash,
+  repeat('b',64),repeat('c',64),repeat('d',64),
+  transaction_timestamp()+interval '1 day'
+from level01_fixture fixture
+join public.cognitive_retention_policy_states policy
+  on policy.task_id=fixture.task_id
+  and policy.project_id=fixture.project_id
+  and policy.platform='shared'
+  and policy.environment='production';
+insert into public.cognitive_research_retention_processor_heartbeats(
+  id,processor_attestation_id,maintenance_run_id,task_id,project_id,
+  platform,environment,scheduled_at,source_count,claim_count,total_count,
+  no_work,attestation_hash,event_hash,completed_at,created_at
+)
+select
+  'cc000000-0000-4000-8000-000000000001',
+  'cb000000-0000-4000-8000-000000000001',
+  'cc000000-0000-4000-8000-000000000002',
+  fixture.task_id,fixture.project_id,'shared','production',
+  case
+    when date_trunc('hour',transaction_timestamp())+interval '17 minutes'
+      <= transaction_timestamp()
+    then date_trunc('hour',transaction_timestamp())+interval '17 minutes'
+    else date_trunc('hour',transaction_timestamp())-interval '43 minutes'
+  end,
+  0,0,0,true,repeat('d',64),repeat('e',64),
+  transaction_timestamp(),transaction_timestamp()
+from level01_fixture fixture;
+set local session_replication_role=origin;
 select set_config('request.jwt.claim.role','service_role',true);
 select pg_temp.set_level01_test_actor('research_source_broker');
 
