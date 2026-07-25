@@ -182,8 +182,8 @@ values (${literal(ids.owner)},null,'owner','active');
 
 -- Build a complete, current production activation fixture without disabling
 -- any trigger or constraint. The immutable decision is backed by real
--- constitution/deliberation/evidence/proposal rows and the three independent
--- attestations required by the finalized-decision trigger.
+-- constitution/deliberation/evidence/proposal rows and the reviewed
+-- single-provider Owner-advisory exception.
 create temporary table retention_activation_fixture as
 select
   transaction_timestamp()-interval '12 minutes' as provider_verified_at,
@@ -309,6 +309,27 @@ update retention_activation_fixture set owner_decision_result =
   );
 reset role;
 commit;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from public.governance_decision_manifests decision
+    join public.cognitive_model_advisory_owner_decisions advisory
+      on advisory.decision_manifest_id = decision.id
+    where decision.id = (
+      select (owner_decision_result->>'decisionManifestId')::uuid
+      from retention_activation_fixture
+    )
+      and decision.model_independence_status =
+        'MODEL_INDEPENDENCE_PROVIDER_REQUIRED'
+      and decision.model_independence_assessment_id is null
+      and advisory.quorum_eligible = false
+  ) then
+    raise exception 'retention_concurrency_advisory_state_mismatch';
+  end if;
+end
+$$;
 
 insert into public.governance_owner_approval_records(
   id,decision_manifest_id,task_id,project_id,platform,environment,
