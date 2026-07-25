@@ -494,6 +494,29 @@ test("GitHub broker stays blocked without provider-enforced merge denial", async
 test("GitHub plans reject forbidden paths and credential-shaped content", async () => {
   const payload = await draftPayload();
   assert.equal(validateDraftPlan({ ...payload, path: ".github/workflows/a.yml" }), null);
+  const exactSourcePayload = {
+    ...payload,
+    branchName: "codex/cognitive-canary/home-tab-target",
+    canaryKey: "low_risk_source_draft_pr",
+    path: "components/haptic-tab.tsx",
+    priorBlobSha: "b".repeat(40),
+  };
+  assert.ok(validateDraftPlan(exactSourcePayload));
+  for (
+    const path of [
+      "components/AuthScreen.tsx",
+      "components/PaymentScreen.tsx",
+      "components/RolesScreen.tsx",
+      "components/haptic-tab-copy.tsx",
+      "app/(tabs)/_layout.tsx",
+    ]
+  ) {
+    assert.equal(
+      validateDraftPlan({ ...exactSourcePayload, path }),
+      null,
+      `${path} must remain outside the exact low-risk source canary`,
+    );
+  }
   assert.equal(
     validateDraftPlan({
       ...payload,

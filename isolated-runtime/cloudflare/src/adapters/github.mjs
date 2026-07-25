@@ -14,7 +14,7 @@ const API_ROOT = "https://api.github.com";
 const API_VERSION = "2026-03-10";
 const USER_AGENT = "chillywood-cognitive-github-draft-pr-broker";
 const SERVICE_IDENTITY = "cognitive_github_draft_pr_broker";
-const PROVIDER_MERGE_DENIAL_BLOCKER =
+export const PROVIDER_MERGE_DENIAL_BLOCKER =
   "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED";
 const ALLOWED_PERMISSION_MANIFEST = Object.freeze({
   contents: "write",
@@ -51,6 +51,7 @@ const BRANCH =
   /^codex\/cognitive-canary\/[a-z0-9][a-z0-9/_-]{2,80}$/u;
 const SAFE_PATH = /^[A-Za-z0-9][A-Za-z0-9._/-]{2,180}$/u;
 const SAFE_TITLE = /^[A-Za-z0-9][A-Za-z0-9 .,:;()/_'-]{7,120}$/u;
+const LOW_RISK_SOURCE_CANARY_PATH = "components/haptic-tab.tsx";
 const FORBIDDEN_PATH =
   /(^|\/)(?:\.github|android|ios|supabase\/migrations)(?:\/|$)|(^|\/)(?:auth|billing|entitlements?|legal|moderation|money|payments?|payouts?|pricing|providers?|ranking|releases?|rights?|rls|roles?|secrets?|transfers?|withdrawals?|workflows?)(?:[._/-]|$)|^(?:app\.json|app\.config\.[^/]+|eas\.json|package(?:-lock)?\.json|deno\.lock)$/iu;
 const EXPLICIT_SECRET =
@@ -396,8 +397,7 @@ const pathMatchesCanary = (canaryKey, path) => {
     return /^scripts\/cognitive-canaries\/[A-Za-z0-9][A-Za-z0-9._-]{2,80}\.(?:mjs|ts)$/u
       .test(path);
   }
-  return /^(?:src|components|app)\/[A-Za-z0-9][A-Za-z0-9._/-]{2,160}\.(?:ts|tsx|js|jsx)$/u
-    .test(path);
+  return path === LOW_RISK_SOURCE_CANARY_PATH;
 };
 
 export const validateDraftPlan = (payload) => {
@@ -949,4 +949,20 @@ export const createGitHubBrokerAdapters = ({
   });
 };
 
-export const GITHUB_BROKER_ADAPTERS = createGitHubBrokerAdapters();
+const defaultGitHubBrokerAdapters = createGitHubBrokerAdapters();
+const providerProofBlocked = (adapter) =>
+  Object.freeze({
+    ...adapter,
+    ready: false,
+    reason: PROVIDER_MERGE_DENIAL_BLOCKER,
+  });
+
+export const GITHUB_BROKER_ADAPTERS = Object.freeze({
+  attest_provider_readback: providerProofBlocked(
+    defaultGitHubBrokerAdapters.attest_provider_readback,
+  ),
+  execute_canary: providerProofBlocked(
+    defaultGitHubBrokerAdapters.execute_canary,
+  ),
+  status: defaultGitHubBrokerAdapters.status,
+});
