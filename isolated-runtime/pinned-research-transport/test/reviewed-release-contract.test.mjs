@@ -281,7 +281,7 @@ test("release profile selection accepts only the exact allowlisted ordered modul
     });
     assert.equal(
       verified.manifest.releaseProfile,
-      "chillywood-pinned-research-host-runtime-v3-current-13",
+      "chillywood-pinned-research-host-runtime-v4-current-14",
     );
 
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -425,6 +425,92 @@ test("new builds reject inactive profiles and source entrypoints without the exa
         releaseProfile: CURRENT_REVIEWED_RELEASE_PROFILE,
         repository,
         sourceCommit: legacyThirteenModuleCommit,
+      }),
+      /reviewed_release_runtime_abi_source_rejected/u,
+    );
+  } finally {
+    await rm(temporary, { force: true, recursive: true });
+  }
+});
+
+test("new builds execute the exact credential contract blob and reject lexical lookalikes", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-reviewed-research-semantic-abi-"),
+  );
+  try {
+    const clonedRepository = resolve(temporary, "repository");
+    execFileSync("git", [
+      "clone",
+      "--quiet",
+      "--no-hardlinks",
+      repository,
+      clonedRepository,
+    ]);
+    execFileSync("git", [
+      "-C",
+      clonedRepository,
+      "checkout",
+      "--quiet",
+      currentCommit(),
+    ]);
+    await writeFile(
+      resolve(
+        clonedRepository,
+        "isolated-runtime/pinned-research-transport/src/credential-directory-contract.mjs",
+      ),
+      [
+        "export const CURRENT_CREDENTIAL_DIRECTORY_ABI =",
+        '  "chillywood-systemd-fixed-user-ephemeral-0400-v1";',
+        "export const CURRENT_CREDENTIAL_DIRECTORY_PATH =",
+        '  "/run/chillywood-research-transport-runtime";',
+        "",
+        "// credentialDirectoryAbi !== \"chillywood-systemd-fixed-user-ephemeral-0400-v1\"",
+        "// credentialDirectoryPath !== \"/run/chillywood-research-transport-runtime\"",
+        "// credentialDirectory !== credentialDirectoryPath",
+        "export const validateResearchHostConfiguration = (environment) =>",
+        "  Object.freeze({",
+        "    credentialDirectory: environment.CREDENTIALS_DIRECTORY,",
+        "    releaseManifestSha256:",
+        "      environment.COGNITIVE_RESEARCH_TRANSPORT_RELEASE_MANIFEST_SHA256,",
+        "    sourceCommit:",
+        "      environment.COGNITIVE_RESEARCH_TRANSPORT_SOURCE_COMMIT,",
+        "    sourceTree: environment.COGNITIVE_RESEARCH_TRANSPORT_SOURCE_TREE,",
+        "  });",
+        "",
+      ].join("\n"),
+    );
+    execFileSync("git", [
+      "-C",
+      clonedRepository,
+      "add",
+      "isolated-runtime/pinned-research-transport/src/credential-directory-contract.mjs",
+    ]);
+    execFileSync(
+      "git",
+      [
+        "-C",
+        clonedRepository,
+        "-c",
+        "user.name=Chi'llywood Test",
+        "-c",
+        "user.email=release-fixture@example.invalid",
+        "commit",
+        "--quiet",
+        "-m",
+        "test: create permissive credential contract",
+      ],
+    );
+    const sourceCommit = execFileSync(
+      "git",
+      ["-C", clonedRepository, "rev-parse", "HEAD"],
+      { encoding: "utf8" },
+    ).trim();
+    await assert.rejects(
+      buildReviewedRelease({
+        archivePath: resolve(temporary, "permissive.tar"),
+        manifestPath: resolve(temporary, "permissive.json"),
+        repository: clonedRepository,
+        sourceCommit,
       }),
       /reviewed_release_runtime_abi_source_rejected/u,
     );

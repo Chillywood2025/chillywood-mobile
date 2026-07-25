@@ -511,6 +511,8 @@ test("current-profile deployment ignores a tampered adjacent template and instal
     );
     const toolDirectory = resolve(temporary, "deployment-tools");
     await mkdir(toolDirectory);
+    const toolSourceDirectory = resolve(temporary, "src");
+    await mkdir(toolSourceDirectory);
     for (const file of [
       "deploy-reviewed-release.sh",
       "reviewed-release-contract.mjs",
@@ -518,6 +520,10 @@ test("current-profile deployment ignores a tampered adjacent template and instal
     ]) {
       await cp(resolve(deployDirectory, file), resolve(toolDirectory, file));
     }
+    await cp(
+      resolve(deployDirectory, "../src/credential-directory-contract.mjs"),
+      resolve(toolSourceDirectory, "credential-directory-contract.mjs"),
+    );
     const copiedDeploy = resolve(
       toolDirectory,
       "deploy-reviewed-release.sh",
@@ -633,6 +639,10 @@ test("standalone rollback rejects a legacy v1 target before link or overlay muta
       bundle: current,
       releaseRoot: harness.releaseRoot,
     });
+    await installBundle({
+      bundle: legacy,
+      releaseRoot: harness.releaseRoot,
+    });
     await symlink(
       currentDirectory,
       resolve(harness.transportRoot, "current"),
@@ -652,7 +662,7 @@ test("standalone rollback rejects a legacy v1 target before link or overlay muta
     assert.match(result.stderr, /reviewed_release_runtime_abi_rejected/u);
     assert.match(result.stderr, /rollback_target_rejected/u);
     assert.equal(
-      await readlink(resolve(harness.transportRoot, "current")),
+      await realpath(resolve(harness.transportRoot, "current")),
       await realpath(currentDirectory),
     );
     assert.deepEqual(await readFile(harness.dropIn), stableOverlay);
@@ -761,7 +771,7 @@ test("standalone rollback rejects a separately selected overlay release before h
     );
     assert.equal(result.status, 65, result.stderr);
     assert.match(result.stderr, /rollback_overlay_binding_rejected/u);
-    assert.equal(await readlink(currentLink), await realpath(currentDirectory));
+    assert.equal(await realpath(currentLink), await realpath(currentDirectory));
     assert.deepEqual(await readFile(harness.dropIn), stableOverlay);
     assert.equal(await exists(harness.readinessLog), false);
     await assertCleanOperationState(harness);
