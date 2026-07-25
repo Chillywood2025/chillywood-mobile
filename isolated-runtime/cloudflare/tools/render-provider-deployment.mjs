@@ -86,7 +86,8 @@ const unresolvedValue =
 const commitPattern = /^[a-f0-9]{40}$/u;
 const treePattern = /^[a-f0-9]{40}$/u;
 const hyperdriveIdPattern = /^[a-f0-9]{32}$/u;
-const accessIdentifierPattern = /^[A-Za-z0-9._-]{16,160}$/u;
+const accessAudiencePattern = /^[a-f0-9]{64}$/u;
+const accessServiceTokenCommonNamePattern = /^[a-f0-9]{32}\.access$/u;
 const safeNamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const safeModelIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
 const safeGitPathPattern =
@@ -494,8 +495,8 @@ const validateAccess = (access) => {
     parsedTeamDomain.search !== "" ||
     parsedTeamDomain.hash !== "" ||
     !parsedTeamDomain.hostname.endsWith(".cloudflareaccess.com") ||
-    !accessIdentifierPattern.test(access.applicationAudience) ||
-    !accessIdentifierPattern.test(access.serviceTokenClientId) ||
+    !accessAudiencePattern.test(access.applicationAudience) ||
+    !accessServiceTokenCommonNamePattern.test(access.serviceTokenClientId) ||
     access.gatewayExposure !== "access_protected_workers_dev"
   ) {
     fail("access_contract_invalid");

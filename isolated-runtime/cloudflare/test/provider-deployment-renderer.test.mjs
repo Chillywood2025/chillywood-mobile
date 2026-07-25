@@ -57,7 +57,7 @@ const activeInput = () => ({
     applicationStatus: "ACTIVE",
     gatewayExposure: "access_protected_workers_dev",
     policyStatus: "ACTIVE",
-    serviceTokenClientId: "b".repeat(32),
+    serviceTokenClientId: `${"b".repeat(32)}.access`,
     serviceTokenStatus: "ACTIVE",
     teamDomain: "https://example-team.cloudflareaccess.com",
   },
@@ -294,6 +294,16 @@ test("active mode fails closed before exact review or provider net readiness", a
   netOpen.providerReadiness.netBoundary =
     "WAITING_FOR_SUPABASE_NET_SCHEMA_PROVIDER_ADMIN";
   await rejects(netOpen, "net_boundary_not_ready");
+});
+
+test("Access identifiers match the gateway verifier exactly", async () => {
+  const clientIdWithoutAccessSuffix = activeInput();
+  clientIdWithoutAccessSuffix.access.serviceTokenClientId = "b".repeat(32);
+  await rejects(clientIdWithoutAccessSuffix, "access_contract_invalid");
+
+  const malformedAudience = activeInput();
+  malformedAudience.access.applicationAudience = `${"a".repeat(63)}-`;
+  await rejects(malformedAudience, "access_contract_invalid");
 });
 
 test("wrong source, base, cross-principal bindings, and cache ambiguity fail", async () => {
