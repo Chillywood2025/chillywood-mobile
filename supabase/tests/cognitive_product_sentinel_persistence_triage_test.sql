@@ -28,6 +28,15 @@ as $$
         public.product_experience_route_family_binding_hash(
           'android', p_route, lower(p_route) || '.main'
         ),
+      'routeFamilyMappingId', 'home_standard_discovery_rows',
+      'routeFamilyMappingHash',
+        public.product_experience_baseline_v1_mapping_contract(
+          'home_standard_discovery_rows'
+        )->>'hash',
+      'surfaceFamily', 'standard_streaming_card',
+      'exceptionContractId', null,
+      'exceptionContractHash', null,
+      'exceptionVersioned', false,
       'runtimeIdentityHash', repeat('c',64),
       'buildRuntimeHash', repeat('d',64),
       'syntheticAccount', true,
@@ -336,7 +345,7 @@ select throws_ok(
   $$select public.product_experience_collect_sentinel_run(
     'c1000000-0000-4000-8000-000000000001',
     'c0000000-0000-4000-8000-000000000001',
-    'android','production','installed_journey_sentinel','home',
+    'android','production','installed_journey_sentinel','Home',
     repeat('8',64),repeat('4',64),repeat('5',64),
     '{
       "schemaVersion":"product-sentinel-v1",
@@ -365,7 +374,7 @@ select
     public.product_experience_collect_sentinel_run(
       'c1000000-0000-4000-8000-000000000001',
       'c0000000-0000-4000-8000-000000000001',
-      'android','production','installed_journey_sentinel','home',
+      'android','production','installed_journey_sentinel','Home',
       repeat('8',64),repeat('4',64),repeat('5',64),
       '{
         "schemaVersion":"product-sentinel-v1",
@@ -405,7 +414,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select throws_ok(
   $$select public.product_quality_record_finding(
     (select run_id from sentinel_triage_fixture where fixture_key='detection-one'),
-    'legacy-operational-bypass-fixture','home',repeat('4',64),
+    'legacy-operational-bypass-fixture','Home',repeat('4',64),
     'medium',repeat('9',64),array[repeat('5',64)],
     'loading_state',0.9500,'confirmed_defect',repeat('a',64),
     repeat('b',64),repeat('c',64),'installed_ui_observed',
@@ -423,13 +432,13 @@ set
   finding_key = public.product_quality_expected_finding_key(
     'c1000000-0000-4000-8000-000000000001',
     'c0000000-0000-4000-8000-000000000001',
-    'android','production','home','route.loading.unresolved'
+    'android','production','Home','route.loading.unresolved'
   )
 where fixture_key = 'detection-one';
 
 update sentinel_triage_fixture
 set assessment_hash = public.product_quality_detection_assessment_hash(
-  run_id, finding_key, 'home', repeat('4',64), 'medium',
+  run_id, finding_key, 'Home', repeat('4',64), 'medium',
   repeat('9',64), array[repeat('5',64)], 'loading_state',
   0.9500, 'confirmed_defect', repeat('a',64), repeat('b',64),
   repeat('c',64), 'installed_ui_observed'
@@ -442,7 +451,7 @@ select throws_ok(
   $$select public.product_quality_triage_detection(
     (select run_id from sentinel_triage_fixture where fixture_key='detection-one'),
     gen_random_uuid(), repeat('d',64), 'route.loading.unresolved',
-    'home', repeat('4',64), 'medium', repeat('9',64),
+    'Home', repeat('4',64), 'medium', repeat('9',64),
     array[repeat('5',64)], 'loading_state', 0.9500,
     'confirmed_defect', repeat('a',64), repeat('b',64),
     repeat('c',64), 'installed_ui_observed',
@@ -482,7 +491,7 @@ select throws_ok(
       'c0000000-0000-4000-8000-000000000001',
       'android','production',
       'forged_finding_key','route.loading.unresolved',repeat('0',64),
-      'home',repeat('4',64),'medium',repeat('9',64),
+      'Home',repeat('4',64),'medium',repeat('9',64),
       array[repeat('5',64)],'loading_state',0.9500,
       'confirmed_defect',repeat('a',64),repeat('b',64),
       repeat('c',64),'installed_ui_observed',
@@ -505,7 +514,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select throws_ok(
   $$select public.product_quality_triage_detection(
     run_id, proof_id, repeat('e',64), 'route.loading.unresolved',
-    'home', repeat('4',64), 'medium', repeat('9',64),
+    'Home', repeat('4',64), 'medium', repeat('9',64),
     array[repeat('5',64)], 'loading_state', 0.9500,
     'confirmed_defect', repeat('a',64), repeat('b',64),
     repeat('c',64), 'installed_ui_observed',
@@ -532,7 +541,7 @@ update sentinel_triage_fixture
 set finding_id = (
   public.product_quality_triage_detection(
     run_id, proof_id, repeat('e',64), 'route.loading.unresolved',
-    'home', repeat('4',64), 'medium', repeat('9',64),
+    'Home', repeat('4',64), 'medium', repeat('9',64),
     array[repeat('5',64)], 'loading_state', 0.9500,
     'confirmed_defect', repeat('a',64), repeat('b',64),
     repeat('c',64), 'installed_ui_observed',
@@ -545,7 +554,7 @@ where fixture_key = 'detection-one';
 select throws_ok(
   $$select public.product_quality_triage_detection(
     run_id, proof_id, repeat('e',64), 'route.loading.unresolved',
-    'home', repeat('4',64), 'medium', repeat('9',64),
+    'Home', repeat('4',64), 'medium', repeat('9',64),
     array[repeat('5',64)], 'loading_state', 0.9500,
     'confirmed_defect', repeat('a',64), repeat('b',64),
     repeat('c',64), 'installed_ui_observed',
@@ -592,7 +601,7 @@ select
     public.product_experience_collect_sentinel_run(
       'c1000000-0000-4000-8000-000000000001',
       'c0000000-0000-4000-8000-000000000001',
-      'android','production','installed_journey_sentinel','home',
+      'android','production','installed_journey_sentinel','Home',
       repeat('8',64),repeat('4',64),repeat('6',64),
       '{
         "schemaVersion":"product-sentinel-v1",
@@ -619,7 +628,7 @@ reset role;
 
 update sentinel_triage_fixture
 set assessment_hash = public.product_quality_detection_assessment_hash(
-  run_id, finding_key, 'home', repeat('4',64), 'medium',
+  run_id, finding_key, 'Home', repeat('4',64), 'medium',
   repeat('9',64), array[repeat('6',64)], 'loading_state',
   0.9600, 'confirmed_defect', repeat('a',64), repeat('b',64),
   repeat('c',64), 'installed_ui_observed'
@@ -686,7 +695,7 @@ update sentinel_triage_fixture
 set finding_id = (
   public.product_quality_triage_detection(
     run_id, proof_id, repeat('2',64), 'route.loading.unresolved',
-    'home', repeat('4',64), 'medium', repeat('9',64),
+    'Home', repeat('4',64), 'medium', repeat('9',64),
     array[repeat('6',64)], 'loading_state', 0.9600,
     'confirmed_defect', repeat('a',64), repeat('b',64),
     repeat('c',64), 'installed_ui_observed',
@@ -729,9 +738,9 @@ select
     public.product_experience_collect_sentinel_run(
       'c1000000-0000-4000-8000-000000000001',
       'c0000000-0000-4000-8000-000000000001',
-      'android','production','installed_journey_sentinel','home',
+      'android','production','installed_journey_sentinel','Home',
       repeat('c',64),repeat('d',64),repeat('7',64),
-      pg_temp.rich_route_timing_manifest('home', repeat('7',64), 2400),
+      pg_temp.rich_route_timing_manifest('Home', repeat('7',64), 2400),
       'passed','installed_ui_observed',
       transaction_timestamp()-interval '2 minutes',
       transaction_timestamp()-interval '1 minute',

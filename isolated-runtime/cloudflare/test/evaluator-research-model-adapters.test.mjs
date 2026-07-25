@@ -400,6 +400,9 @@ test("route timing no-finding uses the reviewed ten-second ready-network bound",
         buildRuntimeHash: HASH_C,
         channel: "play-internal",
         elapsedDurationMs: 10_000,
+        exceptionContractHash: null,
+        exceptionContractId: null,
+        exceptionVersioned: false,
         finalObservedState: "content_loaded",
         findingDisposition: "no_finding",
         firstInteractiveMonotonicMs: 8_000,
@@ -417,10 +420,16 @@ test("route timing no-finding uses the reviewed ten-second ready-network bound",
         reviewedErrorState: false,
         routeFamilyBindingHash: HASH_C,
         routeFamilyId: "home.main",
+        routeFamilyMappingHash:
+          productBaseline.routeComponentMappingHashes[
+            "home_standard_discovery_rows"
+          ],
+        routeFamilyMappingId: "home_standard_discovery_rows",
         routeOrSurface: "Home",
         runtimeIdentityHash: HASH_B,
         runtimeVersion: "1.0.0-android84",
         sanitizedEvidenceHash: HASH_A,
+        surfaceFamily: "standard_streaming_card",
         syntheticAccount: true,
         timeoutObserved: false,
         unresolvedStateCount: 0,
@@ -455,6 +464,15 @@ test("route timing no-finding uses the reviewed ten-second ready-network bound",
       { firstInteractiveMonotonicMs: 1_000 },
       { routeOrSurface: "Explore" },
       { interactionEvidenceKind: "not_observed" },
+      {
+        routeFamilyId: "explore.main",
+        routeFamilyMappingHash:
+          productBaseline.routeComponentMappingHashes[
+            "explore_live_discovery_rows"
+          ],
+        routeFamilyMappingId: "explore_live_discovery_rows",
+        surfaceFamily: "live_streaming_card",
+      },
     ]
   ) {
     assert(

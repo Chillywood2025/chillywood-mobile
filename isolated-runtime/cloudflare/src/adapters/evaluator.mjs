@@ -34,6 +34,9 @@ const ROUTE_MAPPINGS = new Map(
     mapping,
   ]),
 );
+const APPROVED_MAPPING_ROUTES = new Set(
+  productBaselineJson.routeComponentMappings.map((mapping) => mapping.route),
+);
 const ROUTE_MAPPING_HASHES = productBaselineJson.routeComponentMappingHashes;
 const EXCEPTION_CONTRACT_HASHES = productBaselineJson.exceptionContractHashes;
 const OBJECTIVE_ACCESSIBILITY_BINDINGS = new Map(
@@ -248,6 +251,12 @@ const ROUTE_INTERACTION_EVIDENCE = new Set([
   "direct_interaction",
   "both",
 ]);
+const approvedRouteFamilyId = (route) => {
+  if (!APPROVED_MAPPING_ROUTES.has(route)) return null;
+  return route
+    .replace(/([a-z0-9])([A-Z])/gu, "$1-$2")
+    .toLowerCase() + ".main";
+};
 export const routeTimingNoFindingReasons = (run, metrics) => {
   const reasons = new Set();
   const navigationStarted = metricNumber(
@@ -278,7 +287,10 @@ export const routeTimingNoFindingReasons = (run, metrics) => {
     text(metrics.platform) !== run.platform ||
     text(metrics.routeOrSurface) !== run.route_or_surface ||
     !ROUTE_FAMILY_ID.test(text(metrics.routeFamilyId)) ||
-    !HASH.test(text(metrics.routeFamilyBindingHash))
+    !HASH.test(text(metrics.routeFamilyBindingHash)) ||
+    text(metrics.routeFamilyId) !==
+      approvedRouteFamilyId(text(run.route_or_surface)) ||
+    !baselineBindingIsValid(run, metrics)
   ) {
     reasons.add("route_timing_route_family_binding_required");
   }

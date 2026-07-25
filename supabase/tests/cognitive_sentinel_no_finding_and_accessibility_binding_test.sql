@@ -163,6 +163,31 @@ as $$
         public.product_experience_route_family_binding_hash(
           'android', p_route, lower(p_route) || '.main'
         ),
+      'routeFamilyMappingId',
+        case p_route
+          when 'Home' then 'home_standard_discovery_rows'
+          when 'Explore' then 'explore_title_discovery_rows'
+          else null
+        end,
+      'routeFamilyMappingHash',
+        public.product_experience_baseline_v1_mapping_contract(
+          case p_route
+            when 'Home' then 'home_standard_discovery_rows'
+            when 'Explore' then 'explore_title_discovery_rows'
+            else null
+          end
+        )->>'hash',
+      'surfaceFamily',
+        public.product_experience_baseline_v1_mapping_contract(
+          case p_route
+            when 'Home' then 'home_standard_discovery_rows'
+            when 'Explore' then 'explore_title_discovery_rows'
+            else null
+          end
+        )->>'family',
+      'exceptionContractId', null,
+      'exceptionContractHash', null,
+      'exceptionVersioned', false,
       'runtimeIdentityHash', repeat('c',64),
       'buildRuntimeHash', repeat('d',64),
       'syntheticAccount', true,

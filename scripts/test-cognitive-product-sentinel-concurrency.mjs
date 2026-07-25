@@ -220,10 +220,17 @@ set local "request.jwt.claim.role"='service_role';
 `;
 const routeFamilyBindingHash = query(`
 select public.product_experience_route_family_binding_hash(
-  'android','home','home.main'
+  'android','Home','home.main'
 );
 `);
 assert.match(routeFamilyBindingHash, /^[a-f0-9]{64}$/u);
+const routeFamilyMappingHash = query(`
+select
+  public.product_experience_baseline_v1_mapping_contract(
+    'home_standard_discovery_rows'
+  )->>'hash';
+`);
+assert.match(routeFamilyMappingHash, /^[a-f0-9]{64}$/u);
 
 const noFindingMetricManifest = JSON.stringify({
   evidenceHashes: [noFindingEvidenceHash],
@@ -233,6 +240,9 @@ const noFindingMetricManifest = JSON.stringify({
     buildRuntimeHash: buildHash,
     channel: "play-internal",
     elapsedDurationMs: 2400,
+    exceptionContractHash: null,
+    exceptionContractId: null,
+    exceptionVersioned: false,
     finalObservedState: "content_loaded",
     findingDisposition: "no_finding",
     firstInteractiveMonotonicMs: 1200,
@@ -252,10 +262,13 @@ const noFindingMetricManifest = JSON.stringify({
     reviewedErrorState: false,
     routeFamilyBindingHash,
     routeFamilyId: "home.main",
-    routeOrSurface: "home",
+    routeFamilyMappingHash,
+    routeFamilyMappingId: "home_standard_discovery_rows",
+    routeOrSurface: "Home",
     runtimeIdentityHash: runtimeHash,
     runtimeVersion: "1.0.0-android84",
     sanitizedEvidenceHash: noFindingEvidenceHash,
+    surfaceFamily: "standard_streaming_card",
     syntheticAccount: true,
     timeoutObserved: false,
     unresolvedStateCount: 0,
@@ -271,7 +284,7 @@ begin;
 ${serviceRoleSql}
 select public.product_experience_collect_sentinel_run(
   ${sqlLiteral(ids.task)},${sqlLiteral(ids.project)},'android','production',
-  'installed_journey_sentinel','home',${sqlLiteral(runtimeHash)},
+  'installed_journey_sentinel','Home',${sqlLiteral(runtimeHash)},
   ${sqlLiteral(buildHash)},${sqlLiteral(evidenceHash)},
   ${sqlLiteral(metricManifest(evidenceHash, 12000 + index))}::jsonb,
   'failed','installed_ui_observed',
@@ -289,13 +302,13 @@ runIds.forEach((runId) => assert.match(runId, /^[a-f0-9-]{36}$/u));
 const findingKey = query(`
 select public.product_quality_expected_finding_key(
   ${sqlLiteral(ids.task)},${sqlLiteral(ids.project)},'android','production',
-  'home','route.loading.unresolved'
+  'Home','route.loading.unresolved'
 );
 `);
 const assessmentHashes = runIds.map((runId, index) =>
   query(`
 select public.product_quality_detection_assessment_hash(
-  ${sqlLiteral(runId)},${sqlLiteral(findingKey)},'home',
+  ${sqlLiteral(runId)},${sqlLiteral(findingKey)},'Home',
   ${sqlLiteral(buildHash)},'medium',${sqlLiteral(userImpactHash)},
   array[${sqlLiteral(evidenceHashes[index])}],'loading_state',0.9500,
   'confirmed_defect',${sqlLiteral(affectedHash)},${sqlLiteral(providerHash)},
@@ -323,7 +336,7 @@ begin;
 ${serviceRoleSql}
 select public.product_quality_triage_detection(
   ${sqlLiteral(runIds[index])},${sqlLiteral(proofIds[index])},
-  ${sqlLiteral(proofHashes[index])},'route.loading.unresolved','home',
+  ${sqlLiteral(proofHashes[index])},'route.loading.unresolved','Home',
   ${sqlLiteral(buildHash)},'medium',${sqlLiteral(userImpactHash)},
   array[${sqlLiteral(evidenceHashes[index])}],'loading_state',0.9500,
   'confirmed_defect',${sqlLiteral(affectedHash)},${sqlLiteral(providerHash)},
@@ -364,7 +377,7 @@ begin;
 ${serviceRoleSql}
 select public.product_experience_collect_sentinel_run(
   ${sqlLiteral(ids.task)},${sqlLiteral(ids.project)},'android','production',
-  'installed_journey_sentinel','home',${sqlLiteral(runtimeHash)},
+  'installed_journey_sentinel','Home',${sqlLiteral(runtimeHash)},
   ${sqlLiteral(buildHash)},${sqlLiteral(noFindingEvidenceHash)},
   ${sqlLiteral(noFindingMetricManifest)}::jsonb,
   'passed','installed_ui_observed',

@@ -296,6 +296,9 @@ const routeTimingNoFindingMetrics = (
   buildRuntimeHash: validPayload().buildRuntimeHash,
   channel: "play-internal",
   elapsedDurationMs: 10_000,
+  exceptionContractHash: null,
+  exceptionContractId: null,
+  exceptionVersioned: false,
   finalObservedState: "content_loaded",
   findingDisposition: "no_finding",
   firstInteractiveMonotonicMs: 8_000,
@@ -313,10 +316,16 @@ const routeTimingNoFindingMetrics = (
   reviewedErrorState: false,
   routeFamilyBindingHash: "5".repeat(64),
   routeFamilyId: "home.main",
-  routeOrSurface: OBJECTIVE_BINDING.routeOrSurface,
+  routeFamilyMappingHash:
+    productBaselineJson.routeComponentMappingHashes[
+      "home_standard_discovery_rows"
+    ],
+  routeFamilyMappingId: "home_standard_discovery_rows",
+  routeOrSurface: "Home",
   runtimeIdentityHash: "4".repeat(64),
   runtimeVersion: "1.0.0-android84",
   sanitizedEvidenceHash: validPayload().evidenceHashes[0],
+  surfaceFamily: "standard_streaming_card",
   syntheticAccount: true,
   timeoutObserved: false,
   unresolvedStateCount: 0,
@@ -497,6 +506,26 @@ Deno.test("no-finding evaluation is derived from one passing physical run", () =
       "slow, degraded, or unbound route evidence cannot be certified as no-finding",
     );
   }
+  const callerChosenExploreFamily = routeTimingNoFindingMetrics({
+    routeFamilyId: "explore.main",
+    routeFamilyMappingHash:
+      productBaselineJson.routeComponentMappingHashes[
+        "explore_live_discovery_rows"
+      ],
+    routeFamilyMappingId: "explore_live_discovery_rows",
+    surfaceFamily: "live_streaming_card",
+  });
+  assert(
+    deterministicNoFindingReasons(
+      storedRun(
+        "route_timing",
+        callerChosenExploreFamily,
+        { result_status: "passed", route_or_surface: "Home" },
+      ),
+      approvedContext,
+    ).includes("route_timing_route_family_binding_required"),
+    "a self-consistent caller-chosen family from another approved route must fail closed",
+  );
 });
 
 Deno.test("Android touch classification is derived from stored run metrics", () => {
@@ -1618,8 +1647,16 @@ Deno.test("resolution proof requires a matching passing observation", () => {
     source_build_hash: "8".repeat(64),
     task_id: finding.task_id,
   };
-  const passingRun = {
+  const routeFinding = {
+    ...finding,
+    route_or_surface: "Home",
+  };
+  const routeDetectionRun = {
     ...detectionRun,
+    route_or_surface: routeFinding.route_or_surface,
+  };
+  const passingRun = {
+    ...routeDetectionRun,
     evidence_manifest_hash: "9".repeat(64),
     id: "55555555-5555-4555-8555-555555555555",
     metric_manifest: {
@@ -1632,7 +1669,7 @@ Deno.test("resolution proof requires a matching passing observation", () => {
         interactionEvidenceHash: "9".repeat(64),
         maximumDurationMs: 10_000,
         resolvedStateMonotonicMs: 500,
-        routeOrSurface: finding.route_or_surface,
+        routeOrSurface: routeFinding.route_or_surface,
         sanitizedEvidenceHash: "9".repeat(64),
       }),
       observationKind: "route_timing",
@@ -1642,8 +1679,8 @@ Deno.test("resolution proof requires a matching passing observation", () => {
   assert(
     deterministicResolutionReasons(
       passingRun,
-      finding,
-      detectionRun,
+      routeFinding,
+      routeDetectionRun,
     ).length === 0,
     "matching passing observation should support resolution",
   );
@@ -1656,8 +1693,8 @@ Deno.test("resolution proof requires a matching passing observation", () => {
           observationKind: "search_accessibility",
         },
       },
-      finding,
-      detectionRun,
+      routeFinding,
+      routeDetectionRun,
     ).includes("resolution_observation_kind_mismatch"),
     "unrelated passing observation must not resolve a finding",
   );
