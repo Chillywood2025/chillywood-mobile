@@ -39,9 +39,9 @@ Only sanitized classifications are retained:
 
 | Credential | Presence | Provider state | Exposure | Scope | Expiry |
 | --- | --- | --- | --- | --- | --- |
-| inherited deployment credential | PRESENT | ACTIVE | EXPOSED | SCOPE_TOO_BROAD | EXPIRY_REQUIRES_RENEWAL |
+| inherited deployment credential | PRESENT | ACTIVE | NOT_EXPOSED | SCOPE_TOO_BROAD | EXPIRY_REQUIRES_RENEWAL |
 | bounded replacement deployment credential | PRESENT | ACTIVE | NOT_EXPOSED | SCOPE_MATCH | EXPIRY_ACCEPTABLE |
-| replacement Access API path | PRESENT | INACTIVE | NOT_EXPOSED | SCOPE_MATCH | EXPIRY_ACCEPTABLE |
+| replacement Access API path | PRESENT | ACTIVE | NOT_EXPOSED | SCOPE_MATCH | EXPIRY_ACCEPTABLE |
 
 The bounded replacement expires on 2026-07-31. Seven days is sufficient for
 this activation window; it remains renewable and is not converted into a
@@ -53,22 +53,33 @@ credential for that deployment window. Expiration while no deployment is in
 progress is an intended fail-closed state, not a runtime outage.
 
 The inherited credential is not being replaced merely because Chi'llywood is
-pre-launch. Replacement is required by the Owner's credential policy because
-the sanitized verification classified it as `EXPOSED` and
-`SCOPE_TOO_BROAD`. The bounded replacement has already been provider-verified
-as `ACTIVE`, `NOT_EXPOSED`, `SCOPE_MATCH`, and `EXPIRY_ACCEPTABLE`.
-Provider-confirmed revocation of the inherited credential is therefore a hard
-predeployment gate: no Level 0/1 Cloudflare resource may be deployed while the
-inherited credential remains active. The inherited raw value is not retrieved
-or printed during confirmation. Neither deployment credential may be installed
-into a cognitive runtime Worker.
+pre-launch. The evidence shows that a raw value was observed only by an
+Owner-controlled local diagnostic process; it was not committed, uploaded,
+persisted to a shared log or artifact, displayed in a shared transcript, or
+received by an unauthorized person or system. Under the Owner's credential
+policy this is `NOT_EXPOSED_OWNER_CONTROLLED`, not incident containment.
+Because the credential is still `SCOPE_TOO_BROAD`, it is not used for this
+deployment and retirement remains recommended. Its revocation is not a
+predeployment gate unless later evidence proves raw exposure or the Owner
+requests retirement. The inherited raw value is not retrieved or printed
+during adjudication. Neither deployment credential may be installed into a
+cognitive runtime Worker.
 
 The replacement credential is account-bound and limited to Workers Scripts,
 Hyperdrive, Access Apps and Policies, and Access Service Tokens. Billing,
 membership/administration, and DNS-wide authority were denied by negative
-checks. The Access API path currently remains `INACTIVE`; gateway publication
-therefore remains fail-closed until Access can be configured and verified
-through bounded owner-authenticated tooling.
+checks. The Access API path is `ACTIVE`. The Zero Trust Free account, a
+90-day service token, and the self-hosted gateway application with one
+service-auth policy were provider-created and read back through the bounded
+credential. The service-token record hash is
+`f71b0ad664978fec23d74bb1a12005c61e7d34cf90809588df59279bd31e6628`;
+the application ID hash is
+`1c447ea28dfc17c09d5e158f49469def49f4876cfde3f730c6481efdee2869b7`;
+and the application audience hash is
+`abc7914062cf0bc107ab23f8a6baba963794030f792217a28c3ccf6f89e9e138`.
+The raw service-token values remain outside Git in the Owner-controlled macOS
+Keychain. Gateway publication remains fail-closed until the reviewed Worker
+source is deployed and the Access denial tests pass against the live route.
 
 ## Runtime inventory
 
