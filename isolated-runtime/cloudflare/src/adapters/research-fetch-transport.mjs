@@ -241,7 +241,8 @@ export const createMediatedResearchTransport = ({
 
         const response = await withAbort(fetcher(target.canonical, {
           headers: {
-            Accept: "text/html, text/plain, application/json",
+            Accept:
+              "text/html, text/plain, application/json, application/feed+json",
             "Accept-Encoding": "identity",
             "User-Agent": "ChillywoodPublicResearchBroker/1",
           },

@@ -9,6 +9,7 @@ import {
   derivePublicationProvenance,
   extractBoundedExcerpt,
   extractObservedPublicationDates,
+  extractPublicationDateCandidates,
   extractRetrievedCitationMetadata,
   ipAddressKey,
   isPrivateOrReservedIp,
@@ -16,6 +17,7 @@ import {
   normalizeContradictionDetectionRequest,
   normalizeResearchMaintenanceRequest,
   normalizeSourceRequest,
+  selectPublicationDateProvenance,
 } from "./policy.ts";
 
 const assert: (
@@ -292,14 +294,21 @@ Deno.test("bounded excerpt strips executable and hidden page content", () => {
 });
 
 Deno.test("publication dates are derived from retrieved source metadata", () => {
+  const now = Date.parse("2026-07-24T18:00:00.000Z");
+  const target = canonicalizeResearchUrl(
+    "https://developer.apple.com/documentation/",
+  );
+  assert(target !== null, "official documentation target should canonicalize");
   const dates = extractObservedPublicationDates(
     `<html><head>
       <meta property="article:published_time" content="2026-07-20T15:30:00Z">
       <script type="application/ld+json">
-        {"datePublished":"2026-07-20T15:30:00Z"}
+        {"@context":"https://schema.org","@type":"TechArticle",
+         "datePublished":"2026-07-20T15:30:00Z"}
       </script>
     </head></html>`,
     "text/html",
+    now,
   );
   assert(
     dates.length === 1 && dates[0] === "2026-07-20T15:30:00.000Z",
@@ -309,6 +318,7 @@ Deno.test("publication dates are derived from retrieved source metadata", () => 
     extractObservedPublicationDates(
       "Published sometime without machine-readable metadata.",
       "text/plain",
+      now,
     ).length === 0,
     "caller prose must not mint a publication date",
   );
@@ -329,8 +339,12 @@ Deno.test("publication dates are derived from retrieved source metadata", () => 
     "Last-Modified should remain bounded transport metadata",
   );
   assert(
-    extractObservedPublicationDates(parsed.body, parsed.contentType).length ===
-      0,
+    extractPublicationDateCandidates(
+      parsed.body,
+      parsed.contentType,
+      now,
+      parsed.lastModifiedHeader,
+    ).every((candidate) => candidate.evidenceClass === "modification"),
     "Last-Modified transport metadata must not become publication provenance",
   );
   const commitTarget = canonicalizeResearchUrl(
@@ -342,6 +356,7 @@ Deno.test("publication dates are derived from retrieved source metadata", () => 
     "text/html",
     commitTarget,
     "chillywood-public-repository",
+    now,
   );
   assert(
     commitProvenance?.mode === "github_commit_metadata" &&
@@ -350,6 +365,142 @@ Deno.test("publication dates are derived from retrieved source metadata", () => 
         "1335dc18669d8917bb72c14393bf464d98ce902f",
       ),
     "GitHub commit date and immutable SHA must be derived from machine metadata",
+  );
+
+  const fixtures = [
+    {
+      body: '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@type":"NewsArticle",' +
+        '"datePublished":"2026-07-20T15:30:00Z"}</script>',
+      expected: "selected",
+      name: "one publication date",
+    },
+    {
+      body: '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@type":"Article",' +
+        '"datePublished":"2026-07-20T15:30:00Z",' +
+        '"dateModified":"2026-07-22T10:00:00Z"}</script>',
+      expected: "selected",
+      name: "publication and modification date",
+    },
+    {
+      body: '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@graph":[' +
+        '{"@type":"WebPage","mainEntity":{"@id":"#primary"}},' +
+        '{"@id":"#primary","@type":"TechArticle",' +
+        '"datePublished":"2026-07-20T15:30:00Z"},' +
+        '{"@id":"#related","@type":"NewsArticle",' +
+        '"datePublished":"2017-01-02T00:00:00Z"}]}</script>',
+      expected: "selected",
+      name: "unrelated embedded article date",
+    },
+    {
+      body: "<footer>Copyright © 1999–2026</footer>" +
+        '<meta property="article:published_time" ' +
+        'content="2026-07-20T15:30:00Z">',
+      expected: "selected",
+      name: "copyright plus publication date",
+    },
+    {
+      body: '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@type":"NewsArticle",' +
+        '"datePublished":"2026-07-20T15:30:00Z"}</script>' +
+        '<meta property="article:published_time" ' +
+        'content="2026-07-21T15:30:00Z">',
+      expected: "ambiguous",
+      name: "conflicting structured metadata",
+    },
+    {
+      body: "<p>Copyright 2026. Historical event: July 20, 1999. " +
+        "Comment posted 2026-07-20.</p>",
+      expected: "unverified",
+      name: "no trustworthy date",
+    },
+    {
+      body: JSON.stringify({
+        copyright: 2026,
+        unrelated: { datePublished: "2017-01-02T00:00:00Z" },
+      }),
+      contentType: "application/json",
+      expected: "unverified",
+      name: "unrelated JSON object date",
+    },
+    {
+      body: JSON.stringify({
+        items: [{
+          date_published: "2026-07-20T15:30:00Z",
+          id: "one",
+          title: "One feed item",
+        }],
+        version: "https://jsonfeed.org/version/1.1",
+      }),
+      contentType: "application/feed+json",
+      expected: "selected",
+      name: "trusted single-item feed publication date",
+      publicationDate: "2026-07-20T15:30:00.000Z",
+    },
+    {
+      body: '<meta property="article:published_time" ' +
+        'content="2026-07-20T10:30:00-05:00">',
+      expected: "selected",
+      name: "timezone offset",
+      publicationDate: "2026-07-20T15:30:00.000Z",
+    },
+    {
+      body: '<meta property="article:published_time" ' +
+        'content="2026-07-25T18:00:00Z">',
+      expected: "unverified",
+      name: "future date",
+    },
+    {
+      body: '<meta property="article:published_time" ' +
+        'content="2018-03-01T12:00:00Z">',
+      expected: "selected",
+      name: "stale date remains provenance, not retrieval freshness",
+      publicationDate: "2018-03-01T12:00:00.000Z",
+    },
+  ] as const;
+  for (const fixture of fixtures) {
+    const selection = selectPublicationDateProvenance(
+      fixture.body,
+      "contentType" in fixture ? fixture.contentType : "text/html",
+      target,
+      "apple-docs",
+      now,
+      null,
+    );
+    assert(
+      selection.status === fixture.expected,
+      `${fixture.name} should be ${fixture.expected}, got ${selection.status}`,
+    );
+    if (
+      selection.status === "selected" &&
+      "publicationDate" in fixture
+    ) {
+      assert(
+        selection.provenance.publicationDate === fixture.publicationDate,
+        `${fixture.name} should normalize the exact publication instant`,
+      );
+    }
+    if (selection.status === "ambiguous") {
+      assert(
+        selection.contradictionState === "detected" &&
+          selection.publicationDates.length === 2,
+        "conflicting publication metadata must produce a contradiction",
+      );
+    }
+  }
+  const feedFixture = fixtures.find((fixture) =>
+    fixture.name === "trusted single-item feed publication date"
+  );
+  assert(feedFixture !== undefined, "trusted feed fixture should exist");
+  assert(
+    extractBoundedExcerpt(
+      feedFixture.body,
+      "contentType" in feedFixture ? feedFixture.contentType : "",
+      "One feed item",
+    )?.includes("One feed item") === true,
+    "trusted JSON Feed evidence should remain bounded and extractable",
   );
 });
 

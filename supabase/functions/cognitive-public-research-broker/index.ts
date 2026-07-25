@@ -9,7 +9,6 @@ import {
   claimHasExtractiveSupport,
   type ClaimRequest,
   type ContradictionDetectionRequest,
-  derivePublicationProvenance,
   extractBoundedExcerpt,
   extractRetrievedCitationMetadata,
   ipAddressKey,
@@ -22,6 +21,7 @@ import {
   normalizeSourceRequest,
   type PinnedResearchResponse,
   type ResearchMaintenanceRequest,
+  selectPublicationDateProvenance,
   sha256Hex,
   type SourceRequest,
 } from "./policy.ts";
@@ -312,7 +312,7 @@ const requestPinnedAddress = async (
     const requestBytes = new TextEncoder().encode(
       `GET ${target.pathAndQuery} HTTP/1.1\r\n` +
         `Host: ${target.hostname}\r\n` +
-        "Accept: text/html, text/plain, application/json\r\n" +
+        "Accept: text/html, text/plain, application/json, application/feed+json\r\n" +
         "Accept-Encoding: identity\r\n" +
         "Connection: close\r\n" +
         "User-Agent: ChillywoodPublicResearchBroker/1\r\n\r\n",
@@ -524,15 +524,21 @@ export const retrieveAndRecordSource = async (
     return json(422, { error: "public_research_content_rejected" });
   }
   const retrievalTime = Date.parse(retrieved.retrievalDate);
-  const provenance = derivePublicationProvenance(
+  const publicationSelection = selectPublicationDateProvenance(
     retrieved.body,
     retrieved.contentType,
     authorityUrl,
     payload.authorityId,
+    Date.now(),
+    retrieved.lastModifiedHeader,
   );
-  if (!provenance) {
+  if (publicationSelection.status === "ambiguous") {
+    return json(422, { error: "research_publication_date_ambiguous" });
+  }
+  if (publicationSelection.status !== "selected") {
     return json(422, { error: "research_publication_date_unverified" });
   }
+  const provenance = publicationSelection.provenance;
   const publicationDate = provenance.publicationDate;
   if (Date.parse(publicationDate) > retrievalTime) {
     return json(400, { error: "research_publication_date_rejected" });

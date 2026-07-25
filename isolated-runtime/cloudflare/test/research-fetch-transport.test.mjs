@@ -3,7 +3,10 @@ import test from "node:test";
 import {
   canonicalizeResearchUrl,
   createPublicResearchBrokerAdapters,
+  extractBoundedExcerpt,
+  extractPublicationDateCandidates,
   RESEARCH_PINNED_TRANSPORT_REQUIRED,
+  selectPublicationDateProvenance,
 } from "../src/adapters/research-broker.mjs";
 import {
   createMediatedResearchTransport,
@@ -30,11 +33,12 @@ const sourcePayload = Object.freeze({
   publisher: "Cloudflare",
   sourceType: "official_documentation",
   taskId: UUID_A,
-  url: "https://developers.cloudflare.com/workers/configuration/integrations/apis/",
+  url:
+    "https://developers.cloudflare.com/workers/configuration/integrations/apis/",
 });
 
 const html = (body) =>
-  '<html><head><title>Workers APIs · Cloudflare docs</title>' +
+  "<html><head><title>Workers APIs · Cloudflare docs</title>" +
   '<meta property="article:published_time" content="2026-04-23T00:00:00.000Z">' +
   `</head><body>${body}</body></html>`;
 
@@ -57,12 +61,198 @@ test("production retrieve_source remains blocked without an explicitly injected 
   }
 });
 
+test("publication provenance selects semantic labels and fails closed on ambiguity", () => {
+  const target = canonicalizeResearchUrl(sourcePayload.url);
+  assert(target);
+  const fixtures = [
+    {
+      body: '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@type":"NewsArticle",' +
+        '"datePublished":"2026-07-20T15:30:00Z"}</script>',
+      expected: "selected",
+      name: "one publication date",
+    },
+    {
+      body: '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@type":"Article",' +
+        '"datePublished":"2026-07-20T15:30:00Z",' +
+        '"dateModified":"2026-07-22T10:00:00Z"}</script>',
+      expected: "selected",
+      name: "publication and modification date",
+    },
+    {
+      body: '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@graph":[' +
+        '{"@type":"WebPage","mainEntity":{"@id":"#primary"}},' +
+        '{"@id":"#primary","@type":"TechArticle",' +
+        '"datePublished":"2026-07-20T15:30:00Z"},' +
+        '{"@id":"#related","@type":"NewsArticle",' +
+        '"datePublished":"2017-01-02T00:00:00Z"}]}</script>',
+      expected: "selected",
+      name: "unrelated embedded article date",
+    },
+    {
+      body: "<footer>Copyright © 1999–2026</footer>" +
+        '<meta property="article:published_time" ' +
+        'content="2026-07-20T15:30:00Z">',
+      expected: "selected",
+      name: "copyright plus publication date",
+    },
+    {
+      body: '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@type":"NewsArticle",' +
+        '"datePublished":"2026-07-20T15:30:00Z"}</script>' +
+        '<meta property="article:published_time" ' +
+        'content="2026-07-21T15:30:00Z">',
+      expected: "ambiguous",
+      name: "conflicting structured metadata",
+    },
+    {
+      body: "<p>Copyright 2026. Historical event: July 20, 1999. " +
+        "Comment posted 2026-07-20.</p>",
+      expected: "unverified",
+      name: "no trustworthy date",
+    },
+    {
+      body: JSON.stringify({
+        copyright: 2026,
+        unrelated: { datePublished: "2017-01-02T00:00:00Z" },
+      }),
+      contentType: "application/json",
+      expected: "unverified",
+      name: "unrelated JSON object date",
+    },
+    {
+      body: JSON.stringify({
+        items: [{
+          date_published: "2026-07-20T15:30:00Z",
+          id: "one",
+          title: "One feed item",
+        }],
+        version: "https://jsonfeed.org/version/1.1",
+      }),
+      contentType: "application/feed+json",
+      expected: "selected",
+      name: "trusted single-item feed publication date",
+      publicationDate: "2026-07-20T15:30:00.000Z",
+    },
+    {
+      body: '<meta property="article:published_time" ' +
+        'content="2026-07-20T10:30:00-05:00">',
+      expected: "selected",
+      name: "timezone offset",
+      publicationDate: "2026-07-20T15:30:00.000Z",
+    },
+    {
+      body: '<meta property="article:published_time" ' +
+        'content="2026-07-25T18:00:00Z">',
+      expected: "unverified",
+      name: "future date",
+    },
+    {
+      body: '<meta property="article:published_time" ' +
+        'content="2018-03-01T12:00:00Z">',
+      expected: "selected",
+      name: "stale date remains provenance, not retrieval freshness",
+      publicationDate: "2018-03-01T12:00:00.000Z",
+    },
+  ];
+  for (const fixture of fixtures) {
+    const selection = selectPublicationDateProvenance(
+      fixture.body,
+      fixture.contentType ?? "text/html",
+      target,
+      "cloudflare-docs",
+      NOW,
+      "Tue, 21 Jul 2026 15:30:00 GMT",
+    );
+    assert.equal(selection.status, fixture.expected, fixture.name);
+    if (selection.status === "selected" && fixture.publicationDate) {
+      assert.equal(
+        selection.provenance.publicationDate,
+        fixture.publicationDate,
+        fixture.name,
+      );
+    }
+    if (selection.status === "ambiguous") {
+      assert.equal(selection.contradictionState, "detected");
+      assert.equal(selection.publicationDates.length, 2);
+    }
+  }
+  const candidates = extractPublicationDateCandidates(
+    fixtures[1].body,
+    "text/html",
+    NOW,
+    "Tue, 21 Jul 2026 15:30:00 GMT",
+  );
+  assert.deepEqual(
+    candidates.map(({ evidenceClass, label }) => [evidenceClass, label]),
+    [
+      ["publication", "json_ld_article_date_published"],
+      ["modification", "json_ld_article_date_modified"],
+      ["modification", "http_last_modified"],
+    ],
+  );
+  const feedFixture = fixtures.find((fixture) =>
+    fixture.name === "trusted single-item feed publication date"
+  );
+  assert(feedFixture);
+  assert.match(
+    extractBoundedExcerpt(
+      feedFixture.body,
+      feedFixture.contentType,
+      "One feed item",
+    ),
+    /One feed item/u,
+  );
+});
+
+test("ambiguous publication metadata cannot reach source persistence", async () => {
+  let databaseCalls = 0;
+  const adapters = createPublicResearchBrokerAdapters({
+    now: () => NOW,
+    transport: async () => ({
+      body: "<html><head><title>Conflicting source</title>" +
+        '<script type="application/ld+json">' +
+        '{"@context":"https://schema.org","@type":"NewsArticle",' +
+        '"datePublished":"2026-07-20T15:30:00Z"}</script>' +
+        '<meta property="article:published_time" ' +
+        'content="2026-07-21T15:30:00Z"></head>' +
+        "<body>Workers HTTP fetches use the mediated public fetch proxy.</body>" +
+        "</html>",
+      canonicalUrl: sourcePayload.url,
+      connectedAddress: PUBLIC_ADDRESS,
+      contentType: "text/html",
+      lastModifiedHeader: "Tue, 21 Jul 2026 15:30:00 GMT",
+      resolvedAddresses: [PUBLIC_ADDRESS],
+      retrievalDate: new Date(NOW).toISOString(),
+      status: 200,
+    }),
+  });
+  await assert.rejects(
+    adapters.retrieve_source.execute({
+      database: {
+        call: async () => {
+          databaseCalls += 1;
+          return {};
+        },
+      },
+      env: { COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN: TOKEN },
+      payload: sourcePayload,
+    }),
+    /research_publication_date_ambiguous/u,
+  );
+  assert.equal(databaseCalls, 0);
+});
+
 test("explicit test transport uses mediated fetch and binds every SQL argument by signature", async () => {
   const requests = [];
   const resolutions = [];
   const responses = [
     new Response(null, {
-      headers: { Location: "/workers/configuration/integrations/apis/reference/" },
+      headers: {
+        Location: "/workers/configuration/integrations/apis/reference/",
+      },
       status: 302,
     }),
     new Response(

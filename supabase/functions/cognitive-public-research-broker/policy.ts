@@ -616,7 +616,14 @@ export const extractBoundedExcerpt = (
   evidenceQuery?: string,
 ): string | null => {
   const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
-  if (!["text/html", "text/plain", "application/json"].includes(mediaType)) {
+  if (
+    ![
+      "application/feed+json",
+      "application/json",
+      "text/html",
+      "text/plain",
+    ].includes(mediaType)
+  ) {
     return null;
   }
   let text = body;
@@ -652,46 +659,341 @@ export const extractBoundedExcerpt = (
   return bounded;
 };
 
+export type PublicationDateCandidate = Readonly<{
+  date: string;
+  evidenceClass: "modification" | "publication";
+  label:
+    | "http_last_modified"
+    | "json_ld_article_date_modified"
+    | "json_ld_article_date_published"
+    | "open_graph_modified_time"
+    | "open_graph_published_time"
+    | "publisher_labeled_modified_date"
+    | "publisher_labeled_publication_date"
+    | "schema_org_date_modified"
+    | "schema_org_date_published"
+    | "trusted_feed_publication_date";
+  priority: number;
+}>;
+
+const parseTagAttributes = (source: string): ReadonlyMap<string, string> => {
+  const attributes = new Map<string, string>();
+  for (
+    const match of source.matchAll(
+      /([a-z_:][a-z0-9_.:-]*)\s*=\s*(["'])([\s\S]*?)\2/giu,
+    )
+  ) {
+    const name = match[1].toLowerCase();
+    if (!attributes.has(name)) {
+      attributes.set(name, decodeHtmlEntities(match[3].trim()));
+    }
+  }
+  return attributes;
+};
+
+const schemaTypes = (value: unknown): readonly string[] => {
+  const values = Array.isArray(value) ? value : [value];
+  return Object.freeze(
+    values
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean),
+  );
+};
+
+const schemaIdentifier = (value: unknown): string | null => {
+  if (typeof value === "string") return value.trim() || null;
+  if (
+    isRecord(value) &&
+    typeof value["@id"] === "string" &&
+    value["@id"].trim()
+  ) {
+    return value["@id"].trim();
+  }
+  return null;
+};
+
+const schemaIdentifiers = (value: unknown): readonly string[] => {
+  const values = Array.isArray(value) ? value : [value];
+  return Object.freeze(
+    values.map(schemaIdentifier).filter((entry): entry is string => !!entry),
+  );
+};
+
+const isArticleNode = (value: Record<string, unknown>): boolean =>
+  schemaTypes(value["@type"]).some((type) =>
+    [
+      "article",
+      "blogposting",
+      "newsarticle",
+      "report",
+      "scholarlyarticle",
+      "techarticle",
+    ].includes(type)
+  );
+
+const primaryJsonLdNodes = (
+  root: Record<string, unknown>,
+): readonly Record<string, unknown>[] => {
+  const graph = Array.isArray(root["@graph"])
+    ? root["@graph"].filter(isRecord)
+    : [];
+  if (graph.length < 1) return Object.freeze([root]);
+
+  const referenced = new Set([
+    ...schemaIdentifiers(root.mainEntity),
+    ...graph.flatMap((node) =>
+      schemaTypes(node["@type"]).includes("webpage")
+        ? schemaIdentifiers(node.mainEntity)
+        : []
+    ),
+  ]);
+  const explicitlyPrimary = graph.filter((node) => {
+    const nodeId = schemaIdentifier(node["@id"]);
+    return (
+      (nodeId !== null && referenced.has(nodeId)) ||
+      node.mainEntityOfPage === true ||
+      schemaIdentifier(node.mainEntityOfPage) !== null
+    );
+  });
+  if (explicitlyPrimary.length > 0) {
+    return Object.freeze(explicitlyPrimary);
+  }
+  const articles = graph.filter(isArticleNode);
+  return Object.freeze(articles.length === 1 ? articles : []);
+};
+
+const extractJsonLdRoots = (body: string): readonly unknown[] => {
+  const roots: unknown[] = [];
+  for (
+    const match of body.matchAll(
+      /<script\b[^>]*\btype\s*=\s*["']application\/ld\+json(?:\s*;\s*charset=[^"']+)?["'][^>]*>([\s\S]*?)<\/script\s*>/giu,
+    )
+  ) {
+    try {
+      roots.push(JSON.parse(decodeHtmlEntities(match[1])));
+    } catch {
+      // Malformed structured data is not trusted publication evidence.
+    }
+  }
+  return Object.freeze(roots);
+};
+
+const hasSchemaOrgContext = (value: unknown): boolean => {
+  const contexts = Array.isArray(value) ? value : [value];
+  return contexts.some((entry) =>
+    typeof entry === "string" &&
+    /^https?:\/\/schema\.org\/?$/iu.test(entry.trim())
+  );
+};
+
+export const extractPublicationDateCandidates = (
+  body: string,
+  contentType: string,
+  now = Date.now(),
+  lastModifiedHeader: string | null = null,
+): readonly PublicationDateCandidate[] => {
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  if (
+    ![
+      "application/feed+json",
+      "application/json",
+      "text/html",
+      "text/plain",
+    ].includes(mediaType)
+  ) {
+    return Object.freeze([]);
+  }
+  const candidates: PublicationDateCandidate[] = [];
+  const append = (
+    raw: unknown,
+    evidenceClass: PublicationDateCandidate["evidenceClass"],
+    label: PublicationDateCandidate["label"],
+    priority: number,
+  ): void => {
+    if (typeof raw !== "string" || raw.length < 4 || raw.length > 80) return;
+    const parsed = Date.parse(decodeHtmlEntities(raw.trim()));
+    if (!Number.isFinite(parsed) || parsed > now + 300_000) return;
+    candidates.push(Object.freeze({
+      date: new Date(parsed).toISOString(),
+      evidenceClass,
+      label,
+      priority,
+    }));
+  };
+  const appendJsonLd = (
+    rootValue: unknown,
+    explicitlyJsonLd: boolean,
+  ): void => {
+    const roots = Array.isArray(rootValue) ? rootValue : [rootValue];
+    for (const root of roots.filter(isRecord)) {
+      for (const node of primaryJsonLdNodes(root)) {
+        const article = isArticleNode(node);
+        if (
+          !article &&
+          !explicitlyJsonLd &&
+          !hasSchemaOrgContext(root["@context"]) &&
+          !hasSchemaOrgContext(node["@context"])
+        ) {
+          continue;
+        }
+        append(
+          node.datePublished,
+          "publication",
+          article
+            ? "json_ld_article_date_published"
+            : "schema_org_date_published",
+          article ? 10 : 20,
+        );
+        append(
+          node.dateModified,
+          "modification",
+          article
+            ? "json_ld_article_date_modified"
+            : "schema_org_date_modified",
+          article ? 110 : 120,
+        );
+      }
+    }
+  };
+
+  if (mediaType === "text/html") {
+    for (const root of extractJsonLdRoots(body)) appendJsonLd(root, true);
+    for (const match of body.matchAll(/<meta\b[^>]{0,2048}>/giu)) {
+      const attributes = parseTagAttributes(match[0]);
+      const label = (
+        attributes.get("property") ??
+          attributes.get("name") ??
+          attributes.get("itemprop") ??
+          ""
+      ).toLowerCase();
+      const value = attributes.get("content");
+      if (label === "article:published_time") {
+        append(value, "publication", "open_graph_published_time", 30);
+      } else if (label === "article:modified_time") {
+        append(value, "modification", "open_graph_modified_time", 130);
+      } else if (label === "datepublished") {
+        append(value, "publication", "schema_org_date_published", 20);
+      } else if (label === "datemodified") {
+        append(value, "modification", "schema_org_date_modified", 120);
+      } else if (
+        ["publication_date", "publish-date", "published"].includes(label)
+      ) {
+        append(
+          value,
+          "publication",
+          "publisher_labeled_publication_date",
+          40,
+        );
+      } else if (["modified", "modified-date"].includes(label)) {
+        append(
+          value,
+          "modification",
+          "publisher_labeled_modified_date",
+          140,
+        );
+      }
+    }
+    for (
+      const match of body.matchAll(
+        /<time\b([^>]{0,2048})>([\s\S]{0,256}?)<\/time\s*>/giu,
+      )
+    ) {
+      const attributes = parseTagAttributes(match[1]);
+      const itemProp = (attributes.get("itemprop") ?? "").toLowerCase();
+      const label = decodeHtmlEntities(match[2])
+        .replace(/<[^>]+>/gu, " ")
+        .replace(/\s+/gu, " ")
+        .trim()
+        .toLowerCase();
+      const value = attributes.get("datetime") ?? attributes.get("content");
+      if (
+        itemProp === "datepublished" ||
+        /^(?:first\s+)?published(?:\s+(?:at|on))?\b/u.test(label) ||
+        /^publication\s+date\b/u.test(label)
+      ) {
+        append(
+          value,
+          "publication",
+          itemProp === "datepublished"
+            ? "schema_org_date_published"
+            : "publisher_labeled_publication_date",
+          itemProp === "datepublished" ? 20 : 40,
+        );
+      } else if (
+        itemProp === "datemodified" ||
+        /^(?:last\s+)?(?:modified|updated)(?:\s+(?:at|on))?\b/u.test(label)
+      ) {
+        append(
+          value,
+          "modification",
+          itemProp === "datemodified"
+            ? "schema_org_date_modified"
+            : "publisher_labeled_modified_date",
+          itemProp === "datemodified" ? 120 : 140,
+        );
+      }
+    }
+  } else if (
+    mediaType === "application/json" ||
+    mediaType === "application/feed+json"
+  ) {
+    try {
+      const root = JSON.parse(body);
+      appendJsonLd(root, false);
+      if (
+        isRecord(root) &&
+        typeof root.version === "string" &&
+        root.version.startsWith("https://jsonfeed.org/version/") &&
+        Array.isArray(root.items) &&
+        root.items.length === 1 &&
+        isRecord(root.items[0])
+      ) {
+        append(
+          root.items[0].date_published,
+          "publication",
+          "trusted_feed_publication_date",
+          50,
+        );
+      }
+    } catch {
+      // Invalid JSON is not trusted publication evidence.
+    }
+  }
+  append(
+    lastModifiedHeader,
+    "modification",
+    "http_last_modified",
+    150,
+  );
+  const unique = new Map<string, PublicationDateCandidate>();
+  for (const candidate of candidates) {
+    unique.set(
+      `${candidate.evidenceClass}|${candidate.label}|${candidate.date}`,
+      candidate,
+    );
+  }
+  return Object.freeze(
+    [...unique.values()].sort((left, right) =>
+      left.priority - right.priority ||
+      left.date.localeCompare(right.date) ||
+      left.label.localeCompare(right.label)
+    ),
+  );
+};
+
 export const extractObservedPublicationDates = (
   body: string,
   contentType: string,
-): readonly string[] => {
-  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
-  if (!["text/html", "text/plain", "application/json"].includes(mediaType)) {
-    return Object.freeze([]);
-  }
-  const candidates: string[] = [];
-  const append = (raw: string): void => {
-    const parsed = Date.parse(decodeHtmlEntities(raw.trim()));
-    if (Number.isFinite(parsed) && parsed <= Date.now() + 300_000) {
-      candidates.push(new Date(parsed).toISOString());
-    }
-  };
-  for (
-    const match of body.matchAll(
-      /"(?:datePublished|publicationDate|published_at)"\s*:\s*"([^"]{4,80})"/giu,
-    )
-  ) {
-    append(match[1]);
-  }
-  if (mediaType === "text/html") {
-    for (
-      const match of body.matchAll(
-        /<meta\b[^>]*(?:name|property)\s*=\s*["'](?:article:published_time|datePublished|publication_date|publish-date)["'][^>]*content\s*=\s*["']([^"']{4,80})["'][^>]*>/giu,
-      )
-    ) {
-      append(match[1]);
-    }
-    for (
-      const match of body.matchAll(
-        /<meta\b[^>]*content\s*=\s*["']([^"']{4,80})["'][^>]*(?:name|property)\s*=\s*["'](?:article:published_time|datePublished|publication_date|publish-date)["'][^>]*>/giu,
-      )
-    ) {
-      append(match[1]);
-    }
-  }
-  return Object.freeze([...new Set(candidates)].sort());
-};
+  now = Date.now(),
+): readonly string[] =>
+  Object.freeze([
+    ...new Set(
+      extractPublicationDateCandidates(body, contentType, now)
+        .filter((candidate) => candidate.evidenceClass === "publication")
+        .map((candidate) => candidate.date),
+    ),
+  ].sort());
 
 export type PublicationProvenance = Readonly<{
   machineValue: string;
@@ -700,18 +1002,43 @@ export type PublicationProvenance = Readonly<{
   semanticIdentity: string;
 }>;
 
-export const derivePublicationProvenance = (
+export type PublicationDateSelection =
+  | Readonly<{
+    candidates: readonly PublicationDateCandidate[];
+    contradictionState: "detected";
+    publicationDates: readonly string[];
+    status: "ambiguous";
+  }>
+  | Readonly<{
+    candidates: readonly PublicationDateCandidate[];
+    contradictionState: "provenance_incomplete";
+    status: "unverified";
+  }>
+  | Readonly<{
+    candidates: readonly PublicationDateCandidate[];
+    contradictionState: "none";
+    provenance: PublicationProvenance;
+    status: "selected";
+  }>;
+
+export const selectPublicationDateProvenance = (
   body: string,
   contentType: string,
   target: CanonicalResearchUrl,
   authorityId: string,
-): PublicationProvenance | null => {
+  now = Date.now(),
+  lastModifiedHeader: string | null = null,
+): PublicationDateSelection => {
   if (authorityId === "chillywood-public-repository") {
     const commit = target.pathname.match(
       /^\/Chillywood2025\/chillywood-mobile\/commit\/([a-f0-9]{40})$/u,
     )?.[1];
     if (!commit || !contentType.toLowerCase().startsWith("text/html")) {
-      return null;
+      return Object.freeze({
+        candidates: Object.freeze([]),
+        contradictionState: "provenance_incomplete",
+        status: "unverified",
+      });
     }
     const rawDate = body.match(
       /"(?:committedDate|authoredDate)"\s*:\s*"([^"]{4,80})"/iu,
@@ -720,26 +1047,85 @@ export const derivePublicationProvenance = (
         /<relative-time\b[^>]*\bdatetime=["']([^"']{4,80})["'][^>]*>/iu,
       )?.[1];
     const parsed = rawDate === undefined ? Number.NaN : Date.parse(rawDate);
-    if (!Number.isFinite(parsed) || parsed > Date.now() + 300_000) {
-      return null;
+    if (!Number.isFinite(parsed) || parsed > now + 300_000) {
+      return Object.freeze({
+        candidates: Object.freeze([]),
+        contradictionState: "provenance_incomplete",
+        status: "unverified",
+      });
     }
     const publicationDate = new Date(parsed).toISOString();
     return Object.freeze({
-      machineValue: publicationDate,
-      mode: "github_commit_metadata",
-      publicationDate,
-      semanticIdentity: `github-commit:${commit}`,
+      candidates: Object.freeze([]),
+      contradictionState: "none",
+      provenance: Object.freeze({
+        machineValue: publicationDate,
+        mode: "github_commit_metadata",
+        publicationDate,
+        semanticIdentity: `github-commit:${commit}`,
+      }),
+      status: "selected",
     });
   }
-  const observed = extractObservedPublicationDates(body, contentType);
-  if (observed.length < 1) return null;
-  const publicationDate = observed[0];
+  const candidates = extractPublicationDateCandidates(
+    body,
+    contentType,
+    now,
+    lastModifiedHeader,
+  );
+  const publicationDates = Object.freeze([
+    ...new Set(
+      candidates
+        .filter((candidate) => candidate.evidenceClass === "publication")
+        .map((candidate) => candidate.date),
+    ),
+  ].sort());
+  if (publicationDates.length < 1) {
+    return Object.freeze({
+      candidates,
+      contradictionState: "provenance_incomplete",
+      status: "unverified",
+    });
+  }
+  if (publicationDates.length > 1) {
+    return Object.freeze({
+      candidates,
+      contradictionState: "detected",
+      publicationDates,
+      status: "ambiguous",
+    });
+  }
+  const publicationDate = publicationDates[0];
   return Object.freeze({
-    machineValue: publicationDate,
-    mode: "published_metadata",
-    publicationDate,
-    semanticIdentity: `published-at:${publicationDate}`,
+    candidates,
+    contradictionState: "none",
+    provenance: Object.freeze({
+      machineValue: publicationDate,
+      mode: "published_metadata",
+      publicationDate,
+      semanticIdentity: `published-at:${publicationDate}`,
+    }),
+    status: "selected",
   });
+};
+
+export const derivePublicationProvenance = (
+  body: string,
+  contentType: string,
+  target: CanonicalResearchUrl,
+  authorityId: string,
+  now = Date.now(),
+  lastModifiedHeader: string | null = null,
+): PublicationProvenance | null => {
+  const selection = selectPublicationDateProvenance(
+    body,
+    contentType,
+    target,
+    authorityId,
+    now,
+    lastModifiedHeader,
+  );
+  return selection.status === "selected" ? selection.provenance : null;
 };
 
 const normalizeExtractiveText = (value: string): string =>
@@ -781,7 +1167,10 @@ export const extractRetrievedCitationMetadata = (
     title = decodeHtmlEntities(
       (titleMatch?.[1] ?? metaTitleMatch?.[1] ?? "").replace(/<[^>]+>/gu, " "),
     );
-  } else if (mediaType === "application/json") {
+  } else if (
+    mediaType === "application/json" ||
+    mediaType === "application/feed+json"
+  ) {
     const match = body.match(
       /"(?:headline|title|name)"\s*:\s*"([^"\\]{1,512})"/iu,
     );
