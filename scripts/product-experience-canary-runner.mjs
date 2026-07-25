@@ -775,6 +775,22 @@ function selfTest() {
   assert.equal(livekitPass.resultStatus, "passed");
   assert.equal(livekitPass.classificationAuthority, "preliminary_local_only");
   assert.equal(livekitPass.remoteGovernedFindingMutationAllowed, false);
+  const connectedNativeCameraPlaceholder = classifyLiveKit({
+    ...livekitEvidence,
+    uiExitedConnecting: false,
+  });
+  assert.equal(
+    connectedNativeCameraPlaceholder.resultStatus,
+    "finding_created",
+  );
+  assert.equal(
+    connectedNativeCameraPlaceholder.suspectedLayer,
+    "installed_ui_state",
+  );
+  assert.equal(
+    connectedNativeCameraPlaceholder.remoteGovernedFindingMutationAllowed,
+    false,
+  );
   const healthyFailureFixture = classifyLiveKit({
     ...livekitEvidence,
     scenarioType: "bounded_failure_fixture",

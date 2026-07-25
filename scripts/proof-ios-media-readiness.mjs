@@ -189,13 +189,22 @@ excludes(stageRoute, "new Audio.Recording", "live-stage automatic microphone rec
   'liveSurface !== "stage"',
   "legacyStageCanPublishLocalMedia",
   "stageLocalMediaIntent",
+  "shouldAutoStartLiveStageLocalMedia(Platform.OS)",
   'mediaAppState === "active"',
   'testID={stageLocalMediaIntent ? "live-stage-stop-local-media" : "live-stage-start-local-media"}',
   "connect={shouldConnectRoom}",
   "effectivePublishLocalAudio",
   "effectivePublishLocalCamera",
   "registerActiveMediaSessionStopper",
-].forEach((expected) => includes(stageRoute, expected, "live-stage media lifecycle"));
+].forEach((expected) => includes(stageRoute, expected, "live-stage native media lifecycle"));
+includes(
+  stageRoute.slice(
+    stageRoute.indexOf("const renderStageTopChrome = () => ("),
+    stageRoute.indexOf("const renderStageControlsSheet = () => {"),
+  ),
+  "isLiveFirstMode && shouldRenderStageLocalMediaControl",
+  "live-stage Live-First local media stop/restart control reachability",
+);
 
 const stageSurface = read("components/watch-party-live/livekit-stage-media-surface.tsx");
 [

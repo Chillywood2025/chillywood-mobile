@@ -28,6 +28,16 @@ The collector distinguishes:
 - installed background/foreground recovery;
 - cleanup/disconnect.
 
+For installed Android and iOS observations, `connectingResolved` describes
+the rendered, interactive product state—not only the LiveKit room connection
+enum. It must remain `false` when a native surface still shows a loading-like
+placeholder such as `Preparing your live camera` after the UI deadline, when
+an authorized host or approved speaker has not reached the expected local
+media state, or when the user has no reachable local-media control to recover.
+Consequently, a healthy token, WebSocket, ICE, room, and headless media flow
+cannot turn a stuck native camera UI into a pass. That case is classified as
+`installed_ui_connecting_stuck` and requires installed Android or iOS proof.
+
 The protected prepare action validates and classifies a packet without
 persisting it. The protected record action writes only the bounded run through
 the service-owned `product_experience_collect_sentinel_run` persistence RPC.

@@ -1147,6 +1147,7 @@ async function main() {
       const liveStagePattern = "Live Stage|Room comments|2 in room|people in room|Chilly Party Members|Chi'lly Party Members|Request camera|Request pending|Lock controls";
       const preStagePattern = "Continue to Live Stage|Join Live Stage|Set the live room before|stays pre-stage";
       const livePlaceholderPattern = "Live feed is syncing|Preparing your live camera|Preparing your camera|Camera bubbles preparing";
+      const liveLocalMediaControlPattern = "live-stage-start-local-media|live-stage-stop-local-media|Start Camera & Mic|Stop Camera & Mic";
       const stageAlreadyA = xmlHas(liveXmlA, liveStagePattern) && !xmlHas(liveXmlA, preStagePattern);
       const stageAlreadyB = xmlHas(liveXmlB, liveStagePattern) && !xmlHas(liveXmlB, preStagePattern);
       const enterAVisible = !stageAlreadyA && xmlHas(liveXmlA, "live-room-enter-stage-button|Continue to Live Stage|Join Live Stage");
@@ -1177,15 +1178,21 @@ async function main() {
       screenshot(DEVICE_B, "device-b-live-stage-after-enter");
       const combinedLiveXml = `${liveXmlA}\n${liveXmlB}`;
       const liveUnavailable = xmlHas(combinedLiveXml, "Live room unavailable|Live video is temporarily unavailable|Live video unavailable");
+      const livePlaceholderA = xmlHas(liveXmlA, livePlaceholderPattern);
+      const livePlaceholderB = xmlHas(liveXmlB, livePlaceholderPattern);
+      const liveLocalMediaControlA = xmlHas(liveXmlA, liveLocalMediaControlPattern);
+      const liveLocalMediaControlB = xmlHas(liveXmlB, liveLocalMediaControlPattern);
+      const unrecoverableCameraPlaceholderA = livePlaceholderA && !liveLocalMediaControlA;
+      const unrecoverableCameraPlaceholderB = livePlaceholderB && !liveLocalMediaControlB;
       const appFocusedAfterA = isAppFocused(DEVICE_A);
       const appFocusedAfterB = isAppFocused(DEVICE_B);
       const passA = (xmlHas(liveXmlA, liveStagePattern) || (appFocusedAfterA && (stageAlreadyA || hostStageImplicitA)))
         && !xmlHas(liveXmlA, preStagePattern)
-        && !xmlHas(liveXmlA, livePlaceholderPattern)
+        && !livePlaceholderA
         && !xmlHas(liveXmlA, "Live room unavailable|Live video unavailable");
       const passB = (xmlHas(liveXmlB, liveStagePattern) || (appFocusedAfterB && stageAlreadyB))
         && !xmlHas(liveXmlB, preStagePattern)
-        && !xmlHas(liveXmlB, livePlaceholderPattern)
+        && !livePlaceholderB
         && !xmlHas(liveXmlB, "Live room unavailable|Live video unavailable");
       addFlow("Live video participant visibility installed UI", waitingA && waitingB && goLiveA && goLiveB && enterA && enterB && passA && passB && !liveUnavailable ? "Closed" : "Partial", waitingA && waitingB && goLiveA && goLiveB && enterA && enterB && passA && passB && !liveUnavailable
         ? "Both physical Play-internal clients entered from the Party Room waiting room, tapped Go Live, tapped Live Stage entry, and exposed post-entry live/participant state without the LiveKit unavailable guard."
@@ -1211,8 +1218,12 @@ async function main() {
         deviceBAppFocusedAfterEnter: appFocusedAfterB ? "yes" : "no",
         deviceAResult: passA ? "live marker visible" : "live marker not visible",
         deviceBResult: passB ? "live marker visible" : "live marker not visible",
-        deviceAPlaceholderVisible: xmlHas(liveXmlA, livePlaceholderPattern) ? "yes" : "no",
-        deviceBPlaceholderVisible: xmlHas(liveXmlB, livePlaceholderPattern) ? "yes" : "no",
+        deviceAPlaceholderVisible: livePlaceholderA ? "yes" : "no",
+        deviceBPlaceholderVisible: livePlaceholderB ? "yes" : "no",
+        deviceALocalMediaControlReachable: liveLocalMediaControlA ? "yes" : "no",
+        deviceBLocalMediaControlReachable: liveLocalMediaControlB ? "yes" : "no",
+        deviceAUnrecoverableCameraPlaceholder: unrecoverableCameraPlaceholderA ? "yes" : "no",
+        deviceBUnrecoverableCameraPlaceholder: unrecoverableCameraPlaceholderB ? "yes" : "no",
         liveUnavailableGuardVisible: liveUnavailable ? "yes" : "no",
         premiumGateBypass: "no",
         diagnosticFallback: "25 seeded participants realtime diagnostic already proved Live media with seeded RTC clients.",

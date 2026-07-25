@@ -560,11 +560,14 @@ try {
 }
 
 const classifyLiveKit = (metrics) => {
+  const nativeCameraUiUnresolved =
+    metrics.uiState === "connecting" ||
+    metrics.uiState === "camera_preparing" ||
+    metrics.localMediaControlReachable === false;
   if (
     metrics.backendTokenState === "healthy" &&
     metrics.roomConnected === true &&
-    metrics.uiState === "connecting" &&
-    metrics.firstRemoteMediaMs === null
+    nativeCameraUiUnresolved
   ) {
     return {
       reproductionState: "likely_defect",
@@ -608,8 +611,19 @@ assert(
     roomConnected: true,
     uiState: "connecting",
     firstRemoteMediaMs: null,
+    localMediaControlReachable: true,
   }).suspectedLayer === "installed_ui_state",
   "LiveKit fixture does not distinguish backend health from installed UI state",
+);
+assert(
+  classifyLiveKit({
+    backendTokenState: "healthy",
+    roomConnected: true,
+    uiState: "camera_preparing",
+    firstRemoteMediaMs: 1200,
+    localMediaControlReachable: false,
+  }).reproductionState === "likely_defect",
+  "connected native camera placeholder without a reachable recovery control escaped detection",
 );
 assert(
   classifyVisual({ cardViewportWidthRatio: 0.94 }).reproductionState ===

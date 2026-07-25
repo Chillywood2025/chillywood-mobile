@@ -60,6 +60,12 @@ const watchPartyLiveKitGuard = readSource("scripts/guard-watch-party-livekit-cam
 const seatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
 const liveStagePresentation = readSource("_lib/watch-party/live-stage-presentation.ts");
 const watchParty = readSource("_lib/watchParty.ts");
+const liveStageTopChrome = sliceBetween(
+  liveStage,
+  "const renderStageTopChrome = () => (",
+  "const renderStageControlsSheet = () => {",
+  "Live Stage top chrome boundary",
+);
 const liveStageLocalAudioGate = sliceBetween(
   liveStage,
   "const publishLocalStageAudio = stageLocalMediaIntent",
@@ -149,8 +155,19 @@ assertIncludes(livekitToken, "removeParticipant(room.roomName, targetUserId)", "
 assertIncludes(liveStagePresentation, "applyLiveStageSeatRequestEvent", "Live Stage presentation helper must own request event state");
 assertIncludes(liveStagePresentation, "closeLiveStageSeatRequestSheet", "Live Stage presentation helper must own X close suppression");
 assertIncludes(liveStagePresentation, "liveKitContractMatchesDesiredAuthority", "Live Stage presentation helper must own contract authority matching");
+assertIncludes(liveStagePresentation, '["android", "ios"].includes', "Live Stage native platforms must share automatic authorized local media startup");
+assertIncludes(liveStagePresentation, "shouldAutoStartLiveStageLocalMedia", "Live Stage presentation helper must own native local media startup policy");
 assertIncludes(liveStagePresentation, "canRenderParticipantSpecificLiveKitTrack", "Live Stage presentation helper must own identity-safe track rendering");
 
+assertIncludes(liveStage, "const DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT = shouldAutoStartLiveStageLocalMedia(Platform.OS);", "Live Stage platform-local media default");
+assertIncludes(liveStage, "useState(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage local media state must use the platform default");
+assertIncludes(liveStage, "useRef(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage local media ref must use the platform default");
+assertIncludes(liveStage, "setStageLocalMediaIntent(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage room reset must restore the platform default");
+assertIncludes(liveStage, "const shouldPublishLocalCamera = canPublishLocalCamera && publishLocalCamera;", "Live Stage hero must use actual local camera publish intent");
+assertIncludes(liveStage, "publishLocalCamera={publishLocalStageCamera}", "Live Stage hero must receive actual local camera publish intent");
+assertIncludes(liveStage, "Camera and microphone are off. Tap Start Camera & Mic.", "Live Stage camera-off placeholder must be truthful");
+assertIncludes(liveStageTopChrome, "isLiveFirstMode && shouldRenderStageLocalMediaControl", "Live-First local media control must be reachable outside the hybrid-only deck");
+assertIncludes(liveStageTopChrome, 'testID={stageLocalMediaIntent ? "live-stage-stop-local-media" : "live-stage-start-local-media"}', "Live-First local media control proof target");
 assertIncludes(liveStage, "currentTrackedParticipantState?.role === \"speaker\"", "Live Stage local speaker authority state");
 assertIncludes(liveStage, "currentStageMembership?.canSpeak", "Live Stage canSpeak membership authority");
 assertIncludes(liveStage, "currentStageMembership?.stageRole === \"speaker\"", "Live Stage stageRole membership authority");

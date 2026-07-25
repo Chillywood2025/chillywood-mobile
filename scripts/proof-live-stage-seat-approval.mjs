@@ -43,6 +43,7 @@ const {
   liveKitContractMatchesDesiredAuthority,
   resolveActualVisualHeroParticipantId,
   resolveDesiredLiveKitAuthority,
+  shouldAutoStartLiveStageLocalMedia,
   shouldAutoOpenLiveStageSeatRequest,
   shouldShowLiveStageJoinUnavailable,
 } = await importTypeScriptModule("_lib/watch-party/live-stage-presentation.ts");
@@ -426,6 +427,9 @@ const viewerDesired = resolveDesiredLiveKitAuthority({ participantRole: "viewer"
 assert(speakerDesired.canPublish === true, "speaker desired authority should require publish");
 assert(mutedSpeakerDesired.canPublish === false, "muted speaker desired authority should block publish");
 assert(viewerDesired.canPublish === false, "viewer desired authority should block publish");
+assert(shouldAutoStartLiveStageLocalMedia("android") === true, "Android Live Stage should restore automatic authorized local media");
+assert(shouldAutoStartLiveStageLocalMedia("ios") === true, "iOS Live Stage should match Android automatic authorized local media");
+assert(shouldAutoStartLiveStageLocalMedia("web") === false, "web Live Stage should not inherit the native automatic local-media policy");
 assert(liveKitContractMatchesDesiredAuthority({ participantRole: "speaker", requestedGrants: { canPublish: true } }, speakerDesired), "speaker publish contract should be publish-ready");
 assert(!liveKitContractMatchesDesiredAuthority({ participantRole: "viewer", requestedGrants: { canPublish: false } }, speakerDesired), "viewer/no-publish token must not be publish-ready for approved speaker");
 assert(!liveKitContractMatchesDesiredAuthority({ participantRole: "speaker", requestedGrants: { canPublish: false } }, speakerDesired), "speaker/no-publish token must not be publish-ready for unmuted approved speaker");
@@ -505,6 +509,8 @@ console.log(JSON.stringify({
   hostPendingCardOpensSeatSheet: true,
   viewerSelfHeroLocalOnly: true,
   hostFirstInSelfHeroPartyBox: true,
+  androidAuthorizedLocalMediaStartsAutomatically: true,
+  iosAuthorizedLocalMediaStartsAutomatically: true,
   speakerContractMustMatchPublishAuthority: true,
   transientUnavailablePreservesRenderableLiveStageSurface: true,
   participantTilesRequireIdentityMatchedTracks: true,

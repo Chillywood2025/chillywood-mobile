@@ -211,6 +211,29 @@ Deno.test("media flow with unresolved Connecting is an installed UI failure", ()
   }
 });
 
+Deno.test("connected native room with a persistent camera placeholder is an installed UI failure", () => {
+  const evidence = {
+    ...baseline(),
+    connectingResolved: false,
+    roomConnected: true,
+    localTrackPublished: true,
+    remoteParticipantJoined: true,
+    remoteTrackSubscribed: true,
+    firstAudioVideoObserved: true,
+    stageFailureCategory: "installed_ui_connecting_stuck",
+  } satisfies LiveKitMetricManifest;
+  const classification = classifyLiveKitEvidence(evidence);
+  if (classification.failureCategory !== "installed_ui_connecting_stuck") {
+    throw new Error("persistent native camera placeholder escaped installed UI classification");
+  }
+  if (classification.resultStatus !== "failed") {
+    throw new Error("healthy transport must not hide an unresolved installed camera UI");
+  }
+  if (classification.physicalProofStatus !== "installed_ui_observed") {
+    throw new Error("native camera placeholder requires installed UI proof");
+  }
+});
+
 Deno.test("ICE failure is distinct from room and token failure", () => {
   const evidence = {
     ...baseline(),

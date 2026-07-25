@@ -174,6 +174,7 @@ import {
   liveKitContractMatchesDesiredAuthority,
   resolveActualVisualHeroParticipantId,
   resolveDesiredLiveKitAuthority,
+  shouldAutoStartLiveStageLocalMedia,
   shouldAutoOpenLiveStageSeatRequest,
   shouldShowLiveStageJoinUnavailable,
   type LiveStageSeatRequestState,
@@ -283,6 +284,7 @@ type CommunicationRTCViewComponent = React.ComponentType<{
 
 const HYBRID_LIVEKIT_CONNECT_TIMEOUT_MILLIS = 30_000;
 const HYBRID_LIVEKIT_DISCONNECT_FALLBACK_GRACE_MILLIS = 4_500;
+const DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT = shouldAutoStartLiveStageLocalMedia(Platform.OS);
 
 type LiveKitStageFallbackReason = "connection_timeout" | "disconnected" | "room_error";
 
@@ -401,12 +403,14 @@ function LiveKitHybridHeroVideo({
   forceLocalHeroFallback = false,
   participantRole,
   preferLocalHero,
+  publishLocalCamera,
   roomName,
 }: {
   fallbackInitial: string;
   forceLocalHeroFallback?: boolean;
   participantRole: LiveKitTokenReady["participantRole"];
   preferLocalHero: boolean;
+  publishLocalCamera: boolean;
   roomName: string;
 }) {
   const connectionState = useHybridLiveKitConnectionState();
@@ -415,7 +419,8 @@ function LiveKitHybridHeroVideo({
     lastCameraError,
     localParticipant,
   } = useHybridLiveKitLocalParticipant();
-  const shouldPublishLocalCamera = participantRole !== "viewer";
+  const canPublishLocalCamera = participantRole !== "viewer";
+  const shouldPublishLocalCamera = canPublishLocalCamera && publishLocalCamera;
   const tracks = useHybridLiveKitTracks(
     [
       { source: Track.Source.ScreenShare, withPlaceholder: false },
@@ -513,9 +518,12 @@ function LiveKitHybridHeroVideo({
 
   const isConnected = String(connectionState ?? "").toLowerCase() === "connected";
   const shouldShowWaiting = isConnected && shouldPublishLocalCamera && !lastCameraError;
+  const shouldShowCameraOff = isConnected && preferLocalHero && canPublishLocalCamera && !publishLocalCamera;
   const fallbackText = shouldShowWaiting
     ? "Preparing your live camera…"
-    : "Live feed is syncing.";
+    : shouldShowCameraOff
+      ? "Camera and microphone are off. Tap Start Camera & Mic."
+      : "Live feed is syncing.";
 
   return (
     <View style={styles.stageHeroFallback}>
@@ -958,7 +966,7 @@ export default function WatchPartyLiveStageScreen({
   const [stageParticipantActionBusyId, setStageParticipantActionBusyId] = useState("");
   const [stageSelfMuteBusy, setStageSelfMuteBusy] = useState(false);
   const [stageSelfMuteError, setStageSelfMuteError] = useState("");
-  const [stageLocalMediaIntent, setStageLocalMediaIntent] = useState(false);
+  const [stageLocalMediaIntent, setStageLocalMediaIntent] = useState(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT);
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
@@ -988,7 +996,7 @@ export default function WatchPartyLiveStageScreen({
   const stageOverlayLastInteractionAtRef = useRef(Date.now());
   const stageOverlayAutoHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stageOverlayFinalizeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stageLocalMediaIntentRef = useRef(false);
+  const stageLocalMediaIntentRef = useRef(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT);
   const liveKitStageContractRefreshKeyRef = useRef("");
   const liveKitStageAuthorityRetryKeyRef = useRef("");
   const liveKitStageAuthorityRetryCountRef = useRef<Record<string, number>>({});
@@ -1091,7 +1099,7 @@ export default function WatchPartyLiveStageScreen({
     setSeatRequestState(emptyLiveStageSeatRequestState());
     setStageSelfMuteBusy(false);
     setStageSelfMuteError("");
-    setStageLocalMediaIntent(false);
+    setStageLocalMediaIntent(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT);
   }, [partyId]);
 
   const syncStageSnapshot = useCallback((snapshot: { room: WatchPartyState; memberships: WatchPartyRoomMembership[] }, trackedUserId: string) => {
@@ -4175,6 +4183,25 @@ export default function WatchPartyLiveStageScreen({
               {controlsLocked ? "Unlock controls" : "Lock controls"}
             </Text>
           </TouchableOpacity>
+          {isLiveFirstMode && shouldRenderStageLocalMediaControl ? (
+            <TouchableOpacity
+              style={[styles.stageTopMenuButton, stageLocalMediaIntent && styles.stageTopMenuButtonActive]}
+              activeOpacity={0.84}
+              accessible
+              focusable
+              accessibilityRole="button"
+              accessibilityLabel={stageLocalMediaIntent ? "Stop camera and microphone on Live Stage" : "Start camera and microphone on Live Stage"}
+              accessibilityState={{ selected: stageLocalMediaIntent }}
+              hitSlop={STAGE_CONTROL_HIT_SLOP}
+              onPressIn={armAndRevealStageOverlay}
+              onPress={onToggleStageLocalMedia}
+              testID={stageLocalMediaIntent ? "live-stage-stop-local-media" : "live-stage-start-local-media"}
+            >
+              <Text style={styles.stageTopMenuButtonText}>
+                {stageLocalMediaIntent ? "Stop Camera & Mic" : "Start Camera & Mic"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={styles.stageSurfaceBackButton}
             activeOpacity={0.84}
@@ -4910,6 +4937,7 @@ export default function WatchPartyLiveStageScreen({
               forceLocalHeroFallback={false}
               participantRole={liveKitStageSurfaceContract.participantRole}
               preferLocalHero={isHost}
+              publishLocalCamera={publishLocalStageCamera}
               roomName={liveKitStageSurfaceContract.roomName}
             />
           ) : shouldShowLiveKitJoinUnavailable ? (

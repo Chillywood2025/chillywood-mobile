@@ -51,6 +51,10 @@ export type LiveKitJoinContractLike = {
 
 const sanitizeIdentifier = (value: unknown) => String(value ?? "").trim();
 
+export const shouldAutoStartLiveStageLocalMedia = (platform: string) => (
+  ["android", "ios"].includes(sanitizeIdentifier(platform).toLowerCase())
+);
+
 export const normalizeSeatRequestVersion = (...candidates: unknown[]) => {
   for (const candidate of candidates) {
     const normalized = sanitizeIdentifier(candidate);
