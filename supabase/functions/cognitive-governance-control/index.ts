@@ -18,6 +18,8 @@ const CORS_HEADERS = Object.freeze({
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const PLATFORM = "shared";
 const ENVIRONMENT = "production";
+const OWNER_ASSISTED_MODE = "OWNER_ASSISTED_ACTIVE";
+const ISOLATED_AUTONOMOUS_MODE = "ISOLATED_AUTONOMOUS_PENDING";
 const SECURITY_POLICY = securityPolicyJson as CanonicalSecurityPolicy;
 const RESEARCH_KEYS = Object.freeze([
   "platform_policy_research",
@@ -188,6 +190,9 @@ const readStatus = async (
       deployment: "not_deployed",
       liveMemory: false,
       liveResearch: false,
+      isolatedAutonomousMode: ISOLATED_AUTONOMOUS_MODE,
+      isolatedAutonomousRuntimeLive: false,
+      ownerAssistedMode: OWNER_ASSISTED_MODE,
       productionAuthority: false,
       scheduler: "none",
       source: "live_readback",
@@ -259,6 +264,9 @@ const readStatus = async (
     deploymentState: String(task.data.status),
     emergencyStop: emergency.data?.status !== "active",
     latestDecisionCount: decisions.data?.length ?? 0,
+    isolatedAutonomousMode: ISOLATED_AUTONOMOUS_MODE,
+    isolatedAutonomousRuntimeLive: false,
+    ownerAssistedMode: OWNER_ASSISTED_MODE,
     pendingApprovalCount: (approvals.data ?? []).filter(
       (entry) => entry.status === "pending",
     ).length,

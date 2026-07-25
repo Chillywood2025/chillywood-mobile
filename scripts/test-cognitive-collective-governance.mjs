@@ -1042,6 +1042,9 @@ await test("Admin status parser accepts direct and enveloped live readback only"
     source: "live_readback",
     canManageLevel01: true,
     deploymentState: "deployed",
+    isolatedAutonomousMode: "ISOLATED_AUTONOMOUS_PENDING",
+    isolatedAutonomousRuntimeLive: false,
+    ownerAssistedMode: "OWNER_ASSISTED_ACTIVE",
     schedulerState: "none",
     switches: { cognitive_research_enabled: true },
     pendingApprovalCount: 1,
@@ -1051,6 +1054,9 @@ await test("Admin status parser accepts direct and enveloped live readback only"
   assert.deepEqual(adminStatus.parseLiveCognitiveStatusResponse(direct), {
     canManageLevel01: true,
     deploymentState: "deployed",
+    isolatedAutonomousMode: "ISOLATED_AUTONOMOUS_PENDING",
+    isolatedAutonomousRuntimeLive: false,
+    ownerAssistedMode: "OWNER_ASSISTED_ACTIVE",
     schedulerState: "none",
     switches: { cognitive_research_enabled: true },
     pendingApprovalCount: 1,
@@ -1068,6 +1074,49 @@ await test("Admin status parser accepts direct and enveloped live readback only"
       source: "source_manifest",
     }),
     null,
+  );
+  assert.equal(
+    adminStatus.parseLiveCognitiveStatusResponse({
+      ...direct,
+      isolatedAutonomousRuntimeLive: true,
+    }),
+    null,
+  );
+  assert.equal(
+    adminStatus.parseLiveCognitiveStatusResponse({
+      ...direct,
+      isolatedAutonomousMode: "ISOLATED_AUTONOMOUS_ACTIVE",
+    }),
+    null,
+  );
+});
+await test("Admin UI and status API distinguish assisted work from pending isolation", () => {
+  const statusApi = fs.readFileSync(
+    path.join(
+      root,
+      "supabase/functions/cognitive-governance-control/index.ts",
+    ),
+    "utf8",
+  );
+  const controlCenter = fs.readFileSync(
+    path.join(root, "components/admin/cognitive-control-center.tsx"),
+    "utf8",
+  );
+  const statusModel = fs.readFileSync(
+    path.join(root, "_lib/cognitiveAdminStatus.ts"),
+    "utf8",
+  );
+  for (const source of [statusApi, statusModel]) {
+    assert.match(source, /OWNER_ASSISTED_ACTIVE/u);
+    assert.match(source, /ISOLATED_AUTONOMOUS_PENDING/u);
+  }
+  assert.match(statusApi, /isolatedAutonomousRuntimeLive:\s*false/u);
+  assert.doesNotMatch(statusApi, /ISOLATED_AUTONOMOUS_ACTIVE/u);
+  assert.match(controlCenter, /OWNER_ASSISTED_COGNITIVE_MODE/u);
+  assert.match(controlCenter, /ISOLATED_AUTONOMOUS_COGNITIVE_MODE/u);
+  assert.match(
+    controlCenter,
+    /The isolated autonomous runtime is pending/u,
   );
 });
 await test("timestamp exact expiration is inactive", () => {

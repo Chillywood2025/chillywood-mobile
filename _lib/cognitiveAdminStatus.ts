@@ -1,6 +1,14 @@
+export const OWNER_ASSISTED_COGNITIVE_MODE =
+  "OWNER_ASSISTED_ACTIVE" as const;
+export const ISOLATED_AUTONOMOUS_COGNITIVE_MODE =
+  "ISOLATED_AUTONOMOUS_PENDING" as const;
+
 export type LiveCognitiveStatus = Readonly<{
   canManageLevel01: boolean;
   deploymentState: string;
+  isolatedAutonomousMode: typeof ISOLATED_AUTONOMOUS_COGNITIVE_MODE;
+  isolatedAutonomousRuntimeLive: false;
+  ownerAssistedMode: typeof OWNER_ASSISTED_COGNITIVE_MODE;
   schedulerState: string;
   switches: Readonly<Record<string, boolean>>;
   pendingApprovalCount: number;
@@ -37,7 +45,11 @@ export const parseLiveCognitiveStatusResponse = (
   if (
     !deploymentState ||
     !schedulerState ||
-    typeof candidate.canManageLevel01 !== "boolean"
+    typeof candidate.canManageLevel01 !== "boolean" ||
+    candidate.ownerAssistedMode !== OWNER_ASSISTED_COGNITIVE_MODE ||
+    candidate.isolatedAutonomousMode !==
+      ISOLATED_AUTONOMOUS_COGNITIVE_MODE ||
+    candidate.isolatedAutonomousRuntimeLive !== false
   ) {
     return null;
   }
@@ -54,6 +66,9 @@ export const parseLiveCognitiveStatusResponse = (
   return Object.freeze({
     canManageLevel01: candidate.canManageLevel01,
     deploymentState,
+    isolatedAutonomousMode: ISOLATED_AUTONOMOUS_COGNITIVE_MODE,
+    isolatedAutonomousRuntimeLive: false,
+    ownerAssistedMode: OWNER_ASSISTED_COGNITIVE_MODE,
     schedulerState,
     switches: Object.freeze(switches),
     pendingApprovalCount: boundedCount(candidate.pendingApprovalCount),

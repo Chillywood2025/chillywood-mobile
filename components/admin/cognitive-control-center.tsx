@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION } from "../../_lib/cognitivePlatformFoundation";
 import {
+  ISOLATED_AUTONOMOUS_COGNITIVE_MODE,
+  OWNER_ASSISTED_COGNITIVE_MODE,
   parseLiveCognitiveStatusResponse,
   type LiveCognitiveStatus,
 } from "../../_lib/cognitiveAdminStatus";
@@ -11,14 +13,16 @@ const REQUIRED_READ_PERMISSION = "admin.cognitive.read";
 
 const SOURCE_STATUS_ROWS = [
   ["System", "product_intelligence_operator"],
-  ["Activation", "Off"],
-  ["Deployment", "Collective governance source complete · not deployed"],
-  ["Scheduler", "None"],
+  ["Current mode", OWNER_ASSISTED_COGNITIVE_MODE],
+  ["Isolated mode", ISOLATED_AUTONOMOUS_COGNITIVE_MODE],
+  ["Isolated runtime live", "No"],
+  ["Deployment", "Cloudflare inert readiness only"],
+  ["Scheduler", "Dry-run only · remote schedules off"],
   ["Model credential", "None"],
   ["Tool credential", "None"],
-  ["Database", "No live memory · local migration only"],
-  ["Research", "No live research"],
-  ["Execution", "No execution authority"],
+  ["Database", "Supabase net boundary pending · no runtime login"],
+  ["Research", "Local advisory only · no remote memory"],
+  ["Execution", "Owner-assisted draft work only"],
   ["Evaluator", "No live evaluator"],
 ] as const;
 
@@ -53,6 +57,12 @@ export const CognitiveControlCenterFoundation = () => {
     return [
       ["System", "product_intelligence_operator"],
       ["Readback", "Live backend status"],
+      ["Current mode", liveStatus.ownerAssistedMode],
+      ["Isolated mode", liveStatus.isolatedAutonomousMode],
+      [
+        "Isolated runtime live",
+        liveStatus.isolatedAutonomousRuntimeLive ? "Yes" : "No",
+      ],
       ["Deployment", liveStatus.deploymentState],
       ["Scheduler", liveStatus.schedulerState],
       ["Emergency stop", liveStatus.emergencyStop ? "Active" : "Inactive"],
@@ -107,8 +117,8 @@ export const CognitiveControlCenterFoundation = () => {
       <Text style={styles.title}>Cognitive Intelligence Foundation</Text>
       <Text style={styles.body}>
         {readbackState === "live"
-          ? "Backend-authoritative cognitive status. This screen exposes no credential and grants no execution authority."
-          : "This source manifest describes an undeployed scaffold. It is not live system status and has no memory, research, evaluator, scheduler, credentials, or production authority."}
+          ? "Backend-authoritative status. Owner-assisted inspection and draft work may be active while the isolated autonomous runtime remains pending."
+          : "Owner-assisted inspection and draft work may continue. The isolated autonomous runtime is pending and has no live database login, memory, scheduler, or unattended authority."}
       </Text>
       <Text style={styles.muted}>
         Access contract: Owner, Super Admin, or a scoped Admin with {REQUIRED_READ_PERMISSION}. The future backend remains authoritative.
@@ -116,7 +126,7 @@ export const CognitiveControlCenterFoundation = () => {
       <View style={styles.pillRow}>
         <View style={styles.pill}>
           <Text style={styles.pillText}>
-            {readbackState === "live" ? "LIVE READBACK" : "OFF"}
+            {readbackState === "live" ? "LIVE READBACK" : "SOURCE STATUS"}
           </Text>
         </View>
         <View style={styles.pill}>
@@ -125,6 +135,9 @@ export const CognitiveControlCenterFoundation = () => {
               ? liveStatus?.deploymentState.toUpperCase()
               : "NOT DEPLOYED"}
           </Text>
+        </View>
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>AUTONOMOUS PENDING</Text>
         </View>
         <View style={styles.pill}><Text style={styles.pillText}>NO SELF-APPROVAL</Text></View>
       </View>

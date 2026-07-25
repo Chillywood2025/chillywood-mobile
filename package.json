@@ -515,6 +515,8 @@
     "proof:cognitive-intelligence-contract": "node ./scripts/cognitive-contract-suite.mjs intelligence proof",
     "guard:research-source-integrity": "node ./scripts/cognitive-contract-suite.mjs research guard",
     "guard:cognitive-research-authorities": "node ./scripts/guard-cognitive-research-authorities.mjs",
+    "guard:cognitive-deferred-evidence": "node ./scripts/validate-cognitive-deferred-evidence-manifest.mjs",
+    "plan:cognitive-deferred-evidence-import": "node ./scripts/validate-cognitive-deferred-evidence-manifest.mjs --plan",
     "proof:research-source-integrity": "node ./scripts/cognitive-contract-suite.mjs research proof",
     "test:research-source-broker": "node ./scripts/cognitive-contract-suite.mjs research test",
     "guard:cognitive-memory-integrity": "node ./scripts/cognitive-contract-suite.mjs memory guard",
