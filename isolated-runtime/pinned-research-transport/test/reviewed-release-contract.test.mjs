@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   buildReviewedRelease,
@@ -75,6 +75,20 @@ test("reviewed release binds exact Git archive, tree, module graph, and release 
         manifest: verified.manifest,
       }),
       true,
+    );
+    const extractedHostService = await import(
+      `${
+        pathToFileURL(
+          resolve(
+            extracted,
+            "isolated-runtime/pinned-research-transport/src/host-service.mjs",
+          ),
+        ).href
+      }?release=${built.manifestSha256}`
+    );
+    assert.equal(
+      typeof extractedHostService.createPinnedResearchHostServer,
+      "function",
     );
     await installReleaseMetadata({
       directory: extracted,

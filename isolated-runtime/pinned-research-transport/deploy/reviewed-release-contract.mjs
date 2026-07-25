@@ -15,6 +15,7 @@ export const REVIEWED_RELEASE_CONTRACT =
 
 export const RESEARCH_HOST_RUNTIME_MODULE_PATHS = Object.freeze([
   "config/intelligence/research-authorities.json",
+  "isolated-runtime/cloudflare/src/adapters/research-fetch-transport.mjs",
   "isolated-runtime/pinned-research-transport/bin/server.mjs",
   "isolated-runtime/pinned-research-transport/deploy/readiness.sh",
   "isolated-runtime/pinned-research-transport/deploy/reviewed-release-contract.mjs",
