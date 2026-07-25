@@ -295,6 +295,7 @@ import {
 } from "../_lib/dmca";
 import { supabase } from "../_lib/supabase";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
+import { CognitiveControlCenterFoundation } from "../components/admin/cognitive-control-center";
 
 type TitleId = Database["public"]["Tables"]["titles"]["Row"]["id"];
 
@@ -418,6 +419,7 @@ type OperatorTabKey =
   | "canary"
   | "safety-dashboard"
   | "rachi"
+  | "cognitive"
   | "users"
   | "money-center"
   | "premium"
@@ -738,6 +740,7 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "canary", label: "Canary" },
   { key: "safety-dashboard", label: "Safety" },
   { key: "rachi", label: "Rachi" },
+  { key: "cognitive", label: "Cognitive" },
   { key: "users", label: "Users" },
   { key: "money-center", label: "Money Center" },
   { key: "usage", label: "Usage" },
@@ -755,6 +758,7 @@ const ADMIN_MAIN_TAB_KEYS: readonly OperatorTabKey[] = [
   "reports",
   "live-ops-fix-center",
   "rachi",
+  "cognitive",
   "legal",
   "system",
   "owner-security",
@@ -3755,6 +3759,16 @@ export default function AdminStudioScreen() {
     && platformRolesChecked
     && hasPlatformRoleMembership(platformRoles, ["owner", "operator"]);
   const isOwnerStaff = isSignedIn && isActive && platformRolesChecked && hasPlatformRoleMembership(platformRoles, ["owner"]);
+  const canAccessCognitiveSourceManifest = isSignedIn
+    && isActive
+    && platformRolesChecked
+    && (
+      hasPlatformRoleMembership(platformRoles, ["owner", "super_admin"])
+      || (
+        hasPlatformRoleMembership(platformRoles, ["operator"])
+        && hasPlatformStaffPermission(platformRoles, ["admin.cognitive.read"])
+      )
+    );
   const canAccessDmca = isSignedIn && isActive && platformRolesChecked && canAccessDmcaTools(platformRoles);
   const canManageAdminStaff = isSignedIn && isActive && platformRolesChecked && canManageAdminRoleAssignments(platformRoles);
   const canManageModeratorStaff = isSignedIn && isActive && platformRolesChecked && canManageModeratorRoleAssignments(platformRoles);
@@ -3807,6 +3821,7 @@ export default function AdminStudioScreen() {
       if (canManagePermissionTemplates) scopedTabs.push("permission-templates");
       if (canAccessBreakGlass) scopedTabs.push("break-glass");
       if (canAccessOwnerSecurity) scopedTabs.push("owner-security", "safety-dashboard");
+      if (canAccessCognitiveSourceManifest) scopedTabs.push("cognitive");
       return operatorTabs.filter((tab) => scopedTabs.includes(tab.key));
     },
     [
@@ -3818,6 +3833,7 @@ export default function AdminStudioScreen() {
       canAccessLegalIntake,
       canAccessLiveOps,
       canAccessOwnerSecurity,
+      canAccessCognitiveSourceManifest,
       canAccessCanaryChecks,
       canAccessDmca,
       canManagePrivilegedWrites,
@@ -18137,6 +18153,10 @@ export default function AdminStudioScreen() {
             </OwnerControlRow>
           </View>
         </View>
+        ) : null}
+
+        {operatorTab === "cognitive" && canAccessCognitiveSourceManifest ? (
+          <CognitiveControlCenterFoundation />
         ) : null}
 
         {operatorTab === "ops-alerts" ? (

@@ -84,7 +84,8 @@ export type PlatformStaffPermissionKey =
   | "admin.room.moderate"
   | "admin.live.force_end"
   | "admin.audit.view"
-  | "admin.lower_role.manage";
+  | "admin.lower_role.manage"
+  | "admin.cognitive.read";
 
 export type ModerationAccess = {
   actorRole: ModerationActorRole;
@@ -421,6 +422,7 @@ const normalizePlatformStaffPermissionKey = (value: unknown): PlatformStaffPermi
     || normalized === "admin.live.force_end"
     || normalized === "admin.audit.view"
     || normalized === "admin.lower_role.manage"
+    || normalized === "admin.cognitive.read"
   ) {
     return normalized;
   }

@@ -177,3 +177,45 @@ verify_jwt = false
 
 [functions.admin-owner-controls]
 verify_jwt = false
+
+[functions.cognitive-governance-control]
+verify_jwt = true
+
+[functions.cognitive-owner-approval]
+verify_jwt = true
+
+[functions.cognitive-approved-action-worker]
+verify_jwt = true
+
+[functions.cognitive-independent-evaluator]
+verify_jwt = true
+
+[functions.cognitive-model-router]
+verify_jwt = true
+
+[functions.cognitive-public-research-broker]
+verify_jwt = true
+
+[functions.cognitive-research-evaluator]
+verify_jwt = true
+
+[functions.cognitive-sentinel-collector]
+verify_jwt = true
+
+[functions.cognitive-product-quality-evaluator]
+verify_jwt = true
+
+[functions.cognitive-product-baseline-executor]
+verify_jwt = true
+
+[functions.cognitive-product-quality-triage]
+verify_jwt = true
+
+[functions.cognitive-livekit-experience-collector]
+verify_jwt = true
+
+[functions.cognitive-github-draft-pr-broker]
+verify_jwt = true
+
+[functions.cognitive-level01-scheduler]
+verify_jwt = true

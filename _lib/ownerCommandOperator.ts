@@ -35,6 +35,7 @@ export type OwnerCommandIntent =
   | "privacy_compliance"
   | "support_success"
   | "search_ranking_integrity"
+  | "product_intelligence"
   | "ads_sponsor_delivery"
   | "multi_system"
   | "unknown";
@@ -99,6 +100,7 @@ const ACTIVE_SYSTEMS: readonly OwnerCommandTargetSystemId[] = [
   "privacy_compliance_operator",
   "support_success_operator",
   "search_ranking_integrity_operator",
+  "product_intelligence_operator",
   "ads_sponsor_delivery_operator",
 ];
 
@@ -277,6 +279,15 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "index freshness",
     "shadowban",
   ],
+  product_intelligence_operator: [
+    "product intelligence",
+    "cognitive platform",
+    "research broker",
+    "architecture graph",
+    "experiment plan",
+    "independent evaluator",
+    "model budget",
+  ],
   ads_sponsor_delivery_operator: [
     "ads",
     "ad provider",
@@ -425,6 +436,12 @@ const SYSTEM_FORBIDDEN_SCOPE: Record<OwnerCommandTargetSystemId, readonly string
     "ranking algorithm mutation",
     "moderation enforcement",
   ],
+  product_intelligence_operator: [
+    "production cognitive deployment",
+    "self approval",
+    "unrestricted model credential",
+    "direct money, rights, auth/RLS, moderation, release, or provider mutation",
+  ],
   ads_sponsor_delivery_operator: [
     "serving ads",
     "sponsor checkout",
@@ -498,6 +515,7 @@ export const classifyOwnerCommandIntent = (commandText: string): OwnerCommandInt
   if (systemId === "privacy_compliance_operator") return "privacy_compliance";
   if (systemId === "support_success_operator") return "support_success";
   if (systemId === "search_ranking_integrity_operator") return "search_ranking_integrity";
+  if (systemId === "product_intelligence_operator") return "product_intelligence";
   if (systemId === "ads_sponsor_delivery_operator") return "ads_sponsor_delivery";
   return "unknown";
 };

@@ -30,6 +30,7 @@ const ACTIVE_SYSTEMS = [
   "privacy_compliance_operator",
   "support_success_operator",
   "search_ranking_integrity_operator",
+  "product_intelligence_operator",
   "ads_sponsor_delivery_operator",
 ] as const;
 
@@ -47,6 +48,7 @@ const SYSTEM_KEYWORDS: Record<string, readonly string[]> = {
   privacy_compliance_operator: ["privacy", "data export", "account deletion", "legal hold", "retention", "pii", "data rights"],
   support_success_operator: ["support", "ticket", "refund request", "account help", "support draft", "support escalation"],
   search_ranking_integrity_operator: ["search", "ranking", "recommendation", "visibility", "discovery", "index freshness", "shadowban"],
+  product_intelligence_operator: ["product intelligence", "cognitive platform", "research broker", "architecture graph", "experiment plan", "independent evaluator", "model budget"],
   ads_sponsor_delivery_operator: ["ads", "ad provider", "sponsor", "sponsor checkout", "brand safety", "ad revenue"],
 };
 
@@ -215,6 +217,7 @@ const intentForSystems = (systems: readonly string[]) => {
   if (systemId === "privacy_compliance_operator") return "privacy_compliance";
   if (systemId === "support_success_operator") return "support_success";
   if (systemId === "search_ranking_integrity_operator") return "search_ranking_integrity";
+  if (systemId === "product_intelligence_operator") return "product_intelligence";
   if (systemId === "ads_sponsor_delivery_operator") return "ads_sponsor_delivery";
   return "unknown";
 };
@@ -234,6 +237,7 @@ const systemForbiddenScope = (systemId: string) => {
     privacy_compliance_operator: ["hidden deletion", "raw private data export", "legal hold bypass", "PII/secret exposure"],
     support_success_operator: ["refund execution", "manual Premium grant", "auth credential reset", "external legal/payment commitment"],
     search_ranking_integrity_operator: ["hidden shadowban", "secret demotion/boost", "ranking algorithm mutation", "moderation enforcement"],
+    product_intelligence_operator: ["production cognitive deployment", "self approval", "unrestricted model credential", "direct money, rights, auth/RLS, moderation, release, or provider mutation"],
     ads_sponsor_delivery_operator: ["serving ads", "sponsor checkout", "ad revenue claim", "provider/billing mutation"],
   };
   return map[systemId] ?? ["unknown target system"];

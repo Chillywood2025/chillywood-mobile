@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "optionsVersion": "chillywood-product-experience-baseline-options-v1",
+  "status": "owner_selection_required",
+  "scope": [
+    "android_installed_visual_sentinel",
+    "ios_installed_visual_sentinel",
+    "responsive_product_experience_review"
+  ],
+  "referenceViewports": {
+    "phonePortrait": {
+      "width": 390,
+      "height": 844,
+      "unit": "logical"
+    },
+    "tabletPortrait": {
+      "width": 1024,
+      "height": 1366,
+      "unit": "logical"
+    }
+  },
+  "commonRequirements": {
+    "androidMinimumInteractiveTargetDp": 48,
+    "iosMinimumInteractiveTargetPt": 44,
+    "webPreferredInteractiveTargetCssPx": 44,
+    "webWcag22AaMinimumTargetCssPx": 24,
+    "preserveMediaAspectRatio": true,
+    "dynamicTypeRequired": true,
+    "screenReaderNameRoleValueRequired": true,
+    "focusOrderMatchesVisualOrder": true,
+    "loadingEmptyErrorOfflinePermissionStatesRequired": true,
+    "portraitLandscapeAndResizableWindowEvidenceRequired": true,
+    "maximumTitleLines": 2,
+    "maximumMetadataLines": 2
+  },
+  "options": [
+    {
+      "option": "A",
+      "name": "dense_discovery",
+      "phone": {
+        "cardWidth": 173,
+        "cardHeight": 97,
+        "aspectRatio": "16:9",
+        "columns": 2,
+        "horizontalMargin": 16,
+        "columnGap": 12,
+        "rowGap": 16,
+        "expectedCardsVisibleAboveFold": {
+          "minimum": 4,
+          "maximum": 6
+        }
+      },
+      "tablet": {
+        "cardWidth": 228,
+        "cardHeight": 128,
+        "aspectRatio": "16:9",
+        "columns": 4,
+        "horizontalMargin": 32,
+        "columnGap": 16,
+        "rowGap": 20,
+        "expectedCardsVisibleAboveFold": {
+          "minimum": 8,
+          "maximum": 12
+        }
+      },
+      "rowGridBehavior": "Two-column phone grid and four-column tablet grid; featured content may span all columns but may not displace more than one discovery row.",
+      "portraitLandscapeBehavior": "Increase columns when the available window crosses 600 and 840 logical units; never stretch media outside 16:9 or lock orientation.",
+      "creatorIdentity": "Creator avatar and name remain visible in one compact metadata row.",
+      "liveState": "Live badge and viewer state remain visible over the media edge without obscuring primary content.",
+      "expectedImpact": "Highest browsing efficiency and the most titles visible per viewport.",
+      "tradeoffs": "Less room for artwork, creator storytelling, and featured-event emphasis."
+    },
+    {
+      "option": "B",
+      "name": "cinematic",
+      "phone": {
+        "cardWidth": 358,
+        "cardHeight": 201,
+        "aspectRatio": "16:9",
+        "columns": 1,
+        "horizontalMargin": 16,
+        "columnGap": 0,
+        "rowGap": 24,
+        "expectedCardsVisibleAboveFold": {
+          "minimum": 1,
+          "maximum": 2
+        }
+      },
+      "tablet": {
+        "cardWidth": 460,
+        "cardHeight": 259,
+        "aspectRatio": "16:9",
+        "columns": 2,
+        "horizontalMargin": 40,
+        "columnGap": 24,
+        "rowGap": 28,
+        "expectedCardsVisibleAboveFold": {
+          "minimum": 2,
+          "maximum": 4
+        }
+      },
+      "rowGridBehavior": "Single-column phone stream and two-column tablet grid; one optional featured hero may use a 2:1 crop with a protected focal region.",
+      "portraitLandscapeBehavior": "Landscape uses two columns when height permits; compact-height windows retain one horizontal carousel and preserve media ratio.",
+      "creatorIdentity": "Creator avatar, name, and one supporting identity line receive a dedicated metadata band.",
+      "liveState": "Live state receives a prominent badge plus elapsed or scheduled state adjacent to creator identity.",
+      "expectedImpact": "Strongest artwork and featured-content emphasis with clear event storytelling.",
+      "tradeoffs": "Lowest browsing density and more scrolling before users can compare titles."
+    },
+    {
+      "option": "C",
+      "name": "creator_balanced",
+      "phone": {
+        "cardWidth": 252,
+        "cardHeight": 142,
+        "aspectRatio": "16:9",
+        "columns": 1,
+        "horizontalMargin": 16,
+        "columnGap": 12,
+        "rowGap": 20,
+        "expectedCardsVisibleAboveFold": {
+          "minimum": 3,
+          "maximum": 4
+        },
+        "horizontalCardsVisiblePerRow": 1.42
+      },
+      "tablet": {
+        "cardWidth": 307,
+        "cardHeight": 173,
+        "aspectRatio": "16:9",
+        "columns": 3,
+        "horizontalMargin": 32,
+        "columnGap": 20,
+        "rowGap": 24,
+        "expectedCardsVisibleAboveFold": {
+          "minimum": 6,
+          "maximum": 9
+        }
+      },
+      "rowGridBehavior": "Peekable horizontal rows on compact phones and a three-column tablet grid; featured content is limited to the first row.",
+      "portraitLandscapeBehavior": "Compact landscape uses two balanced columns; medium and expanded windows use three or four columns without changing the 16:9 media ratio.",
+      "creatorIdentity": "Creator avatar and name are first-class; a compact secondary line may show category or recency.",
+      "liveState": "Live badge, viewer state, and creator identity remain visible without reducing the interactive card target.",
+      "expectedImpact": "Streaming-style density while preserving creator identity and live-state prominence.",
+      "tradeoffs": "More layout rules than the other options and less artwork emphasis than the cinematic option."
+    }
+  ],
+  "sources": [
+    "https://developer.apple.com/design/human-interface-guidelines/buttons",
+    "https://developer.apple.com/design/human-interface-guidelines/layout",
+    "https://developer.apple.com/design/human-interface-guidelines/accessibility",
+    "https://developer.android.com/guide/topics/ui/accessibility/views/apps-views",
+    "https://developer.android.com/develop/adaptive-apps/guides/use-window-size-classes",
+    "https://developer.android.com/design/ui/mobile/guides/layout-and-content/adapt-layout",
+    "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum",
+    "https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced",
+    "https://reactnative.dev/docs/accessibility",
+    "https://reactnative.dev/docs/text"
+  ]
+}

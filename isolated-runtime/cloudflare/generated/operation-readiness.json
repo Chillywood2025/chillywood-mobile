@@ -1,0 +1,261 @@
+{
+  "principals": {
+    "cognitive_github_draft_pr_broker": {
+      "attest_provider_readback": {
+        "databaseOperations": [
+          "record_github_provider_readback"
+        ],
+        "ready": false,
+        "reason": "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED"
+      },
+      "execute_canary": {
+        "databaseOperations": [
+          "consume_github_capability",
+          "accept_github_tool_result"
+        ],
+        "ready": false,
+        "reason": "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED"
+      },
+      "status": {
+        "databaseOperations": [],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_level01_scheduler": {
+      "dispatch_occurrence": {
+        "databaseOperations": [
+          "read_scheduler_status",
+          "issue_recurring_child_task"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "evaluate_prerequisites": {
+        "databaseOperations": [
+          "read_scheduler_status"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_livekit_experience_collector": {
+      "issue_failure_fixture": {
+        "databaseOperations": [
+          "issue_livekit_failure_fixture"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "prepare_run": {
+        "databaseOperations": [],
+        "ready": true,
+        "reason": null
+      },
+      "prepare_fixture_run": {
+        "databaseOperations": [],
+        "ready": true,
+        "reason": null
+      },
+      "read_failure_fixture": {
+        "databaseOperations": [],
+        "ready": true,
+        "reason": null
+      },
+      "record_run": {
+        "databaseOperations": [
+          "collect_livekit_sentinel_run"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "record_fixture_run": {
+        "databaseOperations": [
+          "consume_livekit_failure_fixture"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_model_router": {
+      "assess_sanitized_evidence": {
+        "databaseOperations": [
+          "recover_model_reservation",
+          "reserve_model_invocation",
+          "record_model_provider_overrun",
+          "settle_model_invocation"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_product_baseline_executor": {
+      "claim": {
+        "databaseOperations": [
+          "claim_approved_action"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "transition": {
+        "databaseOperations": [
+          "begin_approved_execution"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "stage_selection": {
+        "databaseOperations": [
+          "stage_product_baseline"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "complete": {
+        "databaseOperations": [
+          "complete_approved_execution"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "persist": {
+        "databaseOperations": [
+          "persist_product_baseline"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "fail": {
+        "databaseOperations": [
+          "fail_approved_execution"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_product_quality_evaluator": {
+      "attest_livekit_bounded_failure_no_finding": {
+        "databaseOperations": [
+          "read_product_quality_snapshot",
+          "attest_livekit_bounded_failure_no_finding"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "evaluate_product_baseline_selection": {
+        "databaseOperations": [
+          "evaluate_product_baseline"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "evaluate_sentinel_detection": {
+        "databaseOperations": [
+          "read_product_quality_snapshot",
+          "compute_detection_hash",
+          "record_sentinel_evaluator_proof"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "evaluate_sentinel_no_finding": {
+        "databaseOperations": [
+          "read_product_quality_snapshot",
+          "compute_no_finding_hash",
+          "record_sentinel_evaluator_proof"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "evaluate_sentinel_resolution": {
+        "databaseOperations": [
+          "read_product_quality_snapshot",
+          "compute_resolution_hash",
+          "record_sentinel_evaluator_proof"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_product_quality_triage": {
+      "triage_detection": {
+        "databaseOperations": [
+          "triage_detection"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "triage_resolution": {
+        "databaseOperations": [
+          "triage_resolution"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "triage_no_finding": {
+        "databaseOperations": [
+          "triage_no_finding"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_public_research_broker": {
+      "retrieve_source": {
+        "databaseOperations": [
+          "record_research_source"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "record_claim": {
+        "databaseOperations": [
+          "record_research_claim"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "detect_contradiction": {
+        "databaseOperations": [
+          "detect_research_contradiction"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "expire_public_memory": {
+        "databaseOperations": [
+          "expire_research"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_research_evaluator": {
+      "evaluate_research_claim": {
+        "databaseOperations": [
+          "read_research_snapshot",
+          "derive_research_evaluation"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "evaluate_contradiction_resolution": {
+        "databaseOperations": [
+          "resolve_research_contradiction"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    },
+    "cognitive_sentinel_collector": {
+      "collect_sentinel_run": {
+        "databaseOperations": [
+          "collect_sentinel_run"
+        ],
+        "ready": true,
+        "reason": null
+      }
+    }
+  },
+  "schemaVersion": "cognitive-level01-isolated-runtime-v1"
+}

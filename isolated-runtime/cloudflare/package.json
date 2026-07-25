@@ -1,0 +1,17 @@
+{
+  "name": "@chillywood/cognitive-level01-isolated-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node ./tools/generate-artifacts.mjs",
+    "test": "node --test ./test/*.test.mjs",
+    "verify": "npm run generate && npm test && node ./tools/verify-generated.mjs"
+  },
+  "dependencies": {
+    "jose": "6.2.4",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "wrangler": "4.114.0"
+  }
+}

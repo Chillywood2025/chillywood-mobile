@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "policyId": "chillywood-cognitive-retention-v1",
+  "decisionState": "owner_counsel_decision_required",
+  "userDerivedMemoryEnabled": false,
+  "privateUserDataModelInputEnabled": false,
+  "allowedCanaryDataClasses": [
+    "public_research",
+    "repository_source",
+    "non_personal_operational_metadata",
+    "sanitized_hash",
+    "bounded_sanitized_evidence"
+  ],
+  "forbiddenCanaryDataClasses": [
+    "private_chat",
+    "private_media",
+    "raw_user_report",
+    "raw_user_level_analytics",
+    "user_derived_memory"
+  ],
+  "dataClasses": [
+    {
+      "id": "public_research",
+      "personal": false,
+      "retentionDays": 30,
+      "legalHoldAllowed": false,
+      "erasureMode": "expire"
+    },
+    {
+      "id": "repository_source",
+      "personal": false,
+      "retentionDays": 30,
+      "legalHoldAllowed": false,
+      "erasureMode": "expire"
+    },
+    {
+      "id": "non_personal_operational_metadata",
+      "personal": false,
+      "retentionDays": 90,
+      "legalHoldAllowed": false,
+      "erasureMode": "expire"
+    },
+    {
+      "id": "sanitized_hash",
+      "personal": false,
+      "retentionDays": 365,
+      "legalHoldAllowed": true,
+      "erasureMode": "retain_non_personal_audit"
+    },
+    {
+      "id": "bounded_sanitized_evidence",
+      "personal": false,
+      "retentionDays": 90,
+      "legalHoldAllowed": true,
+      "erasureMode": "redact_then_tombstone"
+    },
+    {
+      "id": "user_derived_memory",
+      "personal": true,
+      "retentionDays": 0,
+      "legalHoldAllowed": false,
+      "erasureMode": "disabled_pending_owner_counsel"
+    }
+  ]
+}

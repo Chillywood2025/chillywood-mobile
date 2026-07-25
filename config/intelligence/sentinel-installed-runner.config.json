@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "configKey": "sentinel-installed-runner-readiness-v1",
+  "status": "readiness_inventory_only",
+  "newBinaryOrOtaRequiredStatus": "NEW_BINARY_OR_OTA_REQUIRED",
+  "privacy": {
+    "storeRawTesterIdentities": false,
+    "storeRawDeviceIds": false,
+    "storeRawLogs": false,
+    "storeRawScreenshots": false,
+    "storeLiveKitTokens": false,
+    "storeProviderCredentials": false,
+    "evidenceAllowed": [
+      "sanitized status labels",
+      "hashed device identifiers",
+      "package, version, build, runtime, and channel labels",
+      "bounded timing metrics",
+      "screenshot hashes",
+      "UI state labels",
+      "participant-count labels",
+      "provider/backend read-only health labels"
+    ]
+  },
+  "releaseMutationPolicy": {
+    "mayBuild": false,
+    "mayPublishOta": false,
+    "mayDeploy": false,
+    "mayChangeProviderProducts": false,
+    "mayChangePlayTracks": false,
+    "mayChangeTestFlightGroups": false,
+    "mayInstallOrSideload": false,
+    "mayClearAppData": false
+  },
+  "installedTargets": {
+    "android": {
+      "packageId": "com.chillywood.mobile",
+      "requiredInstaller": "com.android.vending",
+      "requiredDistributionSource": "google_play_internal",
+      "expectedNativeBuild": "84",
+      "expectedVersionName": "1.0.0",
+      "expectedRuntimeVersion": "1.0.0-android-imagemanipulator-v1",
+      "expectedChannel": "production",
+      "runtimeProofRequiredFromInstalledApp": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.chillywood.mobile",
+      "requiredDistributionSource": "testflight_internal_or_signed_simulator_candidate",
+      "expectedVersionName": "1.0.0",
+      "expectedInternalBuild": "8",
+      "expectedRuntimeVersion": "1.0.0-iosqa1",
+      "expectedChannel": "ios-qa",
+      "runtimeProofRequiredFromInstalledApp": true
+    }
+  },
+  "approvedSyntheticFixtureContract": {
+    "fixtureSource": "external_owner_approved_runner_secret_store",
+    "storedInRepository": false,
+    "minimumAccounts": 2,
+    "requiredLabels": [
+      "livekit_host_or_existing_room_owner",
+      "livekit_second_participant",
+      "standard_journey_user"
+    ],
+    "forbiddenClosurePaths": [
+      "manual Premium grant",
+      "direct entitlement row edit",
+      "raw account email committed to Git",
+      "private tester identity committed to Git"
+    ]
+  },
+  "canaries": {
+    "livekit_experience": {
+      "script": "npm run sentinel:canary:livekit -- --evidence <sanitized-evidence.json>",
+      "sentinelKey": "livekit_experience_sentinel",
+      "requiredInstalledEvidence": [
+        "roomRunCorrelationHash",
+        "installedParticipantIdentityHash",
+        "sourceBuildHash",
+        "runtimeIdentityHash",
+        "observationStartedAt",
+        "observationFinishedAt",
+        "scenarioType",
+        "roomRequested",
+        "tokenRequested",
+        "tokenReturned",
+        "websocketConnected",
+        "roomConnected",
+        "localTrackPublished",
+        "remoteParticipantObserved",
+        "remoteMediaObserved",
+        "uiExitedConnecting",
+        "backgrounded",
+        "foregrounded",
+        "backgroundForegroundRecovery",
+        "cleanupDisconnected"
+      ],
+      "requiredTimingMetrics": [
+        "tokenIssuedElapsedMs",
+        "roomConnectElapsedMs",
+        "uiStateResolutionElapsedMs",
+        "firstRemoteMediaElapsedMs"
+      ]
+    },
+    "visual_experience_metrics": {
+      "script": "npm run sentinel:canary:visual -- --evidence <sanitized-evidence.json>",
+      "sentinelKey": "visual_product_experience_sentinel",
+      "requiredInstalledEvidence": [
+        "screenshotEvidenceHash",
+        "sourceRuntimeHash",
+        "platform",
+        "measurementUnit",
+        "deviceClass",
+        "orientation",
+        "syntheticAccount",
+        "surfaceFamily",
+        "baselineApplicability",
+        "referenceViewport",
+        "windowClass",
+        "layoutMode",
+        "baselineState",
+        "baselineComparisonHash",
+        "baselineId",
+        "baselineVersion",
+        "evidenceQuality",
+        "evidenceQualityHash",
+        "componentIdentityHash",
+        "routeFamilyMappingId",
+        "routeFamilyMappingHash",
+        "automationStatus",
+        "providerState",
+        "contentState",
+        "observedClassification",
+        "exceptionVersioned",
+        "exceptionType",
+        "exceptionContractId",
+        "exceptionContractHash",
+        "featuredPlacement"
+      ],
+      "requiredMetrics": [
+        "mediaFrameWidth",
+        "mediaFrameHeight",
+        "totalCardContainerWidth",
+        "totalCardContainerHeight",
+        "metadataBandHeight",
+        "viewportWidth",
+        "viewportHeight",
+        "cardViewportWidthRatio",
+        "cardViewportHeightRatio",
+        "horizontalCardsVisible",
+        "cardsAboveFold",
+        "aspectRatioClass",
+        "horizontalMargin",
+        "horizontalGap",
+        "columnGap",
+        "verticalRowGap",
+        "columnCount",
+        "creatorIdentityVisible",
+        "liveStateVisible",
+        "liveContent",
+        "titleLineCount",
+        "metadataLineCount",
+        "interactiveTargetWidth",
+        "interactiveTargetHeight",
+        "interactivePreferredThreshold",
+        "interactiveApplicableMinimumThreshold",
+        "interactiveAncestorPresent",
+        "interactiveAncestorWidth",
+        "interactiveAncestorHeight",
+        "interactiveAncestorActuallyInteractive",
+        "interactiveAncestorRolePresent",
+        "interactiveAncestorClickActionPresent",
+        "interactiveAncestorIsTargetContainer",
+        "accessibilityNamePresent",
+        "accessibilityRolePresent",
+        "screenDensityDpi"
+      ]
+    },
+    "installed_journey": {
+      "script": "npm run sentinel:canary:journey -- --evidence <sanitized-evidence.json>",
+      "sentinelKey": "installed_journey_sentinel",
+      "requiredInstalledEvidence": [
+        "journeyName",
+        "expectedState",
+        "observedState",
+        "maxDurationMs",
+        "elapsedDurationMs",
+        "resultState",
+        "journeyStepCount",
+        "unresolvedStateCount",
+        "screenshotEvidenceHash",
+        "sourceRuntimeHash"
+      ],
+      "initialJourneys": [
+        "sign_in",
+        "relaunch_session_persistence",
+        "home",
+        "explore",
+        "search",
+        "library",
+        "profile",
+        "settings",
+        "content_player",
+        "public_profile_channel",
+        "chat",
+        "live",
+        "watch_party",
+        "loading_to_success",
+        "offline_permission_background"
+      ]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "repositoryId": "Chillywood2025/chillywood-mobile",
+  "generatorVersion": "2.0.0-security-hardened",
+  "caps": {
+    "maxFiles": 5000,
+    "maxEdges": 20000,
+    "maxFileBytes": 5000000,
+    "maxTotalBytes": 150000000
+  },
+  "symlinkPolicy": "skip_all",
+  "fullGraphPersistence": "ci_or_owner_only_artifact",
+  "committedEvidence": "generator_config_only"
+}

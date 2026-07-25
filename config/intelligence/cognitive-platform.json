@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 2,
+  "systemId": "product_intelligence_operator",
+  "deploymentState": "collective_governance_source_complete_not_deployed",
+  "activationMode": "off",
+  "scheduler": "none",
+  "supportedPlatforms": ["shared", "ios", "android", "web"],
+  "orchestrationRule": "plan_and_delegate_to_registered_domain_executors",
+  "directExecutionForbidden": [
+    "money movement",
+    "user rights",
+    "auth or RLS",
+    "moderation enforcement",
+    "public release",
+    "provider product mutation"
+  ],
+  "budgets": {
+    "maxModelTokens": 10000000,
+    "maxToolCalls": 100,
+    "maxToolBytes": 10000000,
+    "maxDurationSeconds": 14400,
+    "maxCostUsd": 25,
+    "maxChildTasks": 20,
+    "maxChildDepth": 4,
+    "maxConcurrentCalls": 4,
+    "maxRetries": 5,
+    "capabilityExpiryRequired": true
+  },
+  "hardening": {
+    "arbitraryShell": false,
+    "workflowEditAuthority": false,
+    "forcePushAuthority": false,
+    "mainWriteAuthority": false,
+    "selfApproval": false,
+    "capabilityProtocol": "task_project_repository_branch_platform_environment_provider_operation_path_snapshot_bound",
+    "modelOutput": "strict_closed_schema",
+    "toolOutput": "untrusted_envelope",
+    "researchTransport": "https_dns_and_redirect_validated_mock_only",
+    "databaseDeployment": "absent",
+    "productionCredentials": "none",
+    "productionScheduler": "none",
+    "twoPartyActivation": "owner_approval_and_service_execution_are_distinct_requests",
+    "legacyDirectSwitchRpc": "fail_closed_two_party_owner_approval_required"
+  },
+  "governanceComponents": [
+    {"id": "collective_intelligence_council", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "deliberation_orchestrator", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "governance_constitution_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "decision_manifest_authority", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "quorum_and_veto_engine", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "dissent_and_minority_report_registry", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "stakeholder_impact_panel", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "model_independence_guard", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "governance_audit_ledger", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "appeal_and_reconsideration_service", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "outcome_calibration_service", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "governance_emergency_control", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "owner_approval_lifecycle_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "approval_revalidation_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "cognitive_owner_approval_endpoint", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "cognitive_approved_action_worker", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "model_independence_attestation_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "product_experience_baseline_service", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"},
+    {"id": "livekit_experience_sentinel", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "visual_product_experience_sentinel", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "installed_journey_sentinel", "componentType": "registered_surface", "deploymentState": "source_complete_not_deployed"},
+    {"id": "product_quality_triage_router", "componentType": "protected_control_plane", "deploymentState": "source_complete_not_deployed"}
+  ],
+  "components": [
+    {
+      "id": "rachi_cognitive_orchestration",
+      "componentType": "protected_control_plane",
+      "purpose": "Plan bounded work and delegate it to registered specialized systems.",
+      "approvalLevel": 2,
+      "writes": ["intelligence_tasks", "execution_plans", "approval requests"],
+      "forbidden": ["self approval", "direct domain mutation", "production execution"]
+    },
+    {
+      "id": "research_source_broker",
+      "componentType": "registered_surface",
+      "purpose": "Normalize cited, fresh, untrusted research evidence.",
+      "approvalLevel": 1,
+      "writes": ["research_sources", "research_claims"],
+      "forbidden": ["tool execution from web text", "secrets", "private user data"]
+    },
+    {
+      "id": "intelligence_memory_service",
+      "componentType": "protected_control_plane",
+      "purpose": "Maintain deduplicated service-owned evidence, summaries, lessons, and playbooks.",
+      "approvalLevel": 2,
+      "writes": ["cognitive memory tables"],
+      "forbidden": ["direct client writes", "private-user-data model training", "immutable evidence deletion"]
+    },
+    {
+      "id": "architecture_knowledge_graph",
+      "componentType": "registered_surface",
+      "purpose": "Index repository relationships and produce deterministic impact analysis.",
+      "approvalLevel": 1,
+      "writes": ["local generated graph evidence"],
+      "forbidden": ["secret indexing", "production mutation"]
+    },
+    {
+      "id": "product_experiment_engine",
+      "componentType": "registered_surface",
+      "purpose": "Plan bounded hypotheses and experiments without activating product changes.",
+      "approvalLevel": 2,
+      "writes": ["hypotheses", "experiments", "experiment_results"],
+      "forbidden": ["price changes", "rights changes", "production feature flags"]
+    },
+    {
+      "id": "software_engineering_executor",
+      "componentType": "protected_control_plane",
+      "purpose": "Execute validated source-only plans on scoped draft-PR branches.",
+      "approvalLevel": 2,
+      "writes": ["allowlisted source paths", "draft branches", "draft PR evidence"],
+      "forbidden": ["main writes", "merge", "force push", "production deploy", "store release", "OTA"]
+    },
+    {
+      "id": "independent_evaluation_judge",
+      "componentType": "protected_control_plane",
+      "purpose": "Independently reject unsupported or unsafe completion claims.",
+      "approvalLevel": 1,
+      "writes": ["evaluation_results"],
+      "forbidden": ["source modification", "self approval", "evidence deletion"]
+    },
+    {
+      "id": "capability_and_tool_broker",
+      "componentType": "protected_control_plane",
+      "purpose": "Issue expiring, allowlisted, budgeted local capabilities.",
+      "approvalLevel": 2,
+      "writes": ["tool_invocations", "capability audit"],
+      "forbidden": ["unrestricted root credential", "expired capability use", "scope expansion"]
+    },
+    {
+      "id": "model_router_and_budget_controller",
+      "componentType": "protected_control_plane",
+      "purpose": "Route models within task, time, call, and cost budgets.",
+      "approvalLevel": 2,
+      "writes": ["model_invocations", "intelligence_budgets"],
+      "forbidden": ["budget bypass", "secret-bearing prompts", "policy mutation"]
+    },
+    {
+      "id": "cognitive_owner_approval_endpoint",
+      "componentType": "protected_control_plane",
+      "purpose": "Record immutable exact Owner approval versions through the normal authenticated JWT path.",
+      "approvalLevel": 2,
+      "writes": ["governance_owner_approval_versions", "governance_owner_approval_lifecycle_events"],
+      "forbidden": ["service execution", "service-role key use", "approval mutation", "credential issuance"]
+    },
+    {
+      "id": "cognitive_approved_action_worker",
+      "componentType": "protected_control_plane",
+      "purpose": "Claim and execute only exact active approval versions using a separately verified service principal.",
+      "approvalLevel": 2,
+      "writes": ["governance_approved_action_executions", "cognitive_governance_switches"],
+      "forbidden": ["Owner approval creation", "Owner impersonation", "scope widening", "replay"]
+    },
+    {
+      "id": "model_independence_attestation_service",
+      "componentType": "protected_control_plane",
+      "purpose": "Record sanitized model execution attestations and report provider/model independence status.",
+      "approvalLevel": 2,
+      "writes": ["governance_model_execution_attestations"],
+      "forbidden": ["model credential storage", "raw prompt storage", "fake quorum", "copied-output double counting"]
+    },
+    {
+      "id": "product_experience_baseline_service",
+      "componentType": "protected_control_plane",
+      "purpose": "Version product-experience baselines only after exact Owner approval.",
+      "approvalLevel": 2,
+      "writes": ["product_experience_baseline_versions"],
+      "forbidden": ["silent current-app baseline approval", "autonomous redesign authority", "private user data"]
+    },
+    {
+      "id": "livekit_experience_sentinel",
+      "componentType": "registered_surface",
+      "purpose": "Observe synthetic end-to-end LiveKit product experience and classify backend, media, and installed UI failure layers.",
+      "approvalLevel": 1,
+      "writes": ["product_experience_sentinel_runs"],
+      "forbidden": ["provider mutation", "production repair", "release", "private user data"]
+    },
+    {
+      "id": "visual_product_experience_sentinel",
+      "componentType": "registered_surface",
+      "purpose": "Measure content density, card metrics, spacing, typography, and breakpoint behavior from screenshots and route analysis.",
+      "approvalLevel": 1,
+      "writes": ["product_experience_sentinel_runs"],
+      "forbidden": ["autonomous redesign", "baseline approval", "production mutation", "private user data"]
+    },
+    {
+      "id": "installed_journey_sentinel",
+      "componentType": "registered_surface",
+      "purpose": "Run bounded synthetic installed-product journeys and detect stuck loading, broken taps, blank screens, and route failures.",
+      "approvalLevel": 1,
+      "writes": ["product_experience_sentinel_runs"],
+      "forbidden": ["production mutation", "store release", "private user data", "Level 2 repair"]
+    },
+    {
+      "id": "product_quality_triage_router",
+      "componentType": "protected_control_plane",
+      "purpose": "Route sanitized sentinel findings into collective governance with deterministic classification metadata.",
+      "approvalLevel": 1,
+      "writes": ["product_quality_findings"],
+      "forbidden": ["finding fabrication", "evidence deletion", "production mutation", "self approval"]
+    }
+  ]
+}

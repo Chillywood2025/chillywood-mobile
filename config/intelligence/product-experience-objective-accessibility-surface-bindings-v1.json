@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "bindingSetId": "product-experience-objective-accessibility-surface-bindings-v1",
+  "status": "review_pending",
+  "baselineId": "chillywood-product-experience-baseline-v1",
+  "baselineHash": "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba",
+  "policyBasis": "platform_accessibility_floor_v1",
+  "canonicalBindingPayload": {
+    "baselineId": "chillywood-product-experience-baseline-v1",
+    "baselineHash": "34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba",
+    "policyBasis": "platform_accessibility_floor_v1",
+    "bindings": [
+      {
+        "bindingId": "home_main_tab_navigation_control",
+        "routeOrSurface": "Home main tab",
+        "componentSource": "components/haptic-tab.tsx#HapticTab",
+        "usageSource": "app/(tabs)/_layout.tsx#main-tab-home",
+        "surfaceFamily": "non_media_interactive_surface",
+        "appliesTo": "bottom tab navigation Home control",
+        "policyBasis": "platform_accessibility_floor_v1",
+        "exceptionContractId": "non_streaming_discovery_route_v1",
+        "objectiveAccessibilityOnly": true,
+        "allowsVisualDensityComparison": false,
+        "allowsWebPreferredOnlyFinding": false,
+        "bindingHash": "3b6e2cf28d5041e97de6ab4eec5d006c2c5ae7b37b74823904a8645bc923d6e0"
+      }
+    ],
+    "componentSetHash": "b6b6e64a3375935b849019fbeedd8fd07f02e7a76e938aea3b6e1a0189a7fddc"
+  },
+  "bindingSetHash": "8bfbe4fcadb6910607c6c6e8a5221f80b218facb3248d706ebe1a23249120490",
+  "amendmentProcedure": "Create a new immutable binding-set version and complete exact-source review; never rewrite v1.",
+  "authorityBoundary": {
+    "findingAuthority": "independent evaluator plus governed triage only",
+    "visualDensityAuthority": false,
+    "uiMutationAuthority": false,
+    "releaseAuthority": false
+  }
+}

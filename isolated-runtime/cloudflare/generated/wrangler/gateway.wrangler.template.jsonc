@@ -1,0 +1,63 @@
+{
+  "compatibility_date": "2026-07-24",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "preview_urls": false,
+  "workers_dev": false,
+  "main": "../../src/gateway.mjs",
+  "name": "chillywood-cognitive-level01-gateway",
+  "services": [
+    {
+      "binding": "COGNITIVE_PRODUCT_BASELINE_EXECUTOR",
+      "service": "chillywood-level01-product-baseline-executor"
+    },
+    {
+      "binding": "COGNITIVE_SENTINEL_COLLECTOR",
+      "service": "chillywood-level01-sentinel-collector"
+    },
+    {
+      "binding": "COGNITIVE_PRODUCT_QUALITY_EVALUATOR",
+      "service": "chillywood-level01-product-quality-evaluator"
+    },
+    {
+      "binding": "COGNITIVE_PRODUCT_QUALITY_TRIAGE",
+      "service": "chillywood-level01-product-quality-triage"
+    },
+    {
+      "binding": "COGNITIVE_PUBLIC_RESEARCH_BROKER",
+      "service": "chillywood-level01-public-research-broker"
+    },
+    {
+      "binding": "COGNITIVE_RESEARCH_EVALUATOR",
+      "service": "chillywood-level01-research-evaluator"
+    },
+    {
+      "binding": "COGNITIVE_MODEL_ROUTER",
+      "service": "chillywood-level01-model-router"
+    },
+    {
+      "binding": "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR",
+      "service": "chillywood-level01-livekit-experience-collector"
+    },
+    {
+      "binding": "COGNITIVE_GITHUB_DRAFT_PR_BROKER",
+      "service": "chillywood-level01-github-draft-pr-broker"
+    },
+    {
+      "binding": "COGNITIVE_LEVEL01_SCHEDULER",
+      "service": "chillywood-level01-level01-scheduler"
+    }
+  ],
+  "vars": {
+    "CF_ACCESS_AUD": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+    "CF_ACCESS_SERVICE_TOKEN_COMMON_NAME": "REPLACE_WITH_ACCESS_SERVICE_TOKEN_CLIENT_ID",
+    "CF_ACCESS_TEAM_DOMAIN": "https://replace-with-team.cloudflareaccess.com",
+    "RUNTIME_SCHEMA_VERSION": "cognitive-level01-isolated-runtime-v1",
+    "SOURCE_COMMIT": "REPLACE_WITH_REVIEWED_SUCCESSOR_COMMIT",
+    "SOURCE_BASE_COMMIT": "8660558a9cf360f033246a404dfc5812d522da88"
+  },
+  "version_metadata": {
+    "binding": "WORKER_VERSION"
+  }
+}
