@@ -52,6 +52,31 @@ files do not mutate a provider. Deployment status remains
 installed, the one Worker-specific HMAC credential is attached at both ends,
 the HTTPS origin is bound, and remote readiness/negative tests pass.
 
+Caddy 2.6.x must use `admin unix//run/caddy/admin.sock` without a permission
+suffix; that version otherwise treats the suffix as part of the socket
+filename. The reviewed Unix-admin templates create `/run/caddy` as
+`caddy:caddy` mode `0700`, keep reloads on the fixed Unix socket without
+`--force`, and run a fixed-path verifier after the `Type=notify` startup gate.
+The verifier accepts no arguments or environment-selected path. It requires
+the non-symlink Caddy-owned parent at mode `0700` and the exact Caddy-owned
+socket at its installed-version initial mode `0755`, records both objects'
+device and inode, changes only the socket to `0600`, and then revalidates
+parent and socket type, owner, device, inode, and exact mode. The private
+parent prevents an unsafe access window before the post-start mode change;
+the Caddy service `UMask` remains unchanged. Provider deployment installs the
+verifier at `/usr/local/libexec/verify-caddy-admin-socket.mjs`; it is
+provider configuration and does not enter a mobile or Worker secret domain.
+
+The provider transaction keeps an owner-only rollback snapshot and holds one
+host lock through external attestation. On any failed gate, rollback must
+restore the exact prior Caddyfile, remove the Unix-admin drop-in, remove the
+fixed socket verifier, remove the research route snippet, restore the prior
+release link and credential-overlay state, restart Caddy with `admin off`,
+and leave the research transport inactive. Firewall comparison uses a
+stateless ruleset representation so packet counters cannot create a false
+transaction result. A successful local service check still does not activate
+research or any database switch.
+
 The deployment and rollback transactions allow only the loopback listener's
 connection-refused status to receive a bounded startup retry: at most ten
 attempts, within three seconds total, separated by 0.2 seconds. Every attempt

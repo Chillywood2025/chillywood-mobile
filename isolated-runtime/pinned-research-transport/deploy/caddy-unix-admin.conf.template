@@ -1,0 +1,7 @@
+[Service]
+RuntimeDirectory=caddy
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=no
+ExecStartPost=/usr/bin/node /usr/local/libexec/verify-caddy-admin-socket.mjs
+ExecReload=
+ExecReload=/usr/bin/caddy reload --address unix//run/caddy/admin.sock --config /etc/caddy/Caddyfile --adapter caddyfile
