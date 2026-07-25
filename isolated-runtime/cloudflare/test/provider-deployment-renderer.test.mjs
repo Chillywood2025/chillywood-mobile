@@ -65,7 +65,7 @@ const activeInput = () => ({
     policyStatus: "ACTIVE",
     serviceTokenClientId: "b".repeat(32),
     serviceTokenStatus: "ACTIVE",
-    teamDomain: "https://soft-fire-157b.cloudflareaccess.com",
+    teamDomain: "https://example-team.cloudflareaccess.com",
   },
   activationMode: "active",
   hyperdrive: structuredClone(hyperdrive),
