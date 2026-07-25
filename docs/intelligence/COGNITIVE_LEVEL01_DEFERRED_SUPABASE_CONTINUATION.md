@@ -252,3 +252,28 @@ No iOS build or OTA was started.
 - No secret or private evidence was committed.
 - No generated `android/` or `ios/` directory was committed.
 - `deno.lock` remained untracked and unstaged.
+
+## Post-closeout plan-status amendment — 2026-07-25
+
+This amendment records provider-plan truth after the original PR #35
+closeout. It does not rewrite the historical attestation above: no paid
+upgrade existed when that closeout completed.
+
+- The Supabase organization was upgraded to Pro after the original closeout.
+- Cloudflare remains on its existing plan with no plan change.
+- Ticket `SU-431426` was updated to record the Pro organization status.
+- The provider-admin response for removal of `PUBLIC USAGE` from the
+  provider-owned `net` schema remains pending.
+- Micro compute and the Dedicated Pooler may be enabled separately by the
+  Owner. Those compute and pooling changes do not themselves change the
+  `net` schema ACL.
+- No cognitive runtime LOGIN password or password-bearing Hyperdrive database
+  credential exists.
+
+Current state remains:
+
+`WAITING_FOR_SUPABASE_NET_SCHEMA_PROVIDER_ADMIN`
+
+`OWNER_ASSISTED_ACTIVE`
+
+`ISOLATED_AUTONOMOUS_PENDING`

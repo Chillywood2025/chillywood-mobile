@@ -4,17 +4,43 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
-const manifestPath = path.join(
+export const V1_MANIFEST_PATH = path.join(
   root,
   "config/intelligence/cognitive-level01-deferred-evidence-manifest-v1.json",
 );
-const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+export const V2_MANIFEST_PATH = path.join(
+  root,
+  "config/intelligence/cognitive-level01-deferred-evidence-manifest-v2.json",
+);
+export const ANDROID_RELEASE_PATH = path.join(
+  root,
+  "config/release/android-production.json",
+);
+export const V1_SCHEMA = "chillywood-cognitive-deferred-evidence-v1";
+export const V2_SCHEMA = "chillywood-cognitive-deferred-evidence-v2";
+export const SOURCE_CORRECTION_TIMESTAMP = "2026-07-25T15:29:25.000Z";
+
 const SHA256 = /^[a-f0-9]{64}$/u;
 const COMMIT = /^[a-f0-9]{40}$/u;
 const SAFE_TEXT = /^[A-Za-z0-9_.:-]{1,128}$/u;
-const ENTRY_KEYS = [
+const IMPORT_ELIGIBILITY = new Set([
+  "audit_only",
+  "eligible_after_runtime_unlock",
+  "not_eligible",
+  "requires_reevaluation",
+]);
+const CORRECTED_ANDROID_EVIDENCE_TYPES = new Set([
+  "android_accessibility_touch_target",
+  "android_crash_anr_observation",
+  "android_installed_route_repeat",
+  "android_session_lifecycle",
+  "android_signout_signin",
+  "livekit_installed_observer_gate",
+]);
+const V1_ENTRY_KEYS = [
   "appBuild",
   "appChannel",
   "appRuntime",
@@ -33,19 +59,51 @@ const ENTRY_KEYS = [
   "sourceCommit",
   "synthetic",
 ].sort();
-const IMPORT_ELIGIBILITY = new Set([
-  "audit_only",
-  "eligible_after_runtime_unlock",
-  "not_eligible",
-  "requires_reevaluation",
-]);
+const V2_ENTRY_KEYS = [
+  ...V1_ENTRY_KEYS,
+  "amendmentKey",
+  "amendsFutureImportKey",
+  "amendsManifestVersion",
+  "appVersion",
+  "correctionKind",
+  "distributionSource",
+  "originalEvidenceKey",
+].sort();
+const V2_TOP_LEVEL_KEYS = [
+  "appendOnly",
+  "canonicalForFutureImport",
+  "correction",
+  "entries",
+  "manifestHash",
+  "manifestHashAlgorithm",
+  "manifestVersion",
+  "modeStates",
+  "originalEvidenceKeys",
+  "rawEvidencePolicy",
+  "remotePersistencePerformed",
+  "schemaVersion",
+  "supersedesManifestHash",
+  "supersedesManifestVersion",
+].sort();
+const IMMUTABLE_ENTRY_KEYS = [
+  "evaluatorResult",
+  "evidenceKey",
+  "evidenceType",
+  "expiresAt",
+  "findingKey",
+  "importEligibility",
+  "importStatus",
+  "metricHashes",
+  "observedAt",
+  "platform",
+  "retentionClass",
+  "sourceCommit",
+  "synthetic",
+];
 
-const exactKeys = (value, keys) =>
-  value !== null &&
-  typeof value === "object" &&
-  !Array.isArray(value) &&
-  Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
-const canonical = (value) => {
+export const readJson = (filePath) =>
+  JSON.parse(fs.readFileSync(filePath, "utf8"));
+export const canonical = (value) => {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === "object") {
     return Object.fromEntries(
@@ -54,40 +112,36 @@ const canonical = (value) => {
   }
   return value;
 };
-const hashJson = (value) =>
+export const hashJson = (value) =>
   createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+export const computeManifestHash = (manifest) => {
+  const { manifestHash: _storedManifestHash, ...hashableManifest } = manifest;
+  return hashJson(hashableManifest);
+};
+const exactKeys = (value, keys) =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
 const validTimestamp = (value) =>
   typeof value === "string" &&
   Number.isFinite(Date.parse(value)) &&
   new Date(Date.parse(value)).toISOString() === value;
 const validNullableSafeText = (value) =>
   value === null || (typeof value === "string" && SAFE_TEXT.test(value));
-
-assert.equal(
-  manifest.schemaVersion,
-  "chillywood-cognitive-deferred-evidence-v1",
-);
-assert.equal(manifest.appendOnly, true);
-assert.deepEqual(manifest.modeStates, {
-  isolatedAutonomous: "ISOLATED_AUTONOMOUS_PENDING",
-  ownerAssisted: "OWNER_ASSISTED_ACTIVE",
-});
-assert.equal(manifest.rawEvidencePolicy, "outside_git_owner_only");
-assert.equal(manifest.remotePersistencePerformed, false);
-assert.ok(Array.isArray(manifest.entries) && manifest.entries.length > 0);
-
-const evidenceKeys = new Set();
-const importKeys = new Set();
-let priorObservedAt = 0;
-for (const entry of manifest.entries) {
-  assert.ok(exactKeys(entry, ENTRY_KEYS), "deferred evidence entry shape drift");
+const assertModeTruth = (manifest) => {
+  assert.deepEqual(manifest.modeStates, {
+    isolatedAutonomous: "ISOLATED_AUTONOMOUS_PENDING",
+    ownerAssisted: "OWNER_ASSISTED_ACTIVE",
+  });
+  assert.equal(manifest.appendOnly, true);
+  assert.equal(manifest.rawEvidencePolicy, "outside_git_owner_only");
+  assert.equal(manifest.remotePersistencePerformed, false);
+};
+const validateCommonEntry = (entry) => {
   assert.match(entry.evidenceKey, SHA256);
   assert.match(entry.futureImportKey, SHA256);
   assert.match(entry.sourceCommit, COMMIT);
-  assert.ok(!evidenceKeys.has(entry.evidenceKey), "duplicate evidence key");
-  assert.ok(!importKeys.has(entry.futureImportKey), "duplicate import key");
-  evidenceKeys.add(entry.evidenceKey);
-  importKeys.add(entry.futureImportKey);
   assert.ok(SAFE_TEXT.test(entry.evidenceType));
   assert.ok(SAFE_TEXT.test(entry.platform));
   assert.ok(SAFE_TEXT.test(entry.appChannel));
@@ -107,43 +161,351 @@ for (const entry of manifest.entries) {
   );
   assert.ok(validTimestamp(entry.observedAt));
   assert.ok(validTimestamp(entry.expiresAt));
-  const observedAt = Date.parse(entry.observedAt);
-  assert.ok(observedAt >= priorObservedAt, "manifest must be append ordered");
-  assert.ok(Date.parse(entry.expiresAt) > observedAt);
-  priorObservedAt = observedAt;
-}
-
-const plan = manifest.entries.map((entry) => {
-  const action = entry.importEligibility === "eligible_after_runtime_unlock"
-    ? "defer_until_isolated_intake_active"
-    : entry.importEligibility === "requires_reevaluation"
-    ? "reevaluate_after_unlock"
-    : "do_not_import";
-  return {
-    action,
-    evidenceKey: entry.evidenceKey,
-    idempotencyKey: entry.futureImportKey,
-    importTime: null,
-    originalObservedAt: entry.observedAt,
-    preserveOriginalObservedAt: true,
-  };
-});
-const summary = {
-  entries: manifest.entries.length,
-  manifestHash: hashJson(manifest),
-  mode: manifest.modeStates.ownerAssisted,
-  remotePersistencePerformed: false,
+  assert.ok(Date.parse(entry.expiresAt) > Date.parse(entry.observedAt));
 };
 
-if (process.argv.includes("--plan")) {
-  console.log(JSON.stringify({
-    schemaVersion: "chillywood-cognitive-deferred-import-plan-v1",
+export const validateHistoricalV1 = (manifest) => {
+  assert.equal(manifest.schemaVersion, V1_SCHEMA);
+  assertModeTruth(manifest);
+  assert.ok(Array.isArray(manifest.entries) && manifest.entries.length > 0);
+  const evidenceKeys = new Set();
+  const importKeys = new Set();
+  let priorObservedAt = 0;
+  for (const entry of manifest.entries) {
+    assert.ok(exactKeys(entry, V1_ENTRY_KEYS), "historical v1 entry shape drift");
+    validateCommonEntry(entry);
+    assert.ok(!evidenceKeys.has(entry.evidenceKey), "duplicate evidence key");
+    assert.ok(!importKeys.has(entry.futureImportKey), "duplicate import key");
+    evidenceKeys.add(entry.evidenceKey);
+    importKeys.add(entry.futureImportKey);
+    const observedAt = Date.parse(entry.observedAt);
+    assert.ok(observedAt >= priorObservedAt, "manifest must be append ordered");
+    priorObservedAt = observedAt;
+  }
+  return {
+    canonicalForFutureImport: false,
+    entries: manifest.entries.length,
+    manifestHash: hashJson(manifest),
+    schemaVersion: manifest.schemaVersion,
+  };
+};
+
+const correctedIdentityFor = (entry, release) =>
+  CORRECTED_ANDROID_EVIDENCE_TYPES.has(entry.evidenceType)
+    ? {
+        appBuild: release.nativeBuild,
+        appChannel: release.channel,
+        appRuntime: release.runtimeVersion,
+        appVersion: release.appVersion,
+        correctionKind: "corrected_android_build84_release_identity",
+        distributionSource: release.distributionSource,
+      }
+    : {
+        appBuild: entry.appBuild,
+        appChannel: entry.appChannel,
+        appRuntime: entry.appRuntime,
+        appVersion: null,
+        correctionKind: "carried_forward_unmodified_identity",
+        distributionSource: null,
+      };
+const amendmentMaterialFor = ({
+  entry,
+  identity,
+  supersedesManifestHash,
+}) => ({
+  amendsFutureImportKey: entry.futureImportKey,
+  correctionKind: identity.correctionKind,
+  correctedIdentity: {
+    appBuild: identity.appBuild,
+    appChannel: identity.appChannel,
+    appRuntime: identity.appRuntime,
+    appVersion: identity.appVersion,
+    distributionSource: identity.distributionSource,
+  },
+  originalEvidenceKey: entry.evidenceKey,
+  schemaVersion: V2_SCHEMA,
+  supersedesManifestHash,
+});
+const futureImportMaterialFor = (entry) => ({
+  amendmentKey: entry.amendmentKey,
+  appBuild: entry.appBuild,
+  appChannel: entry.appChannel,
+  appRuntime: entry.appRuntime,
+  appVersion: entry.appVersion,
+  distributionSource: entry.distributionSource,
+  evidenceKey: entry.evidenceKey,
+  evidenceType: entry.evidenceType,
+  importEligibility: entry.importEligibility,
+  observedAt: entry.observedAt,
+  originalEvidenceKey: entry.originalEvidenceKey,
+  schemaVersion: V2_SCHEMA,
+  sourceCommit: entry.sourceCommit,
+});
+
+export const buildV2FromV1 = ({
+  release,
+  sourceCorrectionTimestamp = SOURCE_CORRECTION_TIMESTAMP,
+  v1,
+}) => {
+  const v1Summary = validateHistoricalV1(v1);
+  const entries = v1.entries.map((entry) => {
+    const identity = correctedIdentityFor(entry, release);
+    const amendmentKey = hashJson(amendmentMaterialFor({
+      entry,
+      identity,
+      supersedesManifestHash: v1Summary.manifestHash,
+    }));
+    const amendedEntry = {
+      ...entry,
+      ...identity,
+      amendmentKey,
+      amendsFutureImportKey: entry.futureImportKey,
+      amendsManifestVersion: V1_SCHEMA,
+      originalEvidenceKey: entry.evidenceKey,
+    };
+    amendedEntry.futureImportKey = hashJson(futureImportMaterialFor(amendedEntry));
+    return amendedEntry;
+  });
+  const manifest = {
+    schemaVersion: V2_SCHEMA,
+    manifestVersion: 2,
+    canonicalForFutureImport: true,
+    appendOnly: true,
+    supersedesManifestVersion: V1_SCHEMA,
+    supersedesManifestHash: v1Summary.manifestHash,
+    manifestHashAlgorithm: "sha256_canonical_json_excluding_manifestHash",
+    manifestHash: "",
+    correction: {
+      reason:
+        "Correct Android build-84 release identity by separating app version, native build, runtime, EAS update channel, and distribution source; preserve every original observation and evidence key.",
+      releaseIdentitySource: "config/release/android-production.json",
+      sourceCorrectionTimestamp,
+    },
+    originalEvidenceKeys: v1.entries.map((entry) => entry.evidenceKey),
+    modeStates: { ...v1.modeStates },
+    rawEvidencePolicy: v1.rawEvidencePolicy,
+    remotePersistencePerformed: false,
+    entries,
+  };
+  manifest.manifestHash = computeManifestHash(manifest);
+  return manifest;
+};
+
+const assertReleaseIdentity = (entry, release) => {
+  assert.equal(
+    entry.appVersion,
+    release.appVersion,
+    `${entry.evidenceType} appVersion release identity mismatch`,
+  );
+  assert.equal(
+    entry.appBuild,
+    release.nativeBuild,
+    `${entry.evidenceType} appBuild release identity mismatch`,
+  );
+  assert.equal(
+    entry.appRuntime,
+    release.runtimeVersion,
+    `${entry.evidenceType} appRuntime release identity mismatch`,
+  );
+  assert.equal(
+    entry.appChannel,
+    release.channel,
+    `${entry.evidenceType} appChannel release identity mismatch`,
+  );
+  assert.equal(
+    entry.distributionSource,
+    release.distributionSource,
+    `${entry.evidenceType} distributionSource release identity mismatch`,
+  );
+};
+
+export const validateCanonicalV2 = ({ manifest, release, v1 }) => {
+  const v1Summary = validateHistoricalV1(v1);
+  assert.ok(exactKeys(manifest, V2_TOP_LEVEL_KEYS), "v2 top-level shape drift");
+  assert.equal(manifest.schemaVersion, V2_SCHEMA);
+  assert.equal(manifest.manifestVersion, 2);
+  assert.equal(manifest.canonicalForFutureImport, true);
+  assert.equal(manifest.supersedesManifestVersion, V1_SCHEMA);
+  assert.equal(manifest.supersedesManifestHash, v1Summary.manifestHash);
+  assert.equal(
+    manifest.manifestHashAlgorithm,
+    "sha256_canonical_json_excluding_manifestHash",
+  );
+  assert.equal(
+    manifest.manifestHash,
+    computeManifestHash(manifest),
+    "v2 deterministic manifest hash mismatch",
+  );
+  assertModeTruth(manifest);
+  assert.ok(validTimestamp(manifest.correction.sourceCorrectionTimestamp));
+  assert.equal(
+    manifest.correction.releaseIdentitySource,
+    "config/release/android-production.json",
+  );
+  assert.ok(
+    manifest.correction.reason.includes("Android build-84 release identity"),
+  );
+  assert.deepEqual(
+    manifest.originalEvidenceKeys,
+    v1.entries.map((entry) => entry.evidenceKey),
+  );
+  assert.equal(manifest.entries.length, v1.entries.length);
+
+  const evidenceKeys = new Set();
+  const importKeys = new Set();
+  const amendmentKeys = new Set();
+  let priorObservedAt = 0;
+  for (const [index, entry] of manifest.entries.entries()) {
+    const original = v1.entries[index];
+    assert.ok(exactKeys(entry, V2_ENTRY_KEYS), "canonical v2 entry shape drift");
+    validateCommonEntry(entry);
+    assert.equal(entry.originalEvidenceKey, original.evidenceKey);
+    assert.equal(entry.evidenceKey, original.evidenceKey);
+    assert.equal(entry.amendsManifestVersion, V1_SCHEMA);
+    assert.equal(entry.amendsFutureImportKey, original.futureImportKey);
+    for (const key of IMMUTABLE_ENTRY_KEYS) {
+      assert.deepEqual(
+        entry[key],
+        original[key],
+        `${entry.evidenceType} historical ${key} changed`,
+      );
+    }
+    assert.match(entry.amendmentKey, SHA256);
+    assert.ok(!evidenceKeys.has(entry.evidenceKey), "duplicate evidence key");
+    assert.ok(!importKeys.has(entry.futureImportKey), "duplicate import key");
+    assert.ok(!amendmentKeys.has(entry.amendmentKey), "duplicate amendment key");
+    assert.notEqual(
+      entry.futureImportKey,
+      original.futureImportKey,
+      "v2 future import key was not regenerated",
+    );
+    evidenceKeys.add(entry.evidenceKey);
+    importKeys.add(entry.futureImportKey);
+    amendmentKeys.add(entry.amendmentKey);
+    const expectedIdentity = correctedIdentityFor(original, release);
+    assert.equal(entry.correctionKind, expectedIdentity.correctionKind);
+    if (CORRECTED_ANDROID_EVIDENCE_TYPES.has(entry.evidenceType)) {
+      assert.equal(
+        entry.correctionKind,
+        "corrected_android_build84_release_identity",
+      );
+      assertReleaseIdentity(entry, release);
+    } else {
+      assert.equal(entry.appVersion, null);
+      assert.equal(entry.distributionSource, null);
+      assert.equal(entry.appBuild, original.appBuild);
+      assert.equal(entry.appRuntime, original.appRuntime);
+      assert.equal(entry.appChannel, original.appChannel);
+    }
+    assert.equal(
+      entry.amendmentKey,
+      hashJson(amendmentMaterialFor({
+        entry: original,
+        identity: expectedIdentity,
+        supersedesManifestHash: manifest.supersedesManifestHash,
+      })),
+      `${entry.evidenceType} amendment linkage mismatch`,
+    );
+    assert.equal(
+      entry.futureImportKey,
+      hashJson(futureImportMaterialFor(entry)),
+      `${entry.evidenceType} future import key mismatch`,
+    );
+    const observedAt = Date.parse(entry.observedAt);
+    assert.ok(observedAt >= priorObservedAt, "manifest must be append ordered");
+    priorObservedAt = observedAt;
+  }
+  assert.equal(
+    manifest.entries.filter((entry) =>
+      CORRECTED_ANDROID_EVIDENCE_TYPES.has(entry.evidenceType)).length,
+    CORRECTED_ANDROID_EVIDENCE_TYPES.size,
+  );
+  return {
+    canonicalForFutureImport: true,
+    correctedAndroidEntries: CORRECTED_ANDROID_EVIDENCE_TYPES.size,
+    entries: manifest.entries.length,
+    manifestHash: manifest.manifestHash,
+    schemaVersion: manifest.schemaVersion,
+    supersedesManifestHash: manifest.supersedesManifestHash,
+  };
+};
+
+export const buildImportPlan = ({
+  evaluatedAt = new Date().toISOString(),
+  manifest,
+}) => {
+  assert.equal(
+    manifest.schemaVersion,
+    V2_SCHEMA,
+    "canonical v2 manifest required for future import planning",
+  );
+  assert.equal(
+    manifest.canonicalForFutureImport,
+    true,
+    "historical manifest cannot be selected for future import",
+  );
+  assert.ok(validTimestamp(evaluatedAt));
+  const plan = manifest.entries.map((entry) => {
+    const stale = Date.parse(entry.expiresAt) <= Date.parse(evaluatedAt);
+    const action = stale
+      ? "reevaluate_stale_evidence_before_import"
+      : entry.importEligibility === "eligible_after_runtime_unlock"
+      ? "defer_until_isolated_intake_active"
+      : entry.importEligibility === "requires_reevaluation"
+      ? "reevaluate_after_unlock"
+      : "do_not_import";
+    return {
+      action,
+      conflictBehavior: "future_import_key_conflict_is_no_op",
+      evidenceKey: entry.evidenceKey,
+      idempotencyKey: entry.futureImportKey,
+      importTime: null,
+      originalObservedAt: entry.observedAt,
+      preserveOriginalObservedAt: true,
+      requiresFreshnessCheck: true,
+    };
+  });
+  return {
+    schemaVersion: "chillywood-cognitive-deferred-import-plan-v2",
+    canonicalManifestPath:
+      "config/intelligence/cognitive-level01-deferred-evidence-manifest-v2.json",
+    canonicalManifestHash: manifest.manifestHash,
     isolatedIntakeRequired: true,
     duplicatePolicy: "future_import_key_conflict_is_no_op",
     staleEvidencePolicy: "reevaluate_before_import",
+    evaluatedAt,
     plan,
-    summary,
-  }, null, 2));
-} else {
-  console.log(JSON.stringify(summary));
+  };
+};
+
+const runCli = () => {
+  const args = new Set(process.argv.slice(2));
+  const v1 = readJson(V1_MANIFEST_PATH);
+  if (args.has("--historical-v1")) {
+    assert.ok(
+      !args.has("--plan"),
+      "historical v1 cannot be selected for future import planning",
+    );
+    console.log(JSON.stringify(validateHistoricalV1(v1)));
+    return;
+  }
+  const release = readJson(ANDROID_RELEASE_PATH);
+  if (args.has("--generate-v2")) {
+    console.log(JSON.stringify(buildV2FromV1({ release, v1 }), null, 2));
+    return;
+  }
+  const manifest = readJson(V2_MANIFEST_PATH);
+  const summary = validateCanonicalV2({ manifest, release, v1 });
+  if (args.has("--plan")) {
+    console.log(JSON.stringify(buildImportPlan({ manifest }), null, 2));
+  } else {
+    console.log(JSON.stringify(summary));
+  }
+};
+
+if (
+  process.argv[1] &&
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
+) {
+  runCli();
 }
