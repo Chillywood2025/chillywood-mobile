@@ -183,6 +183,7 @@ export const createPrivateInvocationHandler = ({
       signal: deadlineController.signal,
     });
     const context = {
+      deadlineAt: envelope.deadlineAt,
       environment: envelope.environment,
       operation: envelope.operation,
       platform: envelope.platform,

@@ -3,6 +3,9 @@ import researchAuthoritiesJson from "../../../../config/intelligence/research-au
 };
 import { assertInvocationActive } from "../abort.mjs";
 import { blocked, ready } from "./helpers.mjs";
+import {
+  createPinnedResearchHostTransport,
+} from "./research-pinned-host-transport.mjs";
 
 const UUID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -856,19 +859,40 @@ export const extractRetrievedCitationMetadata = (
     : null;
 };
 
-const retrieveAndRecordSource = (transport, now) =>
+const retrieveAndRecordSource = (
+  transport,
+  now,
+  requireProviderAttestation,
+) =>
   ready(
     ["record_research_source"],
-    async ({ assertActive, database, env, payload, signal }) => {
+    async ({ assertActive, context, database, env, payload, signal }) => {
       const request = normalizeSourceRequest(payload);
       if (!request) throw new Error("research_source_payload_rejected");
       const authorityUrl = canonicalizeResearchUrl(request.url);
       let retrieved;
       try {
         await assertInvocationActive({ assertActive, signal });
-        retrieved = await transport(request.url, signal);
+        retrieved = await transport(request.url, signal, {
+          authorityId: request.authorityId,
+          context,
+          env,
+        });
       } catch {
         signal?.throwIfAborted();
+        throw new Error("public_research_transport_blocked");
+      }
+      if (
+        requireProviderAttestation &&
+        (
+          retrieved?.providerReadiness !== "ACTIVE" ||
+          retrieved?.trustedForPersistence !== true ||
+          retrieved?.networkBoundary !==
+            "isolated_node_pinned_https_v1" ||
+          typeof retrieved?.transportAttestationHash !== "string" ||
+          !/^[a-f0-9]{64}$/u.test(retrieved.transportAttestationHash)
+        )
+      ) {
         throw new Error("public_research_transport_blocked");
       }
       const excerpt = extractBoundedExcerpt(
@@ -997,6 +1021,8 @@ const retrieveAndRecordSource = (transport, now) =>
         retrievalId: result.retrieval_id,
         sourceId: result.source_id,
         sourceType: request.sourceType,
+        transportAttestationHash:
+          retrieved.transportAttestationHash ?? null,
         trustedForToolExecution: false,
         userDerivedDataUsed: false,
       });
@@ -1128,11 +1154,16 @@ const expirePublicMemory = ready(
 
 export const createPublicResearchBrokerAdapters = ({
   now = Date.now,
+  requireProviderAttestation = false,
   transport,
 } = {}) => {
   return Object.freeze({
     retrieve_source: typeof transport === "function"
-      ? retrieveAndRecordSource(transport, now)
+      ? retrieveAndRecordSource(
+        transport,
+        now,
+        requireProviderAttestation,
+      )
       : blocked(
         ["record_research_source"],
         RESEARCH_PINNED_TRANSPORT_REQUIRED,
@@ -1144,4 +1175,7 @@ export const createPublicResearchBrokerAdapters = ({
 };
 
 export const PUBLIC_RESEARCH_BROKER_ADAPTERS =
-  createPublicResearchBrokerAdapters();
+  createPublicResearchBrokerAdapters({
+    requireProviderAttestation: true,
+    transport: createPinnedResearchHostTransport(),
+  });

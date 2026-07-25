@@ -1,0 +1,22 @@
+# Import this snippet inside the existing HTTPS site block. The public hostname
+# must match COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL in the research-broker
+# Worker. No other pinned-transport path is routed.
+@chillywood_research_transport {
+	method POST
+	path /internal/cognitive-research-transport/v1/retrieve
+}
+
+handle @chillywood_research_transport {
+	request_body {
+		max_size 8KB
+	}
+	rewrite * /v1/retrieve
+	reverse_proxy 127.0.0.1:4319 {
+		header_up Host chillywood-research-transport.internal
+		header_up X-Forwarded-Proto https
+	}
+}
+
+handle /internal/cognitive-research-transport/* {
+	respond 404
+}

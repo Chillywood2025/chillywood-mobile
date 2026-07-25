@@ -13,7 +13,6 @@ import {
   createPrivateInvocationHandler,
   privateEnvironmentKeyAllowlist,
 } from "../src/private-core.mjs";
-import { RESEARCH_PINNED_TRANSPORT_REQUIRED } from "../src/adapters/research-broker.mjs";
 
 const UUID_A = "10000000-0000-4000-8000-000000000001";
 const UUID_B = "20000000-0000-4000-8000-000000000002";
@@ -239,6 +238,22 @@ test("provider secrets exist only in their exact principal", () => {
     [],
   );
   assert.deepEqual(
+    byId.get("cognitive_public_research_broker").requiredSecrets,
+    [
+      "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
+      "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN",
+      "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY",
+    ],
+  );
+  assert.equal(
+    byId.get("cognitive_public_research_broker").provider,
+    "isolated_pinned_research_transport",
+  );
+  assert.deepEqual(
+    byId.get("cognitive_public_research_broker").networkEgress,
+    ["configured_peer_pinned_research_transport_origin_only"],
+  );
+  assert.deepEqual(
     byId.get("cognitive_github_draft_pr_broker").requiredSecrets,
     [
       "COGNITIVE_GITHUB_DRAFT_PR_BROKER_INVOKE_SHA256",
@@ -272,7 +287,7 @@ test("provider secrets exist only in their exact principal", () => {
   }
 });
 
-test("production research retrieval fails closed with the stable pinned-transport reason", async () => {
+test("production research retrieval fails closed before database work when provider binding is absent", async () => {
   const principal = PRINCIPAL_BY_ID.get("cognitive_public_research_broker");
   const invocationToken = "bounded-research-invocation-token-0001";
   const sourceCommit = "c".repeat(40);
@@ -327,7 +342,7 @@ test("production research retrieval fails closed with the stable pinned-transpor
   });
   await assert.rejects(
     () => handler(envelope, invocationToken),
-    new RegExp(RESEARCH_PINNED_TRANSPORT_REQUIRED, "u"),
+    /credential_domain_rejected/u,
   );
 });
 
@@ -439,6 +454,7 @@ test("private worker rejects every sibling credential domain", async () => {
     const siblingSecret of [
       "COGNITIVE_MODEL_OPENAI_API_KEY",
       "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN",
+      "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY",
       "GITHUB_APP_PRIVATE_KEY",
       "GITHUB_REPOSITORY_ID",
       "LIVEKIT_API_SECRET",

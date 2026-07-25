@@ -199,8 +199,8 @@
         "databaseOperations": [
           "record_research_source"
         ],
-        "ready": false,
-        "reason": "RESEARCH_PINNED_TRANSPORT_REQUIRED"
+        "ready": true,
+        "reason": null
       },
       "record_claim": {
         "databaseOperations": [

@@ -98,7 +98,7 @@
     {
       "from": "chillywood-level01-public-research-broker",
       "kind": "allowlisted_network_egress",
-      "to": "allowlisted_primary_and_public_research_authorities_only"
+      "to": "configured_peer_pinned_research_transport_origin_only"
     },
     {
       "from": "chillywood-level01-public-research-broker",
@@ -217,12 +217,13 @@
       "credentials": [
         "COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE",
         "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
-        "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN"
+        "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN",
+        "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY"
       ],
       "databaseRole": "cognitive_public_research_broker",
       "id": "chillywood-level01-public-research-broker",
       "kind": "private_service_binding_worker",
-      "provider": "none",
+      "provider": "isolated_pinned_research_transport",
       "public": false
     },
     {

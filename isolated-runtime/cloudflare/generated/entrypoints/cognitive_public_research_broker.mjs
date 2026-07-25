@@ -15,7 +15,7 @@ const principal = Object.freeze({
   "hyperdriveBinding": "COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE",
   "maxRequestBytes": 1048576,
   "networkEgress": [
-    "allowlisted_primary_and_public_research_authorities_only"
+    "configured_peer_pinned_research_transport_origin_only"
   ],
   "operations": {
     "retrieve_source": {
@@ -86,11 +86,14 @@ const principal = Object.freeze({
       ]
     }
   },
-  "provider": "none",
-  "runtimeConfiguration": {},
+  "provider": "isolated_pinned_research_transport",
+  "runtimeConfiguration": {
+    "COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL": "REPLACE_WITH_REVIEWED_PINNED_TRANSPORT_HTTPS_URL"
+  },
   "requiredSecrets": [
     "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
-    "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN"
+    "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN",
+    "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

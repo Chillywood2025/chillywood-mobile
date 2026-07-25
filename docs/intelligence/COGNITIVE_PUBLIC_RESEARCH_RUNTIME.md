@@ -18,11 +18,15 @@ compression and unsupported content, bounds the response to 1 MiB, and
 revalidates same-authority redirects.
 
 The isolated Cloudflare adapter uses the same authority and exact-path registry,
-rejects private/reserved DNS results, and revalidates redirects before fetching
-the canonical hostname through Cloudflare's transport. It does not claim
-application-level peer-IP pinning. Both adapters store only a bounded sanitized
-excerpt, citation metadata, safe hashes, public publisher/source classification,
-freshness, and hashed network addresses.
+but it does not claim that Cloudflare `fetch` exposes the connected target peer.
+It calls a separate loopback-only Node transport through one exact HTTPS route
+and a Worker-specific HMAC request/response contract. The Node transport rejects
+private/reserved DNS results, pins the connection to an approved address,
+verifies the actual socket peer, preserves the hostname for TLS SNI and `Host`,
+and revalidates redirects. The Worker independently validates the signed
+attestation before the broker may persist a bounded sanitized excerpt,
+citation metadata, safe hashes, publisher/source classification, freshness, and
+hashed network addresses.
 
 The broker can create research source and claim evidence. It cannot create an
 evaluator record or accept a canary. The evaluator accepts only a claim ID and
@@ -57,7 +61,10 @@ Legacy Edge deployment prerequisites are presence-only checks:
 The isolated Cloudflare deployment does not use the Supabase URL or service-role
 credential. Its research broker and evaluator instead have separate invocation
 secrets, separate database LOGIN roles, and separate Hyperdrive bindings. The
-research evaluator has no network or provider credential.
+research broker alone receives
+`COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY`; the research evaluator has no
+network or provider credential. The peer-pinned host has no database, model,
+GitHub, LiveKit, user, or Supabase credential.
 
 No source in this runtime enables a switch, changes retention policy, processes
 user-derived material, grants tool authority, or stores raw pages. Function

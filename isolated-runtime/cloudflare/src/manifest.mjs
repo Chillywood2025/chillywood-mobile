@@ -208,8 +208,16 @@ export const RUNTIME_MANIFEST = Object.freeze({
       id: "cognitive_public_research_broker",
       edgeSource:
         "supabase/functions/cognitive-public-research-broker/index.ts",
+      provider: "isolated_pinned_research_transport",
+      providerSecrets: [
+        "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY",
+      ],
+      runtimeConfiguration: {
+        COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL:
+          "REPLACE_WITH_REVIEWED_PINNED_TRANSPORT_HTTPS_URL",
+      },
       networkEgress: [
-        "allowlisted_primary_and_public_research_authorities_only",
+        "configured_peer_pinned_research_transport_origin_only",
       ],
       internalSecrets: ["COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN"],
       operations: {

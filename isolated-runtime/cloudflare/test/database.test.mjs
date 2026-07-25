@@ -8,7 +8,6 @@ import {
   operationAdapter,
 } from "../src/operation-adapters.mjs";
 import { PROVIDER_MERGE_DENIAL_BLOCKER } from "../src/adapters/github.mjs";
-import { RESEARCH_PINNED_TRANSPORT_REQUIRED } from "../src/adapters/research-broker.mjs";
 
 const calls = [];
 const sqlFactory = (_connectionString, options) => ({
@@ -76,29 +75,24 @@ test("ready operation adapters use exact static parameter order", async () => {
 test("every reviewed operation has an explicit readiness state and static database plan", () => {
   for (const [principal, operations] of Object.entries(OPERATION_ADAPTERS)) {
     for (const [operation, adapter] of Object.entries(operations)) {
-      const isPinnedResearchBlocker =
-        principal === "cognitive_public_research_broker" &&
-        operation === "retrieve_source";
       const isGitHubProviderProofBlocker =
         principal === "cognitive_github_draft_pr_broker" &&
         operation !== "status";
       assert.equal(
         adapter.ready,
-        !(isPinnedResearchBlocker || isGitHubProviderProofBlocker),
+        !isGitHubProviderProofBlocker,
         `${principal}.${operation}`,
       );
       assert.equal(
         adapter.reason,
-        isPinnedResearchBlocker
-          ? RESEARCH_PINNED_TRANSPORT_REQUIRED
-          : isGitHubProviderProofBlocker
-            ? PROVIDER_MERGE_DENIAL_BLOCKER
-            : null,
+        isGitHubProviderProofBlocker
+          ? PROVIDER_MERGE_DENIAL_BLOCKER
+          : null,
         `${principal}.${operation}`,
       );
       assert.equal(
         typeof adapter.execute,
-        isPinnedResearchBlocker ? "undefined" : "function",
+        "function",
         `${principal}.${operation}`,
       );
       assert(Array.isArray(adapter.databaseOperations));

@@ -15,16 +15,16 @@ reviewed Supabase Edge contracts.
 - Each private Worker has one unique cache-disabled Hyperdrive configuration,
   one dedicated Postgres login/NOLOGIN role domain, and one unique invocation
   hash.
-- Only the model and GitHub Workers declare provider secrets. The LiveKit
+- Only the model, GitHub, and public-research Workers declare provider secrets.
+  The public-research Worker receives one HMAC key for the exact peer-pinned
+  transport host and no model, GitHub, LiveKit, or general-purpose network
+  credential. The LiveKit
   evidence collector accepts sanitized participant evidence from a separately
   bounded synthetic participant and owns no LiveKit provider credential.
-  Public research has no provider credential. Its production
-  `retrieve_source` operation is fail-closed with
-  `RESEARCH_PINNED_TRANSPORT_REQUIRED`: a DNS preflight followed by
-  Cloudflare's public-fetch proxy does not prove that the peer connection is
-  pinned to the approved public addresses. The mediated transport remains
-  injectable only by source-controlled tests or a future reviewed transport;
-  request data and Worker environment bindings cannot enable it.
+  Public research never uses Cloudflare's public-fetch proxy to claim peer
+  pinning. Its exact HMAC adapter calls the separately reviewed Node transport,
+  which connects to a DNS-approved address and verifies the socket peer. The
+  Worker independently verifies the signed response and transport attestation.
 - No Worker consumes a Supabase service-role or secret key.
 
 Cloudflare documents Service Bindings as non-public Worker-to-Worker calls with
@@ -75,8 +75,9 @@ review must port and parity-test it before changing the flag. The generated
 readiness file, adapter tests, static SQL statement inventory, and exact-head
 review are authoritative; this document never turns an incomplete operation
 into a deployment-ready operation. In particular, public research activation
-remains externally blocked until a reviewed, peer-pinned transport replaces
-the current hostname-preflight/public-fetch boundary.
+remains externally blocked until the reviewed peer-pinned host is deployed,
+its exact origin and Worker-only HMAC binding are present, and the deployed
+negative/readiness suite passes.
 
 Before upload, the coordinator must:
 
@@ -101,10 +102,12 @@ Before upload, the coordinator must:
    reviewed version metadata;
 7. run the negative isolation suite against deployed Workers.
 
-Public research and non-personal memory switches must remain off while
-`retrieve_source` reports `RESEARCH_PINNED_TRANSPORT_REQUIRED`. No environment
-variable, request field, or deployment-time caller option may override that
-gate.
+Public research and non-personal memory switches must remain off while the
+pinned host, exact HMAC binding, remote attestation, retention, or evaluator
+readiness is absent. A missing or malformed provider origin/HMAC binding,
+unsigned response, replay, expiry, cancellation, or attestation mismatch fails
+closed with `RESEARCH_PINNED_TRANSPORT_REQUIRED`. No request field can override
+that gate.
 
 The templates intentionally provide no gateway route and keep `workers_dev`
 disabled. The gateway `workers.dev` endpoint is enabled only after the Access
