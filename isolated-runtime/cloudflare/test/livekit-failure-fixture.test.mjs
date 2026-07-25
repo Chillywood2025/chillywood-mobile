@@ -154,6 +154,52 @@ test("fixture issuer fixes an immutable synthetic-room-only condition", async ()
   assert.equal(JSON.stringify(issued).includes("normal-user"), false);
 });
 
+test("isolated fixture issue persists only hashes through its exact wrapper", async () => {
+  const calls = [];
+  let activeChecks = 0;
+  const persisted = await LIVEKIT_COLLECTOR_ADAPTERS.issue_failure_fixture.execute(
+    {
+      assertActive: async () => {
+        activeChecks += 1;
+      },
+      context,
+      database: {
+        call: async (statement, parameters) => {
+          calls.push({ parameters, statement });
+          return {
+            active: true,
+            fixtureAttestationHash: parameters[6],
+            fixtureId: parameters[5],
+            issuanceHash: HASH_A,
+            principal: "cognitive_livekit_experience_collector",
+          };
+        },
+      },
+      env: {
+        COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY: SECRET,
+        COGNITIVE_LIVEKIT_SENTINEL_ASSERTION: "sentinel-assertion",
+      },
+      payload: issuePayload(),
+    },
+  );
+  assert.equal(activeChecks, 1);
+  assert.equal(persisted.persisted, true);
+  assert.equal(persisted.issuanceHash, HASH_A);
+  assert.deepEqual(
+    calls.map((entry) => entry.statement),
+    ["issueLiveKitFailureFixture"],
+  );
+  assert.equal(calls[0].parameters.length, 15);
+  assert.equal(calls[0].parameters.includes(persisted.fixtureTicket), false);
+  assert.equal(
+    calls[0].parameters.some((parameter) =>
+      typeof parameter === "string" &&
+      parameter.includes(persisted.fixtureTicket)
+    ),
+    false,
+  );
+});
+
 test("normal user rooms and caller-defined fixture labels are rejected", async () => {
   await assert.rejects(
     issue({ syntheticRoomName: "normal-user-room" }),
@@ -313,6 +359,60 @@ test("fixture evidence requires exact server condition and attestation hash", as
   );
 });
 
+test("fixture record uses one atomic consume-and-collect wrapper", async () => {
+  const issued = await issue();
+  const payload = await fixtureRunPayload(issued);
+  payload.action = "record_fixture_run";
+  const calls = [];
+  let activeChecks = 0;
+  const result = await LIVEKIT_COLLECTOR_ADAPTERS.record_fixture_run.execute({
+    assertActive: async () => {
+      activeChecks += 1;
+    },
+    context,
+    database: {
+      call: async (statement, parameters) => {
+        calls.push({ parameters, statement });
+        return {
+          fixtureAttestationHash: issued.fixtureAttestationHash,
+          fixtureConsumed: true,
+          fixtureConsumptionHash: HASH_A,
+          fixtureId: issued.fixtureId,
+          fixtureReceiptHash: HASH_B,
+          sentinelRunId: "00000000-0000-4000-8000-000000000003",
+        };
+      },
+    },
+    env: {
+      COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY: SECRET,
+      COGNITIVE_LIVEKIT_SENTINEL_ASSERTION: "sentinel-assertion",
+    },
+    nowMillis: NOW,
+    payload,
+  });
+  assert.equal(activeChecks, 1);
+  assert.equal(result.persisted, true);
+  assert.equal(result.fixtureConsumptionHash, HASH_A);
+  assert.equal(result.fixtureReceiptHash, HASH_B);
+  assert.deepEqual(
+    calls.map((entry) => entry.statement),
+    ["consumeLiveKitFailureFixtureAndCollect"],
+  );
+  assert.equal(calls[0].parameters.length, 22);
+  assert.equal(calls[0].parameters.includes(issued.fixtureTicket), false);
+  const persistedManifest = JSON.parse(calls[0].parameters[14]);
+  assert.deepEqual(persistedManifest.failureFixtureBinding, {
+    condition: issued.fixtureRecord.condition,
+    fixtureAttestationHash: issued.fixtureAttestationHash,
+    fixtureId: issued.fixtureId,
+    fixtureType: issued.fixtureRecord.fixtureType,
+    principal: "cognitive_livekit_experience_collector",
+    roomRunCorrelationHash: issued.fixtureRecord.roomRunCorrelationHash,
+    sourceCommit: SOURCE_COMMIT,
+    syntheticRoomNameHash: issued.fixtureRecord.syntheticRoomNameHash,
+  });
+});
+
 test("runtime manifest keeps fixture operations on the isolated LiveKit principal", () => {
   const principal = RUNTIME_MANIFEST.principals.find(
     (entry) => entry.dbRole === "cognitive_livekit_experience_collector",
@@ -341,10 +441,18 @@ test("runtime manifest keeps fixture operations on the isolated LiveKit principa
   assert.equal(principal.provider, "none");
   assert.deepEqual(
     LIVEKIT_COLLECTOR_ADAPTERS.issue_failure_fixture.databaseOperations,
-    ["collect_livekit_sentinel_run"],
+    ["issue_livekit_failure_fixture"],
+  );
+  assert.deepEqual(
+    LIVEKIT_COLLECTOR_ADAPTERS.prepare_fixture_run.databaseOperations,
+    [],
   );
   assert.deepEqual(
     LIVEKIT_COLLECTOR_ADAPTERS.read_failure_fixture.databaseOperations,
     [],
+  );
+  assert.deepEqual(
+    LIVEKIT_COLLECTOR_ADAPTERS.record_fixture_run.databaseOperations,
+    ["consume_livekit_failure_fixture"],
   );
 });

@@ -322,7 +322,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "action", "fixtureType", "installedObserverRequired",
           "requestedTtlSeconds", "roomRunCorrelationHash",
           "syntheticRoomName",
-        ], ["cognitive_runtime.collect_livekit_sentinel_run"]),
+        ], ["cognitive_runtime.issue_livekit_failure_fixture"]),
         prepare_run: operation([
           "action", "evidenceManifestHash", "metricManifest",
           "observationFinishedAt", "observationStartedAt", "platform",
@@ -333,7 +333,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "metricManifest", "observationFinishedAt", "observationStartedAt",
           "platform", "routeOrSurface", "runtimeIdentityHash",
           "sourceBuildHash", "syntheticRoomName",
-        ], ["cognitive_runtime.collect_livekit_sentinel_run"]),
+        ], []),
         read_failure_fixture: operation([
           "action", "fixtureId", "fixtureTicket",
         ], []),
@@ -347,7 +347,9 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "metricManifest", "observationFinishedAt", "observationStartedAt",
           "platform", "routeOrSurface", "runtimeIdentityHash",
           "sourceBuildHash", "syntheticRoomName",
-        ], ["cognitive_runtime.collect_livekit_sentinel_run"]),
+        ], [
+          "cognitive_runtime.consume_livekit_failure_fixture_and_collect",
+        ]),
       },
       maxRequestBytes: 98_304,
     }),

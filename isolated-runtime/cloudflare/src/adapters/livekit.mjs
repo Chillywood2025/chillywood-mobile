@@ -11,6 +11,7 @@ import {
 } from "./livekit-failure-fixture.mjs";
 
 const SERVICE_IDENTITY = "cognitive_sentinel_collector";
+const RUNTIME_PRINCIPAL = "cognitive_livekit_experience_collector";
 const SENTINEL_KEY = "livekit_experience_sentinel";
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const TASK_KEY = "cognitive-level01-canary-control";
@@ -556,7 +557,9 @@ export const prepareLiveKitFixturePacket = async ({
     ? Object.freeze({
       fixtureAttestationHash: fixtureReadback.fixtureAttestationHash,
       fixtureId: fixtureReadback.fixtureId,
+      fixtureRecord: fixtureReadback.fixtureRecord,
       packet,
+      syntheticRoomName,
     })
     : null;
 };
@@ -576,12 +579,52 @@ const executePrepare = async ({ context, payload }) => {
   });
 };
 
-const executeIssueFailureFixture = async ({ context, env, payload }) =>
-  issueLiveKitFailureFixture({
+const executeIssueFailureFixture = async ({
+  assertActive,
+  context,
+  database,
+  env,
+  payload,
+}) => {
+  const issued = await issueLiveKitFailureFixture({
     context,
     payload,
     secret: env.COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY,
   });
+  await assertActive();
+  const persisted = await database.call("issueLiveKitFailureFixture", [
+    context.taskId,
+    context.projectId,
+    context.platform,
+    context.environment,
+    context.sourceCommit,
+    issued.fixtureId,
+    issued.fixtureAttestationHash,
+    issued.fixtureRecord.fixtureType,
+    JSON.stringify(issued.fixtureRecord.condition),
+    payload.syntheticRoomName,
+    issued.fixtureRecord.syntheticRoomNameHash,
+    issued.fixtureRecord.roomRunCorrelationHash,
+    issued.fixtureRecord.issuedAt,
+    issued.fixtureRecord.expiresAt,
+    env.COGNITIVE_LIVEKIT_SENTINEL_ASSERTION,
+  ]);
+  if (
+    !isRecord(persisted) ||
+    persisted.active !== true ||
+    persisted.fixtureId !== issued.fixtureId ||
+    persisted.fixtureAttestationHash !== issued.fixtureAttestationHash ||
+    !SHA256.test(persisted.issuanceHash) ||
+    persisted.principal !== RUNTIME_PRINCIPAL
+  ) {
+    throw new Error("livekit_fixture_issuance_persistence_rejected");
+  }
+  return Object.freeze({
+    ...issued,
+    issuanceHash: persisted.issuanceHash,
+    persisted: true,
+  });
+};
 
 const executeReadFailureFixture = async ({ context, env, payload }) => {
   if (
@@ -679,21 +722,38 @@ const executeRecordFixture = async ({
   context,
   database,
   env,
+  nowMillis = Date.now(),
   payload,
 }) => {
   const prepared = await prepareLiveKitFixturePacket({
     context,
     env,
+    nowMillis,
     payload,
   });
   if (!prepared || prepared.packet.platform !== context.platform) {
     throw new Error("livekit_fixture_run_rejected");
   }
   const packet = prepared.packet;
+  const persistedMetricManifest = Object.freeze({
+    ...packet.metricManifest,
+    failureFixtureBinding: Object.freeze({
+      condition: prepared.fixtureRecord.condition,
+      fixtureAttestationHash: prepared.fixtureAttestationHash,
+      fixtureId: prepared.fixtureId,
+      fixtureType: prepared.fixtureRecord.fixtureType,
+      principal: RUNTIME_PRINCIPAL,
+      roomRunCorrelationHash:
+        prepared.fixtureRecord.roomRunCorrelationHash,
+      sourceCommit: prepared.fixtureRecord.sourceCommit,
+      syntheticRoomNameHash:
+        prepared.fixtureRecord.syntheticRoomNameHash,
+    }),
+  });
   const collectionIdempotencyHash = await sha256Hex([
     REPOSITORY,
     TASK_KEY,
-    SERVICE_IDENTITY,
+    RUNTIME_PRINCIPAL,
     SENTINEL_KEY,
     packet.platform,
     packet.routeOrSurface,
@@ -706,16 +766,24 @@ const executeRecordFixture = async ({
     prepared.fixtureAttestationHash,
   ].join("|"));
   await assertActive();
-  const result = await database.call("collectLiveKitSentinelRun", [
+  const result = await database.call(
+    "consumeLiveKitFailureFixtureAndCollect",
+    [
     context.taskId,
     context.projectId,
     packet.platform,
-    "production",
+    context.environment,
+    context.sourceCommit,
+    prepared.fixtureId,
+    prepared.fixtureAttestationHash,
+    prepared.syntheticRoomName,
+    prepared.fixtureRecord.syntheticRoomNameHash,
+    prepared.fixtureRecord.roomRunCorrelationHash,
     packet.routeOrSurface,
     packet.runtimeIdentityHash,
     packet.sourceBuildHash,
     packet.evidenceManifestHash,
-    JSON.stringify(packet.metricManifest),
+    JSON.stringify(persistedMetricManifest),
     packet.classification.resultStatus,
     packet.classification.physicalProofStatus,
     packet.observationStartedAt,
@@ -725,18 +793,30 @@ const executeRecordFixture = async ({
     ).toISOString(),
     collectionIdempotencyHash,
     env.COGNITIVE_LIVEKIT_SENTINEL_ASSERTION,
-  ]);
+    ],
+  );
   const sentinelRunId = isRecord(result) &&
       typeof result.sentinelRunId === "string"
     ? result.sentinelRunId
     : "";
-  if (!sentinelRunId) throw new Error("livekit_sentinel_run_rejected");
+  if (
+    !sentinelRunId ||
+    result.fixtureConsumed !== true ||
+    result.fixtureId !== prepared.fixtureId ||
+    result.fixtureAttestationHash !== prepared.fixtureAttestationHash ||
+    !SHA256.test(result.fixtureConsumptionHash) ||
+    !SHA256.test(result.fixtureReceiptHash)
+  ) {
+    throw new Error("livekit_sentinel_run_rejected");
+  }
   return Object.freeze({
     classification: packet.classification,
     evaluatorReadbackRequired: true,
     evidenceManifestHash: packet.evidenceManifestHash,
     fixtureAttestationHash: prepared.fixtureAttestationHash,
+    fixtureConsumptionHash: result.fixtureConsumptionHash,
     fixtureId: prepared.fixtureId,
+    fixtureReceiptHash: result.fixtureReceiptHash,
     independentEvaluationRequired: true,
     ok: true,
     persisted: true,
@@ -747,18 +827,15 @@ const executeRecordFixture = async ({
 
 export const LIVEKIT_COLLECTOR_ADAPTERS = Object.freeze({
   issue_failure_fixture: ready(
-    ["collect_livekit_sentinel_run"],
+    ["issue_livekit_failure_fixture"],
     executeIssueFailureFixture,
   ),
   prepare_run: ready([], executePrepare),
-  prepare_fixture_run: ready(
-    ["collect_livekit_sentinel_run"],
-    executePrepareFixture,
-  ),
+  prepare_fixture_run: ready([], executePrepareFixture),
   read_failure_fixture: ready([], executeReadFailureFixture),
   record_run: ready(["collect_livekit_sentinel_run"], executeRecord),
   record_fixture_run: ready(
-    ["collect_livekit_sentinel_run"],
+    ["consume_livekit_failure_fixture"],
     executeRecordFixture,
   ),
 });

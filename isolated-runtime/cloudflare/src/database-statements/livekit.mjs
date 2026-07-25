@@ -7,4 +7,22 @@ export const LIVEKIT_STATEMENTS = Object.freeze({
       $13::timestamptz,$14::timestamptz,$15::text,$16::text
     ) as result`,
   }),
+  consumeLiveKitFailureFixtureAndCollect: Object.freeze({
+    arity: 22,
+    text:
+      `select cognitive_runtime.consume_livekit_failure_fixture_and_collect(
+        $1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::text,
+        $8::text,$9::text,$10::text,$11::text,$12::text,$13::text,
+        $14::text,$15::jsonb,$16::text,$17::text,$18::timestamptz,
+        $19::timestamptz,$20::timestamptz,$21::text,$22::text
+      ) as result`,
+  }),
+  issueLiveKitFailureFixture: Object.freeze({
+    arity: 15,
+    text: `select cognitive_runtime.issue_livekit_failure_fixture(
+      $1::uuid,$2::uuid,$3::text,$4::text,$5::text,$6::text,$7::text,
+      $8::text,$9::jsonb,$10::text,$11::text,$12::text,$13::timestamptz,
+      $14::timestamptz,$15::text
+    ) as result`,
+  }),
 });

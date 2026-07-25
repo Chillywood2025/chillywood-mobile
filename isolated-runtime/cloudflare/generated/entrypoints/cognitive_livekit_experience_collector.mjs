@@ -26,7 +26,7 @@ const principal = Object.freeze({
         "syntheticRoomName"
       ],
       "rpcEntrypoints": [
-        "cognitive_runtime.collect_livekit_sentinel_run"
+        "cognitive_runtime.issue_livekit_failure_fixture"
       ]
     },
     "prepare_run": {
@@ -58,9 +58,7 @@ const principal = Object.freeze({
         "sourceBuildHash",
         "syntheticRoomName"
       ],
-      "rpcEntrypoints": [
-        "cognitive_runtime.collect_livekit_sentinel_run"
-      ]
+      "rpcEntrypoints": []
     },
     "read_failure_fixture": {
       "payloadKeys": [
@@ -102,7 +100,7 @@ const principal = Object.freeze({
         "syntheticRoomName"
       ],
       "rpcEntrypoints": [
-        "cognitive_runtime.collect_livekit_sentinel_run"
+        "cognitive_runtime.consume_livekit_failure_fixture_and_collect"
       ]
     }
   },

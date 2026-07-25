@@ -848,6 +848,11 @@ test("scheduler dispatch rereads exact prerequisites before issuing one child", 
 
 test("new database statements are static and exact-arity", async () => {
   assert.equal(LIVEKIT_STATEMENTS.collectLiveKitSentinelRun.arity, 16);
+  assert.equal(
+    LIVEKIT_STATEMENTS.consumeLiveKitFailureFixtureAndCollect.arity,
+    22,
+  );
+  assert.equal(LIVEKIT_STATEMENTS.issueLiveKitFailureFixture.arity, 15);
   assert.equal(GITHUB_STATEMENTS.recordGithubProviderReadback.arity, 9);
   assert.equal(GITHUB_STATEMENTS.consumeGithubCapability.arity, 37);
   assert.equal(GITHUB_STATEMENTS.acceptGithubToolResult.arity, 12);

@@ -55,6 +55,8 @@ insert into expected_runtime_grants(role_name, schema_name, function_name) value
   ('cognitive_model_router','cognitive_runtime','cognitive_model_router_settle_provider_overrun'),
   ('cognitive_model_router','cognitive_runtime','cognitive_model_router_settle'),
   ('cognitive_livekit_experience_collector','cognitive_runtime','collect_livekit_sentinel_run'),
+  ('cognitive_livekit_experience_collector','cognitive_runtime','issue_livekit_failure_fixture'),
+  ('cognitive_livekit_experience_collector','cognitive_runtime','consume_livekit_failure_fixture_and_collect'),
   ('cognitive_github_draft_pr_broker','cognitive_runtime','cognitive_record_github_draft_pr_provider_readback'),
   ('cognitive_github_draft_pr_broker','cognitive_runtime','cognitive_consume_github_draft_pr_capability'),
   ('cognitive_github_draft_pr_broker','cognitive_runtime','cognitive_accept_github_draft_pr_tool_result'),
@@ -415,7 +417,7 @@ select is(
     )
     from explicit_grants
   ),
-  'e10daa9d911424fb0085df5de2aa051e227700ae750fbcdfc0eac034c6e4cc92',
+  'e70e47af02aefabc9e19fdadc1f48f357f3c8d85fce75259c4703b2863e70058',
   'exact role-to-function-signature grant manifest is deterministic'
 );
 
@@ -747,8 +749,8 @@ select is(
       and procedure.prosecdef
       and procedure.proconfig @> array['search_path=""']
   ),
-  42,
-  'all forty-two runtime boundary helpers and wrappers are security definer with an empty search path'
+  44,
+  'all forty-four runtime boundary helpers and wrappers are security definer with an empty search path'
 );
 
 select ok(

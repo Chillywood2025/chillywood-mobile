@@ -42,7 +42,7 @@
     "cognitive_livekit_experience_collector": {
       "issue_failure_fixture": {
         "databaseOperations": [
-          "collect_livekit_sentinel_run"
+          "issue_livekit_failure_fixture"
         ],
         "ready": true,
         "reason": null
@@ -53,9 +53,7 @@
         "reason": null
       },
       "prepare_fixture_run": {
-        "databaseOperations": [
-          "collect_livekit_sentinel_run"
-        ],
+        "databaseOperations": [],
         "ready": true,
         "reason": null
       },
@@ -73,7 +71,7 @@
       },
       "record_fixture_run": {
         "databaseOperations": [
-          "collect_livekit_sentinel_run"
+          "consume_livekit_failure_fixture"
         ],
         "ready": true,
         "reason": null
