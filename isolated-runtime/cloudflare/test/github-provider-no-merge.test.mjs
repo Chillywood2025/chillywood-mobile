@@ -11,7 +11,6 @@ import {
 } from "../src/adapters/github-provider-no-merge.mjs";
 
 const NOW = Date.parse("2026-07-24T20:00:00.000Z");
-const OWNER_TEAM_ID = 4567;
 const RULESET_ID = 7654;
 const PULL_NUMBER = 321;
 const HEAD_SHA = "a".repeat(40);
@@ -22,13 +21,22 @@ const STATUS_CHECKS = [
 
 const ruleset = () => ({
   ...buildGitHubNoMergeRulesetRequest({
-    ownerTeamId: OWNER_TEAM_ID,
     requiredStatusChecks: STATUS_CHECKS,
   }),
   id: RULESET_ID,
   source: GITHUB_PROVIDER_REPOSITORY,
   source_type: "Repository",
 });
+
+const repositoryOwner = () => ({
+  login: "Chillywood2025",
+  type: "User",
+});
+
+const directCollaborators = () => [{
+  login: "Chillywood2025",
+  role_name: "admin",
+}];
 
 const effectiveRules = () =>
   ["deletion", "non_fast_forward", "pull_request", "required_status_checks"]
@@ -86,12 +94,13 @@ const mergeAttempt = () => ({
 
 const attestation = (overrides = {}) =>
   createGitHubProviderNoMergeAttestation({
+    directCollaborators: directCollaborators(),
     effectiveRules: effectiveRules(),
     expiresAt: new Date(NOW + 20 * 60_000).toISOString(),
     installation: installation(),
     mergeAttempt: mergeAttempt(),
-    ownerTeamId: OWNER_TEAM_ID,
     pullRequest: pullRequest(),
+    repositoryOwner: repositoryOwner(),
     requiredStatusChecks: STATUS_CHECKS,
     ruleset: ruleset(),
     verifiedAt: new Date(NOW).toISOString(),
@@ -100,7 +109,6 @@ const attestation = (overrides = {}) =>
 
 test("provider ruleset request is exact, active, and has no bypass actor", () => {
   const request = buildGitHubNoMergeRulesetRequest({
-    ownerTeamId: OWNER_TEAM_ID,
     requiredStatusChecks: [...STATUS_CHECKS].reverse(),
   });
   assert.equal(request.name, GITHUB_PROVIDER_RULESET_NAME);
@@ -125,11 +133,7 @@ test("provider ruleset request is exact, active, and has no bypass actor", () =>
   );
   assert.equal(pullRule.parameters.required_approving_review_count, 1);
   assert.equal(pullRule.parameters.require_last_push_approval, true);
-  assert.deepEqual(pullRule.parameters.required_reviewers, [{
-    file_patterns: ["**/*"],
-    minimum_approvals: 1,
-    reviewer: { id: OWNER_TEAM_ID, type: "Team" },
-  }]);
+  assert.deepEqual(pullRule.parameters.required_reviewers, []);
   const checks = request.rules.find((entry) =>
     entry.type === "required_status_checks"
   );
@@ -208,6 +212,28 @@ test("provider attestation fails closed on bypass, broad scope, or inactive rule
   await assert.rejects(
     attestation({ ruleset: inactive }),
     /github_provider_ruleset_rejected/u,
+  );
+});
+
+test("provider attestation rejects collaborator or repository-owner drift", async () => {
+  await assert.rejects(
+    attestation({
+      directCollaborators: [
+        ...directCollaborators(),
+        { login: "unexpected-writer", role_name: "write" },
+      ],
+    }),
+    /github_owner_boundary_rejected/u,
+  );
+
+  await assert.rejects(
+    attestation({
+      repositoryOwner: {
+        login: "Chillywood2025",
+        type: "Organization",
+      },
+    }),
+    /github_owner_boundary_rejected/u,
   );
 });
 

@@ -1,6 +1,6 @@
 # Cognitive GitHub Draft-PR Broker Runtime
 
-Status: `PROVIDER_RULESET_READY_APP_SUDO_PENDING`
+Status: `PROVIDER_APP_INSTALLED_NO_MERGE_PROOF_PENDING`
 
 The `cognitive-github-draft-pr-broker` Edge Function is a closed, server-only
 GitHub path for three Level 0/1 canaries:
@@ -52,6 +52,24 @@ effectively Owner-only. Its canonical ruleset hash is
 the canonical direct-collaborator proof hash is
 `8d08f33a949274a6962fc5b1cbe3d4ed2eed17f73771c06824d6d235cde502f0`.
 The future GitHub App must remain absent from every bypass list.
+
+The provider also has the active
+`chillywood-cognitive-draft-pr-no-merge` ruleset on the exact reviewed canary
+base branch `codex/cognitive-level01-operationalization`. It has no bypass
+actors, denies deletion and non-fast-forward updates, requires one fresh human
+approval, and requires the inherited 13 strict checks. The repository is owned
+by the GitHub user `Chillywood2025`, not an organization, so an Owner team
+cannot exist. The provider-correct Owner boundary is therefore:
+
+- repository owner is exactly the user `Chillywood2025`;
+- the exact direct-collaborator set contains only `Chillywood2025` with
+  `admin`;
+- the App is absent from bypass actors;
+- one approval remains required after the latest push.
+
+The attestation adapter rejects any owner-type, owner-login, direct-collaborator
+set, approval rule, status-check set, branch, or bypass drift. It does not
+invent an organization team that the provider cannot supply.
 
 Primary provider references:
 
@@ -188,12 +206,29 @@ no canary mutation is attempted.
 
 ## Current operational result
 
-The repository ruleset is provider-configured and independently readable. The
-exact repository-specific GitHub App credential remains missing because GitHub
-requires an interactive sudo-mode approval before registration. The
-development user's broad `gh` credential is used only for bounded repository
-administration and is not an acceptable runtime substitute. No canary branch,
-canary PR, merge, release, installation token, or runtime private key exists
-yet. The draft-PR switch remains off until the App is repository-selected, its
-private key is stored only in the isolated GitHub Worker, and the App-only
-merge-denial proof passes.
+The repository rulesets are provider-configured and independently readable.
+The dedicated GitHub App
+`chillywood-level01-draft-pr-broker` is installed on only
+`Chillywood2025/chillywood-mobile`; OAuth user authorization and webhooks are
+off. Provider readback confirms exactly Metadata read, Contents write, and Pull
+requests write. Safe provider evidence is:
+
+- App ID hash:
+  `d20b6f5786d9287118f44ac64b06787ff537c9e023a0cbc26df751d5556af54b`;
+- client ID hash:
+  `510fa7474ff01981180d1f9672f0d514a59112a828f1b8e63c955062f0cc1a2d`;
+- installation ID hash:
+  `deb5012b16c318850eb0bda9cd0da2423e4de951cd613345ac3834cc1c593cd0`;
+- App public-key fingerprint:
+  `e79995e2184a850e68159ec8c4f491d28ac3d4a1d4be87299237045d182f50dc`;
+- provider installation-scope readback hash:
+  `17c84de9070f1cff960d6cfa214d344d7a5f5d25b1926cf0bfff13668efe2500`;
+- canary-base ruleset ID hash:
+  `fffbfe3f4acac5b98d3f9d0b3870b1917c17b848892fb3932e577ac45d281680`.
+
+The private key remains outside Git and is not attached to any runtime. No
+canary branch, canary PR, merge, release, or persistent installation token has
+been created. The draft-PR switch remains off until the reviewed isolated
+GitHub Worker is deployed, the private key is attached only to that Worker,
+and a real non-draft App-token merge attempt is denied by the exact canary-base
+ruleset and accepted as immutable proof.

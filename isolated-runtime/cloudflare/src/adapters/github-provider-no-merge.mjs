@@ -47,6 +47,7 @@ const MAXIMUM_DENIAL_CLOCK_SKEW_MS = 5 * 60 * 1_000;
 const MERGE_DENIAL_REASON =
   /(?:approval|branch protection|not mergeable|required|review|rule|status check)/iu;
 const DRAFT_ONLY_REASON = /(?:draft|work in progress|\bwip\b)/iu;
+const OWNER_LOGIN = "Chillywood2025";
 
 const isRecord = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -112,30 +113,19 @@ const normalizeStatusChecks = (checks) => {
   return normalized;
 };
 
-const expectedPullRequestParameters = (ownerTeamId) => ({
+const expectedPullRequestParameters = () => ({
   allowed_merge_methods: ["merge", "squash", "rebase"],
   dismiss_stale_reviews_on_push: true,
   require_code_owner_review: false,
   require_last_push_approval: true,
   required_approving_review_count: 1,
   required_review_thread_resolution: true,
-  required_reviewers: [{
-    file_patterns: ["**/*"],
-    minimum_approvals: 1,
-    reviewer: {
-      id: ownerTeamId,
-      type: "Team",
-    },
-  }],
+  required_reviewers: [],
 });
 
 export const buildGitHubNoMergeRulesetRequest = ({
-  ownerTeamId,
   requiredStatusChecks,
 }) => {
-  if (!positiveInteger(ownerTeamId)) {
-    throw new Error("github_owner_reviewer_team_rejected");
-  }
   const checks = normalizeStatusChecks(requiredStatusChecks);
   if (!checks) throw new Error("github_required_status_checks_rejected");
   return Object.freeze({
@@ -152,7 +142,7 @@ export const buildGitHubNoMergeRulesetRequest = ({
       { type: "deletion" },
       { type: "non_fast_forward" },
       {
-        parameters: expectedPullRequestParameters(ownerTeamId),
+        parameters: expectedPullRequestParameters(),
         type: "pull_request",
       },
       {
@@ -169,7 +159,6 @@ export const buildGitHubNoMergeRulesetRequest = ({
 };
 
 const normalizeRulesetPolicy = ({
-  ownerTeamId,
   requiredStatusChecks,
   ruleset,
   requireAdministrativeBypassReadback,
@@ -227,7 +216,7 @@ const normalizeRulesetPolicy = ({
     return null;
   }
   const pullRequest = byType.get("pull_request").parameters;
-  const expectedPullRequest = expectedPullRequestParameters(ownerTeamId);
+  const expectedPullRequest = expectedPullRequestParameters();
   if (
     !isRecord(pullRequest) ||
     !sameJson(pullRequest, expectedPullRequest)
@@ -274,6 +263,39 @@ const normalizeRulesetPolicy = ({
     source: GITHUB_PROVIDER_REPOSITORY,
     sourceType: "Repository",
     target: "branch",
+  });
+};
+
+const normalizeOwnerBoundary = ({
+  directCollaborators,
+  repositoryOwner,
+}) => {
+  if (
+    !isRecord(repositoryOwner) ||
+    repositoryOwner.login !== OWNER_LOGIN ||
+    repositoryOwner.type !== "User" ||
+    !Array.isArray(directCollaborators) ||
+    directCollaborators.length !== 1
+  ) {
+    return null;
+  }
+  const collaborator = directCollaborators[0];
+  if (
+    !isRecord(collaborator) ||
+    collaborator.login !== OWNER_LOGIN ||
+    (collaborator.role_name ?? collaborator.roleName) !== "admin"
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    directCollaborators: [{
+      login: OWNER_LOGIN,
+      roleName: "admin",
+    }],
+    repositoryOwner: {
+      login: OWNER_LOGIN,
+      type: "User",
+    },
   });
 };
 
@@ -384,12 +406,13 @@ const normalizeDeniedMerge = ({
 };
 
 export const createGitHubProviderNoMergeAttestation = async ({
+  directCollaborators,
   effectiveRules,
   expiresAt,
   installation,
   mergeAttempt,
-  ownerTeamId,
   pullRequest,
+  repositoryOwner,
   requiredStatusChecks,
   ruleset,
   verifiedAt,
@@ -404,15 +427,16 @@ export const createGitHubProviderNoMergeAttestation = async ({
   ) {
     throw new Error("github_provider_proof_expiry_rejected");
   }
-  if (!positiveInteger(ownerTeamId)) {
-    throw new Error("github_owner_reviewer_team_rejected");
-  }
+  const ownerBoundary = normalizeOwnerBoundary({
+    directCollaborators,
+    repositoryOwner,
+  });
+  if (!ownerBoundary) throw new Error("github_owner_boundary_rejected");
   const normalizedInstallation = normalizeInstallation(installation);
   if (!normalizedInstallation) {
     throw new Error("github_installation_scope_rejected");
   }
   const rulesetPolicy = normalizeRulesetPolicy({
-    ownerTeamId,
     requiredStatusChecks,
     requireAdministrativeBypassReadback: true,
     ruleset,
@@ -444,7 +468,10 @@ export const createGitHubProviderNoMergeAttestation = async ({
       normalizedInstallation.repository,
     ]),
     rulesetIdHash: await hashJson({ id: ruleset.id }),
-    rulesetPolicyHash: await hashJson(rulesetPolicy),
+    rulesetPolicyHash: await hashJson({
+      ownerBoundary,
+      rulesetPolicy,
+    }),
     schemaVersion: GITHUB_PROVIDER_NO_MERGE_SCHEMA_VERSION,
     scopeManifestHash: GITHUB_PROVIDER_SCOPE_MANIFEST_HASH,
     verifiedAt: verified.value,
