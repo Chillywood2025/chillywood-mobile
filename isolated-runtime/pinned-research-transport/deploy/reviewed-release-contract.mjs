@@ -67,6 +67,7 @@ export const REVIEWED_RELEASE_PROFILES = Object.freeze([
     credentialDirectoryAbi: null,
     credentialDirectoryPath: null,
     modulePaths: LEGACY_V1_RUNTIME_MODULE_PATHS,
+    currentDeployable: false,
     runtimeActivationAllowed: false,
   }),
   Object.freeze({
@@ -75,7 +76,17 @@ export const REVIEWED_RELEASE_PROFILES = Object.freeze([
     credentialDirectoryAbi: null,
     credentialDirectoryPath: null,
     modulePaths: LEGACY_V1_THIRTEEN_MODULE_PATHS,
+    currentDeployable: false,
     runtimeActivationAllowed: false,
+  }),
+  Object.freeze({
+    id: "chillywood-pinned-research-host-runtime-v3-current-13",
+    contract: REVIEWED_RELEASE_CONTRACT,
+    credentialDirectoryAbi: CURRENT_CREDENTIAL_DIRECTORY_ABI,
+    credentialDirectoryPath: CURRENT_CREDENTIAL_DIRECTORY_PATH,
+    modulePaths: LEGACY_V1_THIRTEEN_MODULE_PATHS,
+    currentDeployable: false,
+    runtimeActivationAllowed: true,
   }),
   Object.freeze({
     id: "chillywood-pinned-research-host-runtime-v4-current-14",
@@ -83,12 +94,13 @@ export const REVIEWED_RELEASE_PROFILES = Object.freeze([
     credentialDirectoryAbi: CURRENT_CREDENTIAL_DIRECTORY_ABI,
     credentialDirectoryPath: CURRENT_CREDENTIAL_DIRECTORY_PATH,
     modulePaths: RESEARCH_HOST_RUNTIME_MODULE_PATHS,
+    currentDeployable: true,
     runtimeActivationAllowed: true,
   }),
 ]);
 
 export const CURRENT_REVIEWED_RELEASE_PROFILE =
-  REVIEWED_RELEASE_PROFILES[2];
+  REVIEWED_RELEASE_PROFILES[3];
 
 const SHA1 = /^[a-f0-9]{40}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
@@ -114,11 +126,62 @@ const exactKeys = (value, keys) =>
 const sha256 = (value) =>
   createHash("sha256").update(value).digest("hex");
 
+export const canonicalCredentialDirectoryContractSource = () =>
+  [
+    "export const CURRENT_CREDENTIAL_DIRECTORY_ABI =",
+    `  ${JSON.stringify(CURRENT_CREDENTIAL_DIRECTORY_ABI)};`,
+    "export const CURRENT_CREDENTIAL_DIRECTORY_PATH =",
+    `  ${JSON.stringify(CURRENT_CREDENTIAL_DIRECTORY_PATH)};`,
+    "",
+    "export const validateResearchHostConfiguration = (environment) => {",
+    "  const credentialDirectory = environment.CREDENTIALS_DIRECTORY;",
+    "  const credentialDirectoryAbi =",
+    "    environment.COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI;",
+    "  const credentialDirectoryPath =",
+    "    environment.COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_PATH;",
+    "  const sourceCommit =",
+    "    environment.COGNITIVE_RESEARCH_TRANSPORT_SOURCE_COMMIT;",
+    "  const sourceTree =",
+    "    environment.COGNITIVE_RESEARCH_TRANSPORT_SOURCE_TREE;",
+    "  const releaseManifestSha256 =",
+    "    environment.COGNITIVE_RESEARCH_TRANSPORT_RELEASE_MANIFEST_SHA256;",
+    "  if (",
+    "    typeof credentialDirectory !== \"string\" ||",
+    "    credentialDirectoryAbi !== CURRENT_CREDENTIAL_DIRECTORY_ABI ||",
+    "    credentialDirectoryPath !== CURRENT_CREDENTIAL_DIRECTORY_PATH ||",
+    "    credentialDirectory !== credentialDirectoryPath ||",
+    "    typeof sourceCommit !== \"string\" ||",
+    "    !/^[a-f0-9]{40}$/u.test(sourceCommit) ||",
+    "    typeof sourceTree !== \"string\" ||",
+    "    !/^[a-f0-9]{40}$/u.test(sourceTree) ||",
+    "    typeof releaseManifestSha256 !== \"string\" ||",
+    "    !/^[a-f0-9]{64}$/u.test(releaseManifestSha256)",
+    "  ) {",
+    "    throw new Error(\"research_host_configuration_rejected\");",
+    "  }",
+    "  return Object.freeze({",
+    "    credentialDirectory,",
+    "    releaseManifestSha256,",
+    "    sourceCommit,",
+    "    sourceTree,",
+    "  });",
+    "};",
+    "",
+  ].join("\n");
+
 const validateExactCredentialDirectoryContract = async ({
   source,
   sourceCommit,
   sourceTree,
 }) => {
+  if (
+    !Buffer.isBuffer(source) ||
+    !source.equals(
+      Buffer.from(canonicalCredentialDirectoryContractSource(), "utf8"),
+    )
+  ) {
+    throw new Error("reviewed_release_runtime_abi_source_rejected");
+  }
   const sourceSha256 = sha256(source);
   let contract;
   try {
@@ -341,6 +404,7 @@ const normalizeManifest = (value) => {
       isCurrent ? value.credentialDirectoryPath : null,
     moduleGraphSha256: value.moduleGraphSha256,
     modules: Object.freeze(modules),
+    currentDeployable: profile.currentDeployable,
     releaseProfile: profile.id,
     runtimeActivationAllowed: profile.runtimeActivationAllowed,
     sourceCommit: value.sourceCommit,
@@ -348,17 +412,37 @@ const normalizeManifest = (value) => {
   });
 };
 
-export const requireCurrentRuntimeAbi = (manifest) => {
+export const requireCompatibleRuntimeAbi = (manifest) => {
   if (
     manifest?.contract !== REVIEWED_RELEASE_CONTRACT ||
-    manifest?.releaseProfile !== CURRENT_REVIEWED_RELEASE_PROFILE.id ||
     manifest?.runtimeActivationAllowed !== true ||
     manifest?.credentialDirectoryAbi !==
       CURRENT_CREDENTIAL_DIRECTORY_ABI ||
     manifest?.credentialDirectoryPath !==
-      CURRENT_CREDENTIAL_DIRECTORY_PATH
+      CURRENT_CREDENTIAL_DIRECTORY_PATH ||
+    !REVIEWED_RELEASE_PROFILES.some(
+      (profile) =>
+        profile.id === manifest.releaseProfile &&
+        profile.runtimeActivationAllowed === true &&
+        profile.contract === REVIEWED_RELEASE_CONTRACT &&
+        profile.credentialDirectoryAbi ===
+          CURRENT_CREDENTIAL_DIRECTORY_ABI &&
+        profile.credentialDirectoryPath ===
+          CURRENT_CREDENTIAL_DIRECTORY_PATH,
+    )
   ) {
     throw new Error("reviewed_release_runtime_abi_rejected");
+  }
+  return true;
+};
+
+export const requireCurrentDeployable = (manifest) => {
+  requireCompatibleRuntimeAbi(manifest);
+  if (
+    manifest?.releaseProfile !== CURRENT_REVIEWED_RELEASE_PROFILE.id ||
+    manifest?.currentDeployable !== true
+  ) {
+    throw new Error("reviewed_release_current_deployable_rejected");
   }
   return true;
 };
@@ -427,6 +511,7 @@ export const buildReviewedRelease = async ({
     !selectedProfile ||
     selectedProfile.id !== CURRENT_REVIEWED_RELEASE_PROFILE.id ||
     selectedProfile.contract !== REVIEWED_RELEASE_CONTRACT ||
+    selectedProfile.currentDeployable !== true ||
     selectedProfile.runtimeActivationAllowed !== true ||
     !Array.isArray(releaseProfile?.modulePaths) ||
     releaseProfile.modulePaths.join("\n") !==
@@ -708,7 +793,7 @@ export const verifyCredentialOverlaySource = async ({
     expectedManifestSha256,
     expectedSourceCommit,
   });
-  requireCurrentRuntimeAbi(release.manifest);
+  requireCompatibleRuntimeAbi(release.manifest);
   const module = release.manifest.modules.find(
     ({ path }) => path === CREDENTIAL_OVERLAY_MODULE_PATH,
   );
@@ -735,7 +820,7 @@ export const verifyActiveInstalledRelease = async ({
     expectedManifestSha256,
     expectedSourceCommit,
   });
-  requireCurrentRuntimeAbi(release.manifest);
+  requireCompatibleRuntimeAbi(release.manifest);
   return release;
 };
 
@@ -809,7 +894,7 @@ const main = async () => {
       expectedManifestSha256,
       manifestPath,
     });
-    requireCurrentRuntimeAbi(manifest);
+    requireCurrentDeployable(manifest);
     process.stdout.write(
       `${manifest.sourceCommit} ${manifest.sourceTree} ${manifest.archiveSha256} ${manifest.moduleGraphSha256} ${manifest.releaseProfile}\n`,
     );

@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   buildReviewedRelease,
+  canonicalCredentialDirectoryContractSource,
   CURRENT_CREDENTIAL_DIRECTORY_ABI,
   CURRENT_CREDENTIAL_DIRECTORY_PATH,
   CURRENT_REVIEWED_RELEASE_PROFILE,
@@ -23,12 +24,14 @@ import {
   LEGACY_REVIEWED_RELEASE_CONTRACT,
   REVIEWED_RELEASE_CONTRACT,
   REVIEWED_RELEASE_PROFILES,
+  requireCurrentDeployable,
   verifyActiveInstalledRelease,
   verifyExtractedRelease,
   verifyInstalledRelease,
   verifyReviewedBundle,
 } from "../deploy/reviewed-release-contract.mjs";
 import {
+  buildCompatibleV2Fixture,
   buildLegacyV1Fixture,
 } from "./release-fixture-helpers.mjs";
 
@@ -45,6 +48,8 @@ const legacyTenModuleCommit =
   "132a2022acc4ad83618e77652c7a554637599aeb";
 const legacyThirteenModuleCommit =
   "607dda39f18d3c65149717ae157a0667a5eef691";
+const priorCompatibleV3Commit =
+  "1770d3e9d9d6e7b8351d3f984b3cdd8a398b68cf";
 
 const extract = (archivePath, directory) => {
   execFileSync("tar", [
@@ -337,6 +342,7 @@ test("exact legacy v1 ten- and thirteen-module manifests remain canonical and ve
         LEGACY_REVIEWED_RELEASE_CONTRACT,
       );
       assert.equal(verified.manifest.releaseProfile, profile.id);
+      assert.equal(verified.manifest.currentDeployable, false);
       assert.equal(verified.manifest.runtimeActivationAllowed, false);
       assert.equal(verified.manifest.credentialDirectoryAbi, null);
       assert.equal(verified.manifest.credentialDirectoryPath, null);
@@ -403,6 +409,70 @@ test("exact legacy v1 ten- and thirteen-module manifests remain canonical and ve
   }
 });
 
+test("exact prior v3 contract remains installed-verifiable and active-compatible but not current-deployable", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-reviewed-research-prior-v3-"),
+  );
+  try {
+    const archivePath = resolve(temporary, "release.tar");
+    const manifestPath = resolve(temporary, "release.manifest.json");
+    const extracted = resolve(temporary, "extracted");
+    await mkdir(extracted);
+    const profile = REVIEWED_RELEASE_PROFILES[2];
+    assert.equal(
+      profile.id,
+      "chillywood-pinned-research-host-runtime-v3-current-13",
+    );
+    const built = await buildCompatibleV2Fixture({
+      archivePath,
+      manifestPath,
+      profile,
+      repository,
+      sourceCommit: priorCompatibleV3Commit,
+    });
+    const verified = await verifyReviewedBundle({
+      archivePath,
+      expectedManifestSha256: built.manifestSha256,
+      manifestPath,
+    });
+    assert.equal(verified.manifest.releaseProfile, profile.id);
+    assert.equal(verified.manifest.runtimeActivationAllowed, true);
+    assert.equal(verified.manifest.currentDeployable, false);
+    extract(archivePath, extracted);
+    await installReleaseMetadata({
+      directory: extracted,
+      expectedManifestSha256: built.manifestSha256,
+      manifestPath,
+    });
+    assert.equal(
+      (
+        await verifyInstalledRelease({
+          directory: extracted,
+          expectedManifestSha256: built.manifestSha256,
+          expectedSourceCommit: priorCompatibleV3Commit,
+        })
+      ).manifest.releaseProfile,
+      profile.id,
+    );
+    assert.equal(
+      (
+        await verifyActiveInstalledRelease({
+          directory: extracted,
+          expectedManifestSha256: built.manifestSha256,
+          expectedSourceCommit: priorCompatibleV3Commit,
+        })
+      ).manifest.releaseProfile,
+      profile.id,
+    );
+    assert.throws(
+      () => requireCurrentDeployable(verified.manifest),
+      /reviewed_release_current_deployable_rejected/u,
+    );
+  } finally {
+    await rm(temporary, { force: true, recursive: true });
+  }
+});
+
 test("new builds reject inactive profiles and source entrypoints without the exact credential ABI", async () => {
   const temporary = await mkdtemp(
     resolve(tmpdir(), "chillywood-reviewed-research-build-abi-"),
@@ -433,12 +503,26 @@ test("new builds reject inactive profiles and source entrypoints without the exa
   }
 });
 
-test("new builds execute the exact credential contract blob and reject lexical lookalikes", async () => {
+test("canonical credential contract source matches the complete reviewed module bytes", async () => {
+  assert.equal(
+    await readFile(
+      resolve(
+        repository,
+        "isolated-runtime/pinned-research-transport/src/credential-directory-contract.mjs",
+      ),
+      "utf8",
+    ),
+    canonicalCredentialDirectoryContractSource(),
+  );
+});
+
+test("new builds reject a side-effecting credential contract before candidate evaluation", async () => {
   const temporary = await mkdtemp(
     resolve(tmpdir(), "chillywood-reviewed-research-semantic-abi-"),
   );
   try {
     const clonedRepository = resolve(temporary, "repository");
+    const sideEffectMarker = resolve(temporary, "candidate-executed");
     execFileSync("git", [
       "clone",
       "--quiet",
@@ -459,24 +543,11 @@ test("new builds execute the exact credential contract blob and reject lexical l
         "isolated-runtime/pinned-research-transport/src/credential-directory-contract.mjs",
       ),
       [
-        "export const CURRENT_CREDENTIAL_DIRECTORY_ABI =",
-        '  "chillywood-systemd-fixed-user-ephemeral-0400-v1";',
-        "export const CURRENT_CREDENTIAL_DIRECTORY_PATH =",
-        '  "/run/chillywood-research-transport-runtime";',
-        "",
-        "// credentialDirectoryAbi !== \"chillywood-systemd-fixed-user-ephemeral-0400-v1\"",
-        "// credentialDirectoryPath !== \"/run/chillywood-research-transport-runtime\"",
-        "// credentialDirectory !== credentialDirectoryPath",
-        "export const validateResearchHostConfiguration = (environment) =>",
-        "  Object.freeze({",
-        "    credentialDirectory: environment.CREDENTIALS_DIRECTORY,",
-        "    releaseManifestSha256:",
-        "      environment.COGNITIVE_RESEARCH_TRANSPORT_RELEASE_MANIFEST_SHA256,",
-        "    sourceCommit:",
-        "      environment.COGNITIVE_RESEARCH_TRANSPORT_SOURCE_COMMIT,",
-        "    sourceTree: environment.COGNITIVE_RESEARCH_TRANSPORT_SOURCE_TREE,",
-        "  });",
-        "",
+        'import { writeFileSync } from "node:fs";',
+        `writeFileSync(${
+          JSON.stringify(sideEffectMarker)
+        }, "candidate_executed", { mode: 0o600 });`,
+        canonicalCredentialDirectoryContractSource(),
       ].join("\n"),
     );
     execFileSync("git", [
@@ -514,6 +585,7 @@ test("new builds execute the exact credential contract blob and reject lexical l
       }),
       /reviewed_release_runtime_abi_source_rejected/u,
     );
+    await assert.rejects(readFile(sideEffectMarker), /ENOENT/u);
   } finally {
     await rm(temporary, { force: true, recursive: true });
   }

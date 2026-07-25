@@ -39,8 +39,11 @@ the builder loads from the exact Git blob and executes before creating an
 artifact, and `.release-environment` carries those same values to the selected
 Node entrypoint. Exact legacy v1 manifests remain verifiable for audit and link
 restoration, but they are inactive-only and can never be restarted or reach a
-readiness check. Direct deployment and standalone rollback accept only a
-current compatible v2 release with its own verified credential overlay. The
+readiness check. The exact prior v3/current-13 contract remains
+ABI-compatible for installed-release verification and active rollback, but it
+cannot be selected for a fresh direct deployment. Direct deployment accepts
+only the current v4/current-14 contract, while standalone rollback accepts a
+reviewed ABI-compatible v2 release with its own verified credential overlay. The
 systemd unit reads source commit, source tree, release-manifest hash, ABI and
 path from the selected release, so a verified rollback cannot retain metadata
 from a newer release or silently cross a credential-directory boundary. These
