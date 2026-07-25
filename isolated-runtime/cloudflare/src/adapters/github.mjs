@@ -3,8 +3,15 @@ import {
   assertInvocationActive,
   providerSignal,
 } from "../abort.mjs";
-import { sha256Hex } from "../contracts.mjs";
+import {
+  hashJson,
+  sha256Hex,
+} from "../contracts.mjs";
 import { ready } from "./helpers.mjs";
+import {
+  GITHUB_PROVIDER_SCOPE_MANIFEST_HASH,
+  validateGitHubProviderNoMergeProof,
+} from "./github-provider-no-merge.mjs";
 
 const REPOSITORY = "Chillywood2025/chillywood-mobile";
 const REPOSITORY_OWNER = "Chillywood2025";
@@ -22,7 +29,7 @@ const ALLOWED_PERMISSION_MANIFEST = Object.freeze({
   pull_requests: "write",
 });
 export const APPROVED_SCOPE_MANIFEST_HASH =
-  "ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554";
+  GITHUB_PROVIDER_SCOPE_MANIFEST_HASH;
 const EXPLICIT_RUNTIME_DENIES = Object.freeze([
   "actions",
   "administration",
@@ -374,9 +381,18 @@ const createCredentialReader = ({ fetcher, now }) =>
     if (scopeManifestHash !== APPROVED_SCOPE_MANIFEST_HASH) {
       throw new Error("github_installation_scope_manifest_drift");
     }
+    const permissionManifestHash = await hashJson(
+      ALLOWED_PERMISSION_MANIFEST,
+    );
+    const repositorySelectionHash = await hashJson([{
+      fullName: repository.full_name,
+      id: repository.id,
+    }]);
     return Object.freeze({
       expiresAt,
       fingerprintHash,
+      permissionManifestHash,
+      repositorySelectionHash,
       scopeManifestHash,
       token,
     });
@@ -578,36 +594,68 @@ export const createGitHubBrokerAdapters = ({
 } = {}) => {
   const readInstallationCredential = createCredentialReader({ fetcher, now });
   const githubApi = createGithubApi({ fetcher });
-  const requireProviderMergeDenial = async () => {
-    const verified = await verifyProviderMergeDenial({
+  const readProviderMergeDenial = async () => {
+    const proof = await verifyProviderMergeDenial({
       repository: REPOSITORY,
       requiredBaseBranch: ALLOWED_BASE_BRANCH,
     });
-    if (verified !== true) {
+    const verified = await validateGitHubProviderNoMergeProof(
+      proof,
+      { now: now() },
+    );
+    if (!verified) {
       throw new Error(PROVIDER_MERGE_DENIAL_BLOCKER);
     }
+    return verified;
+  };
+  const bindProviderMergeDenial = async (proof, credential) => {
+    const verified = await validateGitHubProviderNoMergeProof(
+      proof,
+      {
+        expectedAppPublicFingerprintHash: credential.fingerprintHash,
+        expectedPermissionManifestHash: credential.permissionManifestHash,
+        expectedRepositorySelectionHash:
+          credential.repositorySelectionHash,
+        expectedScopeManifestHash: credential.scopeManifestHash,
+        now: now(),
+      },
+    );
+    if (!verified) throw new Error(PROVIDER_MERGE_DENIAL_BLOCKER);
+    return verified;
   };
 
   const status = async ({ env }) => {
     const credential = credentialState(env);
     const identity = serviceIdentityState(env);
-    const providerMergeDenial = await verifyProviderMergeDenial({
-      repository: REPOSITORY,
-      requiredBaseBranch: ALLOWED_BASE_BRANCH,
-    });
+    let providerMergeDenial = null;
+    if (credential === "PRESENT" && identity === "PRESENT") {
+      try {
+        const proof = await readProviderMergeDenial();
+        const installation = await readInstallationCredential(env);
+        providerMergeDenial = await bindProviderMergeDenial(
+          proof,
+          installation,
+        );
+      } catch {
+        providerMergeDenial = null;
+      }
+    }
     return Object.freeze({
       blocker: credential === "PRESENT"
         ? identity === "PRESENT"
-          ? providerMergeDenial === true
+          ? providerMergeDenial
             ? null
             : PROVIDER_MERGE_DENIAL_BLOCKER
           : "GITHUB_DRAFT_PR_BROKER_IDENTITY_REQUIRED"
         : "GITHUB_DRAFT_PR_CREDENTIAL_REQUIRED",
       brokerServiceIdentity: identity,
       credential,
-      providerMergeDenial: providerMergeDenial === true ? "MATCH" : "MISSING",
+      deniedMergeEvidenceHash:
+        providerMergeDenial?.deniedMergeEvidenceHash ?? null,
+      providerMergeDenial: providerMergeDenial ? "MATCH" : "MISSING",
       repositoryScopeHash: await sha256Hex(REPOSITORY),
-      runtimeAuthority: providerMergeDenial === true
+      rulesetPolicyHash: providerMergeDenial?.rulesetPolicyHash ?? null,
+      runtimeAuthority: providerMergeDenial
         ? "draft_pr_only"
         : "blocked",
     });
@@ -620,11 +668,16 @@ export const createGitHubBrokerAdapters = ({
     env,
     signal,
   }) => {
-    await requireProviderMergeDenial();
+    const providerProof = await readProviderMergeDenial();
     const invocation = { assertActive, signal };
     const credential = await readInstallationCredential(env, invocation);
+    await bindProviderMergeDenial(providerProof, credential);
     const evidenceHash = await sha256Hex(
-      `${credential.fingerprintHash}|${credential.scopeManifestHash}|configured|${credential.expiresAt}`,
+      `${credential.fingerprintHash}|${credential.scopeManifestHash}|${
+        providerProof.rulesetPolicyHash
+      }|${providerProof.deniedMergeEvidenceHash}|configured|${
+        credential.expiresAt
+      }`,
     );
     const receipt = await database.call("recordGithubProviderReadback", [
       context.taskId,
@@ -647,8 +700,10 @@ export const createGitHubBrokerAdapters = ({
       credentialKind: "github_draft_pr",
       evidenceHash,
       expiresAt: credential.expiresAt,
+      deniedMergeEvidenceHash: providerProof.deniedMergeEvidenceHash,
       providerReadbackId,
       result: "configured",
+      rulesetPolicyHash: providerProof.rulesetPolicyHash,
       scopeManifestHash: credential.scopeManifestHash,
     });
   };
@@ -660,7 +715,6 @@ export const createGitHubBrokerAdapters = ({
     payload,
     signal,
   }) => {
-    await requireProviderMergeDenial();
     if (
       credentialState(env) !== "PRESENT" ||
       serviceIdentityState(env) !== "PRESENT"
@@ -669,8 +723,10 @@ export const createGitHubBrokerAdapters = ({
     }
     const plan = validateDraftPlan(payload);
     if (!plan) throw new Error("github_draft_plan_rejected");
+    const providerProof = await readProviderMergeDenial();
     const invocation = { assertActive, signal };
     const credential = await readInstallationCredential(env, invocation);
+    await bindProviderMergeDenial(providerProof, credential);
     const contract = await deriveDraftPlanContract(plan);
     if (plan.planSnapshotHash !== contract.planContractHash) {
       throw new Error("github_approved_plan_contract_mismatch");

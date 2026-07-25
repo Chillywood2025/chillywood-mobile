@@ -2,12 +2,19 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { hashJson } from "../src/contracts.mjs";
+import {
+  hashJson,
+  sha256Hex,
+} from "../src/contracts.mjs";
 import {
   createGitHubBrokerAdapters,
   deriveDraftPlanContract,
   validateDraftPlan,
 } from "../src/adapters/github.mjs";
+import {
+  GITHUB_PROVIDER_NO_MERGE_SCHEMA_VERSION,
+  GITHUB_PROVIDER_SCOPE_MANIFEST_HASH,
+} from "../src/adapters/github-provider-no-merge.mjs";
 import {
   classifyLiveKitEvidence,
   LIVEKIT_COLLECTOR_ADAPTERS,
@@ -284,7 +291,37 @@ const createFakeGitHub = ({ pullFails = false } = {}) => {
   };
   return { events, fetcher };
 };
-const verifyProviderMergeDenial = async () => true;
+const verifyProviderMergeDenial = async () => {
+  const unsigned = {
+    appPublicFingerprintHash: await sha256Hex(
+      "github-app-installation|12345|23456|34567",
+    ),
+    baseBranch: "codex/cognitive-level01-operationalization",
+    bypassManifestHash: await hashJson([]),
+    deniedMergeEvidenceHash: HASH_A,
+    expiresAt: new Date(GITHUB_NOW + 20 * 60_000).toISOString(),
+    permissionManifestHash: await hashJson({
+      contents: "write",
+      metadata: "read",
+      pull_requests: "write",
+    }),
+    providerStatus: "provider_enforced_no_merge",
+    repository: "Chillywood2025/chillywood-mobile",
+    repositorySelectionHash: await hashJson([{
+      fullName: "Chillywood2025/chillywood-mobile",
+      id: 34567,
+    }]),
+    rulesetIdHash: HASH_B,
+    rulesetPolicyHash: HASH_C,
+    schemaVersion: GITHUB_PROVIDER_NO_MERGE_SCHEMA_VERSION,
+    scopeManifestHash: GITHUB_PROVIDER_SCOPE_MANIFEST_HASH,
+    verifiedAt: new Date(GITHUB_NOW - 60_000).toISOString(),
+  };
+  return {
+    ...unsigned,
+    proofHash: await hashJson(unsigned),
+  };
+};
 
 const draftPayload = async () => {
   const payload = {
@@ -489,6 +526,25 @@ test("GitHub broker stays blocked without provider-enforced merge denial", async
     /GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED/u,
   );
   assert.equal(providerCalls, 0);
+});
+
+test("GitHub broker rejects a bare boolean provider proof", async () => {
+  const fake = createFakeGitHub();
+  const adapters = createGitHubBrokerAdapters({
+    fetcher: fake.fetcher,
+    now: () => GITHUB_NOW,
+    verifyProviderMergeDenial: async () => true,
+  });
+  const status = await adapters.status.execute({ env: githubEnv() });
+  assert.equal(
+    status.blocker,
+    "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED",
+  );
+  assert.equal(status.providerMergeDenial, "MISSING");
+  assert.equal(
+    fake.events.some((entry) => entry.includes("/access_tokens")),
+    false,
+  );
 });
 
 test("GitHub plans reject forbidden paths and credential-shaped content", async () => {
