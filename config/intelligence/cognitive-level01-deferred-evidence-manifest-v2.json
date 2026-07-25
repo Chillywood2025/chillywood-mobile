@@ -6,7 +6,7 @@
   "supersedesManifestVersion": "chillywood-cognitive-deferred-evidence-v1",
   "supersedesManifestHash": "2f71ecf8dda5b6f310bdb6d35ecd6eb3d2c87a06f800814e63bcb4e1f10b9008",
   "manifestHashAlgorithm": "sha256_canonical_json_excluding_manifestHash",
-  "manifestHash": "4763f7bb16bcf82e35c61d95542e84773c3f3f55838624701155925da3240b9c",
+  "manifestHash": "665c13f3cad6580348a60fb9a68fd07e0988c192383d06e791d2ab68fad19793",
   "correction": {
     "reason": "Correct Android build-84 release identity by separating app version, native build, runtime, EAS update channel, and distribution source; preserve every original observation and evidence key.",
     "releaseIdentitySource": "config/release/android-production.json",
@@ -342,6 +342,37 @@
       "amendsFutureImportKey": "7dd263c16345338562c252f6f17e19c1ac5cae1a86f13b5caa4b3df1e3e302e8",
       "amendsManifestVersion": "chillywood-cognitive-deferred-evidence-v1",
       "originalEvidenceKey": "fe18d1480c07361d9321d55043b792c4d0dbbed20aa9c2dee9159295dd28eed6"
+    },
+    {
+      "evaluatorResult": "accepted_touch_target_48_76dp",
+      "evidenceKey": "ceff19cda847439490658cf248023b7e4ae0d16cb48b16eb2e39282e2f4b38a0",
+      "evidenceType": "android_post_ota_after_state",
+      "expiresAt": "2026-08-24T16:55:06.769Z",
+      "findingKey": null,
+      "importEligibility": "requires_reevaluation",
+      "importStatus": "not_imported",
+      "metricHashes": [
+        "4ee6577e0b2ba41aa36cc97508e85a459b0944010adb3ad1f2148d45e3658f5d",
+        "48ab4aea1c6cf8e50d1762e18f0b262f4e1ed90f8a2a296e6ec26a3c5550b8bb",
+        "4a6147ed2fea0a562e4ec36029d31e8bfb147569349b46211a4b030abcc0134e",
+        "3c571e59d792710017f057bb7892b74bbffc1d39aa457f25226b50b7c80eab70"
+      ],
+      "observedAt": "2026-07-25T16:55:06.769Z",
+      "platform": "android",
+      "retentionClass": "sanitized_nonpersonal_30d",
+      "sourceCommit": "4e03c91e896da0ecb29eac51986bdefa97bfcb35",
+      "synthetic": false,
+      "amendmentKey": "f34b3301d6ec2586cb277212fbf2cec6b7d3629bb1b62332eb4e486999bd7384",
+      "amendsFutureImportKey": null,
+      "amendsManifestVersion": "chillywood-cognitive-deferred-evidence-v2",
+      "appBuild": "84",
+      "appChannel": "production",
+      "appRuntime": "1.0.0-android-imagemanipulator-v1",
+      "appVersion": "1.0.0",
+      "correctionKind": "new_android_build84_post_ota_observation",
+      "distributionSource": "google_play_internal",
+      "futureImportKey": "3238d0cf4471c6f0ed3a889340160f751ce24b7829276018c0401feac5f7ae7f",
+      "originalEvidenceKey": "ceff19cda847439490658cf248023b7e4ae0d16cb48b16eb2e39282e2f4b38a0"
     }
   ]
 }

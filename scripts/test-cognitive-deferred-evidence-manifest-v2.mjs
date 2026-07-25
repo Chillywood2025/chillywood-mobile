@@ -209,11 +209,11 @@ test("a post-OTA observation appends without rewriting historical entries", () =
     release,
     v1,
   });
-  assert.equal(summary.entries, v1.entries.length + 1);
+  assert.equal(summary.entries, v2.entries.length + 1);
   assert.equal(entry.correctionKind, POST_INTEGRATION_CORRECTION_KIND);
   assert.deepEqual(
-    candidate.entries.slice(0, v1.entries.length),
-    v2.entries.slice(0, v1.entries.length),
+    candidate.entries.slice(0, v2.entries.length),
+    v2.entries,
   );
   const plan = buildImportPlan({
     evaluatedAt: "2026-07-25T20:01:00.000Z",
