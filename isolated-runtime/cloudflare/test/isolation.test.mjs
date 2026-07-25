@@ -226,6 +226,7 @@ test("provider secrets exist only in their exact principal", () => {
     byId.get("cognitive_livekit_experience_collector").requiredSecrets,
     [
       "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
+      "COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY",
       "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION",
     ],
   );

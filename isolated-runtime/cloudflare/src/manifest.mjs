@@ -287,17 +287,40 @@ export const RUNTIME_MANIFEST = Object.freeze({
       edgeSource:
         "supabase/functions/cognitive-livekit-experience-collector/index.ts",
       provider: "none",
-      internalSecrets: ["COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"],
+      internalSecrets: [
+        "COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY",
+        "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION",
+      ],
       operations: {
+        issue_failure_fixture: operation([
+          "action", "fixtureType", "installedObserverRequired",
+          "requestedTtlSeconds", "roomRunCorrelationHash",
+          "syntheticRoomName",
+        ], ["cognitive_runtime.collect_livekit_sentinel_run"]),
         prepare_run: operation([
           "action", "evidenceManifestHash", "metricManifest",
           "observationFinishedAt", "observationStartedAt", "platform",
           "routeOrSurface", "runtimeIdentityHash", "sourceBuildHash",
         ], []),
+        prepare_fixture_run: operation([
+          "action", "evidenceManifestHash", "fixtureId", "fixtureTicket",
+          "metricManifest", "observationFinishedAt", "observationStartedAt",
+          "platform", "routeOrSurface", "runtimeIdentityHash",
+          "sourceBuildHash", "syntheticRoomName",
+        ], ["cognitive_runtime.collect_livekit_sentinel_run"]),
+        read_failure_fixture: operation([
+          "action", "fixtureId", "fixtureTicket",
+        ], []),
         record_run: operation([
           "action", "evidenceManifestHash", "metricManifest",
           "observationFinishedAt", "observationStartedAt", "platform",
           "routeOrSurface", "runtimeIdentityHash", "sourceBuildHash",
+        ], ["cognitive_runtime.collect_livekit_sentinel_run"]),
+        record_fixture_run: operation([
+          "action", "evidenceManifestHash", "fixtureId", "fixtureTicket",
+          "metricManifest", "observationFinishedAt", "observationStartedAt",
+          "platform", "routeOrSurface", "runtimeIdentityHash",
+          "sourceBuildHash", "syntheticRoomName",
         ], ["cognitive_runtime.collect_livekit_sentinel_run"]),
       },
       maxRequestBytes: 98_304,

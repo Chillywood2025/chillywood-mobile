@@ -40,12 +40,38 @@
       }
     },
     "cognitive_livekit_experience_collector": {
+      "issue_failure_fixture": {
+        "databaseOperations": [
+          "collect_livekit_sentinel_run"
+        ],
+        "ready": true,
+        "reason": null
+      },
       "prepare_run": {
         "databaseOperations": [],
         "ready": true,
         "reason": null
       },
+      "prepare_fixture_run": {
+        "databaseOperations": [
+          "collect_livekit_sentinel_run"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "read_failure_fixture": {
+        "databaseOperations": [],
+        "ready": true,
+        "reason": null
+      },
       "record_run": {
+        "databaseOperations": [
+          "collect_livekit_sentinel_run"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "record_fixture_run": {
         "databaseOperations": [
           "collect_livekit_sentinel_run"
         ],

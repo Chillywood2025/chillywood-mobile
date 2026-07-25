@@ -155,6 +155,7 @@
       "credentials": [
         "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_HYPERDRIVE",
         "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
+        "COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY",
         "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"
       ],
       "databaseRole": "cognitive_livekit_experience_collector",

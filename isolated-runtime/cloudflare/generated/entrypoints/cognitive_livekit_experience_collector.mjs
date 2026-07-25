@@ -16,6 +16,19 @@ const principal = Object.freeze({
   "maxRequestBytes": 98304,
   "networkEgress": [],
   "operations": {
+    "issue_failure_fixture": {
+      "payloadKeys": [
+        "action",
+        "fixtureType",
+        "installedObserverRequired",
+        "requestedTtlSeconds",
+        "roomRunCorrelationHash",
+        "syntheticRoomName"
+      ],
+      "rpcEntrypoints": [
+        "cognitive_runtime.collect_livekit_sentinel_run"
+      ]
+    },
     "prepare_run": {
       "payloadKeys": [
         "action",
@@ -27,6 +40,33 @@ const principal = Object.freeze({
         "routeOrSurface",
         "runtimeIdentityHash",
         "sourceBuildHash"
+      ],
+      "rpcEntrypoints": []
+    },
+    "prepare_fixture_run": {
+      "payloadKeys": [
+        "action",
+        "evidenceManifestHash",
+        "fixtureId",
+        "fixtureTicket",
+        "metricManifest",
+        "observationFinishedAt",
+        "observationStartedAt",
+        "platform",
+        "routeOrSurface",
+        "runtimeIdentityHash",
+        "sourceBuildHash",
+        "syntheticRoomName"
+      ],
+      "rpcEntrypoints": [
+        "cognitive_runtime.collect_livekit_sentinel_run"
+      ]
+    },
+    "read_failure_fixture": {
+      "payloadKeys": [
+        "action",
+        "fixtureId",
+        "fixtureTicket"
       ],
       "rpcEntrypoints": []
     },
@@ -45,12 +85,32 @@ const principal = Object.freeze({
       "rpcEntrypoints": [
         "cognitive_runtime.collect_livekit_sentinel_run"
       ]
+    },
+    "record_fixture_run": {
+      "payloadKeys": [
+        "action",
+        "evidenceManifestHash",
+        "fixtureId",
+        "fixtureTicket",
+        "metricManifest",
+        "observationFinishedAt",
+        "observationStartedAt",
+        "platform",
+        "routeOrSurface",
+        "runtimeIdentityHash",
+        "sourceBuildHash",
+        "syntheticRoomName"
+      ],
+      "rpcEntrypoints": [
+        "cognitive_runtime.collect_livekit_sentinel_run"
+      ]
     }
   },
   "provider": "none",
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
+    "COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY",
     "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"
   ],
   "rpcHooks": [

@@ -16,6 +16,12 @@ test("every isolated action and direct RPC remains bound to reviewed source", as
         "supabase/functions/cognitive-public-research-broker/policy.ts",
       );
     }
+    if (principal.dbRole === "cognitive_livekit_experience_collector") {
+      sources.push(
+        "isolated-runtime/cloudflare/src/adapters/livekit.mjs",
+        "isolated-runtime/cloudflare/src/adapters/livekit-failure-fixture.mjs",
+      );
+    }
     const text = (
       await Promise.all(
         sources.map((source) =>
