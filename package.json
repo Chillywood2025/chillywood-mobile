@@ -518,6 +518,7 @@
     "guard:cognitive-deferred-evidence": "npm run validate:cognitive-deferred-evidence",
     "validate:cognitive-deferred-evidence": "node ./scripts/validate-cognitive-deferred-evidence-manifest.mjs && node ./scripts/test-cognitive-deferred-evidence-manifest-v2.mjs",
     "test:cognitive-deferred-evidence-identity": "node ./scripts/test-cognitive-deferred-evidence-manifest-v2.mjs",
+    "validate:cognitive-final-integration-matrix": "node ./scripts/validate-cognitive-final-integration-pr-matrix.mjs --verify-git",
     "plan:cognitive-deferred-evidence-import": "node ./scripts/validate-cognitive-deferred-evidence-manifest.mjs --plan",
     "proof:research-source-integrity": "node ./scripts/cognitive-contract-suite.mjs research proof",
     "test:research-source-broker": "node ./scripts/cognitive-contract-suite.mjs research test",
