@@ -79,7 +79,7 @@ if [ "${#source_commit}" -ne 40 ] ||
   exit 65
 fi
 if [ "$release_profile" != \
-  "chillywood-pinned-research-host-runtime-v3-current-13" ]; then
+  "chillywood-pinned-research-host-runtime-v4-current-14" ]; then
   echo "release_profile_rejected" >&2
   exit 65
 fi

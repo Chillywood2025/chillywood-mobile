@@ -34,8 +34,10 @@ plus a canonical sidecar manifest. Deployment requires the independently
 recorded sidecar hash, then verifies the archive hash, exact runtime-module graph,
 extracted file hashes and executable modes before installing a read-only release.
 The canonical v2 manifest also binds the exact credential-directory ABI and
-path, and `.release-environment` carries those same values to the selected Node
-entrypoint. Exact legacy v1 manifests remain verifiable for audit and link
+path. Its reviewed module graph includes an import-free semantic validator that
+the builder loads from the exact Git blob and executes before creating an
+artifact, and `.release-environment` carries those same values to the selected
+Node entrypoint. Exact legacy v1 manifests remain verifiable for audit and link
 restoration, but they are inactive-only and can never be restarted or reach a
 readiness check. Direct deployment and standalone rollback accept only a
 current compatible v2 release with its own verified credential overlay. The

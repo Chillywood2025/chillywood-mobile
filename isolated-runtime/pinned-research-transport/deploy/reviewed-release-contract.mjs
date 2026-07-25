@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { Buffer } from "node:buffer";
 import {
   chmod,
   lstat,
@@ -10,14 +11,19 @@ import {
 } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 
+import {
+  CURRENT_CREDENTIAL_DIRECTORY_ABI,
+  CURRENT_CREDENTIAL_DIRECTORY_PATH,
+} from "../src/credential-directory-contract.mjs";
+
 export const LEGACY_REVIEWED_RELEASE_CONTRACT =
   "chillywood-reviewed-research-transport-release-v1";
 export const REVIEWED_RELEASE_CONTRACT =
   "chillywood-reviewed-research-transport-release-v2";
-export const CURRENT_CREDENTIAL_DIRECTORY_ABI =
-  "chillywood-systemd-fixed-user-ephemeral-0400-v1";
-export const CURRENT_CREDENTIAL_DIRECTORY_PATH =
-  "/run/chillywood-research-transport-runtime";
+export {
+  CURRENT_CREDENTIAL_DIRECTORY_ABI,
+  CURRENT_CREDENTIAL_DIRECTORY_PATH,
+};
 
 const LEGACY_V1_RUNTIME_MODULE_PATHS = Object.freeze([
   "config/intelligence/research-authorities.json",
@@ -32,7 +38,7 @@ const LEGACY_V1_RUNTIME_MODULE_PATHS = Object.freeze([
   "isolated-runtime/pinned-research-transport/src/pinned-public-research-transport.mjs",
 ]);
 
-export const RESEARCH_HOST_RUNTIME_MODULE_PATHS = Object.freeze([
+const LEGACY_V1_THIRTEEN_MODULE_PATHS = Object.freeze([
   "config/intelligence/research-authorities.json",
   "isolated-runtime/cloudflare/src/adapters/research-fetch-transport.mjs",
   "isolated-runtime/pinned-research-transport/bin/server.mjs",
@@ -46,6 +52,12 @@ export const RESEARCH_HOST_RUNTIME_MODULE_PATHS = Object.freeze([
   "isolated-runtime/pinned-research-transport/src/host-service.mjs",
   "isolated-runtime/pinned-research-transport/src/invocation-contract.mjs",
   "isolated-runtime/pinned-research-transport/src/pinned-public-research-transport.mjs",
+]);
+
+export const RESEARCH_HOST_RUNTIME_MODULE_PATHS = Object.freeze([
+  ...LEGACY_V1_THIRTEEN_MODULE_PATHS.slice(0, 9),
+  "isolated-runtime/pinned-research-transport/src/credential-directory-contract.mjs",
+  ...LEGACY_V1_THIRTEEN_MODULE_PATHS.slice(9),
 ]);
 
 export const REVIEWED_RELEASE_PROFILES = Object.freeze([
@@ -62,11 +74,11 @@ export const REVIEWED_RELEASE_PROFILES = Object.freeze([
     contract: LEGACY_REVIEWED_RELEASE_CONTRACT,
     credentialDirectoryAbi: null,
     credentialDirectoryPath: null,
-    modulePaths: RESEARCH_HOST_RUNTIME_MODULE_PATHS,
+    modulePaths: LEGACY_V1_THIRTEEN_MODULE_PATHS,
     runtimeActivationAllowed: false,
   }),
   Object.freeze({
-    id: "chillywood-pinned-research-host-runtime-v3-current-13",
+    id: "chillywood-pinned-research-host-runtime-v4-current-14",
     contract: REVIEWED_RELEASE_CONTRACT,
     credentialDirectoryAbi: CURRENT_CREDENTIAL_DIRECTORY_ABI,
     credentialDirectoryPath: CURRENT_CREDENTIAL_DIRECTORY_PATH,
@@ -80,6 +92,8 @@ export const CURRENT_REVIEWED_RELEASE_PROFILE =
 
 const SHA1 = /^[a-f0-9]{40}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
+const CREDENTIAL_DIRECTORY_CONTRACT_MODULE_PATH =
+  "isolated-runtime/pinned-research-transport/src/credential-directory-contract.mjs";
 const MANIFEST_NAME = ".reviewed-release-manifest.json";
 const MANIFEST_SHA_NAME = ".reviewed-release-manifest.sha256";
 const RELEASE_ENVIRONMENT_NAME = ".release-environment";
@@ -99,6 +113,102 @@ const exactKeys = (value, keys) =>
 
 const sha256 = (value) =>
   createHash("sha256").update(value).digest("hex");
+
+const validateExactCredentialDirectoryContract = async ({
+  source,
+  sourceCommit,
+  sourceTree,
+}) => {
+  const sourceSha256 = sha256(source);
+  let contract;
+  try {
+    contract = await import(
+      `data:text/javascript;base64,${
+        Buffer.from(source).toString("base64")
+      }#${sourceCommit}-${sourceSha256}`
+    );
+  } catch {
+    throw new Error("reviewed_release_runtime_abi_source_rejected");
+  }
+  if (
+    Object.keys(contract).sort().join("\n") !==
+      [
+        "CURRENT_CREDENTIAL_DIRECTORY_ABI",
+        "CURRENT_CREDENTIAL_DIRECTORY_PATH",
+        "validateResearchHostConfiguration",
+      ].join("\n") ||
+    contract.CURRENT_CREDENTIAL_DIRECTORY_ABI !==
+      CURRENT_CREDENTIAL_DIRECTORY_ABI ||
+    contract.CURRENT_CREDENTIAL_DIRECTORY_PATH !==
+      CURRENT_CREDENTIAL_DIRECTORY_PATH ||
+    typeof contract.validateResearchHostConfiguration !== "function"
+  ) {
+    throw new Error("reviewed_release_runtime_abi_source_rejected");
+  }
+  const exactEnvironment = Object.freeze({
+    CREDENTIALS_DIRECTORY: CURRENT_CREDENTIAL_DIRECTORY_PATH,
+    COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI:
+      CURRENT_CREDENTIAL_DIRECTORY_ABI,
+    COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_PATH:
+      CURRENT_CREDENTIAL_DIRECTORY_PATH,
+    COGNITIVE_RESEARCH_TRANSPORT_RELEASE_MANIFEST_SHA256:
+      "0".repeat(64),
+    COGNITIVE_RESEARCH_TRANSPORT_SOURCE_COMMIT: sourceCommit,
+    COGNITIVE_RESEARCH_TRANSPORT_SOURCE_TREE: sourceTree,
+  });
+  let validated;
+  try {
+    validated =
+      contract.validateResearchHostConfiguration(exactEnvironment);
+  } catch {
+    throw new Error("reviewed_release_runtime_abi_source_rejected");
+  }
+  if (
+    !Object.isFrozen(validated) ||
+    !exactKeys(validated, [
+      "credentialDirectory",
+      "releaseManifestSha256",
+      "sourceCommit",
+      "sourceTree",
+    ]) ||
+    validated.credentialDirectory !==
+      CURRENT_CREDENTIAL_DIRECTORY_PATH ||
+    validated.releaseManifestSha256 !== "0".repeat(64) ||
+    validated.sourceCommit !== sourceCommit ||
+    validated.sourceTree !== sourceTree
+  ) {
+    throw new Error("reviewed_release_runtime_abi_source_rejected");
+  }
+  for (const override of [
+    {
+      COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI:
+        "legacy-abi",
+    },
+    {
+      COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_PATH:
+        "/run/credentials/chillywood-research-transport.service",
+    },
+    {
+      CREDENTIALS_DIRECTORY:
+        "/run/credentials/chillywood-research-transport.service",
+    },
+  ]) {
+    try {
+      contract.validateResearchHostConfiguration({
+        ...exactEnvironment,
+        ...override,
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "research_host_configuration_rejected"
+      ) {
+        continue;
+      }
+    }
+    throw new Error("reviewed_release_runtime_abi_source_rejected");
+  }
+};
 
 const canonicalModuleGraph = (modules) =>
   `${JSON.stringify(modules)}\n`;
@@ -332,32 +442,23 @@ export const buildReviewedRelease = async ({
   if (!SHA1.test(sourceTree)) {
     throw new Error("reviewed_release_source_tree_rejected");
   }
-  const selectedEntrypoint = readGit(
-    repository,
-    [
-      "show",
-      `${sourceCommit}:isolated-runtime/pinned-research-transport/bin/server.mjs`,
-    ],
-    "utf8",
-  );
-  if (
-    !selectedEntrypoint.includes(
-      "COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI",
-    ) ||
-    !new RegExp(
-      `credentialDirectoryAbi\\s*!==\\s*"${CURRENT_CREDENTIAL_DIRECTORY_ABI}"`,
-      "u",
-    ).test(selectedEntrypoint) ||
-    !new RegExp(
-      `credentialDirectoryPath\\s*!==\\s*"${CURRENT_CREDENTIAL_DIRECTORY_PATH}"`,
-      "u",
-    ).test(selectedEntrypoint) ||
-    !selectedEntrypoint.includes(
-      "credentialDirectory !== credentialDirectoryPath",
-    )
-  ) {
+  let selectedCredentialDirectoryContract;
+  try {
+    selectedCredentialDirectoryContract = readGit(
+      repository,
+      [
+        "show",
+        `${sourceCommit}:${CREDENTIAL_DIRECTORY_CONTRACT_MODULE_PATH}`,
+      ],
+    );
+  } catch {
     throw new Error("reviewed_release_runtime_abi_source_rejected");
   }
+  await validateExactCredentialDirectoryContract({
+    source: selectedCredentialDirectoryContract,
+    sourceCommit,
+    sourceTree,
+  });
   const modules = selectedProfile.modulePaths.map((modulePath) => {
     const treeEntry = readGit(
       repository,

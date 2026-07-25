@@ -431,12 +431,21 @@ test("systemd RuntimeDirectory interpretation stays outside its credential names
     dirname(fileURLToPath(import.meta.url)),
     "..",
   );
-  const [credentialCompatibility, readiness, server] = await Promise.all([
+  const [
+    credentialCompatibility,
+    credentialDirectoryContract,
+    readiness,
+    server,
+  ] = await Promise.all([
     readFile(
       resolve(
         packageRoot,
         "deploy/chillywood-research-transport-credential-compat.conf.template",
       ),
+      "utf8",
+    ),
+    readFile(
+      resolve(packageRoot, "src/credential-directory-contract.mjs"),
       "utf8",
     ),
     readFile(resolve(packageRoot, "deploy/readiness.sh"), "utf8"),
@@ -466,7 +475,12 @@ test("systemd RuntimeDirectory interpretation stays outside its credential names
   assert.doesNotMatch(runtimeDirectory, /\//u);
   assert.equal(credentialDirectory, `/run/${runtimeDirectory}`);
   assert.doesNotMatch(credentialDirectory, /^\/run\/credentials(?:\/|$)/u);
-  for (const source of [credentialCompatibility, readiness, server]) {
+  for (const source of [
+    credentialCompatibility,
+    credentialDirectoryContract,
+    readiness,
+    server,
+  ]) {
     assert.doesNotMatch(
       source,
       /\/run\/credentials\/chillywood-research-transport-runtime/u,
@@ -491,16 +505,27 @@ test("systemd RuntimeDirectory interpretation stays outside its credential names
     new RegExp(`^runtime_directory=${credentialDirectory}$`, "mu"),
   );
   assert.match(
-    server,
+    credentialDirectoryContract,
     new RegExp(
-      `credentialDirectoryPath\\s*!==\\s*"${credentialDirectory}"`,
+      `CURRENT_CREDENTIAL_DIRECTORY_PATH\\s*=\\s*"${credentialDirectory}"`,
       "u",
     ),
   );
-  assert.match(server, /credentialDirectory !== credentialDirectoryPath/u);
+  assert.match(
+    credentialDirectoryContract,
+    /credentialDirectoryPath\s*!==\s*CURRENT_CREDENTIAL_DIRECTORY_PATH/u,
+  );
+  assert.match(
+    credentialDirectoryContract,
+    /credentialDirectory !== credentialDirectoryPath/u,
+  );
+  assert.match(
+    credentialDirectoryContract,
+    /COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI/u,
+  );
   assert.match(
     server,
-    /COGNITIVE_RESEARCH_TRANSPORT_CREDENTIAL_DIRECTORY_ABI/u,
+    /\.\.\/src\/credential-directory-contract\.mjs/u,
   );
 });
 
