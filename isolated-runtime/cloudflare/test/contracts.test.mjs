@@ -64,6 +64,53 @@ test("accepts one exact reviewed sentinel contract", async () => {
   assert.equal(result.ok, true);
 });
 
+test("LiveKit no-finding attestation is evaluator-only and schema-closed", async () => {
+  const payload = {
+    action: "attest_livekit_bounded_failure_no_finding",
+    sentinelRunId: UUID_A,
+  };
+  const valid = await envelope({
+    operation: "attest_livekit_bounded_failure_no_finding",
+    payload,
+    principal: "cognitive_product_quality_evaluator",
+  });
+  assert.equal(
+    (await validateEnvelope(
+      valid,
+      Date.parse("2026-07-24T12:00:00.000Z"),
+      60_000,
+      (principal) => PRINCIPAL_BY_ID.get(principal),
+    )).ok,
+    true,
+  );
+  assert.equal(
+    (await validateEnvelope(
+      {
+        ...valid,
+        principal: "cognitive_product_quality_triage",
+      },
+      Date.parse("2026-07-24T12:00:00.000Z"),
+      60_000,
+      (principal) => PRINCIPAL_BY_ID.get(principal),
+    )).error,
+    "envelope_scope_rejected",
+  );
+  const tamperedPayload = { ...payload, verdict: "passed" };
+  assert.equal(
+    (await validateEnvelope(
+      {
+        ...valid,
+        payload: tamperedPayload,
+        payloadHash: await hashJson(tamperedPayload),
+      },
+      Date.parse("2026-07-24T12:00:00.000Z"),
+      60_000,
+      (principal) => PRINCIPAL_BY_ID.get(principal),
+    )).error,
+    "operation_schema_rejected",
+  );
+});
+
 test("rejects extra fields, action drift, hash drift, scope drift and expiry", async () => {
   const valid = await envelope();
   assert.equal(

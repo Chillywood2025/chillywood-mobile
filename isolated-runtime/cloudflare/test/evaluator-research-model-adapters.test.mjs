@@ -17,6 +17,7 @@ import {
   deterministicVisualClassification,
   PRODUCT_QUALITY_EVALUATOR_ADAPTERS,
 } from "../src/adapters/evaluator.mjs";
+import { hashJson, sha256Hex } from "../src/contracts.mjs";
 import {
   createModelRouterAdapters,
   hashEvidencePacket,
@@ -301,29 +302,204 @@ const liveKitMetrics = (changes = {}) => ({
   ...changes,
 });
 
-test("caller-labelled LiveKit fixtures have no evaluator authority", () => {
+test("LiveKit fixture attestation independently derives one exact no-finding receipt", async () => {
   const metrics = liveKitMetrics({
     backgroundForegroundRecovery: false,
     backgrounded: false,
     firstAudioVideoObserved: false,
     foregrounded: false,
-    headlessParticipantIdentityHash: null,
-    iceCheckingObserved: false,
-    iceGatheringObserved: false,
-    iceState: "new",
-    localTrackPublished: false,
-    participantIdentityDistinct: false,
-    peerConnectionEstablished: false,
     remoteMediaKind: "none",
-    remoteParticipantJoined: false,
     remoteTrackSubscribed: false,
-    roomConnected: false,
     scenarioType: "bounded_failure_fixture",
-    stageFailureCategory: "token_backend_failure",
-    tokenClaimsValidated: false,
-    tokenResultStatus: "error",
-    tokenReturned: false,
-    websocketConnected: false,
+    stageFailureCategory: "remote_subscription_failure",
+  });
+  const fixtureAttestationHash = "d".repeat(64);
+  const fixtureId = "e".repeat(64);
+  const binding = {
+    condition: {
+      expectedFailureCategory: "remote_subscription_failure",
+      injectedCondition: "suppress_remote_publication",
+      timeoutMs: 12_000,
+      triggerStage: "remote_participant_joined",
+    },
+    fixtureAttestationHash,
+    fixtureId,
+    fixtureType: "remote_join_without_publish",
+    principal: "cognitive_livekit_experience_collector",
+    roomRunCorrelationHash: HASH_A,
+    sourceCommit: "f".repeat(40),
+    syntheticRoomNameHash: "6".repeat(64),
+  };
+  const run = {
+    collector_capability_id: UUID_A,
+    environment: "production",
+    erased_at: null,
+    evaluation_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    evidence_manifest_hash: HASH_A,
+    id: UUID_A,
+    metric_manifest: {
+      evidenceHashes: [HASH_A, fixtureAttestationHash],
+      failureFixtureBinding: binding,
+      metrics,
+      observationKind: "livekit_experience",
+    },
+    physical_proof_status: "installed_ui_observed",
+    platform: "android",
+    project_id: UUID_B,
+    result_status: "failed",
+    route_or_surface: "live-stage",
+    runtime_identity_hash: HASH_B,
+    sentinel_key: "livekit_experience_sentinel",
+    source_build_hash: HASH_C,
+    task_id: UUID_C,
+  };
+  const calls = [];
+  let activeChecks = 0;
+  const result = await PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+    .attest_livekit_bounded_failure_no_finding.execute({
+      assertActive: async () => {
+        activeChecks += 1;
+      },
+      database: {
+        call: async (id, parameters) => {
+          calls.push({ id, parameters });
+          if (id === "productQualityEvaluatorSnapshot") {
+            return {
+              activeBaseline: { count: 0 },
+              detectionRun: null,
+              finding: null,
+              run,
+            };
+          }
+          return {
+            attestationHash: parameters[3],
+            attestationId: UUID_D,
+            derivedFailureCategory: parameters[1],
+            findingCreated: false,
+            findingRecurrence: false,
+            recordedAt: new Date().toISOString(),
+            resolutionRequired: false,
+            scenarioType: "bounded_failure_fixture",
+            sentinelRunId: UUID_A,
+          };
+        },
+      },
+      env: {
+        COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
+      },
+      payload: {
+        action: "attest_livekit_bounded_failure_no_finding",
+        sentinelRunId: UUID_A,
+      },
+    });
+  assert.equal(activeChecks, 1);
+  assert.equal(result.independentEvaluation, true);
+  assert.equal(result.selfApproval, false);
+  assert.deepEqual(
+    calls.map((entry) => entry.id),
+    [
+      "productQualityEvaluatorSnapshot",
+      "productQualityAttestLiveKitBoundedFailureNoFinding",
+    ],
+  );
+  const evaluatorOutputHash = await hashJson({
+    derivedFailureCategory: "remote_subscription_failure",
+    evidenceManifestHash: HASH_A,
+    evaluationKind: "livekit_bounded_failure_no_finding",
+    fixtureAttestationHash,
+    fixtureId,
+    sentinelRunId: UUID_A,
+    sourceBuildHash: HASH_C,
+    verdict: "expected_fixture_failure_no_finding",
+  });
+  const attestationHash = await sha256Hex([
+    "livekit-bounded-failure-no-finding-attestation-v1",
+    UUID_A,
+    UUID_C,
+    UUID_B,
+    "android",
+    "production",
+    "bounded_failure_fixture",
+    HASH_A,
+    HASH_C,
+    "remote_subscription_failure",
+    evaluatorOutputHash,
+  ].join("|"));
+  assert.deepEqual(calls[1].parameters, [
+    UUID_A,
+    "remote_subscription_failure",
+    evaluatorOutputHash,
+    attestationHash,
+    EVALUATOR_TOKEN,
+  ]);
+  assert.deepEqual(
+    PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+      .attest_livekit_bounded_failure_no_finding.databaseOperations,
+    [
+      "read_product_quality_snapshot",
+      "attest_livekit_bounded_failure_no_finding",
+    ],
+  );
+  assert.equal(
+    EVALUATOR_STATEMENTS.productQualityAttestLiveKitBoundedFailureNoFinding
+      .arity,
+    5,
+  );
+  assert.equal(
+    deriveIndependentLiveKitFailureCategory(metrics),
+    "remote_subscription_failure",
+  );
+  assert.deepEqual(
+    deterministicNoFindingReasons(run, {
+      approvedVisualBaselineCount: 0,
+      approvedVisualBaselineHash: null,
+    }),
+    [
+      "healthy_installed_livekit_experience_required",
+      "passing_physical_run_required",
+    ],
+  );
+
+  for (
+    const extra of [
+      { verdict: "passed" },
+      { derivedFailureCategory: "none" },
+      { attestationHash: HASH_A },
+    ]
+  ) {
+    await assert.rejects(
+      PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+        .attest_livekit_bounded_failure_no_finding.execute({
+          assertActive: async () => {},
+          database: {
+            call: async () => {
+              throw new Error("database_must_not_be_called");
+            },
+          },
+          env: {
+            COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
+          },
+          payload: {
+            action: "attest_livekit_bounded_failure_no_finding",
+            sentinelRunId: UUID_A,
+            ...extra,
+          },
+        }),
+      /livekit_no_finding_attestation_payload_rejected/u,
+    );
+  }
+});
+
+test("LiveKit fixture attestation rejects missing proof, relabel, tamper, and replay", async () => {
+  const metrics = liveKitMetrics({
+    backgroundForegroundRecovery: false,
+    backgrounded: false,
+    firstAudioVideoObserved: false,
+    foregrounded: false,
+    remoteMediaKind: "none",
+    remoteTrackSubscribed: false,
+    scenarioType: "bounded_failure_fixture",
+    stageFailureCategory: "remote_subscription_failure",
   });
   const run = {
     collector_capability_id: UUID_A,
@@ -333,39 +509,115 @@ test("caller-labelled LiveKit fixtures have no evaluator authority", () => {
     evidence_manifest_hash: HASH_A,
     id: UUID_A,
     metric_manifest: {
+      evidenceHashes: [HASH_A, HASH_B],
       metrics,
       observationKind: "livekit_experience",
     },
     physical_proof_status: "installed_ui_observed",
     platform: "android",
     project_id: UUID_B,
-    result_status: "passed",
+    result_status: "failed",
     route_or_surface: "live-stage",
     runtime_identity_hash: HASH_B,
     sentinel_key: "livekit_experience_sentinel",
     source_build_hash: HASH_C,
     task_id: UUID_C,
   };
-  assert.equal(
+  const request = {
+    action: "attest_livekit_bounded_failure_no_finding",
+    sentinelRunId: UUID_A,
+  };
+  let databaseCalls = 0;
+  await assert.rejects(
     PRODUCT_QUALITY_EVALUATOR_ADAPTERS
-      .attest_livekit_bounded_failure_no_finding,
-    undefined,
+      .attest_livekit_bounded_failure_no_finding.execute({
+        assertActive: async () => {},
+        database: {
+          call: async () => {
+            databaseCalls += 1;
+            return {
+              activeBaseline: { count: 0 },
+              detectionRun: null,
+              finding: null,
+              run,
+            };
+          },
+        },
+        env: {
+          COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
+        },
+        payload: request,
+      }),
+    /livekit_no_finding_attestation_snapshot_rejected/u,
   );
-  assert.equal(
-    EVALUATOR_STATEMENTS.productQualityAttestLiveKitBoundedFailureNoFinding,
-    undefined,
+  assert.equal(databaseCalls, 1);
+
+  const validBinding = {
+    condition: {
+      expectedFailureCategory: "remote_subscription_failure",
+      injectedCondition: "suppress_remote_publication",
+      timeoutMs: 12_000,
+      triggerStage: "remote_participant_joined",
+    },
+    fixtureAttestationHash: HASH_B,
+    fixtureId: HASH_C,
+    fixtureType: "remote_join_without_publish",
+    principal: "cognitive_livekit_experience_collector",
+    roomRunCorrelationHash: HASH_A,
+    sourceCommit: "f".repeat(40),
+    syntheticRoomNameHash: "6".repeat(64),
+  };
+  const snapshot = {
+    activeBaseline: { count: 0 },
+    detectionRun: null,
+    finding: null,
+    run: {
+      ...run,
+      metric_manifest: {
+        ...run.metric_manifest,
+        failureFixtureBinding: {
+          ...validBinding,
+          fixtureType: "remote_publication_cancelled",
+        },
+      },
+    },
+  };
+  await assert.rejects(
+    PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+      .attest_livekit_bounded_failure_no_finding.execute({
+        assertActive: async () => {},
+        database: { call: async () => snapshot },
+        env: {
+          COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
+        },
+        payload: request,
+      }),
+    /livekit_no_finding_attestation_snapshot_rejected/u,
   );
-  assert.equal(
-    deriveIndependentLiveKitFailureCategory(metrics),
-    "token_backend_failure",
+
+  snapshot.run.metric_manifest.failureFixtureBinding = validBinding;
+  let calls = 0;
+  await assert.rejects(
+    PRODUCT_QUALITY_EVALUATOR_ADAPTERS
+      .attest_livekit_bounded_failure_no_finding.execute({
+        assertActive: async () => {},
+        database: {
+          call: async (id) => {
+            calls += 1;
+            if (id === "productQualityEvaluatorSnapshot") return snapshot;
+            throw new Error(
+              "livekit_bounded_failure_no_finding_attestation_replay_rejected",
+            );
+          },
+        },
+        env: {
+          COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION: EVALUATOR_TOKEN,
+        },
+        payload: request,
+      }),
+    /livekit_bounded_failure_no_finding_attestation_replay_rejected/u,
   );
-  assert.deepEqual(
-    deterministicNoFindingReasons(run, {
-      approvedVisualBaselineCount: 0,
-      approvedVisualBaselineHash: null,
-    }),
-    ["healthy_installed_livekit_experience_required"],
-  );
+  assert.equal(calls, 2);
 });
 
 test("authoritative touch-target port preserves Android 23.24dp finding", () => {

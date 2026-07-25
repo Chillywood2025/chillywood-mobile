@@ -39,6 +39,7 @@ insert into expected_runtime_grants(role_name, schema_name, function_name) value
   ('cognitive_product_quality_evaluator','cognitive_runtime','governance_evaluate_product_experience_baseline_v1'),
   ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_record_sentinel_evaluator_proof'),
   ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_evaluator_snapshot'),
+  ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_attest_livekit_bounded_failure_no_finding'),
   ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_detection'),
   ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_no_finding'),
   ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_resolution'),
@@ -417,7 +418,7 @@ select is(
     )
     from explicit_grants
   ),
-  'e70e47af02aefabc9e19fdadc1f48f357f3c8d85fce75259c4703b2863e70058',
+  'e924f1b719ee1cd1a5e43d7f622c53dbc3c45d9e1e077d005c410f07b352446e',
   'exact role-to-function-signature grant manifest is deterministic'
 );
 

@@ -228,7 +228,7 @@ select ok(
 );
 
 select ok(
-  not has_function_privilege(
+  has_function_privilege(
     'cognitive_product_quality_evaluator',
     'cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding(uuid,text,text,text,text)',
     'EXECUTE'
@@ -253,11 +253,11 @@ select ok(
     'cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding(uuid,text,text,text,text)',
     'EXECUTE'
   ),
-  'the retired bounded-failure no-finding wrapper is not executable by any runtime or client role'
+  'only the isolated product evaluator can execute the bounded-failure no-finding wrapper'
 );
 
 select ok(
-  not cognitive_runtime.runtime_operation_allowed(
+  cognitive_runtime.runtime_operation_allowed(
     'cognitive_product_quality_evaluator',
     'attest_livekit_bounded_failure_no_finding'
   )
@@ -269,7 +269,7 @@ select ok(
     'cognitive_livekit_experience_collector',
     'attest_livekit_bounded_failure_no_finding'
   ),
-  'the retired bounded-failure no-finding runtime operation is unavailable to every principal'
+  'the bounded-failure no-finding runtime operation is evaluator-only'
 );
 
 select ok(

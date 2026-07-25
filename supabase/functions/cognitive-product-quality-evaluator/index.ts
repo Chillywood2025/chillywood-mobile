@@ -139,6 +139,10 @@ const BASELINE_EVALUATION_KEYS = Object.freeze([
   "executionReceiptHash",
 ]);
 const NO_FINDING_KEYS = Object.freeze(["action", "sentinelRunId"]);
+const LIVEKIT_NO_FINDING_ATTESTATION_KEYS = Object.freeze([
+  "action",
+  "sentinelRunId",
+]);
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
   "confirmed_defect",
@@ -425,6 +429,12 @@ export const isStrictSentinelEvaluationPayload = (
   }
   if (value.action === "evaluate_sentinel_no_finding") {
     return hasExactKeys(value, NO_FINDING_KEYS) &&
+      typeof value.sentinelRunId === "string" &&
+      UUID.test(value.sentinelRunId) &&
+      safePayload({ action: value.action });
+  }
+  if (value.action === "attest_livekit_bounded_failure_no_finding") {
+    return hasExactKeys(value, LIVEKIT_NO_FINDING_ATTESTATION_KEYS) &&
       typeof value.sentinelRunId === "string" &&
       UUID.test(value.sentinelRunId) &&
       safePayload({ action: value.action });
@@ -2597,7 +2607,10 @@ export const handler = async (request: Request): Promise<Response> => {
       }
       return json(200, result.data as JsonObject);
     }
-    if (payload.action === "evaluate_sentinel_no_finding") {
+    if (
+      payload.action === "evaluate_sentinel_no_finding" ||
+      payload.action === "attest_livekit_bounded_failure_no_finding"
+    ) {
       return json(409, {
         error: "isolated_product_quality_evaluator_runtime_required",
       });

@@ -5,6 +5,13 @@ export const EVALUATOR_STATEMENTS = Object.freeze({
       $1::uuid,$2::text,$3::text,$4::text
     ) as result`,
   }),
+  productQualityAttestLiveKitBoundedFailureNoFinding: Object.freeze({
+    arity: 5,
+    text:
+      `select cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding(
+        $1::uuid,$2::text,$3::text,$4::text,$5::text
+      ) as result`,
+  }),
   productQualityDetectionAssessmentHash: Object.freeze({
     arity: 14,
     text: `select cognitive_runtime.product_quality_detection_assessment_hash(

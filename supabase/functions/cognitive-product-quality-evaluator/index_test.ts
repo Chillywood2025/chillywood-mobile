@@ -438,13 +438,30 @@ Deno.test("general no-finding evaluation accepts only a run identity", () => {
       "caller-controlled no-finding material accepted",
     );
   }
+  const isolatedAttestation = {
+    action: "attest_livekit_bounded_failure_no_finding",
+    sentinelRunId: payload.sentinelRunId,
+  };
   assert(
-    !isStrictSentinelEvaluationPayload({
-      action: "attest_livekit_bounded_failure_no_finding",
-      sentinelRunId: payload.sentinelRunId,
-    }),
-    "retired caller-labelled fixture attestation action accepted",
+    isStrictSentinelEvaluationPayload(isolatedAttestation),
+    "isolated fixture attestation envelope rejected",
   );
+  for (
+    const rejected of [
+      { ...isolatedAttestation, verdict: "passed" },
+      {
+        ...isolatedAttestation,
+        derivedFailureCategory: "token_backend_failure",
+      },
+      { ...isolatedAttestation, attestationHash: "9".repeat(64) },
+      { ...isolatedAttestation, sentinelRunId: "not-a-uuid" },
+    ]
+  ) {
+    assert(
+      !isStrictSentinelEvaluationPayload(rejected),
+      "caller-controlled fixture attestation material accepted",
+    );
+  }
 });
 
 Deno.test("no-finding evaluation is derived from one passing physical run", () => {

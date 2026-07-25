@@ -564,6 +564,16 @@ select is(
   'platform mismatch fails the exact scope validator'
 );
 
+select is(
+  public.product_experience_livekit_derived_failure_category(
+    'android',
+    'failed',
+    (select metric_manifest from fixture_manifest)
+  ),
+  'remote_subscription_failure',
+  'the STABLE derived-category function reads the exact persisted fixture binding'
+);
+
 select throws_ok(
   $sql$
     do $fixture_replay$

@@ -156,6 +156,13 @@ export const RUNTIME_MANIFEST = Object.freeze({
             "governance_evaluate_product_experience_baseline_v1",
           ],
         ),
+        attest_livekit_bounded_failure_no_finding: operation(
+          ["action", "sentinelRunId"],
+          [
+            "cognitive_runtime.product_quality_evaluator_snapshot",
+            "cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding",
+          ],
+        ),
         evaluate_sentinel_detection: operation(
           ["action", ...findings],
           [
