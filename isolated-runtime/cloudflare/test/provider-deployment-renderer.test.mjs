@@ -4,6 +4,7 @@ import {
   chmod,
   lstat,
   mkdtemp,
+  mkdir,
   readFile,
   readdir,
   rm,
@@ -15,7 +16,10 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { RUNTIME_MANIFEST } from "../src/manifest.mjs";
 import {
+  assertGitWorktreeMatchesReviewedSource,
+  collectGitSourceGraph,
   DeploymentRenderError,
+  getRepositoryState,
   renderDeployment,
 } from "../tools/render-provider-deployment.mjs";
 
@@ -24,19 +28,9 @@ const repositoryRoot = resolve(cloudflareRoot, "..", "..");
 const scriptPath = fileURLToPath(
   new URL("../tools/render-provider-deployment.mjs", import.meta.url),
 );
-const currentCommit = execFileSync("git", ["rev-parse", "HEAD"], {
-  cwd: repositoryRoot,
-  encoding: "utf8",
-}).trim();
-const currentTree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
-  cwd: repositoryRoot,
-  encoding: "utf8",
-}).trim();
-const repositoryState = Object.freeze({
-  baseIsAncestor: true,
-  commit: currentCommit,
-  tree: currentTree,
-});
+const repositoryState = getRepositoryState();
+const currentCommit = repositoryState.commit;
+const currentTree = repositoryState.tree;
 
 const serviceBindings = Object.fromEntries(
   RUNTIME_MANIFEST.principals.map((principal) => [
@@ -96,6 +90,7 @@ const activeInput = () => ({
     p0: 0,
     p1: 0,
     sourceCommit: currentCommit,
+    sourceModuleGraphSha256: repositoryState.sourceGraph.hash,
     sourceTree: currentTree,
   },
   runtimeVariables: {
@@ -105,12 +100,17 @@ const activeInput = () => ({
       COGNITIVE_MODEL_NAME: "approved-advisory-model",
       COGNITIVE_MODEL_OUTPUT_USD_PER_MILLION: "4.75",
     },
+    cognitive_public_research_broker: {
+      COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL:
+        "https://research-transport.example.invalid/internal/cognitive-research-transport/v1/retrieve",
+    },
   },
   schemaVersion: "chillywood-cognitive-level01-provider-deployment-input-v1",
   serviceBindings: structuredClone(serviceBindings),
   source: {
     baseCommit: RUNTIME_MANIFEST.sourceBaseCommit,
     commit: currentCommit,
+    moduleGraphSha256: repositoryState.sourceGraph.hash,
     tree: currentTree,
   },
 });
@@ -153,14 +153,30 @@ test("active rendering emits ten private configs and a credential-free gateway",
     );
     assert.equal(config.vars.SOURCE_COMMIT, currentCommit);
     assert.equal(
+      config.vars.SOURCE_MODULE_GRAPH_SHA256,
+      repositoryState.sourceGraph.hash,
+    );
+    assert.equal(
       config.vars.SOURCE_BASE_COMMIT,
       RUNTIME_MANIFEST.sourceBaseCommit,
     );
     assert.equal("secrets" in config, false);
+    assert.match(
+      config.main,
+      /^\.\.\/source\/repository\/isolated-runtime\/cloudflare\/generated\/entrypoints\/cognitive_[a-z0-9_]+\.mjs$/u,
+    );
     ids.add(config.hyperdrive[0].id);
     assert.doesNotMatch(JSON.stringify(config), /REPLACE_WITH|replace-with/u);
   }
   assert.equal(ids.size, 10);
+  const research = rendered.configs.get(
+    "cognitive_public_research_broker.wrangler.jsonc",
+  );
+  assert.equal(
+    research.vars.COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL,
+    activeInput().runtimeVariables.cognitive_public_research_broker
+      .COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL,
+  );
 
   const gateway = rendered.configs.get("gateway.wrangler.jsonc");
   assert.equal(gateway.workers_dev, true);
@@ -169,7 +185,20 @@ test("active rendering emits ten private configs and a credential-free gateway",
   assert.equal("hyperdrive" in gateway, false);
   assert.equal("secrets" in gateway, false);
   assert.equal(gateway.vars.CF_ACCESS_AUD, "a".repeat(64));
+  assert.equal(
+    gateway.vars.SOURCE_MODULE_GRAPH_SHA256,
+    repositoryState.sourceGraph.hash,
+  );
+  assert.equal(
+    gateway.main,
+    "../source/repository/isolated-runtime/cloudflare/src/gateway.mjs",
+  );
   assert.equal(gateway.services.length, 10);
+  assert.equal(rendered.commandPlan.preparationCommands.length, 1);
+  assert.equal(
+    rendered.commandPlan.sourceModuleGraphSha256,
+    repositoryState.sourceGraph.hash,
+  );
 });
 
 test("inert mode emits reviewed credential-free Workers without database bindings", async () => {
@@ -194,13 +223,11 @@ test("inert mode emits reviewed credential-free Workers without database binding
     assert.deepEqual(config.routes, []);
     assert.equal("hyperdrive" in config, false);
     assert.equal("secrets" in config, false);
+    const placeholderNames = Object.entries(principal.runtimeConfiguration)
+      .filter(([, value]) => /REPLACE_WITH|replace-with/u.test(value))
+      .map(([name]) => name);
     assert.equal(
-      [
-        "COGNITIVE_MODEL_FAMILY",
-        "COGNITIVE_MODEL_INPUT_USD_PER_MILLION",
-        "COGNITIVE_MODEL_NAME",
-        "COGNITIVE_MODEL_OUTPUT_USD_PER_MILLION",
-      ].some((name) => name in config.vars),
+      placeholderNames.some((name) => name in config.vars),
       false,
     );
   }
@@ -234,6 +261,14 @@ test("active mode fails closed before exact review or provider net readiness", a
   inertAccessPending.access.applicationStatus = "INACTIVE";
   await rejects(inertAccessPending, "access_not_ready");
 
+  const inertWithRuntimeValues = activeInput();
+  inertWithRuntimeValues.activationMode = "inert";
+  inertWithRuntimeValues.hyperdrive = null;
+  await rejects(
+    inertWithRuntimeValues,
+    "runtime_variable_contract_invalid",
+  );
+
   const netOpen = activeInput();
   netOpen.providerReadiness.netBoundary =
     "WAITING_FOR_SUPABASE_NET_SCHEMA_PROVIDER_ADMIN";
@@ -249,6 +284,12 @@ test("wrong source, base, cross-principal bindings, and cache ambiguity fail", a
   const wrongBase = activeInput();
   wrongBase.source.baseCommit = "d".repeat(40);
   await rejects(wrongBase, "source_binding_mismatch");
+
+  const wrongModuleGraph = activeInput();
+  wrongModuleGraph.source.moduleGraphSha256 = "d".repeat(64);
+  wrongModuleGraph.review.sourceModuleGraphSha256 =
+    wrongModuleGraph.source.moduleGraphSha256;
+  await rejects(wrongModuleGraph, "source_binding_mismatch");
 
   const crossedBinding = activeInput();
   const [first, second] = RUNTIME_MANIFEST.principals;
@@ -292,11 +333,112 @@ test("duplicate Hyperdrive IDs and broad or runtime deployment credentials fail"
   await rejects(rawSecretField, "credential_value_field_forbidden");
 });
 
-test("unresolved model configuration is rejected", async () => {
+test("runtime configuration is exact per principal and rejects unresolved or unsafe values", async () => {
   const input = activeInput();
   input.runtimeVariables.cognitive_model_router.COGNITIVE_MODEL_NAME =
     "REPLACE_WITH_APPROVED_MODEL_NAME";
   await rejects(input, "model_variable_invalid");
+
+  const missingResearch = activeInput();
+  delete missingResearch.runtimeVariables.cognitive_public_research_broker;
+  await rejects(missingResearch, "runtime_variable_contract_invalid");
+
+  const extraPrincipal = activeInput();
+  extraPrincipal.runtimeVariables.cognitive_sentinel_collector = {};
+  await rejects(extraPrincipal, "runtime_variable_contract_invalid");
+
+  const extraResearchValue = activeInput();
+  extraResearchValue.runtimeVariables.cognitive_public_research_broker
+    .COGNITIVE_MODEL_NAME = "cross-principal-value";
+  await rejects(
+    extraResearchValue,
+    "runtime_principal_variable_contract_invalid",
+  );
+
+  for (const unsafe of [
+    "http://research-transport.example.invalid/internal/cognitive-research-transport/v1/retrieve",
+    "https://127.0.0.1/internal/cognitive-research-transport/v1/retrieve",
+    "https://research-transport.example.invalid/incorrect",
+    "https://user:pass@research-transport.example.invalid/internal/cognitive-research-transport/v1/retrieve",
+  ]) {
+    const unsafeResearch = activeInput();
+    unsafeResearch.runtimeVariables.cognitive_public_research_broker
+      .COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL = unsafe;
+    await rejects(unsafeResearch, "runtime_variable_invalid");
+  }
+});
+
+test("source graph packages committed bytes and excludes tracked or untracked worktree tampering", async (t) => {
+  const scratch = await mkdtemp(join(tmpdir(), "chillywood-source-graph-test-"));
+  t.after(() => rm(scratch, { recursive: true, force: true }));
+  const fixtureRoot = join(scratch, "repository");
+  await mkdir(join(fixtureRoot, "runtime"), { recursive: true });
+  await writeFile(
+    join(fixtureRoot, "runtime", "main.mjs"),
+    'export const value = "reviewed";\n',
+  );
+  execFileSync("git", ["init", "--quiet"], { cwd: fixtureRoot });
+  execFileSync("git", ["config", "user.name", "Cognitive Runtime Test"], {
+    cwd: fixtureRoot,
+  });
+  execFileSync("git", ["config", "user.email", "runtime-test@example.invalid"], {
+    cwd: fixtureRoot,
+  });
+  execFileSync("git", ["add", "runtime/main.mjs"], { cwd: fixtureRoot });
+  execFileSync("git", ["commit", "--quiet", "-m", "reviewed source"], {
+    cwd: fixtureRoot,
+  });
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: fixtureRoot,
+    encoding: "utf8",
+  }).trim();
+  const reviewed = collectGitSourceGraph({
+    commit,
+    pathspecs: ["runtime"],
+    repository: fixtureRoot,
+    requiredPaths: ["runtime/main.mjs"],
+  });
+  assert.doesNotThrow(() =>
+    assertGitWorktreeMatchesReviewedSource({
+      pathspecs: ["runtime"],
+      repository: fixtureRoot,
+    })
+  );
+
+  await writeFile(
+    join(fixtureRoot, "runtime", "main.mjs"),
+    'export const value = "tampered";\n',
+  );
+  await writeFile(
+    join(fixtureRoot, "runtime", "shadow.mjs"),
+    'export const value = "untracked";\n',
+  );
+  const afterTamper = collectGitSourceGraph({
+    commit,
+    pathspecs: ["runtime"],
+    repository: fixtureRoot,
+    requiredPaths: ["runtime/main.mjs"],
+  });
+  assert.equal(afterTamper.hash, reviewed.hash);
+  assert.equal(afterTamper.fileCount, 1);
+  assert.equal(
+    afterTamper.entries[0].bytes.toString("utf8"),
+    'export const value = "reviewed";\n',
+  );
+  assert.equal(
+    afterTamper.entries.some((entry) => entry.path.endsWith("shadow.mjs")),
+    false,
+  );
+  assert.throws(
+    () =>
+      assertGitWorktreeMatchesReviewedSource({
+        pathspecs: ["runtime"],
+        repository: fixtureRoot,
+      }),
+    (error) =>
+      error instanceof DeploymentRenderError &&
+      error.message === "source_module_worktree_dirty",
+  );
 });
 
 test("CLI requires owner-only external input and writes owner-only dry-run artifacts", async (t) => {
@@ -325,6 +467,8 @@ test("CLI requires owner-only external input and writes owner-only dry-run artif
   assert.deepEqual(files, [
     "command-plan.json",
     "deployment-metadata.json",
+    "source",
+    "source-manifest.json",
     "wrangler",
   ]);
   for (const file of await readdir(join(outputPath, "wrangler"))) {
@@ -336,10 +480,50 @@ test("CLI requires owner-only external input and writes owner-only dry-run artif
   );
   assert.equal(metadata.configCount, 11);
   assert.equal(Object.keys(metadata.configHashes).length, 11);
+  assert.equal(
+    metadata.sourceModuleGraphSha256,
+    repositoryState.sourceGraph.hash,
+  );
+  assert.match(metadata.sourceManifestSha256, /^[a-f0-9]{64}$/u);
+  const sourceManifest = JSON.parse(
+    await readFile(join(outputPath, "source-manifest.json"), "utf8"),
+  );
+  assert.equal(
+    sourceManifest.sourceModuleGraphSha256,
+    repositoryState.sourceGraph.hash,
+  );
+  assert.equal(
+    sourceManifest.fileCount,
+    repositoryState.sourceGraph.fileCount,
+  );
+  const packagedEntrypoint = join(
+    outputPath,
+    "source",
+    "repository",
+    "isolated-runtime",
+    "cloudflare",
+    "generated",
+    "entrypoints",
+    "cognitive_public_research_broker.mjs",
+  );
+  const reviewedEntrypoint = execFileSync(
+    "git",
+    [
+      "show",
+      `${currentCommit}:isolated-runtime/cloudflare/generated/entrypoints/cognitive_public_research_broker.mjs`,
+    ],
+  );
+  assert.deepEqual(await readFile(packagedEntrypoint), reviewedEntrypoint);
   const commandPlan = JSON.parse(
     await readFile(join(outputPath, "command-plan.json"), "utf8"),
   );
   assert.equal(commandPlan.commands.length, 11);
+  assert.equal(commandPlan.preparationCommands.length, 1);
+  assert.equal(commandPlan.commands.some(({ argv }) => argv[0] === "npx"), false);
+  assert.equal(
+    commandPlan.sourceManifestSha256,
+    metadata.sourceManifestSha256,
+  );
 });
 
 test("CLI rejects repository input, permissive input, and unsafe output", async (t) => {
