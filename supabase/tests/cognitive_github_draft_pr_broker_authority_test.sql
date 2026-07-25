@@ -268,6 +268,51 @@ select throws_ok(
     'missing-capability',
     repeat('b',32),
     repeat('n',32),
+    'forbidden-camel-case-source-call',
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001',
+    'Chillywood2025/chillywood-mobile',
+    'codex/cognitive-canary/home-tab-target',
+    'shared',
+    'production',
+    'github',
+    'github_open_draft_pr',
+    'components/AuthScreen.tsx',
+    'e3000000-0000-4000-8000-000000000001',
+    128,
+    0,
+    repeat('5',64),
+    repeat('6',64),
+    repeat('7',64),
+    'e4000000-0000-4000-8000-000000000001',
+    repeat('8',64),
+    repeat('9',64),
+    repeat('a',40),
+    repeat('b',40),
+    repeat('c',64),
+    repeat('d',64),
+    repeat('e',64),
+    repeat('f',64),
+    repeat('1',64),
+    repeat('2',64),
+    repeat('3',64),
+    repeat('4',64),
+    repeat('5',64),
+    repeat('6',64),
+    repeat('7',64),
+    repeat('8',64),
+    'github-broker-service-token-test-only'
+  )$$,
+  'P0001',
+  'github_draft_pr_exact_source_path_rejected',
+  'camel-case auth filenames cannot bypass the exact source-canary path'
+);
+
+select throws_ok(
+  $$select public.cognitive_consume_github_draft_pr_capability(
+    'missing-capability',
+    repeat('b',32),
+    repeat('n',32),
     'missing-capability-call',
     'e2000000-0000-4000-8000-000000000001',
     'e1000000-0000-4000-8000-000000000001',
@@ -409,15 +454,25 @@ select ok(
 
 select ok(
   pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
+    'public.cognitive_consume_github_draft_pr_pre_source(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
   ) like '%cognitive_github_draft_pr_runtime_attestation_is_current%'
   and pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
+    'public.cognitive_consume_github_draft_pr_pre_source(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
   ) like '%cognitive_github_draft_pr_plan_contract_hash%'
   and pg_get_functiondef(
-    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
+    'public.cognitive_consume_github_draft_pr_pre_source(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
   ) like '%ccb0b53a380c2a14bae99680105c60aa1c78267f3a96dff3cb22aaa258588554%',
   'draft execution binds exact plan and current least-privilege credential'
+);
+
+select ok(
+  pg_get_functiondef(
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
+  ) like '%p_path = ''components/haptic-tab.tsx''%'
+  and pg_get_functiondef(
+    'public.cognitive_consume_github_draft_pr_capability(text,text,text,text,uuid,uuid,text,text,public.cognitive_platform,public.cognitive_environment,text,text,text,uuid,bigint,numeric,text,text,text,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)'::regprocedure
+  ) not like '%^(src|components|app)/%',
+  'database source-canary authorization is positively bound to the Home tab component'
 );
 
 select * from finish();

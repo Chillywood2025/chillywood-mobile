@@ -5,16 +5,16 @@
         "databaseOperations": [
           "record_github_provider_readback"
         ],
-        "ready": true,
-        "reason": null
+        "ready": false,
+        "reason": "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED"
       },
       "execute_canary": {
         "databaseOperations": [
           "consume_github_capability",
           "accept_github_tool_result"
         ],
-        "ready": true,
-        "reason": null
+        "ready": false,
+        "reason": "GITHUB_NO_MERGE_PROVIDER_PROOF_REQUIRED"
       },
       "status": {
         "databaseOperations": [],
