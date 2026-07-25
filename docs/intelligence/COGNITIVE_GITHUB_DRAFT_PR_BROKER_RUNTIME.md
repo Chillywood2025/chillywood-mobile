@@ -1,6 +1,6 @@
 # Cognitive GitHub Draft-PR Broker Runtime
 
-Status: `SOURCE_READY_FAIL_CLOSED`
+Status: `PROVIDER_RULESET_READY_APP_SUDO_PENDING`
 
 The `cognitive-github-draft-pr-broker` Edge Function is a closed, server-only
 GitHub path for three Level 0/1 canaries:
@@ -33,11 +33,25 @@ Do not enable user authorization.
 
 GitHub does not expose separate create-only permissions for pull requests or a
 provider-level `deny merge` permission. Pull-request write permission is
-therefore confined by the broker's closed operation set: it calls only the
-create-draft endpoint and verifies `draft=true`, `merged=false`, the exact head,
-and the exact non-default base. Branch protection remains required defense in
-depth. This runtime does not claim that the raw installation token is
-provider-structurally incapable of every pull-request write.
+therefore confined by both the broker's closed operation set and an active
+repository ruleset. The broker calls only the create-draft endpoint and verifies
+`draft=true`, `merged=false`, the exact head, and the exact non-default base.
+The provider proof is not a boolean supplied by the caller: the isolated
+adapter validates the exact repository, installation, permission manifest,
+base branch, active ruleset, empty bypass set, required checks, human approval
+rule, and a real App-token merge denial. Until that complete proof exists, the
+broker remains fail-closed.
+
+The current `main-pr-review-protection` ruleset is active on `main`, has no
+bypass actors, disables force pushes and branch deletion, requires one fresh
+approval after the latest push, and requires all 13 established Phase 1 CI
+checks with strict branch freshness. The repository has one direct
+write-capable collaborator, `Chillywood2025`, so the one-approval rule is
+effectively Owner-only. Its canonical ruleset hash is
+`b16e03fd7f15c9bd871b119ddcc8ae9bbe346270e014fb2f89c6e7a2da319dc4`;
+the canonical direct-collaborator proof hash is
+`8d08f33a949274a6962fc5b1cbe3d4ed2eed17f73771c06824d6d235cde502f0`.
+The future GitHub App must remain absent from every bypass list.
 
 Primary provider references:
 
@@ -174,7 +188,12 @@ no canary mutation is attempted.
 
 ## Current operational result
 
-The exact repository-specific GitHub App credential is missing. The development
-user's broad `gh` credential is not an acceptable substitute and was not used.
-No branch, commit, PR, merge, release, provider configuration, or remote
-credential was created by this lane.
+The repository ruleset is provider-configured and independently readable. The
+exact repository-specific GitHub App credential remains missing because GitHub
+requires an interactive sudo-mode approval before registration. The
+development user's broad `gh` credential is used only for bounded repository
+administration and is not an acceptable runtime substitute. No canary branch,
+canary PR, merge, release, installation token, or runtime private key exists
+yet. The draft-PR switch remains off until the App is repository-selected, its
+private key is stored only in the isolated GitHub Worker, and the App-only
+merge-denial proof passes.
