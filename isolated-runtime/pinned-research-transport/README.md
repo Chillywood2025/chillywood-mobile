@@ -52,6 +52,14 @@ files do not mutate a provider. Deployment status remains
 installed, the one Worker-specific HMAC credential is attached at both ends,
 the HTTPS origin is bound, and remote readiness/negative tests pass.
 
+The deployment and rollback transactions allow only the loopback listener's
+connection-refused status to receive a bounded startup retry: at most ten
+attempts, within three seconds total, separated by 0.2 seconds. Every attempt
+reruns the complete release, credential-boundary, and exact response-schema
+checks. An inactive service, authentication or semantic mismatch, unexpected
+HTTP response, any other transport failure, or deadline exhaustion fails
+immediately into the existing atomic rollback path.
+
 Build an artifact from the reviewed Git object, not from mutable working-tree
 files:
 

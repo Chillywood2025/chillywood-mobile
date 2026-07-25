@@ -116,12 +116,56 @@ run_systemctl() {
   "$systemctl_command" "$@"
 }
 
-run_readiness() {
+run_readiness_once() {
   if [ -n "$readiness_command" ]; then
     "$readiness_command" "$current_link"
   else
     "$current_link/isolated-runtime/pinned-research-transport/deploy/readiness.sh"
   fi
+}
+
+run_readiness() {
+  readiness_max_attempts=10
+  readiness_total_deadline_seconds=3
+  readiness_retry_interval_seconds=0.2
+  readiness_started_at=$(date +%s)
+  readiness_attempt=1
+
+  while [ "$readiness_attempt" -le "$readiness_max_attempts" ]; do
+    if ! run_systemctl is-active --quiet \
+      chillywood-research-transport.service; then
+      echo "readiness_service_inactive" >&2
+      return 1
+    fi
+
+    if run_readiness_once; then
+      if ! run_systemctl is-active --quiet \
+        chillywood-research-transport.service; then
+        echo "readiness_service_inactive" >&2
+        return 1
+      fi
+      return 0
+    else
+      readiness_status=$?
+    fi
+    if [ "$readiness_status" -ne 7 ]; then
+      return "$readiness_status"
+    fi
+
+    readiness_now=$(date +%s)
+    readiness_elapsed=$((readiness_now - readiness_started_at))
+    if [ "$readiness_attempt" -ge "$readiness_max_attempts" ] ||
+       [ "$readiness_elapsed" -ge \
+         "$readiness_total_deadline_seconds" ]; then
+      echo "readiness_listener_retry_exhausted" >&2
+      return 1
+    fi
+
+    sleep "$readiness_retry_interval_seconds"
+    readiness_attempt=$((readiness_attempt + 1))
+  done
+
+  return 1
 }
 
 restore_current_link() {

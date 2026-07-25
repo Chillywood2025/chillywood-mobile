@@ -155,6 +155,7 @@ const createHarness = async (temporary) => {
     "etc/systemd/system/chillywood-research-transport.service.d/10-credential-compat.conf",
   );
   const systemctlLog = resolve(hostRoot, "systemctl.log");
+  const systemctlMode = resolve(hostRoot, "systemctl.mode");
   const readinessMode = resolve(hostRoot, "readiness.mode");
   const readinessEntered = resolve(hostRoot, "readiness.entered");
   const readinessLog = resolve(hostRoot, "readiness.log");
@@ -175,7 +176,12 @@ const createHarness = async (temporary) => {
   );
   await writeFile(
     systemctl,
-    shell(`printf '%s\\n' "$*" >> '${systemctlLog}'`),
+    shell(`
+printf '%s\\n' "$*" >> '${systemctlLog}'
+if [ "\${1:-}" = is-active ]; then
+  [ "$(cat '${systemctlMode}')" = active ]
+fi
+`),
   );
   await writeFile(
     readiness,
@@ -185,6 +191,33 @@ target=$(readlink -f "$current_link")
 printf '%s\\n' "$target" >> '${readinessLog}'
 mode=$(cat '${readinessMode}')
 case "$mode" in
+  refuse-once)
+    printf '%s\\n' pass > '${readinessMode}'
+    exit 7
+    ;;
+  refuse-always)
+    exit 7
+    ;;
+  refuse-then-service-exit)
+    printf '%s\\n' inactive > '${systemctlMode}'
+    exit 7
+    ;;
+  success-then-service-exit)
+    printf '%s\\n' inactive > '${systemctlMode}'
+    exit 0
+    ;;
+  semantic-fail)
+    exit 65
+    ;;
+  authentication-fail)
+    exit 66
+    ;;
+  unexpected-http-fail)
+    exit 22
+    ;;
+  nonretryable-transport-fail)
+    exit 28
+    ;;
   fail-current-once:*)
     rejected=\${mode#fail-current-once:}
     if [ "$target" = "$rejected" ]; then
@@ -237,6 +270,7 @@ exec /usr/bin/id "$@"
   await chmod(readiness, 0o700);
   await chmod(atomicMove, 0o700);
   await chmod(identity, 0o700);
+  await writeFile(systemctlMode, "active\n");
   await writeFile(readinessMode, "pass\n");
   return {
     binDirectory,
@@ -248,6 +282,7 @@ exec /usr/bin/id "$@"
     readinessMode,
     releaseRoot,
     systemctlLog,
+    systemctlMode,
     transportRoot,
   };
 };
@@ -347,6 +382,271 @@ const createFutureCompatibleRepository = async (temporary) => {
   ).trim();
   return { baselineCommit, clonedRepository, futureCommit };
 };
+
+const prepareLegacyToCurrentDeployment = async (temporary) => {
+  const harness = await createHarness(temporary);
+  const legacy = await buildBundle({
+    directory: temporary,
+    profile: REVIEWED_RELEASE_PROFILES[1],
+    sourceCommit: legacyThirteenModuleSourceCommit,
+  });
+  const current = await buildBundle({
+    directory: temporary,
+    profile: CURRENT_REVIEWED_RELEASE_PROFILE,
+    sourceCommit: currentCommit(),
+  });
+  const legacyDirectory = await installBundle({
+    bundle: legacy,
+    releaseRoot: harness.releaseRoot,
+  });
+  await symlink(
+    legacyDirectory,
+    resolve(harness.transportRoot, "current"),
+  );
+  await mkdir(dirname(harness.dropIn), { recursive: true });
+  await writeFile(harness.dropIn, "previous-overlay\n");
+  return {
+    current,
+    currentDirectory: resolve(
+      await realpath(harness.releaseRoot),
+      current.sourceCommit,
+    ),
+    harness,
+    legacyDirectory,
+  };
+};
+
+test("deployment retries a transient loopback listener refusal and then requires the exact readiness contract", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-readiness-transient-"),
+  );
+  try {
+    const {
+      current,
+      currentDirectory,
+      harness,
+    } = await prepareLegacyToCurrentDeployment(temporary);
+    await writeFile(harness.readinessMode, "refuse-once\n");
+
+    const result = run(
+      deployScript,
+      [
+        current.archivePath,
+        current.manifestPath,
+        current.manifestSha256,
+      ],
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(
+      result.stdout,
+      /deployment=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION/u,
+    );
+    assert.deepEqual(
+      (await readFile(harness.readinessLog, "utf8"))
+        .trim()
+        .split("\n"),
+      [currentDirectory, currentDirectory],
+    );
+    assert.equal(
+      await realpath(resolve(harness.transportRoot, "current")),
+      await realpath(currentDirectory),
+    );
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
+test("persistent loopback listener refusal exhausts the exact bounded attempts and rolls back inactive", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-readiness-exhausted-"),
+  );
+  try {
+    const {
+      current,
+      currentDirectory,
+      harness,
+      legacyDirectory,
+    } = await prepareLegacyToCurrentDeployment(temporary);
+    await writeFile(harness.readinessMode, "refuse-always\n");
+
+    const result = run(
+      deployScript,
+      [
+        current.archivePath,
+        current.manifestPath,
+        current.manifestSha256,
+      ],
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /readiness_listener_retry_exhausted/u);
+    assert.match(
+      result.stderr,
+      /automatic_rollback=INACTIVE_ONLY_ABI_INCOMPATIBLE/u,
+    );
+    const readinessAttempts = (
+      await readFile(harness.readinessLog, "utf8")
+    )
+      .trim()
+      .split("\n");
+    assert.ok(
+      readinessAttempts.length >= 2 &&
+        readinessAttempts.length <= 10,
+      `unexpected bounded attempt count: ${readinessAttempts.length}`,
+    );
+    assert.deepEqual(
+      readinessAttempts,
+      Array(readinessAttempts.length).fill(currentDirectory),
+    );
+    assert.equal(
+      await realpath(resolve(harness.transportRoot, "current")),
+      await realpath(legacyDirectory),
+    );
+    assert.equal(
+      await readFile(harness.dropIn, "utf8"),
+      "previous-overlay\n",
+    );
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
+for (const failureMode of [
+  "semantic-fail",
+  "authentication-fail",
+  "unexpected-http-fail",
+  "nonretryable-transport-fail",
+]) {
+  test(`${failureMode} readiness failure is never retried`, async () => {
+    const temporary = await mkdtemp(
+      resolve(tmpdir(), `chillywood-release-readiness-${failureMode}-`),
+    );
+    try {
+      const {
+        current,
+        currentDirectory,
+        harness,
+        legacyDirectory,
+      } = await prepareLegacyToCurrentDeployment(temporary);
+      await writeFile(harness.readinessMode, `${failureMode}\n`);
+
+      const result = run(
+        deployScript,
+        [
+          current.archivePath,
+          current.manifestPath,
+          current.manifestSha256,
+        ],
+        harness.hostRoot,
+      );
+      assert.equal(result.status, 1, result.stderr);
+      assert.doesNotMatch(
+        result.stderr,
+        /readiness_listener_retry_exhausted/u,
+      );
+      assert.equal(
+        (await readFile(harness.readinessLog, "utf8")).trim(),
+        currentDirectory,
+      );
+      assert.equal(
+        await realpath(resolve(harness.transportRoot, "current")),
+        await realpath(legacyDirectory),
+      );
+      await assertCleanOperationState(harness);
+    } finally {
+      await removeTemporary(temporary);
+    }
+  });
+}
+
+test("service exit after a retryable refusal aborts before another readiness attempt", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-readiness-service-exit-"),
+  );
+  try {
+    const {
+      current,
+      currentDirectory,
+      harness,
+      legacyDirectory,
+    } = await prepareLegacyToCurrentDeployment(temporary);
+    await writeFile(
+      harness.readinessMode,
+      "refuse-then-service-exit\n",
+    );
+
+    const result = run(
+      deployScript,
+      [
+        current.archivePath,
+        current.manifestPath,
+        current.manifestSha256,
+      ],
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /readiness_service_inactive/u);
+    assert.doesNotMatch(
+      result.stderr,
+      /readiness_listener_retry_exhausted/u,
+    );
+    assert.equal(
+      (await readFile(harness.readinessLog, "utf8")).trim(),
+      currentDirectory,
+    );
+    assert.equal(
+      await realpath(resolve(harness.transportRoot, "current")),
+      await realpath(legacyDirectory),
+    );
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
+test("service exit immediately after an exact readiness response still rolls back", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-readiness-post-success-exit-"),
+  );
+  try {
+    const {
+      current,
+      currentDirectory,
+      harness,
+      legacyDirectory,
+    } = await prepareLegacyToCurrentDeployment(temporary);
+    await writeFile(
+      harness.readinessMode,
+      "success-then-service-exit\n",
+    );
+
+    const result = run(
+      deployScript,
+      [
+        current.archivePath,
+        current.manifestPath,
+        current.manifestSha256,
+      ],
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /readiness_service_inactive/u);
+    assert.equal(
+      (await readFile(harness.readinessLog, "utf8")).trim(),
+      currentDirectory,
+    );
+    assert.equal(
+      await realpath(resolve(harness.transportRoot, "current")),
+      await realpath(legacyDirectory),
+    );
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
 
 test("failed v2 deployment restores an exact legacy v1 release and overlay inactive-only without readiness", async () => {
   const temporary = await mkdtemp(
