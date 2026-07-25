@@ -43,6 +43,75 @@ select ok(
   'source, claim, contradiction detection, and contradiction resolution share the hardened live boundary'
 );
 
+select ok(
+  (
+    select count(*) = 5
+      and count(distinct trigger.tgrelid) = 5
+      and bool_and(trigger.tgrelid in (
+        'public.research_sources'::regclass,
+        'public.research_claims'::regclass,
+        'public.cognitive_subject_evidence_manifests'::regclass,
+        'public.research_contradictions'::regclass,
+        'public.cognitive_research_contradiction_events'::regclass
+      ))
+    from pg_catalog.pg_trigger trigger
+    where trigger.tgname in (
+      'cognitive_research_source_live_write_barrier',
+      'cognitive_research_claim_live_write_barrier',
+      'cognitive_research_evaluation_live_write_barrier',
+      'cognitive_research_contradiction_live_write_barrier',
+      'cognitive_research_contradiction_event_live_write_barrier'
+    )
+      and not trigger.tgisinternal
+      and trigger.tgenabled = 'O'
+  )
+  and pg_get_functiondef(
+    'public.cognitive_research_live_write_lock_and_assert(uuid,uuid,public.cognitive_platform,public.cognitive_environment)'
+      ::regprocedure
+  ) like '%pg_advisory_xact_lock(%'
+  and pg_get_functiondef(
+    'public.cognitive_research_live_write_lock_and_assert(uuid,uuid,public.cognitive_platform,public.cognitive_environment)'
+      ::regprocedure
+  ) like '%clock_timestamp()%'
+  and pg_get_functiondef(
+    'public.cognitive_research_retention_processor_ready(uuid,uuid,public.cognitive_platform,public.cognitive_environment)'
+      ::regprocedure
+  ) like '%clock_timestamp()%'
+  and pg_get_functiondef(
+    'public.cognitive_research_retention_processor_ready(uuid,uuid,public.cognitive_platform,public.cognitive_environment)'
+      ::regprocedure
+  ) not like '%transaction_timestamp()%'
+  and pg_get_functiondef(
+    'public.governance_revoke_research_retention_activation(uuid,uuid,text,text,text)'
+      ::regprocedure
+  ) like '%cognitive_research_retention_scope_lock_key(%',
+  'five exact mutation barriers and revocation share one wall-clock scope lock domain'
+);
+
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.cognitive_research_retention_scope_lock_key(uuid,uuid,public.cognitive_platform,public.cognitive_environment)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.cognitive_research_live_write_lock_and_assert(uuid,uuid,public.cognitive_platform,public.cognitive_environment)',
+    'execute'
+  )
+  and has_function_privilege(
+    'service_role',
+    'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)',
+    'execute'
+  )
+  and has_function_privilege(
+    'service_role',
+    'public.governance_revoke_research_retention_activation(uuid,uuid,text,text,text)',
+    'execute'
+  ),
+  'new internal lock helpers are closed while existing governance grants remain unchanged'
+);
+
 select isnt(
   public.governance_research_retention_activation_hash(
     repeat('1',40),repeat('2',64),repeat('3',64),repeat('4',64),
@@ -95,6 +164,47 @@ select ok(
   'persistence includes current approval, receipt, Owner-window, and emergency checks'
 );
 
+select ok(
+  pg_get_functiondef(
+    'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
+      ::regprocedure
+  ) like '%p_provider_verified_at >= decision_value.created_at%'
+  and pg_get_functiondef(
+    'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
+      ::regprocedure
+  ) like '%p_provider_verified_at >= approval_value.created_at%'
+  and pg_get_functiondef(
+    'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
+      ::regprocedure
+  ) like '%p_provider_verified_at >= execution_value.claimed_at%'
+  and pg_get_functiondef(
+    'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
+      ::regprocedure
+  ) like '%p_expires_at <= p_provider_verified_at%'
+  and pg_get_functiondef(
+    'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
+      ::regprocedure
+  ) like '%clock_timestamp()%'
+  and pg_get_functiondef(
+    'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
+      ::regprocedure
+  ) not like '%p_provider_verified_at < execution_value.claimed_at%',
+  'provider evidence is strictly earlier than decision, approval, and claim, expiry follows verification, and persistence uses wall-clock time'
+);
+
+select ok(
+  (
+    select pg_get_constraintdef(constraint_row.oid)
+      like '%expires_at > provider_verified_at%'
+    from pg_catalog.pg_constraint constraint_row
+    where constraint_row.conname =
+      'cognitive_research_backup_retention_temporal_v3_check'
+      and constraint_row.conrelid =
+        'public.cognitive_research_backup_retention_attestations'::regclass
+  ),
+  'the stored provider attestation enforces expiry after provider verification'
+);
+
 insert into public.cognitive_projects(
   id,repository_full_name,source_state,activation_state,
   scheduler_state,production_authority
@@ -143,6 +253,134 @@ insert into public.cognitive_retention_policy_states(
   'shared','production',repeat('e',64),
   'owner_counsel_decision_required',false,false,false,false,false,false
 );
+
+insert into public.cognitive_service_identities(
+  service_identity,credential_hash,status,issued_at,expires_at
+) values
+(
+  'research_source_broker',
+  encode(extensions.digest(convert_to(
+    'research-retention-broker-token-0000000000','UTF8'
+  ),'sha256'),'hex'),
+  'active',transaction_timestamp(),transaction_timestamp()+interval '1 day'
+),
+(
+  'independent_evaluation_judge',
+  encode(extensions.digest(convert_to(
+    'research-retention-evaluator-token-000000','UTF8'
+  ),'sha256'),'hex'),
+  'active',transaction_timestamp(),transaction_timestamp()+interval '1 day'
+)
+on conflict (service_identity) do update set
+  credential_hash=excluded.credential_hash,
+  status='active',
+  issued_at=excluded.issued_at,
+  expires_at=excluded.expires_at,
+  revoked_at=null;
+
+create function pg_temp.all_research_live_entrypoints_reject(
+  p_task_id uuid,
+  p_project_id uuid
+)
+returns boolean
+language plpgsql
+as $$
+declare
+  bounded_excerpt_value text := 'bounded public research fixture';
+  locator_value text := 'https://developer.apple.com/test/research-retention';
+  publication_date_value timestamptz :=
+    transaction_timestamp()-interval '1 day';
+  provenance_semantic_value text := 'published:research-retention-fixture';
+  rejected_count integer := 0;
+begin
+  begin
+    perform public.cognitive_record_public_research_source_v2(
+      p_task_id,p_project_id,'shared','production',
+      'apple-docs','developer.apple.com',
+      'official_documentation','Apple','apple',
+      encode(extensions.digest(convert_to(
+        'apple-docs-research-retention-fixture','UTF8'
+      ),'sha256'),'hex'),
+      encode(extensions.digest(convert_to(
+        locator_value,'UTF8'
+      ),'sha256'),'hex'),
+      encode(extensions.digest(convert_to(
+        bounded_excerpt_value,'UTF8'
+      ),'sha256'),'hex'),
+      publication_date_value,
+      jsonb_build_object(
+        'mode','published_metadata',
+        'machineValue',publication_date_value::text,
+        'semanticIdentity',provenance_semantic_value,
+        'evidenceHash',encode(extensions.digest(convert_to(concat_ws(
+          '|','published_metadata',publication_date_value::text,
+          provenance_semantic_value
+        ),'UTF8'),'sha256'),'hex')
+      ),
+      transaction_timestamp(),transaction_timestamp()+interval '1 day',
+      true,bounded_excerpt_value,
+      jsonb_build_object('title','fixture','locator',locator_value),
+      array[repeat('5',64)],
+      'research-retention-broker-token-0000000000'
+    );
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'public_research_source_v2_rejected' then raise; end if;
+    rejected_count := rejected_count + 1;
+  end;
+
+  begin
+    perform public.cognitive_record_public_research_claim_evidence(
+      p_task_id,p_project_id,'shared','production',
+      'platform_policy_research','bounded claim','technical',0.9,
+      transaction_timestamp()+interval '1 day','none',
+      array['01000000-0000-4000-8000-000000000001'::uuid],
+      'research-retention-broker-token-0000000000'
+    );
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'public_research_claim_evidence_rejected' then raise; end if;
+    rejected_count := rejected_count + 1;
+  end;
+
+  begin
+    perform public.cognitive_derive_public_research_evaluation(
+      p_task_id,p_project_id,'shared','production','research_claim',
+      '01000000-0000-4000-8000-000000000002',
+      'research-retention-evaluator-token-000000'
+    );
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'public_research_evaluation_rejected' then raise; end if;
+    rejected_count := rejected_count + 1;
+  end;
+
+  begin
+    perform public.cognitive_record_public_research_contradiction_detection(
+      p_task_id,p_project_id,'shared','production',
+      '01000000-0000-4000-8000-000000000003',
+      '01000000-0000-4000-8000-000000000004',
+      'bounded contradiction evidence',
+      'research-retention-broker-token-0000000000'
+    );
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'research_contradiction_detection_rejected' then raise; end if;
+    rejected_count := rejected_count + 1;
+  end;
+
+  begin
+    perform public.cognitive_resolve_public_research_contradiction(
+      p_task_id,p_project_id,'shared','production',
+      '01000000-0000-4000-8000-000000000005',
+      '01000000-0000-4000-8000-000000000006',
+      'bounded resolution evidence',
+      'research-retention-evaluator-token-000000'
+    );
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'research_contradiction_resolution_rejected' then raise; end if;
+    rejected_count := rejected_count + 1;
+  end;
+
+  return rejected_count = 5;
+end;
+$$;
 
 set local session_replication_role=replica;
 insert into public.cognitive_governance_switches(
@@ -267,6 +505,17 @@ select is(
   'a stale retention heartbeat blocks every shared live-write entrypoint'
 );
 
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select ok(
+  pg_temp.all_research_live_entrypoints_reject(
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001'
+  ),
+  'a stale heartbeat is rejected through all five effective research entrypoints'
+);
+reset role;
+
 set local session_replication_role=replica;
 update public.cognitive_research_retention_processor_heartbeats
 set
@@ -295,6 +544,17 @@ select is(
   false,
   'an expired processor attestation blocks every shared live-write entrypoint'
 );
+
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select ok(
+  pg_temp.all_research_live_entrypoints_reject(
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001'
+  ),
+  'an expired processor is rejected through all five effective research entrypoints'
+);
+reset role;
 
 set local session_replication_role=replica;
 update public.cognitive_research_retention_processor_attestations
@@ -326,19 +586,51 @@ select is(
   'revocation immediately blocks every shared live-write entrypoint'
 );
 
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+select ok(
+  pg_temp.all_research_live_entrypoints_reject(
+    'e2000000-0000-4000-8000-000000000001',
+    'e1000000-0000-4000-8000-000000000001'
+  ),
+  'a revoked processor is rejected through all five effective research entrypoints'
+);
+reset role;
+
 -- Build one exact completed Owner/worker/evaluator fixture. Foreign-key trigger
 -- checks are disabled only for fixture construction; the function under test
 -- runs normally as service_role and inserts through all real constraints.
 create temporary table retention_activation_fixture as
 select
-  transaction_timestamp()-interval '3 minutes' as provider_verified_at,
+  transaction_timestamp()-interval '12 minutes' as provider_verified_at,
   transaction_timestamp()+interval '30 minutes' as expires_at;
 alter table retention_activation_fixture add column activation_hash text;
+alter table retention_activation_fixture
+  add column late_provider_verified_at timestamptz;
+alter table retention_activation_fixture add column late_activation_hash text;
+alter table retention_activation_fixture add column invalid_expires_at timestamptz;
+alter table retention_activation_fixture
+  add column invalid_expiry_activation_hash text;
 update retention_activation_fixture set activation_hash =
   public.governance_research_retention_activation_hash(
     repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
     repeat('e',64),provider_verified_at,expires_at
-  );
+  ),
+  late_provider_verified_at =
+    transaction_timestamp()-interval '7 minutes',
+  invalid_expires_at =
+    provider_verified_at-interval '1 second';
+update retention_activation_fixture set
+  late_activation_hash =
+    public.governance_research_retention_activation_hash(
+      repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
+      repeat('e',64),late_provider_verified_at,expires_at
+    ),
+  invalid_expiry_activation_hash =
+    public.governance_research_retention_activation_hash(
+      repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
+      repeat('e',64),provider_verified_at,invalid_expires_at
+    );
 grant select on retention_activation_fixture to service_role;
 
 insert into public.platform_role_memberships(user_id,email,role,status)
@@ -354,7 +646,7 @@ insert into public.governance_decision_manifests(
   selected_option_hash,rejected_option_hashes,council_attestation_hash,
   votes_hash,vetoes_hash,dissent_hash,stakeholder_impact_hash,risk_level,
   required_test_ids,capability_scope_hash,budget_hash,maximum_executions,
-  rollback_hash,decision_hash,status,expires_at,finalized_at
+  rollback_hash,decision_hash,status,expires_at,finalized_at,created_at
 ) select
   'ed000000-0000-4000-8000-000000000001',
   'ed000000-0000-4000-8000-000000000002',
@@ -368,13 +660,15 @@ insert into public.governance_decision_manifests(
   repeat('7',64),'low',array['research-retention-p1-test'],
   repeat('8',64),repeat('1',64),1,repeat('f',64),repeat('4',64),
   'finalized',transaction_timestamp()+interval '1 hour',
-  transaction_timestamp()-interval '10 minutes'
+  transaction_timestamp()-interval '10 minutes 30 seconds',
+  transaction_timestamp()-interval '11 minutes'
 from retention_activation_fixture;
 
 insert into public.governance_owner_approval_records(
   id,decision_manifest_id,task_id,project_id,platform,environment,
   approval_key,objective_hash,owner_user_id,current_version,current_state,
-  maximum_executions,executions_claimed,executions_completed,approval_hash
+  maximum_executions,executions_claimed,executions_completed,approval_hash,
+  created_at,updated_at
 ) values (
   'ee000000-0000-4000-8000-000000000001',
   'ed000000-0000-4000-8000-000000000001',
@@ -382,7 +676,8 @@ insert into public.governance_owner_approval_records(
   'e1000000-0000-4000-8000-000000000001',
   'shared','production','research-retention-p1-approval',repeat('9',64),
   'ec000000-0000-4000-8000-000000000001',1,'completed',1,1,1,
-  repeat('3',64)
+  repeat('3',64),transaction_timestamp()-interval '10 minutes',
+  transaction_timestamp()-interval '2 minutes'
 );
 
 insert into public.governance_owner_approval_versions(
@@ -394,7 +689,7 @@ insert into public.governance_owner_approval_versions(
   path_scope_hashes,table_scope_hashes,function_scope_hashes,budget_hash,
   maximum_cost,maximum_calls,maximum_bytes,maximum_executions,tests_hash,
   required_test_ids,evaluator_requirement_hash,rollback_hash,approval_hash,
-  material_delta,approved_at,valid_from,expires_at
+  material_delta,approved_at,valid_from,expires_at,created_at
 ) select
   'ef000000-0000-4000-8000-000000000001',
   'ee000000-0000-4000-8000-000000000001',
@@ -409,9 +704,10 @@ insert into public.governance_owner_approval_versions(
   'public_research_ingest',activation_hash,'{}'::text[],'{}'::text[],
   '{}'::text[],repeat('1',64),0,1,4096,1,repeat('a',64),
   array['research-retention-p1-test'],repeat('5',64),repeat('f',64),
-  repeat('3',64),false,transaction_timestamp()-interval '10 minutes',
+  repeat('3',64),false,transaction_timestamp()-interval '9 minutes 30 seconds',
   transaction_timestamp()-interval '9 minutes',
-  transaction_timestamp()+interval '45 minutes'
+  transaction_timestamp()+interval '45 minutes',
+  transaction_timestamp()-interval '9 minutes 30 seconds'
 from retention_activation_fixture;
 
 insert into public.governance_owner_approval_version_states(
@@ -448,8 +744,8 @@ insert into public.governance_approved_action_executions(
   repeat('4',64),repeat('2',64),repeat('3',64),activation_hash,
   repeat('1',64),repeat('a',64),repeat('5',64),repeat('f',64),
   repeat('6',64),repeat('7',64),
-  transaction_timestamp()-interval '5 minutes',
-  transaction_timestamp()-interval '4 minutes',
+  transaction_timestamp()-interval '8 minutes',
+  transaction_timestamp()-interval '7 minutes',
   transaction_timestamp()-interval '2 minutes',
   transaction_timestamp()-interval '2 minutes'
 from retention_activation_fixture;
@@ -495,6 +791,29 @@ insert into public.governance_two_party_service_assertions(
   revocation_hash=null;
 set local session_replication_role=origin;
 
+select ok(
+  (
+    select
+      fixture.provider_verified_at < decision.created_at
+      and fixture.provider_verified_at < decision.finalized_at
+      and fixture.provider_verified_at < approval.created_at
+      and fixture.provider_verified_at < version.approved_at
+      and fixture.provider_verified_at < version.created_at
+      and fixture.provider_verified_at < execution.claimed_at
+      and fixture.expires_at > fixture.provider_verified_at
+    from retention_activation_fixture fixture
+    join public.governance_decision_manifests decision
+      on decision.id='ed000000-0000-4000-8000-000000000001'
+    join public.governance_owner_approval_records approval
+      on approval.id='ee000000-0000-4000-8000-000000000001'
+    join public.governance_owner_approval_versions version
+      on version.id='ef000000-0000-4000-8000-000000000001'
+    join public.governance_approved_action_executions execution
+      on execution.id='f0000000-0000-4000-8000-000000000001'
+  ),
+  'the positive fixture collects provider evidence before decision, Owner approval, and execution claim'
+);
+
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
@@ -531,6 +850,88 @@ select throws_ok(
 
 reset role;
 set local session_replication_role=replica;
+update public.governance_decision_manifests
+set selected_option_hash=(
+  select late_activation_hash from retention_activation_fixture
+)
+where id='ed000000-0000-4000-8000-000000000001';
+update public.governance_owner_approval_versions
+set target_resource_hash=(
+  select late_activation_hash from retention_activation_fixture
+)
+where id='ef000000-0000-4000-8000-000000000001';
+update public.governance_approved_action_executions
+set target_resource_hash=(
+  select late_activation_hash from retention_activation_fixture
+)
+where id='f0000000-0000-4000-8000-000000000001';
+set local session_replication_role=origin;
+set local role service_role;
+select throws_ok(
+  $$select public.governance_persist_research_retention_activation(
+    'f0000000-0000-4000-8000-000000000001',
+    repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
+    (select late_provider_verified_at from retention_activation_fixture),
+    repeat('e',64),(select expires_at from retention_activation_fixture),
+    'cognitive_approved_action_worker',
+    'research-retention-worker-assertion-000000000000'
+  )$$,
+  'P0001',
+  'research_retention_activation_attestation_rejected',
+  'hash-bound provider evidence collected after the execution claim is rejected'
+);
+
+reset role;
+set local session_replication_role=replica;
+update public.governance_decision_manifests
+set selected_option_hash=(
+  select invalid_expiry_activation_hash from retention_activation_fixture
+)
+where id='ed000000-0000-4000-8000-000000000001';
+update public.governance_owner_approval_versions
+set target_resource_hash=(
+  select invalid_expiry_activation_hash from retention_activation_fixture
+)
+where id='ef000000-0000-4000-8000-000000000001';
+update public.governance_approved_action_executions
+set target_resource_hash=(
+  select invalid_expiry_activation_hash from retention_activation_fixture
+)
+where id='f0000000-0000-4000-8000-000000000001';
+set local session_replication_role=origin;
+set local role service_role;
+select throws_ok(
+  $$select public.governance_persist_research_retention_activation(
+    'f0000000-0000-4000-8000-000000000001',
+    repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
+    (select provider_verified_at from retention_activation_fixture),
+    repeat('e',64),(select invalid_expires_at
+     from retention_activation_fixture),
+    'cognitive_approved_action_worker',
+    'research-retention-worker-assertion-000000000000'
+  )$$,
+  'P0001',
+  'research_retention_activation_attestation_rejected',
+  'hash-bound expiry at or before provider verification is rejected'
+);
+
+reset role;
+set local session_replication_role=replica;
+update public.governance_decision_manifests
+set selected_option_hash=(
+  select activation_hash from retention_activation_fixture
+)
+where id='ed000000-0000-4000-8000-000000000001';
+update public.governance_owner_approval_versions
+set target_resource_hash=(
+  select activation_hash from retention_activation_fixture
+)
+where id='ef000000-0000-4000-8000-000000000001';
+update public.governance_approved_action_executions
+set target_resource_hash=(
+  select activation_hash from retention_activation_fixture
+)
+where id='f0000000-0000-4000-8000-000000000001';
 update public.governance_approved_execution_evaluator_proofs
 set execution_receipt_hash=repeat('0',64)
 where id='f1000000-0000-4000-8000-000000000001';
@@ -675,6 +1076,20 @@ select ok(
     from retention_activation_result
   ),
   'one current exact Owner/worker/evaluator chain persists timestamp-bound retention evidence'
+);
+
+select throws_ok(
+  $$select public.governance_persist_research_retention_activation(
+    'f0000000-0000-4000-8000-000000000001',
+    repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
+    (select provider_verified_at from retention_activation_fixture),
+    repeat('e',64),(select expires_at from retention_activation_fixture),
+    'cognitive_approved_action_worker',
+    'research-retention-worker-assertion-000000000000'
+  )$$,
+  'P0001',
+  'research_retention_activation_attestation_rejected',
+  'the completed activation execution cannot be replayed'
 );
 
 reset role;
