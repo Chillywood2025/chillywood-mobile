@@ -33,9 +33,16 @@ templates. The builder reads only an exact Git commit and emits a source archive
 plus a canonical sidecar manifest. Deployment requires the independently
 recorded sidecar hash, then verifies the archive hash, exact runtime-module graph,
 extracted file hashes and executable modes before installing a read-only release.
-The systemd unit reads source commit, source tree and release-manifest hash from
-the selected release, so a verified rollback cannot retain metadata from a newer
-release. These files do not mutate a provider. Deployment status remains
+The canonical v2 manifest also binds the exact credential-directory ABI and
+path, and `.release-environment` carries those same values to the selected Node
+entrypoint. Exact legacy v1 manifests remain verifiable for audit and link
+restoration, but they are inactive-only and can never be restarted or reach a
+readiness check. Direct deployment and standalone rollback accept only a
+current compatible v2 release with its own verified credential overlay. The
+systemd unit reads source commit, source tree, release-manifest hash, ABI and
+path from the selected release, so a verified rollback cannot retain metadata
+from a newer release or silently cross a credential-directory boundary. These
+files do not mutate a provider. Deployment status remains
 `PINNED_RESEARCH_TRANSPORT_REQUIRES_PROVIDER` until an exact reviewed commit is
 installed, the one Worker-specific HMAC credential is attached at both ends,
 the HTTPS origin is bound, and remote readiness/negative tests pass.

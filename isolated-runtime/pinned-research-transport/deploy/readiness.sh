@@ -9,7 +9,7 @@ fi
 release_directory=$(realpath "$(dirname "$0")/../../..")
 contract_script="$release_directory/isolated-runtime/pinned-research-transport/deploy/reviewed-release-contract.mjs"
 release_metadata=$(
-  node "$contract_script" verify-release "$release_directory"
+  node "$contract_script" verify-active-release "$release_directory"
 )
 set -- $release_metadata
 if [ "$#" -ne 3 ]; then

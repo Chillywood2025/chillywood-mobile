@@ -25,10 +25,14 @@ import { fileURLToPath } from "node:url";
 
 import {
   buildReviewedRelease,
+  CURRENT_REVIEWED_RELEASE_PROFILE,
   installReleaseMetadata,
   REVIEWED_RELEASE_PROFILES,
   verifyReviewedBundle,
 } from "../deploy/reviewed-release-contract.mjs";
+import {
+  buildLegacyV1Fixture,
+} from "./release-fixture-helpers.mjs";
 
 const repository = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -47,6 +51,8 @@ const compatibilityTemplateRelative =
   "isolated-runtime/pinned-research-transport/deploy/chillywood-research-transport-credential-compat.conf.template";
 const legacySourceCommit =
   "132a2022acc4ad83618e77652c7a554637599aeb";
+const legacyThirteenModuleSourceCommit =
+  "607dda39f18d3c65149717ae157a0667a5eef691";
 
 const currentCommit = () =>
   execFileSync("git", ["-C", repository, "rev-parse", "HEAD"], {
@@ -66,17 +72,27 @@ const exists = async (path) => {
 const buildBundle = async ({
   directory,
   profile,
+  sourceRepository = repository,
   sourceCommit,
 }) => {
-  const archivePath = resolve(directory, `${profile.id}.tar`);
-  const manifestPath = resolve(directory, `${profile.id}.manifest.json`);
-  const built = await buildReviewedRelease({
-    archivePath,
-    manifestPath,
-    releaseProfile: profile,
-    repository,
-    sourceCommit,
-  });
+  const artifactName = `${profile.id}-${sourceCommit}`;
+  const archivePath = resolve(directory, `${artifactName}.tar`);
+  const manifestPath = resolve(directory, `${artifactName}.manifest.json`);
+  const built = profile.runtimeActivationAllowed
+    ? await buildReviewedRelease({
+        archivePath,
+        manifestPath,
+        releaseProfile: profile,
+        repository: sourceRepository,
+        sourceCommit,
+      })
+    : await buildLegacyV1Fixture({
+        archivePath,
+        manifestPath,
+        profile,
+        repository: sourceRepository,
+        sourceCommit,
+      });
   return {
     archivePath,
     manifestPath,
@@ -130,6 +146,7 @@ const createHarness = async (temporary) => {
   const systemctlLog = resolve(hostRoot, "systemctl.log");
   const readinessMode = resolve(hostRoot, "readiness.mode");
   const readinessEntered = resolve(hostRoot, "readiness.entered");
+  const readinessLog = resolve(hostRoot, "readiness.log");
   const ownerMismatch = resolve(hostRoot, "owner.mismatch");
   const systemctl = resolve(
     hostRoot,
@@ -154,6 +171,7 @@ const createHarness = async (temporary) => {
     shell(`
 current_link=$1
 target=$(readlink -f "$current_link")
+printf '%s\\n' "$target" >> '${readinessLog}'
 mode=$(cat '${readinessMode}')
 case "$mode" in
   fail-current-once:*)
@@ -215,6 +233,7 @@ exec /usr/bin/id "$@"
     hostRoot,
     ownerMismatch,
     readinessEntered,
+    readinessLog,
     readinessMode,
     releaseRoot,
     systemctlLog,
@@ -268,7 +287,57 @@ const removeTemporary = async (temporary) => {
   await rm(temporary, { force: true, recursive: true });
 };
 
-test("failed current-profile deployment automatically rolls back to the exact legacy profile while retaining the reviewed overlay", async () => {
+const createFutureCompatibleRepository = async (temporary) => {
+  const clonedRepository = resolve(temporary, "compatible-repository");
+  execFileSync("git", [
+    "clone",
+    "--quiet",
+    "--no-hardlinks",
+    repository,
+    clonedRepository,
+  ]);
+  const baselineCommit = currentCommit();
+  execFileSync("git", [
+    "-C",
+    clonedRepository,
+    "checkout",
+    "--quiet",
+    baselineCommit,
+  ]);
+  await writeFile(
+    resolve(clonedRepository, "compatible-release-fixture.txt"),
+    "future compatible source tree marker\n",
+  );
+  execFileSync("git", [
+    "-C",
+    clonedRepository,
+    "add",
+    "compatible-release-fixture.txt",
+  ]);
+  execFileSync(
+    "git",
+    [
+      "-C",
+      clonedRepository,
+      "-c",
+      "user.name=Chi'llywood Test",
+      "-c",
+      "user.email=release-fixture@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "test: create future compatible release",
+    ],
+  );
+  const futureCommit = execFileSync(
+    "git",
+    ["-C", clonedRepository, "rev-parse", "HEAD"],
+    { encoding: "utf8" },
+  ).trim();
+  return { baselineCommit, clonedRepository, futureCommit };
+};
+
+test("failed v2 deployment restores an exact legacy v1 release and overlay inactive-only without readiness", async () => {
   const temporary = await mkdtemp(
     resolve(tmpdir(), "chillywood-release-auto-rollback-"),
   );
@@ -276,12 +345,12 @@ test("failed current-profile deployment automatically rolls back to the exact le
     const harness = await createHarness(temporary);
     const legacy = await buildBundle({
       directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[0],
-      sourceCommit: legacySourceCommit,
+      profile: REVIEWED_RELEASE_PROFILES[1],
+      sourceCommit: legacyThirteenModuleSourceCommit,
     });
     const current = await buildBundle({
       directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[1],
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
       sourceCommit: currentCommit(),
     });
     const legacyDirectory = await installBundle({
@@ -315,7 +384,7 @@ test("failed current-profile deployment automatically rolls back to the exact le
     assert.equal(result.status, 1, result.stderr);
     assert.match(
       result.stderr,
-      /automatic_rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION/u,
+      /automatic_rollback=INACTIVE_ONLY_ABI_INCOMPATIBLE/u,
     );
     assert.equal(
       await readlink(resolve(harness.transportRoot, "current")),
@@ -323,10 +392,92 @@ test("failed current-profile deployment automatically rolls back to the exact le
     );
     assert.equal(
       await readFile(harness.dropIn, "utf8"),
-      await readFile(
-        resolve(currentDirectory, compatibilityTemplateRelative),
-        "utf8",
-      ),
+      "previous-overlay\n",
+    );
+    assert.equal(
+      await readFile(harness.readinessLog, "utf8"),
+      `${currentDirectory}\n`,
+    );
+    assert.match(
+      await readFile(harness.systemctlLog, "utf8"),
+      /stop chillywood-research-transport\.service/u,
+    );
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
+test("failed future compatible v2 deployment automatically restores and readies the exact prior v2 ABI and overlay", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-compatible-auto-rollback-"),
+  );
+  try {
+    const harness = await createHarness(temporary);
+    const {
+      baselineCommit,
+      clonedRepository,
+      futureCommit,
+    } = await createFutureCompatibleRepository(temporary);
+    const baseline = await buildBundle({
+      directory: temporary,
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
+      sourceCommit: baselineCommit,
+      sourceRepository: clonedRepository,
+    });
+    const future = await buildBundle({
+      directory: temporary,
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
+      sourceCommit: futureCommit,
+      sourceRepository: clonedRepository,
+    });
+    const baselineDirectory = await installBundle({
+      bundle: baseline,
+      releaseRoot: harness.releaseRoot,
+    });
+    await symlink(
+      baselineDirectory,
+      resolve(harness.transportRoot, "current"),
+    );
+    await mkdir(dirname(harness.dropIn), { recursive: true });
+    const baselineOverlay = await readFile(
+      resolve(baselineDirectory, compatibilityTemplateRelative),
+    );
+    await writeFile(harness.dropIn, baselineOverlay);
+    const futureDirectory = resolve(
+      await realpath(harness.releaseRoot),
+      future.sourceCommit,
+    );
+    await writeFile(
+      harness.readinessMode,
+      `fail-current-once:${futureDirectory}\n`,
+    );
+
+    const result = run(
+      deployScript,
+      [
+        future.archivePath,
+        future.manifestPath,
+        future.manifestSha256,
+      ],
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(
+      result.stderr,
+      /automatic_rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION/u,
+    );
+    assert.doesNotMatch(result.stderr, /INACTIVE_ONLY_ABI_INCOMPATIBLE/u);
+    assert.equal(
+      await readlink(resolve(harness.transportRoot, "current")),
+      await realpath(baselineDirectory),
+    );
+    assert.deepEqual(await readFile(harness.dropIn), baselineOverlay);
+    assert.deepEqual(
+      (await readFile(harness.readinessLog, "utf8"))
+        .trim()
+        .split("\n"),
+      [futureDirectory, await realpath(baselineDirectory)],
     );
     await assertCleanOperationState(harness);
   } finally {
@@ -347,7 +498,7 @@ test("current-profile deployment ignores a tampered adjacent template and instal
     });
     const current = await buildBundle({
       directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[1],
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
       sourceCommit: currentCommit(),
     });
     const legacyDirectory = await installBundle({
@@ -420,40 +571,49 @@ test("current-profile deployment ignores a tampered adjacent template and instal
   }
 });
 
-test("direct deployment of the legacy compatibility profile is rejected before host mutation", async () => {
+test("direct deployment rejects exact legacy ten- and prior thirteen-module v1 releases before host mutation", async () => {
   const temporary = await mkdtemp(
     resolve(tmpdir(), "chillywood-release-legacy-deploy-"),
   );
   try {
     const harness = await createHarness(temporary);
-    const legacy = await buildBundle({
-      directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[0],
-      sourceCommit: legacySourceCommit,
-    });
-    const result = run(
-      deployScript,
-      [
-        legacy.archivePath,
-        legacy.manifestPath,
-        legacy.manifestSha256,
-      ],
-      harness.hostRoot,
-    );
-    assert.equal(result.status, 65, result.stderr);
-    assert.match(result.stderr, /release_profile_rejected/u);
-    assert.equal(
-      await exists(resolve(harness.transportRoot, "current")),
-      false,
-    );
-    assert.equal(await exists(harness.dropIn), false);
-    await assertCleanOperationState(harness);
+    for (const [profile, sourceCommit] of [
+      [REVIEWED_RELEASE_PROFILES[0], legacySourceCommit],
+      [REVIEWED_RELEASE_PROFILES[1], legacyThirteenModuleSourceCommit],
+    ]) {
+      const legacy = await buildBundle({
+        directory: temporary,
+        profile,
+        sourceCommit,
+      });
+      const result = run(
+        deployScript,
+        [
+          legacy.archivePath,
+          legacy.manifestPath,
+          legacy.manifestSha256,
+        ],
+        harness.hostRoot,
+      );
+      assert.equal(result.status, 65, result.stderr);
+      assert.match(
+        result.stderr,
+        /reviewed_release_runtime_abi_rejected/u,
+      );
+      assert.match(result.stderr, /release_bundle_rejected/u);
+      assert.equal(
+        await exists(resolve(harness.transportRoot, "current")),
+        false,
+      );
+      assert.equal(await exists(harness.dropIn), false);
+      await assertCleanOperationState(harness);
+    }
   } finally {
     await removeTemporary(temporary);
   }
 });
 
-test("standalone rollback selects the legacy profile without changing the stable reviewed overlay", async () => {
+test("standalone rollback rejects a legacy v1 target before link or overlay mutation", async () => {
   const temporary = await mkdtemp(
     resolve(tmpdir(), "chillywood-release-standalone-rollback-"),
   );
@@ -466,13 +626,13 @@ test("standalone rollback selects the legacy profile without changing the stable
     });
     const current = await buildBundle({
       directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[1],
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
       sourceCommit: currentCommit(),
     });
-    const [legacyDirectory, currentDirectory] = await Promise.all([
-      installBundle({ bundle: legacy, releaseRoot: harness.releaseRoot }),
-      installBundle({ bundle: current, releaseRoot: harness.releaseRoot }),
-    ]);
+    const currentDirectory = await installBundle({
+      bundle: current,
+      releaseRoot: harness.releaseRoot,
+    });
     await symlink(
       currentDirectory,
       resolve(harness.transportRoot, "current"),
@@ -485,7 +645,68 @@ test("standalone rollback selects the legacy profile without changing the stable
 
     const result = run(
       rollbackScript,
-      rollbackArguments(legacy, current),
+      rollbackArguments(legacy, legacy),
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 65, result.stderr);
+    assert.match(result.stderr, /reviewed_release_runtime_abi_rejected/u);
+    assert.match(result.stderr, /rollback_target_rejected/u);
+    assert.equal(
+      await readlink(resolve(harness.transportRoot, "current")),
+      await realpath(currentDirectory),
+    );
+    assert.deepEqual(await readFile(harness.dropIn), stableOverlay);
+    assert.equal(await exists(harness.readinessLog), false);
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
+test("standalone rollback activates only a compatible v2 target with its exact installed overlay", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-compatible-rollback-"),
+  );
+  try {
+    const harness = await createHarness(temporary);
+    const {
+      baselineCommit,
+      clonedRepository,
+      futureCommit,
+    } = await createFutureCompatibleRepository(temporary);
+    const baseline = await buildBundle({
+      directory: temporary,
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
+      sourceCommit: baselineCommit,
+      sourceRepository: clonedRepository,
+    });
+    const future = await buildBundle({
+      directory: temporary,
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
+      sourceCommit: futureCommit,
+      sourceRepository: clonedRepository,
+    });
+    const [baselineDirectory, futureDirectory] = await Promise.all([
+      installBundle({
+        bundle: baseline,
+        releaseRoot: harness.releaseRoot,
+      }),
+      installBundle({
+        bundle: future,
+        releaseRoot: harness.releaseRoot,
+      }),
+    ]);
+    const currentLink = resolve(harness.transportRoot, "current");
+    await symlink(futureDirectory, currentLink);
+    await mkdir(dirname(harness.dropIn), { recursive: true });
+    const targetOverlay = await readFile(
+      resolve(baselineDirectory, compatibilityTemplateRelative),
+    );
+    await writeFile(harness.dropIn, targetOverlay);
+
+    const result = run(
+      rollbackScript,
+      rollbackArguments(baseline, baseline),
       harness.hostRoot,
     );
     assert.equal(result.status, 0, result.stderr);
@@ -493,11 +714,56 @@ test("standalone rollback selects the legacy profile without changing the stable
       result.stdout,
       /rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION/u,
     );
+    assert.equal(await readlink(currentLink), await realpath(baselineDirectory));
+    assert.deepEqual(await readFile(harness.dropIn), targetOverlay);
     assert.equal(
-      await readlink(resolve(harness.transportRoot, "current")),
-      await realpath(legacyDirectory),
+      (await readFile(harness.readinessLog, "utf8")).trim(),
+      await realpath(baselineDirectory),
     );
+    await assertCleanOperationState(harness);
+  } finally {
+    await removeTemporary(temporary);
+  }
+});
+
+test("standalone rollback rejects a separately selected overlay release before host mutation", async () => {
+  const temporary = await mkdtemp(
+    resolve(tmpdir(), "chillywood-release-overlay-binding-"),
+  );
+  try {
+    const harness = await createHarness(temporary);
+    const legacy = await buildBundle({
+      directory: temporary,
+      profile: REVIEWED_RELEASE_PROFILES[0],
+      sourceCommit: legacySourceCommit,
+    });
+    const current = await buildBundle({
+      directory: temporary,
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
+      sourceCommit: currentCommit(),
+    });
+    const currentDirectory = await installBundle({
+      bundle: current,
+      releaseRoot: harness.releaseRoot,
+    });
+    const currentLink = resolve(harness.transportRoot, "current");
+    await symlink(currentDirectory, currentLink);
+    await mkdir(dirname(harness.dropIn), { recursive: true });
+    const stableOverlay = await readFile(
+      resolve(currentDirectory, compatibilityTemplateRelative),
+    );
+    await writeFile(harness.dropIn, stableOverlay);
+
+    const result = run(
+      rollbackScript,
+      rollbackArguments(current, legacy),
+      harness.hostRoot,
+    );
+    assert.equal(result.status, 65, result.stderr);
+    assert.match(result.stderr, /rollback_overlay_binding_rejected/u);
+    assert.equal(await readlink(currentLink), await realpath(currentDirectory));
     assert.deepEqual(await readFile(harness.dropIn), stableOverlay);
+    assert.equal(await exists(harness.readinessLog), false);
     await assertCleanOperationState(harness);
   } finally {
     await removeTemporary(temporary);
@@ -510,21 +776,15 @@ test("standalone rollback rejects tampered content, wrong mode, wrong owner, and
   );
   try {
     const harness = await createHarness(temporary);
-    const legacy = await buildBundle({
-      directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[0],
-      sourceCommit: legacySourceCommit,
-    });
     const current = await buildBundle({
       directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[1],
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
       sourceCommit: currentCommit(),
     });
-    const [legacyDirectory, currentDirectory] = await Promise.all([
-      installBundle({ bundle: legacy, releaseRoot: harness.releaseRoot }),
-      installBundle({ bundle: current, releaseRoot: harness.releaseRoot }),
-    ]);
-    assert(await exists(legacyDirectory));
+    const currentDirectory = await installBundle({
+      bundle: current,
+      releaseRoot: harness.releaseRoot,
+    });
     const currentLink = resolve(harness.transportRoot, "current");
     await symlink(currentDirectory, currentLink);
     await mkdir(dirname(harness.dropIn), { recursive: true });
@@ -574,7 +834,7 @@ test("standalone rollback rejects tampered content, wrong mode, wrong owner, and
       await scenario.mutate();
       const result = run(
         rollbackScript,
-        rollbackArguments(legacy, current),
+        rollbackArguments(current, current),
         harness.hostRoot,
       );
       assert.equal(result.status, 65, `${scenario.name}: ${result.stderr}`);
@@ -607,20 +867,15 @@ test("stale and concurrent operation locks reject before current or overlay muta
   );
   try {
     const harness = await createHarness(temporary);
-    const legacy = await buildBundle({
-      directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[0],
-      sourceCommit: legacySourceCommit,
-    });
     const current = await buildBundle({
       directory: temporary,
-      profile: REVIEWED_RELEASE_PROFILES[1],
+      profile: CURRENT_REVIEWED_RELEASE_PROFILE,
       sourceCommit: currentCommit(),
     });
-    const [legacyDirectory, currentDirectory] = await Promise.all([
-      installBundle({ bundle: legacy, releaseRoot: harness.releaseRoot }),
-      installBundle({ bundle: current, releaseRoot: harness.releaseRoot }),
-    ]);
+    const currentDirectory = await installBundle({
+      bundle: current,
+      releaseRoot: harness.releaseRoot,
+    });
     const currentLink = resolve(harness.transportRoot, "current");
     await symlink(currentDirectory, currentLink);
     await mkdir(dirname(harness.dropIn), { recursive: true });
@@ -637,7 +892,7 @@ test("stale and concurrent operation locks reject before current or overlay muta
     await mkdir(lock);
     const stale = run(
       rollbackScript,
-      rollbackArguments(legacy, current),
+      rollbackArguments(current, current),
       harness.hostRoot,
     );
     assert.equal(stale.status, 73, stale.stderr);
@@ -649,7 +904,7 @@ test("stale and concurrent operation locks reject before current or overlay muta
     await writeFile(harness.readinessMode, "block\n");
     const first = spawn(
       rollbackScript,
-      rollbackArguments(legacy, current),
+      rollbackArguments(current, current),
       {
         env: {
           PATH: `${harness.binDirectory}:${process.env.PATH}`,
@@ -665,7 +920,7 @@ test("stale and concurrent operation locks reject before current or overlay muta
       harness.hostRoot,
     );
     assert.equal(concurrent.status, 73, concurrent.stderr);
-    assert.equal(await readlink(currentLink), await realpath(legacyDirectory));
+    assert.equal(await readlink(currentLink), await realpath(currentDirectory));
     assert.deepEqual(await readFile(harness.dropIn), stableOverlay);
     await writeFile(harness.readinessMode, "pass\n");
     const firstResult = await new Promise((resolvePromise) => {

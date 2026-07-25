@@ -49,12 +49,15 @@ fi
 
 script_directory=$(realpath "$(dirname "$0")")
 contract_script="$script_directory/reviewed-release-contract.mjs"
-bundle_metadata=$(
-  node "$contract_script" verify-bundle \
+if ! bundle_metadata=$(
+  node "$contract_script" verify-deployable-bundle \
     "$source_archive" \
     "$reviewed_manifest" \
     "$expected_manifest_sha256"
-)
+); then
+  echo "release_bundle_rejected" >&2
+  exit 65
+fi
 set -- $bundle_metadata
 if [ "$#" -ne 5 ]; then
   echo "release_bundle_rejected" >&2
@@ -76,7 +79,7 @@ if [ "${#source_commit}" -ne 40 ] ||
   exit 65
 fi
 if [ "$release_profile" != \
-  "chillywood-pinned-research-host-runtime-v2-current-13" ]; then
+  "chillywood-pinned-research-host-runtime-v3-current-13" ]; then
   echo "release_profile_rejected" >&2
   exit 65
 fi
@@ -103,6 +106,8 @@ next_link_created=0
 drop_in_next_created=0
 transaction_open=0
 previous_target=
+previous_runtime_compatible=0
+previous_overlay_sha256=
 previous_drop_in_state=absent
 previous_drop_in_backup=
 
@@ -212,6 +217,38 @@ if [ -e "$credential_drop_in_target" ] ||
   previous_drop_in_state=present
 fi
 
+if [ -n "$test_root" ]; then
+  expected_overlay_uid=$(id -u)
+  expected_overlay_gid=$(id -g)
+else
+  expected_overlay_uid=0
+  expected_overlay_gid=0
+fi
+if [ -n "$previous_target" ] &&
+   previous_release_metadata=$(
+     node "$contract_script" verify-active-release \
+       "$previous_target" 2>/dev/null
+   ); then
+  set -- $previous_release_metadata
+  if [ "$#" -eq 3 ]; then
+    previous_source_commit=$1
+    previous_manifest_sha256=$3
+    if previous_overlay_sha256=$(
+      node "$contract_script" verify-overlay-source \
+        "$previous_target" \
+        "$previous_source_commit" \
+        "$previous_manifest_sha256" 2>/dev/null
+    ) &&
+       node "$contract_script" verify-installed-overlay \
+         "$credential_drop_in_target" \
+         "$previous_overlay_sha256" \
+         "$expected_overlay_uid" \
+         "$expected_overlay_gid" >/dev/null 2>&1; then
+      previous_runtime_compatible=1
+    fi
+  fi
+fi
+
 if [ -e "$expected_directory" ]; then
   node "$contract_script" verify-release \
     "$expected_directory" \
@@ -276,13 +313,6 @@ fi
 drop_in_next_created=1
 mv -Tf "$credential_drop_in_next" "$credential_drop_in_target"
 drop_in_next_created=0
-if [ -n "$test_root" ]; then
-  expected_overlay_uid=$(id -u)
-  expected_overlay_gid=$(id -g)
-else
-  expected_overlay_uid=0
-  expected_overlay_gid=0
-fi
 if ! node "$contract_script" verify-installed-overlay \
   "$credential_drop_in_target" \
   "$expected_overlay_sha256" \
@@ -305,23 +335,28 @@ if run_systemctl restart chillywood-research-transport.service &&
   exit 0
 fi
 
-if [ -n "$previous_target" ]; then
-  node "$contract_script" verify-release "$previous_target" >/dev/null
-  restore_current_link
-  if run_systemctl daemon-reload &&
-     run_systemctl restart chillywood-research-transport.service &&
-     run_readiness; then
-    transaction_open=0
-    echo "automatic_rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION" >&2
-    echo "deployment=INACTIVE" >&2
-    exit 1
-  fi
-fi
-
 restore_current_link
 restore_credential_drop_in
+if [ "$previous_runtime_compatible" -eq 1 ] &&
+   node "$contract_script" verify-installed-overlay \
+     "$credential_drop_in_target" \
+     "$previous_overlay_sha256" \
+     "$expected_overlay_uid" \
+     "$expected_overlay_gid" >/dev/null 2>&1 &&
+   run_systemctl daemon-reload &&
+   run_systemctl restart chillywood-research-transport.service &&
+   run_readiness; then
+  transaction_open=0
+  echo "automatic_rollback=LOCAL_READY_PENDING_EXTERNAL_ATTESTATION" >&2
+  echo "deployment=INACTIVE" >&2
+  exit 1
+fi
 run_systemctl daemon-reload || true
 run_systemctl stop chillywood-research-transport.service || true
 transaction_open=0
+if [ -n "$previous_target" ] &&
+   [ "$previous_runtime_compatible" -ne 1 ]; then
+  echo "automatic_rollback=INACTIVE_ONLY_ABI_INCOMPATIBLE" >&2
+fi
 echo "deployment=INACTIVE" >&2
 exit 1
