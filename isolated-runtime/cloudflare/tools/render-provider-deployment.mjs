@@ -260,7 +260,7 @@ const validateDeploymentCredential = (credential) => {
   );
 };
 
-const validateAccess = (access, active) => {
+const validateAccess = (access) => {
   exactKeys(
     access,
     [
@@ -296,12 +296,9 @@ const validateAccess = (access, active) => {
     fail("access_contract_invalid");
   }
   if (
-    active &&
-    (
-      access.applicationStatus !== "ACTIVE" ||
-      access.policyStatus !== "ACTIVE" ||
-      access.serviceTokenStatus !== "ACTIVE"
-    )
+    access.applicationStatus !== "ACTIVE" ||
+    access.policyStatus !== "ACTIVE" ||
+    access.serviceTokenStatus !== "ACTIVE"
   ) {
     fail("access_not_ready");
   }
@@ -424,7 +421,7 @@ const validateRuntimeVariables = (runtimeVariables, active) => {
   return runtimeVariables;
 };
 
-const assertActiveGates = (input) => {
+const assertReviewGates = (input) => {
   if (
     input.review.exactHeadReviewed !== true ||
     input.review.p0 !== 0 ||
@@ -465,14 +462,14 @@ export const validateDeploymentInput = (
   const active = input.activationMode === "active";
   validateSource(input, repositoryState);
   validateProviderReadiness(input.providerReadiness, active);
-  validateAccess(input.access, active);
+  validateAccess(input.access);
   validateServiceBindings(input.serviceBindings);
   const hyperdrive = validateHyperdrive(input.hyperdrive, active);
   const runtimeVariables = validateRuntimeVariables(
     input.runtimeVariables,
     active,
   );
-  if (active) assertActiveGates(input);
+  assertReviewGates(input);
   return Object.freeze({ active, hyperdrive, runtimeVariables });
 };
 
@@ -508,6 +505,7 @@ const renderGateway = async (input) => {
 const renderPrivateWorker = async (
   input,
   principal,
+  active,
   hyperdrive,
   runtimeVariables,
 ) => {
@@ -515,10 +513,14 @@ const renderPrivateWorker = async (
   const template = await readTemplate(templateName);
   const config = {
     ...template,
-    hyperdrive: [{
-      binding: principal.hyperdriveBinding,
-      id: hyperdrive.get(principal.dbRole).configurationId,
-    }],
+    ...(active
+      ? {
+        hyperdrive: [{
+          binding: principal.hyperdriveBinding,
+          id: hyperdrive.get(principal.dbRole).configurationId,
+        }],
+      }
+      : {}),
     main: await resolveMain(templateName, template.main),
     preview_urls: false,
     routes: [],
@@ -526,17 +528,25 @@ const renderPrivateWorker = async (
       ...template.vars,
       SOURCE_COMMIT: input.source.commit,
       SOURCE_BASE_COMMIT: input.source.baseCommit,
-      ...(principal.dbRole === "cognitive_model_router"
+      ...(active && principal.dbRole === "cognitive_model_router"
         ? runtimeVariables.cognitive_model_router
         : {}),
     },
     workers_dev: false,
   };
   delete config.secrets;
+  if (!active) {
+    delete config.hyperdrive;
+    for (const name of modelRuntimeVariableNames) delete config.vars[name];
+  }
   assertNoUnresolvedValues(config);
   if (
-    config.hyperdrive.length !== 1 ||
-    config.hyperdrive[0].binding !== principal.hyperdriveBinding ||
+    (active &&
+      (
+        config.hyperdrive.length !== 1 ||
+        config.hyperdrive[0].binding !== principal.hyperdriveBinding
+      )) ||
+    (!active && "hyperdrive" in config) ||
     config.workers_dev !== false ||
     config.preview_urls !== false ||
     config.routes.length !== 0
@@ -557,25 +567,6 @@ export const renderDeployment = async (
     sourceCommit: input.source.commit,
     sourceTree: input.source.tree,
   };
-  if (!validated.active) {
-    return Object.freeze({
-      commandPlan: {
-        commands: [],
-        deploymentOrder: [],
-        gate: "BLOCKED_INERT",
-        schemaVersion: outputSchema,
-      },
-      configs: new Map(),
-      metadata: {
-        ...baseMetadata,
-        configCount: 0,
-        gate: "BLOCKED_INERT",
-        inputAttestationHash: sha256(stableJson(input)),
-        schemaVersion: outputSchema,
-      },
-    });
-  }
-
   const configs = new Map();
   for (const principal of RUNTIME_MANIFEST.principals) {
     configs.set(
@@ -583,6 +574,7 @@ export const renderDeployment = async (
       await renderPrivateWorker(
         input,
         principal,
+        validated.active,
         validated.hyperdrive,
         validated.runtimeVariables,
       ),
@@ -600,13 +592,16 @@ export const renderDeployment = async (
     ),
     "gateway.wrangler.jsonc",
   ];
+  const gate = validated.active
+    ? "READY_EXACT_REVIEW_AND_NET"
+    : "READY_INERT_NO_DATABASE";
   const commandPlan = {
     commands: deploymentOrder.map((config) => ({
       argv: ["npx", "wrangler", "deploy", "--config", join("wrangler", config)],
       configSha256: configHashes[config],
     })),
     deploymentOrder,
-    gate: "READY_EXACT_REVIEW_AND_NET",
+    gate,
     schemaVersion: outputSchema,
   };
   return Object.freeze({
@@ -617,7 +612,7 @@ export const renderDeployment = async (
       configCount: configs.size,
       configHashes,
       gatewayCredentialCount: 0,
-      gate: "READY_EXACT_REVIEW_AND_NET",
+      gate,
       inputAttestationHash: sha256(stableJson(input)),
       privateWorkerCount: RUNTIME_MANIFEST.principals.length,
       schemaVersion: outputSchema,

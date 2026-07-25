@@ -172,7 +172,7 @@ test("active rendering emits ten private configs and a credential-free gateway",
   assert.equal(gateway.services.length, 10);
 });
 
-test("inert mode emits no provider-usable Wrangler configs", async () => {
+test("inert mode emits reviewed credential-free Workers without database bindings", async () => {
   const input = activeInput();
   input.activationMode = "inert";
   input.hyperdrive = null;
@@ -180,23 +180,35 @@ test("inert mode emits no provider-usable Wrangler configs", async () => {
   input.providerReadiness.netBoundary =
     "WAITING_FOR_SUPABASE_NET_SCHEMA_PROVIDER_ADMIN";
   input.providerReadiness.runtimeLoginProvisioningReady = false;
-  input.review = {
-    ...input.review,
-    ciPassed: 0,
-    exactHeadReviewed: false,
-    p0: null,
-    p1: null,
-  };
-  input.access = {
-    ...input.access,
-    applicationStatus: "INACTIVE",
-    policyStatus: "INACTIVE",
-    serviceTokenStatus: "INACTIVE",
-  };
   const rendered = await renderDeployment(input, repositoryState);
-  assert.equal(rendered.configs.size, 0);
-  assert.equal(rendered.metadata.gate, "BLOCKED_INERT");
-  assert.deepEqual(rendered.commandPlan.commands, []);
+  assert.equal(rendered.configs.size, 11);
+  assert.equal(rendered.metadata.gate, "READY_INERT_NO_DATABASE");
+  assert.equal(rendered.commandPlan.commands.length, 11);
+  for (const principal of RUNTIME_MANIFEST.principals) {
+    const config = rendered.configs.get(
+      `${principal.dbRole}.wrangler.jsonc`,
+    );
+    assert.ok(config);
+    assert.equal(config.workers_dev, false);
+    assert.equal(config.preview_urls, false);
+    assert.deepEqual(config.routes, []);
+    assert.equal("hyperdrive" in config, false);
+    assert.equal("secrets" in config, false);
+    assert.equal(
+      [
+        "COGNITIVE_MODEL_FAMILY",
+        "COGNITIVE_MODEL_INPUT_USD_PER_MILLION",
+        "COGNITIVE_MODEL_NAME",
+        "COGNITIVE_MODEL_OUTPUT_USD_PER_MILLION",
+      ].some((name) => name in config.vars),
+      false,
+    );
+  }
+  const gateway = rendered.configs.get("gateway.wrangler.jsonc");
+  assert.equal(gateway.workers_dev, true);
+  assert.equal("hyperdrive" in gateway, false);
+  assert.equal("secrets" in gateway, false);
+  assert.equal(gateway.services.length, 10);
 });
 
 test("active mode fails closed before exact review or provider net readiness", async () => {
@@ -207,6 +219,20 @@ test("active mode fails closed before exact review or provider net readiness", a
   const ciPartial = activeInput();
   ciPartial.review.ciPassed = 12;
   await rejects(ciPartial, "exact_review_gate_not_satisfied");
+
+  const inertReviewPending = activeInput();
+  inertReviewPending.activationMode = "inert";
+  inertReviewPending.hyperdrive = null;
+  inertReviewPending.runtimeVariables = null;
+  inertReviewPending.review.exactHeadReviewed = false;
+  await rejects(inertReviewPending, "exact_review_gate_not_satisfied");
+
+  const inertAccessPending = activeInput();
+  inertAccessPending.activationMode = "inert";
+  inertAccessPending.hyperdrive = null;
+  inertAccessPending.runtimeVariables = null;
+  inertAccessPending.access.applicationStatus = "INACTIVE";
+  await rejects(inertAccessPending, "access_not_ready");
 
   const netOpen = activeInput();
   netOpen.providerReadiness.netBoundary =
