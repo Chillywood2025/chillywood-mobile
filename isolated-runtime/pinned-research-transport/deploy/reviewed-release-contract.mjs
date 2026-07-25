@@ -61,6 +61,8 @@ const SHA256 = /^[a-f0-9]{64}$/u;
 const MANIFEST_NAME = ".reviewed-release-manifest.json";
 const MANIFEST_SHA_NAME = ".reviewed-release-manifest.sha256";
 const RELEASE_ENVIRONMENT_NAME = ".release-environment";
+export const CREDENTIAL_OVERLAY_MODULE_PATH =
+  "isolated-runtime/pinned-research-transport/deploy/chillywood-research-transport-credential-compat.conf.template";
 const RELEASE_METADATA_FILES = new Set([
   MANIFEST_NAME,
   MANIFEST_SHA_NAME,
@@ -482,6 +484,63 @@ export const verifyInstalledRelease = async ({
   });
 };
 
+export const verifyCredentialOverlaySource = async ({
+  directory,
+  expectedManifestSha256,
+  expectedSourceCommit,
+}) => {
+  const release = await verifyInstalledRelease({
+    directory,
+    expectedManifestSha256,
+    expectedSourceCommit,
+  });
+  if (
+    release.manifest.releaseProfile !==
+      CURRENT_REVIEWED_RELEASE_PROFILE.id
+  ) {
+    throw new Error("reviewed_release_overlay_profile_rejected");
+  }
+  const module = release.manifest.modules.find(
+    ({ path }) => path === CREDENTIAL_OVERLAY_MODULE_PATH,
+  );
+  if (!module) {
+    throw new Error("reviewed_release_overlay_module_rejected");
+  }
+  return Object.freeze({
+    releaseProfile: release.manifest.releaseProfile,
+    sha256: module.sha256,
+  });
+};
+
+export const verifyInstalledCredentialOverlay = async ({
+  expectedGid,
+  expectedSha256,
+  expectedUid,
+  overlayPath,
+}) => {
+  if (
+    !Number.isSafeInteger(expectedUid) ||
+    expectedUid < 0 ||
+    !Number.isSafeInteger(expectedGid) ||
+    expectedGid < 0 ||
+    !SHA256.test(expectedSha256)
+  ) {
+    throw new Error("installed_credential_overlay_contract_rejected");
+  }
+  const metadata = await lstat(overlayPath);
+  if (
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    metadata.uid !== expectedUid ||
+    metadata.gid !== expectedGid ||
+    (metadata.mode & 0o777) !== 0o644 ||
+    sha256(await readFile(overlayPath)) !== expectedSha256
+  ) {
+    throw new Error("installed_credential_overlay_rejected");
+  }
+  return true;
+};
+
 const main = async () => {
   const [command, ...args] = process.argv.slice(2);
   if (command === "build" && args.length === 4) {
@@ -547,6 +606,33 @@ const main = async () => {
     process.stdout.write(
       `${result.manifest.sourceCommit} ${result.manifest.sourceTree} ${result.manifestSha256}\n`,
     );
+    return;
+  }
+  if (command === "verify-overlay-source" && args.length === 3) {
+    const [directory, expectedSourceCommit, expectedManifestSha256] = args;
+    const result = await verifyCredentialOverlaySource({
+      directory,
+      expectedManifestSha256,
+      expectedSourceCommit,
+    });
+    process.stdout.write(`${result.sha256}\n`);
+    return;
+  }
+  if (command === "verify-installed-overlay" && args.length === 4) {
+    const [overlayPath, expectedSha256, expectedUidRaw, expectedGidRaw] = args;
+    if (
+      !/^(?:0|[1-9][0-9]*)$/u.test(expectedUidRaw) ||
+      !/^(?:0|[1-9][0-9]*)$/u.test(expectedGidRaw)
+    ) {
+      throw new Error("installed_credential_overlay_contract_rejected");
+    }
+    await verifyInstalledCredentialOverlay({
+      expectedGid: Number(expectedGidRaw),
+      expectedSha256,
+      expectedUid: Number(expectedUidRaw),
+      overlayPath,
+    });
+    process.stdout.write("installed_credential_overlay=MATCH\n");
     return;
   }
   throw new Error("reviewed_release_contract_usage_rejected");

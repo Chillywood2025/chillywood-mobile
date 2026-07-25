@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 2 ]; then
-  echo "usage: rollback-reviewed-release.sh SOURCE_COMMIT EXPECTED_MANIFEST_SHA256" >&2
+if [ "$#" -ne 4 ]; then
+  echo "usage: rollback-reviewed-release.sh SOURCE_COMMIT EXPECTED_MANIFEST_SHA256 OVERLAY_SOURCE_COMMIT OVERLAY_SOURCE_MANIFEST_SHA256" >&2
   exit 64
 fi
 
@@ -38,17 +38,27 @@ fi
 
 source_commit=$1
 expected_manifest_sha256=$2
+overlay_source_commit=$3
+overlay_source_manifest_sha256=$4
 case "$source_commit" in
   *[!0-9a-f]*|'') echo "source_commit_rejected" >&2; exit 65 ;;
 esac
-if [ "${#source_commit}" -ne 40 ]; then
+case "$overlay_source_commit" in
+  *[!0-9a-f]*|'') echo "overlay_source_commit_rejected" >&2; exit 65 ;;
+esac
+if [ "${#source_commit}" -ne 40 ] ||
+   [ "${#overlay_source_commit}" -ne 40 ]; then
   echo "source_commit_rejected" >&2
   exit 65
 fi
 case "$expected_manifest_sha256" in
   *[!0-9a-f]*|'') echo "manifest_hash_rejected" >&2; exit 65 ;;
 esac
-if [ "${#expected_manifest_sha256}" -ne 64 ]; then
+case "$overlay_source_manifest_sha256" in
+  *[!0-9a-f]*|'') echo "overlay_source_manifest_hash_rejected" >&2; exit 65 ;;
+esac
+if [ "${#expected_manifest_sha256}" -ne 64 ] ||
+   [ "${#overlay_source_manifest_sha256}" -ne 64 ]; then
   echo "manifest_hash_rejected" >&2
   exit 65
 fi
@@ -56,9 +66,11 @@ fi
 transport_root="$host_prefix/opt/chillywood/research-transport"
 release_root="$transport_root/releases"
 release_directory="$release_root/$source_commit"
+overlay_source_directory="$release_root/$overlay_source_commit"
 current_link="$transport_root/current"
 next_link="$transport_root/.current.next"
 operation_lock="$transport_root/.deployment-rollback.lock"
+credential_drop_in_target="$host_prefix/etc/systemd/system/chillywood-research-transport.service.d/10-credential-compat.conf"
 contract_script=$(realpath "$(dirname "$0")/reviewed-release-contract.mjs")
 if [ ! -d "$release_directory" ] ||
    ! node "$contract_script" verify-release \
@@ -66,6 +78,19 @@ if [ ! -d "$release_directory" ] ||
      "$source_commit" \
      "$expected_manifest_sha256" >/dev/null; then
   echo "rollback_target_rejected" >&2
+  exit 65
+fi
+expected_overlay_sha256=$(
+  node "$contract_script" verify-overlay-source \
+    "$overlay_source_directory" \
+    "$overlay_source_commit" \
+    "$overlay_source_manifest_sha256"
+)
+case "$expected_overlay_sha256" in
+  *[!0-9a-f]*|'') echo "overlay_source_rejected" >&2; exit 65 ;;
+esac
+if [ "${#expected_overlay_sha256}" -ne 64 ]; then
+  echo "overlay_source_rejected" >&2
   exit 65
 fi
 
@@ -149,6 +174,21 @@ if [ -L "$current_link" ]; then
     *) echo "current_release_target_rejected" >&2; exit 65 ;;
   esac
   node "$contract_script" verify-release "$previous_target" >/dev/null
+fi
+if [ -n "$test_root" ]; then
+  expected_overlay_uid=$(id -u)
+  expected_overlay_gid=$(id -g)
+else
+  expected_overlay_uid=0
+  expected_overlay_gid=0
+fi
+if ! node "$contract_script" verify-installed-overlay \
+  "$credential_drop_in_target" \
+  "$expected_overlay_sha256" \
+  "$expected_overlay_uid" \
+  "$expected_overlay_gid" >/dev/null; then
+  echo "installed_credential_overlay_rejected" >&2
+  exit 65
 fi
 
 transaction_open=1
