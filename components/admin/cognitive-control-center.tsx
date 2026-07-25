@@ -118,7 +118,7 @@ export const CognitiveControlCenterFoundation = () => {
       <Text style={styles.body}>
         {readbackState === "live"
           ? "Backend-authoritative status. No execution authority is granted by this control center. Owner-assisted inspection and draft work may be active while the isolated autonomous runtime remains pending."
-          : "Owner-assisted inspection and draft work may continue. The isolated autonomous runtime is pending and has no live database login, memory, scheduler, or unattended authority."}
+          : "No execution authority is granted by this control center. Owner-assisted inspection and draft work may continue. The isolated autonomous runtime is pending and has no live database login, memory, scheduler, or unattended authority."}
       </Text>
       <Text style={styles.muted}>
         Access contract: Owner, Super Admin, or a scoped Admin with {REQUIRED_READ_PERMISSION}. The future backend remains authoritative.

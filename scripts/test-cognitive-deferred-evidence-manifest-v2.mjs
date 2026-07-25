@@ -58,13 +58,15 @@ test("v2 deterministic manifest hash verifies", () => {
 });
 test("v2 preserves all original evidence keys", () => {
   assert.deepEqual(
-    v2.entries.map((entry) => entry.originalEvidenceKey),
+    v2.entries
+      .slice(0, v1.entries.length)
+      .map((entry) => entry.originalEvidenceKey),
     v1.entries.map((entry) => entry.evidenceKey),
   );
 });
 test("v2 regenerates every future import key", () => {
   assert.ok(
-    v2.entries.every(
+    v2.entries.slice(0, v1.entries.length).every(
       (entry, index) => entry.futureImportKey !== v1.entries[index].futureImportKey,
     ),
   );
@@ -173,7 +175,7 @@ test("original observation time remains distinct from import time", () => {
   assert.ok(
     plan.plan.every(
       (entry, index) =>
-        entry.originalObservedAt === v1.entries[index].observedAt &&
+        entry.originalObservedAt === v2.entries[index].observedAt &&
         entry.importTime === null &&
         entry.preserveOriginalObservedAt,
     ),
@@ -213,6 +215,15 @@ test("a post-OTA observation appends without rewriting historical entries", () =
     candidate.entries.slice(0, v1.entries.length),
     v2.entries.slice(0, v1.entries.length),
   );
+  const plan = buildImportPlan({
+    evaluatedAt: "2026-07-25T20:01:00.000Z",
+    manifest: candidate,
+  });
+  const appendedPlanEntry = plan.plan.at(-1);
+  assert.equal(appendedPlanEntry.originalObservedAt, entry.observedAt);
+  assert.equal(appendedPlanEntry.idempotencyKey, entry.futureImportKey);
+  assert.equal(appendedPlanEntry.importTime, null);
+  assert.equal(appendedPlanEntry.preserveOriginalObservedAt, true);
 });
 test("a post-OTA observation with release identity drift fails", () => {
   const candidate = clone(v2);

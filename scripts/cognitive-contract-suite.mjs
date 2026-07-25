@@ -86,9 +86,17 @@ const guardIntelligence = () => {
     "routes", "loading states", "empty states", "error states", "offline behavior", "permissions", "notifications", "calls", "purchases", "accessibility",
     "prices", "Premium rights", "auth/RLS", "production feature flags",
   ], "product and UX intelligence contract");
-  requireIncludes(read("components/admin/cognitive-control-center.tsx"), [
+  const ownerControlCenter = read("components/admin/cognitive-control-center.tsx");
+  requireIncludes(ownerControlCenter, [
     "admin-cognitive-control-center", "COGNITIVE_OWNER_CONTROL_CENTER_FOUNDATION", "No execution authority", "accessibilityState={{ disabled: true }}",
   ], "owner control center foundation");
+  assert.equal(
+    ownerControlCenter.match(
+      /No execution authority is granted by this control center\./gu,
+    )?.length,
+    2,
+    "live and source-only control-center states must display the exact no-execution-authority statement",
+  );
 };
 
 const guardResearch = async (runBehavior) => {
