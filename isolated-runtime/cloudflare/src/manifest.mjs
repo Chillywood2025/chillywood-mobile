@@ -212,10 +212,6 @@ export const RUNTIME_MANIFEST = Object.freeze({
       providerSecrets: [
         "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY",
       ],
-      runtimeConfiguration: {
-        COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL:
-          "REPLACE_WITH_REVIEWED_PINNED_TRANSPORT_HTTPS_URL",
-      },
       networkEgress: [
         "configured_peer_pinned_research_transport_origin_only",
       ],
@@ -239,6 +235,24 @@ export const RUNTIME_MANIFEST = Object.freeze({
           scope.filter((key) => key !== "action").concat("action", "limit"),
           ["cognitive_expire_public_research_maintenance"],
         ),
+      },
+      runtimeConfiguration: {
+        COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL:
+          "REPLACE_WITH_REVIEWED_PINNED_TRANSPORT_HTTPS_URL",
+        COGNITIVE_RESEARCH_RETENTION_ATTESTATION_HASH:
+          "REPLACE_WITH_REVIEWED_RETENTION_ATTESTATION_HASH",
+        COGNITIVE_RESEARCH_RETENTION_BATCH_LIMIT: "100",
+        COGNITIVE_RESEARCH_RETENTION_CRON: "17 * * * *",
+        COGNITIVE_RESEARCH_RETENTION_ENVIRONMENT: "production",
+        COGNITIVE_RESEARCH_RETENTION_MAXIMUM_BATCHES: "1",
+        COGNITIVE_RESEARCH_RETENTION_PLATFORM: "shared",
+        COGNITIVE_RESEARCH_RETENTION_PROCESSOR_ATTESTATION_ID:
+          "REPLACE_WITH_REVIEWED_RETENTION_PROCESSOR_ATTESTATION_ID",
+        COGNITIVE_RESEARCH_RETENTION_PROJECT_ID:
+          "REPLACE_WITH_REVIEWED_RETENTION_PROJECT_ID",
+        COGNITIVE_RESEARCH_RETENTION_TASK_ID:
+          "REPLACE_WITH_REVIEWED_RETENTION_TASK_ID",
+        COGNITIVE_RESEARCH_RETENTION_TIMEOUT_MS: "50000",
       },
       maxRequestBytes: 1_048_576,
     }),

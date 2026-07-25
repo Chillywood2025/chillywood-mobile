@@ -103,6 +103,19 @@ const activeInput = () => ({
     cognitive_public_research_broker: {
       COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL:
         "https://research-transport.example.invalid/internal/cognitive-research-transport/v1/retrieve",
+      COGNITIVE_RESEARCH_RETENTION_ATTESTATION_HASH: "c".repeat(64),
+      COGNITIVE_RESEARCH_RETENTION_BATCH_LIMIT: "100",
+      COGNITIVE_RESEARCH_RETENTION_CRON: "17 * * * *",
+      COGNITIVE_RESEARCH_RETENTION_ENVIRONMENT: "production",
+      COGNITIVE_RESEARCH_RETENTION_MAXIMUM_BATCHES: "1",
+      COGNITIVE_RESEARCH_RETENTION_PLATFORM: "shared",
+      COGNITIVE_RESEARCH_RETENTION_PROCESSOR_ATTESTATION_ID:
+        "10000000-0000-4000-8000-000000000001",
+      COGNITIVE_RESEARCH_RETENTION_PROJECT_ID:
+        "20000000-0000-4000-8000-000000000001",
+      COGNITIVE_RESEARCH_RETENTION_TASK_ID:
+        "30000000-0000-4000-8000-000000000001",
+      COGNITIVE_RESEARCH_RETENTION_TIMEOUT_MS: "50000",
     },
   },
   schemaVersion: "chillywood-cognitive-level01-provider-deployment-input-v1",
@@ -153,10 +166,6 @@ test("active rendering emits ten private configs and a credential-free gateway",
     );
     assert.equal(config.vars.SOURCE_COMMIT, currentCommit);
     assert.equal(
-      config.vars.SOURCE_MODULE_GRAPH_SHA256,
-      repositoryState.sourceGraph.hash,
-    );
-    assert.equal(
       config.vars.SOURCE_BASE_COMMIT,
       RUNTIME_MANIFEST.sourceBaseCommit,
     );
@@ -166,6 +175,15 @@ test("active rendering emits ten private configs and a credential-free gateway",
       /^\.\.\/source\/repository\/isolated-runtime\/cloudflare\/generated\/entrypoints\/cognitive_[a-z0-9_]+\.mjs$/u,
     );
     ids.add(config.hyperdrive[0].id);
+    if (principal.dbRole === "cognitive_public_research_broker") {
+      assert.deepEqual(config.triggers, { crons: ["17 * * * *"] });
+      assert.equal(
+        config.vars.COGNITIVE_RESEARCH_RETENTION_ATTESTATION_HASH,
+        "c".repeat(64),
+      );
+    } else {
+      assert.equal("triggers" in config, false);
+    }
     assert.doesNotMatch(JSON.stringify(config), /REPLACE_WITH|replace-with/u);
   }
   assert.equal(ids.size, 10);
@@ -185,10 +203,6 @@ test("active rendering emits ten private configs and a credential-free gateway",
   assert.equal("hyperdrive" in gateway, false);
   assert.equal("secrets" in gateway, false);
   assert.equal(gateway.vars.CF_ACCESS_AUD, "a".repeat(64));
-  assert.equal(
-    gateway.vars.SOURCE_MODULE_GRAPH_SHA256,
-    repositoryState.sourceGraph.hash,
-  );
   assert.equal(
     gateway.main,
     "../source/repository/isolated-runtime/cloudflare/src/gateway.mjs",
@@ -230,6 +244,13 @@ test("inert mode emits reviewed credential-free Workers without database binding
       placeholderNames.some((name) => name in config.vars),
       false,
     );
+    assert.equal(
+      Object.keys(config.vars).some((name) =>
+        name.startsWith("COGNITIVE_RESEARCH_RETENTION_")
+      ),
+      false,
+    );
+    assert.equal("triggers" in config, false);
   }
   const gateway = rendered.configs.get("gateway.wrangler.jsonc");
   assert.equal(gateway.workers_dev, true);

@@ -63,6 +63,22 @@ const requiredSourceGraphPaths = Object.freeze([
   "isolated-runtime/cloudflare/src/manifest.mjs",
   "isolated-runtime/pinned-research-transport/src/invocation-contract.mjs",
 ]);
+const researchRetentionRuntimeVariableNames = Object.freeze([
+  "COGNITIVE_RESEARCH_RETENTION_ATTESTATION_HASH",
+  "COGNITIVE_RESEARCH_RETENTION_BATCH_LIMIT",
+  "COGNITIVE_RESEARCH_RETENTION_CRON",
+  "COGNITIVE_RESEARCH_RETENTION_ENVIRONMENT",
+  "COGNITIVE_RESEARCH_RETENTION_MAXIMUM_BATCHES",
+  "COGNITIVE_RESEARCH_RETENTION_PLATFORM",
+  "COGNITIVE_RESEARCH_RETENTION_PROCESSOR_ATTESTATION_ID",
+  "COGNITIVE_RESEARCH_RETENTION_PROJECT_ID",
+  "COGNITIVE_RESEARCH_RETENTION_TASK_ID",
+  "COGNITIVE_RESEARCH_RETENTION_TIMEOUT_MS",
+]);
+const researchRuntimeVariableNames = Object.freeze([
+  "COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL",
+  ...researchRetentionRuntimeVariableNames,
+]);
 const forbiddenCredentialKey =
   /(?:api[_-]?(?:key|token)|(?:access|refresh)[_-]?token|token[_-]?value|client[_-]?secret|credential[_-]?(?:secret|value)|private[_-]?key|secret[_-]?value|password|database[_-]?url|service[_-]?role)/iu;
 const unresolvedValue =
@@ -589,6 +605,20 @@ const placeholderConfigurationByPrincipal = () =>
       .filter(([, names]) => names.length > 0),
   );
 
+const runtimeConfigurationInputByPrincipal = () => {
+  const expected = placeholderConfigurationByPrincipal();
+  const research = RUNTIME_MANIFEST.principals.find(
+    (principal) =>
+      principal.dbRole === "cognitive_public_research_broker",
+  );
+  if (!research) fail("research_runtime_configuration_missing");
+  expected.set(
+    research.dbRole,
+    Object.keys(research.runtimeConfiguration).sort(),
+  );
+  return expected;
+};
+
 const validatePinnedResearchTransportUrl = (value) => {
   if (typeof value !== "string" || value.length > 2_048) {
     fail("runtime_variable_invalid");
@@ -655,6 +685,12 @@ const validateRuntimeVariable = (principal, name, value) => {
     return;
   }
   if (
+    principal === "cognitive_public_research_broker" &&
+    researchRetentionRuntimeVariableNames.includes(name)
+  ) {
+    return;
+  }
+  if (
     principal === "cognitive_model_router" &&
     [
       "COGNITIVE_MODEL_FAMILY",
@@ -676,7 +712,7 @@ const validateRuntimeVariables = (runtimeVariables, active) => {
     }
     return {};
   }
-  const expected = placeholderConfigurationByPrincipal();
+  const expected = runtimeConfigurationInputByPrincipal();
   exactKeys(
     runtimeVariables,
     [...expected.keys()],
@@ -695,6 +731,33 @@ const validateRuntimeVariables = (runtimeVariables, active) => {
         runtimeVariables[principal][name],
       );
     }
+  }
+  const research = runtimeVariables.cognitive_public_research_broker;
+  exactKeys(
+    research,
+    researchRuntimeVariableNames,
+    "research_retention_variable_contract_invalid",
+  );
+  if (
+    research.COGNITIVE_RESEARCH_RETENTION_CRON !== "17 * * * *" ||
+    research.COGNITIVE_RESEARCH_RETENTION_PLATFORM !== "shared" ||
+    research.COGNITIVE_RESEARCH_RETENTION_ENVIRONMENT !== "production" ||
+    research.COGNITIVE_RESEARCH_RETENTION_BATCH_LIMIT !== "100" ||
+    research.COGNITIVE_RESEARCH_RETENTION_MAXIMUM_BATCHES !== "1" ||
+    research.COGNITIVE_RESEARCH_RETENTION_TIMEOUT_MS !== "50000" ||
+    !/^[a-f0-9]{64}$/u.test(
+      research.COGNITIVE_RESEARCH_RETENTION_ATTESTATION_HASH,
+    ) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+      .test(
+        research.COGNITIVE_RESEARCH_RETENTION_PROCESSOR_ATTESTATION_ID,
+      ) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+      .test(research.COGNITIVE_RESEARCH_RETENTION_PROJECT_ID) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+      .test(research.COGNITIVE_RESEARCH_RETENTION_TASK_ID)
+  ) {
+    fail("research_retention_variable_invalid");
   }
   return runtimeVariables;
 };
@@ -771,7 +834,6 @@ const renderGateway = (input, sourceGraph) => {
       CF_ACCESS_TEAM_DOMAIN: input.access.teamDomain,
       SOURCE_COMMIT: input.source.commit,
       SOURCE_BASE_COMMIT: input.source.baseCommit,
-      SOURCE_MODULE_GRAPH_SHA256: input.source.moduleGraphSha256,
     },
     workers_dev: true,
   };
@@ -810,7 +872,6 @@ const renderPrivateWorker = (
       ...template.vars,
       SOURCE_COMMIT: input.source.commit,
       SOURCE_BASE_COMMIT: input.source.baseCommit,
-      SOURCE_MODULE_GRAPH_SHA256: input.source.moduleGraphSha256,
       ...(active
         ? runtimeVariables[principal.dbRole] ?? {}
         : {}),
@@ -821,6 +882,10 @@ const renderPrivateWorker = (
   if (!active) {
     delete config.hyperdrive;
     for (const name of placeholderNames) delete config.vars[name];
+    for (const name of researchRetentionRuntimeVariableNames) {
+      delete config.vars[name];
+    }
+    delete config.triggers;
   }
   assertNoUnresolvedValues(config);
   if (

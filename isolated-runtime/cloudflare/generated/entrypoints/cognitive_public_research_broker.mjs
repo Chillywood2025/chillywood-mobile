@@ -1,5 +1,6 @@
 import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";
 import { createScopedDatabasePort } from "../../src/database-core.mjs";
+import { createResearchRetentionScheduledHandler } from "../../src/research-retention-scheduled.mjs";
 import { PUBLIC_RESEARCH_BROKER_ADAPTERS } from "../../src/adapters/research-broker.mjs";
 import { RESEARCH_BROKER_STATEMENTS } from "../../src/database-statements/research-broker.mjs";
 
@@ -88,7 +89,17 @@ const principal = Object.freeze({
   },
   "provider": "isolated_pinned_research_transport",
   "runtimeConfiguration": {
-    "COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL": "REPLACE_WITH_REVIEWED_PINNED_TRANSPORT_HTTPS_URL"
+    "COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL": "REPLACE_WITH_REVIEWED_PINNED_TRANSPORT_HTTPS_URL",
+    "COGNITIVE_RESEARCH_RETENTION_ATTESTATION_HASH": "REPLACE_WITH_REVIEWED_RETENTION_ATTESTATION_HASH",
+    "COGNITIVE_RESEARCH_RETENTION_BATCH_LIMIT": "100",
+    "COGNITIVE_RESEARCH_RETENTION_CRON": "17 * * * *",
+    "COGNITIVE_RESEARCH_RETENTION_ENVIRONMENT": "production",
+    "COGNITIVE_RESEARCH_RETENTION_MAXIMUM_BATCHES": "1",
+    "COGNITIVE_RESEARCH_RETENTION_PLATFORM": "shared",
+    "COGNITIVE_RESEARCH_RETENTION_PROCESSOR_ATTESTATION_ID": "REPLACE_WITH_REVIEWED_RETENTION_PROCESSOR_ATTESTATION_ID",
+    "COGNITIVE_RESEARCH_RETENTION_PROJECT_ID": "REPLACE_WITH_REVIEWED_RETENTION_PROJECT_ID",
+    "COGNITIVE_RESEARCH_RETENTION_TASK_ID": "REPLACE_WITH_REVIEWED_RETENTION_TASK_ID",
+    "COGNITIVE_RESEARCH_RETENTION_TIMEOUT_MS": "50000"
   },
   "requiredSecrets": [
     "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
@@ -108,6 +119,7 @@ const createDatabase = (options) => createScopedDatabasePort({
 
 export default createPrivateWorkerEntrypoint({
   createDatabase,
+  createScheduledHandler: createResearchRetentionScheduledHandler,
   principal,
   resolveAdapter: (operation) => PUBLIC_RESEARCH_BROKER_ADAPTERS[operation] ?? null,
 });

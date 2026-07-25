@@ -142,6 +142,11 @@ for (const principal of RUNTIME_MANIFEST.principals) {
   const entrypoint = [
     'import { createPrivateWorkerEntrypoint } from "../../src/private-worker.mjs";',
     'import { createScopedDatabasePort } from "../../src/database-core.mjs";',
+    ...(principal.dbRole === "cognitive_public_research_broker"
+      ? [
+        'import { createResearchRetentionScheduledHandler } from "../../src/research-retention-scheduled.mjs";',
+      ]
+      : []),
     `import { ${adapterModule.exportName} } from "${adapterModule.path}";`,
     `import { ${databaseModule.exportName} } from "${databaseModule.path}";`,
     "",
@@ -153,6 +158,9 @@ for (const principal of RUNTIME_MANIFEST.principals) {
     "",
     "export default createPrivateWorkerEntrypoint({",
     "  createDatabase,",
+    ...(principal.dbRole === "cognitive_public_research_broker"
+      ? ["  createScheduledHandler: createResearchRetentionScheduledHandler,"]
+      : []),
     "  principal,",
     `  resolveAdapter: (operation) => ${adapterModule.exportName}[operation] ?? null,`,
     "});",
@@ -180,6 +188,9 @@ for (const principal of RUNTIME_MANIFEST.principals) {
     },
     version_metadata: { binding: "WORKER_VERSION" },
   };
+  if (principal.dbRole === "cognitive_public_research_broker") {
+    config.triggers = { crons: ["17 * * * *"] };
+  }
   await writeJson(
     resolve(configs, `${principal.dbRole}.wrangler.template.jsonc`),
     config,

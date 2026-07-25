@@ -3,6 +3,7 @@ import { createPrivateInvocationHandler } from "./private-core.mjs";
 
 export const createPrivateWorkerEntrypoint = ({
   createDatabase,
+  createScheduledHandler = null,
   principal,
   resolveAdapter,
 }) =>
@@ -24,5 +25,16 @@ export const createPrivateWorkerEntrypoint = ({
         principal,
         resolveAdapter,
       })(envelope, invocationToken);
+    }
+
+    async scheduled(controller) {
+      if (typeof createScheduledHandler !== "function") {
+        throw new Error("scheduled_handler_not_configured");
+      }
+      return createScheduledHandler({
+        createDatabase,
+        env: this.env,
+        principal,
+      })(controller);
     }
   };

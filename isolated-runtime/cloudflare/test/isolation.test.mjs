@@ -329,6 +329,7 @@ test("production research retrieval fails closed before database work when provi
       COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256:
         await sha256Hex(invocationToken),
       COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN: "r".repeat(40),
+      ...principal.runtimeConfiguration,
       RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
       SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
       SOURCE_COMMIT: sourceCommit,

@@ -30,4 +30,12 @@ export const RESEARCH_BROKER_STATEMENTS = Object.freeze({
       $20::text[],$21::text
     ) as result`,
   }),
+  runAttestedRetention: Object.freeze({
+    arity: 8,
+    text:
+      `select cognitive_runtime.run_attested_research_retention_maintenance(
+        $1::uuid,$2::uuid,$3::uuid,$4::text,$5::text,
+        $6::timestamptz,$7::integer,$8::text
+      ) as result`,
+  }),
 });
