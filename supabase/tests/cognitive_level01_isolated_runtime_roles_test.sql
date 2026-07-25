@@ -34,11 +34,11 @@ insert into expected_runtime_grants(role_name, schema_name, function_name) value
   ('cognitive_product_baseline_executor','cognitive_runtime','governance_fail_approved_execution'),
   ('cognitive_sentinel_collector','cognitive_runtime','collect_sentinel_run'),
   ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_detection_assessment_hash'),
+  ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_no_finding_assessment_hash'),
   ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_resolution_assessment_hash'),
   ('cognitive_product_quality_evaluator','cognitive_runtime','governance_evaluate_product_experience_baseline_v1'),
   ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_record_sentinel_evaluator_proof'),
   ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_evaluator_snapshot'),
-  ('cognitive_product_quality_evaluator','cognitive_runtime','product_quality_attest_livekit_bounded_failure_no_finding'),
   ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_detection'),
   ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_resolution'),
   ('cognitive_public_research_broker','cognitive_runtime','cognitive_record_public_research_source_v2'),
@@ -413,7 +413,7 @@ select is(
     )
     from explicit_grants
   ),
-  'f9645ca530d3a21cac368e018eea80c8421a1add1034ffa1e25c4b0339a1b726',
+  '04db6b1a88316f17a079a1087014a2e0b593b600db055cc487fa8e5034bed73b',
   'exact role-to-function-signature grant manifest is deterministic'
 );
 
@@ -745,8 +745,8 @@ select is(
       and procedure.prosecdef
       and procedure.proconfig @> array['search_path=""']
   ),
-  39,
-  'all thirty-nine runtime boundary helpers and wrappers are security definer with an empty search path'
+  40,
+  'all forty runtime boundary helpers and wrappers are security definer with an empty search path'
 );
 
 select ok(

@@ -11,6 +11,9 @@ import securityPolicyJson from "../../../config/intelligence/cognitive-security-
 import productBaselineJson from "../../../config/intelligence/chillywood-product-experience-baseline-v1.json" with {
   type: "json",
 };
+import objectiveAccessibilityBindingsJson from "../../../config/intelligence/product-experience-objective-accessibility-surface-bindings-v1.json" with {
+  type: "json",
+};
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonObject = { [key: string]: Json };
@@ -135,10 +138,7 @@ const BASELINE_EVALUATION_KEYS = Object.freeze([
   "executionId",
   "executionReceiptHash",
 ]);
-const LIVEKIT_FIXTURE_ATTESTATION_KEYS = Object.freeze([
-  "action",
-  "sentinelRunId",
-]);
+const NO_FINDING_KEYS = Object.freeze(["action", "sentinelRunId"]);
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
   "confirmed_defect",
@@ -172,6 +172,7 @@ const PHYSICAL_PROOF_STATUSES = new Set([
   "device_unavailable",
   "new_binary_or_ota_required",
 ]);
+const DEFAULT_ROUTE_RESOLUTION_MS = 10_000;
 const LIVEKIT_MAX_TIMING_MS = 600_000;
 const LIVEKIT_MAX_OBSERVATION_WINDOW_MS = 120_000;
 const LIVEKIT_BOOLEAN_METRICS = Object.freeze([
@@ -299,15 +300,24 @@ const ROUTE_MAPPINGS = new Map(
     mapping,
   ]),
 );
+const OBJECTIVE_ACCESSIBILITY_BINDINGS = new Map(
+  objectiveAccessibilityBindingsJson.canonicalBindingPayload.bindings.map(
+    (binding) => [binding.bindingId, binding],
+  ),
+);
+const OBJECTIVE_ACCESSIBILITY_COMPONENT_SET_HASH =
+  objectiveAccessibilityBindingsJson.canonicalBindingPayload.componentSetHash;
 const BASELINE_VARIANCE = productBaselineJson.allowedVariance;
 
 const baselineContractBindingIsValid = (
+  run: StoredRun,
   metrics: Record<string, unknown>,
 ): boolean => {
   const mappingId = toText(metrics.routeFamilyMappingId);
   const mapping = ROUTE_MAPPINGS.get(mappingId);
   if (
     !mapping ||
+    toText(run.route_or_surface) !== mapping.route ||
     toText(metrics.routeFamilyMappingHash) !==
       ROUTE_MAPPING_HASHES[mappingId] ||
     toText(metrics.surfaceFamily) !== mapping.family
@@ -324,6 +334,28 @@ const baselineContractBindingIsValid = (
     toText(metrics.exceptionContractHash) ===
       EXCEPTION_CONTRACT_HASHES[exceptionId] &&
     metrics.exceptionVersioned === true;
+};
+const objectiveAccessibilityBindingIsValid = (
+  run: StoredRun,
+  metrics: Record<string, unknown>,
+): boolean => {
+  const binding = OBJECTIVE_ACCESSIBILITY_BINDINGS.get(
+    toText(metrics.routeFamilyMappingId),
+  );
+  return !!binding &&
+    binding.objectiveAccessibilityOnly === true &&
+    binding.allowsVisualDensityComparison === false &&
+    toText(run.route_or_surface) === binding.routeOrSurface &&
+    toText(metrics.routeFamilyMappingHash) === binding.bindingHash &&
+    toText(metrics.componentIdentityHash) ===
+      OBJECTIVE_ACCESSIBILITY_COMPONENT_SET_HASH &&
+    toText(metrics.surfaceFamily) === binding.surfaceFamily &&
+    toText(metrics.exceptionContractId) === binding.exceptionContractId &&
+    toText(metrics.exceptionContractHash) ===
+      EXCEPTION_CONTRACT_HASHES[binding.exceptionContractId] &&
+    metrics.exceptionVersioned === true &&
+    toText(metrics.exceptionType) === "non_media_surface" &&
+    toText(metrics.targetClassification) !== "meets_wcag_aa_minimum_only";
 };
 const VERSIONED_EXCEPTION_FAMILIES = new Set([
   "featured_hero_card",
@@ -388,8 +420,8 @@ export const isStrictSentinelEvaluationPayload = (
       LOWER_HEX_64.test(value.resolutionReasonHash) &&
       safePayload({ action: value.action });
   }
-  if (value.action === "attest_livekit_bounded_failure_no_finding") {
-    return hasExactKeys(value, LIVEKIT_FIXTURE_ATTESTATION_KEYS) &&
+  if (value.action === "evaluate_sentinel_no_finding") {
+    return hasExactKeys(value, NO_FINDING_KEYS) &&
       typeof value.sentinelRunId === "string" &&
       UUID.test(value.sentinelRunId) &&
       safePayload({ action: value.action });
@@ -670,7 +702,7 @@ export const deterministicVisualClassification = (
     !SURFACE_FAMILIES.has(surfaceFamily) ||
     !LOWER_HEX_64.test(componentIdentityHash) ||
     !LOWER_HEX_64.test(routeFamilyMappingHash) ||
-    !baselineContractBindingIsValid(metrics) ||
+    !baselineContractBindingIsValid(run, metrics) ||
     preferredThreshold !== expectedPreferredThreshold ||
     applicableMinimumThreshold !== expectedApplicableMinimum
   ) {
@@ -1262,7 +1294,10 @@ export const deterministicTouchTargetClassification = (
     !touchTargetBaselineBindingIsValid(metrics, context) ||
     !LOWER_HEX_64.test(toText(metrics.componentIdentityHash)) ||
     !LOWER_HEX_64.test(toText(metrics.routeFamilyMappingHash)) ||
-    !baselineContractBindingIsValid(metrics)
+    !(
+      baselineContractBindingIsValid(run, metrics) ||
+      objectiveAccessibilityBindingIsValid(run, metrics)
+    )
   ) {
     return visualAssessment("baseline_ambiguity");
   }
@@ -1931,6 +1966,103 @@ export const deterministicDetectionReasons = (
   return Object.freeze([...reasons].sort());
 };
 
+export const deterministicNoFindingReasons = (
+  run: StoredRun,
+  context: DetectionEvaluationContext = DEFAULT_EVALUATION_CONTEXT,
+): readonly string[] => {
+  const reasons = new Set<string>();
+  const metrics = metricObject(run);
+  const observationKind = toText(run.metric_manifest.observationKind);
+  if (
+    run.result_status !== "passed" ||
+    !["installed_ui_observed", "simulator_observed"].includes(
+      run.physical_proof_status,
+    )
+  ) {
+    reasons.add("passing_physical_run_required");
+  }
+  if (!metrics) {
+    reasons.add("metric_manifest_missing");
+    return Object.freeze([...reasons].sort());
+  }
+  if (observationKind === "search_accessibility") {
+    for (
+      const key of [
+        "inputPresent",
+        "inputFocusable",
+        "inputClickable",
+        "accessibilityLabelPresent",
+        "queryAccepted",
+        "clearSucceeded",
+        "keyboardDismissed",
+      ]
+    ) {
+      if (metrics[key] !== true) {
+        reasons.add(`search_accessibility_${key}_required`);
+      }
+    }
+  } else if (observationKind === "route_timing") {
+    const elapsedDurationMs = metricNumber(metrics, "elapsedDurationMs");
+    if (
+      metrics.timeoutObserved !== false ||
+      toText(metrics.networkState) !== "ready" ||
+      elapsedDurationMs === null ||
+      elapsedDurationMs < 0 ||
+      elapsedDurationMs > DEFAULT_ROUTE_RESOLUTION_MS
+    ) {
+      reasons.add("resolved_route_timing_required");
+    }
+  } else if (observationKind === "crash_anr") {
+    if (
+      metricNumber(metrics, "fatalExceptionCount") !== 0 ||
+      metricNumber(metrics, "anrCount") !== 0
+    ) {
+      reasons.add("zero_crash_anr_observation_required");
+    }
+  } else if (observationKind === "installed_journey") {
+    const elapsedDuration = metricNumber(metrics, "elapsedDurationMs");
+    const maximumDuration = metricNumber(metrics, "maxDurationMs");
+    if (
+      toText(metrics.resultState) !== "success" ||
+      toText(metrics.expectedState) !== toText(metrics.observedState) ||
+      metricNumber(metrics, "unresolvedStateCount") !== 0 ||
+      elapsedDuration === null ||
+      maximumDuration === null ||
+      elapsedDuration > maximumDuration
+    ) {
+      reasons.add("resolved_installed_journey_required");
+    }
+  } else if (observationKind === "touch_target") {
+    if (
+      deterministicTouchTargetClassification(run, context).classification !==
+        "false_positive"
+    ) {
+      reasons.add("compliant_touch_target_required");
+    }
+  } else if (observationKind === "visual_layout") {
+    if (
+      !["false_positive", "route_specific_exception"].includes(
+        deterministicVisualClassification(run, context).classification,
+      )
+    ) {
+      reasons.add("compliant_visual_layout_required");
+    }
+  } else if (observationKind === "livekit_experience") {
+    const failureCategory = deriveIndependentLiveKitFailureCategory(metrics);
+    if (
+      toText(metrics.scenarioType) === "bounded_failure_fixture" ||
+      failureCategory !== "none" ||
+      metrics.installedUiObserved !== true ||
+      metrics.connectingResolved !== true
+    ) {
+      reasons.add("healthy_installed_livekit_experience_required");
+    }
+  } else {
+    reasons.add("unsupported_observation_kind");
+  }
+  return Object.freeze([...reasons].sort());
+};
+
 export const deterministicResolutionReasons = (
   run: StoredRun,
   finding: StoredFinding,
@@ -2090,6 +2222,20 @@ export const deterministicResolutionReasons = (
         metricNumber(detectionMetrics, "journeyStepCount")
     ) {
       reasons.add("resolution_measurement_identity_mismatch");
+    }
+  } else if (observationKind === "route_timing") {
+    const elapsedDurationMs = metricNumber(
+      resolutionMetrics,
+      "elapsedDurationMs",
+    );
+    if (
+      resolutionMetrics.timeoutObserved !== false ||
+      toText(resolutionMetrics.networkState) !== "ready" ||
+      elapsedDurationMs === null ||
+      elapsedDurationMs < 0 ||
+      elapsedDurationMs > DEFAULT_ROUTE_RESOLUTION_MS
+    ) {
+      reasons.add("resolved_route_timing_required");
     }
   }
   return Object.freeze([...reasons].sort());
@@ -2334,7 +2480,7 @@ export const handler = async (request: Request): Promise<Response> => {
       }
       return json(200, result.data as JsonObject);
     }
-    if (payload.action === "attest_livekit_bounded_failure_no_finding") {
+    if (payload.action === "evaluate_sentinel_no_finding") {
       return json(409, {
         error: "isolated_product_quality_evaluator_runtime_required",
       });

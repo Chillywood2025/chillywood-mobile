@@ -50,12 +50,13 @@ insert into livekit_fixture values (
   }'::jsonb
 );
 
-select ok(
+select is(
   public.product_experience_livekit_bounded_failure_fixture_is_valid(
     'failed',
     (select metric_manifest from livekit_fixture)
   ),
-  'exact failed bounded fixture is valid'
+  false,
+  'caller-labeled bounded failure fixture is invalid without a reviewed fixture plan'
 );
 
 select is(
@@ -161,8 +162,8 @@ select is(
     'failed',
     (select metric_manifest from livekit_fixture)
   ),
-  'websocket_failure',
-  'database independently derives the failure category'
+  null,
+  'rejected caller-labeled fixture cannot derive a no-finding failure category'
 );
 
 select ok(
@@ -227,7 +228,7 @@ select ok(
 );
 
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'cognitive_product_quality_evaluator',
     'cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding(uuid,text,text,text,text)',
     'EXECUTE'
@@ -252,11 +253,11 @@ select ok(
     'cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding(uuid,text,text,text,text)',
     'EXECUTE'
   ),
-  'only the exact evaluator role can execute the wrapper'
+  'the retired bounded-failure no-finding wrapper is not executable by any runtime or client role'
 );
 
 select ok(
-  cognitive_runtime.runtime_operation_allowed(
+  not cognitive_runtime.runtime_operation_allowed(
     'cognitive_product_quality_evaluator',
     'attest_livekit_bounded_failure_no_finding'
   )
@@ -268,7 +269,7 @@ select ok(
     'cognitive_livekit_experience_collector',
     'attest_livekit_bounded_failure_no_finding'
   ),
-  'runtime operation is evaluator-only'
+  'the retired bounded-failure no-finding runtime operation is unavailable to every principal'
 );
 
 select ok(
@@ -345,17 +346,30 @@ select ok(
   (
     select
       pg_catalog.pg_get_functiondef(procedure.oid) like
-        '%product_experience_livekit_bounded_failure_fixture_is_valid%'
+        '%new.metric_manifest->''metrics''->>''scenarioType''%'
       and pg_catalog.pg_get_functiondef(procedure.oid) like
-        '%product_quality_bounded_failure_fixture_finding_rejected%'
+        '%livekit_fixture_plan_required%'
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace
       on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'public'
       and procedure.proname =
-        'product_quality_reject_bounded_failure_fixture_finding'
+        'product_experience_reject_unbound_livekit_failure_fixture'
   ),
-  'one fail-closed table-boundary trigger function covers direct and RPC writes'
+  'the sentinel-run boundary rejects unbound fixture labels with the exact fail-closed reason'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_catalog.pg_trigger trigger
+    where trigger.tgrelid =
+      'public.product_experience_sentinel_runs'::regclass
+      and trigger.tgname =
+        'product_experience_unbound_livekit_failure_fixture_rejected'
+      and not trigger.tgisinternal
+  ),
+  'the unbound LiveKit fixture rejection trigger exists on sentinel-run writes'
 );
 
 select ok(
@@ -521,98 +535,61 @@ insert into public.cognitive_product_quality_service_capabilities(
   transaction_timestamp() + interval '1 hour'
 );
 
-insert into public.product_experience_sentinel_runs(
-  id,
-  task_id,
-  project_id,
-  platform,
-  environment,
-  sentinel_key,
-  route_or_surface,
-  runtime_identity_hash,
-  source_build_hash,
-  evidence_manifest_hash,
-  metric_manifest,
-  result_status,
-  physical_proof_status,
-  collector_capability_id,
-  collection_idempotency_hash,
-  observation_started_at,
-  observation_finished_at,
-  evaluation_expires_at
-) values (
-  'cf400000-0000-4000-8000-000000000001',
-  'cf100000-0000-4000-8000-000000000001',
-  'cf000000-0000-4000-8000-000000000001',
-  'android',
-  'production',
-  'livekit_experience_sentinel',
-  'live-stage',
-  repeat('3',64),
-  repeat('4',64),
-  repeat('5',64),
-  (select metric_manifest from livekit_fixture),
-  'failed',
-  'installed_ui_observed',
-  'cf300000-0000-4000-8000-000000000001',
-  repeat('6',64),
-  transaction_timestamp() - interval '2 minutes',
-  transaction_timestamp() - interval '1 minute',
-  transaction_timestamp() + interval '1 hour'
-);
-
-update public.autonomous_system_emergency_states
-set
-  status = 'emergency_stop',
-  reason = 'livekit no-finding liveness rejection fixture',
-  updated_at = transaction_timestamp()
-where system_id = 'product_intelligence_operator';
-
 select throws_ok(
   $sql$
-    insert into
-      public.product_experience_livekit_no_finding_attestations(
-        sentinel_run_id,
-        task_id,
-        project_id,
-        platform,
-        environment,
-        scenario_type,
-        derived_failure_category,
-        evidence_manifest_hash,
-        source_build_hash,
-        evaluator_output_hash,
-        attestation_hash,
-        evaluator_identity
-      )
-    values (
+    insert into public.product_experience_sentinel_runs(
+      id,
+      task_id,
+      project_id,
+      platform,
+      environment,
+      sentinel_key,
+      route_or_surface,
+      runtime_identity_hash,
+      source_build_hash,
+      evidence_manifest_hash,
+      metric_manifest,
+      result_status,
+      physical_proof_status,
+      collector_capability_id,
+      collection_idempotency_hash,
+      observation_started_at,
+      observation_finished_at,
+      evaluation_expires_at
+    ) values (
       'cf400000-0000-4000-8000-000000000001',
       'cf100000-0000-4000-8000-000000000001',
       'cf000000-0000-4000-8000-000000000001',
       'android',
       'production',
-      'bounded_failure_fixture',
-      'websocket_failure',
-      repeat('5',64),
+      'livekit_experience_sentinel',
+      'live-stage',
+      repeat('3',64),
       repeat('4',64),
-      repeat('7',64),
-      public.product_experience_livekit_no_finding_attestation_hash(
-        'cf400000-0000-4000-8000-000000000001',
-        'cf100000-0000-4000-8000-000000000001',
-        'cf000000-0000-4000-8000-000000000001',
-        'android',
-        'production',
-        repeat('5',64),
-        repeat('4',64),
-        'websocket_failure',
-        repeat('7',64)
-      ),
-      'cognitive_product_quality_evaluator'
+      repeat('5',64),
+      (select metric_manifest from livekit_fixture),
+      'failed',
+      'installed_ui_observed',
+      'cf300000-0000-4000-8000-000000000001',
+      repeat('6',64),
+      transaction_timestamp() - interval '2 minutes',
+      transaction_timestamp() - interval '1 minute',
+      transaction_timestamp() + interval '1 hour'
     )
   $sql$,
-  '42501',
-  'livekit_bounded_failure_no_finding_attestation_task_not_live',
-  'table boundary rejects no-finding attestation after emergency stop'
+  'P0001',
+  'livekit_fixture_plan_required',
+  'sentinel-run boundary rejects a caller-labeled fixture before persistence'
+);
+
+select is(
+  (
+    select count(*)
+    from public.product_experience_sentinel_runs
+    where id = 'cf400000-0000-4000-8000-000000000001'
+  ),
+  0::bigint,
+  'fixture rejection leaves no sentinel run'
 );
 
 select is(
@@ -622,7 +599,37 @@ select is(
     where sentinel_run_id = 'cf400000-0000-4000-8000-000000000001'
   ),
   0::bigint,
-  'emergency-stop rejection leaves no immutable attestation'
+  'fixture rejection leaves no immutable no-finding attestation'
+);
+
+select is(
+  (
+    select count(*)
+    from public.product_quality_findings
+    where sentinel_run_id = 'cf400000-0000-4000-8000-000000000001'
+  ),
+  0::bigint,
+  'fixture rejection leaves no governed finding'
+);
+
+select is(
+  (
+    select count(*)
+    from public.product_experience_sentinel_evaluator_proofs
+    where sentinel_run_id = 'cf400000-0000-4000-8000-000000000001'
+  ),
+  0::bigint,
+  'fixture rejection leaves no evaluator proof'
+);
+
+select is(
+  (
+    select count(*)
+    from public.product_quality_finding_events
+    where sentinel_run_id = 'cf400000-0000-4000-8000-000000000001'
+  ),
+  0::bigint,
+  'fixture rejection leaves no finding event'
 );
 
 select * from finish();

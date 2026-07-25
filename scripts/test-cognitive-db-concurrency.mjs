@@ -19,7 +19,17 @@ const docker = (args, input = "") => {
     input,
     maxBuffer: 4 * 1024 * 1024,
   });
-  assert.equal(result.status, 0, "local Postgres test command failed");
+  const diagnostic = result.stderr
+    .split("\n")
+    .find((line) => line.includes("ERROR:"))
+    ?.replaceAll(/'[^']*'/gu, "'<redacted>'")
+    .replaceAll(/[A-Za-z0-9_-]{40,}/gu, "<redacted>")
+    ?? "no_sanitized_postgres_error";
+  assert.equal(
+    result.status,
+    0,
+    `local Postgres test command failed: ${diagnostic}`,
+  );
   return result.stdout.trim();
 };
 
@@ -292,6 +302,11 @@ insert into public.governance_model_execution_attestations(
     'cross_provider',0.1,100
   );
 
+-- The retention activation gate intentionally blocks every new collective
+-- decision while provider-output retention is unavailable. These concurrency
+-- tests exercise downstream locking against a pre-existing reviewed decision,
+-- while the gate itself remains covered by its dedicated pgTAP suite.
+set local session_replication_role = replica;
 insert into public.governance_decision_manifests(
   id,deliberation_id,evidence_packet_id,selected_proposal_id,task_id,
   project_id,platform,environment,decision_key,source_commit,
@@ -299,7 +314,9 @@ insert into public.governance_decision_manifests(
   selected_option_hash,rejected_option_hashes,council_attestation_hash,
   votes_hash,vetoes_hash,dissent_hash,stakeholder_impact_hash,risk_level,
   required_test_ids,capability_scope_hash,budget_hash,maximum_executions,
-  rollback_hash,decision_hash,status,expires_at,finalized_at
+  rollback_hash,decision_hash,status,expires_at,finalized_at,
+  model_independence_assessment_id,model_independence_status,
+  model_independence_evidence_hash
 ) values (
   ${sqlLiteral(ids.decision)},${sqlLiteral(ids.deliberation)},
   ${sqlLiteral(ids.evidencePacket)},${sqlLiteral(ids.proposal)},
@@ -311,8 +328,13 @@ insert into public.governance_decision_manifests(
   ${sqlLiteral(h2)},${sqlLiteral(h3)},'low',array['concurrency-test'],
   ${sqlLiteral(h4)},${sqlLiteral(h9)},10,${sqlLiteral(h3)},${sqlLiteral(h5)},
   'finalized',transaction_timestamp()+interval '1 day',
-  transaction_timestamp()
+  transaction_timestamp(),
+  'deliberation-' || encode(extensions.digest(
+    convert_to(${sqlLiteral(ids.deliberation)},'UTF8'),'sha256'
+  ),'hex'),
+  'MODEL_INDEPENDENCE_VERIFIED',${sqlLiteral(h8)}
 );
+set local session_replication_role = origin;
 
 insert into public.governance_two_party_service_assertions(
   service_identity,assertion_hash,allowed_operations,registered_by,status,

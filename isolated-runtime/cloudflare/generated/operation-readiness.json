@@ -110,14 +110,6 @@
       }
     },
     "cognitive_product_quality_evaluator": {
-      "attest_livekit_bounded_failure_no_finding": {
-        "databaseOperations": [
-          "read_product_quality_snapshot",
-          "attest_livekit_bounded_failure_no_finding"
-        ],
-        "ready": true,
-        "reason": null
-      },
       "evaluate_product_baseline_selection": {
         "databaseOperations": [
           "evaluate_product_baseline"
@@ -129,6 +121,15 @@
         "databaseOperations": [
           "read_product_quality_snapshot",
           "compute_detection_hash",
+          "record_sentinel_evaluator_proof"
+        ],
+        "ready": true,
+        "reason": null
+      },
+      "evaluate_sentinel_no_finding": {
+        "databaseOperations": [
+          "read_product_quality_snapshot",
+          "compute_no_finding_hash",
           "record_sentinel_evaluator_proof"
         ],
         "ready": true,

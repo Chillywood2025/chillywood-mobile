@@ -610,6 +610,7 @@ try {
   const recycled = await setupLocalAuthUser(status, `recycled-${runId}@local.invalid`, password);
 
   psql(status.dbUrl, `
+    begin;
     insert into public.cognitive_projects(
       id, repository_full_name, source_state, activation_state,
       scheduler_state, production_authority
@@ -736,6 +737,12 @@ try {
         ${quote(hex("e", 64))}, ${quote(hex("f", 64))},
         ${quote(hex("a", 64))}, true, 'cross_provider', 0.1, 100
       );
+    -- The retention gate intentionally blocks new collective decisions while
+    -- provider-output retention is unavailable. This HTTP harness exercises
+    -- the already-reviewed downstream two-party contract against a
+    -- pre-existing finalized decision; the retention gate itself remains
+    -- covered by its dedicated pgTAP and activation-hold suites.
+    set local session_replication_role = replica;
     insert into public.governance_decision_manifests(
       id, deliberation_id, evidence_packet_id, selected_proposal_id, task_id,
       project_id, platform, environment, decision_key, source_commit,
@@ -762,6 +769,8 @@ try {
       ${quote(`deliberation-${hash(ids.deliberation)}`)}, 'MODEL_INDEPENDENCE_VERIFIED',
       ${quote(hash(`model-independence:${runId}`))}
     );
+    set local session_replication_role = origin;
+    commit;
   `);
 
   await expectHttp("anon owner approval denied by Edge JWT gate", [401, 403], () =>

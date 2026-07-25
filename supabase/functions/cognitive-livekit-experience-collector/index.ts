@@ -590,6 +590,9 @@ const parseMetricEnvelope = (
   }
   const metrics = parseMetricManifest(value.metrics);
   if (!metrics) return null;
+  if (metrics.scenarioType === "bounded_failure_fixture") {
+    return null;
+  }
   return {
     evidenceHashes: [...new Set(value.evidenceHashes)].sort(),
     metrics,
