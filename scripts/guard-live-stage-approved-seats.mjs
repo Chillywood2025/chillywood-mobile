@@ -252,7 +252,8 @@ assertIncludes(liveStage, "testID=\"live-stage-seat-request-approve\"", "Live St
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-dismiss\"", "Live Stage seat-request sheet has dismiss action");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-close\"", "Live Stage seat-request sheet has close action");
 assertIncludes(liveStage, "accessibilityLabel=\"Return to Live Room\"", "Live Stage exposes an accessible route-back action");
-assertIncludes(liveStage, "<Text style={styles.stageSurfaceBackText}>← Live Room</Text>", "Live Stage route-back action has a visible phone back arrow");
+assertIncludes(liveStage, "<AppBackButton", "Live Stage route-back action uses the shared visible phone back control");
+assertIncludes(liveStage, "testID=\"live-stage-live-room-button\"", "Live Stage route-back action keeps a stable proof target");
 assertIncludes(liveStage, "LiveStageSeatRequestState", "Live Stage tracks versioned seat requests");
 assertIncludes(liveStage, "createSeatRequestVersion", "Live Stage requests must carry a request version");
 assertIncludes(liveStage, "applyLiveStageSeatRequestEvent", "Live Stage request broadcasts must use shared versioned state helper");

@@ -148,6 +148,7 @@ import { ReportSheet } from "../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
+import { AppBackButton } from "../../components/navigation/app-back-button";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
@@ -3370,10 +3371,14 @@ export default function WatchPartyRoomScreen() {
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={returnToWatchPartyEntry} hitSlop={12} activeOpacity={0.75}>
-            <Text style={styles.backArrow}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.kicker}>Chi’llywood · Watch Party</Text>
+          <AppBackButton
+            accessibilityLabel={`Return to ${sharedRoomMode === "live" ? "Live Waiting Room" : "Party Waiting Room"}`}
+            hitSlop={12}
+            onPress={returnToWatchPartyEntry}
+            style={styles.headerBackButton}
+            testID="watch-party-room-back-button"
+          />
+          <Text numberOfLines={1} style={[styles.kicker, styles.headerKicker]}>Chi’llywood · Watch Party</Text>
           <NotificationBellButton surface="watch-party-room" roomSafe />
           {/* Connection badge */}
           <View style={[styles.connBadge, { borderColor: connColor[connState] + "44" }]}>
@@ -3931,8 +3936,9 @@ const styles = StyleSheet.create({
   },
 
   // Header
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 },
-  backArrow: { color: "#aaa", fontSize: 20, fontWeight: "600", paddingRight: 8 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4, marginBottom: 2 },
+  headerBackButton: { marginLeft: -6, marginRight: 2 },
+  headerKicker: { flex: 1 },
   kicker: { color: "#555", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.2 },
   connBadge: {
     flexDirection: "row",

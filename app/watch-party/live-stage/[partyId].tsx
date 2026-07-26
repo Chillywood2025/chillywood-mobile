@@ -134,6 +134,7 @@ import { useChannelFollowAction } from "../../../hooks/use-channel-follow-action
 import { LiveEffectsPanel } from "../../../components/live/live-effects-sheet";
 import { SocialAttachmentActionSheet } from "../../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../../components/social/social-attachment-card";
+import { AppBackButton } from "../../../components/navigation/app-back-button";
 import {
   patchLiveKitSignalReadingLoop,
 } from "../../../components/watch-party-live/livekit-stage-media-surface";
@@ -4230,20 +4231,15 @@ export default function WatchPartyLiveStageScreen({
               </Text>
             </TouchableOpacity>
           ) : null}
-          <TouchableOpacity
-            style={styles.stageSurfaceBackButton}
-            activeOpacity={0.84}
-            accessible
-            focusable
-            accessibilityRole="button"
+          <AppBackButton
             accessibilityLabel="Return to Live Room"
             hitSlop={STAGE_CONTROL_HIT_SLOP}
             onPressIn={armAndRevealStageOverlay}
             onPress={onReturnToLiveRoom}
+            style={styles.stageSurfaceBackButton}
             testID="live-stage-live-room-button"
-          >
-            <Text style={styles.stageSurfaceBackText}>← Live Room</Text>
-          </TouchableOpacity>
+            textStyle={styles.stageSurfaceBackText}
+          />
         </View>
       </View>
 

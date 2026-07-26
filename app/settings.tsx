@@ -96,6 +96,7 @@ import {
   ProfileImagePreviewSheet,
   ProfileMediaReviewSheet,
 } from "../components/profile/profile-media-sheets";
+import { AppBackButton } from "../components/navigation/app-back-button";
 
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 
@@ -461,6 +462,13 @@ function SettingsRow({ title, subtitle, value, onPress, tone = "default", childr
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const onSettingsBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(tabs)/profile");
+  }, [router]);
   const params = useLocalSearchParams<{ section?: string }>();
   const insets = useSafeAreaInsets();
   const { isLoading, isSignedIn, user } = useSession();
@@ -1589,9 +1597,12 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
+        <AppBackButton
+          accessibilityLabel="Go back from Settings"
+          onPress={onSettingsBack}
+          style={styles.headerBackButton}
+          testID="settings-back-button"
+        />
         <Text style={styles.kicker}>SETTINGS</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -2464,12 +2475,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 18,
   },
-  backArrow: {
-    color: "#aaa",
-    fontSize: 20,
-    fontWeight: "700",
-    paddingRight: 8,
-  },
+  headerBackButton: { width: 74 },
   kicker: {
     color: "#555",
     fontSize: 9.5,
@@ -2477,7 +2483,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   headerSpacer: {
-    width: 18,
+    width: 74,
   },
   card: {
     borderRadius: 18,
