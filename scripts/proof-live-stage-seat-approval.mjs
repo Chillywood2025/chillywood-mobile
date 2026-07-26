@@ -34,6 +34,7 @@ const importTypeScriptModule = async (relativePath) => {
 const {
   applyLiveStageSeatRequestEvent,
   buildLiveStageCommunityParticipants,
+  canRenderLocalParticipantLiveKitTrack,
   canUseLiveStageRenderableContract,
   canRenderParticipantSpecificLiveKitTrack,
   closeLiveStageSeatRequestSheet,
@@ -238,7 +239,7 @@ const hostHeroId = resolveActualVisualHeroParticipantId({
   isHost: true,
   currentUserParticipantId: hostId,
   shouldUseViewerSelfHero: false,
-  heroParticipantId: viewerId,
+  heroParticipantId: hostId,
 });
 const hostPartyBox = buildLiveStageCommunityParticipants({
   participants,
@@ -253,12 +254,18 @@ assert(hostPartyBox.some((participant) => participant.userId === viewerId), "hos
 
 const focusedHostPartyBox = buildLiveStageCommunityParticipants({
   participants,
-  actualVisualHeroParticipantId: hostHeroId,
+  actualVisualHeroParticipantId: resolveActualVisualHeroParticipantId({
+    isHost: true,
+    currentUserParticipantId: hostId,
+    shouldUseViewerSelfHero: false,
+    heroParticipantId: viewerId,
+  }),
   participantStateById,
   shouldUseViewerSelfHero: false,
   hostParticipantId: hostId,
 });
-assert(focusedHostPartyBox.some((participant) => participant.userId === viewerId), "focused remote viewer should remain in host party box");
+assert(focusedHostPartyBox.some((participant) => participant.userId === hostId), "host should move into the party box when a remote viewer is the actual hero");
+assert(!focusedHostPartyBox.some((participant) => participant.userId === viewerId), "focused remote viewer should not duplicate inside the host party box");
 
 assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" } }) === "Audience", "featured listener must still be Audience");
 assert(getLiveStagePrimaryRoleLabel({ state: { role: "listener" }, isRequesting: true }) === "Seat request pending", "requesting listener must show request status");
@@ -482,6 +489,18 @@ assert(canRenderParticipantSpecificLiveKitTrack({
   localParticipantIdentity: viewerId,
   trackParticipantIdentity: viewerId,
 }) === false, "viewer self tile must not borrow a local/remote LiveKit track fallback");
+assert(canRenderLocalParticipantLiveKitTrack({
+  participantId: viewerId,
+  localParticipantIdentity: viewerId,
+  trackParticipantIdentity: viewerId,
+  publishLocalCamera: true,
+}) === true, "viewer self Party Members tile should render its exact active local camera track");
+assert(canRenderLocalParticipantLiveKitTrack({
+  participantId: viewerId,
+  localParticipantIdentity: viewerId,
+  trackParticipantIdentity: viewerId,
+  publishLocalCamera: false,
+}) === false, "viewer self Party Members tile must not render local camera while publishing is off");
 
 assert(state.deviceOrEmulatorUsed === false, "proof must not use an attached device or emulator");
 assert(state.realAuthAccountCreated === false, "proof must not create real auth accounts");
@@ -503,7 +522,8 @@ console.log(JSON.stringify({
   hostVisualHeroIsSelf: true,
   hostPartyBoxExcludesSelfHost: true,
   hostPartyBoxIncludesRemoteViewer: true,
-  hostFocusKeepsRemoteViewerVisible: true,
+  remoteHeroMovesHostIntoPartyBox: true,
+  remoteHeroIsNotDuplicatedInPartyBox: true,
   featuredFocusDoesNotReplaceRoleLabel: true,
   defaultViewerSelfVisibleInPartyBox: true,
   hostPendingCardOpensSeatSheet: true,

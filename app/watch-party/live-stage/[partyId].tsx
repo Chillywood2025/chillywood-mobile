@@ -165,6 +165,7 @@ import {
 import {
   applyLiveStageSeatRequestEvent,
   buildLiveStageCommunityParticipants,
+  canRenderLocalParticipantLiveKitTrack,
   canUseLiveStageRenderableContract,
   canRenderParticipantSpecificLiveKitTrack,
   closeLiveStageSeatRequestSheet,
@@ -315,11 +316,13 @@ function ConditionalWrap({
 function LiveKitHybridParticipantVideo({
   participantId,
   fallback,
+  publishLocalCamera,
 }: {
   participantId: string;
   fallback: React.ReactNode;
+  publishLocalCamera: boolean;
 }) {
-  const { localParticipant } = useHybridLiveKitLocalParticipant();
+  const { cameraTrack, localParticipant } = useHybridLiveKitLocalParticipant();
   const tracks = useHybridLiveKitTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: false },
@@ -349,6 +352,32 @@ function LiveKitHybridParticipantVideo({
     [localParticipant.identity, participantId, tracks],
   );
   const participantIsLocal = participantId === localParticipant.identity;
+  const publishedLocalCameraTrackRef = useMemo(
+    () => tracks.find((trackRef) => (
+      isHybridLiveKitTrackReference(trackRef)
+      && trackRef.participant.identity === localParticipant.identity
+      && trackRef.source === Track.Source.Camera
+    )) ?? null,
+    [localParticipant.identity, tracks],
+  );
+  const directLocalCameraTrackRef = useMemo(() => {
+    if (!publishLocalCamera || !cameraTrack) return null;
+    return {
+      participant: localParticipant,
+      publication: cameraTrack,
+      source: Track.Source.Camera,
+    };
+  }, [cameraTrack, localParticipant, publishLocalCamera]);
+  const localCameraTrackRef = publishedLocalCameraTrackRef ?? directLocalCameraTrackRef;
+  const resolvedLocalTrack = (
+    localCameraTrackRef
+    && canRenderLocalParticipantLiveKitTrack({
+      participantId,
+      localParticipantIdentity: localParticipant.identity,
+      trackParticipantIdentity: localCameraTrackRef.participant.identity,
+      publishLocalCamera,
+    })
+  ) ? localCameraTrackRef : null;
   const resolvedRemoteTrack = (
     matchingTrack
     && canRenderParticipantSpecificLiveKitTrack({
@@ -365,6 +394,7 @@ function LiveKitHybridParticipantVideo({
       remoteCameraTrackCount: remoteCameraTracks.length,
       remoteCameraIdentities: remoteCameraTracks.map((trackRef) => trackRef.participant.identity),
       hasMatchingTrack: !!matchingTrack,
+      hasLocalCameraTrack: !!resolvedLocalTrack,
       missingMatchingTrack: !matchingTrack,
       participantIsLocal,
       usesIdentityFallback: false,
@@ -377,18 +407,20 @@ function LiveKitHybridParticipantVideo({
     matchingTrack,
     participantId,
     participantIsLocal,
+    resolvedLocalTrack,
     remoteCameraTracks,
     resolvedRemoteTrack,
   ]);
 
-  if (resolvedRemoteTrack && isHybridLiveKitTrackReference(resolvedRemoteTrack)) {
+  const resolvedTrack = resolvedLocalTrack ?? resolvedRemoteTrack;
+  if (resolvedTrack && isHybridLiveKitTrackReference(resolvedTrack)) {
     return (
       <View style={styles.stagePresenceCameraFill} collapsable={false}>
         <HybridLiveKitVideoTrack
-          trackRef={resolvedRemoteTrack}
+          trackRef={resolvedTrack}
           style={styles.stagePresenceCameraFill}
           objectFit="cover"
-          mirror={false}
+          mirror={participantIsLocal}
           zOrder={0}
         />
       </View>
@@ -2394,7 +2426,7 @@ export default function WatchPartyLiveStageScreen({
     ? "Remote live feeds appear here. Your camera and microphone stay off until you tap Start Camera & Mic."
     : currentStageParticipantState.role === "speaker"
       ? stageLocalMediaIntent
-        ? "Your camera seat and local media are active. Your own preview stays out of this remote-feed grid."
+        ? "Your camera seat and local media are active. Your preview appears in Party Members while the host remains the hero."
         : "Your camera seat is ready. Tap Start Camera & Mic when you want to publish."
       : currentStageSeatRequestPending
         ? "Camera request pending. The host can seat you when they review requests."
@@ -3402,7 +3434,7 @@ export default function WatchPartyLiveStageScreen({
             requestedGrants: liveKitStageSurfaceContract.requestedGrants,
           });
           closeStageOverlayPanels();
-          setStageOverlayAutoHideArmed(entryStageMode !== "hybrid");
+          setStageOverlayAutoHideArmed(true);
           stageOverlayLastInteractionAtRef.current = Date.now();
           setStageOverlayVisible(true);
           stageOverlayMotion.setValue(1);
@@ -3444,7 +3476,7 @@ export default function WatchPartyLiveStageScreen({
     }
 
     closeStageOverlayPanels();
-    setStageOverlayAutoHideArmed(entryStageMode !== "hybrid");
+    setStageOverlayAutoHideArmed(true);
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
@@ -3856,12 +3888,10 @@ export default function WatchPartyLiveStageScreen({
       return;
     }
 
-    // Live Watch-Party hybrid owns the member deck; it is not transient chrome.
-    revealStageOverlay({ armAutoHide: !isHybridMode });
-    if (isHybridMode) {
-      setStageOverlayAutoHideArmed(false);
-    }
-  }, [isHybridMode, isLiveRoomSurface, revealStageOverlay, stageOverlayMotion]);
+    // Both Live-First and Live Watch-Party use transient stage chrome.
+    // Locking the controls is the only persistent-visibility override.
+    revealStageOverlay();
+  }, [isLiveRoomSurface, revealStageOverlay, stageOverlayMotion]);
 
   useEffect(() => {
     if (isLiveRoomSurface || !stageOverlayVisible) {
@@ -3870,8 +3900,7 @@ export default function WatchPartyLiveStageScreen({
     }
 
     if (
-      isHybridMode
-      || !stageOverlayAutoHideArmed
+      !stageOverlayAutoHideArmed
       || (
       controlsLocked
       || commentsOpen
@@ -3900,7 +3929,6 @@ export default function WatchPartyLiveStageScreen({
     faceFilterSheetOpen,
     hideStageOverlay,
     hybridCommentFocused,
-    isHybridMode,
     isLiveRoomSurface,
     reactionPickerOpen,
     stageControlsOpen,
@@ -4214,7 +4242,7 @@ export default function WatchPartyLiveStageScreen({
             onPress={onReturnToLiveRoom}
             testID="live-stage-live-room-button"
           >
-            <Text style={styles.stageSurfaceBackText}>Live Room</Text>
+            <Text style={styles.stageSurfaceBackText}>← Live Room</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -5564,6 +5592,7 @@ export default function WatchPartyLiveStageScreen({
                                   {shouldUseHybridLiveKitVideo ? (
                                     <LiveKitHybridParticipantVideo
                                       participantId={participant.userId}
+                                      publishLocalCamera={isCurrentUser && publishLocalStageCamera}
                                       fallback={bubbleMediaUri ? (
                                         <Image
                                           source={{ uri: bubbleMediaUri }}
