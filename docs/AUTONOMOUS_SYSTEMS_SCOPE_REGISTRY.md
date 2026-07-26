@@ -1,8 +1,20 @@
 # Chi'llywood Autonomous Systems Scope Registry
 
-Last updated: 2026-07-13
+Last updated: 2026-07-23
 
 This registry is the protected top-level contract for Chi'llywood autonomous systems. The source registry lives in `_lib/autonomousSystemsRegistry.ts`; this document is the operator-facing mirror. Future autonomous scope must be added through explicit registry entries with approval level, read/write bounds, guard, proof, rollback, emergency-stop/fallback, and owner/admin approval requirements. In short, future scope can be added only through registry entries.
+
+## Platform contract
+
+Every system declares `supportedPlatforms` using only `shared`, `ios`, `android`, `web`, and `unknown`. `shared` means backend policy or control-plane state; it is not a substitute for a known client platform. Unknown historical client/provider rows remain `unknown` rather than being guessed.
+
+The explicit iOS adapters are notification delivery and terminal retry, EAS/App Store release readback, runtime observability, installed TestFlight QA readiness, LiveKit client telemetry, RevenueCat App Store provider readiness, signing/security, recovery, privacy, support, and owner-command routing. Media, moderation, and search remain shared backends with optional origin-platform telemetry. Ads/sponsor delivery remains foundation-only and off.
+
+The canonical operator matrix, including source, scheduler, read/write boundary, guard, proof, kill switch, approval boundary, and physical-proof state, is [IOS_AUTONOMOUS_OPERATOR_MATRIX.md](ios/IOS_AUTONOMOUS_OPERATOR_MATRIX.md). Missing provider readback must be `unknown` or `blocked`; no generic `watch_once` may default to healthy.
+
+The canonical component inventory is `config/autonomy/autonomous-components.json`. It classifies every discovered operator, worker, monitor, database scheduler, host timer, scheduled workflow, protected control plane, and non-autonomous utility. With the undeployed cognitive/two-party successor foundation it contains 61 components: 15 top-level systems, 20 registered surfaces, 22 protected control planes, 3 non-autonomous utilities, and 1 foundation-only/off system. The production malware-scanner queue worker is a `media_automation` surface; the LiveKit heartbeat and disabled Cloudflare/GitHub scheduler templates remain owned by `livekit_operator`; terminal retry remains a notification surface; Android Firebase Test Lab and iOS readiness remain separate installed-QA surfaces; User Report Router is a support-owned surface; and the cognitive Owner approval endpoint, service worker, model-attestation service, baseline service, and product-experience sentinels remain source-only/off. See [ALL_PLATFORM_AUTONOMY_PARITY_REPORT.md](ios/ALL_PLATFORM_AUTONOMY_PARITY_REPORT.md).
+
+Shared, Android, and iOS probes are compositional. Expected release manifests never populate observed fields. Provider capability observations are append-only; current capability state and current findings are deduplicated with separate append-only lifecycle audit. Platform scope is inherited through command, approval, execution-step, blocker, provider-repair, report-routing, and audit rows.
 
 ## Current Systems
 
@@ -684,7 +696,7 @@ Forbidden:
 - executing raw user report text
 - allowing report spam to trigger high-risk action
 
-`support_success_operator` records queue health, stale-ticket findings, draft responses, owner/admin escalations, and the User Report Router loop. User reports are sanitized, classified, clustered, and routed to target autonomous systems. Three unique matching bug/fix reports within seven days can create a routed finding or Owner Command. Critical safety, security, privacy, payment, or provider reports can escalate immediately to the correct operator for review. User reports cannot directly issue refunds, grant Premium, mutate auth/entitlements, reset credentials, send payment/legal commitments, enforce account restrictions, activate ads/sponsors, or execute raw report text.
+`support_success_operator` records queue health, stale-ticket findings, draft responses, owner/admin escalations, and the User Report Router loop. User reports are sanitized, classified, clustered, and routed to target autonomous systems. Unique-reporter clustering and downstream command/approval routing use separate service-only transactional RPCs, so concurrent threshold crossings remain retry-idempotent. Three unique matching bug/fix reports within seven days can create one routed finding or Owner Command. Critical safety, security, privacy, payment, or provider reports can escalate immediately to the correct operator for review. User reports cannot directly issue refunds, grant Premium, mutate auth/entitlements, reset credentials, send payment/legal commitments, enforce account restrictions, activate ads/sponsors, or execute raw report text.
 
 ### `search_ranking_integrity_operator`
 
@@ -837,3 +849,8 @@ Owner commands route through:
 - `ads_sponsor_delivery_operator` for ads/sponsor foundation readiness planning only; it cannot execute ad/sponsor delivery
 
 Forbidden owner-command bypasses include direct broad DB mutation, money movement without Level 4 plus external confirmation, manual Premium grants, Premium bypass, OTA publish/rollback without approval, auth/RLS/owner-role mutation without approval, ban/restrict/delete without approval, private/Premium/original media exposure, provider product/mode changes, LiveKit routing-policy changes, R2/media behavior changes, secret output, stale preflight, scope expansion, and emergency-stop bypass.
+# Cognitive Intelligence foundation (stacked draft)
+
+`product_intelligence_operator` is registered as a single top-level planning, research, memory, architecture, experiment, scoped-execution, evaluation, capability, and budget foundation. Its original nine surfaces are `rachi_cognitive_orchestration`, `research_source_broker`, `intelligence_memory_service`, `architecture_knowledge_graph`, `product_experiment_engine`, `software_engineering_executor`, `independent_evaluation_judge`, `capability_and_tool_broker`, and `model_router_and_budget_controller`. The two-party successor adds `cognitive_owner_approval_endpoint`, `cognitive_approved_action_worker`, `model_independence_attestation_service`, `product_experience_baseline_service`, `livekit_experience_sentinel`, `visual_product_experience_sentinel`, `installed_journey_sentinel`, and `product_quality_triage_router`.
+
+All are source-only/off, have no scheduler or production credential, and remain off. They plan, observe, approve, execute bounded Level 0/1 actions, and evaluate above the existing specialized systems only after the required two-party gates. They do not replace those systems or receive direct authority over money, user rights, auth/RLS, moderation enforcement, release/OTA, pricing, provider products, public exposure, or Level 2 repairs. The canonical detailed component contract is `config/autonomy/autonomous-components.json` and the bounded cognitive policy is `config/intelligence/cognitive-platform.json`.

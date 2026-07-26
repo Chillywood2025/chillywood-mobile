@@ -15,7 +15,7 @@ HTTP_STATUS="$(
     --request POST "${SUPABASE_FUNCTIONS_URL%/}/money-operator" \
     --header "Content-Type: application/json" \
     --header "x-money-operator-token: ${MONEY_OPERATOR_TOKEN}" \
-    --data '{"action":"watch_once","environment_mode":"production","scheduler":"systemd_timer","operator_id":"money_flow_control","source":"'"${SOURCE}"'","moneyMoved":false,"highRiskExecuted":false}'
+    --data '{"action":"watch_once","platform":"ios","environment_mode":"production","scheduler":"systemd_timer","operator_id":"money_flow_control","source":"'"${SOURCE}"'","moneyMoved":false,"highRiskExecuted":false}'
 )"
 
 REDACTED_RESPONSE="$(

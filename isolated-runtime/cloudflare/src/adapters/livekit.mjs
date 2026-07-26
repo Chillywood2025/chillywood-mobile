@@ -1,0 +1,841 @@
+import {
+  canonicalize,
+  constantTimeEqual,
+  sha256Hex,
+} from "../contracts.mjs";
+import { ready } from "./helpers.mjs";
+import {
+  issueLiveKitFailureFixture,
+  readLiveKitFailureFixture,
+  validateLiveKitFailureFixtureEvidence,
+} from "./livekit-failure-fixture.mjs";
+
+const SERVICE_IDENTITY = "cognitive_sentinel_collector";
+const RUNTIME_PRINCIPAL = "cognitive_livekit_experience_collector";
+const SENTINEL_KEY = "livekit_experience_sentinel";
+const REPOSITORY = "Chillywood2025/chillywood-mobile";
+const TASK_KEY = "cognitive-level01-canary-control";
+const MAX_TIMING_MS = 600_000;
+const MAX_OBSERVATION_AGE_MS = 5 * 60_000;
+const MAX_OBSERVATION_WINDOW_MS = 120_000;
+const SHA256 = /^[a-f0-9]{64}$/u;
+const ROUTES = new Set(["live-stage", "watch-party-live", "chat-call"]);
+const INSTALLED_OBSERVER_PLATFORMS = new Set(["android", "ios"]);
+const SCENARIO_TYPES = new Set([
+  "success_baseline",
+  "bounded_failure_fixture",
+  "background_foreground_recovery",
+]);
+const ICE_STATES = new Set([
+  "new",
+  "checking",
+  "connected",
+  "completed",
+  "failed",
+  "disconnected",
+  "closed",
+  "unknown",
+]);
+const LOCAL_MEDIA_SOURCES = new Set([
+  "test_tone",
+  "silent_audio",
+  "color_bars",
+  "none",
+]);
+const NETWORK_STATES = new Set(["ready", "interrupted", "unknown"]);
+const PERMISSION_STATES = new Set([
+  "granted",
+  "denied",
+  "unknown",
+  "not_applicable",
+]);
+const PROVIDER_STATES = new Set(["healthy", "degraded", "blocked", "unknown"]);
+const REMOTE_MEDIA_KINDS = new Set(["audio", "video", "audio_video", "none"]);
+const TOKEN_RESULT_STATES = new Set([
+  "success",
+  "denied",
+  "error",
+  "timeout",
+  "not_attempted",
+]);
+const METRIC_KEYS = Object.freeze([
+  "backgroundForegroundRecovery",
+  "backgrounded",
+  "buildRuntimeMatched",
+  "cleanupDisconnected",
+  "connectingResolved",
+  "firstAudioVideoObserved",
+  "firstRemoteMediaElapsedMs",
+  "foregrounded",
+  "headlessParticipantUsed",
+  "headlessObservationFinishedAt",
+  "headlessObservationStartedAt",
+  "headlessParticipantIdentityHash",
+  "iceCheckingObserved",
+  "iceGatheringObserved",
+  "iceState",
+  "installedUiEvidenceHash",
+  "installedUiObserved",
+  "installedObservationFinishedAt",
+  "installedObservationStartedAt",
+  "installedParticipantIdentityHash",
+  "installedRuntimeIdentityHash",
+  "installedRoomRunCorrelationHash",
+  "installedSourceBuildHash",
+  "localMediaSource",
+  "localTrackPublished",
+  "networkState",
+  "participantIdentityDistinct",
+  "peerConnectionEstablished",
+  "permissionState",
+  "providerState",
+  "remoteMediaKind",
+  "remoteParticipantJoined",
+  "remoteTrackSubscribed",
+  "roomConnectElapsedMs",
+  "roomConnected",
+  "roomRunCorrelationHash",
+  "scenarioType",
+  "stageFailureCategory",
+  "tokenIssuedElapsedMs",
+  "tokenRequestStarted",
+  "tokenRequested",
+  "tokenResultStatus",
+  "tokenReturned",
+  "tokenClaimsValidated",
+  "uiStateResolutionElapsedMs",
+  "websocketConnected",
+]);
+const METRIC_ENVELOPE_KEYS = Object.freeze([
+  "evidenceHashes",
+  "metrics",
+  "observationKind",
+  "sanitizationVersion",
+  "schemaVersion",
+]);
+const PAYLOAD_KEYS = Object.freeze([
+  "action",
+  "evidenceManifestHash",
+  "metricManifest",
+  "observationFinishedAt",
+  "observationStartedAt",
+  "platform",
+  "routeOrSurface",
+  "runtimeIdentityHash",
+  "sourceBuildHash",
+]);
+const FIXTURE_RUN_PAYLOAD_KEYS = Object.freeze([
+  ...PAYLOAD_KEYS.filter((key) => key !== "action"),
+  "action",
+  "fixtureId",
+  "fixtureTicket",
+  "syntheticRoomName",
+]);
+const BOOLEAN_METRICS = Object.freeze([
+  "backgroundForegroundRecovery",
+  "backgrounded",
+  "buildRuntimeMatched",
+  "cleanupDisconnected",
+  "connectingResolved",
+  "firstAudioVideoObserved",
+  "foregrounded",
+  "headlessParticipantUsed",
+  "iceCheckingObserved",
+  "iceGatheringObserved",
+  "installedUiObserved",
+  "localTrackPublished",
+  "participantIdentityDistinct",
+  "peerConnectionEstablished",
+  "remoteParticipantJoined",
+  "remoteTrackSubscribed",
+  "roomConnected",
+  "tokenRequestStarted",
+  "tokenRequested",
+  "tokenReturned",
+  "tokenClaimsValidated",
+  "websocketConnected",
+]);
+const TIMING_METRICS = Object.freeze([
+  "firstRemoteMediaElapsedMs",
+  "roomConnectElapsedMs",
+  "tokenIssuedElapsedMs",
+  "uiStateResolutionElapsedMs",
+]);
+
+const isRecord = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const exactKeys = (value, expected) => {
+  if (!isRecord(value)) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length &&
+    actual.every((key, index) => key === wanted[index]);
+};
+
+const canonicalTimestamp = (value) => {
+  if (typeof value !== "string") return null;
+  const millis = Date.parse(value);
+  return Number.isFinite(millis) && new Date(millis).toISOString() === value
+    ? millis
+    : null;
+};
+
+const nullableHash = (value) => value === null ||
+  (typeof value === "string" && SHA256.test(value));
+
+const nullableTimestamp = (value) =>
+  value === null || canonicalTimestamp(value) !== null;
+
+const boundedTiming = (value) =>
+  Number.isInteger(value) && value >= 0 && value <= MAX_TIMING_MS;
+
+export const deriveLiveKitFailureCategory = (metric) => {
+  if (metric.permissionState === "denied") return "permission_failure";
+  if (!metric.buildRuntimeMatched) return "build_runtime_mismatch";
+  if (metric.networkState === "interrupted") return "network_interruption";
+  if (!metric.tokenReturned) return "token_backend_failure";
+  if (!metric.websocketConnected) return "websocket_failure";
+  if (["failed", "disconnected", "closed"].includes(metric.iceState)) {
+    return "ice_turn_failure";
+  }
+  if (!metric.roomConnected) {
+    return metric.iceCheckingObserved
+      ? "ice_turn_failure"
+      : "room_connection_failure";
+  }
+  if (!metric.localTrackPublished) return "local_publish_failure";
+  if (!metric.remoteParticipantJoined) return "remote_participant_missing";
+  if (!metric.remoteTrackSubscribed) return "remote_subscription_failure";
+  if (!metric.firstAudioVideoObserved) return "first_media_missing";
+  if (metric.installedUiObserved && !metric.connectingResolved) {
+    return "installed_ui_connecting_stuck";
+  }
+  if (
+    metric.scenarioType === "background_foreground_recovery" &&
+    metric.installedUiObserved &&
+    (
+      !metric.backgrounded || !metric.foregrounded ||
+      !metric.backgroundForegroundRecovery
+    )
+  ) {
+    return "background_foreground_recovery_failed";
+  }
+  if (!metric.cleanupDisconnected) return "cleanup_failure";
+  if (["blocked", "degraded"].includes(metric.providerState)) {
+    return "provider_degradation";
+  }
+  if (
+    metric.tokenIssuedElapsedMs > 3_000 ||
+    metric.roomConnectElapsedMs > 12_000 ||
+    metric.uiStateResolutionElapsedMs > 15_000 ||
+    metric.firstRemoteMediaElapsedMs > 20_000
+  ) {
+    return "deadline_exceeded";
+  }
+  return "none";
+};
+
+export const classifyLiveKitEvidence = (metric) => {
+  const failureCategory = deriveLiveKitFailureCategory(metric);
+  const physicalProofStatus = metric.providerState === "blocked"
+    ? "provider_blocked"
+    : metric.installedUiObserved
+    ? "installed_ui_observed"
+    : "source_only";
+  return Object.freeze({
+    failureCategory,
+    physicalProofStatus,
+    resultStatus: physicalProofStatus !== "installed_ui_observed"
+      ? "blocked"
+      : failureCategory === "none"
+      ? "passed"
+      : "failed",
+  });
+};
+
+const parseMetricManifest = (value) => {
+  if (!exactKeys(value, METRIC_KEYS)) return null;
+  if (BOOLEAN_METRICS.some((key) => typeof value[key] !== "boolean")) {
+    return null;
+  }
+  if (TIMING_METRICS.some((key) => !boundedTiming(value[key]))) return null;
+  if (
+    !ICE_STATES.has(value.iceState) ||
+    !LOCAL_MEDIA_SOURCES.has(value.localMediaSource) ||
+    !NETWORK_STATES.has(value.networkState) ||
+    !PERMISSION_STATES.has(value.permissionState) ||
+    !PROVIDER_STATES.has(value.providerState) ||
+    !REMOTE_MEDIA_KINDS.has(value.remoteMediaKind) ||
+    !TOKEN_RESULT_STATES.has(value.tokenResultStatus) ||
+    !SCENARIO_TYPES.has(value.scenarioType) ||
+    !SHA256.test(value.roomRunCorrelationHash) ||
+    !nullableHash(value.headlessParticipantIdentityHash) ||
+    !nullableHash(value.installedUiEvidenceHash) ||
+    !nullableHash(value.installedParticipantIdentityHash) ||
+    !nullableHash(value.installedRuntimeIdentityHash) ||
+    !nullableHash(value.installedRoomRunCorrelationHash) ||
+    !nullableHash(value.installedSourceBuildHash) ||
+    !nullableTimestamp(value.installedObservationStartedAt) ||
+    !nullableTimestamp(value.installedObservationFinishedAt)
+  ) {
+    return null;
+  }
+  const headlessStarted = canonicalTimestamp(
+    value.headlessObservationStartedAt,
+  );
+  const headlessFinished = canonicalTimestamp(
+    value.headlessObservationFinishedAt,
+  );
+  const installedStarted = canonicalTimestamp(
+    value.installedObservationStartedAt,
+  );
+  const installedFinished = canonicalTimestamp(
+    value.installedObservationFinishedAt,
+  );
+  if (
+    headlessStarted === null ||
+    headlessFinished === null ||
+    headlessStarted > headlessFinished ||
+    headlessFinished - headlessStarted > MAX_OBSERVATION_WINDOW_MS ||
+    (
+      value.installedUiObserved &&
+      (
+        installedStarted === null ||
+        installedFinished === null ||
+        installedStarted > installedFinished ||
+        installedFinished - installedStarted > MAX_OBSERVATION_WINDOW_MS
+      )
+    )
+  ) {
+    return null;
+  }
+  const installedBound = value.installedUiObserved;
+  const identitiesDiffer =
+    value.headlessParticipantIdentityHash !== null &&
+    value.installedParticipantIdentityHash !== null &&
+    value.headlessParticipantIdentityHash !==
+      value.installedParticipantIdentityHash;
+  if (
+    installedBound !== (value.installedUiEvidenceHash !== null) ||
+    installedBound !== (value.installedObservationStartedAt !== null) ||
+    installedBound !== (value.installedObservationFinishedAt !== null) ||
+    installedBound !== (value.installedParticipantIdentityHash !== null) ||
+    installedBound !== (value.installedRuntimeIdentityHash !== null) ||
+    installedBound !== (value.installedRoomRunCorrelationHash !== null) ||
+    installedBound !== (value.installedSourceBuildHash !== null) ||
+    (
+      installedBound &&
+      value.installedRoomRunCorrelationHash !== value.roomRunCorrelationHash
+    ) ||
+    value.participantIdentityDistinct !== identitiesDiffer ||
+    (
+      value.tokenReturned &&
+      (
+        !value.tokenClaimsValidated ||
+        value.headlessParticipantIdentityHash === null
+      )
+    ) ||
+    (
+      !value.tokenReturned &&
+      (
+        value.tokenClaimsValidated ||
+        value.headlessParticipantIdentityHash !== null
+      )
+    ) ||
+    (
+      value.tokenReturned && installedBound &&
+      !value.participantIdentityDistinct
+    ) ||
+    value.firstAudioVideoObserved !== (value.remoteMediaKind !== "none") ||
+    value.tokenReturned !== (value.tokenResultStatus === "success") ||
+    value.tokenRequested !== value.tokenRequestStarted ||
+    value.headlessParticipantUsed !== true ||
+    (
+      value.scenarioType !== "background_foreground_recovery" &&
+      (
+        value.backgrounded ||
+        value.foregrounded ||
+        value.backgroundForegroundRecovery
+      )
+    ) ||
+    value.stageFailureCategory !== deriveLiveKitFailureCategory(value) ||
+    (
+      value.scenarioType === "bounded_failure_fixture" &&
+      value.stageFailureCategory === "none"
+    )
+  ) {
+    return null;
+  }
+  return value;
+};
+
+const stageSummary = (metric) => Object.freeze({
+  installedEvidence: metric.installedUiObserved
+    ? "installed_observed"
+    : "headless_only",
+  installedPassEligible: metric.installedUiObserved,
+  media: metric.firstAudioVideoObserved
+    ? "first_media_observed"
+    : metric.remoteTrackSubscribed
+    ? "subscribed_no_media"
+    : metric.remoteParticipantJoined
+    ? "participant_no_subscription"
+    : metric.localTrackPublished
+    ? "local_only"
+    : "not_published",
+  provider: metric.providerState,
+  room: metric.roomConnected
+    ? "connected"
+    : metric.websocketConnected
+    ? "websocket_only"
+    : "not_connected",
+  token: metric.tokenReturned
+    ? "validated"
+    : metric.tokenResultStatus,
+});
+
+export const prepareLiveKitPacket = async (
+  payload,
+  nowMillis = Date.now(),
+  fixtureReadback = null,
+  syntheticRoomName = null,
+) => {
+  if (
+    !exactKeys(payload, PAYLOAD_KEYS) ||
+    !["prepare_run", "record_run"].includes(payload.action) ||
+    !INSTALLED_OBSERVER_PLATFORMS.has(payload.platform) ||
+    !ROUTES.has(payload.routeOrSurface)
+  ) {
+    return null;
+  }
+  if (
+    !SHA256.test(payload.runtimeIdentityHash) ||
+    !SHA256.test(payload.sourceBuildHash) ||
+    !SHA256.test(payload.evidenceManifestHash)
+  ) {
+    return null;
+  }
+  const envelope = payload.metricManifest;
+  if (
+    !exactKeys(envelope, METRIC_ENVELOPE_KEYS) ||
+    envelope.schemaVersion !== "product-sentinel-v1" ||
+    envelope.sanitizationVersion !== "bounded-nonpersonal-v1" ||
+    envelope.observationKind !== "livekit_experience" ||
+    !Array.isArray(envelope.evidenceHashes) ||
+    envelope.evidenceHashes.length < 1 ||
+    envelope.evidenceHashes.length > 64 ||
+    envelope.evidenceHashes.some((entry) =>
+      typeof entry !== "string" || !SHA256.test(entry)
+    ) ||
+    !envelope.evidenceHashes.includes(payload.evidenceManifestHash)
+  ) {
+    return null;
+  }
+  const metrics = parseMetricManifest(envelope.metrics);
+  if (!metrics) return null;
+  if (metrics.scenarioType === "bounded_failure_fixture") {
+    if (
+      !fixtureReadback ||
+      typeof syntheticRoomName !== "string" ||
+      !envelope.evidenceHashes.includes(
+        fixtureReadback.fixtureAttestationHash,
+      ) ||
+      !await validateLiveKitFailureFixtureEvidence({
+        fixtureReadback,
+        metrics,
+        syntheticRoomName,
+      })
+    ) {
+      throw new Error("livekit_fixture_plan_required");
+    }
+  } else if (fixtureReadback !== null || syntheticRoomName !== null) {
+    return null;
+  }
+  const outerStarted = canonicalTimestamp(payload.observationStartedAt);
+  const outerFinished = canonicalTimestamp(payload.observationFinishedAt);
+  const headlessStarted = canonicalTimestamp(
+    metrics.headlessObservationStartedAt,
+  );
+  const headlessFinished = canonicalTimestamp(
+    metrics.headlessObservationFinishedAt,
+  );
+  const installedStarted = canonicalTimestamp(
+    metrics.installedObservationStartedAt,
+  );
+  const installedFinished = canonicalTimestamp(
+    metrics.installedObservationFinishedAt,
+  );
+  const expectedStarted = installedStarted === null
+    ? headlessStarted
+    : Math.min(headlessStarted, installedStarted);
+  const expectedFinished = installedFinished === null
+    ? headlessFinished
+    : Math.max(headlessFinished, installedFinished);
+  if (
+    outerStarted === null ||
+    outerFinished === null ||
+    outerStarted !== expectedStarted ||
+    outerFinished !== expectedFinished ||
+    outerStarted > outerFinished ||
+    outerFinished - outerStarted > MAX_OBSERVATION_WINDOW_MS ||
+    nowMillis - outerFinished > MAX_OBSERVATION_AGE_MS ||
+    outerFinished > nowMillis + 60_000 ||
+    (
+      metrics.installedUiObserved &&
+      (
+        metrics.installedRuntimeIdentityHash !== payload.runtimeIdentityHash ||
+        metrics.installedSourceBuildHash !== payload.sourceBuildHash
+      )
+    )
+  ) {
+    return null;
+  }
+  const computedHash = await sha256Hex(
+    JSON.stringify(canonicalize(metrics)),
+  );
+  if (!constantTimeEqual(computedHash, payload.evidenceManifestHash)) {
+    return null;
+  }
+  return Object.freeze({
+    classification: classifyLiveKitEvidence(metrics),
+    evidenceManifestHash: computedHash,
+    metricManifest: Object.freeze({
+      evidenceHashes: [...new Set(envelope.evidenceHashes)].sort(),
+      metrics,
+      observationKind: "livekit_experience",
+      sanitizationVersion: "bounded-nonpersonal-v1",
+      schemaVersion: "product-sentinel-v1",
+    }),
+    observationFinishedAt: new Date(outerFinished).toISOString(),
+    observationStartedAt: new Date(outerStarted).toISOString(),
+    platform: payload.platform,
+    routeOrSurface: payload.routeOrSurface,
+    runtimeIdentityHash: payload.runtimeIdentityHash,
+    sourceBuildHash: payload.sourceBuildHash,
+    stages: stageSummary(metrics),
+  });
+};
+
+export const prepareLiveKitFixturePacket = async ({
+  context,
+  env,
+  nowMillis = Date.now(),
+  payload,
+}) => {
+  if (
+    !exactKeys(payload, FIXTURE_RUN_PAYLOAD_KEYS) ||
+    !["prepare_fixture_run", "record_fixture_run"].includes(payload.action) ||
+    !SHA256.test(payload.fixtureId) ||
+    typeof payload.fixtureTicket !== "string" ||
+    typeof payload.syntheticRoomName !== "string"
+  ) {
+    return null;
+  }
+  const fixtureReadback = await readLiveKitFailureFixture({
+    context,
+    fixtureId: payload.fixtureId,
+    fixtureTicket: payload.fixtureTicket,
+    nowMillis,
+    secret: env.COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY,
+  });
+  const syntheticRoomName = payload.syntheticRoomName;
+  const ordinaryPayload = { ...payload };
+  delete ordinaryPayload.fixtureId;
+  delete ordinaryPayload.fixtureTicket;
+  delete ordinaryPayload.syntheticRoomName;
+  ordinaryPayload.action = payload.action === "prepare_fixture_run"
+    ? "prepare_run"
+    : "record_run";
+  const packet = await prepareLiveKitPacket(
+    ordinaryPayload,
+    nowMillis,
+    fixtureReadback,
+    syntheticRoomName,
+  );
+  return packet
+    ? Object.freeze({
+      fixtureAttestationHash: fixtureReadback.fixtureAttestationHash,
+      fixtureId: fixtureReadback.fixtureId,
+      fixtureRecord: fixtureReadback.fixtureRecord,
+      packet,
+      syntheticRoomName,
+    })
+    : null;
+};
+
+const executePrepare = async ({ context, payload }) => {
+  const packet = await prepareLiveKitPacket(payload);
+  if (!packet || packet.platform !== context.platform) {
+    throw new Error("livekit_sentinel_payload_rejected");
+  }
+  return Object.freeze({
+    classification: packet.classification,
+    evidenceManifestHash: packet.evidenceManifestHash,
+    independentEvaluationRequired: true,
+    ok: true,
+    persisted: false,
+    stages: packet.stages,
+  });
+};
+
+const executeIssueFailureFixture = async ({
+  assertActive,
+  context,
+  database,
+  env,
+  payload,
+}) => {
+  const issued = await issueLiveKitFailureFixture({
+    context,
+    payload,
+    secret: env.COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY,
+  });
+  await assertActive();
+  const persisted = await database.call("issueLiveKitFailureFixture", [
+    context.taskId,
+    context.projectId,
+    context.platform,
+    context.environment,
+    context.sourceCommit,
+    issued.fixtureId,
+    issued.fixtureAttestationHash,
+    issued.fixtureRecord.fixtureType,
+    JSON.stringify(issued.fixtureRecord.condition),
+    payload.syntheticRoomName,
+    issued.fixtureRecord.syntheticRoomNameHash,
+    issued.fixtureRecord.roomRunCorrelationHash,
+    issued.fixtureRecord.issuedAt,
+    issued.fixtureRecord.expiresAt,
+    env.COGNITIVE_LIVEKIT_SENTINEL_ASSERTION,
+  ]);
+  if (
+    !isRecord(persisted) ||
+    persisted.active !== true ||
+    persisted.fixtureId !== issued.fixtureId ||
+    persisted.fixtureAttestationHash !== issued.fixtureAttestationHash ||
+    !SHA256.test(persisted.issuanceHash) ||
+    persisted.principal !== RUNTIME_PRINCIPAL
+  ) {
+    throw new Error("livekit_fixture_issuance_persistence_rejected");
+  }
+  return Object.freeze({
+    ...issued,
+    issuanceHash: persisted.issuanceHash,
+    persisted: true,
+  });
+};
+
+const executeReadFailureFixture = async ({ context, env, payload }) => {
+  if (
+    !exactKeys(payload, ["action", "fixtureId", "fixtureTicket"]) ||
+    payload.action !== "read_failure_fixture"
+  ) {
+    throw new Error("livekit_fixture_readback_rejected");
+  }
+  return readLiveKitFailureFixture({
+    context,
+    fixtureId: payload.fixtureId,
+    fixtureTicket: payload.fixtureTicket,
+    secret: env.COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY,
+  });
+};
+
+const executeRecord = async ({ context, database, env, payload }) => {
+  const packet = await prepareLiveKitPacket(payload);
+  if (!packet || packet.platform !== context.platform) {
+    throw new Error("livekit_sentinel_payload_rejected");
+  }
+  const collectionIdempotencyHash = await sha256Hex([
+    REPOSITORY,
+    TASK_KEY,
+    SERVICE_IDENTITY,
+    SENTINEL_KEY,
+    packet.platform,
+    packet.routeOrSurface,
+    packet.runtimeIdentityHash,
+    packet.sourceBuildHash,
+    packet.evidenceManifestHash,
+    packet.observationStartedAt,
+    packet.observationFinishedAt,
+  ].join("|"));
+  const result = await database.call("collectLiveKitSentinelRun", [
+    context.taskId,
+    context.projectId,
+    packet.platform,
+    "production",
+    packet.routeOrSurface,
+    packet.runtimeIdentityHash,
+    packet.sourceBuildHash,
+    packet.evidenceManifestHash,
+    JSON.stringify(packet.metricManifest),
+    packet.classification.resultStatus,
+    packet.classification.physicalProofStatus,
+    packet.observationStartedAt,
+    packet.observationFinishedAt,
+    new Date(
+      Date.parse(packet.observationFinishedAt) + 24 * 60 * 60_000,
+    ).toISOString(),
+    collectionIdempotencyHash,
+    env.COGNITIVE_LIVEKIT_SENTINEL_ASSERTION,
+  ]);
+  const sentinelRunId = isRecord(result) &&
+      typeof result.sentinelRunId === "string"
+    ? result.sentinelRunId
+    : "";
+  if (!sentinelRunId) throw new Error("livekit_sentinel_run_rejected");
+  return Object.freeze({
+    classification: packet.classification,
+    evidenceManifestHash: packet.evidenceManifestHash,
+    independentEvaluationRequired: true,
+    ok: true,
+    persisted: true,
+    runIdHash: await sha256Hex(sentinelRunId),
+    stages: packet.stages,
+  });
+};
+
+const executePrepareFixture = async ({ context, env, payload }) => {
+  const prepared = await prepareLiveKitFixturePacket({
+    context,
+    env,
+    payload,
+  });
+  if (!prepared || prepared.packet.platform !== context.platform) {
+    throw new Error("livekit_fixture_run_rejected");
+  }
+  return Object.freeze({
+    classification: prepared.packet.classification,
+    evaluatorReadbackRequired: true,
+    evidenceManifestHash: prepared.packet.evidenceManifestHash,
+    fixtureAttestationHash: prepared.fixtureAttestationHash,
+    fixtureId: prepared.fixtureId,
+    independentEvaluationRequired: true,
+    ok: true,
+    persisted: false,
+    stages: prepared.packet.stages,
+  });
+};
+
+const executeRecordFixture = async ({
+  assertActive,
+  context,
+  database,
+  env,
+  nowMillis = Date.now(),
+  payload,
+}) => {
+  const prepared = await prepareLiveKitFixturePacket({
+    context,
+    env,
+    nowMillis,
+    payload,
+  });
+  if (!prepared || prepared.packet.platform !== context.platform) {
+    throw new Error("livekit_fixture_run_rejected");
+  }
+  const packet = prepared.packet;
+  const persistedMetricManifest = Object.freeze({
+    ...packet.metricManifest,
+    failureFixtureBinding: Object.freeze({
+      condition: prepared.fixtureRecord.condition,
+      fixtureAttestationHash: prepared.fixtureAttestationHash,
+      fixtureId: prepared.fixtureId,
+      fixtureType: prepared.fixtureRecord.fixtureType,
+      principal: RUNTIME_PRINCIPAL,
+      roomRunCorrelationHash:
+        prepared.fixtureRecord.roomRunCorrelationHash,
+      sourceCommit: prepared.fixtureRecord.sourceCommit,
+      syntheticRoomNameHash:
+        prepared.fixtureRecord.syntheticRoomNameHash,
+    }),
+  });
+  const collectionIdempotencyHash = await sha256Hex([
+    REPOSITORY,
+    TASK_KEY,
+    RUNTIME_PRINCIPAL,
+    SENTINEL_KEY,
+    packet.platform,
+    packet.routeOrSurface,
+    packet.runtimeIdentityHash,
+    packet.sourceBuildHash,
+    packet.evidenceManifestHash,
+    packet.observationStartedAt,
+    packet.observationFinishedAt,
+    prepared.fixtureId,
+    prepared.fixtureAttestationHash,
+  ].join("|"));
+  await assertActive();
+  const result = await database.call(
+    "consumeLiveKitFailureFixtureAndCollect",
+    [
+    context.taskId,
+    context.projectId,
+    packet.platform,
+    context.environment,
+    context.sourceCommit,
+    prepared.fixtureId,
+    prepared.fixtureAttestationHash,
+    prepared.syntheticRoomName,
+    prepared.fixtureRecord.syntheticRoomNameHash,
+    prepared.fixtureRecord.roomRunCorrelationHash,
+    packet.routeOrSurface,
+    packet.runtimeIdentityHash,
+    packet.sourceBuildHash,
+    packet.evidenceManifestHash,
+    JSON.stringify(persistedMetricManifest),
+    packet.classification.resultStatus,
+    packet.classification.physicalProofStatus,
+    packet.observationStartedAt,
+    packet.observationFinishedAt,
+    new Date(
+      Date.parse(packet.observationFinishedAt) + 24 * 60 * 60_000,
+    ).toISOString(),
+    collectionIdempotencyHash,
+    env.COGNITIVE_LIVEKIT_SENTINEL_ASSERTION,
+    ],
+  );
+  const sentinelRunId = isRecord(result) &&
+      typeof result.sentinelRunId === "string"
+    ? result.sentinelRunId
+    : "";
+  if (
+    !sentinelRunId ||
+    result.fixtureConsumed !== true ||
+    result.fixtureId !== prepared.fixtureId ||
+    result.fixtureAttestationHash !== prepared.fixtureAttestationHash ||
+    !SHA256.test(result.fixtureConsumptionHash) ||
+    !SHA256.test(result.fixtureReceiptHash)
+  ) {
+    throw new Error("livekit_sentinel_run_rejected");
+  }
+  return Object.freeze({
+    classification: packet.classification,
+    evaluatorReadbackRequired: true,
+    evidenceManifestHash: packet.evidenceManifestHash,
+    fixtureAttestationHash: prepared.fixtureAttestationHash,
+    fixtureConsumptionHash: result.fixtureConsumptionHash,
+    fixtureId: prepared.fixtureId,
+    fixtureReceiptHash: result.fixtureReceiptHash,
+    independentEvaluationRequired: true,
+    ok: true,
+    persisted: true,
+    runIdHash: await sha256Hex(sentinelRunId),
+    stages: packet.stages,
+  });
+};
+
+export const LIVEKIT_COLLECTOR_ADAPTERS = Object.freeze({
+  issue_failure_fixture: ready(
+    ["issue_livekit_failure_fixture"],
+    executeIssueFailureFixture,
+  ),
+  prepare_run: ready([], executePrepare),
+  prepare_fixture_run: ready([], executePrepareFixture),
+  read_failure_fixture: ready([], executeReadFailureFixture),
+  record_run: ready(["collect_livekit_sentinel_run"], executeRecord),
+  record_fixture_run: ready(
+    ["consume_livekit_failure_fixture"],
+    executeRecordFixture,
+  ),
+});

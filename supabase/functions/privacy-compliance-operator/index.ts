@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+import { runIosPrivacySourceProbe } from "../_shared/ios-source-operator-probes.ts";
+import { runAndroidPrivacyProbe, runSharedPrivacyProbe } from "../_shared/all-platform-source-operator-probes.ts";
 
 Deno.serve(handleScopedOperatorRequest({
   systemId: "privacy_compliance_operator",
@@ -45,4 +47,6 @@ Deno.serve(handleScopedOperatorRequest({
     data_safety_disclosure_findings: "privacy_required_review_flags",
     evidence_retention_status: "retention_hold_findings",
   },
+  watchOnceHandlers: [runSharedPrivacyProbe, runAndroidPrivacyProbe, runIosPrivacySourceProbe],
+  requiredWatchPlatforms: ["shared", "android", "ios"],
 }));

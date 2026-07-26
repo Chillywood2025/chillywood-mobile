@@ -1305,7 +1305,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "Subscription offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage this creator Platform subscription. This is separate from Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, and payouts.
+              Manage this creator Platform subscription. This is separate from Chi’llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, and payouts.
             </Text>
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1372,7 +1372,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "VIP offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage creator-specific VIP for this Platform. VIP does not unlock Chi'llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, or payouts.
+              Manage creator-specific VIP for this Platform. VIP does not unlock Chi’llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, or payouts.
             </Text>
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>

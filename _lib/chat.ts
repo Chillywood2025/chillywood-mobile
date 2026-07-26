@@ -12,7 +12,10 @@ import {
 import {
   CHAT_CALL_EVENTS_TABLE,
   CHAT_CALL_INVITES_TABLE,
-  createChillyChatCallInvite,
+  beginChillyChatCall,
+  dispatchChillyChatCallPush,
+  readLatestChillyChatCallInviteForRoom,
+  type BegunChillyChatCall,
   type ChillyChatCallInvite,
   type ChillyChatCallInviteDelivery,
 } from "./chillyChatCalls";
@@ -997,6 +1000,7 @@ export async function clearEndedChatThreadCall(threadId: string): Promise<void> 
 export async function startChatThreadCall(threadId: string, mode: ChatCallType): Promise<{
   delivery: ChillyChatCallInviteDelivery | null;
   invite: ChillyChatCallInvite | null;
+  role: "caller" | "callee";
   thread: ChatThreadSummary;
   roomId: string;
   callType: ChatCallType;
@@ -1027,9 +1031,11 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
         roomId: existingRoomId,
         mode: thread.activeCallType ?? mode,
       });
+      const existingInvite = await readLatestChillyChatCallInviteForRoom(existingRoomId).catch(() => null);
       return {
         delivery: null,
-        invite: null,
+        invite: existingInvite,
+        role: existingInvite?.calleeUserId === currentUserId ? "callee" : "caller",
         thread,
         roomId: existingRoomId,
         callType: thread.activeCallType ?? mode,
@@ -1061,8 +1067,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   }
 
   const roomId = toText(created.roomId);
-  const calleeUserId = toText(thread.otherMember?.userId);
-  if (!calleeUserId) {
+  if (!toText(thread.otherMember?.userId)) {
     await endCommunicationRoom(roomId).catch(() => null);
     logChatCall("thread_call_missing_callee", {
       currentUserId,
@@ -1073,69 +1078,15 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
     throw new Error("Unable to start Chi'lly Chat call. The receiver is unavailable.");
   }
 
-  const startCallUpdate: ChatThreadUpdate = {
-    active_communication_room_id: roomId,
-    active_call_type: mode,
-  };
-
-  const updatedThreadResponse = await supabase
-    .from(CHAT_THREADS_TABLE)
-    .update(startCallUpdate)
-    .eq("id", thread.threadId)
-    .select(CHAT_THREAD_SELECT)
-    .returns<ChatThreadRow>()
-    .single();
-
-  const updatedThreadRow = updatedThreadResponse.data as ChatThreadRow | null;
-
-  if (updatedThreadResponse.error || !updatedThreadRow) {
-    await endCommunicationRoom(roomId).catch(() => null);
-    logChatCall("thread_call_thread_update_failed", {
-      currentUserId,
-      threadId: thread.threadId,
-      roomId,
-      mode,
-      message: updatedThreadResponse.error?.message ?? "no_data",
-    });
-    throw new Error("Unable to start Chi'lly Chat call. The thread could not be updated for the receiver.");
-  }
-
-  const threadAfterStart = parseChatThread(updatedThreadRow, currentUserId);
-  if (!threadAfterStart?.activeCommunicationRoomId) {
-    await endCommunicationRoom(roomId).catch(() => null);
-    logChatCall("thread_call_thread_update_missing_room", {
-      currentUserId,
-      threadId: thread.threadId,
-      roomId,
-      mode,
-    });
-    throw new Error("Unable to start Chi'lly Chat call. The receiver-visible call state was not saved.");
-  }
-
   let delivery: ChillyChatCallInviteDelivery | null = null;
-  let createdInvite: ChillyChatCallInvite | null = null;
+  let begunCall: BegunChillyChatCall;
   try {
-    const invite = await createChillyChatCallInvite({
-      calleeUserId,
-      callerUserId: currentUserId,
+    begunCall = await beginChillyChatCall({
       callType: mode,
       communicationRoomId: roomId,
       threadId: thread.threadId,
     });
-    createdInvite = invite.invite;
-    delivery = invite.delivery;
-    logChatCall("thread_call_invite_delivery", {
-      currentUserId,
-      threadId: thread.threadId,
-      roomId,
-      mode,
-      notificationCreated: delivery.notificationCreated,
-      pushSent: delivery.pushSent,
-      reason: delivery.reason,
-      status: delivery.status,
-    });
   } catch (inviteError) {
-    await clearEndedChatThreadCall(thread.threadId).catch(() => null);
     await endCommunicationRoom(roomId).catch(() => null);
     logChatCall("thread_call_invite_failed", {
       currentUserId,
@@ -1145,6 +1096,32 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       message: inviteError instanceof Error ? inviteError.message : "invite_failed",
     });
     throw new Error("Unable to start Chi'lly Chat call. The receiver invite could not be saved.");
+  }
+
+  if (begunCall.created) {
+    delivery = await dispatchChillyChatCallPush({
+      action: "incoming",
+      inviteId: begunCall.invite.id,
+    });
+    logChatCall("thread_call_invite_delivery", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId: begunCall.invite.communicationRoomId ?? roomId,
+      mode,
+      notificationCreated: delivery.notificationCreated,
+      pushSent: delivery.pushSent,
+      reason: delivery.reason,
+      status: delivery.status,
+    });
+  } else {
+    await endCommunicationRoom(roomId).catch(() => null);
+    logChatCall("thread_call_collision_reused", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId: begunCall.invite.communicationRoomId ?? "",
+      mode: begunCall.invite.callType,
+      role: begunCall.role,
+    });
   }
 
   const updated = await getChatThread(thread.threadId);
@@ -1167,10 +1144,11 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
 
   return {
     delivery,
-    invite: createdInvite,
+    invite: begunCall.invite,
+    role: begunCall.role,
     thread: updated,
-    roomId,
-    callType: mode,
+    roomId: begunCall.invite.communicationRoomId ?? roomId,
+    callType: begunCall.invite.callType,
   };
 }
 

@@ -290,8 +290,9 @@ forbidSentence("v60 proof doc", doc, (sentence) => (
 });
 
 [
-  "throw new Error(\"Unable to start Chi'lly Chat call. The receiver-visible call state was not saved.\")",
   "throw new Error(\"Unable to start Chi'lly Chat call. The receiver invite could not be saved.\")",
+  "beginChillyChatCall",
+  "dispatchChillyChatCallPush",
 ].forEach((needle) => requireText("chat source failure handling", chatLib, needle));
 
 [
@@ -341,8 +342,8 @@ requireText("owner readback migration", ownerReadbackMigration, "explicit member
 requireText("direct member readback migration", directMemberReadbackMigration, "create or replace function public.can_access_chat_thread");
 requireText("direct member readback migration", directMemberReadbackMigration, "Direct threads that contain a platform owner remain member-only");
 requireText("direct member readback migration", directMemberReadbackMigration, "public.\"has_channel_audience_block_between\"(actor.user_id, other_member.\"user_id\")");
-requireText("call invite stale missed guard", callLib, "query = query.eq(\"status\", \"ringing\");");
-requireText("call invite stale missed guard", callLib, "if (!updatedInvite) return null;");
+requireText("call invite stale missed guard", callLib, ".eq(\"status\", \"ringing\")");
+requireText("call invite stale missed guard", callLib, "if (error || !data?.length) return null;");
 requireText("banner auto accept source", thread, "Incoming call could not be accepted. Ask the caller to start a new call.");
 requireText("banner auto accept source", thread, "status: \"accepted\"");
 requireText("direct thread messaging UX source", thread, "chat-thread-messages-scroll");

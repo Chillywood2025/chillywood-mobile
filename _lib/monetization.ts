@@ -1,9 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CustomerInfo, PurchasesOffering, PurchasesPackage, PurchasesOfferings } from "react-native-purchases";
+import { Platform } from "react-native";
 
 import { trackEvent } from "./analytics";
 import { FEATURE_FLAGS, getAppMonetizationRuntimeFeatures } from "./featureFlags";
 import { debugLog, reportRuntimeError } from "./logger";
+import {
+  getMoneyFeatureFlag,
+  readMoneyFeatureFlagSummaryWithStatus,
+  type MoneyFeatureFlagState,
+} from "./moneyFeatureFlags";
 import {
   canMakeRevenueCatPurchases,
   configureRevenueCatOnce,
@@ -23,7 +29,7 @@ import {
   type PremiumEntitlementKey,
 } from "./premiumEntitlements";
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./moderation";
-import { isBetaOperatorIdentity } from "./runtimeConfig";
+import { getRuntimeConfig, isBetaOperatorIdentity } from "./runtimeConfig";
 import { supabase } from "./supabase";
 
 export type PlanTier = "free" | "premium";
@@ -190,6 +196,8 @@ export type InternalTesterSandboxPurchaseModeState = {
   payoutsEnabled: boolean;
   cashoutEnabled: boolean;
   providerSandboxCandidate: boolean;
+  storePurchaseRailState: MoneyFeatureFlagState;
+  storePurchaseRailReadbackComplete: boolean;
 };
 
 export type MonetizationAccessPurchaseOutcome = {
@@ -272,17 +280,35 @@ const WATCH_PARTY_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_watch_pa
 const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
 
 export const PREMIUM_PURCHASE_SHELL_ON_HOLD = true;
-export const PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
+export const ANDROID_PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
   "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.";
+export const IOS_PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
+  "Premium purchase is temporarily unavailable while App Store and RevenueCat setup is verified.";
+export const PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
+  Platform.OS === "ios"
+    ? IOS_PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE
+    : ANDROID_PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE;
 export const INTERNAL_TESTER_SANDBOX_PURCHASE_MODE = "internal_tester_sandbox" satisfies MonetizationPurchaseMode;
 export const INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL = "Provider sandbox purchases";
-export const INTERNAL_TESTER_SANDBOX_PURCHASE_COPY =
+export const ANDROID_INTERNAL_TESTER_SANDBOX_PURCHASE_COPY =
   "Provider-backed sandbox purchase through Google Play / RevenueCat. No production money, payouts, cash-out, withdrawal, transfer, or payable balance is enabled.";
+export const IOS_INTERNAL_TESTER_SANDBOX_PURCHASE_COPY =
+  "Provider-backed sandbox purchase through App Store / RevenueCat. No production money, payouts, cash-out, withdrawal, transfer, or payable balance is enabled.";
+export const INTERNAL_TESTER_SANDBOX_PURCHASE_COPY =
+  Platform.OS === "ios"
+    ? IOS_INTERNAL_TESTER_SANDBOX_PURCHASE_COPY
+    : ANDROID_INTERNAL_TESTER_SANDBOX_PURCHASE_COPY;
+
+const revenueCatStoreLabel = () => Platform.OS === "ios" ? "App Store / RevenueCat" : "Google Play / RevenueCat";
+const storePurchasesEnabledForPlatform = () => (
+  Platform.OS !== "ios" || getRuntimeConfig().revenueCat.appStorePurchasesEnabled === true
+);
 
 export const isPremiumPurchaseShellAvailable = () => {
   const runtime = getAppMonetizationRuntimeFeatures();
   return FEATURE_FLAGS.monetization.subscriptions
     && runtime.premiumEnabled
+    && storePurchasesEnabledForPlatform()
     && !PREMIUM_PURCHASE_SHELL_ON_HOLD;
 };
 
@@ -294,6 +320,7 @@ export const isPremiumPurchaseShellAvailableForMode = (
   return mode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
     && FEATURE_FLAGS.monetization.subscriptions
     && runtime.premiumEnabled
+    && storePurchasesEnabledForPlatform()
     && !runtime.liveMoneyEnabled
     && !runtime.payoutsEnabled
     && !runtime.cashoutEnabled;
@@ -314,6 +341,18 @@ export async function resolveInternalTesterSandboxPurchaseMode(options?: {
   const cashoutEnabled = runtime.cashoutEnabled === true;
   const providerSandboxCandidate = !!String(options?.userId ?? options?.email ?? "").trim();
   const roles: string[] = [];
+  const storePurchaseRailKey = Platform.OS === "ios"
+    ? "revenuecat_app_store_enabled"
+    : "revenuecat_google_play_enabled";
+  const storePurchaseRailReadback = await readMoneyFeatureFlagSummaryWithStatus();
+  const storePurchaseRailState = getMoneyFeatureFlag(
+    storePurchaseRailReadback.rows,
+    storePurchaseRailKey,
+  ).state;
+  const railState = {
+    storePurchaseRailState,
+    storePurchaseRailReadbackComplete: storePurchaseRailReadback.readbackComplete,
+  };
 
   if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) {
     return {
@@ -326,6 +365,7 @@ export async function resolveInternalTesterSandboxPurchaseMode(options?: {
       payoutsEnabled,
       cashoutEnabled,
       providerSandboxCandidate,
+      ...railState,
     };
   }
 
@@ -340,6 +380,52 @@ export async function resolveInternalTesterSandboxPurchaseMode(options?: {
       payoutsEnabled,
       cashoutEnabled,
       providerSandboxCandidate,
+      ...railState,
+    };
+  }
+
+  if (!storePurchasesEnabledForPlatform()) {
+    return {
+      enabled: false,
+      mode: "public",
+      label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
+      reason: "App Store sandbox purchases are disabled for this iOS build.",
+      allowedRoles: roles,
+      liveMoneyEnabled,
+      payoutsEnabled,
+      cashoutEnabled,
+      providerSandboxCandidate,
+      ...railState,
+    };
+  }
+
+  if (!storePurchaseRailReadback.readbackComplete) {
+    return {
+      enabled: false,
+      mode: "public",
+      label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
+      reason: `Unable to verify the ${revenueCatStoreLabel()} sandbox server rail. Try again.`,
+      allowedRoles: roles,
+      liveMoneyEnabled,
+      payoutsEnabled,
+      cashoutEnabled,
+      providerSandboxCandidate,
+      ...railState,
+    };
+  }
+
+  if (storePurchaseRailState !== "sandbox_only") {
+    return {
+      enabled: false,
+      mode: "public",
+      label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
+      reason: `${revenueCatStoreLabel()} sandbox purchases are not enabled on the server yet.`,
+      allowedRoles: roles,
+      liveMoneyEnabled,
+      payoutsEnabled,
+      cashoutEnabled,
+      providerSandboxCandidate,
+      ...railState,
     };
   }
 
@@ -360,12 +446,13 @@ export async function resolveInternalTesterSandboxPurchaseMode(options?: {
       enabled: false,
       mode: "public",
       label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
-      reason: "Sign in before starting a Google Play / RevenueCat sandbox Premium purchase.",
+      reason: `Sign in before starting a ${revenueCatStoreLabel()} sandbox Premium purchase.`,
       allowedRoles: roles,
       liveMoneyEnabled,
       payoutsEnabled,
       cashoutEnabled,
       providerSandboxCandidate,
+      ...railState,
     };
   }
 
@@ -373,12 +460,13 @@ export async function resolveInternalTesterSandboxPurchaseMode(options?: {
     enabled: true,
     mode: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE,
     label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
-    reason: "Provider-backed sandbox purchase mode is available for this signed-in account when Google Play billing and RevenueCat offerings are ready. Internal tester roles are diagnostics only.",
+    reason: `Provider-backed sandbox purchase mode is available for this signed-in account when ${revenueCatStoreLabel()} offerings are ready. Internal tester roles are diagnostics only.`,
     allowedRoles: roles,
     liveMoneyEnabled,
     payoutsEnabled,
     cashoutEnabled,
     providerSandboxCandidate,
+    ...railState,
   };
 }
 
@@ -1294,7 +1382,7 @@ export async function readMonetizationAccessSheetState(options: {
       presentation: {
         ...presentation,
         title: "Premium access is being checked",
-        body: "Premium purchase status can be checked here. Signed-in users can use the Google Play / RevenueCat sandbox flow when provider setup is available; live settlement stays off.",
+        body: `Premium purchase status can be checked here. Signed-in users can use the ${revenueCatStoreLabel()} sandbox flow when provider setup is available; live settlement stays off.`,
         actionLabel: "Check Premium Status",
       },
       primaryAction: "retry",
@@ -1387,7 +1475,7 @@ export async function readMonetizationAccessSheetState(options: {
     primaryDisabled: false,
     helperKicker: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE ? "SANDBOX TEST" : "LIVE OFFER",
     helperBody: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
-      ? "This provider-backed path opens Google Play sandbox billing only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is created. Premium access still requires RevenueCat and Supabase entitlement readback."
+      ? `This provider-backed path opens ${Platform.OS === "ios" ? "App Store" : "Google Play"} sandbox billing only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is created. Premium access still requires RevenueCat and Supabase entitlement readback.`
       : "This pricing is coming from the current configured offer for this build.",
     helperTone: "neutral",
     offer,

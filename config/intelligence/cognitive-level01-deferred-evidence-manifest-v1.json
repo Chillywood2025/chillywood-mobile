@@ -1,0 +1,246 @@
+{
+  "schemaVersion": "chillywood-cognitive-deferred-evidence-v1",
+  "appendOnly": true,
+  "modeStates": {
+    "ownerAssisted": "OWNER_ASSISTED_ACTIVE",
+    "isolatedAutonomous": "ISOLATED_AUTONOMOUS_PENDING"
+  },
+  "rawEvidencePolicy": "outside_git_owner_only",
+  "remotePersistencePerformed": false,
+  "entries": [
+    {
+      "evidenceKey": "14a5bdf59feb02799208f1391f34dde5007cb6c132c980eea55c94b063eaee5f",
+      "evidenceType": "cloudflare_inert_readiness",
+      "observedAt": "2026-07-25T08:24:00.000Z",
+      "sourceCommit": "a4519f33e685fb3b85b3019e87323d3fef935d32",
+      "platform": "cloudflare_workers_free",
+      "appBuild": null,
+      "appRuntime": "INERT_READINESS_ONLY",
+      "appChannel": "credential_free_readiness",
+      "synthetic": true,
+      "metricHashes": [
+        "50b7103acacde8b35da4e25d36333209d2451e77cc56971a97a4692084ec40f9",
+        "722992d0f6394757f842454924d809cd4b7649f8b2b88869381e7f3f79a38679"
+      ],
+      "evaluatorResult": "pass_inert_readiness_only",
+      "findingKey": null,
+      "futureImportKey": "e73dcd112300e2fd4bdadedb646aee6d2cfe683edb9c5d18ee45d681524dc0e9",
+      "importStatus": "not_imported",
+      "importEligibility": "audit_only",
+      "expiresAt": "2026-08-24T08:24:00.000Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "cb6bb1f1a6b268dccd97ffdc21927bc134ce4febe771d619fe991645d6a58349",
+      "evidenceType": "android_installed_route_repeat",
+      "observedAt": "2026-07-25T13:15:53.066Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "android",
+      "appBuild": "84",
+      "appRuntime": "1.0.0",
+      "appChannel": "google_play_internal",
+      "synthetic": true,
+      "metricHashes": [
+        "70ce84f76b3d68b620994993e0e8ed28bffd70fc18b8f6fda070c7a86afdfdf3"
+      ],
+      "evaluatorResult": "pass_routes_with_watch_party_entitlement_gate",
+      "findingKey": null,
+      "futureImportKey": "f009c85f5237c3b97dc3f77453ba2076acf1907bae8b19d33eaaefd78520a6a9",
+      "importStatus": "not_imported",
+      "importEligibility": "eligible_after_runtime_unlock",
+      "expiresAt": "2026-08-24T13:15:53.066Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "3ea7b98e3bb938a2520b9bde427875c255d2a50c362dec7144c5c1008e5d7539",
+      "evidenceType": "android_accessibility_touch_target",
+      "observedAt": "2026-07-25T13:16:34.140Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "android",
+      "appBuild": "84",
+      "appRuntime": "1.0.0",
+      "appChannel": "google_play_internal",
+      "synthetic": true,
+      "metricHashes": [
+        "aa326881aac9c1dd9ee1dea15421389ec5dc30f65d395bc07b83969637dd254c",
+        "eeb1860d6e4edb647e1ebeb116ff81393ec50e2d721560c1fe2d686716a518f8"
+      ],
+      "evaluatorResult": "finding_102_86_by_23_24_dp_below_48_dp_height",
+      "findingKey": "1df2e48d75c359034af842e0f598cf5e541957236256e323b0e8cd6149c0493a",
+      "futureImportKey": "68b094566a51e8dcef5f6848fb0605f20496ca76de9b7c0078d70875f778a8a5",
+      "importStatus": "not_imported",
+      "importEligibility": "eligible_after_runtime_unlock",
+      "expiresAt": "2026-08-24T13:16:34.140Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "d27ba0ffa1d435eaae403fde84200cc92c19e7b70f269a501da588e660495330",
+      "evidenceType": "github_owner_assisted_draft_pr_canaries",
+      "observedAt": "2026-07-25T13:20:04.413Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "github",
+      "appBuild": null,
+      "appRuntime": "repository_app",
+      "appChannel": "draft_pr_only",
+      "synthetic": true,
+      "metricHashes": [
+        "8189e750277342559dd6f88096677f8482fb3cf2a13a7313d35d5241eb9c1d9d",
+        "d2f96a9fe80c4a6a693f2e3d3d25a189ed3c17a1a84f01e98839b3ec133bf82b"
+      ],
+      "evaluatorResult": "draft_only_provider_and_path_boundaries_pass",
+      "findingKey": null,
+      "futureImportKey": "8319503192e5d02ddedc52f01955d1f44893bb99cd77203b5d00f06f518f0e17",
+      "importStatus": "not_imported",
+      "importEligibility": "audit_only",
+      "expiresAt": "2026-08-24T13:20:04.413Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "698c1a9630422a3ff93413fbd91ec234de5c34de3edf57541fc6022f4f2b0c10",
+      "evidenceType": "android_session_lifecycle",
+      "observedAt": "2026-07-25T13:25:50.033Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "android",
+      "appBuild": "84",
+      "appRuntime": "1.0.0",
+      "appChannel": "google_play_internal",
+      "synthetic": true,
+      "metricHashes": [
+        "89bc1b278a8b86a78d0c43b423459710f93b63e37bcc9e2b4f7a46df10cb7ab9"
+      ],
+      "evaluatorResult": "pass_background_foreground_and_session_persistence",
+      "findingKey": null,
+      "futureImportKey": "2b2db4a8c1c5feca9dcb5c5169c89223e5828915e2222fc990e9a340fb43807d",
+      "importStatus": "not_imported",
+      "importEligibility": "eligible_after_runtime_unlock",
+      "expiresAt": "2026-08-24T13:25:50.033Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "0a7eb5d147618c23f1e7bb8700ef8a27ee764279b17d725865953fa272e66e53",
+      "evidenceType": "livekit_installed_observer_gate",
+      "observedAt": "2026-07-25T13:29:09.000Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "android",
+      "appBuild": "84",
+      "appRuntime": "1.0.0",
+      "appChannel": "google_play_internal",
+      "synthetic": true,
+      "metricHashes": [
+        "f3c6618be6bd415d8699b89935dbf387cbbffa6f9e1716173ca1e5e6c2b80906"
+      ],
+      "evaluatorResult": "blocked_existing_premium_entitlement_gate",
+      "findingKey": "8f8a9916af0aa080a9c0bf642993158d33203951a350cee14a5b4ed0aa1bb5b1",
+      "futureImportKey": "ca971429e6d43737fa0ac2b20b87cd1eb25e8ef058db30452954e002c9960bd9",
+      "importStatus": "not_imported",
+      "importEligibility": "requires_reevaluation",
+      "expiresAt": "2026-08-24T13:29:09.000Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "5c6c60554d27c1c70e707b1026727dac40db3f8c60a1937ce257f09d8062511c",
+      "evidenceType": "livekit_two_headless_recovery",
+      "observedAt": "2026-07-25T13:29:43.000Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "macos_headless",
+      "appBuild": null,
+      "appRuntime": "rtc_node_synthetic",
+      "appChannel": "preview_sandbox",
+      "synthetic": true,
+      "metricHashes": [
+        "624ac2ef2ff731e480108cc3d0b633bd8ac563bd75e21e31641d9f1e7f6b2e05"
+      ],
+      "evaluatorResult": "blocked_reconnect_timeout_after_initial_connections",
+      "findingKey": null,
+      "futureImportKey": "b58c960546e44d137684f2d211b543aa85f52c0a5b40b8ec6faae06ef44fdd3d",
+      "importStatus": "not_imported",
+      "importEligibility": "requires_reevaluation",
+      "expiresAt": "2026-08-24T13:29:43.000Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "e04b4ee34fab844543419cd825e20600ca44604ccb68e0f1b0ac18e42ae98bba",
+      "evidenceType": "pinned_public_research_canaries",
+      "observedAt": "2026-07-25T13:31:37.319Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "pinned_https_host",
+      "appBuild": null,
+      "appRuntime": "reviewed_transport_v1",
+      "appChannel": "local_advisory",
+      "synthetic": true,
+      "metricHashes": [
+        "6490755d9ad8431e4cc2d63340520a2024fa26a7ec8d0b66f5af83deeb506937"
+      ],
+      "evaluatorResult": "blocked_external_route_404_fail_closed",
+      "findingKey": null,
+      "futureImportKey": "9182d70c8c9398f0d2e8150e6e329917f4cb0e591679e378893dbe2b66fed9c8",
+      "importStatus": "not_imported",
+      "importEligibility": "not_eligible",
+      "expiresAt": "2026-08-24T13:31:37.319Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "4da38676d6acb44d4b2e4a7245e281afaf0b74ea859e33a4501df541c1145670",
+      "evidenceType": "scheduler_definition_dry_run",
+      "observedAt": "2026-07-25T13:33:23.978Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "local_scheduler",
+      "appBuild": null,
+      "appRuntime": "source_evaluator",
+      "appChannel": "dry_run",
+      "synthetic": true,
+      "metricHashes": [
+        "69ea17d3841a8a64b857146b529f7547012d5d8971ff3276e272fae2acc61f7e"
+      ],
+      "evaluatorResult": "pass_dry_run_all_dispatches_no_work",
+      "findingKey": null,
+      "futureImportKey": "8bf9d57b123919238c765ae50dbcc3b63e469717cf3cfbf2ba1eb6d9c52c5104",
+      "importStatus": "not_imported",
+      "importEligibility": "audit_only",
+      "expiresAt": "2026-08-24T13:33:23.978Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "9841966318dba452ba547a2c582f84dffacce44bb9fca1cfa3c3a513c075499d",
+      "evidenceType": "android_signout_signin",
+      "observedAt": "2026-07-25T13:41:52.297Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "android",
+      "appBuild": "84",
+      "appRuntime": "1.0.0",
+      "appChannel": "google_play_internal",
+      "synthetic": true,
+      "metricHashes": [
+        "9df71b84e0c7b20d3ff025fd29b6a55ee754884df60e5602de82b1b998d0135f"
+      ],
+      "evaluatorResult": "pass_ui_signout_and_signin",
+      "findingKey": null,
+      "futureImportKey": "302b71db7df2110a2e3fcac67fccc91ccccf088907817dc884345d2274ef69a6",
+      "importStatus": "not_imported",
+      "importEligibility": "eligible_after_runtime_unlock",
+      "expiresAt": "2026-08-24T13:41:52.297Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    },
+    {
+      "evidenceKey": "fe18d1480c07361d9321d55043b792c4d0dbbed20aa9c2dee9159295dd28eed6",
+      "evidenceType": "android_crash_anr_observation",
+      "observedAt": "2026-07-25T13:42:33.972Z",
+      "sourceCommit": "0a69bbf400151b5136c2dda070aeb586cd846171",
+      "platform": "android",
+      "appBuild": "84",
+      "appRuntime": "1.0.0",
+      "appChannel": "google_play_internal",
+      "synthetic": true,
+      "metricHashes": [
+        "e3a3ea2aa188f5c800a4dc64a33280aeb2b4780b82457b2e9af8ff8ef38aba23"
+      ],
+      "evaluatorResult": "pass_no_crash_anr_marker",
+      "findingKey": null,
+      "futureImportKey": "7dd263c16345338562c252f6f17e19c1ac5cae1a86f13b5caa4b3df1e3e302e8",
+      "importStatus": "not_imported",
+      "importEligibility": "eligible_after_runtime_unlock",
+      "expiresAt": "2026-08-24T13:42:33.972Z",
+      "retentionClass": "sanitized_nonpersonal_30d"
+    }
+  ]
+}

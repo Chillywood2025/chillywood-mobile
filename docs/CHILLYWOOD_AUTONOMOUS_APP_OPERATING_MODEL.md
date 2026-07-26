@@ -1,6 +1,6 @@
 # Chi'llywood Autonomous App Operating Model
 
-Last updated: 2026-07-13
+Last updated: 2026-07-16
 
 Status: governing policy for future Codex/operator work. Chi'llywood should operate autonomously by default inside approved safety policy, with owner approval reserved for high-risk boundary changes.
 
@@ -31,7 +31,12 @@ Current approved systems:
 - `privacy_compliance_operator`
 - `support_success_operator`
 - `search_ranking_integrity_operator`
+- `product_intelligence_operator` (source-only, off, not deployed)
 - `ads_sponsor_delivery_operator` foundation-only
+
+Component ownership is machine-enforced by `config/autonomy/autonomous-components.json`. A component is exactly one of `top_level_system`, `registered_surface`, `protected_control_plane`, `non_autonomous_utility`, or `foundation_only_off`. Scheduled host units, database cron workers, scheduled workflows, Cloudflare scheduler templates, long-running queue consumers, and operator-like Edge Functions must appear in that inventory. New behavior attaches to an existing owner when its authority already exists; a technical worker is not automatically a new top-level system.
+
+Platform-aware `watch_once` is compositional: shared, Android, and iOS probes run independently. Each returns platform, readback completeness, health, source, data window, reasons, and immutable safety booleans. A missing required platform or provider is blocked/unknown and prevents an overall healthy result. Expected identity and observed identity are separate contracts.
 
 `notification_delivery_operator`, `release_ota_operator`, `security_owner_operator`, and `moderation_safety_operator` are now scoped-write capable guarded systems with limited scheduled `watch_once` loops on `chillywood-prod-01`. Notification runs every five minutes in `limited_scheduled_safe_recovery` mode for strictly safe provider-evidenced cleanup; release runs every thirty minutes, security-owner every fifteen minutes, and moderation-safety every ten minutes in `limited_scheduled_probe` mode. They may write only safe status, review, finding, audit, duplicate-detection, learning, and autonomous approval-request records inside their registered tables. Every scheduled run includes `scheduler=systemd_timer`, the specific operator id, and a host source in audit metadata. They cannot publish releases, roll back releases, mutate owner roles, mutate auth/RLS, rotate secrets, send broad push campaigns, bypass notification preferences, ban/restrict users, delete content, change user rights, move money, grant Premium, or change provider products without the registered Level 3/4 approval path.
 
@@ -220,6 +225,18 @@ The owner command layer is not a god panel and does not bypass the registry. It 
 
 Rachi may recommend/request but cannot approve. Autonomous operators cannot approve their own requests. Level 3/4 commands still use the live owner/super-admin approval path and the target operator's proof/rollback/emergency-state gates.
 
+## 12B. Platform and iOS Readback Policy
+
+Autonomous state uses the normalized platform values `shared`, `ios`, `android`, `web`, and `unknown`. Shared backend policy stays shared. Client, release, provider, notification, runtime, installed-QA, and support evidence must include a platform when platform changes its interpretation. App version, native build, bundle identifier, runtime, channel, update, distribution source, and provider environment are recorded only where meaningful.
+
+Notification, release, and observability operators require substantive readback. Empty caller metadata is not evidence. A missing provider, query, metric, or credential capability is `unknown` or `blocked`; it cannot become healthy merely because no failure was returned. Provider adapters are read-only and recursively sanitize token-, credential-, receipt-, cookie-, private-key-, and signed-URL-like data.
+
+iOS installed-QA readiness distinguishes source, provider, internal-build, physical, and second-device states. Repository/config proof may establish `source_ready`; EAS/App Store readback may establish `provider_ready` or `internal_build_ready`. It may not establish physical APNs, PushKit/CallKit, StoreKit, signed Universal Link, camera/microphone/Photos, accessibility/audio-route, or two-device LiveKit behavior. Those stay `physical_proof_required` or `second_device_required` until direct evidence exists.
+
+The terminal call-delivery retry worker is a bounded notification surface. Its one-minute database schedule, batch and attempt caps, exponential backoff, stale lease, idempotent delivery key, sanitized result, failure rows, config kill switch, and token-hash gate are mandatory. The retry surface cannot create a new incoming call, read/output raw tokens, send a broad push, bypass new-call preferences, mutate call membership, or hide/delete failure evidence.
+
+No platform adapter may publish or roll back OTA, change TestFlight/App Review state, mutate provider products, move money, grant Premium, change auth/RLS/roles, execute moderation enforcement, or self-approve.
+
 ## 13. Codex Behavior Rule
 
 Do not ask the owner for Level 0 or Level 1 operations. Do the work, verify it, report what happened, and keep moving.
@@ -229,3 +246,10 @@ For Level 2 operations, proceed only when the emergency stop, caps, rollback, au
 Ask the owner before Level 3 operations. Ask the owner and require external confirmation before Level 4 operations.
 
 If unsure, classify the operation, explain the approval level, state the risk boundary, and choose the safer level until the classification is clear.
+# Cognitive orchestration boundary
+
+The source-only `product_intelligence_operator` may research, plan, delegate, remember sanitized evidence, and independently evaluate bounded engineering/product work. It remains off and undeployed. Existing domain operators remain the specialized executors.
+
+The cognitive layer follows the same Detect → Plan → Preflight → Dry-run → Execute → Audit → Rollback/quarantine → Report discipline, but raw model or web text is never executable. Every capability is branch/path/tool scoped, capped by calls/time/cost, expires, and has a rollback plan. The executor cannot approve itself and the evaluator cannot edit source.
+
+No cognitive component can directly execute money movement, change user rights, mutate auth/RLS or roles, enforce moderation, publish or roll back an OTA, release publicly, change a store/provider product, or activate a production scheduler. Those boundaries cannot be learned away.

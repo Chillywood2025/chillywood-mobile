@@ -7,7 +7,8 @@ const assert = (condition, message) => {
 
 const helper = read("_lib/userReportRouter.ts");
 const edge = read("supabase/functions/user-report-intake/index.ts");
-const migration = read("supabase/migrations/20260714001704_user_report_router.sql");
+const migration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
+const routingMigration = read("supabase/migrations/20260718142500_atomic_user_report_routing.sql");
 const supportFunction = read("supabase/functions/support-success-operator/index.ts");
 const admin = read("app/admin.tsx");
 const supportScreen = read("components/system/support-screen.tsx");
@@ -77,8 +78,9 @@ for (const table of [
 
 assert(edge.includes("authenticateUser") && edge.includes("authenticated_user_required"), "user report intake must require an authenticated user");
 assert(edge.includes("client_requested_routed_system_id_ignored"), "client-provided routed system must be ignored");
-assert(edge.includes("owner_command_requests"), "threshold routing must create safe owner command rows");
-assert(edge.includes("autonomous_approval_requests"), "critical report routing must be able to create approval requests");
+assert(edge.includes("route_user_report_cluster"), "threshold routing must call the atomic database operation");
+assert(routingMigration.includes("insert into public.owner_command_requests"), "threshold routing must create safe owner command rows");
+assert(routingMigration.includes("insert into public.autonomous_approval_requests"), "critical report routing must be able to create approval requests");
 assert(supportFunction.includes("user_report_router_watch_once"), "support_success_operator missing user report router action");
 assert(supportFunction.includes("route_report_clusters"), "support_success_operator missing report cluster routing action");
 

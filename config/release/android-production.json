@@ -1,0 +1,142 @@
+{
+  "manifestVersion": 3,
+  "platform": "android",
+  "packageIdentifier": "com.chillywood.mobile",
+  "appVersion": "1.0.0",
+  "nativeBuild": "84",
+  "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
+  "channel": "production",
+  "distributionSource": "google_play_internal",
+  "buildProfile": "android-production-local-recovery",
+  "nativeBuildSource": "local_eas_build",
+  "expectedBinarySourceCommit": "8c426f4e74de61de7d4529d32d124744833912dc",
+  "nativeBuildId": null,
+  "releaseStatus": "android_image_manipulator_incident_closed_internal_only",
+  "expoSdkVersion": "54.0.36",
+  "expoImageManipulatorVersion": "14.0.8",
+  "legacyBuild": {
+    "nativeBuild": "80",
+    "runtimeVersion": "1.0.0",
+    "nativeModuleAvailable": false,
+    "installationSourceObserved": "google_play",
+    "protectionState": "protected_by_existing_android_safety_ota",
+    "activeSafetyUpdateGroup": "37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5",
+    "activeSafetyUpdateId": "019f7cdd-b989-74e3-9775-254352ce68cd",
+    "activeSafetyUpdateSourceCommit": "31ffc0ff0f67474b3b3a13d6277cabbac7845dd9"
+  },
+  "nativeCompatibility": {
+    "schemaVersion": 1,
+    "digest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a",
+    "runtimeBindings": [
+      {
+        "runtimeVersion": "1.0.0",
+        "digest": null,
+        "status": "historical_pre_manifest_build"
+      },
+      {
+        "runtimeVersion": "1.0.0-android-imagemanipulator-v1",
+        "digest": "4abe7acf4df511520c4645be55ea01b0c5762f8184c76a4f48ed6ab31a47a50a",
+        "status": "reviewed_replacement_built_and_validated"
+      }
+    ],
+    "requiredModules": {
+      "expo-image-manipulator": "14.0.8"
+    }
+  },
+  "artifactEvidence": {
+    "productionAabSha256": "de8f4da21956988bdcf7e8ea74bf96493a8d2649018557ed97d4914a7ceabb30",
+    "qaApksSha256": "d5f36daf6e60947428c05bebfa8d7eac16f6e67c19d04822a006183fbde36bce",
+    "qaInstallArtifactSha256": "1bdc302a633be44f96b2dc72c524d51762852acfafdb1726462626b1ee0cc1da",
+    "signingCertificateSha256": "6D:37:4C:35:AE:3E:AA:1E:9D:2E:01:9F:EE:63:CF:2F:9B:BF:D4:1E:65:F8:85:A5:49:58:21:6F:57:83:A2:C7",
+    "bundletoolValidationPassed": true,
+    "manifestValidationPassed": true,
+    "modulePackagingProved": true,
+    "moduleRegistrationProved": true,
+    "moduleClass": "expo.modules.imagemanipulator.ImageManipulatorModule",
+    "moduleName": "ExpoImageManipulator",
+    "releaseMinificationEnabled": false,
+    "runtimeModuleProved": true,
+    "nativePathUsed": true,
+    "fallbackUsed": false,
+    "cleanInstallPassed": true,
+    "inPlaceUpgradeState": "google_play_build_80_to_84_pass"
+  },
+  "signingIncident": {
+    "classification": "compromised_google_play_upload_key",
+    "compromisedEasCredentialRemoved": true,
+    "googlePlayAppSigningKeyChanged": false,
+    "replacementBackupsVerified": true,
+    "googleUploadKeyResetStatus": "upload_key_reset_effective",
+    "googleUploadKeyEffectiveAt": "2026-07-22T21:49:00Z",
+    "googlePlaySubmissionState": "internal_testing_available",
+    "replacementEasCredentialSynchronized": true,
+    "fourWayPublicCertificateMatch": true
+  },
+  "playDistributionEvidence": {
+    "track": "internal",
+    "nativeBuild": "84",
+    "uploadEvidenceAt": "2026-07-22T22:33:08Z",
+    "submissionIdentifierSha256": "196c2535dde720cc3a618f37e18067689b3bef46f37ef2a8ef882c33747ed4a2",
+    "processingState": "available_to_internal_testers",
+    "testerLane": "existing_bounded_email_list",
+    "testerCount": 17,
+    "productionTrackChanged": false,
+    "openTestingTrackChanged": false,
+    "closedTestingTrackChanged": false,
+    "playDeliveredUpgradeState": "pass",
+    "sessionPreservationState": "pass",
+    "settingsPreservationState": "pass",
+    "physicalNativeModuleState": "available",
+    "physicalHeicState": "native_conversion_pass"
+  },
+  "runtimeFixtureEvidence": {
+    "deviceClass": "android_emulator_api_34",
+    "jpeg": "passed",
+    "pngCancel": "passed",
+    "heic": "passed",
+    "heif": "passed",
+    "highResolutionHeic": "passed",
+    "corruptedHeic": "failed_safely_without_crash",
+    "backgroundForeground": "passed_without_duplicate_storage_object",
+    "lowMemory": "not_observed"
+  },
+  "playUpgradeEvidence": {
+    "proofDate": "2026-07-22",
+    "deviceClass": "samsung_physical_android_11",
+    "startingNativeBuild": "80",
+    "replacementNativeBuild": "84",
+    "installationSource": "google_play_internal",
+    "inPlaceWithoutDataClear": true,
+    "playAppSigningCertificateMatch": true,
+    "sessionPreserved": true,
+    "settingsPreserved": true,
+    "notificationPreferencesPreserved": true,
+    "runtimeIsolationPassed": true,
+    "nativeModuleAvailable": true,
+    "nativePathUsed": true,
+    "fallbackUsed": false,
+    "jpeg": "saved_once",
+    "png": "review_cancel_pass",
+    "heic": "native_conversion_saved_once",
+    "heif": "native_conversion_saved_once",
+    "highResolutionHeic": "saved_without_fatal_or_observed_oom",
+    "corruptedHeic": "failed_safely_without_process_exit",
+    "backgroundForeground": "review_resumed_and_saved_once",
+    "duplicatePrevention": "single_profile_slot_state_observed",
+    "historicalFatalObservedCount": 0,
+    "javascriptFatalObservedCount": 0,
+    "lowMemory": "not_observed",
+    "minimumApi": "not_observed",
+    "secondOem": "not_observed",
+    "allImageSurfaces": "not_observed"
+  },
+  "otaNativeCompatibility": {
+    "optionalDeferredPackages": [
+      {
+        "package": "expo-image-manipulator",
+        "source": "_lib/imageUploadNormalization.ts",
+        "unsupportedBehavior": "Native availability is checked before package evaluation; HEIC/HEIF conversion fails closed with a sanitized non-fatal and user-facing JPEG/PNG guidance"
+      }
+    ]
+  }
+}

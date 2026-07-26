@@ -15,7 +15,7 @@ HTTP_STATUS="$(
     --request POST "${SUPABASE_FUNCTIONS_URL%/}/moderation-safety-operator" \
     --header "Content-Type: application/json" \
     --header "x-moderation-safety-operator-token: ${MODERATION_SAFETY_OPERATOR_TOKEN}" \
-    --data '{"action":"watch_once","scheduler":"systemd_timer","operator_id":"moderation_safety_operator","source":"'"${SOURCE}"'","enable_safe_recovery":false}'
+    --data '{"action":"watch_once","platform":"shared","scheduler":"systemd_timer","operator_id":"moderation_safety_operator","source":"'"${SOURCE}"'","enable_safe_recovery":false}'
 )"
 
 REDACTED_RESPONSE="$(

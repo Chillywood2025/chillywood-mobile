@@ -1,0 +1,208 @@
+{
+  "identifier" : "ChillywoodLocalStoreKit",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "10000000-0000-4000-8000-000000000101",
+      "localizations" : [
+        {
+          "description" : "A one-time creator tip. No content unlock.",
+          "displayName" : "Creator Tip — Tier 1",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chillywood.tip.tier1",
+      "referenceName" : "Chi'llywood Creator Tip Tier 1",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "2.99",
+      "familyShareable" : false,
+      "internalID" : "10000000-0000-4000-8000-000000000102",
+      "localizations" : [
+        {
+          "description" : "A one-time creator tip. No content unlock.",
+          "displayName" : "Creator Tip — Tier 2",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chillywood.tip.tier2",
+      "referenceName" : "Chi'llywood Creator Tip Tier 2",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "10000000-0000-4000-8000-000000000103",
+      "localizations" : [
+        {
+          "description" : "A one-time creator tip. No content unlock.",
+          "displayName" : "Creator Tip — Tier 3",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chillywood.tip.tier3",
+      "referenceName" : "Chi'llywood Creator Tip Tier 3",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "10000000-0000-4000-8000-000000000104",
+      "localizations" : [
+        {
+          "description" : "A one-time creator tip. No content unlock.",
+          "displayName" : "Creator Tip — Tier 4",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chillywood.tip.tier4",
+      "referenceName" : "Chi'llywood Creator Tip Tier 4",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "20000000-0000-4000-8000-000000000101",
+      "localizations" : [
+        {
+          "description" : "One-time eligible watch-party seat access.",
+          "displayName" : "Seat Pass — Tier 1",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chillywood.seatpass.tier1",
+      "referenceName" : "Chi'llywood Seat Pass Tier 1",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "2.99",
+      "familyShareable" : false,
+      "internalID" : "20000000-0000-4000-8000-000000000102",
+      "localizations" : [
+        {
+          "description" : "One-time eligible watch-party seat access.",
+          "displayName" : "Seat Pass — Tier 2",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chillywood.seatpass.tier2",
+      "referenceName" : "Chi'llywood Seat Pass Tier 2",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "20000000-0000-4000-8000-000000000103",
+      "localizations" : [
+        {
+          "description" : "One-time eligible watch-party seat access.",
+          "displayName" : "Seat Pass — Tier 3",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chillywood.seatpass.tier3",
+      "referenceName" : "Chi'llywood Seat Pass Tier 3",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "20000000-0000-4000-8000-000000000104",
+      "localizations" : [
+        {
+          "description" : "One-time eligible watch-party seat access.",
+          "displayName" : "Seat Pass — Tier 4",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.chillywood.seatpass.tier4",
+      "referenceName" : "Chi'llywood Seat Pass Tier 4",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6791217176",
+    "_developerTeamID" : "CU7536UQK9",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "30000000-0000-4000-8000-000000000001",
+      "localizations" : [
+        {
+          "description" : "Premium subscription options.",
+          "displayName" : "Chi'llywood Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "chillywood_premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "30000000-0000-4000-8000-000000000101",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Monthly Chi'llywood Premium access.",
+              "displayName" : "Chi'llywood Premium Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.chillywood.premium.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Chi'llywood Premium Monthly",
+          "subscriptionGroupID" : "30000000-0000-4000-8000-000000000001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "99.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "30000000-0000-4000-8000-000000000102",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Yearly Chi'llywood Premium access.",
+              "displayName" : "Chi'llywood Premium Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.chillywood.premium.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Chi'llywood Premium Yearly",
+          "subscriptionGroupID" : "30000000-0000-4000-8000-000000000001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

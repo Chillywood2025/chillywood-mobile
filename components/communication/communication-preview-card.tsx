@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
 import { getCommunicationRTCModule } from "../../_lib/communication";
+import type { MediaPermissionState } from "../../_lib/mediaPermissions";
 
 const logCallDebug = (..._args: unknown[]) => {};
 
@@ -12,8 +13,8 @@ type CommunicationPreviewCardProps = {
   streamURL?: string;
   cameraEnabled: boolean;
   micEnabled: boolean;
-  cameraPermissionState: "unknown" | "granted" | "denied" | "blocked";
-  microphonePermissionState: "unknown" | "granted" | "denied" | "blocked";
+  cameraPermissionState: MediaPermissionState;
+  microphonePermissionState: MediaPermissionState;
 };
 
 type CommunicationRTCViewComponent = React.ComponentType<{
@@ -33,7 +34,7 @@ const getInitials = (value: string) => {
 
 const getPermissionLabel = (label: string, state: CommunicationPreviewCardProps["cameraPermissionState"]) => {
   if (state === "granted") return `${label} ready`;
-  if (state === "blocked") return `${label} blocked`;
+  if (state === "restricted") return `${label} restricted`;
   if (state === "denied") return `${label} denied`;
   return `${label} pending`;
 };

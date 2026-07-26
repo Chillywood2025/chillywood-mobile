@@ -7,7 +7,8 @@ const assert = (condition, message) => {
 
 const helper = read("_lib/userReportRouter.ts");
 const edge = read("supabase/functions/user-report-intake/index.ts");
-const migration = read("supabase/migrations/20260714001704_user_report_router.sql");
+const migration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
+const routingMigration = read("supabase/migrations/20260718142500_atomic_user_report_routing.sql");
 const admin = read("app/admin.tsx");
 
 for (const redaction of ["EMAIL_PATTERN", "PHONE_PATTERN", "IPV4_PATTERN", "SECRET_KEY_PATTERN", "LONG_SECRET_LIKE_PATTERN"]) {
@@ -33,13 +34,13 @@ assert(admin.includes("ads/sponsors") && admin.includes("Premium") && admin.incl
 for (const forbidden of [
   "manual Premium grant",
   "auth/RLS mutation",
-  "direct enforcement",
+  "direct moderation enforcement",
   "provider product mutation",
   "LiveKit routing change",
   "R2/media behavior change",
   "ad or sponsor activation",
 ]) {
-  assert(helper.includes(forbidden) || edge.includes(forbidden), `missing forbidden scope ${forbidden}`);
+  assert(helper.includes(forbidden) || edge.includes(forbidden) || routingMigration.includes(forbidden), `missing forbidden scope ${forbidden}`);
 }
 
 console.log("proof:user-report-safety-privacy passed");

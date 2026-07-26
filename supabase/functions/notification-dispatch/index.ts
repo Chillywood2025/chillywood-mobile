@@ -1,9 +1,15 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.6";
+
+import {
+  IOS_NOTIFICATION_CATEGORIES,
+  buildPlatformExpoPushMessage,
+} from "../_shared/notification-payload.mjs";
+import { reconcileRecentExpoPushReceipts } from "../_shared/expo-push-receipts.ts";
 
 type JsonObject = Record<string, unknown>;
-type SupabaseClientLike = ReturnType<typeof createClient>;
+type SupabaseClientLike = ReturnType<typeof createClient<any>>;
 
 type TriggerType =
   | "followed_creator_live"
@@ -81,6 +87,7 @@ type NotificationPreference = {
 
 type PushToken = {
   id: string;
+  platform: "android" | "ios";
   provider: string;
   token: string;
   token_fingerprint: string;
@@ -102,6 +109,9 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const ANDROID_NOTIFICATION_CHANNEL_ID = "default";
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const isIosOrdinaryPushRolloutEnabled = () => (
+  toText(Deno.env.get("IOS_ORDINARY_PUSH_ROLLOUT_ENABLED")).toLowerCase() === "true"
+);
 
 const jsonResponse = (status: number, payload: JsonObject) =>
   new Response(JSON.stringify(payload), { headers: JSON_HEADERS, status });
@@ -334,17 +344,25 @@ async function readPreferences(adminClient: SupabaseClientLike, userIds: string[
 }
 
 async function readPushTokens(adminClient: SupabaseClientLike, userId: string) {
-  const { data } = await adminClient
-    .from("user_push_tokens")
-    .select("id,provider,token,token_fingerprint")
-    .eq("user_id", userId)
-    .eq("platform", "android")
-    .eq("enabled", true)
-    .is("revoked_at", null)
-    .order("last_seen_at", { ascending: false })
-    .limit(5);
+  const readPlatformTokens = async (platform: PushToken["platform"]) => {
+    const { data } = await adminClient
+      .from("user_push_tokens")
+      .select("id,platform,provider,token,token_fingerprint")
+      .eq("user_id", userId)
+      .eq("platform", platform)
+      .eq("provider", "expo")
+      .eq("enabled", true)
+      .is("revoked_at", null)
+      .order("last_seen_at", { ascending: false })
+      .limit(5);
+    return (data ?? []) as PushToken[];
+  };
 
-  return (data ?? []) as PushToken[];
+  const [androidTokens, iosTokens] = await Promise.all([
+    readPlatformTokens("android"),
+    readPlatformTokens("ios"),
+  ]);
+  return [...androidTokens, ...iosTokens];
 }
 
 async function insertDeliveryAttempt(adminClient: SupabaseClientLike, input: {
@@ -578,10 +596,11 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
     };
   }
 
+  await reconcileRecentExpoPushReceipts(adminClient, input.recipient.id);
   const tokens = await readPushTokens(adminClient, input.recipient.id);
   if (!tokens.length) {
     await insertDeliveryAttempt(adminClient, {
-      errorCode: "no_enabled_android_token",
+      errorCode: "no_enabled_push_token",
       notificationId,
       provider: "expo",
       recipientUserId: input.recipient.id,
@@ -592,25 +611,52 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
       pushSent: false,
       recipientUserId: input.recipient.id,
       status: inAppAllowed ? "created" : "skipped",
-      reason: "no_enabled_android_token",
+      reason: "no_enabled_push_token",
+    };
+  }
+
+  const iosRolloutEnabled = isIosOrdinaryPushRolloutEnabled();
+  const rolloutBlockedTokens = tokens.filter((token) => token.platform === "ios" && !iosRolloutEnabled);
+  for (const token of rolloutBlockedTokens) {
+    await insertDeliveryAttempt(adminClient, {
+      errorCode: "ios_push_rollout_disabled",
+      notificationId,
+      provider: token.provider,
+      pushTokenId: token.id,
+      recipientUserId: input.recipient.id,
+      status: "skipped",
+    });
+  }
+  const deliverableTokens = tokens.filter((token) => token.platform === "android" || iosRolloutEnabled);
+  if (!deliverableTokens.length) {
+    return {
+      notificationId,
+      pushSent: false,
+      recipientUserId: input.recipient.id,
+      status: inAppAllowed ? "created" : "skipped",
+      reason: "ios_push_rollout_disabled",
     };
   }
 
   let sentCount = 0;
-  for (const token of tokens) {
-    const pushResult = await sendExpoPush({
+  for (const token of deliverableTokens) {
+    const pushResult = await sendExpoPush(buildPlatformExpoPushMessage({
+      androidChannelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+      badge: 1,
       body: copy.body,
-      channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+      categoryId: IOS_NOTIFICATION_CATEGORIES.activity,
       data: {
         notificationId,
         path: input.target.deepLink.replace(/^chillywoodmobile:\/\//u, "/"),
         triggerType: input.triggerType,
       },
+      interruptionLevel: "active",
+      platform: token.platform,
       priority: "high",
       sound: "default",
       title: copy.title,
       to: token.token,
-    });
+    }));
     const firstTicket = Array.isArray((pushResult.body as { data?: unknown }).data)
       ? ((pushResult.body as { data: JsonObject[] }).data[0] ?? {})
       : ((pushResult.body as { data?: JsonObject }).data ?? {});
@@ -664,13 +710,15 @@ async function dispatchToRecipient(adminClient: SupabaseClientLike, input: {
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
   try {
     const auth = await readAuthenticatedOperator(req);
-    if ("error" in auth) return auth.error;
+    if ("error" in auth) {
+      return auth.error ?? jsonResponse(500, { error: "authentication_result_invalid" });
+    }
 
     const payload = await parseJsonPayload(req);
     if (payload.error) return payload.error;

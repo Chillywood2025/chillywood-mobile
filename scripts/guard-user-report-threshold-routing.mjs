@@ -7,15 +7,17 @@ const assert = (condition, message) => {
 
 const helper = read("_lib/userReportRouter.ts");
 const edge = read("supabase/functions/user-report-intake/index.ts");
-const migration = read("supabase/migrations/20260714001704_user_report_router.sql");
+const migration = read("supabase/migrations/20260718134500_governed_user_report_router.sql");
+const routingMigration = read("supabase/migrations/20260718142500_atomic_user_report_routing.sql");
 const registry = read("_lib/autonomousSystemsRegistry.ts");
 
 assert(helper.includes("USER_REPORT_THRESHOLD_UNIQUE_USERS = 3"), "normal bug routing threshold must remain 3 unique users");
 assert(edge.includes("THRESHOLD_UNIQUE_USERS = 3"), "Edge threshold must remain 3 unique users");
 assert(migration.includes("unique (cluster_id, reporter_hash)"), "same reporter must not satisfy threshold multiple times");
-assert(edge.includes("already_routed"), "router must avoid duplicate Owner Commands for one cluster");
-assert(edge.includes("owner_command_requests"), "clusters must route through Owner Command, not direct execution");
-assert(edge.includes("autonomous_approval_requests"), "high-risk clusters must have approval path");
+assert(edge.includes("route_user_report_cluster"), "Edge must delegate qualifying clusters to atomic routing");
+assert(routingMigration.includes("'already_routed'"), "router must avoid duplicate Owner Commands for one cluster");
+assert(routingMigration.includes("insert into public.owner_command_requests"), "clusters must route through Owner Command, not direct execution");
+assert(routingMigration.includes("insert into public.autonomous_approval_requests"), "high-risk clusters must have approval path");
 
 for (const blocked of [
   "money movement",

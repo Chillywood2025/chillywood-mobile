@@ -533,6 +533,7 @@ const insertEvent = async (client: SupabaseClientLike, event: JsonObject) => {
       severity: safeLabel(event.severity ?? "info"),
       result: safeLabel(event.result ?? "recorded"),
       environment_mode: environmentMode(event.environment_mode),
+      platform: ["shared", "ios", "android", "web", "unknown"].includes(toText(event.platform)) ? toText(event.platform) : "shared",
       money_moved: false,
       external_confirmation_required: Boolean(event.external_confirmation_required),
       external_confirmation_status: safeLabel(event.external_confirmation_status ?? "not_required"),
@@ -595,11 +596,15 @@ const createApprovalRequest = async (client: SupabaseClientLike, payload: JsonOb
     "real money movement without Level 4 external provider confirmation",
     "provider secrets in logs/artifacts",
   ];
+  const platform = ["shared", "ios", "android", "web", "unknown"].includes(safeLabel(payload.platform))
+    ? safeLabel(payload.platform)
+    : "shared";
   const { data, error } = await client
     .from("autonomous_approval_requests")
     .insert({
       system_id: SYSTEM_ID,
       action_id: actionId,
+      platform,
       requested_by_actor_type: "money_flow_control",
       approval_level: classification.approvalLevel,
       status: "pending",
@@ -622,7 +627,8 @@ const createApprovalRequest = async (client: SupabaseClientLike, payload: JsonOb
 
   const eventError = await client.from("autonomous_approval_request_events").insert({
     request_id: data.id,
-    event_type: "requested",
+    platform,
+    event_type: "created",
     actor_type: "money_flow_control",
     event_summary: "Money Flow Control created a Level 3/4 approval request and stopped before execution.",
     metadata: { action_id: actionId, money_moved: false },
@@ -1335,25 +1341,131 @@ Deno.serve(async (request) => {
       const scheduler = safeLabel(payload.scheduler ?? "manual_cli");
       const operatorId = safeLabel(payload.operator_id ?? SYSTEM_ID);
       const source = safeLabel(payload.source ?? `${scheduler}:${operatorId}`);
-      const { data: statuses, error } = await client
+      const [{ data: statuses, error }, { data: iosMappings, error: iosMappingError }, { data: androidMappings, error: androidMappingError }, { data: moneySwitches, error: switchError }] = await Promise.all([
+        client
         .from("money_provider_sync_status")
         .select("provider,capability,sync_status,environment_mode,last_checked_at,last_success_at,failure_reason,money_moved,metadata")
         .in("provider", PROVIDER_WEBHOOKS.map((entry) => entry.provider))
         .order("last_checked_at", { ascending: false })
-        .limit(32);
+        .limit(32),
+        client
+          .from("monetization_product_store_mappings")
+          .select("concept,platform,store,provider,provider_product_id,store_product_type,tier,reference_price_minor,reference_currency,environment,status,unlocks_digital_access,grants_livekit_authority,creates_payable_balance")
+          .eq("platform", "ios")
+          .eq("store", "app_store")
+          .eq("provider", "revenuecat_app_store")
+          .order("provider_product_id", { ascending: true }),
+        client
+          .from("monetization_product_store_mappings")
+          .select("concept,platform,store,provider,provider_product_id,store_product_type,tier,reference_price_minor,reference_currency,environment,status,unlocks_digital_access,grants_livekit_authority,creates_payable_balance")
+          .eq("platform", "android")
+          .order("provider_product_id", { ascending: true }),
+        client
+          .from("platform_money_kill_switches")
+          .select("key,state")
+          .in("key", ["revenuecat_app_store_enabled", "provider_webhooks_enabled", "tips_enabled", "watch_party_tickets_enabled", "live_money_enabled", "payouts_enabled"]),
+      ]);
       if (error) throw error;
+      if (iosMappingError) throw iosMappingError;
+      if (androidMappingError) throw androidMappingError;
+      if (switchError) throw switchError;
       const activeStatuses = statuses ?? [];
+      const iOSCatalog = iosMappings ?? [];
+      const androidCatalog = androidMappings ?? [];
+      const expectedIosProducts = 10;
+      const catalogSafe = iOSCatalog.length === expectedIosProducts
+        && iOSCatalog.every((row: JsonObject) => row.grants_livekit_authority === false && row.creates_payable_balance === false)
+        && iOSCatalog.filter((row: JsonObject) => row.concept === "creator_tip").every((row: JsonObject) => row.unlocks_digital_access === false);
+      const iOSProviderStatus = activeStatuses.find((row: JsonObject) => safeLabel(row.provider) === "revenuecat");
+      const androidProviderStatus = activeStatuses.find((row: JsonObject) => ["revenuecat", "google_play"].includes(safeLabel(row.provider)));
+      const iOSReadbackComplete = catalogSafe && Boolean(iOSProviderStatus);
       const hasOutage = activeStatuses.some((row: JsonObject) => safeLabel(row.sync_status) === "blocked");
       const hasDegraded = activeStatuses.some((row: JsonObject) => safeLabel(row.sync_status) === "failed");
-      const healthState = hasOutage ? "outage" : hasDegraded ? "degraded" : "healthy";
+      const healthState = hasOutage ? "outage" : hasDegraded ? "degraded" : activeStatuses.length === 0 ? "unknown" : "healthy";
+      const iosHealthState = !iOSReadbackComplete ? "blocked" : ["blocked", "failed"].includes(safeLabel(iOSProviderStatus?.sync_status)) ? "degraded" : "healthy";
+      const androidCatalogSafe = androidCatalog.length > 0
+        && androidCatalog.every((row: JsonObject) => row.creates_payable_balance === false);
+      const androidReadbackComplete = androidCatalogSafe && Boolean(androidProviderStatus);
+      const androidHealthState = !androidReadbackComplete ? "blocked" : ["blocked", "failed"].includes(safeLabel(androidProviderStatus?.sync_status)) ? "degraded" : "healthy";
+      const capabilities = await client.from("autonomous_provider_readback_capabilities").insert([{
+        system_id: SYSTEM_ID,
+        platform: "ios",
+        provider: "revenuecat_app_store",
+        capability: "app_store_catalog_webhook_and_non_payable_policy_readback",
+        capability_state: iOSReadbackComplete ? "available" : "unavailable",
+        missing_capability: iOSReadbackComplete ? null : "revenuecat_app_store_provider_readback_unavailable",
+        readback_complete: iOSReadbackComplete,
+        data_source: "monetization_product_store_mappings+money_provider_sync_status+platform_money_kill_switches",
+        provider_environment: "sandbox",
+        bundle_identifier: null,
+        distribution_source: null,
+        money_moved: false,
+        user_rights_changed: false,
+        high_risk_executed: false,
+        metadata: safeMetadata({
+          revenuecat_app_id: "app3a0ad1ba62",
+          mapping_count: iOSCatalog.length,
+          expected_mapping_count: expectedIosProducts,
+          concepts: [...new Set(iOSCatalog.map((row: JsonObject) => safeLabel(row.concept)))],
+          switch_states: moneySwitches ?? [],
+          provider_status_present: Boolean(iOSProviderStatus),
+          catalog_safe: catalogSafe,
+          no_payable_balance: true,
+          stripe_digital_ios_used: false,
+          expected_bundle_identifier: "com.chillywood.mobile",
+          expected_distribution_source: "testflight_internal",
+        }),
+      }, {
+        system_id: SYSTEM_ID,
+        platform: "android",
+        provider: "revenuecat_google_play",
+        capability: "google_play_catalog_base_plan_and_webhook_readback",
+        capability_state: androidReadbackComplete ? "available" : "unavailable",
+        missing_capability: androidReadbackComplete ? null : "revenuecat_google_play_provider_readback_unavailable",
+        readback_complete: androidReadbackComplete,
+        data_source: "monetization_product_store_mappings+money_provider_sync_status",
+        provider_environment: "sandbox",
+        bundle_identifier: null,
+        distribution_source: null,
+        money_moved: false,
+        user_rights_changed: false,
+        high_risk_executed: false,
+        metadata: safeMetadata({ mapping_count: androidCatalog.length, provider_status_present: Boolean(androidProviderStatus), catalog_safe: androidCatalogSafe, base_plan_parsing_preserved: true, no_payable_balance: true, expected_package_identifier: "com.chillywood.mobile", expected_distribution_source: "google_play_internal" }),
+      }, {
+        system_id: SYSTEM_ID,
+        platform: "shared",
+        provider: "provider_webhook_control_plane",
+        capability: "stripe_connect_merchandise_and_provider_webhook_status",
+        capability_state: activeStatuses.length > 0 ? "available" : "unavailable",
+        missing_capability: activeStatuses.length > 0 ? null : "shared_provider_status_readback_unavailable",
+        readback_complete: activeStatuses.length > 0,
+        data_source: "money_provider_sync_status+platform_money_kill_switches",
+        provider_environment: mode,
+        money_moved: false,
+        user_rights_changed: false,
+        high_risk_executed: false,
+        metadata: safeMetadata({ statuses_seen: activeStatuses.length, switch_states: moneySwitches ?? [], stripe_digital_ios_used: false, no_payable_balance: true }),
+      }]);
+      if (capabilities.error) throw capabilities.error;
+      const snapshotRows = [
+        { platform: "shared", health: healthState, complete: activeStatuses.length > 0, provider: "provider_webhook_control_plane", dataSource: "provider_status+money_control_readback", metadata: { statuses_seen: activeStatuses.length } },
+        { platform: "ios", health: iosHealthState, complete: iOSReadbackComplete, provider: "revenuecat_app_store", dataSource: "app_store_catalog+revenuecat_status", metadata: { catalog_mapping_count: iOSCatalog.length } },
+        { platform: "android", health: androidHealthState, complete: androidReadbackComplete, provider: "revenuecat_google_play", dataSource: "google_play_catalog+revenuecat_status", metadata: { catalog_mapping_count: androidCatalog.length } },
+      ];
       const snapshot = await client
         .from("money_flow_health_snapshots")
-        .insert({
+        .insert(snapshotRows.map((rail) => ({
           system_id: SYSTEM_ID,
-          health_state: healthState,
+          health_state: rail.health,
           eligible_for_safe_writes: true,
           latest_operator_action: "money_provider_reliability_watch_once",
           environment_mode: mode,
+          platform: rail.platform,
+          bundle_identifier: null,
+          provider_environment: "sandbox",
+          distribution_source: null,
+          data_source: rail.dataSource,
+          readback_complete: rail.complete,
           money_moved: false,
           metadata: safeMetadata({
             provider_count: PROVIDER_WEBHOOKS.length,
@@ -1363,15 +1475,51 @@ Deno.serve(async (request) => {
             source,
             highRiskExecuted: false,
             safe_recovery: "audit_status_only_no_provider_dashboard_mutation",
+            provider: rail.provider,
+            platform: rail.platform,
+            ...rail.metadata,
+            no_payable_balance: true,
+            stripe_digital_ios_used: false,
+            expected_bundle_identifier: rail.platform === "shared" ? null : "com.chillywood.mobile",
+            expected_distribution_source: rail.platform === "ios" ? "testflight_internal" : rail.platform === "android" ? "google_play_internal" : null,
           }),
-        })
-        .select("id,health_state,eligible_for_safe_writes,created_at,money_moved")
-        .single();
+        })))
+        .select("id,platform,health_state,eligible_for_safe_writes,created_at,money_moved");
       if (snapshot.error) throw snapshot.error;
+      const activeFindingKeys = new Map<string, string[]>();
+      for (const rail of snapshotRows) {
+        const findingType = !rail.complete
+          ? "money_provider_readback_blocked"
+          : rail.health === "healthy"
+            ? null
+            : "money_provider_health_degraded";
+        if (findingType) {
+          const { data: findingKey, error: findingError } = await client.rpc("record_autonomous_finding", {
+            p_system_id: SYSTEM_ID,
+            p_platform: rail.platform,
+            p_finding_type: findingType,
+            p_target_surface: rail.provider,
+            p_provider: rail.provider,
+            p_severity: rail.health === "outage" ? "critical" : rail.health === "degraded" ? "warning" : "review",
+            p_metadata: safeMetadata({ readback_complete: rail.complete, data_source: rail.dataSource, money_moved: false }),
+          });
+          if (findingError) throw findingError;
+          if (typeof findingKey === "string") activeFindingKeys.set(rail.platform, [...(activeFindingKeys.get(rail.platform) ?? []), findingKey]);
+        }
+        if (rail.complete) {
+          const { error: resolveError } = await client.rpc("resolve_autonomous_findings", {
+            p_system_id: SYSTEM_ID,
+            p_platform: rail.platform,
+            p_active_finding_keys: activeFindingKeys.get(rail.platform) ?? [],
+          });
+          if (resolveError) throw resolveError;
+        }
+      }
       const event = await insertEvent(client, {
         event_type: "money_provider_reliability_watch_once",
         action_id: "provider_webhook_reliability_loop",
         environment_mode: mode,
+        platform: "shared",
         result: healthState,
         metadata: {
           provider_count: PROVIDER_WEBHOOKS.length,
@@ -1382,16 +1530,45 @@ Deno.serve(async (request) => {
           money_moved: false,
           high_risk_executed: false,
           provider_dashboard_mutated: false,
+          ios_provider_readback_complete: iOSReadbackComplete,
+          ios_health_state: iosHealthState,
         },
       });
       return jsonResponse(200, {
         ok: true,
         action,
         healthState,
-        snapshot: snapshot.data,
+        snapshots: snapshot.data,
         event,
         providerWebhooks: safeProviderWebhookRows(),
         statuses: activeStatuses,
+        ios: {
+          healthState: iosHealthState,
+          readbackComplete: iOSReadbackComplete,
+          catalogMappingCount: iOSCatalog.length,
+          expectedCatalogMappingCount: expectedIosProducts,
+          provider: "revenuecat_app_store",
+          providerEnvironment: "sandbox",
+          expectedBundleIdentifier: "com.chillywood.mobile",
+          expectedRevenueCatAppId: "app3a0ad1ba62",
+          moneyMoved: false,
+          payableBalanceCreated: false,
+          stripeDigitalIosUsed: false,
+        },
+        android: {
+          healthState: androidHealthState,
+          readbackComplete: androidReadbackComplete,
+          catalogMappingCount: androidCatalog.length,
+          provider: "revenuecat_google_play",
+          moneyMoved: false,
+          payableBalanceCreated: false,
+        },
+        shared: { healthState, readbackComplete: activeStatuses.length > 0, provider: "provider_webhook_control_plane", moneyMoved: false },
+        platformResults: [
+          { platform: "shared", healthState, readbackComplete: activeStatuses.length > 0 },
+          { platform: "ios", healthState: iosHealthState, readbackComplete: iOSReadbackComplete },
+          { platform: "android", healthState: androidHealthState, readbackComplete: androidReadbackComplete },
+        ],
         recoveryExecuted: false,
         moneyMoved: false,
       });

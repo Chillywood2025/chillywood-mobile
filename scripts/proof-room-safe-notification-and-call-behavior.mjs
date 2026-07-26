@@ -35,9 +35,9 @@ const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
   "\"/watch-party\"",
   "\"/watch-party/live-stage\"",
   "\"/communication\"",
-  "app-wide-incoming-call-modal",
-  "alreadyOnSameThread) return null;",
-  "roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay",
+  "app-wide-incoming-call-banner",
+  "presentation === \"native_background\"",
+  "presentation === \"thread_banner\"",
   "room-safe-incoming-call-banner",
   "Incoming Chi'lly Chat call",
   "Answering will leave or pause your current room media session.",
@@ -70,18 +70,20 @@ add(
 );
 add("Reply in Chat routes to chat without answering", includes(layout, "replyInChat") && includes(layout, "`/chat/${threadId}`"), "replyInChat route");
 add(
-  "normal app surfaces use full incoming call modal and ring/vibrate outside the same chat thread",
+  "normal foreground app surfaces use compact incoming call banner and background calls stay native",
   includes(layout, "playChillyChatCallSound")
     && includes(layout, "Vibration.vibrate")
     && includes(layout, "alreadyOnSameThread")
-    && includes(layout, "app-wide-incoming-call-modal")
+    && includes(layout, "app-wide-incoming-call-banner")
     && includes(layout, "app-wide-incoming-call-answer")
+    && includes(layout, "presentation === \"native_background\"")
+    && !includes(layout, "<Modal")
     && includes(layout, "readLatestRingingChillyChatCallInviteForCallee")
     && includes(layout, "AppState.addEventListener")
     && includes(layout, "AppState.currentState === \"active\"")
     && includes(layout, "setInterval")
     && includes(layout, "readNotificationPreferences"),
-  "global call bridge must ring/vibrate and show the full modal on normal app surfaces without double-ringing, duplicating the same thread, or depending on a single missed realtime/foreground-notification event",
+  "global call bridge must ring/vibrate and show the compact foreground banner without replacing native background presentation, double-ringing, or depending on a single missed event",
 );
 add(
   "declined/answered call rows are removed from in-app Activity",

@@ -15,7 +15,7 @@ HTTP_STATUS="$(
     --request POST "${SUPABASE_FUNCTIONS_URL%/}/security-owner-operator" \
     --header "Content-Type: application/json" \
     --header "x-security-owner-operator-token: ${SECURITY_OWNER_OPERATOR_TOKEN}" \
-    --data '{"action":"watch_once","scheduler":"systemd_timer","operator_id":"security_owner_operator","source":"'"${SOURCE}"'","enable_safe_recovery":false}'
+    --data '{"action":"watch_once","platform":"ios","scheduler":"systemd_timer","operator_id":"security_owner_operator","source":"'"${SOURCE}"'","enable_safe_recovery":false}'
 )"
 
 REDACTED_RESPONSE="$(

@@ -1,10 +1,16 @@
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 
 import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
   syncRevenueCatCustomerIdentity,
 } from "./revenuecat";
+import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import {
+  REVENUECAT_APP_STORE_PROVIDER,
+  REVENUECAT_GOOGLE_PLAY_PROVIDER,
+  resolvePaymentRailPolicy,
+} from "./paymentRailPolicy";
 import { SUPABASE_URL, supabase } from "./supabase";
 
 export type CreatorMonetizationSetupSourceType =
@@ -25,7 +31,7 @@ export type CreatorMonetizationSetupTier = {
   productType: string;
   providerProductId: string;
   priceLabel: string;
-  providerRail: "revenuecat_google_play" | "stripe_physical_goods";
+  providerRail: "revenuecat_google_play" | "revenuecat_app_store" | "stripe_physical_goods";
   unlocks: string;
   safety: string;
 };
@@ -54,6 +60,10 @@ export type CreatorMonetizationConfig = {
   metadata?: Record<string, unknown>;
 };
 
+const resolveProviderRail = () => (
+  Platform.OS === "ios" ? REVENUECAT_APP_STORE_PROVIDER : REVENUECAT_GOOGLE_PLAY_PROVIDER
+);
+
 export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
   {
     key: "paid_content_access_sandbox_099",
@@ -62,7 +72,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "paid_content_access",
     providerProductId: "cw_paid_content_access_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Unlocks this content only when it remains public and safe.",
     safety: "Private, draft, deleted, admin-removed, malware, and blocked states still deny.",
   },
@@ -73,7 +83,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "watch_party_live_ticket",
     providerProductId: "cw_watch_party_live_ticket_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Allows viewer entry only when room policy allows.",
     safety: "Does not grant mic, camera, publish, host, speaker, moderator, or admin authority.",
   },
@@ -84,7 +94,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "live_watch_party_access_pass",
     providerProductId: "cw_live_watch_party_access_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Allows viewer/listener entry only.",
     safety: "No host, speaker, moderator, admin, or LiveKit publish authority is granted.",
   },
@@ -95,7 +105,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "live_watch_party_seat_pass",
     providerProductId: "cw_live_watch_party_seat_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Makes a viewer eligible to request or reserve a seat.",
     safety: "Host approval is still required before mic/camera/publish can turn on.",
   },
@@ -106,7 +116,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "creator_tip",
     providerProductId: "cw_creator_tip_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Records sandbox creator support activity only.",
     safety: "Tips do not create access grants, payable balance, payout, cash-out, withdrawal, or transfer.",
   },
@@ -117,7 +127,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "channel_subscription",
     providerProductId: "channel_subscription_sandbox_monthly_499",
     priceLabel: "$4.99/month sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Creates subscriber status for this creator channel only.",
     safety: "Does not unlock Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, LiveKit authority, or other creators.",
   },
@@ -128,7 +138,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "vip_pass",
     providerProductId: "cw_vip_pass_sandbox_499",
     priceLabel: "$4.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Creates VIP status for this creator channel only.",
     safety: "Does not unlock Premium, paid videos, event passes, channel subscriptions, Watch-Party Seat Passes, LiveKit authority, or other creators.",
   },
@@ -139,7 +149,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     productType: "event_pass",
     providerProductId: "cw_event_pass_sandbox_099",
     priceLabel: "$0.99 sandbox/test",
-    providerRail: "revenuecat_google_play",
+    providerRail: resolveProviderRail(),
     unlocks: "Allows viewing/entry only while the event remains active and allowed.",
     safety: "Canceled, ended, removed, disabled, unsafe, and blocked states still deny.",
   },
@@ -165,6 +175,7 @@ export const CREATOR_MONETIZATION_SETUP_POLICY = {
   withdrawalEnabled: false,
   transferEnabled: false,
   stripeAndroidDigitalCheckoutEnabled: false,
+  stripeIosDigitalCheckoutEnabled: false,
   payoutExecutionReadOnly: true,
   liveKitPublishGrantedByPayment: false,
   hostApprovalBypassedBySeatPass: false,
@@ -272,7 +283,19 @@ export async function launchCreatorSandboxDigitalPurchase(input: {
   userId: string;
 }) {
   const tier = getCreatorSandboxTier(input.config.productKey);
-  if (tier.providerRail !== "revenuecat_google_play") {
+  if (Platform.OS === "ios") {
+    const decision = resolvePaymentRailPolicy({
+      environment: "sandbox",
+      liveMoneyEnabled: false,
+      platform: "ios",
+      store: "app_store",
+      unlocksDigitalAccess: tier.sourceType !== "creator_tip",
+      useCase: tier.sourceType === "creator_tip" ? "creator_tip_support" : "creator_paid_digital_content",
+    });
+    if (!decision.allowed) throw new Error(IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY);
+    throw new Error("Use the dedicated finite-catalog App Store tip or Seat Pass checkout. Nothing was charged.");
+  }
+  if (tier.providerRail !== REVENUECAT_GOOGLE_PLAY_PROVIDER && tier.providerRail !== REVENUECAT_APP_STORE_PROVIDER) {
     throw new Error("Digital sandbox purchases must use Google Play / RevenueCat.");
   }
   if (!isValidCreatorMonetizationSourceId(input.config.sourceId)) {

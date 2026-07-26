@@ -18,6 +18,7 @@ import {
 } from "react-native";
 
 import { debugLog, reportRuntimeError } from "../../_lib/logger";
+import { registerActiveMediaSessionStopper } from "../../_lib/mediaSessionLifecycle";
 import {
   LIVE_VIDEO_CAPTURE_OPTIONS,
   createLiveKitV1RoomOptions,
@@ -883,6 +884,15 @@ export function LiveKitStageMediaSurface({
       disableLocalMediaQuietly("unmount");
     };
   }, [clearDisconnectFallbackTimeout, disableLocalMediaQuietly, room]);
+
+  useEffect(() => registerActiveMediaSessionStopper(async (reason) => {
+    disableLocalMediaQuietly(reason);
+    if (reason !== "app_background") {
+      tearingDownRoomsRef.current.add(room);
+      clearDisconnectFallbackTimeout();
+      await room.disconnect().catch(() => undefined);
+    }
+  }), [clearDisconnectFallbackTimeout, disableLocalMediaQuietly, room]);
 
   useEffect(() => {
     const changeSubscription = AppState.addEventListener("change", (nextState) => {

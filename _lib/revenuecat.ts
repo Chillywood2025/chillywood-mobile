@@ -10,11 +10,10 @@ import Purchases, {
   type PurchasesPackage,
   type PurchasesStoreProduct,
 } from "react-native-purchases";
-
-export type { PurchasesPackage } from "react-native-purchases";
-
 import { debugLog, reportRuntimeError } from "./logger";
 import { getRuntimeConfig } from "./runtimeConfig";
+
+export type { PurchasesPackage } from "react-native-purchases";
 
 export type RevenueCatConfigurationMode = "disabled" | "android-debug" | "android-release" | "ios-release";
 
@@ -59,6 +58,9 @@ let latestCustomerInfo: CustomerInfo | null = null;
 let latestOfferings: PurchasesOfferings | null = null;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const appStorePurchasesEnabled = () => (
+  !APPLE_PLATFORM || getRuntimeConfig().revenueCat.appStorePurchasesEnabled === true
+);
 const normalizeIdentityText = (value: unknown) => {
   const normalized = normalizeText(value);
   if (!normalized) return "";
@@ -383,6 +385,7 @@ export async function readRevenueCatOfferings() {
 export async function canMakeRevenueCatPurchases() {
   const state = configureRevenueCatOnce();
   if (!state.shouldConfigure) return false;
+  if (!appStorePurchasesEnabled()) return false;
 
   try {
     return await Purchases.canMakePayments();
@@ -398,6 +401,9 @@ export async function purchaseRevenueCatPackage(pkg: PurchasesPackage): Promise<
   const state = configureRevenueCatOnce();
   if (!state.shouldConfigure) {
     throw new Error(state.reason ?? "RevenueCat is not configured.");
+  }
+  if (!appStorePurchasesEnabled()) {
+    throw new Error("App Store purchases are disabled for this build.");
   }
 
   const result = await Purchases.purchasePackage(pkg);
@@ -454,6 +460,9 @@ export async function purchaseRevenueCatStoreProduct(product: PurchasesStoreProd
   const state = configureRevenueCatOnce();
   if (!state.shouldConfigure) {
     throw new Error(state.reason ?? "RevenueCat is not configured.");
+  }
+  if (!appStorePurchasesEnabled()) {
+    throw new Error("App Store purchases are disabled for this build.");
   }
 
   const result = await Purchases.purchaseStoreProduct(product);

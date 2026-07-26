@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+
+const DIGITAL_STORE_NAME = Platform.OS === "ios" ? "the App Store" : "Google Play";
 
 export type MoneyScopeKey =
   | "premium"
@@ -45,7 +47,7 @@ export const MONEY_SCOPE_INFO: Record<MoneyScopeKey, MoneyScopeInfo> = {
       "host, speaker, moderator, admin, or LiveKit publish authority",
     ],
     whereItWorks: "Across the app only where Chi'llywood Premium is the backed gate.",
-    whoControlsIt: "Chi'llywood Premium is account-owned through Google Play and RevenueCat entitlement checks.",
+    whoControlsIt: `Chi'llywood Premium is account-owned through ${DIGITAL_STORE_NAME} and RevenueCat entitlement checks.`,
     lifecycleNote: "Restore/manage actions affect app-wide Premium only, not creator offers.",
     payoutNote: "Premium is platform subscription access. It does not create creator earnings or payout access.",
   },

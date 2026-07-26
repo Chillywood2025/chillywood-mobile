@@ -1,5 +1,25 @@
 # ROADMAP
 
+## Android Image Manipulator Native-Boundary Closeout
+
+Source, native artifact, clean-install proof, and the Google Play in-place upgrade
+proof are complete. Android build 80
+predates `expo-image-manipulator`; its runtime-`1.0.0` safety update prevents the
+startup crash while keeping HEIC/HEIF fail-closed. Replacement versionCode 84,
+runtime `1.0.0-android-imagemanipulator-v1`, contains and registers
+`ExpoImageManipulator` 14.0.8 and passed clean API-34 native-path image proof. Its
+replacement upload certificate is active, the Play app-signing certificate is
+unchanged, and Google/EAS/AAB/local public fingerprints match. The exact preserved
+AAB is processed and available on Google Play Internal Testing only to the
+existing bounded 17-tester lane; build 80 is deactivated on that track and no
+production/open/closed release changed. An approved Samsung Android 11 device
+updated from Play build 80 to 84 without uninstall/data clear/sideload; session and
+safe settings survived, native HEIC/HEIF conversion passed, and the bounded log
+window contained no historical fatal. The incident is **CLOSED**. Remaining work
+is optional per-surface, second-OEM, minimum-API, permission/network, EXIF, and
+low-memory breadth listed in
+`docs/android/ANDROID_IMAGE_MANIPULATOR_NATIVE_FIX.md`.
+
 ## Current Play-Internal Two-Phone Chat/Live Proof
 
 Local-source notifications and Money Center proof is Partial/mostly-Closed for local web and installed-app proof remains Pending. Android emulator/dev-client proof remained blocked because the available emulator app did not request Metro/local source, so local web fallback was used before any Play build. Money Center human-tap proof passed for Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout / Payout readiness. Settings Activity and bell tray read real records; Home, Explore, Live, Saved, and Platform Studio show the icon-only bell with real unread count; Watch-Party Waiting Room shows a room-safe bell and no full normal header. Source-specific player/watch-party/event content proof remains fixture-limited without safe ids, and actual room tray-open behavior, LiveKit camera/mic preservation, Android push/device behavior, and two-device incoming Chi'lly Chat call behavior remain physical/Play proof items. No EAS build, Play build, sideload, physical-device adb install, physical-device clear data, physical-device logout, live money, payout, cashout, provider mutation, auth/RLS weakening, or Premium bypass happened.

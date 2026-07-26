@@ -1,4 +1,5 @@
 import type { Tables, TablesInsert } from "../supabase/database.types";
+import { normalizeImageUploadFile } from "./imageUploadNormalization";
 import {
   createSignedMediaDownload,
   deleteStoredMediaObject,
@@ -394,24 +395,39 @@ export async function createSocialAttachmentForSurface(input: {
   file: SocialAttachmentFile;
 }): Promise<SocialAttachment> {
   const surfaceId = toText(input.surfaceId);
-  const validationMessage = getSocialAttachmentValidationMessage(input.file);
   if (!surfaceId) throw new Error("Attachment target is missing.");
-  if (validationMessage) throw new Error(validationMessage);
 
   const { userId } = await getSignedInUserSession();
   const id = createClientId();
-  const mimeType = inferMimeType(input.file);
-  const fileName = getReadableSocialAttachmentName({ name: input.file.name });
-  const storagePath = `${userId}/${input.surfaceType}/${surfaceId}/${id}.${getFileExtension(input.file)}`;
+  const normalized = await normalizeImageUploadFile(input.file);
+  const preparedUpload = await (async () => {
+    try {
+      const validationMessage = getSocialAttachmentValidationMessage(normalized.file);
+      if (validationMessage) throw new Error(validationMessage);
 
-  const uploadedObject = await uploadFileToMediaStorage({
-    surfaceType: "social_attachment",
-    uri: toText(input.file.uri),
-    objectKey: storagePath,
-    mimeType,
-    fileName,
-    sizeBytes: input.file.size,
-  });
+      const mimeType = inferMimeType(normalized.file);
+      const fileName = getReadableSocialAttachmentName({ name: normalized.file.name });
+      const storagePath = `${userId}/${input.surfaceType}/${surfaceId}/${id}.${getFileExtension(normalized.file)}`;
+      const uploadedObject = await uploadFileToMediaStorage({
+        surfaceType: "social_attachment",
+        uri: toText(normalized.file.uri),
+        objectKey: storagePath,
+        mimeType,
+        fileName,
+        sizeBytes: normalized.file.size,
+      });
+
+      return {
+        file: normalized.file,
+        fileName,
+        mimeType,
+        uploadedObject,
+      };
+    } finally {
+      await normalized.cleanup();
+    }
+  })();
+  const { file, fileName, mimeType, uploadedObject } = preparedUpload;
 
   const payload: SocialAttachmentInsert & Record<string, unknown> = {
     id,
@@ -423,7 +439,7 @@ export async function createSocialAttachmentForSurface(input: {
     storage_object_key: uploadedObject.objectKey,
     storage_path: uploadedObject.objectKey,
     mime_type: mimeType,
-    size_bytes: Math.max(0, Number(input.file.size ?? 0) || 0),
+    size_bytes: Math.max(0, Number(file.size ?? 0) || 0),
     original_file_name: fileName,
     moderation_status: "clean",
     scan_status: "pending_scan",

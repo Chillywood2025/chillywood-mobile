@@ -1,0 +1,28 @@
+# Cognitive research SSRF model
+
+The research transport remains local/mock-only and undeployed.
+
+It accepts HTTPS on the normal TLS port only. It rejects embedded credentials,
+loopback, RFC1918, carrier-grade NAT, link-local, multicast, reserved/documentation
+networks (IPv4 and IPv6, including mapped forms), metadata/internal hosts and
+unsupported schemes. DNS is resolved before the request; every address must be
+public. Requests receive the validated address set and require the transport to
+verify the connected address against that set. Every redirect repeats DNS and
+network validation, with a strict redirect cap.
+
+Requests send no cookie or authorization material. One internal total timeout
+bounds DNS, redirects and transport work, aborts the active request, and does not
+depend on caller cancellation. Caller cancellation is raced independently and
+must terminate promptly even when a transport ignores its abort signal. The
+connected peer must be reported and equal a normalized DNS-pinned public address;
+missing or mismatched peers fail closed. Compressed and decompressed byte ceilings,
+decompression-ratio limits and a text/JSON content-type allowlist prevent response
+amplification. Scripts, forms and hidden control content are stripped. Remaining
+text is still labeled untrusted evidence and cannot invoke a tool or widen scope.
+
+CI accepts only a branded reviewed mock transport. The source also contains a
+credential-free HTTPS transport that pins the validated DNS address through the
+TLS connection lookup, verifies the actual socket peer, applies identity
+encoding, counts actual streamed bytes, rejects non-2xx results, and propagates
+cancellation into DNS. Neither transport is deployed and no production web
+credential or network authority exists.

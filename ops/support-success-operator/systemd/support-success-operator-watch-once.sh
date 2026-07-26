@@ -23,7 +23,7 @@ run_support_action() {
       --request POST "${SUPABASE_FUNCTIONS_URL%/}/support-success-operator" \
       --header "Content-Type: application/json" \
       --header "x-support-success-operator-token: ${SUPPORT_SUCCESS_OPERATOR_TOKEN}" \
-      --data '{"action":"'"${action}"'","environment_mode":"production","scheduler":"systemd_timer","operator_id":"support_success_operator","source":"'"${SOURCE}"'","moneyMoved":false,"userRightsChanged":false,"highRiskExecuted":false}'
+      --data '{"action":"'"${action}"'","platform":"ios","app_version":"1.0.0","native_build":"8","runtime_version":"1.0.0-iosqa1","channel":"ios-qa","environment_mode":"production","scheduler":"systemd_timer","operator_id":"support_success_operator","source":"'"${SOURCE}"'","moneyMoved":false,"userRightsChanged":false,"highRiskExecuted":false}'
   )"
 
   local redacted_response

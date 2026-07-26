@@ -7,6 +7,9 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 const normalizeRuntimeEnvironment = (value: unknown) => (
   normalizeText(value).toLowerCase() === "closed-beta" ? "closed-beta" : "public-v1"
 );
+const normalizeBoolean = (value: unknown) => ["1", "true", "yes", "on"].includes(
+  normalizeText(value).toLowerCase(),
+);
 const CONFIG_DIR = process.cwd();
 const DEPLOYED_LIVEKIT_SERVER_URL = "wss://live.chillywoodstream.com";
 const DEPLOYED_SUPABASE_FUNCTIONS_URL = "https://network-proof.chillywoodstream.com";
@@ -16,6 +19,17 @@ const DEPLOYED_TERMS_OF_SERVICE_URL = "https://chillywoodstream.com/terms";
 const DEPLOYED_ACCOUNT_DELETION_URL = "https://chillywoodstream.com/account-deletion";
 const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-report";
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
+const IOS_ASSOCIATED_DOMAIN = "applinks:chillywoodstream.com";
+const IOS_PRIVACY_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "ios", "privacy-manifest.json");
+const ANDROID_RELEASE_MANIFEST_PATH = path.join(CONFIG_DIR, "config", "release", "android-production.json");
+const IOS_PHOTO_LIBRARY_USAGE_DESCRIPTION = "Chi'llywood accesses photos you choose for your profile and social images.";
+const IOS_RNFIREBASE_STATIC_PODS = [
+  "RNFBAnalytics",
+  "RNFBApp",
+  "RNFBCrashlytics",
+  "RNFBPerf",
+  "RNFBRemoteConfig",
+] as const;
 const ANDROID_APP_LINK_HOST = "chillywoodstream.com";
 const ANDROID_APP_LINK_EXACT_PATHS = [
   "/auth",
@@ -62,7 +76,7 @@ const CHILLY_CHAT_NOTIFICATION_SOUND_FILES = [
   "./assets/sounds/chilly-chat/classic_phone.wav",
 ] as const;
 
-const resolveExistingFile = (...candidates: Array<string | undefined>) => {
+const resolveExistingFile = (...candidates: (string | undefined)[]) => {
   for (const candidate of candidates) {
     const normalized = normalizeText(candidate);
     if (!normalized) continue;
@@ -131,6 +145,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ? base.ios
       : {}
   ) as NonNullable<ExpoConfig["ios"]>;
+  const existingIosInfoPlist = (
+    existingIos.infoPlist && typeof existingIos.infoPlist === "object" && !Array.isArray(existingIos.infoPlist)
+      ? existingIos.infoPlist
+      : {}
+  ) as Record<string, unknown>;
+  const existingIosEntitlements = (
+    existingIos.entitlements && typeof existingIos.entitlements === "object" && !Array.isArray(existingIos.entitlements)
+      ? existingIos.entitlements
+      : {}
+  ) as Record<string, unknown>;
   const existingRuntime = (
     existingExtra.runtime && typeof existingExtra.runtime === "object" && !Array.isArray(existingExtra.runtime)
       ? existingExtra.runtime
@@ -161,10 +185,34 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     "./google-services.json",
     "./android/app/google-services.json",
   );
-  const iosGoogleServicesFile = resolveExistingFile(
+  const configuredIosGoogleServicesFile = normalizeText(process.env.IOS_GOOGLE_SERVICES_FILE);
+  const iosGoogleServicesFile = configuredIosGoogleServicesFile || resolveExistingFile(
     typeof existingIos.googleServicesFile === "string" ? existingIos.googleServicesFile : undefined,
     "./GoogleService-Info.plist",
   );
+  const iosQaRuntimeVersion = normalizeText(process.env.IOS_QA_RUNTIME_VERSION);
+  const androidReleaseManifest = JSON.parse(
+    fs.readFileSync(ANDROID_RELEASE_MANIFEST_PATH, "utf8"),
+  ) as { packageIdentifier?: unknown; runtimeVersion?: unknown };
+  const androidRuntimeVersion = normalizeText(androidReleaseManifest.runtimeVersion);
+  if (normalizeText(androidReleaseManifest.packageIdentifier) !== normalizeText(existingAndroid.package)) {
+    throw new Error("Android release manifest packageIdentifier does not match app.json.");
+  }
+  if (!androidRuntimeVersion || androidRuntimeVersion === normalizeText(base.runtimeVersion)) {
+    throw new Error("Android release manifest must define a dedicated native runtime different from the shared legacy runtime.");
+  }
+  const iosAssociatedDomains = [
+    ...(Array.isArray(existingIos.associatedDomains) ? existingIos.associatedDomains : []),
+    IOS_ASSOCIATED_DOMAIN,
+  ].filter((value, index, values) => values.indexOf(value) === index);
+  const existingAssociatedDomainEntitlements = Array.isArray(
+    existingIosEntitlements["com.apple.developer.associated-domains"],
+  )
+    ? existingIosEntitlements["com.apple.developer.associated-domains"] as string[]
+    : [];
+  const iosPrivacyManifests = JSON.parse(
+    fs.readFileSync(IOS_PRIVACY_MANIFEST_PATH, "utf8"),
+  ) as NonNullable<NonNullable<ExpoConfig["ios"]>["privacyManifests"]>;
 
   return {
     ...base,
@@ -175,6 +223,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: {
       ...base.android,
+      runtimeVersion: androidRuntimeVersion,
       ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
       intentFilters: [
         ...(Array.isArray(existingAndroid.intentFilters) ? existingAndroid.intentFilters : []),
@@ -183,10 +232,28 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     ios: {
       ...base.ios,
+      ...(iosQaRuntimeVersion ? { runtimeVersion: iosQaRuntimeVersion } : {}),
       ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
+      associatedDomains: iosAssociatedDomains,
+      privacyManifests: iosPrivacyManifests,
+      entitlements: {
+        ...existingIosEntitlements,
+        "com.apple.developer.associated-domains": [
+          ...existingAssociatedDomainEntitlements,
+          IOS_ASSOCIATED_DOMAIN,
+        ].filter((value, index, values) => values.indexOf(value) === index),
+      },
+      infoPlist: {
+        ...existingIosInfoPlist,
+        NSPhotoLibraryUsageDescription: normalizeText(
+          existingIosInfoPlist.NSPhotoLibraryUsageDescription || IOS_PHOTO_LIBRARY_USAGE_DESCRIPTION,
+        ),
+      },
     },
     plugins: mergePlugins(base.plugins, [
+      "expo-asset",
       "@livekit/react-native-expo-plugin",
+      "./plugins/withLiveKitIosStaticFrameworkCompatibility",
       [
         "expo-notifications",
         {
@@ -194,6 +261,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
       ],
       "./plugins/withChillyChatNativeCallNotifications",
+      "./plugins/withChillyChatIosNativeCalls",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "@react-native-firebase/perf",
@@ -202,6 +270,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         {
           ios: {
             useFrameworks: "static",
+            forceStaticLinking: [...IOS_RNFIREBASE_STATIC_PODS],
           },
         },
       ],
@@ -251,6 +320,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
         communication: {
           ...existingCommunication,
+          iosNativeCallsEnabled: normalizeBoolean(
+            process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED || existingCommunication.iosNativeCallsEnabled,
+          ),
+          iosOrdinaryPushEnabled: normalizeBoolean(
+            process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED || existingCommunication.iosOrdinaryPushEnabled,
+          ),
           iceServers: normalizeText(
             process.env.EXPO_PUBLIC_COMMUNICATION_ICE_SERVERS || existingCommunication.iceServers,
           ),
@@ -277,6 +352,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           ),
           iosPublicSdkKey: normalizeText(
             process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_SDK_KEY || existingRevenueCat.iosPublicSdkKey,
+          ),
+          appStorePurchasesEnabled: normalizeBoolean(
+            process.env.EXPO_PUBLIC_REVENUECAT_APP_STORE_ENABLED || existingRevenueCat.appStorePurchasesEnabled,
           ),
         },
         livekit: {

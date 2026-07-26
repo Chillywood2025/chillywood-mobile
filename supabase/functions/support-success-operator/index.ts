@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+import { runIosSupportSourceProbe } from "../_shared/ios-source-operator-probes.ts";
+import { runAndroidSupportProbe, runSharedSupportProbe } from "../_shared/all-platform-source-operator-probes.ts";
 
 Deno.serve(handleScopedOperatorRequest({
   systemId: "support_success_operator",
@@ -55,4 +57,6 @@ Deno.serve(handleScopedOperatorRequest({
     route_report_clusters: "support_required_review_flags",
     report_router_status: "support_required_review_flags",
   },
+  watchOnceHandlers: [runSharedSupportProbe, runAndroidSupportProbe, runIosSupportSourceProbe],
+  requiredWatchPlatforms: ["shared", "android", "ios"],
 }));

@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "platform": "ios",
+  "appStoreAppId": "6791217176",
+  "bundleIdentifier": "com.chillywood.mobile",
+  "appVersion": "1.0.0",
+  "nativeBuild": "8",
+  "runtimeVersion": "1.0.0-iosqa1",
+  "channel": "ios-qa",
+  "distributionSource": "testflight_internal",
+  "expectedBinarySourceCommit": "bbb9d6db67620b1d39e3a3e67ab8ef7166ce02ae",
+  "binarySha256": "24a951d58302dd73e13e4adc899fc28680472eb78f37cac04639ee95896e36d8",
+  "appStoreConnectBuildId": "a6ed5eda-fe76-4dd0-b18c-d00c72b0f00f",
+  "clientCapabilities": {
+    "nativeCallsBuildEnabled": true,
+    "nativeCallsRuntimeEnabled": true,
+    "ordinaryPushEnabled": true,
+    "revenueCatAppStoreEnabled": true
+  }
+}

@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
+import { Alert, ActivityIndicator, Image, ImageBackground, Linking, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
@@ -23,7 +23,7 @@ import {
   readNotificationPreferences,
   readCurrentPushRegistration,
   readNativeCallAlertStatus,
-  requestAndroidPushPermissionAndRegister,
+  requestPushPermissionAndRegister,
   openNativeCallAlertSettings,
   revokeCurrentPushInstall,
   updateNotificationPreferences,
@@ -54,6 +54,7 @@ import {
   type AccessVisibility,
 } from "../_lib/accessVisibility";
 import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
+import { revokeIosVoipRegistration } from "../_lib/iosNativeCalls";
 import {
   formatReleaseDiagnosticsSummary,
   readReleaseDiagnostics,
@@ -95,6 +96,7 @@ import {
   ProfileImagePreviewSheet,
   ProfileMediaReviewSheet,
 } from "../components/profile/profile-media-sheets";
+import { AppBackButton } from "../components/navigation/app-back-button";
 
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 
@@ -174,7 +176,7 @@ const NOTIFICATION_GROUPS: {
       {
         key: "pushEnabled",
         label: "Push alerts",
-        description: "Allow this device to receive Android push notifications.",
+        description: "Allow this device to receive push notifications.",
       },
     ],
   },
@@ -264,8 +266,9 @@ const NOTIFICATION_GROUPS: {
   },
 ];
 
-const CHILLY_CHAT_SOUND_PLAYBACK_ERROR =
-  "Sound could not play. Check media volume, notification volume, or Android sound settings.";
+const CHILLY_CHAT_SOUND_PLAYBACK_ERROR = Platform.OS === "android"
+  ? "Sound could not play. Check media volume, notification volume, or Android sound settings."
+  : "Sound could not play. Check media volume, notification volume, or iOS sound settings.";
 
 const LEGAL_POLICY_DESCRIPTIONS: Record<string, string> = {
   "account-deletion": "How to request account and data deletion.",
@@ -459,6 +462,13 @@ function SettingsRow({ title, subtitle, value, onPress, tone = "default", childr
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const onSettingsBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(tabs)/profile");
+  }, [router]);
   const params = useLocalSearchParams<{ section?: string }>();
   const insets = useSafeAreaInsets();
   const { isLoading, isSignedIn, user } = useSession();
@@ -749,7 +759,7 @@ export default function SettingsScreen() {
 
     setNotificationSavingKey("push-register");
     try {
-      const result = await requestAndroidPushPermissionAndRegister();
+      const result = await requestPushPermissionAndRegister();
       let nextRegistration = result;
       if (result.status === "registered") {
         const updated = await updateNotificationPreferences({ pushEnabled: true });
@@ -761,6 +771,12 @@ export default function SettingsScreen() {
       setNotificationSavingKey(null);
     }
   }, [notificationSavingKey]);
+
+  const onPressOpenNotificationSettings = useCallback(async () => {
+    await Linking.openSettings().catch(() => {
+      Alert.alert("Notifications", "Open this device's Settings app to change notification permission.");
+    });
+  }, []);
 
   const onPressRefreshPushRegistration = useCallback(async () => {
     if (notificationSavingKey) return;
@@ -863,7 +879,9 @@ export default function SettingsScreen() {
       ? "Silent / Vibrate Only is selected. In-app calls will not play a ringtone."
       : notificationPreferences.chillyChatCallSoundKey === "quiet_buzz"
         ? "Quiet Buzz preview started. It is a quieter, vibration-first alert, so keep Vibrate on calls enabled if you want the buzz pattern."
-        : "Preview sound started. Background push sound uses the Android call channel and Android settings may override it.";
+        : Platform.OS === "android"
+          ? "Preview sound started. Background push sound uses the Android call channel and Android settings may override it."
+          : "Preview sound started. iOS system notification settings may override alert sound behavior.";
     Alert.alert(
       "Chi'lly Chat preview",
       previewMessage,
@@ -946,6 +964,8 @@ export default function SettingsScreen() {
     });
 
     try {
+      await revokeCurrentPushInstall().catch(() => null);
+      await revokeIosVoipRegistration().catch(() => null);
       const { error } = await supabase.auth.signOut();
 
       if (error) {
@@ -1334,9 +1354,13 @@ export default function SettingsScreen() {
                   {
                     text: "OK",
                     onPress: () => {
-                      void supabase.auth.signOut().finally(() => {
-                        router.replace("/(auth)/login");
-                      });
+                      void revokeCurrentPushInstall()
+                        .catch(() => null)
+                        .then(() => revokeIosVoipRegistration().catch(() => null))
+                        .then(() => supabase.auth.signOut())
+                        .finally(() => {
+                          router.replace("/(auth)/login");
+                        });
                     },
                   },
                 ]);
@@ -1573,9 +1597,12 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
+        <AppBackButton
+          accessibilityLabel="Go back from Settings"
+          onPress={onSettingsBack}
+          style={styles.headerBackButton}
+          testID="settings-back-button"
+        />
         <Text style={styles.kicker}>SETTINGS</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -2030,7 +2057,7 @@ export default function SettingsScreen() {
       >
         <SettingsRow
           title="Device push status"
-          subtitle={pushRegistration?.message ?? "Register this Android device for production push alerts."}
+          subtitle={pushRegistration?.message ?? "Register this device for push alerts."}
           value={pushStatusLabel}
         >
           {pushRegistration?.tokenFingerprint ? (
@@ -2043,7 +2070,18 @@ export default function SettingsScreen() {
             Device push registration controls phone push alerts. In-app Activity lives in the bell tray and still works in the app.
           </Text>
           <View style={styles.utilityRow}>
-            {showRegisterPushButton ? (
+            {Platform.OS === "ios" && pushRegistration?.permissionState === "denied" ? (
+              <TouchableOpacity
+                style={[styles.utilityButton, !!notificationSavingKey && styles.utilityButtonDisabled]}
+                activeOpacity={0.86}
+                disabled={!!notificationSavingKey}
+                onPress={() => {
+                  void onPressOpenNotificationSettings();
+                }}
+              >
+                <Text style={styles.utilityButtonText}>Open Settings</Text>
+              </TouchableOpacity>
+            ) : showRegisterPushButton ? (
               <TouchableOpacity
                 style={[styles.utilityButton, !!notificationSavingKey && styles.utilityButtonDisabled]}
                 activeOpacity={0.86}
@@ -2097,33 +2135,37 @@ export default function SettingsScreen() {
             </View>
           </InlineAccordion>
         ))}
-        <SettingsRow
-          title="Full-screen call alerts"
-          subtitle="Android controls whether Chi'lly Chat calls can open over the lock screen."
-          value={nativeCallAlertStatusLabel}
-        >
-          <Text style={styles.metaText}>
-            {nativeCallAlertStatus?.message
-              ?? "Requires the native Google Play build with Android CallStyle support."}
-          </Text>
-          <Text style={styles.metaText}>
-            Channel: {nativeCallAlertStatus?.channelId ?? "chilly_chat_calls_fullscreen_v1"}. DND, notification volume, and Android channel settings can still silence ringing.
-          </Text>
-          {nativeCallAlertStatus?.canOpenSettings ? (
-            <TouchableOpacity
-              style={styles.utilityButton}
-              activeOpacity={0.86}
-              onPress={() => {
-                void onPressNativeCallAlertSettings();
-              }}
-            >
-              <Text style={styles.utilityButtonText}>Open Android call alert settings</Text>
-            </TouchableOpacity>
-          ) : null}
-        </SettingsRow>
+        {Platform.OS === "android" ? (
+          <SettingsRow
+            title="Full-screen call alerts"
+            subtitle="Android controls whether Chi'lly Chat calls can open over the lock screen."
+            value={nativeCallAlertStatusLabel}
+          >
+            <Text style={styles.metaText}>
+              {nativeCallAlertStatus?.message
+                ?? "Requires the native Google Play build with Android CallStyle support."}
+            </Text>
+            <Text style={styles.metaText}>
+              Channel: {nativeCallAlertStatus?.channelId ?? "chilly_chat_calls_fullscreen_v1"}. DND, notification volume, and Android channel settings can still silence ringing.
+            </Text>
+            {nativeCallAlertStatus?.canOpenSettings ? (
+              <TouchableOpacity
+                style={styles.utilityButton}
+                activeOpacity={0.86}
+                onPress={() => {
+                  void onPressNativeCallAlertSettings();
+                }}
+              >
+                <Text style={styles.utilityButtonText}>Open Android call alert settings</Text>
+              </TouchableOpacity>
+            ) : null}
+          </SettingsRow>
+        ) : null}
         <SettingsRow
           title="Incoming call sound"
-          subtitle="Choose the ringtone used when Ring on calls is on. Background call alerts use the Android call channel, and Android settings may override it."
+          subtitle={Platform.OS === "android"
+            ? "Choose the ringtone used when Ring on calls is on. Background call alerts use the Android call channel, and Android settings may override it."
+            : "Choose the in-app ringtone used when Ring on calls is on. Native iOS incoming calls remain disabled pending a later device-tested phase."}
           value={
             notificationPreferences?.chillyChatCallSoundKey === "silent_vibrate"
               ? "Ring off"
@@ -2163,7 +2205,9 @@ export default function SettingsScreen() {
               <Text style={styles.utilityButtonText}>Preview sound</Text>
             </TouchableOpacity>
             <Text style={styles.metaText}>
-              Downloaded/imported sounds are in-app only for V1. Background push sounds use the Android call notification channel, not downloaded sounds.
+              {Platform.OS === "android"
+                ? "Downloaded/imported sounds are in-app only for V1. Background push sounds use the Android call notification channel, not downloaded sounds."
+                : "Downloaded/imported sounds are in-app only. Ordinary iOS push alerts use the system notification sound."}
             </Text>
           </View>
         </SettingsRow>
@@ -2303,6 +2347,11 @@ export default function SettingsScreen() {
             <ReleaseDiagnosticItem label="Created at" value={releaseDiagnostics.createdAt} />
             <ReleaseDiagnosticItem label="Embedded launch" value={releaseDiagnostics.isEmbeddedLaunch} testID="release-diagnostics-embedded-launch" />
             <ReleaseDiagnosticItem label="Emergency launch" value={releaseDiagnostics.isEmergencyLaunch} testID="release-diagnostics-emergency-launch" />
+            <ReleaseDiagnosticItem
+              label="HEIC native module"
+              value={releaseDiagnostics.imageManipulatorNativeModuleAvailable ? "Available" : "Missing"}
+              testID="release-diagnostics-image-manipulator-module"
+            />
             <ReleaseDiagnosticItem label="Auto check" value={releaseDiagnostics.checkAutomatically} />
             <ReleaseDiagnosticItem
               label="Last update check"
@@ -2426,12 +2475,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 18,
   },
-  backArrow: {
-    color: "#aaa",
-    fontSize: 20,
-    fontWeight: "700",
-    paddingRight: 8,
-  },
+  headerBackButton: { width: 74 },
   kicker: {
     color: "#555",
     fontSize: 9.5,
@@ -2439,7 +2483,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   headerSpacer: {
-    width: 18,
+    width: 74,
   },
   card: {
     borderRadius: 18,

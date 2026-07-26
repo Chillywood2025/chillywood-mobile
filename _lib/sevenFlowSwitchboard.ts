@@ -1,4 +1,10 @@
+import { Platform } from "react-native";
+
 import type { MoneyFeatureFlagKey } from "./moneyFeatureFlags";
+
+const IOS_STORE = Platform.OS === "ios";
+const REVENUECAT_STORE_LABEL = IOS_STORE ? "App Store / RevenueCat" : "Google Play / RevenueCat";
+const IOS_DYNAMIC_PRODUCT_DISABLED = "ios_dynamic_product_disabled";
 
 export type SevenMoneyFlowKey =
   | "premium"
@@ -38,7 +44,7 @@ export type SevenFlowSwitchboardRow = {
   moneySwitchKey: MoneyFeatureFlagKey | "premium_purchase_shell";
   globalMasterSwitchRequired: boolean;
   emergencyStopSwitch: MoneyFeatureFlagKey;
-  provider: "Google Play / RevenueCat";
+  provider: "App Store / RevenueCat" | "Google Play / RevenueCat";
   productId: string;
   productionProductId?: string;
   productionBasePlanId?: string;
@@ -74,8 +80,8 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     moneySwitchKey: "premium_purchase_shell",
     globalMasterSwitchRequired: false,
     emergencyStopSwitch: "live_money_enabled",
-    provider: "Google Play / RevenueCat",
-    productId: "premium_subscription",
+    provider: REVENUECAT_STORE_LABEL,
+    productId: IOS_STORE ? "com.chillywood.premium.monthly" : "premium_subscription",
     productType: "subscription",
     accessCreated: "user_entitlements row for entitlement_key premium when RevenueCat verifies an active subscription.",
     accessNotCreated: "No creator access grant, creator earning, payout, paid content unlock, VIP, Seat Pass, event pass, room authority, or LiveKit publish authority.",
@@ -90,9 +96,9 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     moneySwitchKey: "tips_enabled",
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
-    provider: "Google Play / RevenueCat",
-    productId: "cw_creator_tip_sandbox_099",
-    productionProductId: "cw_creator_tip_099",
+    provider: REVENUECAT_STORE_LABEL,
+    productId: IOS_STORE ? "com.chillywood.tip.tier1" : "cw_creator_tip_sandbox_099",
+    productionProductId: IOS_STORE ? "" : "cw_creator_tip_099",
     productType: "one_time_consumable",
     accessCreated: "No durable access. Sandbox ledger/readback row only.",
     accessNotCreated: "No Premium, paid video, Seat Pass, subscription, VIP, event, badge, ranking, LiveKit, host, moderator, payable balance, or payout access.",
@@ -107,9 +113,9 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     moneySwitchKey: "paid_content_enabled",
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
-    provider: "Google Play / RevenueCat",
-    productId: "cw_paid_content_access_sandbox_099",
-    productionProductId: "cw_paid_content_access_099",
+    provider: REVENUECAT_STORE_LABEL,
+    productId: IOS_STORE ? IOS_DYNAMIC_PRODUCT_DISABLED : "cw_paid_content_access_sandbox_099",
+    productionProductId: IOS_STORE ? "" : "cw_paid_content_access_099",
     productType: "one_time_consumable",
     accessCreated: "paid_content_access grant bound to one creator video/source id.",
     accessNotCreated: "No Premium, channel subscription, VIP, Seat Pass, event pass, other video unlock, LiveKit authority, payout, or payable balance.",
@@ -124,9 +130,9 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     moneySwitchKey: "watch_party_tickets_enabled",
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
-    provider: "Google Play / RevenueCat",
-    productId: "cw_watch_party_live_ticket_sandbox_099",
-    productionProductId: "cw_watch_party_ticket_099",
+    provider: REVENUECAT_STORE_LABEL,
+    productId: IOS_STORE ? "com.chillywood.seatpass.tier1" : "cw_watch_party_live_ticket_sandbox_099",
+    productionProductId: IOS_STORE ? "" : "cw_watch_party_ticket_099",
     productType: "one_time_consumable",
     accessCreated: "watch_party_live_ticket grant bound to one Party Room / Watch-Party target.",
     accessNotCreated: "No Premium, other room, Live Stage route, LiveKit publish, host, speaker, moderator, paid video, VIP, subscription, event pass, payout, or payable balance.",
@@ -141,10 +147,10 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     moneySwitchKey: "digital_sales_enabled",
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
-    provider: "Google Play / RevenueCat",
-    productId: "channel_subscription_sandbox_monthly_499:monthly",
-    productionProductId: "cw_channel_subscription_monthly_499",
-    productionBasePlanId: "monthly",
+    provider: REVENUECAT_STORE_LABEL,
+    productId: IOS_STORE ? IOS_DYNAMIC_PRODUCT_DISABLED : "channel_subscription_sandbox_monthly_499:monthly",
+    productionProductId: IOS_STORE ? "" : "cw_channel_subscription_monthly_499",
+    productionBasePlanId: IOS_STORE ? undefined : "monthly",
     productType: "subscription",
     accessCreated: "channel_subscription grant/subscription state for one creator channel.",
     accessNotCreated: "No Premium, VIP, paid video, Seat Pass, event pass, other creator subscription, LiveKit authority, payout, or payable balance.",
@@ -159,9 +165,9 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     moneySwitchKey: "digital_sales_enabled",
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
-    provider: "Google Play / RevenueCat",
-    productId: "cw_vip_pass_sandbox_499",
-    productionProductId: "cw_vip_pass_499",
+    provider: REVENUECAT_STORE_LABEL,
+    productId: IOS_STORE ? IOS_DYNAMIC_PRODUCT_DISABLED : "cw_vip_pass_sandbox_499",
+    productionProductId: IOS_STORE ? "" : "cw_vip_pass_499",
     productType: "one_time_non_consumable",
     accessCreated: "vip_pass grant/pass state for one creator.",
     accessNotCreated: "No Premium, channel subscription, paid video, Seat Pass, event pass, other creator VIP, LiveKit authority, payout, or payable balance.",
@@ -176,9 +182,9 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     moneySwitchKey: "digital_sales_enabled",
     globalMasterSwitchRequired: true,
     emergencyStopSwitch: "live_money_enabled",
-    provider: "Google Play / RevenueCat",
-    productId: "cw_event_pass_sandbox_099",
-    productionProductId: "cw_event_pass_099",
+    provider: REVENUECAT_STORE_LABEL,
+    productId: IOS_STORE ? IOS_DYNAMIC_PRODUCT_DISABLED : "cw_event_pass_sandbox_099",
+    productionProductId: IOS_STORE ? "" : "cw_event_pass_099",
     productType: "one_time_consumable",
     accessCreated: "event_pass grant/pass bound to one creator event.",
     accessNotCreated: "No Premium, VIP, subscription, paid video, Seat Pass, other event, LiveKit authority, payout, or payable balance.",

@@ -12,8 +12,15 @@ web-build/
 # Local proof and generated artifacts
 artifacts/
 supabase/.temp/
+deno.lock
+*.ipa
+*.xcarchive/
 
-# Native build output, keep checked-in native source
+# Generated native projects and native build output
+# This repository uses managed prebuild; local native output must never become
+# EAS build input or carry local-only SDK/Firebase/signing paths into artifacts.
+/ios
+/android
 android/.gradle/
 android/build/
 android/app/build/
@@ -26,9 +33,19 @@ ios/build/
 
 # Local-only env files and signing material
 .env*.local
+app-store-connect.env
+app-store-connect.*.env
+!app-store-connect.example.env
+!app-store-connect.env.example
 *.keystore
 *.jks
 *.p8
 *.p12
+*.pem
+*.cer
 *.key
 *.mobileprovision
+credentials.json
+*.signing-password
+*.keystore-password
+GoogleService-Info.plist

@@ -2,6 +2,7 @@ export const USER_REPORT_ROUTER_SYSTEM_ID = "support_success_operator" as const;
 export const USER_REPORT_ROUTER_ACTION_ID = "user_report_router" as const;
 export const USER_REPORT_THRESHOLD_UNIQUE_USERS = 3;
 export const USER_REPORT_THRESHOLD_WINDOW_DAYS = 7;
+export type UserReportPlatform = "shared" | "ios" | "android" | "web" | "unknown";
 
 export type UserReportClass =
   | "safety_abuse"
@@ -44,6 +45,7 @@ export type UserReportRoutedSystem =
   | "ads_sponsor_delivery_operator";
 
 export type UserReportClassification = {
+  platform: UserReportPlatform;
   reportType: UserReportClass;
   category: UserReportClass;
   severity: UserReportSeverity;
@@ -85,6 +87,7 @@ export type UserReportClusterSummary = {
   textSummaryRedacted?: string | null;
   spamFlag?: boolean;
   falsePositive?: boolean;
+  platform?: UserReportPlatform;
 };
 
 const SECRET_KEY_PATTERN = /(service[_\s-]?role|secret|token|password|credential|authorization|signed[_\s-]?url|api[_\s-]?key|private[_\s-]?key|db[_\s-]?url|database[_\s-]?url|payment[_\s-]?credential|tax[_\s-]?id|bank[_\s-]?detail|reporter identity|private evidence)/gi;
@@ -97,18 +100,18 @@ const SPAM_PATTERN = /(free money|crypto giveaway|airdrop|follow my link|http:\/
 
 const CATEGORY_HINTS: Array<[UserReportClass, RegExp]> = [
   ["security_access", /\b(security|hacked|unauthorized|admin access|permission|access control|account takeover|2fa|mfa|session hijack|leak)\b/i],
-  ["premium_or_billing", /\b(premium|subscription|billing|charged|charge|google play|revenuecat|store|purchase|restore)\b/i],
+  ["premium_or_billing", /\b(premium|subscription|billing|charged|charge|google play|play billing|revenuecat|storekit|iap|in-app purchase|app store purchase|apple subscription|restore purchases|seat pass|tip tier|store|purchase|restore|refund|revocation)\b/i],
   ["payout_or_money", /\b(payout|cashout|transfer|stripe|bank|tax|refund|money|invoice|checkout)\b/i],
   ["privacy_data", /\b(privacy|delete my data|export my data|personal data|doxx|reporter|private evidence|gdpr|ccpa)\b/i],
-  ["livekit_live_watchparty", /\b(watch party|party room|livekit|camera|microphone|mic|live stage|viewer request|host approve|call)\b/i],
+  ["livekit_live_watchparty", /\b(watch party|party room|livekit|camera|microphone|mic|live stage|viewer request|host approve|call media)\b/i],
   ["media_playback", /\b(playback|video|audio|buffer|caption|subtitle|player|stream|stuck loading)\b/i],
   ["upload_or_transcode", /\b(upload|transcode|processing|thumbnail|media job|draft video|creator upload)\b/i],
-  ["notification_delivery", /\b(push|notification|expo|device token|alert did not arrive|reminder)\b/i],
-  ["release_update_version", /\b(update|version|ota|runtime|stale app|release|rollback|channel)\b/i],
+  ["notification_delivery", /\b(push|notification|expo|device token|alert did not arrive|reminder|apns|pushkit|callkit|voip|native incoming call|terminal call cleanup|fcm)\b/i],
+  ["release_update_version", /\b(update|version|ota|runtime|stale app|release|rollback|channel|testflight|ios-qa|apk|aab|versioncode)\b/i],
   ["search_discovery_visibility", /\b(search|discover|ranking|recommendation|visibility|not showing|shadowban|boost|demote)\b/i],
   ["ads_sponsor", /\b(ad|ads|sponsor|sponsorship|paid placement|brand deal|promotion)\b/i],
   ["safety_abuse", /\b(abuse|unsafe|threat|violence|self harm|minor safety|sexual exploitation|report abuse)\b/i],
-  ["harassment", /\b(harass|bully|hate|slur|stalking)\b/i],
+  ["harassment", /\b(harass(?:ment|ed|ing)?|bully|hate|slur|stalking)\b/i],
   ["impersonation", /\b(impersonat|fake account|pretending to be)\b/i],
   ["copyright", /\b(copyright|dmca|takedown|stolen video|unauthorized media)\b/i],
   ["illegal_or_dangerous_content", /\b(illegal|dangerous|weapon|explosive|drug sale|trafficking)\b/i],
@@ -121,6 +124,34 @@ const CATEGORY_HINTS: Array<[UserReportClass, RegExp]> = [
 const ROUTES_TO_INSTALLED_QA = /^\/?(admin|chat|creator-monetization-setup|subscribe|settings|creator|channel-studio)\b/i;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+
+export const normalizeUserReportPlatform = (value: unknown): UserReportPlatform => {
+  const platform = normalizeText(value).toLowerCase();
+  if (["ios", "iphone", "ipad", "testflight", "app_store"].includes(platform)) return "ios";
+  if (["android", "google_play", "play_store", "firebase_test_lab"].includes(platform)) return "android";
+  if (["web", "browser", "pwa"].includes(platform)) return "web";
+  if (platform === "shared") return "shared";
+  return "unknown";
+};
+
+const inferPlatformFromText = (input: UserReportInput): UserReportPlatform => {
+  const explicit = normalizeUserReportPlatform(input.devicePlatform);
+  if (explicit !== "unknown") return explicit;
+  const text = `${input.surface ?? ""} ${input.route ?? ""} ${input.summary ?? ""} ${input.details ?? ""}`;
+  if (/\b(ios|iphone|ipad|testflight|app store|storekit|iap|apple subscription|apns|pushkit|callkit|voip)\b/i.test(text)) return "ios";
+  if (/\b(android|google play|play billing|fcm|apk|aab|versioncode|firebase test lab)\b/i.test(text)) return "android";
+  if (/\b(web|browser|pwa|website)\b/i.test(text)) return "web";
+  return "unknown";
+};
+
+const PLATFORM_SPECIFIC_REPORT_SIGNAL = /\b(ios|iphone|ipad|testflight|app store|storekit|iap|apple subscription|app privacy|privacyinfo|privacy manifest|apns|pushkit|callkit|voip|android|google play|play billing|data safety|fcm|apk|aab|versioncode|firebase test lab|web|browser|pwa|permission screen|account deletion (?:screen|button|route)|sign[ -]?in screen|login screen|route|screen|button)\b/i;
+
+const platformForClassification = (reportType: UserReportClass, input: UserReportInput): UserReportPlatform => {
+  const inferred = inferPlatformFromText(input);
+  if (!["safety_abuse", "harassment", "impersonation", "copyright", "illegal_or_dangerous_content", "privacy_data", "account_access"].includes(reportType)) return inferred;
+  const issueText = `${input.surface ?? ""} ${input.route ?? ""} ${input.summary ?? ""} ${input.details ?? ""}`;
+  return inferred !== "unknown" && PLATFORM_SPECIFIC_REPORT_SIGNAL.test(issueText) ? inferred : "shared";
+};
 
 const normalizeKeywordText = (value: string) => value
   .toLowerCase()
@@ -206,7 +237,7 @@ export const routeUserReportToSystem = (
   if (["safety_abuse", "harassment", "impersonation", "copyright", "illegal_or_dangerous_content"].includes(reportType)) {
     return "moderation_safety_operator";
   }
-  if (reportType === "premium_or_billing" || reportType === "payout_or_money") return "support_success_operator";
+  if (reportType === "premium_or_billing" || reportType === "payout_or_money") return "money_flow_control";
   if (reportType === "security_access") return "security_owner_operator";
   if (reportType === "privacy_data") return "privacy_compliance_operator";
   if (reportType === "livekit_live_watchparty") return "livekit_operator";
@@ -215,11 +246,13 @@ export const routeUserReportToSystem = (
   if (reportType === "release_update_version") return "release_ota_operator";
   if (reportType === "search_discovery_visibility") return "search_ranking_integrity_operator";
   if (reportType === "ads_sponsor") return "ads_sponsor_delivery_operator";
-  if (reportType === "chat_or_call" && /\b(camera|microphone|mic|call|live|watch party)\b/i.test(text)) return "livekit_operator";
+  if (reportType === "chat_or_call" && /\b(apns|pushkit|callkit|voip|native incoming call|terminal call cleanup)\b/i.test(text)) return "notification_delivery_operator";
+  if (reportType === "chat_or_call" && /\b(camera|microphone|mic|call media|livekit|live|watch party)\b/i.test(text)) return "livekit_operator";
+  if (reportType === "bug_broken_feature" && /\b(crash|fatal|slow|performance|timeout|anr|startup failure|backend error)\b/i.test(text)) return "observability_runtime_operator";
   if (reportType === "bug_broken_feature" && (ROUTES_TO_INSTALLED_QA.test(route) || /\b(route|screen|button|marker|testid|navigation|stuck on home)\b/i.test(text))) {
     return "installed_product_qa_operator";
   }
-  if (reportType === "bug_broken_feature" && /\b(crash|error|slow|performance|timeout|api|backend)\b/i.test(text)) {
+  if (reportType === "bug_broken_feature" && /\b(error|api|backend)\b/i.test(text)) {
     return "observability_runtime_operator";
   }
   return "support_success_operator";
@@ -247,6 +280,7 @@ export const detectReportSpamOrAbuse = (input: UserReportInput) => {
 
 export const classifyUserReport = (input: UserReportInput): UserReportClassification => {
   const reportType = inferReportClass(input);
+  const platform = platformForClassification(reportType, input);
   const combinedText = `${input.summary ?? ""} ${input.details ?? ""}`;
   const severity = normalizeSeverity(input.severity, combinedText);
   const routedSystemId = routeUserReportToSystem(reportType, input);
@@ -258,6 +292,7 @@ export const classifyUserReport = (input: UserReportInput): UserReportClassifica
       : 2
   );
   return {
+    platform,
     reportType,
     category: reportType,
     severity,
@@ -281,6 +316,7 @@ export const fingerprintUserReport = (input: UserReportInput, classification = c
     .slice(0, 14)
     .join(" ");
   return [
+    classification.platform,
     classification.reportType,
     classification.routedSystemId,
     normalizedSurface || "surface_unknown",
@@ -316,7 +352,10 @@ export const buildOwnerCommandFromReportCluster = (cluster: UserReportClusterSum
   return {
     commandText: `User report cluster requires safe operator review: ${cluster.reportType} with ${cluster.uniqueReporterCount} unique reporters routed to ${cluster.routedSystemId}.`,
     normalizedIntent: "user_report_cluster_routing",
-    targetSystems: [cluster.routedSystemId],
+    platform: cluster.platform ?? "unknown",
+    targetSystems: cluster.routedSystemId === "money_flow_control"
+      ? [cluster.routedSystemId, "support_success_operator"]
+      : [cluster.routedSystemId],
     approvalLevel,
     status: approvalLevel >= 3 ? "approval_required" : "planned",
     allowedScope: [

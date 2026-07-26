@@ -47,6 +47,8 @@ const foundationDoc = read("docs/CREATOR_MONETIZATION_SYSTEMS_FOUNDATION.md");
   assertIncludes(policy, "creator_tip_support", label);
   assertIncludes(policy, "tips_cannot_unlock_digital_access", label);
   assertIncludes(policy, "creator_tips_use_revenuecat_google_play_sandbox_only", label);
+  assertIncludes(policy, "watch_party_seat_pass", label);
+  assertIncludes(policy, "ios_seat_pass_uses_finite_app_store_catalog_sandbox_only", label);
   assertIncludes(policy, "creator_physical_product", label);
   assertIncludes(policy, "merch_checkout_disabled_until_provider_proof", label);
   assertIncludes(policy, "creator_payout_cashout", label);

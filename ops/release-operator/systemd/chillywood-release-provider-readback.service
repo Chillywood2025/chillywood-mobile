@@ -1,0 +1,27 @@
+[Unit]
+Description=Chi'llywood all-platform release provider readback adapter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=chillywood
+Group=chillywood
+WorkingDirectory=/opt/chillywood/repository
+EnvironmentFile=/etc/chillywood/release-operator.env
+EnvironmentFile=-/etc/chillywood/release-provider-readback.env
+ExecStart=/usr/bin/timeout 4m /usr/bin/node scripts/all-platform-release-provider-readback.mjs --post
+TimeoutStartSec=5min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/chillywood
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+
+# The required operator environment contains only the narrow endpoint/token.
+# The optional provider environment may contain read-only EAS/App Store/Play
+# access. Neither file may contain a Supabase service-role key.

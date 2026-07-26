@@ -84,6 +84,11 @@ assert.ok(settings.includes("Clipboard.setStringAsync(releaseDiagnosticsSummary)
 assert.ok(settings.includes("readReleaseDiagnostics()"), "settings must read release diagnostics");
 assert.ok(settings.includes("sanitizeReleaseDiagnosticsForDisplay"), "settings must display sanitized diagnostics");
 assert.ok(runtimeUpdates.includes("recordReleaseUpdateCheckResult"), "runtime update gate must record non-secret check result");
+assert.ok(runtimeUpdates.includes("Updates.useUpdates()"), "runtime update gate must observe native pending downloads");
+assert.ok(runtimeUpdates.includes("updatesState.isUpdatePending"), "runtime update gate must activate pending downloads");
+assert.ok(runtimeUpdates.includes("reloadRequestedRef.current = null"), "failed activation reload must become retryable");
+assert.ok(!runtimeUpdates.includes("InteractionManager"), "runtime activation must not wait indefinitely for interactions");
+assert.ok(!runtimeUpdates.includes("LAST_RELOAD_FINGERPRINT_KEY"), "runtime activation must not persist a permanent reload suppression key");
 
 const diagnosticsBlockStart = settings.indexOf("release-diagnostics-card");
 const diagnosticsBlockEnd = settings.indexOf("</SettingsAccordion>", diagnosticsBlockStart);

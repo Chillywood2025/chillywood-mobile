@@ -1,0 +1,126 @@
+# Level 0/1 LiveKit Experience Collector
+
+Status: source implemented; no deployment, switch activation, provider mutation,
+or remote sentinel run was performed in this lane.
+
+The `cognitive-livekit-experience-collector` function is a server-only adapter
+for the `cognitive_sentinel_collector` principal operating the already
+registered `livekit_experience_sentinel` sentinel key. It accepts
+only one fixed repository/task scope, three reviewed surfaces (`live-stage`,
+`watch-party-live`, and `chat-call`), a private invocation proof, a bounded
+canonical metric manifest, a syntactically valid bearer JWT (in addition to
+the platform's required JWT verification), and safe SHA-256
+evidence/runtime identities. It
+computes the result and failure category itself. It cannot create a product
+finding, invoke triage, enable a switch, change source, deploy, or mutate a
+LiveKit provider product.
+
+The collector distinguishes:
+
+- token request and token response;
+- LiveKit signaling/WebSocket connection;
+- ICE candidate gathering/checking and terminal state when exposed by RTC
+  statistics;
+- peer connection and room connection;
+- local deterministic media publication;
+- remote participant join, track subscription, and first audio/video frame;
+- installed UI resolution independently from headless media state;
+- installed background/foreground recovery;
+- cleanup/disconnect.
+
+For installed Android and iOS observations, `connectingResolved` describes
+the rendered, interactive product state—not only the LiveKit room connection
+enum. It must remain `false` when a native surface still shows a loading-like
+placeholder such as `Preparing your live camera` after the UI deadline, when
+an authorized host or approved speaker has not reached the expected local
+media state, or when the user has no reachable local-media control to recover.
+Consequently, a healthy token, WebSocket, ICE, room, and headless media flow
+cannot turn a stuck native camera UI into a pass. That case is classified as
+`installed_ui_connecting_stuck` and requires installed Android or iOS proof.
+
+The protected prepare action validates and classifies a packet without
+persisting it. The protected record action writes only the bounded run through
+the service-owned `product_experience_collect_sentinel_run` persistence RPC.
+The persisted metric envelope is versioned as `product-sentinel-v1`, sanitized
+as `bounded-nonpersonal-v1`, identifies `livekit_experience`, and binds one to
+64 safe evidence hashes including the canonical evidence-manifest hash. It
+returns a hash of the run identifier, never the raw identifier. Every recorded
+result still requires independent evaluation before the separate triage
+identity may create a finding.
+
+Collector results are only `passed`, `failed`, or `blocked`. A failed run is
+not itself a finding; the independently evaluated triage path owns that later
+decision.
+
+Every packet declares exactly one scenario: `success_baseline`,
+`bounded_failure_fixture`, or `background_foreground_recovery`. Ordinary
+baseline and bounded-failure packets must not imply that a background cycle
+occurred. A passing recovery packet must contain a real installed observation
+with background, foreground, and recovery evidence. This keeps the three
+required sessions distinct and prevents an ordinary healthy session from
+being mislabeled as a recovery failure.
+
+## Headless synthetic participant
+
+`scripts/livekit-headless-synthetic-participant.mjs` provides a distinct,
+bounded second participant using the already pinned `@livekit/rtc-node`
+development dependency. When the app-issued participant grant permits
+publication, it publishes a deterministic 440 Hz low-amplitude test tone. It
+stores no media frames and reads at most the first remote audio/video frame to
+prove media arrival.
+
+The private input is an owner-only `0600` JSON file outside Git, owned by the
+current process user, at most 64 KiB, and no older than six hours. It contains
+the exact installed-observer platform (`android` or `ios`), the app
+token-request endpoint, ephemeral authorization material, the existing app
+request body, a one-run correlation nonce, the resulting domain-separated
+session/room correlation hash, the safe source/build and runtime hashes, and
+the reviewed surface and scenario. When installed evidence is supplied, its observer kind
+must match that platform. The collector persists that platform and rejects
+`shared` or `web`; it never substitutes the control-plane platform for the
+installed observer. The nonce and raw room remain owner-only. The harness never
+prints the private input, the endpoint, participant tokens, participant
+identities, room identifiers, device identifiers, or provider credentials.
+
+The returned participant JWT is decoded only in memory. Its bounded `sub`,
+`video.room`, `exp`, and optional `iat`/`nbf` claims must match the requested
+room and freshness window before the token may count as returned. Only a
+domain-separated SHA-256 participant identity is emitted. The headless
+participant hash must differ from the installed observer's participant hash;
+same-identity evidence is rejected.
+
+Both observers derive the participant hash as
+`SHA-256("livekit-participant-identity-v1\0" + exact trimmed token subject)`.
+They derive the shared run/room correlation as
+`SHA-256("livekit-session-room-correlation-v1\0" + one-run nonce + "\0" + uppercase trimmed room)`.
+Neither the token subject, nonce, nor room is emitted.
+
+An optional second owner-only file may provide a separately collected,
+sanitized Android or iOS installed-observer result. Without that separate
+input, the output always records `installedUiObserved=false`; headless evidence
+does not prove installed UI. With it, the installed evidence is bound by its
+safe hash, exact surface, source/build hash, runtime hash, session/room
+correlation hash, participant identity hash, and canonical start/finish
+timestamps. The combined headless/installed window is at most 120 seconds and
+must finish within five minutes. Stale, unrelated, source/runtime-mismatched,
+or same-identity evidence is rejected rather than classified.
+
+The harness emits one bounded collector packet to stdout. Redirect it only to
+an owner-only temporary path, submit it through the protected collector, then
+delete the temporary packet after its safe hash and bounded summary have been
+recorded. Do not commit the packet.
+
+Focused local verification:
+
+```sh
+node scripts/livekit-headless-synthetic-participant.mjs --self-test
+node scripts/test-cognitive-livekit-experience-collector.mjs
+npx --yes deno test --allow-env \
+  supabase/functions/cognitive-livekit-experience-collector/index_test.ts
+```
+
+Provider execution additionally requires a valid, existing synthetic-account
+token request and a real installed observer for an installed-product result.
+Those prerequisites are operational evidence, not repository fixtures. A
+headless-only run remains blocked/source-only even if its backend, room, and
+media stages pass.

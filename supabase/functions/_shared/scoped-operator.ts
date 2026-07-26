@@ -12,6 +12,120 @@ export type ScopedOperatorConfig = {
   approvalActions: readonly string[];
   actionTables: Record<string, string>;
   defaultHealthState: string;
+  watchOnceHandler?: ScopedOperatorHandler;
+  watchOnceHandlers?: readonly ScopedOperatorHandler[];
+  requiredWatchPlatforms?: readonly string[];
+  statusHandler?: ScopedOperatorHandler;
+  reportHandler?: ScopedOperatorHandler;
+};
+
+export type ScopedOperatorHandlerContext = {
+  client: SupabaseClient;
+  config: ScopedOperatorConfig;
+  payload: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+};
+
+export type ScopedOperatorHandlerResult = Record<string, unknown> & {
+  readbackComplete: boolean;
+  platform: string;
+  source: string;
+  dataWindow: { start: string | null; end: string | null };
+};
+
+export type ScopedOperatorHandler = (
+  context: ScopedOperatorHandlerContext,
+) => Promise<ScopedOperatorHandlerResult>;
+
+const healthRank: Record<string, number> = {
+  healthy: 0,
+  configured_ready: 0,
+  delivery_evidence_healthy: 0,
+  source_ready: 0,
+  internal_build_ready: 0,
+  degraded: 1,
+  idle_no_delivery_evidence: 1,
+  rollout_disabled: 1,
+  no_active_install: 1,
+  unknown: 2,
+  blocked: 3,
+  critical: 4,
+  failed: 4,
+};
+
+export const runComposedOperatorHandlers = async (
+  handlers: readonly ScopedOperatorHandler[],
+  context: ScopedOperatorHandlerContext,
+  requiredPlatforms: readonly string[] = [],
+) => {
+  const platformResults: ScopedOperatorHandlerResult[] = [];
+  for (const handler of handlers) {
+    try {
+      const result = await handler(context);
+      platformResults.push({
+        ...result,
+        platform: normalizeOperatorPlatform(result.platform),
+        readbackComplete: result.readbackComplete === true,
+        healthState: String(result.healthState ?? (result.readbackComplete === true ? "healthy" : "unknown")),
+        source: String(result.source ?? "unknown"),
+        dataWindow: result.dataWindow ?? { start: null, end: null },
+        reasons: Array.isArray(result.reasons) ? result.reasons : [],
+        moneyMoved: false,
+        userRightsChanged: false,
+        highRiskExecuted: false,
+      });
+    } catch (error) {
+      platformResults.push({
+        readbackComplete: false,
+        platform: "unknown",
+        healthState: "unknown",
+        source: "handler_failure",
+        dataWindow: { start: null, end: new Date().toISOString() },
+        reasons: [safeOperatorErrorMessage(error)],
+        moneyMoved: false,
+        userRightsChanged: false,
+        highRiskExecuted: false,
+      });
+    }
+  }
+  const observedPlatforms = new Set(platformResults.map((result) => result.platform));
+  const missingPlatforms = requiredPlatforms
+    .map(normalizeOperatorPlatform)
+    .filter((platform) => !observedPlatforms.has(platform));
+  for (const platform of missingPlatforms) {
+    platformResults.push({
+      readbackComplete: false,
+      platform,
+      healthState: "blocked",
+      source: "required_platform_handler_missing",
+      dataWindow: { start: null, end: new Date().toISOString() },
+      reasons: ["required_platform_handler_missing"],
+      moneyMoved: false,
+      userRightsChanged: false,
+      highRiskExecuted: false,
+    });
+  }
+  const readbackComplete = platformResults.length > 0 && platformResults.every((result) => result.readbackComplete === true);
+  const healthState = platformResults.reduce((worst, result) => (
+    (healthRank[String(result.healthState ?? "unknown")] ?? 2) > (healthRank[worst] ?? 2)
+      ? String(result.healthState ?? "unknown")
+      : worst
+  ), "healthy");
+  return {
+    readbackComplete,
+    platform: "shared",
+    healthState,
+    source: "composed_platform_handlers",
+    dataWindow: {
+      start: platformResults.map((result) => result.dataWindow?.start).filter((value): value is string => typeof value === "string").sort()[0] ?? null,
+      end: platformResults.map((result) => result.dataWindow?.end).filter((value): value is string => typeof value === "string").sort().at(-1) ?? null,
+    },
+    platformResults,
+    reasons: platformResults.flatMap((result) => Array.isArray(result.reasons) ? result.reasons : []),
+    moneyMoved: false,
+    userRightsChanged: false,
+    highRiskExecuted: false,
+  } satisfies ScopedOperatorHandlerResult;
 };
 
 const jsonHeaders = {
@@ -21,6 +135,13 @@ const jsonHeaders = {
 };
 
 const secretKeyPattern = /(secret|token|password|credential|authorization|api[_-]?key|service[_-]?role|private[_-]?key|signed[_-]?url)/i;
+const longCredentialPattern = /[A-Za-z0-9._~+/=-]{48,}/g;
+const supportedPlatforms = ["shared", "ios", "android", "web", "unknown"] as const;
+
+export const normalizeOperatorPlatform = (value: unknown) => {
+  const platform = String(value ?? "unknown").trim().toLowerCase();
+  return (supportedPlatforms as readonly string[]).includes(platform) ? platform : "unknown";
+};
 
 export const scopedOperatorCorsHeaders = (tokenHeader: string) => ({
   ...jsonHeaders,
@@ -35,7 +156,10 @@ export const scopedJsonResponse = (tokenHeader: string, status: number, body: Re
 export const sanitizeOperatorMetadata = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map((entry) => sanitizeOperatorMetadata(entry));
   if (!value || typeof value !== "object") {
-    if (typeof value === "string" && value.length > 160) return `${value.slice(0, 20)}...[redacted:${value.length}]`;
+    if (typeof value === "string") {
+      const redacted = value.replace(longCredentialPattern, "[redacted]");
+      return redacted.length > 160 ? `${redacted.slice(0, 120)}...[redacted:${redacted.length}]` : redacted;
+    }
     return value;
   }
 
@@ -43,6 +167,55 @@ export const sanitizeOperatorMetadata = (value: unknown): unknown => {
     key,
     secretKeyPattern.test(key) ? "[redacted]" : sanitizeOperatorMetadata(entry),
   ]));
+};
+
+const safeOperatorErrorMessage = (error: unknown) => {
+  const candidate = error instanceof Error
+    ? error.message
+    : error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  const sanitized = sanitizeOperatorMetadata(candidate);
+  return typeof sanitized === "string" && sanitized.trim() ? sanitized : "unknown_error";
+};
+
+const persistOperatorFindingLifecycle = async (
+  client: SupabaseClient,
+  systemId: string,
+  result: ScopedOperatorHandlerResult,
+) => {
+  if (result.lifecycleManaged === true) return;
+  const results = Array.isArray(result.platformResults)
+    ? result.platformResults as ScopedOperatorHandlerResult[]
+    : [result];
+  for (const platformResult of results) {
+    const platform = normalizeOperatorPlatform(platformResult.platform);
+    const reasons = Array.isArray(platformResult.reasons)
+      ? platformResult.reasons.map((reason) => String(reason).slice(0, 160)).filter(Boolean)
+      : [];
+    const activeKeys: string[] = [];
+    for (const reason of reasons) {
+      const { data, error } = await client.rpc("record_autonomous_finding", {
+        p_finding_type: reason,
+        p_metadata: { source: String(platformResult.source ?? "unknown"), readback_complete: platformResult.readbackComplete === true },
+        p_platform: platform,
+        p_provider: String(platformResult.provider ?? "none").slice(0, 80),
+        p_severity: ["critical", "failed"].includes(String(platformResult.healthState)) ? "critical" : platformResult.readbackComplete === true ? "warning" : "review",
+        p_system_id: systemId,
+        p_target_surface: String(platformResult.surface ?? "watch_once").slice(0, 120),
+      });
+      if (error) throw error;
+      if (typeof data === "string") activeKeys.push(data);
+    }
+    if (platformResult.readbackComplete === true) {
+      const { error } = await client.rpc("resolve_autonomous_findings", {
+        p_active_finding_keys: activeKeys,
+        p_platform: platform,
+        p_system_id: systemId,
+      });
+      if (error) throw error;
+    }
+  }
 };
 
 const sha256Hex = async (value: string): Promise<string> => {
@@ -90,6 +263,7 @@ const insertEvent = async (
     action_id: actionId,
     result,
     environment_mode: String(metadata.environment_mode ?? "production"),
+    platform: normalizeOperatorPlatform(metadata.platform),
     user_rights_changed: false,
     money_moved: false,
     metadata: sanitizeOperatorMetadata(metadata),
@@ -107,6 +281,7 @@ const insertSnapshot = async (
     system_id: config.systemId,
     health_state: String(metadata.health_state ?? config.defaultHealthState),
     environment_mode: String(metadata.environment_mode ?? "production"),
+    platform: normalizeOperatorPlatform(metadata.platform),
     user_rights_changed: false,
     money_moved: false,
     metadata: sanitizeOperatorMetadata(metadata),
@@ -115,6 +290,20 @@ const insertSnapshot = async (
     row.provider = String(metadata.provider ?? "expo");
     row.retry_backlog = Number(metadata.retry_backlog ?? 0);
     row.failed_attempt_count = Number(metadata.failed_attempt_count ?? 0);
+    row.invalid_token_count = Number(metadata.invalid_token_count ?? 0);
+    row.provider_response_class = metadata.provider_response_class ?? null;
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
+    row.runtime_version = metadata.runtime_version ?? null;
+    row.channel = metadata.channel ?? null;
+    row.update_id = metadata.update_id ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
   }
   if (config.systemId === "release_ota_operator") {
     row.channel = metadata.channel ?? null;
@@ -122,6 +311,15 @@ const insertSnapshot = async (
     row.update_id = metadata.update_id ?? null;
     row.embedded_launch = typeof metadata.embedded_launch === "boolean" ? metadata.embedded_launch : null;
     row.emergency_launch = typeof metadata.emergency_launch === "boolean" ? metadata.emergency_launch : null;
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
   }
   if (config.systemId === "security_owner_operator") {
     row.critical_finding_count = Number(metadata.critical_finding_count ?? 0);
@@ -141,6 +339,29 @@ const insertSnapshot = async (
     row.update_id = metadata.update_id ?? null;
     row.embedded_launch = typeof metadata.embedded_launch === "boolean" ? metadata.embedded_launch : null;
     row.emergency_launch = typeof metadata.emergency_launch === "boolean" ? metadata.emergency_launch : null;
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
+  }
+  if (["security_owner_operator", "platform_recovery_operator", "privacy_compliance_operator", "support_success_operator"].includes(config.systemId)) {
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
+    row.runtime_version = metadata.runtime_version ?? null;
+    row.channel = metadata.channel ?? null;
+    row.update_id = metadata.update_id ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
   }
   const { error } = await client.from(config.snapshotTable).insert(row);
   if (error) throw error;
@@ -255,6 +476,21 @@ const insertReview = async (
       row.error_rate_percent = typeof metadata.error_rate_percent === "number" ? metadata.error_rate_percent : null;
     }
   }
+  if (["security_owner_operator", "platform_recovery_operator", "privacy_compliance_operator", "support_success_operator"].includes(config.systemId)) {
+    row.platform = normalizeOperatorPlatform(metadata.platform);
+    row.app_version = metadata.app_version ?? null;
+    row.native_build = metadata.native_build ?? null;
+    row.bundle_identifier = metadata.bundle_identifier ?? null;
+    row.runtime_version = metadata.runtime_version ?? null;
+    row.channel = metadata.channel ?? null;
+    row.update_id = metadata.update_id ?? null;
+    row.distribution_source = metadata.distribution_source ?? null;
+    row.provider_environment = metadata.provider_environment ?? null;
+    row.data_source = metadata.data_source ?? "operator_metadata";
+    row.readback_complete = metadata.readback_complete === true;
+    row.window_start = metadata.window_start ?? null;
+    row.window_end = metadata.window_end ?? null;
+  }
 
   const { error } = await client.from(targetTable).insert(row);
   if (error) throw error;
@@ -273,6 +509,7 @@ const createApprovalRequest = async (
   const insertPayload = {
     system_id: config.systemId,
     action_id: actionId,
+    platform: normalizeOperatorPlatform(payload.platform),
     requested_by_actor_type: config.systemId,
     requested_by_actor_id: payload.requested_by_actor_id ?? null,
     approval_level: approvalLevel,
@@ -300,13 +537,18 @@ const createApprovalRequest = async (
 
   await client.from("autonomous_approval_request_events").insert({
     request_id: data.id,
+    platform: normalizeOperatorPlatform(payload.platform),
     event_type: "created",
     actor_type: config.systemId,
     actor_id: null,
     event_summary: `${config.systemId} requested approval for ${actionId}`,
     metadata: { created_by: config.systemId },
   });
-  await insertEvent(client, config, "create_approval_request", "approval_request_created", { approval_request_id: data.id, action_id: actionId });
+  await insertEvent(client, config, "create_approval_request", "approval_request_created", {
+    approval_request_id: data.id,
+    action_id: actionId,
+    platform: normalizeOperatorPlatform(payload.platform),
+  });
   return data;
 };
 
@@ -315,6 +557,21 @@ const withAuditIdentity = (config: ScopedOperatorConfig, payload: Record<string,
   scheduler: String(payload.scheduler ?? "direct_token_call"),
   operator_id: String(payload.operator_id ?? config.systemId),
   source: String(payload.source ?? `direct_token_call:${config.systemId}`),
+  platform: normalizeOperatorPlatform(payload.platform),
+});
+
+const responseEnvelope = (metadata: Record<string, unknown>, overrides: Record<string, unknown> = {}) => ({
+  readbackComplete: metadata.readback_complete === true,
+  platform: normalizeOperatorPlatform(metadata.platform),
+  source: String(metadata.source ?? "unknown"),
+  dataWindow: {
+    start: typeof metadata.window_start === "string" ? metadata.window_start : null,
+    end: typeof metadata.window_end === "string" ? metadata.window_end : null,
+  },
+  moneyMoved: false,
+  userRightsChanged: false,
+  highRiskExecuted: false,
+  ...overrides,
 });
 
 export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => async (request: Request) => {
@@ -343,7 +600,7 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
 
   try {
     const client = adminClient();
-    const metadata = (sanitizeOperatorMetadata(withAuditIdentity(config, { ...payload, action })) ?? {}) as Record<string, unknown>;
+    let metadata = (sanitizeOperatorMetadata(withAuditIdentity(config, { ...payload, action })) ?? {}) as Record<string, unknown>;
 
     if (action === "create_approval_request" || config.approvalActions.includes(action)) {
       const requestRow = await createApprovalRequest(client, config, { ...payload, action_id: payload.action_id ?? action });
@@ -353,12 +610,21 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
         action,
         approvalRequest: requestRow,
         executedHighRiskAction: false,
-        moneyMoved: false,
-        userRightsChanged: false,
+        ...responseEnvelope(metadata),
       });
     }
 
     if (action === "report") {
+      if (config.reportHandler) {
+        const customReport = await config.reportHandler({ client, config, payload, metadata });
+        return scopedJsonResponse(config.tokenHeader, 200, {
+          ok: true,
+          systemId: config.systemId,
+          action,
+          result: "report_read",
+          ...responseEnvelope(metadata, sanitizeOperatorMetadata(customReport) as Record<string, unknown>),
+        });
+      }
       const report = await readReport(client, config);
       return scopedJsonResponse(config.tokenHeader, 200, {
         ok: true,
@@ -366,13 +632,45 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
         action,
         result: "report_read",
         ...report,
-        moneyMoved: false,
-        userRightsChanged: false,
-        highRiskExecuted: false,
+        ...responseEnvelope(metadata),
+      });
+    }
+
+    if (action === "watch_once" && (config.watchOnceHandlers?.length || config.watchOnceHandler)) {
+      const context = { client, config, payload, metadata };
+      const customResult = config.watchOnceHandlers?.length
+        ? await runComposedOperatorHandlers(config.watchOnceHandlers, context, config.requiredWatchPlatforms)
+        : await config.watchOnceHandler!(context);
+      await persistOperatorFindingLifecycle(client, config.systemId, customResult);
+      return scopedJsonResponse(config.tokenHeader, 200, {
+        ok: true,
+        systemId: config.systemId,
+        action,
+        result: "substantive_readback_recorded",
+        ...responseEnvelope(metadata, sanitizeOperatorMetadata(customResult) as Record<string, unknown>),
+      });
+    }
+
+    if (action === "status" && config.statusHandler) {
+      const customResult = await config.statusHandler({ client, config, payload, metadata });
+      return scopedJsonResponse(config.tokenHeader, 200, {
+        ok: true,
+        systemId: config.systemId,
+        action,
+        result: "status_read",
+        ...responseEnvelope(metadata, sanitizeOperatorMetadata(customResult) as Record<string, unknown>),
       });
     }
 
     if (["health_snapshot", "watch_once", "status"].includes(action)) {
+      if (action === "watch_once") {
+        metadata = {
+          ...metadata,
+          health_state: "unknown",
+          readback_complete: false,
+          data_source: "generic_operator_no_custom_readback",
+        };
+      }
       await insertSnapshot(client, config, action, metadata);
     } else {
       if (config.systemId === "notification_delivery_operator" && action === "mark_token_provider_revoked" && metadata.provider_evidence !== "DeviceNotRegistered") {
@@ -395,18 +693,19 @@ export const handleScopedOperatorRequest = (config: ScopedOperatorConfig) => asy
         operatorId: metadata.operator_id,
         source: metadata.source,
       },
-      moneyMoved: false,
-      userRightsChanged: false,
-      highRiskExecuted: false,
+      ...responseEnvelope(metadata),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown_error";
+    const message = safeOperatorErrorMessage(error);
     return scopedJsonResponse(config.tokenHeader, 500, {
       error: "operator_action_failed",
       message,
       systemId: config.systemId,
-      moneyMoved: false,
-      userRightsChanged: false,
+      ...responseEnvelope({
+        platform: payload?.platform,
+        source: payload?.source ?? `direct_token_call:${config.systemId}`,
+        readback_complete: false,
+      }),
     });
   }
 };

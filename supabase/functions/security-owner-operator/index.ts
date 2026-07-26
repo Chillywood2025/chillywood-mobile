@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+import { runIosSecuritySourceProbe } from "../_shared/ios-source-operator-probes.ts";
+import { runAndroidSecurityProbe, runSharedSecurityProbe } from "../_shared/all-platform-source-operator-probes.ts";
 
 Deno.serve(handleScopedOperatorRequest({
   systemId: "security_owner_operator",
@@ -29,4 +31,6 @@ Deno.serve(handleScopedOperatorRequest({
     admin_route_exposure_check: "security_required_review_flags",
     secret_scan_status_record: "secret_scan_findings",
   },
+  watchOnceHandlers: [runSharedSecurityProbe, runAndroidSecurityProbe, runIosSecuritySourceProbe],
+  requiredWatchPlatforms: ["shared", "android", "ios"],
 }));

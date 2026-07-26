@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeF
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
 import process from "node:process";
+import { normalizeInstalledQaPlatform } from "../supabase/functions/_shared/installed-qa-platform-policy.mjs";
 
 const SYSTEM_ID = "installed_product_qa_operator";
 const PROVIDER = "firebase_test_lab";
@@ -643,6 +644,7 @@ const classifyPollLifecycle = (pollResult) => {
 };
 
 const buildOperatorPayload = (report) => {
+  const platform = normalizeInstalledQaPlatform("android", PROOF_SOURCE);
   const metadata = {
     provider: PROVIDER,
     proofSource: PROOF_SOURCE,
@@ -676,6 +678,7 @@ const buildOperatorPayload = (report) => {
     const failed = lifecycleState === "matrix_failed";
     return {
       action: "record_traversal_run",
+      platform,
       source: PROOF_SOURCE,
       discovered_by: "device_lab",
       scheduler: textEnv("INSTALLED_QA_SCHEDULER", "manual_cli"),
@@ -688,11 +691,16 @@ const buildOperatorPayload = (report) => {
       two_device_required_count: 0,
       result: failed ? "failed" : "partial",
       blocker_classification: failed ? "device_unavailable" : "unknown_requires_review",
+      distribution_source: "firebase_test_lab",
+      provider_environment: "production",
+      data_source: "firebase_test_lab_api",
+      readback_complete: completed || failed,
       metadata,
     };
   }
   return {
     action: "record_device_availability",
+    platform,
     source: PROOF_SOURCE,
     discovered_by: "device_lab",
     device_requirement: "Firebase Test Lab cost-capped virtual-device smoke path",
@@ -702,6 +710,10 @@ const buildOperatorPayload = (report) => {
     device_lab_configured: Boolean(report.costGuard.canRun),
     blocker_classification: report.costGuard.blockerClassification,
     result: report.costGuard.canRun ? "partial" : "blocked",
+    distribution_source: "firebase_test_lab",
+    provider_environment: "production",
+    data_source: "firebase_test_lab_budget_and_device_readiness",
+    readback_complete: true,
     next_safe_action: report.costGuard.canRun
       ? "Run only bounded cost-capped Firebase virtual smoke; keep Play-installed, Premium, and two-device proof separate."
       : "Keep Firebase smoke pending or blocked until the cost/scheduler/device guard permits a run.",

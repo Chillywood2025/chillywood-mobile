@@ -1,0 +1,256 @@
+{
+  "edges": [
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-github-draft-pr-broker"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-level01-scheduler"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-livekit-experience-collector"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-model-router"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-product-baseline-executor"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-product-quality-evaluator"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-product-quality-triage"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-public-research-broker"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-research-evaluator"
+    },
+    {
+      "from": "chillywood-cognitive-level01-gateway",
+      "kind": "cloudflare_service_binding",
+      "to": "chillywood-level01-sentinel-collector"
+    },
+    {
+      "from": "chillywood-level01-github-draft-pr-broker",
+      "kind": "allowlisted_network_egress",
+      "to": "https://api.github.com"
+    },
+    {
+      "from": "chillywood-level01-github-draft-pr-broker",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_github_draft_pr_broker"
+    },
+    {
+      "from": "chillywood-level01-level01-scheduler",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_level01_scheduler"
+    },
+    {
+      "from": "chillywood-level01-livekit-experience-collector",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_livekit_experience_collector"
+    },
+    {
+      "from": "chillywood-level01-model-router",
+      "kind": "allowlisted_network_egress",
+      "to": "configured_model_api_origin_only"
+    },
+    {
+      "from": "chillywood-level01-model-router",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_model_router"
+    },
+    {
+      "from": "chillywood-level01-product-baseline-executor",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_product_baseline_executor"
+    },
+    {
+      "from": "chillywood-level01-product-quality-evaluator",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_product_quality_evaluator"
+    },
+    {
+      "from": "chillywood-level01-product-quality-triage",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_product_quality_triage"
+    },
+    {
+      "from": "chillywood-level01-public-research-broker",
+      "kind": "allowlisted_network_egress",
+      "to": "configured_peer_pinned_research_transport_origin_only"
+    },
+    {
+      "from": "chillywood-level01-public-research-broker",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_public_research_broker"
+    },
+    {
+      "from": "chillywood-level01-research-evaluator",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_research_evaluator"
+    },
+    {
+      "from": "chillywood-level01-sentinel-collector",
+      "kind": "cache_disabled_hyperdrive",
+      "to": "postgres-role:cognitive_sentinel_collector"
+    }
+  ],
+  "nodes": [
+    {
+      "credentials": [],
+      "id": "chillywood-cognitive-level01-gateway",
+      "kind": "access_protected_gateway",
+      "public": true
+    },
+    {
+      "credentials": [
+        "COGNITIVE_GITHUB_DRAFT_PR_BROKER_HYPERDRIVE",
+        "COGNITIVE_GITHUB_DRAFT_PR_BROKER_INVOKE_SHA256",
+        "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN",
+        "GITHUB_APP_ID",
+        "GITHUB_APP_INSTALLATION_ID",
+        "GITHUB_APP_PRIVATE_KEY",
+        "GITHUB_REPOSITORY_ID"
+      ],
+      "databaseRole": "cognitive_github_draft_pr_broker",
+      "id": "chillywood-level01-github-draft-pr-broker",
+      "kind": "private_service_binding_worker",
+      "provider": "github_app_repository_installation",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_LEVEL01_SCHEDULER_HYPERDRIVE",
+        "COGNITIVE_LEVEL01_SCHEDULER_INVOKE_SHA256",
+        "COGNITIVE_LEVEL01_SCHEDULER_ASSERTION"
+      ],
+      "databaseRole": "cognitive_level01_scheduler",
+      "id": "chillywood-level01-level01-scheduler",
+      "kind": "private_service_binding_worker",
+      "provider": "none",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_HYPERDRIVE",
+        "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
+        "COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY",
+        "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"
+      ],
+      "databaseRole": "cognitive_livekit_experience_collector",
+      "id": "chillywood-level01-livekit-experience-collector",
+      "kind": "private_service_binding_worker",
+      "provider": "none",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_MODEL_ROUTER_HYPERDRIVE",
+        "COGNITIVE_MODEL_ROUTER_INVOKE_SHA256",
+        "COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION",
+        "COGNITIVE_MODEL_OPENAI_API_KEY"
+      ],
+      "databaseRole": "cognitive_model_router",
+      "id": "chillywood-level01-model-router",
+      "kind": "private_service_binding_worker",
+      "provider": "approved_model_provider",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_PRODUCT_BASELINE_EXECUTOR_HYPERDRIVE",
+        "COGNITIVE_PRODUCT_BASELINE_EXECUTOR_INVOKE_SHA256",
+        "COGNITIVE_PRODUCT_BASELINE_SERVICE_ASSERTION"
+      ],
+      "databaseRole": "cognitive_product_baseline_executor",
+      "id": "chillywood-level01-product-baseline-executor",
+      "kind": "private_service_binding_worker",
+      "provider": "none",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_HYPERDRIVE",
+        "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_INVOKE_SHA256",
+        "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION"
+      ],
+      "databaseRole": "cognitive_product_quality_evaluator",
+      "id": "chillywood-level01-product-quality-evaluator",
+      "kind": "private_service_binding_worker",
+      "provider": "none",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_PRODUCT_QUALITY_TRIAGE_HYPERDRIVE",
+        "COGNITIVE_PRODUCT_QUALITY_TRIAGE_INVOKE_SHA256",
+        "COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION"
+      ],
+      "databaseRole": "cognitive_product_quality_triage",
+      "id": "chillywood-level01-product-quality-triage",
+      "kind": "private_service_binding_worker",
+      "provider": "none",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE",
+        "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
+        "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN",
+        "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY"
+      ],
+      "databaseRole": "cognitive_public_research_broker",
+      "id": "chillywood-level01-public-research-broker",
+      "kind": "private_service_binding_worker",
+      "provider": "isolated_pinned_research_transport",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_RESEARCH_EVALUATOR_HYPERDRIVE",
+        "COGNITIVE_RESEARCH_EVALUATOR_INVOKE_SHA256",
+        "COGNITIVE_INDEPENDENT_EVALUATOR_SERVICE_TOKEN"
+      ],
+      "databaseRole": "cognitive_research_evaluator",
+      "id": "chillywood-level01-research-evaluator",
+      "kind": "private_service_binding_worker",
+      "provider": "none",
+      "public": false
+    },
+    {
+      "credentials": [
+        "COGNITIVE_SENTINEL_COLLECTOR_HYPERDRIVE",
+        "COGNITIVE_SENTINEL_COLLECTOR_INVOKE_SHA256",
+        "COGNITIVE_SENTINEL_COLLECTOR_ASSERTION"
+      ],
+      "databaseRole": "cognitive_sentinel_collector",
+      "id": "chillywood-level01-sentinel-collector",
+      "kind": "private_service_binding_worker",
+      "provider": "none",
+      "public": false
+    }
+  ],
+  "schemaVersion": "cognitive-level01-isolated-runtime-v1",
+  "sourceBaseCommit": "8660558a9cf360f033246a404dfc5812d522da88"
+}

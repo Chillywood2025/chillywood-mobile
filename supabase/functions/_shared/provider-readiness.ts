@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 
 type JsonObject = Record<string, unknown>;
 export type SupabaseClientLike = ReturnType<typeof createClient<any, "public", any>>;

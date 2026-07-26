@@ -16,6 +16,7 @@ export type MoneyFeatureFlagKey =
   | "payouts_enabled"
   | "stripe_connect_enabled"
   | "revenuecat_google_play_enabled"
+  | "revenuecat_app_store_enabled"
   | "provider_webhooks_enabled"
   | "live_money_enabled"
   | "creator_monetization_enabled"
@@ -31,6 +32,11 @@ export type MoneyFeatureFlagSummaryRow = {
   displaySummary: string;
   updatedAt: string | null;
   publicSafe: boolean;
+};
+
+export type MoneyFeatureFlagSummaryReadback = {
+  rows: MoneyFeatureFlagSummaryRow[];
+  readbackComplete: boolean;
 };
 
 export type PlatformMoneyKillSwitchRow = {
@@ -113,6 +119,7 @@ export const MONEY_FEATURE_FLAG_KEYS: readonly MoneyFeatureFlagKey[] = [
   "payouts_enabled",
   "stripe_connect_enabled",
   "revenuecat_google_play_enabled",
+  "revenuecat_app_store_enabled",
   "provider_webhooks_enabled",
   "live_money_enabled",
   "creator_monetization_enabled",
@@ -136,6 +143,7 @@ export const MONEY_FEATURE_FLAG_DEFAULT_STATES: Record<MoneyFeatureFlagKey, Mone
   payouts_enabled: "off",
   stripe_connect_enabled: "sandbox_only",
   revenuecat_google_play_enabled: "sandbox_only",
+  revenuecat_app_store_enabled: "off",
   provider_webhooks_enabled: "sandbox_only",
   live_money_enabled: "off",
   creator_monetization_enabled: "sandbox_only",
@@ -159,6 +167,7 @@ const MONEY_FEATURE_FLAG_LABELS: Record<MoneyFeatureFlagKey, string> = {
   payouts_enabled: "Payouts",
   stripe_connect_enabled: "Stripe Connect",
   revenuecat_google_play_enabled: "RevenueCat / Google Play",
+  revenuecat_app_store_enabled: "RevenueCat / App Store",
   provider_webhooks_enabled: "Provider webhooks",
   live_money_enabled: "Live money",
   creator_monetization_enabled: "Creator monetization",
@@ -182,6 +191,7 @@ const MONEY_FEATURE_FLAG_DESCRIPTIONS: Record<MoneyFeatureFlagKey, string> = {
   payouts_enabled: "Controls payout and cash-out availability claims.",
   stripe_connect_enabled: "Controls Stripe Connect setup/readiness surfaces.",
   revenuecat_google_play_enabled: "Controls store readiness surfaces for Android digital purchases.",
+  revenuecat_app_store_enabled: "Controls bounded App Store sandbox purchases independently from Android.",
   provider_webhooks_enabled: "Controls provider webhook processing beyond audit/readiness.",
   live_money_enabled: "Global switch for production money movement and live money claims.",
   creator_monetization_enabled: "Optional global scaffold for creator monetization readiness.",
@@ -304,7 +314,7 @@ export const getPlatformMoneyKillSwitchFallbackRows = (): PlatformMoneyKillSwitc
   })
 );
 
-export async function readMoneyFeatureFlagSummary(): Promise<MoneyFeatureFlagSummaryRow[]> {
+export async function readMoneyFeatureFlagSummaryWithStatus(): Promise<MoneyFeatureFlagSummaryReadback> {
   try {
     const { data, error } = await moneyFlagClient.rpc<MoneyFeatureFlagDbRow[]>(
       "get_money_feature_flags_summary",
@@ -314,10 +324,17 @@ export async function readMoneyFeatureFlagSummary(): Promise<MoneyFeatureFlagSum
       .map(toSummaryRow)
       .filter((row): row is MoneyFeatureFlagSummaryRow => !!row)
       .filter((row) => row.publicSafe);
-    return rows.length ? rows : getMoneyFeatureFlagFallbackSummary();
+    return rows.length
+      ? { rows, readbackComplete: true }
+      : { rows: getMoneyFeatureFlagFallbackSummary(), readbackComplete: false };
   } catch {
-    return getMoneyFeatureFlagFallbackSummary();
+    return { rows: getMoneyFeatureFlagFallbackSummary(), readbackComplete: false };
   }
+}
+
+export async function readMoneyFeatureFlagSummary(): Promise<MoneyFeatureFlagSummaryRow[]> {
+  const readback = await readMoneyFeatureFlagSummaryWithStatus();
+  return readback.rows;
 }
 
 export async function readPlatformMoneyKillSwitches(): Promise<PlatformMoneyKillSwitchRow[]> {

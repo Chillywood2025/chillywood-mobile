@@ -51,6 +51,12 @@ export type LiveKitJoinContractLike = {
 
 const sanitizeIdentifier = (value: unknown) => String(value ?? "").trim();
 
+export const shouldAutoStartAuthorizedNativeLiveKitMedia = (platform: string) => (
+  ["android", "ios"].includes(sanitizeIdentifier(platform).toLowerCase())
+);
+
+export const shouldAutoStartLiveStageLocalMedia = shouldAutoStartAuthorizedNativeLiveKitMedia;
+
 export const normalizeSeatRequestVersion = (...candidates: unknown[]) => {
   for (const candidate of candidates) {
     const normalized = sanitizeIdentifier(candidate);
@@ -141,8 +147,10 @@ export const resolveActualVisualHeroParticipantId = (options: {
   heroParticipantId?: string | null;
 }) => {
   const currentUserParticipantId = sanitizeIdentifier(options.currentUserParticipantId);
-  if (options.isHost || options.shouldUseViewerSelfHero) return currentUserParticipantId;
-  return sanitizeIdentifier(options.heroParticipantId);
+  if (options.shouldUseViewerSelfHero) return currentUserParticipantId;
+  const heroParticipantId = sanitizeIdentifier(options.heroParticipantId);
+  if (heroParticipantId) return heroParticipantId;
+  return options.isHost ? currentUserParticipantId : "";
 };
 
 const roleFromParticipant = (participant: LiveStageParticipantLike, state?: LiveStageParticipantStateLike) => (
@@ -239,4 +247,19 @@ export const canRenderParticipantSpecificLiveKitTrack = (options: {
     && !!trackParticipantIdentity
     && participantId !== localParticipantIdentity
     && trackParticipantIdentity === participantId;
+};
+
+export const canRenderLocalParticipantLiveKitTrack = (options: {
+  participantId: string;
+  localParticipantIdentity: string;
+  trackParticipantIdentity?: string | null;
+  publishLocalCamera: boolean;
+}) => {
+  const participantId = sanitizeIdentifier(options.participantId);
+  const localParticipantIdentity = sanitizeIdentifier(options.localParticipantIdentity);
+  const trackParticipantIdentity = sanitizeIdentifier(options.trackParticipantIdentity);
+  return options.publishLocalCamera
+    && !!participantId
+    && participantId === localParticipantIdentity
+    && trackParticipantIdentity === localParticipantIdentity;
 };

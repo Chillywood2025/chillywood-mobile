@@ -1,4 +1,4 @@
-name: Phase 1 CI - Lint and Typecheck
+name: Phase 1 CI
 
 on:
   pull_request:
@@ -6,17 +6,98 @@ on:
     branches:
       - main
 
-jobs:
-  lint-and-typecheck:
-    name: Phase 1 Checks / Lint and Typecheck
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
+jobs:
+  autonomous-systems-all-platform-contract:
+    name: Phase 1 / Autonomous Systems All-Platform Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate all-platform autonomous contracts
+        run: |
+          npm run guard:autonomous-component-inventory
+          npm run proof:autonomous-component-inventory
+          npm run guard:autonomous-systems-contract
+          npm run proof:autonomous-systems-contract
+          npm run guard:autonomous-operating-model
+          npm run guard:scheduled-provider-adapters
+          npm run proof:scheduled-provider-adapters
+          npm run test:scheduled-provider-adapters
+          npm run guard:all-platform-autonomy
+          npm run proof:all-platform-autonomy
+          npm run test:all-platform-autonomy
+          npm run guard:user-report-router
+          npm run guard:user-report-threshold-routing
+          npm run proof:user-report-router
+          npm run proof:user-report-threshold-routing
+          npm run proof:user-report-safety-privacy
+          npm run proof:notification-delivery-operator
+          npm run proof:release-ota-operator
+          npm run proof:security-owner-operator
+          npm run proof:moderation-safety-operator
+          npm run proof:observability-runtime-operator
+          npm run proof:installed-product-qa-operator
+          npm run proof:platform-recovery-operator
+          npm run proof:privacy-compliance-operator
+          npm run proof:support-success-operator
+          npm run proof:search-ranking-integrity-operator
+          npm run proof:money-flow-control
+          npm run proof:money-operator-write-scope
+          npm run proof:livekit-autonomous-operator
+          npm run proof:owner-command-operator
+          npm run proof:owner-command-routing
+          npm run proof:owner-command-approval-gates
+
+      - name: Check modified autonomous Edge Functions
+        run: |
+          deno check --node-modules-dir=auto --no-lock supabase/functions/_shared/scoped-operator.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/_shared/all-platform-source-operator-probes.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/notification-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/release-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/observability-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/installed-product-qa-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/money-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/security-owner-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/platform-recovery-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/privacy-compliance-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/support-success-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/owner-command-operator/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/autonomous-approval-request/index.ts
+          deno check --node-modules-dir=auto --no-lock supabase/functions/user-report-intake/index.ts
+
+  autonomous-systems-ios-contract:
+    name: Phase 1 / Autonomous Systems iOS Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -24,8 +105,253 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run lint
-        run: npm run lint
+      - name: Validate autonomous iOS contracts
+        run: |
+          npm run guard:autonomous-systems-contract
+          npm run proof:autonomous-systems-contract
+          npm run guard:autonomous-operating-model
+          npm run guard:ios-autonomous-call-retry
+          npm run proof:ios-autonomous-call-retry
+          npm run guard:ios-notification-autonomy
+          npm run proof:ios-notification-autonomy
+          npm run test:ios-notification-autonomy
+          npm run guard:ios-release-autonomy
+          npm run proof:ios-release-autonomy
+          npm run test:ios-release-autonomy
+          npm run guard:ios-observability-autonomy
+          npm run proof:ios-observability-autonomy
+          npm run test:ios-observability-autonomy
+          npm run guard:ios-installed-qa-autonomy
+          npm run proof:ios-installed-qa-autonomy
+          npm run test:ios-installed-qa-autonomy
+          npm run guard:ios-autonomous-system-coverage
+          npm run proof:ios-autonomous-system-coverage
 
-      - name: Run typecheck
-        run: npm run typecheck
+  cognitive-intelligence-contract:
+    name: Phase 1 / Cognitive Intelligence Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate cognitive registry and architecture
+        env:
+          COGNITIVE_EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          npm run guard:autonomous-component-inventory
+          npm run proof:autonomous-component-inventory
+          npm run guard:autonomous-systems-contract
+          npm run proof:autonomous-systems-contract
+          npm run guard:autonomous-operating-model
+          npm run guard:cognitive-intelligence-contract
+          npm run proof:cognitive-intelligence-contract
+          npm run guard:cognitive-architecture-graph
+          npm run proof:cognitive-architecture-graph
+
+  cognitive-execution-safety:
+    name: Phase 1 / Cognitive Execution Safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Setup Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+      - name: Install dependencies
+        run: npm ci
+      - name: Test bounded execution and evaluator independence
+        run: |
+          npm run test:brace-expansion-compat
+          npm run guard:cognitive-execution-safety
+          npm run proof:cognitive-execution-safety
+          npm run test:cognitive-execution-safety
+          npm run guard:cognitive-executor-confinement
+          npm run test:cognitive-executor-confinement
+          npm run guard:cognitive-capability-contract
+          npm run test:cognitive-capability-contract
+          npm run guard:cognitive-evaluator-independence
+          npm run test:cognitive-evaluator-independence
+          npm run test:cognitive-budget-cancellation
+          npm run test:cognitive-conflict-rollback
+          npm run test:cognitive-red-team
+          npm run test:cognitive-hardening-regressions
+          npm run test:cognitive-runtime-authority-regressions
+          npm run guard:cognitive-policy-parity
+          npm run guard:cognitive-network-policy-parity
+          npm run guard:cognitive-credential-path-policy-parity
+          npm run guard:cognitive-dependency-advisories
+          npm run test:cognitive-collective-governance
+          npm run test:cognitive-governance-adversarial
+          npm run test:cognitive-two-party-handoff
+          npm run test:cognitive-bootstrap-edge-contract
+          npm run test:cognitive-model-independence
+          npm run test:cognitive-product-sentinels
+          npm run test:cognitive-livekit-experience-collector
+          npm run test:cognitive-isolated-runtime
+          deno test --node-modules-dir=auto --no-lock --allow-env --allow-net \
+            supabase/functions/cognitive-model-router/index_test.ts \
+            supabase/functions/cognitive-public-research-broker/index_test.ts \
+            supabase/functions/cognitive-research-evaluator/index_test.ts \
+            supabase/functions/cognitive-sentinel-collector/index_test.ts \
+            supabase/functions/cognitive-product-quality-evaluator/index_test.ts \
+            supabase/functions/cognitive-product-quality-triage/index_test.ts \
+            supabase/functions/cognitive-livekit-experience-collector/index_test.ts \
+            supabase/functions/cognitive-github-draft-pr-broker/index_test.ts \
+            supabase/functions/cognitive-level01-scheduler/index_test.ts
+          npm run guard:cognitive-admin-truth
+          npm run guard:cognitive-ci-supply-chain
+          npm run guard:android-native-runtime-compatibility
+          npm run guard:ios-config-policy
+          npm run proof:ios-config
+
+  research-and-memory-integrity:
+    name: Phase 1 / Research and Memory Integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
+        with:
+          version: 2.109.1
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate mocked research and memory contract
+        run: |
+          npm run guard:research-source-integrity
+          npm run proof:research-source-integrity
+          npm run test:research-source-broker
+          node ./scripts/test-cognitive-hardening.mjs research
+          node ./scripts/test-cognitive-hardening.mjs sanitizer
+          npm run guard:cognitive-memory-integrity
+          npm run proof:cognitive-memory-integrity
+      - name: Exercise undeployed migration locally
+        run: |
+          supabase start
+          supabase db reset
+          supabase test db supabase/tests/cognitive_intelligence_foundation_test.sql
+          npm run test:cognitive-db-concurrency
+          npm run test:cognitive-activation-hold-security-definer
+          npm run test:cognitive-public-research-liveness-concurrency
+          npm run test:cognitive-product-sentinel-concurrency
+
+  supabase-database-integration:
+    name: Phase 1 / Supabase Database Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
+        with:
+          version: 2.109.1
+
+      - name: Verify required database suites are present
+        run: test -f supabase/tests/chilly_chat_call_transitions_test.sql && test -f supabase/tests/revenuecat_atomic_transactions_test.sql && test -f supabase/tests/ios_autonomous_systems_test.sql && test -f supabase/tests/all_platform_autonomy_test.sql && test -f supabase/tests/cognitive_intelligence_foundation_test.sql
+
+      - name: Start local Supabase services
+        run: supabase start
+
+      - name: Reset local database from migrations
+        run: supabase db reset
+
+      - name: Run pgTAP database integration suites
+        run: supabase test db
+
+      - name: Run isolated runtime LOGIN boundary integration
+        run: npm run test:cognitive-runtime-login-integration
+
+  phase1-check:
+    name: Phase 1 / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: lint
+            name: Repository Lint
+            command: npm run lint
+          - key: typescript
+            name: TypeScript
+            command: npx tsc --noEmit
+          - key: runtime
+            name: Runtime Validation
+            command: npm run validate:runtime && npm run test:runtime-update-activation && npm run guard:ota-native-boundary && npm run test:image-upload-native-boundary && npm run guard:android-native-runtime-compatibility && npm run guard:android-signing-secret-policy
+          - key: routes
+            name: Route Contracts
+            command: npm run guard:route-contracts
+          - key: ios
+            name: iOS Configuration
+            command: npm run guard:ios-config-policy && npm run proof:ios-config && npm run guard:apple-app-site-association && npm run guard:ios-commerce-catalog && npm run guard:ios-commerce-policy && npm run proof:ios-commerce && npm run test:premium-purchase-readiness && npm run proof:ios-media-readiness && npm run proof:ios-push-platform && npm run guard:ios-native-call-policy && npm run proof:ios-voip-policy && npm run proof:ios-voip-token-lifecycle && npm run guard:ios-privacy-manifest && npm run guard:ios-release-workflows
+          - key: android
+            name: Android Regression Guards
+            command: npm run guard:android-native-runtime-compatibility && npm run guard:android-signing-secret-policy && npm run guard:payment-rail-policy && npm run guard:notification-room-call-policy && npm run guard:chilly-chat-call-push-policy && npm run guard:watch-party-livekit && npm run guard:old-room-handling
+          - key: expo-doctor
+            name: Expo Doctor
+            command: npx expo-doctor
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install alert-automation dependencies for TypeScript
+        if: matrix.key == 'typescript'
+        run: npm ci --prefix ops/alert-automation
+
+      - name: Run runtime validation
+        if: matrix.key == 'runtime'
+        env:
+          CI: "1"
+          EXPO_NO_DOTENV: "1"
+          EXPO_NO_CLIENT_ENV_VARS: "1"
+          EXPO_PUBLIC_SUPABASE_URL: "https://ci.invalid"
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: "ci-placeholder-not-a-secret"
+          EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST: "ci@example.invalid"
+          EXPO_PUBLIC_BETA_ENVIRONMENT: "closed-beta"
+        run: npm run validate:runtime && npm run test:runtime-update-activation && npm run guard:ota-native-boundary && npm run test:image-upload-native-boundary && npm run guard:android-native-runtime-compatibility && npm run guard:android-signing-secret-policy
+
+      - name: Run diagnostic
+        if: matrix.key != 'runtime'
+        run: ${{ matrix.command }}

@@ -1,0 +1,37 @@
+# Cognitive capability protocol
+
+A capability is not a model credential. The broker retains credential material;
+the model sees only a non-reusable scope description. Opaque bearer material is
+stored only as a hash.
+
+Each capability binds:
+
+- capability ID, nonce/JTI, task and project;
+- exact repository, branch, platform and non-production environment;
+- provider, closed operation and canonical path scopes;
+- risk level, issue/not-before/expiry times;
+- call, byte and cost ceilings;
+- approval request/scope hash and immutable plan snapshot hash;
+- lifecycle and revocation state.
+
+Every call proves both the opaque bearer and nonce against stored hashes, then
+atomically verifies the complete scope, a fresh snapshot-bound owner approval and
+preflight, emergency-stop/cancellation/quarantine state and remaining budgets. A
+unique call ID and usage sequence are consumed before work. The broker accepts a
+long-running result only for that consumed call ID and rechecks proof,
+cancellation, revocation, approval and scope. Replays, expiry,
+cross-task/project/repository/platform/provider use, stale snapshots and high-risk
+path mismatches fail closed.
+
+The in-memory source implementation keeps capability records, used call IDs, and
+lifecycle events in private fields. Consumers receive frozen snapshots only and
+cannot mutate replay or authorization state through an object reference.
+
+The action engine separately binds the complete requested action, repository,
+branch, every normalized path, high-risk classification, and primary resource to
+the capability before execution. A capability valid for one requested path
+cannot authorize a sibling path smuggled into the same action.
+
+The undeployed database creates immutable capability events and exposes only the
+controlled consumption RPC to `service_role`; clients cannot issue or activate
+capabilities.

@@ -49,6 +49,9 @@ const {
   shouldAutoOpenWatchPartySeatRequestReview,
   watchPartyLiveContractMatchesDesiredAuthority,
 } = await importTypeScriptModule("_lib/watch-party/watch-party-live-source-truth.ts");
+const {
+  shouldAutoStartAuthorizedNativeLiveKitMedia,
+} = await importTypeScriptModule("_lib/watch-party/live-stage-presentation.ts");
 
 const playerSource = readFileSync(path.join(root, "app/player/[id].tsx"), "utf8");
 const partyRoomSource = readFileSync(path.join(root, "app/watch-party/[partyId].tsx"), "utf8");
@@ -849,6 +852,25 @@ assert(
     && !playerSource.includes('playerAppState === "active" && (Platform.OS !== "android" || playerHasAndroidFocus)'),
   "Shared Player must keep Watch-Party LiveKit active through transient Android blur while foregrounded",
 );
+const sharedPlayerAutoStartStart = playerSource.indexOf("useEffect(() => {\n    if (\n      !isSharedPartyPlayback", playerSource.indexOf("const watchPartyLiveKitCanPublish"));
+const sharedPlayerAutoStartEnd = playerSource.indexOf("const publishWatchPartyLiveKitAudio", sharedPlayerAutoStartStart);
+const sharedPlayerAutoStartSource = sharedPlayerAutoStartStart >= 0 && sharedPlayerAutoStartEnd > sharedPlayerAutoStartStart
+  ? playerSource.slice(sharedPlayerAutoStartStart, sharedPlayerAutoStartEnd)
+  : "";
+assert(
+  shouldAutoStartAuthorizedNativeLiveKitMedia("android") === true
+    && shouldAutoStartAuthorizedNativeLiveKitMedia("ios") === true
+    && shouldAutoStartAuthorizedNativeLiveKitMedia("web") === false,
+  "shared LiveKit local-media auto-start policy must match on Android and iOS while remaining off on web",
+);
+assert(
+  sharedPlayerAutoStartSource.includes("watchPartyLiveKitCanPublish")
+    && sharedPlayerAutoStartSource.includes("shouldAutoStartAuthorizedNativeLiveKitMedia(Platform.OS)")
+    && sharedPlayerAutoStartSource.includes("setWatchPartyLocalMediaIntent(true)")
+    && playerSource.includes("const publishWatchPartyLiveKitAudio = watchPartyLocalMediaIntent")
+    && playerSource.includes("const publishWatchPartyLiveKitVideo = watchPartyLocalMediaIntent"),
+  "Shared Player must auto-start local LiveKit media only after host/speaker publish authority is proven",
+);
 assert(
   livekitSurfaceSource.includes('const appIsInteractive = appState === "active";')
     && !livekitSurfaceSource.includes('appState === "active" && (Platform.OS !== "android" || hasAndroidFocus)'),
@@ -899,6 +921,7 @@ console.log(JSON.stringify({
   reactionReceiverEventProof: true,
   viewerSelfMuteProofTargets: true,
   approvedSpeakerMissingTrackCameraPreparing: true,
+  androidIosAuthorizedLocalMediaStartsAutomatically: true,
   foregroundBlurDoesNotDisableLiveKit: true,
   keyboardComposerScrollsIntoView: true,
   postApprovalRosterConvergenceGuarded: true,

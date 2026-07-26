@@ -6,6 +6,35 @@ This file is intentionally compact. Keep current truth here, keep detailed proof
 Full checkpoint history through April 24, 2026 is preserved at `docs/archive/current-state-history-through-2026-04-24.md`. Later detailed proof history is available in git history and task artifacts; this hot-path file should carry only the current governing facts future sessions must not undo.
 
 ## Current Checkpoint
+Android `ExpoImageManipulator` incident closeout is **CLOSED** and recorded in `ANDROID_CRASH_REPORT.md` and
+`docs/android/ANDROID_IMAGE_MANIPULATOR_NATIVE_FIX.md`. Historical Google Play
+build 80/runtime `1.0.0` predates the native module and is protected from the
+startup fatal by existing Android safety update group
+`37a91fdc-f5bf-47e4-8e43-f8a8620ca0d5`; HEIC/HEIF remains fail-closed there. A
+local production AAB and exact AAB-derived universal QA APK were built from
+`8c426f4e74de61de7d4529d32d124744833912dc` as versionCode 84, runtime
+`1.0.0-android-imagemanipulator-v1`. Actual artifact inspection proves
+`ExpoImageManipulator` 14.0.8 is packaged and registered, and Android API 34
+clean-install proof passed JPEG, HEIC, HEIF, high-resolution HEIC, safe corrupt
+input failure, and background/foreground duplicate prevention. The compromised
+upload credential was removed from EAS, a replacement key has two verified
+encrypted backups, and post-activation Google App Integrity readback now shows the
+replacement upload certificate active while the Play app-signing certificate is
+unchanged. Google/EAS/AAB/local public fingerprints match and the compromised EAS
+credential remains removed. The unchanged AAB hash
+`de8f4da21956988bdcf7e8ea74bf96493a8d2649018557ed97d4914a7ceabb30`
+was accepted and processed on Google Play Internal Testing only; build 84 is
+available to the existing bounded tester lane and build 80 is deactivated on that
+track. On 2026-07-22, an approved Samsung Android 11 device updated in place from
+Google Play build 80 to 84 without uninstall, data clear, or sideload. Session,
+safe settings, notification state, and profile state survived. Settings reported
+the replacement runtime and native module available; JPEG, HEIC, HEIF,
+high-resolution HEIC, corrupt-input fail-safe, and background/foreground tests
+passed as documented. The bounded log window contained no historical native-module
+or React Native fatal signature. A verified Android binary attestation and
+installed-QA physical proof row record the result. No rebuild, versionCode 85,
+production/open/closed release, or OTA occurred.
+
 Chi'llywood autonomous app operating model is now documented in `docs/CHILLYWOOD_AUTONOMOUS_APP_OPERATING_MODEL.md`. Future Codex/operator work should be autonomous by default for Level 0/1 safe operations such as eligible media discovery, safe batch sizing, scoped backups, restore drills, public-safe media work inside caps, post-write audit, scoped rollback, fallback playback, and telemetry reporting. Owner approval remains required for Level 3/4 boundaries: money/billing/provider changes, auth/RLS changes, Premium entitlement changes, payout/cashout, destructive production DB changes, broad catalog backfill, public/private exposure changes, public launch, legal/compliance, payment production mutation, and public marketing claims. Emergency stop, fallback, audit, rollback/quarantine, no-secret logging, and no unauthorized public exposure remain mandatory.
 
 User Report Router is now under `support_success_operator` scope. Authenticated user reports are sanitized, classified, clustered, deduped by unique reporter, and routed to the correct autonomous system. Three unique matching bug/fix reports within seven days create a safe routed finding or Owner Command; critical safety, security, privacy, payment, billing, payout, or provider issues can escalate immediately for review. User reports never directly execute high-risk work: no money movement, Premium grant, auth/RLS mutation, enforcement, OTA publish/rollback, LiveKit/R2 behavior change, provider product change, or ads/sponsor activation.

@@ -25,11 +25,19 @@ type InRoomCommunicationPanelProps = {
   callType?: "voice" | "video" | null;
   cameraEnabled: boolean;
   micEnabled: boolean;
+  mediaControlsBusy?: boolean;
+  speakerEnabled?: boolean;
+  mediaPermissionMessage?: string | null;
+  canOpenMediaSettings?: boolean;
   showControls?: boolean;
   presentation?: "embedded" | "fullscreen";
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  onToggleAudioRoute?: () => void;
+  onSwitchCamera?: () => void;
   onLeave: () => void;
+  leaveLabel?: string;
+  onOpenMediaSettings?: () => void;
   onCloseSurface?: () => void;
 };
 
@@ -58,11 +66,19 @@ export function InRoomCommunicationPanel({
   callType = null,
   cameraEnabled,
   micEnabled,
+  mediaControlsBusy = false,
+  speakerEnabled = false,
+  mediaPermissionMessage,
+  canOpenMediaSettings = false,
   showControls = true,
   presentation = "embedded",
   onToggleCamera,
   onToggleMic,
+  onToggleAudioRoute,
+  onSwitchCamera,
   onLeave,
+  leaveLabel,
+  onOpenMediaSettings,
   onCloseSurface,
 }: InRoomCommunicationPanelProps) {
   const responsiveLayout = useResponsiveLayout();
@@ -112,7 +128,7 @@ export function InRoomCommunicationPanel({
       {isFullscreen ? (
         <View style={[styles.fullscreenHeader, fullscreenContentStyle]}>
           <View style={styles.fullscreenHeaderCopy}>
-            <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.kicker}>CHI'LLY CHAT</Text>
+            <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.kicker}>CHI’LLY CHAT</Text>
             <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.fullscreenTitle}>{resolvedTitle}</Text>
             <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.fullscreenBody}>{resolvedBody}</Text>
           </View>
@@ -128,7 +144,7 @@ export function InRoomCommunicationPanel({
         </View>
       ) : (
         <View style={styles.copyBlock}>
-          <Text style={styles.kicker}>CHI'LLY CHAT</Text>
+          <Text style={styles.kicker}>CHI’LLY CHAT</Text>
           <Text style={styles.title}>{resolvedTitle}</Text>
           <Text style={styles.body}>{resolvedBody}</Text>
         </View>
@@ -150,6 +166,22 @@ export function InRoomCommunicationPanel({
           <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{statusLabelOverride ?? getStatusLabel(channelState)}</Text>
         </View>
       </View>
+
+      {mediaPermissionMessage ? (
+        <View style={[styles.permissionCard, fullscreenContentStyle]}>
+          <Text style={styles.permissionText}>{mediaPermissionMessage}</Text>
+          {canOpenMediaSettings && onOpenMediaSettings ? (
+            <TouchableOpacity
+              accessibilityLabel="Open device settings for camera and microphone permissions"
+              activeOpacity={0.86}
+              onPress={onOpenMediaSettings}
+              style={styles.permissionButton}
+            >
+              <Text style={styles.permissionButtonText}>Open Settings</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={[styles.stateCard, isFullscreen && styles.fullscreenStateCard, fullscreenContentStyle]}>
@@ -199,10 +231,14 @@ export function InRoomCommunicationPanel({
             cameraEnabled={cameraEnabled}
             cameraStatus={cameraStatus}
             micEnabled={micEnabled}
+            disabled={mediaControlsBusy}
+            speakerEnabled={speakerEnabled}
             minimumTouchTarget={responsiveLayout.minimumTouchTarget}
-            leaveLabel={isHost ? "End Call" : "Leave"}
+            leaveLabel={leaveLabel ?? (isHost ? "End Call" : "Leave")}
             onToggleCamera={onToggleCamera}
             onToggleMic={onToggleMic}
+            onToggleAudioRoute={onToggleAudioRoute}
+            onSwitchCamera={onSwitchCamera}
             onLeave={onLeave}
           />
         </View>
@@ -301,6 +337,36 @@ const styles = StyleSheet.create({
     color: "#C6D0E5",
     fontSize: 11,
     fontWeight: "800",
+  },
+  permissionCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,190,92,0.34)",
+    backgroundColor: "rgba(255,190,92,0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 9,
+  },
+  permissionText: {
+    color: "#F3D6A1",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  permissionButton: {
+    alignSelf: "flex-start",
+    minHeight: 44,
+    justifyContent: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 14,
+  },
+  permissionButtonText: {
+    color: "#F7FAFF",
+    fontSize: 12,
+    fontWeight: "900",
   },
   participantStage: {
     gap: 12,

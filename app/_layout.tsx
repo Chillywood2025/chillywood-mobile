@@ -1,9 +1,15 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Linking, Modal, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Linking, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
+import {
+  APPLICATION_LEGAL_PATHS,
+  isCreatorReplayApplicationLink,
+  parseApplicationLink,
+  resolveApplicationRouteByKind,
+} from "../_lib/appLinks";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
 import { REMOTE_CONFIG_KEYS } from "../_lib/featureFlags";
 import {
@@ -25,6 +31,8 @@ import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import {
   readLatestRingingChillyChatCallInviteForCallee,
+  readChillyChatCallInvite,
+  subscribeToChillyChatCallInvite,
   subscribeToIncomingChillyChatCallInvites,
   updateChillyChatCallInviteStatus,
   type ChillyChatCallInvite,
@@ -35,12 +43,14 @@ import {
   type ChillyChatPlayingSound,
 } from "../_lib/chillyChatCallSoundAssets";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
+import { resolveIncomingCallPresentation } from "../_lib/communicationCallMediaPolicy.mjs";
 import {
+  clearApplicationNotificationBadge,
   configureNotificationRuntime,
   dismissChillyChatCallNotificationRows,
   dismissPresentedChillyChatCallNotifications,
   readNotificationPreferences,
-  refreshAndroidPushRegistrationIfGranted,
+  refreshPushRegistrationIfGranted,
   subscribeToForegroundActivityNotifications,
   subscribeToForegroundNotificationAlerts,
   subscribeToNotificationResponses,
@@ -51,67 +61,28 @@ import {
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
+import {
+  reportIosNativeCallRemoteEnd,
+  revokeIosVoipRegistration,
+  startIosNativeCallsReadiness,
+  type SanitizedNativeCallEvent,
+} from "../_lib/iosNativeCalls";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
 import DevDebugOverlay from "../components/dev/dev-debug-overlay";
 import { RootErrorBoundary } from "../components/system/root-error-boundary";
 import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailable-screen";
 import InterstitialAdController from "../components/ads/InterstitialController";
 
-const PUBLIC_LEGAL_PATHS = new Set([
-  "/privacy",
-  "/terms",
-  "/account-deletion",
-  "/support",
-  "/community-guidelines",
-  "/creator-rules",
-  "/copyright",
-  "/support-policy",
-  "/premium-terms",
-  "/live-rules",
-  "/law-enforcement",
-  "/moderation-policy",
-  "/creator-monetization",
-  "/copyright-report",
-]);
+const PUBLIC_LEGAL_PATHS = new Set<string>(APPLICATION_LEGAL_PATHS);
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
 
-const normalizePublicLegalRoutePath = (value?: string | null) => {
-  const normalized = String(value ?? "").trim().toLowerCase().replace(/\/+$/u, "");
-  if (!normalized) return null;
-
-  const candidate = normalized.startsWith("/") ? normalized : `/${normalized}`;
-  return PUBLIC_LEGAL_PATHS.has(candidate) ? candidate : null;
-};
-
 const getPublicLegalRouteFromUrl = (url: string | null) => {
-  if (!url) return null;
-
-  try {
-    const parsedUrl = new URL(url);
-    const isAppLink = parsedUrl.protocol === "chillywoodmobile:";
-    const isWebLink = (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:")
-      && parsedUrl.hostname === "chillywoodstream.com";
-    if (!isAppLink && !isWebLink) return null;
-
-    const params = getUrlSearchParamsWithFragment(parsedUrl);
-    if (hasAuthLinkLikeParams(Object.fromEntries(params.entries()))) return null;
-
-    const hostRoute = isAppLink ? normalizePublicLegalRoutePath(parsedUrl.hostname) : null;
-    const pathRoute = normalizePublicLegalRoutePath(parsedUrl.pathname);
-
-    return hostRoute ?? pathRoute;
-  } catch {
-    return null;
-  }
+  const parsed = parseApplicationLink(url);
+  return parsed?.kind === "legal" ? parsed.pathname : null;
 };
 
-const isCreatorReplayPlayerDeepLink = (url?: string | null) => {
-  const normalized = String(url ?? "").trim().toLowerCase();
-  if (!normalized) return false;
-
-  return normalized.includes("://player/replay/") || normalized.includes(":///player/replay/");
-};
+const isCreatorReplayPlayerDeepLink = (url?: string | null) => isCreatorReplayApplicationLink(url);
 
 const hasAuthLinkLikeParams = (params: Record<string, unknown>) => {
   const type = String(params.type ?? "").trim().toLowerCase();
@@ -178,160 +149,19 @@ const sanitizeRouteAnalyticsParams = (pathname: string, params: Record<string, u
   return sanitized;
 };
 
-const getUrlSearchParamsWithFragment = (url: URL) => {
-  const params = new URLSearchParams(url.search);
-  const fragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+const getPasswordRecoveryRouteFromUrl = (url: string | null) => (
+  resolveApplicationRouteByKind(url, "password_reset")
+);
 
-  if (fragment) {
-    const hashParams = new URLSearchParams(fragment);
-    hashParams.forEach((value, key) => {
-      if (!params.has(key)) {
-        params.set(key, value);
-      }
-    });
-  }
-
-  return params;
-};
-
-const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
-  if (!url) return null;
-
-  try {
-    const parsedUrl = new URL(url);
-    const isSupabaseDeepLink = parsedUrl.protocol === "chillywoodmobile:"
-      || parsedUrl.protocol === "https:"
-      || parsedUrl.protocol === "http:";
-    if (!isSupabaseDeepLink) return null;
-
-    const normalizedHost = parsedUrl.hostname.toLowerCase();
-    const normalizedPath = parsedUrl.pathname.toLowerCase().replace(/\/+$/u, "");
-    const params = getUrlSearchParamsWithFragment(parsedUrl);
-
-    const type = String(params.get("type") ?? "").trim().toLowerCase();
-    const flow = String(params.get("flow") ?? "").trim().toLowerCase();
-    const hasRecoveryType = type === "recovery" || type === "recover" || flow === "recovery" || flow === "recover";
-    const isRecoveryPath = (
-      normalizedPath.includes("recovery")
-      || normalizedPath.includes("reset-password")
-      || normalizedPath.endsWith("/recovery")
-      || normalizedPath.endsWith("/auth/reset-password")
-      || normalizedHost === "reset-password"
-    );
-    const hasRecoveryTokens = params.has("access_token") && params.has("refresh_token");
-    const isResetPasswordPath = normalizedHost === "reset-password"
-      || (
-        normalizedHost === "chillywoodstream.com"
-        && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
-      )
-      || normalizedPath === "/reset-password"
-      || normalizedPath === "/auth/reset-password";
-
-    const appearsToBeRecoveryLink = hasRecoveryType
-      || isRecoveryPath
-      || hasRecoveryTokens;
-
-    if (!appearsToBeRecoveryLink && !isResetPasswordPath) return null;
-
-    const query = params.toString();
-    return query ? `/reset-password?${query}` : "/reset-password";
-  } catch {
-    return null;
-  }
-};
-
-const getAuthCallbackRouteFromUrl = (url: string | null) => {
-  if (!url) return null;
-
-  try {
-    const parsedUrl = new URL(url);
-    const isSupabaseDeepLink = parsedUrl.protocol === "chillywoodmobile:"
-      || parsedUrl.protocol === "https:"
-      || parsedUrl.protocol === "http:";
-    if (!isSupabaseDeepLink) return null;
-
-    const normalizedHost = parsedUrl.hostname.toLowerCase();
-    const normalizedPath = parsedUrl.pathname.toLowerCase().replace(/\/+$/u, "");
-    const params = getUrlSearchParamsWithFragment(parsedUrl);
-
-    const callbackType = String(params.get("type") ?? "").trim().toLowerCase();
-    const callbackFlow = String(params.get("flow") ?? "").trim().toLowerCase();
-    const hasAuthData = params.has("code")
-      || params.has("token")
-      || params.has("token_hash")
-      || (params.has("access_token") && params.has("refresh_token"));
-    if (
-      callbackType === "recovery"
-      || callbackType === "recover"
-      || callbackFlow === "recovery"
-      || callbackFlow === "recover"
-    ) {
-      return null;
-    }
-
-    const isResetPasswordPath = normalizedHost === "reset-password"
-      || (
-        normalizedHost === "chillywoodstream.com"
-        && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
-      )
-      || normalizedPath === "/reset-password"
-      || normalizedPath === "/auth/reset-password";
-    if (isResetPasswordPath) return null;
-
-    const hasKnownAuthType = [
-      "signup",
-      "email",
-      "email_change",
-      "invite",
-      "magiclink",
-      "reauthentication",
-    ].includes(callbackType);
-
-    const hasAuthCallbackParam = [
-      "code",
-      "token",
-      "type",
-      "error",
-      "error_code",
-      "error_description",
-      "access_token",
-      "refresh_token",
-      "token_hash",
-      "confirmation_token",
-      "recovery_token",
-    ].some((key) => params.has(key));
-
-    const hasConfirmPath =
-      normalizedPath === "/confirm"
-      || normalizedPath === "/verify"
-      || normalizedPath.endsWith("/verify")
-      || normalizedPath === "/v1/verify"
-      || normalizedPath.endsWith("/v1/verify")
-      || normalizedPath === "/auth"
-      || (normalizedHost === "auth" && (normalizedPath === "" || normalizedPath === "/" || normalizedPath === "/callback"))
-      || normalizedPath === "/callback"
-      || normalizedPath === "/auth-callback"
-      || normalizedHost === "auth-callback"
-      || normalizedHost === "callback"
-      || normalizedHost === "verify"
-      || normalizedPath === "/auth/verify"
-      || normalizedPath === "/auth/v1/verify";
-
-    const isLikelyAuthCallback = hasKnownAuthType || hasAuthCallbackParam || hasConfirmPath;
-    const appearsToBeAuthCallback = isLikelyAuthCallback || hasAuthData;
-    if (!appearsToBeAuthCallback) return null;
-
-    const query = params.toString();
-    return query ? `/auth-callback?${query}` : "/auth-callback";
-  } catch {
-    return null;
-  }
-};
+const getAuthCallbackRouteFromUrl = (url: string | null) => (
+  resolveApplicationRouteByKind(url, "auth_callback")
+);
 
 function RouteAnalyticsBridge() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const router = useRouter();
+  const { isSignedIn, user } = useSession();
   const handledInitialUrlRef = useRef(false);
 
   useEffect(() => {
@@ -339,15 +169,30 @@ function RouteAnalyticsBridge() {
   }, [params, pathname]);
 
   useEffect(() => {
+    const refreshPushIfAllowed = async () => {
+      const userId = String(user?.id ?? "").trim();
+      if (!isSignedIn || !userId) return;
+      const preferences = await readNotificationPreferences(userId).catch(() => null);
+      if (preferences?.pushEnabled === false) return;
+      await refreshPushRegistrationIfGranted().catch(() => null);
+    };
+
     void configureNotificationRuntime();
-    void refreshAndroidPushRegistrationIfGranted();
+    void clearApplicationNotificationBadge();
+    void refreshPushIfAllowed();
     const subscription = subscribeToNotificationResponses((path) => {
       router.push(path as Parameters<typeof router.push>[0]);
     });
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") return;
+      void clearApplicationNotificationBadge();
+      void refreshPushIfAllowed();
+    });
     return () => {
       subscription.remove();
+      appStateSubscription.remove();
     };
-  }, [router]);
+  }, [isSignedIn, router, user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -424,6 +269,16 @@ type IncomingCallAlert = ForegroundNotificationAlert & {
   invite?: ChillyChatCallInvite | null;
 };
 
+const buildIncomingCallAnswerPath = (alert: IncomingCallAlert) => {
+  const [routePath, query = ""] = String(alert.path ?? "").trim().split("?");
+  const params = new URLSearchParams(query);
+  const inviteId = String(alert.invite?.id ?? alert.inviteId ?? "").trim();
+  if (inviteId) params.set("callInviteId", inviteId);
+  params.set("nativeCallAction", "answer");
+  params.set("openCall", "1");
+  return `${routePath || "/chat"}?${params.toString()}`;
+};
+
 const ROOM_SAFE_CALL_PATH_PREFIXES = [
   "/watch-party",
   "/watch-party/",
@@ -452,10 +307,6 @@ const getIncomingCallerLabel = (alert: IncomingCallAlert) => {
   return String(match?.[1] ?? "").trim() || "Someone";
 };
 
-const getIncomingCallerInitial = (callerLabel: string) => (
-  String(callerLabel ?? "").trim().charAt(0).toUpperCase() || "C"
-);
-
 const normalizeRoutePathOnly = (value?: string | null) => {
   const normalized = String(value ?? "").trim().split("?")[0]?.replace(/\/+$/u, "") ?? "";
   return normalized || "/";
@@ -482,6 +333,7 @@ function IncomingCallNotificationBridge() {
   const pathname = usePathname();
   const { isSignedIn, user } = useSession();
   const [alert, setAlert] = useState<IncomingCallAlert | null>(null);
+  const [appState, setAppState] = useState(AppState.currentState);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
@@ -495,6 +347,9 @@ function IncomingCallNotificationBridge() {
 
   const showAlert = (nextAlert: IncomingCallAlert) => {
     if (nextAlert.inviteId && latestInviteAlertIdRef.current === nextAlert.inviteId) {
+      if (nextAlert.invite) {
+        setAlert((current) => current?.invite ? current : current ? { ...current, ...nextAlert } : nextAlert);
+      }
       return;
     }
     if (nextAlert.inviteId) latestInviteAlertIdRef.current = nextAlert.inviteId;
@@ -562,6 +417,7 @@ function IncomingCallNotificationBridge() {
       }
     }, 3000);
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      setAppState(nextState);
       if (nextState === "active") {
         void refreshIncomingInvite();
       }
@@ -586,7 +442,8 @@ function IncomingCallNotificationBridge() {
     const alertPath = normalizeRoutePathOnly(alert.path);
     const alreadyOnSameThread = currentPath.startsWith("/chat/") && alertPath && currentPath === alertPath;
     if (
-      alreadyOnSameThread
+      appState !== "active"
+      || alreadyOnSameThread
       || callPreferences?.chillyChatCallsEnabled === false
       || callPreferences?.inAppEnabled === false
     ) {
@@ -614,19 +471,19 @@ function IncomingCallNotificationBridge() {
       soundActive = false;
       stopIncomingCallAttention();
     };
-  }, [alert?.inviteId, alert?.path, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, callPreferences?.inAppEnabled, pathname]);
+  }, [alert, appState, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, callPreferences?.inAppEnabled, pathname]);
 
   if (!alert) return null;
 
   const currentPath = normalizeRoutePathOnly(pathname);
   const alertPath = normalizeRoutePathOnly(alert.path);
   const alreadyOnSameThread = currentPath.startsWith("/chat/") && !!alertPath && currentPath === alertPath;
-  if (alreadyOnSameThread) return null;
+  const presentation = resolveIncomingCallPresentation({ appState, alreadyOnSameThread });
+  if (presentation === "native_background" || presentation === "thread_banner") return null;
 
   const roomSafeCall = isRoomSafeIncomingCallPath(pathname);
   const callKind = getIncomingCallKind(alert);
   const callerLabel = getIncomingCallerLabel(alert);
-  const callerInitial = getIncomingCallerInitial(callerLabel);
 
   const clearAlert = () => {
     stopIncomingCallAttention();
@@ -662,7 +519,7 @@ function IncomingCallNotificationBridge() {
   };
 
   const openCall = () => {
-    const path = alert.path;
+    const path = buildIncomingCallAnswerPath(alert);
     cleanupChillyChatCallNotifications({
       callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       path,
@@ -734,7 +591,7 @@ function IncomingCallNotificationBridge() {
   const overlay = (
     <View
       pointerEvents="box-none"
-      style={roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay}
+      style={styles.incomingCallBannerOverlay}
       testID="app-wide-incoming-call-overlay"
       accessibilityLabel="Incoming Chi'lly Chat call overlay"
     >
@@ -745,8 +602,8 @@ function IncomingCallNotificationBridge() {
           testID="room-safe-incoming-call-banner"
           accessibilityLabel="Room-safe incoming Chi'lly Chat call"
         >
-          <Text style={styles.incomingCallEyebrow}>Chi'lly Chat</Text>
-          <Text style={styles.incomingCallTitle}>Incoming Chi'lly Chat call</Text>
+          <Text style={styles.incomingCallEyebrow}>Chi’lly Chat</Text>
+          <Text style={styles.incomingCallTitle}>Incoming Chi’lly Chat call</Text>
           <Text style={styles.incomingCallBody}>
             Answering will leave or pause your current room media session.
           </Text>
@@ -785,70 +642,50 @@ function IncomingCallNotificationBridge() {
       </View>
       ) : (
       <View
-        style={styles.incomingCallModalSheet}
-        testID="app-wide-incoming-call-modal"
+        style={styles.incomingCallBannerCard}
+        testID="app-wide-incoming-call-banner"
         accessibilityLabel={`Incoming Chi'lly Chat ${callKind} call from ${callerLabel}`}
       >
-        <View style={styles.incomingCallRingGlow}>
-          <View style={styles.incomingCallAvatar}>
-            <Text style={styles.incomingCallAvatarText}>{callerInitial}</Text>
-          </View>
-        </View>
-        <Text style={styles.incomingCallModalKicker}>Chi'lly Chat</Text>
-        <Text style={styles.incomingCallModalTitle}>{callerLabel} is calling...</Text>
-        <Text style={styles.incomingCallModalBody}>Incoming {callKind} call</Text>
-        <View style={styles.incomingCallModalActionRow}>
+        <Text style={styles.incomingCallEyebrow}>Incoming {callKind} call</Text>
+        <Text style={styles.incomingCallTitle}>{callerLabel} is calling…</Text>
+        <Text style={styles.incomingCallBody}>Answer, decline, or reply without leaving your current screen.</Text>
+        <View style={styles.incomingCallActions}>
           <TouchableOpacity
             activeOpacity={0.86}
             onPress={() => {
               void decline();
             }}
-            style={[styles.incomingCallModalButton, styles.incomingCallModalDeclineButton]}
+            style={[styles.incomingCallButton, styles.incomingCallDeclineButton]}
             testID="app-wide-incoming-call-decline"
             accessibilityLabel="Decline incoming Chi'lly Chat call"
           >
-            <Text style={styles.incomingCallModalButtonText}>Decline</Text>
+            <Text style={styles.incomingCallDeclineText}>Decline</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.82}
+            onPress={replyInChat}
+            style={[styles.incomingCallButton, styles.incomingCallSecondaryButton]}
+            testID="app-wide-incoming-call-reply-chat"
+            accessibilityLabel="Reply in Chi'lly Chat without answering"
+          >
+            <Text style={styles.incomingCallSecondaryText}>Reply</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.88}
             onPress={openCall}
-            style={[styles.incomingCallModalButton, styles.incomingCallModalAcceptButton]}
+            style={[styles.incomingCallButton, styles.incomingCallPrimaryButton]}
             testID="app-wide-incoming-call-answer"
             accessibilityLabel="Answer incoming Chi'lly Chat call"
           >
-            <Text style={styles.incomingCallModalButtonText}>Answer</Text>
+            <Text style={styles.incomingCallPrimaryText}>Answer</Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          activeOpacity={0.82}
-          onPress={replyInChat}
-          style={styles.incomingCallModalReplyButton}
-          testID="app-wide-incoming-call-reply-chat"
-          accessibilityLabel="Reply in Chi'lly Chat without answering"
-        >
-          <Text style={styles.incomingCallModalReplyText}>Reply in Chat</Text>
-        </TouchableOpacity>
-        <Text style={styles.incomingCallModalFootnote}>
-          Rings for about 45 seconds, then becomes a missed call.
-        </Text>
       </View>
       )}
     </View>
   );
 
-  if (roomSafeCall) return overlay;
-
-  return (
-    <Modal
-      animationType="fade"
-      onRequestClose={() => {}}
-      statusBarTranslucent
-      transparent
-      visible
-    >
-      {overlay}
-    </Modal>
-  );
+  return overlay;
 }
 
 function RoomSafeActivityNotificationBridge() {
@@ -1000,6 +837,162 @@ function RevenueCatBootstrap() {
       // runtime error reporting already happens inside the monetization owners
     });
   }, [user?.id]);
+
+  return null;
+}
+
+function IosNativeCallsBridge() {
+  const router = useRouter();
+  const { isSignedIn, user } = useSession();
+  const inviteSubscriptionsRef = useRef(new Map<string, () => void>());
+  const nativeCallDescriptorsRef = useRef(new Map<string, { callUuid: string; threadId: string }>());
+
+  useEffect(() => {
+    let active = true;
+    const currentUserId = String(user?.id ?? "").trim();
+
+    const clearInviteSubscription = (inviteId: string) => {
+      inviteSubscriptionsRef.current.get(inviteId)?.();
+      inviteSubscriptionsRef.current.delete(inviteId);
+      nativeCallDescriptorsRef.current.delete(inviteId);
+    };
+    const clearInviteSubscriptions = () => {
+      inviteSubscriptionsRef.current.forEach((unsubscribe) => unsubscribe());
+      inviteSubscriptionsRef.current.clear();
+      nativeCallDescriptorsRef.current.clear();
+    };
+
+    if (!isSignedIn || !currentUserId) {
+      nativeCallDescriptorsRef.current.forEach((descriptor) => {
+        void reportIosNativeCallRemoteEnd(descriptor.callUuid, "account_transition");
+      });
+      clearInviteSubscriptions();
+      void revokeIosVoipRegistration();
+      return () => {
+        active = false;
+        clearInviteSubscriptions();
+      };
+    }
+
+    const watchInviteLifecycle = (event: SanitizedNativeCallEvent) => {
+      const inviteId = String(event.callInviteId ?? "").trim();
+      const callUuid = String(event.callUuid ?? "").trim();
+      if (!inviteId || !callUuid || inviteSubscriptionsRef.current.has(inviteId)) return;
+      nativeCallDescriptorsRef.current.set(inviteId, {
+        callUuid,
+        threadId: String(event.threadId ?? "").trim(),
+      });
+
+      const reconcileInvite = async () => {
+        const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
+        if (!active || !invite) return;
+        if (invite.status === "ringing" || invite.status === "accepted") return;
+        clearInviteSubscription(inviteId);
+        await reportIosNativeCallRemoteEnd(callUuid, `invite_${invite.status}`).catch(() => false);
+      };
+
+      inviteSubscriptionsRef.current.set(
+        inviteId,
+        subscribeToChillyChatCallInvite(inviteId, () => {
+          void reconcileInvite();
+        }),
+      );
+      void reconcileInvite();
+    };
+
+    const routeNativeAction = (
+      event: SanitizedNativeCallEvent,
+      action: "answer" | "decline" | "end",
+    ) => {
+      const threadId = String(event.threadId ?? "").trim();
+      const callInviteId = String(event.callInviteId ?? "").trim();
+      if (!threadId || !callInviteId) return;
+      const callUuid = String(event.callUuid ?? "").trim();
+      const params = new URLSearchParams({ callInviteId, nativeCallAction: action });
+      if (callUuid) params.set("nativeCallUuid", callUuid);
+      const destination = `/chat/${encodeURIComponent(threadId)}?${params.toString()}`;
+      if (action === "answer") {
+        router.replace(destination as Parameters<typeof router.replace>[0]);
+        return;
+      }
+      router.push(destination as Parameters<typeof router.push>[0]);
+    };
+
+    const handleNativeCallEvent = async (event: SanitizedNativeCallEvent) => {
+      if (!active) return;
+      if (event.type === "incoming" || event.type === "recovered") {
+        watchInviteLifecycle(event);
+        return;
+      }
+      if (event.type === "answerRequested") {
+        routeNativeAction(event, "answer");
+        return;
+      }
+      if (event.type === "declined") {
+        routeNativeAction(event, "decline");
+        return;
+      }
+      if (event.type === "muted" || event.type === "unmuted") {
+        // CallKit mute state is consumed by the already-mounted call screen.
+        // Navigating here would stack a second chat route and tear down the
+        // active WebRTC peer connection during the first screen's cleanup.
+        return;
+      }
+      if (event.type === "audioInterruptionBegan") {
+        // AVAudioSession owns interruption behavior. Do not navigate or turn a
+        // transient system interruption into a call-screen replacement.
+        return;
+      }
+      if (event.type === "timeout") {
+        const inviteId = String(event.callInviteId ?? "").trim();
+        if (!inviteId) return;
+        const invite = await readChillyChatCallInvite(inviteId).catch(() => null);
+        if (invite && invite.calleeUserId === currentUserId && invite.status === "ringing") {
+          await updateChillyChatCallInviteStatus({
+            actorUserId: currentUserId,
+            invite,
+            status: "missed",
+          }).catch(() => null);
+        }
+        clearInviteSubscription(inviteId);
+        return;
+      }
+      if (
+        event.type === "ended"
+        || event.type === "answerFailed"
+        || event.type === "audioSessionFailed"
+        || event.type === "providerReset"
+      ) {
+        routeNativeAction(event, "end");
+        clearInviteSubscription(String(event.callInviteId ?? "").trim());
+        return;
+      }
+      if (event.type === "remoteEnded" || event.type === "reportFailed") {
+        clearInviteSubscription(String(event.callInviteId ?? "").trim());
+      }
+    };
+
+    void startIosNativeCallsReadiness(handleNativeCallEvent);
+    const activationSubscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      nativeCallDescriptorsRef.current.forEach((descriptor, inviteId) => {
+        void readChillyChatCallInvite(inviteId)
+          .then((invite) => {
+            if (!invite || invite.status === "ringing" || invite.status === "accepted") return;
+            clearInviteSubscription(inviteId);
+            return reportIosNativeCallRemoteEnd(descriptor.callUuid, `activation_${invite.status}`);
+          })
+          .catch(() => null);
+      });
+    });
+
+    return () => {
+      active = false;
+      activationSubscription.remove();
+      clearInviteSubscriptions();
+      void revokeIosVoipRegistration();
+    };
+  }, [isSignedIn, router, user?.id]);
 
   return null;
 }
@@ -1254,6 +1247,7 @@ export default function RootLayout() {
       <RuntimeUpdateGate />
       <FirebaseRuntimeBridge />
       <RevenueCatBootstrap />
+      <IosNativeCallsBridge />
       <BetaProgramProvider>
         <RootErrorBoundary>
           <AuthRouteGate />
@@ -1287,14 +1281,6 @@ const styles = StyleSheet.create({
     right: 14,
     zIndex: 40,
   },
-  incomingCallModalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 22,
-    backgroundColor: "rgba(0,0,0,0.58)",
-  },
   incomingCallBannerCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -1306,109 +1292,6 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
-  },
-  incomingCallModalSheet: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(10,12,21,0.96)",
-    padding: 24,
-    alignItems: "center",
-    gap: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.34,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 12,
-  },
-  incomingCallRingGlow: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(243,75,116,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(243,75,116,0.42)",
-  },
-  incomingCallAvatar: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  incomingCallAvatarText: {
-    color: "#FFF5F8",
-    fontSize: 28,
-    fontWeight: "900",
-  },
-  incomingCallModalKicker: {
-    color: "#FFB4C6",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.15,
-    textTransform: "uppercase",
-  },
-  incomingCallModalTitle: {
-    color: "#FFFFFF",
-    fontSize: 23,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  incomingCallModalBody: {
-    color: "#C9D4E8",
-    fontSize: 14,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  incomingCallModalActionRow: {
-    flexDirection: "row",
-    gap: 12,
-    width: "100%",
-    marginTop: 8,
-  },
-  incomingCallModalButton: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  incomingCallModalDeclineButton: {
-    backgroundColor: "#B91C1C",
-  },
-  incomingCallModalAcceptButton: {
-    backgroundColor: "#16A34A",
-  },
-  incomingCallModalButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  incomingCallModalReplyButton: {
-    minHeight: 42,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  incomingCallModalReplyText: {
-    color: "#D7E4EA",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  incomingCallModalFootnote: {
-    color: "#8E9AB0",
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
   },
   incomingCallOpenAction: {
     gap: 4,
@@ -1453,6 +1336,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: "#A9F6D2",
   },
+  incomingCallDeclineButton: {
+    backgroundColor: "#B91C1C",
+  },
   incomingCallSecondaryText: {
     color: "#D7E4EA",
     fontSize: 12,
@@ -1460,6 +1346,11 @@ const styles = StyleSheet.create({
   },
   incomingCallPrimaryText: {
     color: "#071014",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  incomingCallDeclineText: {
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "900",
   },

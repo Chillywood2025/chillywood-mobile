@@ -71,6 +71,7 @@ import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeIn
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
+import { AppBackButton } from "../../components/navigation/app-back-button";
 import { PLAYER_WATCH_PARTY_SOURCE } from "../../_lib/watch-party/room-shared";
 import WatchPartyLiveStageScreen from "./live-stage/[partyId]";
 import { AppText } from "../../components/ui/typography";
@@ -182,6 +183,13 @@ export default function WatchPartyIndexScreen() {
         ? "platform_title"
         : null;
   const initialRouteSourceId = String(Array.isArray(params.sourceId) ? params.sourceId[0] : params.sourceId ?? "").trim();
+  const onWaitingRoomBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(tabs)/live");
+  }, [router]);
   const [joinCode, setJoinCode] = useState(() => (!isPlayerWatchPartyLiveFlow ? initialRouteRoomCode : ""));
   const [joinLookupBusy, setJoinLookupBusy] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -1655,6 +1663,12 @@ export default function WatchPartyIndexScreen() {
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
         <View style={styles.headerRow}>
+          <AppBackButton
+            accessibilityLabel={`Go back from ${waitingRoomTitle}`}
+            onPress={onWaitingRoomBack}
+            style={styles.headerBackButton}
+            testID="watch-party-waiting-room-back-button"
+          />
           <View style={styles.headerCopy}>
             <AppText scale="caption" style={styles.kicker}>{branding.appDisplayName.toUpperCase()}</AppText>
           </View>
@@ -2046,6 +2060,7 @@ const styles = StyleSheet.create({
 
   // Header
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  headerBackButton: { marginLeft: -6 },
   headerCopy: { flex: 1 },
   kicker: { color: "#555", fontSize: 10, fontWeight: "900", letterSpacing: 1.8 },
   headline: { color: "#fff", fontSize: 38, fontWeight: "900", marginTop: 4, lineHeight: 42 },

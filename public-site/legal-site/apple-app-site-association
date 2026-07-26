@@ -1,0 +1,37 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "CU7536UQK9.com.chillywood.mobile"
+        ],
+        "components": [
+          { "/": "/auth" },
+          { "/": "/auth-callback" },
+          { "/": "/auth/reset-password" },
+          { "/": "/auth/v1/verify" },
+          { "/": "/auth/verify" },
+          { "/": "/callback" },
+          { "/": "/confirm" },
+          { "/": "/reset-password" },
+          { "/": "/verify" },
+          { "/": "/v1/verify" },
+          { "/": "/profile" },
+          { "/": "/channel" },
+          { "/": "/title" },
+          { "/": "/player" },
+          { "/": "/spectate" },
+          { "/": "/watch-party" },
+          { "/": "/auth/*" },
+          { "/": "/profile/*" },
+          { "/": "/channel/*" },
+          { "/": "/title/*" },
+          { "/": "/player/*" },
+          { "/": "/spectate/*" },
+          { "/": "/watch-party/*" }
+        ]
+      }
+    ]
+  }
+}

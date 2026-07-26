@@ -6,7 +6,7 @@ export function RuntimeUnavailableScreen({ message }: { message: string }) {
     <View style={styles.outer}>
       <View style={styles.card}>
         <Text style={styles.kicker}>RUNTIME CONFIG REQUIRED</Text>
-        <Text style={styles.title}>Chi'llywood is unavailable right now.</Text>
+        <Text style={styles.title}>Chi’llywood is unavailable right now.</Text>
         <Text style={styles.body}>
           {message}
         </Text>

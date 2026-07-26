@@ -1,0 +1,34 @@
+{
+  "compatibility_date": "2026-07-24",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "preview_urls": false,
+  "workers_dev": false,
+  "hyperdrive": [
+    {
+      "binding": "COGNITIVE_GITHUB_DRAFT_PR_BROKER_HYPERDRIVE",
+      "id": "REPLACE_WITH_COGNITIVE_GITHUB_DRAFT_PR_BROKER_HYPERDRIVE_ID"
+    }
+  ],
+  "main": "../entrypoints/cognitive_github_draft_pr_broker.mjs",
+  "name": "chillywood-level01-github-draft-pr-broker",
+  "secrets": {
+    "required": [
+      "COGNITIVE_GITHUB_DRAFT_PR_BROKER_INVOKE_SHA256",
+      "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN",
+      "GITHUB_APP_ID",
+      "GITHUB_APP_INSTALLATION_ID",
+      "GITHUB_APP_PRIVATE_KEY",
+      "GITHUB_REPOSITORY_ID"
+    ]
+  },
+  "vars": {
+    "RUNTIME_SCHEMA_VERSION": "cognitive-level01-isolated-runtime-v1",
+    "SOURCE_COMMIT": "REPLACE_WITH_REVIEWED_SUCCESSOR_COMMIT",
+    "SOURCE_BASE_COMMIT": "8660558a9cf360f033246a404dfc5812d522da88"
+  },
+  "version_metadata": {
+    "binding": "WORKER_VERSION"
+  }
+}

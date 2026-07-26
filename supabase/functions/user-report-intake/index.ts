@@ -7,7 +7,6 @@ type SupabaseClientLike = any;
 
 const SYSTEM_ID = "support_success_operator";
 const THRESHOLD_UNIQUE_USERS = 3;
-const THRESHOLD_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -46,6 +45,7 @@ const REPORT_TYPES = [
 
 type ReportType = typeof REPORT_TYPES[number];
 type Severity = "low" | "review" | "major" | "critical";
+type Platform = "shared" | "ios" | "android" | "web" | "unknown";
 type RoutedSystem =
   | "media_automation"
   | "livekit_operator"
@@ -72,18 +72,18 @@ const ROUTES_TO_INSTALLED_QA = /^\/?(admin|chat|creator-monetization-setup|subsc
 
 const CATEGORY_HINTS: Array<[ReportType, RegExp]> = [
   ["security_access", /\b(security|hacked|unauthorized|admin access|permission|access control|account takeover|2fa|mfa|session hijack|leak)\b/i],
-  ["premium_or_billing", /\b(premium|subscription|billing|charged|charge|google play|revenuecat|store|purchase|restore)\b/i],
+  ["premium_or_billing", /\b(premium|subscription|billing|charged|charge|google play|play billing|revenuecat|storekit|iap|in-app purchase|app store purchase|apple subscription|restore purchases|seat pass|tip tier|store|purchase|restore|refund|revocation)\b/i],
   ["payout_or_money", /\b(payout|cashout|transfer|stripe|bank|tax|refund|money|invoice|checkout)\b/i],
   ["privacy_data", /\b(privacy|delete my data|export my data|personal data|doxx|reporter|private evidence|gdpr|ccpa)\b/i],
-  ["livekit_live_watchparty", /\b(watch party|party room|livekit|camera|microphone|mic|live stage|viewer request|host approve|call)\b/i],
+  ["livekit_live_watchparty", /\b(watch party|party room|livekit|camera|microphone|mic|live stage|viewer request|host approve|call media)\b/i],
   ["media_playback", /\b(playback|video|audio|buffer|caption|subtitle|player|stream|stuck loading)\b/i],
   ["upload_or_transcode", /\b(upload|transcode|processing|thumbnail|media job|draft video|creator upload)\b/i],
-  ["notification_delivery", /\b(push|notification|expo|device token|alert did not arrive|reminder)\b/i],
-  ["release_update_version", /\b(update|version|ota|runtime|stale app|release|rollback|channel)\b/i],
+  ["notification_delivery", /\b(push|notification|expo|device token|alert did not arrive|reminder|apns|pushkit|callkit|voip|native incoming call|terminal call cleanup|fcm)\b/i],
+  ["release_update_version", /\b(update|version|ota|runtime|stale app|release|rollback|channel|testflight|ios-qa|apk|aab|versioncode)\b/i],
   ["search_discovery_visibility", /\b(search|discover|ranking|recommendation|visibility|not showing|shadowban|boost|demote)\b/i],
   ["ads_sponsor", /\b(ad|ads|sponsor|sponsorship|paid placement|brand deal|promotion)\b/i],
   ["safety_abuse", /\b(abuse|unsafe|threat|violence|self harm|minor safety|sexual exploitation|report abuse)\b/i],
-  ["harassment", /\b(harass|bully|hate|slur|stalking)\b/i],
+  ["harassment", /\b(harass(?:ment|ed|ing)?|bully|hate|slur|stalking)\b/i],
   ["impersonation", /\b(impersonat|fake account|pretending to be)\b/i],
   ["copyright", /\b(copyright|dmca|takedown|stolen video|unauthorized media)\b/i],
   ["illegal_or_dangerous_content", /\b(illegal|dangerous|weapon|explosive|drug sale|trafficking)\b/i],
@@ -99,6 +99,33 @@ const jsonResponse = (status: number, payload: JsonObject) => new Response(JSON.
 });
 
 const toText = (value: unknown) => String(value ?? "").trim();
+
+const normalizePlatform = (value: unknown): Platform => {
+  const platform = toText(value).toLowerCase();
+  if (["ios", "iphone", "ipad", "testflight", "app_store"].includes(platform)) return "ios";
+  if (["android", "google_play", "play_store", "firebase_test_lab"].includes(platform)) return "android";
+  if (["web", "browser", "pwa"].includes(platform)) return "web";
+  if (platform === "shared") return "shared";
+  return "unknown";
+};
+
+const PLATFORM_SPECIFIC_REPORT_SIGNAL = /\b(ios|iphone|ipad|testflight|app store|storekit|iap|apple subscription|app privacy|privacyinfo|privacy manifest|apns|pushkit|callkit|voip|android|google play|play billing|data safety|fcm|apk|aab|versioncode|firebase test lab|web|browser|pwa|permission screen|account deletion (?:screen|button|route)|sign[ -]?in screen|login screen|route|screen|button)\b/i;
+
+const classifyPlatform = (payload: JsonObject, reportType: ReportType): Platform => {
+  const explicit = normalizePlatform(payload.platform ?? payload.devicePlatform ?? payload.device_platform);
+  const text = `${payload.surface ?? ""} ${payload.route ?? ""} ${payload.summary ?? ""} ${payload.details ?? ""}`;
+  const inferred = explicit !== "unknown"
+    ? explicit
+    : /\b(ios|iphone|ipad|testflight|app store|storekit|iap|apple subscription|apns|pushkit|callkit|voip)\b/i.test(text)
+      ? "ios"
+      : /\b(android|google play|play billing|fcm|apk|aab|versioncode|firebase test lab)\b/i.test(text)
+        ? "android"
+        : /\b(web|browser|pwa|website)\b/i.test(text)
+          ? "web"
+          : "unknown";
+  if (!["safety_abuse", "harassment", "impersonation", "copyright", "illegal_or_dangerous_content", "privacy_data", "account_access"].includes(reportType)) return inferred;
+  return inferred !== "unknown" && PLATFORM_SPECIFIC_REPORT_SIGNAL.test(text) ? inferred : "shared";
+};
 
 const readRequiredEnv = (key: string) => {
   const value = toText(Deno.env.get(key));
@@ -172,7 +199,7 @@ const routeSystem = (reportType: ReportType, payload: JsonObject): RoutedSystem 
   if (["safety_abuse", "harassment", "impersonation", "copyright", "illegal_or_dangerous_content"].includes(reportType)) {
     return "moderation_safety_operator";
   }
-  if (reportType === "premium_or_billing" || reportType === "payout_or_money") return "support_success_operator";
+  if (reportType === "premium_or_billing" || reportType === "payout_or_money") return "money_flow_control";
   if (reportType === "security_access") return "security_owner_operator";
   if (reportType === "privacy_data") return "privacy_compliance_operator";
   if (reportType === "livekit_live_watchparty") return "livekit_operator";
@@ -181,11 +208,13 @@ const routeSystem = (reportType: ReportType, payload: JsonObject): RoutedSystem 
   if (reportType === "release_update_version") return "release_ota_operator";
   if (reportType === "search_discovery_visibility") return "search_ranking_integrity_operator";
   if (reportType === "ads_sponsor") return "ads_sponsor_delivery_operator";
-  if (reportType === "chat_or_call" && /\b(camera|microphone|mic|call|live|watch party)\b/i.test(text)) return "livekit_operator";
+  if (reportType === "chat_or_call" && /\b(apns|pushkit|callkit|voip|native incoming call|terminal call cleanup)\b/i.test(text)) return "notification_delivery_operator";
+  if (reportType === "chat_or_call" && /\b(camera|microphone|mic|call media|livekit|live|watch party)\b/i.test(text)) return "livekit_operator";
+  if (reportType === "bug_broken_feature" && /\b(crash|fatal|slow|performance|timeout|anr|startup failure|backend error)\b/i.test(text)) return "observability_runtime_operator";
   if (reportType === "bug_broken_feature" && (ROUTES_TO_INSTALLED_QA.test(route) || /\b(route|screen|button|marker|testid|navigation|stuck on home)\b/i.test(text))) {
     return "installed_product_qa_operator";
   }
-  if (reportType === "bug_broken_feature" && /\b(crash|error|slow|performance|timeout|api|backend)\b/i.test(text)) {
+  if (reportType === "bug_broken_feature" && /\b(error|api|backend)\b/i.test(text)) {
     return "observability_runtime_operator";
   }
   return "support_success_operator";
@@ -198,6 +227,7 @@ const isImmediate = (reportType: ReportType, severity: Severity) => (
 
 const classifyPayload = (payload: JsonObject) => {
   const reportType = inferReportType(payload);
+  const platform = classifyPlatform(payload, reportType);
   const combinedText = `${payload.summary ?? ""} ${payload.details ?? ""}`;
   const severity = inferSeverity(payload, combinedText);
   const routedSystemId = routeSystem(reportType, payload);
@@ -205,6 +235,7 @@ const classifyPayload = (payload: JsonObject) => {
   const spamFlag = SPAM_PATTERN.test(combinedText) || toText(payload.summary).length > 180;
   const immediate = isImmediate(reportType, severity);
   return {
+    platform,
     reportType,
     category: reportType,
     severity,
@@ -227,6 +258,7 @@ const fingerprintPayload = (payload: JsonObject, classification: ReturnType<type
     .slice(0, 14)
     .join(" ");
   return [
+    classification.platform,
     classification.reportType,
     classification.routedSystemId,
     normalizedSurface || "surface_unknown",
@@ -245,170 +277,10 @@ const authenticateUser = async (request: Request, client: SupabaseClientLike) =>
   return { user: data.user, error: null };
 };
 
-const buildOwnerCommandPayload = (cluster: JsonObject, approvalLevel: number) => ({
-  owner_user_id: null,
-  command_text: `User report cluster requires safe operator review: ${cluster.report_type} with ${cluster.unique_reporter_count} unique reporters routed to ${cluster.routed_system_id}.`,
-  normalized_intent: "user_report_cluster_routing",
-  target_systems: [cluster.routed_system_id],
-  approval_level: approvalLevel,
-  status: approvalLevel >= 3 ? "approval_required" : "planned",
-  allowed_scope: [
-    "read sanitized report cluster summary",
-    "write routed operator finding",
-    "create scoped owner command or approval request",
-    "safe source/proof/test update after target operator preflight",
-  ],
-  forbidden_scope: [
-    "money movement",
-    "manual Premium grant",
-    "Premium grant",
-    "auth/RLS mutation",
-    "ban/restrict/delete content directly",
-    "provider product mutation",
-    "LiveKit routing change",
-    "R2/media behavior change",
-    "OTA publish or rollback without approval",
-    "ad or sponsor activation",
-    "raw user text execution",
-  ],
-  preflight_plan: ["confirm cluster fingerprint and unique reporter count", "review sanitized reproduction details only", "confirm target operator scope"],
-  execution_plan: ["target operator records finding", "operator proposes safe fix or blocker", "high-risk work routes to autonomous approval"],
-  rollback_plan: ["supersede finding/command rows; no user state was changed"],
-  proof_plan: ["run target operator proof/guard and user report router guard"],
-  validation_plan: ["verify no high-risk side effect flags were set"],
-  metadata: {
-    source: "user_report_router",
-    cluster_id: cluster.id,
-    normalized_fingerprint: cluster.normalized_fingerprint,
-    raw_user_text_executed: false,
-  },
-});
-
-const createApprovalRequest = async (
-  client: SupabaseClientLike,
-  cluster: JsonObject,
-  ownerCommandId: string | null,
-  approvalLevel: number,
-) => {
-  if (approvalLevel < 3) return null;
-  const { data, error } = await client
-    .from("autonomous_approval_requests")
-    .insert({
-      system_id: String(cluster.routed_system_id ?? SYSTEM_ID),
-      action_id: "user_report_cluster_review",
-      requested_by_actor_type: SYSTEM_ID,
-      requested_by_actor_id: null,
-      approval_level: approvalLevel,
-      status: "pending",
-      title: `User report cluster review for ${cluster.report_type}`,
-      reason: "Critical or sensitive user report cluster requires owner/super-admin review before any high-risk action.",
-      risk_summary: "User reports are untrusted input and cannot directly execute money, Premium, auth, enforcement, provider, OTA, LiveKit, R2, or ads changes.",
-      proposed_action: "Review sanitized cluster and route target operator work through approved scope only.",
-      allowed_write_scope: ["sanitized finding rows", "owner command blocker/proof rows", "approval request rows"],
-      forbidden_scope: ["direct money movement", "Premium grant", "auth/RLS mutation", "direct enforcement", "provider product mutation", "raw user text execution"],
-      rollback_plan: "Cancel approval and supersede routed finding rows; no user state changes were made.",
-      kill_switch_plan: "Support Success and target operator emergency stops block execution.",
-      proof_plan: "Run user report router, target operator, and owner command guards before execution.",
-      validation_plan: "Confirm highRiskExecuted=false, moneyMoved=false, userRightsChanged=false.",
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      metadata: {
-        source: "user_report_router",
-        cluster_id: cluster.id,
-        owner_command_id: ownerCommandId,
-      },
-    })
-    .select("id,status")
-    .single();
-  if (error) throw error;
-
-  await client.from("autonomous_approval_request_events").insert({
-    request_id: data.id,
-    event_type: "created",
-    actor_type: SYSTEM_ID,
-    actor_id: null,
-    event_summary: "User report router requested owner review for a critical/sensitive report cluster.",
-    metadata: { source: "user_report_router", cluster_id: cluster.id },
-  });
-  return data;
-};
-
-const shouldRouteCluster = (cluster: JsonObject) => {
-  if (cluster.spam_flag || cluster.false_positive) return false;
-  if (isImmediate(String(cluster.report_type ?? "other_support") as ReportType, String(cluster.severity ?? "review") as Severity)) return true;
-  const uniqueReporterCount = Number(cluster.unique_reporter_count ?? 0);
-  if (uniqueReporterCount < THRESHOLD_UNIQUE_USERS) return false;
-  const firstSeenAt = new Date(String(cluster.first_seen_at ?? new Date().toISOString())).getTime();
-  return Date.now() - firstSeenAt <= THRESHOLD_WINDOW_MS;
-};
-
 const routeClusterIfNeeded = async (client: SupabaseClientLike, cluster: JsonObject) => {
-  if (!shouldRouteCluster(cluster)) return { routed: false, reason: "threshold_not_met" };
-
-  const { data: existing } = await client
-    .from("user_report_routing_actions")
-    .select("id,owner_command_id,approval_request_id")
-    .eq("cluster_id", cluster.id)
-    .limit(1)
-    .maybeSingle();
-  if (existing?.id) return { routed: false, reason: "already_routed", routingActionId: existing.id };
-
-  const approvalLevel = isImmediate(String(cluster.report_type ?? "other_support") as ReportType, String(cluster.severity ?? "review") as Severity) ? 3 : 2;
-  const { data: command, error: commandError } = await client
-    .from("owner_command_requests")
-    .insert(buildOwnerCommandPayload(cluster, approvalLevel))
-    .select("id,status")
-    .single();
-  if (commandError) throw commandError;
-
-  const approval = await createApprovalRequest(client, cluster, command?.id ?? null, approvalLevel);
-
-  const actionType = approvalLevel >= 3 ? "immediate_escalation" : "threshold_owner_command";
-  const actionStatus = approval?.id ? "approval_request_created" : "owner_command_created";
-  const { data: action, error: actionError } = await client
-    .from("user_report_routing_actions")
-    .insert({
-      cluster_id: cluster.id,
-      action_type: actionType,
-      routed_system_id: cluster.routed_system_id,
-      owner_command_id: command.id,
-      approval_request_id: approval?.id ?? null,
-      action_status: actionStatus,
-      reason: approvalLevel >= 3 ? "critical_or_sensitive_immediate_escalation" : "three_unique_reporter_threshold_met",
-      unique_reporter_count: cluster.unique_reporter_count,
-      report_count: cluster.report_count,
-      metadata: { source: "user_report_router", raw_user_text_executed: false },
-    })
-    .select("id")
-    .single();
-  if (actionError) throw actionError;
-
-  await client.from("user_report_operator_findings").insert({
-    cluster_id: cluster.id,
-    system_id: SYSTEM_ID,
-    finding_type: cluster.report_type,
-    severity: cluster.severity,
-    routed_system_id: cluster.routed_system_id,
-    text_summary_redacted: cluster.text_summary_redacted,
-    unique_reporter_count: cluster.unique_reporter_count,
-    report_count: cluster.report_count,
-    owner_command_id: command.id,
-    approval_request_id: approval?.id ?? null,
-    finding_status: actionStatus,
-    metadata: { source: "user_report_router", prompt_injection_executed: false },
-  });
-
-  await client
-    .from("user_report_clusters")
-    .update({
-      cluster_status: approvalLevel >= 3 ? "review_required" : "routed",
-      action_status: actionStatus,
-      owner_command_id: command.id,
-      approval_request_id: approval?.id ?? null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", cluster.id);
-
-  return { routed: true, routingActionId: action.id, ownerCommandId: command.id, approvalRequestId: approval?.id ?? null };
+  const { data, error } = await client.rpc("route_user_report_cluster", { p_cluster_id: cluster.id });
+  if (error) throw error;
+  return (data ?? { routed: false, reason: "routing_result_missing" }) as JsonObject;
 };
 
 const submitReport = async (request: Request, client: SupabaseClientLike, payload: JsonObject) => {
@@ -432,6 +304,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
       report_type: classification.reportType,
       category: classification.category,
       severity: classification.severity,
+      platform: classification.platform,
       surface: toText(payload.surface) || null,
       route: toText(payload.route) || null,
       target_type: toText(payload.targetType ?? payload.target_type) || null,
@@ -439,7 +312,8 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
       app_version: toText(payload.appVersion ?? payload.app_version) || null,
       update_id: toText(payload.updateId ?? payload.update_id) || null,
       runtime_version: toText(payload.runtimeVersion ?? payload.runtime_version) || null,
-      device_platform: toText(payload.devicePlatform ?? payload.device_platform) || null,
+      native_build: toText(payload.nativeBuild ?? payload.native_build) || null,
+      channel: toText(payload.channel) || null,
       normalized_fingerprint: normalizedFingerprint,
       text_summary_redacted: summary || details.slice(0, 220),
       raw_text_redacted: details || null,
@@ -457,6 +331,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
 
   await client.from("user_report_classifications").insert({
     report_id: report.id,
+    platform: classification.platform,
     report_type: classification.reportType,
     category: classification.category,
     severity: classification.severity,
@@ -468,95 +343,13 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
     metadata: { source: "user_report_intake", raw_user_text_executed: false },
   });
 
-  const now = new Date().toISOString();
-  let { data: cluster, error: clusterReadError } = await client
-    .from("user_report_clusters")
-    .select("*")
-    .eq("normalized_fingerprint", normalizedFingerprint)
-    .maybeSingle();
-  if (clusterReadError) throw clusterReadError;
-
-  if (!cluster) {
-    const { data: insertedCluster, error: insertClusterError } = await client
-      .from("user_report_clusters")
-      .insert({
-        normalized_fingerprint: normalizedFingerprint,
-        report_type: classification.reportType,
-        category: classification.category,
-        severity: classification.severity,
-        surface: report.surface,
-        route: report.route,
-        target_type: report.target_type,
-        target_id_hash: targetIdHash,
-        text_summary_redacted: report.text_summary_redacted,
-        unique_reporter_count: 0,
-        report_count: 0,
-        first_seen_at: now,
-        last_seen_at: now,
-        cluster_status: classification.spamFlag ? "spam" : "open",
-        routed_system_id: classification.routedSystemId,
-        action_status: "threshold_pending",
-        spam_flag: classification.spamFlag,
-        metadata: { source: "user_report_intake" },
-      })
-      .select("*")
-      .single();
-    if (insertClusterError) throw insertClusterError;
-    cluster = insertedCluster;
-  }
-
-  const { data: existingMember } = await client
-    .from("user_report_cluster_members")
-    .select("id,report_count")
-    .eq("cluster_id", cluster.id)
-    .eq("reporter_hash", reporterHash)
-    .maybeSingle();
-
-  if (existingMember?.id) {
-    await client
-      .from("user_report_cluster_members")
-      .update({
-        report_count: Number(existingMember.report_count ?? 1) + 1,
-        duplicate_flag: true,
-        last_seen_at: now,
-      })
-      .eq("id", existingMember.id);
-    await client.from("user_report_intake_events").update({ duplicate_flag: true }).eq("id", report.id);
-  } else {
-    await client.from("user_report_cluster_members").insert({
-      cluster_id: cluster.id,
-      report_id: report.id,
-      reporter_user_id: user.id,
-      reporter_hash: reporterHash,
-      metadata: { source: "user_report_intake" },
-    });
-  }
-
-  const { count: uniqueReporterCount } = await client
-    .from("user_report_cluster_members")
-    .select("id", { count: "exact", head: true })
-    .eq("cluster_id", cluster.id);
-  const { count: reportCount } = await client
-    .from("user_report_intake_events")
-    .select("id", { count: "exact", head: true })
-    .eq("normalized_fingerprint", normalizedFingerprint);
-
-  const updatedClusterPayload = {
-    unique_reporter_count: uniqueReporterCount ?? 0,
-    report_count: reportCount ?? 0,
-    last_seen_at: now,
-    severity: classification.severity === "critical" ? "critical" : cluster.severity,
-    updated_at: now,
-  };
-  const { data: updatedCluster, error: updateClusterError } = await client
-    .from("user_report_clusters")
-    .update(updatedClusterPayload)
-    .eq("id", cluster.id)
-    .select("*")
-    .single();
-  if (updateClusterError) throw updateClusterError;
-
-  await client.from("user_report_intake_events").update({ report_status: "clustered" }).eq("id", report.id);
+  const { data: clusterTransition, error: clusterTransitionError } = await client.rpc(
+    "upsert_user_report_cluster_membership",
+    { p_report_id: report.id, p_reporter_hash: reporterHash },
+  );
+  if (clusterTransitionError) throw clusterTransitionError;
+  const updatedCluster = clusterTransition?.cluster;
+  if (!updatedCluster?.id) throw new Error("atomic_cluster_transition_missing_result");
   const routeResult = await routeClusterIfNeeded(client, updatedCluster);
   if (routeResult.routed) {
     await client.from("user_report_intake_events").update({ report_status: "routed" }).eq("id", report.id);
@@ -567,6 +360,7 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
     reportId: report.id,
     clusterId: updatedCluster.id,
     classification: {
+      platform: classification.platform,
       reportType: classification.reportType,
       severity: classification.severity,
       routedSystemId: classification.routedSystemId,
@@ -575,8 +369,8 @@ const submitReport = async (request: Request, client: SupabaseClientLike, payloa
       promptInjectionFlag: classification.promptInjectionFlag,
     },
     cluster: {
-      uniqueReporterCount: uniqueReporterCount ?? 0,
-      reportCount: reportCount ?? 0,
+      uniqueReporterCount: Number(updatedCluster.unique_reporter_count ?? 0),
+      reportCount: Number(updatedCluster.report_count ?? 0),
       thresholdUniqueReporters: THRESHOLD_UNIQUE_USERS,
       actionStatus: routeResult.routed ? "routed" : "threshold_pending",
     },

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Chi'llywood iOS installed-product readiness daily, independent of Android Firebase Test Lab
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+Persistent=true
+AccuracySec=60s
+RandomizedDelaySec=10min
+Unit=chillywood-installed-qa-ios-readiness.service
+
+[Install]
+WantedBy=timers.target

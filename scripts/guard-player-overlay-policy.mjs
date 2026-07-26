@@ -85,7 +85,12 @@ assertIncludes(player, "zIndex: 46", "standalone top chrome remains above gestur
 assertIncludes(player, "zIndex: 90", "standalone bottom chrome remains above gesture target");
 assertIncludes(player, "playerFrameworkFullscreenBackground", "standalone fullscreen must use plain background");
 assertIncludes(player, "isStandaloneFullscreen ? (\n          <View style={styles.playerFrameworkFullscreenBackground} />", "standalone fullscreen must not render poster blur/background wash");
-assertIncludes(player, "!isStandaloneFullscreen ? (\n          <>", "standalone fullscreen must suppress framework depth overlays");
+assertIncludes(
+  player,
+  "const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);",
+  "player fullscreen must cover both standalone and shared-party playback",
+);
+assertIncludes(player, "!isPlayerFullscreen ? (\n          <>", "player fullscreen must suppress framework depth overlays");
 assertNotIncludes(player, "standaloneVideoBottomMatte", "standalone Player bottom matte");
 assertNotIncludes(player, "StandalonePlaybackMenu", "standalone Playback sheet");
 assertNotIncludes(player, "Speed and quality", "standalone Playback sheet visible copy");
@@ -122,7 +127,9 @@ assertIncludes(player, "Reset Zoom", "Reset Zoom control");
 assertIncludes(player, "watchPartyAudioMixPanel", "Watch-Party Live shared Audio Mix remains");
 assertIncludes(player, "Audio Mix", "Watch-Party Live shared Audio Mix label remains");
 assertNotIncludes(standaloneTopChrome, "Audio Mix", "standalone top chrome");
-assertIncludes(player, "const publishWatchPartyLiveKitAudio = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted", "LiveKit audio publish guard unchanged");
+assertIncludes(player, "shouldAutoStartAuthorizedNativeLiveKitMedia(Platform.OS)", "shared Player uses the Android/iOS LiveKit auto-start policy");
+assertIncludes(player, "const publishWatchPartyLiveKitAudio = watchPartyLocalMediaIntent", "LiveKit audio publish remains local-intent gated");
+assertIncludes(player, "&& watchPartyLiveKitCanPublish", "LiveKit local publish remains backend-authority gated");
 assertIncludes(watchPartyLiveKitGuard, "Player Watch-Party LiveKit", "Watch-Party LiveKit guard still tracks Player route");
 assertIncludes(oldRoomGuard, "isWatchPartyRoomActive", "old-room handling guard remains present");
 

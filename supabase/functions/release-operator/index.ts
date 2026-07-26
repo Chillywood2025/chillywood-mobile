@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+import { runAndroidReleaseAutonomyProbe, runIosReleaseAutonomyProbe, runSharedReleaseProbe } from "./probe.ts";
 
 Deno.serve(handleScopedOperatorRequest({
   systemId: "release_ota_operator",
@@ -10,6 +11,8 @@ Deno.serve(handleScopedOperatorRequest({
   snapshotTable: "release_health_snapshots",
   reviewTable: "release_required_review_flags",
   defaultHealthState: "healthy",
+  watchOnceHandlers: [runSharedReleaseProbe, runAndroidReleaseAutonomyProbe, runIosReleaseAutonomyProbe],
+  requiredWatchPlatforms: ["shared", "android", "ios"],
   allowedActions: [
     "health_snapshot",
     "read_release_diagnostics_report",

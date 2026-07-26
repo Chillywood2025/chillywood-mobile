@@ -1,6 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  classifyIosInstalledQaReadiness,
+  IOS_QA_RELEASE_EXPECTATION,
+  sanitizeAutonomousReadback,
+} from "../_shared/ios-autonomous-operator-policy.mjs";
+import { normalizeInstalledQaPlatform } from "../_shared/installed-qa-platform-policy.mjs";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -20,6 +26,11 @@ const JSON_HEADERS = {
 } as const;
 
 const PROOF_SOURCES = [
+  "testflight_internal",
+  "physical_ios",
+  "ios_simulator",
+  "eas_internal_ios",
+  "app_store_internal",
   "play_installed",
   "browserstack",
   "firebase_test_lab_uploaded_artifact",
@@ -27,7 +38,10 @@ const PROOF_SOURCES = [
   "manual_codex_proof",
 ] as const;
 const DISCOVERED_BY = ["autonomous_operator", "codex_manual", "device_lab"] as const;
-const RESULTS = ["pass", "partial", "blocked", "failed", "human_review", "two_device_required"] as const;
+const RESULTS = [
+  "pass", "partial", "blocked", "failed", "human_review", "two_device_required",
+  "source_ready", "provider_ready", "provider_readback_blocked", "internal_build_ready", "physical_proof_required", "second_device_required",
+] as const;
 const BLOCKER_CLASSIFICATIONS = [
   "source_bug",
   "stale_proof_expectation",
@@ -42,82 +56,28 @@ const BLOCKER_CLASSIFICATIONS = [
   "installed_ota_stale",
   "manual_codex_only_gap",
   "unknown_requires_review",
+  "ios_testflight_build_unavailable",
+  "ios_runtime_mismatch",
+  "ios_channel_mismatch",
+  "ios_source_commit_mismatch",
+  "ios_provider_readback_blocked",
+  "ios_physical_proof_required",
+  "ios_second_device_required",
+  "ios_native_capability_missing",
+  "ios_universal_link_proof_pending",
+  "ios_push_proof_pending",
+  "ios_voip_proof_pending",
+  "ios_storekit_proof_pending",
 ] as const;
 
 const SECRET_PATTERN = /(secret|token|password|credential|authorization|service[_-]?role|participant[_-]?token|signed[_-]?url|api[_-]?key|private[_-]?key|db[_-]?url|database[_-]?url|webhook[_-]?secret|reporter|private[_-]?evidence|tax|bank)/i;
 const LONG_SECRET_PATTERN = /[A-Za-z0-9._~+/=-]{48,}/;
 const HIGH_RISK_MUTATION_PATTERN = /(manual[_\s-]?premium|grant\s+premium|entitlement\s+(edit|insert|grant)|service[_\s-]?role|auth\/rls|owner[_\s-]?role|ban\s+user|suspend\s+user|restrict\s+user|delete\s+content|move\s+money|payout|cashout|provider\s+product|publish\s+ota|rollback\s+ota|adb\s+install|sideload|clear\s+app\s+data)/i;
 
-const CURRENT_MANUAL_FINDINGS = [
-  {
-    action: "record_route_finding",
-    route_path: "/chat",
-    account_role: "normal",
-    expected_marker: "chat-inbox-screen",
-    actual_marker: "Home",
-    expected_behavior: "normal signed-in user lands on chat inbox",
-    actual_behavior: "normal /chat stayed on Home during manual traversal",
-    blocker_classification: "route_contract_mismatch",
-    result: "blocked",
-    next_safe_action: "Run proactive installed normal /chat route marker check and create safe source/proof/testID owner command if mismatch recurs.",
-  },
-  {
-    action: "record_role_finding",
-    route_path: "/chat",
-    account_role: "restricted",
-    expected_behavior: "restricted/denied copy or blocked chat action",
-    actual_behavior: "restricted /chat showed Chat inbox during manual traversal",
-    blocker_classification: "expected_denial_copy_missing",
-    result: "blocked",
-    next_safe_action: "Verify restricted fixture state first; do not ban/restrict a real user or fake denial proof.",
-  },
-  {
-    action: "record_route_finding",
-    route_path: "/creator-monetization-setup",
-    account_role: "creator",
-    expected_marker: "Platform Studio / Premium required compatibility marker",
-    actual_marker: "expected marker missing",
-    expected_behavior: "compatibility route reaches canonical monetization gate",
-    actual_behavior: "creator monetization setup marker missing during manual traversal",
-    blocker_classification: "missing_testid_or_marker",
-    result: "blocked",
-    next_safe_action: "Run proactive compatibility marker check and create safe source/proof/testID owner command if marker is missing.",
-  },
-  {
-    action: "record_account_fixture_health",
-    account_label: "proof_premium_001",
-    account_role: "premium",
-    expected_state: "provider-backed Premium active",
-    actual_state: "Premium is not active in installed traversal",
-    provider_backed: false,
-    blocker_classification: "premium_provider_state_missing",
-    result: "blocked",
-    next_safe_action: "Use only provider-backed active account, restore, or approved Google Play / RevenueCat sandbox renewal; never manually grant Premium.",
-  },
-  {
-    action: "record_manual_codex_gap",
-    flag_type: "moderator_boundary_pending",
-    target_type: "role_boundary",
-    target_id: "proof_moderator_001:/admin",
-    account_role: "moderator",
-    blocker_classification: "manual_codex_only_gap",
-    result: "human_review",
-    next_safe_action: "Run focused moderator boundary packet and keep private evidence/reporter identity absent by default.",
-  },
-  {
-    action: "record_device_availability",
-    device_requirement: "two Play-installed devices or approved device lab",
-    available_device_count: 1,
-    required_device_count: 2,
-    play_installed_device_available: true,
-    device_lab_configured: false,
-    blocker_classification: "second_device_required",
-    result: "two_device_required",
-    next_safe_action: "Do not claim realtime closure until two Play-installed devices or an approved device lab prove the flow.",
-  },
-] as const;
-
 const toText = (value: unknown) => String(value ?? "").trim();
+const normalizePlatform = (value: unknown) => ["shared", "ios", "android", "web", "unknown"].includes(toText(value).toLowerCase())
+  ? toText(value).toLowerCase()
+  : "unknown";
 const isOneOf = <T extends readonly string[]>(value: unknown, values: T): value is T[number] => (
   (values as readonly string[]).includes(toText(value))
 );
@@ -207,10 +167,17 @@ const assertSafePayload = (payload: JsonObject) => {
 
 const baseRow = (payload: JsonObject) => ({
   system_id: SYSTEM_ID,
+  platform: normalizeInstalledQaPlatform(payload.platform, payload.source),
   source: isOneOf(payload.source, PROOF_SOURCES) ? payload.source : "manual_codex_proof",
   update_id: payload.update_id ?? payload.updateId ?? null,
   runtime_version: payload.runtime_version ?? payload.runtimeVersion ?? null,
   channel: payload.channel ?? null,
+  app_version: payload.app_version ?? payload.appVersion ?? null,
+  native_build: payload.native_build ?? payload.nativeBuild ?? null,
+  bundle_identifier: payload.bundle_identifier ?? payload.bundleIdentifier ?? null,
+  distribution_source: payload.distribution_source ?? payload.distributionSource ?? null,
+  data_source: payload.data_source ?? payload.dataSource ?? null,
+  readback_complete: payload.readback_complete === true || payload.readbackComplete === true,
   account_role: payload.account_role ?? payload.accountRole ?? null,
   result: isOneOf(payload.result, RESULTS) ? payload.result : "blocked",
   blocker_classification: isOneOf(payload.blocker_classification ?? payload.blockerClassification, BLOCKER_CLASSIFICATIONS)
@@ -231,12 +198,19 @@ const baseRow = (payload: JsonObject) => ({
 const insertEvent = async (client: SupabaseClientLike, actionId: string, result: string, payload: JsonObject) => {
   const row = {
     system_id: SYSTEM_ID,
+    platform: normalizeInstalledQaPlatform(payload.platform, payload.source),
     source: isOneOf(payload.source, PROOF_SOURCES) ? payload.source : "manual_codex_proof",
     action_id: actionId,
     result,
     update_id: payload.update_id ?? payload.updateId ?? null,
     runtime_version: payload.runtime_version ?? payload.runtimeVersion ?? null,
     channel: payload.channel ?? null,
+    app_version: payload.app_version ?? payload.appVersion ?? null,
+    native_build: payload.native_build ?? payload.nativeBuild ?? null,
+    bundle_identifier: payload.bundle_identifier ?? payload.bundleIdentifier ?? null,
+    distribution_source: payload.distribution_source ?? payload.distributionSource ?? null,
+    data_source: payload.data_source ?? payload.dataSource ?? null,
+    readback_complete: payload.readback_complete === true || payload.readbackComplete === true,
     account_role: payload.account_role ?? payload.accountRole ?? null,
     blocker_classification: isOneOf(payload.blocker_classification ?? payload.blockerClassification, BLOCKER_CLASSIFICATIONS)
       ? payload.blocker_classification ?? payload.blockerClassification
@@ -328,6 +302,7 @@ const recordAccountFixtureHealth = async (client: SupabaseClientLike, payload: J
 };
 
 const recordDeviceAvailability = async (client: SupabaseClientLike, payload: JsonObject) => {
+  const result = toText(payload.result ?? "blocked");
   const row = {
     ...baseRow(payload),
     device_requirement: toText(payload.device_requirement ?? payload.deviceRequirement),
@@ -335,12 +310,47 @@ const recordDeviceAvailability = async (client: SupabaseClientLike, payload: Jso
     required_device_count: Number(payload.required_device_count ?? payload.requiredDeviceCount ?? 1),
     play_installed_device_available: Boolean(payload.play_installed_device_available ?? payload.playInstalledDeviceAvailable ?? false),
     device_lab_configured: Boolean(payload.device_lab_configured ?? payload.deviceLabConfigured ?? false),
-    finding_status: "open",
+    testflight_internal_build_available: Boolean(payload.testflight_internal_build_available ?? payload.testflightInternalBuildAvailable ?? false),
+    signed_ios_build_available: Boolean(payload.signed_ios_build_available ?? payload.signedIosBuildAvailable ?? false),
+    ios_physical_device_count: Number(payload.ios_physical_device_count ?? payload.iosPhysicalDeviceCount ?? 0),
+    ios_second_device_available: Boolean(payload.ios_second_device_available ?? payload.iosSecondDeviceAvailable ?? false),
+    ios_simulator_available: Boolean(payload.ios_simulator_available ?? payload.iosSimulatorAvailable ?? false),
+    physical_proof_available: Boolean(payload.physical_proof_available ?? payload.physicalProofAvailable ?? false),
+    universal_link_proof_available: Boolean(payload.universal_link_proof_available ?? payload.universalLinkProofAvailable ?? false),
+    apns_proof_available: Boolean(payload.apns_proof_available ?? payload.apnsProofAvailable ?? false),
+    voip_proof_available: Boolean(payload.voip_proof_available ?? payload.voipProofAvailable ?? false),
+    storekit_proof_available: Boolean(payload.storekit_proof_available ?? payload.storekitProofAvailable ?? false),
+    result,
+    finding_status: result === "pass" ? "reviewed" : "open",
     next_safe_action: toText(payload.next_safe_action ?? payload.nextSafeAction ?? "Keep installed realtime proof pending until device/device-lab readiness exists."),
   };
   if (!row.device_requirement) throw new Error("device_requirement_required");
-  const { error } = await client.from("device_availability_findings").insert(row);
-  if (error) throw error;
+  const findOpen = () => client.from("device_availability_findings")
+    .select("id")
+    .eq("system_id", row.system_id)
+    .eq("platform", row.platform)
+    .eq("device_requirement", row.device_requirement)
+    .eq("blocker_classification", row.blocker_classification)
+    .eq("finding_status", "open")
+    .limit(1)
+    .maybeSingle();
+  const { data: existing, error: findError } = await findOpen();
+  if (findError) throw findError;
+  if (existing?.id) {
+    const { error } = await client.from("device_availability_findings").update(row).eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await client.from("device_availability_findings").insert(row);
+    if (error?.code === "23505") {
+      const { data: raced, error: raceFindError } = await findOpen();
+      if (raceFindError) throw raceFindError;
+      if (!raced?.id) throw error;
+      const { error: raceUpdateError } = await client.from("device_availability_findings").update(row).eq("id", raced.id);
+      if (raceUpdateError) throw raceUpdateError;
+    } else if (error) {
+      throw error;
+    }
+  }
   await insertEvent(client, "record_device_availability", "device_availability_finding_recorded", payload);
 };
 
@@ -354,8 +364,36 @@ const recordManualCodexGap = async (client: SupabaseClientLike, payload: JsonObj
     review_status: "open",
     next_safe_action: toText(payload.next_safe_action ?? payload.nextSafeAction ?? "Run proactive installed QA watch_once/device-lab proof; do not wait for manual Codex prompt."),
   };
-  const { error } = await client.from("qa_required_review_flags").insert(row);
-  if (error) throw error;
+  const targetType = row.target_type ?? null;
+  const targetId = row.target_id ?? null;
+  const findOpen = () => {
+    let query = client.from("qa_required_review_flags")
+      .select("id")
+      .eq("system_id", row.system_id)
+      .eq("platform", row.platform)
+      .eq("flag_type", row.flag_type)
+      .eq("review_status", "open");
+    query = targetType === null ? query.is("target_type", null) : query.eq("target_type", targetType);
+    query = targetId === null ? query.is("target_id", null) : query.eq("target_id", targetId);
+    return query.limit(1).maybeSingle();
+  };
+  const { data: existing, error: findError } = await findOpen();
+  if (findError) throw findError;
+  if (existing?.id) {
+    const { error } = await client.from("qa_required_review_flags").update(row).eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await client.from("qa_required_review_flags").insert(row);
+    if (error?.code === "23505") {
+      const { data: raced, error: raceFindError } = await findOpen();
+      if (raceFindError) throw raceFindError;
+      if (!raced?.id) throw error;
+      const { error: raceUpdateError } = await client.from("qa_required_review_flags").update(row).eq("id", raced.id);
+      if (raceUpdateError) throw raceUpdateError;
+    } else if (error) {
+      throw error;
+    }
+  }
   await insertEvent(client, "record_manual_codex_gap", "manual_codex_gap_recorded", payload);
 };
 
@@ -390,6 +428,7 @@ const createOwnerCommand = async (client: SupabaseClientLike, payload: JsonObjec
   const insertPayload = {
     command_text: commandText,
     normalized_intent: "installed_product_qa",
+    platform: normalizePlatform(payload.platform),
     target_systems: [SYSTEM_ID],
     approval_level: 2,
     status: "planned",
@@ -430,6 +469,7 @@ const createApprovalRequest = async (client: SupabaseClientLike, payload: JsonOb
   const insertPayload = {
     system_id: SYSTEM_ID,
     action_id: actionId,
+    platform: normalizePlatform(payload.platform),
     requested_by_actor_type: SYSTEM_ID,
     requested_by_actor_id: null,
     approval_level: approvalLevel,
@@ -455,6 +495,7 @@ const createApprovalRequest = async (client: SupabaseClientLike, payload: JsonOb
   if (error) throw error;
   await client.from("autonomous_approval_request_events").insert({
     request_id: data.id,
+    platform: normalizePlatform(payload.platform),
     event_type: "created",
     actor_type: SYSTEM_ID,
     actor_id: null,
@@ -466,63 +507,170 @@ const createApprovalRequest = async (client: SupabaseClientLike, payload: JsonOb
 };
 
 const runWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => {
-  const deviceLabConfigured = Boolean(payload.device_lab_configured ?? payload.deviceLabConfigured ?? Deno.env.get("INSTALLED_QA_DEVICE_LAB_ENABLED") === "true");
-  const requestedSource = payload.source ?? payload.proof_source ?? payload.proofSource;
-  const source = isOneOf(requestedSource, PROOF_SOURCES)
-    ? requestedSource
-    : deviceLabConfigured
-      ? "browserstack"
-      : "manual_codex_proof";
-  const requestedDiscoveredBy = payload.discovered_by ?? payload.discoveredBy;
-  const discoveredBy = isOneOf(requestedDiscoveredBy, DISCOVERED_BY)
-    ? requestedDiscoveredBy
-    : deviceLabConfigured
-      ? "device_lab"
-      : "autonomous_operator";
+  const { data: releaseSnapshot, error: releaseError } = await client
+    .from("release_health_snapshots")
+    .select("platform,app_version,native_build,bundle_identifier,runtime_version,channel,update_id,distribution_source,readback_complete,metadata,created_at")
+    .eq("platform", "ios")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (releaseError) throw releaseError;
+  const { data: attestation, error: attestationError } = await client
+    .from("release_binary_attestations")
+    .select("attestation_status,verified_at,source_commit,binary_sha256,app_store_connect_build_id")
+    .eq("platform", "ios")
+    .eq("binary_sha256", IOS_QA_RELEASE_EXPECTATION.binarySha256)
+    .limit(1)
+    .maybeSingle();
+  if (attestationError) throw attestationError;
+  const releaseMetadata = releaseSnapshot?.metadata && typeof releaseSnapshot.metadata === "object" ? releaseSnapshot.metadata as JsonObject : {};
+  const observedReleaseMetadata = releaseMetadata.observedIdentity && typeof releaseMetadata.observedIdentity === "object" ? releaseMetadata.observedIdentity as JsonObject : {};
+  const providerReadbackComplete = releaseSnapshot?.readback_complete === true && attestation?.attestation_status === "verified";
+  const release = {
+    internalBuildAvailable: providerReadbackComplete
+      && releaseSnapshot?.distribution_source === "testflight_internal"
+      && releaseSnapshot?.native_build === IOS_QA_RELEASE_EXPECTATION.nativeBuild,
+    appVersion: providerReadbackComplete ? releaseSnapshot?.app_version : null,
+    nativeBuild: providerReadbackComplete ? releaseSnapshot?.native_build : null,
+    bundleIdentifier: providerReadbackComplete ? releaseSnapshot?.bundle_identifier : null,
+    runtimeVersion: providerReadbackComplete ? releaseSnapshot?.runtime_version : null,
+    channel: providerReadbackComplete ? releaseSnapshot?.channel : null,
+    updateId: providerReadbackComplete ? releaseSnapshot?.update_id : null,
+    distributionSource: providerReadbackComplete ? releaseSnapshot?.distribution_source : null,
+    sourceCommit: providerReadbackComplete ? observedReleaseMetadata.sourceCommit ?? attestation?.source_commit ?? null : null,
+    externalGroupCount: providerReadbackComplete ? releaseMetadata.externalGroupCount : null,
+    publicSubmissionPresent: providerReadbackComplete ? releaseMetadata.publicSubmissionPresent : null,
+  };
+  const classification = classifyIosInstalledQaReadiness({
+    providerReadbackComplete,
+    release,
+    clientCapabilities: IOS_QA_RELEASE_EXPECTATION.clientCapabilities,
+    physicalEvidenceAvailable: false,
+    availablePhysicalDeviceCount: 0,
+  });
+  const source = release.internalBuildAvailable ? "testflight_internal" : attestation?.binary_sha256 ? "local_fixture" : "manual_codex_proof";
+  const discoveredBy = "autonomous_operator";
   const base = {
+    platform: "ios",
     source,
     discovered_by: discoveredBy,
-    update_id: payload.update_id ?? payload.updateId ?? null,
-    runtime_version: payload.runtime_version ?? payload.runtimeVersion ?? null,
-    channel: payload.channel ?? "production",
+    update_id: release.updateId ?? null,
+    runtime_version: release.runtimeVersion ?? null,
+    channel: release.channel ?? null,
+    app_version: release.appVersion ?? null,
+    native_build: release.nativeBuild ?? null,
+    bundle_identifier: release.bundleIdentifier ?? null,
+    distribution_source: release.distributionSource ?? null,
+    data_source: "latest_release_operator_snapshot+compiled_ios_qa_contract",
+    readback_complete: providerReadbackComplete,
     metadata: {
       watchOnce: true,
-      deviceLabConfigured,
       scheduler: payload.scheduler ?? "manual_cli",
       operatorId: payload.operator_id ?? SYSTEM_ID,
       source,
       discoveredBy,
+      releaseSnapshotCreatedAt: releaseSnapshot?.created_at ?? null,
+      binaryAttestationVerified: attestation?.attestation_status === "verified",
+      clientCapabilities: IOS_QA_RELEASE_EXPECTATION.clientCapabilities,
+      physicalProofClaimed: false,
+      blockers: classification.blockers,
     },
   };
   await recordTraversalRun(client, {
     ...base,
-    run_label: "installed_product_qa_watch_once",
-    result: "partial",
-    blocked_count: 4,
-    human_review_count: 1,
-    two_device_required_count: 1,
-    device_count: Number(payload.device_count ?? payload.deviceCount ?? 0),
-    blocker_classification: deviceLabConfigured ? "unknown_requires_review" : "manual_codex_only_gap",
+    run_label: "ios_installed_product_qa_readiness_watch_once",
+    result: classification.readinessState,
+    blocked_count: classification.blockers.length,
+    two_device_required_count: classification.blockers.includes("ios_second_device_required") ? 1 : 0,
+    device_count: 0,
+    blocker_classification: classification.blockers[0] ?? "ios_physical_proof_required",
   });
-  for (const finding of CURRENT_MANUAL_FINDINGS) {
-    const findingPayload = { ...base, ...finding, discovered_by: discoveredBy, source };
-    if (finding.action === "record_route_finding") await recordRouteFinding(client, findingPayload);
-    if (finding.action === "record_role_finding") await recordRoleFinding(client, findingPayload);
-    if (finding.action === "record_account_fixture_health") await recordAccountFixtureHealth(client, findingPayload);
-    if (finding.action === "record_device_availability") await recordDeviceAvailability(client, findingPayload);
-    if (finding.action === "record_manual_codex_gap") await recordManualCodexGap(client, findingPayload);
-    await updateLearningState(client, toText(finding.action) + ":" + toText((finding as JsonObject).route_path ?? (finding as JsonObject).account_label ?? (finding as JsonObject).flag_type ?? "device"), findingPayload);
+  await recordDeviceAvailability(client, {
+    ...base,
+    device_requirement: "Signed iOS physical proof and two-device realtime proof",
+    available_device_count: 0,
+    required_device_count: 2,
+    play_installed_device_available: false,
+    device_lab_configured: false,
+    testflight_internal_build_available: release.internalBuildAvailable,
+    signed_ios_build_available: Boolean(attestation?.binary_sha256) && attestation?.attestation_status !== "revoked",
+    ios_physical_device_count: 0,
+    ios_second_device_available: false,
+    ios_simulator_available: false,
+    physical_proof_available: false,
+    universal_link_proof_available: false,
+    apns_proof_available: false,
+    voip_proof_available: false,
+    storekit_proof_available: false,
+    result: "second_device_required",
+    blocker_classification: "ios_second_device_required",
+    next_safe_action: "Keep APNs, PushKit, CallKit, StoreKit, camera, and two-device LiveKit as physical proof requirements; do not synthesize a pass.",
+  });
+  const activeFindingKeys: string[] = [];
+  for (const blocker of classification.blockers) {
+    const { data: findingKey, error } = await client.rpc("record_autonomous_finding", {
+      p_system_id: SYSTEM_ID, p_platform: "ios", p_finding_type: blocker,
+      p_target_surface: "ios_build_readiness", p_provider: "app_store_connect+eas",
+      p_severity: blocker.includes("mismatch") || blocker.includes("unavailable") ? "warning" : "review",
+      p_metadata: { readback_complete: providerReadbackComplete, physical_proof_claimed: false },
+    });
+    if (error) throw error;
+    if (typeof findingKey === "string") activeFindingKeys.push(findingKey);
   }
-  const ownerCommand = await createOwnerCommand(client, {
-    command_text: "Installed Product QA watch_once found unresolved installed traversal coverage blockers; plan safe source/proof/testID follow-up without Premium grants, fake proof, sideload, auth/RLS, money, provider, or enforcement mutation.",
-    metadata: { deviceLabConfigured, findingCount: CURRENT_MANUAL_FINDINGS.length },
-  });
+  const { error: resolveError } = await client.rpc("resolve_autonomous_findings", { p_system_id: SYSTEM_ID, p_platform: "ios", p_active_finding_keys: activeFindingKeys });
+  if (resolveError) throw resolveError;
   await insertEvent(client, "watch_once", "installed_qa_gaps_recorded", {
     ...base,
-    owner_command_request_id: ownerCommand.id,
-    blocker_classification: deviceLabConfigured ? "unknown_requires_review" : "manual_codex_only_gap",
+    blocker_classification: classification.blockers[0] ?? "ios_physical_proof_required",
   });
-  return { findingCount: CURRENT_MANUAL_FINDINGS.length, ownerCommand };
+  return {
+    readbackComplete: providerReadbackComplete,
+    platform: "ios",
+    source: "latest_release_operator_snapshot+compiled_ios_qa_contract",
+    dataWindow: { start: releaseSnapshot?.created_at ?? null, end: new Date().toISOString() },
+    readinessState: classification.readinessState,
+    blockers: sanitizeAutonomousReadback(classification.blockers),
+    sourceReady: classification.sourceReady,
+    fakePhysicalProof: false,
+    moneyMoved: false,
+    userRightsChanged: false,
+    highRiskExecuted: false,
+  };
+};
+
+const runAndroidWatchOnce = async (client: SupabaseClientLike, payload: JsonObject) => {
+  const { data: release, error } = await client.from("release_health_snapshots")
+    .select("app_version,native_build,bundle_identifier,runtime_version,channel,update_id,distribution_source,readback_complete,created_at")
+    .eq("platform", "android").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  const complete = release?.readback_complete === true;
+  const base = {
+    platform: "android", source: "play_installed", discovered_by: "autonomous_operator",
+    update_id: complete ? release?.update_id ?? null : null,
+    runtime_version: complete ? release?.runtime_version ?? null : null,
+    channel: complete ? release?.channel ?? null : null,
+    app_version: complete ? release?.app_version ?? null : null,
+    native_build: complete ? release?.native_build ?? null : null,
+    bundle_identifier: complete ? release?.bundle_identifier ?? null : null,
+    distribution_source: complete ? release?.distribution_source ?? null : null,
+    data_source: "android_release_snapshot+independent_firebase_test_lab_state", readback_complete: complete,
+    metadata: { firebaseTestLabRequiredForIos: false, scheduler: payload.scheduler ?? "manual_cli", physicalProofClaimed: false },
+  };
+  await insertEvent(client, "watch_once", complete ? "android_provider_readiness_recorded" : "android_provider_readback_blocked", base);
+  const activeKeys: string[] = [];
+  if (!complete) {
+    const { data, error: findingError } = await client.rpc("record_autonomous_finding", {
+      p_system_id: SYSTEM_ID, p_platform: "android", p_finding_type: "android_provider_readback_blocked",
+      p_target_surface: "android_installed_readiness", p_provider: "eas+google_play",
+      p_severity: "review", p_metadata: { readback_complete: false, firebase_test_lab_independent: true },
+    });
+    if (findingError) throw findingError;
+    if (typeof data === "string") activeKeys.push(data);
+  } else {
+    const { error: resolveError } = await client.rpc("resolve_autonomous_findings", { p_system_id: SYSTEM_ID, p_platform: "android", p_active_finding_keys: activeKeys });
+    if (resolveError) throw resolveError;
+  }
+  return { readbackComplete: complete, platform: "android", source: "android_release_snapshot+independent_firebase_test_lab_state", dataWindow: { start: release?.created_at ?? null, end: new Date().toISOString() }, readinessState: complete ? "provider_ready" : "provider_readback_blocked", blockers: complete ? [] : ["android_provider_readback_blocked"], fakePhysicalProof: false, moneyMoved: false, userRightsChanged: false, highRiskExecuted: false };
 };
 
 const readReport = async (client: SupabaseClientLike) => {
@@ -596,7 +744,9 @@ Deno.serve(async (request) => {
     } else if (action === "create_approval_request") {
       details = { approvalRequest: await createApprovalRequest(client, payload) };
     } else if (action === "watch_once") {
-      details = await runWatchOnce(client, payload) as JsonObject;
+      details = payload.platform === "android"
+        ? await runAndroidWatchOnce(client, payload) as JsonObject
+        : await runWatchOnce(client, payload) as JsonObject;
     } else {
       await insertEvent(client, action, action === "status" ? "status_recorded" : "health_snapshot_recorded", payload);
     }

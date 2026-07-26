@@ -5,6 +5,7 @@ import { AppState, Platform } from "react-native";
 
 import { clearUser, identifyUser, trackEvent } from "./analytics";
 import { reportDebugAuth } from "./devDebug";
+import { stopActiveMediaSessions } from "./mediaSessionLifecycle";
 import { supabase } from "./supabase";
 
 const PASSWORD_RECOVERY_SESSION_STORAGE_KEY = "chillywood.passwordRecoverySession";
@@ -92,6 +93,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         void AsyncStorage.setItem(PASSWORD_RECOVERY_SESSION_STORAGE_KEY, "active").catch(() => null);
       }
       if (event === "SIGNED_OUT" || !nextSession) {
+        void stopActiveMediaSessions("sign_out");
         setIsPasswordRecoverySession(false);
         void AsyncStorage.removeItem(PASSWORD_RECOVERY_SESSION_STORAGE_KEY).catch(() => null);
       }

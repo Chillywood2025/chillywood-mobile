@@ -12,6 +12,7 @@ export type AutonomousSystemId =
   | "privacy_compliance_operator"
   | "support_success_operator"
   | "search_ranking_integrity_operator"
+  | "product_intelligence_operator"
   | "ads_sponsor_delivery_operator"
   | "owner_command_operator";
 
@@ -28,6 +29,13 @@ export type AutonomousActivationMode =
 
 export type AutonomousApprovalLevel = 0 | 1 | 2 | 3 | 4;
 
+export type AutonomousPlatform =
+  | "shared"
+  | "ios"
+  | "android"
+  | "web"
+  | "unknown";
+
 export type AutonomousSystemSurface = {
   id: string;
   approvalLevel: AutonomousApprovalLevel;
@@ -39,6 +47,9 @@ export type AutonomousSystemSurface = {
   rollbackBehavior: string;
   killSwitchOrFallback: string;
   ownerApprovalRequired: boolean;
+  supportedPlatforms?: readonly AutonomousPlatform[];
+  platformScope?: string;
+  platformContextRequired?: boolean;
 };
 
 export type AutonomousSystemContract = {
@@ -48,6 +59,9 @@ export type AutonomousSystemContract = {
   activationModes: readonly AutonomousActivationMode[];
   activeActivationMode: AutonomousActivationMode;
   schedulerStatus: string;
+  supportedPlatforms: readonly AutonomousPlatform[];
+  platformScope: string;
+  platformContextRequired: boolean;
   allowedSurfaces: readonly string[];
   allowedWrites: readonly string[];
   forbidden: readonly string[];
@@ -55,6 +69,17 @@ export type AutonomousSystemContract = {
   requiredProofScripts: readonly string[];
   requiredGuardScripts: readonly string[];
   surfaces: readonly AutonomousSystemSurface[];
+};
+
+export type AutonomousPlatformAdapterContract = {
+  systemId: AutonomousSystemId;
+  surfaceId: string;
+  platform: "ios";
+  dataSources: readonly string[];
+  allowedWrites: readonly string[];
+  forbidden: readonly string[];
+  readbackFailureState: "unknown" | "blocked";
+  physicalProofRequired: boolean;
 };
 
 export type AutonomousCandidateSystemContract = {
@@ -96,9 +121,281 @@ export const AUTONOMOUS_HIGH_RISK_DOMAINS = [
   "provider plan/add-on",
 ] as const;
 
+export const IOS_AUTONOMOUS_PLATFORM_ADAPTERS: readonly AutonomousPlatformAdapterContract[] = [
+  {
+    systemId: "notification_delivery_operator", surfaceId: "ios_delivery_health_and_terminal_retry", platform: "ios",
+    dataSources: ["user_push_tokens summaries", "notification_delivery_attempts", "voip_push_delivery_attempts summaries", "terminal retry scheduler/backlog"],
+    allowedWrites: ["platform health snapshots", "sanitized review flags", "provider-proven invalid-token disable"],
+    forbidden: ["raw tokens", "broad push", "incoming preference bypass", "unlimited retry"],
+    readbackFailureState: "unknown", physicalProofRequired: true,
+  },
+  {
+    systemId: "release_ota_operator", surfaceId: "ios_eas_app_store_readback", platform: "ios",
+    dataSources: ["read-only EAS build/channel/update adapter", "read-only App Store Connect build/TestFlight adapter"],
+    allowedWrites: ["release snapshots", "anomaly findings", "rollback-readiness records"],
+    forbidden: ["OTA publish or rollback", "TestFlight mutation", "App Review submission", "channel/runtime mutation"],
+    readbackFailureState: "blocked", physicalProofRequired: false,
+  },
+  {
+    systemId: "observability_runtime_operator", surfaceId: "ios_runtime_provider_health", platform: "ios",
+    dataSources: ["Firebase read-only adapter", "Supabase error summaries", "release diagnostics", "LiveKit client telemetry"],
+    allowedWrites: ["runtime snapshots", "crash/performance/analytics/backend findings"],
+    forbidden: ["crash deletion", "Firebase mutation", "Remote Config mutation", "OTA action", "PII"],
+    readbackFailureState: "unknown", physicalProofRequired: false,
+  },
+  {
+    systemId: "installed_product_qa_operator", surfaceId: "ios_testflight_source_and_provider_readiness", platform: "ios",
+    dataSources: ["latest iOS release snapshot", "compiled build contract", "signed physical proof records"],
+    allowedWrites: ["source/provider/internal-build readiness", "physical/second-device blocker rows"],
+    forbidden: ["fake installed proof", "fake physical pass", "device control", "manual Premium grant"],
+    readbackFailureState: "blocked", physicalProofRequired: true,
+  },
+  {
+    systemId: "livekit_operator", surfaceId: "ios_livekit_client_render_telemetry", platform: "ios",
+    dataSources: ["authenticated sanitized render/token telemetry", "shared router and heartbeat health"],
+    allowedWrites: ["platform-aware LiveKit health/audit rows"],
+    forbidden: ["participant tokens", "TURN credentials", "routing mutation", "claiming physical media proof"],
+    readbackFailureState: "unknown", physicalProofRequired: true,
+  },
+  {
+    systemId: "money_flow_control", surfaceId: "ios_revenuecat_app_store_readback", platform: "ios",
+    dataSources: ["RevenueCat read-only webhook status", "App Store catalog mappings", "sandbox switch state"],
+    allowedWrites: ["provider capability/status/findings", "non-payable audit snapshots"],
+    forbidden: ["product mutation", "Premium grant", "money movement", "payable balance", "Stripe digital iOS"],
+    readbackFailureState: "blocked", physicalProofRequired: true,
+  },
+  {
+    systemId: "security_owner_operator", surfaceId: "ios_signing_and_provider_credential_readiness", platform: "ios",
+    dataSources: ["sanitized signing certificate/profile status", "credential presence by name", "bundle/team consistency"],
+    allowedWrites: ["redacted security findings and review flags"],
+    forbidden: ["certificate or profile mutation", "secret rotation", "credential output", "owner-role mutation"],
+    readbackFailureState: "blocked", physicalProofRequired: false,
+  },
+  {
+    systemId: "platform_recovery_operator", surfaceId: "ios_release_and_retry_recovery_readiness", platform: "ios",
+    dataSources: ["migration/function drift", "runtime/channel drift", "secret presence names", "retry scheduler", "rollback target"],
+    allowedWrites: ["drift/readiness findings"],
+    forbidden: ["production restore", "secret rotation", "release action", "rollout mutation"],
+    readbackFailureState: "blocked", physicalProofRequired: false,
+  },
+  {
+    systemId: "privacy_compliance_operator", surfaceId: "ios_privacy_manifest_and_store_worksheet_readiness", platform: "ios",
+    dataSources: ["PrivacyInfo.xcprivacy hash/presence", "purpose strings", "privacy worksheet and deletion/support source contracts"],
+    allowedWrites: ["privacy readiness findings"],
+    forbidden: ["legal attestation", "App Store submission", "PII storage"],
+    readbackFailureState: "blocked", physicalProofRequired: true,
+  },
+  {
+    systemId: "support_success_operator", surfaceId: "ios_build_scoped_support_findings", platform: "ios",
+    dataSources: ["sanitized support issue metadata", "build/runtime/channel context"],
+    allowedWrites: ["support health/findings/review flags"],
+    forbidden: ["refund", "grant", "account mutation", "legal commitment", "private evidence"],
+    readbackFailureState: "unknown", physicalProofRequired: false,
+  },
+  {
+    systemId: "owner_command_operator", surfaceId: "ios_scoped_command_routing", platform: "ios",
+    dataSources: ["sanitized owner command intent", "registered iOS operator surfaces"],
+    allowedWrites: ["plan/routing/audit/approval-request rows"],
+    forbidden: ["direct provider mutation", "public release", "OTA", "money", "auth/RLS", "role mutation", "moderation enforcement"],
+    readbackFailureState: "blocked", physicalProofRequired: false,
+  },
+] as const;
+
+const COGNITIVE_GOVERNANCE_COMPONENT_IDS = [
+  "collective_intelligence_council",
+  "deliberation_orchestrator",
+  "governance_constitution_service",
+  "decision_manifest_authority",
+  "quorum_and_veto_engine",
+  "dissent_and_minority_report_registry",
+  "stakeholder_impact_panel",
+  "model_independence_guard",
+  "governance_audit_ledger",
+  "appeal_and_reconsideration_service",
+  "outcome_calibration_service",
+  "governance_emergency_control",
+  "owner_approval_lifecycle_service",
+  "approval_revalidation_service",
+] as const;
+
+const COGNITIVE_FOUNDATION_SURFACES: readonly AutonomousSystemSurface[] = [
+  {
+    id: "rachi_cognitive_orchestration",
+    approvalLevel: 2,
+    allowedReadScope: ["registered autonomous contracts", "sanitized task and evidence state", "owner-approved scope"],
+    allowedWriteScope: ["undeployed intelligence task and execution-plan records", "approval requests"],
+    forbiddenScope: ["direct domain mutation", "self approval", "production execution", "money", "user rights", "auth/RLS", "moderation enforcement", "public release"],
+    proofScript: "proof:cognitive-intelligence-contract",
+    guardScript: "guard:cognitive-intelligence-contract",
+    rollbackBehavior: "discard the source-only plan and revert the draft-branch commit",
+    killSwitchOrFallback: "system remains off with no function, credential, or scheduler",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_planning_control_plane",
+    platformContextRequired: true,
+  },
+  {
+    id: "research_source_broker",
+    approvalLevel: 1,
+    allowedReadScope: ["public primary sources", "corroborated public research", "local mocked CI fixtures"],
+    allowedWriteScope: ["undeployed sanitized research provenance and claim records"],
+    forbiddenScope: ["tool execution from web text", "prompt injection", "secrets", "private user data", "uncited consequential claims"],
+    proofScript: "proof:research-source-integrity",
+    guardScript: "guard:research-source-integrity",
+    rollbackBehavior: "quarantine the source claim while retaining immutable provenance",
+    killSwitchOrFallback: "broker is source-only and has no production network capability",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared"],
+    platformScope: "shared_untrusted_research_broker",
+    platformContextRequired: false,
+  },
+  {
+    id: "intelligence_memory_service",
+    approvalLevel: 2,
+    allowedReadScope: ["sanitized cognitive evidence", "current summaries", "reviewed lessons and playbooks"],
+    allowedWriteScope: ["undeployed service-owned cognitive tables"],
+    forbiddenScope: ["direct client writes", "immutable evidence deletion", "private-user-data model training", "secret persistence"],
+    proofScript: "proof:cognitive-memory-integrity",
+    guardScript: "guard:cognitive-memory-integrity",
+    rollbackBehavior: "forward-correct schema in local disposable databases; retain immutable evidence",
+    killSwitchOrFallback: "no linked migration and no deployed service",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_service_owned_memory",
+    platformContextRequired: true,
+  },
+  {
+    id: "architecture_knowledge_graph",
+    approvalLevel: 1,
+    allowedReadScope: ["tracked repository source and configuration", "sanitized deterministic dependency metadata"],
+    allowedWriteScope: ["local generated architecture graph evidence"],
+    forbiddenScope: ["secret indexing", "credential reads", "production mutation"],
+    proofScript: "proof:cognitive-architecture-graph",
+    guardScript: "guard:cognitive-architecture-graph",
+    rollbackBehavior: "regenerate or discard the deterministic local snapshot",
+    killSwitchOrFallback: "generation is local and manual only",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_repository_index",
+    platformContextRequired: true,
+  },
+  {
+    id: "product_experiment_engine",
+    approvalLevel: 2,
+    allowedReadScope: ["sanitized product contracts", "approved aggregate telemetry", "research claims"],
+    allowedWriteScope: ["undeployed hypotheses, candidates, experiments, and result evidence"],
+    forbiddenScope: ["production activation", "price or money changes", "Premium rights", "moderation outcomes", "ranking/public exposure", "auth/RLS", "production flags"],
+    proofScript: "proof:cognitive-intelligence-contract",
+    guardScript: "guard:cognitive-execution-safety",
+    rollbackBehavior: "cancel the local experiment plan and preserve evaluation evidence",
+    killSwitchOrFallback: "engine remains off with no production assignments",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_source_only_experiment_planning",
+    platformContextRequired: true,
+  },
+  {
+    id: "software_engineering_executor",
+    approvalLevel: 2,
+    allowedReadScope: ["validated structured execution plans", "allowlisted repository paths", "local validation output"],
+    allowedWriteScope: ["draft-branch source", "tests", "commits", "normal branch pushes", "draft PR evidence"],
+    forbiddenScope: ["merge", "force push", "main writes", "production deploy", "store release", "OTA", "money", "auth/RLS", "roles", "provider products"],
+    proofScript: "proof:cognitive-execution-safety",
+    guardScript: "guard:cognitive-execution-safety",
+    rollbackBehavior: "revert draft-branch commits and retain audit evidence",
+    killSwitchOrFallback: "no deployed executor and every capability expires",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_scoped_source_executor",
+    platformContextRequired: true,
+  },
+  {
+    id: "independent_evaluation_judge",
+    approvalLevel: 1,
+    allowedReadScope: ["objective", "research", "plan", "diff", "tests", "sanitized logs and proof", "rollback"],
+    allowedWriteScope: ["undeployed evaluation-result records only"],
+    forbiddenScope: ["source modification", "self approval", "evidence deletion", "unsupported completion claims"],
+    proofScript: "proof:cognitive-execution-safety",
+    guardScript: "guard:cognitive-execution-safety",
+    rollbackBehavior: "reject or quarantine the execution claim without changing source",
+    killSwitchOrFallback: "read-only evaluator remains unavailable in production",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_independent_read_only_evaluator",
+    platformContextRequired: true,
+  },
+  {
+    id: "capability_and_tool_broker",
+    approvalLevel: 2,
+    allowedReadScope: ["validated structured plan", "tool/path allowlists", "budget and expiry state"],
+    allowedWriteScope: ["undeployed sanitized tool-invocation audit records"],
+    forbiddenScope: ["unrestricted credentials", "expired capability use", "scope expansion", "raw-model-text execution"],
+    proofScript: "proof:cognitive-execution-safety",
+    guardScript: "guard:cognitive-execution-safety",
+    rollbackBehavior: "expire the capability and stop remaining tool calls",
+    killSwitchOrFallback: "all production capabilities are absent",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared"],
+    platformScope: "shared_expiring_capability_broker",
+    platformContextRequired: false,
+  },
+  {
+    id: "model_router_and_budget_controller",
+    approvalLevel: 2,
+    allowedReadScope: ["task classification", "sanitized prompt metadata", "remaining time/call/cost budget"],
+    allowedWriteScope: ["undeployed sanitized model-invocation and budget records"],
+    forbiddenScope: ["budget bypass", "secret-bearing prompts", "policy mutation", "private-user-data training"],
+    proofScript: "proof:cognitive-execution-safety",
+    guardScript: "guard:cognitive-execution-safety",
+    rollbackBehavior: "stop routing when a cap is reached and preserve the audit record",
+    killSwitchOrFallback: "no production model credentials or router scheduler",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared"],
+    platformScope: "shared_budgeted_model_router",
+    platformContextRequired: false,
+  },
+  ...COGNITIVE_GOVERNANCE_COMPONENT_IDS.map((id) => ({
+    id,
+    approvalLevel: 2 as const,
+    allowedReadScope: [
+      "immutable sanitized cognitive evidence packets",
+      "versioned governance constitution",
+      "bounded council assessments, dissent, approvals, receipts, and outcomes",
+    ],
+    allowedWriteScope: [
+      "undeployed governance state and immutable audit records",
+      "source-manifest status evidence",
+    ],
+    forbiddenScope: [
+      "self approval",
+      "direct tool execution by council roles",
+      "merge",
+      "public release",
+      "money movement",
+      "user rights",
+      "auth/RLS mutation",
+      "moderation enforcement",
+      "provider product mutation",
+    ],
+    proofScript: "test:cognitive-collective-governance",
+    guardScript: "guard:cognitive-policy-parity",
+    rollbackBehavior:
+      "revoke scoped capabilities, release leases, preserve immutable evidence, and require a new plan",
+    killSwitchOrFallback:
+      "component remains undeployed and off until the reviewed canary branch explicitly activates it",
+    ownerApprovalRequired: false,
+    supportedPlatforms: ["shared", "ios", "android", "web"] as const,
+    platformScope: "shared_collective_governance_control_plane",
+    platformContextRequired: true,
+  })),
+] as const;
+
 export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   {
     id: "media_automation",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_backend",
+    platformContextRequired: false,
     displayName: "Media Autonomous System",
     status: "bounded_source_and_cli_automation_with_object_storage_shutdown_readiness_closed",
     activeActivationMode: "bounded_run",
@@ -204,6 +501,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "livekit_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_backend_with_platform_telemetry",
+    platformContextRequired: true,
     displayName: "LiveKit Autonomous Operator",
     status: "limited_scheduled_safe_recovery_active_systemd_timer",
     activeActivationMode: "limited_scheduled_safe_recovery",
@@ -313,6 +613,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "money_flow_control",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_ledger_with_platform_provider_adapters",
+    platformContextRequired: true,
     displayName: "Money Flow & Ledger Control Plane",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -556,6 +859,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "notification_delivery_operator",
+    supportedPlatforms: ["shared", "ios", "android"],
+    platformScope: "shared_delivery_with_platform_provider_adapters",
+    platformContextRequired: true,
     displayName: "Notification Delivery Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_safe_recovery",
@@ -570,6 +876,7 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
       "money_notification_delivery",
       "livekit_live_room_notifications",
       "chat_call_push_notifications",
+      "ios_terminal_call_delivery_retry",
       "creator_notification_delivery",
     ],
     allowedWrites: [
@@ -582,6 +889,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
       "user_push_tokens disabled/revoked only after provider says DeviceNotRegistered",
       "autonomous approval requests",
       "notification_operator_learning_state",
+      "bounded chat_call_transition_deliveries claim/status/result writes",
+      "chat_call_transition_delivery_failures warning/critical and resolved-at writes",
     ],
     forbidden: [
       "marketing blast sends",
@@ -591,6 +900,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
       "changing push provider credentials",
       "sending notifications as fake system events",
       "broad user messaging without approval",
+      "raw push or VoIP token reads or output",
+      "new incoming call creation from terminal retry",
+      "unlimited terminal retries or hidden terminal failure",
     ],
     requiredGates: [
       "preference respect",
@@ -600,9 +912,12 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
       "audit",
       "emergency stop",
       "owner approval for broad campaigns/provider config",
+      "Vault-held terminal retry token with hash verification",
+      "one-minute bounded retry schedule, batch cap, attempt cap, exponential backoff, and stale lease",
+      "idempotent terminal delivery key and sanitized result",
     ],
-    requiredProofScripts: ["proof:notification-delivery-operator", "proof:autonomous-systems-contract"],
-    requiredGuardScripts: ["guard:notification-delivery-operator", "guard:autonomous-systems-contract"],
+    requiredProofScripts: ["proof:notification-delivery-operator", "proof:ios-autonomous-call-retry", "proof:ios-notification-autonomy", "proof:autonomous-systems-contract"],
+    requiredGuardScripts: ["guard:notification-delivery-operator", "guard:ios-autonomous-call-retry", "guard:ios-notification-autonomy", "guard:autonomous-systems-contract"],
     surfaces: [
       {
         id: "delivery_health_and_attempt_audit",
@@ -629,6 +944,42 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
         ownerApprovalRequired: false,
       },
       {
+        id: "ios_terminal_call_delivery_retry",
+        approvalLevel: 2,
+        supportedPlatforms: ["shared", "ios"],
+        platformScope: "shared_server_retry_for_ios_native_terminal_cleanup",
+        platformContextRequired: true,
+        allowedReadScope: [
+          "chat_call_transition_deliveries pending failed and stale-dispatching summaries",
+          "chat_call_transition_delivery_failures warning critical and unresolved summaries",
+          "chat_call_transition_retry_config enabled state without token hash",
+          "sanitized voip_push_delivery_attempts and notification delivery summaries",
+          "scheduler state retry backlog and capped failure count",
+        ],
+        allowedWriteScope: [
+          "bounded chat_call_transition_deliveries claim/status/result writes",
+          "chat_call_transition_delivery_failures warning critical and resolved-at writes",
+          "notification operator events snapshots and review flags",
+        ],
+        forbiddenScope: [
+          "raw token reads or output",
+          "new incoming call creation",
+          "broad push send",
+          "incoming call preference bypass",
+          "provider credential mutation",
+          "unlimited retries",
+          "hiding terminal failure",
+          "deleting provider evidence",
+          "call membership or account-rights mutation",
+          "money movement",
+        ],
+        proofScript: "proof:ios-autonomous-call-retry",
+        guardScript: "guard:ios-autonomous-call-retry",
+        rollbackBehavior: "disable retry config and unschedule cron while retaining delivery audit and failure history",
+        killSwitchOrFallback: "chat_call_transition_retry_config enabled=false plus cron unschedule; terminal history remains immutable",
+        ownerApprovalRequired: false,
+      },
+      {
         id: "broad_notification_campaign_or_provider_config",
         approvalLevel: 3,
         allowedReadScope: ["explicitly scoped audience and provider config summary"],
@@ -644,6 +995,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "release_ota_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_release_control_with_platform_provider_readback",
+    platformContextRequired: true,
     displayName: "Release / OTA Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -687,8 +1041,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
       "owner approval for publish/rollback/public release",
       "route/runtime validation",
     ],
-    requiredProofScripts: ["proof:release-ota-operator", "proof:autonomous-systems-contract"],
-    requiredGuardScripts: ["guard:release-ota-operator", "guard:autonomous-systems-contract"],
+    requiredProofScripts: ["proof:release-ota-operator", "proof:ios-release-autonomy", "proof:autonomous-systems-contract"],
+    requiredGuardScripts: ["guard:release-ota-operator", "guard:ios-release-autonomy", "guard:autonomous-systems-contract"],
     surfaces: [
       {
         id: "release_diagnostics_and_rollout_health",
@@ -730,6 +1084,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "security_owner_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_security_with_platform_signing_readback",
+    platformContextRequired: true,
     displayName: "Security / Owner Authority Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -818,6 +1175,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "moderation_safety_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_backend_with_optional_origin_platform",
+    platformContextRequired: false,
     displayName: "Moderation / Safety Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -905,6 +1265,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "observability_runtime_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_observability_with_platform_runtime_dimensions",
+    platformContextRequired: true,
     displayName: "Observability / Runtime Health Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -969,8 +1332,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
       "approval request for any provider/analytics config mutation",
       "release diagnostics proof for update-related findings",
     ],
-    requiredProofScripts: ["proof:observability-runtime-operator", "proof:monitoring-analytics-crash-runtime-diagnostics", "proof:autonomous-systems-contract"],
-    requiredGuardScripts: ["guard:observability-runtime-operator", "guard:monitoring-analytics-crash-policy", "guard:autonomous-systems-contract"],
+    requiredProofScripts: ["proof:observability-runtime-operator", "proof:monitoring-analytics-crash-runtime-diagnostics", "proof:ios-observability-autonomy", "proof:autonomous-systems-contract"],
+    requiredGuardScripts: ["guard:observability-runtime-operator", "guard:monitoring-analytics-crash-policy", "guard:ios-observability-autonomy", "guard:autonomous-systems-contract"],
     surfaces: [
       {
         id: "crash_and_error_cluster_detection",
@@ -1048,6 +1411,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "installed_product_qa_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_qa_control_with_platform_specific_proof_sources",
+    platformContextRequired: true,
     displayName: "Installed Product QA Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -1117,8 +1483,8 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
       "Level 3/4 approval for high-risk fixes",
       "scheduler cannot be claimed active without device-lab/timer proof",
     ],
-    requiredProofScripts: ["proof:installed-product-qa-operator", "proof:autonomous-systems-contract"],
-    requiredGuardScripts: ["guard:installed-product-qa-operator", "guard:autonomous-systems-contract"],
+    requiredProofScripts: ["proof:installed-product-qa-operator", "proof:ios-installed-qa-autonomy", "proof:autonomous-systems-contract"],
+    requiredGuardScripts: ["guard:installed-product-qa-operator", "guard:ios-installed-qa-autonomy", "guard:autonomous-systems-contract"],
     surfaces: [
       {
         id: "installed_route_marker_traversal",
@@ -1229,6 +1595,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "platform_recovery_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_recovery_with_platform_release_readiness",
+    platformContextRequired: true,
     displayName: "Platform Recovery Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -1311,6 +1680,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "privacy_compliance_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_privacy_with_platform_manifest_readback",
+    platformContextRequired: true,
     displayName: "Privacy Compliance Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -1383,6 +1755,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "support_success_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_support_with_platform_issue_context",
+    platformContextRequired: true,
     displayName: "Support Success Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -1481,6 +1856,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "search_ranking_integrity_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_backend_with_optional_telemetry_platform",
+    platformContextRequired: false,
     displayName: "Search / Ranking Integrity Operator",
     status: "scoped_write_capable_guarded",
     activeActivationMode: "limited_scheduled_probe",
@@ -1552,7 +1930,64 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
     ],
   },
   {
+    id: "product_intelligence_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_cognitive_planning_and_delegation_foundation",
+    platformContextRequired: true,
+    displayName: "Product Intelligence Operator",
+    status: "security_hardened_scaffold_not_deployed",
+    activeActivationMode: "off",
+    schedulerStatus: "no_scheduler_no_function_no_production_model_credentials",
+    activationModes: ["off", "manual_cli"],
+    allowedSurfaces: COGNITIVE_FOUNDATION_SURFACES.map((surface) => surface.id),
+    allowedWrites: [
+      "undeployed service-owned cognitive memory schema",
+      "local deterministic architecture graph evidence",
+      "draft-branch source and test changes from a validated bounded plan",
+      "draft PR and local evaluation evidence",
+    ],
+    forbidden: [
+      "direct money movement or money-policy mutation",
+      "user-rights, auth, RLS, owner-role, or moderation-enforcement mutation",
+      "public release, production deployment, store release, or OTA action",
+      "provider product or pricing mutation",
+      "self approval or approval-level mutation",
+      "unrestricted model or tool credentials",
+      "private-user-data model training",
+      "production scheduler activation",
+    ],
+    requiredGates: [
+      "validated structured plan",
+      "branch, path, and tool allowlists",
+      "call, time, and cost budgets",
+      "capability expiry",
+      "secret and PII redaction",
+      "independent read-only evaluation",
+      "rollback plan",
+      "owner approval for any future Level 3/4 promotion",
+      "no self approval",
+    ],
+    requiredProofScripts: [
+      "proof:cognitive-intelligence-contract",
+      "proof:cognitive-execution-safety",
+      "proof:research-source-integrity",
+      "proof:cognitive-memory-integrity",
+      "proof:cognitive-architecture-graph",
+    ],
+    requiredGuardScripts: [
+      "guard:cognitive-intelligence-contract",
+      "guard:cognitive-execution-safety",
+      "guard:research-source-integrity",
+      "guard:cognitive-memory-integrity",
+      "guard:cognitive-architecture-graph",
+    ],
+    surfaces: COGNITIVE_FOUNDATION_SURFACES,
+  },
+  {
     id: "ads_sponsor_delivery_operator",
+    supportedPlatforms: ["shared"],
+    platformScope: "foundation_only_shared_backend",
+    platformContextRequired: false,
     displayName: "Ads / Sponsor Delivery Operator",
     status: "foundation_only_guarded",
     activeActivationMode: "off",
@@ -1609,6 +2044,9 @@ export const AUTONOMOUS_SYSTEMS_REGISTRY = [
   },
   {
     id: "owner_command_operator",
+    supportedPlatforms: ["shared", "ios", "android", "web"],
+    platformScope: "shared_command_router_with_explicit_target_platform",
+    platformContextRequired: true,
     displayName: "Owner Command / Judgment Execution Operator",
     status: "scoped_command_router_guarded",
     activeActivationMode: "manual_cli",

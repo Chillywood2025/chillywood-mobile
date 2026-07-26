@@ -1,4 +1,4 @@
-import type { AutonomousApprovalLevel, AutonomousSystemId } from "./autonomousSystemsRegistry";
+import type { AutonomousApprovalLevel, AutonomousPlatform, AutonomousSystemId } from "./autonomousSystemsRegistry";
 
 export type OwnerCommandTargetSystemId = Exclude<AutonomousSystemId, "owner_command_operator">;
 
@@ -35,11 +35,13 @@ export type OwnerCommandIntent =
   | "privacy_compliance"
   | "support_success"
   | "search_ranking_integrity"
+  | "product_intelligence"
   | "ads_sponsor_delivery"
   | "multi_system"
   | "unknown";
 
 export type OwnerCommandClassification = {
+  platformScope: AutonomousPlatform;
   normalizedIntent: OwnerCommandIntent;
   riskLevel: OwnerCommandRiskLevel;
   approvalRequired: boolean;
@@ -65,6 +67,7 @@ export type OwnerCommandExecutionStep = {
 export type OwnerCommandExecutionPlan = {
   status: OwnerCommandStatus;
   commandText: string;
+  platformScope: AutonomousPlatform;
   normalizedIntent: OwnerCommandIntent;
   approvalLevel: OwnerCommandRiskLevel;
   targetSystems: OwnerCommandTargetSystemId[];
@@ -97,6 +100,7 @@ const ACTIVE_SYSTEMS: readonly OwnerCommandTargetSystemId[] = [
   "privacy_compliance_operator",
   "support_success_operator",
   "search_ranking_integrity_operator",
+  "product_intelligence_operator",
   "ads_sponsor_delivery_operator",
 ];
 
@@ -135,6 +139,17 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "premium",
     "webhook",
     "provider",
+    "storekit",
+    "iap",
+    "in-app purchase",
+    "app store purchase",
+    "apple subscription",
+    "restore purchases",
+    "revenuecat apple",
+    "tip tier",
+    "seat pass",
+    "refund",
+    "revocation",
   ],
   notification_delivery_operator: [
     "notification",
@@ -143,6 +158,12 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "device token",
     "delivery",
     "alert",
+    "apns",
+    "pushkit",
+    "callkit",
+    "voip",
+    "native incoming call",
+    "terminal call cleanup",
   ],
   release_ota_operator: [
     "release",
@@ -167,6 +188,11 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "secret scan",
     "rachi",
     "approval",
+    "ios signing",
+    "apple certificate",
+    "provisioning profile",
+    "apns key",
+    "app store connect key",
   ],
   moderation_safety_operator: [
     "moderation",
@@ -206,6 +232,13 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "installed proof",
     "report cluster route bug",
     "user report route marker",
+    "testflight",
+    "ios simulator",
+    "internal ios build",
+    "iphone",
+    "ipad",
+    "build number",
+    "ios-qa",
   ],
   platform_recovery_operator: [
     "platform recovery",
@@ -245,6 +278,15 @@ const SYSTEM_KEYWORDS: Record<OwnerCommandTargetSystemId, readonly string[]> = {
     "discovery",
     "index freshness",
     "shadowban",
+  ],
+  product_intelligence_operator: [
+    "product intelligence",
+    "cognitive platform",
+    "research broker",
+    "architecture graph",
+    "experiment plan",
+    "independent evaluator",
+    "model budget",
   ],
   ads_sponsor_delivery_operator: [
     "ads",
@@ -394,6 +436,12 @@ const SYSTEM_FORBIDDEN_SCOPE: Record<OwnerCommandTargetSystemId, readonly string
     "ranking algorithm mutation",
     "moderation enforcement",
   ],
+  product_intelligence_operator: [
+    "production cognitive deployment",
+    "self approval",
+    "unrestricted model credential",
+    "direct money, rights, auth/RLS, moderation, release, or provider mutation",
+  ],
   ads_sponsor_delivery_operator: [
     "serving ads",
     "sponsor checkout",
@@ -431,6 +479,18 @@ export const sanitizeOwnerCommandProof = (value: unknown): unknown => {
 
 const commandMatches = (text: string, patterns: readonly RegExp[]) => patterns.some((pattern) => pattern.test(text));
 
+export const classifyOwnerCommandPlatform = (commandText: string): AutonomousPlatform => {
+  const text = normalizeCommandText(commandText).toLowerCase();
+  const matches = [
+    /\b(ios|iphone|ipad|testflight|app store|apns|pushkit|callkit|storekit)\b/.test(text) ? "ios" : null,
+    /\b(android|google play|play store|play billing|fcm|apk|aab|firebase test lab)\b/.test(text) ? "android" : null,
+    /\b(web|browser|pwa|website)\b/.test(text) ? "web" : null,
+  ].filter(Boolean) as AutonomousPlatform[];
+  if (matches.length > 1) return "unknown";
+  if (matches[0]) return matches[0];
+  return "shared";
+};
+
 export const mapOwnerCommandToAutonomousSystems = (commandText: string): OwnerCommandTargetSystemId[] => {
   const text = normalizeCommandText(commandText).toLowerCase();
   const systems = ACTIVE_SYSTEMS.filter((systemId) => SYSTEM_KEYWORDS[systemId].some((keyword) => text.includes(keyword)));
@@ -455,6 +515,7 @@ export const classifyOwnerCommandIntent = (commandText: string): OwnerCommandInt
   if (systemId === "privacy_compliance_operator") return "privacy_compliance";
   if (systemId === "support_success_operator") return "support_success";
   if (systemId === "search_ranking_integrity_operator") return "search_ranking_integrity";
+  if (systemId === "product_intelligence_operator") return "product_intelligence";
   if (systemId === "ads_sponsor_delivery_operator") return "ads_sponsor_delivery";
   return "unknown";
 };
@@ -480,8 +541,10 @@ export const classifyOwnerCommand = (commandText: string): OwnerCommandClassific
   if (!normalized) blockers.push("command_text_required");
   if (includesSecretLikeValue(normalized)) blockers.push("secret_like_command_payload_blocked");
   if (!targetSystems.length) blockers.push("target_system_not_identified");
+  if (classifyOwnerCommandPlatform(normalized) === "unknown") blockers.push("multiple_platform_scopes_require_separate_approval_requests");
 
   return {
+    platformScope: classifyOwnerCommandPlatform(normalized),
     normalizedIntent: classifyOwnerCommandIntent(normalized),
     riskLevel,
     approvalRequired: riskLevel >= 3,
@@ -532,6 +595,7 @@ export const buildOwnerCommandExecutionPlan = (commandText: string): OwnerComman
   return {
     status: classification.blockers.length ? "blocked" : classification.approvalRequired ? "approval_required" : "planned",
     commandText: redactText(command),
+    platformScope: classification.platformScope,
     normalizedIntent: classification.normalizedIntent,
     approvalLevel: classification.riskLevel,
     targetSystems,
@@ -590,6 +654,7 @@ export const buildOwnerCommandApprovalRequest = (plan: OwnerCommandExecutionPlan
   if (plan.approvalLevel < 3) return null;
   return {
     systemId: plan.targetSystems[0] ?? "security_owner_operator",
+    platform: plan.platformScope,
     actionId: "owner_command_high_risk_execution",
     approvalLevel: plan.approvalLevel as Extract<AutonomousApprovalLevel, 3 | 4>,
     title: `Owner command approval: ${plan.normalizedIntent}`,

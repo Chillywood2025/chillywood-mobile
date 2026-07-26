@@ -11,7 +11,6 @@ const checks = [];
 const add = (name, passed, detail) => checks.push({ name, passed, detail });
 const includes = (source, needle) => source.includes(needle);
 const excludes = (source, needle) => !source.includes(needle);
-const includesAll = (source, needles) => needles.every((needle) => includes(source, needle));
 const excludesAll = (source, needles) => needles.every((needle) => excludes(source, needle));
 
 const channelSettings = read("app/channel-settings.tsx");
@@ -181,7 +180,7 @@ const flowChecks = [
       ["viewer tip sheet confirm action exists", tipSheet, "tip-confirm-button"],
       ["viewer tip sheet amount options are accessible buttons", tipSheet, "Choose ${formatMonetizationCurrency(amount, tipStatus?.currency ?? \"usd\")} tip amount"],
       ["viewer tip sheet secondary action is tappable", tipSheet, "tip-sheet-not-now-button"],
-      ["viewer purchase helper is wired", tipSheet, "purchaseCreatorTipWithGooglePlay"],
+      ["platform-neutral viewer purchase helper is wired", tipSheet, "purchaseCreatorTipWithStore"],
       ["viewer helper uses sandbox tip product key", creatorTips, "creator_tip_sandbox_099"],
       ["viewer helper uses RevenueCat sandbox tip product", creatorTips, "cw_creator_tip_sandbox_099"],
       ["viewer helper creates creator-tip intent", creatorTips, 'p_product_key: CREATOR_TIP_SANDBOX_PRODUCT_KEY'],

@@ -158,7 +158,7 @@ export function ParticipantDetailSheet({
               activeOpacity={0.82}
               onPress={onOpenChat}
             >
-              <Text style={styles.actionBtnText}>Chi'lly Chat</Text>
+              <Text style={styles.actionBtnText}>Chi’lly Chat</Text>
             </TouchableOpacity>
           ) : null}
 

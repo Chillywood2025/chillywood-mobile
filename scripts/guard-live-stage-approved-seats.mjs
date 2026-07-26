@@ -23,6 +23,16 @@ const assertBefore = (source, firstNeedle, secondNeedle, label) => {
   if (firstIndex < 0 || secondIndex < 0 || firstIndex > secondIndex) fail(label);
 };
 
+const sliceBetween = (source, startNeedle, endNeedle, label) => {
+  const startIndex = source.indexOf(startNeedle);
+  const endIndex = source.indexOf(endNeedle, startIndex + startNeedle.length);
+  if (startIndex < 0 || endIndex < 0 || endIndex <= startIndex) {
+    fail(`${label} is missing.`);
+    return "";
+  }
+  return source.slice(startIndex, endIndex);
+};
+
 const assertStaticRole = ({ label, requestedRole, isHost, freshMembership, approved, muted, expectedRole, expectedCanPublish }) => {
   let participantRole = "viewer";
   let canPublish = false;
@@ -50,6 +60,24 @@ const watchPartyLiveKitGuard = readSource("scripts/guard-watch-party-livekit-cam
 const seatApprovalProof = readSource("scripts/proof-live-stage-seat-approval.mjs");
 const liveStagePresentation = readSource("_lib/watch-party/live-stage-presentation.ts");
 const watchParty = readSource("_lib/watchParty.ts");
+const liveStageTopChrome = sliceBetween(
+  liveStage,
+  "const renderStageTopChrome = () => (",
+  "const renderStageControlsSheet = () => {",
+  "Live Stage top chrome boundary",
+);
+const liveStageLocalAudioGate = sliceBetween(
+  liveStage,
+  "const publishLocalStageAudio = stageLocalMediaIntent",
+  "const publishLocalStageCamera = stageLocalMediaIntent",
+  "Live Stage local audio publish gate boundary",
+);
+const liveStageLocalCameraGate = sliceBetween(
+  liveStage,
+  "const publishLocalStageCamera = stageLocalMediaIntent",
+  "const currentStageSeatActivating",
+  "Live Stage local camera publish gate boundary",
+);
 
 assertStaticRole({
   label: "host",
@@ -127,13 +155,32 @@ assertIncludes(livekitToken, "removeParticipant(room.roomName, targetUserId)", "
 assertIncludes(liveStagePresentation, "applyLiveStageSeatRequestEvent", "Live Stage presentation helper must own request event state");
 assertIncludes(liveStagePresentation, "closeLiveStageSeatRequestSheet", "Live Stage presentation helper must own X close suppression");
 assertIncludes(liveStagePresentation, "liveKitContractMatchesDesiredAuthority", "Live Stage presentation helper must own contract authority matching");
+assertIncludes(liveStagePresentation, '["android", "ios"].includes', "Live Stage native platforms must share automatic authorized local media startup");
+assertIncludes(liveStagePresentation, "shouldAutoStartAuthorizedNativeLiveKitMedia", "shared presentation helper must own native LiveKit local media startup policy");
 assertIncludes(liveStagePresentation, "canRenderParticipantSpecificLiveKitTrack", "Live Stage presentation helper must own identity-safe track rendering");
+assertIncludes(liveStagePresentation, "canRenderLocalParticipantLiveKitTrack", "Live Stage presentation helper must own exact local-track rendering");
 
+assertIncludes(liveStage, "const DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT = shouldAutoStartAuthorizedNativeLiveKitMedia(Platform.OS);", "Live Stage platform-local media default");
+assertIncludes(liveStage, "useState(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage local media state must use the platform default");
+assertIncludes(liveStage, "useRef(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage local media ref must use the platform default");
+assertIncludes(liveStage, "setStageLocalMediaIntent(DEFAULT_LIVE_STAGE_LOCAL_MEDIA_INTENT)", "Live Stage room reset must restore the platform default");
+assertIncludes(liveStage, "const shouldPublishLocalCamera = canPublishLocalCamera && publishLocalCamera;", "Live Stage hero must use actual local camera publish intent");
+assertIncludes(liveStage, "publishLocalCamera={publishLocalStageCamera}", "Live Stage hero must receive actual local camera publish intent");
+assertIncludes(liveStage, "Camera and microphone are off. Tap Start Camera & Mic.", "Live Stage camera-off placeholder must be truthful");
+assertIncludes(liveStageTopChrome, "isLiveFirstMode && shouldRenderStageLocalMediaControl", "Live-First local media control must be reachable outside the hybrid-only deck");
+assertIncludes(liveStageTopChrome, 'testID={stageLocalMediaIntent ? "live-stage-stop-local-media" : "live-stage-start-local-media"}', "Live-First local media control proof target");
 assertIncludes(liveStage, "currentTrackedParticipantState?.role === \"speaker\"", "Live Stage local speaker authority state");
 assertIncludes(liveStage, "currentStageMembership?.canSpeak", "Live Stage canSpeak membership authority");
 assertIncludes(liveStage, "currentStageMembership?.stageRole === \"speaker\"", "Live Stage stageRole membership authority");
-assertIncludes(liveStage, "const publishLocalStageAudio = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;", "Live Stage local audio publish gate");
-assertIncludes(liveStage, "const publishLocalStageCamera = liveKitContractAllowsStagePublish && !isCurrentStageParticipantMuted;", "Live Stage local camera publish gate");
+for (const [source, label] of [
+  [liveStageLocalAudioGate, "Live Stage local audio publish gate"],
+  [liveStageLocalCameraGate, "Live Stage local camera publish gate"],
+]) {
+  assertIncludes(source, "stageLocalMediaIntent", `${label} explicit intent`);
+  assertIncludes(source, 'mediaAppState === "active"', `${label} foreground state`);
+  assertIncludes(source, "liveKitContractAllowsStagePublish", `${label} server authority`);
+  assertIncludes(source, "!isCurrentStageParticipantMuted", `${label} mute state`);
+}
 assertIncludes(liveStage, "const staleRoleContract = !!liveKitJoinContract && liveKitJoinContract.participantRole !== desiredLiveKitAuthority.participantRole;", "Live Stage role mismatch contract refresh");
 assertIncludes(liveStage, "const stalePublishContract = !!liveKitJoinContract && existingCanPublish !== desiredCanPublish;", "Live Stage publish mismatch contract refresh");
 assertIncludes(liveStage, "liveKitContractMatchesDesiredAuthority(liveKitJoinContract, desiredLiveKitAuthority)", "Live Stage publish readiness must require matching contract authority");
@@ -167,6 +214,10 @@ assertIncludes(liveStage, "const canUseViewerSelfHero = !isHost && isHybridMode;
 assertIncludes(liveStage, "const shouldUseViewerSelfHero = canUseViewerSelfHero && viewerSelfHeroEnabled;", "Live Stage self-hero mode is local UI state");
 assertIncludes(liveStage, "const participantIsLocal = participantId === localParticipant.identity;", "Live Stage member tile must detect local self before using remote track fallback");
 assertIncludes(liveStage, "canRenderParticipantSpecificLiveKitTrack", "Live Stage member tile must require exact participant identity for LiveKit video");
+assertIncludes(liveStage, "canRenderLocalParticipantLiveKitTrack", "Live Stage self tile must require exact local participant identity");
+assertIncludes(liveStage, "publishLocalCamera={isCurrentUser && publishLocalStageCamera}", "Live Stage self tile renders local video only while camera publishing is active");
+assertIncludes(liveStage, "mirror={participantIsLocal}", "Live Stage mirrors only the current device's local preview");
+assertIncludes(liveStage, "Your preview appears in Party Members while the host remains the hero.", "Live Stage viewer copy matches self-preview behavior");
 assertNotIncludes(liveStage, "matchingTrack ?? fallbackRemoteTrack", "Live Stage member tile must not borrow arbitrary remote tracks");
 assertIncludes(liveStage, "resolveActualVisualHeroParticipantId", "Live Stage must separate actual visual hero from active/focus participant");
 assertIncludes(liveStage, "buildLiveStageCommunityParticipants", "Live Stage party box must use shared helper filtering");
@@ -200,6 +251,9 @@ assertIncludes(liveStage, "testID=\"live-stage-seat-request-sheet\"", "Live Stag
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-approve\"", "Live Stage seat-request sheet has approve action");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-dismiss\"", "Live Stage seat-request sheet has dismiss action");
 assertIncludes(liveStage, "testID=\"live-stage-seat-request-close\"", "Live Stage seat-request sheet has close action");
+assertIncludes(liveStage, "accessibilityLabel=\"Return to Live Room\"", "Live Stage exposes an accessible route-back action");
+assertIncludes(liveStage, "<AppBackButton", "Live Stage route-back action uses the shared visible phone back control");
+assertIncludes(liveStage, "testID=\"live-stage-live-room-button\"", "Live Stage route-back action keeps a stable proof target");
 assertIncludes(liveStage, "LiveStageSeatRequestState", "Live Stage tracks versioned seat requests");
 assertIncludes(liveStage, "createSeatRequestVersion", "Live Stage requests must carry a request version");
 assertIncludes(liveStage, "applyLiveStageSeatRequestEvent", "Live Stage request broadcasts must use shared versioned state helper");
@@ -211,9 +265,12 @@ assertIncludes(liveStage, "closeSeatRequestSheet(seatRequestSheetParticipantId);
 assertIncludes(liveStage, "pointerEvents=\"auto\"\n            style={[styles.stageSeatRequestSheetWrap", "Live Stage seat request wrapper must receive host taps");
 assertIncludes(liveStage, "zIndex: 100", "Live Stage overlay wrapper must sit above the notification portal for host sheet taps");
 assertIncludes(liveStage, "elevation: 100", "Live Stage overlay wrapper must sit above Android elevated portals for host sheet taps");
-assertIncludes(liveStage, "Live Watch-Party hybrid owns the member deck; it is not transient chrome.", "Live Stage hybrid deck visibility marker");
-assertIncludes(liveStage, "setStageOverlayAutoHideArmed(entryStageMode !== \"hybrid\")", "Live Stage must not arm overlay auto-hide for hybrid Live Watch-Party entry");
-assertIncludes(liveStage, "isHybridMode\n      || !stageOverlayAutoHideArmed", "Live Stage hybrid mode must block the overlay auto-hide timer");
+assertIncludes(liveStage, "Both Live-First and Live Watch-Party use transient stage chrome.", "Live Stage both-mode transient overlay marker");
+assertIncludes(liveStage, "setStageOverlayAutoHideArmed(true)", "Live Stage must arm overlay auto-hide on entry in both modes");
+assertNotIncludes(liveStage, "setStageOverlayAutoHideArmed(entryStageMode !== \"hybrid\")", "Live Stage must not exempt Live Watch-Party entry from auto-hide");
+assertNotIncludes(liveStage, "isHybridMode\n      || !stageOverlayAutoHideArmed", "Live Stage must not exempt Live Watch-Party from the overlay timer");
+assertIncludes(liveStage, "revealStageOverlay({ armAutoHide: false });\n      setStageOverlayAutoHideArmed(false);", "Live Stage controls lock keeps the overlay visible");
+assertIncludes(liveStage, "revealStageOverlay();\n  }, [controlsLocked, revealStageOverlay]);", "Live Stage controls unlock re-arms the overlay timer");
 
 assertIncludes(oldRoomGuard, "isWatchPartyRoomCurrentlyActive(room)", "Old-room guard covers LiveKit stale room rejection");
 assertIncludes(oldRoomGuard, "LiveKit token room_expired rejection", "Old-room guard covers expired token response");
@@ -229,12 +286,15 @@ assertIncludes(seatApprovalProof, "dismiss should close the seat-request sheet",
 assertIncludes(seatApprovalProof, "close should keep the pending request", "Live Stage proof covers X close preserving request");
 assertIncludes(seatApprovalProof, "default viewer layout should include viewer self in party box", "Live Stage proof covers default self tile visibility");
 assertIncludes(seatApprovalProof, "host party box should not duplicate host/self as You HOST", "Live Stage proof covers host self not duplicated in remote member box");
-assertIncludes(seatApprovalProof, "focused remote viewer should remain in host party box", "Live Stage proof covers focused remote viewer retention");
+assertIncludes(seatApprovalProof, "host should move into the party box when a remote viewer is the actual hero", "Live Stage proof covers host placement when a remote viewer is the hero");
+assertIncludes(seatApprovalProof, "focused remote viewer should not duplicate inside the host party box", "Live Stage proof excludes the actual remote hero from the party box");
 assertIncludes(seatApprovalProof, "host card tap must not hide the participant", "Live Stage proof covers pending remote viewer card retention");
 assertIncludes(seatApprovalProof, "featured listener must still be Audience", "Live Stage proof covers Featured not replacing primary role/status");
 assertIncludes(seatApprovalProof, "host pending-request card tap should open the seat-request sheet", "Live Stage proof covers card tap sheet behavior");
 assertIncludes(seatApprovalProof, "pending approve/dismiss actions must not render inline", "Live Stage proof covers sheet-only pending approval");
 assertIncludes(seatApprovalProof, "participant card must not borrow another remote participant's track", "Live Stage proof covers identity-matched member tracks");
+assertIncludes(seatApprovalProof, "viewer self Party Members tile should render its exact active local camera track", "Live Stage proof covers active local self-preview");
+assertIncludes(seatApprovalProof, "viewer self Party Members tile must not render local camera while publishing is off", "Live Stage proof covers local self-preview shutdown");
 assertIncludes(seatApprovalProof, "duplicate pending broadcast must not reopen a locally closed request", "Live Stage proof covers request-versioned X close suppression");
 assertIncludes(seatApprovalProof, "viewer/no-publish token must not be publish-ready for approved speaker", "Live Stage proof covers downgraded contract rejection");
 assertIncludes(seatApprovalProof, "close should collapse transient host controls", "Live Stage proof covers X close clearing the transient host overlay");

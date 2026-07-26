@@ -2,6 +2,30 @@
 
 # Cloudflare R2 Media Delivery Staged Proof
 
+## Android native-image incident closed
+
+The permanent Android replacement is available on Google Play Internal Testing.
+Version
+1.0.0 (84), runtime `1.0.0-android-imagemanipulator-v1`, was built locally from
+`8c426f4e74de61de7d4529d32d124744833912dc`; its AAB and exact AAB-derived QA APK
+contain and register `ExpoImageManipulator` 14.0.8. Clean Android API 34 proof
+passed the native path for JPEG, HEIC, HEIF, and high-resolution HEIC, while a
+corrupt HEIC failed safely. Google App Integrity now shows the replacement upload
+certificate active, the Play app-signing certificate unchanged, and the same
+public fingerprint in EAS, Google, the preserved AAB, and the local replacement.
+The exact preserved AAB is processed and available on the internal track to the
+existing bounded 17-tester lane; production/open/closed testing were unchanged.
+An approved Samsung Android 11 device completed the Play-delivered build-80-to-84
+in-place upgrade with no uninstall, clear, or sideload. Session, safe settings,
+notification state, and profile state survived. The replacement runtime and native
+module were observed; JPEG, HEIC, HEIF, high-resolution HEIC, corrupt-input
+fail-safe, repeated edits, and background/foreground behavior passed without the
+historical fatal. The incident is closed. Do not publish either superseded
+incompatible runtime-1.0.0 update group. Build 80 is protected by the existing
+safety update but intentionally cannot perform HEIC/HEIF conversion. Remaining
+coverage is second-OEM/minimum-API/permission/network/low-memory/EXIF and every
+individual social attachment surface, not a blocker to this incident closeout.
+
 Current latest truth:
 - Autonomous operating model is now the governing policy: Do not ask owner approval for Level 0/1 autonomous operations; classify first, proceed inside safe policy, and report. Ask owner for Level 3; ask owner plus external confirmation for Level 4.
 - User Report Router is now under `support_success_operator`: authenticated reports are sanitized, classified, clustered, deduped by unique reporter, and routed to the owning autonomous system. Three unique matching bug/fix reports within seven days create a routed finding or Owner Command. Critical safety/security/privacy/payment/provider issues can escalate immediately for review. Reports cannot directly execute money movement, Premium grants, auth/RLS mutation, enforcement, OTA publish/rollback, LiveKit/R2 changes, provider product changes, or ads/sponsor activation.

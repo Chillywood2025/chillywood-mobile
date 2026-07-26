@@ -54,6 +54,7 @@ const validateRuntime = read("scripts/validate-runtime.mjs");
 const channelSettings = read("app/channel-settings.tsx");
 const adminSandboxRoute = read("app/admin-money-sandbox-purchases.tsx");
 const accessSheet = read("components/monetization/access-sheet.tsx");
+const subscribe = read("app/subscribe.tsx");
 const watchPartyRoute = read("app/watch-party/[partyId].tsx");
 const liveStageRoute = read("app/watch-party/live-stage/[partyId].tsx");
 
@@ -115,6 +116,13 @@ assertIncludes(accessSheet, "const renderDeferredUnavailable = deferredMonetizat
 assertIncludes(accessSheet, "if (renderDeferredUnavailable)", "deferred unavailable close path is bounded away from Premium gates");
 assertIncludes(accessSheet, "if (isPremiumGateSheet && sheetState?.primaryAction !== \"purchase\")", "Premium gate routes to subscribe only when sandbox purchase is not ready");
 assertIncludes(accessSheet, "sheetState?.primaryAction === \"purchase\"", "Premium gate sheet can directly launch provider-backed sandbox purchase");
+assertIncludes(monetization, "readMoneyFeatureFlagSummaryWithStatus", "sandbox purchase server-rail readback");
+assertIncludes(monetization, "storePurchaseRailState !== \"sandbox_only\"", "bounded sandbox server-rail requirement");
+assertIncludes(monetization, "storePurchaseRailReadback.readbackComplete", "missing server-rail readback fail-closed behavior");
+assertIncludes(subscribe, "disabled={busy}", "purchase CTA remains actionable for exact readiness explanation");
+assertIncludes(subscribe, "premium-purchase-blocked-reason", "visible purchase readiness blocker");
+assertIncludes(subscribe, '"testing-details": true', "purchase readiness failure opens diagnostics");
+assertNotIncludes(subscribe, "disabled={busy || (!hasPremium && !canPurchase)}", "purchase explanation hidden behind disabled CTA");
 const liveTab = read("app/(tabs)/live.tsx");
 assertIncludes(liveTab, "requireLiveFirstPremium({ accessKey: \"bottom-live-tab\" })", "Live tab keeps strict Premium access check");
 assertIncludes(liveTab, "setPremiumGateVisible(true)", "Live tab Premium denial opens actionable Premium sheet");

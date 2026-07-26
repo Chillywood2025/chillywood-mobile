@@ -1,9 +1,19 @@
+import { Platform } from "react-native";
+
 import { supabase } from "./supabase";
 import {
+  getRevenueCatProductionReadiness,
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
   syncRevenueCatCustomerIdentity,
 } from "./revenuecat";
+import {
+  findIosStoreProductByStableKey,
+  findIosStoreProductByProductId,
+  resolveIosFiniteAppStoreTier,
+} from "./iosAppStoreCommerce";
+import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
+import { getRuntimeConfig } from "./runtimeConfig";
 
 export type CreatorTipStatus = "setup_incomplete" | "active" | "paused" | "blocked";
 
@@ -80,12 +90,15 @@ export type CreatorTipCheckoutResult = {
   error?: string;
 };
 
-export type CreatorTipGooglePlayPurchaseResult = {
+export type CreatorTipStorePurchaseResult = {
   ok: boolean;
   intentId: string | null;
   productId: string;
   message: string;
 };
+
+/** @deprecated Use CreatorTipStorePurchaseResult for platform-neutral code. */
+export type CreatorTipGooglePlayPurchaseResult = CreatorTipStorePurchaseResult;
 
 const CREATOR_TIP_SANDBOX_PRODUCT_KEY = "creator_tip_sandbox_099";
 const CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID = "cw_creator_tip_sandbox_099";
@@ -254,6 +267,22 @@ export async function createCreatorTipCheckout(input: {
   returnUrl: string;
   cancelUrl: string;
 }): Promise<CreatorTipCheckoutResult> {
+  if (Platform.OS === "ios") {
+    return {
+      status: "ios_app_store_required",
+      provider: "revenuecat",
+      providerKey: "revenuecat_app_store",
+      mode: "test",
+      checkoutCreated: false,
+      liveMoneyAction: false,
+      noAccessGranted: true,
+      pureContributionOnly: true,
+      tipId: null,
+      url: null,
+      message: "Use the finite App Store tip flow on iOS. No Stripe checkout was created.",
+    };
+  }
+
   const { data, error } = await creatorTipsClient.functions.invoke("create-creator-tip-checkout", {
     body: {
       amount_cents: input.amountCents,
@@ -284,60 +313,124 @@ export async function createCreatorTipCheckout(input: {
   };
 }
 
-export async function purchaseCreatorTipWithGooglePlay(input: {
+export async function purchaseCreatorTipWithStore(input: {
   creatorId: string;
   userId: string;
   amountCents: number;
   currency?: string;
+  iosStoreProductKey?: string;
   privateNote?: string | null;
   sourceSurface?: string;
-}): Promise<CreatorTipGooglePlayPurchaseResult> {
+}): Promise<CreatorTipStorePurchaseResult> {
   const creatorId = toText(input.creatorId);
   const userId = toText(input.userId);
+  const legacyIosTipProduct = Platform.OS === "ios"
+    ? resolveIosFiniteAppStoreTier("creator_tip", input.amountCents)
+    : null;
+  const legacyIosProductId = legacyIosTipProduct?.productId ?? null;
+  const iosTipProduct = Platform.OS === "ios"
+    ? findIosStoreProductByStableKey(input.iosStoreProductKey) ??
+      (legacyIosProductId ? findIosStoreProductByProductId(legacyIosProductId) : null)
+    : null;
+  const productId = iosTipProduct?.productId ?? legacyIosProductId ?? CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID;
   if (!creatorId || !userId) {
     return {
       ok: false,
       intentId: null,
-      productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+      productId,
       message: "Sign in again before sending a sandbox tip.",
     };
   }
 
+  if (Platform.OS === "ios") {
+    if (!iosTipProduct || iosTipProduct.concept !== "creator_tip") {
+      return {
+        ok: false,
+        intentId: null,
+        productId,
+        message: "Choose one of the available App Store tip tiers. Nothing was charged.",
+      };
+    }
+    const runtime = getRuntimeConfig();
+    const readiness = getRevenueCatProductionReadiness();
+    const decision = resolvePaymentRailPolicy({
+      appStorePurchasesEnabled: runtime.revenueCat.appStorePurchasesEnabled,
+      environment: "sandbox",
+      liveMoneyEnabled: false,
+      platform: "ios",
+      providerReady: readiness.iosPublicKeyConfigured,
+      store: "app_store",
+      unlocksDigitalAccess: false,
+      useCase: "creator_tip_support",
+    });
+    if (!decision.allowed || decision.provider !== "revenuecat_app_store") {
+      return {
+        ok: false,
+        intentId: null,
+        productId,
+        message: "App Store sandbox tips are disabled for this build. Nothing was charged.",
+      };
+    }
+  }
+
   await syncRevenueCatCustomerIdentity(userId);
 
-  const { data: intent, error } = await creatorTipsClient.rpc<{ id?: unknown }>("create_money_purchase_intent", {
-    p_metadata: {
-      amount_minor: String(Math.max(0, Math.trunc(input.amountCents))),
-      creator_id: creatorId,
-      currency: toText(input.currency) || "usd",
-      no_access_grant: true,
-      no_live_payout: true,
-      not_payable: true,
-      private_note_present: !!toText(input.privateNote),
-      sandbox_only: true,
-      source_surface: toText(input.sourceSurface) || "creator_tip_sheet",
-    },
-    p_product_key: CREATOR_TIP_SANDBOX_PRODUCT_KEY,
-    p_source_id: creatorId,
-    p_source_type: "creator_tip",
-  });
+  const intentRpc = Platform.OS === "ios"
+    ? "create_ios_app_store_purchase_intent"
+    : "create_money_purchase_intent";
+  const intentArgs = Platform.OS === "ios"
+    ? {
+        p_metadata: {
+          amount_minor: String(iosTipProduct?.referencePriceMinor ?? 0),
+          creator_id: creatorId,
+          currency: "usd",
+          no_access_grant: true,
+          no_live_payout: true,
+          not_payable: true,
+          private_note_present: !!toText(input.privateNote),
+          sandbox_only: true,
+          source_surface: toText(input.sourceSurface) || "creator_tip_sheet",
+        },
+        p_provider_product_id: productId,
+        p_source_id: creatorId,
+        p_source_type: "creator_tip",
+      }
+    : {
+        p_metadata: {
+          amount_minor: String(Math.max(0, Math.trunc(input.amountCents))),
+          creator_id: creatorId,
+          currency: toText(input.currency) || "usd",
+          no_access_grant: true,
+          no_live_payout: true,
+          not_payable: true,
+          private_note_present: !!toText(input.privateNote),
+          sandbox_only: true,
+          source_surface: toText(input.sourceSurface) || "creator_tip_sheet",
+        },
+        p_product_key: CREATOR_TIP_SANDBOX_PRODUCT_KEY,
+        p_source_id: creatorId,
+        p_source_type: "creator_tip",
+      };
+  const { data: intent, error } = await creatorTipsClient.rpc<{ id?: unknown }>(intentRpc, intentArgs);
   if (error) {
     return {
       ok: false,
       intentId: null,
-      productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+      productId,
       message: "Sandbox tip could not be started right now.",
     };
   }
 
-  const products = await readRevenueCatNonSubscriptionProducts([CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID]);
-  const storeProduct = products.find((entry) => toText(entry.identifier) === CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID);
+  const products = await readRevenueCatNonSubscriptionProducts([productId]);
+  const storeProduct = products.find((entry) => toText(entry.identifier) === productId);
   if (!storeProduct) {
     return {
       ok: false,
       intentId: toText(intent?.id) || null,
-      productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
-      message: "Google Play sandbox tip product is not available on this device yet.",
+      productId,
+      message: Platform.OS === "ios"
+        ? "App Store sandbox tip product is not available on this device yet."
+        : "Google Play sandbox tip product is not available on this device yet.",
     };
   }
 
@@ -348,16 +441,21 @@ export async function purchaseCreatorTipWithGooglePlay(input: {
     return {
       ok: false,
       intentId: toText(intent?.id) || null,
-      productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+      productId,
       message: isRevenueCatUserCancellation(error)
         ? "Tip canceled. Nothing changed."
-        : "Google Play tip could not be completed. Try again later.",
+        : Platform.OS === "ios"
+          ? "App Store tip could not be completed. Try again later."
+          : "Google Play tip could not be completed. Try again later.",
     };
   }
   return {
     ok: true,
     intentId: toText(intent?.id) || null,
-    productId: toText(purchase.productIdentifier) || CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+    productId: toText(purchase.productIdentifier) || productId,
     message: "Sandbox tip complete.",
   };
 }
+
+/** @deprecated Use purchaseCreatorTipWithStore for platform-neutral call sites. */
+export const purchaseCreatorTipWithGooglePlay = purchaseCreatorTipWithStore;

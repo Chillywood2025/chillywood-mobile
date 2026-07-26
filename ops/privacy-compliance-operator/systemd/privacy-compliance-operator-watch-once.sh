@@ -15,7 +15,7 @@ HTTP_STATUS="$(
     --request POST "${SUPABASE_FUNCTIONS_URL%/}/privacy-compliance-operator" \
     --header "Content-Type: application/json" \
     --header "x-privacy-compliance-operator-token: ${PRIVACY_COMPLIANCE_OPERATOR_TOKEN}" \
-    --data '{"action":"watch_once","environment_mode":"production","scheduler":"systemd_timer","operator_id":"privacy_compliance_operator","source":"'"${SOURCE}"'","moneyMoved":false,"userRightsChanged":false,"highRiskExecuted":false}'
+    --data '{"action":"watch_once","platform":"ios","environment_mode":"production","scheduler":"systemd_timer","operator_id":"privacy_compliance_operator","source":"'"${SOURCE}"'","moneyMoved":false,"userRightsChanged":false,"highRiskExecuted":false}'
 )"
 
 REDACTED_RESPONSE="$(

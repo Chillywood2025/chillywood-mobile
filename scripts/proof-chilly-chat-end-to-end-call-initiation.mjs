@@ -28,6 +28,7 @@ const inbox = read("app/chat/index.tsx");
 const thread = read("app/chat/[threadId].tsx");
 const profile = read("app/profile/[userId].tsx");
 const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts");
+const callDeliveryCopy = read("_lib/chillyChatCallDeliveryCopy.ts");
 
 [
   "Chi’lly Chat end-to-end call initiation proof: Closed / Partial / Blocked",
@@ -70,11 +71,10 @@ const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts
 ].forEach((needle) => requireText("chat inbox start-chat path", inbox, needle));
 
 [
-  "Unable to start Chi'lly Chat call. The receiver-visible call state was not saved.",
   "Unable to start Chi'lly Chat call. The receiver invite could not be saved.",
-  "await clearEndedChatThreadCall(thread.threadId).catch(() => null);",
   "await endCommunicationRoom(roomId).catch(() => null);",
-  "createChillyChatCallInvite",
+  "beginChillyChatCall",
+  "dispatchChillyChatCallPush",
 ].forEach((needle) => requireText("chat call source", chatLib, needle));
 
 [
@@ -94,29 +94,38 @@ const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts
   "readLatestRingingChillyChatCallInviteForCallee",
   "subscribeToIncomingChillyChatCallInvites",
   "chilly_chat_call_invite",
-  "app-wide-incoming-call-modal",
+  "app-wide-incoming-call-banner",
+  "presentation === \"native_background\"",
   "openCall: \"1\"",
 ].forEach((needle) => requireText("app-wide receiver source", appLayout, needle));
 
 [
-  "Delivery status: push sent",
+  "chat-thread-incoming-call-banner",
+  "result.role === \"callee\"",
+  "shouldShowOutgoingRingingPanel",
+].forEach((needle) => requireText("same-thread collision source", thread, needle));
+
+[
+  "Android call alert sent.",
+  "Native iPhone call alert sent.",
+  "Push notification sent.",
   "Delivery status: in-app banner available",
   "Delivery status: push unconfirmed",
   "Delivery status: invite failed",
   "chat-call-delivery-status",
-].forEach((needle) => requireText("thread delivery status source", thread, needle));
+].forEach((needle) => requireText("thread delivery status source", `${thread}\n${callDeliveryCopy}`, needle));
 
 [
   "profile-unavailable-open-chat-search",
-  "Use Chi'lly Chat search to find or start a direct thread through the normal app path.",
+  "Chat search to find or start a direct thread through the normal app path.",
   "Voice Call",
   "Video Call",
   "getOrCreateDirectThread",
 ].forEach((needle) => requireText("profile path source", profile, needle));
 
 [
-  "blockedReason: \"account_access_restricted\"",
-  "return jsonResponse(200, {",
+  "blockedDispatch(\"account_access_restricted\")",
+  "buildBlockedChillyChatCallDispatch",
 ].forEach((needle) => requireText("call dispatch receiver unavailable source", callDispatch, needle));
 
 if (failures.length) {

@@ -7,6 +7,7 @@ import {
   Alert,
   ImageBackground,
   Keyboard,
+  Platform,
   Linking,
   Modal,
   ScrollView,
@@ -294,6 +295,7 @@ import {
 } from "../_lib/dmca";
 import { supabase } from "../_lib/supabase";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
+import { CognitiveControlCenterFoundation } from "../components/admin/cognitive-control-center";
 
 type TitleId = Database["public"]["Tables"]["titles"]["Row"]["id"];
 
@@ -417,6 +419,7 @@ type OperatorTabKey =
   | "canary"
   | "safety-dashboard"
   | "rachi"
+  | "cognitive"
   | "users"
   | "money-center"
   | "premium"
@@ -737,6 +740,7 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "canary", label: "Canary" },
   { key: "safety-dashboard", label: "Safety" },
   { key: "rachi", label: "Rachi" },
+  { key: "cognitive", label: "Cognitive" },
   { key: "users", label: "Users" },
   { key: "money-center", label: "Money Center" },
   { key: "usage", label: "Usage" },
@@ -754,6 +758,7 @@ const ADMIN_MAIN_TAB_KEYS: readonly OperatorTabKey[] = [
   "reports",
   "live-ops-fix-center",
   "rachi",
+  "cognitive",
   "legal",
   "system",
   "owner-security",
@@ -1292,13 +1297,13 @@ const MONEY_SWITCH_GROUPS: readonly {
   {
     id: "digital",
     title: "Digital Purchases",
-    summary: "Android digital goods stay on Google Play and RevenueCat readiness.",
+    summary: "Digital goods are validated through store/provider readiness.",
     keys: ["digital_sales_enabled", "tips_enabled", "watch_party_seats_enabled", "paid_content_enabled", "revenuecat_google_play_enabled"],
   },
   {
     id: "physical",
     title: "Physical / Merch",
-    summary: "Physical goods stay separate from Android digital purchases.",
+    summary: "Physical goods stay separate from digital purchases.",
     keys: ["merch_enabled"],
   },
   {
@@ -3393,6 +3398,8 @@ const listAdminContentAuditEventsRpc = async (limit = 10) => {
 };
 
 export default function AdminStudioScreen() {
+  const storeProviderName = Platform.OS === "ios" ? "App Store" : "Google Play";
+  const storeProviderPair = `${storeProviderName} / RevenueCat`;
   const router = useRouter();
   const routeParams = useLocalSearchParams<{
     focus?: string | string[];
@@ -3752,6 +3759,16 @@ export default function AdminStudioScreen() {
     && platformRolesChecked
     && hasPlatformRoleMembership(platformRoles, ["owner", "operator"]);
   const isOwnerStaff = isSignedIn && isActive && platformRolesChecked && hasPlatformRoleMembership(platformRoles, ["owner"]);
+  const canAccessCognitiveSourceManifest = isSignedIn
+    && isActive
+    && platformRolesChecked
+    && (
+      hasPlatformRoleMembership(platformRoles, ["owner", "super_admin"])
+      || (
+        hasPlatformRoleMembership(platformRoles, ["operator"])
+        && hasPlatformStaffPermission(platformRoles, ["admin.cognitive.read"])
+      )
+    );
   const canAccessDmca = isSignedIn && isActive && platformRolesChecked && canAccessDmcaTools(platformRoles);
   const canManageAdminStaff = isSignedIn && isActive && platformRolesChecked && canManageAdminRoleAssignments(platformRoles);
   const canManageModeratorStaff = isSignedIn && isActive && platformRolesChecked && canManageModeratorRoleAssignments(platformRoles);
@@ -3804,6 +3821,7 @@ export default function AdminStudioScreen() {
       if (canManagePermissionTemplates) scopedTabs.push("permission-templates");
       if (canAccessBreakGlass) scopedTabs.push("break-glass");
       if (canAccessOwnerSecurity) scopedTabs.push("owner-security", "safety-dashboard");
+      if (canAccessCognitiveSourceManifest) scopedTabs.push("cognitive");
       return operatorTabs.filter((tab) => scopedTabs.includes(tab.key));
     },
     [
@@ -3815,6 +3833,7 @@ export default function AdminStudioScreen() {
       canAccessLegalIntake,
       canAccessLiveOps,
       canAccessOwnerSecurity,
+      canAccessCognitiveSourceManifest,
       canAccessCanaryChecks,
       canAccessDmca,
       canManagePrivilegedWrites,
@@ -11219,7 +11238,7 @@ export default function AdminStudioScreen() {
       { label: "Delayed-payment pending", value: "Provider/device gap; failed and expired intent safety proved" },
       { label: "Event pass safety", value: "Proved; canceled event denied access even with grant" },
       { label: "LiveKit authority", value: "Unchanged; access grants do not grant publish, host, speaker, mod, or admin power" },
-      { label: "Stripe Android digital checkout", value: "Absent" },
+              { label: "Stripe digital checkout", value: "Absent" },
     ];
 
     const sections: AdminMoneyCenterSectionConfig[] = [
@@ -11241,7 +11260,7 @@ export default function AdminStudioScreen() {
             <OwnerDisabledReason reason="Launch review state: sandbox digital access evidence is complete, live money and payouts are off, sandbox/setup rows are not payable, and no cash-out or withdrawal action exists." />
             <OwnerDetailGrid
               rows={[
-                { label: "Digital rail", value: "Google Play / RevenueCat for Android digital purchases" },
+                { label: "Digital rail", value: `${storeProviderPair} for digital purchases` },
                 { label: "Product catalog", value: formatAdminFinanceCount(adminFinanceReadModel.monetizationProductCount, adminFinanceReadModel.loading, "catalog product", "catalog products") },
                 { label: "Shared access grants", value: formatAdminFinanceCount(adminFinanceReadModel.accessGrantCount, adminFinanceReadModel.loading, "access grant", "access grants") },
                 { label: "Payout rail", value: "Stripe Connect for creator payouts only" },
@@ -11525,7 +11544,7 @@ export default function AdminStudioScreen() {
             <OwnerDetailGrid
               rows={[
                 { label: "Approved tester access", value: "Owner, Admin, runtime allowlist, active beta/internal tester, or approved internal account" },
-                { label: "Premium", value: "Google Play / RevenueCat sandbox only; public shell remains closed" },
+                { label: "Premium", value: `${storeProviderPair} sandbox only; public shell remains closed` },
                 { label: "Digital access", value: "Tips, Seat Passes, access passes, paid content, and event passes use sandbox intents" },
                 { label: "Physical merch", value: "Stripe sandbox physical goods only; no digital access" },
                 { label: "Payout readiness", value: "Read-only Stripe Connect status; no payout execution" },
@@ -11571,8 +11590,8 @@ export default function AdminStudioScreen() {
       },
       {
         id: "premium",
-        title: "Premium / RevenueCat / Google Play",
-        summary: "Premium entitlements and Android store readiness in one place; Premium gates are unchanged.",
+        title: `Premium / RevenueCat / ${storeProviderName}`,
+        summary: `${storeProviderName} and RevenueCat readiness in one place; Premium gates are unchanged.`,
         meta: `Store switch is ${formatMoneySwitchState(revenueCatGoogleSwitch.state)}.`,
         statusLabel: getCreatorReadinessLabel(premiumReadiness, "Setup needed"),
         tone: providerReadinessStatusTone(premiumReadiness?.status ?? "setup_needed"),
@@ -11641,7 +11660,7 @@ export default function AdminStudioScreen() {
       {
         id: "digital_sales",
         title: "Digital Sales",
-        summary: "Paid creator content, digital access passes, and creator events stay on Google Play / RevenueCat for Android.",
+        summary: `Paid creator content, digital access passes, and creator events stay on ${storeProviderPair}.`,
         meta: `Digital sales are ${formatMoneySwitchState(digitalSalesSwitch.state)}.`,
         statusLabel: digitalSalesSwitch.state === "on" && revenueCatGoogleSwitch.state === "on" ? "Provider verification required" : "Not active",
         tone: digitalSalesSwitch.state === "on" ? "manual" : "locked",
@@ -11663,7 +11682,7 @@ export default function AdminStudioScreen() {
               ]}
             />
             {renderProviderReadinessLine("revenuecat", "paid_content", "Paid content provider readiness")}
-            <OwnerDisabledReason reason="No Stripe checkout for Android digital goods. No sale toggle appears until both provider readiness and backend switches allow it." />
+            <OwnerDisabledReason reason="No Stripe checkout for digital goods. No sale toggle appears until both provider readiness and backend switches allow it." />
             {renderAdminMoneyAuditEventRows(digitalAuditEvents, "No digital sales rows returned", "Paid content, tips, access grants, and merch setup rows appear here only if backed rows are readable.", 4)}
           </View>
         ),
@@ -11696,7 +11715,7 @@ export default function AdminStudioScreen() {
       {
         id: "merch",
         title: "Merch",
-        summary: "Physical goods are separate from Android digital access and can use Stripe sandbox checkout only where explicitly proved.",
+        summary: "Physical goods are separate from digital access and can use Stripe sandbox checkout only where explicitly proved.",
         meta: `Merch is ${formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "merch_enabled").state)}.`,
         statusLabel: "Planned",
         tone: "locked",
@@ -11711,7 +11730,7 @@ export default function AdminStudioScreen() {
                 { label: "Processed merch events", value: formatAdminFinanceCount(adminFinanceReadModel.stripeMerchEventProcessedCount, adminFinanceReadModel.loading, "processed event", "processed events") },
                 { label: "Legacy creator products", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductCount, adminFinanceReadModel.loading, "setup product", "setup products") },
                 { label: "Legacy creator orders", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductOrderCount, adminFinanceReadModel.loading, "setup order", "setup orders") },
-                { label: "Payment rail", value: "Stripe is physical merch only; Android digital goods stay Google Play / RevenueCat" },
+                { label: "Payment rail", value: `Stripe is physical merch only; ${storeProviderPair} handles digital goods` },
               ]}
             />
             {renderAdminMoneyAuditEventRows(digitalAuditEvents.filter((event) => event.category === "merch"), "No merch rows returned", "Physical merch setup rows appear here only if safe records are readable.", 4)}
@@ -11745,7 +11764,7 @@ export default function AdminStudioScreen() {
       {
         id: "payouts",
         title: "Payouts / Stripe Connect",
-        summary: "Stripe Connect readiness for creator payouts only; no Android digital checkout.",
+        summary: "Stripe Connect readiness for creator payouts only; no digital checkout.",
         meta: `Payouts are ${formatMoneySwitchState(payoutsSwitch.state)}.`,
         statusLabel: getCreatorReadinessLabel(payoutsReadiness ?? stripeConnectReadiness, "Setup needed"),
         tone: providerReadinessStatusTone((payoutsReadiness ?? stripeConnectReadiness)?.status ?? "setup_needed"),
@@ -13735,9 +13754,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>RACHI / OFFICIAL ACCOUNT</Text>
-              <Text style={styles.configTitle}>Official Chi'llywood presence</Text>
+              <Text style={styles.configTitle}>Official Chi’llywood presence</Text>
               <Text style={styles.configBody}>
-                Manage Rachi as an official Platform voice for updates, tips, and Chi'llywood Originals. Rachi does not read private chats.
+                Manage Rachi as an official Platform voice for updates, tips, and Chi’llywood Originals. Rachi does not read private chats.
               </Text>
             </View>
           </View>
@@ -13790,7 +13809,7 @@ export default function AdminStudioScreen() {
                 <OwnerStatusPill label={rachiProfileImageSavedUrl ? "Custom" : "Default"} tone={rachiProfileImageSavedUrl ? "success" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Choose a picture from this device's photo gallery to update Rachi's official Profile and Platform picture. Saves and clears write admin audit.
+                Choose a picture from this device’s photo gallery to update Rachi’s official Profile and Platform picture. Saves and clears write admin audit.
               </Text>
               <View style={styles.rachiProfileImageRow}>
                 <View style={styles.rachiProfileImagePreview}>
@@ -13897,11 +13916,11 @@ export default function AdminStudioScreen() {
 
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
-                <Text style={styles.ownerSectionTitle}>Chi'llywood Originals</Text>
+                <Text style={styles.ownerSectionTitle}>Chi’llywood Originals</Text>
                 <OwnerStatusPill label={rachiOriginalsLoading ? "Loading" : `${rachiOriginals.length} public`} tone={rachiOriginals.length ? "info" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Home reads public-safe videos owned by Rachi for the Chi'llywood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
+                Home reads public-safe videos owned by Rachi for the Chi’llywood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
               </Text>
               {rachiOriginals.length ? (
                 <View style={styles.ownerControlList}>
@@ -13960,7 +13979,7 @@ export default function AdminStudioScreen() {
                   <Text style={styles.actionText}>Open Platform</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/chilly-circle")}>
-                  <Text style={styles.actionText}>Open Chi'lly Circle</Text>
+                  <Text style={styles.actionText}>Open Chi’lly Circle</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionBtn, styles.configSaveBtnDisabled]} disabled>
                   <Text style={styles.actionText}>Upload Original</Text>
@@ -16457,7 +16476,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>LIVE OPS FIX CENTER</Text>
               <Text style={styles.configTitle}>Owner/Admin Live remediation approvals</Text>
               <Text style={styles.configBody}>
-                Real incident cards for Live Stage, Watch-Party Live, and Chi'lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
+                Real incident cards for Live Stage, Watch-Party Live, and Chi’lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
               </Text>
             </View>
             <View style={[styles.badge, getLiveOpsRiskStyle(liveOpsHighestRisk)]}>
@@ -18134,6 +18153,10 @@ export default function AdminStudioScreen() {
             </OwnerControlRow>
           </View>
         </View>
+        ) : null}
+
+        {operatorTab === "cognitive" && canAccessCognitiveSourceManifest ? (
+          <CognitiveControlCenterFoundation />
         ) : null}
 
         {operatorTab === "ops-alerts" ? (

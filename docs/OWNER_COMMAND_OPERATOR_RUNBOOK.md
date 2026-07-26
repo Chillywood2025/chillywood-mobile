@@ -29,7 +29,7 @@ This is no god mode. It does not replace the owner, Rachi does not outrank owner
 ## Command Flow
 
 1. Owner submits a command through owner-authorized UI, CLI, or backend call.
-2. The command is sanitized and classified.
+2. The command is sanitized and classified. Platform scope is normalized to `shared`, `ios`, `android`, or `web`; a platform label supplies routing/audit context but no new authority.
 3. The command maps to one or more active autonomous systems:
    - media work -> `media_automation`
    - LiveKit/realtime work -> `livekit_operator`
@@ -50,6 +50,12 @@ This is no god mode. It does not replace the owner, Rachi does not outrank owner
 6. Level 3/4 commands create `autonomous_approval_requests` and stop.
 7. Approved Level 3/4 commands require fresh preflight, exact scope match, active emergency state, and audit before execution.
 8. Level 4 still needs external confirmation where applicable.
+
+iOS commands route to the existing notification/APNs/terminal-retry, EAS/App Store release, observability, installed TestFlight readiness, LiveKit telemetry, RevenueCat App Store readiness, signing/security, recovery, privacy, and support surfaces. The route cannot directly execute an OTA, public release, provider mutation, purchase, push campaign, entitlement, role change, moderation enforcement, or physical-proof claim.
+
+Platform scope is first-class from classification through approval, preflight, execution step, blocker, and audit. Every child row inherits its parent command/request platform even when caller metadata supplies a different value. A fresh approved execution must match target system, action id, platform, allowed writes, approval level, expiry, and external confirmation. An `ios / revenuecat_app_store` approval cannot authorize `android / revenuecat_google_play`, shared Stripe, or web work. A command that explicitly spans iOS and Android is split into separately approvable scopes; it cannot borrow whichever keyword matched first.
+
+Mixed-system commands route to every relevant system. StoreKit/IAP/App Store/Restore/tip-tier/Seat-Pass terms route to money; APNs/PushKit/CallKit/VoIP and terminal-call cleanup route to notification delivery; TestFlight/iOS Simulator/iPhone/iPad/build-number/`ios-qa` route to installed QA and release as appropriate; iOS signing/certificate/profile/APNs/App Store Connect keys route to security. Existing Play Billing/FCM/APK/AAB/versionCode/Firebase Test Lab terms remain active.
 
 ## Risk Levels
 

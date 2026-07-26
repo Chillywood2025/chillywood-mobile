@@ -31,6 +31,9 @@ const noopUseTracks = ((..._args: unknown[]) => []) as unknown as LiveKitReactNa
 export const LiveKitAudioSession = liveKitReactNativeModule?.AudioSession ?? {
   startAudioSession: async () => {},
   stopAudioSession: async () => {},
+  getAudioOutputs: async () => [] as string[],
+  selectAudioOutput: async (_deviceId: string) => {},
+  showAudioRoutePicker: async () => {},
 };
 
 export const LiveKitRoom = liveKitReactNativeModule?.LiveKitRoom ?? NoopLiveKitRoom;

@@ -136,6 +136,8 @@ export function AccessSheet({
     payoutsEnabled: false,
     cashoutEnabled: false,
     providerSandboxCandidate: false,
+    storePurchaseRailState: "off",
+    storePurchaseRailReadbackComplete: false,
   });
 
   const resolvePurchaseMode = useCallback(async (): Promise<MonetizationPurchaseMode> => {

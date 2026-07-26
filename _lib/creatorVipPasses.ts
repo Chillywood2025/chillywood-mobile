@@ -4,6 +4,9 @@ import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
+import { Platform } from "react-native";
+import { IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY } from "./iosAppStoreCommerce";
+import { resolvePaymentRailPolicy } from "./paymentRailPolicy";
 import { supabase } from "./supabase";
 
 export const VIP_PASS_SANDBOX_PRODUCT_KEY = "vip_pass_sandbox_499";
@@ -78,6 +81,7 @@ type RpcClient = {
 const rpcClient = supabase as unknown as RpcClient;
 
 const toText = (value: unknown) => String(value ?? "").trim();
+const resolveRevenueCatProvider = () => Platform.OS === "ios" ? "revenuecat_app_store" : "revenuecat_google_play";
 const toCents = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
@@ -118,7 +122,7 @@ const parseOffer = (row: Record<string, unknown>): CreatorVipPassOffer | null =>
     currency: toText(row.currency) || "usd",
     passType: "one_time",
     status: normalizeOfferStatus(row.status),
-    provider: toText(row.provider) || "revenuecat_google_play",
+    provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductKey: toText(row.providerProductKey) || null,
     providerProductId: toText(row.providerProductId) || null,
     vipCount: toCents(row.vipCount),
@@ -140,7 +144,7 @@ const parseTransaction = (row: Record<string, unknown>): CreatorVipTransaction |
     title: toText(row.title) || "VIP Pass",
     amountCents: toCents(row.amountCents),
     currency: toText(row.currency) || "usd",
-    provider: toText(row.provider) || "revenuecat_google_play",
+    provider: toText(row.provider) || resolveRevenueCatProvider(),
     providerProductId: toText(row.providerProductId) || null,
     providerTransactionId: toText(row.providerTransactionId) || null,
     status: toText(row.status) || "pending",
@@ -287,6 +291,20 @@ export async function purchaseCreatorVipPass(input: {
   }
   if (!access.requiresPurchase || !access.offer?.id) {
     return { ok: false, message: "VIP is not available for this creator right now.", access };
+  }
+
+  if (Platform.OS === "ios") {
+    const decision = resolvePaymentRailPolicy({
+      environment: "sandbox",
+      liveMoneyEnabled: false,
+      platform: "ios",
+      store: "app_store",
+      unlocksDigitalAccess: true,
+      useCase: "creator_paid_digital_content",
+    });
+    if (!decision.allowed) {
+      return { ok: false, message: IOS_DYNAMIC_APP_STORE_UNAVAILABLE_COPY, access };
+    }
   }
 
   const intent = await createCreatorVipPassPurchaseIntent(access.offer.id);

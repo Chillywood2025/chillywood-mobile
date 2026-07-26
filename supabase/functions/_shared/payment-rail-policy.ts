@@ -1,15 +1,19 @@
 export type PaymentRailPlatform = "android" | "ios" | "web" | "unknown";
+export type PaymentRailStore = "app_store" | "google_play" | "web" | "unknown";
 
 export type PaymentRailUseCase =
   | "premium_subscription"
   | "creator_paid_digital_content"
   | "creator_tip_support"
+  | "watch_party_seat_pass"
   | "creator_physical_product"
   | "creator_payout_cashout"
   | "creator_sponsor_payment";
 
 export type PaymentRailProvider =
   | "google_play_revenuecat"
+  | "revenuecat_google_play"
+  | "revenuecat_app_store"
   | "google_play_billing"
   | "approved_external_billing"
   | "stripe_checkout"
@@ -26,13 +30,18 @@ export type PaymentRailDecision = {
   stripeAllowed: boolean;
   revenueCatAllowed: boolean;
   unlocksDigitalAccess: boolean;
+  grantsLiveKitAuthority: boolean;
+  createsPayableBalance: boolean;
 };
 
 export type PaymentRailPolicyInput = {
   useCase: PaymentRailUseCase;
   platform?: PaymentRailPlatform;
+  store?: PaymentRailStore;
+  environment?: "setup" | "sandbox" | "production";
   liveMoneyEnabled?: boolean;
   providerReady?: boolean;
+  appStorePurchasesEnabled?: boolean;
   approvedExternalBillingProof?: boolean;
   unlocksDigitalAccess?: boolean;
 };
@@ -44,6 +53,13 @@ export const TIPS_MUST_NOT_UNLOCK_DIGITAL_BENEFITS = true;
 export const CREATOR_TIP_PAYMENT_RAIL = "google_play_revenuecat";
 export const PHYSICAL_PRODUCT_PAYMENT_RAIL = "stripe_checkout";
 export const CREATOR_PAYOUT_PAYMENT_RAIL = "stripe_connect";
+export const REVENUECAT_GOOGLE_PLAY_PROVIDER = "revenuecat_google_play";
+export const REVENUECAT_APP_STORE_PROVIDER = "revenuecat_app_store";
+export const APP_STORE_PURCHASES_DEFAULT_ENABLED = false;
+
+export const resolveRevenueCatProviderByPlatform = (platform: PaymentRailPlatform = "unknown") => (
+  platform === "ios" ? REVENUECAT_APP_STORE_PROVIDER : REVENUECAT_GOOGLE_PLAY_PROVIDER
+);
 
 const blocked = (
   provider: PaymentRailProvider,
@@ -59,6 +75,8 @@ const blocked = (
   stripeAllowed: false,
   revenueCatAllowed: false,
   unlocksDigitalAccess: false,
+  grantsLiveKitAuthority: false,
+  createsPayableBalance: false,
   ...extra,
 });
 
@@ -69,6 +87,16 @@ export function resolvePaymentRailPolicy(input: PaymentRailPolicyInput): Payment
   const platform = input.platform ?? "unknown";
 
   if (input.useCase === "premium_subscription") {
+    if (platform === "ios") {
+      const appStoreReady = input.providerReady === true && input.appStorePurchasesEnabled === true;
+      return blocked("revenuecat_app_store", "ios_premium_requires_revenuecat_app_store_proof", {
+        allowed: appStoreReady,
+        premiumEntitlementSource: "revenuecat",
+        revenueCatAllowed: true,
+        requiresProviderProof: !appStoreReady,
+      });
+    }
+
     return blocked("google_play_revenuecat", "premium_purchase_proof_required", {
       allowed: input.providerReady === true,
       premiumEntitlementSource: "revenuecat",
@@ -78,6 +106,12 @@ export function resolvePaymentRailPolicy(input: PaymentRailPolicyInput): Payment
   }
 
   if (input.useCase === "creator_paid_digital_content") {
+    if (platform === "ios") {
+      return blocked("disabled", "ios_dynamic_digital_content_not_in_finite_app_store_catalog", {
+        unlocksDigitalAccess: true,
+      });
+    }
+
     if (platform === "android" && input.approvedExternalBillingProof !== true) {
       return blocked("google_play_billing", "android_digital_content_requires_play_billing", {
         unlocksDigitalAccess: true,
@@ -104,11 +138,48 @@ export function resolvePaymentRailPolicy(input: PaymentRailPolicyInput): Payment
       });
     }
 
+    if (platform === "ios") {
+      const appStoreReady = input.environment === "sandbox"
+        && input.providerReady === true
+        && input.appStorePurchasesEnabled === true
+        && input.liveMoneyEnabled !== true;
+      return blocked("revenuecat_app_store", "creator_tips_use_revenuecat_app_store_sandbox_only", {
+        allowed: appStoreReady,
+        requiresProviderProof: !appStoreReady,
+        revenueCatAllowed: true,
+        unlocksDigitalAccess: false,
+        createsPayableBalance: false,
+      });
+    }
+
     return blocked("google_play_revenuecat", "creator_tips_use_revenuecat_google_play_sandbox_only", {
       allowed: providerReady(input),
       requiresProviderProof: !providerReady(input),
       revenueCatAllowed: true,
       unlocksDigitalAccess: false,
+    });
+  }
+
+  if (input.useCase === "watch_party_seat_pass") {
+    if (platform === "ios") {
+      const appStoreReady = input.environment === "sandbox"
+        && input.providerReady === true
+        && input.appStorePurchasesEnabled === true
+        && input.liveMoneyEnabled !== true;
+      return blocked("revenuecat_app_store", "ios_seat_pass_uses_finite_app_store_catalog_sandbox_only", {
+        allowed: appStoreReady,
+        requiresProviderProof: !appStoreReady,
+        revenueCatAllowed: true,
+        unlocksDigitalAccess: true,
+        createsPayableBalance: false,
+      });
+    }
+
+    return blocked("revenuecat_google_play", "android_seat_pass_uses_existing_google_play_policy", {
+      allowed: providerReady(input),
+      requiresProviderProof: !providerReady(input),
+      revenueCatAllowed: true,
+      unlocksDigitalAccess: true,
     });
   }
 

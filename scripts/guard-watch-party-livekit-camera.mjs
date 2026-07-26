@@ -63,6 +63,12 @@ const partyRoomWatchTogether = sliceBetween(
   "const onPickPartyRoomCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {",
   "Party Room Watch Together handler boundary",
 );
+const partyRoomCameraPreviewGate = sliceBetween(
+  partyRoom,
+  "const allowLocalCameraPreview = isNativeCameraPlatform",
+  "const onTogglePartyRoomCameraPreview = useCallback(async () => {",
+  "Party Room local camera-preview gate boundary",
+);
 const partyRoomSharedPlayerMainCta = sliceBetween(
   partyRoom,
   'testID="watch-party-open-shared-player-button"',
@@ -908,11 +914,10 @@ assertIncludes(
   "partyRoomCameraPreviewSuppressed",
   "Party Room handoff camera-preview suppression state",
 );
-assertIncludes(
-  partyRoom,
-  "const allowLocalCameraPreview = isNativeCameraPlatform && isFocused && !partyRoomCameraPreviewSuppressed;",
-  "Party Room local preview focus/suppression gate",
-);
+assertIncludes(partyRoomCameraPreviewGate, "&& isFocused", "Party Room local preview focus gate");
+assertIncludes(partyRoomCameraPreviewGate, '&& partyRoomAppState === "active"', "Party Room local preview foreground gate");
+assertIncludes(partyRoomCameraPreviewGate, "&& partyRoomCameraPreviewIntent", "Party Room explicit local preview intent gate");
+assertIncludes(partyRoomCameraPreviewGate, "&& !partyRoomCameraPreviewSuppressed", "Party Room local preview suppression gate");
 assertNotIncludes(
   partyRoomWatchTogether,
   "await prepareLiveKitJoinBoundary({",

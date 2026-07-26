@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.6";
 
 type JsonObject = Record<string, unknown>;
 
@@ -161,6 +161,10 @@ Deno.serve(async (req): Promise<Response> => {
     const provider = normalizeProvider(body.provider);
     const platform = normalizePlatform(body.platform);
     const installId = toText(body.installId) || null;
+
+    if (platform === "ios" && provider !== "expo") {
+      return jsonResponse(400, { error: "invalid_provider_for_platform" });
+    }
 
     const supabaseUrl = readRequiredEnv("SUPABASE_URL");
     const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
