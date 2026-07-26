@@ -1,5 +1,30 @@
 # iOS Final Device-Test Matrix (Remaining 10%)
 
+## 2026-07-25 closeout delta
+
+Build 8 remains the exact internal TestFlight candidate:
+`com.chillywood.mobile` `1.0.0 (8)`, runtime `1.0.0-iosqa1`, channel `ios-qa`,
+expected update `019f9c13-9f6d-7c52-9cee-71265b8fd565`. Current source is the
+tree from PR #10 source `f73aa431fc1fd3e43c3ff8e0a9cd890aa41ac9df`, merged
+as `77e0dcbf810e91e44b2716b999a534aaace9d108`.
+
+Available route proof now passes cold launch into Home, Settings, Chat, Live,
+Watch-Party waiting room, Profile, Support, Privacy, Terms, and Player. Visible
+back navigation is proved on Settings, Watch-Party waiting room, and Player;
+Player media and fullscreen render. The separate two-headless LiveKit reconnect
+fixture passes restored audio/video flow and cleanup.
+
+The rows below remain authoritative for uncompleted physical-provider cases.
+Physical two-device media is still blocked because the Android role-free account
+correctly hits Premium while the iPhone host reaches Live Room; no manual Premium
+grant is allowed and the purchase shell is on hold. The installed host's stage
+entry request returned to pre-stage without a visible gate or error. A bounded
+15-second LiveKit token-request timeout is now source-proved but is not installed
+because no replacement OTA was authorized. Accessibility automation transport
+timed out, so no VoiceOver pass is fabricated. APNs/PushKit/CallKit,
+StoreKit purchase/restore, camera/microphone denial, complete photo-format matrix,
+and owner legal/public-release actions remain open.
+
 Checkpoint date: 2026-07-19
 
 This matrix contains only work that inherently requires repeated physical Apple
@@ -39,7 +64,7 @@ The all-platform autonomy parity closeout does not change this gate. It adds tru
 | 1 | Physical iPhone camera permission and preview | `READY_NOT_STARTED` | Prompt state, allow flow, real preview, camera off/on, lifecycle, and truthful denied/restricted recovery without private imagery. |
 | 2 | Physical iPhone microphone capture/publish | `READY_NOT_STARTED` | Permission, real local track, mute/unmute, lifecycle, and denied/restricted recovery without recording private conversation. |
 | 3 | Physical iPhone photo picker and upload | `READY_NOT_STARTED` | Select a non-private HEIC asset, cancel safely, limited-library behavior if offered, prepare/upload/render, and verify item-scoped access. |
-| 4 | Two-device LiveKit audio/video | `BLOCKED_SECOND_PHYSICAL_CLIENT` | Two bounded accounts join one approved room; bidirectional audio/video, mute, camera, leave cleanup, background/return, and network recovery pass. |
+| 4 | Two-device LiveKit audio/video | `BLOCKED_PREMIUM_SANDBOX_ACCOUNT_AND_INSTALLED_ENTRY_RETEST` | Two role-free Premium-active sandbox accounts join one approved room; the closeout token-timeout source is delivered through a separately authorized compatible update; bidirectional audio/video, mute, camera, leave cleanup, background/return, and network recovery pass. |
 | 5 | APNs foreground delivery | `READY_NOT_STARTED` | Exact final build receives a permitted ordinary notification in foreground with correct route/category/badge behavior and no token exposure. |
 | 6 | APNs background delivery | `READY_NOT_STARTED` | Background delivery and response route pass without duplicate handling. |
 | 7 | APNs terminated-app delivery | `READY_NOT_STARTED` | Terminated launch opens the intended bounded route exactly once. |

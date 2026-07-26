@@ -8,6 +8,20 @@ This report is source truth for the continuation branch. It does not activate
 an isolated runtime, authenticate a remote baseline, enable a switch or
 schedule, or claim unattended operation.
 
+Post-merge readback on 2026-07-25 supersedes older provider and reconnect
+statements below where they conflict: PR #10 is merged at
+`77e0dcbf810e91e44b2716b999a534aaace9d108`; organization billing is Pro;
+PUBLIC still has USAGE on provider-owned schema `net`; all ten Cognitive roles
+remain NOLOGIN; switches are `0/10`; schedules are `0/5`; memory and Level 2
+remain off. The two-headless LiveKit reconnect fixture now passes restored
+audio/video flow, data, leave, and cleanup without requiring optional
+reconnect events. Pinned research remains blocked because the provider host has
+a legacy v1 inactive-only release and no exact Caddy route. Node 20 closeout
+validation passes the two-party HTTP suite `89/89`, zero-state bootstrap HTTP
+suite `58/58`, database concurrency `18/18`, and local pgTAP `37` files /
+`1279` tests. These local fixture results do not enable any remote Cognitive
+switch, schedule, credential, memory, or repair authority.
+
 ## Change control
 
 - Objective: continue app inspection, inert infrastructure readiness, sandbox
@@ -51,9 +65,9 @@ Current state:
 
 `WAITING_FOR_SUPABASE_NET_SCHEMA_PROVIDER_ADMIN`
 
-The Free Supabase plan has no guaranteed custom provider administration or
-email-support SLA. No Supabase upgrade was purchased. No runtime LOGIN
-password or Hyperdrive database credential was created. The ten available
+The organization is Pro, but ticket `SU-431426` remains the provider-admin
+boundary for schema `net`. No runtime LOGIN password or Hyperdrive database
+credential was created. The ten available
 Cloudflare Free Hyperdrive slots remain a reserved capacity budget only; zero
 configurations exist.
 
@@ -101,14 +115,16 @@ The separate Owner-assisted source canary is draft-only.
 LiveKit used the preview sandbox, two approved synthetic users, a temporary
 non-private room, and deterministic media. Both headless clients obtained the
 bounded host/speaker grants, connected, published deterministic audio/video,
-and subscribed in both directions before the reviewed reconnect simulation
-timed out waiting for the first reconnect event. Cleanup removed the temporary
-synthetic room and memberships through the ordinary QA-user boundary. The installed
-build did not enter the room because the existing Premium entitlement gate
-remained in force; no right was changed. Therefore:
+subscribed in both directions, restored media flow after both reviewed
+full-reconnect simulations, exchanged post-recovery data, and completed leave
+and cleanup. The former event timeout was a fixture expectation mismatch:
+current `rtc-node` recovery proof is restored media flow and does not guarantee
+either reconnect event. The installed Android participant still did not enter
+because the existing Premium entitlement gate remained in force; no right was
+changed. Therefore:
 
-- the initial backend token/room/two-way-media seam was observed;
-- background/foreground recovery is blocked by the reconnect timeout;
+- backend token, room, two-way media, reconnect recovery, leave, and cleanup
+  passed in the bounded headless lane;
 - installed LiveKit UX is blocked by the existing entitlement of the approved
   QA observer;
 - no healthy-server result is represented as a full installed UX pass;
@@ -117,12 +133,17 @@ remained in force; no right was changed. Therefore:
 
 The signed pinned-host research canaries attempted the React Native update,
 public repository architecture/UX, and Android security lanes. TLS verified,
-but the exact Caddy path returned 404. All three HMAC requests failed closed as
-`RESEARCH_PINNED_TRANSPORT_REQUIRED`. The correct classification is
+but the exact Caddy path returned 404. Host inspection now identifies the
+bounded cause: the route is absent and the installed transport release is
+legacy contract v1, which current source intentionally classifies
+inactive-only. The failed service-start attempt was rolled back and Caddy was
+left unchanged. All three HMAC requests failed closed as
+`RESEARCH_PINNED_TRANSPORT_REQUIRED`. The correct classification remains
 `LOCAL_ADVISORY_CANARY_BLOCKED`, not
 `REMOTE_AUTONOMOUS_RESEARCH_ACTIVE`. Local pinned-transport tests passed
 76/76, the Worker adapter passed 4/4, and authority parity passed 30/30. The
-single external blocker is `PINNED_RESEARCH_HOST_EXTERNAL_ROUTE_INACTIVE`.
+single external blocker is
+`PINNED_RESEARCH_CURRENT_REVIEWED_RELEASE_AND_ROUTE_ATTESTATION_REQUIRED`.
 
 The repository-specific GitHub App evidence is:
 

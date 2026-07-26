@@ -1,5 +1,43 @@
 # NEXT TASK
 
+## Post-merge closeout blockers only — 2026-07-25
+
+PR #10 is the cumulative implementation merge on `main`
+(`77e0dcbf810e91e44b2716b999a534aaace9d108`), with final source
+`f73aa431fc1fd3e43c3ff8e0a9cd890aa41ac9df`; PR #9 is closed unmerged and its
+required source is present exactly once through PR #10. Internal Android remains
+build 84/update `019f9c11-33c1-7d23-a0c0-8029c62e0ea4`; internal iOS remains
+build 8/update `019f9c13-9f6d-7c52-9cee-71265b8fd565`. Do not create another
+build or OTA merely for this merge or documentation closeout.
+
+Only these exact blockers remain eligible follow-up:
+
+1. Provider admin must remove PUBLIC USAGE from Supabase schema `net` under
+   ticket `SU-431426`. Until then keep
+   `WAITING_FOR_SUPABASE_NET_SCHEMA_PROVIDER_ADMIN`, all Cognitive roles NOLOGIN,
+   switches `0/10`, schedules `0/5`, memory off, and Level 2 off.
+2. Deploy a reviewed current-contract pinned research transport release on the
+   provider host, then mount and attest the exact Caddy POST route. The installed
+   legacy v1 release is intentionally inactive-only; do not force-start it.
+3. Obtain two role-free, provider-backed Premium-active internal accounts (or
+   restore the already approved sandbox purchase rail) before repeating physical
+   Android/iPhone Live Stage and Watch-Party Live media. Do not manually grant
+   Premium. Deliver the closeout branch's bounded LiveKit token-request timeout
+   only through a separately authorized compatible internal update before
+   retesting the iPhone host entry; the current installed update returned to
+   pre-stage without a visible gate or error.
+4. Finish unavailable Apple-provider cases—APNs/PushKit/CallKit, StoreKit
+   purchase/restore, full VoiceOver automation, and public-release owner/legal
+   attestations—without broad push or public distribution.
+
+The reconnect fixture itself is closed: two-headless audio/video, post-simulation
+media flow, data, leave, and cleanup pass without requiring optional reconnect
+events. The role-free synthetic credential exposed in the intermediate transcript
+is rotated and old sessions are revoked. Android's complete installed signed-in
+route smoke passes. Node 20 source validation, Expo Doctor `18/18`, local reset,
+pgTAP `37/1279`, two-party HTTP `89/89`, zero-state bootstrap HTTP `58/58`, and
+database concurrency `18/18` pass.
+
 # Cloudflare R2 Media Delivery Staged Proof
 
 ## Android native-image incident closed

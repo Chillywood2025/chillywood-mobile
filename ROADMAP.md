@@ -1,5 +1,37 @@
 # ROADMAP
 
+## 2026-07-25 post-merge closeout truth
+
+`main` merge `77e0dcbf810e91e44b2716b999a534aaace9d108` is tree-identical to
+PR #10 source `f73aa431fc1fd3e43c3ff8e0a9cd890aa41ac9df`. PR #10 remains the
+cumulative implementation merge; PR #9 is closed unmerged and is included once
+through PR #10. The current internal identities are Android build 84/update
+`019f9c11-33c1-7d23-a0c0-8029c62e0ea4` and iOS build 8/update
+`019f9c13-9f6d-7c52-9cee-71265b8fd565`. No new build, OTA, public release, or
+rollout mutation is justified by the merge.
+
+The bounded LiveKit reconnect harness is corrected and passes restored
+audio/video flow, data, leave, and cleanup without treating optional reconnect
+events as the product contract. Remaining physical Live Stage/Watch-Party media
+is an entitlement/device proof lane: the iPhone role-free host reaches Live Room,
+while Android correctly preserves the Premium gate. The purchase shell remains on
+hold and manual Premium grants remain forbidden. The installed iPhone entry tap
+returned to pre-stage without visible gate/error; closeout source now bounds the
+LiveKit token request at 15 seconds, but no replacement OTA was published.
+
+Android's full installed route/session smoke passes. Node 20 validation passes
+the requested source/Cognitive matrix, Expo Doctor `18/18`, local pgTAP `37`
+files / `1279` tests, two-party HTTP `89/89`, zero-state bootstrap HTTP `58/58`,
+and database concurrency `18/18`.
+
+Research activation is not a source-hardening lane. The provider host currently
+has only a legacy v1 inactive-only transport release and no exact Caddy route.
+Leave the service inactive until a reviewed current release and external
+attestation are available. Cognitive mode stays `OWNER_ASSISTED_ACTIVE` /
+`ISOLATED_AUTONOMOUS_PENDING`; Supabase ticket `SU-431426`, PUBLIC `net` USAGE,
+NOLOGIN roles, `0/10` switches, `0/5` schedules, memory off, and Level 2 off are
+the governing autonomy blockers.
+
 ## Android Image Manipulator Native-Boundary Closeout
 
 Source, native artifact, clean-install proof, and the Google Play in-place upgrade

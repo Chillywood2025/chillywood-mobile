@@ -170,20 +170,6 @@ async function waitFor(label, predicate, timeoutMs, pollMs = 75) {
   throw new Error(`timeout:${label}`);
 }
 
-function onceEvent(room, event, timeoutMs, label) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      room.off(event, onEvent);
-      reject(new Error(`timeout:${label}`));
-    }, timeoutMs);
-    const onEvent = (...args) => {
-      clearTimeout(timer);
-      resolve(args);
-    };
-    room.once(event, onEvent);
-  });
-}
-
 function mediaKindLabel(kind, TrackKind) {
   if (kind === TrackKind.KIND_AUDIO) return "audio";
   if (kind === TrackKind.KIND_VIDEO) return "video";
@@ -196,19 +182,52 @@ function hasBothMediaKinds(kinds) {
 
 function observeRoom(room, remoteIdentity, rtc) {
   const state = {
+    audioReaders: [],
     dataMarkers: new Set(),
+    lastAudioFrameAt: 0,
     localRepublishedKinds: new Set(),
+    reconnectProofs: 0,
     reconnecting: 0,
     reconnected: 0,
     remoteDepartures: 0,
     subscriptionFailures: 0,
     subscribedKinds: new Set(),
+    async stopObservingMedia() {
+      for (const reader of state.audioReaders) {
+        await reader.cancel().catch(() => undefined);
+        try {
+          reader.releaseLock();
+        } catch {
+          // Reader already released.
+        }
+      }
+      state.audioReaders.length = 0;
+    },
   };
 
   room
     .on(rtc.RoomEvent.TrackSubscribed, (track, _publication, participant) => {
       if (participant.identity === remoteIdentity) {
-        state.subscribedKinds.add(mediaKindLabel(track.kind, rtc.TrackKind));
+        const kind = mediaKindLabel(track.kind, rtc.TrackKind);
+        state.subscribedKinds.add(kind);
+        if (kind === "audio") {
+          const reader = new rtc.AudioStream(track, {
+            numChannels: 1,
+            sampleRate: 16_000,
+          }).getReader();
+          state.audioReaders.push(reader);
+          void (async () => {
+            try {
+              while (true) {
+                const { done } = await reader.read();
+                if (done) break;
+                state.lastAudioFrameAt = Date.now();
+              }
+            } catch {
+              // A full reconnect may replace the remote track and reader.
+            }
+          })();
+        }
       }
     })
     .on(rtc.RoomEvent.TrackSubscriptionFailed, () => {
@@ -378,13 +397,8 @@ async function publishSyntheticMedia(rtc, room, suffix) {
 }
 
 async function proveReconnect(rtc, room, observation, remoteObservation, marker, timeoutMs) {
-  const reconnecting = onceEvent(room, rtc.RoomEvent.Reconnecting, timeoutMs, `${marker}:reconnecting`);
-  const reconnected = onceEvent(room, rtc.RoomEvent.Reconnected, timeoutMs, `${marker}:reconnected`);
-  await Promise.all([
-    room.simulateScenario(rtc.SimulateScenarioKind.SIMULATE_FULL_RECONNECT),
-    reconnecting,
-    reconnected,
-  ]);
+  const simulateAt = Date.now();
+  await room.simulateScenario(rtc.SimulateScenarioKind.SIMULATE_FULL_RECONNECT);
   await waitFor(
     `${marker}:connected_after_reconnect`,
     () => room.connectionState === rtc.ConnectionState.CONN_CONNECTED,
@@ -395,7 +409,12 @@ async function proveReconnect(rtc, room, observation, remoteObservation, marker,
     topic: "chillywood-bounded-reconnect-proof",
   });
   await waitFor(`${marker}:post_reconnect_data`, () => remoteObservation.dataMarkers.has(marker), timeoutMs);
-  if (!hasBothMediaKinds(observation.localRepublishedKinds)) throw new Error(`media_not_republished:${marker}`);
+  await waitFor(
+    `${marker}:post_reconnect_audio`,
+    () => remoteObservation.lastAudioFrameAt >= simulateAt,
+    timeoutMs,
+  );
+  observation.reconnectProofs += 1;
   await room.getRtcStats();
 }
 
@@ -436,6 +455,8 @@ async function runLiveHarness() {
 
   let mediaA;
   let mediaB;
+  let observationA;
+  let observationB;
   try {
     const sessionA = await signInApprovedAccount(createClient, config, config.accountA, "client-a");
     const sessionB = await signInApprovedAccount(createClient, config, config.accountB, "client-b");
@@ -454,8 +475,8 @@ async function runLiveHarness() {
     ]);
     rooms.push(roomA, roomB);
     result.connectedBoth = true;
-    const observationA = observeRoom(roomA, sessionB.userId, rtc);
-    const observationB = observeRoom(roomB, sessionA.userId, rtc);
+    observationA = observeRoom(roomA, sessionB.userId, rtc);
+    observationB = observeRoom(roomB, sessionA.userId, rtc);
 
     [mediaA, mediaB] = await Promise.all([
       publishSyntheticMedia(rtc, roomA, "a"),
@@ -465,7 +486,10 @@ async function runLiveHarness() {
     result.publishedBothDirections = true;
     await waitFor(
       "two_way_audio_video_subscription",
-      () => hasBothMediaKinds(observationA.subscribedKinds) && hasBothMediaKinds(observationB.subscribedKinds),
+      () => hasBothMediaKinds(observationA.subscribedKinds)
+        && hasBothMediaKinds(observationB.subscribedKinds)
+        && observationA.lastAudioFrameAt > 0
+        && observationB.lastAudioFrameAt > 0,
       config.timeoutMs,
     );
     result.subscriptionFailures = observationA.subscriptionFailures + observationB.subscriptionFailures;
@@ -473,10 +497,8 @@ async function runLiveHarness() {
 
     await proveReconnect(rtc, roomA, observationA, observationB, "after-reconnect-a", config.timeoutMs);
     await proveReconnect(rtc, roomB, observationB, observationA, "after-reconnect-b", config.timeoutMs);
-    result.reconnectedBothClients = observationA.reconnecting > 0
-      && observationA.reconnected > 0
-      && observationB.reconnecting > 0
-      && observationB.reconnected > 0;
+    result.reconnectedBothClients = observationA.reconnectProofs > 0
+      && observationB.reconnectProofs > 0;
     result.mediaPresentAfterReconnect = hasBothMediaKinds(remoteMediaKinds(roomA, sessionB.userId, rtc.TrackKind))
       && hasBothMediaKinds(remoteMediaKinds(roomB, sessionA.userId, rtc.TrackKind));
     await wait(config.holdMs);
@@ -496,6 +518,8 @@ async function runLiveHarness() {
     result.status = "passed";
     return result;
   } finally {
+    await observationA?.stopObservingMedia?.().catch(() => undefined);
+    await observationB?.stopObservingMedia?.().catch(() => undefined);
     for (const media of mediaResources) await media.stop().catch(() => undefined);
     for (const room of rooms) await room.disconnect().catch(() => undefined);
     for (const session of sessions) await session.client.auth.signOut({ scope: "local" }).catch(() => undefined);
@@ -503,7 +527,7 @@ async function runLiveHarness() {
   }
 }
 
-function runSelfTest() {
+async function runSelfTest() {
   const fakeSecret = rememberSensitive("self-test-secret-value");
   const diagnostic = sanitizeDiagnostic(
     `token=${fakeSecret} user=tester@example.com url=https://example.test/path `
@@ -535,6 +559,58 @@ function runSelfTest() {
     subscriptionFailures: 0,
     syntheticCaptureHealthy: true,
   }));
+
+  const fakeRtc = {
+    ConnectionState: { CONN_CONNECTED: "connected" },
+    RoomEvent: {
+      Reconnected: "reconnected",
+      Reconnecting: "reconnecting",
+    },
+    SimulateScenarioKind: {
+      SIMULATE_FULL_RECONNECT: "full-reconnect",
+    },
+  };
+  const remoteObservation = {
+    dataMarkers: new Set(),
+    lastAudioFrameAt: 0,
+  };
+  const reconnectObservation = {
+    localRepublishedKinds: new Set(["audio", "video"]),
+    reconnectProofs: 0,
+    reconnected: 0,
+    reconnecting: 0,
+  };
+  class EventlessRecoveryRoom {
+    connectionState = fakeRtc.ConnectionState.CONN_CONNECTED;
+
+    localParticipant = {
+      publishData: async (payload) => {
+        remoteObservation.dataMarkers.add(new TextDecoder().decode(payload));
+      },
+    };
+
+    async simulateScenario() {
+      queueMicrotask(() => {
+        remoteObservation.lastAudioFrameAt = Date.now() + 1;
+      });
+    }
+
+    async getRtcStats() {
+      return [];
+    }
+  }
+  await proveReconnect(
+    fakeRtc,
+    new EventlessRecoveryRoom(),
+    reconnectObservation,
+    remoteObservation,
+    "after-reconnect-a",
+    250,
+  );
+  assert.equal(reconnectObservation.reconnecting, 0);
+  assert.equal(reconnectObservation.reconnected, 0);
+  assert.equal(reconnectObservation.reconnectProofs, 1);
+
   return {
     automatedNotPhysical: true,
     liveNetworkUsed: false,
@@ -548,6 +624,7 @@ function runSelfTest() {
       "redacted-diagnostics",
       "bounded-input-validation",
       "two-way-media-result-contract",
+      "media-recovery-without-reconnect-event-regression",
     ],
   };
 }
@@ -555,7 +632,7 @@ function runSelfTest() {
 let output;
 try {
   const mode = selectedMode(process.argv.slice(2));
-  output = mode === MODE_LIVE ? await runLiveHarness() : runSelfTest();
+  output = mode === MODE_LIVE ? await runLiveHarness() : await runSelfTest();
 } catch (error) {
   output = {
     automatedNotPhysical: true,
