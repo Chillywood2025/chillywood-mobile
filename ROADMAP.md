@@ -10,9 +10,10 @@ through PR #10. The current internal identities are Android build 84/update
 `019f9c13-9f6d-7c52-9cee-71265b8fd565`. No new build, OTA, public release, or
 rollout mutation is justified by the merge.
 
-The bounded LiveKit reconnect harness is corrected and passes restored
-audio/video flow, data, leave, and cleanup without treating optional reconnect
-events as the product contract. Remaining physical Live Stage/Watch-Party media
+The bounded LiveKit reconnect harness is corrected and passes initial two-way
+audio/video subscription with real audio frames, post-simulation audio/data
+recovery with audio/video subscriptions retained, leave, and cleanup without
+treating optional reconnect events as the product contract. Remaining physical Live Stage/Watch-Party media
 is an entitlement/device proof lane: the iPhone role-free host reaches Live Room,
 while Android correctly preserves the Premium gate. The purchase shell remains on
 hold and manual Premium grants remain forbidden. The installed iPhone entry tap

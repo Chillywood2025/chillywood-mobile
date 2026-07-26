@@ -30,9 +30,10 @@ Only these exact blockers remain eligible follow-up:
    purchase/restore, full VoiceOver automation, and public-release owner/legal
    attestations—without broad push or public distribution.
 
-The reconnect fixture itself is closed: two-headless audio/video, post-simulation
-media flow, data, leave, and cleanup pass without requiring optional reconnect
-events. The role-free synthetic credential exposed in the intermediate transcript
+The reconnect fixture itself is closed: initial two-headless audio/video
+subscription with real audio frames, post-simulation audio/data recovery with
+audio/video subscriptions retained, leave, and cleanup pass without requiring
+optional reconnect events. The role-free synthetic credential exposed in the intermediate transcript
 is rotated and old sessions are revoked. Android's complete installed signed-in
 route smoke passes. Node 20 source validation, Expo Doctor `18/18`, local reset,
 pgTAP `37/1279`, two-party HTTP `89/89`, zero-state bootstrap HTTP `58/58`, and

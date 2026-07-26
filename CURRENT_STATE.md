@@ -24,10 +24,11 @@
   Watch-Party waiting room, Profile, Support, Privacy, Terms, and Player. Settings,
   Watch-Party waiting room, and Player visibly expose back navigation; Player
   rendered media and fullscreen control.
-- The two-headless LiveKit proof now passes two-way synthetic audio/video,
-  post-simulation media flow, data, leave, and cleanup. The former
+- The two-headless LiveKit proof now passes initial two-way synthetic audio/video
+  subscription with real audio frames, post-simulation audio/data recovery with
+  audio/video subscriptions retained, leave, and cleanup. The former
   `after-reconnect-a:reconnecting` timeout was a fixture defect: current
-  `rtc-node` validates restored media flow and does not guarantee
+  `rtc-node` validates post-simulation media/data recovery and does not guarantee
   `Reconnecting` or `Reconnected` events for the full-reconnect simulation.
 - Physical two-device media remains blocked without bypass: the TestFlight
   synthetic host reaches the Live Room, while the Android role-free participant
