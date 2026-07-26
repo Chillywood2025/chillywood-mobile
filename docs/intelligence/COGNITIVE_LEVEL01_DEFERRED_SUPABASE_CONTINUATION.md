@@ -13,10 +13,11 @@ statements below where they conflict: PR #10 is merged at
 `77e0dcbf810e91e44b2716b999a534aaace9d108`; organization billing is Pro;
 PUBLIC still has USAGE on provider-owned schema `net`; all ten Cognitive roles
 remain NOLOGIN; switches are `0/10`; schedules are `0/5`; memory and Level 2
-remain off. The two-headless LiveKit reconnect fixture now passes restored
-audio/video flow, data, leave, and cleanup without requiring optional
-reconnect events. Pinned research remains blocked because the provider host has
-a legacy v1 inactive-only release and no exact Caddy route. Node 20 closeout
+remain off. The two-headless LiveKit reconnect fixture now passes initial two-way
+audio/video subscription, post-simulation audio/data recovery with audio/video
+subscriptions retained, leave, and cleanup without requiring optional reconnect
+events. Pinned research remains blocked because the provider host has a legacy
+v1 inactive-only release and no exact Caddy route. Node 20 closeout
 validation passes the two-party HTTP suite `89/89`, zero-state bootstrap HTTP
 suite `58/58`, database concurrency `18/18`, and local pgTAP `37` files /
 `1279` tests. These local fixture results do not enable any remote Cognitive

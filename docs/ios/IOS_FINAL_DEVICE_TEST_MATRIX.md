@@ -12,7 +12,8 @@ Available route proof now passes cold launch into Home, Settings, Chat, Live,
 Watch-Party waiting room, Profile, Support, Privacy, Terms, and Player. Visible
 back navigation is proved on Settings, Watch-Party waiting room, and Player;
 Player media and fullscreen render. The separate two-headless LiveKit reconnect
-fixture passes restored audio/video flow and cleanup.
+fixture passes initial two-way audio/video subscription, post-simulation
+audio/data recovery with audio/video subscriptions retained, and cleanup.
 
 The rows below remain authoritative for uncompleted physical-provider cases.
 Physical two-device media is still blocked because the Android role-free account
