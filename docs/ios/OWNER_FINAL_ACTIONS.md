@@ -1,5 +1,31 @@
 # Owner Final Actions
 
+## Post-merge closeout handoff — 2026-07-25
+
+No owner action is needed for PR #10 or PR #9: PR #10 is merged at
+`77e0dcbf810e91e44b2716b999a534aaace9d108`, its tree matches source
+`f73aa431fc1fd3e43c3ff8e0a9cd890aa41ac9df`, and PR #9 is closed unmerged as
+superseded. No replacement build or OTA is required for that merge.
+
+Remaining owner/provider actions are exact:
+
+1. Forward the Supabase response for ticket `SU-431426`; do not enable Cognitive
+   LOGIN credentials, Hyperdrive, switches, schedules, memory, or Level 2 while
+   PUBLIC retains USAGE on schema `net`.
+2. Authorize and provide the reviewed current pinned-research release artifact
+   for provider-host deployment. The installed legacy v1 release is
+   inactive-only, so the service and missing Caddy route cannot be truthfully
+   activated from the current host state.
+3. Restore an approved provider-backed Premium sandbox tester path for two
+   role-free internal accounts if physical Android/iPhone Live media is to be
+   repeated. Do not use a manual Premium grant. Separately authorize a compatible
+   internal delivery of the bounded LiveKit token-request timeout before treating
+   the installed host entry retest as closed.
+4. Complete the remaining Apple-only provider/device actions: StoreKit
+   purchase/restore, APNs/PushKit/CallKit, VoiceOver and permission-denial proof,
+   plus legal/privacy/release attestations. Public release remains separately
+   unauthorized.
+
 Checkpoint date: 2026-07-16
 
 This list contains only actions that require owner authority, dashboard permission,

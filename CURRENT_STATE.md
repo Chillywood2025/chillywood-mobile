@@ -1,5 +1,73 @@
 # CURRENT STATE
 
+## Post-merge internal closeout — 2026-07-25
+
+- Starting `main` is merge commit
+  `77e0dcbf810e91e44b2716b999a534aaace9d108`; its source tree exactly matches
+  cumulative PR #10 source
+  `f73aa431fc1fd3e43c3ff8e0a9cd890aa41ac9df`. PR #10 is merged, PR #9 is closed
+  unmerged as superseded, and PR #9's required source reaches `main` once through
+  PR #10.
+- Android internal identity remains package `com.chillywood.mobile`, version
+  `1.0.0` (84), runtime `1.0.0-android-imagemanipulator-v1`, production channel,
+  Play installer, update `019f9c11-33c1-7d23-a0c0-8029c62e0ea4`. iOS remains
+  TestFlight `com.chillywood.mobile` version `1.0.0` (8), runtime
+  `1.0.0-iosqa1`, `ios-qa`, expected update
+  `019f9c13-9f6d-7c52-9cee-71265b8fd565`.
+- The exposed role-free synthetic QA credential was rotated, prior sessions were
+  revoked, and role, entitlement, profile, balance, and user-right invariants
+  matched. No real-user credential changed.
+- Installed Android signed-in smoke passed Home, Explore/Search, Saved Library,
+  Profile, Settings/release diagnostics, Chat, Live, Watch-Party entry, title,
+  Player/fullscreen, Support, Privacy, Terms, lifecycle/session persistence, and
+  sign-out/sign-in. Installed iPhone deep-link smoke reached Home, Settings, Chat, Live,
+  Watch-Party waiting room, Profile, Support, Privacy, Terms, and Player. Settings,
+  Watch-Party waiting room, and Player visibly expose back navigation; Player
+  rendered media and fullscreen control.
+- The two-headless LiveKit proof now passes initial two-way synthetic audio/video
+  subscription with real audio frames, post-simulation audio/data recovery with
+  audio/video subscriptions retained, leave, and cleanup. The former
+  `after-reconnect-a:reconnecting` timeout was a fixture defect: current
+  `rtc-node` validates post-simulation media/data recovery and does not guarantee
+  `Reconnecting` or `Reconnected` events for the full-reconnect simulation.
+- Physical two-device media remains blocked without bypass: the TestFlight
+  synthetic host reaches the Live Room, while the Android role-free participant
+  correctly receives the Premium gate. The purchase shell is on hold, no manual
+  Premium grant is permitted, and no two-device media pass is claimed. The
+  installed iPhone host's entry tap returned to pre-stage without a visible gate
+  or error. Closeout source now bounds the previously unbounded LiveKit token
+  request at 15 seconds so future compatible delivery cannot strand stage entry;
+  that source-only repair was not published as an OTA.
+- Node 20 validation passes lint, TypeScript, the requested runtime/native/iOS/
+  Android/Cognitive guard matrix, LiveKit surface and reconnect proofs, Expo
+  Doctor `18/18`, local Supabase reset, pgTAP `37` files / `1279` tests,
+  two-party HTTP `89/89` with `40/40` required scenarios, zero-state bootstrap
+  HTTP `58/58` with `44/44` required cases, and database concurrency `18/18`.
+  The local HTTP fixtures now tolerate the current Supabase CLI's rejected
+  admin-service JWT by using local signup only for fixture creation, and the
+  concurrency command resets its mutating local fixture first.
+- The pinned research origin remains blocked by exact provider-host deployment
+  state: Caddy lacks the reviewed route and the installed transport release is
+  legacy contract v1, which current source classifies inactive-only. The failed
+  bounded start was rolled back, the service is inactive, Caddy was not changed,
+  and no research canary is claimed. A reviewed current-contract transport release
+  plus route attestation is required.
+- Cognitive state is `OWNER_ASSISTED_ACTIVE` /
+  `ISOLATED_AUTONOMOUS_PENDING`; the control center continues to state, “No
+  execution authority is granted by this control center.” Supabase ticket
+  `SU-431426` remains open because PUBLIC still has USAGE on provider-owned
+  schema `net`. All ten Cognitive roles remain NOLOGIN, switches are `0/10`,
+  schedules are `0/5`, user-derived memory is off, and Level 2 repair is off.
+- No Android/iOS build, unnecessary OTA, public release, broad push, real-money
+  charge, manual Premium grant, Cognitive runtime password, Hyperdrive database
+  credential, switch, schedule, user-derived memory, or Level 2 activation was
+  created by this closeout.
+- Superseded implementation PRs #16, #18, #21, #23, #24, #26, #28, #30, and
+  #35; review-only PRs #15, #19, #20, #22, #25, #27, #29, #31, and #37; and
+  canary PRs #32, #33, and #34 were closed unmerged after ancestry/content proof.
+  PR #14 remains its historical intentional merge and PR #17 remains closed
+  unmerged. No branch was deleted.
+
 ## Hot-Path Control Rule
 This file is intentionally compact. Keep current truth here, keep detailed proof output in artifacts or `/tmp`, and do not load archived checkpoint history during normal preflight unless a historical reconciliation task explicitly asks for it.
 

@@ -319,7 +319,21 @@ const setupAuthUser = async (status, email, password) => {
     body: { email, password, email_confirm: true },
   });
   if (![200, 201].includes(created.status)) {
-    throw new Error(`auth_admin_create_user_failed:${created.category}`);
+    const signUp = await httpJson(`${status.apiUrl}/auth/v1/signup`, {
+      headers: { apikey: status.anonKey },
+      body: { email, password },
+    });
+    if (![200, 201].includes(signUp.status)) {
+      throw new Error(
+        `auth_user_create_failed:${created.category}:${signUp.category}`,
+      );
+    }
+    if (signUp.data?.access_token && signUp.data?.user?.id) {
+      return {
+        id: signUp.data.user.id,
+        token: signUp.data.access_token,
+      };
+    }
   }
   const signedIn = await httpJson(
     `${status.apiUrl}/auth/v1/token?grant_type=password`,

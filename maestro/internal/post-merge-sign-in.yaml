@@ -1,0 +1,51 @@
+appId: com.chillywood.mobile
+---
+- launchApp:
+    clearState: false
+
+- runFlow:
+    when:
+      visible: "Login Error"
+    commands:
+      - tapOn:
+          text: "OK"
+
+- openLink: "chillywoodmobile://home"
+
+- runFlow:
+    when:
+      visible:
+        id: "auth-logged-in-home"
+    commands:
+      - openLink: "chillywoodmobile://settings"
+      - scrollUntilVisible:
+          element:
+            text: "Account"
+          direction: DOWN
+          timeout: 30000
+      - tapOn:
+          text: "Account"
+      - scrollUntilVisible:
+          element:
+            id: "settings-logout-button"
+          direction: DOWN
+          timeout: 30000
+      - tapOn:
+          id: "settings-logout-button"
+
+- assertVisible:
+    text: "Sign In"
+- tapOn:
+    id: "auth-login-email-input"
+- eraseText
+- inputText: "${QA_EMAIL}"
+- tapOn:
+    id: "auth-login-password-input"
+- eraseText
+- inputText: "${QA_PASSWORD}"
+- tapOn:
+    id: "auth-login-submit-button"
+- extendedWaitUntil:
+    visible:
+      id: "auth-logged-in-home"
+    timeout: 30000

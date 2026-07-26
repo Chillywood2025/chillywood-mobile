@@ -21,6 +21,7 @@ const importTypeScriptModule = async (relativePath) => {
 };
 
 const tokenFunction = readFileSync(path.join(root, "supabase/functions/livekit-token/index.ts"), "utf8");
+const tokenContract = readFileSync(path.join(root, "_lib/livekit/token-contract.ts"), "utf8");
 const joinBoundary = readFileSync(path.join(root, "_lib/livekit/join-boundary.ts"), "utf8");
 const player = readFileSync(path.join(root, "app/player/[id].tsx"), "utf8");
 const partyRoom = readFileSync(path.join(root, "app/watch-party/[partyId].tsx"), "utf8");
@@ -41,6 +42,18 @@ const {
 assert.ok(tokenFunction.includes('"live-stage"'), "livekit-token must support live-stage");
 assert.ok(tokenFunction.includes('"watch-party-live"'), "livekit-token must support watch-party-live");
 assert.ok(tokenFunction.includes('"chat-call"'), "livekit-token must support chat-call");
+assert.ok(
+  tokenContract.includes("LIVEKIT_TOKEN_REQUEST_TIMEOUT_MILLIS = 15_000"),
+  "client token requests must have a bounded timeout",
+);
+assert.ok(
+  tokenContract.includes("signal: controller.signal"),
+  "client token requests must pass the abort signal to fetch",
+);
+assert.ok(
+  tokenContract.includes("clearTimeout(timeout)"),
+  "client token requests must clear the timeout after completion",
+);
 assert.ok(joinBoundary.includes("prepareLiveKitJoinBoundary"), "join boundary must prepare LiveKit token contracts");
 assert.ok(liveStage.includes('surface: "live-stage"'), "Live Stage must request live-stage token surface");
 assert.ok(player.includes('surface: "watch-party-live"'), "Shared Player must request watch-party-live token surface");

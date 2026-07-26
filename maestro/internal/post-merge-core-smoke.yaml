@@ -1,0 +1,200 @@
+appId: com.chillywood.mobile
+---
+- launchApp:
+    clearState: false
+
+- waitForAnimationToEnd
+
+- runFlow:
+    when:
+      visible: "Sign In"
+    commands:
+      - tapOn:
+          id: "auth-login-email-input"
+      - inputText: "${QA_EMAIL}"
+      - tapOn:
+          id: "auth-login-password-input"
+      - inputText: "${QA_PASSWORD}"
+      - tapOn:
+          id: "auth-login-submit-button"
+
+- assertVisible:
+    id: "auth-logged-in-home"
+
+- assertNotVisible:
+    text: "Something went wrong"
+
+- tapOn:
+    text: "Explore"
+- assertVisible:
+    id: "home-explore-search-input"
+- tapOn:
+    id: "home-explore-search-input"
+- inputText: "Chicago"
+- assertVisible:
+    id: "home-explore-search-input"
+- hideKeyboard
+
+- tapOn:
+    text: "Saved"
+- assertNotVisible:
+    text: "Something went wrong"
+
+- openLink: "chillywoodmobile://profile"
+- assertNotVisible:
+    text: "Something went wrong"
+
+- openLink: "chillywoodmobile://home"
+- assertVisible:
+    id: "auth-logged-in-home"
+
+- openLink: "chillywoodmobile://settings"
+- assertVisible:
+    id: "settings-back-button"
+- scrollUntilVisible:
+    element:
+      text: "App Info"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: "App Info"
+- scrollUntilVisible:
+    element:
+      id: "release-diagnostics-card"
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    id: "release-diagnostics-card"
+- scrollUntilVisible:
+    element:
+      id: "release-diagnostics-runtime-version"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "release-diagnostics-channel"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "release-diagnostics-update-id"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "release-diagnostics-embedded-launch"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "release-diagnostics-emergency-launch"
+    direction: DOWN
+    timeout: 30000
+- openLink: "chillywoodmobile://home"
+
+- openLink: "chillywoodmobile://chat"
+- assertVisible:
+    id: "chat-inbox-screen"
+
+- openLink: "chillywoodmobile://live"
+- assertVisible:
+    text: "Live"
+
+- openLink: "chillywoodmobile://watch-party"
+- runFlow:
+    when:
+      visible: "Premium required"
+    commands:
+      - tapOn:
+          text: "Not now"
+- assertVisible:
+    id: "watch-party-waiting-room-back-button"
+
+- openLink: "chillywoodmobile://title/f0d03df8-ced8-433f-a5c0-e2b930813eb0"
+- runFlow:
+    when:
+      visible: "Premium required"
+    commands:
+      - tapOn:
+          text: "Not now"
+- assertNotVisible:
+    text: "Title not found."
+
+- openLink: "chillywoodmobile://player/f0d03df8-ced8-433f-a5c0-e2b930813eb0"
+- runFlow:
+    when:
+      visible: "Premium required"
+    commands:
+      - tapOn:
+          text: "Not now"
+- assertVisible:
+    id: "screen-player"
+- assertNotVisible:
+    text: "Title not found."
+- assertVisible:
+    id: "player-fullscreen-button"
+
+- openLink: "chillywoodmobile://support"
+- runFlow:
+    when:
+      visible: "Premium required"
+    commands:
+      - tapOn:
+          text: "Not now"
+- assertVisible:
+    text: "SUPPORT & FEEDBACK"
+
+- openLink: "chillywoodmobile://privacy"
+- runFlow:
+    when:
+      visible: "Premium required"
+    commands:
+      - tapOn:
+          text: "Not now"
+- assertVisible:
+    text: "Privacy Policy"
+
+- openLink: "chillywoodmobile://terms"
+- runFlow:
+    when:
+      visible: "Premium required"
+    commands:
+      - tapOn:
+          text: "Not now"
+- assertVisible:
+    text: "Terms of Use"
+
+- openLink: "chillywoodmobile://home"
+- stopApp
+- launchApp:
+    clearState: false
+- assertVisible:
+    id: "auth-logged-in-home"
+
+- openLink: "chillywoodmobile://settings"
+- scrollUntilVisible:
+    element:
+      text: "Account"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: "Account"
+- scrollUntilVisible:
+    element:
+      id: "settings-logout-button"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "settings-logout-button"
+- assertVisible:
+    text: "Sign In"
+- tapOn:
+    id: "auth-login-email-input"
+- inputText: "${QA_EMAIL}"
+- tapOn:
+    id: "auth-login-password-input"
+- inputText: "${QA_PASSWORD}"
+- tapOn:
+    id: "auth-login-submit-button"
+- assertVisible:
+    id: "auth-logged-in-home"

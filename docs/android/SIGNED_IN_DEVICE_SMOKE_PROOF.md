@@ -1,5 +1,23 @@
 # Signed-In Device Smoke Proof
 
+## 2026-07-25 post-merge delta
+
+The current Play Internal identity is package `com.chillywood.mobile`, version
+`1.0.0` (84), runtime `1.0.0-android-imagemanipulator-v1`, production channel,
+installer `com.android.vending`, update
+`019f9c11-33c1-7d23-a0c0-8029c62e0ea4`. Its tested source is cumulative PR #10
+source `f73aa431fc1fd3e43c3ff8e0a9cd890aa41ac9df`, tree-identical to merge
+`77e0dcbf810e91e44b2716b999a534aaace9d108`.
+
+Current installed route smoke passed signed-in Home, Explore/Search, Saved
+Library, Profile, Settings/release diagnostics, Chat, Live, Watch-Party waiting
+room, title/player, Support, Privacy, Terms, lifecycle, session persistence, and
+sign-out/sign-in. No blank screen, endless loading state, crash, ANR, or startup
+fatal was observed in the bounded run. The role-free physical Live participant remains correctly
+blocked by Premium; no manual entitlement was granted and no two-device media
+pass is claimed. No build, reinstall, clear-data action, OTA, public track
+mutation, real charge, broad push, or public release occurred.
+
 Date: 2026-06-05
 
 Proof type: Play-installed physical Android signed-in route smoke

@@ -288,7 +288,16 @@ const setupLocalAuthUser = async ({ apiUrl, anonKey, serviceRoleKey }, email, pa
     body: { email, password, email_confirm: true },
   });
   if (![200, 201].includes(create.status)) {
-    throw new Error(`auth_admin_create_user_failed:${create.category}`);
+    const signUp = await httpJson(`${apiUrl}/auth/v1/signup`, {
+      headers: { apikey: anonKey },
+      body: { email, password },
+    });
+    if (![200, 201].includes(signUp.status)) {
+      throw new Error(`auth_user_create_failed:${create.category}:${signUp.category}`);
+    }
+    if (signUp.data?.access_token && signUp.data?.user?.id) {
+      return { id: signUp.data.user.id, token: signUp.data.access_token };
+    }
   }
   const signIn = await httpJson(`${apiUrl}/auth/v1/token?grant_type=password`, {
     headers: { apikey: anonKey },

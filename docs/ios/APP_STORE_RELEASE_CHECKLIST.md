@@ -1,5 +1,25 @@
 # App Store Release Checklist
 
+## Post-merge internal status — 2026-07-25
+
+PR #10 is merged and its source tree is unchanged by merge metadata. Internal
+TestFlight build 8 remains the only current iOS QA candidate, with expected
+`ios-qa` update `019f9c13-9f6d-7c52-9cee-71265b8fd565`. Installed cold-route
+smoke covers Home, Settings, Chat, Live, Watch-Party waiting room, Profile,
+Support, Privacy, Terms, and Player; visible back navigation and Player
+media/fullscreen are proved on the relevant sampled routes.
+
+The installed Live Room host entry tap returned to pre-stage without a visible
+gate or error. A closeout-only source fix now bounds LiveKit token fetch at 15
+seconds, but it was not delivered because no replacement OTA was authorized.
+This does not satisfy public release. StoreKit purchase/restore, full
+camera/microphone/photo denial and format coverage, Universal Link launch from an
+external Apple app, VoiceOver/Dynamic Type/orientation coverage,
+APNs/PushKit/CallKit, final privacy/legal answers, review metadata, and owner
+approval remain unchecked. No App Review submission, external TestFlight,
+automatic/phased release, public App Store release, real charge, or manual Premium
+grant occurred.
+
 Status: internal readiness checklist. Internal TestFlight upload may be authorized separately; public App Store release, external TestFlight distribution, legal attestation, and automatic release are not authorized by this document.
 
 ## 1. Source and configuration

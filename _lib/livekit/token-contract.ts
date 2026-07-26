@@ -350,6 +350,28 @@ export const getRequestedLiveKitGrants = (
   };
 };
 
+export const LIVEKIT_TOKEN_REQUEST_TIMEOUT_MILLIS = 15_000;
+
+const requestLiveKitTokenResponse = async (
+  endpoint: string,
+  init: RequestInit,
+): Promise<Response> => {
+  if (typeof AbortController === "undefined") {
+    return fetch(endpoint, init);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LIVEKIT_TOKEN_REQUEST_TIMEOUT_MILLIS);
+  try {
+    return await fetch(endpoint, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 // The mobile app never mints LiveKit credentials. It only requests them from a backend endpoint.
 export async function requestLiveKitParticipantToken(
   request: LiveKitTokenRequest,
@@ -395,7 +417,7 @@ export async function requestLiveKitParticipantToken(
 
   let response: Response;
   try {
-    response = await fetch(config.tokenEndpoint, {
+    response = await requestLiveKitTokenResponse(config.tokenEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1,3 +1,5 @@
+project_id = "chillywood-mobile"
+
 [functions.livekit-token]
 verify_jwt = false
 

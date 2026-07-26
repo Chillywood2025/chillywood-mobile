@@ -1,5 +1,31 @@
 # Chi'llywood iOS Status
 
+## Post-merge internal readback — 2026-07-25
+
+PR #10 merged at `77e0dcbf810e91e44b2716b999a534aaace9d108`, and that merge tree
+exactly matches final tested source
+`f73aa431fc1fd3e43c3ff8e0a9cd890aa41ac9df`. PR #9 remains closed unmerged
+and its required source reaches `main` once through PR #10.
+
+The attached internal app remains TestFlight bundle `com.chillywood.mobile`,
+version `1.0.0` (8), runtime `1.0.0-iosqa1`, channel `ios-qa`, expected update
+`019f9c13-9f6d-7c52-9cee-71265b8fd565`. Cold payload-URL proof reached Home,
+Settings, Chat, Live, Watch-Party waiting room, Profile, Support, Privacy, Terms,
+and Player. Settings, Watch-Party waiting room, and Player show visible back
+navigation; Player rendered title media and retained fullscreen control.
+
+Two-device Live media is not closed by those route checks. The synthetic iPhone
+host reached the Live Room, but the role-free Android participant correctly
+remained behind Premium. No manual entitlement was granted and the purchase shell
+is on hold. The host entry tap registered but returned to pre-stage without a
+visible gate or error. Source now adds a 15-second abort boundary to the
+previously unbounded LiveKit token request and proves that policy, but the
+installed TestFlight update does not contain that closeout-only source change and
+no replacement OTA was published. APNs/PushKit/CallKit, StoreKit purchase/restore, full VoiceOver
+automation, permission denial branches, and legal/public-release attestations
+remain exact internal/provider/device blockers. No new iOS build, OTA, external
+TestFlight group, App Review submission, or public release occurred.
+
 Checkpoint date: 2026-07-19
 
 Overall verdict: **The remaining iOS QA source and backend gaps are closed at
