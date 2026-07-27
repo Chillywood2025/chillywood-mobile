@@ -81,14 +81,14 @@ select ok(
 select ok(
   pg_get_functiondef(
     'public.governance_open_provider_independent_visual_canary(uuid,uuid,text,text,text,text,text,text,text,interval)'::regprocedure
-  ) like '%6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a%'
+  ) like '%e05ff68c426e2ccb1bc268e14e9e5d19ba64efa9%'
   and pg_get_functiondef(
     'public.governance_open_provider_independent_visual_canary(uuid,uuid,text,text,text,text,text,text,text,interval)'::regprocedure
-  ) like '%cc040ff917f762d2c3d5e944202a00f7c68734cb%'
+  ) like '%5295d907e6806883e1de2dda5626d8e3a129783d%'
   and pg_get_functiondef(
     'public.governance_open_provider_independent_visual_canary(uuid,uuid,text,text,text,text,text,text,text,interval)'::regprocedure
-  ) like '%d9a1b788775f358912946920106442036105e4f66b5bf72eb64518b1ee5b9a6f%',
-  'opening is bound to the exact reviewed Worker commit, tree, and graph'
+  ) like '%47779ee113dd79b7678569750aa2f96e4663e2e1ccc5b44262365817ce1611fb%',
+  'opening is bound to the exact repaired Worker commit, tree, and graph'
 );
 
 select ok(
