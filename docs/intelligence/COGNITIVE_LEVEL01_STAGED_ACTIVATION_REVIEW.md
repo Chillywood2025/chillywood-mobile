@@ -7,8 +7,12 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a`
+  `78e84e16921cfd486b125a1ade98a4a240db28c5`
 - implementation tree:
+  `b722a7f1a4fadec09d0348572acc69d6d261e357`
+- reviewed and deployed Worker source commit:
+  `6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a`
+- reviewed and deployed Worker source tree:
   `cc040ff917f762d2c3d5e944202a00f7c68734cb`
 - reviewed Worker source graph SHA-256:
   `d9a1b788775f358912946920106442036105e4f66b5bf72eb64518b1ee5b9a6f`
@@ -92,6 +96,33 @@ claimed, executed, replay, mutation, and emergency-stop paths fail closed.
 Focused source-revision pgTAP passes `20/20`; the clean full suite passes
 `1364/1364`. The current unresolved P1 count remains `0`.
 
+A fifth fail-closed review gap was found before any switch was enabled: the
+visual collector correctly required its own switch, while the generic switch
+activation path correctly required already-persisted canaries. A simple switch
+flip would have broken the reviewed two-party path, and a time-bounded flip
+without a table-boundary expiry check could have left a stale enabled flag
+operational after authorization expiry.
+
+Implementation commit `78e84e16921cfd486b125a1ade98a4a240db28c5`
+adds only forward migration
+`20260727170000_cognitive_provider_independent_visual_canary_activation.sql`.
+Its authenticated exact-Owner RPC can open only the visual sentinel switch,
+for at most 30 minutes, after the completed Option C version 3 chain, one
+effective baseline, all four core service identities, active emergency state,
+and zero sibling switches or schedules. It binds the immutable receipt to the
+reviewed deployed Worker commit, tree, source graph, review, tests, deployment
+plan, and rollback evidence. The existing persisted-run trigger is replaced
+forward-only so an expired authorization rejects new collection even if the
+audit switch row has not yet been finalized; an expired authorization remains
+explicitly rollbackable. Retaining the switch requires consumed independent
+detection, no-finding, and resolution proofs, triage, a resolved finding, an
+emergency pause/resume drill, and zero sibling switches or schedules. The
+migration creates no authorization or outcome and enables nothing.
+
+Focused activation pgTAP passes `18/18`; the clean full suite passes
+`1382/1382`; the isolated runtime remains `134/134`. The current unresolved P1
+count remains `0`.
+
 ## Static review result
 
 | Lane | P0 | P1 | Result |
@@ -126,12 +157,13 @@ Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 
 ## Automated proof
 
-- exact-head GitHub Phase 1 CI run: `30285375677`
-- current exact-head required checks: `13/13` passing
+- exact-head GitHub Phase 1 CI run: `30287517984` (in progress)
+- current exact-head required checks: pending
 - isolated Cloudflare runtime: `134/134` passing
 - provider-independent Option C path pgTAP: `22/22` passing
 - unclaimed source-revision pgTAP: `20/20` passing
-- full pgTAP: `1364/1364` passing
+- provider-independent visual activation pgTAP: `18/18` passing
+- full pgTAP: `1382/1382` passing
 - Cognitive intelligence contract: passing
 - Cognitive architecture guard and proof: passing
 - committed-secret scan: no deployment or runtime secret evidence found
