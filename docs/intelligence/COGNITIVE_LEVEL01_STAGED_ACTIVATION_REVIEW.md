@@ -7,9 +7,9 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `547d50cb7f4f0f714806df18a178df9edb30fc5c`
+  `ba43c9c0abdc569ba67bf18ab70fdf72c27e4893`
 - implementation tree:
-  `37dcf31b541814bcf496af0fc7c7340ffadbc1e2`
+  `50e2444c920107855d1140eeb3e10dcc0133a151`
 - reviewed and deployed Worker source commit:
   `6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a`
 - reviewed and deployed Worker source tree:
@@ -162,6 +162,27 @@ collection, independent proof persistence, triage consumption, immutable-event
 readback, and replay denial. The focused file passes `31/31`; the clean full
 suite passes `1398/1398`. The current unresolved P1 count remains `0`.
 
+A seventh fail-closed review gap was found by the first live collection before
+any sentinel row was stored. The v1 authorization enabled the shared switch,
+while the collector and evaluator correctly required an exact Android/iOS run
+and the persistence boundary correctly required a switch matching that run's
+platform task. The authorization was rolled back with immutable counts of
+zero runs, proofs, consumptions, and findings.
+
+Implementation commit `ba43c9c0abdc569ba67bf18ab70fdf72c27e4893`
+adds only forward migration
+`20260727181000_cognitive_android_visual_canary_scope.sql`. An authenticated
+exact-Owner preparation RPC may restore only the zero-run rollback's disabled
+shared policy metadata, then invoke the already-reviewed platform-scope
+materializer to create exact disabled Android and iOS tasks and their six
+disabled switches. The replacement authorization requires exact Android
+collector and triage capabilities, leaves the shared and iOS switches off,
+and opens only the Android visual switch. Collection expiry, final proof
+counts, emergency pause/resume, resolution, and sibling/schedule denial are
+all rebound to the exact Android task and platform. The focused activation
+files pass `35/35`; the clean full suite passes `1415/1415`. The current
+unresolved P1 count remains `0`.
+
 ## Static review result
 
 | Lane | P0 | P1 | Result |
@@ -204,7 +225,8 @@ Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 - provider-independent visual activation pgTAP: `18/18` passing
 - canonical deferred-evidence decisions pgTAP: `13/13` passing
 - visual no-finding triage integration file: `31/31` passing
-- full pgTAP: `1398/1398` passing
+- Android-scoped visual activation files: `35/35` passing
+- full pgTAP: `1415/1415` passing
 - Cognitive intelligence contract: passing
 - Cognitive architecture guard and proof: passing
 - committed-secret scan: no deployment or runtime secret evidence found
