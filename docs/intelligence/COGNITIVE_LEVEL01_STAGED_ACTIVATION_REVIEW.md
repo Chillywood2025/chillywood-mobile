@@ -7,9 +7,9 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `f45772f9a145c8363659954d337e7eaa46eefb3b`
+  `547d50cb7f4f0f714806df18a178df9edb30fc5c`
 - implementation tree:
-  `6628e5c41c83f120ceca0c415060a4d3a5b0ee54`
+  `37dcf31b541814bcf496af0fc7c7340ffadbc1e2`
 - reviewed and deployed Worker source commit:
   `6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a`
 - reviewed and deployed Worker source tree:
@@ -141,7 +141,26 @@ Both candidate and decision tables use forced RLS, immutable triggers, and no
 service-role access.
 
 Focused evidence pgTAP passes `13/13`; the clean full suite passes
-`1395/1395`. The current unresolved P1 count remains `0`.
+`1395/1395`.
+
+A sixth fail-closed review gap was found during live-canary preflight before an
+authorization was opened: visual-canary finalization correctly required a
+consumed `run_no_finding` proof, but the triage function correctly accepted
+only the prior route-timing no-finding packet. The combination made the
+required visual no-finding consumption unreachable.
+
+Implementation commit `547d50cb7f4f0f714806df18a178df9edb30fc5c`
+adds only forward migration
+`20260727173000_cognitive_visual_no_finding_triage.sql`. It preserves the
+existing authoritative route-timing branch and adds a separate visual branch
+that accepts only a passing `touch_target` or `visual_layout` packet already
+validated by the bounded and detailed visual validators, with installed or
+simulator observation and the exact persisted evidence binding. The immutable
+no-finding event derives its non-null binding from the reviewed visual mapping;
+callers cannot supply it. A database integration regression performs visual
+collection, independent proof persistence, triage consumption, immutable-event
+readback, and replay denial. The focused file passes `31/31`; the clean full
+suite passes `1398/1398`. The current unresolved P1 count remains `0`.
 
 ## Static review result
 
@@ -177,14 +196,15 @@ Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 
 ## Automated proof
 
-- exact-head GitHub Phase 1 CI run: `30288181208`
+- exact-head GitHub Phase 1 CI run: `30289726019`
 - current exact-head required checks: `13/13` passing
 - isolated Cloudflare runtime: `134/134` passing
 - provider-independent Option C path pgTAP: `22/22` passing
 - unclaimed source-revision pgTAP: `20/20` passing
 - provider-independent visual activation pgTAP: `18/18` passing
 - canonical deferred-evidence decisions pgTAP: `13/13` passing
-- full pgTAP: `1395/1395` passing
+- visual no-finding triage integration file: `31/31` passing
+- full pgTAP: `1398/1398` passing
 - Cognitive intelligence contract: passing
 - Cognitive architecture guard and proof: passing
 - committed-secret scan: no deployment or runtime secret evidence found
