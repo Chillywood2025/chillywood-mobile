@@ -43,6 +43,7 @@ test("database port accepts only compile-time statement IDs and exact arity", as
   assert.equal(calls.at(-1).options.max, 1);
   assert.equal(calls.at(-1).options.prepare, false);
   assert.equal(calls.at(-1).options.ssl, "require");
+  assert.equal(calls.at(-1).options.connect_timeout, 15);
 });
 
 test("ready operation adapters use exact static parameter order", async () => {

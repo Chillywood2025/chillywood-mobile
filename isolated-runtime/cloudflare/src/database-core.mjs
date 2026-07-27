@@ -31,7 +31,7 @@ export const createScopedDatabasePort = ({
     ...domainStatements,
   });
   const sql = sqlFactory(connectionString, {
-    connect_timeout: 5,
+    connect_timeout: 15,
     idle_timeout: 5,
     max: 1,
     max_lifetime: 60,
