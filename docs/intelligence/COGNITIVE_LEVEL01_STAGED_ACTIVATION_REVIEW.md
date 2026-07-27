@@ -7,7 +7,7 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `ba43c9c0abdc569ba67bf18ab70fdf72c27e4893`
+  `ba43c9c050ccbcf58aaa85854f31459657de00ae`
 - implementation tree:
   `50e2444c920107855d1140eeb3e10dcc0133a151`
 - reviewed and deployed Worker source commit:
@@ -169,7 +169,7 @@ and the persistence boundary correctly required a switch matching that run's
 platform task. The authorization was rolled back with immutable counts of
 zero runs, proofs, consumptions, and findings.
 
-Implementation commit `ba43c9c0abdc569ba67bf18ab70fdf72c27e4893`
+Implementation commit `ba43c9c050ccbcf58aaa85854f31459657de00ae`
 adds only forward migration
 `20260727181000_cognitive_android_visual_canary_scope.sql`. An authenticated
 exact-Owner preparation RPC may restore only the zero-run rollback's disabled
