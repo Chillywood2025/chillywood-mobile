@@ -463,18 +463,40 @@ select is(
 );
 
 select ok(
-  exists (
-    select 1
-    from cognitive_runtime.net_acl_provider_attestations
-    where postgres_version_num =
-      current_setting('server_version_num')::integer
-      and extension_version = (
-        select extension.extversion
-        from pg_catalog.pg_extension extension
-        where extension.extname = 'pg_net'
+  (
+    with observed_versions as (
+      select
+        current_setting('server_version_num')::integer
+          as postgres_version_num,
+        (
+          select extension.extversion
+          from pg_catalog.pg_extension extension
+          where extension.extname = 'pg_net'
+        ) as extension_version
+    ),
+    guard_snapshot as (
+      select cognitive_runtime.net_acl_guard_snapshot() as value
+    )
+    select
+      (guard_snapshot.value->>'postgres_version_match')::boolean =
+        (observed_versions.postgres_version_num = 170006)
+      and
+      (guard_snapshot.value->>'extension_version_match')::boolean =
+        (observed_versions.extension_version = '0.19.5')
+      and (
+        observed_versions.postgres_version_num = 170006
+        or guard_snapshot.value->'finding_codes'
+          ? 'POSTGRES_VERSION_REVALIDATION_REQUIRED'
       )
+      and (
+        observed_versions.extension_version = '0.19.5'
+        or guard_snapshot.value->'finding_codes'
+          ? 'PG_NET_VERSION_REVALIDATION_REQUIRED'
+      )
+    from observed_versions
+    cross join guard_snapshot
   ),
-  'Postgres and pg_net upgrades require a new reviewed attestation'
+  'Postgres and pg_net upgrades are detected and require revalidation'
 );
 
 select ok(
