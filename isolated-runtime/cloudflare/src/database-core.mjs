@@ -36,7 +36,6 @@ export const createScopedDatabasePort = ({
     max: 1,
     max_lifetime: 60,
     prepare: false,
-    ssl: "require",
   });
   const call = async (statementId, parameters) => {
     signal?.throwIfAborted();
