@@ -7,9 +7,9 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `3e6a58973dfb46d1e7db7d1eac2fdf8de94f004c`
+  `c0d6e8f5b403324fff2d12e89d456f9cbe5e4e38`
 - implementation tree:
-  `4a7a19241505c10ea357bd772a5e865a275660ba`
+  `9b35eb0bd437e15e0de1c995c5e719554a17f2d8`
 - reviewed Worker source graph SHA-256:
   `0d377e19a200e0c970bef32ca141a588a7f4097d2c21ac69951ea19356edcb87`
 - reviewed Worker source graph files: `71`
@@ -32,6 +32,23 @@ closes the finding with new forward-only migration
 No historical migration was edited. The existing full Option C persistence
 pgTAP now uses the isolated product-quality evaluator identity and passes
 `46/46` locally. The current unresolved P1 count is `0`.
+
+A second fail-closed review gap was found before remote deployment: the live
+control task had zero decision manifests, while the generic Owner approval RPC
+correctly required verified model-independence evidence. Reusing that generic
+path would either block provider-independent Option C or falsely claim that a
+model council had run.
+
+Implementation commit `c0d6e8f5b403324fff2d12e89d456f9cbe5e4e38`
+adds only a dedicated provider-independent Option C Owner receipt and approval
+path. It does not amend the generic model gate. The dedicated path is bound to
+the exact repository, activation branch, reviewed Worker source-graph hash,
+independent-review hash, full-test hash, Option C identifier/name/hash, one
+execution, zero provider cost, empty mutation scopes, and the separate
+`cognitive_product_quality_evaluator`. Its decision status is explicitly
+`PROVIDER_INDEPENDENT_OWNER_SELECTION_REVIEWED`; it never claims
+`MODEL_INDEPENDENCE_VERIFIED`. New focused pgTAP passes `22/22`, and the clean
+full suite passes `1344/1344`. The current unresolved P1 count remains `0`.
 
 ## Static review result
 
@@ -61,7 +78,7 @@ Partial deployment reports `NOT_GLOBALLY_READY`; it cannot claim
 all-principal readiness. Targeted rollback preserves sibling configuration,
 and emergency-stop enforcement remains in the operation RPC path.
 
-The implementation does not modify a migration, grant a UI mutation
+The implementation does not modify a historical migration, grant a UI mutation
 authority, install a Supabase service-role credential, add a public private
 Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 
@@ -70,7 +87,8 @@ Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 - prior GitHub Phase 1 CI run: `30278807328`
 - current exact-head required checks: pending
 - isolated Cloudflare runtime: `134/134` passing
-- pgTAP: `1322/1322` passing
+- provider-independent Option C path pgTAP: `22/22` passing
+- full pgTAP: `1344/1344` passing
 - Cognitive intelligence contract: passing
 - Cognitive architecture guard and proof: passing
 - committed-secret scan: no deployment or runtime secret evidence found
