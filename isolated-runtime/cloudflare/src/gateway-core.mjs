@@ -16,6 +16,32 @@ const COMMON_GATEWAY_ENVIRONMENT_BINDINGS = Object.freeze([
 const json = (status, body) =>
   new Response(JSON.stringify(body), { headers: JSON_HEADERS, status });
 
+const readPrincipalStates = (env) => {
+  if (typeof env?.COGNITIVE_PRINCIPAL_STATES !== "string") return null;
+  let value;
+  try {
+    value = JSON.parse(env.COGNITIVE_PRINCIPAL_STATES);
+  } catch {
+    return null;
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const actual = Object.keys(value).sort();
+  const expected = RUNTIME_MANIFEST.principals
+    .map((principal) => principal.dbRole).sort();
+  if (
+    actual.length !== expected.length ||
+    actual.some((name, index) => name !== expected[index]) ||
+    Object.values(value).some((state) =>
+      !["active", "inert"].includes(state)
+    )
+  ) {
+    return null;
+  }
+  return value;
+};
+
 export const gatewayEnvironmentKeyAllowlist = () =>
   Object.freeze([
     ...COMMON_GATEWAY_ENVIRONMENT_BINDINGS,
@@ -30,7 +56,8 @@ const hasExactGatewayEnvironment = (env) => {
   const actual = Object.keys(env).sort();
   const expected = gatewayEnvironmentKeyAllowlist();
   return actual.length === expected.length &&
-    actual.every((name, index) => name === expected[index]);
+    actual.every((name, index) => name === expected[index]) &&
+    readPrincipalStates(env) !== null;
 };
 
 const readBoundedJson = async (request) => {
@@ -116,6 +143,10 @@ export const createGatewayHandler = ({
     );
     if (!validation.ok) return json(400, { error: validation.error });
     const principal = PRINCIPAL_BY_ID.get(body.principal);
+    const principalStates = readPrincipalStates(env);
+    if (principalStates?.[body.principal] !== "active") {
+      return json(503, { error: "principal_inert" });
+    }
     const service = principal ? env[principal.binding] : null;
     if (!service || typeof service.invoke !== "function") {
       return json(503, { error: "principal_service_binding_missing" });
@@ -126,7 +157,9 @@ export const createGatewayHandler = ({
     } catch (error) {
       const category = error instanceof Error ? error.message : "";
       return json(
-        ["invocation_rejected", "revocation_rejected"].includes(category)
+        category === "principal_inert"
+          ? 503
+          : ["invocation_rejected", "revocation_rejected"].includes(category)
           ? 401
           : 409,
         { error: category || "principal_operation_rejected" },

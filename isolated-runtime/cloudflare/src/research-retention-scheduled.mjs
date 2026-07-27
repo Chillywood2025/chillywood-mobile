@@ -15,10 +15,11 @@ const exactEnvironment = (env, principal) => {
     throw new Error("retention_environment_rejected");
   }
   const actual = Object.keys(env).sort();
-  const expected = privateEnvironmentKeyAllowlist(principal);
+  const expected = privateEnvironmentKeyAllowlist(principal, "active");
   if (
     actual.length !== expected.length ||
-    actual.some((name, index) => name !== expected[index])
+    actual.some((name, index) => name !== expected[index]) ||
+    env.COGNITIVE_DEPLOYMENT_STATE !== "active"
   ) {
     throw new Error("retention_environment_rejected");
   }

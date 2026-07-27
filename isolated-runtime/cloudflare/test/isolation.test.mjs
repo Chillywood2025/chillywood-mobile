@@ -44,6 +44,7 @@ const makeEnvelope = async () => ({
 const baselineEnv = async (changes = {}) => {
   const principal = PRINCIPAL_BY_ID.get("cognitive_product_baseline_executor");
   return {
+    COGNITIVE_DEPLOYMENT_STATE: "active",
     COGNITIVE_PRODUCT_BASELINE_EXECUTOR_HYPERDRIVE: {
       connectionString: "postgres://isolated.invalid/db",
     },
@@ -62,6 +63,14 @@ const gatewayEnv = (changes = {}) => ({
   CF_ACCESS_AUD: "a".repeat(64),
   CF_ACCESS_SERVICE_TOKEN_COMMON_NAME: `${"b".repeat(32)}.access`,
   CF_ACCESS_TEAM_DOMAIN: "https://chillywood.cloudflareaccess.com",
+  COGNITIVE_PRINCIPAL_STATES: JSON.stringify(
+    Object.fromEntries(
+      RUNTIME_MANIFEST.principals.map((principal) => [
+        principal.dbRole,
+        "active",
+      ]),
+    ),
+  ),
   RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
   SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
   SOURCE_COMMIT: "a".repeat(40),
@@ -180,6 +189,7 @@ test("gateway and every private Worker use exact generated environment-key allow
       "CF_ACCESS_AUD",
       "CF_ACCESS_SERVICE_TOKEN_COMMON_NAME",
       "CF_ACCESS_TEAM_DOMAIN",
+      "COGNITIVE_PRINCIPAL_STATES",
       ...RUNTIME_MANIFEST.principals.map((principal) => principal.binding),
       "RUNTIME_SCHEMA_VERSION",
       "SOURCE_BASE_COMMIT",
@@ -189,8 +199,9 @@ test("gateway and every private Worker use exact generated environment-key allow
   );
   for (const principal of RUNTIME_MANIFEST.principals) {
     assert.deepEqual(
-      privateEnvironmentKeyAllowlist(principal),
+      privateEnvironmentKeyAllowlist(principal, "active"),
       [
+        "COGNITIVE_DEPLOYMENT_STATE",
         principal.hyperdriveBinding,
         ...principal.requiredSecrets,
         ...Object.keys(principal.runtimeConfiguration),
@@ -202,13 +213,49 @@ test("gateway and every private Worker use exact generated environment-key allow
       principal.dbRole,
     );
     assert.equal(
-      privateEnvironmentKeyAllowlist(principal).includes(
+      privateEnvironmentKeyAllowlist(principal, "active").includes(
         "CLOUDFLARE_API_TOKEN",
       ),
       false,
       principal.dbRole,
     );
+    assert.deepEqual(
+      privateEnvironmentKeyAllowlist(principal, "inert"),
+      [
+        "COGNITIVE_DEPLOYMENT_STATE",
+        "RUNTIME_SCHEMA_VERSION",
+        "SOURCE_BASE_COMMIT",
+        "SOURCE_COMMIT",
+        "WORKER_VERSION",
+      ],
+      principal.dbRole,
+    );
   }
+});
+
+test("an inert principal is unavailable before database, adapter, or provider work", async () => {
+  const principal = PRINCIPAL_BY_ID.get(
+    "cognitive_product_baseline_executor",
+  );
+  const handler = createPrivateInvocationHandler({
+    createDatabase: () => assert.fail("inert principal reached database"),
+    env: {
+      COGNITIVE_DEPLOYMENT_STATE: "inert",
+      RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
+      SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
+      SOURCE_COMMIT: "a".repeat(40),
+      WORKER_VERSION: { id: "inert-version" },
+    },
+    logger: silentLogger,
+    now: () => NOW,
+    principal,
+    resolveAdapter: () => assert.fail("inert principal resolved adapter"),
+  });
+  const envelope = await makeEnvelope();
+  await assert.rejects(
+    () => handler(envelope, TOKEN),
+    /principal_inert/u,
+  );
 });
 
 test("provider secrets exist only in their exact principal", () => {
@@ -323,6 +370,7 @@ test("production research retrieval fails closed before database work when provi
   const handler = createPrivateInvocationHandler({
     createDatabase: () => assert.fail("database must not be created"),
     env: {
+      COGNITIVE_DEPLOYMENT_STATE: "active",
       COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE: {
         connectionString: "postgres://isolated.invalid/db",
       },
@@ -425,7 +473,7 @@ test("private worker rejects every unexpected binding including deployment crede
 test("all ten private Worker handlers reject a deployment credential binding", async () => {
   for (const principal of RUNTIME_MANIFEST.principals) {
     const env = Object.fromEntries(
-      privateEnvironmentKeyAllowlist(principal).map((name) => [
+      privateEnvironmentKeyAllowlist(principal, "active").map((name) => [
         name,
         "present",
       ]),
@@ -433,6 +481,7 @@ test("all ten private Worker handlers reject a deployment credential binding", a
     env[principal.hyperdriveBinding] = {
       connectionString: "postgres://isolated.invalid/db",
     };
+    env.COGNITIVE_DEPLOYMENT_STATE = "active";
     env.CLOUDFLARE_API_TOKEN = "must-not-exist";
     const handler = createPrivateInvocationHandler({
       createDatabase: () => assert.fail("database must not be created"),
@@ -848,6 +897,39 @@ test("gateway rejects unauthenticated, wrong-principal and absent binding calls"
     }),
   );
   assert.equal(response.status, 503);
+});
+
+test("gateway returns unavailable for an explicitly inert bound service", async () => {
+  const envelope = await makeEnvelope();
+  let invoked = false;
+  const states = Object.fromEntries(
+    RUNTIME_MANIFEST.principals.map((principal) => [
+      principal.dbRole,
+      principal.dbRole === envelope.principal ? "inert" : "active",
+    ]),
+  );
+  const gateway = createGatewayHandler({
+    now: () => NOW,
+    verifyAccess: async () => true,
+  });
+  const response = await gateway(
+    new Request("https://gateway.invalid/v1", {
+      body: JSON.stringify(envelope),
+      headers: { "x-cognitive-principal-invocation": TOKEN },
+      method: "POST",
+    }),
+    gatewayEnv({
+      COGNITIVE_PRINCIPAL_STATES: JSON.stringify(states),
+      COGNITIVE_PRODUCT_BASELINE_EXECUTOR: {
+        invoke: async () => {
+          invoked = true;
+        },
+      },
+    }),
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "principal_inert" });
+  assert.equal(invoked, false);
 });
 
 test("gateway rejects deployment credentials and every unexpected binding before Access verification", async () => {

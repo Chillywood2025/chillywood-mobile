@@ -167,6 +167,7 @@ test("private Worker propagates the validated envelope platform to LiveKit", asy
       }),
     }),
     env: {
+      COGNITIVE_DEPLOYMENT_STATE: "active",
       COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_HYPERDRIVE: {
         connectionString: "postgres://isolated.invalid/db",
       },

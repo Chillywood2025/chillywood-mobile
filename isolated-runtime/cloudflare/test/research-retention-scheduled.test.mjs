@@ -21,6 +21,7 @@ const principal = RUNTIME_MANIFEST.principals.find((entry) =>
 );
 
 const environment = () => ({
+  COGNITIVE_DEPLOYMENT_STATE: "active",
   COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE: {
     connectionString: "postgres://retention.invalid/database",
   },

@@ -13,6 +13,11 @@ const principal = Object.freeze({
     "DATABASE_URL"
   ],
   "hyperdriveBinding": "COGNITIVE_MODEL_ROUTER_HYPERDRIVE",
+  "internalBindings": [
+    "COGNITIVE_MODEL_ROUTER_INVOKE_SHA256",
+    "COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION"
+  ],
+  "loginRole": "cognitive_model_router_login",
   "maxRequestBytes": 65536,
   "networkEgress": [
     "configured_model_api_origin_only"
@@ -46,6 +51,9 @@ const principal = Object.freeze({
     }
   },
   "provider": "approved_model_provider",
+  "providerBindings": [
+    "COGNITIVE_MODEL_OPENAI_API_KEY"
+  ],
   "runtimeConfiguration": {
     "COGNITIVE_MODEL_FAMILY": "REPLACE_WITH_APPROVED_MODEL_FAMILY",
     "COGNITIVE_MODEL_INPUT_USD_PER_MILLION": "REPLACE_WITH_APPROVED_INPUT_USD_PER_MILLION",
@@ -57,6 +65,14 @@ const principal = Object.freeze({
     "COGNITIVE_MODEL_ROUTER_INVOKE_SHA256",
     "COGNITIVE_MODEL_ROUTER_SERVICE_ASSERTION",
     "COGNITIVE_MODEL_OPENAI_API_KEY"
+  ],
+  "rpcAllowlist": [
+    "cognitive_model_router_recover_expired",
+    "cognitive_model_router_reserve",
+    "cognitive_model_router_settle",
+    "cognitive_runtime.cognitive_model_router_settle_provider_overrun",
+    "cognitive_runtime.runtime_revocation_status",
+    "cognitive_runtime.runtime_role_preflight"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

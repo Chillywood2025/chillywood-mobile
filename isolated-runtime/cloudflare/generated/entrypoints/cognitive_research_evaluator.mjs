@@ -13,6 +13,11 @@ const principal = Object.freeze({
     "DATABASE_URL"
   ],
   "hyperdriveBinding": "COGNITIVE_RESEARCH_EVALUATOR_HYPERDRIVE",
+  "internalBindings": [
+    "COGNITIVE_RESEARCH_EVALUATOR_INVOKE_SHA256",
+    "COGNITIVE_INDEPENDENT_EVALUATOR_SERVICE_TOKEN"
+  ],
+  "loginRole": "cognitive_research_evaluator_login",
   "maxRequestBytes": 32768,
   "networkEgress": [],
   "operations": {
@@ -47,10 +52,18 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "providerBindings": [],
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_RESEARCH_EVALUATOR_INVOKE_SHA256",
     "COGNITIVE_INDEPENDENT_EVALUATOR_SERVICE_TOKEN"
+  ],
+  "rpcAllowlist": [
+    "cognitive_resolve_public_research_contradiction",
+    "cognitive_runtime.derive_research_evaluation_with_readback",
+    "cognitive_runtime.research_evaluator_snapshot",
+    "cognitive_runtime.runtime_revocation_status",
+    "cognitive_runtime.runtime_role_preflight"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

@@ -13,6 +13,12 @@ const principal = Object.freeze({
     "DATABASE_URL"
   ],
   "hyperdriveBinding": "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_HYPERDRIVE",
+  "internalBindings": [
+    "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
+    "COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY",
+    "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"
+  ],
+  "loginRole": "cognitive_livekit_experience_collector_login",
   "maxRequestBytes": 98304,
   "networkEgress": [],
   "operations": {
@@ -105,11 +111,19 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "providerBindings": [],
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_LIVEKIT_EXPERIENCE_COLLECTOR_INVOKE_SHA256",
     "COGNITIVE_LIVEKIT_FAILURE_FIXTURE_HMAC_KEY",
     "COGNITIVE_LIVEKIT_SENTINEL_ASSERTION"
+  ],
+  "rpcAllowlist": [
+    "cognitive_runtime.collect_livekit_sentinel_run",
+    "cognitive_runtime.consume_livekit_failure_fixture_and_collect",
+    "cognitive_runtime.issue_livekit_failure_fixture",
+    "cognitive_runtime.runtime_revocation_status",
+    "cognitive_runtime.runtime_role_preflight"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

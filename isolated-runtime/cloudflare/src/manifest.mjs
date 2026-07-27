@@ -50,6 +50,18 @@ const principal = ({
   maxRequestBytes = 98_304,
 }) => {
   const suffix = id.replace(/^cognitive_/u, "").replaceAll("_", "-");
+  const invocationBinding = `${id.toUpperCase()}_INVOKE_SHA256`;
+  const internalBindings = Object.freeze([
+    invocationBinding,
+    ...internalSecrets,
+  ]);
+  const providerBindings = Object.freeze([...providerSecrets]);
+  const rpcAllowlist = Object.freeze([
+    ...new Set([
+      ...DB_HOOKS,
+      ...Object.values(operations).flatMap((entry) => entry.rpcEntrypoints),
+    ]),
+  ].sort());
   return Object.freeze({
     binding: id.toUpperCase(),
     dbRole: id,
@@ -60,16 +72,19 @@ const principal = ({
       "DATABASE_URL",
     ]),
     hyperdriveBinding: `${id.toUpperCase()}_HYPERDRIVE`,
+    internalBindings,
+    loginRole: `${id}_login`,
     maxRequestBytes,
     networkEgress: Object.freeze([...networkEgress]),
     operations: Object.freeze(operations),
     provider,
+    providerBindings,
     runtimeConfiguration: Object.freeze({ ...runtimeConfiguration }),
     requiredSecrets: Object.freeze([
-      `${id.toUpperCase()}_INVOKE_SHA256`,
-      ...internalSecrets,
-      ...providerSecrets,
+      ...internalBindings,
+      ...providerBindings,
     ]),
+    rpcAllowlist,
     rpcHooks: DB_HOOKS,
     workerName: `chillywood-level01-${suffix}`,
   });
@@ -86,6 +101,7 @@ export const RUNTIME_MANIFEST = Object.freeze({
       "CF_ACCESS_AUD",
       "CF_ACCESS_SERVICE_TOKEN_COMMON_NAME",
       "CF_ACCESS_TEAM_DOMAIN",
+      "COGNITIVE_PRINCIPAL_STATES",
     ]),
     workerName: "chillywood-cognitive-level01-gateway",
   }),

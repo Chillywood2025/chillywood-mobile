@@ -12,9 +12,9 @@ reviewed Supabase Edge contracts.
 - Ten private Workers are reachable only through explicit Cloudflare Service
   Bindings. Their committed templates disable `workers.dev`, Preview URLs, and
   public routes.
-- Each private Worker has one unique cache-disabled Hyperdrive configuration,
-  one dedicated Postgres login/NOLOGIN role domain, and one unique invocation
-  hash.
+- Each active private Worker has one unique cache-disabled Hyperdrive
+  configuration, one dedicated Postgres login/NOLOGIN role domain, and one
+  unique invocation hash. An inert Worker has none of those runtime bindings.
 - Only the model, GitHub, and public-research Workers declare provider secrets.
   The public-research Worker receives one HMAC key for the exact peer-pinned
   transport host and no model, GitHub, LiveKit, or general-purpose network
@@ -47,17 +47,23 @@ Primary runtime references:
    configured issuer and audience.
 3. The gateway validates an exact, hash-bound request envelope and dispatches
    through one explicit Service Binding.
-4. The private Worker validates its distinct invocation hash, exact operation
+4. The gateway validates the exact ten-principal `active`/`inert` matrix. It
+   returns `503 principal_inert` without dispatching an inert principal.
+5. The private Worker independently validates its explicit deployment state.
+   An inert Worker accepts only source/version metadata plus
+   `COGNITIVE_DEPLOYMENT_STATE=inert`, returns `principal_inert`, and never
+   constructs a database or provider adapter.
+6. An active private Worker validates its distinct invocation hash, exact operation
    schema, exact generated environment-key allowlist, source metadata,
    deadline, task/project/platform scope, and payload hash. The gateway applies
    its own exact allowlist covering only reviewed public configuration, source
    metadata, version metadata, and the ten Service Bindings. A deployment
    credential such as `CLOUDFLARE_API_TOKEN` is rejected from every runtime
    environment.
-5. The dedicated database role executes
+7. The dedicated database role executes
    `cognitive_runtime.runtime_role_preflight` and
    `cognitive_runtime.runtime_revocation_status` before the operation RPC.
-6. Domain RPCs remain responsible for evaluator proof, immutable receipts,
+8. Domain RPCs remain responsible for evaluator proof, immutable receipts,
    replay denial, approval/capability checks, emergency stop, and settlement.
 
 Only bounded category/status/request hashes are logged. Payloads, tokens,
@@ -66,7 +72,15 @@ logged.
 
 ## Deployment gate
 
-The generated Wrangler files are templates, not deployment authorization.
+The generated Wrangler files are templates, not deployment authorization. The
+deployment input schema requires one explicit record for each of the ten
+principals; there is no global activation mode and no default state.
+An active record must bind the reviewed source and independent review, exact
+login/NOLOGIN identity, one matching cache-disabled Hyperdrive, exact RPC
+allowlist, exact names-only internal/provider bindings, exact runtime
+configuration, denied `net` access, and principal-scoped rollback evidence. An
+inert record must contain null database/runtime/review/rollback/trigger values
+and empty internal/provider binding inventories.
 `generated/operation-readiness.json` is also a hard deployment gate. An
 operation marked `ready: false` has not yet had its reviewed pure
 validation/provider sequence extracted from the Deno implementation. The
@@ -88,11 +102,12 @@ Before upload, the coordinator must:
    `supabase_admin`. The owner-only login provisioner therefore stops before
    creating any password-bearing role until the provider closes that inherited
    surface or an equivalent isolated Postgres boundary is selected;
-2. replace every Hyperdrive configuration ID using an owner-only deployment
-   input;
-3. prove every Hyperdrive configuration was created with
+2. set all ten principal states explicitly in an owner-only deployment input;
+3. for each active principal only, supply its matching Hyperdrive
+   configuration ID and prove that configuration was created with
    `--caching-disabled` and its matching dedicated login;
-4. create and attach each required secret to only its named Worker;
+4. attach each active principal's required internal/provider bindings only to
+   that named Worker; attach none to an inert Worker;
 5. configure an Access application and Service Auth policy for the gateway
    `workers.dev` endpoint, then replace the public team-domain, audience, and
    exact service-token Client ID placeholders. The gateway independently
@@ -101,6 +116,11 @@ Before upload, the coordinator must:
 6. verify the successor Git commit is supplied as `sourceCommit` and matches
    reviewed version metadata;
 7. run the negative isolation suite against deployed Workers.
+
+Worker activation and cron activation are separate. An active Worker has no
+cron unless the principal record also contains an exact reviewed trigger
+attestation. Partial activation metadata always reports
+`NOT_GLOBALLY_READY`; it cannot be interpreted as all-principal readiness.
 
 Public research and non-personal memory switches must remain off while the
 pinned host, exact HMAC binding, remote attestation, retention, or evaluator
@@ -116,16 +136,17 @@ from the public Internet.
 
 ## Rollback order
 
-Rollback is fail-closed and proceeds in this order:
+Rollback is fail-closed and may target one principal without deactivating its
+siblings:
 
-1. disable the gateway route and its Access Service Auth policy;
-2. revoke each private Worker's invocation and provider secrets;
-3. run the owner-only database revocation action, which sets every runtime
-   login to `NOLOGIN`, removes principal membership, resets role
-   configuration, and terminates existing sessions;
-4. detach and delete the per-principal Hyperdrive configurations after
-   database revocation is verified;
-5. retire the private Worker versions, then retire the gateway version.
+1. set the target principal to explicit `inert` while preserving every sibling
+   state;
+2. redeploy the target without Hyperdrive, runtime/provider bindings, or cron;
+3. verify both gateway and private-service invocations return
+   `principal_inert`;
+4. revoke that principal's invocation/assertion/provider values and database
+   login, then terminate its sessions;
+5. detach its Hyperdrive only after revocation is verified.
 
 The deployment credential is never installed in a Worker. If rollback stops
 partway through, the earlier gateway, secret, and database revocations remain

@@ -13,6 +13,11 @@ const principal = Object.freeze({
     "DATABASE_URL"
   ],
   "hyperdriveBinding": "COGNITIVE_GITHUB_DRAFT_PR_BROKER_HYPERDRIVE",
+  "internalBindings": [
+    "COGNITIVE_GITHUB_DRAFT_PR_BROKER_INVOKE_SHA256",
+    "COGNITIVE_GITHUB_DRAFT_PR_BROKER_SERVICE_TOKEN"
+  ],
+  "loginRole": "cognitive_github_draft_pr_broker_login",
   "maxRequestBytes": 65536,
   "networkEgress": [
     "https://api.github.com"
@@ -64,6 +69,12 @@ const principal = Object.freeze({
     }
   },
   "provider": "github_app_repository_installation",
+  "providerBindings": [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_INSTALLATION_ID",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_REPOSITORY_ID"
+  ],
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_GITHUB_DRAFT_PR_BROKER_INVOKE_SHA256",
@@ -72,6 +83,13 @@ const principal = Object.freeze({
     "GITHUB_APP_INSTALLATION_ID",
     "GITHUB_APP_PRIVATE_KEY",
     "GITHUB_REPOSITORY_ID"
+  ],
+  "rpcAllowlist": [
+    "cognitive_accept_github_draft_pr_tool_result",
+    "cognitive_consume_github_draft_pr_capability",
+    "cognitive_record_github_draft_pr_provider_readback",
+    "cognitive_runtime.runtime_revocation_status",
+    "cognitive_runtime.runtime_role_preflight"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",
