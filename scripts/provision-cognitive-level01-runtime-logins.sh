@@ -140,7 +140,7 @@ select exists (
 ) as login_role_preexisting
 \gset
 select format(
-  'create role %I login nosuperuser nocreatedb nocreaterole inherit noreplication nobypassrls',
+  'create role %I login nosuperuser nocreatedb nocreaterole inherit noreplication nobypassrls connection limit 6',
   '${login_role}'
 )
 where not exists (
@@ -164,6 +164,7 @@ where exists (
       or rolcreaterole
       or rolreplication
       or rolbypassrls
+      or rolconnlimit <> 6
       or pg_catalog.has_database_privilege(
         rolname,
         current_database(),
@@ -279,7 +280,7 @@ where exists (
 )
 \gexec
 alter role "${login_role}"
-  login inherit
+  login inherit connection limit 6
   password :'runtime_password';
 alter role "${login_role}" set search_path = cognitive_runtime, pg_catalog;
 alter role "${login_role}" set statement_timeout = '15s';

@@ -195,7 +195,8 @@ if ! {
     printf '%s\n' \
       "create role ${principal}_login" \
       "  login nosuperuser nocreatedb nocreaterole inherit" \
-      "  noreplication nobypassrls password :'runtime_password';" \
+      "  noreplication nobypassrls connection limit 6" \
+      "  password :'runtime_password';" \
       "revoke create, temporary on database ${database_name}" \
       "  from ${principal}_login;" \
       "alter role ${principal}_login" \
@@ -298,6 +299,7 @@ begin
      or not login_value.rolinherit
      or login_value.rolreplication
      or login_value.rolbypassrls
+     or login_value.rolconnlimit <> 6
      or login_value.rolvaliduntil is null
      or login_value.rolvaliduntil <= transaction_timestamp()
      or cardinality(coalesce(login_value.rolconfig, '{}'::text[])) <> 4
