@@ -612,7 +612,7 @@ alter table retention_activation_fixture add column invalid_expires_at timestamp
 alter table retention_activation_fixture
   add column invalid_expiry_activation_hash text;
 update retention_activation_fixture set activation_hash =
-  public.governance_research_retention_activation_hash(
+  public.governance_research_retention_activation_hash_v3(
     repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
     repeat('e',64),provider_verified_at,expires_at
   ),
@@ -622,12 +622,12 @@ update retention_activation_fixture set activation_hash =
     provider_verified_at-interval '1 second';
 update retention_activation_fixture set
   late_activation_hash =
-    public.governance_research_retention_activation_hash(
+    public.governance_research_retention_activation_hash_v3(
       repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
       repeat('e',64),late_provider_verified_at,expires_at
     ),
   invalid_expiry_activation_hash =
-    public.governance_research_retention_activation_hash(
+    public.governance_research_retention_activation_hash_v3(
       repeat('a',40),repeat('b',64),repeat('c',64),repeat('d',64),
       repeat('e',64),provider_verified_at,invalid_expires_at
     );

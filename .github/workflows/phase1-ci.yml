@@ -290,7 +290,7 @@ jobs:
       - name: Run pgTAP database integration suites
         run: supabase test db
 
-      - name: Run isolated runtime LOGIN boundary integration
+      - name: Run provider-version drift or isolated LOGIN boundary integration
         run: npm run test:cognitive-runtime-login-integration
 
   phase1-check:

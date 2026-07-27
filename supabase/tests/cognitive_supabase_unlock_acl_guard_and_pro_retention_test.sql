@@ -1,6 +1,6 @@
 begin;
 
-select plan(40);
+select plan(43);
 
 select has_table(
   'cognitive_runtime',
@@ -300,23 +300,69 @@ select ok(
   pg_get_functiondef(
     'public.governance_research_retention_activation_hash(text,text,text,text,text,timestamptz,timestamptz)'
       ::regprocedure
-  ) like '%provider_daily_backups_available%'
+  ) like '%chillywood-research-retention-processor-v2%'
   and pg_get_functiondef(
     'public.governance_research_retention_activation_hash(text,text,text,text,text,timestamptz,timestamptz)'
+      ::regprocedure
+  ) like '%provider_project_backups_absent%'
+  and pg_get_functiondef(
+    'public.governance_research_retention_activation_hash(text,text,text,text,text,timestamptz,timestamptz)'
+      ::regprocedure
+  ) like '%free%',
+  'historical timestamp-bound v2 Free hash remains deterministic'
+);
+
+select ok(
+  pg_get_functiondef(
+    'public.governance_research_retention_activation_hash_v3(text,text,text,text,text,timestamptz,timestamptz)'
+      ::regprocedure
+  ) like '%chillywood-research-retention-processor-v3%'
+  and pg_get_functiondef(
+    'public.governance_research_retention_activation_hash_v3(text,text,text,text,text,timestamptz,timestamptz)'
+      ::regprocedure
+  ) like '%provider_daily_backups_available%'
+  and pg_get_functiondef(
+    'public.governance_research_retention_activation_hash_v3(text,text,text,text,text,timestamptz,timestamptz)'
       ::regprocedure
   ) like '%pro%'
   and pg_get_functiondef(
-    'public.governance_research_retention_activation_hash(text,text,text,text,text,timestamptz,timestamptz)'
+    'public.governance_research_retention_activation_hash_v3(text,text,text,text,text,timestamptz,timestamptz)'
       ::regprocedure
   ) not like '%provider_project_backups_absent%',
-  'effective timestamp-bound retention hash uses only current Pro truth'
+  'effective timestamp-bound v3 hash uses only current Pro truth'
+);
+
+select is(
+  public.governance_research_retention_activation_hash(
+    repeat('1',40),repeat('2',64),repeat('3',64),repeat('4',64),
+    repeat('5',64),
+    '2026-07-27 00:00:00+00'::timestamptz,
+    '2026-07-28 00:00:00+00'::timestamptz
+  ),
+  'f9a0da9e7c6ba5d347ffd41fb7b10b19b7c1056033ba13e653f4635f02aa268e',
+  'historical timestamp-bound v2 Free digest is byte-exact'
+);
+
+select is(
+  public.governance_research_retention_activation_hash_v3(
+    repeat('1',40),repeat('2',64),repeat('3',64),repeat('4',64),
+    repeat('5',64),
+    '2026-07-27 00:00:00+00'::timestamptz,
+    '2026-07-28 00:00:00+00'::timestamptz
+  ),
+  'f8c5b0ad0282aefca8b5ba64571679745d66f1351597d5edf13d16de91995f5e',
+  'current timestamp-bound v3 Pro digest is byte-exact'
 );
 
 select ok(
   pg_get_functiondef(
     'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
       ::regprocedure
-  ) like '%''supabase'',''pro''%'
+  ) like '%governance_research_retention_activation_hash_v3(%'
+  and pg_get_functiondef(
+    'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
+      ::regprocedure
+  ) not like '%governance_research_retention_activation_hash(%'
   and pg_get_functiondef(
     'public.governance_persist_research_retention_activation(uuid,text,text,text,text,timestamptz,text,timestamptz,text,text)'
       ::regprocedure

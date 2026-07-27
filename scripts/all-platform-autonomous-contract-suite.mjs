@@ -78,6 +78,65 @@ const runAllPlatform = async () => {
   check(composed.platformResults.some((result) => result.platform === "android" && result.healthState === "blocked"), "missing required Android result must be blocked");
   check(composed.readbackComplete === false && composed.healthState !== "healthy", "overall result cannot be healthy when a required platform is blocked");
 
+  const lifecycleCalls = [];
+  const lifecycleClient = {
+    rpc: async (name, args) => {
+      lifecycleCalls.push({ name, args });
+      return {
+        data: name === "record_autonomous_finding"
+          ? `finding-${lifecycleCalls.length}`
+          : null,
+        error: null,
+      };
+    },
+  };
+  await scoped.persistOperatorFindingLifecycle(
+    lifecycleClient,
+    "security_owner_operator",
+    {
+      readbackComplete: false,
+      platform: "shared",
+      source: "composed_fixture",
+      dataWindow: { start: null, end: null },
+      platformResults: [
+        {
+          lifecycleManaged: true,
+          platform: "shared",
+          readbackComplete: false,
+          healthState: "critical",
+          provider: "supabase",
+          surface: "cognitive_pg_net_acl",
+          source: "cognitive_runtime.net_acl_guard_snapshot",
+          dataWindow: { start: null, end: null },
+          reasons: ["cognitive_net_acl_guard_mismatch"],
+        },
+        {
+          platform: "shared",
+          readbackComplete: true,
+          healthState: "healthy",
+          provider: "source_tree",
+          surface: "security_source_probe",
+          source: "shared_security_probe",
+          dataWindow: { start: null, end: null },
+          reasons: [],
+        },
+      ],
+    },
+  );
+  check(
+    !lifecycleCalls.some((call) =>
+      call.name === "record_autonomous_finding" &&
+      call.args.p_finding_type === "cognitive_net_acl_guard_mismatch"
+    ),
+    "SQL-managed ACL lifecycle must bypass generic composed finding writes",
+  );
+  check(
+    lifecycleCalls.filter((call) =>
+      call.name === "resolve_autonomous_findings"
+    ).length === 1,
+    "unmanaged healthy shared probe must retain its existing lifecycle",
+  );
+
   const noReadback = classifyNotificationAutonomy({ readbackComplete: false });
   const rolloutOff = classifyNotificationAutonomy({ readbackComplete: true, providerConfigured: true, rolloutEnabled: false, activeTokenCount: 1 });
   const noInstall = classifyNotificationAutonomy({ readbackComplete: true, providerConfigured: true, rolloutEnabled: true, activeTokenCount: 0 });

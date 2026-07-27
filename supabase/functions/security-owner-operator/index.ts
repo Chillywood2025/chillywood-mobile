@@ -23,6 +23,10 @@ const runCognitiveNetAclGuard: ScopedOperatorHandler = async ({ client }) => {
     snapshot.automatic_repair_attempted === false;
 
   return {
+    // The SQL readback owns the durable finding/review/Owner Command lifecycle.
+    // Avoid allowing the following healthy shared-platform probe to resolve an
+    // ACL mismatch finding by platform alone.
+    lifecycleManaged: true,
     readbackComplete: passed,
     platform: "shared",
     provider: "supabase",
