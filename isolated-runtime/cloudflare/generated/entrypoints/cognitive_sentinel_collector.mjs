@@ -44,6 +44,30 @@ const principal = Object.freeze({
       "rpcEntrypoints": [
         "cognitive_runtime.collect_sentinel_run"
       ]
+    },
+    "preflight_visual_sentinel_collection": {
+      "payloadKeys": [
+        "action",
+        "collectionIdempotencyHash",
+        "environment",
+        "evaluationExpiresAt",
+        "evidenceManifestHash",
+        "metricManifest",
+        "observationFinishedAt",
+        "observationStartedAt",
+        "physicalProofStatus",
+        "platform",
+        "projectId",
+        "resultStatus",
+        "routeOrSurface",
+        "runtimeIdentityHash",
+        "sentinelKey",
+        "sourceBuildHash",
+        "taskId"
+      ],
+      "rpcEntrypoints": [
+        "cognitive_runtime.preflight_visual_sentinel_collection"
+      ]
     }
   },
   "provider": "none",
@@ -55,6 +79,7 @@ const principal = Object.freeze({
   ],
   "rpcAllowlist": [
     "cognitive_runtime.collect_sentinel_run",
+    "cognitive_runtime.preflight_visual_sentinel_collection",
     "cognitive_runtime.runtime_revocation_status",
     "cognitive_runtime.runtime_role_preflight"
   ],

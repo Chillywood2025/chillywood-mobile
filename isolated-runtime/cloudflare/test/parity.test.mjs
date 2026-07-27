@@ -22,6 +22,11 @@ test("every isolated action and direct RPC remains bound to reviewed source", as
         "isolated-runtime/cloudflare/src/adapters/livekit-failure-fixture.mjs",
       );
     }
+    if (principal.dbRole === "cognitive_sentinel_collector") {
+      sources.push(
+        "isolated-runtime/cloudflare/src/adapters/sentinel.mjs",
+      );
+    }
     const text = (
       await Promise.all(
         sources.map((source) =>

@@ -157,6 +157,16 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "routeOrSurface", "runtimeIdentityHash", "sentinelKey",
           "sourceBuildHash", "taskId",
         ], ["cognitive_runtime.collect_sentinel_run"]),
+        preflight_visual_sentinel_collection: operation([
+          "action", "collectionIdempotencyHash", "environment",
+          "evaluationExpiresAt", "evidenceManifestHash", "metricManifest",
+          "observationFinishedAt", "observationStartedAt",
+          "physicalProofStatus", "platform", "projectId", "resultStatus",
+          "routeOrSurface", "runtimeIdentityHash", "sentinelKey",
+          "sourceBuildHash", "taskId",
+        ], [
+          "cognitive_runtime.preflight_visual_sentinel_collection",
+        ]),
       },
       internalSecrets: ["COGNITIVE_SENTINEL_COLLECTOR_ASSERTION"],
     }),
