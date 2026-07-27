@@ -518,3 +518,99 @@ proof, triage consumption, finding, resolution, emergency-stop result,
 rollback result, evidence import, or activation acceptance. PR #44 remains
 draft until both PRs have exact-head green CI and every live gate is appended.
 PR #45 remains review-only and must never merge.
+
+## Exact JSONB-boundary successor review
+
+Status: exact subpredicate proved and source repair passed; operational
+credential installation and live Android acceptance remain pending.
+
+This additive section does not rewrite the preceding review. It supersedes
+only the preceding section's aggregate inference that
+`cognitive_json_is_sanitized(metric_manifest)` was the exact failed
+subpredicate. That inference remains in the immutable review history and is
+not used to authorize a retry.
+
+Implementation commit
+`e05ff68c426e2ccb1bc268e14e9e5d19ba64efa9`, tree
+`5295d907e6806883e1de2dda5626d8e3a129783d`, has the 71-file Worker
+source-graph SHA-256
+`47779ee113dd79b7678569750aa2f96e4663e2e1ccc5b44262365817ce1611fb`.
+It changes only the sentinel adapter's JSONB parameter boundary and its exact
+database-port regressions.
+
+The exact canonical manifest object and the exact previously deployed
+adapter-shaped value were evaluated independently against the deployed
+fourteen-check diagnostic twice. Sanitized readback:
+
+- canonical manifest object: generic `PASS`, detailed Android visual `PASS`;
+- previously deployed adapter shape: generic `FAIL`;
+- exact failed subpredicate on run 1: `manifest_is_json_object`;
+- exact failed subpredicate on run 2: `manifest_is_json_object`;
+- result equality across both runs: `true`; and
+- diagnostic side effects: zero evidence, authorization, switch, or schedule
+  writes.
+
+The defect is classified `CANARY_PAYLOAD_DEFECT`, specifically an isolated
+runtime JSONB serialization defect, not `GENERIC_VALIDATOR_DEFECT`.
+`postgres.js` learns the `$n::jsonb` type from the static statement and
+serializes an object parameter once. The sentinel adapter had called
+`JSON.stringify` before passing the value, causing the driver to serialize a
+JSON string rather than the reviewed manifest object. The database therefore
+correctly failed the first generic subpredicate.
+
+The exact repair removes pre-stringification only at the three sentinel
+metric-manifest call sites:
+
+- `preflight_visual_generic_manifest_predicates`;
+- `preflight_visual_sentinel_collection`; and
+- `collect_sentinel_run`.
+
+All three now pass the same reconstructed metric-manifest object to the static
+JSONB statement. The deterministic generator, metric values, evidence binding,
+generic validator, detailed Android visual validator, global sanitizer,
+database assertion, capabilities, Hyperdrive, LOGIN principal, gateway,
+sibling principals, switches, schedules, and prior failed records are
+unchanged. No sanitizer exception or validator bypass was added.
+
+Exact-head regression proof:
+
+- PR #44 CI run `30312758298`: `13/13`;
+- full pgTAP: `1476/1476`;
+- isolated Cloudflare runtime: `138/138`;
+- password-authenticated disposable LOGIN integration: `PASS`;
+- canonical manifest bytes: `2,184`;
+- three independent canonical generator runs equal: `true`;
+- canonical canary SHA-256:
+  `212b03706b35be48aacfe80cc8d2795e7f4c581fd88d43c67d775ff067c2bfb9`;
+- metric-manifest SHA-256:
+  `3175d45f3cc1f9b6f9cc9aa0c2b37352f5c74b880b3c2cf5dfae4c52c022993d`;
+- implementation `git diff --check`: `PASS`; and
+- worktree guard: only untracked and unstaged `deno.lock`.
+
+The repaired source retains the preceding mutation regressions for schema and
+sanitization versions, evidence hash presence/format/binding, manifest and
+metrics bounds, secret-like and private-identifier-like fields, observation
+kind and metrics types, and detailed touch-target contradiction. Existing
+sentinel persistence coverage also retains failed-collection zero-write,
+successful-collection exactly-one-run, deterministic dedupe, and replay
+denial checks.
+
+Static successor review result:
+
+| Lane | P0 | P1 | Result |
+| --- | ---: | ---: | --- |
+| architecture / credential / network | 0 | 0 | pass |
+| database / validator / RLS | 0 | 0 | pass |
+| sentinel JSONB boundary | 0 | 0 | pass |
+| deterministic evidence / replay | 0 | 0 | pass |
+
+P2: `0`
+
+P3: `0`
+
+This review authorizes no blind retry. A fresh Android authorization may be
+opened only after the retained operational invocation credential is installed
+in the reviewed caller/Worker boundary and both generic and detailed
+preflights return `PASS`. This review does not claim a live run or any later
+lifecycle, evidence-import, emergency-stop, rollback, merge, or iOS result.
+PR #45 remains review-only and must never merge.
