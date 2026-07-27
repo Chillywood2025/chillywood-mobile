@@ -265,7 +265,7 @@ select is(
 );
 select is(
   public.governance_register_two_party_service_principal(
-    'cognitive_independent_evaluator',
+    'cognitive_product_quality_evaluator',
     encode(
       extensions.digest(
         convert_to('synthetic-evaluator-assertion-000000000000','UTF8'),
@@ -277,7 +277,7 @@ select is(
     transaction_timestamp() + interval '1 day'
   )->>'status',
   'registered',
-  'Owner registers a distinct independent evaluator assertion'
+  'Owner registers the isolated product-quality evaluator assertion'
 );
 
 insert into baseline_chain_state(
@@ -414,7 +414,7 @@ set evaluator_proof_hash = (
   from (
     select public.governance_evaluate_product_experience_baseline_v1(
       (select execution_id from baseline_chain_state),
-      'cognitive_independent_evaluator',
+      'cognitive_product_quality_evaluator',
       'synthetic-evaluator-assertion-000000000000',
       repeat('d',64)
     ) result
