@@ -413,3 +413,108 @@ Owner authorization to rotate only the sentinel invocation token/hash so the
 already-reviewed diagnostic can be reached; that rotation must not alter the
 sentinel assertion, capability, database identity, Hyperdrive, gateway scope,
 or any sibling principal.
+
+## Exact generic-manifest successor review
+
+Status: source review passed; operational credential installation and live
+Android acceptance remain pending.
+
+This additive section preserves the prior failed-closed history and reviews
+implementation commit
+`3873b5a84e6de69d0beb820dc6d39642fea4c02d`, tree
+`f4760029850d1feeaf8ceb9370bb31ee57b55512`, and the unchanged 71-file
+Worker source-graph SHA-256
+`7b9b1e56ef8f4eef9bfa652ebfaf46c22a7964153167ee24c9ea4002acf45869`.
+
+The two prior Worker-path results remain immutable:
+`failedPredicate=metric_manifest_generic`. The exact submitted construction
+proves the JSON-object, total-size, schema, sanitization-version,
+observation-kind type, metrics-object, metrics count/size, evidence-array
+type/count/format/binding, and visual observation-kind predicates. Therefore
+the exact failed generic subpredicate was
+`cognitive_json_is_sanitized(metric_manifest)`. No prior result or request was
+rewritten.
+
+The failure is classified `CANARY_PAYLOAD_DEFECT`, not
+`GENERIC_VALIDATOR_DEFECT`. The prior operator-built packet randomized its
+evidence bindings and incorrectly represented the reviewed Build 84 evidence
+as simulator-observed, measured-simulator, approved-baseline, provider-healthy
+evidence. Those values contradicted the already-reviewed installed traversal
+and made the packet non-reconstructible.
+
+The repair is deterministic and source-bound:
+
+- reviewed evidence-manifest SHA-256
+  `f7cf764c8d7e5b81189f48f2a097189f417113b56179c8a324380d26b83e8a1e`;
+- reviewed Build 84 source commit
+  `1335dc18669d8917bb72c14393bf464d98ce902f`;
+- Android production, `Home main tab`, `touch_target`, and failed result;
+- `installed_ui_observed` plus `measured_installed`;
+- `needs_product_baseline_review` with a null comparison hash;
+- `providerState=not_applicable` and `contentState=not_applicable`;
+- exact 102.86dp by 23.24dp measurement, 420dpi density, accessibility
+  name/role presence, actually-interactive state, and no larger interactive
+  ancestor;
+- objective binding
+  `home_main_tab_navigation_control`, its exact mapping hash, component-set
+  hash, and versioned non-media exception contract; and
+- the exact evidence-manifest hash included in `evidenceHashes`.
+
+Three independent generator runs produce identical 2,184-byte canonical
+canary JSON with SHA-256
+`212b03706b35be48aacfe80cc8d2795e7f4c581fd88d43c67d775ff067c2bfb9`.
+The metric-manifest SHA-256 is
+`3175d45f3cc1f9b6f9cc9aa0c2b37352f5c74b880b3c2cf5dfae4c52c022993d`.
+The exact repaired manifest passes the deployed production generic, detailed,
+and objective touch-target validators through a read-only query.
+
+Forward migration
+`20260727211939_cognitive_visual_sentinel_generic_manifest_subpredicate_preflight.sql`
+does not edit the prior diagnostic or the generic validator. It adds one
+collector-only, read-only operation that returns exactly fourteen PASS/FAIL
+values and the first failed subpredicate. It returns no submitted value, hash,
+metric content, assertion material, or evidence. The runtime wrapper remains
+bound to the password-authenticated sentinel LOGIN identity and one static,
+three-argument SQL statement. No collection or triage capability row, database
+assertion, Hyperdrive, database role, net ACL, gateway binding, sibling
+principal, provider binding, switch, schedule, authorization, or evidence row
+is changed.
+
+Regression proof:
+
+- full pgTAP: `1476/1476`;
+- exact new regression file: `23/23`;
+- isolated Cloudflare runtime: `138/138`;
+- password-authenticated disposable LOGIN integration: passing;
+- deterministic generator: passing across three independent builds;
+- existing product-sentinel contract: passing;
+- production generic/detailed/objective read-only evaluation: `PASS/PASS/PASS`;
+- generated-source verification: passing;
+- source-graph worktree guard: passing with only untracked `deno.lock`; and
+- implementation `git diff --check`: passing.
+
+The regression mutations preserve failure for wrong schema and sanitization
+versions, absent/uppercase/mismatched evidence hashes, oversize, more than 64
+metric keys, secret-like and private-identifier-like fields, wrong observation
+kind, malformed metrics, and a contradictory detailed touch-target failure.
+Diagnostic execution creates zero evidence, authorizations, switches, or
+schedules.
+
+Static successor review result:
+
+| Lane | P0 | P1 | Result |
+| --- | ---: | ---: | --- |
+| architecture / credential / network | 0 | 0 | pass |
+| database / validator / RLS | 0 | 0 | pass |
+| sentinel / evaluator / triage | 0 | 0 | pass |
+| deterministic evidence / replay | 0 | 0 | pass |
+
+P2: `0`
+
+P3: `0`
+
+This review does not claim a live authorization, sentinel run, evaluator
+proof, triage consumption, finding, resolution, emergency-stop result,
+rollback result, evidence import, or activation acceptance. PR #44 remains
+draft until both PRs have exact-head green CI and every live gate is appended.
+PR #45 remains review-only and must never merge.
