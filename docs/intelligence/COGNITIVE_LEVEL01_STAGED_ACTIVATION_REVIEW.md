@@ -7,9 +7,9 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `ba43c9c050ccbcf58aaa85854f31459657de00ae`
+  `844056f429e2aa4185399d981780b9473a06443c`
 - implementation tree:
-  `50e2444c920107855d1140eeb3e10dcc0133a151`
+  `de3c1c716894ab39dc85ef5e2155471472b9565c`
 - reviewed and deployed Worker source commit:
   `6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a`
 - reviewed and deployed Worker source tree:
@@ -21,7 +21,8 @@ Status: review-only; never merge.
   `1bb99451ca10716f9988d5258fff09b14495b334`
 
 The reviewed implementation is the exact head of draft implementation PR #44.
-This review branch adds only this review record and must never be merged.
+This review branch carries that exact implementation plus this review record
+and must never be merged.
 
 ## Remediated review finding
 
@@ -183,6 +184,28 @@ all rebound to the exact Android task and platform. The focused activation
 files pass `35/35`; the clean full suite passes `1415/1415`. The current
 unresolved P1 count remains `0`.
 
+An eighth fail-closed live gap was found after the Android authorization opened
+but before any sentinel row was stored. The database rejected the first
+post-rotation Worker call with
+`product_quality_service_capability_required`. The exact target switch was
+immediately finalized off with immutable counts of zero runs, proofs,
+consumptions, and finding events. The prior authorization and failed outcome
+were retained; no receipt was rewritten.
+
+Implementation commit `844056f429e2aa4185399d981780b9473a06443c`
+adds only forward migration
+`20260727183000_cognitive_android_visual_canary_zero_run_retry.sql`. Its
+authenticated exact-Owner retry RPC restores only the disabled Android visual
+switch's policy metadata after proving the latest exact-target v2 outcome is a
+rollback with all four evidence counts at zero, the target has no sentinel
+runs, every switch and schedule is off, emergency state is active, no
+unfinished authorization exists, and fresh unrevoked Android collector and
+triage capabilities are present. It never enables a switch, opens an
+authorization, fabricates an outcome, changes a prior receipt, or touches a
+sibling scope. The retry file passes `14/14`; the three Android activation
+files pass `49/49`; the clean full suite passes `1429/1429`. The current
+unresolved P1 count remains `0`.
+
 ## Static review result
 
 | Lane | P0 | P1 | Result |
@@ -217,20 +240,25 @@ Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 
 ## Automated proof
 
-- exact-head GitHub Phase 1 CI run: `30289726019`
-- current exact-head required checks: `13/13` passing
+- prior exact-head GitHub Phase 1 CI run: `30292475331`
+- prior exact-head required checks: `13/13` passing
 - isolated Cloudflare runtime: `134/134` passing
 - provider-independent Option C path pgTAP: `22/22` passing
 - unclaimed source-revision pgTAP: `20/20` passing
 - provider-independent visual activation pgTAP: `18/18` passing
 - canonical deferred-evidence decisions pgTAP: `13/13` passing
 - visual no-finding triage integration file: `31/31` passing
-- Android-scoped visual activation files: `35/35` passing
-- full pgTAP: `1415/1415` passing
+- Android-scoped visual activation and zero-run retry files: `49/49` passing
+- Android zero-run retry file: `14/14` passing
+- full pgTAP: `1429/1429` passing
 - Cognitive intelligence contract: passing
 - Cognitive architecture guard and proof: passing
 - committed-secret scan: no deployment or runtime secret evidence found
 - `git diff --check`: passing
+
+The successor implementation and review-only exact-head GitHub CI runs are
+recorded on PRs #44 and #45 after this review-record commit; they must be
+`13/13` before any retry migration is deployed.
 
 ## Live gate
 
