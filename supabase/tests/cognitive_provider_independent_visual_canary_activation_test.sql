@@ -151,7 +151,7 @@ select ok(
   ) like '%emergency_resumed%'
   and pg_get_functiondef(
     'public.governance_finalize_provider_independent_visual_canary(uuid,boolean,text,text,text)'::regprocedure
-  ) like '%sibling.switch_key <>%'
+  ) like '%sibling.id <> target_switch.id%'
   and pg_get_functiondef(
     'public.governance_finalize_provider_independent_visual_canary(uuid,boolean,text,text,text)'::regprocedure
   ) like '%schedule.enabled%',
