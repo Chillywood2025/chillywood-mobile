@@ -7,9 +7,9 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `e574b629d9f3b01a5c85365cbca8a20de40b8a39`
+  `3e6a58973dfb46d1e7db7d1eac2fdf8de94f004c`
 - implementation tree:
-  `c2f681c0df40b1663cf6e9dae59f6c3096f0e7af`
+  `4a7a19241505c10ea357bd772a5e865a275660ba`
 - reviewed Worker source graph SHA-256:
   `0d377e19a200e0c970bef32ca141a588a7f4097d2c21ac69951ea19356edcb87`
 - reviewed Worker source graph files: `71`
@@ -18,6 +18,20 @@ Status: review-only; never merge.
 
 The reviewed implementation is the exact head of draft implementation PR #44.
 This review branch adds only this review record and must never be merged.
+
+## Remediated review finding
+
+The first remote prerequisite readback found one P1: the assertion table,
+operation allowlist, evaluator-proof constraints, and runtime RPCs accepted
+`cognitive_product_quality_evaluator`, but the authenticated Owner registration
+RPC had not added that identity to its exact registration allowlist.
+
+Implementation commit `3e6a58973dfb46d1e7db7d1eac2fdf8de94f004c`
+closes the finding with new forward-only migration
+`20260727152710_cognitive_product_quality_evaluator_owner_registration.sql`.
+No historical migration was edited. The existing full Option C persistence
+pgTAP now uses the isolated product-quality evaluator identity and passes
+`46/46` locally. The current unresolved P1 count is `0`.
 
 ## Static review result
 
@@ -53,8 +67,8 @@ Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 
 ## Automated proof
 
-- GitHub Phase 1 CI run: `30278807328`
-- required checks: `13/13` passing
+- prior GitHub Phase 1 CI run: `30278807328`
+- current exact-head required checks: pending
 - isolated Cloudflare runtime: `134/134` passing
 - pgTAP: `1322/1322` passing
 - Cognitive intelligence contract: passing
