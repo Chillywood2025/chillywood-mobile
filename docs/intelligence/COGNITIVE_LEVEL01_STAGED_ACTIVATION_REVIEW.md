@@ -353,3 +353,63 @@ decision, or activation acceptance. PR #44 must remain draft until the exact
 Worker-path predicate is reproduced twice, only the proved repair is applied,
 the full regression and live Android gates pass, and a final live-acceptance
 readback is appended. PR #45 remains review-only and must never merge.
+
+## Successor deployment readback and fail-closed invocation hold
+
+Implementation commit
+`7d85063dab506ffdc2c55c857c5130849362fb16`, tree
+`2090b41cb9c88dd3e29f5881efdc90742896657e`, preserves the exact reviewed
+SQL and Worker bytes. It renames the undeployed repository migration file
+without changing its SHA-256 so its version matches the migration version
+assigned by the Supabase migration API:
+`20260727194502_cognitive_visual_sentinel_collection_predicate_preflight.sql`.
+This is source/history alignment, not a replacement migration or SQL retry.
+
+Remote deployment readback:
+
+- migration head: `20260727194502`;
+- remote/local normalized preflight-definition SHA-256:
+  `87692b0caeaac5aae6178ad1c2feb71c61a8688e41091c260948734be8445d48`;
+- sentinel principal execute: `true`;
+- triage sibling execute: `false`;
+- generic `service_role` execute: `false`;
+- operation allowed for sentinel: `true`;
+- operation allowed for triage sibling: `false`;
+- sentinel runs after migration: `0`;
+- prior authorizations/outcomes retained: `4/4`;
+- enabled switches: `0`;
+- enabled schedules: `0`;
+- sentinel Worker version:
+  `2a185b9d-e726-40c3-8720-abcfaaee4099`;
+- gateway Worker version:
+  `f7c0a156-8270-40fe-927e-877361e8d1af`; and
+- both deployed versions bind source commit
+  `7d85063dab506ffdc2c55c857c5130849362fb16`.
+
+The sentinel deployment preserves exactly one existing Hyperdrive, its two
+separate secret names, and no provider secret. The gateway preserves all ten
+service bindings, the explicit four-active/six-inert principal matrix, and no
+database or runtime-secret binding. The exact renderer reported
+`READY_STAGED_PARTIAL`; partial activation did not fabricate global readiness.
+
+The existing Access service-token client ID remains unchanged and
+policy-bound. Its unavailable raw client secret was rotated through the exact
+Access service-token boundary and stored only in the owner-only temporary
+credential directory. No Access application or policy scope was broadened.
+
+The Worker-path database preflight has not been called. The prior temporary
+caller-side sentinel invocation token was securely deleted, while the Worker
+retains only `COGNITIVE_SENTINEL_COLLECTOR_INVOKE_SHA256`; Cloudflare cannot
+return its preimage. Rotating this Worker runtime binding before the database
+preflight proves the failed predicate would violate the Owner instruction not
+to change runtime secrets before diagnosis. Direct database execution is not
+substituted for the required Access gateway → service binding → private Worker
+path.
+
+Accordingly this is a fail-closed hold, not an assertion-mismatch finding. The
+assertion digest remains unclassified, no fresh authorization has been opened,
+and no canary evidence row has been written. Continuing requires one narrow
+Owner authorization to rotate only the sentinel invocation token/hash so the
+already-reviewed diagnostic can be reached; that rotation must not alter the
+sentinel assertion, capability, database identity, Hyperdrive, gateway scope,
+or any sibling principal.
