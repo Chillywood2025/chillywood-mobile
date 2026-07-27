@@ -7,11 +7,11 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `a54c04518f85f17a9983e0bbe7699463262537e1`
+  `6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a`
 - implementation tree:
-  `33c38c132d75eebf94eaae64351a6284533a6fb6`
+  `cc040ff917f762d2c3d5e944202a00f7c68734cb`
 - reviewed Worker source graph SHA-256:
-  `b8d974ae532bc7b3a26230048376af19d507fb0fb64069c2660868ff0c547bf9`
+  `d9a1b788775f358912946920106442036105e4f66b5bf72eb64518b1ee5b9a6f`
 - reviewed Worker source graph files: `71`
 - base commit:
   `1bb99451ca10716f9988d5258fff09b14495b334`
@@ -71,6 +71,27 @@ It rejects non-Owners, source-graph drift, any prior claim or execution, replay,
 and emergency stop. Focused pgTAP passes `13/13`; the clean full suite passes
 `1357/1357`. The current unresolved P1 count remains `0`.
 
+The 15-second canary exposed a fourth P1 at the actual Hyperdrive boundary:
+the isolated runtime overrode Hyperdrive's dynamic Postgres connection string
+with `ssl: "require"`. That caused a second client-side TLS negotiation inside
+Cloudflare's Hyperdrive tunnel; the connection never reached the database
+claim, while direct LOGIN and the exact claim continued to pass. Implementation
+commit `808ec0dba45f8f1e349859e5919c17a4a3236ae0` removes only that override
+and leaves origin TLS under the reviewed Hyperdrive configuration. A static
+regression proves the Worker does not override the dynamic connection string.
+
+The source change did not rewrite or claim Option C approval version 2.
+Implementation commit `6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a`
+adds forward-only migration
+`20260727163000_cognitive_option_c_unclaimed_tls_source_revision.sql`.
+Its authenticated exact-Owner RPC can create version 3 only while version 2 is
+active, unclaimed, and has no execution. The immutable receipt binds both prior
+source versions, the exact final commit/tree/Worker graph, review/test/plan and
+rollback hashes, and a one-claim non-live execution. Non-Owner, graph-drift,
+claimed, executed, replay, mutation, and emergency-stop paths fail closed.
+Focused source-revision pgTAP passes `20/20`; the clean full suite passes
+`1364/1364`. The current unresolved P1 count remains `0`.
+
 ## Static review result
 
 | Lane | P0 | P1 | Result |
@@ -105,12 +126,12 @@ Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 
 ## Automated proof
 
-- exact-head GitHub Phase 1 CI run: `30284030090`
+- exact-head GitHub Phase 1 CI run: `30285375677`
 - current exact-head required checks: `13/13` passing
 - isolated Cloudflare runtime: `134/134` passing
 - provider-independent Option C path pgTAP: `22/22` passing
-- unclaimed source-amendment pgTAP: `13/13` passing
-- full pgTAP: `1357/1357` passing
+- unclaimed source-revision pgTAP: `20/20` passing
+- full pgTAP: `1364/1364` passing
 - Cognitive intelligence contract: passing
 - Cognitive architecture guard and proof: passing
 - committed-secret scan: no deployment or runtime secret evidence found
