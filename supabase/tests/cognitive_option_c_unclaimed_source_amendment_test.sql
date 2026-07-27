@@ -66,7 +66,9 @@ create temporary table option_c_source_amendment_state(
   prior_approval_version_id uuid,
   prior_approval_hash text,
   amended_approval_version_id uuid,
-  amended_approval_hash text
+  amended_approval_hash text,
+  revised_approval_version_id uuid,
+  revised_approval_hash text
 );
 grant select, insert, update on option_c_source_amendment_state
   to authenticated, service_role;
@@ -158,7 +160,8 @@ select throws_ok(
     public.governance_amend_unclaimed_product_baseline_v1_owner_approval_source(
       (select prior_approval_version_id
        from option_c_source_amendment_state),
-      repeat('9', 40), repeat('8', 40),
+      'a54c04518f85f17a9983e0bbe7699463262537e1',
+      repeat('8', 40),
       'b8d974ae532bc7b3a26230048376af19d507fb0fb64069c2660868ff0c547bf9',
       repeat('b', 64), repeat('c', 64),
       repeat('d', 64), repeat('e', 64),
@@ -187,7 +190,8 @@ select throws_ok(
     public.governance_amend_unclaimed_product_baseline_v1_owner_approval_source(
       (select prior_approval_version_id
        from option_c_source_amendment_state),
-      repeat('9', 40), repeat('8', 40), repeat('f', 64),
+      'a54c04518f85f17a9983e0bbe7699463262537e1',
+      repeat('8', 40), repeat('f', 64),
       repeat('b', 64), repeat('c', 64),
       repeat('d', 64), repeat('e', 64),
       interval '21 hours'
@@ -249,7 +253,8 @@ select throws_ok(
     public.governance_amend_unclaimed_product_baseline_v1_owner_approval_source(
       (select prior_approval_version_id
        from option_c_source_amendment_state),
-      repeat('9', 40), repeat('8', 40),
+      'a54c04518f85f17a9983e0bbe7699463262537e1',
+      repeat('8', 40),
       'b8d974ae532bc7b3a26230048376af19d507fb0fb64069c2660868ff0c547bf9',
       repeat('b', 64), repeat('c', 64),
       repeat('d', 64), repeat('e', 64),
@@ -287,7 +292,8 @@ set (
       public.governance_amend_unclaimed_product_baseline_v1_owner_approval_source(
         (select prior_approval_version_id
          from option_c_source_amendment_state),
-        repeat('9', 40), repeat('8', 40),
+        'a54c04518f85f17a9983e0bbe7699463262537e1',
+        repeat('8', 40),
         'b8d974ae532bc7b3a26230048376af19d507fb0fb64069c2660868ff0c547bf9',
         repeat('b', 64), repeat('c', 64),
         repeat('d', 64), repeat('e', 64),
@@ -301,7 +307,8 @@ select ok(
     select
       amendment.prior_source_commit =
         'c0d6e8f5b403324fff2d12e89d456f9cbe5e4e38'
-      and amendment.amended_source_commit = repeat('9', 40)
+      and amendment.amended_source_commit =
+        'a54c04518f85f17a9983e0bbe7699463262537e1'
       and amendment.amended_source_tree = repeat('8', 40)
       and amendment.amended_source_module_graph_hash =
         'b8d974ae532bc7b3a26230048376af19d507fb0fb64069c2660868ff0c547bf9'
@@ -324,7 +331,8 @@ select ok(
       and amended_state.executions_claimed = 0
       and amended.version_number = 2
       and amended.prior_version_id = prior.id
-      and amended.source_commit = repeat('9', 40)
+      and amended.source_commit =
+        'a54c04518f85f17a9983e0bbe7699463262537e1'
       and amended.architecture_graph_digest =
         'b8d974ae532bc7b3a26230048376af19d507fb0fb64069c2660868ff0c547bf9'
       and amended.maximum_executions = 1
@@ -362,7 +370,8 @@ select throws_ok(
     public.governance_amend_unclaimed_product_baseline_v1_owner_approval_source(
       (select prior_approval_version_id
        from option_c_source_amendment_state),
-      repeat('9', 40), repeat('8', 40),
+      'a54c04518f85f17a9983e0bbe7699463262537e1',
+      repeat('8', 40),
       'b8d974ae532bc7b3a26230048376af19d507fb0fb64069c2660868ff0c547bf9',
       repeat('b', 64), repeat('c', 64),
       repeat('d', 64), repeat('e', 64),
@@ -385,14 +394,181 @@ select throws_ok(
   'the exact source-amendment receipt cannot be rewritten'
 );
 
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  'e3000000-0000-4000-8000-000000000002',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"e3000000-0000-4000-8000-000000000002"}',
+  true
+);
+select throws_ok(
+  $$select public.governance_amend_unclaimed_option_c_v2_tls_source(
+    (select amended_approval_version_id
+     from option_c_source_amendment_state),
+    repeat('a', 40), repeat('7', 40),
+    'd9a1b788775f358912946920106442036105e4f66b5bf72eb64518b1ee5b9a6f',
+    repeat('1', 64), repeat('2', 64),
+    repeat('3', 64), repeat('4', 64),
+    interval '17 hours'
+  )$$,
+  '42501',
+  'governance_owner_identity_required',
+  'a non-Owner cannot record the Hyperdrive TLS source revision'
+);
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  'e3000000-0000-4000-8000-000000000001',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"e3000000-0000-4000-8000-000000000001"}',
+  true
+);
+select throws_ok(
+  $$select public.governance_amend_unclaimed_option_c_v2_tls_source(
+    (select amended_approval_version_id
+     from option_c_source_amendment_state),
+    repeat('a', 40), repeat('7', 40), repeat('f', 64),
+    repeat('1', 64), repeat('2', 64),
+    repeat('3', 64), repeat('4', 64),
+    interval '17 hours'
+  )$$,
+  'P0001',
+  'product_experience_baseline_tls_revision_rejected',
+  'the Owner cannot substitute an unreviewed TLS-repaired source graph'
+);
+
+update option_c_source_amendment_state
+set (
+  revised_approval_version_id, revised_approval_hash
+) = (
+  select
+    (result->>'approvalVersionId')::uuid,
+    result->>'approvalHash'
+  from (
+    select public.governance_amend_unclaimed_option_c_v2_tls_source(
+      (select amended_approval_version_id
+       from option_c_source_amendment_state),
+      repeat('a', 40), repeat('7', 40),
+      'd9a1b788775f358912946920106442036105e4f66b5bf72eb64518b1ee5b9a6f',
+      repeat('1', 64), repeat('2', 64),
+      repeat('3', 64), repeat('4', 64),
+      interval '17 hours'
+    ) result
+  ) revised
+);
+
 select ok(
   (
-    select relrowsecurity and relforcerowsecurity
-    from pg_class
-    where oid =
-      'public.product_experience_baseline_owner_source_amendments'::regclass
+    select
+      revision.prior_source_commit =
+        'a54c04518f85f17a9983e0bbe7699463262537e1'
+      and revision.revised_source_commit = repeat('a', 40)
+      and revision.revised_source_tree = repeat('7', 40)
+      and revision.prior_source_module_graph_hash =
+        'b8d974ae532bc7b3a26230048376af19d507fb0fb64069c2660868ff0c547bf9'
+      and revision.revised_source_module_graph_hash =
+        'd9a1b788775f358912946920106442036105e4f66b5bf72eb64518b1ee5b9a6f'
+      and revision.reason_code =
+        'hyperdrive_dynamic_connection_tls_mode'
+    from public.product_experience_baseline_owner_tls_source_revisions revision
+    where revision.prior_approval_version_id = (
+      select amended_approval_version_id
+      from option_c_source_amendment_state
+    )
   ),
-  'the source-amendment receipt table has forced RLS'
+  'the second immutable receipt binds the exact Hyperdrive TLS source revision'
+);
+select ok(
+  (
+    select
+      prior_state.state = 'superseded'
+      and prior_state.executions_claimed = 0
+      and revised_state.state = 'active'
+      and revised_state.executions_claimed = 0
+      and revised.version_number = 3
+      and revised.prior_version_id = prior.id
+      and revised.source_commit = repeat('a', 40)
+      and revised.architecture_graph_digest =
+        'd9a1b788775f358912946920106442036105e4f66b5bf72eb64518b1ee5b9a6f'
+      and revised.maximum_executions = 1
+      and revised.material_delta
+    from public.governance_owner_approval_versions prior
+    join public.governance_owner_approval_version_states prior_state
+      on prior_state.approval_version_id = prior.id
+    join public.governance_owner_approval_versions revised
+      on revised.id = (
+        select revised_approval_version_id
+        from option_c_source_amendment_state
+      )
+    join public.governance_owner_approval_version_states revised_state
+      on revised_state.approval_version_id = revised.id
+    where prior.id = (
+      select amended_approval_version_id
+      from option_c_source_amendment_state
+    )
+  ),
+  'version 2 is preserved and superseded while exact version 3 is active'
+);
+select is(
+  (
+    select current_version
+    from public.governance_owner_approval_records
+    where id = (
+      select approval_id from option_c_source_amendment_state
+    )
+  ),
+  3,
+  'the approval record points at TLS-revised immutable version 3'
+);
+select throws_ok(
+  $$select public.governance_amend_unclaimed_option_c_v2_tls_source(
+    (select amended_approval_version_id
+     from option_c_source_amendment_state),
+    repeat('a', 40), repeat('7', 40),
+    'd9a1b788775f358912946920106442036105e4f66b5bf72eb64518b1ee5b9a6f',
+    repeat('1', 64), repeat('2', 64),
+    repeat('3', 64), repeat('4', 64),
+    interval '17 hours'
+  )$$,
+  'P0001',
+  'product_experience_baseline_tls_revision_rejected',
+  'the one-time Hyperdrive TLS source revision cannot replay'
+);
+reset role;
+select throws_ok(
+  $$update public.product_experience_baseline_owner_tls_source_revisions
+    set reason_code = 'mutated'
+    where approval_record_id = (
+      select approval_id from option_c_source_amendment_state
+    )$$,
+  '42501',
+  'immutable_cognitive_evidence',
+  'the Hyperdrive TLS source-revision receipt cannot be rewritten'
+);
+
+select ok(
+  (
+    select count(*) = 2
+    from pg_class
+    where oid in (
+      'public.product_experience_baseline_owner_source_amendments'::regclass,
+      'public.product_experience_baseline_owner_tls_source_revisions'::regclass
+    )
+      and relrowsecurity
+      and relforcerowsecurity
+  ),
+  'both immutable source-revision receipt tables have forced RLS'
 );
 select is(
   (
