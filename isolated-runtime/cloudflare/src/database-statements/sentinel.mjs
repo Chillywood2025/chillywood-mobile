@@ -15,4 +15,11 @@ export const SENTINEL_STATEMENTS = Object.freeze({
       $14::timestamptz,$15::timestamptz,$16::text,$17::text
     ) as result`,
   }),
+  preflightVisualGenericManifestPredicates: Object.freeze({
+    arity: 3,
+    text:
+      `select cognitive_runtime.preflight_visual_generic_manifest_predicates(
+        $1::text,$2::text,$3::jsonb
+      ) as result`,
+  }),
 });

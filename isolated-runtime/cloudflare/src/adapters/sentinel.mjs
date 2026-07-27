@@ -47,4 +47,13 @@ export const SENTINEL_COLLECTOR_ADAPTERS = Object.freeze({
         env.COGNITIVE_SENTINEL_COLLECTOR_ASSERTION,
       ]),
   ),
+  preflight_visual_generic_manifest_predicates: ready(
+    ["preflight_visual_generic_manifest_predicates"],
+    ({ database, payload }) =>
+      database.call("preflightVisualGenericManifestPredicates", [
+        payload.sentinelKey,
+        payload.evidenceManifestHash,
+        JSON.stringify(payload.metricManifest),
+      ]),
+  ),
 });

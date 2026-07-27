@@ -43,7 +43,7 @@ principals=(
 
 operation_sets=(
   "claim_approved_action,begin_approved_execution,stage_product_baseline,complete_approved_execution,persist_product_baseline,fail_approved_execution"
-  "collect_sentinel_run,preflight_visual_sentinel_collection"
+  "collect_sentinel_run,preflight_visual_sentinel_collection,preflight_visual_generic_manifest_predicates"
   "read_active_baseline,compute_detection_hash,compute_no_finding_hash,compute_resolution_hash,evaluate_product_baseline,record_sentinel_evaluator_proof,read_product_quality_snapshot,attest_livekit_bounded_failure_no_finding"
   "triage_detection,triage_no_finding,triage_resolution"
   "record_research_source,record_research_claim,detect_research_contradiction,expire_research"
@@ -56,7 +56,7 @@ operation_sets=(
 
 wrapper_sets=(
   "governance_claim_approved_action,governance_begin_approved_execution,governance_stage_product_experience_baseline_v1,governance_complete_approved_execution,governance_product_baseline_persist_completed_execution,governance_fail_approved_execution"
-  "collect_sentinel_run,preflight_visual_sentinel_collection"
+  "collect_sentinel_run,preflight_visual_sentinel_collection,preflight_visual_generic_manifest_predicates"
   "product_quality_detection_assessment_hash,product_quality_no_finding_assessment_hash,product_quality_resolution_assessment_hash,governance_evaluate_product_experience_baseline_v1,product_quality_record_sentinel_evaluator_proof,product_quality_evaluator_snapshot,product_quality_attest_livekit_bounded_failure_no_finding"
   "product_quality_triage_detection,product_quality_triage_no_finding,product_quality_triage_resolution"
   "cognitive_record_public_research_source_v2,record_research_claim_with_readback,cognitive_record_public_research_contradiction_detection,cognitive_expire_public_research_maintenance,run_attested_research_retention_maintenance"
@@ -652,6 +652,46 @@ begin
     end if;
     if current_setting('request.jwt.claim.role', true) <> 'authenticated' then
       raise exception 'sentinel_preflight_success_claim_restore_rejected';
+    end if;
+
+    result_value :=
+      cognitive_runtime.preflight_visual_generic_manifest_predicates(
+        'visual_product_experience_sentinel',
+        repeat('c', 64),
+        jsonb_build_object(
+          'schemaVersion',
+          'product-sentinel-v1',
+          'sanitizationVersion',
+          'bounded-nonpersonal-v1',
+          'observationKind',
+          'touch_target',
+          'evidenceHashes',
+          jsonb_build_array(repeat('c', 64)),
+          'metrics',
+          jsonb_build_object('platform', 'android')
+        )
+      );
+    if result_value->>'failedSubpredicate' is not null
+       or jsonb_typeof(result_value->'checks') <> 'object'
+       or (
+         select count(*)
+         from jsonb_object_keys(result_value->'checks')
+       ) <> 14
+       or exists (
+         select 1
+         from jsonb_each_text(result_value->'checks') check_result
+         where check_result.value <> 'PASS'
+       )
+       or exists (
+         select 1
+         from jsonb_object_keys(result_value) result_key
+         where result_key not in ('checks', 'failedSubpredicate')
+       )
+       or result_value::text like '%' || repeat('c', 64) || '%' then
+      raise exception 'sentinel_generic_predicate_boundary_rejected';
+    end if;
+    if current_setting('request.jwt.claim.role', true) <> 'authenticated' then
+      raise exception 'sentinel_generic_predicate_claim_restore_rejected';
     end if;
   end if;
 end;
