@@ -7,9 +7,9 @@ Status: review-only; never merge.
 - implementation branch:
   `codex/cognitive-level01-staged-worker-activation`
 - implementation commit:
-  `78e84e16921cfd486b125a1ade98a4a240db28c5`
+  `f45772f9a145c8363659954d337e7eaa46eefb3b`
 - implementation tree:
-  `b722a7f1a4fadec09d0348572acc69d6d261e357`
+  `6628e5c41c83f120ceca0c415060a4d3a5b0ee54`
 - reviewed and deployed Worker source commit:
   `6b9d7da6b8bb0d707a92fa19bd0058529e6e0a6a`
 - reviewed and deployed Worker source tree:
@@ -123,6 +123,26 @@ Focused activation pgTAP passes `18/18`; the clean full suite passes
 `1382/1382`; the isolated runtime remains `134/134`. The current unresolved P1
 count remains `0`.
 
+The canonical deferred-evidence Manifest V2 retains observations for 30 days,
+while the live sentinel evaluator correctly limits a fresh evaluation to 24
+hours after observation. Importing historical candidates as fresh sentinel
+runs would have fabricated recency. Implementation commit
+`f45772f9a145c8363659954d337e7eaa46eefb3b` adds forward-only migration
+`20260727171500_cognitive_deferred_evidence_v2_import_receipts.sql`.
+It represents the 12 exact sanitized candidates under canonical manifest hash
+`665c13f3cad6580348a60fb9a68fd07e0988c192383d06e791d2ab68fad19793`
+and records no decision by itself. Only the authenticated exact Owner may
+append an idempotent decision after the live core outcome passes. Receipts
+preserve `original_observed_at` separately from `imported_at`, reject stale
+imports, and hard-bind the reviewed result to 5 eligible imports, 2 deferrals,
+and 5 rejections. Premium-gated, physically incomplete, provider-blocked,
+audit-only, and newer-evidence-contradicted candidates cannot be imported.
+Both candidate and decision tables use forced RLS, immutable triggers, and no
+service-role access.
+
+Focused evidence pgTAP passes `13/13`; the clean full suite passes
+`1395/1395`. The current unresolved P1 count remains `0`.
+
 ## Static review result
 
 | Lane | P0 | P1 | Result |
@@ -157,13 +177,14 @@ Worker route, enable a schedule, enable user-derived memory, or enable Level 2.
 
 ## Automated proof
 
-- exact-head GitHub Phase 1 CI run: `30287517984` (in progress)
-- current exact-head required checks: pending
+- exact-head GitHub Phase 1 CI run: `30288181208`
+- current exact-head required checks: `13/13` passing
 - isolated Cloudflare runtime: `134/134` passing
 - provider-independent Option C path pgTAP: `22/22` passing
 - unclaimed source-revision pgTAP: `20/20` passing
 - provider-independent visual activation pgTAP: `18/18` passing
-- full pgTAP: `1382/1382` passing
+- canonical deferred-evidence decisions pgTAP: `13/13` passing
+- full pgTAP: `1395/1395` passing
 - Cognitive intelligence contract: passing
 - Cognitive architecture guard and proof: passing
 - committed-secret scan: no deployment or runtime secret evidence found
