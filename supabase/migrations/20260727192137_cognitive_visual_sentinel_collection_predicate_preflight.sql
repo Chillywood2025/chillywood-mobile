@@ -165,69 +165,90 @@ begin
     nested_claim_established :=
       current_setting('request.jwt.claim.role', true) = 'service_role';
 
-    capability_current := exists (
-      select 1
-      from public.cognitive_product_quality_service_capabilities capability
-      where capability.service_identity = 'cognitive_sentinel_collector'
-        and capability.operation = 'collect_sentinel_run'
-        and public.governance_exact_owner(capability.registered_by)
-        and transaction_timestamp() < capability.expires_at
-        and not exists (
-          select 1
-          from public.cognitive_product_quality_service_capability_revocations
-            revocation
-          where revocation.capability_id = capability.id
-        )
-    );
-
-    assertion_digest_matches := exists (
-      select 1
-      from public.cognitive_product_quality_service_capabilities capability
-      where capability.service_identity = 'cognitive_sentinel_collector'
-        and capability.operation = 'collect_sentinel_run'
-        and public.governance_exact_owner(capability.registered_by)
-        and transaction_timestamp() < capability.expires_at
-        and capability.assertion_hash = encode(
-          extensions.digest(
-            convert_to(p_service_assertion, 'UTF8'),
-            'sha256'
-          ),
-          'hex'
-        )
-        and not exists (
-          select 1
-          from public.cognitive_product_quality_service_capability_revocations
-            revocation
-          where revocation.capability_id = capability.id
-        )
-    );
-
-    sentinel_key_allowed := exists (
-      select 1
-      from public.cognitive_product_quality_service_capabilities capability
-      where capability.service_identity = 'cognitive_sentinel_collector'
-        and capability.operation = 'collect_sentinel_run'
-        and public.governance_exact_owner(capability.registered_by)
-        and transaction_timestamp() < capability.expires_at
-        and capability.assertion_hash = encode(
-          extensions.digest(
-            convert_to(p_service_assertion, 'UTF8'),
-            'sha256'
-          ),
-          'hex'
-        )
-        and p_sentinel_key = any(capability.allowed_sentinel_keys)
-        and not exists (
-          select 1
-          from public.cognitive_product_quality_service_capability_revocations
-            revocation
-          where revocation.capability_id = capability.id
-        )
-    );
-
-    capability_scope_matches :=
+    capability_current :=
       platform_value is not null
       and environment_value is not null
+      and exists (
+        select 1
+        from public.cognitive_product_quality_service_capabilities capability
+        where capability.service_identity = 'cognitive_sentinel_collector'
+          and capability.operation = 'collect_sentinel_run'
+          and public.governance_exact_owner(capability.registered_by)
+          and capability.task_id = p_task_id
+          and capability.project_id = p_project_id
+          and capability.platform = platform_value
+          and capability.environment = environment_value
+          and transaction_timestamp() < capability.expires_at
+          and not exists (
+            select 1
+            from public.cognitive_product_quality_service_capability_revocations
+              revocation
+            where revocation.capability_id = capability.id
+          )
+      );
+
+    assertion_digest_matches :=
+      platform_value is not null
+      and environment_value is not null
+      and exists (
+        select 1
+        from public.cognitive_product_quality_service_capabilities capability
+        where capability.service_identity = 'cognitive_sentinel_collector'
+          and capability.operation = 'collect_sentinel_run'
+          and public.governance_exact_owner(capability.registered_by)
+          and capability.task_id = p_task_id
+          and capability.project_id = p_project_id
+          and capability.platform = platform_value
+          and capability.environment = environment_value
+          and transaction_timestamp() < capability.expires_at
+          and capability.assertion_hash = encode(
+            extensions.digest(
+              convert_to(p_service_assertion, 'UTF8'),
+              'sha256'
+            ),
+            'hex'
+          )
+          and not exists (
+            select 1
+            from public.cognitive_product_quality_service_capability_revocations
+              revocation
+            where revocation.capability_id = capability.id
+          )
+      );
+
+    sentinel_key_allowed :=
+      platform_value is not null
+      and environment_value is not null
+      and exists (
+        select 1
+        from public.cognitive_product_quality_service_capabilities capability
+        where capability.service_identity = 'cognitive_sentinel_collector'
+          and capability.operation = 'collect_sentinel_run'
+          and public.governance_exact_owner(capability.registered_by)
+          and capability.task_id = p_task_id
+          and capability.project_id = p_project_id
+          and capability.platform = platform_value
+          and capability.environment = environment_value
+          and transaction_timestamp() < capability.expires_at
+          and capability.assertion_hash = encode(
+            extensions.digest(
+              convert_to(p_service_assertion, 'UTF8'),
+              'sha256'
+            ),
+            'hex'
+          )
+          and p_sentinel_key = any(capability.allowed_sentinel_keys)
+          and not exists (
+            select 1
+            from public.cognitive_product_quality_service_capability_revocations
+              revocation
+            where revocation.capability_id = capability.id
+          )
+      );
+
+    capability_scope_matches :=
+      platform_value = 'android'::public.cognitive_platform
+      and environment_value = 'production'::public.cognitive_environment
       and exists (
         select 1
         from public.cognitive_product_quality_service_capabilities capability

@@ -126,8 +126,20 @@ select ok(
   ) like '%capability.operation = ''collect_sentinel_run''%'
   and pg_get_functiondef(
     'cognitive_runtime.preflight_visual_sentinel_collection(uuid,uuid,text,text,text,text,text,text,text,jsonb,text,text,timestamptz,timestamptz,timestamptz,text,text)'::regprocedure
+  ) like '%capability.task_id = p_task_id%'
+  and pg_get_functiondef(
+    'cognitive_runtime.preflight_visual_sentinel_collection(uuid,uuid,text,text,text,text,text,text,text,jsonb,text,text,timestamptz,timestamptz,timestamptz,text,text)'::regprocedure
+  ) like '%capability.project_id = p_project_id%'
+  and pg_get_functiondef(
+    'cognitive_runtime.preflight_visual_sentinel_collection(uuid,uuid,text,text,text,text,text,text,text,jsonb,text,text,timestamptz,timestamptz,timestamptz,text,text)'::regprocedure
+  ) like '%capability.platform = platform_value%'
+  and pg_get_functiondef(
+    'cognitive_runtime.preflight_visual_sentinel_collection(uuid,uuid,text,text,text,text,text,text,text,jsonb,text,text,timestamptz,timestamptz,timestamptz,text,text)'::regprocedure
+  ) like '%capability.environment = environment_value%'
+  and pg_get_functiondef(
+    'cognitive_runtime.preflight_visual_sentinel_collection(uuid,uuid,text,text,text,text,text,text,text,jsonb,text,text,timestamptz,timestamptz,timestamptz,text,text)'::regprocedure
   ) like '%cognitive_product_quality_service_capability_revocations%',
-  'capability checks require exact Owner registration, operation, expiry, and non-revocation'
+  'capability checks require exact Owner, scope, operation, expiry, and non-revocation'
 );
 
 select ok(
