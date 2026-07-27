@@ -698,3 +698,67 @@ This section records no production migration, authorization, live run,
 evaluator proof, triage consumption, finding lifecycle, evidence decision,
 emergency-stop drill, rollback drill, merge, or iOS result. PR #45 remains
 review-only and must never merge.
+
+## Production source-binding deployment and caller-custody gate
+
+Status at `2026-07-27T23:57:22Z`: the exact forward source-binding migration
+is deployed; no fresh authorization has been opened because the complete
+three-principal caller boundary is not presently callable from an approved
+secret store.
+
+Supabase recorded the migration as
+`20260727234309_cognitive_android_visual_repaired_worker_source`. Commit
+`2e9d34be4efd8a008e4958926a54380d60afdae4` renames the local migration to
+that exact remote version without changing any SQL bytes. The pre-rename and
+post-rename SQL SHA-256 values are both
+`cbd20bbd6c395df123c9a12c88c7c4610dd2f6b33910050921b4a3884228c787`.
+
+Post-deployment readback proves:
+
+- the open function contains the exact repaired Worker and successor-review
+  bindings;
+- the composite constraint retains both the immutable historical tuple and
+  the exact repaired tuple;
+- historical authorizations/outcomes remain `4/4`;
+- unfinished authorizations remain `0`;
+- sentinel runs, evaluator proofs, triage consumptions, findings,
+  finding events, no-finding events, and deferred receipts remain `0`;
+- enabled switches remain `0/16`; and
+- enabled schedules remain `0/5`.
+
+The Supabase security advisor reports the existing authenticated
+`SECURITY DEFINER` exposure for the open function. That exposure is
+intentional and remains fail-closed behind
+`governance_assert_exact_owner()`; `CREATE OR REPLACE FUNCTION` preserved the
+prior grants. The new migration creates no table or RLS policy. Performance
+advisor notices for the pre-existing authorization table are unchanged by
+the composite check.
+
+The retained sentinel operational caller credential is present only in
+macOS Keychain and is accepted by sentinel Worker version
+`e91be8a3-cb32-498d-9715-b3240d9bc730`. Read-only custody reconstruction
+also proves that the earlier approved deployment bundle held distinct raw
+evaluator and triage invocation files and used them for the reviewed
+principal rollback/restoration drills. That mode-700 temporary bundle was
+subsequently deleted. The current Keychain contains no evaluator or triage
+caller entry, and Cloudflare retains only the one-way invocation hashes.
+
+No evaluator or triage invocation hash, assertion, capability, Hyperdrive
+binding, LOGIN identity, or Gateway binding has been changed. No replacement
+credential has been created because the current Owner scope authorizes one
+new retained sentinel invocation credential, not evaluator or triage
+invocation rotation. Opening the single 30-minute Android authorization
+without both downstream callers would be a blind, non-completable
+authorization, so the switch remains off.
+
+Static successor review remains:
+
+| Lane | P0 | P1 | Result |
+| --- | ---: | ---: | --- |
+| architecture / credential / network | 0 | 0 | pass |
+| authorization source truth | 0 | 0 | pass |
+| database / validator / RLS | 0 | 0 | pass |
+| sentinel JSONB repair | 0 | 0 | pass |
+
+The missing evaluator/triage caller custody is an operational authority gate,
+not a source-review finding. PR #45 remains review-only and must never merge.
