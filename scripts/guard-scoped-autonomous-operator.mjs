@@ -92,6 +92,7 @@ if (!systemBlock.includes(`activeActivationMode: "${system.expectedActivation}"`
 if (!systemBlock.includes(system.expectedSchedulerStatus)) failures.push("scheduler_status_missing_or_wrong");
 if (!pkg.scripts?.[system.guardScript]) failures.push("package_guard_script_missing");
 if (!fn.includes("handleScopedOperatorRequest") || !sharedFn.includes("constantTimeEqual")) failures.push("constant_time_token_gate_missing");
+if (key === "security" && (!fn.includes("runCognitiveNetAclGuard") || !fn.includes("lifecycleManaged: true") || !sharedFn.includes("if (platformResult.lifecycleManaged === true) continue"))) failures.push("cognitive_net_acl_lifecycle_not_sql_managed");
 if (!sharedFn.includes("sanitizeOperatorMetadata")) failures.push("metadata_redaction_missing");
 if (!sharedFn.includes("withAuditIdentity") || !sharedFn.includes("auditIdentity") || !sharedFn.includes("report_read")) failures.push("audit_identity_or_readonly_report_missing");
 if (!migration.includes("enable row level security")) failures.push("rls_missing");

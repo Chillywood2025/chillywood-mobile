@@ -179,7 +179,7 @@ const safeOperatorErrorMessage = (error: unknown) => {
   return typeof sanitized === "string" && sanitized.trim() ? sanitized : "unknown_error";
 };
 
-const persistOperatorFindingLifecycle = async (
+export const persistOperatorFindingLifecycle = async (
   client: SupabaseClient,
   systemId: string,
   result: ScopedOperatorHandlerResult,
@@ -189,6 +189,7 @@ const persistOperatorFindingLifecycle = async (
     ? result.platformResults as ScopedOperatorHandlerResult[]
     : [result];
   for (const platformResult of results) {
+    if (platformResult.lifecycleManaged === true) continue;
     const platform = normalizeOperatorPlatform(platformResult.platform);
     const reasons = Array.isArray(platformResult.reasons)
       ? platformResult.reasons.map((reason) => String(reason).slice(0, 160)).filter(Boolean)

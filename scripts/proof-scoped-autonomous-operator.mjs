@@ -113,6 +113,7 @@ const checks = [
   ["helper forbids unsafe mutation", helper.includes("assertNoForbidden")],
   ["edge function token hash", fn.includes(system.tokenHashEnv)],
   ["edge function action surface", fn.includes(system.safeAction) && fn.includes(system.highRiskAction)],
+  ["security ACL lifecycle is SQL-managed", key !== "security" || (fn.includes("runCognitiveNetAclGuard") && fn.includes("lifecycleManaged: true") && sharedFn.includes("if (platformResult.lifecycleManaged === true) continue"))],
   ["report action read-only", sharedFn.includes('if (action === "report")') && sharedFn.includes("report_read")],
   ["watch_once audit identity", sharedFn.includes("withAuditIdentity") && sharedFn.includes("auditIdentity") && watchScript.includes('"scheduler":"systemd_timer"') && watchScript.includes(`"operator_id":"${system.id}"`)],
   ["systemd service exists", fs.existsSync(system.servicePath)],

@@ -257,6 +257,7 @@ jobs:
           supabase start
           supabase db reset
           supabase test db supabase/tests/cognitive_intelligence_foundation_test.sql
+          npm run test:cognitive-net-acl-guard-concurrency
           npm run test:cognitive-db-concurrency
           npm run test:cognitive-activation-hold-security-definer
           npm run test:cognitive-public-research-liveness-concurrency
@@ -289,7 +290,7 @@ jobs:
       - name: Run pgTAP database integration suites
         run: supabase test db
 
-      - name: Run isolated runtime LOGIN boundary integration
+      - name: Run provider-version drift or isolated LOGIN boundary integration
         run: npm run test:cognitive-runtime-login-integration
 
   phase1-check:

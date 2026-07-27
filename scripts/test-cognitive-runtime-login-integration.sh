@@ -165,6 +165,91 @@ if [[ "$net_public_usage_before" != "t" \
   exit 1
 fi
 
+# A newer local Supabase image is intentionally not a substitute for the
+# reviewed production provider attestation. In that case, prove the permanent
+# guard blocks provisioning after the otherwise-matching ACL is closed, then
+# roll the local ACL change back. The full ten-login exercise continues below
+# only when PostgreSQL and pg_net match the reviewed production versions.
+provider_version_match="$(
+  docker exec "$database_container" \
+    psql --no-psqlrc --quiet --tuples-only --no-align \
+      --username postgres --dbname "$database_name" \
+      --command "
+        select coalesce((
+          select attestation.postgres_version_num =
+            current_setting('server_version_num')::integer
+            and attestation.extension_version = extension.extversion
+          from cognitive_runtime.net_acl_provider_attestations attestation
+          cross join pg_catalog.pg_extension extension
+          where extension.extname = 'pg_net'
+          order by attestation.attestation_version desc
+          limit 1
+        ), false);
+      " 2>/dev/null
+)"
+provider_version_match="$(
+  printf '%s' "$provider_version_match" | tr -d '[:space:]'
+)"
+test_stage="provider_version_preflight"
+if [[ "$provider_version_match" != "t" \
+   && "$provider_version_match" != "f" ]]; then
+  exit 1
+fi
+
+if [[ "$provider_version_match" == "f" ]]; then
+  test_stage="provider_version_drift_guard"
+  if ! {
+    printf '%s\n' \
+      "begin;" \
+      "revoke usage on schema net from public;" \
+      "do \$version_drift\$" \
+      "declare" \
+      "  snapshot_value jsonb :=" \
+      "    cognitive_runtime.net_acl_guard_snapshot();" \
+      "begin" \
+      "  if snapshot_value->>'guard_status' <> 'FAIL'" \
+      "     or (snapshot_value->>'public_usage_denied')::boolean is not true" \
+      "     or (snapshot_value->>'required_direct_grants_present')::boolean" \
+      "       is not true" \
+      "     or (snapshot_value->>'unexpected_direct_grant_count')::integer" \
+      "       <> 0" \
+      "     or (snapshot_value->>'cognitive_net_access_count')::integer <> 0" \
+      "     or (snapshot_value->>'schema_owner_match')::boolean is not true" \
+      "     or (snapshot_value->>'extension_owner_match')::boolean" \
+      "       is not true" \
+      "     or (snapshot_value->>'observed_acl_sha256') is distinct from" \
+      "       (snapshot_value->>'expected_acl_sha256')" \
+      "     or (" \
+      "       (snapshot_value->>'extension_version_match')::boolean" \
+      "       and (snapshot_value->>'postgres_version_match')::boolean" \
+      "     )" \
+      "     or (snapshot_value->>'isolated_execution_allowed')::boolean" \
+      "       is not false" \
+      "     or cognitive_runtime.runtime_login_provisioning_ready()" \
+      "     or exists (" \
+      "       select 1" \
+      "       from jsonb_array_elements_text(" \
+      "         snapshot_value->'finding_codes'" \
+      "       ) as finding(code)" \
+      "       where finding.code not in (" \
+      "         'PG_NET_VERSION_REVALIDATION_REQUIRED'," \
+      "         'POSTGRES_VERSION_REVALIDATION_REQUIRED'" \
+      "       )" \
+      "     )" \
+      "  then" \
+      "    raise exception 'provider_version_drift_guard_rejected';" \
+      "  end if;" \
+      "end;" \
+      "\$version_drift\$;" \
+      "rollback;"
+  } | admin_psql >/dev/null 2>&1
+  then
+    exit 1
+  fi
+  echo "PASS"
+  exit 0
+fi
+
 # Provision all ten disposable LOGIN identities atomically. Closing the local
 # pg_net PUBLIC fallback proves that the reviewed closed-world preflight becomes
 # true before any password-bearing role is created.
@@ -195,7 +280,8 @@ if ! {
     printf '%s\n' \
       "create role ${principal}_login" \
       "  login nosuperuser nocreatedb nocreaterole inherit" \
-      "  noreplication nobypassrls password :'runtime_password';" \
+      "  noreplication nobypassrls connection limit 6" \
+      "  password :'runtime_password';" \
       "revoke create, temporary on database ${database_name}" \
       "  from ${principal}_login;" \
       "alter role ${principal}_login" \
@@ -298,6 +384,7 @@ begin
      or not login_value.rolinherit
      or login_value.rolreplication
      or login_value.rolbypassrls
+     or login_value.rolconnlimit <> 6
      or login_value.rolvaliduntil is null
      or login_value.rolvaliduntil <= transaction_timestamp()
      or cardinality(coalesce(login_value.rolconfig, '{}'::text[])) <> 4

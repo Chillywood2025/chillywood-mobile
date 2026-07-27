@@ -192,7 +192,7 @@ select
   null::jsonb as owner_decision_result,
   null::jsonb as activation_result;
 update retention_activation_fixture set activation_hash =
-  public.governance_research_retention_activation_hash(
+  public.governance_research_retention_activation_hash_v3(
     ${literal("4fb0853be0e7017e7c369a7281300a8d59a317ab")},
     repeat('b',64),repeat('c',64),repeat('d',64),repeat('2',64),
     provider_verified_at,expires_at
