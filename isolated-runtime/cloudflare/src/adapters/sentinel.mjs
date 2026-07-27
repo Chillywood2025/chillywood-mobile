@@ -24,4 +24,27 @@ export const SENTINEL_COLLECTOR_ADAPTERS = Object.freeze({
         env.COGNITIVE_SENTINEL_COLLECTOR_ASSERTION,
       ]),
   ),
+  preflight_visual_sentinel_collection: ready(
+    ["preflight_visual_sentinel_collection"],
+    ({ database, env, payload }) =>
+      database.call("preflightVisualSentinelCollection", [
+        payload.taskId,
+        payload.projectId,
+        payload.platform,
+        payload.environment,
+        payload.sentinelKey,
+        payload.routeOrSurface,
+        payload.runtimeIdentityHash,
+        payload.sourceBuildHash,
+        payload.evidenceManifestHash,
+        JSON.stringify(payload.metricManifest),
+        payload.resultStatus,
+        payload.physicalProofStatus,
+        payload.observationStartedAt,
+        payload.observationFinishedAt,
+        payload.evaluationExpiresAt,
+        payload.collectionIdempotencyHash,
+        env.COGNITIVE_SENTINEL_COLLECTOR_ASSERTION,
+      ]),
+  ),
 });

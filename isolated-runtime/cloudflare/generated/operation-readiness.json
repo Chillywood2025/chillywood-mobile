@@ -254,6 +254,13 @@
         ],
         "ready": true,
         "reason": null
+      },
+      "preflight_visual_sentinel_collection": {
+        "databaseOperations": [
+          "preflight_visual_sentinel_collection"
+        ],
+        "ready": true,
+        "reason": null
       }
     }
   },
