@@ -551,6 +551,7 @@
     "test:cognitive-bootstrap-edge-contract": "node ./scripts/test-cognitive-bootstrap-edge-contract.mjs",
     "test:cognitive-model-independence": "node ./scripts/test-cognitive-model-independence.mjs",
     "test:cognitive-product-sentinels": "node ./scripts/test-cognitive-product-sentinels.mjs",
+    "test:cognitive-android-visual-canary-manifest": "node ./scripts/test-cognitive-android-visual-canary-manifest.mjs",
     "test:cognitive-product-baseline-v1": "node ./scripts/test-chillywood-product-experience-baseline-v1.mjs",
     "test:cognitive-livekit-experience-collector": "node ./scripts/test-cognitive-livekit-experience-collector.mjs",
     "test:cognitive-isolated-runtime": "npm ci --ignore-scripts --prefix ./isolated-runtime/cloudflare && npm run verify --prefix ./isolated-runtime/cloudflare",

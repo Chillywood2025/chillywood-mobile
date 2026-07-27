@@ -167,6 +167,11 @@ export const RUNTIME_MANIFEST = Object.freeze({
         ], [
           "cognitive_runtime.preflight_visual_sentinel_collection",
         ]),
+        preflight_visual_generic_manifest_predicates: operation([
+          "action", "evidenceManifestHash", "metricManifest", "sentinelKey",
+        ], [
+          "cognitive_runtime.preflight_visual_generic_manifest_predicates",
+        ]),
       },
       internalSecrets: ["COGNITIVE_SENTINEL_COLLECTOR_ASSERTION"],
     }),

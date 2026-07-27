@@ -126,6 +126,48 @@ test("visual collection preflight uses the assertion only in its exact static ca
   assert.equal(JSON.stringify(calls.at(-1).parameters).includes("postgres://"), false);
 });
 
+test("generic visual predicates use one exact read-only static call", async () => {
+  const database = createDatabasePort({
+    connectionString: "postgres://isolated.invalid/db",
+    sqlFactory,
+  });
+  const adapter = operationAdapter(
+    "cognitive_sentinel_collector",
+    "preflight_visual_generic_manifest_predicates",
+  );
+  const metricManifest = {
+    schemaVersion: "product-sentinel-v1",
+    sanitizationVersion: "bounded-nonpersonal-v1",
+    observationKind: "touch_target",
+    evidenceHashes: ["2".repeat(64)],
+    metrics: { platform: "android" },
+  };
+
+  await adapter.execute({
+    database,
+    payload: {
+      action: "preflight_visual_generic_manifest_predicates",
+      evidenceManifestHash: "2".repeat(64),
+      metricManifest,
+      sentinelKey: "visual_product_experience_sentinel",
+    },
+  });
+
+  assert.equal(adapter.ready, true);
+  assert.deepEqual(adapter.databaseOperations, [
+    "preflight_visual_generic_manifest_predicates",
+  ]);
+  assert.match(
+    calls.at(-1).text,
+    /^select cognitive_runtime\.preflight_visual_generic_manifest_predicates/u,
+  );
+  assert.deepEqual(calls.at(-1).parameters, [
+    "visual_product_experience_sentinel",
+    "2".repeat(64),
+    JSON.stringify(metricManifest),
+  ]);
+});
+
 test("every reviewed operation has an explicit readiness state and static database plan", () => {
   for (const [principal, operations] of Object.entries(OPERATION_ADAPTERS)) {
     for (const [operation, adapter] of Object.entries(operations)) {
