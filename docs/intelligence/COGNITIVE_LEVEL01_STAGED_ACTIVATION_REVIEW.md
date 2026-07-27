@@ -277,3 +277,79 @@ can record final activation acceptance:
   Workers have no Hyperdrive or runtime secret.
 
 No live result is claimed by this initial review record.
+
+## Successor Android predicate-preflight exact-head review
+
+Status: source review passed; remote diagnosis and live acceptance pending.
+
+This successor section preserves every prior review entry. It reviews
+implementation commit
+`c16708f62a163a29998a607abeb0bc138fe74783`, tree
+`a50788175c8187616213c27431fb5ecaf849330c`, and Worker source-graph SHA-256
+`ecedc329ad2e0f51e396f6f4531e9b112a6d7471aa0e342acf3e4800f7b8da1c`
+across the same 71 committed source-graph files.
+
+Forward-only migration
+`20260727192137_cognitive_visual_sentinel_collection_predicate_preflight.sql`
+adds one read-only operation:
+`cognitive_runtime.preflight_visual_sentinel_collection`. It does not retry a
+canary, enable a switch, open an authorization, create or rotate a capability,
+or write evidence. The operation is executable only by
+`cognitive_sentinel_collector`; runtime entry still requires the exact
+`cognitive_sentinel_collector_login` session identity, its one principal
+membership, the permanent net-ACL guard, and the new exact operation allowlist
+entry.
+
+The wrapper establishes and restores the legacy nested claim exactly as the
+write wrapper does. It compares the supplied assertion internally and returns
+only `MATCH` or `MISMATCH`; no raw assertion, digest, database value, private
+evidence, or payload is returned. Current capability, assertion, sentinel-key,
+and capability-scope checks are each bound to the supplied task, project,
+platform, and environment. The later scope predicate independently requires
+Android production, preventing an iOS or shared capability from masking an
+absent, expired, revoked, or mismatched Android capability.
+
+The bounded result distinguishes runtime identity, nested claim, capability
+currency, assertion digest, allowed sentinel key, Android capability scope,
+task/repository scope, cancellation, quarantine, deadman, emergency state,
+route sanitization, four exact hashes, idempotency, status/physical-proof
+pairing, observation and evaluation windows, generic metrics, detailed visual
+metrics, effective baseline, existing-run conflict, the exact Android visual
+switch, and one open unexpired Android authorization. It contains no
+application-table `INSERT`, `UPDATE`, or `DELETE`.
+
+The private sentinel Worker adds only the new closed-schema action and one
+static 17-argument database statement. The assertion remains sourced from the
+sentinel Worker's existing private assertion binding and occupies only the
+final bound SQL parameter. The gateway still has no database, provider, or
+runtime-secret domain. No sibling Worker gains an operation, secret, database
+binding, route, or readiness state.
+
+Local exact-head proof:
+
+- predicate-preflight pgTAP: `24/24`;
+- isolated-runtime role manifest pgTAP: `48/48`;
+- real TCP password-authenticated disposable LOGIN integration: passing;
+- isolated Cloudflare runtime: `136/136`;
+- generated-source verification: passing;
+- source-graph worktree guard: passing with only untracked `deno.lock`;
+- diagnostic installation creates zero sentinel runs, authorizations,
+  enabled switches, and enabled schedules; and
+- implementation `git diff --check`: passing.
+
+Static successor review result:
+
+| Lane | P0 | P1 | Result |
+| --- | ---: | ---: | --- |
+| architecture / credential / network | 0 | 0 | pass |
+| database / RLS / concurrency | 0 | 0 | pass |
+| sentinel / evaluator / triage | 0 | 0 | pass |
+| partial activation / red team | 0 | 0 | pass |
+
+The migration and Worker operation remain undeployed at the time of this
+section. Therefore this review does not claim an assertion match, an exact
+failed predicate, a repaired canary, a live sentinel row, an evidence
+decision, or activation acceptance. PR #44 must remain draft until the exact
+Worker-path predicate is reproduced twice, only the proved repair is applied,
+the full regression and live Android gates pass, and a final live-acceptance
+readback is appended. PR #45 remains review-only and must never merge.
