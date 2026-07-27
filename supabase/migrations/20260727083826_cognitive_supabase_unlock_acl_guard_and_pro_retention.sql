@@ -377,6 +377,13 @@ begin
     repeat('0',64)
   );
 
+  -- Serialize only matching observations.  This keeps concurrent watch-once
+  -- calls from racing both check-then-insert paths while allowing unrelated
+  -- provider observations to proceed independently.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(observed_hash,0)
+  );
+
   insert into public.autonomous_provider_readback_capabilities(
     system_id,platform,provider,capability,capability_state,
     missing_capability,readback_complete,data_source,provider_environment,

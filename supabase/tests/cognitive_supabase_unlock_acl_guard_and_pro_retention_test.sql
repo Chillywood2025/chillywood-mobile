@@ -1,6 +1,6 @@
 begin;
 
-select plan(39);
+select plan(40);
 
 select has_table(
   'cognitive_runtime',
@@ -165,6 +165,19 @@ select ok(
     'public.cognitive_record_net_acl_guard_readback()'::regprocedure
   ) not like '%alter schema net%',
   'security evidence recorder contains no repair or provider ACL mutation'
+);
+
+select ok(
+  pg_get_functiondef(
+    'public.cognitive_record_net_acl_guard_readback()'::regprocedure
+  ) like '%pg_advisory_xact_lock%'
+  and pg_get_functiondef(
+    'public.cognitive_record_net_acl_guard_readback()'::regprocedure
+  ) like '%hashtextextended%'
+  and pg_get_functiondef(
+    'public.cognitive_record_net_acl_guard_readback()'::regprocedure
+  ) like '%observed_hash%',
+  'matching ACL observations serialize before deduplicated alert routing'
 );
 
 select is(
