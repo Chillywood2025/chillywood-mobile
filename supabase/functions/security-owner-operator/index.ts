@@ -1,7 +1,52 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { handleScopedOperatorRequest } from "../_shared/scoped-operator.ts";
+import {
+  handleScopedOperatorRequest,
+  type ScopedOperatorHandler,
+} from "../_shared/scoped-operator.ts";
 import { runIosSecuritySourceProbe } from "../_shared/ios-source-operator-probes.ts";
 import { runAndroidSecurityProbe, runSharedSecurityProbe } from "../_shared/all-platform-source-operator-probes.ts";
+
+const runCognitiveNetAclGuard: ScopedOperatorHandler = async ({ client }) => {
+  const checkedAt = new Date().toISOString();
+  const { data, error } = await client.rpc(
+    "cognitive_record_net_acl_guard_readback",
+  );
+  if (error) throw new Error("cognitive_net_acl_guard_readback_failed");
+
+  const snapshot = data && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+  const passed = snapshot.guard_status === "PASS" &&
+    snapshot.public_usage_denied === true &&
+    snapshot.required_direct_grants_present === true &&
+    snapshot.cognitive_net_access_count === 0 &&
+    snapshot.automatic_repair_attempted === false;
+
+  return {
+    readbackComplete: passed,
+    platform: "shared",
+    provider: "supabase",
+    surface: "cognitive_pg_net_acl",
+    source: "cognitive_runtime.net_acl_guard_snapshot",
+    dataWindow: { start: checkedAt, end: checkedAt },
+    healthState: passed ? "healthy" : "critical",
+    reasons: passed ? [] : ["cognitive_net_acl_guard_mismatch"],
+    guardStatus: passed ? "PASS" : "FAIL",
+    publicUsageDenied: snapshot.public_usage_denied === true,
+    requiredDirectGrantsPresent:
+      snapshot.required_direct_grants_present === true,
+    cognitiveNetAccessCount: Number(
+      snapshot.cognitive_net_access_count ?? -1,
+    ),
+    providerAdministrationRequired:
+      snapshot.provider_administration_required === true,
+    automaticRepairAttempted: false,
+    emergencyStopAuthorityPreserved: true,
+    moneyMoved: false,
+    userRightsChanged: false,
+    highRiskExecuted: false,
+  };
+};
 
 Deno.serve(handleScopedOperatorRequest({
   systemId: "security_owner_operator",
@@ -31,6 +76,11 @@ Deno.serve(handleScopedOperatorRequest({
     admin_route_exposure_check: "security_required_review_flags",
     secret_scan_status_record: "secret_scan_findings",
   },
-  watchOnceHandlers: [runSharedSecurityProbe, runAndroidSecurityProbe, runIosSecuritySourceProbe],
+  watchOnceHandlers: [
+    runCognitiveNetAclGuard,
+    runSharedSecurityProbe,
+    runAndroidSecurityProbe,
+    runIosSecuritySourceProbe,
+  ],
   requiredWatchPlatforms: ["shared", "android", "ios"],
 }));

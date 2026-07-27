@@ -256,7 +256,7 @@ select
   'ca000000-0000-4000-8000-000000000002',
   'ca000000-0000-4000-8000-000000000003',
   fixture.task_id,fixture.project_id,'shared','production',
-  'supabase','free','provider_project_backups_absent',0,false,false,true,
+  'supabase','pro','provider_daily_backups_available',7,true,false,true,
   repeat('a',64),transaction_timestamp(),
   transaction_timestamp()+interval '1 day'
 from level01_fixture fixture;

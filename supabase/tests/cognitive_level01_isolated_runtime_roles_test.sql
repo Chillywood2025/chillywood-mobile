@@ -750,8 +750,8 @@ select is(
       and procedure.prosecdef
       and procedure.proconfig @> array['search_path=""']
   ),
-  44,
-  'all forty-four runtime boundary helpers and wrappers are security definer with an empty search path'
+  46,
+  'all forty-six runtime boundary helpers and wrappers are security definer with an empty search path'
 );
 
 select ok(
@@ -797,8 +797,8 @@ select throws_ok(
     )
   $$,
   '42501',
-  'cognitive_runtime_operation_rejected',
-  'preflight rejects an operation outside the principal allowlist'
+  'cognitive_net_acl_guard_blocked',
+  'preflight blocks before operation evaluation when the provider ACL guard fails'
 );
 
 select throws_ok(
@@ -809,8 +809,8 @@ select throws_ok(
     )
   $$,
   '42501',
-  'cognitive_runtime_principal_rejected',
-  'preflight rejects a session without the expected role membership'
+  'cognitive_net_acl_guard_blocked',
+  'preflight blocks before membership evaluation when the provider ACL guard fails'
 );
 
 select throws_ok(
@@ -820,8 +820,8 @@ select throws_ok(
     )
   $$,
   '42501',
-  'cognitive_runtime_principal_rejected',
-  'revocation status fails closed when role membership is absent'
+  'cognitive_net_acl_guard_blocked',
+  'revocation status fails closed first when the provider ACL guard fails'
 );
 
 select ok(

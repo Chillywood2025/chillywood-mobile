@@ -99,8 +99,8 @@ insert into public.cognitive_research_backup_retention_attestations(
   'da000000-0000-4000-8000-000000000003',
   'e2000000-0000-4000-8000-000000000001',
   'e1000000-0000-4000-8000-000000000001',
-  'shared','production','supabase','free',
-  'provider_project_backups_absent',0,false,false,true,repeat('a',64),
+  'shared','production','supabase','pro',
+  'provider_daily_backups_available',7,true,false,true,repeat('a',64),
   transaction_timestamp(),transaction_timestamp()+interval '1 day'
 );
 insert into public.cognitive_research_retention_processor_attestations(
