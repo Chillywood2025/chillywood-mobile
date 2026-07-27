@@ -614,3 +614,87 @@ in the reviewed caller/Worker boundary and both generic and detailed
 preflights return `PASS`. This review does not claim a live run or any later
 lifecycle, evidence-import, emergency-stop, rollback, merge, or iOS result.
 PR #45 remains review-only and must never merge.
+
+## Repaired-Worker authorization source-binding review
+
+Status: P1 source-binding gap closed in source; production migration and the
+single fresh authorization remain pending.
+
+After the repaired Worker returned 14/14 generic `PASS` twice, the full
+read-only collection preflight returned:
+
+- generic metric manifest: `PASS`;
+- detailed Android visual manifest: `PASS`;
+- assertion digest: `MATCH`;
+- collector capability: `PASS`; and
+- first failed predicate: `android_visual_switch`.
+
+That is the expected pre-authorization boundary. No authorization, switch, or
+evidence row was created by the preflights. The retained operational token was
+accepted only by sentinel Worker version
+`e91be8a3-cb32-498d-9715-b3240d9bc730`; missing and invalid tokens, sibling
+use, and an unapproved operation were denied.
+
+The next exact read found one new P1 before any authorization was opened:
+the authorization function and table constraints remained hard-bound to the
+pre-repair Worker source tuple. Passing the repaired tuple would fail closed,
+while relabeling the repaired deployment as the old source would make the
+authorization receipt false.
+
+Implementation commit
+`78f5bfb9b747802258c1fd3d2d7f392c37e4dbf5`, tree
+`fecac02c99f7cef3e16c7a3af37a01a91e55bdbe`, adds only forward migration
+`20260727233500_cognitive_android_visual_repaired_worker_source.sql` and its
+regression. The Worker source graph remains the reviewed 71-file SHA-256
+`47779ee113dd79b7678569750aa2f96e4663e2e1ccc5b44262365817ce1611fb`.
+
+The migration replaces the three independent source-column checks with one
+composite tuple check. It accepts exactly:
+
+- the immutable historical commit/tree/graph tuple; or
+- repaired Worker commit
+  `e05ff68c426e2ccb1bc268e14e9e5d19ba64efa9`, tree
+  `5295d907e6806883e1de2dda5626d8e3a129783d`, and source-graph SHA-256
+  `47779ee113dd79b7678569750aa2f96e4663e2e1ccc5b44262365817ce1611fb`.
+
+Cross-paired values cannot satisfy the composite constraint. Historical
+authorizations and failed outcomes are unchanged.
+
+The exact-Owner open function keeps the completed Option C approval at its
+immutable original source lineage. It separately requires the repaired Worker
+tuple and exact successor review, test, deployment-plan, and rollback hashes.
+It retains the 30-minute maximum, exact Android task, exact two current
+capabilities, active emergency state, zero sibling switches, zero schedules,
+zero unfinished authorization, and one approved baseline gates. The
+authorization receipt domain advances to the explicit v3 source-binding
+contract; collection/finalization switch policy remains the already-reviewed
+v2 runtime contract.
+
+Regression proof before production deployment:
+
+- repaired source-binding test: `12/12`;
+- four Android activation/source-binding files: `61/61`;
+- full pgTAP: `1488/1488`;
+- isolated Cloudflare runtime: `138/138`;
+- source-binding migration authorizations created: `0`;
+- switches enabled by migration: `0`;
+- schedules enabled by migration: `0`; and
+- implementation `git diff --check`: `PASS`.
+
+Static successor review result:
+
+| Lane | P0 | P1 | Result |
+| --- | ---: | ---: | --- |
+| architecture / credential / network | 0 | 0 | pass |
+| authorization source truth | 0 | 0 | pass |
+| database / RLS / immutable history | 0 | 0 | pass |
+| sentinel / evaluator / triage | 0 | 0 | pass |
+
+P2: `0`
+
+P3: `0`
+
+This section records no production migration, authorization, live run,
+evaluator proof, triage consumption, finding lifecycle, evidence decision,
+emergency-stop drill, rollback drill, merge, or iOS result. PR #45 remains
+review-only and must never merge.
