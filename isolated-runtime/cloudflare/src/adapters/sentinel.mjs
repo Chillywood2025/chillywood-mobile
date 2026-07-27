@@ -1,5 +1,8 @@
 import { ready } from "./helpers.mjs";
 
+// postgres.js learns the $n::jsonb type from each static statement and
+// serializes object parameters exactly once. Pre-stringifying here would make
+// the driver serialize a JSON string instead of the manifest object.
 export const SENTINEL_COLLECTOR_ADAPTERS = Object.freeze({
   collect_sentinel_run: ready(
     ["collect_sentinel_run"],
@@ -14,7 +17,7 @@ export const SENTINEL_COLLECTOR_ADAPTERS = Object.freeze({
         payload.runtimeIdentityHash,
         payload.sourceBuildHash,
         payload.evidenceManifestHash,
-        JSON.stringify(payload.metricManifest),
+        payload.metricManifest,
         payload.resultStatus,
         payload.physicalProofStatus,
         payload.observationStartedAt,
@@ -37,7 +40,7 @@ export const SENTINEL_COLLECTOR_ADAPTERS = Object.freeze({
         payload.runtimeIdentityHash,
         payload.sourceBuildHash,
         payload.evidenceManifestHash,
-        JSON.stringify(payload.metricManifest),
+        payload.metricManifest,
         payload.resultStatus,
         payload.physicalProofStatus,
         payload.observationStartedAt,
@@ -53,7 +56,7 @@ export const SENTINEL_COLLECTOR_ADAPTERS = Object.freeze({
       database.call("preflightVisualGenericManifestPredicates", [
         payload.sentinelKey,
         payload.evidenceManifestHash,
-        JSON.stringify(payload.metricManifest),
+        payload.metricManifest,
       ]),
   ),
 });

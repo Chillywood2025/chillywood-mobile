@@ -122,6 +122,8 @@ test("visual collection preflight uses the assertion only in its exact static ca
     /^select cognitive_runtime\.preflight_visual_sentinel_collection/u,
   );
   assert.equal(calls.at(-1).parameters.length, 17);
+  assert.equal(calls.at(-1).parameters[9], payload.metricManifest);
+  assert.equal(typeof calls.at(-1).parameters[9], "object");
   assert.equal(calls.at(-1).parameters.at(-1), assertion);
   assert.equal(JSON.stringify(calls.at(-1).parameters).includes("postgres://"), false);
 });
@@ -164,8 +166,9 @@ test("generic visual predicates use one exact read-only static call", async () =
   assert.deepEqual(calls.at(-1).parameters, [
     "visual_product_experience_sentinel",
     "2".repeat(64),
-    JSON.stringify(metricManifest),
+    metricManifest,
   ]);
+  assert.equal(typeof calls.at(-1).parameters[2], "object");
 });
 
 test("every reviewed operation has an explicit readiness state and static database plan", () => {
