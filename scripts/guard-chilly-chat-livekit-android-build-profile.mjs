@@ -14,13 +14,12 @@ const lockedVersion = (packageName) => (
   packageLock.packages?.[`node_modules/${packageName}`]?.version
 );
 
-assert.equal(profile?.extends, "android-production-local-recovery");
+assert.equal(profile?.extends, "production");
 assert.equal(profile?.channel, "android-chat-livekit-qa");
 assert.equal(profile?.distribution, "store");
 assert.equal(profile?.environment, "production");
 assert.deepEqual(profile?.android, {
   buildType: "app-bundle",
-  credentialsSource: "local",
 });
 
 assert.equal(easJson.build?.production?.channel, "production");
