@@ -56,3 +56,40 @@ iPhone supplies separate physical evidence. A live iOS authorization must not
 open until fresh iOS-only collector and triage capabilities exist and that exact
 manifest passes both preflight layers. The iOS lifecycle, replay denial,
 emergency stop, and sentinel-principal rollback remain pending.
+
+## Successor source review — 2026-07-27
+
+The initial source-only record above is retained unchanged. A subsequent exact
+database review found one pre-deployment P1: the inherited global
+`assertion_hash` uniqueness constraint prevented fresh iOS-scoped collector and
+triage capabilities from binding the already-reviewed, unchanged Worker
+assertions. The original capability-count gate also did not independently prove
+that both required service identities were present.
+
+The implementation corrected only that proved contract defect:
+
+- implementation head: `361718ea38191222ba0aa9c3961562f0eff3edc8`;
+- migration SHA-256:
+  `1ca45bb6f3b0fc8e7622634ea6c64d6eb730b41d935065076c406007718edffe`;
+- focused test SHA-256:
+  `b57ebda756515a7e813879af6e1f9c9d9c2a9d4bc03d5a8f04c9c2824e8f90b6`;
+- assertion uniqueness is now exact-task/project/platform/environment scoped;
+- both preflight and authorization require two current rows and two distinct
+  service identities;
+- the sentinel and triage assertions remain unchanged;
+- Android capabilities and live state remain unchanged;
+- the generic sanitizer and metric-manifest validators remain unchanged.
+
+Exact-source validation after the correction:
+
+- P0: 0;
+- open P1: 0;
+- full pgTAP: 1520/1520;
+- iOS-focused pgTAP: 30/30;
+- isolated runtime: 138/138;
+- password-authenticated isolated LOGIN integration: PASS;
+- Expo Doctor: 18/18;
+- architecture graph: deterministic 3/3.
+
+Production deployment and every physical/live gate remain pending. This review
+branch remains draft, additive, review-only, and forbidden from merge.
