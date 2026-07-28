@@ -226,3 +226,33 @@ use an equivalently reviewed isolated iOS-QA environment), preflight the
 generated manifest as `iosNativeCallsEnabled=true`, retain
 `1.0.0-iosqa1` and the same native graph, and obtain separate Owner approval
 before publication.
+
+## Additive third-OTA source and production-environment preflight
+
+Frozen implementation head:
+`fc3895349c62c1a823d77d9867b064ff60967b3f`
+
+The Owner explicitly approved a third iOS-only internal OTA if needed, with a
+fresh correctness gate before publication. The implementation now treats the
+explicit isolated `1.0.0-iosqa1` runtime as the canonical manifest boundary for
+the already-compiled native-call bridge. The runtime facade gives that
+canonical manifest value precedence over a conflicting export-time public
+environment value. The native module's build-enabled readiness check remains
+required, so unsupported binaries still fail closed.
+
+The exact EAS production environment was executed against the source before
+publication. Sanitized generated-config readback reports:
+
+- iOS runtime `1.0.0-iosqa1`;
+- `iosNativeCallsEnabled=true`;
+- native-call config plugin present;
+- LiveKit config plugin present;
+- update checking remains `ON_LOAD`.
+
+The iOS native-call policy guard, iOS configuration policy guard, and
+TypeScript suite pass. P0-CC-02 remains open until frozen-head CI is 13/13, the
+same production-environment preflight passes from the committed head, the
+third update is published only to `ios-qa`, and installed build-8 database
+readback proves the exact update with `iosNativeCallsEnabled=true`. PushKit,
+outside-app CallKit, and installed LiveKit claims remain pending until their
+separate physical evidence passes.
