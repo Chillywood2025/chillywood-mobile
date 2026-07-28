@@ -151,6 +151,10 @@ assertIncludes(chatThread, "outgoingCallInvite", "caller screen must track outgo
 assertIncludes(chatThread, "Voice call ringing", "caller screen must show ringing instead of stale one-person connected success");
 assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing\" : null}", "call panel must label one-person outgoing calls as ringing");
 assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
+assertIncludes(chatThread, "const latestInvite = await readChillyChatCallInvite(outgoingCallInvite.id)", "caller timeout must re-read authoritative invite state before transition");
+assertIncludes(chatThread, "if (latestInvite?.status === \"accepted\")", "caller timeout must preserve an invite accepted at the deadline");
+assertIncludes(chatThread, "if (!latestInvite || latestInvite.status !== \"ringing\") return;", "caller timeout may only attempt a missed transition from ringing");
+assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"missed\") return;", "caller timeout cleanup requires a confirmed missed transition");
 assertIncludes(chatThread, "nativeCallAction", "native Android notification actions must route through the chat thread");
 assertIncludes(chatThread, "readChillyChatCallInvite(requestedCallInviteId)", "native Android notification actions must read the invite by id after cold/background launch");
 assertIncludes(chatThread, "invite.threadId !== threadId", "native Android notification actions must reject wrong-thread invite ids");

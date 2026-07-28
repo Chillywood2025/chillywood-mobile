@@ -677,22 +677,33 @@ export default function ChillyChatThreadScreen() {
     const expiresAt = Date.parse(outgoingCallInvite.expiresAt);
     const timeoutMs = Math.max(1000, Number.isFinite(expiresAt) ? expiresAt - Date.now() : 45_000);
     outgoingCallTimeoutRef.current = setTimeout(async () => {
-      await updateChillyChatCallInviteStatus({
-        actorUserId: currentUserId,
-        invite: outgoingCallInvite,
-        status: "missed",
-      }).finally(() => {
+      const latestInvite = await readChillyChatCallInvite(outgoingCallInvite.id).catch(() => null);
+      if (latestInvite?.status === "accepted") {
+        activeCallInviteRef.current = latestInvite;
+        setActiveCallInvite(latestInvite);
+        setOutgoingCallInvite(null);
         stopOutgoingRingback();
-        void leaveRoom({ endRoomIfHost: true }).catch(() => null);
-        void clearEndedChatThreadCall(threadId).finally(() => {
-          activeCallInviteRef.current = null;
-          setActiveCallInvite(null);
-          setOutgoingCallInvite(null);
-          setCallPanelOpen(false);
-          setCallDeliveryStatus("No answer. The call expired and active call state was cleared.");
-          void loadThreadState();
-        });
+        setCallDeliveryStatus("Receiver joined the call.");
+        return;
+      }
+      if (!latestInvite || latestInvite.status !== "ringing") return;
+
+      const missedInvite = await updateChillyChatCallInviteStatus({
+        actorUserId: currentUserId,
+        invite: latestInvite,
+        status: "missed",
       });
+      if (!missedInvite || missedInvite.status !== "missed") return;
+
+      stopOutgoingRingback();
+      await leaveRoom({ endRoomIfHost: true }).catch(() => null);
+      await clearEndedChatThreadCall(threadId).catch(() => null);
+      activeCallInviteRef.current = null;
+      setActiveCallInvite(null);
+      setOutgoingCallInvite(null);
+      setCallPanelOpen(false);
+      setCallDeliveryStatus("No answer. The call expired and active call state was cleared.");
+      await loadThreadState();
     }, timeoutMs);
 
     return () => {

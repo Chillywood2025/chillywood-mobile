@@ -386,6 +386,21 @@ assert.match(rootLayoutSource, /presentation === "native_background"/u, "backgro
 assert.match(rootLayoutSource, /params\.set\("nativeCallAction", "answer"\)/u, "foreground Answer uses the durable callee accept route");
 assert.match(rootLayoutSource, /current\?\.invite \? current : current \? \{ \.\.\.current, \.\.\.nextAlert \} : nextAlert/u, "database readback must hydrate a notification-first banner before Decline");
 assert.match(chatThreadSource, /subscribeToChillyChatCallInvite\(visibleInvite\.id/u, "incoming presentation must follow authoritative invite state");
+assert.match(
+  chatThreadSource,
+  /const latestInvite = await readChillyChatCallInvite\(outgoingCallInvite\.id\)[\s\S]{0,320}latestInvite\?\.status === "accepted"[\s\S]{0,320}setActiveCallInvite\(latestInvite\)/u,
+  "the caller timeout race must re-read and preserve an invite accepted at the deadline",
+);
+assert.match(
+  chatThreadSource,
+  /if \(!latestInvite \|\| latestInvite\.status !== "ringing"\) return;[\s\S]{0,420}const missedInvite = await updateChillyChatCallInviteStatus[\s\S]{0,420}if \(!missedInvite \|\| missedInvite\.status !== "missed"\) return;/u,
+  "caller timeout cleanup must require both a fresh ringing read and a confirmed missed transition",
+);
+assert.doesNotMatch(
+  chatThreadSource,
+  /outgoingCallTimeoutRef\.current = setTimeout[\s\S]{0,900}updateChillyChatCallInviteStatus\([\s\S]{0,260}\.finally\(/u,
+  "a rejected missed transition cannot unconditionally clear an accepted call",
+);
 assert.match(chatThreadSource, /setIosNativeCallAudioRoute\(route\)/u, "iOS chat calls must apply the call-type audio route");
 assert.doesNotMatch(
   rootLayoutSource,
