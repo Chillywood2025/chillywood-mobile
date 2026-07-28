@@ -2,11 +2,12 @@
 
 Review-only branch. Never merge this branch or its pull request.
 
-Implementation reviewed: `7c9ad2910cdba18806b2fbc8510198282ca1d879`
+Implementation reviewed: `d7de9d2872aa215aec5dc16f418726de646c5826`
 
-Status: source, local validation, hosted fail-closed deployment, and iOS OTA
-boundary review complete. Android delivery and installed-device call gates
-remain open. This is not an activation or release approval.
+Status: source, local validation, hosted fail-closed deployment, iOS OTA
+boundary review, and the Owner-approved Android replacement profile review are
+complete. Android build/delivery and installed-device call gates remain open.
+This is not an activation or public-release approval.
 
 ## Lane 1 — call lifecycle and product behavior
 
@@ -76,15 +77,21 @@ Native-boundary result:
 
 - Android is `ANDROID_REPLACEMENT_BINARY_REQUIRED`. Build 84 has the compatible
   LiveKit native stack but embeds `production`; an OTA cannot retarget its
-  channel and that channel cannot be used for this internal canary. No Android
-  update or binary was published.
+  channel and that channel cannot be used for this internal canary. The Owner
+  separately approved exactly one replacement App Bundle after the exact delta
+  was reported. The guarded `android-chat-livekit-qa` build profile retains the
+  build-84 runtime and native graph, uses local credentials, produces a store
+  App Bundle, embeds only the isolated internal update channel, and remains
+  bound to the existing Google Play `internal` submit target. Production, open,
+  and closed tracks remain prohibited. No Android update or replacement binary
+  has been published at this review checkpoint.
 - iOS is `IOS_CHAT_CALL_LIVEKIT_OTA_COMPATIBLE`. The one iOS-only update
   `019fa921-fb2c-754d-858b-578a26d67063` was published to `ios-qa` /
   `1.0.0-iosqa1`; TestFlight build 8 recorded two successful and zero failed
   launches.
 
-Open proof gates: separate Owner approval for the Android internal-channel
-replacement, CallKit/PushKit and Android native answer on exact installed
+Open proof gates: one Android internal-channel replacement build and Play
+Internal delivery, CallKit/PushKit and Android native answer on exact installed
 sources, audio activation/deactivation, and background/foreground evidence.
 
 ## Lane 4 — telemetry, privacy, rollback, and regression
@@ -118,6 +125,7 @@ fixture, recovery, emergency stop, and principal rollback.
 - lint: 0 errors
 - TypeScript: pass
 - inherited Android/iOS guards: pass
+- Android internal build-profile guard: pass
 - Edge Function Deno typecheck: pass
 - provider/token authority: 21/21
 - rollout pgTAP: 15/15
