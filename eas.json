@@ -39,13 +39,12 @@
       }
     },
     "android-chat-livekit-qa": {
-      "extends": "android-production-local-recovery",
+      "extends": "production",
       "channel": "android-chat-livekit-qa",
       "distribution": "store",
       "environment": "production",
       "android": {
-        "buildType": "app-bundle",
-        "credentialsSource": "local"
+        "buildType": "app-bundle"
       }
     },
     "ios-qa": {

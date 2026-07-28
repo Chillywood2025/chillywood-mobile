@@ -55,11 +55,13 @@ channel `android-chat-livekit-qa`, while retaining runtime
 `1.0.0-android-imagemanipulator-v1`, the existing package identifier, the
 existing LiveKit/native-call packages, and Google Play Internal distribution.
 The dedicated `android-chat-livekit-qa` EAS profile extends the existing
-locally-signed production App Bundle profile, changes only the embedded update
-channel, and remains bound to the production backend configuration and the
-Google Play `internal` submit target. Owner approval was received on 2026-07-28
-for exactly one replacement App Bundle under this boundary. Production, open,
-and closed Play tracks remain prohibited.
+production App Bundle profile, changes only the embedded update channel, and
+remains bound to the production backend configuration and the Google Play
+`internal` submit target. The already synchronized replacement EAS credential
+must be frozen during the build; no signing credential may be generated,
+exported, or changed. Owner approval was received on 2026-07-28 for exactly one
+replacement App Bundle under this boundary. Production, open, and closed Play
+tracks remain prohibited.
 
 No Android OTA was published. Before the approved replacement is installed, a
 connected Google Play installation reads back app version `1.0.0`, native build
