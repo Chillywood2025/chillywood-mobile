@@ -256,3 +256,38 @@ third update is published only to `ios-qa`, and installed build-8 database
 readback proves the exact update with `iosNativeCallsEnabled=true`. PushKit,
 outside-app CallKit, and installed LiveKit claims remain pending until their
 separate physical evidence passes.
+
+## Additive third-OTA installed readback
+
+Frozen implementation head:
+`fc3895349c62c1a823d77d9867b064ff60967b3f`
+
+PR #50 reached CI 13/13 before publication. The committed-head EAS production
+export again reported iOS runtime `1.0.0-iosqa1`,
+`iosNativeCallsEnabled=true`, both required native plugins, and `ON_LOAD`
+update checking.
+
+The approved third internal iOS OTA was published only to `ios-qa`:
+
+- update group `035a0ce3-5b2e-4331-9b2e-21bd9c05f42b`;
+- iOS update `019fa9a6-4c1a-7b71-b304-3d123f68603c`;
+- runtime `1.0.0-iosqa1`;
+- source `fc3895349c62c1a823d77d9867b064ff60967b3f`;
+- rollback marker false.
+
+Independent EAS readback reports exactly one update in the group, platform
+iOS, branch `ios-qa`, and the exact runtime and source. Two controlled
+TestFlight build-8 launches completed. Installed Expo database readback reports
+the exact update, two successful launches, zero failed launches, and
+`iosNativeCallsEnabled=true`.
+
+Server-owned PushKit readback for the role-free synthetic iOS receiver reports
+one active production token for build 8, zero revoked tokens, and a fresh
+post-update registration. No token, account identifier, device identifier, or
+raw application log was recorded.
+
+P0-CC-02 is resolved at the installed-manifest and token-registration layers.
+Outside-app CallKit presentation/answer and the platform-separated installed
+LiveKit call matrix remain pending direct physical proof. The Android proof
+handset was not attached at this checkpoint, so no cross-platform result is
+inferred or claimed.
