@@ -147,7 +147,7 @@ unmerged after its additive evidence has been consumed.
 
 ## Additive installed-call review — accepted-timeout and iOS native-call gates
 
-Frozen implementation head: `aeb6853643b35ba6bf1e0211552b95bd60a12a5c`
+Frozen implementation head: `aeb68536f23c294115a3c5d0dc09d5000d83ee0e`
 
 Installed review status at this checkpoint: P0=2, P1=0. Neither P0 is accepted
 as LiveKit success evidence.
