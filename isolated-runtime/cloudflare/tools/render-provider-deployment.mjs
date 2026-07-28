@@ -31,9 +31,9 @@ const repositoryRoot = resolve(cloudflareRoot, "..", "..");
 const templateRoot = resolve(cloudflareRoot, "generated", "wrangler");
 const sourceBaseCommit = RUNTIME_MANIFEST.sourceBaseCommit;
 const inputSchema =
-  "chillywood-cognitive-level01-provider-deployment-input-v1";
+  "chillywood-cognitive-level01-provider-deployment-input-v2";
 const outputSchema =
-  "chillywood-cognitive-level01-provider-deployment-output-v1";
+  "chillywood-cognitive-level01-provider-deployment-output-v2";
 const reviewedDeploymentPermissions = Object.freeze([
   "ACCOUNT_ACCESS_APPS_POLICIES_EDIT",
   "ACCOUNT_ACCESS_SERVICE_TOKENS_EDIT",
@@ -559,67 +559,26 @@ const validateServiceBindings = (bindings) => {
   }
 };
 
-const validateHyperdrive = (hyperdrive, active) => {
-  if (!active && hyperdrive === null) return new Map();
+const validateHyperdriveEntry = (principal, entry, ids) => {
   exactKeys(
-    hyperdrive,
-    RUNTIME_MANIFEST.principals.map((principal) => principal.dbRole),
-    "hyperdrive_contract_invalid",
+    entry,
+    ["binding", "cacheMode", "configurationId", "principal"],
+    "hyperdrive_entry_invalid",
   );
-  const ids = new Set();
-  const result = new Map();
-  for (const principal of RUNTIME_MANIFEST.principals) {
-    const entry = hyperdrive[principal.dbRole];
-    exactKeys(
-      entry,
-      ["binding", "cacheMode", "configurationId", "principal"],
-      "hyperdrive_entry_invalid",
-    );
-    if (
-      entry.principal !== principal.dbRole ||
-      entry.binding !== principal.hyperdriveBinding
-    ) {
-      fail("cross_principal_hyperdrive_forbidden");
-    }
-    if (entry.cacheMode !== "disabled") {
-      fail("hyperdrive_cache_must_be_disabled");
-    }
-    if (!hyperdriveIdPattern.test(entry.configurationId)) {
-      fail("hyperdrive_id_invalid");
-    }
-    if (ids.has(entry.configurationId)) fail("hyperdrive_id_duplicate");
-    ids.add(entry.configurationId);
-    result.set(principal.dbRole, entry);
+  if (
+    entry.principal !== principal.dbRole ||
+    entry.binding !== principal.hyperdriveBinding
+  ) {
+    fail("cross_principal_hyperdrive_forbidden");
   }
-  return result;
-};
-
-const placeholderConfigurationByPrincipal = () =>
-  new Map(
-    RUNTIME_MANIFEST.principals
-      .map((principal) => [
-        principal.dbRole,
-        Object.keys(principal.runtimeConfiguration)
-          .filter((name) =>
-            unresolvedValue.test(principal.runtimeConfiguration[name])
-          )
-          .sort(),
-      ])
-      .filter(([, names]) => names.length > 0),
-  );
-
-const runtimeConfigurationInputByPrincipal = () => {
-  const expected = placeholderConfigurationByPrincipal();
-  const research = RUNTIME_MANIFEST.principals.find(
-    (principal) =>
-      principal.dbRole === "cognitive_public_research_broker",
-  );
-  if (!research) fail("research_runtime_configuration_missing");
-  expected.set(
-    research.dbRole,
-    Object.keys(research.runtimeConfiguration).sort(),
-  );
-  return expected;
+  if (entry.cacheMode !== "disabled") {
+    fail("hyperdrive_cache_must_be_disabled");
+  }
+  if (!hyperdriveIdPattern.test(entry.configurationId)) {
+    fail("hyperdrive_id_invalid");
+  }
+  if (ids.has(entry.configurationId)) fail("hyperdrive_id_duplicate");
+  ids.add(entry.configurationId);
 };
 
 const validatePinnedResearchTransportUrl = (value) => {
@@ -705,37 +664,34 @@ const validateRuntimeVariable = (principal, name, value) => {
     validateModelRuntimeVariable(name, value);
     return;
   }
+  if (
+    principal === "cognitive_model_router" &&
+    name === "COGNITIVE_MODEL_PROVIDER" &&
+    value === "openai"
+  ) {
+    return;
+  }
   fail("runtime_variable_validator_missing");
 };
 
-const validateRuntimeVariables = (runtimeVariables, active) => {
-  if (!active) {
-    if (runtimeVariables !== null) {
-      fail("runtime_variable_contract_invalid");
-    }
-    return {};
-  }
-  const expected = runtimeConfigurationInputByPrincipal();
+const validateRuntimeVariables = (principal, runtimeVariables) => {
+  const expected = Object.keys(principal.runtimeConfiguration).sort();
   exactKeys(
     runtimeVariables,
-    [...expected.keys()],
-    "runtime_variable_contract_invalid",
+    expected,
+    "runtime_principal_variable_contract_invalid",
   );
-  for (const [principal, names] of expected) {
-    exactKeys(
-      runtimeVariables[principal],
-      names,
-      "runtime_principal_variable_contract_invalid",
+  for (const name of expected) {
+    validateRuntimeVariable(
+      principal.dbRole,
+      name,
+      runtimeVariables[name],
     );
-    for (const name of names) {
-      validateRuntimeVariable(
-        principal,
-        name,
-        runtimeVariables[principal][name],
-      );
-    }
   }
-  const research = runtimeVariables.cognitive_public_research_broker;
+  if (principal.dbRole !== "cognitive_public_research_broker") {
+    return;
+  }
+  const research = runtimeVariables;
   exactKeys(
     research,
     researchRuntimeVariableNames,
@@ -762,7 +718,173 @@ const validateRuntimeVariables = (runtimeVariables, active) => {
   ) {
     fail("research_retention_variable_invalid");
   }
-  return runtimeVariables;
+};
+
+const validatePrincipalReview = (input, principal, review) => {
+  exactKeys(
+    review,
+    [
+      "lane",
+      "p0",
+      "p1",
+      "principal",
+      "sourceCommit",
+      "sourceModuleGraphSha256",
+      "sourceTree",
+      "status",
+    ],
+    "principal_review_contract_invalid",
+  );
+  if (
+    review.lane !== "independent_principal_activation" ||
+    review.status !== "PASSED" ||
+    review.p0 !== 0 ||
+    review.p1 !== 0 ||
+    review.principal !== principal.dbRole ||
+    review.sourceCommit !== input.source.commit ||
+    review.sourceModuleGraphSha256 !== input.source.moduleGraphSha256 ||
+    review.sourceTree !== input.source.tree
+  ) {
+    fail("principal_independent_review_required");
+  }
+};
+
+const validateRollback = (principal, rollback) => {
+  exactKeys(
+    rollback,
+    [
+      "deactivationMode",
+      "evidenceHash",
+      "preservesSiblings",
+      "principal",
+      "testStatus",
+    ],
+    "principal_rollback_contract_invalid",
+  );
+  if (
+    rollback.deactivationMode !==
+      "redeploy_inert_remove_runtime_bindings" ||
+    rollback.principal !== principal.dbRole ||
+    rollback.preservesSiblings !== true ||
+    rollback.testStatus !== "PASSED" ||
+    !/^[a-f0-9]{64}$/u.test(rollback.evidenceHash)
+  ) {
+    fail("principal_rollback_not_ready");
+  }
+};
+
+const validateTrigger = (principal, trigger) => {
+  if (trigger === null) return;
+  exactKeys(
+    trigger,
+    ["cron", "evidenceHash", "status"],
+    "principal_trigger_contract_invalid",
+  );
+  if (
+    principal.dbRole !== "cognitive_public_research_broker" ||
+    trigger.status !== "ACTIVE_REVIEWED" ||
+    trigger.cron !== "17 * * * *" ||
+    !/^[a-f0-9]{64}$/u.test(trigger.evidenceHash)
+  ) {
+    fail("principal_trigger_not_ready");
+  }
+};
+
+const validatePrincipalStates = (input) => {
+  exactKeys(
+    input.principals,
+    RUNTIME_MANIFEST.principals.map((principal) => principal.dbRole),
+    "principal_state_matrix_invalid",
+  );
+  const active = new Map();
+  const hyperdriveIds = new Set();
+  for (const principal of RUNTIME_MANIFEST.principals) {
+    const contract = input.principals[principal.dbRole];
+    exactKeys(
+      contract,
+      [
+        "database",
+        "installedBindings",
+        "providerBindings",
+        "review",
+        "rollback",
+        "runtimeVariables",
+        "state",
+        "trigger",
+      ],
+      "principal_activation_contract_invalid",
+    );
+    if (!["active", "inert"].includes(contract.state)) {
+      fail("principal_state_invalid");
+    }
+    if (contract.state === "inert") {
+      if (
+        contract.database !== null ||
+        contract.review !== null ||
+        contract.rollback !== null ||
+        contract.runtimeVariables !== null ||
+        contract.trigger !== null
+      ) {
+        fail("inert_principal_runtime_forbidden");
+      }
+      exactStringSet(
+        contract.installedBindings,
+        [],
+        "inert_principal_binding_forbidden",
+      );
+      exactStringSet(
+        contract.providerBindings,
+        [],
+        "inert_principal_provider_binding_forbidden",
+      );
+      continue;
+    }
+
+    exactKeys(
+      contract.database,
+      [
+        "hyperdrive",
+        "loginIdentity",
+        "netAccess",
+        "principalRole",
+        "rpcAllowlist",
+      ],
+      "principal_database_contract_invalid",
+    );
+    validateHyperdriveEntry(
+      principal,
+      contract.database.hyperdrive,
+      hyperdriveIds,
+    );
+    if (
+      contract.database.loginIdentity !== principal.loginRole ||
+      contract.database.principalRole !== principal.dbRole ||
+      contract.database.netAccess !== "DENIED"
+    ) {
+      fail("principal_database_identity_invalid");
+    }
+    exactStringSet(
+      contract.database.rpcAllowlist,
+      principal.rpcAllowlist,
+      "principal_rpc_allowlist_invalid",
+    );
+    exactStringSet(
+      contract.installedBindings,
+      principal.requiredSecrets,
+      "principal_runtime_binding_contract_invalid",
+    );
+    exactStringSet(
+      contract.providerBindings,
+      principal.providerBindings,
+      "principal_provider_binding_contract_invalid",
+    );
+    validateRuntimeVariables(principal, contract.runtimeVariables);
+    validatePrincipalReview(input, principal, contract.review);
+    validateRollback(principal, contract.rollback);
+    validateTrigger(principal, contract.trigger);
+    active.set(principal.dbRole, contract);
+  }
+  return active;
 };
 
 const assertReviewGates = (input) => {
@@ -785,11 +907,9 @@ export const validateDeploymentInput = (
     input,
     [
       "access",
-      "activationMode",
-      "hyperdrive",
+      "principals",
       "providerReadiness",
       "review",
-      "runtimeVariables",
       "schemaVersion",
       "serviceBindings",
       "source",
@@ -797,24 +917,17 @@ export const validateDeploymentInput = (
     "deployment_input_contract_invalid",
   );
   assertNoRawCredentialFields(input);
-  if (
-    input.schemaVersion !== inputSchema ||
-    !["active", "inert"].includes(input.activationMode)
-  ) {
+  if (input.schemaVersion !== inputSchema) {
     fail("deployment_input_contract_invalid");
   }
-  const active = input.activationMode === "active";
+  assertNoUnresolvedValues(input);
   validateSource(input, repositoryState);
-  validateProviderReadiness(input.providerReadiness, active);
   validateAccess(input.access);
   validateServiceBindings(input.serviceBindings);
-  const hyperdrive = validateHyperdrive(input.hyperdrive, active);
-  const runtimeVariables = validateRuntimeVariables(
-    input.runtimeVariables,
-    active,
-  );
   assertReviewGates(input);
-  return Object.freeze({ active, hyperdrive, runtimeVariables });
+  const active = validatePrincipalStates(input);
+  validateProviderReadiness(input.providerReadiness, active.size > 0);
+  return Object.freeze({ active });
 };
 
 const renderGateway = (input, sourceGraph) => {
@@ -835,6 +948,14 @@ const renderGateway = (input, sourceGraph) => {
       CF_ACCESS_SERVICE_TOKEN_COMMON_NAME:
         input.access.serviceTokenClientId,
       CF_ACCESS_TEAM_DOMAIN: input.access.teamDomain,
+      COGNITIVE_PRINCIPAL_STATES: stableJson(
+        Object.fromEntries(
+          RUNTIME_MANIFEST.principals.map((principal) => [
+            principal.dbRole,
+            input.principals[principal.dbRole].state,
+          ]),
+        ),
+      ),
       SOURCE_COMMIT: input.source.commit,
       SOURCE_BASE_COMMIT: input.source.baseCommit,
     },
@@ -849,46 +970,47 @@ const renderGateway = (input, sourceGraph) => {
 const renderPrivateWorker = (
   input,
   principal,
-  active,
-  hyperdrive,
-  runtimeVariables,
+  contract,
   sourceGraph,
 ) => {
   const templateName = `${principal.dbRole}.wrangler.template.jsonc`;
   const template = readTemplate(templateName, sourceGraph);
-  const placeholderNames = Object.keys(principal.runtimeConfiguration)
-    .filter((name) => unresolvedValue.test(principal.runtimeConfiguration[name]));
+  const active = contract.state === "active";
   const config = {
     ...template,
     ...(active
       ? {
         hyperdrive: [{
           binding: principal.hyperdriveBinding,
-          id: hyperdrive.get(principal.dbRole).configurationId,
+          id: contract.database.hyperdrive.configurationId,
         }],
       }
       : {}),
     main: resolvePackagedMain(template.main, sourceGraph),
     preview_urls: false,
     routes: [],
-    vars: {
-      ...template.vars,
-      SOURCE_COMMIT: input.source.commit,
-      SOURCE_BASE_COMMIT: input.source.baseCommit,
-      ...(active
-        ? runtimeVariables[principal.dbRole] ?? {}
-        : {}),
-    },
+    vars: active
+      ? {
+        ...template.vars,
+        ...contract.runtimeVariables,
+        COGNITIVE_DEPLOYMENT_STATE: "active",
+        SOURCE_COMMIT: input.source.commit,
+        SOURCE_BASE_COMMIT: input.source.baseCommit,
+      }
+      : {
+        COGNITIVE_DEPLOYMENT_STATE: "inert",
+        RUNTIME_SCHEMA_VERSION: template.vars.RUNTIME_SCHEMA_VERSION,
+        SOURCE_COMMIT: input.source.commit,
+        SOURCE_BASE_COMMIT: input.source.baseCommit,
+      },
     workers_dev: false,
   };
   delete config.secrets;
+  delete config.triggers;
   if (!active) {
     delete config.hyperdrive;
-    for (const name of placeholderNames) delete config.vars[name];
-    for (const name of researchRetentionRuntimeVariableNames) {
-      delete config.vars[name];
-    }
-    delete config.triggers;
+  } else if (contract.trigger !== null) {
+    config.triggers = { crons: [contract.trigger.cron] };
   }
   assertNoUnresolvedValues(config);
   if (
@@ -912,8 +1034,30 @@ export const renderDeployment = async (
   repositoryState = getRepositoryState(),
 ) => {
   const validated = validateDeploymentInput(input, repositoryState);
+  const principalStates = Object.fromEntries(
+    RUNTIME_MANIFEST.principals.map((principal) => [
+      principal.dbRole,
+      input.principals[principal.dbRole].state,
+    ]),
+  );
+  const activePrincipals = Object.entries(principalStates)
+    .filter(([, state]) => state === "active")
+    .map(([principal]) => principal)
+    .sort();
+  const inertPrincipals = Object.entries(principalStates)
+    .filter(([, state]) => state === "inert")
+    .map(([principal]) => principal)
+    .sort();
   const baseMetadata = {
-    activationMode: input.activationMode,
+    activePrincipalCount: activePrincipals.length,
+    activePrincipals,
+    globalReadiness: activePrincipals.length ===
+        RUNTIME_MANIFEST.principals.length
+      ? "ALL_PRINCIPALS_ACTIVE"
+      : "NOT_GLOBALLY_READY",
+    inertPrincipalCount: inertPrincipals.length,
+    inertPrincipals,
+    principalStates,
     sourceBaseCommit: input.source.baseCommit,
     sourceCommit: input.source.commit,
     sourceModuleGraphFileCount: repositoryState.sourceGraph.fileCount,
@@ -927,9 +1071,7 @@ export const renderDeployment = async (
       await renderPrivateWorker(
         input,
         principal,
-        validated.active,
-        validated.hyperdrive,
-        validated.runtimeVariables,
+        input.principals[principal.dbRole],
         repositoryState.sourceGraph,
       ),
     );
@@ -949,9 +1091,11 @@ export const renderDeployment = async (
     ),
     "gateway.wrangler.jsonc",
   ];
-  const gate = validated.active
-    ? "READY_EXACT_REVIEW_AND_NET"
-    : "READY_INERT_NO_DATABASE";
+  const gate = validated.active.size === 0
+    ? "READY_STAGED_INERT_ONLY"
+    : validated.active.size === RUNTIME_MANIFEST.principals.length
+    ? "READY_STAGED_ALL_PRINCIPALS"
+    : "READY_STAGED_PARTIAL";
   const commandPlan = {
     commands: deploymentOrder.map((config) => ({
       argv: [

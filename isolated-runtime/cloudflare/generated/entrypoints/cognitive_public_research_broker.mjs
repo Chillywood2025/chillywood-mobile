@@ -14,6 +14,11 @@ const principal = Object.freeze({
     "DATABASE_URL"
   ],
   "hyperdriveBinding": "COGNITIVE_PUBLIC_RESEARCH_BROKER_HYPERDRIVE",
+  "internalBindings": [
+    "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
+    "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN"
+  ],
+  "loginRole": "cognitive_public_research_broker_login",
   "maxRequestBytes": 1048576,
   "networkEgress": [
     "configured_peer_pinned_research_transport_origin_only"
@@ -88,6 +93,9 @@ const principal = Object.freeze({
     }
   },
   "provider": "isolated_pinned_research_transport",
+  "providerBindings": [
+    "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY"
+  ],
   "runtimeConfiguration": {
     "COGNITIVE_RESEARCH_PINNED_TRANSPORT_URL": "REPLACE_WITH_REVIEWED_PINNED_TRANSPORT_HTTPS_URL",
     "COGNITIVE_RESEARCH_RETENTION_ATTESTATION_HASH": "REPLACE_WITH_REVIEWED_RETENTION_ATTESTATION_HASH",
@@ -105,6 +113,14 @@ const principal = Object.freeze({
     "COGNITIVE_PUBLIC_RESEARCH_BROKER_INVOKE_SHA256",
     "COGNITIVE_RESEARCH_BROKER_SERVICE_TOKEN",
     "COGNITIVE_RESEARCH_PINNED_TRANSPORT_HMAC_KEY"
+  ],
+  "rpcAllowlist": [
+    "cognitive_expire_public_research_maintenance",
+    "cognitive_record_public_research_contradiction_detection",
+    "cognitive_record_public_research_source_v2",
+    "cognitive_runtime.record_research_claim_with_readback",
+    "cognitive_runtime.runtime_revocation_status",
+    "cognitive_runtime.runtime_role_preflight"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

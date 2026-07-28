@@ -13,6 +13,11 @@ const principal = Object.freeze({
     "DATABASE_URL"
   ],
   "hyperdriveBinding": "COGNITIVE_PRODUCT_BASELINE_EXECUTOR_HYPERDRIVE",
+  "internalBindings": [
+    "COGNITIVE_PRODUCT_BASELINE_EXECUTOR_INVOKE_SHA256",
+    "COGNITIVE_PRODUCT_BASELINE_SERVICE_ASSERTION"
+  ],
+  "loginRole": "cognitive_product_baseline_executor_login",
   "maxRequestBytes": 24576,
   "networkEgress": [],
   "operations": {
@@ -103,10 +108,21 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "providerBindings": [],
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_PRODUCT_BASELINE_EXECUTOR_INVOKE_SHA256",
     "COGNITIVE_PRODUCT_BASELINE_SERVICE_ASSERTION"
+  ],
+  "rpcAllowlist": [
+    "cognitive_runtime.runtime_revocation_status",
+    "cognitive_runtime.runtime_role_preflight",
+    "governance_begin_approved_execution",
+    "governance_claim_approved_action",
+    "governance_complete_approved_execution",
+    "governance_fail_approved_execution",
+    "governance_product_baseline_persist_completed_execution",
+    "governance_stage_product_experience_baseline_v1"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

@@ -11,11 +11,13 @@ const SAFE_CATEGORIES = new Set([
   "credential_domain_rejected",
   "database_rejected",
   "deadline_rejected",
+  "deployment_state_rejected",
   "emergency_stop_rejected",
   "invocation_rejected",
   "operation_completed",
   "payload_rejected",
   "preflight_rejected",
+  "principal_inert",
   "revocation_rejected",
   "source_commit_rejected",
 ]);

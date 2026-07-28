@@ -64,6 +64,74 @@ test("accepts one exact reviewed sentinel contract", async () => {
   assert.equal(result.ok, true);
 });
 
+test("accepts the exact sentinel preflight only for the sentinel principal", async () => {
+  const payload = {
+    ...sentinelPayload,
+    action: "preflight_visual_sentinel_collection",
+  };
+  const valid = await envelope({
+    operation: "preflight_visual_sentinel_collection",
+    payload,
+  });
+
+  assert.equal(
+    (await validateEnvelope(
+      valid,
+      Date.parse("2026-07-24T12:00:00.000Z"),
+      60_000,
+      (principal) => PRINCIPAL_BY_ID.get(principal),
+    )).ok,
+    true,
+  );
+  assert.equal(
+    (await validateEnvelope(
+      {
+        ...valid,
+        principal: "cognitive_product_quality_triage",
+      },
+      Date.parse("2026-07-24T12:00:00.000Z"),
+      60_000,
+      (principal) => PRINCIPAL_BY_ID.get(principal),
+    )).error,
+    "envelope_scope_rejected",
+  );
+});
+
+test("accepts only the collector generic-manifest predicate diagnostic", async () => {
+  const payload = {
+    action: "preflight_visual_generic_manifest_predicates",
+    evidenceManifestHash: "2".repeat(64),
+    metricManifest: sentinelPayload.metricManifest,
+    sentinelKey: "visual_product_experience_sentinel",
+  };
+  const valid = await envelope({
+    operation: "preflight_visual_generic_manifest_predicates",
+    payload,
+  });
+
+  assert.equal(
+    (await validateEnvelope(
+      valid,
+      Date.parse("2026-07-24T12:00:00.000Z"),
+      60_000,
+      (principal) => PRINCIPAL_BY_ID.get(principal),
+    )).ok,
+    true,
+  );
+  assert.equal(
+    (await validateEnvelope(
+      {
+        ...valid,
+        principal: "cognitive_product_quality_triage",
+      },
+      Date.parse("2026-07-24T12:00:00.000Z"),
+      60_000,
+      (principal) => PRINCIPAL_BY_ID.get(principal),
+    )).error,
+    "envelope_scope_rejected",
+  );
+});
+
 test("LiveKit no-finding attestation is evaluator-only and schema-closed", async () => {
   const payload = {
     action: "attest_livekit_bounded_failure_no_finding",

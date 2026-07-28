@@ -13,6 +13,11 @@ const principal = Object.freeze({
     "DATABASE_URL"
   ],
   "hyperdriveBinding": "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_HYPERDRIVE",
+  "internalBindings": [
+    "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_INVOKE_SHA256",
+    "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION"
+  ],
+  "loginRole": "cognitive_product_quality_evaluator_login",
   "maxRequestBytes": 32768,
   "networkEgress": [],
   "operations": {
@@ -87,10 +92,22 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "providerBindings": [],
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_INVOKE_SHA256",
     "COGNITIVE_PRODUCT_QUALITY_EVALUATOR_ASSERTION"
+  ],
+  "rpcAllowlist": [
+    "cognitive_runtime.product_quality_attest_livekit_bounded_failure_no_finding",
+    "cognitive_runtime.product_quality_evaluator_snapshot",
+    "cognitive_runtime.product_quality_no_finding_assessment_hash",
+    "cognitive_runtime.runtime_revocation_status",
+    "cognitive_runtime.runtime_role_preflight",
+    "governance_evaluate_product_experience_baseline_v1",
+    "product_quality_detection_assessment_hash",
+    "product_quality_record_sentinel_evaluator_proof",
+    "product_quality_resolution_assessment_hash"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

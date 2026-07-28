@@ -13,6 +13,11 @@ const principal = Object.freeze({
     "DATABASE_URL"
   ],
   "hyperdriveBinding": "COGNITIVE_PRODUCT_QUALITY_TRIAGE_HYPERDRIVE",
+  "internalBindings": [
+    "COGNITIVE_PRODUCT_QUALITY_TRIAGE_INVOKE_SHA256",
+    "COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION"
+  ],
+  "loginRole": "cognitive_product_quality_triage_login",
   "maxRequestBytes": 32768,
   "networkEgress": [],
   "operations": {
@@ -66,10 +71,18 @@ const principal = Object.freeze({
     }
   },
   "provider": "none",
+  "providerBindings": [],
   "runtimeConfiguration": {},
   "requiredSecrets": [
     "COGNITIVE_PRODUCT_QUALITY_TRIAGE_INVOKE_SHA256",
     "COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION"
+  ],
+  "rpcAllowlist": [
+    "cognitive_runtime.runtime_revocation_status",
+    "cognitive_runtime.runtime_role_preflight",
+    "product_quality_triage_detection",
+    "product_quality_triage_no_finding",
+    "product_quality_triage_resolution"
   ],
   "rpcHooks": [
     "cognitive_runtime.runtime_role_preflight",

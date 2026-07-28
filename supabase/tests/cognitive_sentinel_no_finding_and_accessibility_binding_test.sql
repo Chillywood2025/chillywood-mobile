@@ -732,5 +732,109 @@ select ok(
   'malformed web preference metrics fail closed without numeric-cast errors'
 );
 
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+insert into no_finding_fixture(fixture_key, run_id)
+select
+  'passing-visual',
+  (
+    public.product_experience_collect_sentinel_run(
+      'd1000000-0000-4000-8000-000000000001',
+      'd0000000-0000-4000-8000-000000000001',
+      'android','production',
+      'visual_product_experience_sentinel','Home main tab',
+      repeat('c',64),repeat('d',64),repeat('a',64),
+      jsonb_build_object(
+        'schemaVersion','product-sentinel-v1',
+        'sanitizationVersion','bounded-nonpersonal-v1',
+        'observationKind','touch_target',
+        'evidenceHashes',jsonb_build_array(repeat('a',64)),
+        'metrics',
+        (select metrics from objective_accessibility_fixture)
+        || jsonb_build_object(
+          'interactiveTargetHeight',48,
+          'targetClassification','meets_platform_minimum',
+          'baselineState','approved_baseline',
+          'baselineComparisonHash',
+            '34007790b5b8a94eac209292971a54d4ddbdca543dca01a8b184227d1d660cba',
+          'evidenceQuality','measured_simulator',
+          'evidenceQualityHash',repeat('a',64),
+          'providerState','healthy'
+        )
+      ),
+      'passed','simulator_observed',
+      transaction_timestamp()-interval '2 minutes',
+      transaction_timestamp()-interval '1 minute',
+      transaction_timestamp()+interval '1 hour',
+      repeat('b',64),
+      'cognitive_sentinel_collector',
+      'sentinel-no-finding-collector-assertion'
+    )->>'sentinelRunId'
+  )::uuid;
+reset role;
+
+update no_finding_fixture
+set assessment_hash =
+  public.product_quality_no_finding_assessment_hash(run_id)
+where fixture_key = 'passing-visual';
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+update no_finding_fixture
+set proof_id = (
+  public.product_quality_record_sentinel_evaluator_proof(
+    run_id, 'run_no_finding', assessment_hash, repeat('a',64),
+    'passed', repeat('d',64), repeat('e',64),
+    'cognitive_product_quality_evaluator',
+    'product-quality-evaluator-no-finding-assertion'
+  )->>'evaluatorProofId'
+)::uuid
+where fixture_key = 'passing-visual';
+
+select is(
+  (
+    public.product_quality_triage_no_finding(
+      run_id,
+      proof_id,
+      repeat('e',64),
+      'cognitive_product_quality_triage',
+      'product-quality-triage-no-finding-assertion'
+    )->>'disposition'
+  ),
+  'no_finding',
+  'visual no-finding proof is independently consumed by triage'
+)
+from no_finding_fixture
+where fixture_key = 'passing-visual';
+
+select throws_ok(
+  $$select public.product_quality_triage_no_finding(
+      run_id,
+      proof_id,
+      repeat('e',64),
+      'cognitive_product_quality_triage',
+      'product-quality-triage-no-finding-assertion'
+    )
+    from no_finding_fixture
+    where fixture_key = 'passing-visual'$$,
+  'P0001',
+  'product_quality_no_finding_triage_replay_rejected',
+  'visual no-finding triage remains single-use'
+);
+reset role;
+
+select ok(
+  exists (
+    select 1
+    from public.product_experience_sentinel_no_finding_events event
+    join no_finding_fixture fixture
+      on fixture.run_id = event.sentinel_run_id
+    where fixture.fixture_key = 'passing-visual'
+      and event.disposition = 'no_finding'
+      and event.finding_id is null
+  ),
+  'visual no-finding creates an immutable consumed event'
+);
+
 select * from finish();
 rollback;

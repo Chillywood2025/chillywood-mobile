@@ -42,7 +42,12 @@ test("database port accepts only compile-time statement IDs and exact arity", as
   ]);
   assert.equal(calls.at(-1).options.max, 1);
   assert.equal(calls.at(-1).options.prepare, false);
-  assert.equal(calls.at(-1).options.ssl, "require");
+  assert.equal(
+    Object.hasOwn(calls.at(-1).options, "ssl"),
+    false,
+    "the Hyperdrive dynamic connection string owns its internal TLS mode",
+  );
+  assert.equal(calls.at(-1).options.connect_timeout, 15);
 });
 
 test("ready operation adapters use exact static parameter order", async () => {
@@ -70,6 +75,100 @@ test("ready operation adapters use exact static parameter order", async () => {
     "10000000-0000-4000-8000-000000000001",
     "product_experience_baseline_service",
   ]);
+});
+
+test("visual collection preflight uses the assertion only in its exact static call", async () => {
+  const database = createDatabasePort({
+    connectionString: "postgres://isolated.invalid/db",
+    sqlFactory,
+  });
+  const adapter = operationAdapter(
+    "cognitive_sentinel_collector",
+    "preflight_visual_sentinel_collection",
+  );
+  const payload = {
+    action: "preflight_visual_sentinel_collection",
+    collectionIdempotencyHash: "1".repeat(64),
+    environment: "production",
+    evaluationExpiresAt: "2026-07-24T12:10:00.000Z",
+    evidenceManifestHash: "2".repeat(64),
+    metricManifest: { metrics: {}, observationKind: "touch_target" },
+    observationFinishedAt: "2026-07-24T12:00:05.000Z",
+    observationStartedAt: "2026-07-24T12:00:00.000Z",
+    physicalProofStatus: "simulator_observed",
+    platform: "android",
+    projectId: "30000000-0000-4000-8000-000000000003",
+    resultStatus: "failed",
+    routeOrSurface: "Home main tab",
+    runtimeIdentityHash: "3".repeat(64),
+    sentinelKey: "visual_product_experience_sentinel",
+    sourceBuildHash: "4".repeat(64),
+    taskId: "20000000-0000-4000-8000-000000000002",
+  };
+  const assertion = "sentinel-preflight-assertion-not-logged";
+
+  await adapter.execute({
+    database,
+    env: { COGNITIVE_SENTINEL_COLLECTOR_ASSERTION: assertion },
+    payload,
+  });
+
+  assert.equal(adapter.ready, true);
+  assert.deepEqual(adapter.databaseOperations, [
+    "preflight_visual_sentinel_collection",
+  ]);
+  assert.match(
+    calls.at(-1).text,
+    /^select cognitive_runtime\.preflight_visual_sentinel_collection/u,
+  );
+  assert.equal(calls.at(-1).parameters.length, 17);
+  assert.equal(calls.at(-1).parameters[9], payload.metricManifest);
+  assert.equal(typeof calls.at(-1).parameters[9], "object");
+  assert.equal(calls.at(-1).parameters.at(-1), assertion);
+  assert.equal(JSON.stringify(calls.at(-1).parameters).includes("postgres://"), false);
+});
+
+test("generic visual predicates use one exact read-only static call", async () => {
+  const database = createDatabasePort({
+    connectionString: "postgres://isolated.invalid/db",
+    sqlFactory,
+  });
+  const adapter = operationAdapter(
+    "cognitive_sentinel_collector",
+    "preflight_visual_generic_manifest_predicates",
+  );
+  const metricManifest = {
+    schemaVersion: "product-sentinel-v1",
+    sanitizationVersion: "bounded-nonpersonal-v1",
+    observationKind: "touch_target",
+    evidenceHashes: ["2".repeat(64)],
+    metrics: { platform: "android" },
+  };
+
+  await adapter.execute({
+    database,
+    payload: {
+      action: "preflight_visual_generic_manifest_predicates",
+      evidenceManifestHash: "2".repeat(64),
+      metricManifest,
+      sentinelKey: "visual_product_experience_sentinel",
+    },
+  });
+
+  assert.equal(adapter.ready, true);
+  assert.deepEqual(adapter.databaseOperations, [
+    "preflight_visual_generic_manifest_predicates",
+  ]);
+  assert.match(
+    calls.at(-1).text,
+    /^select cognitive_runtime\.preflight_visual_generic_manifest_predicates/u,
+  );
+  assert.deepEqual(calls.at(-1).parameters, [
+    "visual_product_experience_sentinel",
+    "2".repeat(64),
+    metricManifest,
+  ]);
+  assert.equal(typeof calls.at(-1).parameters[2], "object");
 });
 
 test("every reviewed operation has an explicit readiness state and static database plan", () => {

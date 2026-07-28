@@ -7,6 +7,7 @@ import {
 import { writeSanitizedAudit } from "./sanitize.mjs";
 
 const COMMON_PRIVATE_ENVIRONMENT_BINDINGS = Object.freeze([
+  "COGNITIVE_DEPLOYMENT_STATE",
   "RUNTIME_SCHEMA_VERSION",
   "SOURCE_BASE_COMMIT",
   "SOURCE_COMMIT",
@@ -15,26 +16,36 @@ const COMMON_PRIVATE_ENVIRONMENT_BINDINGS = Object.freeze([
 const PINNED_RESEARCH_TRANSPORT_REASON =
   "RESEARCH_PINNED_TRANSPORT_REQUIRED";
 
-export const privateEnvironmentKeyAllowlist = (principal) =>
-  Object.freeze([
+export const privateEnvironmentKeyAllowlist = (principal, state) => {
+  if (!["active", "inert"].includes(state)) {
+    throw new Error("deployment_state_rejected");
+  }
+  return Object.freeze([
     ...COMMON_PRIVATE_ENVIRONMENT_BINDINGS,
-    principal.hyperdriveBinding,
-    ...Object.keys(principal.runtimeConfiguration),
-    ...principal.requiredSecrets,
+    ...(state === "active"
+      ? [
+        principal.hyperdriveBinding,
+        ...Object.keys(principal.runtimeConfiguration),
+        ...principal.requiredSecrets,
+      ]
+      : []),
   ].sort());
+};
 
-const assertCredentialDomain = (env, principal) => {
+const assertCredentialDomain = (env, principal, state) => {
   if (env === null || typeof env !== "object" || Array.isArray(env)) {
     throw new Error("credential_domain_rejected");
   }
   const actual = Object.keys(env).sort();
-  const expected = privateEnvironmentKeyAllowlist(principal);
+  const expected = privateEnvironmentKeyAllowlist(principal, state);
   if (
     actual.length !== expected.length ||
-    actual.some((name, index) => name !== expected[index])
+    actual.some((name, index) => name !== expected[index]) ||
+    env.COGNITIVE_DEPLOYMENT_STATE !== state
   ) {
     throw new Error("credential_domain_rejected");
   }
+  if (state === "inert") return;
   const missing = principal.requiredSecrets.filter((name) => !env[name]);
   if (missing.length > 0) throw new Error("credential_domain_rejected");
   if (!env[principal.hyperdriveBinding]?.connectionString) {
@@ -139,7 +150,17 @@ export const createPrivateInvocationHandler = ({
   let deadlineController;
   if (!principal) throw new Error("principal_configuration_rejected");
   try {
-    assertCredentialDomain(env, principal);
+    if (env === null || typeof env !== "object" || Array.isArray(env)) {
+      throw new Error("credential_domain_rejected");
+    }
+    const deploymentState = env?.COGNITIVE_DEPLOYMENT_STATE;
+    if (!["active", "inert"].includes(deploymentState)) {
+      throw new Error("deployment_state_rejected");
+    }
+    assertCredentialDomain(env, principal, deploymentState);
+    if (deploymentState === "inert") {
+      throw new Error("principal_inert");
+    }
     const expectedHash =
       env[`${principal.dbRole.toUpperCase()}_INVOKE_SHA256`];
     const suppliedHash = await sha256Hex(
@@ -249,8 +270,10 @@ export const createPrivateInvocationHandler = ({
     const safeCategory = [
       "credential_domain_rejected",
       "deadline_rejected",
+      "deployment_state_rejected",
       "emergency_stop_rejected",
       "invocation_rejected",
+      "principal_inert",
       "preflight_rejected",
       PINNED_RESEARCH_TRANSPORT_REASON,
       "revocation_rejected",

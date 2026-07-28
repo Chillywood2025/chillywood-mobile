@@ -123,6 +123,8 @@ const gatewayConfig = {
       "REPLACE_WITH_ACCESS_SERVICE_TOKEN_CLIENT_ID",
     CF_ACCESS_TEAM_DOMAIN:
       "https://replace-with-team.cloudflareaccess.com",
+    COGNITIVE_PRINCIPAL_STATES:
+      "REPLACE_WITH_EXPLICIT_PRINCIPAL_STATES",
     RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
     SOURCE_COMMIT: "REPLACE_WITH_REVIEWED_SUCCESSOR_COMMIT",
     SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
@@ -181,6 +183,7 @@ for (const principal of RUNTIME_MANIFEST.principals) {
     name: principal.workerName,
     secrets: { required: principal.requiredSecrets },
     vars: {
+      COGNITIVE_DEPLOYMENT_STATE: "REPLACE_WITH_EXPLICIT_PRINCIPAL_STATE",
       RUNTIME_SCHEMA_VERSION: RUNTIME_MANIFEST.schemaVersion,
       SOURCE_COMMIT: "REPLACE_WITH_REVIEWED_SUCCESSOR_COMMIT",
       SOURCE_BASE_COMMIT: RUNTIME_MANIFEST.sourceBaseCommit,
