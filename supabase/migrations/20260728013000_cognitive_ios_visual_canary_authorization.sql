@@ -3,6 +3,21 @@
 -- register a capability, open an authorization, enable a switch, create a
 -- schedule, or persist product evidence.
 
+-- Android and iOS use the same isolated Worker assertions. Preserve assertion
+-- uniqueness inside each exact task scope while permitting a separately
+-- registered platform capability to bind the unchanged Worker assertion.
+alter table public.cognitive_product_quality_service_capabilities
+  drop constraint
+    cognitive_product_quality_service_capabiliti_assertion_hash_key,
+  add constraint cognitive_product_quality_capability_assertion_scope_key
+    unique (
+      assertion_hash,
+      task_id,
+      project_id,
+      platform,
+      environment
+    );
+
 alter table public.cognitive_provider_independent_visual_canary_authorizations
   drop constraint cognitive_visual_canary_target_pair_check,
   add constraint cognitive_visual_canary_target_pair_check check (
@@ -248,7 +263,9 @@ begin
      )
      or not public.governance_approval_emergency_active()
      or (
-       select count(*)
+       select
+         count(*) <> 2
+         or count(distinct capability.service_identity) <> 2
        from public.cognitive_product_quality_service_capabilities capability
        where capability.task_id = target_scope.platform_task_id
          and capability.project_id = p_project_id
@@ -266,7 +283,7 @@ begin
              revocation
            where revocation.capability_id = capability.id
          )
-     ) <> 2
+     )
      or exists (
        select 1
        from public.cognitive_governance_switches sibling
@@ -448,7 +465,7 @@ begin
      or p_independent_review_hash <>
         '95e37b54d9f008fa55546f323c0be7dbf6ac24957e51bd95a3634e2e60686e67'
      or p_tests_hash <>
-        '135df5593901bd206a22281ef596507aaa1c0c0d49294249a2509d58d260f7d6'
+        'b57ebda756515a7e813879af6e1f9c9d9c2a9d4bc03d5a8f04c9c2824e8f90b6'
      or p_deployment_plan_hash <>
         'e39fd94c10a2612ac2d3fb2f41cecb03db52c249b55e92fb9ab4aa84cfa6b6fd'
      or p_rollback_hash <>
@@ -461,7 +478,9 @@ begin
         'Chillywood2025/chillywood-mobile'
      or not public.governance_approval_emergency_active()
      or (
-       select count(*)
+       select
+         count(*) <> 2
+         or count(distinct capability.service_identity) <> 2
        from public.cognitive_product_quality_service_capabilities capability
        where capability.task_id = receipt_value.target_task_id
          and capability.project_id = receipt_value.project_id
@@ -479,7 +498,7 @@ begin
              revocation
            where revocation.capability_id = capability.id
          )
-     ) <> 2
+     )
      or exists (
        select 1
        from public.cognitive_governance_switches sibling
