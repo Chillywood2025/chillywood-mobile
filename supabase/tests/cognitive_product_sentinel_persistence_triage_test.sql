@@ -903,5 +903,77 @@ select throws_ok(
   'immutable finding events cannot be rewritten'
 );
 
+select is(
+  public.product_quality_detection_assessment_hash(
+    'c4000000-0000-4000-8000-000000000001',
+    'android-touch-target-finding',
+    'Home main tab',
+    repeat('1',64),
+    'medium',
+    repeat('2',64),
+    array[repeat('3',64)],
+    'layout_density',
+    0.85::numeric,
+    'confirmed_defect',
+    repeat('4',64),
+    repeat('5',64),
+    repeat('6',64),
+    'installed_ui_observed'
+  ),
+  public.product_quality_detection_assessment_hash(
+    'c4000000-0000-4000-8000-000000000001',
+    'android-touch-target-finding',
+    'Home main tab',
+    repeat('1',64),
+    'medium',
+    repeat('2',64),
+    array[repeat('3',64)],
+    'layout_density',
+    0.8500::numeric(5,4),
+    'confirmed_defect',
+    repeat('4',64),
+    repeat('5',64),
+    repeat('6',64),
+    'installed_ui_observed'
+  ),
+  'numerically equal confidence values have one canonical assessment hash'
+);
+
+select isnt(
+  public.product_quality_detection_assessment_hash(
+    'c4000000-0000-4000-8000-000000000001',
+    'android-touch-target-finding',
+    'Home main tab',
+    repeat('1',64),
+    'medium',
+    repeat('2',64),
+    array[repeat('3',64)],
+    'layout_density',
+    0.85::numeric,
+    'confirmed_defect',
+    repeat('4',64),
+    repeat('5',64),
+    repeat('6',64),
+    'installed_ui_observed'
+  ),
+  public.product_quality_detection_assessment_hash(
+    'c4000000-0000-4000-8000-000000000001',
+    'android-touch-target-finding',
+    'Home main tab',
+    repeat('1',64),
+    'medium',
+    repeat('2',64),
+    array[repeat('3',64)],
+    'layout_density',
+    0.86::numeric,
+    'confirmed_defect',
+    repeat('4',64),
+    repeat('5',64),
+    repeat('6',64),
+    'installed_ui_observed'
+  ),
+  'a materially different confidence value changes the assessment hash'
+);
+
 select * from finish();
 rollback;
