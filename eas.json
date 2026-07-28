@@ -38,6 +38,16 @@
         "credentialsSource": "local"
       }
     },
+    "android-chat-livekit-qa": {
+      "extends": "android-production-local-recovery",
+      "channel": "android-chat-livekit-qa",
+      "distribution": "store",
+      "environment": "production",
+      "android": {
+        "buildType": "app-bundle",
+        "credentialsSource": "local"
+      }
+    },
     "ios-qa": {
       "extends": "production",
       "channel": "ios-qa",

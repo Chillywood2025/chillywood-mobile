@@ -5,9 +5,9 @@ Decision date: 2026-07-28
 Assessed application source: `afa7fe79263941024392922e779f5d45f29f6b3b`
 
 Status: source and native-boundary review complete. The one compatible iOS
-internal OTA has been published and read back on build 8. Android is stopped at
-the replacement-binary approval boundary. This report does not claim an
-installed call result and does not authorize a replacement binary.
+internal OTA has been published and read back on build 8. The Owner separately
+approved one bounded Android replacement binary after reviewing the exact
+channel-only delta below. This report does not claim an installed call result.
 
 ## Migration delta
 
@@ -51,15 +51,19 @@ publishing this canary to the channel named `production` is prohibited. Runtime
 filtering does not turn that public channel into an internal channel.
 
 The exact replacement-binary delta is an embedded Android-only internal update
-channel, proposed as `android-chat-livekit-qa`, while retaining runtime
+channel `android-chat-livekit-qa`, while retaining runtime
 `1.0.0-android-imagemanipulator-v1`, the existing package identifier, the
 existing LiveKit/native-call packages, and Google Play Internal distribution.
-No Android binary is authorized by this report; separate Owner approval is
-required before building it.
+The dedicated `android-chat-livekit-qa` EAS profile extends the existing
+locally-signed production App Bundle profile, changes only the embedded update
+channel, and remains bound to the production backend configuration and the
+Google Play `internal` submit target. Owner approval was received on 2026-07-28
+for exactly one replacement App Bundle under this boundary. Production, open,
+and closed Play tracks remain prohibited.
 
-No Android OTA was published. A connected Google Play installation read back
-app version `1.0.0`, native build `84`; the migration source is not installed
-there.
+No Android OTA was published. Before the approved replacement is installed, a
+connected Google Play installation reads back app version `1.0.0`, native build
+`84`; the migration source is not installed there.
 
 ## iOS
 
@@ -104,8 +108,8 @@ the migration source.
 
 - Do not publish the migration to Android runtime `1.0.0`.
 - Do not publish to the `production` channel.
-- Do not build Android without separate Owner approval of the channel-only
-  replacement delta.
+- Build at most the one Owner-approved Android App Bundle from the reviewed
+  `android-chat-livekit-qa` profile and submit it only to Google Play Internal.
 - Do not publish an iOS update to any runtime other than `1.0.0-iosqa1` or any
   channel other than `ios-qa`.
 - Do not enroll canary accounts or disable the Chat Call LiveKit emergency stop

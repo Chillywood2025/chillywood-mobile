@@ -110,6 +110,7 @@
     "guard:ota-native-boundary": "node ./scripts/guard-ota-native-boundary.mjs",
     "test:image-upload-native-boundary": "node ./scripts/test-image-upload-native-boundary.mjs",
     "guard:android-native-runtime-compatibility": "node ./scripts/guard-android-native-runtime-compatibility.mjs",
+    "guard:chilly-chat-livekit-android-build-profile": "node ./scripts/guard-chilly-chat-livekit-android-build-profile.mjs",
     "guard:android-signing-secret-policy": "node ./scripts/guard-android-signing-secret-policy.mjs",
     "generate:release-manifest-contract": "node ./scripts/generate-release-manifest-contract.mjs",
     "proof:livekit-server-metrics": "node ./scripts/proof-livekit-server-metrics.mjs",
