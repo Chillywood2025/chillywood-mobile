@@ -71,6 +71,8 @@ import { reportRuntimeError } from "../../_lib/logger";
 import {
   completeIosNativeCallAnswer,
   endIosNativeCall,
+  isIosNativeCallsRuntimeEnabled,
+  readIosNativeCallsReadiness,
   reportIosNativeCallRemoteEnd,
   setIosNativeCallAudioRoute,
   setIosNativeCallMuted,
@@ -265,6 +267,9 @@ export default function ChillyChatThreadScreen() {
   const [friendLoading, setFriendLoading] = useState(true);
   const [friendBusy, setFriendBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
+  const [iosNativeCallPresentationOwned, setIosNativeCallPresentationOwned] = useState(
+    Platform.OS === "ios" && isIosNativeCallsRuntimeEnabled(),
+  );
   const autoStartCallRef = useRef("");
   const autoOpenCallRef = useRef("");
   const nativeCallActionHandledRef = useRef("");
@@ -278,6 +283,22 @@ export default function ChillyChatThreadScreen() {
   const handledIncomingRoomIdsRef = useRef<Set<string>>(new Set());
   const outgoingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const outgoingRingbackSoundRef = useRef<ChillyChatPlayingSound | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (Platform.OS !== "ios") {
+      setIosNativeCallPresentationOwned(false);
+      return () => {
+        active = false;
+      };
+    }
+    void readIosNativeCallsReadiness().then((readiness) => {
+      if (active) setIosNativeCallPresentationOwned(readiness.available);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const activeCallRoomId = resolveAcceptedChatCallRoomId({
     inviteRoomId: activeCallInvite?.communicationRoomId,
@@ -2485,10 +2506,11 @@ export default function ChillyChatThreadScreen() {
             micEnabled={micEnabled}
             mediaControlsBusy={mediaControlsBusy}
             speakerEnabled={nativeSpeakerEnabled}
-            leaveLabel="End Call"
+            leaveLabel={outgoingCallRinging ? "Cancel Call" : "End Call"}
             mediaPermissionMessage={mediaPermissionMessage}
             canOpenMediaSettings={canOpenMediaSettings}
-            showControls={activeCallInvite?.status === "accepted" && !callError && !callLoading}
+            showControls={outgoingCallRinging || (activeCallInvite?.status === "accepted" && !callError && !callLoading)}
+            showMediaControls={!outgoingCallRinging}
             presentation="fullscreen"
             onToggleCamera={() => {
               void handleToggleCallCamera();
@@ -2520,7 +2542,7 @@ export default function ChillyChatThreadScreen() {
         </View>
       ) : null}
 
-      {incomingCallInvite && !callPanelOpen ? (
+      {incomingCallInvite && !callPanelOpen && !iosNativeCallPresentationOwned ? (
         <View
           style={[styles.incomingCallBannerOverlay, { top: Math.max(safeAreaInsets.top, 10) + 8 }]}
           pointerEvents="box-none"

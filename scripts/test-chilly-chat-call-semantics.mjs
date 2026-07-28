@@ -304,6 +304,11 @@ assert.equal(resolveIncomingCallPresentation({ appState: "active", alreadyOnSame
 assert.equal(resolveIncomingCallPresentation({ appState: "active", alreadyOnSameThread: true }), "thread_banner");
 assert.equal(resolveIncomingCallPresentation({ appState: "background", alreadyOnSameThread: false }), "native_background");
 assert.equal(resolveIncomingCallPresentation({ appState: "inactive", alreadyOnSameThread: true }), "native_background");
+assert.equal(resolveIncomingCallPresentation({
+  appState: "active",
+  alreadyOnSameThread: true,
+  nativeCallPresentationOwned: true,
+}), "native_ios", "CallKit ownership suppresses the duplicate React incoming-call banner");
 
 const actionScope = {
   callInviteId: "11111111-1111-4111-8111-111111111111",
@@ -431,11 +436,27 @@ assert.match(chatThreadSource, /readLatestChillyChatCallInviteForRoom/u, "callee
 assert.match(chatThreadSource, /result\.role === "callee"/u, "a simultaneous reverse start must switch the losing device to incoming-call controls");
 assert.match(chatThreadSource, /setCallPanelOpen\(false\)[\s\S]{0,180}answer or decline/u, "the collision loser cannot stay on the caller waiting panel");
 assert.match(chatThreadSource, /testID="chat-thread-incoming-call-banner"/u, "same-thread foreground calls use a compact answer banner");
+assert.match(
+  chatThreadSource,
+  /incomingCallInvite && !callPanelOpen && !iosNativeCallPresentationOwned/u,
+  "the same-thread React banner is hidden when CallKit owns iOS presentation",
+);
+assert.match(
+  chatThreadSource,
+  /leaveLabel=\{outgoingCallRinging \? "Cancel Call" : "End Call"\}/u,
+  "a ringing caller receives an explicit cancel-call action",
+);
+assert.match(
+  chatThreadSource,
+  /showControls=\{outgoingCallRinging \|\| \(activeCallInvite\?\.status === "accepted"/u,
+  "the cancel-call action remains visible before acceptance",
+);
 assert.doesNotMatch(chatThreadSource, /styles\.incomingCallSheet/u, "same-thread foreground calls cannot use the large blocking modal");
 assert.match(rootLayoutSource, /testID="app-wide-incoming-call-banner"/u, "foreground calls outside the thread use the compact top banner");
 assert.doesNotMatch(rootLayoutSource, /app-wide-incoming-call-modal/u, "foreground calls cannot use the large app-wide modal");
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
+assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit ownership suppresses the duplicate app-wide React banner");
 assert.match(rootLayoutSource, /params\.set\("nativeCallAction", "answer"\)/u, "foreground Answer uses the durable callee accept route");
 assert.match(rootLayoutSource, /current\?\.invite \? current : current \? \{ \.\.\.current, \.\.\.nextAlert \} : nextAlert/u, "database readback must hydrate a notification-first banner before Decline");
 assert.match(chatThreadSource, /subscribeToChillyChatCallInvite\(visibleInvite\.id/u, "incoming presentation must follow authoritative invite state");
@@ -515,7 +536,7 @@ assert.doesNotMatch(
 );
 assert.match(
   chatThreadSource,
-  /showControls=\{activeCallInvite\?\.status === "accepted"/u,
+  /showMediaControls=\{!outgoingCallRinging\}/u,
   "mic and camera controls stay hidden until the receiver accepts",
 );
 const activeInviteReconciliationSource = chatThreadSource.slice(
@@ -532,7 +553,11 @@ assert.match(
   /reportIosNativeCallRemoteEnd/u,
   "remote terminal invite state must close native and media state",
 );
-assert.match(chatThreadSource, /leaveLabel="End Call"/u, "both participants in a direct call must receive an End Call control");
+assert.match(
+  chatThreadSource,
+  /leaveLabel=\{outgoingCallRinging \? "Cancel Call" : "End Call"\}/u,
+  "ringing callers can cancel and accepted participants can end the call",
+);
 assert.match(inRoomPanelSource, /leaveLabel \?\? \(isHost \? "End Call" : "Leave"\)/u, "room surfaces retain their host/participant label policy");
 assert.match(
   chatThreadSource,

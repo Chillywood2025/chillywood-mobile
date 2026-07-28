@@ -17,10 +17,11 @@ export type ChillyChatCallParticipantRoleInput = {
 export type IncomingCallPresentationInput = {
   appState?: string | null;
   alreadyOnSameThread?: boolean;
+  nativeCallPresentationOwned?: boolean;
 };
 
 export function resolveChillyChatCallParticipantRole(input: ChillyChatCallParticipantRoleInput): "caller" | "callee" | "none";
-export function resolveIncomingCallPresentation(input: IncomingCallPresentationInput): "native_background" | "thread_banner" | "app_banner";
+export function resolveIncomingCallPresentation(input: IncomingCallPresentationInput): "native_ios" | "native_background" | "thread_banner" | "app_banner";
 export function shouldShowOutgoingRingingPanel(
   input: ChillyChatCallParticipantRoleInput & { inviteStatus?: string | null },
 ): boolean;

@@ -30,6 +30,7 @@ type InRoomCommunicationPanelProps = {
   mediaPermissionMessage?: string | null;
   canOpenMediaSettings?: boolean;
   showControls?: boolean;
+  showMediaControls?: boolean;
   presentation?: "embedded" | "fullscreen";
   onToggleCamera: () => void;
   onToggleMic: () => void;
@@ -73,6 +74,7 @@ export function InRoomCommunicationPanel({
   mediaPermissionMessage,
   canOpenMediaSettings = false,
   showControls = true,
+  showMediaControls = true,
   presentation = "embedded",
   onToggleCamera,
   onToggleMic,
@@ -246,6 +248,7 @@ export function InRoomCommunicationPanel({
             speakerEnabled={speakerEnabled}
             minimumTouchTarget={responsiveLayout.minimumTouchTarget}
             leaveLabel={leaveLabel ?? (isHost ? "End Call" : "Leave")}
+            showMediaControls={showMediaControls}
             onToggleCamera={onToggleCamera}
             onToggleMic={onToggleMic}
             onToggleAudioRoute={onToggleAudioRoute}

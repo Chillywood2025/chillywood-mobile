@@ -16,6 +16,7 @@ type CommunicationControlBarProps = {
   onSwitchCamera?: () => void;
   onLeave: () => void;
   leaveLabel?: string;
+  showMediaControls?: boolean;
 };
 
 export function CommunicationControlBar({
@@ -31,6 +32,7 @@ export function CommunicationControlBar({
   onSwitchCamera,
   onLeave,
   leaveLabel = "Leave",
+  showMediaControls = true,
 }: CommunicationControlBarProps) {
   useEffect(() => {
     if (!__DEV__) return;
@@ -52,27 +54,29 @@ export function CommunicationControlBar({
 
   return (
     <View style={styles.row}>
-      <TouchableOpacity
-        style={[
-          styles.control,
-          { minHeight: minimumTouchTarget },
-          resolvedCameraStatus === "on" ? styles.controlOn : resolvedCameraStatus === "connecting" ? styles.controlPending : styles.controlOff,
-          disabled && styles.controlDisabled,
-        ]}
-        activeOpacity={0.86}
-        disabled={disabled}
-        onPress={() => {
-          if (__DEV__) {
-            logCallDebug("[CH_CALL]", "toggle_camera_pressed", {
-              nextCameraEnabled: !cameraEnabled,
-            });
-          }
-          onToggleCamera();
-        }}
-      >
-        <Text style={styles.controlLabel}>{cameraLabel}</Text>
-      </TouchableOpacity>
-      {cameraEnabled && onSwitchCamera ? (
+      {showMediaControls ? (
+        <TouchableOpacity
+          style={[
+            styles.control,
+            { minHeight: minimumTouchTarget },
+            resolvedCameraStatus === "on" ? styles.controlOn : resolvedCameraStatus === "connecting" ? styles.controlPending : styles.controlOff,
+            disabled && styles.controlDisabled,
+          ]}
+          activeOpacity={0.86}
+          disabled={disabled}
+          onPress={() => {
+            if (__DEV__) {
+              logCallDebug("[CH_CALL]", "toggle_camera_pressed", {
+                nextCameraEnabled: !cameraEnabled,
+              });
+            }
+            onToggleCamera();
+          }}
+        >
+          <Text style={styles.controlLabel}>{cameraLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
+      {showMediaControls && cameraEnabled && onSwitchCamera ? (
         <TouchableOpacity
           accessibilityLabel="Switch between front and rear camera"
           style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlOff, disabled && styles.controlDisabled]}
@@ -83,22 +87,24 @@ export function CommunicationControlBar({
           <Text style={styles.controlLabel}>Flip Camera</Text>
         </TouchableOpacity>
       ) : null}
-      <TouchableOpacity
-        style={[styles.control, { minHeight: minimumTouchTarget }, micEnabled ? styles.controlOn : styles.controlOff, disabled && styles.controlDisabled]}
-        activeOpacity={0.86}
-        disabled={disabled}
-        onPress={() => {
-          if (__DEV__) {
-            logCallDebug("[CH_CALL]", "toggle_mic_pressed", {
-              nextMicEnabled: !micEnabled,
-            });
-          }
-          onToggleMic();
-        }}
-      >
-        <Text style={styles.controlLabel}>{micEnabled ? "Mic On" : "Mic Muted"}</Text>
-      </TouchableOpacity>
-      {onToggleAudioRoute ? (
+      {showMediaControls ? (
+        <TouchableOpacity
+          style={[styles.control, { minHeight: minimumTouchTarget }, micEnabled ? styles.controlOn : styles.controlOff, disabled && styles.controlDisabled]}
+          activeOpacity={0.86}
+          disabled={disabled}
+          onPress={() => {
+            if (__DEV__) {
+              logCallDebug("[CH_CALL]", "toggle_mic_pressed", {
+                nextMicEnabled: !micEnabled,
+              });
+            }
+            onToggleMic();
+          }}
+        >
+          <Text style={styles.controlLabel}>{micEnabled ? "Mic On" : "Mic Muted"}</Text>
+        </TouchableOpacity>
+      ) : null}
+      {showMediaControls && onToggleAudioRoute ? (
         <TouchableOpacity
           accessibilityLabel={speakerEnabled ? "Use phone receiver" : "Use speaker"}
           style={[styles.control, { minHeight: minimumTouchTarget }, speakerEnabled ? styles.controlOn : styles.controlOff, disabled && styles.controlDisabled]}
@@ -110,6 +116,7 @@ export function CommunicationControlBar({
         </TouchableOpacity>
       ) : null}
       <TouchableOpacity
+        accessibilityLabel={leaveLabel}
         style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlLeave]}
         activeOpacity={0.86}
         onPress={() => {

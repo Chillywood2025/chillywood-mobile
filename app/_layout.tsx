@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Linking, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Linking, Platform, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import {
@@ -62,6 +62,8 @@ import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
 import {
+  isIosNativeCallsRuntimeEnabled,
+  readIosNativeCallsReadiness,
   reportIosNativeCallRemoteEnd,
   revokeIosVoipRegistration,
   startIosNativeCallsReadiness,
@@ -335,9 +337,28 @@ function IncomingCallNotificationBridge() {
   const [alert, setAlert] = useState<IncomingCallAlert | null>(null);
   const [appState, setAppState] = useState(AppState.currentState);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
+  const [iosNativeCallPresentationOwned, setIosNativeCallPresentationOwned] = useState(
+    Platform.OS === "ios" && isIosNativeCallsRuntimeEnabled(),
+  );
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const latestInviteAlertIdRef = useRef("");
+
+  useEffect(() => {
+    let active = true;
+    if (Platform.OS !== "ios") {
+      setIosNativeCallPresentationOwned(false);
+      return () => {
+        active = false;
+      };
+    }
+    void readIosNativeCallsReadiness().then((readiness) => {
+      if (active) setIosNativeCallPresentationOwned(readiness.available);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const stopIncomingCallAttention = () => {
     Vibration.cancel();
@@ -478,8 +499,12 @@ function IncomingCallNotificationBridge() {
   const currentPath = normalizeRoutePathOnly(pathname);
   const alertPath = normalizeRoutePathOnly(alert.path);
   const alreadyOnSameThread = currentPath.startsWith("/chat/") && !!alertPath && currentPath === alertPath;
-  const presentation = resolveIncomingCallPresentation({ appState, alreadyOnSameThread });
-  if (presentation === "native_background" || presentation === "thread_banner") return null;
+  const presentation = resolveIncomingCallPresentation({
+    appState,
+    alreadyOnSameThread,
+    nativeCallPresentationOwned: iosNativeCallPresentationOwned,
+  });
+  if (presentation === "native_ios" || presentation === "native_background" || presentation === "thread_banner") return null;
 
   const roomSafeCall = isRoomSafeIncomingCallPath(pathname);
   const callKind = getIncomingCallKind(alert);
