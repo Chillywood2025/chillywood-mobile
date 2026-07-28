@@ -2014,6 +2014,7 @@ export type Database = {
           accepted_at: string | null
           call_type: string
           callee_user_id: string
+          chat_call_media_provider: string
           caller_user_id: string
           communication_room_id: string | null
           created_at: string
@@ -2027,6 +2028,7 @@ export type Database = {
           accepted_at?: string | null
           call_type: string
           callee_user_id: string
+          chat_call_media_provider?: string
           caller_user_id: string
           communication_room_id?: string | null
           created_at?: string
@@ -2040,6 +2042,7 @@ export type Database = {
           accepted_at?: string | null
           call_type?: string
           callee_user_id?: string
+          chat_call_media_provider?: string
           caller_user_id?: string
           communication_room_id?: string | null
           created_at?: string

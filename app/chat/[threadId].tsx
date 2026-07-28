@@ -100,7 +100,7 @@ import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
-import { useCommunicationRoomSession } from "../../hooks/use-communication-room-session";
+import { useChatCallMediaSession } from "../../hooks/use-chat-call-media-session";
 
 const logChatThread = (event: string, details?: Record<string, unknown>) => {
   void event;
@@ -540,8 +540,15 @@ export default function ChillyChatThreadScreen() {
     canOpenMediaSettings,
     openMediaSettings,
     leaveRoom,
-  } = useCommunicationRoomSession({
+    mediaProvider: callMediaProvider,
+    setSpeaker: setCallMediaSpeaker,
+    canSetSpeaker: canSetCallMediaSpeaker,
+    markInstalledUiConnected,
+    markParticipantVideoRendered,
+  } = useChatCallMediaSession({
     roomId: activeCallRoomId,
+    invite: activeCallInvite,
+    threadId,
     enabled: shouldActivateAcceptedChatCallMedia({
       roomId: activeCallRoomId,
       inviteStatus: activeCallInvite?.status,
@@ -551,10 +558,6 @@ export default function ChillyChatThreadScreen() {
       && !!requestedNativeCallUuid,
     mediaActivationSerial: nativeMediaActivationSerial,
     initialMediaPreferences: initialCallMediaPreferences,
-    analyticsContext: {
-      surface: "chat-thread",
-      role: null,
-    },
     onRoomEnded: async (reason) => {
       trackEvent("chat_call_ended", {
         surface: "chat-thread",
@@ -611,26 +614,37 @@ export default function ChillyChatThreadScreen() {
   }, [threadId, toggleCamera]);
 
   const handleToggleNativeAudioRoute = useCallback(async () => {
-    if (Platform.OS !== "ios") return;
     const nextSpeakerEnabled = !nativeSpeakerEnabled;
-    const updated = await setIosNativeCallAudioRoute(nextSpeakerEnabled ? "speaker" : "receiver");
-    if (updated) setNativeSpeakerEnabled(nextSpeakerEnabled);
-  }, [nativeSpeakerEnabled]);
+    const liveKitUpdated = callMediaProvider === "livekit"
+      ? await setCallMediaSpeaker(nextSpeakerEnabled)
+      : false;
+    const nativeUpdated = Platform.OS === "ios"
+      ? await setIosNativeCallAudioRoute(nextSpeakerEnabled ? "speaker" : "receiver")
+      : false;
+    if (liveKitUpdated || nativeUpdated) setNativeSpeakerEnabled(nextSpeakerEnabled);
+  }, [callMediaProvider, nativeSpeakerEnabled, setCallMediaSpeaker]);
 
   useEffect(() => {
     if (
-      Platform.OS !== "ios"
-      || !activeCallRoomId
+      !activeCallRoomId
       || activeCallInvite?.status !== "accepted"
       || callChannelState !== "live"
     ) return;
     const route = resolveIosChatCallAudioRoute(thread?.activeCallType);
     const shouldUseSpeaker = route === "speaker";
-    void setIosNativeCallAudioRoute(route)
-      .then((updated) => {
-        if (updated) setNativeSpeakerEnabled(shouldUseSpeaker);
-      });
-  }, [activeCallInvite?.status, activeCallRoomId, callChannelState, nativeMediaActivationSerial, thread?.activeCallType]);
+    if (callMediaProvider === "livekit") {
+      void setCallMediaSpeaker(shouldUseSpeaker)
+        .then((updated) => {
+          if (updated) setNativeSpeakerEnabled(shouldUseSpeaker);
+        });
+    }
+    if (Platform.OS === "ios") {
+      void setIosNativeCallAudioRoute(route)
+        .then((updated) => {
+          if (updated) setNativeSpeakerEnabled(shouldUseSpeaker);
+        });
+    }
+  }, [activeCallInvite?.status, activeCallRoomId, callChannelState, callMediaProvider, nativeMediaActivationSerial, setCallMediaSpeaker, thread?.activeCallType]);
 
   useEffect(() => {
     stopOutgoingRingback();
@@ -2460,7 +2474,7 @@ export default function ChillyChatThreadScreen() {
             onToggleMic={() => {
               void handleToggleCallMic();
             }}
-            onToggleAudioRoute={Platform.OS === "ios"
+            onToggleAudioRoute={Platform.OS === "ios" || canSetCallMediaSpeaker
               ? () => {
                   void handleToggleNativeAudioRoute();
                 }
@@ -2471,6 +2485,8 @@ export default function ChillyChatThreadScreen() {
             onOpenMediaSettings={() => {
               void openMediaSettings();
             }}
+            onInstalledUiConnected={markInstalledUiConnected}
+            onLiveKitVideoRendered={markParticipantVideoRendered}
             onLeave={() => {
               void handleJoinOrCloseCall();
             }}

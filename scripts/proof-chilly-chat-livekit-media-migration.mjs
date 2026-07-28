@@ -1,0 +1,163 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
+const failures = [];
+const pass = (label) => console.log(`PASS ${label}`);
+const fail = (label) => failures.push(label);
+const requireText = (source, needle, label) => (
+  source.includes(needle) ? pass(label) : fail(`${label}: missing ${needle}`)
+);
+const forbidText = (source, needle, label) => (
+  source.includes(needle) ? fail(`${label}: found forbidden ${needle}`) : pass(label)
+);
+const requireOrdered = (source, needles, label) => {
+  let cursor = -1;
+  for (const needle of needles) {
+    const next = source.indexOf(needle, cursor + 1);
+    if (next < 0 || next < cursor) {
+      fail(`${label}: missing or out-of-order ${needle}`);
+      return;
+    }
+    cursor = next;
+  }
+  pass(label);
+};
+
+const provider = read("hooks/use-chat-call-media-session.ts");
+const providerPolicy = read("_lib/chatCallMediaProviderPolicy.ts");
+const providerSources = `${provider}\n${providerPolicy}`;
+const liveKitSession = read("hooks/use-livekit-chat-call-session.ts");
+const legacySession = read("hooks/use-communication-room-session.ts");
+const chatScreen = read("app/chat/[threadId].tsx");
+const tokenFunction = read("supabase/functions/livekit-token/index.ts");
+const authorityPolicy = read("supabase/functions/_shared/chat-call-livekit-authority.ts");
+const tokenAuthority = `${tokenFunction}\n${authorityPolicy}`;
+const tokenContract = read("_lib/livekit/token-contract.ts");
+const operator = read("supabase/functions/livekit-operator/index.ts");
+const telemetry = read("_lib/livekit/livekitRenderTelemetry.ts");
+const chatTelemetry = read("_lib/chatCallLiveKitTelemetry.ts");
+const migration = read("supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql");
+const chatRoomCreation = read("_lib/chat.ts");
+const transition = read("supabase/functions/chilly-chat-call-transition/index.ts");
+
+requireText(provider, "fixedProviderRef", "provider is fixed per invite");
+requireText(providerSources, 'mediaProvider === "legacy_webrtc"', "legacy transport has an exact selector");
+requireText(providerSources, 'mediaProvider === "livekit"', "LiveKit transport has an exact selector");
+requireText(provider, "enabled: shouldEnableLegacy", "legacy transport receives only its own enable gate");
+requireText(provider, "enabled: shouldEnableLiveKit", "LiveKit transport receives only its own enable gate");
+forbidText(provider, "catch(() => legacy", "provider cannot fall back mid-call");
+requireText(chatScreen, "useChatCallMediaSession", "Chat screen consumes the provider abstraction");
+forbidText(chatScreen, "new Room(", "Chat screen does not embed LiveKit SDK connection calls");
+forbidText(chatScreen, "new RTCPeerConnection", "Chat screen does not embed direct WebRTC connection calls");
+requireText(legacySession, "RTCPeerConnection", "legacy direct WebRTC remains available for bounded rollback");
+requireText(liveKitSession, "new Room(", "LiveKit SDK connection is isolated in the LiveKit provider");
+
+requireOrdered(
+  liveKitSession,
+  [
+    'inviteStatus !== "accepted"',
+    "joinCommunicationRoomSession({",
+    'emitStage("token_requested"',
+    "requestLiveKitParticipantToken({",
+    "validateChatCallLiveKitTokenClaims({",
+    "LiveKitAudioSession.startAudioSession()",
+    "liveKitRoom.connect(",
+    "setMicrophoneEnabled(true)",
+  ],
+  "accepted membership precedes token, connection, and publication",
+);
+requireText(liveKitSession, 'mediaProvider: "livekit"', "token request pins the LiveKit provider");
+requireText(liveKitSession, 'participantRole: "speaker"', "accepted call requests speaker grants");
+requireText(liveKitSession, "LiveKitAudioSession.stopAudioSession()", "cleanup stops the LiveKit audio session");
+requireText(liveKitSession, "leaveCommunicationRoomSession({", "cleanup leaves communication membership");
+requireText(liveKitSession, 'emitStage("cleanup_complete"', "cleanup emits installed completion telemetry");
+
+for (const authorityNeedle of [
+  '.eq("id", callInviteId)',
+  'inviteStatus !== "accepted"',
+  "!!normalize(input.invite.endedAt)",
+  'inviteMediaProvider !== "livekit"',
+  "inviteThreadId !== normalize(input.roomThreadId)",
+  "inviteRoomId !== roomName",
+  "normalizeRoom(input.roomActiveRoomId) !== roomName",
+  "inviteCallType !== normalizeLower(input.requestedCallType)",
+  "threadMemberIds.size !== 2",
+  "hasThirdPartyMembership",
+  "isRecentTime(membership.last_seen_at",
+  'participantRole: "speaker"',
+  "canPublish: true",
+]) {
+  requireText(tokenAuthority, authorityNeedle, `token authority requires ${authorityNeedle}`);
+}
+requireText(tokenFunction, "resolveChatCallLiveKitAuthority({", "token function uses the tested Chat Call authority policy");
+requireText(tokenContract, "validateChatCallLiveKitTokenClaims", "client validates exact token claims");
+for (const grant of ["roomJoin", "canPublish", "canSubscribe", "canPublishData"]) {
+  requireText(tokenContract, `video?.${grant} === true`, `client requires ${grant} grant`);
+}
+
+const chatAuthorityStart = tokenFunction.indexOf('surface === "chat-call"');
+const chatAuthorityEnd = tokenFunction.indexOf("if (room.hostUserId === userId)", chatAuthorityStart);
+const chatAuthority = tokenFunction.slice(chatAuthorityStart, chatAuthorityEnd);
+forbidText(chatAuthority.toLowerCase(), "premium", "Chat Call token authority adds no Premium gate");
+requireText(chatRoomCreation, 'contentAccessRule: "open"', "Chat Call room creation remains outside Premium access");
+
+requireText(migration, "public_default_provider = 'legacy_webrtc'", "public provider is constrained fail-closed");
+requireText(migration, "canary_enabled boolean not null default false", "canary begins disabled");
+requireText(migration, "livekit_emergency_stop boolean not null default true", "emergency stop begins engaged");
+requireText(migration, "new.chat_call_media_provider := old.chat_call_media_provider", "database preserves provider for the invite lifetime");
+requireText(migration, "caller_canary.enabled", "caller must be in the role-free canary cohort");
+requireText(migration, "callee_canary.enabled", "callee must be in the role-free canary cohort");
+requireText(transition, "chatCallMediaProvider", "transition responses retain server provider authority");
+
+for (const stage of [
+  "token_requested",
+  "token_returned",
+  "token_claims_validated",
+  "websocket_connected",
+  "ice_state",
+  "room_connected",
+  "local_audio_published",
+  "local_video_published",
+  "remote_participant_joined",
+  "remote_audio_subscribed",
+  "remote_video_subscribed",
+  "first_audio",
+  "first_video",
+  "installed_ui_connected",
+  "backgrounded",
+  "foregrounded",
+  "reconnecting",
+  "recovered",
+  "disconnected",
+  "cleanup_complete",
+]) {
+  requireText(telemetry, `"${stage}"`, `telemetry contract includes ${stage}`);
+}
+requireText(chatTelemetry, 'surface: "chat_call"', "Chat Call telemetry uses the sentinel surface");
+requireText(chatTelemetry, "liveKitSdkEvent: true", "Chat Call telemetry is marked as SDK-derived");
+requireText(operator, "delete renderEvent.communicationRoomId", "collector strips raw communication room IDs");
+requireText(operator, "delete renderEvent.callInviteId", "collector strips raw call invite IDs");
+requireText(operator, "delete renderEvent.threadId", "collector strips raw thread IDs");
+requireText(operator, '.eq("surface", "chat-call")', "collector corroborates an exact Chat Call token audit");
+requireText(operator, '.eq("outcome", "success")', "collector requires successful token authorization");
+requireText(operator, '.eq("can_publish", true)', "collector requires publish authority");
+requireText(operator, '.eq("can_subscribe", true)', "collector requires subscribe authority");
+requireText(operator, "non_livekit_chat_call_evidence_rejected", "collector rejects non-LiveKit evidence");
+requireText(operator, "chat_call_livekit_token_requested_not_success_proof", "token request alone is not LiveKit success proof");
+
+for (const clientSource of [provider, liveKitSession, chatScreen, chatTelemetry]) {
+  forbidText(clientSource, "SUPABASE_SERVICE_ROLE_KEY", "client source contains no Supabase service-role credential");
+}
+for (const privateNeedle of ["participantToken:", "sdp", "candidate", "ipAddress", "email"]) {
+  forbidText(chatTelemetry, privateNeedle, `telemetry does not emit ${privateNeedle}`);
+}
+
+if (failures.length > 0) {
+  for (const failure of failures) console.error(`FAIL ${failure}`);
+  console.error(`Chi'lly Chat LiveKit media migration proof failed (${failures.length}).`);
+  process.exit(1);
+}
+
+console.log("Chi'lly Chat LiveKit media migration proof passed.");

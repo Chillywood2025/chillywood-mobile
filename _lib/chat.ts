@@ -1054,6 +1054,9 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
 
   const created = await createCommunicationRoom({
     hostUserId: currentUserId,
+    // Direct-thread calls retain their existing member-only thread authority;
+    // creator Premium defaults must never become a separate Chat Call gate.
+    contentAccessRule: "open",
   });
 
   if ("error" in created) {

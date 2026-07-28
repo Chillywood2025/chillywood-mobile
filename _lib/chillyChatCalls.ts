@@ -15,6 +15,7 @@ export const CHAT_CALL_EVENTS_TABLE = "chat_call_events";
 export type ChillyChatCallType = "voice" | "video";
 export type ChillyChatCallStatus = "ringing" | "accepted" | "declined" | "missed" | "canceled" | "ended" | "busy";
 export type ChillyChatCallEventType = "started" | "accepted" | "declined" | "missed" | "canceled" | "ended" | "busy";
+export type ChillyChatCallMediaProvider = "legacy_webrtc" | "livekit";
 export type ChillyChatRingtoneKey =
   | "chilly_ring"
   | "skyline_pulse"
@@ -37,6 +38,7 @@ export type ChillyChatCallInvite = {
   callerUserId: string;
   calleeUserId: string;
   callType: ChillyChatCallType;
+  mediaProvider: ChillyChatCallMediaProvider;
   status: ChillyChatCallStatus;
   createdAt: string;
   expiresAt: string;
@@ -87,7 +89,7 @@ type CallEventRow = Tables<"chat_call_events">;
 type CallEventInsert = TablesInsert<"chat_call_events">;
 
 const CALL_INVITE_SELECT =
-  "id,thread_id,communication_room_id,caller_user_id,callee_user_id,call_type,status,created_at,expires_at,accepted_at,ended_at";
+  "id,thread_id,communication_room_id,caller_user_id,callee_user_id,call_type,chat_call_media_provider,status,created_at,expires_at,accepted_at,ended_at";
 const CALL_EVENT_SELECT =
   "id,thread_id,call_invite_id,actor_user_id,call_type,event_type,duration_seconds,created_at";
 
@@ -135,6 +137,12 @@ const normalizeCallType = (value: unknown): ChillyChatCallType => {
   const normalized = toText(value).toLowerCase();
   return normalized === "voice" ? "voice" : "video";
 };
+
+export const normalizeChillyChatCallMediaProvider = (
+  value: unknown,
+): ChillyChatCallMediaProvider => (
+  toText(value).toLowerCase() === "livekit" ? "livekit" : "legacy_webrtc"
+);
 
 const normalizeStatus = (value: unknown): ChillyChatCallStatus => {
   const normalized = toText(value).toLowerCase();
@@ -189,6 +197,7 @@ const parseInvite = (row: CallInviteRow | null): ChillyChatCallInvite | null => 
     callerUserId,
     calleeUserId,
     callType: normalizeCallType(row.call_type),
+    mediaProvider: normalizeChillyChatCallMediaProvider(row.chat_call_media_provider),
     status: normalizeStatus(row.status),
     createdAt: toText(row.created_at) || new Date().toISOString(),
     expiresAt: toText(row.expires_at) || new Date(Date.now() + 45_000).toISOString(),
@@ -535,6 +544,7 @@ export async function updateChillyChatCallInviteStatus(input: {
     callerUserId,
     calleeUserId,
     callType: normalizeCallType(row.callType),
+    mediaProvider: normalizeChillyChatCallMediaProvider(row.chatCallMediaProvider),
     status: normalizeStatus(row.status),
     createdAt,
     expiresAt,

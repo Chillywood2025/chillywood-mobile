@@ -8,6 +8,7 @@ import {
   securityContextAuditMetadata,
   type SecurityRequestContextResult,
 } from "../_shared/security-request-context.ts";
+import { resolveChatCallLiveKitAuthority } from "../_shared/chat-call-livekit-authority.ts";
 import {
   normalizeLiveKitRoutingRoomType,
   resolveLiveKitAssignment,
@@ -28,6 +29,9 @@ type LiveKitRequestedGrants = {
 
 type TokenRequestPayload = {
   action?: unknown;
+  callInviteId?: unknown;
+  callType?: unknown;
+  mediaProvider?: unknown;
   surface?: unknown;
   roomName?: unknown;
   role?: unknown;
@@ -36,6 +40,7 @@ type TokenRequestPayload = {
   participantName?: unknown;
   requestedGrants?: unknown;
   targetParticipantIdentity?: unknown;
+  threadId?: unknown;
   metadata?: unknown;
 };
 
@@ -88,6 +93,8 @@ type ResolvedRoomRecord =
       updatedAt: string | null;
       lastActivityAt: string | null;
       chatThreadId: string | null;
+      chatThreadActiveRoomId: string | null;
+      chatThreadCallType: string | null;
     };
 
 type LiveKitAuthenticatedUser = {
@@ -475,7 +482,7 @@ async function enforceParticipantState(
 
   const roomActive = isWatchPartyRoomCurrentlyActive(room);
   const roleResolution = roomActive
-    ? await resolveEffectiveParticipantRole(adminClient, room, surface, "speaker", targetUserId)
+    ? await resolveEffectiveParticipantRole(adminClient, room, surface, "speaker", targetUserId, {})
     : null;
   const participantRole = roleResolution?.ok ? roleResolution.participantRole : "viewer";
   const canPublish = roleResolution?.ok ? roleResolution.canPublish : false;
@@ -631,7 +638,7 @@ async function resolveTargetRoom(
 
     const chatThread = await adminClient
       .from("chat_threads")
-      .select("id")
+      .select("id,active_communication_room_id,active_call_type")
       .eq("active_communication_room_id", sanitizeText(communicationRoom.data.room_id))
       .maybeSingle();
 
@@ -646,6 +653,8 @@ async function resolveTargetRoom(
       updatedAt: sanitizeText(communicationRoom.data.updated_at) || null,
       lastActivityAt: sanitizeText(communicationRoom.data.last_activity_at) || null,
       chatThreadId: chatThread.data ? sanitizeText(chatThread.data.id) : null,
+      chatThreadActiveRoomId: chatThread.data ? sanitizeText(chatThread.data.active_communication_room_id) : null,
+      chatThreadCallType: chatThread.data ? sanitizeText(chatThread.data.active_call_type).toLowerCase() : null,
     };
   }
 
@@ -707,8 +716,9 @@ async function resolveEffectiveParticipantRole(
   adminClient: SupabaseClientLike,
   room: ResolvedRoomRecord,
   surface: LiveKitJoinSurface,
-  requestedParticipantRole: LiveKitParticipantRole,
+  requestedParticipantRole: LiveKitParticipantRole | null,
   userId: string,
+  payload: TokenRequestPayload,
 ) : Promise<EffectiveRoleResolution> {
   if (room.kind === "communication" && surface === "chat-call") {
     if (!room.chatThreadId) {
@@ -728,6 +738,117 @@ async function resolveEffectiveParticipantRole(
         status: 403,
       };
     }
+
+    const callInviteId = sanitizeText(payload.callInviteId);
+    const requestedThreadId = sanitizeText(payload.threadId);
+    const requestedCallType = sanitizeText(payload.callType).toLowerCase();
+    const requestedMediaProvider = sanitizeText(payload.mediaProvider).toLowerCase();
+    if (
+      !callInviteId
+      || !requestedThreadId
+      || (requestedCallType !== "voice" && requestedCallType !== "video")
+      || requestedMediaProvider !== "livekit"
+    ) {
+      return {
+        ok: false,
+        error: "chat_call_authority_scope_required",
+        message: "Exact accepted Chi'lly Chat call authority is required before a LiveKit token can be issued.",
+        status: 400,
+      };
+    }
+
+    const invite = await adminClient
+      .from("chat_call_invites")
+      .select("id,thread_id,communication_room_id,caller_user_id,callee_user_id,call_type,status,accepted_at,ended_at,chat_call_media_provider")
+      .eq("id", callInviteId)
+      .maybeSingle();
+    if (invite.error || !invite.data) {
+      return {
+        ok: false,
+        error: "chat_call_invite_not_found",
+        message: "The accepted Chi'lly Chat call invite could not be verified.",
+        status: 404,
+      };
+    }
+
+    const inviteThreadId = sanitizeText(invite.data.thread_id);
+    const inviteRoomId = sanitizeText(invite.data.communication_room_id).toUpperCase();
+    const callerUserId = sanitizeText(invite.data.caller_user_id);
+    const calleeUserId = sanitizeText(invite.data.callee_user_id);
+    const inviteCallType = sanitizeText(invite.data.call_type).toLowerCase();
+    const inviteStatus = sanitizeText(invite.data.status).toLowerCase();
+    const inviteMediaProvider = sanitizeText(invite.data.chat_call_media_provider).toLowerCase();
+    const inviteAcceptedAt = sanitizeText(invite.data.accepted_at);
+    const inviteEndedAt = sanitizeText(invite.data.ended_at);
+    const threadMemberships = await adminClient
+      .from("chat_thread_members")
+      .select("user_id")
+      .eq("thread_id", inviteThreadId);
+    if (threadMemberships.error) {
+      return {
+        ok: false,
+        error: "membership_lookup_failed",
+        message: "Chi'llywood could not verify the direct-thread membership before issuing a LiveKit token.",
+        status: 503,
+      };
+    }
+    const threadMemberIds = ((threadMemberships.data ?? []) as Record<string, unknown>[])
+      .map((membership) => sanitizeText(membership.user_id))
+      .filter(Boolean);
+
+    const communicationMemberships = await adminClient
+      .from("communication_room_memberships")
+      .select("user_id,role,membership_state,last_seen_at")
+      .eq("room_id", room.roomName);
+    if (communicationMemberships.error) {
+      return {
+        ok: false,
+        error: "membership_lookup_failed",
+        message: "Chi'llywood could not verify the accepted call membership before issuing a LiveKit token.",
+        status: 503,
+      };
+    }
+
+    const activeMemberships = ((communicationMemberships.data ?? []) as Record<string, unknown>[])
+      .filter((membership) => (
+        ACTIVE_MEMBERSHIP_STATES.has(sanitizeText(membership.membership_state).toLowerCase())
+        && isRecentTime(membership.last_seen_at, COMMUNICATION_MEMBERSHIP_ACTIVE_WINDOW_MS)
+      ));
+    const authority = resolveChatCallLiveKitAuthority({
+      activeMemberships: activeMemberships.map((membership) => ({
+        role: sanitizeText(membership.role),
+        userId: sanitizeText(membership.user_id),
+      })),
+      invite: {
+        acceptedAt: inviteAcceptedAt,
+        callType: inviteCallType,
+        calleeUserId,
+        callerUserId,
+        communicationRoomId: inviteRoomId,
+        endedAt: inviteEndedAt,
+        mediaProvider: inviteMediaProvider,
+        status: inviteStatus,
+        threadId: inviteThreadId,
+      },
+      requestedCallType,
+      requestedMediaProvider,
+      requestedThreadId,
+      roomActiveRoomId: room.chatThreadActiveRoomId ?? "",
+      roomCallType: room.chatThreadCallType ?? "",
+      roomName: room.roomName,
+      roomThreadId: room.chatThreadId,
+      threadMemberIds,
+      userId,
+    });
+    if (!authority.ok) return authority;
+
+    return {
+      ok: true,
+      participantRole: authority.participantRole,
+      canPublish: authority.canPublish,
+      membership: null,
+      reason: authority.reason,
+    };
   }
 
   if (room.hostUserId === userId) {
@@ -958,7 +1079,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    if (action === "mint-token" && !participantRole) {
+    if (action === "mint-token" && surface !== "chat-call" && !participantRole) {
       return await auditAndJson(400, { error: "invalid_role", message: "role must be host, speaker, or viewer." }, {
         action,
         roomName,
@@ -1019,7 +1140,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     }
 
-    if (!participantRole) {
+    if (surface !== "chat-call" && !participantRole) {
       return await auditAndJson(400, { error: "invalid_role", message: "role must be host, speaker, or viewer." }, {
         action,
         room,
@@ -1090,6 +1211,7 @@ Deno.serve(async (req): Promise<Response> => {
       surface,
       participantRole,
       userId,
+      payload,
     );
 
     if (!effectiveRole.ok) {
@@ -1159,6 +1281,7 @@ Deno.serve(async (req): Promise<Response> => {
     const accessToken = new AccessToken(livekitApiKey, livekitApiSecret, {
       identity: participantIdentity,
       metadata: JSON.stringify({
+        ...tokenMetadata,
         app: "chillywood-mobile",
         roomKind: room.kind,
         roomType: room.kind === "watch-party" ? room.roomType : null,
@@ -1168,7 +1291,6 @@ Deno.serve(async (req): Promise<Response> => {
         participantRole: effectiveParticipantRole,
         requestedParticipantRole: participantRole,
         roleResolution: effectiveRole.reason,
-        ...tokenMetadata,
       }),
       name: participantName,
       ttl: liveCostGuardDecision.tokenTtlSeconds ? `${liveCostGuardDecision.tokenTtlSeconds}s` : "1h",

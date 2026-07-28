@@ -39,6 +39,8 @@ type InRoomCommunicationPanelProps = {
   leaveLabel?: string;
   onOpenMediaSettings?: () => void;
   onCloseSurface?: () => void;
+  onInstalledUiConnected?: () => void;
+  onLiveKitVideoRendered?: (participant: CommunicationParticipantView) => void;
 };
 
 const getStatusLabel = (channelState: InRoomCommunicationPanelProps["channelState"]) => {
@@ -80,6 +82,8 @@ export function InRoomCommunicationPanel({
   leaveLabel,
   onOpenMediaSettings,
   onCloseSurface,
+  onInstalledUiConnected,
+  onLiveKitVideoRendered,
 }: InRoomCommunicationPanelProps) {
   const responsiveLayout = useResponsiveLayout();
   const isFullscreen = presentation === "fullscreen";
@@ -103,6 +107,12 @@ export function InRoomCommunicationPanel({
       deviceClass: responsiveLayout.deviceClass,
     });
   }, [callType, channelState, loading, participantCount, participants.length, presentation, responsiveLayout.deviceClass, showControls, statusMessage, surfaceLabel]);
+
+  useEffect(() => {
+    if (channelState === "live" && !loading && !statusMessage) {
+      onInstalledUiConnected?.();
+    }
+  }, [channelState, loading, onInstalledUiConnected, statusMessage]);
 
   const controlsVisible = showControls && !loading && !statusMessage;
   const resolvedTitle = titleText ?? `${surfaceLabel} Chi'lly Chat`;
@@ -207,6 +217,7 @@ export function InRoomCommunicationPanel({
             presentation={isFullscreen ? "fullscreen" : "embedded"}
             responsiveLayout={responsiveLayout}
             localCameraEnabled={cameraEnabled}
+            onLiveKitVideoRendered={onLiveKitVideoRendered}
           />
         </View>
       ) : (

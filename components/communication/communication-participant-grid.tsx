@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 
 import { getCommunicationRTCModule, type CommunicationParticipantView } from "../../_lib/communication";
+import { LiveKitVideoTrack } from "../../_lib/livekit/react-native-module";
 import { responsiveFontSize, type ResponsiveLayout, useResponsiveLayout } from "../../hooks/use-responsive-layout";
 
 const logCallDebug = (..._args: unknown[]) => {};
@@ -12,6 +13,7 @@ type CommunicationParticipantGridProps = {
   presentation?: "embedded" | "fullscreen";
   responsiveLayout?: ResponsiveLayout;
   localCameraEnabled?: boolean;
+  onLiveKitVideoRendered?: (participant: CommunicationParticipantView) => void;
 };
 
 type CommunicationRTCViewComponent = React.ComponentType<{
@@ -56,6 +58,7 @@ export function CommunicationParticipantGrid({
   presentation = "embedded",
   responsiveLayout: providedResponsiveLayout,
   localCameraEnabled,
+  onLiveKitVideoRendered,
 }: CommunicationParticipantGridProps) {
   const RTCView = getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
   const fallbackResponsiveLayout = useResponsiveLayout();
@@ -100,8 +103,13 @@ export function CommunicationParticipantGrid({
             ? localCameraEnabled
             : participant.cameraOn
           : false;
-        const hasVideoStream = isVideoCall && !!participant.streamURL && (!participant.isSelf || cameraRequested);
-        const showVideo = !!RTCView && hasVideoStream;
+        const hasLiveKitVideo = isVideoCall
+          && !!participant.liveKitVideoTrackReference
+          && (!participant.isSelf || cameraRequested);
+        const hasVideoStream = isVideoCall
+          && (!!participant.streamURL || hasLiveKitVideo)
+          && (!participant.isSelf || cameraRequested);
+        const showLegacyVideo = !!RTCView && !!participant.streamURL && hasVideoStream;
         const videoObjectFit = "cover";
         const cameraPillLabel = hasVideoStream ? "Cam On" : cameraRequested ? "Starting" : "Cam Off";
         const tileWide = participants.length <= 1;
@@ -130,7 +138,23 @@ export function CommunicationParticipantGrid({
                 isFullscreen && styles.mediaFrameFullscreen,
               ]}
             >
-              {showVideo && RTCView ? (
+              {hasLiveKitVideo ? (
+                <View
+                  style={[
+                    styles.video,
+                    isFullscreen && styles.videoFullscreen,
+                  ]}
+                  onLayout={() => onLiveKitVideoRendered?.(participant)}
+                >
+                  <LiveKitVideoTrack
+                    trackRef={participant.liveKitVideoTrackReference as React.ComponentProps<typeof LiveKitVideoTrack>["trackRef"]}
+                    style={styles.videoFill}
+                    objectFit={videoObjectFit}
+                    mirror={participant.isSelf}
+                    zOrder={participant.isSelf ? 1 : 0}
+                  />
+                </View>
+              ) : showLegacyVideo && RTCView ? (
                 <RTCView
                   streamURL={participant.streamURL as string}
                   style={[
@@ -283,6 +307,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#050608",
   },
   videoFullscreen: {
+    width: "100%",
+    height: "100%",
+  },
+  videoFill: {
     width: "100%",
     height: "100%",
   },

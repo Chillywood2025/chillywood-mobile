@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { hashSecurityText } from "../_shared/security-request-context.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -325,6 +326,53 @@ const classifyRenderEvent = (renderEvent: JsonObject) => {
   const rosterParticipantCount = readRenderNumber(renderEvent, "rosterParticipantCount", "roster_participant_count");
   const canPublish = readRenderBoolean(renderEvent, "canPublish", "can_publish");
 
+  if (eventName === "livekit_chat_call_stage") {
+    const stage = safeLabel(renderEvent.stage);
+    const mediaProvider = safeLabel(renderEvent.mediaProvider || renderEvent.media_provider);
+    const liveKitSdkEvent = readRenderBoolean(renderEvent, "liveKitSdkEvent", "livekit_sdk_event");
+    const tokenAuditCorroborated = readRenderBoolean(renderEvent, "tokenAuditCorroborated", "token_audit_corroborated");
+    const bindingsComplete = [
+      renderEvent.communicationRoomHash,
+      renderEvent.callInviteHash,
+      renderEvent.threadHash,
+      renderEvent.roomRunCorrelationHash,
+    ].every((value) => /^[a-f0-9]{64}$/u.test(toText(value)));
+    if (surface !== "chat_call" || mediaProvider !== "livekit" || !liveKitSdkEvent || !bindingsComplete) {
+      return {
+        confidence: 0.99,
+        healthState: "non_livekit_chat_call_evidence_rejected",
+        reason: "chat_call_stage_missing_exact_livekit_binding",
+        severity: "critical",
+        surface: "chat_call",
+      };
+    }
+    if (stage !== "token_requested" && !tokenAuditCorroborated) {
+      return {
+        confidence: 0.99,
+        healthState: "non_livekit_chat_call_evidence_rejected",
+        reason: "chat_call_stage_missing_token_audit",
+        severity: "critical",
+        surface: "chat_call",
+      };
+    }
+    if (stage === "token_requested") {
+      return {
+        confidence: 0.99,
+        healthState: "observing",
+        reason: "chat_call_livekit_token_requested_not_success_proof",
+        severity: "info",
+        surface: "chat_call",
+      };
+    }
+    return {
+      confidence: 0.99,
+      healthState: "healthy",
+      reason: `chat_call_livekit_${stage || "unknown"}_corroborated`,
+      severity: "info",
+      surface: "chat_call",
+    };
+  }
+
   if (eventName === "livekit_token_nbf_future_grace_used" && nbfDeltaSeconds !== null && nbfDeltaSeconds >= 0 && nbfDeltaSeconds <= 5) {
     return { confidence: 0.96, healthState: "healthy", reason: "token_nbf_future_within_grace", severity: "info", surface };
   }
@@ -401,12 +449,58 @@ Deno.serve(async (request: Request) => {
       const appUser = await authenticateAppUser(adminClient, request);
       if (!appUser) return jsonResponse(401, { error: "authenticated_user_required" });
 
-      const renderEvent = body.render_event && typeof body.render_event === "object" ? body.render_event as JsonObject : {};
+      const incomingRenderEvent = body.render_event && typeof body.render_event === "object"
+        ? body.render_event as JsonObject
+        : {};
+      const communicationRoomId = toText(incomingRenderEvent.communicationRoomId ?? incomingRenderEvent.communication_room_id);
+      const callInviteId = toText(incomingRenderEvent.callInviteId ?? incomingRenderEvent.call_invite_id);
+      const threadId = toText(incomingRenderEvent.threadId ?? incomingRenderEvent.thread_id);
+      const renderEvent: JsonObject = { ...incomingRenderEvent };
+      delete renderEvent.communicationRoomId;
+      delete renderEvent.communication_room_id;
+      delete renderEvent.callInviteId;
+      delete renderEvent.call_invite_id;
+      delete renderEvent.threadId;
+      delete renderEvent.thread_id;
+      const userHash = await sha256Hex(appUser.id);
+      if (safeLabel(renderEvent.surface) === "chat_call") {
+        renderEvent.communicationRoomHash = communicationRoomId
+          ? await sha256Hex(`chat-call-room:${communicationRoomId}`)
+          : null;
+        renderEvent.callInviteHash = callInviteId
+          ? await sha256Hex(`chat-call-invite:${callInviteId}`)
+          : null;
+        renderEvent.threadHash = threadId
+          ? await sha256Hex(`chat-call-thread:${threadId}`)
+          : null;
+        renderEvent.roomRunCorrelationHash = communicationRoomId && callInviteId && threadId
+          ? await sha256Hex(`chat-call-run:${communicationRoomId}:${callInviteId}:${threadId}:${appUser.id}`)
+          : null;
+        const tokenAuditRoomHash = communicationRoomId
+          ? await hashSecurityText(communicationRoomId.toUpperCase(), "livekit-token-request:room")
+          : null;
+        const sinceTokenIso = new Date(Date.now() - 10 * 60_000).toISOString();
+        let recentTokenAuditQuery = adminClient
+          .from("livekit_token_request_audit")
+          .select("id")
+          .eq("actor_user_id", appUser.id)
+          .eq("surface", "chat-call")
+          .eq("outcome", "success")
+          .eq("room_join", true)
+          .eq("can_publish", true)
+          .eq("can_subscribe", true)
+          .gte("created_at", sinceTokenIso)
+          .order("created_at", { ascending: false });
+        if (tokenAuditRoomHash) {
+          recentTokenAuditQuery = recentTokenAuditQuery.eq("app_room_id_hash", tokenAuditRoomHash);
+        }
+        const recentTokenAudit = await recentTokenAuditQuery.limit(1).maybeSingle();
+        renderEvent.tokenAuditCorroborated = !recentTokenAudit.error && !!recentTokenAudit.data;
+      }
       const classification = classifyRenderEvent(renderEvent);
       const platform = ["ios", "android", "web"].includes(safeLabel(renderEvent.platform))
         ? safeLabel(renderEvent.platform)
         : "unknown";
-      const userHash = await sha256Hex(appUser.id);
       const sinceIso = new Date(Date.now() - 60_000).toISOString();
       const recent = await adminClient
         .from("livekit_operator_events")

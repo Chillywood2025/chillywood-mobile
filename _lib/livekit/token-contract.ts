@@ -23,6 +23,10 @@ export type LiveKitTokenRequest = {
   participantIdentity: string;
   participantName?: string;
   participantRole: LiveKitParticipantRole;
+  callInviteId?: string;
+  callType?: "voice" | "video";
+  mediaProvider?: "legacy_webrtc" | "livekit";
+  threadId?: string;
   metadata?: Record<string, boolean | number | string | null | undefined>;
 };
 
@@ -69,6 +73,14 @@ type LiveKitDecodedTokenPayload = {
   exp?: unknown;
   iat?: unknown;
   nbf?: unknown;
+  sub?: unknown;
+  video?: {
+    room?: unknown;
+    roomJoin?: unknown;
+    canPublish?: unknown;
+    canSubscribe?: unknown;
+    canPublishData?: unknown;
+  };
 };
 
 export type LiveKitParticipantTokenExpiryState = {
@@ -283,6 +295,29 @@ export const getLiveKitParticipantTokenExpiryState = (
   }
 };
 
+export const validateChatCallLiveKitTokenClaims = (input: {
+  participantIdentity: string;
+  participantToken: string;
+  roomName: string;
+}) => {
+  const participantIdentity = String(input.participantIdentity ?? "").trim();
+  const roomName = String(input.roomName ?? "").trim().toUpperCase();
+  if (!participantIdentity || !roomName) return false;
+  try {
+    const { payload } = decodeLiveKitParticipantTokenPayload(input.participantToken);
+    const video = payload.video;
+    return String(payload.sub ?? "").trim() === participantIdentity
+      && String(video?.room ?? "").trim().toUpperCase() === roomName
+      && video?.roomJoin === true
+      && video?.canPublish === true
+      && video?.canSubscribe === true
+      && video?.canPublishData === true
+      && !getLiveKitParticipantTokenExpiryState(input.participantToken).isExpired;
+  } catch {
+    return false;
+  }
+};
+
 const sanitizeMetadata = (value: LiveKitTokenRequest["metadata"]) => {
   if (!value) return {};
   return Object.fromEntries(
@@ -429,7 +464,11 @@ export async function requestLiveKitParticipantToken(
         participantIdentity,
         participantName: String(request.participantName ?? "").trim() || undefined,
         participantRole,
+        callInviteId: String(request.callInviteId ?? "").trim() || undefined,
+        callType: request.callType,
+        mediaProvider: request.mediaProvider,
         requestedGrants,
+        threadId: String(request.threadId ?? "").trim() || undefined,
         metadata: sanitizeMetadata(request.metadata),
       }),
     });
