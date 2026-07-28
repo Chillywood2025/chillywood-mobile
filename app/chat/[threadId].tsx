@@ -50,9 +50,11 @@ import {
 } from "../../_lib/chat";
 import { getCommunicationRoomSnapshot } from "../../_lib/communication";
 import {
+  resolveAcceptedChatCallRoomId,
   resolveIncomingCallRoomJoinAction,
   resolveIosChatCallAudioRoute,
   shouldActivateAcceptedChatCallMedia,
+  shouldKeepAcceptedChatCallPanelOpen,
   shouldShowOutgoingRingingPanel,
 } from "../../_lib/communicationCallMediaPolicy.mjs";
 import { decodeVisiblePercentEscapes } from "../../_lib/displayText";
@@ -277,7 +279,11 @@ export default function ChillyChatThreadScreen() {
   const outgoingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const outgoingRingbackSoundRef = useRef<ChillyChatPlayingSound | null>(null);
 
-  const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
+  const activeCallRoomId = resolveAcceptedChatCallRoomId({
+    inviteRoomId: activeCallInvite?.communicationRoomId,
+    inviteStatus: activeCallInvite?.status,
+    threadRoomId: thread?.activeCommunicationRoomId,
+  });
   const currentUserId = String(user?.id ?? "").trim();
 
   const rememberHandledIncomingInvite = useCallback((
@@ -459,7 +465,12 @@ export default function ChillyChatThreadScreen() {
         setOutgoingCallInvite(null);
         setCallPanelOpen(false);
       } else {
-        setCallPanelOpen((wasOpen) => (wasOpen ? !!visibleThread.activeCommunicationRoomId : false));
+        setCallPanelOpen((wasOpen) => shouldKeepAcceptedChatCallPanelOpen({
+          inviteRoomId: activeCallInviteRef.current?.communicationRoomId,
+          inviteStatus: activeCallInviteRef.current?.status,
+          threadRoomId: visibleThread.activeCommunicationRoomId,
+          wasOpen,
+        }));
       }
     } catch (loadError: any) {
       logChatThread("load_state_failed", {

@@ -17,12 +17,14 @@ import {
 } from "../supabase/functions/_shared/ios-voip-policy.mjs";
 import {
   canAttemptNativeCallBackgroundAudio,
+  resolveAcceptedChatCallRoomId,
   resolveChillyChatCallParticipantRole,
   resolveIncomingCallPresentation,
   resolveIncomingCallRoomJoinAction,
   resolveIosChatCallAudioRoute,
   setActiveCommunicationTracksEnabled,
   shouldActivateAcceptedChatCallMedia,
+  shouldKeepAcceptedChatCallPanelOpen,
   shouldPreserveNativeCallBackgroundAudio,
   shouldShowOutgoingRingingPanel,
 } from "../_lib/communicationCallMediaPolicy.mjs";
@@ -248,6 +250,28 @@ assert.equal(shouldActivateAcceptedChatCallMedia({
   roomId: "",
   inviteStatus: "accepted",
 }), false, "accepted state without an exact room cannot activate media");
+assert.equal(resolveAcceptedChatCallRoomId({
+  inviteRoomId: "ACCEPTED-ROOM",
+  inviteStatus: "accepted",
+  threadRoomId: "",
+}), "ACCEPTED-ROOM", "an accepted invite keeps its immutable room through a stale empty thread refresh");
+assert.equal(resolveAcceptedChatCallRoomId({
+  inviteRoomId: "RINGING-ROOM",
+  inviteStatus: "ringing",
+  threadRoomId: "THREAD-ROOM",
+}), "THREAD-ROOM", "an unaccepted invite cannot override the thread room");
+assert.equal(shouldKeepAcceptedChatCallPanelOpen({
+  inviteRoomId: "ACCEPTED-ROOM",
+  inviteStatus: "accepted",
+  threadRoomId: "",
+  wasOpen: true,
+}), true, "a stale empty thread refresh cannot unmount an accepted call panel");
+assert.equal(shouldKeepAcceptedChatCallPanelOpen({
+  inviteRoomId: "",
+  inviteStatus: null,
+  threadRoomId: "",
+  wasOpen: true,
+}), false, "a call panel closes when neither accepted-invite nor thread room authority remains");
 
 assert.equal(resolveChillyChatCallParticipantRole({
   currentUserId: "caller",
@@ -470,6 +494,16 @@ assert.match(
   chatThreadSource,
   /enabled: shouldActivateAcceptedChatCallMedia\(\{[\s\S]{0,140}inviteStatus: activeCallInvite\?\.status/u,
   "media activation must use the durable accepted-invite gate",
+);
+assert.match(
+  chatThreadSource,
+  /const activeCallRoomId = resolveAcceptedChatCallRoomId\(\{[\s\S]{0,180}inviteRoomId: activeCallInvite\?\.communicationRoomId/u,
+  "accepted-invite room authority must survive a stale empty thread refresh",
+);
+assert.match(
+  chatThreadSource,
+  /setCallPanelOpen\(\(wasOpen\) => shouldKeepAcceptedChatCallPanelOpen\(\{[\s\S]{0,260}activeCallInviteRef\.current\?\.communicationRoomId/u,
+  "an accepted call panel must remain mounted while its immutable invite room is active",
 );
 assert.doesNotMatch(
   chatThreadSource.slice(

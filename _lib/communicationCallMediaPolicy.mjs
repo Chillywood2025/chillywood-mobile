@@ -52,6 +52,18 @@ export function resolveIosChatCallAudioRoute(callType) {
   return callType === "video" ? "speaker" : "receiver";
 }
 
+export function resolveAcceptedChatCallRoomId(input) {
+  const acceptedInviteRoomId = input?.inviteStatus === "accepted"
+    ? String(input?.inviteRoomId ?? "").trim()
+    : "";
+  return acceptedInviteRoomId || String(input?.threadRoomId ?? "").trim();
+}
+
+export function shouldKeepAcceptedChatCallPanelOpen(input) {
+  return input?.wasOpen === true
+    && resolveAcceptedChatCallRoomId(input).length > 0;
+}
+
 export function shouldActivateAcceptedChatCallMedia(input) {
   return String(input?.roomId ?? "").trim().length > 0
     && input?.inviteStatus === "accepted";
