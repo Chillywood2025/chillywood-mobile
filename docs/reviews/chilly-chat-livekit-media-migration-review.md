@@ -144,3 +144,53 @@ The implementation PR must remain draft until the separately approved Android
 internal-channel binary, installed two-device call matrix, four-lane final
 review, and frozen-head CI 13/13 gates close. This review-only PR must be closed
 unmerged after its additive evidence has been consumed.
+
+## Additive installed-call review — accepted-timeout and iOS native-call gates
+
+Frozen implementation head: `aeb6853643b35ba6bf1e0211552b95bd60a12a5c`
+
+Installed review status at this checkpoint: P0=2, P1=0. Neither P0 is accepted
+as LiveKit success evidence.
+
+P0-CC-01 is an accepted-at-timeout caller race. The callee completed the
+authoritative `accepted` transition, but the caller's already-scheduled
+45-second callback attempted `missed` and then unconditionally cleared the
+thread and room marker even though the server rejected that transition. The
+exact LiveKit authority consequently denied the token and the provider cleaned
+up; the sentinel did not accept the attempt. Implementation head `aeb68536`
+now re-reads the invite, promotes an observed `accepted` invite into the active
+call, and performs timeout cleanup only after a confirmed `missed` response.
+The call semantics suite, notification/call guard, TypeScript, and inherited
+native/media guards pass. Installed retest remains required.
+
+P0-CC-02 is an iOS OTA runtime-config preservation failure. TestFlight build 8
+contains the reviewed PushKit/CallKit module, but readback from both retained
+`1.0.0-iosqa1` OTA manifests reports `iosNativeCallsEnabled=false`. The signed-in
+synthetic receiver therefore registered no PushKit token and an outside-app
+incoming call had no native delivery target. A config-only export with the
+existing `ios-qa` flags reports runtime `1.0.0-iosqa1`,
+`iosNativeCallsEnabled=true`, and the existing LiveKit and native-call plugins;
+there is no native delta. Publishing that correction would be a second iOS
+internal OTA, beyond the current exactly-one authorization, so it remains
+blocked pending explicit Owner approval. No binary is required or authorized
+for this correction.
+
+Additional bounded evidence:
+
+- foreground receiver outside the direct thread showed the existing compact
+  Answer/Decline banner;
+- a pre-accept `chat-call` token request was denied with
+  `chat_call_authority_mismatch` and no token;
+- acceptance remained server-authoritative;
+- the failed installed media attempt emitted only observational
+  `token_requested` telemetry and no healthy post-token stage;
+- the orphaned synthetic invite and room were ended through their normal
+  terminal authority;
+- no simultaneous legacy and LiveKit transport was observed;
+- no public channel, public release, Premium policy, entitlement, role, or
+  schedule changed.
+
+The expanded installed matrix must separately cover foreground same-thread,
+foreground off-thread, background, and terminated receivers in both call
+directions. Background and terminated iOS proof cannot proceed until
+P0-CC-02 is corrected and PushKit registration is read back.
