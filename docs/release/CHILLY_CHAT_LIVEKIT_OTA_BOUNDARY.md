@@ -4,8 +4,10 @@ Decision date: 2026-07-28
 
 Assessed application source: `afa7fe79263941024392922e779f5d45f29f6b3b`
 
-Status: source and native-boundary review complete. This report does not claim
-an installed call result and does not authorize a replacement binary.
+Status: source and native-boundary review complete. The one compatible iOS
+internal OTA has been published and read back on build 8. Android is stopped at
+the replacement-binary approval boundary. This report does not claim an
+installed call result and does not authorize a replacement binary.
 
 ## Migration delta
 
@@ -55,7 +57,9 @@ existing LiveKit/native-call packages, and Google Play Internal distribution.
 No Android binary is authorized by this report; separate Owner approval is
 required before building it.
 
-No Android OTA was published.
+No Android OTA was published. A connected Google Play installation read back
+app version `1.0.0`, native build `84`; the migration source is not installed
+there.
 
 ## iOS
 
@@ -72,10 +76,29 @@ compatibility, privacy manifest, camera/microphone descriptions, audio
 background mode, and PushKit/CallKit module required by the migration. The
 accepted-call migration adds no iOS-native delta.
 
-Exactly one iOS-only update may be published to `ios-qa` after the assessed
-implementation receives a green 13/13 CI run. The compatible pre-migration
-update remains the rollback target. No `production` channel update and no
-public release are authorized.
+The assessed implementation passed CI 13/13. Exactly one iOS-only update was
+published:
+
+- branch/channel: `ios-qa`;
+- runtime: `1.0.0-iosqa1`;
+- source: `fe741d57caf7a16d0c2b0c512c4e2dbef0dd4a13`;
+- update group: `2bc8da20-5b4d-4c02-b34b-7c7b59fcc097`;
+- iOS update: `019fa921-fb2c-754d-858b-578a26d67063`.
+
+The connected TestFlight build 8 downloaded the update and recorded two
+successful launches with zero failed launches. Pre-migration update
+`019f9c13-9f6d-7c52-9cee-71265b8fd565` remains retained as the compatible
+rollback target. No `production` channel update and no public release
+occurred.
+
+## Canary hold
+
+Two configured synthetic participant accounts authenticate successfully and
+each has zero active platform roles. Their sanitized account hashes are
+`c390b3190ff5788a` and `4aa617dd1819d6d3`. Neither account is enrolled yet.
+The Chat Call rollout remains `legacy_webrtc` by default with canary disabled
+and emergency stop engaged because both installed platforms do not yet contain
+the migration source.
 
 ## Guardrails
 
