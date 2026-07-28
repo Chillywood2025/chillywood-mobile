@@ -17,7 +17,9 @@ const uuid = () => crypto.randomUUID();
 const hash = () => crypto.randomBytes(32).toString("hex");
 const projectId = uuid();
 const taskId = uuid();
-const capabilityId = uuid();
+const collectCapabilityId = uuid();
+const issueCapabilityId = uuid();
+const consumeCapabilityId = uuid();
 const fixtureId = hash();
 const fixtureAttestationHash = hash();
 const evidenceManifestHash = hash();
@@ -308,9 +310,47 @@ try {
       id,service_identity,operation,task_id,project_id,platform,
       environment,assertion_hash,allowed_sentinel_keys,
       registered_by,expires_at
-    ) values (
-      ${sqlLiteral(capabilityId)}::uuid,
-      'cognitive_sentinel_collector','collect_sentinel_run',
+    ) values
+    (
+      ${sqlLiteral(collectCapabilityId)}::uuid,
+      'cognitive_livekit_experience_collector',
+      'collect_livekit_sentinel_run',
+      ${sqlLiteral(taskId)}::uuid,
+      ${sqlLiteral(projectId)}::uuid,
+      'android','production',
+      encode(
+        extensions.digest(
+          convert_to(:'service_assertion','UTF8'),
+          'sha256'
+        ),
+        'hex'
+      ),
+      array['livekit_experience_sentinel'],
+      ${sqlLiteral(uuid())}::uuid,
+      transaction_timestamp() + interval '1 hour'
+    ),
+    (
+      ${sqlLiteral(issueCapabilityId)}::uuid,
+      'cognitive_livekit_experience_collector',
+      'issue_livekit_failure_fixture',
+      ${sqlLiteral(taskId)}::uuid,
+      ${sqlLiteral(projectId)}::uuid,
+      'android','production',
+      encode(
+        extensions.digest(
+          convert_to(:'service_assertion','UTF8'),
+          'sha256'
+        ),
+        'hex'
+      ),
+      array['livekit_experience_sentinel'],
+      ${sqlLiteral(uuid())}::uuid,
+      transaction_timestamp() + interval '1 hour'
+    ),
+    (
+      ${sqlLiteral(consumeCapabilityId)}::uuid,
+      'cognitive_livekit_experience_collector',
+      'consume_livekit_failure_fixture',
       ${sqlLiteral(taskId)}::uuid,
       ${sqlLiteral(projectId)}::uuid,
       'android','production',

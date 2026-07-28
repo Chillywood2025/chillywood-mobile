@@ -238,6 +238,11 @@ export const RUNTIME_MANIFEST = Object.freeze({
           "action", "evaluatorProofHash", "evaluatorProofId",
           "sentinelRunId",
         ], ["product_quality_triage_no_finding"]),
+        triage_livekit_bounded_failure_no_finding: operation([
+          "action", "attestationId",
+        ], [
+          "cognitive_runtime.product_quality_triage_livekit_bounded_no_finding",
+        ]),
       },
       internalSecrets: ["COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION"],
       maxRequestBytes: 32_768,

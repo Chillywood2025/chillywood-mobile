@@ -19,4 +19,10 @@ export const TRIAGE_STATEMENTS = Object.freeze({
       $1::uuid,$2::uuid,$3::text,$4::text,$5::text
     ) as result`,
   }),
+  triageLiveKitBoundedNoFinding: Object.freeze({
+    arity: 2,
+    text: `select cognitive_runtime.product_quality_triage_livekit_bounded_no_finding(
+      $1::uuid,$2::text
+    ) as result`,
+  }),
 });

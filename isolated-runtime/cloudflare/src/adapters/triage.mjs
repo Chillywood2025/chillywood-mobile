@@ -51,4 +51,12 @@ export const PRODUCT_QUALITY_TRIAGE_ADAPTERS = Object.freeze({
         env.COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION,
       ]),
   ),
+  triage_livekit_bounded_failure_no_finding: ready(
+    ["triage_livekit_bounded_failure_no_finding"],
+    ({ database, env, payload }) =>
+      database.call("triageLiveKitBoundedNoFinding", [
+        payload.attestationId,
+        env.COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION,
+      ]),
+  ),
 });

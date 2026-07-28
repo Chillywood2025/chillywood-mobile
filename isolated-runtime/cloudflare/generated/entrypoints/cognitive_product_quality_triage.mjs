@@ -68,6 +68,15 @@ const principal = Object.freeze({
       "rpcEntrypoints": [
         "product_quality_triage_no_finding"
       ]
+    },
+    "triage_livekit_bounded_failure_no_finding": {
+      "payloadKeys": [
+        "action",
+        "attestationId"
+      ],
+      "rpcEntrypoints": [
+        "cognitive_runtime.product_quality_triage_livekit_bounded_no_finding"
+      ]
     }
   },
   "provider": "none",
@@ -78,6 +87,7 @@ const principal = Object.freeze({
     "COGNITIVE_PRODUCT_QUALITY_TRIAGE_ASSERTION"
   ],
   "rpcAllowlist": [
+    "cognitive_runtime.product_quality_triage_livekit_bounded_no_finding",
     "cognitive_runtime.runtime_revocation_status",
     "cognitive_runtime.runtime_role_preflight",
     "product_quality_triage_detection",

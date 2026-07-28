@@ -45,6 +45,7 @@ insert into expected_runtime_grants(role_name, schema_name, function_name) value
   ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_detection'),
   ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_no_finding'),
   ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_resolution'),
+  ('cognitive_product_quality_triage','cognitive_runtime','product_quality_triage_livekit_bounded_no_finding'),
   ('cognitive_public_research_broker','cognitive_runtime','cognitive_record_public_research_source_v2'),
   ('cognitive_public_research_broker','cognitive_runtime','record_research_claim_with_readback'),
   ('cognitive_public_research_broker','cognitive_runtime','cognitive_record_public_research_contradiction_detection'),
@@ -420,7 +421,7 @@ select is(
     )
     from explicit_grants
   ),
-  '3709ad1fd0b1352a12b5f6afb8b7d162395b53cebf2a7264c34ce003f825ae16',
+  '93b863048b2b08317daddb38d08ae0e2b0a3b981a2d859558b7eecf05b680753',
   'exact role-to-function-signature grant manifest is deterministic'
 );
 
@@ -752,8 +753,8 @@ select is(
       and procedure.prosecdef
       and procedure.proconfig @> array['search_path=""']
   ),
-  48,
-  'all forty-eight runtime boundary helpers and wrappers are security definer with an empty search path'
+  49,
+  'all forty-nine runtime boundary helpers and wrappers are security definer with an empty search path'
 );
 
 select ok(

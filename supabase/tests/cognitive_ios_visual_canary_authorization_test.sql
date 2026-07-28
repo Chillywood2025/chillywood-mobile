@@ -53,14 +53,14 @@ select ok(
 select ok(
   (
     select pg_get_constraintdef(oid)
-      like '%UNIQUE (assertion_hash, task_id, project_id, platform, environment)%'
+      like '%UNIQUE (assertion_hash, task_id, project_id, platform, environment, operation)%'
     from pg_constraint
     where conrelid =
       'public.cognitive_product_quality_service_capabilities'::regclass
       and conname =
-        'cognitive_product_quality_capability_assertion_scope_key'
+        'cognitive_quality_capability_assertion_operation_scope_key'
   ),
-  'unchanged Worker assertions may bind separate exact Android and iOS capabilities'
+  'unchanged Worker assertions may bind separate exact platform operations'
 );
 
 select ok(
