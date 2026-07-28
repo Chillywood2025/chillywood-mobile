@@ -2,7 +2,7 @@
 
 Review-only branch. Never merge this branch or its pull request.
 
-Implementation reviewed: `d7de9d2872aa215aec5dc16f418726de646c5826`
+Implementation reviewed: `1c62115b323c8ddb32193303e6e16d5f23bfd776`
 
 Status: source, local validation, hosted fail-closed deployment, iOS OTA
 boundary review, and the Owner-approved Android replacement profile review are
@@ -80,11 +80,13 @@ Native-boundary result:
   channel and that channel cannot be used for this internal canary. The Owner
   separately approved exactly one replacement App Bundle after the exact delta
   was reported. The guarded `android-chat-livekit-qa` build profile retains the
-  build-84 runtime and native graph, uses local credentials, produces a store
-  App Bundle, embeds only the isolated internal update channel, and remains
-  bound to the existing Google Play `internal` submit target. Production, open,
-  and closed tracks remain prohibited. No Android update or replacement binary
-  has been published at this review checkpoint.
+  build-84 runtime and native graph, produces a store App Bundle, embeds only
+  the isolated internal update channel, and remains bound to the existing
+  Google Play `internal` submit target. The existing synchronized replacement
+  EAS signing credential must be frozen during build; no credential export,
+  generation, or mutation is allowed. Production, open, and closed tracks
+  remain prohibited. No Android update or replacement binary has been
+  published at this review checkpoint.
 - iOS is `IOS_CHAT_CALL_LIVEKIT_OTA_COMPATIBLE`. The one iOS-only update
   `019fa921-fb2c-754d-858b-578a26d67063` was published to `ios-qa` /
   `1.0.0-iosqa1`; TestFlight build 8 recorded two successful and zero failed
