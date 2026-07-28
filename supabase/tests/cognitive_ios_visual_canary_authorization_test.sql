@@ -53,6 +53,31 @@ select ok(
 select ok(
   (
     select pg_get_constraintdef(oid)
+      like '%UNIQUE (assertion_hash, task_id, project_id, platform, environment)%'
+    from pg_constraint
+    where conrelid =
+      'public.cognitive_product_quality_service_capabilities'::regclass
+      and conname =
+        'cognitive_product_quality_capability_assertion_scope_key'
+  ),
+  'unchanged Worker assertions may bind separate exact Android and iOS capabilities'
+);
+
+select ok(
+  not exists (
+    select 1
+    from pg_constraint
+    where conrelid =
+      'public.cognitive_product_quality_service_capabilities'::regclass
+      and conname =
+        'cognitive_product_quality_service_capabiliti_assertion_hash_key'
+  ),
+  'the incompatible global assertion-hash uniqueness constraint is removed'
+);
+
+select ok(
+  (
+    select pg_get_constraintdef(oid)
       like '%target_platform = ANY (ARRAY[''android''%'
       and pg_get_constraintdef(oid) like '%''ios''%'
     from pg_constraint
@@ -177,7 +202,7 @@ select ok(
   ) like '%cognitive_product_quality_triage%'
   and pg_get_functiondef(
     'public.governance_prepare_ios_visual_canary_preflight(uuid,uuid,text,text,jsonb,text,text,interval)'::regprocedure
-  ) like '%) <> 2%',
+  ) like '%count(distinct capability.service_identity) <> 2%',
   'exactly two current iOS-only collector and triage capabilities are required'
 );
 
@@ -237,6 +262,13 @@ select ok(
     'public.governance_open_provider_independent_ios_visual_canary(uuid,text,text,text,text,text,text,text,interval)'::regprocedure
   ) like '%provider-independent-ios-visual-canary-v1%',
   'one unexpired unconsumed iOS receipt binds the exact iOS switch authorization'
+);
+
+select ok(
+  pg_get_functiondef(
+    'public.governance_open_provider_independent_ios_visual_canary(uuid,text,text,text,text,text,text,text,interval)'::regprocedure
+  ) like '%count(distinct capability.service_identity) <> 2%',
+  'authorization rechecks one current collector and one current triage capability'
 );
 
 select ok(
