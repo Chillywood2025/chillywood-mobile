@@ -194,3 +194,35 @@ The expanded installed matrix must separately cover foreground same-thread,
 foreground off-thread, background, and terminated receivers in both call
 directions. Background and terminated iOS proof cannot proceed until
 P0-CC-02 is corrected and PushKit registration is read back.
+
+## Additive corrective-OTA readback
+
+Owner approval was received for one additional iOS-only corrective OTA after
+implementation CI reached 13/13. Update group
+`639ef6a4-ee90-4ea1-94a5-b8cca8e7eec4`, iOS update
+`019fa995-1565-7946-88ac-474a4e637e8a`, was published only to `ios-qa`,
+runtime `1.0.0-iosqa1`, from implementation head `aeb68536`. EAS publication
+readback confirms one iOS update, the exact runtime, branch, and source, with no
+rollback marker.
+
+Two controlled TestFlight build-8 launches downloaded and activated the
+update. Installed database readback reports two successful launches, zero
+failed launches, and the exact new update ID. It also reports
+`iosNativeCallsEnabled=false`. The EAS production environment supplied the
+native-call variables during export and overrode the attempted command-local
+values. Therefore:
+
+- the accepted-at-timeout source repair is installed;
+- the PushKit runtime gate remains off;
+- no PushKit token or outside-app CallKit success may be claimed;
+- no additional iOS OTA is authorized at this checkpoint;
+- the sentinel remains fail-closed and no post-token LiveKit success was
+  recorded;
+- Android and every public update branch remain untouched by this corrective
+  attempt.
+
+P0-CC-02 remains open. A retry must omit the overriding remote environment (or
+use an equivalently reviewed isolated iOS-QA environment), preflight the
+generated manifest as `iosNativeCallsEnabled=true`, retain
+`1.0.0-iosqa1` and the same native graph, and obtain separate Owner approval
+before publication.
