@@ -1,7 +1,9 @@
 # Chi'lly Chat LiveKit media migration audit
 
-Status: implementation in progress. This document records source authority and
-does not claim installed-device success.
+Status: implementation and hosted fail-closed deployment complete. The iOS
+internal OTA is installed on build 8; Android delivery and cross-platform
+installed calls remain blocked on separate approval for an internal-channel
+replacement binary. This document does not claim installed-call success.
 
 ## Product state retained in Supabase
 
@@ -68,3 +70,19 @@ publish, and subscribe authority. A token request by itself remains
 observational. Missing provider/SDK bindings or missing token corroboration is
 classified `non_livekit_chat_call_evidence_rejected`; legacy WebRTC evidence
 cannot satisfy the Chat Call LiveKit sentinel.
+
+## Hosted and installed boundary
+
+- Hosted migration `chilly_chat_livekit_media_rollout` is deployed.
+- `chilly-chat-call-transition` version 6, `livekit-operator` version 46, and
+  `livekit-token` version 139 are active.
+- Public Chat Calls remain `legacy_webrtc`; canary is disabled, its emergency
+  stop is engaged, and zero canary users are enrolled.
+- Android/iOS Cognitive LiveKit switches remain off, shared LiveKit remains
+  off, and Cognitive schedules remain 0/5.
+- The six existing `chat-call` token-audit rows predate this migration and were
+  created on 2026-06-27. They are not counted as migration proof.
+- iOS update `019fa921-fb2c-754d-858b-578a26d67063` is installed on TestFlight
+  build 8, runtime `1.0.0-iosqa1`, with two successful and zero failed launches.
+- No Android OTA was published. Build 84 embeds the `production` update
+  channel, which cannot be repurposed for this internal canary.
