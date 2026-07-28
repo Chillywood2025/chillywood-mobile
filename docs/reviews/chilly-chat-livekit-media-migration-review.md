@@ -2,10 +2,11 @@
 
 Review-only branch. Never merge this branch or its pull request.
 
-Implementation reviewed: `afa7fe79263941024392922e779f5d45f29f6b3b`
+Implementation reviewed: `7c9ad2910cdba18806b2fbc8510198282ca1d879`
 
-Status: source and local validation review complete; hosted and installed-device
-gates remain open. This is not an activation or release approval.
+Status: source, local validation, hosted fail-closed deployment, and iOS OTA
+boundary review complete. Android delivery and installed-device call gates
+remain open. This is not an activation or release approval.
 
 ## Lane 1 — call lifecycle and product behavior
 
@@ -46,8 +47,14 @@ Result: P0=0, P1=0 for the reviewed source.
 - No Premium check, Owner/Admin bypass, or client service-role path was added.
 - Exact token claims are decoded and checked on-device before room connection.
 
-Open proof gates: hosted function deployment/readback, successful and denied
-hosted token fixtures, and exact `livekit_token_request_audit` readback.
+Hosted readback: the rollout migration and all three changed Edge Functions are
+active. Public provider remains `legacy_webrtc`, canary remains disabled with
+emergency stop engaged, and zero canary users are enrolled. The six existing
+`chat-call` audit rows predate this migration and are not accepted as its
+proof.
+
+Open proof gates: successful and denied installed token fixtures and exact new
+`livekit_token_request_audit` readback.
 
 ## Lane 3 — Android/iOS native boundary and audio
 
@@ -65,9 +72,20 @@ Result: P0=0, P1=0 for the reviewed JavaScript/TypeScript source.
 - Background voice policy and foreground video restoration are explicit in the
   LiveKit provider.
 
-Open proof gates: independent Android build 84 and iOS build 8 native-boundary
-classification, CallKit/PushKit and Android native answer on installed builds,
-audio activation/deactivation, and background/foreground evidence.
+Native-boundary result:
+
+- Android is `ANDROID_REPLACEMENT_BINARY_REQUIRED`. Build 84 has the compatible
+  LiveKit native stack but embeds `production`; an OTA cannot retarget its
+  channel and that channel cannot be used for this internal canary. No Android
+  update or binary was published.
+- iOS is `IOS_CHAT_CALL_LIVEKIT_OTA_COMPATIBLE`. The one iOS-only update
+  `019fa921-fb2c-754d-858b-578a26d67063` was published to `ios-qa` /
+  `1.0.0-iosqa1`; TestFlight build 8 recorded two successful and zero failed
+  launches.
+
+Open proof gates: separate Owner approval for the Android internal-channel
+replacement, CallKit/PushKit and Android native answer on exact installed
+sources, audio activation/deactivation, and background/foreground evidence.
 
 ## Lane 4 — telemetry, privacy, rollback, and regression
 
@@ -88,9 +106,12 @@ Result: P0=0, P1=0 for the reviewed source.
 - Rollout defaults to legacy, canary disabled, emergency stop on, with no
   public setting and no mid-call provider change.
 
-Open proof gates: hosted collector readback, installed first-audio/video/UI
-events, bounded failure fixture, recovery, emergency stop, and principal
-rollback.
+Hosted collector mapping is deployed and remains fail-closed. Android/iOS/shared
+LiveKit switches remain off, LiveKit runs/findings remain 0/0, and schedules
+remain 0/5.
+
+Open proof gates: installed first-audio/video/UI events, bounded failure
+fixture, recovery, emergency stop, and principal rollback.
 
 ## Reproduced validation
 
@@ -103,10 +124,13 @@ rollback.
 - full clean pgTAP: 1571/1571
 - migration source proof: pass
 - secret boundary: pass
+- OTA source CI: 13/13
+- iOS update pickup: two successful launches, zero failed launches
 - `deno.lock`: untracked and unstaged
 
 ## Merge posture
 
-The implementation PR must remain draft until hosted, OTA/binary, installed
-two-device, four-lane final review, and CI 13/13 gates close. This review-only
-PR must be closed unmerged after its additive evidence has been consumed.
+The implementation PR must remain draft until the separately approved Android
+internal-channel binary, installed two-device call matrix, four-lane final
+review, and frozen-head CI 13/13 gates close. This review-only PR must be closed
+unmerged after its additive evidence has been consumed.
