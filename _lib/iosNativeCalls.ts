@@ -92,10 +92,12 @@ export const isIosNativeCallsRuntimeEnabled = () => {
   const communication = runtime.communication && typeof runtime.communication === "object" && !Array.isArray(runtime.communication)
     ? runtime.communication as Record<string, unknown>
     : {};
+  const configuredRuntimeValue = communication.iosNativeCallsEnabled
+    ?? runtime.iosNativeCallsEnabled;
   return isExplicitlyEnabled(
-    process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED
-      || communication.iosNativeCallsEnabled
-      || runtime.iosNativeCallsEnabled,
+    configuredRuntimeValue === undefined
+      ? process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED
+      : configuredRuntimeValue,
   );
 };
 

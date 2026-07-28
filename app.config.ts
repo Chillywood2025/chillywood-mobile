@@ -320,9 +320,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
         communication: {
           ...existingCommunication,
-          iosNativeCallsEnabled: normalizeBoolean(
-            process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED || existingCommunication.iosNativeCallsEnabled,
-          ),
+          // `eas update --environment production` can supply the public
+          // production value after command-local values are evaluated. The
+          // isolated ios-qa runtime is itself an explicit native-call
+          // boundary, so keep its manifest aligned with the build profile.
+          iosNativeCallsEnabled: iosQaRuntimeVersion
+            ? true
+            : normalizeBoolean(
+              process.env.EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED || existingCommunication.iosNativeCallsEnabled,
+            ),
           iosOrdinaryPushEnabled: normalizeBoolean(
             process.env.EXPO_PUBLIC_IOS_ORDINARY_PUSH_ENABLED || existingCommunication.iosOrdinaryPushEnabled,
           ),
