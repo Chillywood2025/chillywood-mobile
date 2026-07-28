@@ -762,3 +762,103 @@ Static successor review remains:
 
 The missing evaluator/triage caller custody is an operational authority gate,
 not a source-review finding. PR #45 remains review-only and must never merge.
+
+## Android live-chain successor review
+
+Status at `2026-07-28T00:57:00Z`: the bounded Android lifecycle is complete
+and finalized. Implementation head
+`5662acea6f9115b8ff0c67d0df5989908248a18c` contains the exact forward
+database history through
+`20260728005610_cognitive_product_quality_proof_trigger_final`.
+
+The separately authorized credential work preserved secret-domain isolation:
+
+- the exposed Brevo credential was an API credential used only by the
+  owner-side provider-readiness consumer;
+- the old Brevo credential is revoked and provider authentication rejects it;
+- the replacement is active in the same macOS Keychain consumer;
+- Supabase Auth SMTP uses a separate credential and was not changed;
+- retained sentinel, evaluator, and triage operational invocation credentials
+  are in separate owner-only Keychain entries; and
+- every short-lived Cloudflare deployment credential was revoked after use.
+
+The original generic-manifest diagnosis remains
+`manifest_is_json_object`, classified `CANARY_PAYLOAD_DEFECT`. The repaired
+generator passes the same canonical JSON object to the Worker and Postgres
+instead of serializing the manifest into a JSON string. No generic validator
+or global sanitizer was weakened.
+
+The live chain exposed one later, independent triage capability assertion
+binding defect. Only after the old binding was proved did the Owner register
+one exact-scope replacement and revoke the old triage capability. The
+collector capability and sentinel assertion were unchanged.
+
+The next fail-closed production result was isolated without retaining
+evidence. The exact trigger subpredicate was
+`proof_assessment_bound`: evaluator hashing received numeric confidence `1`,
+while the finding column stored the equal value at scale four. PostgreSQL
+JSONB preserves numeric scale, so the duplicate trigger calculation hashed
+`1.0000` differently. The correction applies only
+`pg_catalog.trim_scale(p_confidence)` inside the immutable assessment-hash
+domain. Every assessment field, proof identity, expiry, evidence hash,
+finding scope, and collected-run binding remains mandatory. A materially
+different confidence value still changes the hash. The final forward
+migration restores the stable fail-closed error contract after the
+value-free diagnostic.
+
+The one Android authorization was
+`8f64a350-fa39-4aa2-b686-15358b85f7b7`. Its finalized live evidence is:
+
+- sentinel runs: `3`;
+- evaluator proofs: `3`;
+- triage consumptions: `3`;
+- finding events: `2` (`detected`, then `resolved`);
+- no-finding events: `1`;
+- collection dedupe: same run ID;
+- replay: denied;
+- emergency stop: mutation denied, then exact-Owner resume;
+- sentinel-principal rollback: denied while membership was absent, then
+  restored with `INHERIT true`, `SET false`, `ADMIN false`; and
+- activation outcome: Android visual switch enabled under
+  `provider-independent-visual-live-v2`.
+
+The canonical deferred-evidence V2 receipts are exact:
+
+- imported: `5`;
+- deferred: `2`;
+- rejected: `5`; and
+- every receipt preserves the original observation time separately from its
+  decision and optional import time.
+
+Final regression evidence:
+
+- full pgTAP: `1490/1490`;
+- isolated Cloudflare runtime: `138/138`;
+- password-authenticated isolated LOGIN integration: `PASS`;
+- Android canonical manifest: three identical runs, generic and detailed
+  validation `PASS`;
+- deferred-evidence identity: `22/22`;
+- implementation and remote migration timestamps: exact match;
+- shared and iOS visual switches: off;
+- provider-dependent switches: off;
+- schedules: `0/5`;
+- user-derived memory: off; and
+- Level 2: off.
+
+Static and live successor review result:
+
+| Lane | P0 | P1 | Result |
+| --- | ---: | ---: | --- |
+| architecture / credential / network | 0 | 0 | pass |
+| generic manifest and detailed Android validator | 0 | 0 | pass |
+| evaluator-proof / triage / finding lifecycle | 0 | 0 | pass |
+| emergency stop / rollback / replay | 0 | 0 | pass |
+| deferred evidence / switch and schedule confinement | 0 | 0 | pass |
+
+P2: `0`
+
+P3: `0`
+
+No Android evidence is approved for reuse by iOS. No shared visual pass,
+provider-dependent Worker activation, recurring schedule, mobile build, OTA,
+or release is claimed. PR #45 remains review-only and must never merge.
