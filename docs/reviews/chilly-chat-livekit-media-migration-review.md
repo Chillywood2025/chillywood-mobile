@@ -291,3 +291,87 @@ Outside-app CallKit presentation/answer and the platform-separated installed
 LiveKit call matrix remain pending direct physical proof. The Android proof
 handset was not attached at this checkpoint, so no cross-platform result is
 inferred or claimed.
+
+## Additive Android OTA and outside-app timeout review
+
+Frozen implementation head:
+`0578bed231fe5f57c8ca326537415a38ed3fbbfd`
+
+The approved Android-only internal OTA was published to
+`android-chat-livekit-qa`:
+
+- update group `a4f03738-9170-4e98-8426-5b8262c22d76`;
+- Android update `019fa9ae-28cd-79d3-8ee8-9105b3b35b3e`;
+- runtime `1.0.0-android-imagemanipulator-v1`;
+- JavaScript source `fc3895349c62c1a823d77d9867b064ff60967b3f`;
+- rollback marker false.
+
+Independent provider readback reports exactly one Android update in the group.
+A BrowserStack real-device lab session installed build 85 and showed the exact
+update, runtime, `android-chat-livekit-qa` channel, Release state, and no
+emergency label in the app's own diagnostics. The session ended by provider
+timeout. This is valid internal installed-update evidence, but it is not
+substituted for the required Google-signed physical-handset call proof.
+
+A voice call was then placed from the Android lab device while the synthetic
+iOS receiver was outside the direct thread and its app process was terminated.
+The server recorded one production APNs VoIP attempt with provider HTTP 200,
+using a server-owned token. No token or device identifier was retained. This
+proves the bounded provider handoff only. No physical CallKit presentation,
+ringing, answer, or decline is inferred or claimed because the system UI was
+not directly observed.
+
+The unaccepted call reached its 45-second expiry. Sanitized production readback
+showed:
+
+- invite `missed` and expired;
+- one `started` and one `missed` history event;
+- thread room and call-type fields cleared;
+- zero active/reconnecting communication-room memberships;
+- zero `chat-call` LiveKit token audits after call start.
+
+The first readback also exposed an active orphan communication-room record.
+The caller's client transition had won the race to mark the invite `missed`,
+so the one-minute expiry worker no longer selected it to close product state.
+No media connected, no token was issued, and the sentinel remained
+fail-closed.
+
+Implementation head `0578bed2` adds migration
+`20260728172910_chilly_chat_terminal_product_state_cleanup`. The migration is
+deployed and makes every durable terminal transition (`declined`, `missed`,
+`canceled`, `busy`, or `ended`) atomically:
+
+- mark active/reconnecting memberships left;
+- disable membership camera/microphone state;
+- end the exact communication room;
+- clear exact thread call linkage;
+- leave a room untouched if another ringing or accepted invite owns it.
+
+The migration also repaired only existing orphan terminal-call rooms with no
+non-terminal owner. Exact production reread for the timed-out call is now room
+`ended`, thread fields cleared, and zero active/reconnecting memberships.
+
+Validation at this checkpoint:
+
+- terminal-cleanup pgTAP: 22/22;
+- targeted transition/expiry/cleanup pgTAP: 68/68;
+- full pgTAP: 1593/1593;
+- lint: 0 errors;
+- TypeScript: pass;
+- call push and semantics guards: pass;
+- LiveKit provider/token/telemetry proof: pass;
+- secret scan: no matches;
+- `deno.lock`: untracked and unstaged.
+
+The chat canary remains limited to two role-free synthetic accounts. Public
+provider remains `legacy_webrtc`; canary emergency stop is false only for that
+bounded cohort. Android, iOS, and shared Cognitive LiveKit switches remain off;
+LiveKit authorizations/runs/findings remain 0/0/0; research, memory,
+user-derived memory, Level 2, and all schedules remain off.
+
+Remaining blocking proof is unchanged: direct physical outside-app/off-thread
+native presentation and interaction, followed by installed
+Android-to-iOS and iOS-to-Android voice/video LiveKit token, publication,
+subscription, first-media, UI Connected, controls, recovery, end, and cleanup.
+The implementation PR and review-only PR remain draft. No merge or activation
+is approved at this checkpoint.
