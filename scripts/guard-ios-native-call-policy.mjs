@@ -10,6 +10,7 @@ const rejectText = (source, marker, message) => {
 };
 
 const plugin = read("plugins/withChillyChatIosNativeCalls.js");
+const appConfig = read("app.config.ts");
 const coordinator = read("modules/chillywood-native-calls/ios/ChillywoodNativeCallCoordinator.swift");
 const moduleSource = read("modules/chillywood-native-calls/ios/ChillywoodNativeCallsModule.swift");
 const facade = read("_lib/iosNativeCalls.ts");
@@ -60,6 +61,9 @@ requireText(moduleSource, "reportRemoteEndAsync", "Realtime terminal state must 
 
 requireText(facade, "EXPO_PUBLIC_IOS_NATIVE_CALLS_ENABLED", "The JS facade must require an explicit runtime flag.");
 requireText(facade, "communication.iosNativeCallsEnabled", "The canonical communication.iosNativeCallsEnabled runtime key must be supported.");
+requireText(facade, "configuredRuntimeValue === undefined", "The canonical manifest value must take precedence over a conflicting export environment value.");
+requireText(appConfig, "iosNativeCallsEnabled: iosQaRuntimeVersion", "The isolated ios-qa runtime must preserve its native-call manifest gate.");
+requireText(appConfig, "? true", "The explicit ios-qa runtime must enable only the already-compiled native-call bridge.");
 requireText(facade, "if (!readiness.available", "PushKit registration must fail closed when build/runtime readiness is absent.");
 requireText(facade, "revokeIosVoipRegistration", "The JS facade must revoke on logout/account transition.");
 requireText(facade, "dispatchIosVoipIncomingCall", "The JS facade must expose incoming-only PushKit dispatch.");
