@@ -345,6 +345,10 @@ const atomicCallBeginMigrationSource = await readFile(
   new URL("supabase/migrations/20260719220000_atomic_chilly_chat_call_begin.sql", root),
   "utf8",
 );
+const terminalCleanupMigrationSource = await readFile(
+  new URL("supabase/migrations/20260728172910_chilly_chat_terminal_product_state_cleanup.sql", root),
+  "utf8",
+);
 assert.ok(dispatchSource.indexOf("const iosVoipPromise = invokeIosVoipDispatch") < dispatchSource.indexOf("const tokens = pushAllowed"));
 assert.doesNotMatch(dispatchSource, /if \(!tokens\.length\)[\s\S]{0,220}return/u);
 assert.match(voipSource, /\.eq\("enabled", true\)[\s\S]*\.is\("revoked_at", null\)/u);
@@ -363,6 +367,31 @@ assert.match(retryMigrationSource, /make_interval\(secs => least\(300/u);
 assert.match(expiryMigrationSource, /for update skip locked/u, "timeout expiry claims a bounded non-overlapping batch");
 assert.match(expiryMigrationSource, /transition_chilly_chat_call_invite/u, "timeout expiry uses the durable transition operation");
 assert.match(expiryMigrationSource, /"status" = 'ended'/u, "timeout expiry closes the stale media room");
+assert.match(
+  terminalCleanupMigrationSource,
+  /after update of "status" on public\."chat_call_invites"/u,
+  "every durable terminal invite transition owns product-state cleanup",
+);
+assert.match(
+  terminalCleanupMigrationSource,
+  /new\."status" not in \('declined', 'missed', 'canceled', 'ended', 'busy'\)/u,
+  "only terminal call statuses close product state",
+);
+assert.match(
+  terminalCleanupMigrationSource,
+  /active_invite\."status" in \('ringing', 'accepted'\)/u,
+  "cleanup cannot close a room still owned by another non-terminal invite",
+);
+assert.match(
+  terminalCleanupMigrationSource,
+  /"membership_state" = 'left'[\s\S]*"camera_enabled" = false[\s\S]*"mic_enabled" = false/u,
+  "terminal cleanup leaves memberships and disables media state",
+);
+assert.match(
+  terminalCleanupMigrationSource,
+  /"active_communication_room_id" = null[\s\S]*"active_call_type" = null/u,
+  "terminal cleanup clears exact thread call linkage",
+);
 assert.match(atomicCallBeginMigrationSource, /pg_advisory_xact_lock/u, "call starts serialize per direct thread");
 assert.match(atomicCallBeginMigrationSource, /invite\."status" in \('ringing', 'accepted'\)/u, "a concurrent start reuses the winning invite");
 assert.match(atomicCallBeginMigrationSource, /'role', case[\s\S]*'callee'/u, "the losing simultaneous caller becomes the callee");
