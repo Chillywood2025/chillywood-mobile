@@ -1,4 +1,5 @@
 import {
+  isStrictLiveKitBoundedNoFindingPayload,
   isStrictProductQualityDetectionPayload,
   isStrictProductQualityNoFindingPayload,
   isStrictProductQualityResolutionPayload,
@@ -37,6 +38,10 @@ const noFinding = () => ({
   evaluatorProofHash: hash("c"),
   evaluatorProofId: "8fd9a7c4-1132-4ac8-9f31-b71c2d4e5a60",
   sentinelRunId: "71a3dc80-6b42-4f19-a872-09d5e31c4b67",
+});
+const liveKitBoundedNoFinding = () => ({
+  action: "triage_livekit_bounded_failure_no_finding",
+  attestationId: "c3dfaa3c-f279-4fb9-b3e7-c8fed1627882",
 });
 const assert = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(message);
@@ -93,6 +98,25 @@ Deno.test("triage no-finding accepts only the exact proof linkage", () => {
     assert(
       !isStrictProductQualityNoFindingPayload(payload),
       "unbound no-finding consumption payload accepted",
+    );
+  }
+});
+
+Deno.test("triage LiveKit bounded no-finding accepts only one attestation", () => {
+  assert(
+    isStrictLiveKitBoundedNoFindingPayload(liveKitBoundedNoFinding()),
+    "valid LiveKit bounded no-finding consumption rejected",
+  );
+  for (
+    const payload of [
+      { ...liveKitBoundedNoFinding(), extra: true },
+      { ...liveKitBoundedNoFinding(), attestationId: "not-a-uuid" },
+      { ...liveKitBoundedNoFinding(), action: "triage_no_finding" },
+    ]
+  ) {
+    assert(
+      !isStrictLiveKitBoundedNoFindingPayload(payload),
+      "unbound LiveKit bounded no-finding consumption accepted",
     );
   }
 });

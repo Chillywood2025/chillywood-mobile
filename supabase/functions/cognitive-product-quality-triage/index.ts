@@ -61,6 +61,10 @@ const NO_FINDING_KEYS = Object.freeze([
   "evaluatorProofId",
   "sentinelRunId",
 ]);
+const LIVEKIT_BOUNDED_NO_FINDING_KEYS = Object.freeze([
+  "action",
+  "attestationId",
+]);
 const SEVERITIES = new Set(["info", "low", "medium", "high", "critical"]);
 const REPRODUCTION_STATES = new Set([
   "confirmed_defect",
@@ -196,6 +200,22 @@ export const isStrictProductQualityNoFindingPayload = (
     safePayload({ action: value.action });
 };
 
+export const isStrictLiveKitBoundedNoFindingPayload = (
+  value: unknown,
+): value is Record<string, unknown> => {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, LIVEKIT_BOUNDED_NO_FINDING_KEYS)
+  ) {
+    return false;
+  }
+  return value.action ===
+      "triage_livekit_bounded_failure_no_finding" &&
+    typeof value.attestationId === "string" &&
+    UUID.test(value.attestationId) &&
+    safePayload({ action: value.action });
+};
+
 const readRequiredSecret = (name: string): string => {
   const value = Deno.env.get(name)?.trim() ?? "";
   if (!value) throw new Error("server_configuration_missing");
@@ -321,6 +341,23 @@ export const handler = async (request: Request): Promise<Response> => {
       );
       if (result.error || !isRecord(result.data)) {
         return json(409, { error: "product_quality_no_finding_rejected" });
+      }
+      return json(200, result.data as JsonObject);
+    }
+    if (isStrictLiveKitBoundedNoFindingPayload(payload)) {
+      const result = await serviceClient
+        .schema("cognitive_runtime")
+        .rpc(
+          "product_quality_triage_livekit_bounded_no_finding",
+          {
+            p_attestation_id: payload.attestationId,
+            p_service_assertion: triageAssertion(),
+          },
+        );
+      if (result.error || !isRecord(result.data)) {
+        return json(409, {
+          error: "livekit_bounded_no_finding_triage_rejected",
+        });
       }
       return json(200, result.data as JsonObject);
     }

@@ -198,6 +198,13 @@
         ],
         "ready": true,
         "reason": null
+      },
+      "triage_livekit_bounded_failure_no_finding": {
+        "databaseOperations": [
+          "triage_livekit_bounded_failure_no_finding"
+        ],
+        "ready": true,
+        "reason": null
       }
     },
     "cognitive_public_research_broker": {
