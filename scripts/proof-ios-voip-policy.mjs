@@ -36,24 +36,18 @@ assert.equal(payload.callUuid, payload.callInviteId);
 assert.match(payload.path, /^\/chat\/thread%20with%20spaces\?callInviteId=/u);
 assert.equal("token" in payload, false, "APNs payload must never contain the raw destination token");
 assert.equal("camera" in payload, false, "incoming-call payload must never activate a camera");
-assert.equal(buildIosVoipApnsPayload({
-  action: "cancel",
-  callInviteId: payload.callInviteId,
-  callType: "video",
-  threadId: "thread with spaces",
-}).action, "cancel");
-assert.equal(buildIosVoipApnsPayload({
-  action: "end",
-  callInviteId: payload.callInviteId,
-  callType: "video",
-  threadId: "thread with spaces",
-}).action, "end");
-assert.equal(buildIosVoipApnsPayload({
-  action: "timeout",
-  callInviteId: payload.callInviteId,
-  callType: "video",
-  threadId: "thread with spaces",
-}).action, "timeout");
+for (const action of ["cancel", "declined", "end", "missed", "timeout"]) {
+  assert.throws(
+    () => buildIosVoipApnsPayload({
+      action,
+      callInviteId: payload.callInviteId,
+      callType: "video",
+      threadId: "thread with spaces",
+    }),
+    /non_incoming_voip_payload_denied/u,
+    `${action}: terminal lifecycle must never synthesize a second iOS VoIP call`,
+  );
+}
 assert.throws(() => buildIosVoipApnsPayload({ callInviteId: "", threadId: "" }), /invalid_voip_payload_scope/u);
 
 for (const reason of ["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"]) {
@@ -62,4 +56,4 @@ for (const reason of ["BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"
 assert.equal(isApnsInvalidVoipTokenReason("TooManyRequests"), false);
 assert.equal(sanitizeApnsProviderReason("Bad Device Token!"), "Bad_Device_Token_");
 
-console.log("iOS VoIP policy proof passed (runtime disabled by default, scoped APNs payload, invalid-token revocation)." );
+console.log("iOS VoIP policy proof passed (runtime disabled by default, incoming-only APNs payload, invalid-token revocation)." );
