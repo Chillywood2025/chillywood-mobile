@@ -14,7 +14,7 @@
     "proof:livekit-autonomous-operator": "node ./scripts/proof-livekit-autonomous-operator.mjs",
     "proof:livekit-surface-health": "node ./scripts/proof-livekit-surface-health.mjs",
     "proof:chilly-chat-livekit-media-migration": "node ./scripts/proof-chilly-chat-livekit-media-migration.mjs",
-    "test:chilly-chat-livekit-authority": "deno test --no-lock ./supabase/functions/_shared/chat-call-media-provider-policy_test.ts ./supabase/functions/_shared/chat-call-livekit-authority_test.ts",
+    "test:chilly-chat-livekit-authority": "deno test --no-lock ./supabase/functions/_shared/chat-call-media-provider-policy_test.ts ./supabase/functions/_shared/chat-call-livekit-authority_test.ts ./supabase/functions/_shared/chat-call-telemetry-authority_test.ts",
     "proof:livekit-operator-scheduler": "node ./scripts/proof-livekit-operator-scheduler.mjs",
     "proof:autonomous-systems-contract": "node ./scripts/proof-autonomous-systems-contract.mjs",
     "proof:autonomous-approval-live-flow": "node ./scripts/proof-autonomous-approval-live-flow.mjs",

@@ -41,6 +41,7 @@ const operator = read("supabase/functions/livekit-operator/index.ts");
 const telemetry = read("_lib/livekit/livekitRenderTelemetry.ts");
 const chatTelemetry = read("_lib/chatCallLiveKitTelemetry.ts");
 const chatTelemetryBindingPolicy = read("_lib/chatCallTelemetryBindingPolicy.ts");
+const chatTelemetryAuthority = read("supabase/functions/_shared/chat-call-telemetry-authority.ts");
 const migration = read("supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql");
 const chatRoomCreation = read("_lib/chat.ts");
 const transition = read("supabase/functions/chilly-chat-call-transition/index.ts");
@@ -173,8 +174,11 @@ for (const stage of [
 requireText(chatTelemetry, 'surface: "chat_call"', "Chat Call telemetry uses the sentinel surface");
 requireText(chatTelemetry, "liveKitSdkEvent: true", "Chat Call telemetry is marked as SDK-derived");
 requireText(telemetry, 'sanitizeChatCallTelemetryBinding(input.callInviteId, "uuid")', "client preserves only a strict exact invite binding for the authenticated collector");
-requireText(telemetry, 'sanitizeChatCallTelemetryBinding(input.communicationRoomId, "room_code")', "client preserves only a strict exact room binding for token-audit correlation");
+requireText(telemetry, 'sanitizeChatCallTelemetryBinding(input.communicationRoomId, "room_code")', "client strips incompatible internal room identifiers before collector ingress");
 requireText(chatTelemetryBindingPolicy, "UUID_PATTERN", "client exact invite and thread bindings are UUID-bounded");
+requireText(chatTelemetryAuthority, "authoritativeCommunicationRoomId", "collector derives an exact room only from the authenticated accepted invite");
+requireText(chatTelemetryAuthority, "clientRoomBindingCompatible", "collector rejects a conflicting client room hint");
+requireText(chatTelemetryAuthority, "participantMatches", "collector requires the authenticated user to be an invite participant");
 requireText(operator, "delete renderEvent.communicationRoomId", "collector strips raw communication room IDs");
 requireText(operator, "delete renderEvent.callInviteId", "collector strips raw call invite IDs");
 requireText(operator, "delete renderEvent.threadId", "collector strips raw thread IDs");
@@ -185,6 +189,7 @@ requireText(operator, '.eq("surface", "chat-call")', "collector corroborates an 
 requireText(operator, '.eq("outcome", "success")', "collector requires successful token authorization");
 requireText(operator, '.eq("can_publish", true)', "collector requires publish authority");
 requireText(operator, '.eq("can_subscribe", true)', "collector requires subscribe authority");
+requireText(operator, "safeTokenAuditBoolean", "collector persists only the non-secret token-audit corroboration boolean");
 requireText(operator, "non_livekit_chat_call_evidence_rejected", "collector rejects non-LiveKit evidence");
 requireText(operator, "chat_call_livekit_token_requested_not_success_proof", "token request alone is not LiveKit success proof");
 
