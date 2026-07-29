@@ -256,6 +256,7 @@ export default function ChillyChatThreadScreen() {
   const [callPanelOpen, setCallPanelOpen] = useState(false);
   const [nativeSpeakerEnabled, setNativeSpeakerEnabled] = useState(false);
   const [nativeMediaActivationSerial, setNativeMediaActivationSerial] = useState(0);
+  const [nativeAudioSessionCallUuid, setNativeAudioSessionCallUuid] = useState("");
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
@@ -554,6 +555,11 @@ export default function ChillyChatThreadScreen() {
 
     return undefined;
   }, [thread?.activeCallType]);
+  const waitingForIosNativeAudioSession =
+    Platform.OS === "ios"
+    && requestedNativeCallAction === "answer"
+    && !!requestedNativeCallUuid
+    && nativeAudioSessionCallUuid !== requestedNativeCallUuid;
 
   const {
     room: callRoom,
@@ -584,7 +590,7 @@ export default function ChillyChatThreadScreen() {
     enabled: shouldActivateAcceptedChatCallMedia({
       roomId: activeCallRoomId,
       inviteStatus: activeCallInvite?.status,
-    }),
+    }) && !waitingForIosNativeAudioSession,
     allowBackgroundAudio: Platform.OS === "ios"
       && requestedNativeCallAction === "answer"
       && !!requestedNativeCallUuid,
@@ -1323,6 +1329,19 @@ export default function ChillyChatThreadScreen() {
       if (!acceptedInvite) {
         throw new Error("Unable to accept this Chi'lly Chat call right now.");
       }
+      if (
+        requestedNativeCallAction === "answer"
+        && requestedNativeCallUuid
+      ) {
+        nativeAnswerAcknowledgedRef.current = requestedNativeCallUuid;
+        const nativeAnswerCompleted = await completeIosNativeCallAnswer(
+          requestedNativeCallUuid,
+          true,
+        );
+        if (!nativeAnswerCompleted) {
+          nativeAnswerAcknowledgedRef.current = "";
+        }
+      }
       rememberHandledIncomingInvite(acceptedInvite);
       activeCallInviteRef.current = acceptedInvite;
       setActiveCallInvite(acceptedInvite);
@@ -1361,7 +1380,16 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setCallBusy(false);
     }
-  }, [callBusy, currentUserId, loadThreadState, readAcceptableIncomingInvite, rememberHandledIncomingInvite, threadId]);
+  }, [
+    callBusy,
+    currentUserId,
+    loadThreadState,
+    readAcceptableIncomingInvite,
+    rememberHandledIncomingInvite,
+    requestedNativeCallAction,
+    requestedNativeCallUuid,
+    threadId,
+  ]);
 
   const handleAcceptIncomingCall = useCallback(async () => {
     if (!incomingCallInvite) return;
@@ -1567,13 +1595,21 @@ export default function ChillyChatThreadScreen() {
     }
     if (callChannelState !== "live" && callChannelState !== "error") return;
 
-    nativeAnswerAcknowledgedRef.current = requestedNativeCallUuid;
     if (callChannelState === "live") {
+      if (nativeAnswerAcknowledgedRef.current === requestedNativeCallUuid) return;
+      nativeAnswerAcknowledgedRef.current = requestedNativeCallUuid;
       void completeIosNativeCallAnswer(requestedNativeCallUuid, true);
       return;
     }
 
-    void completeIosNativeCallAnswer(requestedNativeCallUuid, false);
+    const nativeAnswerWasCompleted =
+      nativeAnswerAcknowledgedRef.current === requestedNativeCallUuid;
+    if (nativeAnswerWasCompleted) {
+      void endIosNativeCall(requestedNativeCallUuid, "media_connection_failed");
+    } else {
+      nativeAnswerAcknowledgedRef.current = requestedNativeCallUuid;
+      void completeIosNativeCallAnswer(requestedNativeCallUuid, false);
+    }
     const activeInvite = activeCallInviteRef.current;
     const finishFailedAnswer = async () => {
       await leaveRoom({ endRoomIfHost: false }).catch(() => undefined);
@@ -1623,6 +1659,9 @@ export default function ChillyChatThreadScreen() {
         || event.type === "applicationActive"
       ) {
         setNativeMediaActivationSerial((current) => current + 1);
+      }
+      if (event.type === "audioSessionActivated") {
+        setNativeAudioSessionCallUuid(requestedNativeCallUuid);
       }
     });
   }, [requestedNativeCallUuid, setMicrophoneEnabled]);

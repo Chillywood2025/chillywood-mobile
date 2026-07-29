@@ -476,6 +476,21 @@ assert.doesNotMatch(
   "a rejected missed transition cannot unconditionally clear an accepted call",
 );
 assert.match(chatThreadSource, /setIosNativeCallAudioRoute\(route\)/u, "iOS chat calls must apply the call-type audio route");
+assert.match(
+  chatThreadSource,
+  /requestedNativeCallAction === "answer"[\s\S]{0,420}completeIosNativeCallAnswer\([\s\S]{0,160}true[\s\S]{0,300}rememberHandledIncomingInvite\(acceptedInvite\)/u,
+  "a server-accepted CallKit answer is fulfilled before accepted media initialization can publish",
+);
+assert.match(
+  chatThreadSource,
+  /nativeAudioSessionCallUuid !== requestedNativeCallUuid[\s\S]{0,900}enabled:[\s\S]{0,260}!waitingForIosNativeAudioSession/u,
+  "iOS CallKit media initialization waits for the matching native audio-session activation",
+);
+assert.match(
+  chatThreadSource,
+  /event\.type === "audioSessionActivated"[\s\S]{0,180}setNativeAudioSessionCallUuid\(requestedNativeCallUuid\)/u,
+  "only CallKit audio-session activation releases the matching accepted call's media gate",
+);
 assert.doesNotMatch(
   rootLayoutSource,
   /event\.type === "muted" \|\| event\.type === "unmuted"\)[\s\S]{0,260}routeNativeAction/u,
