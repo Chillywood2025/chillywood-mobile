@@ -361,6 +361,37 @@ export default function ChillyChatThreadScreen() {
     }
   }, []);
 
+  const applyAcceptedIncomingInviteState = useCallback((
+    invite: ChillyChatCallInvite,
+  ) => {
+    const roomId = String(invite?.communicationRoomId ?? "").trim();
+    const valid =
+      invite?.status === "accepted"
+      && !!roomId
+      && invite.threadId === threadId
+      && invite.calleeUserId === currentUserId
+      && invite.callerUserId !== currentUserId;
+    if (!valid) return false;
+
+    rememberHandledIncomingInvite(invite);
+    activeCallInviteRef.current = invite;
+    setActiveCallInvite(invite);
+    setIncomingCallInvite(null);
+    setOutgoingCallInvite(null);
+    setThread((current) => {
+      if (!current || current.threadId !== threadId) return current;
+      return {
+        ...current,
+        activeCommunicationRoomId: roomId,
+        activeCallType: invite.callType,
+      };
+    });
+    setCallPanelOpen(true);
+    setError(null);
+    setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
+    return true;
+  }, [currentUserId, rememberHandledIncomingInvite, threadId]);
+
   const clearVisibleIncomingCallState = useCallback((invite: ChillyChatCallInvite | null | undefined) => {
     rememberHandledIncomingInvite(invite, { clearRoom: true });
     setIncomingCallInvite(null);
@@ -463,6 +494,19 @@ export default function ChillyChatThreadScreen() {
       ]);
 
       const nextThread = await reconcileEndedCallState(loadedThread);
+      const acceptedActiveInvite = nextThread?.activeCommunicationRoomId
+        ? await readLatestChillyChatCallInviteForRoom(
+          nextThread.activeCommunicationRoomId,
+        ).catch(() => null)
+        : null;
+      const resumableAcceptedInvite =
+        acceptedActiveInvite?.status === "accepted"
+        && acceptedActiveInvite.threadId === threadId
+        && acceptedActiveInvite.communicationRoomId === nextThread?.activeCommunicationRoomId
+        && acceptedActiveInvite.calleeUserId === currentUserId
+        && acceptedActiveInvite.callerUserId !== currentUserId
+          ? acceptedActiveInvite
+          : null;
 
       if (!nextThread) {
         setError("This Chi'lly Chat thread could not be found.");
@@ -494,6 +538,9 @@ export default function ChillyChatThreadScreen() {
         ? latestInviteForCurrentUser
         : null;
       setIncomingCallInvite(visibleIncomingInvite);
+      if (resumableAcceptedInvite) {
+        applyAcceptedIncomingInviteState(resumableAcceptedInvite);
+      }
       setError(null);
       setLoading(false);
       if (!visibleThread.activeCommunicationRoomId) {
@@ -508,7 +555,7 @@ export default function ChillyChatThreadScreen() {
 
       await markThreadReadWithThrottle();
 
-      if (visibleIncomingInvite) {
+      if (visibleIncomingInvite && !resumableAcceptedInvite) {
         stopOutgoingRingback();
         activeCallInviteRef.current = null;
         setActiveCallInvite(null);
@@ -530,7 +577,7 @@ export default function ChillyChatThreadScreen() {
       setError(loadError?.message ?? "Unable to load this Chi'lly Chat thread.");
       setLoading(false);
     }
-  }, [currentUserId, isSignedIn, markThreadReadWithThrottle, reconcileEndedCallState, stopOutgoingRingback, threadId]);
+  }, [applyAcceptedIncomingInviteState, currentUserId, isSignedIn, markThreadReadWithThrottle, reconcileEndedCallState, stopOutgoingRingback, threadId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1387,37 +1434,6 @@ export default function ChillyChatThreadScreen() {
     setCallDeliveryStatus("This Chi'lly Chat call is no longer available. Ask the caller to start a new call.");
     return null;
   }, [clearVisibleIncomingCallState, currentUserId, threadId]);
-
-  const applyAcceptedIncomingInviteState = useCallback((
-    invite: ChillyChatCallInvite,
-  ) => {
-    const roomId = String(invite?.communicationRoomId ?? "").trim();
-    const valid =
-      invite?.status === "accepted"
-      && !!roomId
-      && invite.threadId === threadId
-      && invite.calleeUserId === currentUserId
-      && invite.callerUserId !== currentUserId;
-    if (!valid) return false;
-
-    rememberHandledIncomingInvite(invite);
-    activeCallInviteRef.current = invite;
-    setActiveCallInvite(invite);
-    setIncomingCallInvite(null);
-    setOutgoingCallInvite(null);
-    setThread((current) => {
-      if (!current || current.threadId !== threadId) return current;
-      return {
-        ...current,
-        activeCommunicationRoomId: roomId,
-        activeCallType: invite.callType,
-      };
-    });
-    setCallPanelOpen(true);
-    setError(null);
-    setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
-    return true;
-  }, [currentUserId, rememberHandledIncomingInvite, threadId]);
 
   const resumeAcceptedIncomingInvite = useCallback(async (
     invite: ChillyChatCallInvite,

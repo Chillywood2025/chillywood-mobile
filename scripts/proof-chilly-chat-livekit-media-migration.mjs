@@ -103,6 +103,8 @@ requireText(rootLayout, "hasIosNativeCallPresentation(alertInviteId)", "app-wide
 requireText(chatScreen, "iosNativePresentationGraceReadyInviteId !== incomingCallInviteId", "same-thread fallback waits briefly for CallKit without remaining hidden");
 requireText(rootLayout, "iosNativePresentationGraceReadyInviteId !== alertInviteId", "app-wide fallback waits briefly for CallKit without remaining hidden");
 requireText(chatScreen, "const resumeAcceptedIncomingInvite = useCallback", "native Answer can resume an accepted invite after an activity remount");
+requireText(chatScreen, "const resumableAcceptedInvite =", "thread loading rehydrates a server-accepted callee after an activity remount");
+requireText(chatScreen, "applyAcceptedIncomingInviteState(resumableAcceptedInvite)", "thread loading opens accepted media without requiring a second tap");
 requireText(chatScreen, 'latestInvite?.status === "accepted"', "accepted-invite recovery rechecks authoritative invite state");
 requireText(chatScreen, "latestThread?.activeCommunicationRoomId === roomId", "accepted-invite recovery rechecks exact thread-room linkage");
 requireText(chatScreen, 'snapshot?.room.status === "active"', "accepted-invite recovery rejects stale or ended rooms");

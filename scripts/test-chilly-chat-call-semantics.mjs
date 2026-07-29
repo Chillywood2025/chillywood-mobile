@@ -699,6 +699,16 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
+  /const acceptedActiveInvite = nextThread\?\.activeCommunicationRoomId[\s\S]{0,700}acceptedActiveInvite\?\.status === "accepted"[\s\S]{0,520}acceptedActiveInvite\.calleeUserId === currentUserId/u,
+  "thread-state loading rehydrates only the exact server-accepted callee into media after an activity remount",
+);
+assert.match(
+  chatThreadSource,
+  /setIncomingCallInvite\(visibleIncomingInvite\);[\s\S]{0,180}if \(resumableAcceptedInvite\)[\s\S]{0,120}applyAcceptedIncomingInviteState\(resumableAcceptedInvite\)/u,
+  "thread-state loading opens accepted receiver media without another Answer or Join tap",
+);
+assert.match(
+  chatThreadSource,
   /nativeAudioSessionCallUuid !== requestedNativeCallUuid[\s\S]{0,900}enabled:[\s\S]{0,260}!waitingForIosNativeAudioSession/u,
   "iOS CallKit media initialization waits for the matching native audio-session activation",
 );
