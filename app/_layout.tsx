@@ -62,11 +62,12 @@ import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
 import {
+  hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
-  readIosNativeCallsReadiness,
   reportIosNativeCallRemoteEnd,
   revokeIosVoipRegistration,
   startIosNativeCallsReadiness,
+  subscribeToIosNativeCallPresentation,
   type SanitizedNativeCallEvent,
 } from "../_lib/iosNativeCalls";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
@@ -76,6 +77,7 @@ import { RuntimeUnavailableScreen } from "../components/system/runtime-unavailab
 import InterstitialAdController from "../components/ads/InterstitialController";
 
 const PUBLIC_LEGAL_PATHS = new Set<string>(APPLICATION_LEGAL_PATHS);
+const IOS_NATIVE_PRESENTATION_GRACE_MS = 1_500;
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
 
@@ -337,32 +339,35 @@ function IncomingCallNotificationBridge() {
   const [alert, setAlert] = useState<IncomingCallAlert | null>(null);
   const [appState, setAppState] = useState(AppState.currentState);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
-  const [iosNativeCallPresentationOwned, setIosNativeCallPresentationOwned] = useState(
-    Platform.OS === "ios" && isIosNativeCallsRuntimeEnabled(),
-  );
+  const [iosNativePresentationRevision, bumpIosNativePresentationRevision] = useState(0);
+  const [iosNativePresentationGraceReadyInviteId, setIosNativePresentationGraceReadyInviteId] = useState("");
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const latestInviteAlertIdRef = useRef("");
 
   useEffect(() => {
-    let active = true;
-    if (Platform.OS !== "ios") {
-      setIosNativeCallPresentationOwned(false);
-      return () => {
-        active = false;
-      };
-    }
-    void readIosNativeCallsReadiness().then((readiness) => {
-      if (active) {
-        setIosNativeCallPresentationOwned(
-          isIosNativeCallsRuntimeEnabled() || readiness.available,
-        );
-      }
+    if (Platform.OS !== "ios") return () => {};
+    return subscribeToIosNativeCallPresentation(() => {
+      bumpIosNativePresentationRevision((revision) => revision + 1);
     });
-    return () => {
-      active = false;
-    };
   }, []);
+
+  useEffect(() => {
+    const inviteId = String(alert?.inviteId ?? "").trim();
+    if (
+      Platform.OS !== "ios"
+      || !isIosNativeCallsRuntimeEnabled()
+      || !inviteId
+    ) {
+      setIosNativePresentationGraceReadyInviteId(inviteId);
+      return () => {};
+    }
+    setIosNativePresentationGraceReadyInviteId("");
+    const timeout = setTimeout(() => {
+      setIosNativePresentationGraceReadyInviteId(inviteId);
+    }, IOS_NATIVE_PRESENTATION_GRACE_MS);
+    return () => clearTimeout(timeout);
+  }, [alert?.inviteId]);
 
   const stopIncomingCallAttention = () => {
     Vibration.cancel();
@@ -466,9 +471,19 @@ function IncomingCallNotificationBridge() {
     const currentPath = normalizeRoutePathOnly(pathname);
     const alertPath = normalizeRoutePathOnly(alert.path);
     const alreadyOnSameThread = currentPath.startsWith("/chat/") && alertPath && currentPath === alertPath;
+    const alertInviteId = String(alert.inviteId ?? "").trim();
+    const iosNativeCallPresentationOwned = hasIosNativeCallPresentation(alertInviteId);
+    const waitingForIosNativePresentation =
+      Platform.OS === "ios"
+      && isIosNativeCallsRuntimeEnabled()
+      && !!alertInviteId
+      && !iosNativeCallPresentationOwned
+      && iosNativePresentationGraceReadyInviteId !== alertInviteId;
     if (
       appState !== "active"
       || alreadyOnSameThread
+      || iosNativeCallPresentationOwned
+      || waitingForIosNativePresentation
       || callPreferences?.chillyChatCallsEnabled === false
       || callPreferences?.inAppEnabled === false
     ) {
@@ -496,13 +511,32 @@ function IncomingCallNotificationBridge() {
       soundActive = false;
       stopIncomingCallAttention();
     };
-  }, [alert, appState, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, callPreferences?.inAppEnabled, pathname]);
+  }, [
+    alert,
+    appState,
+    callPreferences?.chillyChatCallSoundKey,
+    callPreferences?.chillyChatCallVibrateEnabled,
+    callPreferences?.chillyChatCallsEnabled,
+    callPreferences?.inAppEnabled,
+    iosNativePresentationGraceReadyInviteId,
+    iosNativePresentationRevision,
+    pathname,
+  ]);
 
   if (!alert) return null;
 
   const currentPath = normalizeRoutePathOnly(pathname);
   const alertPath = normalizeRoutePathOnly(alert.path);
   const alreadyOnSameThread = currentPath.startsWith("/chat/") && !!alertPath && currentPath === alertPath;
+  const alertInviteId = String(alert.inviteId ?? "").trim();
+  const iosNativeCallPresentationOwned = hasIosNativeCallPresentation(alertInviteId);
+  const waitingForIosNativePresentation =
+    Platform.OS === "ios"
+    && isIosNativeCallsRuntimeEnabled()
+    && !!alertInviteId
+    && !iosNativeCallPresentationOwned
+    && iosNativePresentationGraceReadyInviteId !== alertInviteId;
+  if (waitingForIosNativePresentation) return null;
   const presentation = resolveIncomingCallPresentation({
     appState,
     alreadyOnSameThread,

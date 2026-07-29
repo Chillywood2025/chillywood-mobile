@@ -71,12 +71,13 @@ import { reportRuntimeError } from "../../_lib/logger";
 import {
   completeIosNativeCallAnswer,
   endIosNativeCall,
+  hasIosNativeCallPresentation,
   isIosNativeCallsRuntimeEnabled,
-  readIosNativeCallsReadiness,
   reportIosNativeCallRemoteEnd,
   setIosNativeCallAudioRoute,
   setIosNativeCallMuted,
   subscribeToIosNativeCallEvents,
+  subscribeToIosNativeCallPresentation,
 } from "../../_lib/iosNativeCalls";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
@@ -115,6 +116,8 @@ const logChatCall = (event: string, details?: Record<string, unknown>) => {
   void event;
   void details;
 };
+
+const IOS_NATIVE_PRESENTATION_GRACE_MS = 1_500;
 
 const buildAuthor = (members: ChatThreadMember[], senderUserId: string) => {
   return members.find((member) => member.userId === senderUserId)?.displayName ?? "User";
@@ -268,9 +271,8 @@ export default function ChillyChatThreadScreen() {
   const [friendLoading, setFriendLoading] = useState(true);
   const [friendBusy, setFriendBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
-  const [iosNativeCallPresentationOwned, setIosNativeCallPresentationOwned] = useState(
-    Platform.OS === "ios" && isIosNativeCallsRuntimeEnabled(),
-  );
+  const [iosNativePresentationRevision, bumpIosNativePresentationRevision] = useState(0);
+  const [iosNativePresentationGraceReadyInviteId, setIosNativePresentationGraceReadyInviteId] = useState("");
   const autoStartCallRef = useRef("");
   const autoOpenCallRef = useRef("");
   const nativeCallActionHandledRef = useRef("");
@@ -286,24 +288,28 @@ export default function ChillyChatThreadScreen() {
   const outgoingRingbackSoundRef = useRef<ChillyChatPlayingSound | null>(null);
 
   useEffect(() => {
-    let active = true;
-    if (Platform.OS !== "ios") {
-      setIosNativeCallPresentationOwned(false);
-      return () => {
-        active = false;
-      };
-    }
-    void readIosNativeCallsReadiness().then((readiness) => {
-      if (active) {
-        setIosNativeCallPresentationOwned(
-          isIosNativeCallsRuntimeEnabled() || readiness.available,
-        );
-      }
+    if (Platform.OS !== "ios") return () => {};
+    return subscribeToIosNativeCallPresentation(() => {
+      bumpIosNativePresentationRevision((revision) => revision + 1);
     });
-    return () => {
-      active = false;
-    };
   }, []);
+
+  useEffect(() => {
+    const inviteId = String(incomingCallInvite?.id ?? "").trim();
+    if (
+      Platform.OS !== "ios"
+      || !isIosNativeCallsRuntimeEnabled()
+      || !inviteId
+    ) {
+      setIosNativePresentationGraceReadyInviteId(inviteId);
+      return () => {};
+    }
+    setIosNativePresentationGraceReadyInviteId("");
+    const timeout = setTimeout(() => {
+      setIosNativePresentationGraceReadyInviteId(inviteId);
+    }, IOS_NATIVE_PRESENTATION_GRACE_MS);
+    return () => clearTimeout(timeout);
+  }, [incomingCallInvite?.id]);
 
   const activeCallRoomId = resolveAcceptedChatCallRoomId({
     inviteRoomId: activeCallInvite?.communicationRoomId,
@@ -839,7 +845,22 @@ export default function ChillyChatThreadScreen() {
     void stopChillyChatCallSound(incomingCallSoundRef.current);
     incomingCallSoundRef.current = null;
 
-    if (!incomingCallInvite || callPanelOpen || callPreferences?.chillyChatCallsEnabled === false) {
+    const incomingInviteId = String(incomingCallInvite?.id ?? "").trim();
+    const iosNativeCallPresentationOwned = hasIosNativeCallPresentation(incomingInviteId);
+    const waitingForIosNativePresentation =
+      Platform.OS === "ios"
+      && isIosNativeCallsRuntimeEnabled()
+      && !!incomingInviteId
+      && !iosNativeCallPresentationOwned
+      && iosNativePresentationGraceReadyInviteId !== incomingInviteId;
+
+    if (
+      !incomingCallInvite
+      || callPanelOpen
+      || iosNativeCallPresentationOwned
+      || waitingForIosNativePresentation
+      || callPreferences?.chillyChatCallsEnabled === false
+    ) {
       return () => {
         Vibration.cancel();
       };
@@ -868,7 +889,15 @@ export default function ChillyChatThreadScreen() {
       void stopChillyChatCallSound(incomingCallSoundRef.current);
       incomingCallSoundRef.current = null;
     };
-  }, [callPanelOpen, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, incomingCallInvite]);
+  }, [
+    callPanelOpen,
+    callPreferences?.chillyChatCallSoundKey,
+    callPreferences?.chillyChatCallVibrateEnabled,
+    callPreferences?.chillyChatCallsEnabled,
+    incomingCallInvite,
+    iosNativePresentationGraceReadyInviteId,
+    iosNativePresentationRevision,
+  ]);
 
   useEffect(() => {
     if (incomingCallTimeoutRef.current) {
@@ -2122,6 +2151,15 @@ export default function ChillyChatThreadScreen() {
     );
   }
 
+  const incomingCallInviteId = String(incomingCallInvite?.id ?? "").trim();
+  const iosNativeCallPresentationOwned = hasIosNativeCallPresentation(incomingCallInviteId);
+  const waitingForIosNativePresentation =
+    Platform.OS === "ios"
+    && isIosNativeCallsRuntimeEnabled()
+    && !!incomingCallInviteId
+    && !iosNativeCallPresentationOwned
+    && iosNativePresentationGraceReadyInviteId !== incomingCallInviteId;
+
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { paddingTop: safeAreaInsets.top + 8 }]}
@@ -2617,7 +2655,10 @@ export default function ChillyChatThreadScreen() {
         </View>
       ) : null}
 
-      {incomingCallInvite && !callPanelOpen && !iosNativeCallPresentationOwned ? (
+      {incomingCallInvite
+        && !callPanelOpen
+        && !iosNativeCallPresentationOwned
+        && !waitingForIosNativePresentation ? (
         <View
           style={[styles.incomingCallBannerOverlay, { top: Math.max(safeAreaInsets.top, 10) + 8 }]}
           pointerEvents="box-none"

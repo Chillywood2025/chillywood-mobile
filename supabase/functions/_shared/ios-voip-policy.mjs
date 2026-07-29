@@ -31,19 +31,9 @@ export const buildIosVoipTopic = (bundleIdentifier) => {
 export const buildIosVoipApnsPayload = (input) => {
   const callInviteId = toText(input.callInviteId);
   const threadId = toText(input.threadId);
-  const requestedAction = toText(input.action).toLowerCase();
+  const action = toText(input.action).toLowerCase() || "incoming";
   if (!callInviteId || !threadId) throw new Error("invalid_voip_payload_scope");
-  const action = requestedAction || "incoming";
-  const supportedAction = [
-    "incoming",
-    "missed",
-    "cancel",
-    "declined",
-    "end",
-    "timeout",
-  ].includes(action)
-    ? action
-    : "incoming";
+  if (action !== "incoming") throw new Error("non_incoming_voip_payload_denied");
 
   const callerName = toText(input.callerName).slice(0, 80) || "Chi'llywood caller";
   const callType = normalizeIosVoipCallType(input.callType);
@@ -51,11 +41,10 @@ export const buildIosVoipApnsPayload = (input) => {
     aps: {
       "content-available": 1,
     },
-    action: supportedAction,
+    action: "incoming",
     callInviteId,
     callType,
     callUuid: callInviteId,
-    ...(supportedAction !== "incoming" ? { callAction: supportedAction } : {}),
     callerName,
     expiresAt: toText(input.expiresAt),
     path: `/chat/${encodeURIComponent(threadId)}?callInviteId=${encodeURIComponent(callInviteId)}`,

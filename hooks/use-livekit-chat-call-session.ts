@@ -9,7 +9,7 @@ import {
   type TrackPublication,
 } from "livekit-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, Linking } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
 
 import { emitChatCallLiveKitStage } from "../_lib/chatCallLiveKitTelemetry";
 import type { ChillyChatCallInvite } from "../_lib/chillyChatCalls";
@@ -31,7 +31,11 @@ import {
   selectLiveKitAudioOutput,
   type LiveKitAudioOutput,
 } from "../_lib/livekit/audioRouting";
-import { LiveKitAudioSession } from "../_lib/livekit/react-native-module";
+import {
+  configureLiveKitIosAudioSession,
+  LiveKitAudioSession,
+  resetLiveKitIosAudioSession,
+} from "../_lib/livekit/react-native-module";
 import {
   requestLiveKitParticipantToken,
   validateChatCallLiveKitTokenClaims,
@@ -131,6 +135,7 @@ export function useLiveKitChatCallSession({
   const cameraFacingRef = useRef<"user" | "environment">("user");
   const speakerRequestedRef = useRef(inviteCallType === "video");
   const mediaControlRef = useRef<Promise<unknown> | null>(null);
+  const ownsIosAudioConfigurationRef = useRef(false);
   const onRoomEndedRef = useRef(onRoomEnded);
   const telemetryStartedAtRef = useRef(Date.now());
   const [room, setRoom] = useState<CommunicationRoomState | null>(null);
@@ -403,6 +408,10 @@ export function useLiveKitChatCallSession({
         await liveKitRoom.disconnect().catch(() => undefined);
       }
       await LiveKitAudioSession.stopAudioSession().catch(() => undefined);
+      if (ownsIosAudioConfigurationRef.current) {
+        await resetLiveKitIosAudioSession().catch(() => undefined);
+        ownsIosAudioConfigurationRef.current = false;
+      }
       if (productRoom && currentIdentity && options.endRoomIfHost && productRoom.hostUserId === currentIdentity.userId) {
         await endCommunicationRoom(productRoom.roomId).catch(() => undefined);
       }
@@ -570,6 +579,11 @@ export function useLiveKitChatCallSession({
         dynacast: true,
       }));
       roomRef.current = liveKitRoom;
+
+      if (Platform.OS === "ios" && !allowBackgroundAudio) {
+        await configureLiveKitIosAudioSession(inviteCallType === "video");
+        ownsIosAudioConfigurationRef.current = true;
+      }
 
       const refresh = () => refreshParticipantViews();
       liveKitRoom

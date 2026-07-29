@@ -175,7 +175,7 @@ const terminalPreference = resolveChillyChatCallPreferencePolicy({
   pushEnabled: false,
 });
 assert.equal(terminalPreference.actionAllowed, true, "terminal cleanup remains eligible after new-call preference is disabled");
-assert.equal(terminalPreference.iosVoip, true, "terminal cleanup may close an existing iPhone native call");
+assert.equal(terminalPreference.iosVoip, false, "terminal cleanup cannot synthesize a second iPhone VoIP call");
 assert.equal(terminalPreference.ordinaryPush, true, "terminal cleanup may close an existing Android/Expo call");
 assert.equal(terminalPreference.inAppNotification, false, "terminal cleanup creates no new presentation");
 
@@ -352,18 +352,27 @@ const actionScope = {
 
 assert.match(buildChillyChatCallPresentationCopy({ ...actionScope, action: "incoming" }).title, /^Incoming/u);
 assert.match(buildChillyChatCallPresentationCopy({ ...actionScope, action: "missed" }).title, /^Missed/u);
+const incomingVoipData = buildIosVoipApnsPayload({ ...actionScope, action: "incoming" });
+assert.equal(incomingVoipData.action, "incoming");
+assert.equal(incomingVoipData.callUuid, actionScope.callInviteId);
+assert.equal(incomingVoipData.callInviteId, actionScope.callInviteId);
+assert.equal(incomingVoipData.threadId, actionScope.threadId);
+assert.equal(incomingVoipData.expiresAt, actionScope.expiresAt);
+assert.equal(incomingVoipData.callType, actionScope.callType);
 
 for (const action of ["cancel", "declined", "end", "timeout"]) {
   const androidData = buildChillyChatNativeActionData({ ...actionScope, action });
-  const voipData = buildIosVoipApnsPayload({ ...actionScope, action });
-  for (const payload of [androidData, voipData]) {
-    assert.equal(payload.action, action);
-    assert.equal(payload.callUuid, actionScope.callInviteId);
-    assert.equal(payload.callInviteId, actionScope.callInviteId);
-    assert.equal(payload.threadId, actionScope.threadId);
-    assert.equal(payload.expiresAt, actionScope.expiresAt);
-    assert.equal(payload.callType, actionScope.callType);
-  }
+  assert.equal(androidData.action, action);
+  assert.equal(androidData.callUuid, actionScope.callInviteId);
+  assert.equal(androidData.callInviteId, actionScope.callInviteId);
+  assert.equal(androidData.threadId, actionScope.threadId);
+  assert.equal(androidData.expiresAt, actionScope.expiresAt);
+  assert.equal(androidData.callType, actionScope.callType);
+  assert.throws(
+    () => buildIosVoipApnsPayload({ ...actionScope, action }),
+    /non_incoming_voip_payload_denied/u,
+    `${action}: PushKit must not carry terminal lifecycle state`,
+  );
   assert.equal("title" in androidData, false, `${action}: terminal title forbidden`);
   assert.equal("body" in androidData, false, `${action}: terminal body forbidden`);
   assert.equal("notificationCategory" in androidData, false, `${action}: terminal category forbidden`);
@@ -378,6 +387,7 @@ const nativeCoordinatorSource = await readFile(
 );
 const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root), "utf8");
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
+const iosNativeCallsSource = await readFile(new URL("_lib/iosNativeCalls.ts", root), "utf8");
 const liveKitBootstrapSource = await readFile(new URL("_lib/livekit/bootstrap.ts", root), "utf8");
 const communicationSessionSource = await readFile(new URL("hooks/use-communication-room-session.ts", root), "utf8");
 const liveKitChatCallSessionSource = await readFile(
@@ -430,6 +440,13 @@ assert.match(voipSource, /\.eq\("enabled", true\)[\s\S]*\.is\("revoked_at", null
 assert.match(voipSource, /return data\?\.chilly_chat_calls_enabled !== false/u);
 assert.doesNotMatch(voipSource, /data\?\.push_enabled !== false/u);
 assert.match(voipSource, /ios_voip:\$\{invite\.id\}:\$\{tokenRow\.id\}:\$\{action\}/u);
+assert.match(dispatchSource, /const shouldInvokeIosVoip = \(action: DispatchAction\) => action === "incoming"/u);
+assert.match(voipSource, /reason: "non_incoming_uses_authoritative_state"/u);
+assert.ok(
+  voipSource.indexOf('reason: "non_incoming_uses_authoritative_state"')
+    < voipSource.indexOf('readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY")'),
+  "non-incoming VoIP actions must stop before any provider or privileged backend work",
+);
 assert.match(nativeCoordinatorSource, /if isTerminalInvite\(inviteId\)[\s\S]*completion\(\)/u);
 assert.match(retryWorkerSource, /claim_chilly_chat_call_transition_delivery_batch/u);
 assert.match(retryWorkerSource, /complete_chilly_chat_call_transition_delivery/u);
@@ -494,7 +511,7 @@ assert.match(chatThreadSource, /setCallPanelOpen\(false\)[\s\S]{0,180}answer or 
 assert.match(chatThreadSource, /testID="chat-thread-incoming-call-banner"/u, "same-thread foreground calls use a compact answer banner");
 assert.match(
   chatThreadSource,
-  /incomingCallInvite && !callPanelOpen && !iosNativeCallPresentationOwned/u,
+  /incomingCallInvite[\s\S]{0,160}!callPanelOpen[\s\S]{0,160}!iosNativeCallPresentationOwned[\s\S]{0,160}!waitingForIosNativePresentation/u,
   "the same-thread React banner is hidden when CallKit owns iOS presentation",
 );
 assert.match(
@@ -533,10 +550,28 @@ assert.doesNotMatch(rootLayoutSource, /app-wide-incoming-call-modal/u, "foregrou
 for (const nativePresentationOwnerSource of [rootLayoutSource, chatThreadSource]) {
   assert.match(
     nativePresentationOwnerSource,
-    /setIosNativeCallPresentationOwned\(\s*isIosNativeCallsRuntimeEnabled\(\) \|\| readiness\.available/u,
-    "an enabled iOS native-call runtime cannot be downgraded into a duplicate in-app Answer/Decline banner",
+    /subscribeToIosNativeCallPresentation/u,
+    "iOS incoming-call surfaces subscribe to exact native presentation ownership",
+  );
+  assert.match(
+    nativePresentationOwnerSource,
+    /IOS_NATIVE_PRESENTATION_GRACE_MS/u,
+    "iOS incoming-call surfaces give CallKit a bounded presentation grace period",
+  );
+  assert.match(
+    nativePresentationOwnerSource,
+    /hasIosNativeCallPresentation/u,
+    "iOS incoming-call surfaces suppress fallback only for an exact native-presented invite",
+  );
+  assert.match(
+    nativePresentationOwnerSource,
+    /\|\| iosNativeCallPresentationOwned\s+\|\| waitingForIosNativePresentation[\s\S]{0,1200}playChillyChatCallSound/u,
+    "iOS in-app ringtone and vibration wait for exact CallKit presentation ownership and bounded fallback grace",
   );
 }
+assert.match(iosNativeCallsSource, /const nativePresentedInviteIds = new Set<string>\(\)/u, "native presentation ownership is tracked per invite");
+assert.match(iosNativeCallsSource, /event\.type === "incoming" \|\| event\.type === "recovered"/u, "only confirmed native incoming/recovered events acquire presentation ownership");
+assert.match(iosNativeCallsSource, /"reportFailed"/u, "failed CallKit reporting releases fallback presentation ownership");
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit ownership suppresses the duplicate app-wide React banner");
@@ -804,7 +839,7 @@ assert.doesNotMatch(
   "retry worker must not use the database service-role key as a cross-function bearer token",
 );
 assert.match(dispatchSource, /authorize_chilly_chat_call_transition_retry/u, "dispatcher must verify retry authorization before terminal delivery");
-assert.match(iosVoipDispatchSource, /authorize_chilly_chat_call_transition_retry/u, "VoIP dispatcher must verify retry authorization before terminal cleanup");
+assert.doesNotMatch(iosVoipDispatchSource, /authorize_chilly_chat_call_transition_retry/u, "VoIP dispatcher must never receive terminal retry work");
 assert.match(
   dispatchSource,
   /if \(action === "missed"\) \{\s*if \(status !== "missed"\)/u,

@@ -43,6 +43,9 @@ const chatTelemetry = read("_lib/chatCallLiveKitTelemetry.ts");
 const migration = read("supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql");
 const chatRoomCreation = read("_lib/chat.ts");
 const transition = read("supabase/functions/chilly-chat-call-transition/index.ts");
+const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts");
+const iosVoipDispatch = read("supabase/functions/ios-voip-call-dispatch/index.ts");
+const iosVoipPolicy = read("supabase/functions/_shared/ios-voip-policy.mjs");
 
 requireText(provider, "fixedProviderRef", "provider is fixed per invite");
 requireText(providerSources, 'mediaProvider === "legacy_webrtc"', "legacy transport has an exact selector");
@@ -73,6 +76,19 @@ requireOrdered(
 requireText(liveKitSession, 'mediaProvider: "livekit"', "token request pins the LiveKit provider");
 requireText(liveKitSession, 'participantRole: "speaker"', "accepted call requests speaker grants");
 requireText(liveKitSession, "LiveKitAudioSession.stopAudioSession()", "cleanup stops the LiveKit audio session");
+requireText(liveKitSession, "configureLiveKitIosAudioSession(", "non-CallKit iOS calls install LiveKit audio-engine management");
+requireText(liveKitSession, "resetLiveKitIosAudioSession()", "non-CallKit iOS audio management releases its native policy after the call");
+requireText(liveKitSession, 'Platform.OS === "ios" && !allowBackgroundAudio', "CallKit-owned iOS calls retain native audio-session authority");
+requireText(
+  read("_lib/livekit/react-native-module.tsx"),
+  "LiveKitAudioSession.setAppleAudioConfiguration({",
+  "non-CallKit iOS calls use the installed LiveKit SDK audio-session API",
+);
+requireText(
+  read("_lib/livekit/react-native-module.tsx"),
+  'audioMode: preferSpeakerOutput ? "videoChat" : "voiceChat"',
+  "voice and video calls select their exact iOS audio mode",
+);
 requireText(liveKitSession, "leaveCommunicationRoomSession({", "cleanup leaves communication membership");
 requireText(liveKitSession, 'emitStage("cleanup_complete"', "cleanup emits installed completion telemetry");
 requireText(liveKitSession, "void setSpeaker(speakerRequestedRef.current)", "remote audio subscription reasserts the selected speaker route");
@@ -80,10 +96,17 @@ requireText(liveKitSession, "await setSpeaker(speakerRequestedRef.current)", "ca
 requireText(inRoomPanel, "selfParticipant?.liveKitVideoTrackReference", "camera UI recognizes the rendered LiveKit local track");
 requireText(chatScreen, 'terminalInvite.status === "ringing" && currentUserIsCaller', "the durable caller can cancel before media starts");
 requireText(chatScreen, "activeCallRoomId && !callPanelOpen && !incomingCallRinging", "ringing receivers do not see a duplicate active-room banner");
-requireText(chatScreen, "isIosNativeCallsRuntimeEnabled() || readiness.available", "same-thread iOS presentation remains owned by CallKit");
-requireText(rootLayout, "isIosNativeCallsRuntimeEnabled() || readiness.available", "app-wide iOS presentation remains owned by CallKit");
+requireText(chatScreen, "hasIosNativeCallPresentation(incomingCallInviteId)", "same-thread iOS presentation is owned only by the exact CallKit invite");
+requireText(rootLayout, "hasIosNativeCallPresentation(alertInviteId)", "app-wide iOS presentation is owned only by the exact CallKit invite");
+requireText(chatScreen, "iosNativePresentationGraceReadyInviteId !== incomingCallInviteId", "same-thread fallback waits briefly for CallKit without remaining hidden");
+requireText(rootLayout, "iosNativePresentationGraceReadyInviteId !== alertInviteId", "app-wide fallback waits briefly for CallKit without remaining hidden");
+requireText(chatScreen, "|| iosNativeCallPresentationOwned\n      || waitingForIosNativePresentation", "same-thread ringtone and vibration defer to exact CallKit ownership and grace");
+requireText(rootLayout, "|| iosNativeCallPresentationOwned\n      || waitingForIosNativePresentation", "app-wide ringtone and vibration defer to exact CallKit ownership and grace");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline persists directly without foreground navigation");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End persists directly without foreground navigation");
+requireText(callDispatch, 'const shouldInvokeIosVoip = (action: DispatchAction) => action === "incoming"', "PushKit dispatch is reserved for the initial invitation");
+requireText(iosVoipDispatch, 'reason: "non_incoming_uses_authoritative_state"', "direct non-incoming VoIP dispatch fails closed");
+requireText(iosVoipPolicy, 'throw new Error("non_incoming_voip_payload_denied")', "VoIP payload construction rejects terminal lifecycle state");
 
 for (const authorityNeedle of [
   '.eq("id", callInviteId)',

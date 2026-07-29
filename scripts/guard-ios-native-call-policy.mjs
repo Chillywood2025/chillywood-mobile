@@ -125,11 +125,11 @@ requireText(tokenFunction, "token_fingerprint", "PushKit token responses must us
 requireText(dispatchFunction, "runtime_disabled_pending_physical_proof", "APNs VoIP dispatch must default to a runtime-disabled result.");
 requireText(voipPolicy, "IOS_VOIP_PUSH_DISPATCH_ENABLED", "APNs VoIP dispatch must require its explicit server flag.");
 requireText(dispatchFunction, "IOS_VOIP_DISPATCH_ENABLED_ENV", "APNs VoIP dispatch must consume the shared explicit server flag.");
-requireText(dispatchFunction, "isTerminalAction", "VoIP dispatch should route terminal actions.");
+requireText(dispatchFunction, "non_incoming_uses_authoritative_state", "VoIP dispatch must reject non-incoming lifecycle actions before provider access.");
 requireText(dispatchFunction, "const expiration = 0", "Incoming VoIP pushes must not be stored for stale delivery.");
 requireText(dispatchFunction, "AbortSignal.timeout", "APNs transport must have a bounded timeout.");
 requireText(dispatchFunction, "attempt_count", "Failed or stale APNs attempts must use bounded compare-and-swap retries.");
-requireText(voipPolicy, "supportedAction", "VoIP payload policy must validate terminal-supported action values.");
+requireText(voipPolicy, "non_incoming_voip_payload_denied", "VoIP payload policy must deny terminal lifecycle payloads.");
 for (const eligibility of [
   "thread_membership_required",
   "audience_block",
@@ -148,7 +148,8 @@ requireText(dispatchFunction, "api.sandbox.push.apple.com", "Development PushKit
 requireText(dispatchFunction, "api.push.apple.com", "Production PushKit tokens must use Apple's APNs production endpoint.");
 requireText(dispatchFunction, "isApnsInvalidVoipTokenReason", "Invalid APNs tokens must be revoked.");
 requireText(dispatchFunction, "provider_status_code", "APNs delivery attempts must record the provider HTTP status without response secrets.");
-requireText(dispatchFunction, "!isTerminalAction(action) && !await readCallPreference", "terminal VoIP cleanup must not be blocked by the new-call preference");
+requireText(dispatchFunction, "if (!await readCallPreference", "incoming VoIP presentation must honor the new-call preference");
+rejectText(dispatchFunction, "authorize_chilly_chat_call_transition_retry", "terminal retry work must never enter the incoming-only VoIP dispatcher");
 
 for (const marker of [
   "authorize_chilly_chat_call_transition_retry",
