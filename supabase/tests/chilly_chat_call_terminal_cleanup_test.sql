@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(31);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -189,6 +189,23 @@ select is(
   2,
   'acceptance keeps participant memberships active'
 );
+select has_trigger(
+  'public',
+  'chat_threads',
+  'prevent_active_chilly_chat_thread_call_clear',
+  'active thread-call clear race guard exists'
+);
+select lives_ok(
+  $$update public.chat_threads
+    set active_communication_room_id = null, active_call_type = null
+    where id = '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6'$$,
+  'a stale client cleanup is handled while an accepted call remains active'
+);
+select is(
+  (select active_communication_room_id from public.chat_threads where id = '8aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6'),
+  'TERMINALROOM6',
+  'a stale client cleanup cannot detach an accepted call'
+);
 
 select lives_ok(
   $$select public.transition_chilly_chat_call_invite('80000000-0000-0000-0000-000000000006', '81111111-1111-1111-1111-111111111111', 'ended', 1)$$,
@@ -241,6 +258,11 @@ select is(
   has_function_privilege('authenticated', 'public.cleanup_terminal_chilly_chat_call_product_state()', 'execute'),
   false,
   'clients cannot invoke the privileged cleanup trigger function'
+);
+select is(
+  has_function_privilege('authenticated', 'public.prevent_active_chilly_chat_thread_call_clear()', 'execute'),
+  false,
+  'clients cannot invoke the privileged active-call clear guard'
 );
 
 select * from finish();
