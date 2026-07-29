@@ -413,7 +413,7 @@ const terminalCleanupMigrationSource = await readFile(
   "utf8",
 );
 const terminalMembershipRaceGuardMigrationSource = await readFile(
-  new URL("supabase/migrations/20260728211500_chilly_chat_terminal_membership_race_guard.sql", root),
+  new URL("supabase/migrations/20260729020612_chilly_chat_terminal_membership_race_guard.sql", root),
   "utf8",
 );
 assert.ok(dispatchSource.indexOf("const iosVoipPromise = invokeIosVoipDispatch") < dispatchSource.indexOf("const tokens = pushAllowed"));
