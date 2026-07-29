@@ -384,6 +384,10 @@ const inRoomPanelSource = await readFile(
   new URL("components/communication/in-room-communication-panel.tsx", root),
   "utf8",
 );
+const communicationControlBarSource = await readFile(
+  new URL("components/communication/communication-control-bar.tsx", root),
+  "utf8",
+);
 const retryWorkerSource = await readFile(
   new URL("supabase/functions/chilly-chat-call-transition-retry/index.ts", root),
   "utf8",
@@ -406,6 +410,10 @@ const atomicCallBeginMigrationSource = await readFile(
 );
 const terminalCleanupMigrationSource = await readFile(
   new URL("supabase/migrations/20260728172910_chilly_chat_terminal_product_state_cleanup.sql", root),
+  "utf8",
+);
+const terminalMembershipRaceGuardMigrationSource = await readFile(
+  new URL("supabase/migrations/20260728211500_chilly_chat_terminal_membership_race_guard.sql", root),
   "utf8",
 );
 assert.ok(dispatchSource.indexOf("const iosVoipPromise = invokeIosVoipDispatch") < dispatchSource.indexOf("const tokens = pushAllowed"));
@@ -450,6 +458,16 @@ assert.match(
   terminalCleanupMigrationSource,
   /"active_communication_room_id" = null[\s\S]*"active_call_type" = null/u,
   "terminal cleanup clears exact thread call linkage",
+);
+assert.match(
+  terminalMembershipRaceGuardMigrationSource,
+  /update public\."communication_rooms"[\s\S]*update public\."communication_room_memberships"/u,
+  "terminal cleanup locks the room before memberships to serialize stale client writes",
+);
+assert.match(
+  terminalMembershipRaceGuardMigrationSource,
+  /for key share[\s\S]*v_room_status = 'ended'[\s\S]*new\."membership_state" := 'left'/u,
+  "membership media writes fail closed after the room ends",
 );
 assert.match(atomicCallBeginMigrationSource, /pg_advisory_xact_lock/u, "call starts serialize per direct thread");
 assert.match(atomicCallBeginMigrationSource, /invite\."status" in \('ringing', 'accepted'\)/u, "a concurrent start reuses the winning invite");
@@ -535,6 +553,16 @@ assert.doesNotMatch(
   rootLayoutSource,
   /event\.type === "muted" \|\| event\.type === "unmuted"\)[\s\S]{0,260}routeNativeAction/u,
   "CallKit mute must not navigate to a duplicate chat screen",
+);
+assert.match(
+  communicationControlBarSource,
+  /accessibilityLabel=\{speakerEnabled \? "Use phone receiver" : "Use speaker"\}/u,
+  "the icon-only audio-route control retains an exact accessible action label",
+);
+assert.doesNotMatch(
+  communicationControlBarSource,
+  />\{speakerEnabled \? "Speaker On" : "Receiver"\}<\/Text>/u,
+  "the audio-route control does not visibly label both participants as Receiver",
 );
 assert.match(communicationSessionSource, /setLocalMediaKindEnabled\("audio", false\)/u, "mute must preserve the negotiated audio sender");
 assert.match(communicationSessionSource, /setLocalMediaKindEnabled\("video", false\)/u, "camera off must preserve the negotiated video sender");

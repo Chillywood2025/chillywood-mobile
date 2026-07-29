@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const logCallDebug = (..._args: unknown[]) => {};
@@ -107,12 +108,20 @@ export function CommunicationControlBar({
       {showMediaControls && onToggleAudioRoute ? (
         <TouchableOpacity
           accessibilityLabel={speakerEnabled ? "Use phone receiver" : "Use speaker"}
+          accessibilityRole="button"
+          accessibilityState={{ selected: speakerEnabled }}
           style={[styles.control, { minHeight: minimumTouchTarget }, speakerEnabled ? styles.controlOn : styles.controlOff, disabled && styles.controlDisabled]}
           activeOpacity={0.86}
           onPress={onToggleAudioRoute}
           disabled={disabled}
         >
-          <Text style={styles.controlLabel}>{speakerEnabled ? "Speaker On" : "Receiver"}</Text>
+          <MaterialIcons
+            accessibilityElementsHidden
+            color="#F2F5FB"
+            importantForAccessibility="no"
+            name={speakerEnabled ? "volume-up" : "speaker-phone"}
+            size={22}
+          />
         </TouchableOpacity>
       ) : null}
       <TouchableOpacity

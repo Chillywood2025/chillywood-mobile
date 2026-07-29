@@ -1,5 +1,5 @@
 begin;
-select plan(22);
+select plan(27);
 
 insert into auth.users (id, is_sso_user, is_anonymous)
 values
@@ -204,6 +204,38 @@ select is(
   (select count(*)::integer from public.communication_room_memberships where room_id = 'TERMINALROOM6' and membership_state = 'left'),
   2,
   'subsequent end leaves both memberships'
+);
+select has_trigger(
+  'public',
+  'communication_room_memberships',
+  'prevent_ended_communication_room_membership_reactivation',
+  'ended-room membership reactivation guard exists'
+);
+select lives_ok(
+  $$update public.communication_room_memberships
+    set membership_state = 'active', camera_enabled = true, mic_enabled = true
+    where room_id = 'TERMINALROOM6'
+      and user_id = '82222222-2222-2222-2222-222222222222'$$,
+  'a stale post-end membership write is handled fail-closed'
+);
+select is(
+  (select membership_state from public.communication_room_memberships
+    where room_id = 'TERMINALROOM6'
+      and user_id = '82222222-2222-2222-2222-222222222222'),
+  'left',
+  'a stale post-end write cannot reactivate membership'
+);
+select is(
+  (select camera_enabled or mic_enabled from public.communication_room_memberships
+    where room_id = 'TERMINALROOM6'
+      and user_id = '82222222-2222-2222-2222-222222222222'),
+  false,
+  'a stale post-end write cannot reactivate media state'
+);
+select is(
+  has_function_privilege('authenticated', 'public.prevent_ended_communication_room_membership_reactivation()', 'execute'),
+  false,
+  'clients cannot invoke the privileged membership reactivation guard'
 );
 select is(
   has_function_privilege('authenticated', 'public.cleanup_terminal_chilly_chat_call_product_state()', 'execute'),
