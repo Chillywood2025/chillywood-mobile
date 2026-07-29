@@ -1589,7 +1589,6 @@ export default function ChillyChatThreadScreen() {
     if (
       requestedNativeCallAction !== "answer"
       || !requestedNativeCallUuid
-      || nativeAnswerAcknowledgedRef.current === requestedNativeCallUuid
     ) {
       return;
     }

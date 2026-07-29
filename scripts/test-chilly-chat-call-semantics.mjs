@@ -43,6 +43,7 @@ const importTranspiledTypeScript = async (relativePath) => {
 const schema = await importTranspiledTypeScript("_lib/chillyChatCallDispatchSchema.ts");
 const deliveryCopy = await importTranspiledTypeScript("_lib/chillyChatCallDeliveryCopy.ts");
 const visibleReadGate = await importTranspiledTypeScript("_lib/boundedVisibleReadGate.ts");
+const liveKitBootstrapCompat = await importTranspiledTypeScript("_lib/livekit/react-native-bootstrap-compat.ts");
 
 const emptyChannels = () => ({
   androidNative: createChillyChatCallChannelResult(),
@@ -50,6 +51,34 @@ const emptyChannels = () => ({
   ordinaryPush: createChillyChatCallChannelResult(),
   inAppNotification: createChillyChatCallChannelResult(),
 });
+
+const preservedNativeAudioLifecycleMethod = () => "preserved";
+const legacyWebRtcModule = {
+  audioDeviceModuleSetEngineCreatedActive: preservedNativeAudioLifecycleMethod,
+};
+const installedLegacyAudioLifecycleShims =
+  liveKitBootstrapCompat.installLegacyWebRtcAudioLifecycleShims(legacyWebRtcModule);
+assert.equal(
+  legacyWebRtcModule.audioDeviceModuleSetEngineCreatedActive,
+  preservedNativeAudioLifecycleMethod,
+  "the compatibility layer preserves lifecycle methods supplied by the installed native binary",
+);
+assert.equal(
+  installedLegacyAudioLifecycleShims.length,
+  liveKitBootstrapCompat.WEBRTC_AUDIO_LIFECYCLE_ACTIVE_METHODS.length - 1,
+  "the compatibility layer installs only lifecycle methods absent from the installed native binary",
+);
+for (const method of liveKitBootstrapCompat.WEBRTC_AUDIO_LIFECYCLE_ACTIVE_METHODS) {
+  assert.equal(typeof legacyWebRtcModule[method], "function", `${method} is callable after compatibility setup`);
+}
+const navigatorIdentity = { product: "ReactNative" };
+assert.equal(liveKitBootstrapCompat.ensureReactNativeNavigatorUserAgent(navigatorIdentity), true);
+assert.equal(
+  navigatorIdentity.userAgent,
+  "ReactNative",
+  "LiveKit browser detection receives a stable React Native user agent",
+);
+assert.equal(liveKitBootstrapCompat.ensureReactNativeNavigatorUserAgent(navigatorIdentity), false);
 
 const sent = (reason = "sent") => createChillyChatCallChannelResult({
   eligible: true,
@@ -349,6 +378,7 @@ const nativeCoordinatorSource = await readFile(
 );
 const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root), "utf8");
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
+const liveKitBootstrapSource = await readFile(new URL("_lib/livekit/bootstrap.ts", root), "utf8");
 const communicationSessionSource = await readFile(new URL("hooks/use-communication-room-session.ts", root), "utf8");
 const inRoomPanelSource = await readFile(
   new URL("components/communication/in-room-communication-panel.tsx", root),
@@ -476,6 +506,16 @@ assert.doesNotMatch(
   "a rejected missed transition cannot unconditionally clear an accepted call",
 );
 assert.match(chatThreadSource, /setIosNativeCallAudioRoute\(route\)/u, "iOS chat calls must apply the call-type audio route");
+assert.match(
+  liveKitBootstrapSource,
+  /installLegacyWebRtcAudioLifecycleShims\([\s\S]{0,180}NativeModules\.WebRTCModule/u,
+  "LiveKit bootstrap adapts only missing native audio lifecycle methods before global registration",
+);
+assert.match(
+  liveKitBootstrapSource,
+  /autoConfigureAudioSession: Platform\.OS !== "ios"/u,
+  "CallKit remains the sole iOS AVAudioSession owner while installed LiveKit surfaces use explicit session activation",
+);
 assert.match(
   chatThreadSource,
   /requestedNativeCallAction === "answer"[\s\S]{0,420}completeIosNativeCallAnswer\([\s\S]{0,160}true[\s\S]{0,300}rememberHandledIncomingInvite\(acceptedInvite\)/u,
