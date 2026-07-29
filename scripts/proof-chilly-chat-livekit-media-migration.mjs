@@ -102,6 +102,11 @@ requireText(chatScreen, "hasIosNativeCallPresentation(incomingCallInviteId)", "s
 requireText(rootLayout, "hasIosNativeCallPresentation(alertInviteId)", "app-wide iOS presentation is owned only by the exact CallKit invite");
 requireText(chatScreen, "iosNativePresentationGraceReadyInviteId !== incomingCallInviteId", "same-thread fallback waits briefly for CallKit without remaining hidden");
 requireText(rootLayout, "iosNativePresentationGraceReadyInviteId !== alertInviteId", "app-wide fallback waits briefly for CallKit without remaining hidden");
+requireText(chatScreen, "const resumeAcceptedIncomingInvite = useCallback", "native Answer can resume an accepted invite after an activity remount");
+requireText(chatScreen, 'latestInvite?.status === "accepted"', "accepted-invite recovery rechecks authoritative invite state");
+requireText(chatScreen, "latestThread?.activeCommunicationRoomId === roomId", "accepted-invite recovery rechecks exact thread-room linkage");
+requireText(chatScreen, 'snapshot?.room.status === "active"', "accepted-invite recovery rejects stale or ended rooms");
+requireText(chatScreen, 'invite.status === "accepted"\n          ? await resumeAcceptedIncomingInvite(invite)', "native Answer resumes rather than repeating the acceptance transition");
 requireText(chatScreen, "|| iosNativeCallPresentationOwned\n      || waitingForIosNativePresentation", "same-thread ringtone and vibration defer to exact CallKit ownership and grace");
 requireText(rootLayout, "|| iosNativeCallPresentationOwned\n      || waitingForIosNativePresentation", "app-wide ringtone and vibration defer to exact CallKit ownership and grace");
 requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline persists directly without foreground navigation");

@@ -684,8 +684,18 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /requestedNativeCallAction === "answer"[\s\S]{0,420}completeIosNativeCallAnswer\([\s\S]{0,160}true[\s\S]{0,300}rememberHandledIncomingInvite\(acceptedInvite\)/u,
+  /requestedNativeCallAction === "answer"[\s\S]{0,420}completeIosNativeCallAnswer\([\s\S]{0,160}true[\s\S]{0,420}applyAcceptedIncomingInviteState\(acceptedInvite\)/u,
   "a server-accepted CallKit answer is fulfilled before accepted media initialization can publish",
+);
+assert.match(
+  chatThreadSource,
+  /const resumeAcceptedIncomingInvite = useCallback[\s\S]{0,2200}latestInvite\?\.status === "accepted"[\s\S]{0,700}latestThread\?\.activeCommunicationRoomId === roomId[\s\S]{0,320}snapshot\?\.room\.status === "active"/u,
+  "an activity-remounted native Answer resumes only an authoritative accepted invite in its still-active room",
+);
+assert.match(
+  chatThreadSource,
+  /invite\.status === "accepted"[\s\S]{0,120}await resumeAcceptedIncomingInvite\(invite\)[\s\S]{0,120}await acceptIncomingInvite\(invite\)/u,
+  "native Answer resumes a server-accepted invite instead of attempting a second acceptance",
 );
 assert.match(
   chatThreadSource,

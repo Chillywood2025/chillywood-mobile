@@ -1388,6 +1388,126 @@ export default function ChillyChatThreadScreen() {
     return null;
   }, [clearVisibleIncomingCallState, currentUserId, threadId]);
 
+  const applyAcceptedIncomingInviteState = useCallback((
+    invite: ChillyChatCallInvite,
+  ) => {
+    const roomId = String(invite?.communicationRoomId ?? "").trim();
+    const valid =
+      invite?.status === "accepted"
+      && !!roomId
+      && invite.threadId === threadId
+      && invite.calleeUserId === currentUserId
+      && invite.callerUserId !== currentUserId;
+    if (!valid) return false;
+
+    rememberHandledIncomingInvite(invite);
+    activeCallInviteRef.current = invite;
+    setActiveCallInvite(invite);
+    setIncomingCallInvite(null);
+    setOutgoingCallInvite(null);
+    setThread((current) => {
+      if (!current || current.threadId !== threadId) return current;
+      return {
+        ...current,
+        activeCommunicationRoomId: roomId,
+        activeCallType: invite.callType,
+      };
+    });
+    setCallPanelOpen(true);
+    setError(null);
+    setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
+    return true;
+  }, [currentUserId, rememberHandledIncomingInvite, threadId]);
+
+  const resumeAcceptedIncomingInvite = useCallback(async (
+    invite: ChillyChatCallInvite,
+  ) => {
+    if (!invite || callBusy || !currentUserId) return false;
+    const roomId = String(invite.communicationRoomId ?? "").trim();
+    const joinAction = resolveIncomingCallRoomJoinAction({
+      currentUserIsRoomHost: false,
+      inviteBelongsToCurrentCallee:
+        invite.threadId === threadId
+        && invite.calleeUserId === currentUserId
+        && invite.callerUserId !== currentUserId,
+      inviteStatus: invite.status,
+    });
+    if (joinAction !== "resume" || !roomId) return false;
+
+    Vibration.cancel();
+    void stopChillyChatCallSound(incomingCallSoundRef.current);
+    incomingCallSoundRef.current = null;
+    if (incomingCallTimeoutRef.current) {
+      clearTimeout(incomingCallTimeoutRef.current);
+      incomingCallTimeoutRef.current = null;
+    }
+    setCallBusy(true);
+    try {
+      const [latestInvite, latestThread, snapshot] = await Promise.all([
+        readChillyChatCallInvite(invite.id).catch(() => null),
+        getChatThread(threadId).catch(() => null),
+        getCommunicationRoomSnapshot(roomId).catch(() => null),
+      ]);
+      const authoritative =
+        latestInvite?.status === "accepted"
+        && latestInvite.id === invite.id
+        && latestInvite.threadId === threadId
+        && latestInvite.communicationRoomId === roomId
+        && latestInvite.calleeUserId === currentUserId
+        && latestInvite.callerUserId !== currentUserId
+        && latestThread?.activeCommunicationRoomId === roomId
+        && snapshot?.room.status === "active";
+      if (!authoritative || !latestInvite) {
+        setCallDeliveryStatus("This Chi'lly Chat call is no longer available. Ask the caller to start a new call.");
+        return false;
+      }
+
+      if (
+        requestedNativeCallAction === "answer"
+        && requestedNativeCallUuid
+      ) {
+        nativeAnswerAcknowledgedRef.current = requestedNativeCallUuid;
+        const nativeAnswerCompleted = await completeIosNativeCallAnswer(
+          requestedNativeCallUuid,
+          true,
+        );
+        if (!nativeAnswerCompleted) {
+          nativeAnswerAcknowledgedRef.current = "";
+        }
+      }
+      if (!applyAcceptedIncomingInviteState(latestInvite)) return false;
+      await dismissPresentedChillyChatCallNotifications({
+        callInviteId: latestInvite.id,
+        dismissAllPresentedNotificationsFallback: true,
+        dismissIncomingCallFallback: true,
+        threadId,
+      }).catch(() => 0);
+      await dismissChillyChatCallNotificationRows({
+        callInviteId: latestInvite.id,
+        threadId,
+      }).catch(() => 0);
+      logChatCall("accepted_invite_resumed", {
+        threadId,
+        roomId,
+      });
+      await loadThreadState();
+      return true;
+    } catch (resumeError) {
+      setError(resumeError instanceof Error ? resumeError.message : "Unable to resume this Chi'lly Chat call.");
+      return false;
+    } finally {
+      setCallBusy(false);
+    }
+  }, [
+    applyAcceptedIncomingInviteState,
+    callBusy,
+    currentUserId,
+    loadThreadState,
+    requestedNativeCallAction,
+    requestedNativeCallUuid,
+    threadId,
+  ]);
+
   const acceptIncomingInvite = useCallback(async (invite: ChillyChatCallInvite) => {
     if (!invite || callBusy || !currentUserId) return false;
     Vibration.cancel();
@@ -1422,9 +1542,9 @@ export default function ChillyChatThreadScreen() {
           nativeAnswerAcknowledgedRef.current = "";
         }
       }
-      rememberHandledIncomingInvite(acceptedInvite);
-      activeCallInviteRef.current = acceptedInvite;
-      setActiveCallInvite(acceptedInvite);
+      if (!applyAcceptedIncomingInviteState(acceptedInvite)) {
+        throw new Error("Unable to open this accepted Chi'lly Chat call.");
+      }
       await dismissPresentedChillyChatCallNotifications({
         callInviteId: currentInvite.id,
         dismissAllPresentedNotificationsFallback: true,
@@ -1435,18 +1555,6 @@ export default function ChillyChatThreadScreen() {
         callInviteId: currentInvite.id,
         threadId,
       }).catch(() => 0);
-      setIncomingCallInvite(null);
-      setThread((current) => {
-        if (!current || current.threadId !== threadId) return current;
-        return {
-          ...current,
-          activeCommunicationRoomId: currentInvite.communicationRoomId ?? current.activeCommunicationRoomId,
-          activeCallType: currentInvite.callType,
-        };
-      });
-      setCallPanelOpen(true);
-      setError(null);
-      setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
       trackEvent("chat_call_accepted", {
         surface: "chat-thread",
         threadId,
@@ -1461,11 +1569,11 @@ export default function ChillyChatThreadScreen() {
       setCallBusy(false);
     }
   }, [
+    applyAcceptedIncomingInviteState,
     callBusy,
     currentUserId,
     loadThreadState,
     readAcceptableIncomingInvite,
-    rememberHandledIncomingInvite,
     requestedNativeCallAction,
     requestedNativeCallUuid,
     threadId,
@@ -1574,7 +1682,9 @@ export default function ChillyChatThreadScreen() {
       }
 
       if (action === "answer") {
-        const accepted = await acceptIncomingInvite(invite);
+        const accepted = invite.status === "accepted"
+          ? await resumeAcceptedIncomingInvite(invite)
+          : await acceptIncomingInvite(invite);
         if (!accepted && requestedNativeCallUuid) {
           await completeIosNativeCallAnswer(requestedNativeCallUuid, false);
         }
@@ -1654,6 +1764,7 @@ export default function ChillyChatThreadScreen() {
     requestedNativeCallAction,
     requestedNativeCallRequestKey,
     requestedNativeCallUuid,
+    resumeAcceptedIncomingInvite,
     setMicrophoneEnabled,
     callRoom?.hostUserId,
     leaveRoom,
