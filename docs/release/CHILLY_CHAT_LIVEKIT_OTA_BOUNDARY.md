@@ -100,8 +100,8 @@ occurred.
 ## Canary hold
 
 Two configured synthetic participant accounts authenticate successfully and
-each has zero active platform roles. Their sanitized account hashes are
-`c390b3190ff5788a` and `4aa617dd1819d6d3`. Neither account is enrolled yet.
+each has zero active platform roles. Their identifiers remain private and are
+not recorded in this repository. Neither account is enrolled yet.
 The Chat Call rollout remains `legacy_webrtc` by default with canary disabled
 and emergency stop engaged because both installed platforms do not yet contain
 the migration source.
