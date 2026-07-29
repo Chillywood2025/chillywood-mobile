@@ -331,13 +331,24 @@ const classifyRenderEvent = (renderEvent: JsonObject) => {
     const mediaProvider = safeLabel(renderEvent.mediaProvider || renderEvent.media_provider);
     const liveKitSdkEvent = readRenderBoolean(renderEvent, "liveKitSdkEvent", "livekit_sdk_event");
     const tokenAuditCorroborated = readRenderBoolean(renderEvent, "tokenAuditCorroborated", "token_audit_corroborated");
+    const chatCallBindingCorroborated = readRenderBoolean(
+      renderEvent,
+      "chatCallBindingCorroborated",
+      "chat_call_binding_corroborated",
+    );
     const bindingsComplete = [
       renderEvent.communicationRoomHash,
       renderEvent.callInviteHash,
       renderEvent.threadHash,
       renderEvent.roomRunCorrelationHash,
     ].every((value) => /^[a-f0-9]{64}$/u.test(toText(value)));
-    if (surface !== "chat_call" || mediaProvider !== "livekit" || !liveKitSdkEvent || !bindingsComplete) {
+    if (
+      surface !== "chat_call"
+      || mediaProvider !== "livekit"
+      || !liveKitSdkEvent
+      || !bindingsComplete
+      || !chatCallBindingCorroborated
+    ) {
       return {
         confidence: 0.99,
         healthState: "non_livekit_chat_call_evidence_rejected",
@@ -464,19 +475,41 @@ Deno.serve(async (request: Request) => {
       delete renderEvent.thread_id;
       const userHash = await sha256Hex(appUser.id);
       if (safeLabel(renderEvent.surface) === "chat_call") {
-        renderEvent.communicationRoomHash = communicationRoomId
+        const exactBindingsValid =
+          /^[A-Z0-9]{6}$/u.test(communicationRoomId)
+          && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(callInviteId)
+          && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(threadId);
+        renderEvent.communicationRoomHash = exactBindingsValid
           ? await sha256Hex(`chat-call-room:${communicationRoomId}`)
           : null;
-        renderEvent.callInviteHash = callInviteId
+        renderEvent.callInviteHash = exactBindingsValid
           ? await sha256Hex(`chat-call-invite:${callInviteId}`)
           : null;
-        renderEvent.threadHash = threadId
+        renderEvent.threadHash = exactBindingsValid
           ? await sha256Hex(`chat-call-thread:${threadId}`)
           : null;
-        renderEvent.roomRunCorrelationHash = communicationRoomId && callInviteId && threadId
+        renderEvent.roomRunCorrelationHash = exactBindingsValid
           ? await sha256Hex(`chat-call-run:${communicationRoomId}:${callInviteId}:${threadId}:${appUser.id}`)
           : null;
-        const tokenAuditRoomHash = communicationRoomId
+        const exactInvite = exactBindingsValid
+          ? await adminClient
+            .from("chat_call_invites")
+            .select("caller_user_id,callee_user_id,communication_room_id,thread_id,chat_call_media_provider,accepted_at")
+            .eq("id", callInviteId)
+            .maybeSingle()
+          : null;
+        const exactInviteRow = exactInvite?.data as JsonObject | null | undefined;
+        renderEvent.chatCallBindingCorroborated =
+          !exactInvite?.error
+          && toText(exactInviteRow?.communication_room_id).toUpperCase() === communicationRoomId
+          && toText(exactInviteRow?.thread_id).toLowerCase() === threadId.toLowerCase()
+          && safeLabel(exactInviteRow?.chat_call_media_provider) === "livekit"
+          && !!toText(exactInviteRow?.accepted_at)
+          && (
+            toText(exactInviteRow?.caller_user_id) === appUser.id
+            || toText(exactInviteRow?.callee_user_id) === appUser.id
+          );
+        const tokenAuditRoomHash = exactBindingsValid
           ? await hashSecurityText(communicationRoomId.toUpperCase(), "livekit-token-request:room")
           : null;
         const sinceTokenIso = new Date(Date.now() - 10 * 60_000).toISOString();

@@ -27,6 +27,13 @@ export function resolveIncomingCallRoomJoinAction(input) {
   return "blocked";
 }
 
+export function doesNativeCallActionOwnTransition(input) {
+  const callInviteId = String(input?.callInviteId ?? "").trim();
+  const nativeCallAction = String(input?.nativeCallAction ?? "").trim().toLowerCase();
+  return callInviteId.length > 0
+    && ["answer", "decline", "end", "mute", "unmute"].includes(nativeCallAction);
+}
+
 export function resolveChillyChatCallParticipantRole(input) {
   const currentUserId = String(input?.currentUserId ?? "").trim();
   const callerUserId = String(input?.callerUserId ?? "").trim();

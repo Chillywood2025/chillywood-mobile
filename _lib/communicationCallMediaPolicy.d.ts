@@ -32,5 +32,9 @@ export function resolveIncomingCallRoomJoinAction(input: {
   inviteBelongsToCurrentCallee: boolean;
   inviteStatus?: string | null;
 }): "host" | "accept" | "resume" | "blocked";
+export function doesNativeCallActionOwnTransition(input: {
+  callInviteId?: string | null;
+  nativeCallAction?: string | null;
+}): boolean;
 export function resolveIosChatCallAudioRoute(callType?: string | null): "speaker" | "receiver";
 export function shouldActivateAcceptedChatCallMedia(input: { roomId?: string | null; inviteStatus?: string | null }): boolean;

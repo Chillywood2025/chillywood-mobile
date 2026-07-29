@@ -40,6 +40,7 @@ const tokenContract = read("_lib/livekit/token-contract.ts");
 const operator = read("supabase/functions/livekit-operator/index.ts");
 const telemetry = read("_lib/livekit/livekitRenderTelemetry.ts");
 const chatTelemetry = read("_lib/chatCallLiveKitTelemetry.ts");
+const chatTelemetryBindingPolicy = read("_lib/chatCallTelemetryBindingPolicy.ts");
 const migration = read("supabase/migrations/20260728143000_chilly_chat_livekit_media_rollout.sql");
 const chatRoomCreation = read("_lib/chat.ts");
 const transition = read("supabase/functions/chilly-chat-call-transition/index.ts");
@@ -171,9 +172,15 @@ for (const stage of [
 }
 requireText(chatTelemetry, 'surface: "chat_call"', "Chat Call telemetry uses the sentinel surface");
 requireText(chatTelemetry, "liveKitSdkEvent: true", "Chat Call telemetry is marked as SDK-derived");
+requireText(telemetry, 'sanitizeChatCallTelemetryBinding(input.callInviteId, "uuid")', "client preserves only a strict exact invite binding for the authenticated collector");
+requireText(telemetry, 'sanitizeChatCallTelemetryBinding(input.communicationRoomId, "room_code")', "client preserves only a strict exact room binding for token-audit correlation");
+requireText(chatTelemetryBindingPolicy, "UUID_PATTERN", "client exact invite and thread bindings are UUID-bounded");
 requireText(operator, "delete renderEvent.communicationRoomId", "collector strips raw communication room IDs");
 requireText(operator, "delete renderEvent.callInviteId", "collector strips raw call invite IDs");
 requireText(operator, "delete renderEvent.threadId", "collector strips raw thread IDs");
+requireText(chatTelemetry, "emitChatCallLiveKitStage", "Chat Call stages use the bounded telemetry binding");
+requireText(operator, '.from("chat_call_invites")', "collector corroborates the exact durable Chat Call invite");
+requireText(operator, "chatCallBindingCorroborated", "collector requires exact invite, room, thread, provider, acceptance, and participant binding");
 requireText(operator, '.eq("surface", "chat-call")', "collector corroborates an exact Chat Call token audit");
 requireText(operator, '.eq("outcome", "success")', "collector requires successful token authorization");
 requireText(operator, '.eq("can_publish", true)', "collector requires publish authority");

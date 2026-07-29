@@ -17,6 +17,7 @@ import {
 } from "../supabase/functions/_shared/ios-voip-policy.mjs";
 import {
   canAttemptNativeCallBackgroundAudio,
+  doesNativeCallActionOwnTransition,
   resolveAcceptedChatCallRoomId,
   resolveChillyChatCallParticipantRole,
   resolveIncomingCallPresentation,
@@ -44,6 +45,7 @@ const schema = await importTranspiledTypeScript("_lib/chillyChatCallDispatchSche
 const deliveryCopy = await importTranspiledTypeScript("_lib/chillyChatCallDeliveryCopy.ts");
 const visibleReadGate = await importTranspiledTypeScript("_lib/boundedVisibleReadGate.ts");
 const liveKitBootstrapCompat = await importTranspiledTypeScript("_lib/livekit/react-native-bootstrap-compat.ts");
+const chatCallTelemetryBindingPolicy = await importTranspiledTypeScript("_lib/chatCallTelemetryBindingPolicy.ts");
 
 const emptyChannels = () => ({
   androidNative: createChillyChatCallChannelResult(),
@@ -79,6 +81,38 @@ assert.equal(
   "LiveKit browser detection receives a stable React Native user agent",
 );
 assert.equal(liveKitBootstrapCompat.ensureReactNativeNavigatorUserAgent(navigatorIdentity), false);
+assert.equal(
+  chatCallTelemetryBindingPolicy.sanitizeChatCallTelemetryBinding(
+    "11111111-1111-4111-8111-111111111111",
+    "uuid",
+  ),
+  "11111111-1111-4111-8111-111111111111",
+  "the authenticated collector receives an exact canonical invite or thread UUID for one-way hashing",
+);
+assert.equal(
+  chatCallTelemetryBindingPolicy.sanitizeChatCallTelemetryBinding("ab12cd", "room_code"),
+  "AB12CD",
+  "the authenticated collector receives the exact canonical communication room code for token-audit correlation",
+);
+for (const unsafeBinding of [
+  "",
+  "not-a-uuid",
+  "11111111-1111-4111-8111-111111111111?signature=private",
+  "11111111-1111-4111-8111-111111111111/extra",
+]) {
+  assert.equal(
+    chatCallTelemetryBindingPolicy.sanitizeChatCallTelemetryBinding(unsafeBinding, "uuid"),
+    "",
+    "only a bare UUID may cross the exact Chat Call telemetry binding boundary",
+  );
+}
+for (const unsafeRoomCode of ["ABCDE", "ABCDEFG", "AB-12C", "AB12CD?"]) {
+  assert.equal(
+    chatCallTelemetryBindingPolicy.sanitizeChatCallTelemetryBinding(unsafeRoomCode, "room_code"),
+    "",
+    "only the exact six-character product room code may cross the Chat Call telemetry binding boundary",
+  );
+}
 
 const sent = (reason = "sent") => createChillyChatCallChannelResult({
   eligible: true,
@@ -265,6 +299,20 @@ assert.equal(resolveIncomingCallRoomJoinAction({
   inviteBelongsToCurrentCallee: false,
   inviteStatus: "ringing",
 }), "blocked", "missing or mismatched invite evidence cannot open callee media");
+for (const nativeCallAction of ["answer", "decline", "end", "mute", "unmute"]) {
+  assert.equal(doesNativeCallActionOwnTransition({
+    callInviteId: "INVITE-ID",
+    nativeCallAction,
+  }), true, `${nativeCallAction}: an invite-scoped native action owns the authoritative transition`);
+}
+assert.equal(doesNativeCallActionOwnTransition({
+  callInviteId: "",
+  nativeCallAction: "answer",
+}), false, "an unscoped native action cannot suppress compatibility routing");
+assert.equal(doesNativeCallActionOwnTransition({
+  callInviteId: "INVITE-ID",
+  nativeCallAction: "open",
+}), false, "openCall compatibility is not an authoritative native transition");
 assert.equal(resolveIosChatCallAudioRoute("video"), "speaker", "iOS video calls default to speaker");
 assert.equal(resolveIosChatCallAudioRoute("voice"), "receiver", "iOS voice calls default to receiver");
 assert.equal(shouldActivateAcceptedChatCallMedia({
@@ -578,13 +626,33 @@ assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit owners
 assert.match(rootLayoutSource, /params\.set\("nativeCallAction", "answer"\)/u, "foreground Answer uses the durable callee accept route");
 assert.match(
   chatThreadSource,
-  /const requestedNativeCallOwnsTransition =[\s\S]{0,240}\["answer", "decline", "end", "mute", "unmute"\]\.includes\(requestedNativeCallAction\)/u,
-  "native call actions must own their authoritative transition without a competing openCall join",
+  /const requestedNativeCallOwnsTransition = doesNativeCallActionOwnTransition\(\{[\s\S]{0,180}requestedCallInviteId[\s\S]{0,180}requestedNativeCallAction[\s\S]{0,80}\}\)/u,
+  "the chat thread must use the tested native-transition ownership policy",
 );
 assert.match(
   chatThreadSource,
-  /!requestedOpenCall[\s\S]{0,120}\|\| requestedNativeCallOwnsTransition[\s\S]{0,520}void handleJoinOrCloseCall\(\)/u,
+  /!requestedOpenCall[\s\S]{0,120}\|\| requestedNativeCallOwnsTransition[\s\S]{0,520}void handleJoinOrCloseCall\(requestedCallInviteId\)/u,
   "openCall compatibility routing must stay inert while a native action is settling",
+);
+assert.match(
+  chatThreadSource,
+  /normalizedExpectedInviteId && joinInvite\?\.id !== normalizedExpectedInviteId[\s\S]{0,900}!joinInvite && !normalizedExpectedInviteId/u,
+  "openCall compatibility must not fall through from a stale invite ID to a newer same-thread call",
+);
+assert.match(
+  chatThreadSource,
+  /activeNativeCallActionRequestKeyRef\.current = requestedNativeCallRequestKey[\s\S]{0,320}\[requestedNativeCallRequestKey\]/u,
+  "native action work must remain scoped to the exact request across unrelated rerenders",
+);
+assert.match(
+  chatThreadSource,
+  /const invite = await resolveRequestedInvite\(\);[\s\S]{0,160}activeNativeCallActionRequestKeyRef\.current !== requestKey/u,
+  "a hydrated native action must be invalidated only when its exact request changes",
+);
+assert.doesNotMatch(
+  chatThreadSource,
+  /nativeCallActionHandledRef\.current = requestKey;[\s\S]{0,120}let canceled = false/u,
+  "an unrelated rerender must not cancel an already claimed native Answer transition",
 );
 assert.match(rootLayoutSource, /current\?\.invite \? current : current \? \{ \.\.\.current, \.\.\.nextAlert \} : nextAlert/u, "database readback must hydrate a notification-first banner before Decline");
 assert.match(chatThreadSource, /subscribeToChillyChatCallInvite\(visibleInvite\.id/u, "incoming presentation must follow authoritative invite state");
