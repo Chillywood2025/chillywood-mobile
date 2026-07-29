@@ -189,7 +189,14 @@ requireText(operator, '.eq("surface", "chat-call")', "collector corroborates an 
 requireText(operator, '.eq("outcome", "success")', "collector requires successful token authorization");
 requireText(operator, '.eq("can_publish", true)', "collector requires publish authority");
 requireText(operator, '.eq("can_subscribe", true)', "collector requires subscribe authority");
+requireText(operator, "if (tokenAuditRoomHash)", "collector cannot reuse an unrelated recent token audit");
 requireText(operator, "safeTokenAuditBoolean", "collector persists only the non-secret token-audit corroboration boolean");
+requireText(chatTelemetryAuthority, "isApprovedTelemetryDigest", "collector retains only named server-generated telemetry digests");
+requireText(operator, "clientRenderMetadata", "collector separates client metadata from server-owned corroboration");
+requireText(operator, 'delete clientRenderMetadata[serverOwnedKey]', "client metadata cannot overwrite server-owned corroboration");
+requireText(chatTelemetryAuthority, "PREACCEPT_TERMINAL_STATUSES", "collector bounds non-accepted terminal lifecycle states");
+requireText(chatTelemetryAuthority, "PREACCEPT_TERMINAL_CLEANUP_STAGES", "collector bounds non-accepted terminal cleanup stages");
+requireText(operator, "preacceptTerminalCleanupCorroborated", "collector records exact preaccept terminal cleanup without claiming media");
 requireText(operator, "non_livekit_chat_call_evidence_rejected", "collector rejects non-LiveKit evidence");
 requireText(operator, "chat_call_livekit_token_requested_not_success_proof", "token request alone is not LiveKit success proof");
 

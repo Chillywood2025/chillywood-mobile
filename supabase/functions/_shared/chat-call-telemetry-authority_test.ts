@@ -1,5 +1,7 @@
 import {
   hasExactChatCallTelemetryIdentity,
+  isApprovedTelemetryDigest,
+  resolveChatCallPreacceptTerminalCleanup,
   resolveChatCallTelemetryBinding,
 } from "./chat-call-telemetry-authority.ts";
 
@@ -106,5 +108,85 @@ Deno.test("rejects nonparticipants, authority gaps, and invalid identities", () 
 
   if (hasExactChatCallTelemetryIdentity("not-an-invite", THREAD_ID)) {
     throw new Error("invalid invite identity must be rejected before lookup");
+  }
+});
+
+Deno.test("corroborates only exact preaccept terminal cleanup stages", () => {
+  const terminalInvite = {
+    ...acceptedInvite,
+    accepted_at: null,
+    status: "missed",
+  };
+
+  for (const stage of ["disconnected", "cleanup_complete"]) {
+    const result = resolveChatCallPreacceptTerminalCleanup({
+      appUserId: USER_ID,
+      callInviteId: CALL_INVITE_ID,
+      invite: terminalInvite,
+      stage,
+      threadId: THREAD_ID,
+    });
+    if (
+      !result.corroborated ||
+      result.authoritativeCommunicationRoomId !== ROOM_ID
+    ) {
+      throw new Error("expected exact terminal cleanup corroboration");
+    }
+  }
+});
+
+Deno.test("rejects preaccept media, accepted cleanup, and nonparticipant cleanup", () => {
+  const fixtures = [
+    {
+      appUserId: USER_ID,
+      invite: { ...acceptedInvite, accepted_at: null, status: "missed" },
+      stage: "first_audio",
+    },
+    {
+      appUserId: USER_ID,
+      invite: { ...acceptedInvite, status: "ended" },
+      stage: "cleanup_complete",
+    },
+    {
+      appUserId: "55555555-5555-4555-8555-555555555555",
+      invite: { ...acceptedInvite, accepted_at: null, status: "declined" },
+      stage: "disconnected",
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    const result = resolveChatCallPreacceptTerminalCleanup({
+      ...fixture,
+      callInviteId: CALL_INVITE_ID,
+      threadId: THREAD_ID,
+    });
+    if (result.corroborated) {
+      throw new Error("invalid terminal cleanup fixture must fail closed");
+    }
+  }
+});
+
+Deno.test("allows only named server-generated SHA-256 telemetry digests", () => {
+  const digest = "a".repeat(64);
+  for (
+    const key of [
+      "user_hash",
+      "communicationRoomHash",
+      "callInviteHash",
+      "threadHash",
+      "roomRunCorrelationHash",
+    ]
+  ) {
+    if (!isApprovedTelemetryDigest(key, digest)) {
+      throw new Error(`expected approved digest key ${key}`);
+    }
+  }
+  if (
+    isApprovedTelemetryDigest("accessTokenHash", digest) ||
+    isApprovedTelemetryDigest("callInviteHash", "a".repeat(63))
+  ) {
+    throw new Error(
+      "unapproved or malformed telemetry digest must be rejected",
+    );
   }
 });
