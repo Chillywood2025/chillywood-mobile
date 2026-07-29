@@ -57,6 +57,10 @@ export function CommunicationControlBar({
     <View style={styles.row}>
       {showMediaControls ? (
         <TouchableOpacity
+          testID="communication-camera-toggle"
+          accessibilityLabel={cameraLabel}
+          accessibilityRole="button"
+          accessibilityState={{ disabled, selected: resolvedCameraStatus === "on" }}
           style={[
             styles.control,
             { minHeight: minimumTouchTarget },
@@ -79,7 +83,10 @@ export function CommunicationControlBar({
       ) : null}
       {showMediaControls && cameraEnabled && onSwitchCamera ? (
         <TouchableOpacity
+          testID="communication-camera-flip"
           accessibilityLabel="Switch between front and rear camera"
+          accessibilityRole="button"
+          accessibilityState={{ disabled }}
           style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlOff, disabled && styles.controlDisabled]}
           activeOpacity={0.86}
           onPress={onSwitchCamera}
@@ -90,6 +97,10 @@ export function CommunicationControlBar({
       ) : null}
       {showMediaControls ? (
         <TouchableOpacity
+          testID="communication-microphone-toggle"
+          accessibilityLabel={micEnabled ? "Mute microphone" : "Unmute microphone"}
+          accessibilityRole="button"
+          accessibilityState={{ disabled, selected: micEnabled }}
           style={[styles.control, { minHeight: minimumTouchTarget }, micEnabled ? styles.controlOn : styles.controlOff, disabled && styles.controlDisabled]}
           activeOpacity={0.86}
           disabled={disabled}
@@ -107,9 +118,10 @@ export function CommunicationControlBar({
       ) : null}
       {showMediaControls && onToggleAudioRoute ? (
         <TouchableOpacity
+          testID="communication-audio-route-toggle"
           accessibilityLabel={speakerEnabled ? "Use phone receiver" : "Use speaker"}
           accessibilityRole="button"
-          accessibilityState={{ selected: speakerEnabled }}
+          accessibilityState={{ disabled, selected: speakerEnabled }}
           style={[styles.control, { minHeight: minimumTouchTarget }, speakerEnabled ? styles.controlOn : styles.controlOff, disabled && styles.controlDisabled]}
           activeOpacity={0.86}
           onPress={onToggleAudioRoute}
@@ -125,7 +137,9 @@ export function CommunicationControlBar({
         </TouchableOpacity>
       ) : null}
       <TouchableOpacity
+        testID="communication-call-end"
         accessibilityLabel={leaveLabel}
+        accessibilityRole="button"
         style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlLeave]}
         activeOpacity={0.86}
         onPress={() => {

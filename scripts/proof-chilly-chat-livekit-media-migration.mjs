@@ -30,7 +30,9 @@ const providerPolicy = read("_lib/chatCallMediaProviderPolicy.ts");
 const providerSources = `${provider}\n${providerPolicy}`;
 const liveKitSession = read("hooks/use-livekit-chat-call-session.ts");
 const legacySession = read("hooks/use-communication-room-session.ts");
+const rootLayout = read("app/_layout.tsx");
 const chatScreen = read("app/chat/[threadId].tsx");
+const inRoomPanel = read("components/communication/in-room-communication-panel.tsx");
 const tokenFunction = read("supabase/functions/livekit-token/index.ts");
 const authorityPolicy = read("supabase/functions/_shared/chat-call-livekit-authority.ts");
 const tokenAuthority = `${tokenFunction}\n${authorityPolicy}`;
@@ -73,6 +75,15 @@ requireText(liveKitSession, 'participantRole: "speaker"', "accepted call request
 requireText(liveKitSession, "LiveKitAudioSession.stopAudioSession()", "cleanup stops the LiveKit audio session");
 requireText(liveKitSession, "leaveCommunicationRoomSession({", "cleanup leaves communication membership");
 requireText(liveKitSession, 'emitStage("cleanup_complete"', "cleanup emits installed completion telemetry");
+requireText(liveKitSession, "void setSpeaker(speakerRequestedRef.current)", "remote audio subscription reasserts the selected speaker route");
+requireText(liveKitSession, "await setSpeaker(speakerRequestedRef.current)", "camera publication cannot leave the audio session stale");
+requireText(inRoomPanel, "selfParticipant?.liveKitVideoTrackReference", "camera UI recognizes the rendered LiveKit local track");
+requireText(chatScreen, 'terminalInvite.status === "ringing" && currentUserIsCaller', "the durable caller can cancel before media starts");
+requireText(chatScreen, "activeCallRoomId && !callPanelOpen && !incomingCallRinging", "ringing receivers do not see a duplicate active-room banner");
+requireText(chatScreen, "isIosNativeCallsRuntimeEnabled() || readiness.available", "same-thread iOS presentation remains owned by CallKit");
+requireText(rootLayout, "isIosNativeCallsRuntimeEnabled() || readiness.available", "app-wide iOS presentation remains owned by CallKit");
+requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline persists directly without foreground navigation");
+requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End persists directly without foreground navigation");
 
 for (const authorityNeedle of [
   '.eq("id", callInviteId)',

@@ -71,8 +71,9 @@ requireText(facade, "const { token: _token", "Native events exposed to applicati
 requireText(facade, "subscribeToIosNativeCallEvents", "CallKit media consumers must receive sanitized audio-session and application-state events.");
 rejectText(facade, "console.", "The native-call facade must never log PushKit tokens or provider responses.");
 requireText(rootLayout, "startIosNativeCallsReadiness", "Authenticated runtime must wire the native-call bridge.");
-requireText(rootLayout, "nativeCallAction: action", "Sanitized CallKit answer and decline events must use the existing authorized chat route.");
-requireText(rootLayout, 'if (action === "answer")', "CallKit Answer must use a single clean chat route instead of stacking duplicate call screens.");
+requireText(rootLayout, 'nativeCallAction: "answer"', "Sanitized CallKit Answer must use the existing authorized chat route.");
+requireText(rootLayout, 'settleNativeTerminalAction(event, "declined")', "CallKit Decline must use a direct server-authoritative transition.");
+requireText(rootLayout, 'settleNativeTerminalAction(event, "ended")', "CallKit End must use a direct server-authoritative transition.");
 requireText(rootLayout, "router.replace(destination", "CallKit Answer must replace the current route for deterministic cold-start recovery.");
 requireText(rootLayout, "subscribeToChillyChatCallInvite", "Caller cancel and invite terminal states must stop active CallKit UI.");
 requireText(rootLayout, "reportIosNativeCallRemoteEnd", "Realtime invite terminal states must report a distinct remote CallKit end.");

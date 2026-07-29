@@ -380,12 +380,20 @@ const chatThreadSource = await readFile(new URL("app/chat/[threadId].tsx", root)
 const rootLayoutSource = await readFile(new URL("app/_layout.tsx", root), "utf8");
 const liveKitBootstrapSource = await readFile(new URL("_lib/livekit/bootstrap.ts", root), "utf8");
 const communicationSessionSource = await readFile(new URL("hooks/use-communication-room-session.ts", root), "utf8");
+const liveKitChatCallSessionSource = await readFile(
+  new URL("hooks/use-livekit-chat-call-session.ts", root),
+  "utf8",
+);
 const inRoomPanelSource = await readFile(
   new URL("components/communication/in-room-communication-panel.tsx", root),
   "utf8",
 );
 const communicationControlBarSource = await readFile(
   new URL("components/communication/communication-control-bar.tsx", root),
+  "utf8",
+);
+const communicationParticipantGridSource = await readFile(
+  new URL("components/communication/communication-participant-grid.tsx", root),
   "utf8",
 );
 const retryWorkerSource = await readFile(
@@ -496,12 +504,39 @@ assert.match(
 );
 assert.match(
   chatThreadSource,
-  /showControls=\{outgoingCallRinging \|\| \(activeCallInvite\?\.status === "accepted"/u,
+  /showControls=\{outgoingCallRinging \|\| activeCallInvite\?\.status === "accepted"\}/u,
   "the cancel-call action remains visible before acceptance",
+);
+assert.match(
+  chatThreadSource,
+  /terminalInvite\.status === "ringing" && currentUserIsCaller/u,
+  "a ringing caller can cancel before a media room has initialized",
+);
+assert.match(
+  chatThreadSource,
+  /shouldEndRoomAsHost = shouldEndRoomAsHost \|\| currentUserIsCaller/u,
+  "ringing-call cleanup derives room ownership from the durable caller identity",
+);
+assert.match(
+  chatThreadSource,
+  /!incomingCallRinging \? \(\s*<TouchableOpacity[\s\S]{0,260}testID="chat-thread-join-call-button"/u,
+  "a ringing receiver does not receive a duplicate Join Call affordance",
+);
+assert.match(
+  chatThreadSource,
+  /activeCallRoomId && !callPanelOpen && !incomingCallRinging/u,
+  "a ringing receiver does not receive a duplicate active-room banner",
 );
 assert.doesNotMatch(chatThreadSource, /styles\.incomingCallSheet/u, "same-thread foreground calls cannot use the large blocking modal");
 assert.match(rootLayoutSource, /testID="app-wide-incoming-call-banner"/u, "foreground calls outside the thread use the compact top banner");
 assert.doesNotMatch(rootLayoutSource, /app-wide-incoming-call-modal/u, "foreground calls cannot use the large app-wide modal");
+for (const nativePresentationOwnerSource of [rootLayoutSource, chatThreadSource]) {
+  assert.match(
+    nativePresentationOwnerSource,
+    /setIosNativeCallPresentationOwned\(\s*isIosNativeCallsRuntimeEnabled\(\) \|\| readiness\.available/u,
+    "an enabled iOS native-call runtime cannot be downgraded into a duplicate in-app Answer/Decline banner",
+  );
+}
 assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen presentation remains native rather than a React modal");
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit ownership suppresses the duplicate app-wide React banner");
@@ -553,6 +588,26 @@ assert.doesNotMatch(
   rootLayoutSource,
   /event\.type === "muted" \|\| event\.type === "unmuted"\)[\s\S]{0,260}routeNativeAction/u,
   "CallKit mute must not navigate to a duplicate chat screen",
+);
+assert.match(
+  rootLayoutSource,
+  /event\.type === "answerRequested"\)[\s\S]{0,120}routeNativeAnswer\(event\)/u,
+  "CallKit Answer remains the only native action that opens the accepted media route",
+);
+assert.match(
+  rootLayoutSource,
+  /event\.type === "declined"\)[\s\S]{0,120}settleNativeTerminalAction\(event, "declined"\)/u,
+  "CallKit Decline must directly persist the durable declined transition",
+);
+assert.match(
+  rootLayoutSource,
+  /event\.type === "ended"[\s\S]{0,260}settleNativeTerminalAction\(event, "ended"\)/u,
+  "CallKit End must directly persist the durable ended transition",
+);
+assert.doesNotMatch(
+  rootLayoutSource,
+  /routeNativeAction\(event, "(?:decline|end)"\)/u,
+  "CallKit terminal actions must not depend on foreground chat navigation",
 );
 assert.match(
   communicationControlBarSource,
@@ -619,8 +674,103 @@ assert.doesNotMatch(
 );
 assert.match(
   chatThreadSource,
-  /showMediaControls=\{!outgoingCallRinging\}/u,
+  /showMediaControls=\{!outgoingCallRinging && !callError && !callLoading\}/u,
   "mic and camera controls stay hidden until the receiver accepts",
+);
+assert.match(
+  inRoomPanelSource,
+  /!!selfParticipant\?\.streamURL[\s\S]{0,120}\|\| !!selfParticipant\?\.liveKitVideoTrackReference/u,
+  "the camera control treats a rendered LiveKit local track as Camera On",
+);
+assert.match(
+  inRoomPanelSource,
+  /const controlsVisible = showControls;/u,
+  "the End or Cancel control remains visible while media is connecting or failed",
+);
+assert.match(
+  inRoomPanelSource,
+  /const mediaControlsVisible = showMediaControls && !loading && !statusMessage;/u,
+  "camera, microphone, route, and flip controls remain gated on media readiness",
+);
+assert.match(
+  chatThreadSource,
+  /showControls=\{outgoingCallRinging \|\| activeCallInvite\?\.status === "accepted"\}/u,
+  "accepted callers can always end a call even when LiveKit is not ready",
+);
+for (const permanentTestId of [
+  "communication-camera-toggle",
+  "communication-camera-flip",
+  "communication-microphone-toggle",
+  "communication-audio-route-toggle",
+  "communication-call-end",
+]) {
+  assert.match(
+    communicationControlBarSource,
+    new RegExp(`testID="${permanentTestId}"`, "u"),
+    `the physical call matrix has a permanent ${permanentTestId} control target`,
+  );
+}
+for (const permanentSurfaceId of [
+  "communication-call-panel",
+  "communication-call-connection-status",
+]) {
+  assert.match(
+    inRoomPanelSource,
+    new RegExp(`testID="${permanentSurfaceId}"`, "u"),
+    `the physical call matrix has a permanent ${permanentSurfaceId} surface target`,
+  );
+}
+for (const permanentVideoId of [
+  "communication-participant-self",
+  "communication-participant-remote",
+  "communication-video-self",
+  "communication-video-remote",
+]) {
+  assert.match(
+    communicationParticipantGridSource,
+    new RegExp(`"${permanentVideoId}"`, "u"),
+    `the physical call matrix has a permanent ${permanentVideoId} render target`,
+  );
+}
+assert.match(
+  liveKitChatCallSessionSource,
+  /TrackSubscribed[\s\S]{0,260}track\.kind === Track\.Kind\.Audio[\s\S]{0,260}setSpeaker\(speakerRequestedRef\.current\)/u,
+  "a subscribed remote audio track reasserts the platform audio session and video speaker route",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /local_video_published[\s\S]{0,220}await setSpeaker\(speakerRequestedRef\.current\)/u,
+  "camera publication cannot leave the video receiver on a stale audio route",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /const setMicrophoneEnabled[\s\S]{0,420}if \(nextEnabled\)[\s\S]{0,180}LiveKitAudioSession\.startAudioSession/u,
+  "turning the microphone back on restores the native audio session before capture",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /const setCameraEnabled[\s\S]{0,720}local_video_published[\s\S]{0,180}await setSpeaker\(speakerRequestedRef\.current\)/u,
+  "turning the camera back on preserves the selected audio output",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /const toggleCamera[\s\S]{0,420}if \(!updated\)[\s\S]{0,180}return false;[\s\S]{0,120}return true;/u,
+  "the LiveKit camera toggle reports whether capture actually changed",
+);
+assert.match(
+  chatThreadSource,
+  /const handleSwitchCallCamera[\s\S]{0,240}const updated = await switchCamera\(\)[\s\S]{0,180}if \(!updated\)/u,
+  "camera flip failure is surfaced instead of becoming an unhandled no-op",
+);
+assert.match(
+  chatThreadSource,
+  /The audio output could not be changed\. The call remains connected\./u,
+  "audio-route failure is visible without ending the call",
+);
+assert.match(
+  liveKitChatCallSessionSource,
+  /if \(nextState === "active"\)[\s\S]{0,260}LiveKitAudioSession\.startAudioSession\(\)[\s\S]{0,420}setSpeaker\(speakerRequestedRef\.current\)/u,
+  "foreground recovery restores capture and the last selected audio output",
 );
 const activeInviteReconciliationSource = chatThreadSource.slice(
   chatThreadSource.indexOf("const reconcileActiveInvite"),

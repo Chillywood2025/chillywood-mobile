@@ -294,7 +294,11 @@ export default function ChillyChatThreadScreen() {
       };
     }
     void readIosNativeCallsReadiness().then((readiness) => {
-      if (active) setIosNativeCallPresentationOwned(readiness.available);
+      if (active) {
+        setIosNativeCallPresentationOwned(
+          isIosNativeCallsRuntimeEnabled() || readiness.available,
+        );
+      }
     });
     return () => {
       active = false;
@@ -643,7 +647,8 @@ export default function ChillyChatThreadScreen() {
 
   const handleToggleCallCamera = useCallback(async () => {
     try {
-      await toggleCamera();
+      const updated = await toggleCamera();
+      if (updated === false) return;
       setError(null);
     } catch (mediaError) {
       setError("The camera could not be changed. The call remains connected.");
@@ -651,16 +656,40 @@ export default function ChillyChatThreadScreen() {
     }
   }, [threadId, toggleCamera]);
 
+  const handleSwitchCallCamera = useCallback(async () => {
+    try {
+      const updated = await switchCamera();
+      if (!updated) {
+        setError("The camera could not be flipped on this device. The call remains connected.");
+        return;
+      }
+      setError(null);
+    } catch (mediaError) {
+      setError("The camera could not be flipped on this device. The call remains connected.");
+      reportRuntimeError("chat-call-switch-camera", mediaError, { threadId });
+    }
+  }, [switchCamera, threadId]);
+
   const handleToggleNativeAudioRoute = useCallback(async () => {
     const nextSpeakerEnabled = !nativeSpeakerEnabled;
-    const liveKitUpdated = callMediaProvider === "livekit"
-      ? await setCallMediaSpeaker(nextSpeakerEnabled)
-      : false;
-    const nativeUpdated = Platform.OS === "ios"
-      ? await setIosNativeCallAudioRoute(nextSpeakerEnabled ? "speaker" : "receiver")
-      : false;
-    if (liveKitUpdated || nativeUpdated) setNativeSpeakerEnabled(nextSpeakerEnabled);
-  }, [callMediaProvider, nativeSpeakerEnabled, setCallMediaSpeaker]);
+    try {
+      const liveKitUpdated = callMediaProvider === "livekit"
+        ? await setCallMediaSpeaker(nextSpeakerEnabled)
+        : false;
+      const nativeUpdated = Platform.OS === "ios"
+        ? await setIosNativeCallAudioRoute(nextSpeakerEnabled ? "speaker" : "receiver")
+        : false;
+      if (liveKitUpdated || nativeUpdated) {
+        setNativeSpeakerEnabled(nextSpeakerEnabled);
+        setError(null);
+        return;
+      }
+      setError("The audio output could not be changed. The call remains connected.");
+    } catch (routeError) {
+      setError("The audio output could not be changed. The call remains connected.");
+      reportRuntimeError("chat-call-audio-route", routeError, { threadId });
+    }
+  }, [callMediaProvider, nativeSpeakerEnabled, setCallMediaSpeaker, threadId]);
 
   useEffect(() => {
     if (
@@ -988,6 +1017,10 @@ export default function ChillyChatThreadScreen() {
       inviteStatus: outgoingCallInvite.status,
     })
     && participantCount < 2;
+  const incomingCallRinging = !!incomingCallInvite
+    && incomingCallInvite.status === "ringing"
+    && incomingCallInvite.calleeUserId === currentUserId
+    && incomingCallInvite.callerUserId !== currentUserId;
   const callTitle = outgoingCallRinging
     ? (thread?.activeCallType === "video" ? "Video call ringing" : "Voice call ringing")
     : (thread?.activeCallType === "video" ? "Video call active" : "Voice call active");
@@ -1762,13 +1795,8 @@ export default function ChillyChatThreadScreen() {
       return;
     }
 
-    const isHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
+    let shouldEndRoomAsHost = !!callRoom?.hostUserId && callRoom.hostUserId === currentUserId;
     try {
-      logChatCall("handle_join_or_close_decision", {
-        threadId,
-        decision: isHost ? "end_call_as_host" : "end_call_as_participant",
-        roomId: activeCallRoomId,
-      });
       const terminalInvite = activeCallInviteRef.current
         ?? outgoingCallInvite
         ?? await readLatestChillyChatCallInviteForRoom(activeCallRoomId).catch(() => null);
@@ -1778,7 +1806,14 @@ export default function ChillyChatThreadScreen() {
       if (!inviteBelongsToParticipant || !terminalInvite) {
         throw new Error("Unable to find the active call record. The call was left connected so it can be ended safely.");
       }
-      if (terminalInvite.status === "ringing" && isHost && currentUserId) {
+      const currentUserIsCaller = terminalInvite.callerUserId === currentUserId;
+      shouldEndRoomAsHost = shouldEndRoomAsHost || currentUserIsCaller;
+      logChatCall("handle_join_or_close_decision", {
+        threadId,
+        decision: shouldEndRoomAsHost ? "end_call_as_host" : "end_call_as_participant",
+        roomId: activeCallRoomId,
+      });
+      if (terminalInvite.status === "ringing" && currentUserIsCaller && currentUserId) {
         const canceledInvite = await updateChillyChatCallInviteStatus({
           actorUserId: currentUserId,
           invite: terminalInvite,
@@ -1803,7 +1838,7 @@ export default function ChillyChatThreadScreen() {
       } else if (!TERMINAL_CHAT_CALL_INVITE_STATUSES.has(terminalInvite.status)) {
         throw new Error("The active call is changing state. Wait a moment and try End Call again.");
       }
-      await leaveRoom({ endRoomIfHost: isHost });
+      await leaveRoom({ endRoomIfHost: shouldEndRoomAsHost });
       if (requestedNativeCallUuid) {
         await endIosNativeCall(requestedNativeCallUuid, "in_app_leave").catch(() => false);
       }
@@ -1824,12 +1859,12 @@ export default function ChillyChatThreadScreen() {
       logChatCall("handle_join_or_close_failed", {
         threadId,
         roomId: activeCallRoomId,
-        role: isHost ? "host" : "viewer",
+        role: shouldEndRoomAsHost ? "host" : "viewer",
         message: leaveMessage,
       });
       reportRuntimeError("chat-thread-close-call", leaveError, {
         threadId,
-        role: isHost ? "host" : "viewer",
+        role: shouldEndRoomAsHost ? "host" : "viewer",
       });
     }
   }, [acceptIncomingInvite, activeCallInvite, activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, requestedCallInviteId, requestedNativeCallUuid, stopOutgoingRingback, thread?.activeCallType, threadId]);
@@ -2312,19 +2347,21 @@ export default function ChillyChatThreadScreen() {
         >
           <Text style={styles.callBtnText}>Video Call</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          testID="chat-thread-join-call-button"
-          accessibilityLabel={callActionLabel}
-          style={[styles.joinBtn, (callBusy || (!activeCallRoomId && !callPanelOpen)) && styles.callBtnDisabled]}
-          activeOpacity={0.86}
-          disabled={callBusy || (!activeCallRoomId && !callPanelOpen)}
-          onPress={() => void handleJoinOrCloseCall()}
-        >
-          <Text style={styles.joinBtnText}>{callActionLabel}</Text>
-        </TouchableOpacity>
+        {!incomingCallRinging ? (
+          <TouchableOpacity
+            testID="chat-thread-join-call-button"
+            accessibilityLabel={callActionLabel}
+            style={[styles.joinBtn, (callBusy || (!activeCallRoomId && !callPanelOpen)) && styles.callBtnDisabled]}
+            activeOpacity={0.86}
+            disabled={callBusy || (!activeCallRoomId && !callPanelOpen)}
+            onPress={() => void handleJoinOrCloseCall()}
+          >
+            <Text style={styles.joinBtnText}>{callActionLabel}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
-      {activeCallRoomId && !callPanelOpen ? (
+      {activeCallRoomId && !callPanelOpen && !incomingCallRinging ? (
         <View style={styles.callBanner}>
           <Text style={styles.callBannerTitle}>{callTitle}</Text>
           <Text style={styles.callBannerBody}>
@@ -2547,8 +2584,8 @@ export default function ChillyChatThreadScreen() {
             leaveLabel={outgoingCallRinging ? "Cancel Call" : "End Call"}
             mediaPermissionMessage={mediaPermissionMessage}
             canOpenMediaSettings={canOpenMediaSettings}
-            showControls={outgoingCallRinging || (activeCallInvite?.status === "accepted" && !callError && !callLoading)}
-            showMediaControls={!outgoingCallRinging}
+            showControls={outgoingCallRinging || activeCallInvite?.status === "accepted"}
+            showMediaControls={!outgoingCallRinging && !callError && !callLoading}
             presentation="fullscreen"
             onToggleCamera={() => {
               void handleToggleCallCamera();
@@ -2562,7 +2599,7 @@ export default function ChillyChatThreadScreen() {
                 }
               : undefined}
             onSwitchCamera={() => {
-              void switchCamera();
+              void handleSwitchCallCamera();
             }}
             onOpenMediaSettings={() => {
               void openMediaSettings();
