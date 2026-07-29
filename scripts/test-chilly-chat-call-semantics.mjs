@@ -576,6 +576,16 @@ assert.doesNotMatch(rootLayoutSource, /<Modal/u, "background/full-screen present
 assert.match(rootLayoutSource, /presentation === "native_background"/u, "background state defers to native CallStyle or CallKit");
 assert.match(rootLayoutSource, /presentation === "native_ios"/u, "CallKit ownership suppresses the duplicate app-wide React banner");
 assert.match(rootLayoutSource, /params\.set\("nativeCallAction", "answer"\)/u, "foreground Answer uses the durable callee accept route");
+assert.match(
+  chatThreadSource,
+  /const requestedNativeCallOwnsTransition =[\s\S]{0,240}\["answer", "decline", "end", "mute", "unmute"\]\.includes\(requestedNativeCallAction\)/u,
+  "native call actions must own their authoritative transition without a competing openCall join",
+);
+assert.match(
+  chatThreadSource,
+  /!requestedOpenCall[\s\S]{0,120}\|\| requestedNativeCallOwnsTransition[\s\S]{0,520}void handleJoinOrCloseCall\(\)/u,
+  "openCall compatibility routing must stay inert while a native action is settling",
+);
 assert.match(rootLayoutSource, /current\?\.invite \? current : current \? \{ \.\.\.current, \.\.\.nextAlert \} : nextAlert/u, "database readback must hydrate a notification-first banner before Decline");
 assert.match(chatThreadSource, /subscribeToChillyChatCallInvite\(visibleInvite\.id/u, "incoming presentation must follow authoritative invite state");
 assert.match(

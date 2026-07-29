@@ -156,6 +156,8 @@ assertIncludes(chatThread, "if (latestInvite?.status === \"accepted\")", "caller
 assertIncludes(chatThread, "if (!latestInvite || latestInvite.status !== \"ringing\") return;", "caller timeout may only attempt a missed transition from ringing");
 assertIncludes(chatThread, "if (!missedInvite || missedInvite.status !== \"missed\") return;", "caller timeout cleanup requires a confirmed missed transition");
 assertIncludes(chatThread, "nativeCallAction", "native Android notification actions must route through the chat thread");
+assertIncludes(chatThread, "requestedNativeCallOwnsTransition", "native Android actions must own acceptance without racing the openCall compatibility route");
+assertIncludes(chatThread, "|| requestedNativeCallOwnsTransition", "openCall compatibility handling must remain inert while a native action settles");
 assertIncludes(chatThread, "readChillyChatCallInvite(requestedCallInviteId)", "native Android notification actions must read the invite by id after cold/background launch");
 assertIncludes(chatThread, "invite.threadId !== threadId", "native Android notification actions must reject wrong-thread invite ids");
 assertIncludes(chatThread, "invite.calleeUserId !== currentUserId", "native Android notification actions must reject invites for another callee");

@@ -241,6 +241,9 @@ export default function ChillyChatThreadScreen() {
   const requestedCallInviteId = String(Array.isArray(callInviteIdParam) ? callInviteIdParam[0] : callInviteIdParam ?? "").trim();
   const requestedNativeCallAction = String(Array.isArray(nativeCallActionParam) ? nativeCallActionParam[0] : nativeCallActionParam ?? "").trim().toLowerCase();
   const requestedNativeCallUuid = String(Array.isArray(nativeCallUuidParam) ? nativeCallUuidParam[0] : nativeCallUuidParam ?? "").trim();
+  const requestedNativeCallOwnsTransition =
+    !!requestedCallInviteId
+    && ["answer", "decline", "end", "mute", "unmute"].includes(requestedNativeCallAction);
 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -1901,15 +1904,34 @@ export default function ChillyChatThreadScreen() {
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";
 
-    if (!requestedOpenCall || !threadId || loading || callBusy || callPanelOpen || !activeCallRoomId || officialAccount) {
-      if (!requestedOpenCall) autoOpenCallRef.current = "";
+    if (
+      !requestedOpenCall
+      || requestedNativeCallOwnsTransition
+      || !threadId
+      || loading
+      || callBusy
+      || callPanelOpen
+      || !activeCallRoomId
+      || officialAccount
+    ) {
+      if (!requestedOpenCall || requestedNativeCallOwnsTransition) autoOpenCallRef.current = "";
       return;
     }
 
     if (autoOpenCallRef.current === requestKey) return;
     autoOpenCallRef.current = requestKey;
     void handleJoinOrCloseCall();
-  }, [activeCallRoomId, callBusy, callPanelOpen, handleJoinOrCloseCall, loading, officialAccount, requestedOpenCall, threadId]);
+  }, [
+    activeCallRoomId,
+    callBusy,
+    callPanelOpen,
+    handleJoinOrCloseCall,
+    loading,
+    officialAccount,
+    requestedNativeCallOwnsTransition,
+    requestedOpenCall,
+    threadId,
+  ]);
 
   useEffect(() => {
     logChatCall("panel_state_changed", {
